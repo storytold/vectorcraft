@@ -5562,6 +5562,1824 @@ imageTrace	Outline	Contour
 @msg	missing panel layout	ontbrekende paneelindeling
 @msg	unsupported native docking operation	niet-ondersteunde systeemeigen dokbewerking
 @msg	this kind of brush has no options dialog yet	dit soort penseel heeft nog geen dialoogvenster met opties
+
+# Status and error messages: the script engine's own errors, command parameters, file readers and
+# writers, dialogs, panels and add-ons. Names in backticks, command ids, double-quoted values and
+# bare true, false and null stay as the English writes them.
+@msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' en 'arguments' kunnen niet worden gebruikt bij functies in strikte modus
+@msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Een profiel ondersteunt één effect Draaien. Bewerk in plaats daarvan de opties van het bestaande effect.
+@msg	Add Points at Crossings: a path went missing	Punten toevoegen bij kruisingen: er is een pad verdwenen
+@msg	Alignment must be one of the choices	De uitlijning moet een van de keuzes zijn
+@msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Boolean.prototype.{name} is aangeroepen op een waarde die geen Boolean is
+@msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	CMYK-afbeeldingen waarvan de samples niet in CMYK konden worden gelezen, zijn in RGB geïmporteerd
+@msg	CSS options: {e}	CSS-opties: {e}
+@msg	CSV has a header but no data rows	De CSV heeft een koptekst maar geen gegevensrijen
+@msg	CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark	De CSV bevat NUL-bytes: sla het bestand op als UTF-8, of als UTF-16 met een byte-order mark
+@msg	CSV is empty	De CSV is leeg
+@msg	CSV is larger than {MAX_CSV_BYTES} bytes	De CSV is groter dan {MAX_CSV_BYTES} bytes
+@msg	CSV is not UTF-16	De CSV is geen UTF-16
+@msg	CSV is not UTF-8	De CSV is geen UTF-8
+@msg	CSV would be larger than {MAX_CSV_BYTES} bytes	De CSV zou groter worden dan {MAX_CSV_BYTES} bytes
+@msg	Cannot write to the location of “{name}”; choose where to save it	Kan niet schrijven naar de locatie van „{name}”; kies waar je het wilt opslaan
+@msg	Choose original artwork, not a dimension's generated paths	Kies de oorspronkelijke illustratie, niet de gegenereerde paden van een maatlijn
+@msg	Contour: select paths or shapes	Omtrek: selecteer paden of vormen
+@msg	Contour: the Offset Path effect is not available	Omtrek: het effect Pad verschuiven is niet beschikbaar
+@msg	Create needs fills, strokes or both	Maken heeft vullingen, contouren of beide nodig
+@msg	DCS files can only be placed linked: use File › Place with Link on	DCS-bestanden kunnen alleen gekoppeld worden geplaatst: gebruik Bestand › Plaatsen met Koppeling ingeschakeld
+@msg	DXF options: {e}	DXF-opties: {e}
+@msg	DXF scale must be a positive number up to {_1}, not {scale}	De DXF-schaal moet een positief getal tot en met {_1} zijn, niet {scale}
+@msg	DXF {field} `{s}`: {allowed}	DXF {field} `{s}`: {allowed}
+@msg	Date.prototype method called on a value that is not a Date object	Een methode van Date.prototype is aangeroepen op een waarde die geen Date-object is
+@msg	Dimension is locked or hidden	De maatlijn is vergrendeld of verborgen
+@msg	Dimension mode does not match its source	De modus van de maatlijn komt niet overeen met de bron ervan
+@msg	Draw Inside needs exactly one selected path, compound path or text	Binnen tekenen heeft precies één geselecteerd pad, samengesteld pad of tekstobject nodig
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	Opslaan als EPS schrijft alle illustraties: gebruik document.export voor een EPS met alleen de selectie
+@msg	EPS flattener: {e}	EPS-afvlakker: {e}
+@msg	EPS options: {e}	EPS-opties: {e}
+@msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
+@msg	Error.prototype.toString was called on a value that is not an object	Error.prototype.toString is aangeroepen op een waarde die geen object is
+@msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	Exporteren voor schermen schrijft png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai of vectorcraft
+@msg	Flare click coordinates must be finite numbers	De klikcoördinaten van de flare moeten eindige getallen zijn
+@msg	Function.prototype.toString was called on a value that is not a function	Function.prototype.toString is aangeroepen op een waarde die geen functie is
+@msg	HTML Text applies to object slices of type only	HTML-tekst geldt alleen voor objectslices van tekst
+@msg	Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)	Objecten identificeren op staat op XML-id: de naam moet een geldige XML-id zijn (begin met een letter, onderstrepingsteken of dubbele punt; geen spaties)
+@msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Afbeelding traceren is mislukt: interne fout: de thread ervan is gestopt (meld deze bug alsjeblieft)
+@msg	Image Trace failed: {e}	Afbeelding traceren is mislukt: {e}
+@msg	Image Trace finished, but its document was closed	Afbeelding traceren is voltooid, maar het document ervan is gesloten
+@msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Afbeelding traceren is voltooid, maar de afbeelding of de instellingen ervan zijn intussen gewijzigd: traceer de afbeelding opnieuw
+@msg	Import SVG Filter reads SVG files, not SVGZ	SVG-filter importeren leest SVG-bestanden, geen SVGZ
+@msg	Invalid dimension offset	Ongeldige verschuiving van de maatlijn
+@msg	Invalid point	Ongeldig punt
+@msg	JSON.parse: {why} (at offset {at})	JSON.parse: {why} (op positie {at})
+@msg	JSON.stringify cannot write a structure that contains itself	JSON.stringify kan geen structuur schrijven die zichzelf bevat
+@msg	Join: a subpath went missing	Verbinden: er is een subpad verdwenen
+@msg	Line Gap must be a number	De lijnafstand moet een getal zijn
+@msg	Lock Workspace is not available in VectorCraft	Werkruimte vergrendelen is niet beschikbaar in VectorCraft
+@msg	Move Panel to New Window is not available: floating panels stay in the main window	Paneel naar nieuw venster verplaatsen is niet beschikbaar: zwevende panelen blijven in het hoofdvenster
+@msg	Namespace.prototype.toString needs a Namespace	Namespace.prototype.toString heeft een Namespace nodig
+@msg	New Document profiles need the preferences folder, which this run doesn't have	Profielen voor nieuwe documenten hebben de voorkeurenmap nodig, die deze sessie niet heeft
+@msg	Number.prototype.{name} was called on a value that is not a number	Number.prototype.{name} is aangeroepen op een waarde die geen getal is
+@msg	Object.create's prototype must be an object or null	Het prototype van Object.create moet een object of null zijn
+@msg	Object.{function} was given a value that is not an object	Object.{function} kreeg een waarde die geen object is
+@msg	Offset Path: the path is too complex to offset	Pad verschuiven: het pad is te complex om te verschuiven
+@msg	Offset Path: {e}	Pad verschuiven: {e}
+@msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	De PDF-inhoud is onvolledig of overschrijdt de limieten van de lezer; er is geen document geïmporteerd
+@msg	PDF flattener: {e}	PDF-afvlakker: {e}
+@msg	PDF options: {e}	PDF-opties: {e}
+@msg	QName.prototype.toString needs a QName	QName.prototype.toString heeft een QName nodig
+@msg	Recolor Artwork is no longer open	Artwork herkleuren is niet meer geopend
+@msg	RegExp.prototype.{name} was called on a value that is not a RegExp object	RegExp.prototype.{name} is aangeroepen op een waarde die geen RegExp-object is
+@msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	De SVG is geen UTF-8, UTF-16 of ISO 8859-1
+@msg	Save writes one artboard: name one, or export several with document.export	Opslaan schrijft één tekengebied: noem er een, of exporteer er meerdere met document.export
+@msg	Select a dimension first	Selecteer eerst een maatlijn
+@msg	Select dimensions to update	Selecteer maatlijnen om bij te werken
+@msg	Select only dimensions	Selecteer alleen maatlijnen
+@msg	Select two or more objects, or a group	Selecteer twee of meer objecten, of een groep
+@msg	Shaper needs 1–64 source paths	Shaper heeft 1–64 bronpaden nodig
+@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	Sjabloonbruggen: de geselecteerde illustratie is te groot of te gedetailleerd om te overbruggen
+@msg	String.prototype.toString was called on a value that is not a string	String.prototype.toString is aangeroepen op een waarde die geen string is
+@msg	Switch x/y is for scatter graphs	x/y omwisselen is bedoeld voor spreidingsgrafieken
+@msg	Text options: {e}	Tekstopties: {e}
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	De koppeling zit in een symbool, grafiekontwerp, patroon of dekkingmasker en heeft geen plaats op het canvas
+@msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Het profiel {name} kon niet worden gelezen, dus heeft het nieuwe document de standaardinstellingen: {reason}
+@msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Overbrugging: meer dan {_1} paren objecten liggen dicht genoeg bij elkaar om te overbruggen, of te veel objecten delen een horizontaal bereik; overbrug minder objecten tegelijk
+@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Wiedkader en wiedlijnen: er past geen wiedlijn buiten de illustratie en het wiedkader is uitgeschakeld
+@msg	\\ at end of pattern	\\ aan het einde van het patroon
+@msg	`alignOn` cannot be empty	`alignOn` mag niet leeg zijn
+@msg	`alignOn` must be a string	`alignOn` moet een string zijn
+@msg	`align` is start, center or end	`align` is start, center of end
+@msg	`align` must be a string	`align` moet een string zijn
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` moet een array van paren [subpath, anchor] zijn
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` moet ankerindexen bevatten (0, 1, 2…), niet {k}
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` moet ankerindexen bevatten (0, 1, 2…), niet {v}
+@msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` voor dit dialoogvenster {kind} moet een van de volgende zijn: {_1}
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` heeft meer dan {MAX_ANSWERS} antwoorden
+@msg	`answers` is larger than 1 MiB	`answers` is groter dan 1 MiB
+@msg	`answers` must be a list of answers	`answers` moet een lijst met antwoorden zijn
+@msg	`artboard` must be the index of an artboard of the document	`artboard` moet de index van een tekengebied van het document zijn
+@msg	`artboardsAt` must be [x, y]	`artboardsAt` moet [x, y] zijn
+@msg	`artboards` must be a list of artboard indices	`artboards` moet een lijst met tekengebiedindexen zijn
+@msg	`artboards` names an artboard the document does not have	`artboards` noemt een tekengebied dat het document niet heeft
+@msg	`artboards` names an artboard twice	`artboards` noemt een tekengebied twee keer
+@msg	`asset` is the asset id (see assets.list)	`asset` is de asset-id (zie assets.list)
+@msg	`at` must be [x, y] (got {at})	`at` moet [x, y] zijn (kreeg {at})
+@msg	`at` must be a byte offset	`at` moet een bytepositie zijn
+@msg	`at` must be a point [x, y]	`at` moet een punt [x, y] zijn
+@msg	`autoLeading` must be a number	`autoLeading` moet een getal zijn
+@msg	`background` must be "", "matte" or #rrggbb	`background` moet "", "matte" of #rrggbb zijn
+@msg	`beside` needs `side`	`beside` heeft `side` nodig
+@msg	`burasagari` must be "none", "standard" or "forced"	`burasagari` moet "none", "standard" of "forced" zijn
+@msg	`center` must be [x, y]	`center` moet [x, y] zijn
+@msg	`charAlign` must be "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" or "icfBottom"	`charAlign` moet "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" of "icfBottom" zijn
+@msg	`charDirection` must be "default", "leftToRight" or "rightToLeft"	`charDirection` moet "default", "leftToRight" of "rightToLeft" zijn
+@msg	`clearStroke` requires `stroke: false`, `ids: []` and no `stop`	`clearStroke` vereist `stroke: false`, `ids: []` en geen `stop`
+@msg	`clear` must be a list of type object ids, not {v}	`clear` moet een lijst met id’s van tekstobjecten zijn, niet {v}
+@msg	`clear` must list type objects; {_1} is not one	`clear` moet tekstobjecten bevatten; {_1} is er geen
+@msg	`clear` must not list `id`	`clear` mag `id` niet bevatten
+@msg	`code` must be a whole number	`code` moet een geheel getal zijn
+@msg	`colorMode` must be one of rgb, cmyk	`colorMode` moet een van rgb, cmyk zijn
+@msg	`color` needs a `rule` to make the theme from	`color` heeft een `rule` nodig om het thema mee te maken
+@msg	`colors` does not apply to the {name} reduction	`colors` geldt niet voor de reductie {name}
+@msg	`colors` is empty	`colors` is leeg
+@msg	`colors` must be a whole number from 2 to 256	`colors` moet een geheel getal van 2 tot 256 zijn
+@msg	`colors` must be at least 9 for the uniform reduction	`colors` moet minstens 9 zijn voor de uniforme reductie
+@msg	`colors` must be between 1 and {MAX_THEME_COLORS} (got {n})	`colors` moet tussen 1 en {MAX_THEME_COLORS} liggen (kreeg {n})
+@msg	`columnType` is vertical, uniform, repeating or sliding	`columnType` is vertical, uniform, repeating of sliding
+@msg	`columns` must be a whole number 1..50	`columns` moet een geheel getal 1..50 zijn
+@msg	`commands` must not be empty	`commands` mag niet leeg zijn
+@msg	`contents` goes with `to`	`contents` hoort bij `to`
+@msg	`corners` must be sharp, round or square, not `{other}`	`corners` moet sharp, round of square zijn, niet `{other}`
+@msg	`corners` must list anchor indices (0, 1, 2…), not {v}	`corners` moet ankerindexen bevatten (0, 1, 2…), niet {v}
+@msg	`count` must be a whole number from 0 to {MAX_COUNT}	`count` moet een geheel getal van 0 tot {MAX_COUNT} zijn
+@msg	`count` must be a whole number from 1 to 100	`count` moet een geheel getal van 1 tot 100 zijn
+@msg	`dataBase64` is larger than the module limit	`dataBase64` is groter dan de modulelimiet
+@msg	`dataBase64` is not valid base64	`dataBase64` is geen geldige base64
+@msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` kan niet worden gecombineerd met `ids`, `reverse` of `append`
+@msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` en `childLimit` beperken de samenvatting: geef `summary: true` op
+@msg	`design` is a design name, or null for plain columns	`design` is de naam van een ontwerp, of null voor gewone kolommen
+@msg	`design` is a design name, or null for the default marker	`design` is de naam van een ontwerp, of null voor de standaardmarkering
+@msg	`destinationFolder` is required when destination is `folder`	`destinationFolder` is vereist wanneer de bestemming `folder` is
+@msg	`destination` must be `none`, `saveAndClose` or `folder`	`destination` moet `none`, `saveAndClose` of `folder` zijn
+@msg	`diameter` must be from 0.1 to 2500 pt	`diameter` moet van 0,1 tot 2500 pt zijn
+@msg	`digits` must be one of {_1}	`digits` moet een van {_1} zijn
+@msg	`dimImages` is a percentage or false	`dimImages` is een percentage of false
+@msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction` moet "auto", "leftToRight" of "rightToLeft" zijn
+@msg	`ditherAmount` must be a number from 0 to 100	`ditherAmount` moet een getal van 0 tot 100 zijn
+@msg	`each` is the value one design stands for, more than 0	`each` is de waarde waar één ontwerp voor staat, meer dan 0
+@msg	`end` must be "start" or "end"	`end` moet "start" of "end" zijn
+@msg	`ends` applies to joining exactly two paths	`ends` geldt voor het verbinden van precies twee paden
+@msg	`event` must be one of {_1}	`event` moet een van {_1} zijn
+@msg	`every` must be "all", "odd" or "even", not {v}	`every` moet "all", "odd" of "even" zijn, niet {v}
+@msg	`expand` must be true or false	`expand` moet true of false zijn
+@msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` moet van {lo} tot {hi} pt zijn
+@msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` moet 1 tot 1000 paden van lettertypebestanden bevatten die de laatste zoekopdracht van text.findFontFiles heeft gevonden
+@msg	`focal` and `radius` cannot be used together	`focal` en `radius` kunnen niet samen worden gebruikt
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` moet een array van paren [subpath, anchor] zijn
+@msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` noemt [{si}, {ai}], en dat is geen anker van het pad
+@msg	`folder` must be an absolute folder path	`folder` moet een absoluut mappad zijn
+@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` moet een object met astags en waarden zijn, zoals {"wght"}
+@msg	`format` must be a string	`format` moet een string zijn
+@msg	`format` must be one of {_1}	`format` moet een van {_1} zijn
+@msg	`fractions` is chop or scale	`fractions` is chop of scale
+@msg	`from` and `to` must differ	`from` en `to` moeten verschillen
+@msg	`from` has an empty frame	`from` heeft een leeg kader
+@msg	`from` must be a non-negative integer	`from` moet een niet-negatief geheel getal zijn
+@msg	`from` must be area type or type on a path	`from` moet vlaktekst of tekst op een pad zijn
+@msg	`gid` must be a glyph id, not {v}	`gid` moet een glyph-id zijn, niet {v}
+@msg	`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)	`glyphAlternate` hoort bij één teken, niet bij een tekenstijl (text.setGlyphAlternate stelt het in)
+@msg	`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)	`glyphAlternate` accepteert alleen null, dat een glyphkeuze wegneemt (text.setGlyphAlternate maakt er een)
+@msg	`group` must be one of {_1}	`group` moet een van {_1} zijn
+@msg	`group` must be the Objects on Path group of `member` and `target`	`group` moet de groep Objecten op pad van `member` en `target` zijn
+@msg	`guide` must be a guide index (guide.list)	`guide` moet een hulplijnindex zijn (guide.list)
+@msg	`hAlign` must be default, left, center or right	`hAlign` moet default, left, center of right zijn
+@msg	`id` is an object id, not {v}	`id` is een object-id, niet {v}
+@msg	`id` must be a node id	`id` moet een knooppunt-id zijn
+@msg	`id` must be an object id, not {v}	`id` moet een object-id zijn, niet {v}
+@msg	`ids` must name Objects on Path groups or objects in them	`ids` moet groepen Objecten op pad of objecten daarin noemen
+@msg	`ids` takes at most {MAX_INSPECT_IDS} ids	`ids` accepteert maximaal {MAX_INSPECT_IDS} id’s
+@msg	`imageMap` must be none, rectangle or polygon	`imageMap` moet none, rectangle of polygon zijn
+@msg	`includeArtboardFill` must be true or false	`includeArtboardFill` moet true of false zijn
+@msg	`includeSubdirs` must be true or false	`includeSubdirs` moet true of false zijn
+@msg	`index` must be a point index	`index` moet een puntindex zijn
+@msg	`index` must be a whole number or null	`index` moet een geheel getal of null zijn
+@msg	`indices` must be a non-empty array of item indices	`indices` moet een niet-lege array van itemindexen zijn
+@msg	`item` needs `index`	`item` heeft `index` nodig
+@msg	`items` is a list of {kind, item}	`items` is een lijst van {kind, item}
+@msg	`items` is empty	`items` is leeg
+@msg	`items` must be a list of {id, points}	`items` moet een lijst van {id, points} zijn
+@msg	`items` must be a list of {{id, anchors?}}, not {v}	`items` moet een lijst van {{id, anchors?}} zijn, niet {v}
+@msg	`items` must be an array of {id, anchors}	`items` moet een array van {id, anchors} zijn
+@msg	`items` must be an array of {{id, corners?}}, not {v}	`items` moet een array van {{id, corners?}} zijn, niet {v}
+@msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida` moet "none", "short", "medium", "long" of "stylistic" zijn
+@msg	`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)	`kerningBefore` hoort bij het eerste teken van een regel, niet bij een tekenstijl (text.setRangeStyle stelt het in)
+@msg	`kind` is one of {_1}	`kind` is een van {_1}
+@msg	`kind` must be "round", "invertedRound" or "chamfer", not {v}	`kind` moet "round", "invertedRound" of "chamfer" zijn, niet {v}
+@msg	`kind` must be `text`, `visibility`, `image` or `graph`	`kind` moet `text`, `visibility`, `image` of `graph` zijn
+@msg	`kind` must be a string	`kind` moet een string zijn
+@msg	`kind` must be image, noImage or htmlText	`kind` moet image, noImage of htmlText zijn
+@msg	`kinsokuType` must be "pushInFirst", "pushOutFirst" or "pushOutOnly"	`kinsokuType` moet "pushInFirst", "pushOutFirst" of "pushOutOnly" zijn
+@msg	`kinsoku` must be "none", "hard" or "soft"	`kinsoku` moet "none", "hard" of "soft" zijn
+@msg	`label` must be a non-empty name of at most 200 characters	`label` moet een niet-lege naam van maximaal 200 tekens zijn
+@msg	`language` must be a language name or tag, such as "Turkish" or "tr"	`language` moet een taalnaam of -tag zijn, zoals "Turkish" of "tr"
+@msg	`leader` must be a string	`leader` moet een string zijn
+@msg	`leadingModel` must be "romanBaseline" or "emBoxTop"	`leadingModel` moet "romanBaseline" of "emBoxTop" zijn
+@msg	`leading` must be from 0.1 to 5000, or null for Auto	`leading` moet van 0,1 tot 5000 zijn, of null voor Automatisch
+@msg	`length` must be a number of at most 1000000 pt either way	`length` moet een getal van maximaal 1000000 pt in beide richtingen zijn
+@msg	`line` must be true or false	`line` moet true of false zijn
+@msg	`max` must be 1 to {MAX_SUGGESTIONS}	`max` moet 1 tot {MAX_SUGGESTIONS} zijn
+@msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle` ({min_angle}°) mag niet groter zijn dan `maxAngle` ({max_angle}°)
+@msg	`mode` must be "handles", "straight" or "smooth"	`mode` moet "handles", "straight" of "smooth" zijn
+@msg	`mode` must be "straight", "bezier" or "arc"	`mode` moet "straight", "bezier" of "arc" zijn
+@msg	`mode` must be one of {_1}	`mode` moet een van {_1} zijn
+@msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` moet "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" of "lineEndHalf" zijn
+@msg	`name` must be a name that is not empty	`name` moet een naam zijn die niet leeg is
+@msg	`name` must not be empty	`name` mag niet leeg zijn
+@msg	`names` is a list of preset names	`names` is een lijst met namen van voorinstellingen
+@msg	`names` lists preset names	`names` bevat namen van voorinstellingen
+@msg	`names` must be a list of names	`names` moet een lijst met namen zijn
+@msg	`names` must be a list of swatch names	`names` moet een lijst met staalnamen zijn
+@msg	`names` must be an array of style names	`names` moet een array van stijlnamen zijn
+@msg	`new` is a design name, or true	`new` is de naam van een ontwerp, of true
+@msg	`origin` must be [x, y] in points	`origin` moet [x, y] in punten zijn
+@msg	`path` must be a folder	`path` moet een map zijn
+@msg	`path` must be a path object	`path` moet een padobject zijn
+@msg	`picks` must be an array (got {v})	`picks` moet een array zijn (kreeg {v})
+@msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` moet 1 tot {MAX_PICKS} keuzes bevatten (kreeg {_1})
+@msg	`pivot` must be a whole number from 0 to 8	`pivot` moet een geheel getal van 0 tot 8 zijn
+@msg	`points` must be a list of [x, y] points	`points` moet een lijst met punten [x, y] zijn
+@msg	`points` must be a list of point indexes	`points` moet een lijst met puntindexen zijn
+@msg	`points` must be an array of point indices	`points` moet een array van puntindexen zijn
+@msg	`points` must be point indexes	`points` moet uit puntindexen bestaan
+@msg	`points` must hold from 2 to 100000 points	`points` moet 2 tot 100000 punten bevatten
+@msg	`port` must be "in" or "out"	`port` moet "in" of "out" zijn
+@msg	`position` is above or below	`position` is above of below
+@msg	`preset` must be a string	`preset` moet een string zijn
+@msg	`radius` must be 0 or more	`radius` moet 0 of meer zijn
+@msg	`ratio` must be from 0.1 to 0.5	`ratio` moet van 0,1 tot 0,5 zijn
+@msg	`rect` must be [x, y, width, height]	`rect` moet [x, y, width, height] zijn
+@msg	`rect` must be [x, y, width, height] with a positive size	`rect` moet [x, y, width, height] met een positieve grootte zijn
+@msg	`rect` must be [x0, y0, x1, y1] (got {r})	`rect` moet [x0, y0, x1, y1] zijn (kreeg {r})
+@msg	`relation` must be overlap, inside or outside	`relation` moet overlap, inside of outside zijn
+@msg	`replace` must be a string	`replace` moet een string zijn
+@msg	`reversed` must be true or false	`reversed` moet true of false zijn
+@msg	`rotate` must be a finite number	`rotate` moet een eindig getal zijn
+@msg	`rows` must be lists of numbers or nulls, not {r}	`rows` moet uit lijsten met getallen of null-waarden bestaan, niet {r}
+@msg	`rule` must be nonZero or evenOdd	`rule` moet nonZero of evenOdd zijn
+@msg	`scale` must be a number from 0.001 to 1000	`scale` moet een getal van 0,001 tot 1000 zijn
+@msg	`scale` must be a number in (0, 100]	`scale` moet een getal in (0, 100] zijn
+@msg	`scope.{key}` must be a non-empty array	`scope.{key}` moet een niet-lege array zijn
+@msg	`scope` must be "document", {artboards} or {layers}	`scope` moet "document", {artboards} of {layers} zijn
+@msg	`scope` must be "selection" or "document", not {other}	`scope` moet "selection" of "document" zijn, niet {other}
+@msg	`script` must be a string	`script` moet een string zijn
+@msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` is een niet-lege lijst met reeksindexen
+@msg	`seriesIndexes` needs a `type` or a `valueAxis`	`seriesIndexes` heeft een `type` of een `valueAxis` nodig
+@msg	`shift` must be a number of points	`shift` moet een aantal punten zijn
+@msg	`showCenter` must be true or false	`showCenter` moet true of false zijn
+@msg	`side` must be "left", "right", "top" or "bottom"	`side` moet "left", "right", "top" of "bottom" zijn
+@msg	`side` places the artboard: leave out x, y, width and height	`side` plaatst het tekengebied: laat x, y, width en height weg
+@msg	`singleWordJustification` must be "fullJustify", "alignLeft", "alignCenter" or "alignRight"	`singleWordJustification` moet "fullJustify", "alignLeft", "alignCenter" of "alignRight" zijn
+@msg	`size` is a percentage of the base text's size, 1 to 100	`size` is een percentage van de grootte van de basistekst, 1 tot 100
+@msg	`source` and `target` are the same object	`source` en `target` zijn hetzelfde object
+@msg	`source` is the only path in series group `target`	`source` is het enige pad in reeksgroep `target`
+@msg	`source` must be `folder` or `datasets`	`source` moet `folder` of `datasets` zijn
+@msg	`spacing` makes more than {MAX_COUNT} lines across the box	`spacing` levert meer dan {MAX_COUNT} lijnen over het kader op
+@msg	`spacing` must be a number	`spacing` moet een getal zijn
+@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` moet een aantal punten zijn, 0 of meer, of "auto"
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` moet meer dan 0 en maximaal {MAX_DISTANCE} pt zijn
+@msg	`start` must be a finite number	`start` moet een eindig getal zijn
+@msg	`starts` must be an array of anchor indices (or nulls)	`starts` moet een array van ankerindexen (of null-waarden) zijn
+@msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` moet linked, embedded, missing of modified zijn, of een lijst daarvan
+@msg	`stop` must be a stop index	`stop` moet een stopindex zijn
+@msg	`story` styles the whole story: give no `start` or `end`	`story` maakt het hele artikel op: geef geen `start` of `end`
+@msg	`story` takes the whole story: give no `start` or `end`	`story` neemt het hele artikel: geef geen `start` of `end`
+@msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` geldt voor contouren (stroke: true)
+@msg	`style` must be roman or japanese	`style` moet roman of japanese zijn
+@msg	`subpaths` must be two integer indices	`subpaths` moet uit twee gehele indexen bestaan
+@msg	`symbol` must be a symbol name	`symbol` moet een symboolnaam zijn
+@msg	`target` must be "object" or "contents", not {v}	`target` moet "object" of "contents" zijn, niet {v}
+@msg	`target` must be an object of the same Objects on Path group as `member`	`target` moet een object zijn uit dezelfde groep Objecten op pad als `member`
+@msg	`tint` applies to global and spot colours	`tint` geldt voor globale kleuren en steunkleuren
+@msg	`tint` goes with a global or spot `swatch`	`tint` hoort bij een `swatch` met een globale kleur of steunkleur
+@msg	`tint` must be a number (%)	`tint` moet een getal zijn (%)
+@msg	`tint` needs a global or spot colour	`tint` heeft een globale kleur of steunkleur nodig
+@msg	`to` is already threaded	`to` is al gekoppeld
+@msg	`to` is the design's new name	`to` is de nieuwe naam van het ontwerp
+@msg	`to` must be [x, y]	`to` moet [x, y] zijn
+@msg	`to` must be a closed path, area type or type on a path other than `from`	`to` moet een gesloten pad, vlaktekst of tekst op een pad zijn, anders dan `from`
+@msg	`to` must be a whole number	`to` moet een geheel getal zijn
+@msg	`to` takes the rows of one object's stack, not aligned rows	`to` accepteert de rijen van de stapel van één object, geen uitgelijnde rijen
+@msg	`tolerance` must be from 0 to 100 pt	`tolerance` moet van 0 tot 100 pt zijn
+@msg	`useLab` must be true or false	`useLab` moet true of false zijn
+@msg	`vAlign` must be default, top, middle, baseline or bottom	`vAlign` moet default, top, middle, baseline of bottom zijn
+@msg	`values` must be a list	`values` moet een lijst zijn
+@msg	`values` must be an object	`values` moet een object zijn
+@msg	`values` must name hex, rgb, cmyk, lab or gray	`values` moet hex, rgb, cmyk, lab of gray noemen
+@msg	`values` names a kind twice	`values` noemt een soort twee keer
+@msg	`version` must be 0 or {_1}	`version` moet 0 of {_1} zijn
+@msg	`version` must be 0 or {newest}	`version` moet 0 of {newest} zijn
+@msg	`warichuAlign` must be one of {_1}	`warichuAlign` moet een van {_1} zijn
+@msg	`warichuLines` must be a whole number from {_1} to {_2}	`warichuLines` moet een geheel getal van {_1} tot {_2} zijn
+@msg	`weight` must be from 0.01 to 1000 pt	`weight` moet van 0,01 tot 1000 pt zijn
+@msg	`weights` must be a list of {_1} numbers, one per row (got {v})	`weights` moet een lijst met {_1} getallen zijn, één per rij (kreeg {v})
+@msg	`xml` must be a string	`xml` moet een string zijn
+@msg	`{KEY}` entry {n} gives the paragraph at byte {start} of {_1} other indents than an entry before it	`{KEY}`, item {n}, geeft de alinea op byte {start} van {_1} andere inspringingen dan een eerder item
+@msg	`{KEY}` entry {n} must be an object	`{KEY}`, item {n}, moet een object zijn
+@msg	`{KEY}` entry {n} sets neither `leftIndent` nor `firstLineIndent`	`{KEY}`, item {n}, stelt noch `leftIndent` noch `firstLineIndent` in
+@msg	`{KEY}` entry {n}: `id` must be an object id	`{KEY}`, item {n}: `id` moet een object-id zijn
+@msg	`{KEY}` entry {n}: `start` must be a byte offset	`{KEY}`, item {n}: `start` moet een bytepositie zijn
+@msg	`{KEY}` entry {n}: `{k}` must be a number from -{MAX_PARA} to {MAX_PARA} pt	`{KEY}`, item {n}: `{k}` moet een getal van -{MAX_PARA} tot {MAX_PARA} pt zijn
+@msg	`{KEY}` entry {n}: no paragraph of {_1} starts at byte {start}	`{KEY}`, item {n}: er begint geen alinea van {_1} op byte {start}
+@msg	`{KEY}` entry {n}: unknown key `{k}`	`{KEY}`, item {n}: onbekende sleutel `{k}`
+@msg	`{KEY}` entry {n}: {_1} is not a type object	`{KEY}`, item {n}: {_1} is geen tekstobject
+@msg	`{KEY}` is empty	`{KEY}` is leeg
+@msg	`{KEY}` must be a list	`{KEY}` moet een lijst zijn
+@msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` accepteert maximaal {MAX_PARAGRAPH_INDENTS} items (kreeg {_1})
+@msg	`{KEY}` takes no `{other}` beside it	`{KEY}` accepteert geen `{other}` ernaast
+@msg	`{_1}` can't be edited or removed	`{_1}` kan niet worden bewerkt of verwijderd
+@msg	`{_1}` is built in and always listed	`{_1}` is ingebouwd en staat altijd in de lijst
+@msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` is geen lettertypebestand dat de laatste zoekopdracht van text.findFontFiles heeft gevonden
+@msg	`{_1}` would be overwritten by the package: choose a different folder or name	`{_1}` zou door het pakket worden overschreven: kies een andere map of naam
+@msg	`{base}` is larger than {_1} MB	`{base}` is groter dan {_1} MB
+@msg	`{base}` is not in the DCS file's folder	`{base}` staat niet in de map van het DCS-bestand
+@msg	`{file}` has no art to place	`{file}` heeft geen illustratie om te plaatsen
+@msg	`{file}` is over {_1} MB	`{file}` is groter dan {_1} MB
+@msg	`{f}` belongs to a VectorCraft that is running	`{f}` hoort bij een VectorCraft die actief is
+@msg	`{f}` is the copy of a document open now	`{f}` is de kopie van een document dat nu geopend is
+@msg	`{id}` is no writable format (see document.formats)	`{id}` is geen schrijfbare indeling (zie document.formats)
+@msg	`{id}` isn't a loaded library	`{id}` is geen geladen bibliotheek
+@msg	`{key}` has no colours	`{key}` heeft geen kleuren
+@msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` bevat meer dan {MAX_EDIT_WORDS} woorden
+@msg	`{key}` is a design name	`{key}` is de naam van een ontwerp
+@msg	`{key}` is a design name or a list of them	`{key}` is de naam van een ontwerp of een lijst daarvan
+@msg	`{key}` is longer than {MAX_NAME} characters	`{key}` is langer dan {MAX_NAME} tekens
+@msg	`{key}` is out of range	`{key}` valt buiten het bereik
+@msg	`{key}` must be 0 or more	`{key}` moet 0 of meer zijn
+@msg	`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent	`{key}` moet [min, desired, max] of {{min?, desired?, max?}} zijn, in procenten
+@msg	`{key}` must be [x, y] numbers	`{key}` moet uit getallen [x, y] bestaan
+@msg	`{key}` must be a list of words	`{key}` moet een lijst met woorden zijn
+@msg	`{key}` must be a list, not {v}	`{key}` moet een lijst zijn, niet {v}
+@msg	`{key}` must be a non-negative integer	`{key}` moet een niet-negatief geheel getal zijn
+@msg	`{key}` must be a number or null, not {v}	`{key}` moet een getal of null zijn, niet {v}
+@msg	`{key}` must be a number {_1}..{_2}	`{key}` moet een getal {_1}..{_2} zijn
+@msg	`{key}` must be a whole number of 0 or more	`{key}` moet een geheel getal van 0 of meer zijn
+@msg	`{key}` must be a whole number of at least 0, not {n}	`{key}` moet een geheel getal van minstens 0 zijn, niet {n}
+@msg	`{key}` must be an appearance item index (paint order) or null	`{key}` moet de index van een vormgevingsitem (verfvolgorde) of null zijn
+@msg	`{key}` must be an array of asset ids (see assets.list)	`{key}` moet een array van asset-id’s zijn (zie assets.list)
+@msg	`{key}` must be from 0 to 180 degrees, not {a}	`{key}` moet van 0 tot 180 graden zijn, niet {a}
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` moet van 0 tot {MAX_DISTANCE} pt zijn
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` moet van 0,01 tot 1000 pt zijn
+@msg	`{key}` must be from {_1} to {shift_max}	`{key}` moet van {_1} tot {shift_max} zijn
+@msg	`{key}` must be from {lo} to {hi}, not {v}	`{key}` moet van {lo} tot {hi} zijn, niet {v}
+@msg	`{key}` must be one of auto, always, never	`{key}` moet een van auto, always, never zijn
+@msg	`{key}` must be one of miter, round, bevel	`{key}` moet een van miter, round, bevel zijn
+@msg	`{key}` must be one word of at most {_1} characters	`{key}` moet één woord van maximaal {_1} tekens zijn
+@msg	`{key}` must hold single words of at most {_1} characters	`{key}` moet losse woorden van maximaal {_1} tekens bevatten
+@msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}` moet een object noemen dat aan het pad van een groep Objecten op pad is gekoppeld
+@msg	`{key}` names an object that is hidden or locked	`{key}` noemt een object dat verborgen of vergrendeld is
+@msg	`{key}`: not a colour: {v}	`{key}`: geen kleur: {v}
+@msg	`{k}.family` is required	`{k}.family` is vereist
+@msg	`{k}` is a number 0..1	`{k}` is een getal 0..1
+@msg	`{k}` is true or false	`{k}` is true of false
+@msg	`{k}` isn't an export setting: {_1}	`{k}` is geen exportinstelling: {_1}
+@msg	`{k}` must be a byte offset	`{k}` moet een bytepositie zijn
+@msg	`{k}` must be a number	`{k}` moet een getal zijn
+@msg	`{k}` must be a number of points	`{k}` moet een aantal punten zijn
+@msg	`{k}` must be a string	`{k}` moet een string zijn
+@msg	`{k}` must be a whole number	`{k}` moet een geheel getal zijn
+@msg	`{k}` must be from {lo} to {hi} for {key}	`{k}` moet van {lo} tot {hi} zijn voor {key}
+@msg	`{k}` must be {what}, not {v}	`{k}` moet {what} zijn, niet {v}
+@msg	`{l}` isn't a global or spot colour	`{l}` is geen globale kleur of steunkleur
+@msg	`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText	`{m}` is geen bitmap: gebruik clipboard.importSvg, importPdf of importText
+@msg	`{name}` can't be deleted	`{name}` kan niet worden verwijderd
+@msg	`{name}` can't be duplicated	`{name}` kan niet worden gedupliceerd
+@msg	`{name}` can't be edited	`{name}` kan niet worden bewerkt
+@msg	`{name}` can't be edited this way	`{name}` kan niet op deze manier worden bewerkt
+@msg	`{name}` can't be renamed	`{name}` kan geen andere naam krijgen
+@msg	`{name}` can't name a folder	`{name}` kan geen naam van een map zijn
+@msg	`{name}` has no art to place	`{name}` heeft geen illustratie om te plaatsen
+@msg	`{name}` has no text to place	`{name}` heeft geen tekst om te plaatsen
+@msg	`{name}` in the Word document is not UTF-8 or UTF-16 text	`{name}` in het Word-document is geen UTF-8- of UTF-16-tekst
+@msg	`{name}` in the Word document is not well-formed XML: {e}	`{name}` in het Word-document is geen welgevormde XML: {e}
+@msg	`{name}` in the Word document nests elements more than {MAX_NESTING} deep	`{name}` in het Word-document nest elementen meer dan {MAX_NESTING} niveaus diep
+@msg	`{name}` is a built-in preset and is read-only: save it under another name	`{name}` is een ingebouwde voorinstelling en is alleen-lezen: sla deze onder een andere naam op
+@msg	`{name}` is a built-in preset: save under another name	`{name}` is een ingebouwde voorinstelling: sla op onder een andere naam
+@msg	`{name}` is a built-in profile and stays	`{name}` is een ingebouwd profiel en blijft bestaan
+@msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}` is een afzonderlijk bestand, dat alleen naast het pad van het DCS-bestand kan worden gevonden
+@msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` is een tint van `{base}`: bewerk `{base}` (een tintstaal accepteert alleen een nieuwe naam)
+@msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` is een werkruimte: kies eerst een andere met edit.colorSettings
+@msg	`{name}` is built in and stays	`{name}` is ingebouwd en blijft bestaan
+@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` accepteert een verf van zijn eigen soort (kleur, verloop of patroon)
+@msg	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
+@msg	`{n}` can't be deleted	`{n}` kan niet worden verwijderd
+@msg	`{n}` can't be merged	`{n}` kan niet worden samengevoegd
+@msg	`{n}` can't be moved	`{n}` kan niet worden verplaatst
+@msg	`{n}` is not a colour swatch	`{n}` is geen kleurstaal
+@msg	`{n}` isn't a solid colour	`{n}` is geen effen kleur
+@msg	`{n}`: colour groups hold solid colours only	`{n}`: kleurgroepen bevatten alleen effen kleuren
+@msg	`{other}` doesn't trace an image	`{other}` traceert geen afbeelding
+@msg	`{s}`: the step's references copy in more than {_1} MB of values	`{s}`: de verwijzingen van de stap kopiëren meer dan {_1} MB aan waarden
+@msg	`{tag}` is not an axis tag: a tag is four characters, such as "wght"	`{tag}` is geen astag: een tag bestaat uit vier tekens, zoals "wght"
+@msg	`{to}` is empty or already used	`{to}` is leeg of al in gebruik
+@msg	`{u}` is no Unicode character	`{u}` is geen Unicode-teken
+@msg	`{what}` is longer than {MAX_TEXT} bytes	`{what}` is langer dan {MAX_TEXT} bytes
+@msg	`{what}` must be text	`{what}` moet tekst zijn
+@msg	`{word}` isn't in the custom dictionary	`{word}` staat niet in het aangepaste woordenboek
+@msg	a CMap has too many mappings	een CMap heeft te veel toewijzingen
+@msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	een DXF-tekening heeft één oorsprong: geef useArtboards: true op voor één tekening per tekengebied
+@msg	a PDF presets file with over {_1} presets	een bestand met PDF-voorinstellingen met meer dan {_1} voorinstellingen
+@msg	a \\u escape needs four hexadecimal digits	een \\u-escape heeft vier hexadecimale cijfers nodig
+@msg	a batch preview cannot switch documents	een batchvoorvertoning kan niet van document wisselen
+@msg	a brush named `{nn}` exists	er bestaat al een penseel met de naam `{nn}`
+@msg	a comma in an XPath expression must separate function arguments	een komma in een XPath-expressie moet functieargumenten scheiden
+@msg	a container of the listed objects is gone	een container van de vermelde objecten is verdwenen
+@msg	a content stream can't be read	een inhoudsstroom kan niet worden gelezen
+@msg	a content stream isn't a stream	een inhoudsstroom is geen stroom
+@msg	a design holds at most {_1} objects	een ontwerp bevat maximaal {_1} objecten
+@msg	a design needs a name	een ontwerp heeft een naam nodig
+@msg	a dictionary grew too large	een woordenboek is te groot geworden
+@msg	a document holds at most {_1} SVG filters	een document bevat maximaal {_1} SVG-filters
+@msg	a document keeps at most {_1} graph designs	een document bewaart maximaal {_1} grafiekontwerpen
+@msg	a document keeps at most {_1} saved selections	een document bewaart maximaal {_1} opgeslagen selecties
+@msg	a document keeps at most {_1} views	een document bewaart maximaal {_1} weergaven
+@msg	a document links at most {MAX_SVG_SCRIPTS} JavaScript files	een document koppelt maximaal {MAX_SVG_SCRIPTS} JavaScript-bestanden
+@msg	a document with unsaved changes has no recovery copy	een document met niet-opgeslagen wijzigingen heeft geen herstelkopie
+@msg	a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes	de orde van een feConvolveMatrix-filter is {x}×{y}, waardoor de vermenigvuldiging van de kernelgrootte in usvg overloopt
+@msg	a font's data is too large	de gegevens van een lettertype zijn te groot
+@msg	a font's subroutines are too large	de subroutines van een lettertype zijn te groot
+@msg	a function declaration without a name	een functiedeclaratie zonder naam
+@msg	a gradient preset is already called {n}	er heet al een verloopvoorinstelling {n}
+@msg	a graph has at most {_1} series, so it transposes with at most that many categories	een grafiek heeft maximaal {_1} reeksen, dus kan hij met hoogstens zoveel categorieën worden getransponeerd
+@msg	a host value has too many entries	een hostwaarde heeft te veel items
+@msg	a host value is nested too deep	een hostwaarde is te diep genest
+@msg	a layer can't be merged into its own sublayer	een laag kan niet in zijn eigen sublaag worden samengevoegd
+@msg	a layer's form box isn't an array	het kader van het formulier van een laag is geen array
+@msg	a layer's form can't be read	het formulier van een laag kan niet worden gelezen
+@msg	a layer's form has no box	het formulier van een laag heeft geen kader
+@msg	a layer's form has no dictionary	het formulier van een laag heeft geen woordenboek
+@msg	a legend draws at most {MAX_CHIPS} swatches	een legenda tekent maximaal {MAX_CHIPS} stalen
+@msg	a linked JavaScript file is outside the read roots	een gekoppeld JavaScript-bestand staat buiten de leesroots
+@msg	a name names one asset: give multiple: false, or one object	een naam noemt één asset: geef multiple: false, of één object
+@msg	a namespace declaration uses a reserved prefix or URI	een naamruimtedeclaratie gebruikt een gereserveerd voorvoegsel of een gereserveerde URI
+@msg	a namespace qualifier is undefined	een naamruimtekwalificatie is niet gedefinieerd
+@msg	a namespace with an empty URI cannot have a prefix	een naamruimte met een lege URI kan geen voorvoegsel hebben
+@msg	a number has no digits	een getal heeft geen cijfers
+@msg	a number's exponent has no digits	de exponent van een getal heeft geen cijfers
+@msg	a number's fraction has no digits	het breukdeel van een getal heeft geen cijfers
+@msg	a page can't be read	een pagina kan niet worden gelezen
+@msg	a page object is used by something else	een paginaobject wordt door iets anders gebruikt
+@msg	a page thumbnail must be RGB pixels, 1 to {THUMBNAIL_SIZE} a side (got {w} × {h})	een paginaminiatuur moet uit RGB-pixels bestaan, 1 tot {THUMBNAIL_SIZE} per zijde (kreeg {w} × {h})
+@msg	a pattern layer doesn't end what it starts	een patroonlaag sluit niet af wat hij begint
+@msg	a pattern layer's colors hold something else	de kleuren van een patroonlaag bevatten iets anders
+@msg	a pattern named `{n}` exists	er bestaat al een patroon met de naam `{n}`
+@msg	a plug-in with id {_1} is already installed	er is al een plug-in met id {_1} geïnstalleerd
+@msg	a preset named `{n}` exists	er bestaat al een voorinstelling met de naam `{n}`
+@msg	a print presets file with over {_1} presets	een bestand met afdrukvoorinstellingen met meer dan {_1} voorinstellingen
+@msg	a profile is already called {n}	er heet al een profiel {n}
+@msg	a property descriptor cannot have both a value or writable and a get or set	een eigenschapsdescriptor kan niet zowel value of writable als get of set hebben
+@msg	a property descriptor must be an object	een eigenschapsdescriptor moet een object zijn
+@msg	a property's {name} must be a function or undefined	de {name} van een eigenschap moet een functie of undefined zijn
+@msg	a row can't go into itself	een rij kan niet in zichzelf worden geplaatst
+@msg	a series goes on the left or the right value axis	een reeks hoort op de linker- of de rechterwaardeas
+@msg	a start must be an anchor index ≥ 0 or null	een start moet een ankerindex ≥ 0 of null zijn
+@msg	a stream in it would decode to more than 256 MB, or its decode parameters can't be applied	een stroom erin zou tot meer dan 256 MB worden gedecodeerd, of de decodeerparameters ervan kunnen niet worden toegepast
+@msg	a string holds a control character	een string bevat een besturingsteken
+@msg	a string holds an escape sequence JSON does not have	een string bevat een escapereeks die JSON niet kent
+@msg	a string is not closed	een string is niet afgesloten
+@msg	a style named `{name}` already exists	er bestaat al een stijl met de naam `{name}`
+@msg	a style named `{to}` already exists	er bestaat al een stijl met de naam `{to}`
+@msg	a swatch needs a colour, gradient or pattern	een staal heeft een kleur, verloop of patroon nodig
+@msg	a symbol named `{n}` already exists	er bestaat al een symbool met de naam `{n}`
+@msg	a theme has 1 to {THEME_SIZE} colours	een thema heeft 1 tot {THEME_SIZE} kleuren
+@msg	a theme is already called {name} (replace: "{name}" overwrites it)	er heet al een thema {name} (replace: "{name}" overschrijft het)
+@msg	a toolbar name has at most {MAX_NAME} characters	de naam van een werkbalk heeft maximaal {MAX_NAME} tekens
+@msg	a view named `{_1}` exists	er bestaat al een weergave met de naam `{_1}`
+@msg	a view named `{name}` exists	er bestaat al een weergave met de naam `{name}`
+@msg	a workspace keeps at most {MAX} toolbars	een werkruimte bewaart maximaal {MAX} werkbalken
+@msg	a {_1} series can't go in a {_2} graph	een reeks van het type {_1} kan niet in een grafiek van het type {_2} staan
+@msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}: "pdf" (PDF-compatibel, de standaard) of "7" (oude .ai, versie 7)
+@msg	already editing an opacity mask	er wordt al een dekkingmasker bewerkt
+@msg	already editing another object's opacity mask	het dekkingmasker van een ander object wordt al bewerkt
+@msg	already in pattern editing mode	de patroonbewerkingsmodus is al actief
+@msg	an SVG filter is named by its id: give `xml` with `name`	een SVG-filter wordt bij zijn id genoemd: geef `xml` met `name`
+@msg	an XML element has two attributes with the same name	een XML-element heeft twee attributen met dezelfde naam
+@msg	an XML value cannot be inserted into itself or its descendants	een XML-waarde kan niet in zichzelf of in zijn afstammelingen worden ingevoegd
+@msg	an XML value's children cannot be assigned by position	de onderliggende elementen van een XML-waarde kunnen niet op positie worden toegewezen
+@msg	an XML value's children cannot be deleted by position	de onderliggende elementen van een XML-waarde kunnen niet op positie worden verwijderd
+@msg	an XMLList converts to XML only when it has one item	een XMLList wordt alleen naar XML geconverteerd wanneer deze één item heeft
+@msg	an XPath node test is missing	er ontbreekt een XPath-knooppunttest
+@msg	an XPath operand is missing	er ontbreekt een XPath-operand
+@msg	an XPath operator is missing	er ontbreekt een XPath-operator
+@msg	an XPath predicate or step cannot follow here	hier kan geen XPath-predicaat of -stap volgen
+@msg	an XPath predicate or step follows a value that is not a node-set	een XPath-predicaat of -stap volgt op een waarde die geen knooppuntenset is
+@msg	an XPath step is missing	er ontbreekt een XPath-stap
+@msg	an artboard is listed twice	een tekengebied staat twee keer in de lijst
+@msg	an empty artboard has no width or height to scale to	een leeg tekengebied heeft geen breedte of hoogte om naar te schalen
+@msg	an image couldn't be decoded and is missing from the picture	een afbeelding kon niet worden gedecodeerd en ontbreekt in het beeld
+@msg	an image is too large for DXF and was left out	een afbeelding is te groot voor DXF en is weggelaten
+@msg	an image of {_1} MB, at most {_2} MB	een afbeelding van {_1} MB, maximaal {_2} MB
+@msg	an image of {declared_w} × {declared_h} pixels is too large to draw	een afbeelding van {declared_w} × {declared_h} pixels is te groot om te tekenen
+@msg	an image of {width} × {height} pixels is too large to draw	een afbeelding van {width} × {height} pixels is te groot om te tekenen
+@msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	een afbeelding van {w} × {h} pixels is te groot om te converteren (maximaal {_1} pixels)
+@msg	an index must be a whole number	een index moet een geheel getal zijn
+@msg	an inline graphic has no glyphs	een inline afbeelding heeft geen glyphs
+@msg	an invisible text form can't be read	een formulier met onzichtbare tekst kan niet worden gelezen
+@msg	an object is missing	er ontbreekt een object
+@msg	an object's header is missing	de kop van een object ontbreekt
+@msg	an overprinting form can't be read	een overdrukkend formulier kan niet worden gelezen
+@msg	an unread object has no readable bounds	een ongelezen object heeft geen leesbare grenzen
+@msg	an unread object holds a frame of threaded type	een ongelezen object bevat een kader van gekoppelde tekst
+@msg	an unread object is missing from its layer	een ongelezen object ontbreekt in zijn laag
+@msg	anchor `smooth` must be true or false	`smooth` van het anker moet true of false zijn
+@msg	anchor `{key}` must be [x, y]	`{key}` van het anker moet [x, y] zijn
+@msg	anchor `{key}` must be a number	`{key}` van het anker moet een getal zijn
+@msg	angle and roundness must be finite	hoek en ronding moeten eindig zijn
+@msg	angles must be a list as long as pins (degrees or null)	angles moet een lijst zijn die even lang is als pins (graden of null)
+@msg	appearance must be flat|center|edge	appearance moet flat|center|edge zijn
+@msg	apply is "fill" or "stroke", not `{other}`	apply is "fill" of "stroke", niet `{other}`
+@msg	apply was called on a value that is not a function	apply is aangeroepen op een waarde die geen functie is
+@msg	area must be a closed polygon of 3 to 100000 [x, y] points	area moet een gesloten polygoon van 3 tot 100000 punten [x, y] zijn
+@msg	area type in a thread cannot use Dynamic Text: {frames}	vlaktekst in gekoppelde tekst kan geen dynamische tekst gebruiken: {frames}
+@msg	area type needs a path that encloses an area	vlaktekst heeft een pad nodig dat een oppervlak omsluit
+@msg	area type {_1} is named twice	vlaktekst {_1} wordt twee keer genoemd
+@msg	array literal too long	arrayliteral te lang
+@msg	arrowAlign must be extend|tip, got {o}	arrowAlign moet extend|tip zijn, kreeg {o}
+@msg	arrowScale must be [start, end]	arrowScale moet [start, end] zijn
+@msg	artboard is a 0-based index	artboard is een index die bij 0 begint
+@msg	artboard must be a 0-based index	artboard moet een index zijn die bij 0 begint
+@msg	artboard {i} doesn't print	tekengebied {i} wordt niet afgedrukt
+@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout moet {layout?, columns?, spacing?, rightToLeft?} zijn
+@msg	artboardLayout.columns must be 1 or more	artboardLayout.columns moet 1 of meer zijn
+@msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout moet gridByRow, gridByColumn, row of column zijn
+@msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft moet true of false zijn
+@msg	artboardLayout.spacing must be 0–{MAX_SPACING} pt	artboardLayout.spacing moet 0–{MAX_SPACING} pt zijn
+@msg	artboards must be a non-empty list	artboards moet een niet-lege lijst zijn
+@msg	artboards must be a number	artboards moet een getal zijn
+@msg	asset `{_1}` has no art to export	asset `{_1}` heeft geen illustratie om te exporteren
+@msg	assignment to a constant binding	toewijzing aan een constante binding
+@msg	at least one row that isn't excluded needs a weight above 0	minstens één rij die niet is uitgesloten heeft een gewicht boven 0 nodig
+@msg	at most {MAX_KEYWORDS} keywords	maximaal {MAX_KEYWORDS} trefwoorden
+@msg	at most {MAX_MATCHES} matches are kept	er worden maximaal {MAX_MATCHES} overeenkomsten bewaard
+@msg	at most {MAX_POINTS} points	maximaal {MAX_POINTS} punten
+@msg	at most {MAX_QUEUE} files	maximaal {MAX_QUEUE} bestanden
+@msg	at must be [x, y]	at moet [x, y] zijn
+@msg	at/rect lie outside the canvas	at/rect liggen buiten het canvas
+@msg	attribute must be size|leading|tracking|kerning|baselineShift	attribute moet size|leading|tracking|kerning|baselineShift zijn
+@msg	attrs must be an object	attrs moet een object zijn
+@msg	automation path rejected: the folder's name isn't valid text	automatiseringspad geweigerd: de naam van de map is geen geldige tekst
+@msg	automation path rejected: {_1} isn't valid text	automatiseringspad geweigerd: {_1} is geen geldige tekst
+@msg	automation path rejected: {why}: {path}	automatiseringspad geweigerd: {why}: {path}
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`	axis moet "vertical", "horizontal" of een hoek in graden zijn, niet `{given}`
+@msg	backgroundContents must be transparent or white	backgroundContents moet transparent of white zijn
+@msg	bad AES key	ongeldige AES-sleutel
+@msg	bad `runs`: {e}	ongeldige `runs`: {e}
+@msg	bad arrowScale	ongeldige arrowScale
+@msg	bad base64	ongeldige base64
+@msg	bad color {c}	ongeldige kleur {c}
+@msg	bad colour	ongeldige kleur
+@msg	bad colour in `colors`	ongeldige kleur in `colors`
+@msg	bad colour {v}	ongeldige kleur {v}
+@msg	bad colour {v} in groupColors	ongeldige kleur {v} in groupColors
+@msg	bad cross-reference entry	ongeldig item in de kruisverwijzingstabel
+@msg	bad cross-reference table	ongeldige kruisverwijzingstabel
+@msg	bad current colour {v}	ongeldige huidige kleur {v}
+@msg	bad dataBase64	ongeldige dataBase64
+@msg	bad edit	ongeldige bewerking
+@msg	bad fill {v}	ongeldige vulling {v}
+@msg	bad fit: {e}	ongeldige passing: {e}
+@msg	bad model {other} (keep, new or document)	ongeldig model {other} (keep, new of document)
+@msg	bad new colour {v}	ongeldige nieuwe kleur {v}
+@msg	bad object	ongeldig object
+@msg	bad object number	ongeldig objectnummer
+@msg	bad offset	ongeldige positie
+@msg	bad path data: {e}	ongeldige padgegevens: {e}
+@msg	bad point {v}: expected [x, y]	ongeldig punt {v}: verwacht [x, y]
+@msg	bad point {v}: expected [x, y] or [x, y, pressure]	ongeldig punt {v}: verwacht [x, y] of [x, y, pressure]
+@msg	bad reference	ongeldige verwijzing
+@msg	bad trailer size	ongeldige grootte in de trailer
+@msg	bad {k} colour	ongeldige kleur voor {k}
+@msg	batches cannot nest	batches kunnen niet worden genest
+@msg	bind something to a variable first	koppel eerst iets aan een variabele
+@msg	bleed must be 0–{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}	bleed moet 0–{MAX_BLEED} pt zijn: een getal, [top, bottom, left, right] of {{top, bottom, left, right}}
+@msg	blend must be a mode name	blend moet de naam van een modus zijn
+@msg	both sides of an XPath | must select nodes	beide zijden van een XPath-| moeten knooppunten selecteren
+@msg	brush must be a name or null	brush moet een naam of null zijn
+@msg	by must be a number	by moet een getal zijn
+@msg	can't add page thumbnails: {why}	kan geen paginaminiaturen toevoegen: {why}
+@msg	can't add the editing data for other apps: {why}	kan de bewerkingsgegevens voor andere apps niet toevoegen: {why}
+@msg	can't edit the written PDF: {why}	kan de geschreven PDF niet bewerken: {why}
+@msg	can't encrypt the PDF: {why}	kan de PDF niet versleutelen: {why}
+@msg	can't linearise the PDF: {why}	kan de PDF niet lineariseren: {why}
+@msg	can't open `{_1}`: {_2}	kan `{_1}` niet openen: {_2}
+@msg	can't open `{_1}`: {e}	kan `{_1}` niet openen: {e}
+@msg	can't open `{name}`: not a format VectorCraft reads (see document.formats)	kan `{name}` niet openen: geen indeling die VectorCraft leest (zie document.formats)
+@msg	can't place `{name}`: not a format VectorCraft reads (see document.formats)	kan `{name}` niet plaatsen: geen indeling die VectorCraft leest (zie document.formats)
+@msg	can't read back the written PDF: {e}	kan de geschreven PDF niet teruglezen: {e}
+@msg	can't read this Word document: {why}	kan dit Word-document niet lezen: {why}
+@msg	can't write .{e} images: use .png, .jpg, .gif, .webp, .tif or .bmp	kan geen .{e}-afbeeldingen schrijven: gebruik .png, .jpg, .gif, .webp, .tif of .bmp
+@msg	can't write PDF layers, overprint or invisible text: {why}	kan geen PDF-lagen, overdruk of onzichtbare tekst schrijven: {why}
+@msg	can't write the file's copyright: {why}	kan het copyright van het bestand niet schrijven: {why}
+@msg	can't write the file's modification date: {why}	kan de wijzigingsdatum van het bestand niet schrijven: {why}
+@msg	can't write the pages' user units: {why}	kan de gebruikerseenheden van de pagina’s niet schrijven: {why}
+@msg	canceled	geannuleerd
+@msg	cannot convert the object to a primitive value	kan het object niet naar een primitieve waarde converteren
+@msg	cannot convert undefined or null to an object	kan undefined of null niet naar een object converteren
+@msg	cannot distort a zero-size or non-finite bounding box	kan een selectiekader zonder grootte of met niet-eindige afmetingen niet vervormen
+@msg	cannot move an object into itself	kan een object niet in zichzelf verplaatsen
+@msg	case must be upper|lower|title|sentence	case moet upper|lower|title|sentence zijn
+@msg	category `{c}`: one of {_1}	categorie `{c}`: een van {_1}
+@msg	center must be [x, y]	center moet [x, y] zijn
+@msg	character dimensions cannot be represented with the source text transform	tekenafmetingen kunnen niet worden weergegeven met de teksttransformatie van de bron
+@msg	character dimensions cannot be represented with the target text transform	tekenafmetingen kunnen niet worden weergegeven met de teksttransformatie van het doel
+@msg	choose at least one artboard	kies minstens één tekengebied
+@msg	choose at least one status	kies minstens één status
+@msg	clip must be true or false	clip moet true of false zijn
+@msg	clippingMask must be true or false	clippingMask moet true of false zijn
+@msg	closed must be a boolean	closed moet een boolean zijn
+@msg	collapsed must be true or false	collapsed moet true of false zijn
+@msg	color.profile: no RGB or CMYK profile is called “{profile}”	color.profile: er is geen RGB- of CMYK-profiel met de naam „{profile}”
+@msg	colorMode must be rgb or cmyk, not `{m}`	colorMode moet rgb of cmyk zijn, niet `{m}`
+@msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel moet {own} (de modus van het document), grayscale of bitmap zijn
+@msg	colour groups can't go into colour groups	kleurgroepen kunnen niet in kleurgroepen worden geplaatst
+@msg	colour, mode and spot apply to solid-colour swatches only	colour, mode en spot gelden alleen voor stalen met een effen kleur
+@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	kolom {column}: `{cell}` is een `%`-kolom van grafiekgegevensbestanden, die niet worden gelezen
+@msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	kolom {column}: `{cell}` noemt `{name}`, en dat is een variabele van het type {_1}
+@msg	column {column}: `{cell}` names no variable	kolom {column}: `{cell}` noemt geen variabele
+@msg	column {column}: the variable name is longer than {MAX_NAME} characters	kolom {column}: de naam van de variabele is langer dan {MAX_NAME} tekens
+@msg	column: true floats the whole column and takes no onto, above or below	column: true laat de hele kolom zweven en accepteert geen onto, above of below
+@msg	command must be a shape.* command	command moet een shape.*-opdracht zijn
+@msg	commands[{i}]: missing `command`	commands[{i}]: `command` ontbreekt
+@msg	composer must be "singleLine" or "everyLine"	composer moet "singleLine" of "everyLine" zijn
+@msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	samengestelde vormen accepteren paden, samengestelde paden, groepen, samengestelde vormen, tekst, mengsels en omvormingen
+@msg	compound {_1} must contain exactly one open path to join	samengesteld object {_1} moet precies één open pad bevatten om te verbinden
+@msg	connect needs a path other than the one extended	connect heeft een ander pad nodig dan het pad dat wordt verlengd
+@msg	connect needs id	connect heeft id nodig
+@msg	connect path has no open end	het pad van connect heeft geen open uiteinde
+@msg	continuation must be an array of path chunks	continuation moet een array van padstukken zijn
+@msg	continuation requires points	continuation vereist points
+@msg	copy needs path: the file to copy into the document's folder	copy heeft path nodig: het bestand dat naar de map van het document wordt gekopieerd
+@msg	copy takes images only: relink placed documents where their files are	copy accepteert alleen afbeeldingen: koppel geplaatste documenten opnieuw op de plek waar hun bestanden staan
+@msg	copying a file isn't available on the web	een bestand kopiëren is niet beschikbaar op het web
+@msg	copyrightStatus must be unknown, copyrighted or publicDomain	copyrightStatus moet unknown, copyrighted of publicDomain zijn
+@msg	copyrightUrl must be a URL (no spaces, at most 2048 characters)	copyrightUrl moet een URL zijn (geen spaties, maximaal 2048 tekens)
+@msg	corners must be 4 [x, y] points (TL, TR, BR, BL)	corners moet uit 4 punten [x, y] bestaan (LB, RB, RO, LO)
+@msg	counterPer `{c}`: item or file	counterPer `{c}`: item of file
+@msg	crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"	crop `{_1}`: alleen PDF-pagina’s hebben art-, trim-, bleed- en mediakaders; gebruik "crop" of "bounding"
+@msg	crop rectangle doesn't overlap the image	de bijsnijdrechthoek overlapt de afbeelding niet
+@msg	cross-reference and object streams aren't supported	kruisverwijzings- en objectstromen worden niet ondersteund
+@msg	damaged compressed data: {e}	beschadigde gecomprimeerde gegevens: {e}
+@msg	dash lengths must be numbers, got {v}	streeplengten moeten getallen zijn, kreeg {v}
+@msg	dash must be a list of lengths or null, got {v}	dash moet een lijst met lengten of null zijn, kreeg {v}
+@msg	data key `{k}`: letters, digits, -, _ and . (not name or vc-…)	gegevenssleutel `{k}`: letters, cijfers, -, _ en . (niet name of vc-…)
+@msg	data must be an object of key: value, not {v}	data moet een object van sleutel: waarde zijn, niet {v}
+@msg	data set `{name}` holds a value for `{var}`, which the library doesn't declare	gegevensset `{name}` bevat een waarde voor `{var}`, die de bibliotheek niet declareert
+@msg	data set `{name}` holds two values for `{var}`	gegevensset `{name}` bevat twee waarden voor `{var}`
+@msg	data set `{name}` is declared twice	gegevensset `{name}` is twee keer gedeclareerd
+@msg	data takes at most {MAX_DATA} keys at once	data accepteert maximaal {MAX_DATA} sleutels tegelijk
+@msg	dataset `{name}` already exists	gegevensset `{name}` bestaat al
+@msg	dataset `{to}` already exists	gegevensset `{to}` bestaat al
+@msg	date `{d}`: YYYY-MM-DD	datum `{d}`: YYYY-MM-DD
+@msg	decoded data is too large	de gedecodeerde gegevens zijn te groot
+@msg	define a variable first	definieer eerst een variabele
+@msg	detect must be true or false	detect moet true of false zijn
+@msg	direct-select anchor points of a path	selecteer met directe selectie ankerpunten van een pad
+@msg	distance must be > 0	distance moet > 0 zijn
+@msg	dx and dy give the arrow's direction	dx en dy geven de richting van de pijl
+@msg	dx and dy must be numbers	dx en dy moeten getallen zijn
+@msg	dxf fitTo must be [width, height], positive	dxf fitTo moet [width, height] zijn, positief
+@msg	dxf must be an object of DXF import options	dxf moet een object met DXF-importopties zijn
+@msg	dxf scale must be a positive number up to {_1}, not {s}	dxf scale moet een positief getal tot en met {_1} zijn, niet {s}
+@msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf unit `{u}`: een eenheid zoals mm, cm, in of pt
+@msg	dxf: {e}	dxf: {e}
+@msg	each format is an object {format, scale?, suffix?}	elke indeling is een object {format, scale?, suffix?}
+@msg	each item needs an id	elk item heeft een id nodig
+@msg	each match needs `kind`	elke overeenkomst heeft `kind` nodig
+@msg	each match needs a `name`	elke overeenkomst heeft een `name` nodig
+@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	elk item van `fonts` is {family, style?}; 1 tot 1000 stuks
+@msg	each of `items` is {kind, item}	elk item van `items` is {kind, item}
+@msg	each of `items` is {{id, corners?}} with an object id, not {it}	elk item van `items` is {{id, corners?}} met een object-id, niet {it}
+@msg	each path chunk must contain 1 to 4096 points	elk padstuk moet 1 tot 4096 punten bevatten
+@msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	elke keuze is {{at: [x, y]}} of {{rect: [x0, y0, x1, y1]}} (kreeg {v})
+@msg	each row needs `from`	elke rij heeft `from` nodig
+@msg	each stop needs a position	elke stop heeft een positie nodig
+@msg	each subpath needs an anchors array	elk subpad heeft een array anchors nodig
+@msg	each weight must be a number of 0 or more (got {v})	elk gewicht moet een getal van 0 of meer zijn (kreeg {v})
+@msg	easingType must be easeIn, easeOut, easeInOut or easeOutIn	easingType moet easeIn, easeOut, easeInOut of easeOutIn zijn
+@msg	editingData must be true or false	editingData moet true of false zijn
+@msg	editingData must be true, false or "always"	editingData moet true, false of "always" zijn
+@msg	edits overlap	bewerkingen overlappen elkaar
+@msg	effects of objects whose appearances differ can't be moved together	effecten van objecten met een verschillende vormgeving kunnen niet samen worden verplaatst
+@msg	empty header in column {_1}	lege koptekst in kolom {_1}
+@msg	encoding `{_1}`: utf8 or utf16	codering `{_1}`: utf8 of utf16
+@msg	ends must be two of "first" and "last"	ends moet uit twee waarden "first" en "last" bestaan
+@msg	every numbered name for the result is taken	elke genummerde naam voor het resultaat is al in gebruik
+@msg	expanded SVG styles exceed the import size limit	uitgevouwen SVG-stijlen overschrijden de groottelimiet voor importeren
+@msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	het bestand met exportvoorinstellingen is groter dan {MAX_PRESET_FILE_BYTES} bytes
+@msg	exportText must be editable or appearance	exportText moet editable of appearance zijn
+@msg	exportType must be movieClip or graphic, not `{s}`	exportType moet movieClip of graphic zijn, niet `{s}`
+@msg	extend needs id	extend heeft id nodig
+@msg	featureChanges lists at most {MAX_FEATURE_CHANGES} tags	featureChanges bevat maximaal {MAX_FEATURE_CHANGES} tags
+@msg	featureChanges must be a list of tags	featureChanges moet een lijst met tags zijn
+@msg	features must be a list of tags	features moet een lijst met tags zijn
+@msg	fidelity must be 0..100	fidelity moet 0..100 zijn
+@msg	files must be {name, dataBase64}	files moet {name, dataBase64} zijn
+@msg	finally table {t} out of range	finally-tabel {t} buiten het bereik
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit moet none|autoHeight|shrinkText|block zijn, kreeg {id}
+@msg	flags cannot be given with a RegExp object	flags kunnen niet samen met een RegExp-object worden opgegeven
+@msg	flattener: {e}	afvlakker: {e}
+@msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`: high, medium, low of een opgeslagen voorinstelling (zie flattener.presets.list)
+@msg	flipProfile must be along|across, got {o}	flipProfile moet along|across zijn, kreeg {o}
+@msg	folders `{f}`: none, rows, format, item or itemFormat	folders `{f}`: none, rows, format, item of itemFormat
+@msg	folders deeper than {MAX_BATCH_DEPTH} levels	mappen dieper dan {MAX_BATCH_DEPTH} niveaus
+@msg	folders deeper than {MAX_DEPTH} levels	mappen dieper dan {MAX_DEPTH} niveaus
+@msg	font family `{family}` is not available	lettertypefamilie `{family}` is niet beschikbaar
+@msg	font family `{tf}` is not available	lettertypefamilie `{tf}` is niet beschikbaar
+@msg	format `{f}`: pdf or postscript	format `{f}`: pdf of postscript
+@msg	format `{f}`: text or json	format `{f}`: text of json
+@msg	format is `{format}`	de indeling is `{format}`
+@msg	formats must be an array of rows, not {v}	formats moet een array van rijen zijn, niet {v}
+@msg	frequency must be between 1 and 300 lines per inch	frequency moet tussen 1 en 300 lijnen per inch liggen
+@msg	from and to must be finite	from en to moeten eindig zijn
+@msg	from must be [x0, y0, x1, y1]	from moet [x0, y0, x1, y1] zijn
+@msg	function declaration index out of range	index van functiedeclaratie buiten het bereik
+@msg	give `before` or `after`, not both	geef `before` of `after`, niet beide
+@msg	give `char`, `text`, `code` or `unicode`	geef `char`, `text`, `code` of `unicode`
+@msg	give `colors`, or `color` and `rule`	geef `colors`, of `color` en `rule`
+@msg	give `count` or `spacing`, not both	geef `count` of `spacing`, niet beide
+@msg	give `event`, such as onclick	geef `event`, zoals onclick
+@msg	give `file`, the JavaScript file's path or URL	geef `file`, het pad of de URL van het JavaScript-bestand
+@msg	give `fill` and/or `stroke`	geef `fill` en/of `stroke`
+@msg	give `fill`, `stroke` or both	geef `fill`, `stroke` of beide
+@msg	give `folder`	geef `folder`
+@msg	give `fonts`, or open a document	geef `fonts`, of open een document
+@msg	give `from` or `indices`, not both	geef `from` of `indices`, niet beide
+@msg	give `id` (no text is being edited)	geef `id` (er wordt geen tekst bewerkt)
+@msg	give `id` and `anchors`, or `items`, not both	geef `id` en `anchors`, of `items`, niet beide
+@msg	give `id` or `guide`, not both	geef `id` of `guide`, niet beide
+@msg	give `length` or `to`	geef `length` of `to`
+@msg	give `matches`: [{kind, name, target}]	geef `matches`: [{kind, name, target}]
+@msg	give `name` (or edit a pattern)	geef `name` (of bewerk een patroon)
+@msg	give `name` or `names`	geef `name` of `names`
+@msg	give `name`, an SVG filter's name	geef `name`, de naam van een SVG-filter
+@msg	give `path` (a .wasm file) or `dataBase64` (the module)	geef `path` (een .wasm-bestand) of `dataBase64` (de module)
+@msg	give `path`, `data` or `dataBase64`	geef `path`, `data` of `dataBase64`
+@msg	give `path`, `data`, `dataBase64` or `csv`	geef `path`, `data`, `dataBase64` of `csv`
+@msg	give `path`, `xml` or `dataBase64`	geef `path`, `xml` of `dataBase64`
+@msg	give `path`, an SVG file, or `svg`, SVG text	geef `path`, een SVG-bestand, of `svg`, SVG-tekst
+@msg	give `script`, the JavaScript the event runs ("" removes the event)	geef `script`, de JavaScript die de gebeurtenis uitvoert ("" verwijdert de gebeurtenis)
+@msg	give `text` (the reading) or `remove`	geef `text` (de lezing) of `remove`
+@msg	give `x` and `y` (and a `tolerance` of 0 or more)	geef `x` en `y` (en een `tolerance` van 0 of meer)
+@msg	give `xml`, one SVG <filter> element	geef `xml`, één SVG-element <filter>
+@msg	give a mode or r/g/b, c/m/y/k, gray or tint adjustments	geef een modus of aanpassingen voor r/g/b, c/m/y/k, gray of tint
+@msg	give a name, or paint the active proxy with a saved preset	geef een naam, of verf de actieve proxy met een opgeslagen voorinstelling
+@msg	give a name, or select a stroke with a saved profile	geef een naam, of selecteer een contour met een opgeslagen profiel
+@msg	give a pattern name or select an object painted with a pattern	geef de naam van een patroon of selecteer een object dat met een patroon is geverfd
+@msg	give at least one of clip, invert, disabled, linked	geef minstens een van clip, invert, disabled, linked
+@msg	give color, none, swatch or gradient	geef color, none, swatch of gradient
+@msg	give dataBase64	geef dataBase64
+@msg	give either at (a click) or area (a path drawn around the overlaps)	geef at (een klik) of area (een pad dat rond de overlappingen is getekend)
+@msg	give exactly one of `at`, `rect` and `points`	geef precies een van `at`, `rect` en `points`
+@msg	give exactly one of `path`, `data` and `dataBase64`	geef precies een van `path`, `data` en `dataBase64`
+@msg	give formats or a preset, not both	geef formats of een voorinstelling, niet beide
+@msg	give index or indexes, not both	geef index of indexes, niet beide
+@msg	give newName or delete	geef newName of delete
+@msg	give offset or by	geef offset of by
+@msg	give one <filter> element	geef één element <filter>
+@msg	give one of `to`, `rect` or `at`	geef een van `to`, `rect` of `at`
+@msg	give one of assets, layers, selection or fullDocument	geef een van assets, layers, selection of fullDocument
+@msg	give only one of onto, above, below, icon and a column place	geef slechts een van onto, above, below, icon en een kolomplaats
+@msg	give opacity or blend	geef opacity of blend
+@msg	give origin: [x, y], or reset: true	geef origin: [x, y], of reset: true
+@msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	geef overprintFill, overprintStroke, showCenter, imageMap, url of note
+@msg	give path (a file) or folder	geef path (een bestand) of folder
+@msg	give path, or name and dataBase64	geef path, of name en dataBase64
+@msg	give paths or files	geef paths of files
+@msg	give rows, rowHeight, columns or columnWidth	geef rows, rowHeight, columns of columnWidth
+@msg	give svg, or dataBase64 of an SVG or SVGZ file	geef svg, of dataBase64 van een SVG- of SVGZ-bestand
+@msg	give text	geef text
+@msg	give the asset a name	geef de asset een naam
+@msg	give the preset a `name`	geef de voorinstelling een `name`
+@msg	give the preset a name	geef de voorinstelling een naam
+@msg	give the preset a name (1–64 characters)	geef de voorinstelling een naam (1–64 tekens)
+@msg	give the settings to change, e.g. {"formats"}]}	geef de instellingen die moeten worden gewijzigd, bijv. {"formats"}]}
+@msg	give the style a name	geef de stijl een naam
+@msg	give two or more style `names`	geef twee of meer `names` van stijlen
+@msg	give two or more swatches	geef twee of meer stalen
+@msg	give x, y, or a handle's length or angle	geef x, y, of de lengte of hoek van een handgreep
+@msg	give {key, value} or {values}	geef {key, value} of {values}
+@msg	global must be true or false	global moet true of false zijn
+@msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	glyph {_1} wordt niet getekend voor {ch} met de stijl van het teken (zoals hoofdletters, kleinkapitalen of een cijfersysteem)
+@msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	glyph {g} is geen alternatief voor {ch} in {_1} {_2}
+@msg	gradient must be "objects" or "mesh"	gradient moet "objects" of "mesh" zijn
+@msg	grays must be "profile" or "black", not `{g}`	grays moet "profile" of "black" zijn, niet `{g}`
+@msg	gridColors must be a preset name or two colours	gridColors moet de naam van een voorinstelling of twee kleuren zijn
+@msg	gridSize must be small, medium or large	gridSize moet small, medium of large zijn
+@msg	guide {g} is not selected	hulplijn {g} is niet geselecteerd
+@msg	handle must be 0..3	handle moet 0..3 zijn
+@msg	handler at {_1} expects {_2} values but its range starts with {d}	de handler op {_1} verwacht {_2} waarden, maar het bereik ervan begint met {d}
+@msg	handler depth too large	handlerdiepte te groot
+@msg	handler range {_1}..{_2} out of range	handlerbereik {_1}..{_2} buiten het bereik
+@msg	hiddenLayers must be true or false	hiddenLayers moet true of false zijn
+@msg	hiddenObjects {v}: "layer" (the default), "omit" or "visible"	hiddenObjects {v}: "layer" (de standaard), "omit" of "visible"
+@msg	highlight a layer to merge into	markeer een laag om in samen te voegen
+@msg	highlight two or more rows in one layer or group	markeer twee of meer rijen in één laag of groep
+@msg	highlight two or more rows to merge	markeer twee of meer rijen om samen te voegen
+@msg	hvcC	hvcC
+@msg	icon docks a panel in the icon column: use window.panel.dock	icon dockt een paneel in de pictogramkolom: gebruik window.panel.dock
+@msg	id must be a dimension id	id moet de id van een maatlijn zijn
+@msg	image has no bounds	de afbeelding heeft geen grenzen
+@msg	image {_1} is linked already	afbeelding {_1} is al gekoppeld
+@msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client of server
+@msg	images in a spot ink whose samples couldn't be read were imported in RGB	afbeeldingen in een steunkleurinkt waarvan de samples niet konden worden gelezen, zijn in RGB geïmporteerd
+@msg	images past the most pixels one file may hold were left out	afbeeldingen boven het maximale aantal pixels dat één bestand mag bevatten, zijn weggelaten
+@msg	images too large to read were left out	afbeeldingen die te groot zijn om te lezen, zijn weggelaten
+@msg	index out of range	index buiten het bereik
+@msg	indexes may hold at most {MAX_GUIDE_INDEXES} entries	indexes mag maximaal {MAX_GUIDE_INDEXES} items bevatten
+@msg	indexes must be an array of guide indexes	indexes moet een array van hulplijnindexen zijn
+@msg	instances must be 1..1000	instances moet 1..1000 zijn
+@msg	instruction out of range	instructie buiten het bereik
+@msg	instruction {pc} ({op}) pops below the stack	instructie {pc} ({op}) haalt meer van de stack dan erop staat
+@msg	instruction {pc} reached with stack depths {seen} and {d}	instructie {pc} bereikt met stackdiepten {seen} en {d}
+@msg	invalid `color`	ongeldige `color`
+@msg	invalid anchor index {v}: expected a non-negative integer	ongeldige ankerindex {v}: verwacht een niet-negatief geheel getal
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	ongeldige ankerverwijzing {v}: verwacht [subpath, anchor]
+@msg	invalid angle	ongeldige hoek
+@msg	invalid array length	ongeldige arraylengte
+@msg	invalid brush: {e}	ongeldig penseel: {e}
+@msg	invalid color	ongeldige kleur
+@msg	invalid colour {c}	ongeldige kleur {c}
+@msg	invalid delta	ongeldige delta
+@msg	invalid group	ongeldige groep
+@msg	invalid object id {v}: expected a non-negative integer	ongeldige object-id {v}: verwacht een niet-negatief geheel getal
+@msg	invalid point	ongeldig punt
+@msg	invalid regular expression flag '{_1}'	ongeldige vlag '{_1}' voor reguliere expressie
+@msg	invalid regular expression: {m}	ongeldige reguliere expressie: {m}
+@msg	invalid size	ongeldige grootte
+@msg	invalid t	ongeldige t
+@msg	invalid time value	ongeldige tijdwaarde
+@msg	invalid tolerance	ongeldige tolerantie
+@msg	is a confirm's answer, whose `value` must be true or false	is het antwoord op een confirm, waarvan `value` true of false moet zijn
+@msg	is a prompt's answer, whose `value` must be a string or null	is het antwoord op een prompt, waarvan `value` een string of null moet zijn
+@msg	is an alert's answer, whose `value` must be "ok"	is het antwoord op een alert, waarvan `value` "ok" moet zijn
+@msg	is longer than 16 KiB	is langer dan 16 KiB
+@msg	it draws its image through a clipping path	het tekent zijn afbeelding door een knippad
+@msg	it draws no image	het tekent geen afbeelding
+@msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	het is groter dan {MAX_DICTIONARY_FILE_BYTES} bytes
+@msg	it isn't a file	het is geen bestand
+@msg	it names {_1} plates, and at most {MAX_PLATES} are read	het noemt {_1} platen, en er worden er maximaal {MAX_PLATES} gelezen
+@msg	its art is too long or too detailed for a head	de illustratie ervan is te lang of te gedetailleerd voor een kop
+@msg	its art paints nothing	de illustratie ervan verft niets
+@msg	its artboards all lie beyond the canvas (more than {_1} pt from the origin)	alle tekengebieden ervan liggen buiten het canvas (meer dan {_1} pt van de oorsprong)
+@msg	its clipping masks are nested too deeply	de knipmaskers ervan zijn te diep genest
+@msg	its image is too large to read	de afbeelding ervan is te groot om te lezen
+@msg	its metadata has no description	de metagegevens ervan hebben geen beschrijving
+@msg	its metadata has no direct length	de metagegevens ervan hebben geen directe lengte
+@msg	its plates are too large: more than {MAX_SAMPLES} pixels together	de platen ervan zijn te groot: samen meer dan {MAX_SAMPLES} pixels
+@msg	its plates are too large: {_1} plates of {w} × {h} pixels	de platen ervan zijn te groot: {_1} platen van {w} × {h} pixels
+@msg	its plates can't be kept together	de platen ervan kunnen niet bij elkaar worden gehouden
+@msg	its shapes could not be combined into one	de vormen ervan konden niet tot één vorm worden gecombineerd
+@msg	join two different paths	verbind twee verschillende paden
+@msg	jump to {pc}, past the end	sprong naar {pc}, voorbij het einde
+@msg	justify must be auto|left|center|right|justifyAll	justify moet auto|left|center|right|justifyAll zijn
+@msg	kbps must be a positive number, not {kbps}	kbps moet een positief getal zijn, niet {kbps}
+@msg	keywords must be a list of words or a comma-separated string	keywords moet een lijst met woorden of een door komma’s gescheiden string zijn
+@msg	keywords must be at most {MAX_KEYWORD} characters, without control characters	keywords mogen maximaal {MAX_KEYWORD} tekens lang zijn, zonder besturingstekens
+@msg	kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)	kind moet 1, 2 of 3 zijn, of geef de `name` van een voorinstelling (zie perspective.presets.list)
+@msg	kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle	kind moet graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle of paraStyle zijn
+@msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout moet "on", "off", "neutral" of een boolean zijn, niet {v}
+@msg	layer `{name}` has no art to export	laag `{name}` heeft geen illustratie om te exporteren
+@msg	layer must name a layer or sublayer	layer moet een laag of sublaag noemen
+@msg	layers can't be intertwined: select the objects in them	lagen kunnen niet worden verstrengeld: selecteer de objecten erin
+@msg	layers go only at the top level or in layers, objects in layers and groups	lagen staan alleen op het hoogste niveau of in lagen, objecten in lagen en groepen
+@msg	layers must be true or false	layers moet true of false zijn
+@msg	layout must be gridByRow, gridByColumn, row or column	layout moet gridByRow, gridByColumn, row of column zijn
+@msg	leading must be a number or "auto"	leading moet een getal of "auto" zijn
+@msg	left/right must be non-negative widths	left/right moeten niet-negatieve breedten zijn
+@msg	legacyNameEncoding must be one of {_1}	legacyNameEncoding moet een van {_1} zijn
+@msg	level `{t}`: 2 or 3	niveau `{t}`: 2 of 3
+@msg	line {line}: more than {MAX_CSV_COLS} columns	regel {line}: meer dan {MAX_CSV_COLS} kolommen
+@msg	line {line}: unclosed quote	regel {line}: niet-afgesloten aanhalingsteken
+@msg	line {line}: value for `{var}` must match its variable kind	regel {line}: de waarde voor `{var}` moet bij het soort variabele passen
+@msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`: lf of crlf
+@msg	loading profiles from disk isn't available in the browser	profielen van schijf laden is niet beschikbaar in de browser
+@msg	localize: the first argument must be a localization object or a string	localize: het eerste argument moet een lokalisatieobject of een string zijn
+@msg	margin: a {m} pt margin leaves no imageable area on the paper	marge: een marge van {m} pt laat geen afdrukbaar gebied op het papier over
+@msg	matrix must be finite and invertible, depth finite	matrix moet eindig en inverteerbaar zijn, depth eindig
+@msg	matte: {e}	mat: {e}
+@msg	member is for order front, forward, backward or back	member is bedoeld voor order front, forward, backward of back
+@msg	missing `artboards`	`artboards` ontbreekt
+@msg	missing `at` [x, y]	`at` [x, y] ontbreekt
+@msg	missing `attrs`	`attrs` ontbreekt
+@msg	missing `color` or `opacity`	`color` of `opacity` ontbreekt
+@msg	missing `colors`	`colors` ontbreekt
+@msg	missing `commands`	`commands` ontbreekt
+@msg	missing `destinationFolder`	`destinationFolder` ontbreekt
+@msg	missing `effect` id	de id `effect` ontbreekt
+@msg	missing `family`	`family` ontbreekt
+@msg	missing `find`	`find` ontbreekt
+@msg	missing `gid` (a glyph id, or null for the default glyph)	`gid` ontbreekt (een glyph-id, of null voor de standaardglyph)
+@msg	missing `group`	`group` ontbreekt
+@msg	missing `id`	`id` ontbreekt
+@msg	missing `id`: give one, or select one type object	`id` ontbreekt: geef er een, of selecteer één tekstobject
+@msg	missing `index` (a point index, or null to clear)	`index` ontbreekt (een puntindex, of null om te wissen)
+@msg	missing `index` (a stop index, or null to clear)	`index` ontbreekt (een stopindex, of null om te wissen)
+@msg	missing `index` (an item index or null)	`index` ontbreekt (een itemindex of null)
+@msg	missing `item`	`item` ontbreekt
+@msg	missing `library`	`library` ontbreekt
+@msg	missing `library` (see graphicStyle.libraries)	`library` ontbreekt (zie graphicStyle.libraries)
+@msg	missing `library` (see swatch.library.list)	`library` ontbreekt (zie swatch.library.list)
+@msg	missing `map` (rows [{from, to}] or {current})	`map` ontbreekt (rijen [{from, to}] of {current})
+@msg	missing `matrix` [a,b,c,d,e,f]	`matrix` [a,b,c,d,e,f] ontbreekt
+@msg	missing `name` (see gradient.presets.list)	`name` ontbreekt (zie gradient.presets.list)
+@msg	missing `offset` (a distance in points)	`offset` ontbreekt (een afstand in punten)
+@msg	missing `path`	`path` ontbreekt
+@msg	missing `path` (a path object id)	`path` ontbreekt (de id van een padobject)
+@msg	missing `picks`	`picks` ontbreekt
+@msg	missing `rule`	`rule` ontbreekt
+@msg	missing `source` id	de id `source` ontbreekt
+@msg	missing `start` (the byte offset of a character)	`start` ontbreekt (de bytepositie van een teken)
+@msg	missing `status`: linked, embedded, missing or modified	`status` ontbreekt: linked, embedded, missing of modified
+@msg	missing `target` id	de id `target` ontbreekt
+@msg	missing `text`	`text` ontbreekt
+@msg	missing `to`	`to` ontbreekt
+@msg	missing `to` (an index)	`to` ontbreekt (een index)
+@msg	missing `to`: a non-negative integer	`to` ontbreekt: een niet-negatief geheel getal
+@msg	missing `type`	`type` ontbreekt
+@msg	missing `value`	`value` ontbreekt
+@msg	missing `word`	`word` ontbreekt
+@msg	missing `{key}`	`{key}` ontbreekt
+@msg	missing `{k}`	`{k}` ontbreekt
+@msg	missing anchor	anker ontbreekt
+@msg	missing anchors	ankers ontbreken
+@msg	missing anchors [[subpath, anchor]…]	anchors [[subpath, anchor]…] ontbreekt
+@msg	missing array `{key}`	array `{key}` ontbreekt
+@msg	missing case	case ontbreekt
+@msg	missing color	color ontbreekt
+@msg	missing commands	commands ontbreekt
+@msg	missing destination folder	doelmap ontbreekt
+@msg	missing from	from ontbreekt
+@msg	missing group	group ontbreekt
+@msg	missing id or ids	id of ids ontbreekt
+@msg	missing ids	ids ontbreekt
+@msg	missing indexes	indexes ontbreekt
+@msg	missing matrix [a,b,c,d,e,f]	matrix [a,b,c,d,e,f] ontbreekt
+@msg	missing name	name ontbreekt
+@msg	missing op	op ontbreekt
+@msg	missing or invalid `color`	`color` ontbreekt of is ongeldig
+@msg	missing or unknown `tool`	`tool` ontbreekt of is onbekend
+@msg	missing point	punt ontbreekt
+@msg	missing point [x,y]	punt [x,y] ontbreekt
+@msg	missing point `{key}` ([x, y])	punt `{key}` ([x, y]) ontbreekt
+@msg	missing points	points ontbreekt
+@msg	missing points [[x,y]…]	points [[x,y]…] ontbreekt
+@msg	missing segment	segment ontbreekt
+@msg	missing stops	stops ontbreekt
+@msg	missing subpaths	subpaths ontbreekt
+@msg	missing target	target ontbreekt
+@msg	missing to	to ontbreekt
+@msg	missing x, y	x, y ontbreekt
+@msg	mode is set, add or toggle, not `{other}`	mode is set, add of toggle, niet `{other}`
+@msg	mode must be "cmyk" or "rgb"	mode moet "cmyk" of "rgb" zijn
+@msg	mode must be area|onPath, got {o}	mode moet area|onPath zijn, kreeg {o}
+@msg	more than 10000 linked files: package dependencies in smaller parts	meer dan 10000 gekoppelde bestanden: verpak de afhankelijkheden in kleinere delen
+@msg	more than 256 commands	meer dan 256 opdrachten
+@msg	more than {MAX_BATCH_FILES} data sets	meer dan {MAX_BATCH_FILES} gegevenssets
+@msg	more than {MAX_BATCH_FILES} files	meer dan {MAX_BATCH_FILES} bestanden
+@msg	more than {MAX_CSV_ROWS} data rows	meer dan {MAX_CSV_ROWS} gegevensrijen
+@msg	more than {MAX_FILES} images	meer dan {MAX_FILES} afbeeldingen
+@msg	more than {MAX_IMPORT} presets	meer dan {MAX_IMPORT} voorinstellingen
+@msg	moved must be [[x,y]…]	moved moet [[x,y]…] zijn
+@msg	must be an object with `kind` and `value`	moet een object met `kind` en `value` zijn
+@msg	must have `kind` alert, confirm or prompt	moet `kind` alert, confirm of prompt hebben
+@msg	must have exactly `kind` and `value`	moet precies `kind` en `value` hebben
+@msg	name (a toolbar's name) is required	name (de naam van een werkbalk) is vereist
+@msg	name (a toolbar's name) must be a string	name (de naam van een werkbalk) moet een string zijn
+@msg	name must be a toolbar's name	name moet de naam van een werkbalk zijn
+@msg	names is empty	names is leeg
+@msg	names must be an array of symbol names	names moet een array van symboolnamen zijn
+@msg	need `anchor` or `segment` + `t`	`anchor` of `segment` + `t` is nodig
+@msg	need at least one anchor	er is minstens één anker nodig
+@msg	need at least one point	er is minstens één punt nodig
+@msg	need at least two points	er zijn minstens twee punten nodig
+@msg	needs a closing quote after the name	heeft een afsluitend aanhalingsteken na de naam nodig
+@msg	needs a name	heeft een naam nodig
+@msg	needs a name of at most 64 bytes	heeft een naam van maximaal 64 bytes nodig
+@msg	needs a name of letters, digits and _, or a quoted name	heeft een naam van letters, cijfers en _ nodig, of een naam tussen aanhalingstekens
+@msg	needs a name without control characters	heeft een naam zonder besturingstekens nodig
+@msg	needs points	heeft punten nodig
+@msg	nesting too deep	te diep genest
+@msg	nineSlice must be true or false	nineSlice moet true of false zijn
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides moet [left, top, right, bottom] zijn, elk -16..16, met left + right < 1 en top + bottom < 1
+@msg	no HP-GL format	geen HP-GL-indeling
+@msg	no New Document profile called `{shown}` ({_1})	geen profiel voor nieuwe documenten met de naam `{shown}` ({_1})
+@msg	no PDF preset named `{n}`	geen PDF-voorinstelling met de naam `{n}`
+@msg	no SVG filter at index {k}	geen SVG-filter op index {k}
+@msg	no action set is current	er is geen actieset actief
+@msg	no active data set	geen actieve gegevensset
+@msg	no appearance item {index}	geen vormgevingsitem {index}
+@msg	no arrowheads file here	hier is geen bestand met pijlpunten
+@msg	no artboard {_1}	geen tekengebied {_1}
+@msg	no artboard {artboard} (0-based; the document has {_1})	geen tekengebied {artboard} (begint bij 0; het document heeft er {_1})
+@msg	no asset {id}	geen asset {id}
+@msg	no asset {id} (see assets.list)	geen asset {id} (zie assets.list)
+@msg	no assets to export	geen assets om te exporteren
+@msg	no assets yet: collect art for export first (assets.add)	nog geen assets: verzamel eerst illustraties voor export (assets.add)
+@msg	no brush named `{n}`	geen penseel met de naam `{n}`
+@msg	no character at byte {start}	geen teken op byte {start}
+@msg	no character has code {code}	geen teken heeft code {code}
+@msg	no colour	geen kleur
+@msg	no colour group `{group}`	geen kleurgroep `{group}`
+@msg	no colour group `{name}`	geen kleurgroep `{name}`
+@msg	no custom arrowhead {name} (see stroke.arrowheads.list)	geen aangepaste pijlpunt {name} (zie stroke.arrowheads.list)
+@msg	no data sets	geen gegevenssets
+@msg	no dataset named `{from}`	geen gegevensset met de naam `{from}`
+@msg	no dataset named `{name}`	geen gegevensset met de naam `{name}`
+@msg	no datasets	geen gegevenssets
+@msg	no design named `{name}`	geen ontwerp met de naam `{name}`
+@msg	no design named `{n}`	geen ontwerp met de naam `{n}`
+@msg	no design named `{old}`	geen ontwerp met de naam `{old}`
+@msg	no encoder for {_1} yet	nog geen encoder voor {_1}
+@msg	no export preset `{name}` (see document.exportPresets.list)	geen exportvoorinstelling `{name}` (zie document.exportPresets.list)
+@msg	no file to open	geen bestand om te openen
+@msg	no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder	geen map: geef `path` op of stel Voorkeuren › Plug-ins & Scratchschijven › Extra map met plug-ins in
+@msg	no fonts to look for: they are all available	geen lettertypen om te zoeken: ze zijn allemaal beschikbaar
+@msg	no formats to export	geen indelingen om te exporteren
+@msg	no gradient preset `{name}` (see gradient.presets.list)	geen verloopvoorinstelling `{name}` (zie gradient.presets.list)
+@msg	no graphic style `{n}` in `{_1}`	geen grafische stijl `{n}` in `{_1}`
+@msg	no graphic style library `{key}` (see graphicStyle.libraries)	geen bibliotheek met grafische stijlen `{key}` (zie graphicStyle.libraries)
+@msg	no guide selected	geen hulplijn geselecteerd
+@msg	no guide selected (or give an index)	geen hulplijn geselecteerd (of geef een index)
+@msg	no guide {i}	geen hulplijn {i}
+@msg	no images in the folder	geen afbeeldingen in de map
+@msg	no instructions	geen instructies
+@msg	no item at index {_1}	geen item op index {_1}
+@msg	no item at index {from}	geen item op index {from}
+@msg	no item at one of the indices {idx}	geen item op een van de indexen {idx}
+@msg	no layer	geen laag
+@msg	no layer to rename	geen laag om te hernoemen
+@msg	no layer {id} (see layer.list)	geen laag {id} (zie layer.list)
+@msg	no layers to export	geen lagen om te exporteren
+@msg	no library `{key}`	geen bibliotheek `{key}`
+@msg	no metafile format	geen metafile-indeling
+@msg	no object {_1}	geen object {_1}
+@msg	no objects	geen objecten
+@msg	no parent layer	geen bovenliggende laag
+@msg	no perspective grid preset named `{b}` (see perspective.presets.list)	geen voorinstelling voor het perspectiefraster met de naam `{b}` (zie perspective.presets.list)
+@msg	no perspective grid preset named `{n}`	geen voorinstelling voor het perspectiefraster met de naam `{n}`
+@msg	no point selected (give `index`)	geen punt geselecteerd (geef `index`)
+@msg	no preset called `{from}` (see file.newPresets)	geen voorinstelling met de naam `{from}` (zie file.newPresets)
+@msg	no preset called `{name}` (see file.newPresets)	geen voorinstelling met de naam `{name}` (zie file.newPresets)
+@msg	no preset named `{n}`	geen voorinstelling met de naam `{n}`
+@msg	no print preset named `{b}` (see print.presets.list)	geen afdrukvoorinstelling met de naam `{b}` (zie print.presets.list)
+@msg	no print preset named `{name}` (presets: {_1})	geen afdrukvoorinstelling met de naam `{name}` (voorinstellingen: {_1})
+@msg	no print preset named `{n}`	geen afdrukvoorinstelling met de naam `{n}`
+@msg	no profile named `{name}`	geen profiel met de naam `{name}`
+@msg	no random numbers ({e})	geen willekeurige getallen ({e})
+@msg	no readable files in the folder	geen leesbare bestanden in de map
+@msg	no recovery copy `{f}` (see file.recovery.list)	geen herstelkopie `{f}` (zie file.recovery.list)
+@msg	no rows	geen rijen
+@msg	no saved PDF preset named `{name}`	geen opgeslagen PDF-voorinstelling met de naam `{name}`
+@msg	no saved export preset `{name}`	geen opgeslagen exportvoorinstelling `{name}`
+@msg	no saved gradient preset called {name}	geen opgeslagen verloopvoorinstelling met de naam {name}
+@msg	no saved gradient presets	geen opgeslagen verloopvoorinstellingen
+@msg	no saved preset called `{name}`	geen opgeslagen voorinstelling met de naam `{name}`
+@msg	no saved presets to export (name [Default] in `names` to export it)	geen opgeslagen voorinstellingen om te exporteren (noem [Default] in `names` om die te exporteren)
+@msg	no saved presets to export (name built-in ones in `names`)	geen opgeslagen voorinstellingen om te exporteren (noem ingebouwde in `names`)
+@msg	no saved print preset named `{name}`	geen opgeslagen afdrukvoorinstelling met de naam `{name}`
+@msg	no saved profile called {name}	geen opgeslagen profiel met de naam {name}
+@msg	no saved selection `{name}`	geen opgeslagen selectie `{name}`
+@msg	no saved theme called {name} (see colorTheme.list)	geen opgeslagen thema met de naam {name} (zie colorTheme.list)
+@msg	no saved views	geen opgeslagen weergaven
+@msg	no selected or given object has a visible 3D effect	geen enkel geselecteerd of opgegeven object heeft een zichtbaar 3D-effect
+@msg	no series {i}	geen reeks {i}
+@msg	no slice {n} in the image (see slice.list)	geen slice {n} in de afbeelding (zie slice.list)
+@msg	no source art	geen bronillustratie
+@msg	no stop {i} (the gradient has {n})	geen stop {i} (het verloop heeft er {n})
+@msg	no style `{name}`	geen stijl `{name}`
+@msg	no such artboard {v}	tekengebied {v} bestaat niet
+@msg	no such assets (see assets.list)	deze assets bestaan niet (zie assets.list)
+@msg	no such frame anchor, or the frame would reach past the canvas	dit kaderanker bestaat niet, of het kader zou voorbij het canvas reiken
+@msg	no such objects	deze objecten bestaan niet
+@msg	no such path anchor, or the path would reach past the canvas	dit padanker bestaat niet, of het pad zou voorbij het canvas reiken
+@msg	no such rows	deze rijen bestaan niet
+@msg	no swatch `{keep}`	geen staal `{keep}`
+@msg	no swatch `{n}`	geen staal `{n}`
+@msg	no swatch `{n}` (swatches and colour groups move separately)	geen staal `{n}` (stalen en kleurgroepen worden apart verplaatst)
+@msg	no swatch library `{key}` (see swatch.library.list)	geen stalenbibliotheek `{key}` (zie swatch.library.list)
+@msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	geen stalenbibliotheek `{key}` (zie swatch.library.list; "document": de stalen van het document)
+@msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	geen stalenbibliotheek `{key}` (zie swatch.library.list; "{DOCUMENT_SWATCHES}": de stalen van het document)
+@msg	no swatch named `{n}`	geen staal met de naam `{n}`
+@msg	no swatch or colour group `{n}`	geen staal of kleurgroep `{n}`
+@msg	no swatch or colour group `{n}` in `{_1}`	geen staal of kleurgroep `{n}` in `{_1}`
+@msg	no symbol named `{_1}`	geen symbool met de naam `{_1}`
+@msg	no symbol named `{name}`	geen symbool met de naam `{name}`
+@msg	no text objects selected	geen tekstobjecten geselecteerd
+@msg	no toolbar named `{_1}`	geen werkbalk met de naam `{_1}`
+@msg	no toolbar named `{name}`	geen werkbalk met de naam `{name}`
+@msg	no tracing preset `{preset}` (see imageTrace.presets)	geen traceervoorinstelling `{preset}` (zie imageTrace.presets)
+@msg	no user library folder here (save with a path, or without one to get the data)	hier is geen map voor gebruikersbibliotheken (sla op met een pad, of zonder pad om de gegevens te krijgen)
+@msg	no variable named `{from}`	geen variabele met de naam `{from}`
+@msg	no variable named `{name}`	geen variabele met de naam `{name}`
+@msg	no variable named `{var}`	geen variabele met de naam `{var}`
+@msg	no variable named `{v}`	geen variabele met de naam `{v}`
+@msg	no view named `{name}`	geen weergave met de naam `{name}`
+@msg	node {_1} already has the text variable `{_2}`	knooppunt {_1} heeft de tekstvariabele `{_2}` al
+@msg	node {_1} is not a graph	knooppunt {_1} is geen grafiek
+@msg	node {_1} is not an image	knooppunt {_1} is geen afbeelding
+@msg	node {_1} is not type	knooppunt {_1} is geen tekst
+@msg	not a DCS file	geen DCS-bestand
+@msg	not a PDF presets file (format `{_1}`)	geen bestand met PDF-voorinstellingen (indeling `{_1}`)
+@msg	not a PDF presets file: {e}	geen bestand met PDF-voorinstellingen: {e}
+@msg	not a RegExp object	geen RegExp-object
+@msg	not a Word document: its WordDocument stream doesn't start with a file information block	geen Word-document: de WordDocument-stroom ervan begint niet met een blok met bestandsinformatie
+@msg	not a Word document: its compound file has no WordDocument stream	geen Word-document: het samengestelde bestand ervan heeft geen WordDocument-stroom
+@msg	not a Word document: its main part is not a WordprocessingML document	geen Word-document: het hoofdonderdeel ervan is geen WordprocessingML-document
+@msg	not a Word document: its package has no main document part	geen Word-document: het pakket ervan heeft geen hoofddocumentonderdeel
+@msg	not a closed path	geen gesloten pad
+@msg	not a flattener presets file (format `{_1}`)	geen bestand met afvlakkervoorinstellingen (indeling `{_1}`)
+@msg	not a flattener presets file: {e}	geen bestand met afvlakkervoorinstellingen: {e}
+@msg	not a layer or group	geen laag of groep
+@msg	not a library file: {e}	geen bibliotheekbestand: {e}
+@msg	not a mesh envelope point	geen punt van een netomvorming
+@msg	not a perspective grid presets file (format `{_1}`)	geen bestand met voorinstellingen voor het perspectiefraster (indeling `{_1}`)
+@msg	not a perspective grid presets file: {e}	geen bestand met voorinstellingen voor het perspectiefraster: {e}
+@msg	not a print presets file (format `{_1}`)	geen bestand met afdrukvoorinstellingen (indeling `{_1}`)
+@msg	not a print presets file: {e}	geen bestand met afdrukvoorinstellingen: {e}
+@msg	not a regular expression	geen reguliere expressie
+@msg	not a stored or deflated central record	geen opgeslagen of met deflate gecomprimeerd centraal record
+@msg	not a valid SVGZ file: {e}	geen geldig SVGZ-bestand: {e}
+@msg	not an RTF file: it doesn't start with {\\rtf	geen RTF-bestand: het begint niet met {\\rtf
+@msg	not an action set: the text doesn't start with /version and a number	geen actieset: de tekst begint niet met /version en een getal
+@msg	not an image VectorCraft reads (see document.formats)	geen afbeelding die VectorCraft leest (zie document.formats)
+@msg	not area type (text in a frame) outside perspective	geen vlaktekst (tekst in een kader) buiten perspectief
+@msg	not editing an opacity mask	er wordt geen dekkingmasker bewerkt
+@msg	not type on a path outside perspective	geen tekst op een pad buiten perspectief
+@msg	nothing prints	er wordt niets afgedrukt
+@msg	nothing to bind	niets om te koppelen
+@msg	nothing to change	niets om te wijzigen
+@msg	nothing to change: give dx, dy, hScale, vScale or rotation	niets om te wijzigen: geef dx, dy, hScale, vScale of rotation
+@msg	nothing to crop	niets om bij te snijden
+@msg	nothing to export	niets om te exporteren
+@msg	nothing to export: the document has no visible art	niets om te exporteren: het document heeft geen zichtbare illustraties
+@msg	nothing to mark	niets om te markeren
+@msg	nothing to print: every artboard picked is blank	niets om af te drukken: elk gekozen tekengebied is leeg
+@msg	nothing to print: the document has no art that prints	niets om af te drukken: het document heeft geen illustraties die worden afgedrukt
+@msg	nothing to repeat	niets om te herhalen
+@msg	numbers out of order in {_1} quantifier	getallen in de verkeerde volgorde in kwantor {_1}
+@msg	object is not a path	het object is geen pad
+@msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	objecttransparantie kan niet op gemarkeerde tekens worden overgenomen; schakel Transparantie uit in Opties voor pipet of selecteer het hele object
+@msg	object {_1} can't be set as point type	object {_1} kan niet als punttekst worden gezet
+@msg	object {_1} has lost its file's contents: relink it	object {_1} is de inhoud van zijn bestand kwijt: koppel het opnieuw
+@msg	object {_1} has no path	object {_1} heeft geen pad
+@msg	object {_1} has no size	object {_1} heeft geen grootte
+@msg	object {_1} is hidden or locked, or on a locked artboard	object {_1} is verborgen of vergrendeld, of staat op een vergrendeld tekengebied
+@msg	object {_1} is not a placed document	object {_1} is geen geplaatst document
+@msg	object {_1} is not an Intertwine group	object {_1} is geen groep Verstrengelen
+@msg	object {_1} is not an image	object {_1} is geen afbeelding
+@msg	object {_1} is not an image or a linked file	object {_1} is geen afbeelding of gekoppeld bestand
+@msg	object {_1} is not an image or a placed document	object {_1} is geen afbeelding of geplaatst document
+@msg	object {_1} is not in this Intertwine group	object {_1} zit niet in deze groep Verstrengelen
+@msg	object {_1} needs a 3D effect	object {_1} heeft een 3D-effect nodig
+@msg	object {_1} needs a 3D effect at index {index}	object {_1} heeft een 3D-effect op index {index} nodig
+@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	object {_1}: een holle Extruderen en afschuinen heeft geen kappen: schakel Kap in om een afbeelding toe te wijzen
+@msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	object {_1}: met een diepte van 0 heeft het object één vlak: wijs de afbeeldingen ervan toe aan de voorkant
+@msg	object {_1}: {_2}	object {_1}: {_2}
+@msg	object {_1}: {e}	object {_1}: {e}
+@msg	object {_1}: {name} at index {index} has no lighting presets; set its lights with effect.setParams	object {_1}: {name} op index {index} heeft geen belichtingsvoorinstellingen; stel de lichten ervan in met effect.setParams
+@msg	object {id} has anchors 0–{_1} for `corners`, not {past}	object {id} heeft de ankers 0–{_1} voor `corners`, niet {past}
+@msg	object {id} has {n} anchors, so no anchor {past}	object {id} heeft {n} ankers, dus geen anker {past}
+@msg	objects must be none, move or copy	objects moet none, move of copy zijn
+@msg	objects were left out	er zijn objecten weggelaten
+@msg	offset out of range	positie buiten het bereik
+@msg	on must be true or false	on moet true of false zijn
+@msg	only groups, layers, type and images have a Contents (Characters) row	alleen groepen, lagen, tekst en afbeeldingen hebben een rij Inhoud (Tekens)
+@msg	only interior mesh lines can be deleted	alleen binnenste netlijnen kunnen worden verwijderd
+@msg	only solid colours can be added (not gradients or patterns)	alleen effen kleuren kunnen worden toegevoegd (geen verlopen of patronen)
+@msg	only solid-colour swatches can be spot colours	alleen stalen met een effen kleur kunnen steunkleuren zijn
+@msg	only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first	alleen de ingesloten voorvertoning van dit Affinity-bestand kon worden gelezen: gebruik Bestand › Openen om die met de bijbehorende waarschuwing te bekijken, of exporteer eerst SVG of PDF vanuit Affinity
+@msg	only this Affinity file's embedded preview could be read; use File › Open to see it with its warning	alleen de ingesloten voorvertoning van dit Affinity-bestand kon worden gelezen; gebruik Bestand › Openen om die met de bijbehorende waarschuwing te bekijken
+@msg	onto, above, below, icon and a column place belong to window.panel.float and window.panel.dock	onto, above, below, icon en een kolomplaats horen bij window.panel.float en window.panel.dock
+@msg	onto, above, below, icon and a column place take no anchor, side, zone or before	onto, above, below, icon en een kolomplaats accepteren geen anchor, side, zone of before
+@msg	onto, above, below, icon and a column place take no x, y, width or height	onto, above, below, icon en een kolomplaats accepteren geen x, y, width of height
+@msg	opacity must be a number	opacity moet een getal zijn
+@msg	open a document to look for its linked files	open een document om de gekoppelde bestanden ervan te zoeken
+@msg	operand too large	operand te groot
+@msg	options must be an object (see file.formatOptions)	options moet een object zijn (zie file.formatOptions)
+@msg	order is a whole number from 0 to {others}, not `{v}`	order is een geheel getal van 0 tot {others}, niet `{v}`
+@msg	order must be leftToRight or rightToLeft	order moet leftToRight of rightToLeft zijn
+@msg	orientation must be portrait or landscape, not `{o}`	orientation moet portrait of landscape zijn, niet `{o}`
+@msg	outlineText {v}: true or false	outlineText {v}: true of false
+@msg	output intent profile: {e}	profiel van de uitvoerintentie: {e}
+@msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: er is geen RGB- of CMYK-profiel met de naam „{name}”
+@msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1}-bestanden zijn CMYK, en „{name}” is een RGB-profiel
+@msg	output.destination: {e}	output.destination: {e}
+@msg	output.inks: no ink is set to print	output.inks: er is geen inkt ingesteld om af te drukken
+@msg	output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile	output.outputIntent: er is geen profiel met de naam „{name}”, en een uitvoerintentie voor {std} sluit haar profiel in
+@msg	output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)	output.outputIntent: er is geen profiel met de naam „{name}”: een uitvoerintentie voor {std} sluit een profiel in, of noemt een geregistreerde drukconditie (outputConditionId en registry)
+@msg	output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile	output.outputIntent: {std}-bestanden worden in CMYK afgedrukt, en „{name}” is een RGB-profiel
+@msg	output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent	output.outputIntent: „{name}” is een grijsprofiel, dat geen uitvoerintentie voor {std} kan zijn
+@msg	overlap: {o} pt is half a tile or more	overlap: {o} pt is een halve tegel of meer
+@msg	overlapping Shaper paths must be in the same layer or group	overlappende Shaper-paden moeten in dezelfde laag of groep staan
+@msg	overlapping edits	overlappende bewerkingen
+@msg	page art conflicts with image data for {key}	de pagina-illustratie is in strijd met de afbeeldingsgegevens voor {key}
+@msg	page art conflicts with pattern {name}	de pagina-illustratie is in strijd met patroon {name}
+@msg	page art conflicts with swatch {name}	de pagina-illustratie is in strijd met staal {name}
+@msg	page art is missing image data for {key}	in de pagina-illustratie ontbreken afbeeldingsgegevens voor {key}
+@msg	page art is missing pattern {name}	in de pagina-illustratie ontbreekt patroon {name}
+@msg	page art is missing swatch {name}	in de pagina-illustratie ontbreekt staal {name}
+@msg	page must be a whole number from 1	page moet een geheel getal vanaf 1 zijn
+@msg	page thumbnail: {e}	paginaminiatuur: {e}
+@msg	page {page} of the PDF has no objects	pagina {page} van de PDF heeft geen objecten
+@msg	page {page}: `{file}` has {n} {artboards}	pagina {page}: `{file}` heeft {n} {artboards}
+@msg	page {page}: `{name}` has {n} {pages}	pagina {page}: `{name}` heeft {n} {pages}
+@msg	pages must be a range such as "2-3" or a page number, not {v}	pages moet een bereik zoals "2-3" of een paginanummer zijn, niet {v}
+@msg	pages: {e}	pagina’s: {e}
+@msg	panel position must be finite	de paneelpositie moet eindig zijn
+@msg	parameters must be an object	de parameters moeten een object zijn
+@msg	params must be an object	params moet een object zijn
+@msg	passwords can have up to {MAX_PASSWORD} bytes	wachtwoorden mogen maximaal {MAX_PASSWORD} bytes hebben
+@msg	path chunks must share their boundary point	padstukken moeten hun grenspunt delen
+@msg	path has no open end	het pad heeft geen open uiteinde
+@msg	paths must be strings	paths moet uit strings bestaan
+@msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false vereist dat elk tekengebied de bewerkbare illustratie behoudt
+@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false vereist dat de tekengebieden de bewerkbare illustratie behouden wanneer useArtboards false is
+@msg	pdfs `{m}`: single or multiple	pdfs `{m}`: single of multiple
+@msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom is "artwork" of "swatches", niet {v}
+@msg	pins and moved must be non-empty lists of the same length	pins en moved moeten niet-lege lijsten van dezelfde lengte zijn
+@msg	pins must be [[x,y]…]	pins moet [[x,y]…] zijn
+@msg	pins must be finite	pins moet eindig zijn
+@msg	place is above, below or inside, not `{other}`	place is above, below of inside, niet `{other}`
+@msg	plane must be left|right|ground	plane moet left|right|ground zijn
+@msg	plane must be left|right|ground|none	plane moet left|right|ground|none zijn
+@msg	point is outside the mesh	het punt ligt buiten het net
+@msg	point x must be a number	x van het punt moet een getal zijn
+@msg	point y must be a number	y van het punt moet een getal zijn
+@msg	points must be [t, left, right] with non-negative widths	points moet uit [t, left, right] met niet-negatieve breedten bestaan
+@msg	points must be [x,y] pairs	points moet uit paren [x,y] bestaan
+@msg	points must be a non-empty [[x,y,pressure?]…] list	points moet een niet-lege lijst [[x,y,pressure?]…] zijn
+@msg	points must be a non-empty list of finite [x,y]	points moet een niet-lege lijst van eindige [x,y] zijn
+@msg	points must be an array or null	points moet een array of null zijn
+@msg	points must be finite	points moet eindig zijn
+@msg	points must be finite [x,y] pairs	points moet uit eindige paren [x,y] bestaan
+@msg	points must be finite canvas points	points moet uit eindige canvaspunten bestaan
+@msg	points must contain 1–4096 coordinates	points moet 1–4096 coördinaten bevatten
+@msg	position must be normal, superscript or subscript	position moet normal, superscript of subscript zijn
+@msg	position must be topLeft, topRight, bottomLeft or bottomRight	position moet topLeft, topRight, bottomLeft of bottomRight zijn
+@msg	positions must be between 0 and 100000 pt	positions moeten tussen 0 en 100000 pt liggen
+@msg	ppi must be a positive number, not {ppi}	ppi moet een positief getal zijn, niet {ppi}
+@msg	ppi must be between 1 and 2400	ppi moet tussen 1 en 2400 liggen
+@msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` is niet transforms|bounds|fileDimensions|fit|fill
+@msg	preserveShape must be clippingMask|transparency	preserveShape moet clippingMask|transparency zijn
+@msg	preset `{id}`: mobile or density	preset `{id}`: mobile of density
+@msg	preset must be standard, diffuse, topLeft or right	preset moet standard, diffuse, topLeft of right zijn
+@msg	preset must be the name of a print preset	preset moet de naam van een afdrukvoorinstelling zijn
+@msg	previewMode must be default, pixel or overprint	previewMode moet default, pixel of overprint zijn
+@msg	print settings: {e}	afdrukinstellingen: {e}
+@msg	procedures nest too deeply	procedures zijn te diep genest
+@msg	procedures nested too deeply	procedures te diep genest
+@msg	quotes must be {double?, single?}	quotes moet {double?, single?} zijn
+@msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	quotes.{k} moet een openend en een sluitend aanhalingsteken zijn, bijv. "“”"
+@msg	range out of order in character class	bereik in de verkeerde volgorde in tekenklasse
+@msg	rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)	rasterEffectsPpi moet 1–2400 zijn (72 scherm, 150 gemiddeld, 300 hoog)
+@msg	rating must be a whole number from 0 to {MAX_RATING}	rating moet een geheel getal van 0 tot {MAX_RATING} zijn
+@msg	rect and {k} contradict each other: give the area or the artboards	rect en {k} spreken elkaar tegen: geef het gebied of de tekengebieden
+@msg	rect applies to raster formats, not {_1}	rect geldt voor rasterindelingen, niet voor {_1}
+@msg	rect is [x, y, width, height] in points	rect is [x, y, width, height] in punten
+@msg	rect must be [x, y, width, height]	rect moet [x, y, width, height] zijn
+@msg	rect must be [x, y, width, height] with a positive width and height	rect moet [x, y, width, height] met een positieve breedte en hoogte zijn
+@msg	rect needs finite numbers and a positive width and height	rect heeft eindige getallen en een positieve breedte en hoogte nodig
+@msg	redraw needs id	redraw heeft id nodig
+@msg	redraw within must be a finite distance of 0 or more	within van redraw moet een eindige afstand van 0 of meer zijn
+@msg	reduce of an empty array with no initial value	reduce van een lege array zonder beginwaarde
+@msg	registration must be 0..8	registration moet 0..8 zijn
+@msg	regular expression flag '{_1}' given twice	vlag '{_1}' voor reguliere expressie twee keer opgegeven
+@msg	release a layer or a group	geef een laag of een groep vrij
+@msg	replace keeps the replaced object's place and transform: drop template, at and rect	replace behoudt de plaats en de transformatie van het vervangen object: laat template, at en rect weg
+@msg	replace: select the one object to replace	replace: selecteer het ene object dat moet worden vervangen
+@msg	resolution must be a number or screen|medium|high	resolution moet een getal of screen|medium|high zijn
+@msg	resolution must be between 1 and 2400 ppi	resolution moet tussen 1 en 2400 ppi liggen
+@msg	rotation must be a number of degrees	rotation moet een aantal graden zijn
+@msg	rotation must be finite	rotation moet eindig zijn
+@msg	rows and cols must be 1..50	rows en cols moeten 1..50 zijn
+@msg	rows and columns must be 1..500	rows en columns moeten 1..500 zijn
+@msg	rows of objects whose appearances differ can't be reordered together	rijen van objecten met een verschillende vormgeving kunnen niet samen opnieuw worden geordend
+@msg	sampled text would exceed the canvas (coordinates out of range)	de overgenomen tekst zou buiten het canvas vallen (coördinaten buiten het bereik)
+@msg	save the document first: Package collects a saved document	sla het document eerst op: Verpakken verzamelt een opgeslagen document
+@msg	save the document first: copy puts the file in its folder	sla het document eerst op: copy plaatst het bestand in de map ervan
+@msg	savedPreset: {e}	savedPreset: {e}
+@msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	scale `{s}`: een factor zoals 2x, een breedte (100w), een hoogte (100h) of een resolutie (72ppi)
+@msg	scale must be a number above 0, at most 64	scale moet een getal boven 0 zijn, maximaal 64
+@msg	scale must be non-zero	scale mag niet nul zijn
+@msg	scope must be selection or all (got {other})	scope moet selection of all zijn (kreeg {other})
+@msg	scribble is too long	de krabbel is te lang
+@msg	segment does not exist	het segment bestaat niet
+@msg	select a Shaper group	selecteer een Shaper-groep
+@msg	select a blend to set easing or color shift	selecteer een mengsel om de versnelling of de kleurverschuiving in te stellen
+@msg	select a compound shape	selecteer een samengestelde vorm
+@msg	select a graph	selecteer een grafiek
+@msg	select a group or layer with visible, unlocked members	selecteer een groep of laag met zichtbare, ontgrendelde leden
+@msg	select a layer	selecteer een laag
+@msg	select a text object	selecteer een tekstobject
+@msg	select an SVG filter	selecteer een SVG-filter
+@msg	select an image (or an Image Trace group)	selecteer een afbeelding (of een groep Afbeelding traceren)
+@msg	select an image, or pass id	selecteer een afbeelding, of geef id op
+@msg	select an object (or pass `id`)	selecteer een object (of geef `id` op)
+@msg	select an object with a 3D effect	selecteer een object met een 3D-effect
+@msg	select an object with a 3D effect, or give its id in ids	selecteer een object met een 3D-effect, of geef de id ervan in ids
+@msg	select an object with a freeform gradient	selecteer een object met een verloop in vrije vorm
+@msg	select an object with an opacity mask	selecteer een object met een dekkingmasker
+@msg	select area type	selecteer vlaktekst
+@msg	select area type (text in a frame)	selecteer vlaktekst (tekst in een kader)
+@msg	select area type and closed paths (at least one area type object)	selecteer vlaktekst en gesloten paden (minstens één vlaktekstobject)
+@msg	select area type whose first line can fit its frame	selecteer vlaktekst waarvan de eerste regel in het kader past
+@msg	select artwork to add its colours	selecteer illustraties om de kleuren ervan toe te voegen
+@msg	select artwork to make a group of its colours	selecteer illustraties om een groep van de kleuren ervan te maken
+@msg	select artwork to recolour, or give a colour `group`	selecteer illustraties om te herkleuren, of geef een `group` met kleuren
+@msg	select exactly two path ends to join	selecteer precies twee paduiteinden om te verbinden
+@msg	select members of a compound shape	selecteer leden van een samengestelde vorm
+@msg	select objects or give ids	selecteer objecten of geef ids
+@msg	select objects to align to the guide	selecteer objecten om op de hulplijn uit te lijnen
+@msg	select one Intertwine group	selecteer één groep Verstrengelen
+@msg	select one image or pass id	selecteer één afbeelding of geef id op
+@msg	select one layer, group or object to rename	selecteer één laag, groep of object om te hernoemen
+@msg	select paths	selecteer paden
+@msg	select paths or compound paths	selecteer paden of samengestelde paden
+@msg	select rows or objects to collect	selecteer rijen of objecten om te verzamelen
+@msg	select something to export	selecteer iets om te exporteren
+@msg	select something to export (or turn off selectedOnly)	selecteer iets om te exporteren (of schakel selectedOnly uit)
+@msg	select text to redefine the style from	selecteer tekst om de stijl mee opnieuw te definiëren
+@msg	select the art and, on top of it, the mask object	selecteer de illustratie en, daarbovenop, het maskerobject
+@msg	select the art for the design	selecteer de illustratie voor het ontwerp
+@msg	select the art for the pattern tile	selecteer de illustratie voor de patroontegel
+@msg	select the art to add first	selecteer eerst de illustratie die moet worden toegevoegd
+@msg	select the art to collect (or give its ids)	selecteer de illustratie die moet worden verzameld (of geef de id’s ervan)
+@msg	select the art to weed	selecteer de illustratie die moet worden gewied
+@msg	select the banner, or mark every artboard	selecteer de banner, of markeer elk tekengebied
+@msg	select the content and a path on top	selecteer de inhoud en een pad erbovenop
+@msg	select the images to relink, or pass ids	selecteer de afbeeldingen die opnieuw moeten worden gekoppeld, of geef ids op
+@msg	select the images, or pass ids	selecteer de afbeeldingen, of geef ids op
+@msg	select the linked images or placed documents, or pass ids	selecteer de gekoppelde afbeeldingen of geplaatste documenten, of geef ids op
+@msg	select the object to copy from	selecteer het object waarvan moet worden gekopieerd
+@msg	select the objects (or give their ids)	selecteer de objecten (of geef de id’s ervan)
+@msg	select the objects to attach to the path	selecteer de objecten die aan het pad moeten worden gekoppeld
+@msg	select the objects to bind	selecteer de objecten die moeten worden gekoppeld
+@msg	select two or more objects to intertwine	selecteer twee of meer objecten om te verstrengelen
+@msg	select two or more slices to combine	selecteer twee of meer slices om te combineren
+@msg	select type on a path	selecteer tekst op een pad
+@msg	select type on a path or area type	selecteer tekst op een pad of vlaktekst
+@msg	selection `{m}`: one or each	selection `{m}`: one of each
+@msg	settings is an object of document.exportForScreens params	settings is een object met parameters van document.exportForScreens
+@msg	settings must be an object	settings moet een object zijn
+@msg	show `{show}`: all, missing, modified or embedded	show `{show}`: all, missing, modified of embedded
+@msg	show must be true or false	show moet true of false zijn
+@msg	side is left or right, not `{v}`	side is left of right, niet `{v}`
+@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size moet "small", "medium", "large" of een aantal punten boven 0 tot en met {_1} zijn
+@msg	size must be positive	size moet positief zijn
+@msg	sizeMode is "fixed" or "pressure", not `{other}`	sizeMode is "fixed" of "pressure", niet `{other}`
+@msg	sizeMode is "fixed" or "pressure", not {other}	sizeMode is "fixed" of "pressure", niet {other}
+@msg	sizeVariation must be 0 or more	sizeVariation moet 0 of meer zijn
+@msg	smallCaps must be true or false	smallCaps moet true of false zijn
+@msg	sort `{x}`: name, kind or status	sort `{x}`: name, kind of status
+@msg	source paths are too large for Shaper	de bronpaden zijn te groot voor Shaper
+@msg	source text transform is collapsed or unrepresentable	de teksttransformatie van de bron is samengevallen of kan niet worden weergegeven
+@msg	spot, mode and group apply to solid colours only	spot, mode en group gelden alleen voor effen kleuren
+@msg	status `{s}`: linked, embedded, missing or modified	status `{s}`: linked, embedded, missing of modified
+@msg	steps must be 1..1000	steps moet 1..1000 zijn
+@msg	steps must be 1..{MAX_STEPS}	steps moet 1..{MAX_STEPS} zijn
+@msg	stop {i}: `plates` must be four numbers from 0 to 1 (C, M, Y, K)	stop {i}: `plates` moet uit vier getallen van 0 tot 1 bestaan (C, M, Y, K)
+@msg	stopped before the archive was finished	gestopt voordat het archief klaar was
+@msg	strokeMode must be within|along|across, got {m}	strokeMode moet within|along|across zijn, kreeg {m}
+@msg	strokeOptions must be an object of stroke.set options	strokeOptions moet een object met opties van stroke.set zijn
+@msg	strokeWidth must be a positive number of pixels	strokeWidth moet een positief aantal pixels zijn
+@msg	subpath {si} is not an open subpath	subpad {si} is geen open subpad
+@msg	subpaths required when joining the same path	subpaths is vereist bij het verbinden van hetzelfde pad
+@msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict moet "merge" of "add" zijn, niet {v}
+@msg	table must be true or false	table moet true of false zijn
+@msg	takes one name	accepteert één naam
+@msg	target text transform is collapsed or unrepresentable	de teksttransformatie van het doel is samengevallen of kan niet worden weergegeven
+@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text moet {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?} zijn
+@msg	text transform is collapsed or unrepresentable	de teksttransformatie is samengevallen of kan niet worden weergegeven
+@msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces moet een geheel getal van 2 tot 100 zijn
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: gebruik "{_1}" of "{_2}"
+@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: geef {path} of {name, dataBase64} van een afbeeldingsbestand, of een textuur zoals effect.list die geeft
+@msg	textureImage: {e}	textureImage: {e}
+@msg	that makes more than {MAX_PIECES} slices	dat levert meer dan {MAX_PIECES} slices op
+@msg	that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer	dat levert te veel stukken (maximaal 100000) of streepstappen op: vereenvoudig het streeppatroon of maak de strepen langer
+@msg	that object is not in the overlap	dat object ligt niet in de overlapping
+@msg	the Affinity document has no page with a size	het Affinity-document heeft geen pagina met een grootte
+@msg	the CMYK image couldn't be written	de CMYK-afbeelding kon niet worden geschreven
+@msg	the Layers panel is not shown	het paneel Lagen wordt niet getoond
+@msg	the Layers panel's search, filter or Show Layers Only hides its row	de zoekopdracht, het filter of Alleen lagen weergeven van het paneel Lagen verbergt de rij ervan
+@msg	the Objects on Path group is hidden or locked	de groep Objecten op pad is verborgen of vergrendeld
+@msg	the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected	de PDF-beveiligingsinstellingen zijn zonder hun wachtwoorden opgeslagen: geef openPassword of permissionsPassword opnieuw, of security zonder passwordRequired om onbeveiligd te exporteren
+@msg	the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)	het RTF-bestand heeft te veel alinea’s of opmaakwijzigingen om als tekst te plaatsen (maximaal {MAX_PARAGRAPHS} alinea’s en {MAX_RUNS} runs)
+@msg	the RTF file is too large to place as type (at most {_1} MB)	het RTF-bestand is te groot om als tekst te plaatsen (maximaal {_1} MB)
+@msg	the SVG expands to more than {0} nested SVG images	de SVG wordt uitgevouwen tot meer dan {0} geneste SVG-afbeeldingen
+@msg	the SVG expands to more than {0} objects	de SVG wordt uitgevouwen tot meer dan {0} objecten
+@msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	het SVG-bestand is groter dan {MAX_IMPORT_BYTES} bytes
+@msg	the SVG has no drawable objects	de SVG heeft geen tekenbare objecten
+@msg	the SVGZ file unpacks to more than {_1} MB	het SVGZ-bestand wordt uitgepakt tot meer dan {_1} MB
+@msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	het Word-document heeft meer dan {MAX_PAGES} pagina’s met eigenschappen, te veel om te plaatsen
+@msg	the Word document has more than {MAX_RUNS} runs of character or paragraph properties, too many to place	het Word-document heeft meer dan {MAX_RUNS} runs met teken- of alinea-eigenschappen, te veel om te plaatsen
+@msg	the Word document has more than {_1} MB of formatting properties, too many to place	het Word-document heeft meer dan {_1} MB aan opmaakeigenschappen, te veel om te plaatsen
+@msg	the Word document has too much text or formatting to place as type (at most {MAX_PARAGRAPHS} paragraphs, {MAX_RUNS} runs and {_1} MB of text)	het Word-document heeft te veel tekst of opmaak om als tekst te plaatsen (maximaal {MAX_PARAGRAPHS} alinea’s, {MAX_RUNS} runs en {_1} MB tekst)
+@msg	the Word document has too much text to place as type (at most {_1} MB)	het Word-document heeft te veel tekst om als tekst te plaatsen (maximaal {_1} MB)
+@msg	the Word document is encrypted or protected with a password; save it without one to place it	het Word-document is versleuteld of met een wachtwoord beveiligd; sla het zonder wachtwoord op om het te plaatsen
+@msg	the Word document is too large to place (its {name} stream holds more than {_1} MB)	het Word-document is te groot om te plaatsen (de stroom {name} ervan bevat meer dan {_1} MB)
+@msg	the Word document was last saved with fast save, which VectorCraft doesn't read; save it again with fast save turned off	het Word-document is het laatst opgeslagen met snel opslaan, wat VectorCraft niet leest; sla het opnieuw op met snel opslaan uitgeschakeld
+@msg	the Word document was saved by Word 6.0 or Word 95, which VectorCraft doesn't read; save it as a Word 97-2003 document	het Word-document is opgeslagen door Word 6.0 of Word 95, wat VectorCraft niet leest; sla het op als een Word 97-2003-document
+@msg	the Word document's text is made of more than {MAX_PIECES} pieces, too many to place	de tekst van het Word-document bestaat uit meer dan {MAX_PIECES} stukken, te veel om te plaatsen
+@msg	the XML operation needs an XML or XMLList value	de XML-bewerking heeft een XML- of XMLList-waarde nodig
+@msg	the XPath expression does not evaluate to a node-set	de XPath-expressie levert geen knooppuntenset op
+@msg	the XPath expression ends early	de XPath-expressie eindigt te vroeg
+@msg	the XPath expression has an unmatched )	de XPath-expressie heeft een ) zonder tegenhanger
+@msg	the XPath expression has an unmatched ]	de XPath-expressie heeft een ] zonder tegenhanger
+@msg	the XPath expression has an unmatched closing bracket	de XPath-expressie heeft een sluithaakje zonder tegenhanger
+@msg	the XPath expression selects a namespace node, which is not an XML value	de XPath-expressie selecteert een naamruimteknooppunt, en dat is geen XML-waarde
+@msg	the XPath expression selects the root node, which is not an XML value	de XPath-expressie selecteert het hoofdknooppunt, en dat is geen XML-waarde
+@msg	the XPath function {name} needs a node-set	de XPath-functie {name} heeft een knooppuntenset nodig
+@msg	the XPath function {name} takes the wrong number of arguments	de XPath-functie {name} krijgt het verkeerde aantal argumenten
+@msg	the XPath name functions need a node-set	de XPath-naamfuncties hebben een knooppuntenset nodig
+@msg	the XPath prefix {shown} is not bound to a namespace	het XPath-voorvoegsel {shown} is niet aan een naamruimte gebonden
+@msg	the XPath variable ${shown} is not bound	de XPath-variabele ${shown} is niet gebonden
+@msg	the action set ids are not a list	de id’s van de actieset zijn geen lijst
+@msg	the active paint is not a gradient	de actieve verf is geen verloop
+@msg	the argument list is not an object	de argumentenlijst is geen object
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	de illustratie van een grafiekontwerp in een grafiekreeks wordt opnieuw vanuit het ontwerp getekend: bewerk het ontwerp om het te wijzigen
+@msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	de tekengebieden passen niet op het canvas: minder tekengebieden, minder tussenruimte of een kleinere grootte
+@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	de illustratie is te groot voor EPS: wat na 256 MB PostScript komt, is weggelaten
+@msg	the banner has no width or height	de banner heeft geen breedte of hoogte
+@msg	the bitmaps hold more pixels than one file may	de bitmaps bevatten meer pixels dan één bestand mag bevatten
+@msg	the character's size can't be measured	de grootte van het teken kan niet worden gemeten
+@msg	the code runs past its last instruction	de code loopt voorbij de laatste instructie
+@msg	the compound shape is too complex to expand	de samengestelde vorm is te complex om uit te breiden
+@msg	the container of the listed objects is gone	de container van de vermelde objecten is verdwenen
+@msg	the copy `{user_id}` can't be read as a library	de kopie `{user_id}` kan niet als bibliotheek worden gelezen
+@msg	the copy would leave the canvas	de kopie zou buiten het canvas vallen
+@msg	the curve tolerance must be from 0.01 to 10 points	de curvetolerantie moet van 0,01 tot 10 punten zijn
+@msg	the custom dictionary couldn't be saved to {_1}: {e}	het aangepaste woordenboek kon niet worden opgeslagen in {_1}: {e}
+@msg	the custom dictionary {_1} can't be read ({why}), so it is left as it is	het aangepaste woordenboek {_1} kan niet worden gelezen ({why}), dus blijft het zoals het is
+@msg	the cut cannot be made on this art: {e}	de snede kan niet in deze illustratie worden gemaakt: {e}
+@msg	the data isn't an EMF or WMF picture	de gegevens zijn geen EMF- of WMF-afbeelding
+@msg	the data isn't an EPS or PostScript picture	de gegevens zijn geen EPS- of PostScript-afbeelding
+@msg	the deferred paste is no longer available	het uitgestelde plakken is niet meer beschikbaar
+@msg	the design is too big to draw at every data point of this graph	het ontwerp is te groot om bij elk gegevenspunt van deze grafiek te tekenen
+@msg	the design is too big to draw in every column of this graph	het ontwerp is te groot om in elke kolom van deze grafiek te tekenen
+@msg	the dialog it was opened over is no longer open	het dialoogvenster waarboven het is geopend, is niet meer geopend
+@msg	the dictionary stack overflowed	de woordenboekstack is overgelopen
+@msg	the document already has an SVG filter named {name}	het document heeft al een SVG-filter met de naam {name}
+@msg	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it	het document heeft een ander SVG-filter met de naam {name}: gebruik svgFilter.apply, of svgFilter.define met `replace` om het te bewerken
+@msg	the document has no SVG filter named {name}	het document heeft geen SVG-filter met de naam {name}
+@msg	the document has no SVG filter named {r}	het document heeft geen SVG-filter met de naam {r}
+@msg	the document has no color swatches	het document heeft geen kleurstalen
+@msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	de stalen van het document bevatten {_1} kleuren; de documentreductie accepteert er maximaal 255
+@msg	the editing data's hash has no place	de hash van de bewerkingsgegevens heeft geen plaats
+@msg	the entities the document declares expand to too much text	de entiteiten die het document declareert, worden tot te veel tekst uitgevouwen
+@msg	the envelope's content has no bounds	de inhoud van de omvorming heeft geen grenzen
+@msg	the envelope's mesh is malformed	het net van de omvorming is misvormd
+@msg	the file holds no `variableSets` element	het bestand bevat geen element `variableSets`
+@msg	the file is larger than {_1} MB	het bestand is groter dan {_1} MB
+@msg	the file is too large	het bestand is te groot
+@msg	the file isn't valid SVG: {e}	het bestand is geen geldige SVG: {e}
+@msg	the file names no plate	het bestand noemt geen plaat
+@msg	the file was updated or encrypted already	het bestand is al bijgewerkt of versleuteld
+@msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	het eerste teken van een regel heeft geen teken ervoor om mee te kernen: het beweegt alleen omhoog en omlaag (dy)
+@msg	the font {_1} is not available	het lettertype {_1} is niet beschikbaar
+@msg	the format has no file extension	de indeling heeft geen bestandsextensie
+@msg	the function's prototype is not an object	het prototype van de functie is geen object
+@msg	the graphic can't be read: {e}	de afbeelding kan niet worden gelezen: {e}
+@msg	the graphic is empty	de afbeelding is leeg
+@msg	the graphic's data is damaged	de gegevens van de afbeelding zijn beschadigd
+@msg	the graphic's document has no artboard	het document van de afbeelding heeft geen tekengebied
+@msg	the grommet inset is too large for the banner	de afstand van de zeilringen tot de rand is te groot voor de banner
+@msg	the guide is hidden or locked	de hulplijn is verborgen of vergrendeld
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	de koptekst `{cell}` voor `{name}` zou worden teruggelezen als de variabele `{other}`: geef een van beide een andere naam
+@msg	the hem is too deep for the banner	de zoom is te diep voor de banner
+@msg	the image `{path}` isn't followed: {r}	de afbeelding `{path}` wordt niet gevolgd: {r}
+@msg	the image has no embedded pixels	de afbeelding heeft geen ingesloten pixels
+@msg	the image is empty	de afbeelding is leeg
+@msg	the image is fully transparent	de afbeelding is volledig transparant
+@msg	the image is not on an artboard; pass rect	de afbeelding staat niet op een tekengebied; geef rect op
+@msg	the image's pixels are missing	de pixels van de afbeelding ontbreken
+@msg	the image's pixels aren't in the document	de pixels van de afbeelding staan niet in het document
+@msg	the image's pixels can't be read: {e}	de pixels van de afbeelding kunnen niet worden gelezen: {e}
+@msg	the image's transparency doesn't fit it	de transparantie van de afbeelding past er niet bij
+@msg	the job would print more than {MAX_PAGES} pages	de taak zou meer dan {MAX_PAGES} pagina’s afdrukken
+@msg	the job would print more than {_1} pages	de taak zou meer dan {_1} pagina’s afdrukken
+@msg	the layers hold no art to mask	de lagen bevatten geen illustratie om te maskeren
+@msg	the layout moved	de indeling is verplaatst
+@msg	the library has a group `{name}` already	de bibliotheek heeft al een groep `{name}`
+@msg	the library has no group `{name}`	de bibliotheek heeft geen groep `{name}`
+@msg	the library has no item `{item}`	de bibliotheek heeft geen item `{item}`
+@msg	the library has no item `{other}`	de bibliotheek heeft geen item `{other}`
+@msg	the library holds {MAX_GROUPS} groups already	de bibliotheek bevat al {MAX_GROUPS} groepen
+@msg	the library holds {MAX_ITEMS} items of this kind already	de bibliotheek bevat al {MAX_ITEMS} items van dit soort
+@msg	the library's file is outside the read roots	het bestand van de bibliotheek staat buiten de leesroots
+@msg	the line is too long, or the paths it passes too many, to check	de lijn is te lang, of de paden die hij passeert zijn te talrijk, om te controleren
+@msg	the method needs an XML value	de methode heeft een XML-waarde nodig
+@msg	the name is empty	de naam is leeg
+@msg	the object has no fill, stroke or effect	het object heeft geen vulling, contour of effect
+@msg	the object has no graphic style (pass `name`)	het object heeft geen grafische stijl (geef `name` op)
+@msg	the objects don't match the plan	de objecten komen niet overeen met het plan
+@msg	the open and permissions passwords must differ	het wachtwoord voor openen en het wachtwoord voor machtigingen moeten verschillen
+@msg	the operand stack overflowed	de operandstack is overgelopen
+@msg	the page has no area	de pagina heeft geen oppervlak
+@msg	the page's type in an unread object's box isn't in its page art	de tekst van de pagina in het kader van een ongelezen object zit niet in de pagina-illustratie ervan
+@msg	the paint behind the proxy is not a gradient	de verf achter de proxy is geen verloop
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	de verf is geen verloop in vrije vorm (pas er een toe met paint.editGradient {kind})
+@msg	the parameters or body do not form one function	de parameters of de body vormen niet één functie
+@msg	the parent must be a layer or sublayer	het bovenliggende item moet een laag of sublaag zijn
+@msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	het geplakte SVG-filter {name} tekent anders dan het filter met die naam in het document, en er is geen vrije naam die past
+@msg	the path can't be extended	het pad kan niet worden verlengd
+@msg	the path can't be inside one of the objects to attach	het pad kan niet in een van de te koppelen objecten zitten
+@msg	the path has no segments to measure	het pad heeft geen segmenten om te meten
+@msg	the path is empty	het pad is leeg
+@msg	the path is too short to shorten that much	het pad is te kort om zoveel in te korten
+@msg	the paths are too many or too tangled to find where they cross	de paden zijn te talrijk of te verward om te vinden waar ze elkaar kruisen
+@msg	the pen table holds more than 255 pens	de pennentabel bevat meer dan 255 pennen
+@msg	the picture has no objects	de afbeelding heeft geen objecten
+@msg	the plates can't be kept	de platen kunnen niet worden behouden
+@msg	the position table does not match the instructions	de positietabel komt niet overeen met de instructies
+@msg	the program runs too long	het programma loopt te lang
+@msg	the program uses too much memory	het programma gebruikt te veel geheugen
+@msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	de tekst van de prompt is langer dan {MAX_PROMPT_BYTES} bytes
+@msg	the radix must be between 2 and 36	het grondtal moet tussen 2 en 36 liggen
+@msg	the rectangle must have a width and a height	de rechthoek moet een breedte en een hoogte hebben
+@msg	the rectangle needs a size and must lie on the canvas	de rechthoek heeft een grootte nodig en moet op het canvas liggen
+@msg	the rectangle or line reaches too many paths to check	de rechthoek of lijn raakt te veel paden om te controleren
+@msg	the right side of 'in' is not an object	de rechterkant van 'in' is geen object
+@msg	the right side of 'instanceof' is not a function	de rechterkant van 'instanceof' is geen functie
+@msg	the selected art has no width	de geselecteerde illustratie heeft geen breedte
+@msg	the selected art is nested more than {MAX_DEPTH} levels deep	de geselecteerde illustratie is meer dan {MAX_DEPTH} niveaus diep genest
+@msg	the selected art is too large to measure	de geselecteerde illustratie is te groot om te meten
+@msg	the selection draws nothing	de selectie tekent niets
+@msg	the selection has no area	de selectie heeft geen oppervlakte
+@msg	the selection has no art to export	de selectie heeft geen illustratie om te exporteren
+@msg	the selection has no bounds	de selectie heeft geen grenzen
+@msg	the selection has no graphic style	de selectie heeft geen grafische stijl
+@msg	the selection has no outlines to weed around	de selectie heeft geen omtrekken om omheen te wieden
+@msg	the slice would leave the canvas	de slice zou buiten het canvas vallen
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	de tussenruimte levert meer dan {MAX_GROMMETS} zeilringen op
+@msg	the spot colour couldn't be added	de steunkleur kon niet worden toegevoegd
+@msg	the subpath has no ends to extend (it is closed or a single point)	het subpad heeft geen uiteinden om te verlengen (het is gesloten of een enkel punt)
+@msg	the symbols are nested too deeply to expand their instances	de symbolen zijn te diep genest om hun instanties uit te breiden
+@msg	the text file is too large to place as type (at most {_1} MB)	het tekstbestand is te groot om als tekst te plaatsen (maximaal {_1} MB)
+@msg	the text is empty	de tekst is leeg
+@msg	the text is over {_1} MB	de tekst is groter dan {_1} MB
+@msg	the top object must be a path	het bovenste object moet een pad zijn
+@msg	the trace was cancelled	de tracering is geannuleerd
+@msg	the trailer has no size	de trailer heeft geen grootte
+@msg	the type object is flattened to nothing	het tekstobject is tot niets afgevlakt
+@msg	the value bind was called on is not a function	de waarde waarop bind is aangeroepen, is geen functie
+@msg	the value is not a constructor	de waarde is geen constructor
+@msg	the value is not a function	de waarde is geen functie
+@msg	the value is not a valid XML name	de waarde is geen geldige XML-naam
+@msg	the value is not an XML attribute name	de waarde is geen XML-attribuutnaam
+@msg	the value is not an XML name	de waarde is geen XML-naam
+@msg	the value of axis `{tag}` must be a number or null	de waarde van as `{tag}` moet een getal of null zijn
+@msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	de variabelenbibliotheek declareert meer dan {MAX_LIBRARY_DATASETS} gegevenssets
+@msg	the variable library declares more than {MAX_LIBRARY_ENTITIES} entities	de variabelenbibliotheek declareert meer dan {MAX_LIBRARY_ENTITIES} entiteiten
+@msg	the variable library declares more than {MAX_LIBRARY_VARIABLES} variables	de variabelenbibliotheek declareert meer dan {MAX_LIBRARY_VARIABLES} variabelen
+@msg	the variable library declares no variables	de variabelenbibliotheek declareert geen variabelen
+@msg	the variable library is larger than {MAX_LIBRARY_BYTES} bytes	de variabelenbibliotheek is groter dan {MAX_LIBRARY_BYTES} bytes
+@msg	the variable library is not UTF-8	de variabelenbibliotheek is geen UTF-8
+@msg	the variable library is not well-formed XML: {e}	de variabelenbibliotheek is geen welgevormde XML: {e}
+@msg	the variable library nests elements more than {MAX_LIBRARY_NESTING} deep	de variabelenbibliotheek nest elementen meer dan {MAX_LIBRARY_NESTING} niveaus diep
+@msg	the variable library's document type declaration holds something other than entities of plain text	de documenttypedeclaratie van de variabelenbibliotheek bevat iets anders dan entiteiten van platte tekst
+@msg	the variable library's entities expand to more than {MAX_LIBRARY_BYTES} bytes	de entiteiten van de variabelenbibliotheek worden tot meer dan {MAX_LIBRARY_BYTES} bytes uitgevouwen
+@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	de wiedlijnen kruisen de omtrekken van de illustratie te vaak om te meten; gebruik minder lijnen
+@msg	the weeding lines pass too close to too many outline segments to measure; use fewer lines or a smaller gap	de wiedlijnen lopen te dicht langs te veel omtreksegmenten om te meten; gebruik minder lijnen of een kleinere tussenruimte
+@msg	the weeding lines would be more than {max_pieces} pieces	de wiedlijnen zouden uit meer dan {max_pieces} stukken bestaan
+@msg	the window has no dock	het venster heeft geen dock
+@msg	the written PDF has no catalog	de geschreven PDF heeft geen catalogus
+@msg	the written PDF has no cross-reference table	de geschreven PDF heeft geen kruisverwijzingstabel
+@msg	the written PDF's metadata can't be edited	de metagegevens van de geschreven PDF kunnen niet worden bewerkt
+@msg	the {_1} plate lies outside the file	de plaat {_1} ligt buiten het bestand
+@msg	there are no colour swatches to draw	er zijn geen kleurstalen om te tekenen
+@msg	there is already a design named `{name}`	er is al een ontwerp met de naam `{name}`
+@msg	there is already a design named `{to}`	er is al een ontwerp met de naam `{to}`
+@msg	there is already a toolbar named `{name}`	er is al een werkbalk met de naam `{name}`
+@msg	there is already a toolbar named `{to}`	er is al een werkbalk met de naam `{to}`
+@msg	there is no banner to mark	er is geen banner om te markeren
+@msg	there is no library: create one first	er is geen bibliotheek: maak er eerst een
+@msg	these paths are too degenerate for Shaper	deze paden zijn te gedegenereerd voor Shaper
+@msg	this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that	dit is een binair DXF-bestand, dat niet kan worden gelezen: sla het vanuit de CAD-app op als ASCII-DXF en open dat bestand
+@msg	this warp's points can't be edited: use Reset with Mesh first	de punten van deze verdraaiing kunnen niet worden bewerkt: gebruik eerst Herstellen met mesh
+@msg	thumbnail: no page {v} (the {what} has {count})	miniatuur: geen pagina {v} ({what} heeft er {count})
+@msg	tileRange of {what}: {e}	tileRange van {what}: {e}
+@msg	title can't be empty	title mag niet leeg zijn
+@msg	to (the new name) is required	to (de nieuwe naam) is vereist
+@msg	to must be fill or stroke	to moet fill of stroke zijn
+@msg	to must be smooth or corner	to moet smooth of corner zijn
+@msg	toExponential() digits must be between 0 and 20	het aantal cijfers van toExponential() moet tussen 0 en 20 liggen
+@msg	toFixed() digits must be between 0 and 20	het aantal cijfers van toFixed() moet tussen 0 en 20 liggen
+@msg	toISOString is not a function	toISOString is geen functie
+@msg	toPrecision() argument must be between 1 and 21	het argument van toPrecision() moet tussen 1 en 21 liggen
+@msg	toSource: a getter cannot be written as source	toSource: een getter kan niet als broncode worden geschreven
+@msg	toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source	toSource: een array met eigenschappen naast zijn elementen, een niet-opsombare eigenschap of een ander prototype kan niet als broncode worden geschreven
+@msg	toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source	toSource: een object met een niet-opsombare eigenschap, of waarvan het prototype niet Object.prototype is, kan niet als broncode worden geschreven
+@msg	toSource: the source is too long	toSource: de broncode is te lang
+@msg	toSource: the value contains itself	toSource: de waarde bevat zichzelf
+@msg	toSource: the value has too many entries	toSource: de waarde heeft te veel items
+@msg	toSource: the value is nested too deep	toSource: de waarde is te diep genest
+@msg	toString is not a function	toString is geen functie
+@msg	too large for a zip archive: package to a folder	te groot voor een zip-archief: verpak naar een map
+@msg	too many Shaper edits	te veel Shaper-bewerkingen
+@msg	too many `points` (at most 100000)	te veel `points` (maximaal 100000)
+@msg	too many arguments	te veel argumenten
+@msg	too many characters: at most {MAX_CHARS}	te veel tekens: maximaal {MAX_CHARS}
+@msg	too many dots for this size: lower the frequency	te veel punten voor deze grootte: verlaag de frequentie
+@msg	too many filters over one file	te veel filters over één bestand
+@msg	too many overlapping paths for Shaper	te veel overlappende paden voor Shaper
+@msg	too many quantifiers	te veel kwantoren
+@msg	too many saved clips	te veel opgeslagen knippaden
+@msg	too many saved graphics states	te veel opgeslagen grafische toestanden
+@msg	toolbar (a toolbar's name) must be a string	toolbar (de naam van een werkbalk) moet een string zijn
+@msg	toolbar name can't be empty	de naam van een werkbalk mag niet leeg zijn
+@msg	transparentImages {v}: "flatten" (the default) or "omit"	transparentImages {v}: "flatten" (de standaard) of "omit"
+@msg	turn on at least one side	schakel minstens één zijde in
+@msg	two saved selections would be named `{_1}`	twee opgeslagen selecties zouden de naam `{_1}` krijgen
+@msg	type dimension cannot be represented with this text transform	de tekstmaatlijn kan niet worden weergegeven met deze teksttransformatie
+@msg	type dimension must be finite	de tekstmaatlijn moet eindig zijn
+@msg	unexpected resources	onverwachte resources
+@msg	unknown CMYK profile `{name}`	onbekend CMYK-profiel `{name}`
+@msg	unknown File Info field `{k}`	onbekend veld `{k}` van Bestandsinfo
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	onbekende OpenType-functie `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; zet er - voor om uit te schakelen; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom en aalt accepteren het nummer van een alternatief als `tag=N` met N van 0 tot {_1}, zoals `salt=2`)
+@msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	onbekende OpenType-functie `{t}` in featureChanges (de tags die `features` accepteert)
+@msg	unknown PDF preset `{name}` (presets: {_1})	onbekende PDF-voorinstelling `{name}` (voorinstellingen: {_1})
+@msg	unknown Warp style	onbekende warpstijl
+@msg	unknown alignToPath `{a}`	onbekende alignToPath `{a}`
+@msg	unknown arrowhead {v}	onbekende pijlpunt {v}
+@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	onbekende sleutel `{k}` van artboardLayout (layout, columns, spacing, rightToLeft)
+@msg	unknown attribute `{attribute}`	onbekend kenmerk `{attribute}`
+@msg	unknown attribute `{k}`	onbekend kenmerk `{k}`
+@msg	unknown axis `{other}` (vertical|horizontal|free)	onbekende as `{other}` (vertical|horizontal|free)
+@msg	unknown blend mode `{b}`	onbekende vermengingsmodus `{b}`
+@msg	unknown blend mode {b}	onbekende vermengingsmodus {b}
+@msg	unknown brush type `{o}`	onbekend penseeltype `{o}`
+@msg	unknown category `{c}`	onbekende categorie `{c}`
+@msg	unknown category `{c}` ({_1})	onbekende categorie `{c}` ({_1})
+@msg	unknown character `{c}`	onbekend teken `{c}`
+@msg	unknown character style number field	onbekend getalveld van een tekenstijl
+@msg	unknown dither `{d}` (diffusion, pattern, noise or none)	onbekende dither `{d}` (diffusion, pattern, noise of none)
+@msg	unknown effect `{e}`	onbekend effect `{e}`
+@msg	unknown end {e}	onbekend uiteinde {e}
+@msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	onbekende flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution of een opgeslagen voorinstelling: zie flattener.presets.list)
+@msg	unknown format `{f}` (vcswatches, gpl, ase or css)	onbekende indeling `{f}` (vcswatches, gpl, ase of css)
+@msg	unknown from {f}	onbekende from {f}
+@msg	unknown graph type `{t}`	onbekend grafiektype `{t}`
+@msg	unknown grid colours `{name}` (one of {_1})	onbekende rasterkleuren `{name}` (een van {_1})
+@msg	unknown gridType `{t}`	onbekende gridType `{t}`
+@msg	unknown highlight `{v}`	onbekende markering `{v}`
+@msg	unknown intent `{i}`	onbekende intentie `{i}`
+@msg	unknown issue kind {id}	onbekend soort probleem {id}
+@msg	unknown issue kind {v}	onbekend soort probleem {v}
+@msg	unknown knockout state {k}	onbekende knockoutstatus {k}
+@msg	unknown language `{language}` (one of {_1})	onbekende taal `{language}` (een van {_1})
+@msg	unknown language `{l}` (one of {_1})	onbekende taal `{l}` (een van {_1})
+@msg	unknown method `{m}` ({_1})	onbekende methode `{m}` ({_1})
+@msg	unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)	onbekende modus `{other}` (gray, rgb, hsb, lab, cmyk of web)
+@msg	unknown mode `{other}` (mono|cmyk)	onbekende modus `{other}` (mono|cmyk)
+@msg	unknown mode `{other}` (rgb|cmyk|gray|global)	onbekende modus `{other}` (rgb|cmyk|gray|global)
+@msg	unknown mode `{other}` (set, add, subtract)	onbekende modus `{other}` (set, add, subtract)
+@msg	unknown mode `{o}`	onbekende modus `{o}`
+@msg	unknown mode {m}	onbekende modus {m}
+@msg	unknown model `{other}`	onbekend model `{other}`
+@msg	unknown model `{other}` (keep, new or document)	onbekend model `{other}` (keep, new of document)
+@msg	unknown op {o}	onbekende op {o}
+@msg	unknown order `{o}`: toggle, front, forward, backward or back	onbekende volgorde `{o}`: toggle, front, forward, backward of back
+@msg	unknown overprints `{v}` (preserve, simulate or discard)	onbekende overprints `{v}` (preserve, simulate of discard)
+@msg	unknown panel	onbekend paneel
+@msg	unknown panel `{panel}`	onbekend paneel `{panel}`
+@msg	unknown parameter `{key}`	onbekende parameter `{key}`
+@msg	unknown pieLegend `{v}` (none, standard or wedges)	onbekende pieLegend `{v}` (none, standard of wedges)
+@msg	unknown piePosition `{v}` (even, ratio or stacked)	onbekende piePosition `{v}` (even, ratio of stacked)
+@msg	unknown pieSort `{v}` (none, all or first)	onbekende pieSort `{v}` (none, all of first)
+@msg	unknown plate `{n}`	onbekende plaat `{n}`
+@msg	unknown preference `{k}`	onbekende voorkeur `{k}`
+@msg	unknown profile {id} (see stroke.widthProfile.list)	onbekend profiel {id} (zie stroke.widthProfile.list)
+@msg	unknown proof target `{t}`	onbekend proefdoel `{t}`
+@msg	unknown quotes key `{k}` (double, single)	onbekende sleutel `{k}` van quotes (double, single)
+@msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	onbekende reductie `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform of document)
+@msg	unknown resolution `{v}`	onbekende resolutie `{v}`
+@msg	unknown rule `{rule}` ({_1})	onbekende regel `{rule}` ({_1})
+@msg	unknown rule `{r}` (see color.harmony)	onbekende regel `{r}` (zie color.harmony)
+@msg	unknown setting `{k}`	onbekende instelling `{k}`
+@msg	unknown shape `{v}` (circle|ellipse|square|diamond|line)	onbekende vorm `{v}` (circle|ellipse|square|diamond|line)
+@msg	unknown spacing `{o}` (smooth|steps|distance)	onbekende spacing `{o}` (smooth|steps|distance)
+@msg	unknown tileType `{t}` ({_1})	onbekende tileType `{t}` ({_1})
+@msg	unknown units	onbekende eenheden
+@msg	unknown units `{u}`	onbekende eenheden `{u}`
+@msg	unknown value axis `{v}` (left, right or both)	onbekende waardeas `{v}` (left, right of both)
+@msg	unknown variation `{v}` (tintsShades|warmCool|vividMuted)	onbekende variatie `{v}` (tintsShades|warmCool|vividMuted)
+@msg	unknown warp style `{s}`	onbekende warpstijl `{s}`
+@msg	unknown {key} `{v}` (none, short or full)	onbekende {key} `{v}` (none, short of full)
+@msg	unknown {key} profile `{n}`	onbekend {key}-profiel `{n}`
+@msg	unknown {k} key `{key}` (size, position)	onbekende sleutel `{key}` van {k} (size, position)
+@msg	unmatched ')'	')' zonder tegenhanger
+@msg	unreadable object	onleesbaar object
+@msg	unsafe destination file name	onveilige naam voor het doelbestand
+@msg	unterminated character class	niet-afgesloten tekenklasse
+@msg	unterminated group	niet-afgesloten groep
+@msg	use paths or compound paths	gebruik paden of samengestelde paden
+@msg	useArtboards must be true or false, not {v}	useArtboards moet true of false zijn, niet {v}
+@msg	value for `{var}` must match its variable kind	de waarde voor `{var}` moet bij het soort variabele passen
+@msg	variable `{_1}` is already defined	variabele `{_1}` is al gedefinieerd
+@msg	variable `{name}` has no `trait`	variabele `{name}` heeft geen `trait`
+@msg	variable `{name}` is already defined	variabele `{name}` is al gedefinieerd
+@msg	variable `{name}` is declared twice	variabele `{name}` is twee keer gedeclareerd
+@msg	variable `{to}` already exists	variabele `{to}` bestaat al
+@msg	view is required	view is vereist
+@msg	view must be one of {_1}	view moet een van {_1} zijn
+@msg	warpStyle can only edit an applied Warp effect	warpStyle kan alleen een toegepast warpeffect bewerken
+@msg	width and height must be more than 0 and at most {limit}	width en height moeten meer dan 0 en maximaal {limit} zijn
+@msg	width factors must be finite	breedtefactoren moeten eindig zijn
+@msg	width must be positive	width moet positief zijn
+@msg	width out of range	breedte buiten het bereik
+@msg	width/height must be > 0	width/height moeten > 0 zijn
+@msg	with no hem and no grommets there is nothing to mark	zonder zoom en zonder zeilringen is er niets om te markeren
+@msg	wordGap and lineGap need area type in the selection	wordGap en lineGap hebben vlaktekst in de selectie nodig
+@msg	x and y must be finite numbers	x en y moeten eindige getallen zijn
+@msg	x and y must be given together	x en y moeten samen worden opgegeven
+@msg	xpath needs its variables as an object	xpath heeft zijn variabelen als object nodig
+@msg	xpath needs the expression as a string	xpath heeft de expressie als string nodig
+@msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone heeft een anker nodig: dock naast een paneel met anchor, of in een nieuwe dockkolom met side (Start of End)
+@msg	zoom must be positive	zoom moet positief zijn
+@msg	{C}: no effect at index {list}	{C}: geen effect op index {list}
+@msg	{DEFAULT_PRESET} is protected and stays	{DEFAULT_PRESET} is beveiligd en blijft bestaan
+@msg	{DEFAULT_PRESET} is protected: save the settings under another name	{DEFAULT_PRESET} is beveiligd: sla de instellingen onder een andere naam op
+@msg	{GRANT_NOT_REMOVED}, and its settings and cache can't be moved back from {_1} to {_2}: {e}	{GRANT_NOT_REMOVED}, en de instellingen en cache ervan kunnen niet van {_1} naar {_2} worden teruggezet: {e}
+@msg	{LABEL} produced an empty result	{LABEL} heeft een leeg resultaat opgeleverd
+@msg	{_1} MB of document, at most {_2} MB	{_1} MB aan document, maximaal {_2} MB
+@msg	{_1} MB of images, at most {_2} MB	{_1} MB aan afbeeldingen, maximaal {_2} MB
+@msg	{_1} bytes of RGBA data for a {width} × {height} image	{_1} bytes aan RGBA-gegevens voor een afbeelding van {width} × {height}
+@msg	{_1} can't be read, or changed since it was read: relink or update it first	{_1} kan niet worden gelezen, of is gewijzigd sinds het is gelezen: koppel het eerst opnieuw of werk het eerst bij
+@msg	{_1} can't go into {into}	{_1} kan niet in {into} worden geplaatst
+@msg	{_1} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing	{_1} kan afdrukken niet tot lage resolutie beperken: kies PDF 1.4 of later, of sta afdrukken in hoge resolutie toe
+@msg	{_1} files can't be opened yet	{_1}-bestanden kunnen nog niet worden geopend
+@msg	{_1} files can't be password-protected: remove the passwords or choose no standard	{_1}-bestanden kunnen niet met een wachtwoord worden beveiligd: verwijder de wachtwoorden of kies geen standaard
+@msg	{_1} files can't be {_2}	{_1}-bestanden kunnen niet {_2} zijn
+@msg	{_1} files can't carry editing data: turn off preserveEditing	{_1}-bestanden kunnen geen bewerkingsgegevens bevatten: schakel preserveEditing uit
+@msg	{_1} files can't have PDF layers: turn off createLayers	{_1}-bestanden kunnen geen PDF-lagen hebben: schakel createLayers uit
+@msg	{_1} files need a creation date, and this platform has no clock to give one	{_1}-bestanden hebben een aanmaakdatum nodig, en dit platform heeft geen klok om er een te geven
+@msg	{_1} is not a folder: {e}	{_1} is geen map: {e}
+@msg	{_1} isn't a path	{_1} is geen pad
+@msg	{_1} options: {e}	opties voor {_1}: {e}
+@msg	{_1} paints nothing to rasterize	{_1} verft niets om te rasteriseren
+@msg	{_1} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)	wachtwoorden voor {_1} mogen maximaal {MAX_LEGACY_PASSWORD} ASCII-tekens hebben (PDF 1.7 en later accepteren alle tekens)
+@msg	{_1} with linked images or an image map writes several files: use document.export	{_1} met gekoppelde afbeeldingen of een imagemap schrijft meerdere bestanden: gebruik document.export
+@msg	{_1} writes one file per artboard here: use document.export, or name one artboard	{_1} schrijft hier één bestand per tekengebied: gebruik document.export, of noem één tekengebied
+@msg	{_1} × {_2} pixels is too large for {_3} (at most {max} pixels a side): lower the scale	{_1} × {_2} pixels is te groot voor {_3} (maximaal {max} pixels per zijde): verlaag de schaal
+@msg	{_1}: belongs to another account	{_1}: hoort bij een ander account
+@msg	{_1}: not a folder of its own	{_1}: geen eigen map
+@msg	{_1}: not a plain file	{_1}: geen gewoon bestand
+@msg	{_1}: {_2} and {_3} are in the way	{_1}: {_2} en {_3} staan in de weg
+@msg	{code}: {0}	{code}: {0}
+@msg	{dest}: {e}	{dest}: {e}
+@msg	{dir}: {e}	{dir}: {e}
+@msg	{doc} has no folder	{doc} heeft geen map
+@msg	{file} isn't linked	{file} is niet gekoppeld
+@msg	{file} names more than one linked JavaScript file	{file} noemt meer dan één gekoppeld JavaScript-bestand
+@msg	{folder} is not a package folder	{folder} is geen pakketmap
+@msg	{folder}: more than {max} files and folders	{folder}: meer dan {max} bestanden en mappen
+@msg	{folder}: {e}	{folder}: {e}
+@msg	{g} is not a Live Paint group	{g} is geen Live Paint-groep
+@msg	{id} is not a slice	{id} is geen slice
+@msg	{key} must be 0–{MAX_ADD_AROUND} pt	{key} moet 0–{MAX_ADD_AROUND} pt zijn
+@msg	{key} must be [x,y]	{key} moet [x,y] zijn
+@msg	{key} must be a percentage {min}..100	{key} moet een percentage {min}..100 zijn
+@msg	{key} must be a positive number, not {n}	{key} moet een positief getal zijn, niet {n}
+@msg	{key} must be a positive number, not {v}	{key} moet een positief getal zijn, niet {v}
+@msg	{key} must be one of {_1}	{key} moet een van {_1} zijn
+@msg	{key} must be {_1}, got {s}	{key} moet {_1} zijn, kreeg {s}
+@msg	{key} must name a floating panel	{key} moet een zwevend paneel noemen
+@msg	{key} must name a panel in another group	{key} moet een paneel in een andere groep noemen
+@msg	{key} must name a panel that shows	{key} moet een paneel noemen dat wordt getoond
+@msg	{key} must name a registered panel	{key} moet een geregistreerd paneel noemen
+@msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-bestanden hebben geen transparantie, en het bestand zou {what} bevatten: vlak het eerst af (object.flattenTransparency)
+@msg	{kind} images can't be opened (see document.formats)	{kind}-afbeeldingen kunnen niet worden geopend (zie document.formats)
+@msg	{k} `{v}` is not one of the choices	{k} `{v}` is geen van de keuzes
+@msg	{k} has control characters{_1}	{k} bevat besturingstekens{_1}
+@msg	{k} is too long (at most {MAX_TEXT} characters)	{k} is te lang (maximaal {MAX_TEXT} tekens)
+@msg	{k} must be > 0	{k} moet > 0 zijn
+@msg	{k} must be a number (pt) or a length such as "210 mm"	{k} moet een getal (pt) of een lengte zoals "210 mm" zijn
+@msg	{k} must be a number from {min} to {max}	{k} moet een getal van {min} tot {max} zijn
+@msg	{k} must be a number or "auto"	{k} moet een getal of "auto" zijn
+@msg	{k} must be a string	{k} moet een string zijn
+@msg	{k} must be text	{k} moet tekst zijn
+@msg	{k} must be true or false	{k} moet true of false zijn
+@msg	{k} must be {{size?, position?}}	{k} moet {{size?, position?}} zijn
+@msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}: het pad van een aangepaste pijlpunt heeft een oppervlak om te vullen nodig en maximaal {most} ankers en {most} subpaden, elk anker binnen {far} kopeenheden van de punt
+@msg	{k}: bad custom arrowhead path: {e}	{k}: ongeldig pad van een aangepaste pijlpunt: {e}
+@msg	{k}: bad custom arrowhead: {e}	{k}: ongeldige aangepaste pijlpunt: {e}
+@msg	{k}: can't read `{s}` as a length	{k}: kan `{s}` niet als lengte lezen
+@msg	{k}: custom must be a name	{k}: custom moet een naam zijn
+@msg	{label} must be a number at most {max}	{label} moet een getal van maximaal {max} zijn
+@msg	{label} must be a number from -1296 to 1296	{label} moet een getal van -1296 tot 1296 zijn
+@msg	{label} must be a number from 1 to 10000	{label} moet een getal van 1 tot 10000 zijn
+@msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
+@msg	{name} is built in and can't be deleted	{name} is ingebouwd en kan niet worden verwijderd
+@msg	{name} must be a number	{name} moet een getal zijn
+@msg	{name}: CRC or size mismatch	{name}: CRC of grootte komt niet overeen
+@msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: alleen de ingesloten voorvertoning van dit Affinity-bestand kon worden gelezen; gebruik Bestand › Openen om die met de bijbehorende waarschuwing te bekijken, of exporteer SVG of PDF vanuit Affinity voordat je plaatst
+@msg	{name}: {e}	{name}: {e}
+@msg	{native}; its embedded preview can't be read either ({e})	{native}; de ingesloten voorvertoning ervan kan ook niet worden gelezen ({e})
+@msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}: copy accepteert een DCS-bestand alleen wanneer de platen erin zitten; koppel het opnieuw op de plek waar de plaatbestanden staan
+@msg	{path}: larger than {_1} MB	{path}: groter dan {_1} MB
+@msg	{saving} failed: {e}	{saving} is mislukt: {e}
+@msg	{shown} is not an XPath 1.0 function	{shown} is geen XPath 1.0-functie
+@msg	{std} files are CMYK, and the file would have colours in {_1}	{std}-bestanden zijn CMYK, en het bestand zou kleuren in {_1} bevatten
+@msg	{std} files embed their fonts, and the file would have one that isn't	{std}-bestanden sluiten hun lettertypen in, en het bestand zou er een bevatten dat niet is ingesloten
+@msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	{target} is het bestand waaruit dit document is gelezen, en bij het lezen zijn dingen weggelaten ({what}): door eroverheen te schrijven zouden die voorgoed verloren gaan. Schrijf in plaats daarvan een ander bestand, of geef acknowledgeLoss: true op om het toch te vervangen
+@msg	{ty} brushes need selected art (or params.{k})	{ty}-penselen hebben een geselecteerde illustratie nodig (of params.{k})
+@msg	{v} is not an asset id	{v} is geen asset-id
+@msg	{v} names no layer or sublayer	{v} noemt geen laag of sublaag
+@msg	{what} can't be intertwined	{what} kan niet worden verstrengeld
+@msg	{what} doesn't fit the paper with its bleed and marks	{what} past niet op het papier met de afloop en de tekens ervan
+@msg	{what} is not a function	{what} is geen functie
+@msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what} zou meer dan {MAX_COPIES_PER_SHEET} exemplaren op een vel afdrukken: schaal het omhoog
+@msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} zou op meer dan {MAX_TILES} tegels worden afgedrukt: schaal het omlaag
+@msg	{what} {i} out of range	{what} {i} buiten het bereik
+
 	Ruler Origin	Lineaaloorsprong
 	Reset Ruler Origin	Lineaaloorsprong herstellen
 	Column Width:	Kolombreedte:
