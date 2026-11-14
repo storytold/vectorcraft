@@ -393,8 +393,10 @@ pub(super) fn symbol_place(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The plain art of instance `inst` in document space (fresh ids), with the instance's own
 /// appearance changes to a dynamic symbol's art when `own`, placed through its symbol's 9-slice
-/// guides when it has them. The instance's opacity mask goes on the art, or on a group around it
-/// when the art has a mask of its own.
+/// guides when it has them. The art's bounding boxes turn with the instance's own box, so after
+/// Reset Bounding Box they stand as the instance's box does. The instance's opacity mask goes on
+/// the art, or on a group around it when the art has a mask of its own; a group added around the
+/// art takes the instance's box angle.
 fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &inst.kind else { return None };
     let sym = d.symbols.iter().find(|s| &s.name == symbol)?;
@@ -402,12 +404,17 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
     if let Some((color, amount)) = brush::stain(inst) {
         brush::tint_node(&mut art, &color, amount);
     }
-    let art = d.place_symbol_art(symbol, &art, *xf)?;
+    let mut art = d.place_symbol_art(symbol, &art, *xf)?;
+    let turn = vectorcraft_doc::orient::placed_turn(inst.bbox_angle, *xf);
+    if turn != 0.0 {
+        art.turn_boxes(turn);
+    }
     let mut art = d.reid(&art);
     if inst.opacity < 1.0 || inst.blend != vectorcraft_color::BlendMode::Normal {
         if !matches!(art.kind, NodeKind::Group { .. }) {
             let id = d.alloc_id();
             art = Node::group(id, vec![Arc::new(art)]);
+            art.bbox_angle = inst.bbox_angle;
         }
         art.opacity *= inst.opacity;
         art.blend = inst.blend;
@@ -416,6 +423,7 @@ fn expanded_instance(d: &mut Document, inst: &Node, own: bool) -> Option<Node> {
         if art.extras().mask.is_some() {
             let id = d.alloc_id();
             art = Node::group(id, vec![Arc::new(art)]);
+            art.bbox_angle = inst.bbox_angle;
         }
         art.extras_mut().mask = Some(mask.clone());
     }

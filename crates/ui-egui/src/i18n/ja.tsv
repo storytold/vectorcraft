@@ -242,6 +242,8 @@ digits	Malayalam	マラヤーラム数字
 	Crop Image	画像の切り抜き
 	Image Tools	画像ツール
 	Remove Background…	背景を削除…
+	Draw (Pencil)	描画 (鉛筆)
+	Place Image	画像を配置
 	Remove Background	背景を削除
 	Background	背景
 	Edge Color	端の色
@@ -2439,6 +2441,29 @@ antiAlias	Sharp	シャープ
 	Bristle Brush	剛毛ブラシ
 	Pattern Brush	パターンブラシ
 	missing from the Brushes panel	ブラシパネルにありません
+	built in	内蔵
+	embedding not allowed	埋め込み不可
+	embedding for editing	編集用に埋め込み可
+	embedding for preview and print	プレビューと印刷用に埋め込み可
+	embedding allowed	埋め込み可
+	{file}; {embedding}	{file}、{embedding}
+	substituted: shown in {family} {style} ({detail})	代替: {family} {style} で表示 ({detail})
+	missing: shown in {family} {style}	見つかりません: {family} {style} で表示
+	missing	見つかりません
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}、{instances}
+	{kind}, {rows} × {cols}	{kind}、{rows} × {cols}
+	{grid}, {instances}	{grid}、{instances}
+	Linear gradient	線形グラデーション
+	Radial gradient	円形グラデーション
+	Conic gradient	円錐グラデーション
+	Diamond gradient	ひし形グラデーション
+	Freeform gradient	フリーグラデーション
+@plural	{n} instance|{n} instances	インスタンス {n} 個
+@plural	{n} row|{n} rows	{n} 行
+@plural	{n} column|{n} columns	{n} 列
 	Select art to make a scatter, art or pattern brush.	散布ブラシ、アートブラシ、パターンブラシを作成するには、アートを選択します。
 	Brush Art	ブラシのアート
 	New Calligraphic Brush	新規絵筆ブラシ
@@ -4608,6 +4633,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	direct-select anchor points to cut at (not the end points of open paths)	ダイレクト選択ツールで、カットする位置のアンカーポイントを選択してください (オープンパスの端点を除く)
 @msg	select paths or anchor points	パスまたはアンカーポイントを選択してください
 @msg	Divide Objects Below: select a path	背面のオブジェクトで型抜き: パスを選択してください
+@msg	select a path	パスを選択してください
 @msg	Divide Objects Below: select exactly one path	背面のオブジェクトで型抜き: パスを 1 つだけ選択してください
 @msg	Offset Path: select paths	パスのオフセット: パスを選択してください
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	パスのオフセット: オフセットすると選択したパスが何も残りません (内側へのオフセットがシェイプより大きい)
@@ -4751,6 +4777,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	レイヤーを保持するため、{_1} × {_2} ピクセルの埋め込み画像を {_3} × {_4} ピクセルに縮小しました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft の上限を超えるリンクされたテキストエリアは省略されました
+@msg	the Line Breaking setting of legacy type was left out	旧形式のテキストの行分割の設定は読み込まれませんでした
+@msg	the Japanese layout rules of legacy type were left out	旧形式のテキストの日本語組版ルールは読み込まれませんでした
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	テキストオブジェクト内で書字方向が変わる文字は、最初の文字の方向で開きます
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	リンクされたエリア、テキストの回り込み、複合パス内でマスクとして使われた文字はクリップしません
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ファイルにプレビューのないリンク画像は、元のファイルが見つかるまでプレースホルダーで表示されます：リンクパネルで再リンクしてください
@@ -5021,6 +5049,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`select` must be true or false	`select` には true または false を指定してください
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` と `maxAnchors` は整数にしてください
 @msg	`{key}` must be a number not below 0	`{key}` には 0 以上の数値を指定してください
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` には 0 以上の数値を 4 つ指定してください: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` は [x, y, width, height] の形式で指定してください: 有限の数値 4 つで、幅と高さは負の値にできません
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` が `{max_key}` より大きくなっています
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	次のうち少なくとも 1 つを指定してください: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -5429,6 +5458,7 @@ effect	Vertical	垂直
 	VectorCraft Title Bar on Every Desktop	すべてのデスクトップで VectorCraft のタイトルバー
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	環境変数 VECTORCRAFT_TITLEBAR が設定されている間は、この変数でタイトルバーが決まります。
 	System Title Bar takes precedence over this option while it is on.	システムのタイトルバーがオンの間は、そちらがこのオプションより優先されます。
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	すべてのデスクトップで VectorCraft のタイトルバーがオフの間は、このオプションのオンとオフにかかわらず、このデスクトップがウィンドウのタイトルバーを描画します。
 	Value Axis	数値軸
 	On Left Side	左側
 	On Right Side	右側
@@ -5878,6 +5908,7 @@ lighting	Light	ライト
 @msg	no such color	指定されたカラーが見つかりません
 @msg	{_1} cannot be used on Windows	{_1} は Windows では使用できません
 @msg	more than one action is named “{_1}”	「{_1}」という名前のアクションが複数あります
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	アクション「{_1}」がフォルダーの環境設定 {_2} を設定しています。セットを保存するにはそのステップを削除してください
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
 	Smudge Stick…	スマッジスティック…
 	Smudge Stick	スマッジスティック
@@ -6301,6 +6332,8 @@ axis	Y Axis	Y 軸
 	Action Options…	アクションオプション…
 	Action Options	アクションオプション
 	Playback Options…	再生オプション…
+	Button Mode	ボタンモード
+	No actions.	アクションがありません。
 	Insert Stop…	停止を挿入…
 	Insert Stop	停止を挿入
 	Record Stop	停止を記録

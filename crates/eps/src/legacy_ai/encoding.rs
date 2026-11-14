@@ -120,7 +120,6 @@ pub(super) fn lost_attributes(t: &TextObject) -> bool {
     let run_lost = |s: &CharStyle| {
         s.underline
             || s.strikethrough
-            || s.kerning.is_some_and(|k| k != 0.0)
             || s.optical_kerning
             || s.small_caps.is_some()
             || s.position != CharPosition::Normal

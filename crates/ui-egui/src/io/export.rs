@@ -41,6 +41,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // A `.ai` file names the view's active artboard.
     remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;
+    fileio::check_linked_scripts("file.exportAs", f.id, st).map_err(|e| e.to_string())?;
     let doc = match fileio::export_doc(st, f, params).map_err(|e| e.to_string())? {
         std::borrow::Cow::Borrowed(_) => st.doc.clone(),
         std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
