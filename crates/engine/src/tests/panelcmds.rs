@@ -1624,6 +1624,35 @@ fn text_set_format() {
     assert_eq!(t.para.composer, vectorcraft_doc::Composer::EveryLine);
 }
 
+/// `text.setFormat {composer}` takes the two Middle Eastern & South Asian and the two Standard
+/// composers, each per paragraph and one undo step; any other value is refused and names them all.
+#[test]
+fn text_set_format_takes_the_four_composers() {
+    use vectorcraft_doc::Composer;
+    let mut s = session();
+    let r = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "One\nTwo"})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    let composers = |s: &Session| {
+        let NodeKind::Text(t) = node(s, id).kind else { panic!() };
+        [t.para_at(0).composer, t.para_at(1).composer]
+    };
+    assert_eq!(composers(&s), [Composer::EveryLine; 2], "new type is ME&SA Every-line");
+    for (value, want) in [
+        ("singleLine", Composer::SingleLine),
+        ("standardSingleLine", Composer::StandardSingleLine),
+        ("standardEveryLine", Composer::StandardEveryLine),
+        ("everyLine", Composer::EveryLine),
+    ] {
+        s.execute("text.setFormat", &json!({"ids": [id.0], "composer": value, "start": 4, "end": 4})).unwrap();
+        assert_eq!(composers(&s), [Composer::EveryLine, want], "{value}: only the second paragraph");
+    }
+    s.execute("text.setFormat", &json!({"ids": [id.0], "composer": "standardEveryLine"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(composers(&s), [Composer::EveryLine; 2], "one undo step");
+    let e = s.execute("text.setFormat", &json!({"ids": [id.0], "composer": "standard"})).unwrap_err().to_string();
+    assert!(e.contains("standardSingleLine") && e.contains("standardEveryLine"), "{e}");
+}
+
 #[test]
 fn stroke_advanced_scale_swap_flip() {
     let mut s = session();

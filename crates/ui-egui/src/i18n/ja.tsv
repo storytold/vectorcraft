@@ -1666,7 +1666,8 @@ antiAlias	Sharp	シャープ
 	Every (minutes)	間隔 (分)
 	Every option is at its default.	すべてのオプションが初期値です。
 	Every option matches {base}.	すべてのオプションが {base} と同じです。
-	Every-line Composer	すべての行を一括処理
+	Middle Eastern & South Asian Every-line Composer	すべての行を一括処理 (中東・南アジア)
+	Standard Every-line Composer	すべての行を一括処理 (標準)
 	Exact dash lengths	破線の長さを正確に保つ
 	Exceptions (comma separated)	例外 (カンマ区切り)
 	Exclusion	除外
@@ -3256,7 +3257,8 @@ mark-style	Japanese	日本式
 	Simulate Colored Paper	色紙をシミュレート
 	Simulate Paper	紙色をシミュレート
 	Single Quotes:	一重引用符:
-	Single-line Composer	1 行ずつ組む
+	Middle Eastern & South Asian Single-line Composer	1 行ずつ組む (中東・南アジア)
+	Standard Single-line Composer	1 行ずつ組む (標準)
 	Toggle Line Composer	行の組版方式を切り替え
 	Size Tile to Art	タイルをアートワークのサイズに合わせる
 	Size/Leading	サイズ/行送り
@@ -7191,3 +7193,4 @@ breakText	Glyphs	字形
 	Grommets	ハトメ
 	Grommet Inset	端からハトメまでの距離
 	Diameter	直径
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer は "singleLine"、"everyLine"、"standardSingleLine"、"standardEveryLine" のいずれかにしてください

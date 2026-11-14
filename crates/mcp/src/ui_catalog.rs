@@ -392,7 +392,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "type.lineComposer",
         "Toggle Line Composer",
         "Cmd+Alt+Shift+C",
-        "{} the selected type's paragraphs (or those the Type tool's selection touches) use the Single-line Composer when they all use the Every-line Composer, else the Every-line Composer (text.setFormat {composer}) → \"singleLine\" | \"everyLine\"",
+        "{} the selected type's paragraphs (or those the Type tool's selection touches) use the Single-line Composer when they all use the Every-line Composer, else the Every-line Composer; paragraphs that all use a Standard composer keep it, any other mix takes the Middle Eastern & South Asian one (text.setFormat {composer}) → \"singleLine\" | \"everyLine\" | \"standardSingleLine\" | \"standardEveryLine\"",
     ),
     (
         "type.hyphenate",

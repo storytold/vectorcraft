@@ -1067,7 +1067,8 @@ font-technology	Variable	Вариативные
 	Every (minutes)	Каждые (минут)
 	Every option is at its default.	Все параметры имеют значения по умолчанию.
 	Every option matches {base}.	Все параметры совпадают с {base}.
-	Every-line Composer	Компоновщик всех строк
+	Middle Eastern & South Asian Every-line Composer	Компоновщик всех строк (Ближний Восток и Южная Азия)
+	Standard Every-line Composer	Стандартный компоновщик всех строк
 	Exact dash lengths	Точная длина штрихов
 	Exceptions (comma separated)	Исключения (через запятую)
 	Exclude	Исключить
@@ -3435,7 +3436,8 @@ digits	Malayalam	Малаялам
 	Single Left Quotation Mark	Одинарная открывающая кавычка
 	Single Quotes:	Одинарные кавычки:
 	Single Right Quotation Mark	Одинарная закрывающая кавычка
-	Single-line Composer	Однострочный компоновщик
+	Middle Eastern & South Asian Single-line Composer	Однострочный компоновщик (Ближний Восток и Южная Азия)
+	Standard Single-line Composer	Стандартный однострочный компоновщик
 	Toggle Line Composer	Переключить компоновщик строк
 	Sixth Space	Шестая шпация
 	Size	Размер
@@ -7584,3 +7586,4 @@ shape	Open	Открытый
 	Grommets	Люверсы
 	Grommet Inset	Отступ люверсов от края
 	Diameter	Диаметр
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer должен быть "singleLine", "everyLine", "standardSingleLine" или "standardEveryLine"

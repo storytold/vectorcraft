@@ -960,7 +960,8 @@ antiAlias	Sharp	Nítido
 	Every (minutes)	A cada (minutos)
 	Every option is at its default.	Todas as opções estão no padrão.
 	Every option matches {base}.	Todas as opções correspondem a {base}.
-	Every-line Composer	Compositor de Todas as Linhas
+	Middle Eastern & South Asian Every-line Composer	Compositor de Todas as Linhas (Oriente Médio e Sul da Ásia)
+	Standard Every-line Composer	Compositor Padrão de Todas as Linhas
 	Exact dash lengths	Comprimentos de tracejado exatos
 	Exceptions (comma separated)	Exceções (separadas por vírgula)
 	Exclude	Excluir
@@ -2877,7 +2878,8 @@ digits	Malayalam	Malaiala
 	Single Left Quotation Mark	Aspa Esquerda Única
 	Single Quotes:	Aspas Simples:
 	Single Right Quotation Mark	Aspa Direita Única
-	Single-line Composer	Compositor de Linha Única
+	Middle Eastern & South Asian Single-line Composer	Compositor de Linha Única (Oriente Médio e Sul da Ásia)
+	Standard Single-line Composer	Compositor Padrão de Linha Única
 	Toggle Line Composer	Alternar Compositor de Linhas
 	Sixth Space	Espaço de Sexto
 	Size	Tamanho
@@ -8181,7 +8183,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	column: true floats the whole column and takes no onto, above or below	column: true torna flutuante a coluna inteira e não aceita onto, above nem below
 @msg	command must be a shape.* command	command deve ser um comando shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: falta `command`
-@msg	composer must be "singleLine" or "everyLine"	composer deve ser "singleLine" ou "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer deve ser "singleLine", "everyLine", "standardSingleLine" ou "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	formas compostas aceitam caminhos, caminhos compostos, grupos, formas compostas, texto, mesclagens e envelopes
 @msg	compound {_1} must contain exactly one open path to join	o composto {_1} deve conter exatamente um caminho aberto para unir
 @msg	connect needs a path other than the one extended	connect precisa de um caminho diferente do que foi estendido

@@ -2029,7 +2029,8 @@ digits	Malayalam	Malajálamské
 	Tabular Lining	Tabulkové verzálkové
 	Tabular Oldstyle	Tabulkové minuskové
 	Titling Alternates	Titulkové alternativy
-	Every-line Composer	Sazba všech řádků
+	Middle Eastern & South Asian Every-line Composer	Sazba všech řádků (Blízký východ a Jižní Asie)
+	Standard Every-line Composer	Standardní sazba všech řádků
 	First-line Left Indent	Odsazení prvního řádku zleva
 	Hyphenation…	Dělení slov…
 	Words Longer Than:	Slova delší než:
@@ -2069,7 +2070,8 @@ digits	Malayalam	Malajálamské
 	East Asian Composition Settings	Nastavení východoasijské sazby
 	Korean Composition Settings	Nastavení korejské sazby
 	Select a text object to edit its paragraph attributes.	Vyberte textový objekt, abyste mohli upravit atributy jeho odstavce.
-	Single-line Composer	Sazba jednoho řádku
+	Middle Eastern & South Asian Single-line Composer	Sazba jednoho řádku (Blízký východ a Jižní Asie)
+	Standard Single-line Composer	Standardní sazba jednoho řádku
 	Toggle Line Composer	Přepnout sazbu řádků
 	Space After Paragraph	Mezera za odstavcem
 	Space Before Paragraph	Mezera před odstavcem
@@ -8114,7 +8116,7 @@ breakText	Glyphs	Glyfy
 @msg	column: true floats the whole column and takes no onto, above or below	column: true uvolní celý sloupec jako plovoucí a nepřijímá onto, above ani below
 @msg	command must be a shape.* command	command musí být příkaz shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: chybí `command`
-@msg	composer must be "singleLine" or "everyLine"	composer musí být "singleLine" nebo "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer musí být "singleLine", "everyLine", "standardSingleLine" nebo "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	složené tvary přijímají cesty, složené cesty, skupiny, složené tvary, text, prolnutí a obálky
 @msg	compound {_1} must contain exactly one open path to join	složený objekt {_1} musí ke spojení obsahovat právě jednu otevřenou cestu
 @msg	connect needs a path other than the one extended	connect vyžaduje jinou cestu než tu prodlužovanou

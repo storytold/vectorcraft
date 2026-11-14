@@ -393,7 +393,7 @@ pub(super) fn on_path(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, 
         let text = cx.text;
         let bidi = para_bidi_with(text.get(pr.clone()).unwrap_or_default(), para.direction, &cx.char_directions(pr));
         rtl.get_or_insert(is_rtl(bidi.as_ref()) && !cx.vertical);
-        let mut glyphs = cx.shape_para(pr.clone(), bidi.as_ref());
+        let mut glyphs = cx.shape_para(pr.clone(), bidi.as_ref(), t.para_at(pi));
         // Bullets and numbers: a list paragraph's text starts after its marker here too, unless
         // the paragraph continues from the frame before in its thread.
         if pi > 0 || !t.first_para_continues {

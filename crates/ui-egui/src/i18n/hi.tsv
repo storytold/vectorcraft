@@ -1699,7 +1699,8 @@ antiAlias	Sharp	शार्प
 	Every (minutes)	हर (मिनट)
 	Every option is at its default.	प्रत्येक ऑप्शन इसके डिफ़ॉल्ट रूप से होता है।
 	Every option matches {base}.	प्रत्येक ऑप्शन {base} से मेल खाता है।
-	Every-line Composer	हर लाइन संगीतकार
+	Middle Eastern & South Asian Every-line Composer	हर लाइन संगीतकार (मध्य पूर्व और दक्षिण एशिया)
+	Standard Every-line Composer	मानक हर लाइन संगीतकार
 	Exact	सटीक
 	Exact dash lengths	सटीक डैश लंबाई
 	Example: {name}	उदाहरण: {name}
@@ -4673,7 +4674,8 @@ antiAlias	Sharp	शार्प
 	Single Quotes:	एकल उद्धरण:
 	Single Right Quotation Mark	सिंगल राइट कोटेशन मार्क
 	Single Word Justification:	एकल शब्द जस्टिफ़िकेशन:
-	Single-line Composer	एकल लाइन संगीतकार
+	Middle Eastern & South Asian Single-line Composer	एकल लाइन संगीतकार (मध्य पूर्व और दक्षिण एशिया)
+	Standard Single-line Composer	मानक एकल लाइन संगीतकार
 	Sixth Space	छठे हिस्से जितना स्पेस
 	Size	आकार
 	Size Tile to Art	आकार टाइल कला के लिए
@@ -6567,7 +6569,7 @@ antiAlias	Sharp	शार्प
 @msg	command `{id}` is not available right now	आदेश `{id}` अभी उपलब्ध नहीं है
 @msg	command must be a shape.* command	command कोई shape.* कमांड होना चाहिए
 @msg	commands[{i}]: missing `command`	आदेश [{i}]: लापता `command`
-@msg	composer must be "singleLine" or "everyLine"	composer "singleLine" या "everyLine" होना चाहिए
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer "singleLine", "everyLine", "standardSingleLine" या "standardEveryLine" होना चाहिए
 @msg	compound {_1} must contain exactly one open path to join	जोड़ने के लिए कंपाउंड {_1} में ठीक एक खुला पाथ होना चाहिए
 @msg	compound paths can only contain paths	यौगिक पाथ में केवल पाथ हो सकते हैं
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	कंपाउंड शेप पाथ, कंपाउंड पाथ, समूह, कंपाउंड शेप, टाइप, ब्लेंड और एन्वेलप लेते हैं

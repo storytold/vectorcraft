@@ -1042,7 +1042,8 @@ font-technology	Variable	可變
 	Every (minutes)	每隔 (分鐘)
 	Every option is at its default.	所有選項皆為預設值。
 	Every option matches {base}.	所有選項皆與{base}相同。
-	Every-line Composer	逐行排版程式
+	Middle Eastern & South Asian Every-line Composer	逐行排版程式（中東與南亞）
+	Standard Every-line Composer	標準逐行排版程式
 	Exact dash lengths	精確虛線長度
 	Exceptions (comma separated)	例外 (以逗號分隔)
 	Exclude	差集
@@ -4517,7 +4518,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Single Left Quotation Mark	左單引號
 	Single Quotes:	單引號：
 	Single Right Quotation Mark	右單引號
-	Single-line Composer	單行排版程式
+	Middle Eastern & South Asian Single-line Composer	單行排版程式（中東與南亞）
+	Standard Single-line Composer	標準單行排版程式
 	Toggle Line Composer	切換行排版程式
 	Sixth Space	六分之一空格
 	Size	大小
@@ -7999,7 +8001,7 @@ breakText	Glyphs	字符
 @msg	column: true floats the whole column and takes no onto, above or below	column: true 會讓整欄浮動，不接受 onto、above 或 below
 @msg	command must be a shape.* command	command 必須是 shape.* 指令
 @msg	commands[{i}]: missing `command`	commands[{i}]：未提供 `command`
-@msg	composer must be "singleLine" or "everyLine"	composer 必須是 "singleLine" 或 "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer 必須是 "singleLine"、"everyLine"、"standardSingleLine" 或 "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	複合形狀接受路徑、複合路徑、群組、複合形狀、文字、漸變物件和封套
 @msg	compound {_1} must contain exactly one open path to join	複合路徑 {_1} 必須剛好包含一條可連接的開放路徑
 @msg	connect needs a path other than the one extended	connect 需要延伸路徑以外的另一條路徑

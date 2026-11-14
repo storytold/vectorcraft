@@ -1525,7 +1525,8 @@ antiAlias	Sharp	Nítid
 	Every (minutes)	Cada (minuts)
 	Every option is at its default.	Totes les opcions són al valor predeterminat.
 	Every option matches {base}.	Totes les opcions coincideixen amb {base}.
-	Every-line Composer	Composició línia per línia
+	Middle Eastern & South Asian Every-line Composer	Composició línia per línia (Orient Pròxim i Àsia Meridional)
+	Standard Every-line Composer	Composició estàndard línia per línia
 	Exact	Exacte
 	Exact dash lengths	Longituds de guió exactes
 	Example: {name}	Exemple: {name}
@@ -4326,7 +4327,8 @@ digits	Malayalam	Malaiàlam
 	Single Quotes:	Cometes simples:
 	Single Right Quotation Mark	Cometa simple dreta
 	Single Word Justification:	Justificació d’una sola paraula:
-	Single-line Composer	Compositor d’una línia
+	Middle Eastern & South Asian Single-line Composer	Compositor d’una línia (Orient Pròxim i Àsia Meridional)
+	Standard Single-line Composer	Compositor estàndard d’una línia
 	Sixth Space	Espai de sisena part
 	Size	Mida
 	Size Tile to Art	Ajusta la mida del mosaic a l’art
@@ -7476,3 +7478,4 @@ breakText	Glyphs	Glifs
 	Grommets	Ullets
 	Grommet Inset	Distància dels ullets a la vora
 	Diameter	Diàmetre
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

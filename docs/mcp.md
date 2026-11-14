@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-13 · **Change:** Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-14 · **Change:** `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
@@ -9553,7 +9553,7 @@ The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `ta
   100000 pt); it is disabled at 256 stops or when a stop is already at that position. Delete Tab removes the selected
   stop, and Clear All Tabs leaves the style with no stops, which it then sets. OK sorts the stops by
   position; of two stops at one position it keeps the one edited last.
-- Composition: `composer` (`singleLine` or `everyLine`) and the `roman_hanging` checkbox.
+- Composition: `composer` (`singleLine`, `everyLine`, `standardSingleLine` or `standardEveryLine`) and the `roman_hanging` checkbox.
 - Hyphenation: the `hyphenate` checkbox, `words_longer_than`, `after_first`, `before_last`, `hyphen_limit`,
   `hyphenation_zone` and the `hyphenate_capitalized` checkbox. The options are inactive while Hyphenation is off, and
   Hyphenation Zone is inactive with the Every-line Composer.
@@ -10478,9 +10478,17 @@ of the group in the Layers panel (`layer.move`).
 
 ## Paragraph composer
 
-`text.setFormat {ids?, composer: "singleLine"|"everyLine"}` sets how a text object's lines are broken (the Paragraph
-panel menu's Single-line and Every-line Composer; stored in the paragraph attributes as `para.composer`, saved only
-when it is Single-line). Every-line, the default, picks the breaks of the whole paragraph together in area type:
+`text.setFormat {ids?, composer: "singleLine"|"everyLine"|"standardSingleLine"|"standardEveryLine"}` sets how a text
+object's lines are broken and whether complex scripts are shaped (the Paragraph panel menu's four composers: Middle
+Eastern & South Asian Single-line and Every-line, and Standard Single-line and Every-line; stored in the paragraph
+attributes as `para.composer`, saved only when it is not Every-line, which is the default and what all type used before the
+Standard composers existed). `singleLine` and `everyLine` shape Indic, Arabic and Hebrew type with the font's layout
+tables, as all type is set; `standardSingleLine` and `standardEveryLine` break lines the same way but set such type
+glyph by glyph as the font maps its characters (no conjuncts, reordering, mark placement or joining forms), for legacy
+fonts that keep a script on Latin character codes. The scripts a Standard composer leaves unshaped are Indic, Arabic and the
+other joining scripts (Syriac, N'Ko, Mongolian, Adlam…) and Hebrew; Latin, Greek, Cyrillic, CJK, Thai and the rest keep their
+kerning and ligatures under every composer. Letters left unshaped do not join, so Insert Kashidas adds no tatweel between them. An older VectorCraft cannot open a file that uses a Standard composer. `.ai`, EPS and PDF files carry no composer.
+Every-line, the default, picks the breaks of the whole paragraph together in area type:
 justified text gets even word spacing, ragged text (left, centre or right aligned) an even rag, so it may move a word
 that fits to the next line to avoid a lone short word on the last line or a full line next to a short one.
 Single-line fills each line as far as it goes. Point type and type on a path have no line width, so both composers
@@ -10492,8 +10500,10 @@ narrower, or beside a wrap object, gets the room there. Such a paragraph falls b
 no room for all of it, or when the search for its breaks passes VectorCraft's own limits (1,000,000 lines tried and
 2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the paragraphs of a frame).
 The UI command `type.lineComposer` (Cmd+Alt+Shift+C, in remote mode `press_key {key: "C", mods: {cmd: true, alt: true,
-shift: true}}` or `invoke_menu`) sets `singleLine` when every paragraph of the selected type (or every paragraph the
-Type tool's selection touches) uses Every-line, else `everyLine`, and returns the composer it set.
+shift: true}}` or `invoke_menu`) sets the Single-line form when every paragraph of the selected type (or every paragraph the
+Type tool's selection touches) uses an Every-line one, else the Every-line form. Paragraphs that all use a Standard composer
+keep it (`standardSingleLine` or `standardEveryLine`); any other mix takes the Middle Eastern & South Asian one (`singleLine`
+or `everyLine`). It returns the composer it set.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"ids":[7],"composer":"singleLine"}}}

@@ -1069,7 +1069,8 @@ font-technology	Variable	Variables
 	Every (minutes)	Cada (minutos)
 	Every option is at its default.	Todas las opciones tienen su valor predeterminado.
 	Every option matches {base}.	Todas las opciones coinciden con {base}.
-	Every-line Composer	Composición de todas las líneas
+	Middle Eastern & South Asian Every-line Composer	Composición de todas las líneas (Oriente Medio y Sur de Asia)
+	Standard Every-line Composer	Composición estándar de todas las líneas
 	Exact dash lengths	Longitudes exactas de guion
 	Exceptions (comma separated)	Excepciones (separadas por comas)
 	Exclude	Excluir
@@ -3403,7 +3404,8 @@ digits	Malayalam	Malayálam
 	Single Left Quotation Mark	Comilla simple de apertura
 	Single Quotes:	Comillas simples:
 	Single Right Quotation Mark	Comilla simple de cierre
-	Single-line Composer	Composición de una línea
+	Middle Eastern & South Asian Single-line Composer	Composición de una línea (Oriente Medio y Sur de Asia)
+	Standard Single-line Composer	Composición estándar de una línea
 	Toggle Line Composer	Alternar composición de líneas
 	Sixth Space	Sexto de espacio
 	Size	Tamaño
@@ -7439,3 +7441,4 @@ breakText	Glyphs	Glifos
 	Grommets	Ojales
 	Grommet Inset	Distancia de los ojales al borde
 	Diameter	Diámetro
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer debe ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"

@@ -1766,7 +1766,8 @@ digits	Malayalam	მალაიალამური
 	Tabular Lining	ცხრილური ხაზოვანი
 	Tabular Oldstyle	ცხრილური ძველებური
 	Titling Alternates	სათაურის ალტერნატივები
-	Every-line Composer	აბზაცის მიხედვით აწყობა
+	Middle Eastern & South Asian Every-line Composer	აბზაცის მიხედვით აწყობა (შუა აღმოსავლეთი და სამხრეთ აზია)
+	Standard Every-line Composer	სტანდარტული აბზაცის მიხედვით აწყობა
 	First-line Left Indent	პირველი სტრიქონის მარცხენა შეწევა
 	Hyphenation…	სიტყვების გადატანა…
 	Justification…	სწორება…
@@ -1798,7 +1799,8 @@ digits	Malayalam	მალაიალამური
 	East Asian Composition Settings	აღმოსავლეთ აზიური აწყობის პარამეტრები
 	Korean Composition Settings	კორეული აწყობის პარამეტრები
 	Select a text object to edit its paragraph attributes.	აბზაცის ატრიბუტების რედაქტირებისთვის მონიშნეთ ტექსტური ობიექტი.
-	Single-line Composer	სტრიქონის მიხედვით აწყობა
+	Middle Eastern & South Asian Single-line Composer	სტრიქონის მიხედვით აწყობა (შუა აღმოსავლეთი და სამხრეთ აზია)
+	Standard Single-line Composer	სტანდარტული სტრიქონის მიხედვით აწყობა
 	Toggle Line Composer	აწყობის რეჟიმის გადართვა
 	Space After Paragraph	ინტერვალი აბზაცის შემდეგ
 	Space Before Paragraph	ინტერვალი აბზაცის წინ
@@ -7609,3 +7611,4 @@ font-script	Japanese	იაპონური
 	Grommets	ლუვერები
 	Grommet Inset	ლუვერების დაშორება კიდიდან
 	Diameter	დიამეტრი
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer უნდა იყოს "singleLine", "everyLine", "standardSingleLine" ან "standardEveryLine"

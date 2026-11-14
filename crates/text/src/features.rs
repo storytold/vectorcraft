@@ -52,6 +52,10 @@ pub struct OtFeatures {
     pub extra_values: [u16; EXTRA_FEATURES.len()],
     /// The value `swsh=N` gives swashes ([`Self::swash`]), as [`Self::extra_values`] for `salt`.
     pub swash_value: u16,
+    /// Set a complex script (Indic, Arabic, Hebrew) glyph by glyph as the font maps its
+    /// characters, with none of its layout tables: the Standard composers. Set per paragraph by
+    /// layout from the paragraph's composer, not by a style.
+    pub unshaped_complex: bool,
 }
 
 /// The largest value a `tag=N` feature takes: a font's glyph ids are 16 bits, so is an alternate's
@@ -87,6 +91,7 @@ impl Default for OtFeatures {
             extra: 0,
             extra_values: [0; EXTRA_FEATURES.len()],
             swash_value: 0,
+            unshaped_complex: false,
         }
     }
 }
@@ -159,6 +164,7 @@ impl OtFeatures {
             extra: u32::MAX >> (32 - EXTRA_FEATURES.len()),
             extra_values: [0; EXTRA_FEATURES.len()],
             swash_value: 0,
+            unshaped_complex: false,
         };
         change(&mut off);
         change(&mut on);

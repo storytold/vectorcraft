@@ -54,13 +54,27 @@ pub(crate) fn align(app: &mut VectorcraftApp, justify: &str) -> Result<Value, St
 }
 
 /// `type.lineComposer` (Cmd+Alt+Shift+C): the Single-line Composer for the paragraphs the panel
-/// acts on when they all use the Every-line Composer, else the Every-line Composer. Returns the
-/// composer set.
+/// acts on when they all break their lines every-line (either shaping), else the Every-line
+/// Composer. Paragraphs that all use a Standard composer keep it; any other mix takes the Middle
+/// Eastern & South Asian one. Returns the composer set.
 pub(crate) fn toggle_composer(app: &mut VectorcraftApp) -> Result<Value, String> {
     text_style(app).ok_or("select some type first")?;
-    let id = if shared_composer(app) == Some(Composer::EveryLine) { "singleLine" } else { "everyLine" };
+    let to_single = shared_para(app, |p| p.composer.is_single_line()) == Some(false);
+    let standard = shared_para(app, |p| p.composer.shapes_complex_scripts()) == Some(false);
+    let base = if standard { Composer::StandardEveryLine } else { Composer::EveryLine };
+    let id = composer_id(base.with_breaking(to_single));
     format(app, json!({ "composer": id }));
     Ok(json!(id))
+}
+
+/// The `text.setFormat` value of `composer`.
+fn composer_id(composer: Composer) -> &'static str {
+    match composer {
+        Composer::SingleLine => "singleLine",
+        Composer::EveryLine => "everyLine",
+        Composer::StandardSingleLine => "standardSingleLine",
+        Composer::StandardEveryLine => "standardEveryLine",
+    }
 }
 
 /// `type.hyphenate` (Cmd+Alt+Shift+H): what the Hyphenate checkbox does, on the paragraphs the
@@ -876,11 +890,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     ui.separator();
     let composer = shared_composer(app);
-    for (c, label, id) in
-        [(Composer::SingleLine, tl!("Single-line Composer"), "singleLine"), (Composer::EveryLine, tl!("Every-line Composer"), "everyLine")]
-    {
+    for (c, label) in [
+        (Composer::SingleLine, tl!("Middle Eastern & South Asian Single-line Composer")),
+        (Composer::EveryLine, tl!("Middle Eastern & South Asian Every-line Composer")),
+        (Composer::StandardSingleLine, tl!("Standard Single-line Composer")),
+        (Composer::StandardEveryLine, tl!("Standard Every-line Composer")),
+    ] {
         if menu_item(ui, label, has, composer == Some(c)) {
-            format(app, json!({ "composer": id }));
+            format(app, json!({ "composer": composer_id(c) }));
         }
     }
     ui.separator();

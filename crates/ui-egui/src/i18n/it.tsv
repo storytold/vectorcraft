@@ -1078,7 +1078,8 @@ font-technology	Variable	Variabili
 	Every (minutes)	Ogni (minuti)
 	Every option is at its default.	Tutte le opzioni hanno il valore predefinito.
 	Every option matches {base}.	Tutte le opzioni corrispondono a {base}.
-	Every-line Composer	Composizione su tutte le righe
+	Middle Eastern & South Asian Every-line Composer	Composizione su tutte le righe (Medio Oriente e Asia meridionale)
+	Standard Every-line Composer	Composizione standard su tutte le righe
 	Exact dash lengths	Lunghezze esatte dei trattini
 	Exceptions (comma separated)	Eccezioni (separate da virgole)
 	Exclude	Escludi
@@ -3448,7 +3449,8 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Virgoletta singola di apertura
 	Single Quotes:	Virgolette singole:
 	Single Right Quotation Mark	Virgoletta singola di chiusura
-	Single-line Composer	Composizione su riga singola
+	Middle Eastern & South Asian Single-line Composer	Composizione su riga singola (Medio Oriente e Asia meridionale)
+	Standard Single-line Composer	Composizione standard su riga singola
 	Toggle Line Composer	Alterna composizione delle righe
 	Sixth Space	Spazio di un sesto
 	Size	Dimensione
@@ -7966,7 +7968,7 @@ breakText	Glyphs	Glifi
 @msg	column: true floats the whole column and takes no onto, above or below	column: true rende mobile l'intera colonna e non accetta onto, above o below
 @msg	command must be a shape.* command	command deve essere un comando shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` mancante
-@msg	composer must be "singleLine" or "everyLine"	composer deve essere "singleLine" o "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer deve essere "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	le forme composte accettano tracciati, tracciati composti, gruppi, forme composte, testo, fusioni e involucri
 @msg	compound {_1} must contain exactly one open path to join	il composto {_1} deve contenere esattamente un tracciato aperto da unire
 @msg	connect end must be "start" or "end"	end di connect deve essere "start" o "end"
