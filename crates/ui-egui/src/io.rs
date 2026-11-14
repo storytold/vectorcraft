@@ -26,13 +26,13 @@ pub(crate) use export::{
     export_files, exported_with_notes, file_url, open_in_app, open_original, reveal_path, run_to_file, save_command_output_named,
 };
 pub(crate) use open::report_installed;
-pub(crate) use open::{EXPORT_PRESETS, import_presets, open_with_on, opened, show_opened};
+pub(crate) use open::{EXPORT_PRESETS, import_presets, open_notes, open_with_on, opened, opened_after_notice, show_opened};
 pub use open::{
     MAX_RECENT_FILES, OpensAs, ask_revert, install_module, install_plugin, new_from_template, note_recent, open_bytes, open_dialog, open_document,
     open_path, open_path_with, open_reporting, open_with, opens_as, place_bytes, recent_files, report_open_error,
 };
 #[cfg(test)]
-pub(crate) use open::{open_file, opened_after_notice, opened_with_notes};
+pub(crate) use open::{open_file, opened_with_notes};
 pub(crate) use save::save_current;
 pub use save::{ask_format_options, ask_pdf_options, remember_active_artboard, remember_view, save, save_pdf};
 pub(crate) use save::{export_path, is_web, notes_of, report_saved, show_with_notes, target_path, write_named, write_reporting, write_to};
