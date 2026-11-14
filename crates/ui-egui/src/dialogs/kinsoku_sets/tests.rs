@@ -146,6 +146,32 @@ fn based_on_follows_a_renamed_set() {
     assert_eq!((d.str("name"), d.str("cannotStart")), ("Kinsoku Set 1".to_string(), "ゞ".to_string()));
 }
 
+/// Delete then New does not give the new set the deleted set's name, so on OK the deleted set's
+/// paragraphs take Hard rather than the new set's characters.
+#[test]
+fn new_after_delete_does_not_take_the_deleted_name() {
+    let mut app = app();
+    app.run("type.kinsokuSets.set", json!({"sets": [{"name": "Kinsoku Set 1", "cannotStart": "ゝ"}]})).unwrap();
+    let id = app.run("text.create", json!({"x": 10, "y": 50, "text": "あいう"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setFormat", json!({"kinsoku": "Kinsoku Set 1"})).unwrap();
+    open(&mut app).unwrap();
+    frame(&mut app);
+    press(&mut app, Action::Delete);
+    dialog(&mut app).fields.insert("base".into(), json!("none"));
+    frame(&mut app);
+    press(&mut app, Action::New);
+    assert_eq!(dialog(&mut app).str("name"), "Kinsoku Set 2");
+    frame(&mut app);
+    super::super::confirm(&mut app).unwrap();
+    assert_eq!(doc_sets(&app).iter().map(|k| k.name.as_str()).collect::<Vec<_>>(), ["Kinsoku Set 2"]);
+    let para = match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => t.para_at(0).clone(),
+        _ => panic!("not text"),
+    };
+    assert_eq!(para.kinsoku_name(), "Hard");
+}
+
 /// OK takes the fields as they are set (`ui.dialog.set`) even when no frame was drawn since. Once
 /// `selected` picks another set, the fields no longer describe it: OK leaves that set as it is,
 /// and the next frame fills the fields from it.

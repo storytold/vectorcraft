@@ -117,9 +117,12 @@ fn take_fields(d: &Dialog, set: &mut Map<String, Value>) {
     }
 }
 
-/// "Kinsoku Set N", the first N no set in `sets` is named.
-fn new_name(sets: &[Map<String, Value>]) -> String {
-    (1..).map(|n| format!("Kinsoku Set {n}")).find(|n| !sets.iter().any(|s| KinsokuSet::same_name(name_of(s), n))).unwrap_or_default()
+/// "Kinsoku Set N", the first N that no set in `sets` and no set of the document (`doc`) is named.
+/// A set Delete took out keeps its name out of New's, so OK gives its paragraphs Hard instead of
+/// the new set's characters.
+fn new_name(sets: &[Map<String, Value>], doc: &[KinsokuSet]) -> String {
+    let taken = |n: &str| sets.iter().any(|s| KinsokuSet::same_name(name_of(s), n)) || doc.iter().any(|k| KinsokuSet::same_name(&k.name, n));
+    (1..).map(|n| format!("Kinsoku Set {n}")).find(|n| !taken(n)).unwrap_or_default()
 }
 
 /// The character `code` names: `U+3001`, `u+3001` or `3001`, in hexadecimal.
@@ -253,7 +256,8 @@ fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action) -> Result<(), Stri
                 }
             };
             set.remove("from");
-            set.insert("name".into(), json!(new_name(&list)));
+            let doc = app.session.active().map(|t| t.doc.kinsoku_sets.to_vec()).unwrap_or_default();
+            set.insert("name".into(), json!(new_name(&list, &doc)));
             list.push(set);
             put_sets(d, &list);
             select(d, list.len() - 1);
