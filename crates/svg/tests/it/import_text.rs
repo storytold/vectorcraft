@@ -5,7 +5,7 @@ use vectorcraft_color::{GradientKind, Paint};
 use vectorcraft_doc::{CharStyle, Document, Justify, Node, NodeKind, TextKind, TextObject};
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_svg::{import, import_with_report};
-use vectorcraft_text::{FontDb, layout};
+use vectorcraft_text::{FontDb, layout, spacing_scale};
 
 fn svg(body: &str) -> String {
     format!(r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="400" height="300">{body}</svg>"#)
@@ -801,6 +801,114 @@ fn absolutely_placed_rtl_chunks_of_several_characters_anchor_by_their_visual_edg
         let first = lay.glyphs.iter().filter(|g| g.rtl).min_by_key(|g| g.byte).map(|g| (t.xf * g.origin).x);
         assert!(first.is_some_and(|x| x > left + 1.0), "{body}: the first character starts at {first:?}, the chunk at {left}");
     }
+}
+
+/// Document-space left and right edges of the natural advance of the characters in `bytes` (the
+/// manual kerning that places the next chunk left out: it is at a glyph's right when the glyph runs
+/// left to right and at its left when it runs right to left).
+fn chunk_edges(t: &TextObject, bytes: std::ops::Range<usize>) -> (f64, f64) {
+    let lay = layout(FontDb::global(), t);
+    let mut starts = vec![];
+    let mut at = 0;
+    for r in &t.runs {
+        starts.push((at, &r.style));
+        at += r.text.len();
+    }
+    let style = |byte: usize| starts.iter().rev().find(|(s, _)| *s <= byte).map(|(_, st)| *st).unwrap();
+    let (mut left, mut right) = (f64::INFINITY, f64::NEG_INFINITY);
+    for g in lay.glyphs.iter().filter(|g| bytes.contains(&g.byte)) {
+        let st = style(g.byte);
+        let kern = st.kerning.unwrap_or(0.0) / 1000.0 * st.size * spacing_scale(st, false);
+        let x = (t.xf * g.origin).x;
+        let (l, r) = if g.rtl { (x + kern, x + g.advance) } else { (x, x + g.advance - kern) };
+        (left, right) = (left.min(l), right.max(r));
+    }
+    assert!(left.is_finite(), "no glyph in {bytes:?}");
+    (left, right)
+}
+
+/// SVG 1.1 §10.4 and SVG 2 §11.10.1.1 (https://www.w3.org/TR/SVG2/text.html#TextAnchoringProperties):
+/// every absolutely placed character starts a chunk anchored on its own x, also in right-to-left
+/// text whose characters run right to left, on any line.
+#[test]
+fn absolutely_placed_right_to_left_characters_sit_on_their_own_x() {
+    // (markup, share of each chunk's advance left of its x, each chunk's bytes and x)
+    let two_lines = |anchor: &str| {
+        format!(
+            r#"<text direction="rtl" text-anchor="{anchor}" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100 160" y="80 80">אב</tspan></text>"#
+        )
+    };
+    type Chunks = Vec<(std::ops::Range<usize>, f64)>;
+    let cases: Vec<(String, f64, Chunks)> = vec![
+        (two_lines("start"), 1.0, vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)]),
+        (two_lines("middle"), 0.5, vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)]),
+        (two_lines("end"), 0.0, vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)]),
+        (r#"<text x="100 160" y="80" direction="rtl" font-size="20">אב</text>"#.into(), 1.0, vec![(0..2, 100.0), (2..4, 160.0)]),
+        (r#"<text x="100 160" y="80" direction="rtl" text-anchor="end" font-size="20">אב</text>"#.into(), 0.0, vec![(0..2, 100.0), (2..4, 160.0)]),
+        // Three lines, the characters of the last out of order and overlapping.
+        (
+            r#"<text direction="rtl" font-size="20"><tspan x="300" y="40">אב</tspan><tspan x="60 120" y="80">גד</tspan><tspan x="200 90 205" y="120">הוז</tspan></text>"#.into(),
+            1.0,
+            vec![(0..4, 300.0), (5..7, 60.0), (7..9, 120.0), (10..12, 200.0), (12..14, 90.0), (14..16, 205.0)],
+        ),
+        // Left-to-right characters among right-to-left ones on the same line.
+        (r#"<text x="100 160 220" y="80" direction="rtl" font-size="20">אbc</text>"#.into(), 1.0, vec![(0..2, 100.0), (2..3, 160.0), (3..4, 220.0)]),
+        // Chunks of several characters.
+        (
+            r#"<text direction="rtl" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100" y="80">אב</tspan><tspan x="250">גד</tspan></text>"#.into(),
+            1.0,
+            vec![(0..2, 20.0), (3..7, 100.0), (7..11, 250.0)],
+        ),
+        (
+            r#"<text direction="rtl" text-anchor="middle" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100" y="80">אב</tspan><tspan x="250">גד</tspan></text>"#.into(),
+            0.5,
+            vec![(0..2, 20.0), (3..7, 100.0), (7..11, 250.0)],
+        ),
+        // A placed character after a letter with a combining mark.
+        (
+            r#"<text direction="rtl" font-size="20"><tspan x="100" y="80">&#x5D0;&#x5B8;</tspan><tspan x="160">&#x5D1;</tspan></text>"#.into(),
+            1.0,
+            vec![(4..6, 160.0)],
+        ),
+        (r#"<text font-size="20"><tspan x="100" y="80">e&#x301;</tspan><tspan x="160">b</tspan></text>"#.into(), 0.0, vec![(3..4, 160.0)]),
+        // Characters stretched by `lengthAdjust`, whose kerning is drawn at their scale.
+        (
+            r#"<text direction="rtl" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100 160" y="80 80" textLength="12" lengthAdjust="spacingAndGlyphs">אב</tspan></text>"#.into(),
+            1.0,
+            vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)],
+        ),
+        // Left to right, the right-to-left characters still each start at their own x.
+        (
+            r#"<text direction="ltr" font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100 160" y="80 80">אב</tspan></text>"#.into(),
+            0.0,
+            vec![(0..2, 20.0), (3..5, 100.0), (5..7, 160.0)],
+        ),
+        (
+            r#"<text font-size="20"><tspan x="20" y="40">ab</tspan><tspan x="100 160" y="80 80">cd</tspan></text>"#.into(),
+            0.0,
+            vec![(0..2, 20.0), (3..4, 100.0), (4..5, 160.0)],
+        ),
+    ];
+    let unplaced = |w: &[String]| w.iter().any(|w| w.contains("absolutely placed"));
+    for (body, share, chunks) in cases {
+        let (d, w) = import_with_report(&svg(&body)).unwrap();
+        assert!(!unplaced(&w), "{body}: {w:?}");
+        let t = only_text(&d);
+        if body.contains("lengthAdjust") {
+            assert!(t.runs.iter().any(|r| r.style.h_scale < 99.0), "{body}: {:?}", t.runs);
+        }
+        for (bytes, x) in chunks {
+            let (left, right) = chunk_edges(t, bytes.clone());
+            let want = x - share * (right - left);
+            assert!(close(left, want, 0.05), "{body}: the chunk {bytes:?} spans {left}..{right}, so it does not start at {want}");
+        }
+    }
+    // A left-to-right character between right-to-left ones is drawn right next to the one after
+    // it, with no kerning between them: that one keeps its place in the line, and a warning says so.
+    let (d, w) = import_with_report(&svg(r#"<text x="100 160 220" y="80" direction="rtl" font-size="20">אbג</text>"#)).unwrap();
+    assert!(unplaced(&w), "{w:?}");
+    let (left, right) = chunk_edges(only_text(&d), 2..3);
+    assert!(close(right, 160.0, 0.05), "b spans {left}..{right}");
 }
 
 #[test]
