@@ -4124,7 +4124,8 @@ fn shape_builder_uses_the_filled_faces_of_a_live_paint_group() {
 
 /// The Shape Builder takes a Live Paint face or edge when any of its fill or stroke rows draws,
 /// whichever row is on top: a painted lower row under an unpainted top row counts, and a part
-/// whose only painted row is hidden, transparent or (for an edge) 0 pt wide does not.
+/// whose only painted row is hidden, transparent or (for an edge) 0 pt wide, or whose own opacity
+/// is 0, does not.
 #[test]
 fn shape_builder_takes_the_live_paint_faces_and_edges_that_draw() {
     use vectorcraft_doc::{FillLayer, StrokeLayer};
@@ -4154,15 +4155,23 @@ fn shape_builder_takes_the_live_paint_faces_and_edges_that_draw() {
     let hidden_stroke = set_live_part(&mut s, g, None, Some((150.0, 50.0)), vec![hidden(stroke(red(), 2.0))], 1.0);
     let thin_stroke = set_live_part(&mut s, g, None, Some((100.0, 50.0)), vec![stroke(red(), 0.0)], 1.0);
     let clear_stroke = set_live_part(&mut s, g, None, Some((50.0, 50.0)), vec![clear(stroke(red(), 2.0))], 1.0);
-    let parts = [lower_fill, hidden_fill, clear_fill, lower_stroke, hidden_stroke, thin_stroke, clear_stroke];
+    let clear_edge = set_live_part(&mut s, g, None, Some((75.0, 0.0)), vec![stroke(red(), 2.0)], 0.0);
+    let parts = [lower_fill, hidden_fill, clear_fill, lower_stroke, hidden_stroke, thin_stroke, clear_stroke, clear_edge];
     assert_eq!(parts.iter().collect::<std::collections::HashSet<_>>().len(), parts.len());
     let d = s.doc().unwrap();
     let (_, leaves) = vectorcraft_tools::builder::shape_builder_shapes(&d.doc, &[g], true);
     let taken: Vec<NodeId> = leaves.iter().map(|l| l.id).collect();
     assert!(taken.contains(&lower_fill) && taken.contains(&lower_stroke), "a painted lower row draws: {taken:?}");
-    for id in [hidden_fill, clear_fill, hidden_stroke, thin_stroke, clear_stroke] {
+    for id in [hidden_fill, clear_fill, hidden_stroke, thin_stroke, clear_stroke, clear_edge] {
         assert!(!taken.contains(&id), "{id:?} draws nothing: {taken:?}");
     }
+    // A face with a painted fill whose own opacity is 0 is left out too.
+    let mut s = session();
+    let g = live(&mut s);
+    let clear_face = set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![fill(red())], 0.0);
+    let d = s.doc().unwrap();
+    let (_, leaves) = vectorcraft_tools::builder::shape_builder_shapes(&d.doc, &[g], true);
+    assert!(!leaves.iter().any(|l| l.id == clear_face), "a face with an opacity of 0 draws nothing");
 }
 
 /// An edge that closes on itself is a line around its face, not a second shape over it.

@@ -505,8 +505,8 @@ fn collect_members<'a>(n: &'a Node, builder: bool, out: &mut Vec<&'a Node>) {
         NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => {}
         NodeKind::Path { .. } | NodeKind::Compound { .. } => out.push(n),
         NodeKind::Group { .. } if builder && is_live_paint(n) => {
-            out.extend(faces(n).into_iter().filter(|f| !f.visible || f.locked || f.appearance.has_drawn_fill()).map(|f| &**f));
-            out.extend(edges(n).into_iter().filter(|e| !e.visible || e.locked || e.appearance.has_drawn_stroke()).map(|e| &**e));
+            out.extend(faces(n).into_iter().filter(|f| !f.visible || f.locked || (f.opacity > 0.0 && f.appearance.has_drawn_fill())).map(|f| &**f));
+            out.extend(edges(n).into_iter().filter(|e| !e.visible || e.locked || (e.opacity > 0.0 && e.appearance.has_drawn_stroke())).map(|e| &**e));
         }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             for c in children {
@@ -591,8 +591,8 @@ fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], builder: bool) -> (Vec<po:
 /// counts as filled or stroked when any of its fill or stroke rows draws
 /// ([`vectorcraft_doc::Appearance::has_drawn_fill`], [`vectorcraft_doc::Appearance::has_drawn_stroke`]),
 /// whichever row is on top. A Live Paint group contributes its filled faces as shapes and its
-/// stroked edges as open lines; its unfilled faces and its edges without a stroke are left out.
-/// Locked objects, and objects in a locked group or layer, give nothing.
+/// stroked edges as open lines; its unfilled faces, its edges without a stroke, and its faces and
+/// edges whose own opacity is 0 are left out. Locked objects, and objects in a locked group or layer, give nothing.
 pub fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let (mut shapes, leaves) = shapes_of(doc, roots, true);
     for (s, l) in shapes.iter_mut().zip(&leaves) {
