@@ -7,7 +7,7 @@ use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind, OpacityMask};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect, Vec2};
 use vectorcraft_pathops::BoolOp;
-use vectorcraft_three_d::{Bevel, BevelShape, DepthPlane, Extrude, Facet, Inflate, MAX_OBJECT_FACES, Mesh, PlanarFace, View};
+use vectorcraft_three_d::{Bevel, BevelShape, DepthPlane, Extrude, Facet, Inflate, MAX_OBJECT_FACES, Mesh, MeshedSolid, PlanarFace, View};
 
 #[cfg(test)]
 use vectorcraft_doc::color::Color;
@@ -656,7 +656,7 @@ fn solid_parts(shapes: &[Profile], fallback: Rect) -> (Vec<Part<'_>>, Rect) {
 
 #[cfg(test)]
 thread_local! {
-    /// How many solids [`built_solids`] has built on this thread, for the tests.
+    /// How many solids [`built_solids`] and [`meshes_for`] have built on this thread, for the tests.
     static SOLIDS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -1259,6 +1259,35 @@ fn draw_order(faces: &[Placed], sealed: bool) -> Vec<usize> {
     // face moved to a stroke face's depth goes before it.
     order.sort_by(|&a, &b| keys[a].0.total_cmp(&keys[b].0).then(keys[b].1.cmp(&keys[a].1)));
     local_order(faces, order)
+}
+
+/// The order, back to front, of the faces of one or more Revolve surfaces `faces`, given back to
+/// front by depth: each face's polygon on the drawing, its plane and its depth. When two
+/// overlapping faces are drawn the wrong way round for their depths where they overlap, every pair
+/// of overlapping faces with a convex polygon and a plane goes in the order of its depths there,
+/// the face nearer the viewer after the other ([`local_order`]), and each step draws the face that
+/// comes first in the given order of those whose faces before are drawn, so a face without a plane
+/// or a convex polygon can also move. Otherwise the order given.
+pub(crate) fn surface_order<'a>(faces: impl IntoIterator<Item = (&'a [Point], Option<DepthPlane>, f64)>) -> Vec<usize> {
+    let placed: Vec<Placed> = faces
+        .into_iter()
+        .map(|(points, plane, depth)| {
+            let local = plane.is_some() && convex(points).is_some();
+            // Every face counts as one of a stroke's on one shape, so each overlapping pair is compared.
+            Placed {
+                depth,
+                side: true,
+                away: false,
+                bounds: polygon_bounds(points),
+                member: 0,
+                paints: Paints::Other,
+                outline: if local { points.to_vec() } else { vec![] },
+                plane: plane.filter(|_| local),
+            }
+        })
+        .collect();
+    let order = (0..placed.len()).collect();
+    local_order(&placed, order)
 }
 
 /// `shapes`, the members of group or layer `n`, reshaped by the visible geometry effects `before`
@@ -2039,31 +2068,35 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
         return Ok(out);
     }
     let (parts, bounds) = solid_parts(shapes, b);
-    // The solids the art draws, past the limits of the object's solids together as it is
-    // ([`built_solids`]), each built and its faces counted as the loop reaches it, then dropped.
-    let drawn = built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES).map(|r| r.map(|f| f.is_some()));
-    // Inflate lays out every puff at once (they share one eye); each Inflate and Extrude & Bevel
-    // solid and its mesh are built as the loop reaches them.
+    // Inflate lays out every puff at once (they share one eye). Each Inflate and Extrude & Bevel
+    // solid is built once, as the loop reaches it: its facets decide whether the art draws it, as
+    // [`built_solids`] does, and its faces before projection make its mesh.
     let mut inflated = (fx.id == INFLATE).then(|| {
         let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
-        vectorcraft_three_d::inflate_meshes(&shapes, bounds, inflate_options(&p), view)
+        vectorcraft_three_d::inflate_meshed(&shapes, bounds, inflate_options(&p), view)
     });
     let extrude = if fx.id == CLASSIC_EXTRUDE { classic_extrude_options(&p) } else { extrude_options(&p) };
-    for ((item, member, area, rule, _, _), drawn) in parts.iter().zip(drawn) {
+    let mut kept = 0usize;
+    for (item, member, area, rule, _, _) in &parts {
         let item: &AppearanceItem = item;
-        if !drawn? {
-            // A stroke the art leaves out is left out of the meshes too; Inflate's next puff
-            // still belongs to the next part.
-            if let Some(built) = inflated.as_mut() {
-                built.next();
-            }
-            continue;
-        }
-        let mesh = match inflated.as_mut() {
-            Some(built) => built.next().unwrap_or_else(|| Ok(Mesh::default())),
-            None => vectorcraft_three_d::extrude_mesh(area, *rule, bounds, extrude, view),
+        #[cfg(test)]
+        SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
+        let built = match inflated.as_mut() {
+            Some(each) => each.next().unwrap_or_else(|| Ok(MeshedSolid::default())),
+            None => vectorcraft_three_d::extrude_meshed(area, *rule, bounds, extrude, view),
         };
-        match mesh {
+        // A stroke the art leaves out is left out of the meshes too. The faces of the solids kept
+        // count together against the object's limit.
+        let solid = match built {
+            Ok(solid) => solid,
+            Err(_) if matches!(item, AppearanceItem::Stroke(_)) => continue,
+            Err(e) => return Err(e),
+        };
+        kept = kept.saturating_add(solid.facets.len());
+        if kept > MAX_OBJECT_FACES {
+            return Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string());
+        }
+        match solid.mesh() {
             Ok(mesh) => {
                 let (paint, opacity, _) = paint_of(item, *member);
                 keep(&mut out, mesh, mesh_color(&paint, opacity))?;
@@ -2174,3 +2207,6 @@ mod tests_sources;
 
 #[cfg(test)]
 mod tests_shadow;
+
+#[cfg(test)]
+mod tests_revolve_order;

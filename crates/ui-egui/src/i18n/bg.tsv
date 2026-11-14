@@ -691,6 +691,8 @@ font-technology	Variable	Променливи
 	Crop Image	Изрязване на изображение
 	Image Tools	Инструменти за изображения
 	Remove Background…	Премахване на фона…
+	Draw (Pencil)	Рисуване (Молив)
+	Place Image	Вмъкване на изображение
 	Remove Background	Премахване на фона
 	Background	Фон
 	Edge Color	Цвят на ръба
@@ -2586,6 +2588,7 @@ font-technology	Variable	Променливи
 	Proportional Metrics	Пропорционални метрики
 	Insert Aki Left	Вмъкване на аки отляво
 	Insert Aki Right	Вмъкване на аки отдясно
+	Tsume	Цуме
 	Character Direction	Посока на знаците
 	Digits	Цифри
 	Arabic	Арабски

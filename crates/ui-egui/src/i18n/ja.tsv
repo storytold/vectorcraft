@@ -52,6 +52,7 @@ font-technology	Variable	バリアブル
 	Proportional Metrics	プロポーショナルメトリクス
 	Insert Aki Left	前にアキを挿入
 	Insert Aki Right	後ろにアキを挿入
+	Tsume	文字ツメ
 	Character Direction	文字の方向
 	Digits	数字
 	Arabic	アラビア数字
@@ -242,6 +243,8 @@ digits	Malayalam	マラヤーラム数字
 	Crop Image	画像の切り抜き
 	Image Tools	画像ツール
 	Remove Background…	背景を削除…
+	Draw (Pencil)	描画 (鉛筆)
+	Place Image	画像を配置
 	Remove Background	背景を削除
 	Background	背景
 	Edge Color	端の色
@@ -5011,6 +5014,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`select` must be true or false	`select` には true または false を指定してください
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` と `maxAnchors` は整数にしてください
 @msg	`{key}` must be a number not below 0	`{key}` には 0 以上の数値を指定してください
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` には 0 以上の数値を 4 つ指定してください: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` は [x, y, width, height] の形式で指定してください: 有限の数値 4 つで、幅と高さは負の値にできません
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` が `{max_key}` より大きくなっています
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	次のうち少なくとも 1 つを指定してください: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -6082,8 +6086,8 @@ axis	Y Axis	Y 軸
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	書き出しプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	グループ外のパラメーターは {MAX_UNGROUPED} 個までです。ほかのパラメーターには `group` を指定してください
 @msg	can't encode the input	入力をエンコードできません
-@msg	expected {"dataBase64"}	{"dataBase64"} が必要です
-@msg	expected {"objects"}	{"objects"} が必要です
+@msg	expected {{"dataBase64": "…"}}	{{"dataBase64": "…"}} が必要です
+@msg	expected {{"objects": [...]}}	{{"objects": [...]}} が必要です
 @msg	export `{name}`: {e}	モジュールのエクスポート `{name}`: {e}
 @msg	extension {e} is listed twice	拡張子 {e} が 2 回指定されています
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	拡張子 {e}: ドットを付けずに小文字と数字で 1-16 文字にしてください
@@ -6147,11 +6151,11 @@ axis	Y Axis	Y 軸
 @msg	a painted live effect returns only `objects`	ペイント型のライブ効果が返すのは `objects` だけです
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes` だけです
 @msg	a read-only object was left out	読み取り専用のオブジェクトが省かれています
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	読み取り専用のオブジェクトが省かれています: {"id"} だけの形か、渡されたとおりの形で返してください
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	読み取り専用のオブジェクトが省かれています: {{"id": …}} だけの形か、渡されたとおりの形で返してください
 @msg	a string	文字列
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	線に使えるのは `paint`、`width`、`join`、`cap`、`miterLimit` だけです
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	線は {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} の形にしてください
-@msg	an effect must be {"id", "params"?, "visible"?}	効果は {"id", "params"?, "visible"?} の形にしてください
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	線は {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} の形にしてください
+@msg	an effect must be {{"id", "params"?, "visible"?}}	効果は {{"id", "params"?, "visible"?}} の形にしてください
 @msg	an effect on a fill returns only `fills`	塗りの効果が返すのは `fills` だけです
 @msg	an effect on a stroke returns only `strokes`	線の効果が返すのは `strokes` だけです
 @msg	an object must be a JSON object	オブジェクトは JSON オブジェクトにしてください
