@@ -706,6 +706,42 @@ pub(super) fn lp_color(v: &Value) -> Option<[u8; 3]> {
     Some([r, g, b])
 }
 
+/// Whether `v` is a highlight color [`lp_color`] reads without an alpha part: `#rrggbbaa` (with
+/// or without `#`) is not one.
+pub(super) fn lp_rgb_color(v: &Value) -> bool {
+    let Some(s) = v.as_str() else { return false };
+    let digits = s.trim().trim_start_matches('#');
+    let alpha = digits.len() == 8 && digits.chars().all(|c| c.is_ascii_hexdigit());
+    !alpha && lp_color(v).is_some()
+}
+
+/// Why `tool.setOption` cannot give the Live Paint tool `tool` (`livePaintBucket` or
+/// `livePaintSelection`) the options `values`, checked before any of them is set: an option the
+/// tool does not have, a switch that is not true or false, a `color` that is not an RGB color
+/// ([`lp_rgb_color`]) and a `width` that is not a finite number are errors. A finite width out of
+/// [`LP_BUCKET_WIDTH_RANGE`] or [`LP_SELECT_WIDTH_RANGE`] is not an error: the tool clamps it.
+/// Ok for every other tool. Saved settings go to the tools' `set_option` instead, which skips a
+/// value it cannot read.
+pub fn check_live_paint_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
+    let switches: &[&str] = match tool {
+        "livePaintBucket" => &["paintFills", "paintStrokes", "highlight"],
+        "livePaintSelection" => &["selectFills", "selectStrokes"],
+        _ => return Ok(()),
+    };
+    for (key, v) in values {
+        let error = match key.as_str() {
+            "color" => (!lp_rgb_color(v)).then(|| format!("`{key}` must be a #rrggbb color or a layer color name")),
+            "width" => (!v.as_f64().is_some_and(f64::is_finite)).then(|| format!("`{key}` must be a number")),
+            k if switches.contains(&k) => (!v.is_boolean()).then(|| format!("`{key}` must be true or false")),
+            _ => Some(format!("unknown Live Paint option `{key}`")),
+        };
+        if let Some(e) = error {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
 impl Tool for LivePaintSelectionTool {
     fn id(&self) -> &'static str {
         "livePaintSelection"

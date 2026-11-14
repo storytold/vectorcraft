@@ -1683,6 +1683,95 @@ fn delete_empty_artboards_deletes_those_with_no_art_in_one_step() {
     assert_eq!(s.doc().unwrap().doc.ruler_guides().len(), 3);
 }
 
+/// `n` artboards in a row, each with a guide, and a guide on no artboard; every guide is selected,
+/// and the key guide is the one on artboard `key`.
+fn artboards_with_selected_guides(n: usize, key: usize) -> Session {
+    let mut s = row_of_artboards(n);
+    s.edit("selection fixture", |d, sel| {
+        d.add_ruler_guide(&vectorcraft_doc::Guide::new(false, 75.0));
+        sel.guides = d.ruler_guides().iter().filter_map(|g| g.id).collect();
+        let on_key = d.artboards[key].id;
+        sel.key_guide = d.ruler_guides().iter().find(|g| g.artboard == Some(on_key)).and_then(|g| g.id);
+        Ok(())
+    })
+    .unwrap();
+    s
+}
+
+/// A document's artboards, ruler guides, selected guides and key guide.
+type BoardsAndGuides = (Vec<vectorcraft_doc::Artboard>, Vec<vectorcraft_doc::Guide>, Vec<NodeId>, Option<NodeId>);
+
+/// The artboards, guides, selected guides and key guide after deleting artboards `indices` of the
+/// open document one at a time, the last first. A clone shares the document's retired artboard id,
+/// so the clone retires none.
+fn deleted_one_at_a_time(s: &Session, indices: &[usize]) -> BoardsAndGuides {
+    let st = s.doc().unwrap();
+    let (mut d, mut sel) = ((*st.doc).clone(), st.selection.clone());
+    for &i in indices.iter().rev() {
+        let id = d.artboards.remove(i).id;
+        d.retain_guides(&mut sel, |g| g.artboard != Some(id));
+    }
+    let guides = d.ruler_guides();
+    (d.artboards, guides, sel.guides, sel.key_guide)
+}
+
+/// The same as [`deleted_one_at_a_time`] for the open document as it is.
+fn artboards_and_guides(s: &Session) -> BoardsAndGuides {
+    let st = s.doc().unwrap();
+    (st.doc.artboards.clone(), st.doc.ruler_guides(), st.selection.guides.clone(), st.selection.key_guide)
+}
+
+/// Delete Artboard with many artboards chosen walks the artboards once and the ruler guides once,
+/// and leaves the same artboards, guides and selected guides as deleting them one at a time, in
+/// one undo step.
+#[test]
+fn deleting_many_artboards_walks_the_artboards_and_guides_once() {
+    use crate::cmd::layer::ARTBOARD_PASSES;
+    let mut s = artboards_with_selected_guides(40, 7);
+    let indices: Vec<usize> = (0..40).filter(|i| i % 2 == 1 || *i == 38).collect();
+    let expected = deleted_one_at_a_time(&s, &indices);
+    let steps = s.doc().unwrap().history.undo.len();
+    ARTBOARD_PASSES.set(0);
+    s.execute("artboard.delete", &json!({ "indices": indices })).unwrap();
+    assert_eq!(ARTBOARD_PASSES.get(), 2, "one walk over the artboards and one over the guides");
+    let now = artboards_and_guides(&s);
+    assert_eq!(now, expected);
+    assert_eq!(now.0.len(), 19);
+    assert_eq!(now.1.len(), 20, "the kept artboards' guides and the guide on no artboard stay");
+    assert_eq!((now.2.len(), now.3), (20, None), "the deleted guides leave the selection, the key guide with them");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 40);
+    assert_eq!(s.doc().unwrap().doc.ruler_guides().len(), 41);
+}
+
+/// Delete Empty Artboards and Cut Artboard delete their artboards in the same single pass, with the
+/// same result as deleting them one at a time.
+#[test]
+fn delete_empty_and_cut_artboards_walk_the_artboards_and_guides_once() {
+    use crate::cmd::layer::ARTBOARD_PASSES;
+    let mut s = artboards_with_selected_guides(30, 0);
+    box_at(&mut s, 4010.0, 20.0);
+    let empty: Vec<usize> = (0..30).filter(|i| *i != 10).collect();
+    let expected = deleted_one_at_a_time(&s, &empty);
+    ARTBOARD_PASSES.set(0);
+    assert_eq!(s.execute("artboard.deleteEmpty", &json!({})).unwrap(), json!({ "deleted": empty }));
+    assert_eq!(ARTBOARD_PASSES.get(), 2);
+    assert_eq!(artboards_and_guides(&s), expected);
+    assert_eq!(artboard_names(&s), ["Artboard 11"]);
+
+    let mut s = artboards_with_selected_guides(30, 4);
+    let cut: Vec<usize> = (2..28).collect();
+    let expected = deleted_one_at_a_time(&s, &cut);
+    ARTBOARD_PASSES.set(0);
+    s.execute("artboard.cut", &json!({ "indices": cut, "art": false })).unwrap();
+    assert_eq!(ARTBOARD_PASSES.get(), 2);
+    assert_eq!(artboards_and_guides(&s), expected);
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4);
+    assert!(s.execute("artboard.cut", &json!({ "indices": [0, 1, 2, 3], "art": false })).is_err(), "a document keeps one artboard");
+    assert_eq!(s.doc().unwrap().doc.artboards.len(), 4);
+}
+
 /// What counts as art: hidden and locked objects, an object straddling two artboards and one
 /// that only touches an artboard's edge; a group counts by its members, not by its box.
 #[test]
