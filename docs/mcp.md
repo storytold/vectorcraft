@@ -6555,8 +6555,8 @@ number, naming the key, and place nothing; null is the same as leaving the key o
 `edit.copy` keeps the copied objects with the document resources they use: image blobs, symbols, patterns, global
 and spot swatches (with the tint swatches of the tints used; never the built-in [Registration] swatch), the gradient
 swatches their gradients came from, graphic styles the objects are linked to, character and paragraph styles and
-brushes. Width profiles live in the preferences, so they need no copying. Every `edit.paste*` command (also `edit.pasteWithoutFormatting`, which leaves
-text styles behind) brings them into the active document in the same undo step: an identical resource is reused,
+brushes, with the swatches, patterns and text styles a graph keeps for its series and labels. Width profiles live in the preferences, so they need no copying. Every `edit.paste*` command (also `edit.pasteWithoutFormatting`, which leaves
+text styles behind, those of graph labels included) brings them into the active document in the same undo step: an identical resource is reused,
 a missing one added, and one of the same name that differs is added renamed ("Mark 2"; a copy an earlier paste
 added is reused), which the pasted objects follow. Linked colours show the document's swatch at their tint (a Lab
 spot colour as its Spot Colors option says). The result reports `{ids, added, merged, renamed: [{kind, from,
