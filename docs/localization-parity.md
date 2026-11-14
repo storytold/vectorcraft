@@ -60,7 +60,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Finnish | `fi` | 5,318 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals, 797 `@msg` rows | full; AI-assisted, native proofreading pending |
 | Czech | `cs` | 5,240 catalog entries, including 795 `@msg` rows (counted 2026-10-21); menus, literals and messages complete when counted | catalog complete; render-site gaps reduced; native review pending |
 | Bosnian | `bs` | 5,841 rows (counted 2026-10-30): menus, `tl!` literals and messages complete when counted; one/few/other plurals | full; AI-assisted, native review pending |
-| Swedish | `sv` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals | full; native review welcome |
+| Swedish | `sv` | 9,335 rows, 3,455 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists three menu strings, one `tl!` literal, one undo label and 164 messages: 162 that no complete-message catalog translates yet, and two unknown-parameter errors that start with the `{within}` placeholder; one/other plurals | full; native review welcome |
 | Bulgarian | `bg` | 5,245 rows, 763 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial | full; AI-drafted, native review pending |
 | Greek | `el` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | full; native review welcome |
 | Georgian | `ka` | 5,200 rows (counted 2026-10-21): menus, panels, dialogs, plurals (one count-neutral form) and messages, tested complete; reviewed by a native speaker | full |

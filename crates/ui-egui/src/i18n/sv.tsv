@@ -7708,6 +7708,7 @@ digits	Hindi	Hindi
 @msg	a design needs a name	en design behöver ett namn
 @msg	a dictionary grew too large	ett dictionary-objekt blev för stort
 @msg	a document keeps at most {_1} graph designs	ett dokument rymmer högst {_1} diagramdesigner
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	grafiken för en diagramdesign i en diagramserie ritas om från designen: redigera designen för att ändra den
 @msg	a document keeps at most {_1} saved selections	ett dokument rymmer högst {_1} sparade markeringar
 @msg	a document keeps at most {_1} views	ett dokument rymmer högst {_1} vyer
 @msg	a document links at most {MAX_SVG_SCRIPTS} JavaScript files	ett dokument länkar högst {MAX_SVG_SCRIPTS} JavaScript-filer
@@ -8800,6 +8801,469 @@ digits	Hindi	Hindi
 @msg	x and y must be given together	x och y måste anges tillsammans
 @msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone behöver ett ankare: docka bredvid en panel med anchor eller i en ny dockkolumn med side (Start eller End)
 @msg	zoom must be positive	zoom måste vara positiv
+@msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' och 'arguments' kan inte användas på funktioner i strikt läge
+@msg	Alignment must be one of the choices	Justering måste vara ett av alternativen
+@msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Boolean.prototype.{name} anropades på ett värde som inte är en Boolean
+@msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	CMYK-bilder vars sampel inte kunde läsas i CMYK importerades i RGB
+@msg	Cannot write to the location of “{name}”; choose where to save it	Det går inte att skriva till platsen för ”{name}”; välj var filen ska sparas
+@msg	DCS files can only be placed linked: use File › Place with Link on	DCS-filer kan bara placeras länkade: använd Fil › Placera med Länka aktiverat
+@msg	Date.prototype method called on a value that is not a Date object	en Date.prototype-metod anropades på ett värde som inte är ett Date-objekt
+@msg	Error.prototype.toString was called on a value that is not an object	Error.prototype.toString anropades på ett värde som inte är ett objekt
+@msg	Function.prototype.toString was called on a value that is not a function	Function.prototype.toString anropades på ett värde som inte är en funktion
+@msg	Import SVG Filter reads SVG files, not SVGZ	Importera SVG-filter läser SVG-filer, inte SVGZ
+@msg	JSON.parse: {why} (at offset {at})	JSON.parse: {why} (vid position {at})
+@msg	JSON.stringify cannot write a structure that contains itself	JSON.stringify kan inte skriva en struktur som innehåller sig själv
+@msg	Line Gap must be a number	Radmellanrum måste vara ett tal
+@msg	Namespace.prototype.toString needs a Namespace	Namespace.prototype.toString kräver ett Namespace-objekt
+@msg	New Document profiles need the preferences folder, which this run doesn't have	Profiler för nytt dokument behöver inställningsmappen, som den här körningen saknar
+@msg	Number.prototype.{name} was called on a value that is not a number	Number.prototype.{name} anropades på ett värde som inte är ett tal
+@msg	Object.create's prototype must be an object or null	prototypen för Object.create måste vara ett objekt eller null
+@msg	Object.{function} was given a value that is not an object	Object.{function} fick ett värde som inte är ett objekt
+@msg	QName.prototype.toString needs a QName	QName.prototype.toString kräver ett QName-objekt
+@msg	RegExp.prototype.{name} was called on a value that is not a RegExp object	RegExp.prototype.{name} anropades på ett värde som inte är ett RegExp-objekt
+@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	Schablonbryggor: den markerade teckningen är för stor eller för detaljerad för att förses med bryggor
+@msg	String.prototype.toString was called on a value that is not a string	String.prototype.toString anropades på ett värde som inte är en sträng
+@msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Profilen {name} kunde inte läsas, så det nya dokumentet har standardinställningarna: {reason}
+@msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Överfyllning: fler än {_1} objektpar ligger tillräckligt nära varandra för överfyllning, eller så delar för många objekt samma horisontella område; överfyll färre objekt åt gången
+@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Rensningsram och rensningslinjer: ingen rensningslinje får plats utanför teckningen, och rensningsramen är avstängd
+@msg	\\ at end of pattern	\\ i slutet av mönstret
+@msg	`alignOn` cannot be empty	`alignOn` får inte vara tomt
+@msg	`alignOn` must be a string	`alignOn` måste vara en sträng
+@msg	`align` must be a string	`align` måste vara en sträng
+@msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` för den här dialogrutan av typen {kind} måste vara något av: {_1}
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` har fler än {MAX_ANSWERS} svar
+@msg	`answers` is larger than 1 MiB	`answers` är större än 1 MiB
+@msg	`answers` must be a list of answers	`answers` måste vara en lista med svar
+@msg	`artboard` must be the index of an artboard of the document	`artboard` måste vara indexet för en rityta i dokumentet
+@msg	`artboardsAt` must be [x, y]	`artboardsAt` måste vara [x, y]
+@msg	`artboards` names an artboard the document does not have	`artboards` anger en rityta som dokumentet inte har
+@msg	`artboards` names an artboard twice	`artboards` anger en rityta två gånger
+@msg	`at` must be [x, y] (got {at})	`at` måste vara [x, y] (fick {at})
+@msg	`at` must be a point [x, y]	`at` måste vara en punkt [x, y]
+@msg	`beside` needs `side`	`beside` kräver `side`
+@msg	`code` must be a whole number	`code` måste vara ett heltal
+@msg	`colorMode` must be one of rgb, cmyk	`colorMode` måste vara något av rgb, cmyk
+@msg	`colors` does not apply to the {name} reduction	`colors` gäller inte för reduceringen {name}
+@msg	`colors` must be a whole number from 2 to 256	`colors` måste vara ett heltal från 2 till 256
+@msg	`colors` must be at least 9 for the uniform reduction	`colors` måste vara minst 9 för reduceringen uniform
+@msg	`colors` must be between 1 and {MAX_THEME_COLORS} (got {n})	`colors` måste vara mellan 1 och {MAX_THEME_COLORS} (fick {n})
+@msg	`count` must be a whole number from 0 to {MAX_COUNT}	`count` måste vara ett heltal från 0 till {MAX_COUNT}
+@msg	`ditherAmount` must be a number from 0 to 100	`ditherAmount` måste vara ett tal från 0 till 100
+@msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` måste vara från {lo} till {hi} pt
+@msg	`focal` and `radius` cannot be used together	`focal` och `radius` kan inte användas tillsammans
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` måste vara en array av par [subpath, anchor]
+@msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` anger [{si}, {ai}], som inte är en ankarpunkt på banan
+@msg	`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)	`glyphAlternate` tar bara null, som tar bort ett glyfval (text.setGlyphAlternate skapar ett)
+@msg	`group` must be one of {_1}	`group` måste vara något av {_1}
+@msg	`group` must be the Objects on Path group of `member` and `target`	`group` måste vara den grupp Objekt på bana som `member` och `target` tillhör
+@msg	`id` is an object id, not {v}	`id` är ett objekt-id, inte {v}
+@msg	`item` needs `index`	`item` kräver `index`
+@msg	`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)	`kerningBefore` hör till det första tecknet på en rad, inte till en teckenstil (text.setRangeStyle anger det)
+@msg	`kinsokuType` must be "pushInFirst", "pushOutFirst" or "pushOutOnly"	`kinsokuType` måste vara "pushInFirst", "pushOutFirst" eller "pushOutOnly"
+@msg	`leader` must be a string	`leader` måste vara en sträng
+@msg	`max` must be 1 to {MAX_SUGGESTIONS}	`max` måste vara 1 till {MAX_SUGGESTIONS}
+@msg	`name` must be a name that is not empty	`name` måste vara ett namn som inte är tomt
+@msg	`name` must not be empty	`name` får inte vara tomt
+@msg	`origin` must be [x, y] in points	`origin` måste vara [x, y] i punkter
+@msg	`picks` must be an array (got {v})	`picks` måste vara en array (fick {v})
+@msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` måste innehålla 1 till {MAX_PICKS} val (fick {_1})
+@msg	`points` must hold from 2 to 100000 points	`points` måste innehålla från 2 till 100000 punkter
+@msg	`radius` must be 0 or more	`radius` måste vara 0 eller mer
+@msg	`rect` must be [x, y, width, height]	`rect` måste vara [x, y, width, height]
+@msg	`rect` must be [x0, y0, x1, y1] (got {r})	`rect` måste vara [x0, y0, x1, y1] (fick {r})
+@msg	`replace` must be a string	`replace` måste vara en sträng
+@msg	`rows` must be lists of numbers or nulls, not {r}	`rows` måste vara listor med tal eller null, inte {r}
+@msg	`scale` must be a number from 0.001 to 1000	`scale` måste vara ett tal från 0,001 till 1000
+@msg	`scope.{key}` must be a non-empty array	`scope.{key}` måste vara en icke-tom array
+@msg	`scope` must be "document", {artboards} or {layers}	`scope` måste vara "document", {artboards} eller {layers}
+@msg	`side` must be "left", "right", "top" or "bottom"	`side` måste vara "left", "right", "top" eller "bottom"
+@msg	`side` places the artboard: leave out x, y, width and height	`side` placerar ritytan: utelämna x, y, width och height
+@msg	`source` is the only path in series group `target`	`source` är den enda banan i seriegruppen `target`
+@msg	`spacing` makes more than {MAX_COUNT} lines across the box	`spacing` ger fler än {MAX_COUNT} linjer över ramen
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` måste vara större än 0 och högst {MAX_DISTANCE} pt
+@msg	`target` must be an object of the same Objects on Path group as `member`	`target` måste vara ett objekt i samma grupp Objekt på bana som `member`
+@msg	`tolerance` must be from 0 to 100 pt	`tolerance` måste vara från 0 till 100 pt
+@msg	`version` must be 0 or {_1}	`version` måste vara 0 eller {_1}
+@msg	`version` must be 0 or {newest}	`version` måste vara 0 eller {newest}
+@msg	`warichuAlign` must be one of {_1}	`warichuAlign` måste vara något av {_1}
+@msg	`warichuLines` must be a whole number from {_1} to {_2}	`warichuLines` måste vara ett heltal från {_1} till {_2}
+@msg	`weight` must be from 0.01 to 1000 pt	`weight` måste vara från 0,01 till 1000 pt
+@msg	`weights` must be a list of {_1} numbers, one per row (got {v})	`weights` måste vara en lista med {_1} tal, ett per rad (fick {v})
+@msg	`xml` must be a string	`xml` måste vara en sträng
+@msg	`{KEY}` entry {n} gives the paragraph at byte {start} of {_1} other indents than an entry before it	post {n} i `{KEY}` ger stycket vid byte {start} i {_1} andra indrag än en tidigare post
+@msg	`{KEY}` entry {n} must be an object	post {n} i `{KEY}` måste vara ett objekt
+@msg	`{KEY}` entry {n} sets neither `leftIndent` nor `firstLineIndent`	post {n} i `{KEY}` anger varken `leftIndent` eller `firstLineIndent`
+@msg	`{KEY}` entry {n}: `id` must be an object id	post {n} i `{KEY}`: `id` måste vara ett objekt-id
+@msg	`{KEY}` entry {n}: `start` must be a byte offset	post {n} i `{KEY}`: `start` måste vara en byteposition
+@msg	`{KEY}` entry {n}: `{k}` must be a number from -{MAX_PARA} to {MAX_PARA} pt	post {n} i `{KEY}`: `{k}` måste vara ett tal från -{MAX_PARA} till {MAX_PARA} pt
+@msg	`{KEY}` entry {n}: no paragraph of {_1} starts at byte {start}	post {n} i `{KEY}`: inget stycke i {_1} börjar vid byte {start}
+@msg	`{KEY}` entry {n}: unknown key `{k}`	post {n} i `{KEY}`: okänd nyckel `{k}`
+@msg	`{KEY}` entry {n}: {_1} is not a type object	post {n} i `{KEY}`: {_1} är inte ett textobjekt
+@msg	`{KEY}` is empty	`{KEY}` är tom
+@msg	`{KEY}` must be a list	`{KEY}` måste vara en lista
+@msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` tar högst {MAX_PARAGRAPH_INDENTS} poster (fick {_1})
+@msg	`{KEY}` takes no `{other}` beside it	`{KEY}` tar inget `{other}` bredvid sig
+@msg	`{base}` is larger than {_1} MB	`{base}` är större än {_1} MB
+@msg	`{base}` is not in the DCS file's folder	`{base}` finns inte i DCS-filens mapp
+@msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` innehåller fler än {MAX_EDIT_WORDS} ord
+@msg	`{key}` must be 0 or more	`{key}` måste vara 0 eller mer
+@msg	`{key}` must be [x, y] numbers	`{key}` måste vara talen [x, y]
+@msg	`{key}` must be a list of words	`{key}` måste vara en lista med ord
+@msg	`{key}` must be a list, not {v}	`{key}` måste vara en lista, inte {v}
+@msg	`{key}` must be a number or null, not {v}	`{key}` måste vara ett tal eller null, inte {v}
+@msg	`{key}` must be a whole number of 0 or more	`{key}` måste vara ett heltal som är 0 eller mer
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` måste vara från 0 till {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` måste vara från 0,01 till 1000 pt
+@msg	`{key}` must be from {lo} to {hi}, not {v}	`{key}` måste vara från {lo} till {hi}, inte {v}
+@msg	`{key}` must be one of auto, always, never	`{key}` måste vara något av auto, always, never
+@msg	`{key}` must be one of miter, round, bevel	`{key}` måste vara något av miter, round, bevel
+@msg	`{key}` must be one word of at most {_1} characters	`{key}` måste vara ett ord på högst {_1} tecken
+@msg	`{key}` must hold single words of at most {_1} characters	`{key}` måste innehålla enstaka ord på högst {_1} tecken
+@msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}` måste ange ett objekt som är fäst på banan i en grupp Objekt på bana
+@msg	`{key}` names an object that is hidden or locked	`{key}` anger ett objekt som är dolt eller låst
+@msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}` är en egen fil, som bara kan hittas intill DCS-filens sökväg
+@msg	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
+@msg	`{u}` is no Unicode character	`{u}` är inget Unicode-tecken
+@msg	`{word}` isn't in the custom dictionary	`{word}` finns inte i den egna ordlistan
+@msg	a CMap has too many mappings	en CMap har för många mappningar
+@msg	a \\u escape needs four hexadecimal digits	en \\u-escapesekvens kräver fyra hexadecimala siffror
+@msg	a comma in an XPath expression must separate function arguments	ett kommatecken i ett XPath-uttryck måste skilja funktionsargument åt
+@msg	a document holds at most {_1} SVG filters	ett dokument rymmer högst {_1} SVG-filter
+@msg	a document with unsaved changes has no recovery copy	ett dokument med osparade ändringar har ingen återställningskopia
+@msg	a font's data is too large	ett typsnitts data är för stora
+@msg	a font's subroutines are too large	ett typsnitts subrutiner är för stora
+@msg	a function declaration without a name	en funktionsdeklaration utan namn
+@msg	a host value has too many entries	ett värde från värden har för många poster
+@msg	a host value is nested too deep	ett värde från värden är för djupt kapslat
+@msg	a namespace declaration uses a reserved prefix or URI	en namnrymdsdeklaration använder ett reserverat prefix eller en reserverad URI
+@msg	a namespace qualifier is undefined	en namnrymdskvalificerare är odefinierad
+@msg	a namespace with an empty URI cannot have a prefix	en namnrymd med tom URI kan inte ha ett prefix
+@msg	a number has no digits	ett tal saknar siffror
+@msg	a number's exponent has no digits	ett tals exponent saknar siffror
+@msg	a number's fraction has no digits	ett tals decimaldel saknar siffror
+@msg	a property descriptor cannot have both a value or writable and a get or set	en egenskapsbeskrivning kan inte ha både value eller writable och get eller set
+@msg	a property descriptor must be an object	en egenskapsbeskrivning måste vara ett objekt
+@msg	a property's {name} must be a function or undefined	en egenskaps {name} måste vara en funktion eller undefined
+@msg	a stream in it would decode to more than 256 MB, or its decode parameters can't be applied	en ström i den skulle avkodas till mer än 256 MB, eller så kan dess avkodningsparametrar inte tillämpas
+@msg	a string holds a control character	en sträng innehåller ett styrtecken
+@msg	a string holds an escape sequence JSON does not have	en sträng innehåller en escapesekvens som JSON inte har
+@msg	a string is not closed	en sträng är inte avslutad
+@msg	an SVG filter is named by its id: give `xml` with `name`	ett SVG-filter får sitt namn av sitt id: ange `xml` tillsammans med `name`
+@msg	an XML element has two attributes with the same name	ett XML-element har två attribut med samma namn
+@msg	an XML value cannot be inserted into itself or its descendants	ett XML-värde kan inte infogas i sig självt eller i sina underordnade
+@msg	an XML value's children cannot be assigned by position	underordnade till ett XML-värde kan inte tilldelas efter position
+@msg	an XML value's children cannot be deleted by position	underordnade till ett XML-värde kan inte tas bort efter position
+@msg	an XMLList converts to XML only when it has one item	en XMLList konverteras till XML bara när den har en post
+@msg	an XPath node test is missing	ett XPath-nodtest saknas
+@msg	an XPath operand is missing	en XPath-operand saknas
+@msg	an XPath operator is missing	en XPath-operator saknas
+@msg	an XPath predicate or step cannot follow here	ett XPath-predikat eller XPath-steg kan inte följa här
+@msg	an XPath predicate or step follows a value that is not a node-set	ett XPath-predikat eller XPath-steg följer på ett värde som inte är en noduppsättning
+@msg	an XPath step is missing	ett XPath-steg saknas
+@msg	an image couldn't be decoded and is missing from the picture	en bild kunde inte avkodas och saknas i bilden
+@msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	en bild på {w} × {h} pixlar är för stor för att konverteras (högst {_1} pixlar)
+@msg	apply was called on a value that is not a function	apply anropades på ett värde som inte är en funktion
+@msg	area type in a thread cannot use Dynamic Text: {frames}	områdestext i ett textflöde kan inte använda Dynamisk text: {frames}
+@msg	array literal too long	arrayliteralen är för lång
+@msg	assignment to a constant binding	tilldelning till en konstant bindning
+@msg	at least one row that isn't excluded needs a weight above 0	minst en rad som inte är utesluten behöver en vikt över 0
+@msg	bad point {v}: expected [x, y]	ogiltig punkt {v}: väntade [x, y]
+@msg	blend must be a mode name	blend måste vara namnet på ett läge
+@msg	both sides of an XPath | must select nodes	båda sidor av ett | i XPath måste välja noder
+@msg	canceled	avbrutet
+@msg	cannot convert the object to a primitive value	objektet kan inte konverteras till ett primitivt värde
+@msg	cannot convert undefined or null to an object	undefined eller null kan inte konverteras till ett objekt
+@msg	character dimensions cannot be represented with the source text transform	teckenmåtten kan inte återges med källans texttransformering
+@msg	character dimensions cannot be represented with the target text transform	teckenmåtten kan inte återges med målets texttransformering
+@msg	continuation must be an array of path chunks	continuation måste vara en array av bandelar
+@msg	continuation requires points	continuation kräver points
+@msg	each path chunk must contain 1 to 4096 points	varje bandel måste innehålla 1 till 4096 punkter
+@msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	varje val är {{at: [x, y]}} eller {{rect: [x0, y0, x1, y1]}} (fick {v})
+@msg	each weight must be a number of 0 or more (got {v})	varje vikt måste vara ett tal som är 0 eller mer (fick {v})
+@msg	finally table {t} out of range	finally-tabell {t} utanför intervallet
+@msg	flags cannot be given with a RegExp object	flaggor kan inte anges tillsammans med ett RegExp-objekt
+@msg	function declaration index out of range	funktionsdeklarationens index ligger utanför intervallet
+@msg	give `char`, `text`, `code` or `unicode`	ange `char`, `text`, `code` eller `unicode`
+@msg	give `count` or `spacing`, not both	ange `count` eller `spacing`, inte båda
+@msg	give `name`, an SVG filter's name	ange `name`, namnet på ett SVG-filter
+@msg	give `path`, an SVG file, or `svg`, SVG text	ange `path`, en SVG-fil, eller `svg`, SVG-text
+@msg	give `xml`, one SVG <filter> element	ange `xml`, ett SVG-element <filter>
+@msg	give exactly one of `at`, `rect` and `points`	ange exakt en av `at`, `rect` och `points`
+@msg	give exactly one of `path`, `data` and `dataBase64`	ange exakt en av `path`, `data` och `dataBase64`
+@msg	give index or indexes, not both	ange index eller indexes, inte båda
+@msg	give one <filter> element	ange ett <filter>-element
+@msg	give opacity or blend	ange opacity eller blend
+@msg	handler at {_1} expects {_2} values but its range starts with {d}	hanteraren vid {_1} förväntar sig {_2} värden men dess intervall börjar med {d}
+@msg	handler depth too large	hanterarens djup är för stort
+@msg	handler range {_1}..{_2} out of range	hanterarintervallet {_1}..{_2} ligger utanför intervallet
+@msg	hiddenLayers must be true or false	hiddenLayers måste vara true eller false
+@msg	hvcC	hvcC
+@msg	images in a spot ink whose samples couldn't be read were imported in RGB	bilder i en dekorfärg vars sampel inte kunde läsas importerades i RGB
+@msg	images past the most pixels one file may hold were left out	bilder utöver det största antal pixlar en fil får innehålla utelämnades
+@msg	images too large to read were left out	bilder som är för stora för att läsas utelämnades
+@msg	indexes may hold at most {MAX_GUIDE_INDEXES} entries	indexes får innehålla högst {MAX_GUIDE_INDEXES} poster
+@msg	indexes must be an array of guide indexes	indexes måste vara en array av stödlinjeindex
+@msg	instruction out of range	instruktionen ligger utanför intervallet
+@msg	instruction {pc} ({op}) pops below the stack	instruktion {pc} ({op}) hämtar fler värden än stacken innehåller
+@msg	instruction {pc} reached with stack depths {seen} and {d}	instruktion {pc} nås med stackdjupen {seen} och {d}
+@msg	invalid array length	ogiltig arraylängd
+@msg	invalid group	ogiltig grupp
+@msg	invalid object id {v}: expected a non-negative integer	ogiltigt objekt-id {v}: ett icke-negativt heltal förväntades
+@msg	invalid regular expression flag '{_1}'	ogiltig flagga '{_1}' för reguljärt uttryck
+@msg	invalid regular expression: {m}	ogiltigt reguljärt uttryck: {m}
+@msg	invalid time value	ogiltigt tidsvärde
+@msg	is a confirm's answer, whose `value` must be true or false	är svaret på en confirm, vars `value` måste vara true eller false
+@msg	is a prompt's answer, whose `value` must be a string or null	är svaret på en prompt, vars `value` måste vara en sträng eller null
+@msg	is an alert's answer, whose `value` must be "ok"	är svaret på en alert, vars `value` måste vara "ok"
+@msg	is longer than 16 KiB	är längre än 16 KiB
+@msg	it draws its image through a clipping path	den ritar sin bild genom en urklippsbana
+@msg	it draws no image	den ritar ingen bild
+@msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	den är större än {MAX_DICTIONARY_FILE_BYTES} byte
+@msg	it isn't a file	det är inte en fil
+@msg	it names {_1} plates, and at most {MAX_PLATES} are read	den anger {_1} plåtar, och högst {MAX_PLATES} läses
+@msg	its art is too long or too detailed for a head	dess grafik är för lång eller för detaljerad för en pilspets
+@msg	its art paints nothing	dess grafik målar ingenting
+@msg	its image is too large to read	dess bild är för stor för att läsas
+@msg	its plates are too large: more than {MAX_SAMPLES} pixels together	dess plåtar är för stora: fler än {MAX_SAMPLES} pixlar sammanlagt
+@msg	its plates are too large: {_1} plates of {w} × {h} pixels	dess plåtar är för stora: {_1} plåtar på {w} × {h} pixlar
+@msg	its plates can't be kept together	dess plåtar kan inte hållas samman
+@msg	its shapes could not be combined into one	dess former kunde inte kombineras till en
+@msg	jump to {pc}, past the end	hopp till {pc}, förbi slutet
+@msg	legacyNameEncoding must be one of {_1}	legacyNameEncoding måste vara något av {_1}
+@msg	localize: the first argument must be a localization object or a string	localize: det första argumentet måste vara ett lokaliseringsobjekt eller en sträng
+@msg	missing `picks`	`picks` saknas
+@msg	missing `word`	`word` saknas
+@msg	must be an object with `kind` and `value`	måste vara ett objekt med `kind` och `value`
+@msg	must have `kind` alert, confirm or prompt	måste ha `kind` alert, confirm eller prompt
+@msg	must have exactly `kind` and `value`	måste ha exakt `kind` och `value`
+@msg	needs a closing quote after the name	kräver ett avslutande citattecken efter namnet
+@msg	needs a name	kräver ett namn
+@msg	needs a name of at most 64 bytes	kräver ett namn på högst 64 byte
+@msg	needs a name of letters, digits and _, or a quoted name	kräver ett namn med bokstäver, siffror och _, eller ett namn inom citattecken
+@msg	needs a name without control characters	kräver ett namn utan styrtecken
+@msg	nesting too deep	för djup kapsling
+@msg	no HP-GL format	inget HP-GL-format
+@msg	no New Document profile called `{shown}` ({_1})	ingen profil för nytt dokument med namnet `{shown}` ({_1})
+@msg	no SVG filter at index {k}	inget SVG-filter vid index {k}
+@msg	no arrowheads file here	ingen pilspetsfil här
+@msg	no character has code {code}	inget tecken har koden {code}
+@msg	no custom arrowhead {name} (see stroke.arrowheads.list)	ingen anpassad pilspets {name} (se stroke.arrowheads.list)
+@msg	no file to open	ingen fil att öppna
+@msg	no instructions	inga instruktioner
+@msg	no layer to rename	inget lager att byta namn på
+@msg	no random numbers ({e})	inga slumptal ({e})
+@msg	no selected or given object has a visible 3D effect	inget markerat eller angivet objekt har en synlig 3D-effekt
+@msg	no such artboard {v}	ritytan {v} finns inte
+@msg	no symbol named `{_1}`	ingen symbol med namnet `{_1}`
+@msg	node {_1} already has the text variable `{_2}`	nod {_1} har redan textvariabeln `{_2}`
+@msg	not a DCS file	inte en DCS-fil
+@msg	not a RegExp object	inte ett RegExp-objekt
+@msg	not a regular expression	inte ett reguljärt uttryck
+@msg	not an action set: the text doesn't start with /version and a number	inte en åtgärdsuppsättning: texten börjar inte med /version och ett tal
+@msg	nothing to repeat	inget att upprepa
+@msg	numbers out of order in {_1} quantifier	talen står i fel ordning i kvantifieraren {_1}
+@msg	object {_1} needs a 3D effect	objekt {_1} behöver en 3D-effekt
+@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	objekt {_1}: en ihålig Extrudera och fasa saknar lock: aktivera Lock för att mappa en grafik
+@msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	objekt {_1}: med djupet 0 har objektet en enda yta: mappa dess grafik på framsidan
+@msg	object {_1}: {_2}	objekt {_1}: {_2}
+@msg	object {_1}: {e}	objekt {_1}: {e}
+@msg	object {_1}: {name} at index {index} has no lighting presets; set its lights with effect.setParams	objekt {_1}: {name} vid index {index} har inga belysningsförinställningar; ange dess ljus med effect.setParams
+@msg	opacity must be a number	opacity måste vara ett tal
+@msg	operand too large	operanden är för stor
+@msg	order is a whole number from 0 to {others}, not `{v}`	order är ett heltal från 0 till {others}, inte `{v}`
+@msg	path chunks must share their boundary point	bandelar måste dela sin gränspunkt
+@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false kräver ritytorna för att behålla den redigerbara grafiken när useArtboards är false
+@msg	point x must be a number	punktens x måste vara ett tal
+@msg	point y must be a number	punktens y måste vara ett tal
+@msg	points must be [x,y] pairs	points måste vara par [x,y]
+@msg	points must be finite canvas points	points måste vara ändliga punkter på arbetsytan
+@msg	range out of order in character class	intervall i fel ordning i teckenklass
+@msg	reduce of an empty array with no initial value	reduce på en tom array utan startvärde
+@msg	regular expression flag '{_1}' given twice	flaggan '{_1}' för reguljärt uttryck anges två gånger
+@msg	sampled text would exceed the canvas (coordinates out of range)	den samplade texten skulle hamna utanför arbetsytan (koordinater utanför intervallet)
+@msg	select an SVG filter	markera ett SVG-filter
+@msg	select an object with a 3D effect	markera ett objekt med en 3D-effekt
+@msg	select an object with a 3D effect, or give its id in ids	markera ett objekt med en 3D-effekt, eller ange dess id i ids
+@msg	select one layer, group or object to rename	markera ett lager, en grupp eller ett objekt att byta namn på
+@msg	select the art to weed	markera teckningen som ska rensas
+@msg	select the banner, or mark every artboard	markera bannern, eller märk upp alla ritytor
+@msg	select type on a path or area type	markera text på bana eller områdestext
+@msg	side is left or right, not `{v}`	side är left eller right, inte `{v}`
+@msg	source text transform is collapsed or unrepresentable	källans texttransformering är kollapsad eller kan inte återges
+@msg	table must be true or false	table måste vara true eller false
+@msg	takes one name	tar ett namn
+@msg	target text transform is collapsed or unrepresentable	målets texttransformering är kollapsad eller kan inte återges
+@msg	that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer	det ger för många delar (högst 100000) eller strecksteg: förenkla streckmönstret eller gör strecken längre
+@msg	the Layers panel is not shown	panelen Lager visas inte
+@msg	the Layers panel's search, filter or Show Layers Only hides its row	sökningen, filtret eller Visa endast lager i panelen Lager döljer dess rad
+@msg	the Objects on Path group is hidden or locked	gruppen Objekt på bana är dold eller låst
+@msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	SVG-filen är större än {MAX_IMPORT_BYTES} byte
+@msg	the XML operation needs an XML or XMLList value	XML-åtgärden kräver ett XML- eller XMLList-värde
+@msg	the XPath expression does not evaluate to a node-set	XPath-uttrycket ger ingen noduppsättning
+@msg	the XPath expression ends early	XPath-uttrycket slutar för tidigt
+@msg	the XPath expression has an unmatched )	XPath-uttrycket har en ) utan motsvarande (
+@msg	the XPath expression has an unmatched ]	XPath-uttrycket har en ] utan motsvarande [
+@msg	the XPath expression has an unmatched closing bracket	XPath-uttrycket har en avslutande parentes utan inledande
+@msg	the XPath expression selects a namespace node, which is not an XML value	XPath-uttrycket väljer en namnrymdsnod, som inte är ett XML-värde
+@msg	the XPath expression selects the root node, which is not an XML value	XPath-uttrycket väljer rotnoden, som inte är ett XML-värde
+@msg	the XPath function {name} needs a node-set	XPath-funktionen {name} kräver en noduppsättning
+@msg	the XPath function {name} takes the wrong number of arguments	XPath-funktionen {name} fick fel antal argument
+@msg	the XPath name functions need a node-set	XPath-namnfunktionerna kräver en noduppsättning
+@msg	the XPath prefix {shown} is not bound to a namespace	XPath-prefixet {shown} är inte bundet till en namnrymd
+@msg	the XPath variable ${shown} is not bound	XPath-variabeln ${shown} är inte bunden
+@msg	the argument list is not an object	argumentlistan är inte ett objekt
+@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	grafiken är för stor för EPS: det som följer efter 256 MB PostScript utelämnades
+@msg	the banner has no width or height	bannern saknar bredd eller höjd
+@msg	the bitmaps hold more pixels than one file may	bitmapparna innehåller fler pixlar än en fil får innehålla
+@msg	the code runs past its last instruction	koden fortsätter förbi sin sista instruktion
+@msg	the curve tolerance must be from 0.01 to 10 points	kurvtoleransen måste vara från 0,01 till 10 punkter
+@msg	the custom dictionary couldn't be saved to {_1}: {e}	den egna ordlistan kunde inte sparas i {_1}: {e}
+@msg	the custom dictionary {_1} can't be read ({why}), so it is left as it is	den egna ordlistan {_1} kan inte läsas ({why}), så den lämnas som den är
+@msg	the document already has an SVG filter named {name}	dokumentet har redan ett SVG-filter med namnet {name}
+@msg	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it	dokumentet har ett annat SVG-filter med namnet {name}: använd svgFilter.apply, eller svgFilter.define med `replace` för att redigera det
+@msg	the document has no SVG filter named {name}	dokumentet har inget SVG-filter med namnet {name}
+@msg	the document has no SVG filter named {r}	dokumentet har inget SVG-filter med namnet {r}
+@msg	the document has no color swatches	dokumentet har inga färgrutor
+@msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	dokumentets färgrutor innehåller {_1} färger; reduceringen document tar högst 255
+@msg	the file isn't valid SVG: {e}	filen är inte giltig SVG: {e}
+@msg	the file names no plate	filen anger ingen plåt
+@msg	the function's prototype is not an object	funktionens prototyp är inte ett objekt
+@msg	the grommet inset is too large for the banner	öljetternas avstånd från kanten är för stort för bannern
+@msg	the guide is hidden or locked	stödlinjen är dold eller låst
+@msg	the hem is too deep for the banner	fållen är för djup för bannern
+@msg	the library's file is outside the read roots	bibliotekets fil ligger utanför läsrötterna
+@msg	a linked JavaScript file is outside the read roots	en länkad JavaScript-fil ligger utanför läsrötterna
+@msg	the line is too long, or the paths it passes too many, to check	linjen är för lång, eller passerar för många banor, för att kunna kontrolleras
+@msg	the method needs an XML value	metoden kräver ett XML-värde
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	färgsättningen är inte en fri gradient (använd en med paint.editGradient {kind})
+@msg	the parameters or body do not form one function	parametrarna eller funktionskroppen bildar inte en funktion
+@msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	det inklistrade SVG-filtret {name} ritar annorlunda än dokumentets filter med det namnet, och inget ledigt namn passar det
+@msg	the paths are too many or too tangled to find where they cross	banorna är för många eller för intrasslade för att hitta var de korsar varandra
+@msg	the pen table holds more than 255 pens	penntabellen innehåller fler än 255 pennor
+@msg	the plates can't be kept	plåtarna kan inte behållas
+@msg	the position table does not match the instructions	positionstabellen stämmer inte med instruktionerna
+@msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	promptens text är längre än {MAX_PROMPT_BYTES} byte
+@msg	the radix must be between 2 and 36	talbasen måste vara mellan 2 och 36
+@msg	the rectangle or line reaches too many paths to check	rektangeln eller linjen når för många banor för att kunna kontrolleras
+@msg	the right side of 'in' is not an object	högersidan av 'in' är inte ett objekt
+@msg	the right side of 'instanceof' is not a function	högersidan av 'instanceof' är inte en funktion
+@msg	the selected art is nested more than {MAX_DEPTH} levels deep	den markerade teckningen är kapslad djupare än {MAX_DEPTH} nivåer
+@msg	the selected art is too large to measure	den markerade teckningen är för stor för att mätas
+@msg	the selection has no outlines to weed around	markeringen har inga ytterlinjer att rensa runt
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	avståndet ger fler än {MAX_GROMMETS} öljetter
+@msg	the value bind was called on is not a function	värdet som bind anropades på är inte en funktion
+@msg	the value is not a constructor	värdet är inte en konstruktor
+@msg	the value is not a function	värdet är inte en funktion
+@msg	the value is not a valid XML name	värdet är inte ett giltigt XML-namn
+@msg	the value is not an XML attribute name	värdet är inte ett XML-attributnamn
+@msg	the value is not an XML name	värdet är inte ett XML-namn
+@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	rensningslinjerna korsar teckningens ytterlinjer för många gånger för att kunna mätas; använd färre linjer
+@msg	the weeding lines pass too close to too many outline segments to measure; use fewer lines or a smaller gap	rensningslinjerna går för nära för många ytterlinjesegment för att kunna mätas; använd färre linjer eller ett mindre mellanrum
+@msg	the weeding lines would be more than {max_pieces} pieces	rensningslinjerna skulle bli fler än {max_pieces} delar
+@msg	the {_1} plate lies outside the file	plåten {_1} ligger utanför filen
+@msg	there is no banner to mark	det finns ingen banner att märka upp
+@msg	this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that	det här är en binär DXF-fil, som inte kan läsas: spara den från CAD-appen som ASCII DXF och öppna den filen
+@msg	this warp's points can't be edited: use Reset with Mesh first	den här förvrängningens punkter kan inte redigeras: använd Återställ med nät först
+@msg	toExponential() digits must be between 0 and 20	antalet siffror för toExponential() måste vara mellan 0 och 20
+@msg	toFixed() digits must be between 0 and 20	antalet siffror för toFixed() måste vara mellan 0 och 20
+@msg	toISOString is not a function	toISOString är inte en funktion
+@msg	toPrecision() argument must be between 1 and 21	argumentet till toPrecision() måste vara mellan 1 och 21
+@msg	toSource: a getter cannot be written as source	toSource: en getter kan inte skrivas som källkod
+@msg	toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source	toSource: en array med egenskaper utöver sina element, en egenskap som inte är uppräkningsbar eller en annan prototyp kan inte skrivas som källkod
+@msg	toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source	toSource: ett objekt med en egenskap som inte är uppräkningsbar, eller vars prototyp inte är Object.prototype, kan inte skrivas som källkod
+@msg	toSource: the source is too long	toSource: källkoden är för lång
+@msg	toSource: the value contains itself	toSource: värdet innehåller sig självt
+@msg	toSource: the value has too many entries	toSource: värdet har för många poster
+@msg	toSource: the value is nested too deep	toSource: värdet är för djupt kapslat
+@msg	toString is not a function	toString är inte en funktion
+@msg	too many arguments	för många argument
+@msg	too many quantifiers	för många kvantifierare
+@msg	turn on at least one side	aktivera minst en sida
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	okänd OpenType-funktion `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefixet - stänger av; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom och aalt tar ett alternativs nummer som `tag=N` med N från 0 till {_1}, som `salt=2`)
+@msg	unknown dither `{d}` (diffusion, pattern, noise or none)	okänd dithering `{d}` (diffusion, pattern, noise eller none)
+@msg	unknown panel `{panel}`	okänd panel `{panel}`
+@msg	unknown parameter `{key}`	okänd parameter `{key}`
+@msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	okänd reducering `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform eller document)
+@msg	unmatched ')'	')' utan motsvarande '('
+@msg	unterminated character class	oavslutad teckenklass
+@msg	unterminated group	oavslutad grupp
+@msg	with no hem and no grommets there is nothing to mark	utan fåll och utan öljetter finns det inget att märka upp
+@msg	wordGap and lineGap need area type in the selection	wordGap och lineGap kräver områdestext i markeringen
+@msg	xpath needs its variables as an object	xpath kräver sina variabler som ett objekt
+@msg	xpath needs the expression as a string	xpath kräver uttrycket som en sträng
+@msg	{GRANT_NOT_REMOVED}, and its settings and cache can't be moved back from {_1} to {_2}: {e}	{GRANT_NOT_REMOVED}, och dess inställningar och cache kan inte flyttas tillbaka från {_1} till {_2}: {e}
+@msg	{_1} is not a folder: {e}	{_1} är inte en mapp: {e}
+@msg	{_1}: {_2} and {_3} are in the way	{_1}: {_2} och {_3} ligger i vägen
+@msg	{code}: {0}	{code}: {0}
+@msg	{dir}: {e}	{dir}: {e}
+@msg	{file} names more than one linked JavaScript file	{file} anger fler än en länkad JavaScript-fil
+@msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}: banan för en anpassad pilspets behöver en yta att fylla och högst {most} ankarpunkter och {most} delbanor, med varje ankarpunkt inom {far} pilspetsenheter från spetsen
+@msg	{k}: bad custom arrowhead path: {e}	{k}: ogiltig bana för anpassad pilspets: {e}
+@msg	{k}: bad custom arrowhead: {e}	{k}: ogiltig anpassad pilspets: {e}
+@msg	{k}: custom must be a name	{k}: custom måste vara ett namn
+@msg	{name} must be a number	{name} måste vara ett tal
+@msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}: copy tar en DCS-fil bara när dess plåtar ligger i filen; länka om till den där dess plåtfiler finns
+@msg	{path}: larger than {_1} MB	{path}: större än {_1} MB
+@msg	{saving} failed: {e}	{saving} misslyckades: {e}
+@msg	{shown} is not an XPath 1.0 function	{shown} är inte en XPath 1.0-funktion
+@msg	{v} names no layer or sublayer	{v} anger inget lager eller underlager
+@msg	{what} is not a function	{what} är inte en funktion
+@msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what} skulle skriva ut fler än {MAX_COPIES_PER_SHEET} kopior på ett ark: öka skalan
+@msg	{what} {i} out of range	{what} {i} utanför intervallet
+@msg	`background` must be "", "matte" or #rrggbb	`background` måste vara "", "matte" eller #rrggbb
+@msg	`count` must be a whole number from 1 to 100	`count` måste vara ett heltal från 1 till 100
+@msg	`diameter` must be from 0.1 to 2500 pt	`diameter` måste vara från 0,1 till 2500 pt
+@msg	`to` must be [x, y]	`to` måste vara [x, y]
+@msg	`{k}` must be a number	`{k}` måste vara ett tal
+@msg	`{k}` must be a string	`{k}` måste vara en sträng
+@msg	`{k}` must be a whole number	`{k}` måste vara ett heltal
+@msg	`{name}` is a built-in profile and stays	`{name}` är en inbyggd profil och finns kvar
+@msg	a preset named `{n}` exists	det finns redan en förinställning med namnet `{n}`
+@msg	an image of {width} × {height} pixels is too large to draw	en bild på {width} × {height} pixlar är för stor för att ritas
+@msg	at must be [x, y]	at måste vara [x, y]
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`	axis måste vara "vertical", "horizontal" eller en vinkel i grader, inte `{given}`
+@msg	bad color {c}	ogiltig färg {c}
+@msg	bad colour {v}	ogiltig färg {v}
+@msg	missing `effect` id	id för `effect` saknas
+@msg	missing `find`	`find` saknas
+@msg	missing `id`	`id` saknas
+@msg	missing `to`	`to` saknas
+@msg	missing ids	ids saknas
+@msg	missing indexes	indexes saknas
+@msg	missing name	name saknas
+@msg	names is empty	names är tom
+@msg	no artboard {artboard} (0-based; the document has {_1})	ingen rityta {artboard} (räknat från 0; dokumentet har {_1})
+@msg	no brush named `{n}`	ingen pensel med namnet `{n}`
+@msg	no colour group `{group}`	ingen färggrupp `{group}`
+@msg	no export preset `{name}` (see document.exportPresets.list)	ingen exportförinställning `{name}` (se document.exportPresets.list)
+@msg	no formats to export	inga format att exportera
+@msg	no perspective grid preset named `{n}`	ingen förinställning för perspektivrutnät med namnet `{n}`
+@msg	no print preset named `{n}`	ingen utskriftsförinställning med namnet `{n}`
+@msg	no saved PDF preset named `{name}`	ingen sparad PDF-förinställning med namnet `{name}`
+@msg	no saved preset called `{name}`	ingen sparad förinställning med namnet `{name}`
+@msg	no saved presets to export (name built-in ones in `names`)	inga sparade förinställningar att exportera (ange inbyggda i `names`)
+@msg	no saved print preset named `{name}`	ingen sparad utskriftsförinställning med namnet `{name}`
+@msg	no swatch `{n}`	ingen färgruta `{n}`
+@msg	no swatch library `{key}` (see swatch.library.list)	inget färgrutebibliotek `{key}` (se swatch.library.list)
+@msg	no symbol named `{name}`	ingen symbol med namnet `{name}`
+@msg	node {_1} is not type	nod {_1} är inte text
+@msg	nothing to export: the document has no visible art	inget att exportera: dokumentet har ingen synlig grafik
+@msg	on must be true or false	on måste vara true eller false
+@msg	params must be an object	params måste vara ett objekt
+@msg	resolution must be between 1 and 2400 ppi	upplösningen måste vara mellan 1 och 2400 ppi
+@msg	select one Intertwine group	markera en sammanflätningsgrupp
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	rubriken `{cell}` för `{name}` skulle läsas som variabeln `{other}`: byt namn på en av dem
+@msg	the image's pixels can't be read: {e}	bildens pixlar kan inte läsas: {e}
+@msg	the selection has no bounds	markeringen har inga gränser
+@msg	unknown effect `{e}`	okänd effekt `{e}`
+@msg	unknown highlight `{v}`	okänd framhävning `{v}`
+@msg	unknown overprints `{v}` (preserve, simulate or discard)	okänt övertrycksval `{v}` (preserve, simulate eller discard)
+@msg	unknown preference `{k}`	okänd inställning `{k}`
+@msg	{key} must be [x,y]	{key} måste vara [x,y]
+@msg	{key} must be one of {_1}	{key} måste vara något av {_1}
+@msg	{k} must be a number from {min} to {max}	{k} måste vara ett tal från {min} till {max}
+@msg	{k} must be a string	{k} måste vara en sträng
+@msg	{k} must be true or false	{k} måste vara true eller false
 
 # Importer plug-ins (File › Open With, document.open)
 	Open With	Öppna med

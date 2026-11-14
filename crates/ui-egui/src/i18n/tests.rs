@@ -2061,6 +2061,31 @@ fn a_repeated_placeholder_matches_the_same_text() {
     assert!(c.message("alert: the next answer is for prompt, not confirm").is_none());
 }
 
+/// Swedish shows the status and error messages of the script engine, the parameter checks, the
+/// importers, the 3D effects and the cutting add-on in Swedish, with the values, names and command
+/// ids they carry kept.
+#[test]
+fn swedish_translates_engine_import_and_parameter_messages() {
+    let sv = Lang::from_code("sv").expect("registered");
+    for (english, swedish) in [
+        ("`colors` must be a whole number from 2 to 256", "`colors` måste vara ett heltal från 2 till 256"),
+        ("JSON.parse: oops (at offset 12)", "JSON.parse: oops (vid position 12)"),
+        ("unknown dither `foo` (diffusion, pattern, noise or none)", "okänd dithering `foo` (diffusion, pattern, noise eller none)"),
+        ("not a DCS file", "inte en DCS-fil"),
+        (
+            "object 7: with a depth of 0 the object has one face: map its graphics onto the front",
+            "objekt 7: med djupet 0 har objektet en enda yta: mappa dess grafik på framsidan",
+        ),
+        ("no custom arrowhead Fin (see stroke.arrowheads.list)", "ingen anpassad pilspets Fin (se stroke.arrowheads.list)"),
+        ("`warichuLines` must be a whole number from 1 to 6", "`warichuLines` måste vara ett heltal från 1 till 6"),
+        ("the rectangle or line reaches too many paths to check", "rektangeln eller linjen når för många banor för att kunna kontrolleras"),
+        ("the hem is too deep for the banner", "fållen är för djup för bannern"),
+        ("`diameter` must be from 0.1 to 2500 pt", "`diameter` måste vara från 0,1 till 2500 pt"),
+    ] {
+        assert_eq!(message(sv, english), swedish);
+    }
+}
+
 /// A template that starts with text matches a message it wraps before a template that starts
 /// with a placeholder, even one with more literal text, so the wrapped reason is translated by
 /// its own row.
