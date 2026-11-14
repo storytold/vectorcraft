@@ -2512,8 +2512,12 @@ neutral, the default). In a knockout group each child hides what it covers of th
 pass the enclosing group's setting to their children, off groups never knock out. `knockoutShape: true` makes the
 object's opacity and opacity mask scale how much it knocks out. `transparency.togglePageKnockoutGroup` and
 `transparency.togglePageIsolatedBlending` (`{value?}`) treat the whole page as a knockout or isolated group; they are
-saved with the document and undoable, and `transparency.info` reports them. PDF and SVG write knockout groups as
-soft-masked groups with the same look (the PDF export reports a warning).
+saved with the document and undoable, and `transparency.info` reports them. PDF writes a knockout group as a PDF
+knockout group, which PDF import reads back as one. Where an element knocks out less than the area it paints
+(`knockoutShape: true` with opacity or a mask, or translucent paint), PDF draws each element through one soft mask of
+the overlapping elements above it, as SVG does for every knockout group of translucent art. A group whose masks would
+hold more than 65,536 objects (PDF) or shapes (SVG), or that has more than 2,048 elements, is written as a PDF knockout
+group or a plain SVG group instead, and the export reports a warning.
 
 Groups are not isolated unless Isolate Blending is on: a blend mode inside a group with opacity, a blend mode, an
 opacity mask, knockout or a clip reaches the art below the group, on screen and in PDF (a knockout group's elements
