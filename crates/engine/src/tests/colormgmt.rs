@@ -295,6 +295,30 @@ fn convert_query_and_intents() {
     assert!(s.execute("color.convert", &json!({"color": "#808080", "intent": "vivid"})).is_err());
 }
 
+/// `to: "oklch"` answers the OKLCH of the color's display sRGB, which converts back to the color;
+/// a CMYK color's display color, not its naive separation, sets them.
+#[test]
+fn convert_to_oklch_answers_lightness_chroma_and_hue() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let r = s.execute("color.convert", &json!({"color": "#ff0000", "to": "oklch"})).unwrap();
+    assert_eq!(r["model"], "oklch");
+    let v: Vec<f64> = r["values"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!((v[0] - 62.80).abs() < 0.005 && (v[1] - 0.2577).abs() < 5e-5 && (v[2] - 29.23).abs() < 0.005, "{r}");
+    let (rgb, lowered) = vectorcraft_color::oklab::from_oklch(v[0] / 100.0, v[1], v[2]);
+    assert!(!lowered);
+    assert_eq!(Color::rgb(rgb[0], rgb[1], rgb[2]).to_hex(), "#ff0000");
+    assert_eq!(r["hex"], "#ff0000");
+    let gray = s.execute("color.convert", &json!({"color": "#808080", "to": "oklch"})).unwrap();
+    assert_eq!(gray["values"][2], 0.0, "{gray}");
+    let ink = json!({"c": 1.0, "m": 0.0, "y": 0.0, "k": 0.0});
+    let cyan = s.execute("color.convert", &json!({"color": ink, "to": "oklch"})).unwrap();
+    let shown = vectorcraft_color::oklab::to_oklch(cms::active().display_rgb(&Color::cmyk(1.0, 0.0, 0.0, 0.0)));
+    let naive = vectorcraft_color::oklab::to_oklch([0.0, 1.0, 1.0]);
+    let l = cyan["values"][0].as_f64().unwrap() / 100.0;
+    assert!((l - shown[0]).abs() < 1e-9 && (l - naive[0]).abs() > 0.02, "{cyan} {shown:?} {naive:?}");
+}
+
 #[test]
 fn assign_profile_is_stored_and_undoable() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());

@@ -1649,6 +1649,10 @@ font-technology	Variable	Değişken
 	Knife	Bıçak
 	Knockout Group	Nakavt Grubu
 	Lab	Laboratuvar
+	OKLCH Sliders	OKLCH Kaydırıcıları
+	Chroma	Kroma
+	The largest chroma sRGB holds at this lightness and hue	sRGB'nin bu açıklık ve renk tonunda alabileceği en yüksek kroma
+	OKLCH needs sRGB as the working RGB space	OKLCH, çalışma RGB alanı olarak sRGB gerektirir
 	Lab Spot Colors:	Laboratuvar Spot Renkleri:
 	Lab Values	Laboratuvar Değerleri
 	Landscape	Manzara
@@ -4261,6 +4265,8 @@ axis	Both	Her İkisi
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` grayscale, rgb, hsb, cmyk veya websafe olmalıdır
 @msg	`view` must be wheel or box	`view` wheel veya box olmalıdır
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` hue, saturation, brightness, red, green veya blue olmalıdır
+@msg	`sliders` must be none or oklch	`sliders` none veya oklch olmalıdır
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH, çalışma RGB alanı olarak sRGB gerektirir
 @msg	`{k}` must be [x, y]	`{k}` [x, y] olmalıdır
 @msg	`{name}` has no options	`{name}`nin seçeneği yok
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` yerleşik bir çalışma alanıdır; başka bir isim seç

@@ -1842,6 +1842,10 @@ file-filter	Templates	Шаблоны
 	Knife	Нож
 	Knockout Group	Группа с вырезанием
 	Lab	Lab
+	OKLCH Sliders	Ползунки OKLCH
+	Chroma	Хрома
+	The largest chroma sRGB holds at this lightness and hue	Наибольшая хрома, которую вмещает sRGB при этой светлоте и оттенке
+	OKLCH needs sRGB as the working RGB space	Для OKLCH рабочим пространством RGB должно быть sRGB
 	Lab Spot Colors:	Плашечные цвета Lab:
 	Lab Values	Значения Lab
 	Landscape	Альбомная
@@ -4541,6 +4545,8 @@ axis	Both	Оба
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` должно быть grayscale, rgb, hsb, cmyk или websafe
 @msg	`view` must be wheel or box	`view` должно быть wheel или box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` должно быть hue, saturation, brightness, red, green или blue
+@msg	`sliders` must be none or oklch	`sliders` должен быть none или oklch
+@msg	OKLCH needs sRGB as the working RGB space	Для OKLCH рабочим пространством RGB должно быть sRGB
 @msg	`{k}` must be [x, y]	`{k}` должно быть [x, y]
 @msg	`{name}` has no options	`{name}` не имеет параметров
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` — встроенная рабочая среда; выберите другое имя

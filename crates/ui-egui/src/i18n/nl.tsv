@@ -4478,6 +4478,10 @@ axis	Both	Beide
 	Image	Afbeelding
 	Ink	Inkt
 	Lab	Lab
+	OKLCH Sliders	OKLCH-schuifregelaars
+	Chroma	Chroma
+	The largest chroma sRGB holds at this lightness and hue	De grootste chroma die sRGB bij deze helderheid en tint bevat
+	OKLCH needs sRGB as the working RGB space	OKLCH vereist sRGB als werk-RGB-ruimte
 	Medium	Gemiddeld
 	Name	Naam
 	None	Geen
@@ -6217,6 +6221,8 @@ mark-style	Japanese	Japans
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` moet grayscale, rgb, hsb, cmyk of websafe zijn
 @msg	`view` must be wheel or box	`view` moet wheel of box zijn
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` moet hue, saturation, brightness, red, green of blue zijn
+@msg	`sliders` must be none or oklch	`sliders` moet none of oklch zijn
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH vereist sRGB als werk-RGB-ruimte
 @msg	the Color Picker is not open	de kleurenkiezer is niet open
 @msg	the screen color sampler is already open	de schermkleurkiezer is al open
 @msg	this system has no screen color sampler	dit systeem heeft geen schermkleurkiezer

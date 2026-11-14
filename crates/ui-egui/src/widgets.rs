@@ -27,8 +27,8 @@ pub use blend::{
     reference_point_named,
 };
 pub use buttons::{
-    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, paint_icon_button, primary_button,
-    primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
+    SPLIT_ARROW, flat_button, flat_button_fit, icon_button, icon_button_enabled, menu_item, menu_item_name, menu_item_name_hint, paint_icon_button,
+    primary_button, primary_button_enabled, secondary_button, split_button, split_button_named, toggle_icon,
 };
 pub(crate) use buttons::{button_width, icon_button_info, primary_button_width, secondary_button_width};
 #[cfg(test)]

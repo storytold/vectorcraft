@@ -265,8 +265,9 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?}` shows the wheel or the box (a
-color field with a channel strip at its right) and picks the box's channel; it returns the settings, and `ui.inspect`
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, sliders?}` shows the wheel or
+the box (a color field with a channel strip at its right), picks the box's channel, and shows or hides OKLCH Sliders
+(`sliders: "oklch"` is an error while the working RGB space is not sRGB); it returns the settings, and `ui.inspect`
 reports them as `ui.color_wheel`.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/

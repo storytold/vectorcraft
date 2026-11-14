@@ -2119,6 +2119,10 @@ digits	Hindi	Hindi
 	Knife	Dao
 	Knockout Group	Nhóm Knockout
 	Lab	Lab
+	OKLCH Sliders	Thanh trượt OKLCH
+	Chroma	Độ tươi màu
+	The largest chroma sRGB holds at this lightness and hue	Độ tươi màu lớn nhất mà sRGB chứa được ở độ sáng và sắc độ này
+	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
 	Lab Spot Colors:	Màu đặc Lab:
 	Lab Values	Giá trị Lab
 	Landscape	Ngang
@@ -4589,6 +4593,8 @@ theme	Appearance	Giao diện
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` phải là grayscale, rgb, hsb, cmyk hoặc websafe
 @msg	`view` must be wheel or box	`view` phải là wheel hoặc box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` phải là hue, saturation, brightness, red, green hoặc blue
+@msg	`sliders` must be none or oklch	`sliders` phải là none hoặc oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
 @msg	`{name}` has no options	`{name}` không có tùy chọn
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` là không gian làm việc tích hợp sẵn; hãy chọn tên khác

@@ -1815,6 +1815,10 @@ font-technology	Variable	Variables
 	Knife	Cuchilla
 	Knockout Group	Grupo de exclusión
 	Lab	Lab
+	OKLCH Sliders	Controles deslizantes OKLCH
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	El croma más alto que admite sRGB con esta luminosidad y este tono
+	OKLCH needs sRGB as the working RGB space	OKLCH necesita sRGB como espacio de trabajo RGB
 	Lab Spot Colors:	Tintas planas Lab:
 	Lab Values	Valores Lab
 	Landscape	Horizontal
@@ -4504,6 +4508,8 @@ axis	Both	Ambos
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` debe ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` debe ser wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` debe ser hue, saturation, brightness, red, green o blue
+@msg	`sliders` must be none or oklch	`sliders` debe ser none u oklch
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH necesita sRGB como espacio de trabajo RGB
 @msg	`{k}` must be [x, y]	`{k}` debe ser [x, y]
 @msg	`{name}` has no options	`{name}` no tiene opciones
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` es un espacio de trabajo integrado; elige otro nombre

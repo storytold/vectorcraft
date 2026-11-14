@@ -3899,6 +3899,10 @@ file-filter	Templates	テンプレート
 	Keep the pasted color as a new swatch with a numbered name.	ペーストしたカラーを、番号付きの名前で新規スウォッチとして残します。
 	Keep:	保持:
 	Lab	Lab
+	OKLCH Sliders	OKLCH スライダー
+	Chroma	クロマ
+	The largest chroma sRGB holds at this lightness and hue	この明度と色相で sRGB に収まる最大のクロマ
+	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
 	Lab Values	Lab 値
 	Large List View	大きいリスト表示
 	Large Thumbnail View	大きいサムネール表示
@@ -5016,6 +5020,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` には grayscale、rgb、hsb、cmyk、websafe のいずれかを指定してください
 @msg	`view` must be wheel or box	`view` には wheel、box のいずれかを指定してください
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` には hue、saturation、brightness、red、green、blue のいずれかを指定してください
+@msg	`sliders` must be none or oklch	`sliders` は none または oklch でなければなりません
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	`top` and `below` can't both be true	`top` と `below` を同時に true にすることはできません
 @msg	`select` must be true or false	`select` には true または false を指定してください
