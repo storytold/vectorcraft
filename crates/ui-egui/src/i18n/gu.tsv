@@ -4680,3 +4680,272 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
 @msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
 	Path Length	પાથની લંબાઈ
+# Built-in library names: graphic styles, swatches, gradients, patterns and symbols.
+	Boss Alert	બૉસ ચેતવણી
+	Brushed Metal	બ્રશ કરેલી ધાતુ
+	Bulge	ઉપસાવ
+	Burn Aura	બળતી આભા
+	Chrome Rim	ક્રોમ કિનાર
+	Coin Shine	સિક્કાની ચમક
+	Crosshatch	ક્રોસહેચ
+	Damage Flash	નુકસાન ઝબકારો
+	Darken Veil	ઘેરો પડદો
+	Dashed Border	ડેશવાળી કિનારી
+	Dotted Border	ટપકાંવાળી કિનારી
+	Double Rule	બેવડી રેખા
+	Echo	પડઘો
+	Ember	અંગારો
+	Feathered	ફેધર કરેલું
+	Flag Wave	ધ્વજ લહેર
+	Freeze Edge	થીજેલી કિનારી
+	Ghosted	ઝાંખું
+	Glossy	ચળકતું
+	Glow Orb	ઝળહળતો ગોળો
+	Hard Shadow	તીક્ષ્ણ પડછાયો
+	Haze	ધુમ્મસ
+	Health Fill	હેલ્થ ભરણ
+	Highlighter	હાઇલાઇટર
+	Inner Light	આંતરિક પ્રકાશ
+	Inset Keyline	અંદરની કીલાઇન
+	Lifted Card	ઊંચકેલું કાર્ડ
+	Mana Glow	મના ઝળહળાટ
+	Multiply Tint	ગુણાકાર ટિન્ટ
+	Neon Tube	નિયોન ટ્યુબ
+	Offset Keyline	ઑફસેટ કીલાઇન
+	Outside Stroke	બહારનો સ્ટ્રોક
+	Overlay Glaze	ઓવરલે ગ્લેઝ
+	Pearl	મોતી
+	Pill Badge	ગોળી બેજ
+	Pointer	પોઇન્ટર
+	Poison Tint	ઝેરી ટિન્ટ
+	Puffy	ફૂલેલું
+	Quest Outline	ક્વેસ્ટ રૂપરેખા
+	Round Badge	ગોળ બેજ
+	Screen Light	સ્ક્રીન પ્રકાશ
+	Scribble Fill	લીટીવાળું ભરણ
+	Sea Glass	દરિયાઈ કાચ
+	Shield Buff	ઢાલ બફ
+	Sketchy Line	સ્કેચ જેવી રેખા
+	Soft Light Wash	સૉફ્ટ લાઇટ વૉશ
+	Soft Shadow	નરમ પડછાયો
+	Spiral Copies	સર્પાકાર નકલો
+	Spotlight	સ્પોટલાઇટ
+	Starburst	તારા વિસ્ફોટ
+	Stealth Fade	છૂપું ઝાંખું થવું
+	Stun Pulse	સ્ટન પલ્સ
+	Sunset Band	સૂર્યાસ્ત પટ્ટો
+	Triple Rule	ત્રિવિધ રેખા
+	Twisted	વળ ચડાવેલું
+	Two Tone	બે રંગી
+	Wavy Edge	લહેરિયાં કિનારી
+	Wobble	ડગમગ
+	Zig Zag Edge	ઝિગઝૅગ કિનારી
+	Amber Corona	એમ્બર કોરોના
+	Amber Glow	એમ્બર ઝળહળાટ
+	Amber to Lime	એમ્બરથી લાઇમ
+	Analogous Coral	સમીપવર્તી કોરલ
+	Analogous Teal	સમીપવર્તી ટીલ
+	Aurora Foil	અરોરા ફોઇલ
+	Azure Glow	આસમાની ઝળહળાટ
+	Azure to Violet	આસમાનીથી વાયોલેટ
+	Bloom	મહોર
+	Blue Glow	વાદળી ઝળહળાટ
+	Blue to Magenta	વાદળીથી મેજેન્ટા
+	Brass	પિત્તળ
+	Bronze	કાંસું
+	Charcoal	ચારકોલ
+	Checkerboard	ચેકરબોર્ડ
+	Chevron Pulse	શેવરોન પલ્સ
+	Chrome	ક્રોમ
+	Clay	માટી
+	Clay to Teal	માટીથી ટીલ
+	Coarse Grit	બરછટ કણ
+	Complementary Coral	પૂરક કોરલ
+	Complementary Teal	પૂરક ટીલ
+	Cool Gray	ઠંડો ગ્રે
+	Cool Grays	ઠંડા ગ્રે
+	Copper	કોપર
+	Coral and Navy	કોરલ અને નેવી
+	Crosses	ચોકડીઓ
+	Cyan Glow	સાયન ઝળહળાટ
+	Cyan to Blue	સાયનથી વાદળી
+	Dark Grays	ઘેરા ગ્રે
+	Dawn	પરોઢ
+	Deep	ઘેરો
+	Deep Amber	ઘેરો એમ્બર
+	Deep Azure	ઘેરો આસમાની
+	Deep Blue	ઘેરો વાદળી
+	Deep Cyan	ઘેરો સાયન
+	Deep Green	ઘેરો લીલો
+	Deep Lime	ઘેરો લાઇમ
+	Deep Magenta	ઘેરો મેજેન્ટા
+	Deep Orange	ઘેરો નારંગી
+	Deep Red	ઘેરો લાલ
+	Deep Teal	ઘેરો ટીલ
+	Deep Violet	ઘેરો વાયોલેટ
+	Deep Yellow	ઘેરો પીળો
+	Dense Flecks	ગાઢ છાંટા
+	Dew	ઝાકળ
+	Diagonal Stripes	ત્રાંસા પટ્ટા
+	Diamonds	હીરા
+	Driftwood	તરતું લાકડું
+	Dusk	સંધ્યા
+	Fade to Transparent	પારદર્શક સુધી ઝાંખું
+	Fern	ફર્ન
+	Fine Dots	ઝીણાં ટપકાં
+	Forest and Rose	જંગલ અને રોઝ
+	Frost Spectrum	હિમ સ્પેક્ટ્રમ
+	Gold	સોનું
+	Golden	સોનેરી
+	Green Glow	લીલો ઝળહળાટ
+	Green to Cyan	લીલાથી સાયન
+	Greige	ગ્રેઝ
+	Gunmetal	ગનમેટલ
+	Honey	મધ
+	Horizontal Stripes	આડા પટ્ટા
+	Indigo and Peach	ઈન્ડિગો અને પીચ
+	Ink Wash	શાહી વૉશ
+	Interference Rings	વ્યતિકરણ વલયો
+	Iris Sheen	આઇરિસ ચમક
+	Ivory	હાથીદાંત
+	Lagoon	લગૂન
+	Lavender	લવંડર
+	Lichen	લાઇકેન
+	Light Grays	આછા ગ્રે
+	Lime Glow	લાઇમ ઝળહળાટ
+	Lime to Teal	લાઇમથી ટીલ
+	Linen	લિનન
+	Magenta Glow	મેજેન્ટા ઝળહળાટ
+	Magenta to Orange	મેજેન્ટાથી નારંગી
+	Mint Halo	ફુદીના પ્રભામંડળ
+	Mist	ધૂંધ
+	Moonstone Shift	ચંદ્રમણિ ઝલક
+	Moss	શેવાળ
+	Neutral	તટસ્થ
+	Neutrals	તટસ્થ રંગો
+	Night	રાત
+	Noon	બપોર
+	Oat	ઓટ
+	Ochre	ગેરુ
+	Offset Rings	ઑફસેટ વલયો
+	Olive	ઓલિવ
+	Opal Ribbon	ઓપલ રિબન
+	Orange Glow	નારંગી ઝળહળાટ
+	Orange to Yellow	નારંગીથી પીળો
+	Overcast	વાદળછાયું
+	Pastel	પેસ્ટલ
+	Pastel Amber	પેસ્ટલ એમ્બર
+	Pastel Azure	પેસ્ટલ આસમાની
+	Pastel Blue	પેસ્ટલ વાદળી
+	Pastel Cyan	પેસ્ટલ સાયન
+	Pastel Green	પેસ્ટલ લીલો
+	Pastel Lime	પેસ્ટલ લાઇમ
+	Pastel Magenta	પેસ્ટલ મેજેન્ટા
+	Pastel Orange	પેસ્ટલ નારંગી
+	Pastel Orbit	પેસ્ટલ ભ્રમણકક્ષા
+	Pastel Red	પેસ્ટલ લાલ
+	Pastel Teal	પેસ્ટલ ટીલ
+	Pastel Violet	પેસ્ટલ વાયોલેટ
+	Pastel Yellow	પેસ્ટલ પીળો
+	Pearl Flash	મોતી ઝબકાર
+	Pentagram Coral	પેન્ટાગ્રામ કોરલ
+	Pentagram Teal	પેન્ટાગ્રામ ટીલ
+	Petal	પાંખડી
+	Pewter	પ્યુટર
+	Pinched Stripes	દબાયેલા પટ્ટા
+	Platinum	પ્લેટિનમ
+	Plum and Lime	પ્લમ અને લાઇમ
+	Plum to Olive	પ્લમથી ઓલિવ
+	Polar Glint	ધ્રુવીય ચમક
+	Polka Dots	પોલ્કા ટપકાં
+	Pollen	પરાગ
+	Prism Veil	પ્રિઝમ પડદો
+	Radiating Lenses	પ્રસરતા લેન્સ
+	Red Glow	લાલ ઝળહળાટ
+	Red to Amber	લાલથી એમ્બર
+	Ripple Lines	લહેર રેખાઓ
+	Rose Gold	રોઝ ગોલ્ડ
+	Rose Quartz Gleam	રોઝ ક્વાર્ટ્ઝ ચમક
+	Rosy	ગુલાબી
+	Sand	રેતી
+	Scratches	ઉઝરડા
+	Seafoam	દરિયાઈ ફીણ
+	Silver	ચાંદી
+	Silver Tide	ચાંદી ભરતી
+	Sine Bands	સાઇન પટ્ટા
+	Slate	સ્લેટ
+	Smoke	ધુમાડો
+	Soft Amber	સૉફ્ટ એમ્બર
+	Soft Azure	સૉફ્ટ આસમાની
+	Soft Blue	સૉફ્ટ વાદળી
+	Soft Cyan	સૉફ્ટ સાયન
+	Soft Green	સૉફ્ટ લીલો
+	Soft Lime	સૉફ્ટ લાઇમ
+	Soft Magenta	સૉફ્ટ મેજેન્ટા
+	Soft Orange	સૉફ્ટ નારંગી
+	Soft Red	સૉફ્ટ લાલ
+	Soft Spectrum	સૉફ્ટ સ્પેક્ટ્રમ
+	Soft Teal	સૉફ્ટ ટીલ
+	Soft Violet	સૉફ્ટ વાયોલેટ
+	Soft Yellow	સૉફ્ટ પીળો
+	Sparse Flecks	છૂટાછવાયા છાંટા
+	Speckle	ટપકીઓ
+	Spectrum	સ્પેક્ટ્રમ
+	Split Complementary Coral	વિભાજિત પૂરક કોરલ
+	Split Complementary Teal	વિભાજિત પૂરક ટીલ
+	Stipple	બિંદુચિત્ર
+	Stone	પથ્થર
+	Sunset	સૂર્યાસ્ત
+	Taupe	ટૉપ
+	Teal Glow	ટીલ ઝળહળાટ
+	Teal and Gold	ટીલ અને સોનું
+	Teal to Azure	ટીલથી આસમાની
+	Terracotta	ટેરાકોટા
+	Tetrad Coral	ચતુષ્ક કોરલ
+	Tetrad Teal	ચતુષ્ક ટીલ
+	Tide	ભરતી
+	Triad Coral	ત્રિક કોરલ
+	Triad Teal	ત્રિક ટીલ
+	Umber	અંબર માટી
+	Vertical Stripes	ઊભા પટ્ટા
+	Vignette	વિગ્નેટ
+	Violet Edge	વાયોલેટ કિનારી
+	Violet Glow	વાયોલેટ ઝળહળાટ
+	Violet to Red	વાયોલેટથી લાલ
+	Vivid	તેજસ્વી
+	Vivid Amber	તેજસ્વી એમ્બર
+	Vivid Azure	તેજસ્વી આસમાની
+	Vivid Blue	તેજસ્વી વાદળી
+	Vivid Cyan	તેજસ્વી સાયન
+	Vivid Green	તેજસ્વી લીલો
+	Vivid Lime	તેજસ્વી લાઇમ
+	Vivid Magenta	તેજસ્વી મેજેન્ટા
+	Vivid Orange	તેજસ્વી નારંગી
+	Vivid Red	તેજસ્વી લાલ
+	Vivid Teal	તેજસ્વી ટીલ
+	Vivid Violet	તેજસ્વી વાયોલેટ
+	Vivid Yellow	તેજસ્વી પીળો
+	Warm Gray	હૂંફાળો ગ્રે
+	Warm Grays	હૂંફાળા ગ્રે
+	Warped Checks	વળેલાં ચેક
+	White Fade	સફેદ ઝાંખપ
+	White to Black	સફેદથી કાળો
+	Yellow Glow	પીળો ઝળહળાટ
+	Yellow to Green	પીળાથી લીલો
+	Arrow	તીર
+	Bar	પટ્ટી
+	Burst	વિસ્ફોટ
+	Button	બટન
+	Checkpoint	ચેકપોઇન્ટ
+	Crosshair	ક્રોસહેર
+	Flag	ધ્વજ
+	Gem	રત્ન
+	Hexagon	ષટ્કોણ
+	Key	ચાવી
+	Panel	પેનલ
+	Pin	પિન
+	Potion	ઔષધ
+	Rounded Square	ગોળ ખૂણાવાળો ચોરસ
+	Shield	ઢાલ
+	Sword	તલવાર
+	Triangle	ત્રિકોણ
