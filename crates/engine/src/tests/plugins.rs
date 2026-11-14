@@ -1921,6 +1921,12 @@ fn disabled_plugins_name_files_outside_the_read_root_by_their_names() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// The files and folders in the plug-in store `dir`, without the file windows lock while they
+/// change it.
+fn store_files(dir: &std::path::Path) -> usize {
+    std::fs::read_dir(dir).unwrap().filter(|e| e.as_ref().is_ok_and(|e| e.file_name() != crate::store::DISABLED_LOCK)).count()
+}
+
 /// #2541: a plug-in installed in a session with a plug-in store is installed again in the next
 /// session that attaches the store, and Remove Plug-in takes it out of the store.
 #[test]
@@ -1931,14 +1937,14 @@ fn installed_plugins_are_kept_in_the_store() {
     let mut s = session();
     s.attach_plugin_store(folder.0.clone());
     install_wat(&mut s, &src);
-    assert_eq!(std::fs::read_dir(&folder.0).unwrap().count(), 1, "one file in the store");
+    assert_eq!(store_files(&folder.0), 1, "one file in the store");
     vectorcraft_plugins::registry::remove(id);
 
     let mut next = session();
     next.attach_plugin_store(folder.0.clone());
     assert!(vectorcraft_plugins::registry::get(id).is_some(), "installed again from the store");
     run(&mut next, "plugin.remove", json!({"id": id}));
-    assert_eq!(std::fs::read_dir(&folder.0).unwrap().count(), 0, "removed from the store");
+    assert_eq!(store_files(&folder.0), 0, "removed from the store");
 
     // A file that isn't a plug-in is skipped; the store still attaches.
     std::fs::write(folder.0.join("broken.wasm"), b"\0asm?").unwrap();
@@ -3274,6 +3280,198 @@ fn a_store_loaded_while_installing_loads_the_new_version() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A grant of `doc.read` to plug-in `id`, the module with the SHA-256 `hash`.
+fn doc_read_grant(id: &str, hash: &str) -> vectorcraft_plugins::permissions::Grant {
+    serde_json::from_value(json!({"id": id, "hash": hash, "permissions": ["doc.read"]})).unwrap()
+}
+
+/// A session that uses the plug-in store `dir` without loading it, as another process using the
+/// same folder does: it doesn't wait for the installs and removals of this process's sessions.
+fn other_process(dir: std::path::PathBuf) -> Session {
+    let mut s = Session::new();
+    s.plugin_dir = Some(dir);
+    s
+}
+
+/// Waits on this thread for a turn on a plug-in store, telling `waiting` before it waits.
+fn tell_when_waiting(waiting: std::sync::mpsc::Sender<&'static str>) {
+    crate::store::WHILE_STORE_LOCKED.set(Some(Box::new(move || {
+        let _ = waiting.send("waiting");
+    })));
+}
+
+/// The ids `grants.json` in `dir` holds grants for, and the hash of each.
+fn stored_grant_hashes(dir: &std::path::Path) -> std::collections::BTreeMap<String, String> {
+    let entries: Vec<Value> = serde_json::from_slice(&std::fs::read(dir.join("grants.json")).unwrap()).unwrap();
+    entries.iter().map(|e| (e["id"].as_str().unwrap().to_string(), e["hash"].as_str().unwrap().to_string())).collect()
+}
+
+/// An install into a `Plug-ins` folder that another process also installs the same id into keeps a
+/// module with its own grant: the other process's install waits for this one's turn on the folder,
+/// between this install's module and its grant, and then writes both of its own.
+#[test]
+fn installs_from_two_processes_into_one_store_keep_each_module_with_its_grant() {
+    use vectorcraft_plugins::permissions::sha256_hex;
+    let folder = crate::tests_links::Folder::new("plugin-store-installs-take-turns");
+    let id = "test.engine.permissions.installsturns";
+    let ours = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let theirs = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "documentData": null}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+
+    let (said, heard) = std::sync::mpsc::channel::<&'static str>();
+    let (handed, other) = std::sync::mpsc::channel();
+    let (dir, module) = (folder.0.clone(), theirs.clone());
+    crate::cmd::plugin::BEFORE_GRANT_STORED.set(Some(Box::new(move || {
+        let thread = std::thread::spawn(move || {
+            tell_when_waiting(said.clone());
+            let other = other_process(dir);
+            let turn = other.plugin_store_turn().unwrap();
+            let stored = crate::cmd::plugin::keep_installed(&other, &turn, id, &module, Some(doc_read_grant(id, &sha256_hex(&module))));
+            let _ = said.send(if stored { "stored" } else { "not stored" });
+        });
+        // The other install has written the store, or waits for this one.
+        let first = heard.recv().unwrap_or("gone");
+        let _ = handed.send((first, thread));
+    })));
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&ours), "grant": ["doc.read"]}));
+    let (first, thread) = other.recv().unwrap();
+    thread.join().unwrap();
+
+    let module = std::fs::read(s.stored_plugin_file(id).unwrap()).unwrap();
+    assert_eq!(stored_grant_hashes(&folder.0).get(id), Some(&sha256_hex(&module)), "the stored grant covers the stored module");
+    assert_eq!(module, theirs, "the install that waited wrote last");
+    assert_eq!(first, "waiting", "the other install waits for this one");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// Grants written for two plug-ins into one `Plug-ins` folder by two processes are both kept: the
+/// second write reads `grants.json` only once the first has written it.
+#[test]
+fn grants_written_by_two_processes_into_one_store_keep_both() {
+    let folder = crate::tests_links::Folder::new("plugin-store-grants-take-turns");
+    let (ours, theirs) = ("test.engine.permissions.grantturnsa", "test.engine.permissions.grantturnsb");
+    let hash = vectorcraft_plugins::permissions::sha256_hex(b"module");
+    let s = other_process(folder.0.clone());
+
+    let (said, heard) = std::sync::mpsc::channel::<&'static str>();
+    let (handed, other) = std::sync::mpsc::channel();
+    let (dir, other_hash) = (folder.0.clone(), hash.clone());
+    crate::store::AFTER_GRANTS_READ.set(Some(Box::new(move || {
+        let thread = std::thread::spawn(move || {
+            tell_when_waiting(said.clone());
+            let written = other_process(dir).store_grant(theirs, Some(doc_read_grant(theirs, &other_hash)));
+            let _ = said.send(if written { "written" } else { "not written" });
+        });
+        // The other write has written the file, or waits for this one.
+        let first = heard.recv().unwrap_or("gone");
+        let _ = handed.send((first, thread));
+    })));
+    assert!(s.store_grant(ours, Some(doc_read_grant(ours, &hash))), "the grant is written");
+    let (first, thread) = other.recv().unwrap();
+    thread.join().unwrap();
+
+    let kept = stored_grant_hashes(&folder.0);
+    assert_eq!(kept.keys().map(String::as_str).collect::<Vec<_>>(), [ours, theirs], "both grants are kept");
+    assert_eq!(first, "waiting", "the other write waits for this one");
+}
+
+/// A setting a plug-in changes in one process and another setting it changes in a second process
+/// using the same `Plug-ins` folder are both kept: the second process waits for the first's turn on
+/// the folder and reads what it wrote. The second process is this test run again with
+/// `VECTORCRAFT_TEST_PLUGIN_SETTINGS_STORE` naming the folder; it prints when it waits and when it
+/// is done.
+#[test]
+fn settings_changed_by_two_processes_keep_both() {
+    use std::io::{BufRead, Write};
+    use vectorcraft_plugins::storage::Meter;
+    const CHILD: &str = "VECTORCRAFT_TEST_PLUGIN_SETTINGS_STORE";
+    const NAME: &str = "tests::plugins::settings_changed_by_two_processes_keep_both";
+    let id = "test.engine.storagetwoprocesses";
+    // Nothing a removal kept is moved back, so the storage is made without a turn on the folder.
+    let attached = |s: &Session| {
+        s.attach_plugin_storage(&crate::store::StoreTurn::unheld(), id);
+        vectorcraft_plugins::registry::storage(id).unwrap()
+    };
+    if let Some(dir) = std::env::var_os(CHILD) {
+        let st = attached(&other_process(std::path::PathBuf::from(dir)));
+        crate::store::WHILE_STORE_LOCKED.set(Some(Box::new(|| {
+            println!("settings-child-waiting");
+            let _ = std::io::stdout().flush();
+        })));
+        st.set_setting("theirs", b"2", &mut Meter::unlimited()).unwrap();
+        println!("settings-child-done");
+        let _ = std::io::stdout().flush();
+        return;
+    }
+    let folder = crate::tests_links::Folder::new("plugin-settings-two-processes");
+    let st = attached(&other_process(folder.0.clone()));
+
+    let (handed, child) = std::sync::mpsc::channel();
+    let dir = folder.0.clone();
+    crate::store::AFTER_SETTINGS_READ.set(Some(Box::new(move || {
+        let mut process = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", NAME, "--nocapture", "--test-threads=1"])
+            .env(CHILD, &dir)
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut lines = std::io::BufReader::new(process.stdout.take().unwrap()).lines();
+        // The other process has written the settings, or waits for this change.
+        let first = lines
+            .by_ref()
+            .map_while(std::io::Result::ok)
+            .find_map(|l| ["waiting", "done"].into_iter().find(|said| l.contains(&format!("settings-child-{said}"))));
+        let _ = handed.send((first, process, lines));
+    })));
+    st.set_setting("ours", b"1", &mut Meter::unlimited()).unwrap();
+    let (first, mut process, lines) = child.recv().unwrap();
+    let rest: Vec<String> = lines.map_while(std::io::Result::ok).collect();
+    assert!(process.wait().unwrap().success(), "the other process failed: {rest:?}");
+
+    let file: std::collections::BTreeMap<String, String> =
+        serde_json::from_slice(&std::fs::read(crate::store::plugin_data_dir(&folder.0, id).join("settings.json")).unwrap()).unwrap();
+    assert_eq!(file.keys().map(String::as_str).collect::<Vec<_>>(), ["ours", "theirs"], "both settings are kept");
+    assert_eq!(first, Some("waiting"), "the other process waits for this change");
+    vectorcraft_plugins::registry::set_storage(id, None);
+}
+
+/// When the `Plug-ins` folder can't be locked (here `disabled.lock` is a folder), `plugin.install`
+/// and `plugin.remove` change nothing and say why: the plug-in installed with the id, its grant and
+/// the stored module stay as they were.
+#[test]
+fn a_store_that_cant_be_locked_refuses_installs_and_removals() {
+    use vectorcraft_plugins::{permissions::sha256_hex, registry};
+    let folder = crate::tests_links::Folder::new("plugin-store-not-locked");
+    let id = "test.engine.permissions.notlocked";
+    let first = asking(id, r#"["doc.read"]"#, &json!({"objects": []}));
+    let second = asking(id, r#"["doc.read"]"#, &json!({"objects": [], "documentData": null}));
+    let mut s = session();
+    s.attach_plugin_store(folder.0.clone());
+    run(&mut s, "plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&first), "grant": ["doc.read"]}));
+    let lock = folder.0.join(crate::store::DISABLED_LOCK);
+    std::fs::remove_file(&lock).unwrap();
+    std::fs::create_dir(&lock).unwrap();
+    let grants = std::fs::read(folder.0.join("grants.json")).unwrap();
+
+    let update = json!({"dataBase64": vectorcraft_format::base64_encode(&second), "grant": ["doc.read"], "replace": true});
+    let refused = s.execute("plugin.install", &update).unwrap_err().to_string();
+    assert!(refused.contains(crate::store::STORE_NOT_LOCKED) && refused.contains("nothing was installed"), "{refused}");
+    assert_eq!(registry::get(id).map(|p| p.hash().to_string()), Some(sha256_hex(&first)), "the installed plug-in stays");
+    assert_eq!(registry::granted(id).map(|g| g.hash), Some(sha256_hex(&first)), "its grant stays");
+    assert_eq!(std::fs::read(s.stored_plugin_file(id).unwrap()).unwrap(), first, "the store keeps its module");
+    assert_eq!(std::fs::read(folder.0.join("grants.json")).unwrap(), grants, "and its grant");
+
+    let refused = s.execute("plugin.remove", &json!({"id": id})).unwrap_err().to_string();
+    assert!(refused.contains(crate::store::STORE_NOT_LOCKED) && refused.contains("nothing was removed"), "{refused}");
+    assert!(registry::get(id).is_some(), "the plug-in stays installed");
+    assert!(std::path::Path::new(&s.stored_plugin_file(id).unwrap()).exists(), "and stored");
+
+    std::fs::remove_dir(&lock).unwrap();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    assert!(registry::get(id).is_none());
+}
+
 /// Runs the test `name` of this module again in a process of its own → whether this is that
 /// process. The list of disabled plug-ins is kept for the whole process, and the other tests here
 /// read it again each time they attach a plug-in store.
@@ -3740,7 +3938,7 @@ fn granted_permissions_are_kept_and_folders_skip_the_rest() {
     let mut third = session();
     third.attach_plugin_store(folder.0.clone());
     assert!(vectorcraft_plugins::registry::get(id).is_none(), "nobody granted it");
-    assert_eq!(std::fs::read_dir(&folder.0).unwrap().count(), 1, "the module stays in the store");
+    assert_eq!(store_files(&folder.0), 1, "the module stays in the store");
 
     // The Additional Plug-ins Folder skips it with a note until it is granted.
     let dir = crate::tests_links::Folder::new("plugin-folder-grants");
@@ -4678,7 +4876,7 @@ fn plugin_storage_is_capped_and_survives_a_damaged_settings_file() {
 
     // An id that differs only in case has storage of its own, which removing this one leaves.
     let upper_id = "test.engine.StorageCaps";
-    s.attach_plugin_storage(upper_id);
+    s.attach_plugin_storage(&s.plugin_store_turn().unwrap(), upper_id);
     let upper = vectorcraft_plugins::registry::storage(upper_id).unwrap();
     assert_eq!(upper.setting("k0", m).unwrap(), None);
     upper.set_setting("k0", b"upper", m).unwrap();
@@ -4690,13 +4888,13 @@ fn plugin_storage_is_capped_and_survives_a_damaged_settings_file() {
 
     // Removing the plug-in closes the storage a run still holds, even one from before the plug-in
     // was replaced, so nothing is written back.
-    s.attach_plugin_storage(id);
+    s.attach_plugin_storage(&s.plugin_store_turn().unwrap(), id);
     run(&mut s, "plugin.remove", json!({"id": id}));
     assert_eq!(st.set_setting("zoom", b"again", m), Err(StorageError::Unavailable));
     assert_eq!(st.set_cache_entry("tile", b"again", m), Err(StorageError::Unavailable));
     assert!(!dir.exists());
     assert_eq!(upper.setting("k0", m).unwrap(), Some(b"upper".to_vec()));
-    s.remove_plugin_storage(upper_id, || true).unwrap();
+    s.remove_plugin_storage(&s.plugin_store_turn().unwrap(), upper_id, || true).unwrap();
 }
 
 /// Files larger than the storage reads are not read: a settings file larger than 1 MiB, although
@@ -4874,12 +5072,12 @@ fn removing_a_plugin_drops_its_settings_from_memory() {
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     std::fs::write(&file, &bytes).unwrap();
     set_modified(&file, written);
-    s.attach_plugin_storage(id);
+    s.attach_plugin_storage(&s.plugin_store_turn().unwrap(), id);
     let st = vectorcraft_plugins::registry::storage(id).unwrap();
     let mut m = Meter::unlimited();
     assert_eq!(st.setting("zoom", &mut m).unwrap(), Some(b"hello".to_vec()));
     assert_eq!(m.used(), bytes.len() as u64, "read from the file");
-    s.remove_plugin_storage(id, || true).unwrap();
+    s.remove_plugin_storage(&s.plugin_store_turn().unwrap(), id, || true).unwrap();
 }
 
 /// The cache's total stays in memory while the cache folder keeps its time; a write and a clear
