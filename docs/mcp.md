@@ -821,8 +821,7 @@ placement they set there. A stroke weight and dashes are stored as the label sho
 scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
 a pie with Legends in Wedges whose legend labels have no fill of their own, the legend labels' fill is stored only when
 every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
-a dark wedge. These commands do not store the colors they give a graph's axis lines, ticks and radar rings, which are
-drawn again with their default paint.
+a dark wedge. What they change on a graph's axis lines, tick marks and radar rings is stored as described below.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
@@ -845,6 +844,23 @@ last one in the order of the targets (`ids` as given, otherwise paint order) set
 the paragraph attributes. `paint.setFill` and `paint.setStroke` store a character fill or stroke when the paint goes to
 the label's characters (the whole label, or all of its text highlighted with the Type tool), and the row when it goes to
 a row. A stored character gradient also fits each label.
+
+On a graph's axis lines and tick marks, and separately on a radar graph's rings, `paint.setFill`, `paint.setStroke`,
+`addon.color.fillToStroke`, `addon.color.strokeToFill`, the stroke, gradient and recolor commands above, `paint.swap`,
+`paint.default`, the `appearance.*` commands (`appearance.copyFrom`, the Eyedropper, included), `graphicStyle.apply`,
+`graphicStyle.redefine`, `transparency.set` and `object.setProps` store what a line shows for every line of its kind:
+the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order, and the line's object
+opacity and blend mode. `paint.setFill`, `paint.setStroke` and the recolor commands also store them when given the
+graph, its Axes group or a group that holds the graph, so the lines keep the paint those commands give a whole graph.
+The other commands store them when given the line itself. `transparency.set` without an `item` and `object.setProps`
+store only the object opacity and blend mode. `appearance.copyFrom` stores the rows whatever it picks up, with or
+without `append`. The recolor commands, `paint.swap` and `paint.default` store a line's rows when they change them. The
+other commands store them even when the line already showed them, except that rows equal to a kind's default stroke
+(0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
+paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
+each line fits it when the graph is drawn again. The graph saves the rows as `axisRows` and `ringRows` in its label
+styles. Other stroke options (caps, joins, miter limit, alignment, dashes and arrowheads), rows below the topmost one of
+each kind, and effects are not stored, so a dash set on a line is drawn solid again.
 
 `effect.apply {"effect": "path.outlineObject"}` (Effect › Path › Outline Object) takes no parameters. Type that carries
 it is drawn, exported and expanded as its glyph outlines and stays editable type, and the effects after it reshape

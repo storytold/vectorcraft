@@ -1,7 +1,7 @@
 use vectorcraft_color::BlendMode;
 
 use super::axis::radar_axis;
-use super::labels::{Role, filled_lines_on, label_para, label_style};
+use super::labels::{Line, Role, filled_lines_on, kept_line_rows, label_para, label_style, line_slot};
 use super::{Arc, CharStyle, Color, Document, GraphKind, GraphSpec, HashMap, Node, NodeId, NodeKind, Paint, Result, Session, Value, bad};
 
 // ---------- generation ----------
@@ -561,16 +561,117 @@ pub(crate) fn label_rows(n: &Node) -> Option<vectorcraft_doc::LabelRows> {
     (rows != vectorcraft_doc::LabelRows::default()).then_some(rows)
 }
 
+/// The graph and kind of graph line `id`: a path directly in a graph's Axes group. Looked up through its parents, with no
+/// pass over the document.
+fn graph_line(doc: &Document, id: NodeId) -> Option<(NodeId, Line)> {
+    let line = doc.node(id)?;
+    if !matches!(line.kind, NodeKind::Path { .. }) {
+        return None;
+    }
+    let path = doc.ancestry(id)?;
+    let [.., graph, axes, _] = path.as_slice() else { return None };
+    let spec = doc.node(*graph)?.extras().graph.as_deref()?;
+    Some((*graph, line_in(spec, doc.node(*axes)?, line)?))
+}
+
+/// The kind of graph line `line` is when `axes` is the Axes group of a graph drawn from `spec` and `line` a path directly
+/// in it. A radar graph's rings are its closed paths; its spokes, open, are axis lines.
+fn line_in(spec: &GraphSpec, axes: &Node, line: &Node) -> Option<Line> {
+    if axes.name.as_deref() != Some("Axes") || axes.extras().series_index.is_some() || !matches!(axes.kind, NodeKind::Group { .. }) {
+        return None;
+    }
+    let NodeKind::Path { path, .. } = &line.kind else { return None };
+    Some(if spec.kind == GraphKind::Radar && path.is_closed() { Line::Ring } else { Line::Axis })
+}
+
+/// The graph lines among `ids`, each with its graph and kind, from the back to the front and each once: a later line's
+/// capture replaces an earlier one's, so the frontmost line of a kind sets what the kind keeps.
+fn lines_of(doc: &Document, ids: &[NodeId]) -> Vec<(NodeId, NodeId, Line)> {
+    let mut out: Vec<(NodeId, NodeId, Line)> = ids.iter().filter_map(|id| graph_line(doc, *id).map(|(g, line)| (*id, g, line))).collect();
+    out.sort_by_cached_key(|(id, ..)| doc.index_path(*id));
+    out.dedup_by_key(|(id, ..)| *id);
+    out
+}
+
+/// What lines of kind `line` keep (`slot`) after line `n` shows its rows ([`label_rows`]), or with `object_only` what
+/// `slot` keeps with the line's object opacity and blend mode: `None` when that is how the graph draws them with no
+/// kept rows.
+fn line_rows_after(slot: Option<&vectorcraft_doc::LabelRows>, line: Line, n: &Node, object_only: bool) -> Option<vectorcraft_doc::LabelRows> {
+    let shown = label_rows(n).unwrap_or_default();
+    let rows = if object_only {
+        let mut kept = slot.cloned().unwrap_or_else(|| line.default_rows());
+        (kept.paint.opacity, kept.paint.blend) = (shown.paint.opacity, shown.paint.blend);
+        kept
+    } else {
+        shown
+    };
+    (rows != line.default_rows()).then_some(rows)
+}
+
+/// Keep the object rows ([`label_rows`]) of the graph lines among `ids` for every line of their kind (axis lines and tick
+/// marks, or a radar graph's rings), with `object_only` only their object opacity and blend mode, even when a line
+/// already showed them. Returns whether kept rows changed.
+fn store_line_rows(doc: &mut Document, ids: &[NodeId], object_only: bool) -> bool {
+    let mut changed = false;
+    for (id, graph, line) in lines_of(doc, ids) {
+        let Some(spec) = doc.node(graph).and_then(|n| n.extras().graph.as_deref()) else { continue };
+        let Some(n) = doc.node(id) else { continue };
+        let kept = line_rows_after(kept_line_rows(&spec.label_styles, line), line, n, object_only);
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let slot = line_slot(&mut spec.label_styles, line);
+        changed |= *slot != kept;
+        *slot = kept;
+    }
+    changed
+}
+
+/// Keep the object rows of graph lines `ids` for every line of their kind, as [`capture_label_rows`] keeps a label's,
+/// for an edit that wrote their fill or stroke. Lines of a kind that the edit reached differently take the frontmost
+/// one's rows. Called inside the same edit, so they undo together. Returns whether kept rows changed.
+pub(crate) fn capture_line_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
+    store_line_rows(doc, ids, false)
+}
+
+/// Keep the object rows of the graph lines among `ids` whose rows an edit changed (`before`: the document before the
+/// edit) for every line of their kind. Returns whether kept rows changed.
+fn capture_line_changes(before: &Document, doc: &mut Document, ids: &[NodeId]) -> bool {
+    let changed: Vec<NodeId> = ids
+        .iter()
+        .copied()
+        .filter(|id| graph_line(doc, *id).is_some() && before.node(*id).map(label_rows) != doc.node(*id).map(label_rows))
+        .collect();
+    store_line_rows(doc, &changed, false)
+}
+
+/// Would [`store_line_rows`] with `object_only` change what a graph keeps for the lines among `ids`? Reads the document
+/// without copying it.
+fn line_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bool {
+    let mut kept: Vec<(NodeId, Line, Option<vectorcraft_doc::LabelRows>)> = vec![];
+    for (id, graph, line) in lines_of(doc, ids) {
+        let (Some(spec), Some(n)) = (doc.node(graph).and_then(|n| n.extras().graph.as_deref()), doc.node(id)) else { continue };
+        let slot = match kept.iter().position(|(g, l, _)| *g == graph && *l == line) {
+            Some(i) => kept.swap_remove(i).2,
+            None => kept_line_rows(&spec.label_styles, line).cloned(),
+        };
+        kept.push((graph, line, line_rows_after(slot.as_ref(), line, n, true)));
+    }
+    kept.into_iter().any(|(graph, line, rows)| {
+        doc.node(graph).and_then(|n| n.extras().graph.as_deref()).is_some_and(|spec| kept_line_rows(&spec.label_styles, line) != rows.as_ref())
+    })
+}
+
 /// Keep the object rows ([`label_rows`]) of graph labels `ids` for every label of their kind, as
 /// [`capture_label_styles`] keeps a character format, even when a label already showed them: the last label of a kind
 /// in the order of `ids` sets what that kind keeps. Objects other than type are left out before the graph's labels are
-/// looked up. Called inside the same edit, so they undo together. Returns whether kept rows changed.
+/// looked up. The graph lines among `ids` keep their rows for every line of their kind too ([`capture_line_rows`]).
+/// Called inside the same edit, so they undo together. Returns whether kept rows changed.
 pub(crate) fn capture_label_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
     store_label_rows(doc, ids, false)
 }
 
-/// Keep the object opacity and blend mode of graph labels `ids` for every label of their kind, as [`capture_label_rows`]
-/// keeps them, and leave the kept fill and stroke rows as they are. Returns whether what the graph keeps changed.
+/// Keep the object opacity and blend mode of graph labels and graph lines `ids` for every label or line of their kind, as
+/// [`capture_label_rows`] keeps them, and leave the kept fill and stroke rows as they are. Returns whether what the graph
+/// keeps changed.
 pub(crate) fn capture_label_object_opacity(doc: &mut Document, ids: &[NodeId]) -> bool {
     store_label_rows(doc, ids, true)
 }
@@ -578,20 +679,21 @@ pub(crate) fn capture_label_object_opacity(doc: &mut Document, ids: &[NodeId]) -
 /// Would [`capture_label_object_opacity`] change what a graph keeps for labels `ids`? Reads the document without copying
 /// it.
 pub(crate) fn label_object_opacity_differs(doc: &Document, ids: &[NodeId]) -> bool {
-    label_rows_of(doc, ids).into_iter().any(|(graph, role, rows)| {
-        let Some(spec) = doc.node(graph).and_then(|n| n.extras().graph.as_deref()) else { return false };
-        let slot = match role {
-            Role::Value => &spec.label_styles.values_rows,
-            Role::Category => &spec.label_styles.categories_rows,
-            Role::Legend => &spec.label_styles.legend_rows,
-        };
-        *slot != kept_label_rows(slot, rows, true)
-    })
+    line_object_opacity_differs(doc, ids)
+        || label_rows_of(doc, ids).into_iter().any(|(graph, role, rows)| {
+            let Some(spec) = doc.node(graph).and_then(|n| n.extras().graph.as_deref()) else { return false };
+            let slot = match role {
+                Role::Value => &spec.label_styles.values_rows,
+                Role::Category => &spec.label_styles.categories_rows,
+                Role::Legend => &spec.label_styles.legend_rows,
+            };
+            *slot != kept_label_rows(slot, rows, true)
+        })
 }
 
 /// [`capture_label_rows`], or with `object_only` [`capture_label_object_opacity`].
 fn store_label_rows(doc: &mut Document, ids: &[NodeId], object_only: bool) -> bool {
-    let mut changed = false;
+    let mut changed = store_line_rows(doc, ids, object_only);
     for (graph, role, rows) in label_rows_of(doc, ids) {
         let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
         let slot = match role {
@@ -741,23 +843,38 @@ pub(super) fn picks_legend_fill(g: &GraphSpec) -> bool {
         && !g.label_styles.legend.as_ref().is_some_and(|st| st.fill != Paint::solid(Color::BLACK))
 }
 
-/// The graph labels among `roots` and inside them, for an edit that reaches graph labels without naming them.
+/// The graph labels and graph lines among `roots` and inside them, for an edit that reaches them without naming them.
 pub(crate) fn labels_in(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
     let mut texts = Vec::new();
+    let mut lines = Vec::new();
     for id in roots {
+        // A root that is a line, or the Axes group: found through its parents.
+        if graph_line(doc, *id).is_some() {
+            lines.push(*id);
+        }
         let Some(root) = doc.node(*id) else { continue };
+        if let Some(parent) = doc.parent_of(*id).and_then(|p| doc.node(p))
+            && let Some(spec) = parent.extras().graph.as_deref()
+        {
+            lines.extend(root.children().into_iter().flatten().filter(|c| line_in(spec, root, c).is_some()).map(|c| c.id));
+        }
         root.walk(&mut |n| {
             if matches!(n.kind, NodeKind::Text(_)) {
                 texts.push(n.id);
             }
+            if let Some(spec) = n.extras().graph.as_deref() {
+                for axes in n.children().into_iter().flatten() {
+                    lines.extend(axes.children().into_iter().flatten().filter(|c| line_in(spec, axes, c).is_some()).map(|c| c.id));
+                }
+            }
         });
     }
     // Graph labels are type: without type among `roots`, the graph's labels are not looked up.
-    if texts.is_empty() {
-        return texts;
+    if !texts.is_empty() {
+        let labels = graph_labels(doc);
+        texts.retain(|id| labels.contains_key(id));
     }
-    let labels = graph_labels(doc);
-    texts.retain(|id| labels.contains_key(id));
+    texts.extend(lines.into_iter().filter(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Path { .. }))));
     // Nested roots (a graph and one of its labels) reach a label twice.
     texts.sort_unstable();
     texts.dedup();
@@ -769,10 +886,12 @@ pub(crate) fn labels_in(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 /// and stroke attributes ([`RUN_PAINT`]) that changed on all of a label's characters, on the kind's kept style. The
 /// frontmost label of a kind sets what that kind keeps, whatever order `ids` are in. On a graph that colors its legend
 /// labels itself ([`picks_legend_fill`]), their fill is kept only when the legend labels among `ids` end up with one
-/// fill. Called inside the same edit, so they undo together. Returns whether what a graph keeps changed.
+/// fill. The graph lines among `ids` whose rows changed keep them for every line of their kind ([`capture_line_rows`]),
+/// with or without `rows`. Called inside the same edit, so they undo together. Returns whether what a graph keeps changed.
 pub(crate) fn capture_label_changes(before: &Document, doc: &mut Document, ids: &[NodeId], rows: bool) -> bool {
+    let lines = capture_line_changes(before, doc, ids);
     if !ids.iter().any(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))) {
-        return false;
+        return lines;
     }
     let labels = graph_labels(doc);
     let mut picked: Vec<NodeId> = ids.iter().copied().filter(|id| labels.contains_key(id)).collect();
@@ -800,7 +919,7 @@ pub(crate) fn capture_label_changes(before: &Document, doc: &mut Document, ids: 
         let fill = kind.1 != Role::Legend || one_fill(kind.0);
         characters.extend(run_paint_change(was, now, fill).map(|change| (kind, change)));
     }
-    let mut changed = capture_label_rows(doc, &changed_rows);
+    let mut changed = capture_label_rows(doc, &changed_rows) | lines;
     for ((graph, role), (style, entries)) in &characters {
         changed |= store_label_style(doc, *graph, *role, &|st| {
             for i in entries {

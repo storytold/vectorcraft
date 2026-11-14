@@ -437,7 +437,7 @@ impl<'a> Plot<'a> {
         }
         for v in tick_values(lo, hi, step).into_iter().skip(1) {
             let ring: Vec<Point> = (0..ncat).map(|c| at(c, v)).collect();
-            axes.push(self.b.path(polyline(&ring, true), Paint::None, Paint::solid(Color::rgb(0.6, 0.6, 0.6)), 0.25));
+            axes.push(self.b.ring(polyline(&ring, true)));
         }
         let ax = self.b.group("Axes", axes);
         self.b.out.push(ax);
