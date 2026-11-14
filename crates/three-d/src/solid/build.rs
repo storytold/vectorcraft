@@ -697,6 +697,13 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     Ok(b.finish())
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many Rotate planes (and Extrude & Bevel solids with no depth) this thread has built, for
+    /// the tests.
+    pub(crate) static PLANES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Rotate: the flat art turned in 3D about the centre of `bounds` (which may be larger than the
 /// shape's own, so that every part of one object turns about the same point).
 pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Vec<Facet>, String> {
@@ -705,6 +712,8 @@ pub fn plane(path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Resul
 
 /// [`plane`], keeping its facet, its face before projection, or both, as `keep` asks.
 pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: View, keep: Keep) -> Result<Built, String> {
+    #[cfg(test)]
+    PLANES.with(|n| n.set(n.get() + 1));
     check_bounds(bounds)?;
     let rings = solid_rings_traced(path, rule, bounds.width().max(bounds.height()), MAX_PLANE_POINTS, CURVE_PIECES)?;
     let camera = Camera::new(view, bounds, 0.0);
