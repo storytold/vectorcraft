@@ -20,9 +20,18 @@ fn close(a: Rect, b: Rect) -> bool {
 /// A 100 × 100 frame with a 10 × 10 square in its top-left corner and one in its center, made
 /// into symbol "Panel" with 9-slice guides on, its instance selected at its natural size.
 fn panel_symbol() -> (Session, NodeId) {
+    panel_symbol_filled(None)
+}
+
+/// [`panel_symbol`] with the frame filled with `fill` when there is one.
+fn panel_symbol_filled(fill: Option<vectorcraft_color::Paint>) -> (Session, NodeId) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
     let ids = [rect(&mut s, 50.0, 50.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 10.0, 10.0), rect(&mut s, 95.0, 95.0, 10.0, 10.0)];
+    if let Some(fill) = fill {
+        let doc = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        doc.node_mut(ids[0]).unwrap().appearance = vectorcraft_doc::Appearance::basic(fill, vectorcraft_color::Paint::None, 0.0).into();
+    }
     s.select(|_, sel| sel.set(ids)).unwrap();
     let r = s.execute("symbol.new", &json!({"name": "Panel", "nineSlice": true})).unwrap();
     assert_eq!(r["nineSlice"], json!([0.25, 0.25, 0.25, 0.25]));
@@ -348,5 +357,41 @@ fn guides_outside_the_art_survive_saving_and_reopening_a_native_file() {
         assert!(back.symbol_nine_slice("Panel").is_none(), "{bad}");
         let NodeKind::SymbolInstance { symbol, xf } = &back.node(id).unwrap().kind else { panic!("an instance") };
         assert!(back.symbol_slice_map(symbol, *xf).is_none(), "{bad}: scaled as a whole");
+    }
+}
+
+/// [`panel_symbol`] with a gradient on the frame, so that the frame is drawn in a clip group for
+/// each cell, its instance resized to 200 × 150 and turned 20°.
+fn turned_gradient_panel() -> (Session, NodeId) {
+    let gradient = vectorcraft_color::Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+    let (mut s, id) = panel_symbol_filled(Some(gradient));
+    s.execute("object.setBounds", &json!({"x": 50, "y": 50, "width": 200, "height": 150, "reference": 0})).unwrap();
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    (s, id)
+}
+
+/// The bounding box angles of the objects under the art that replaced an instance, and whether
+/// that art holds a clip group.
+fn expanded_angles(s: &Session, art: NodeId) -> (Vec<f64>, bool) {
+    let (mut angles, mut clips) = (vec![], false);
+    s.doc().unwrap().doc.node(art).unwrap().walk(&mut |c| {
+        angles.push(c.bbox_angle);
+        clips |= matches!(c.kind, NodeKind::Group { clip: true, .. });
+    });
+    (angles, clips)
+}
+
+#[test]
+fn break_link_turns_the_cells_of_a_sliced_instance_with_its_box() {
+    for reset in [false, true] {
+        let (mut s, _) = turned_gradient_panel();
+        if reset {
+            assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+        }
+        let r = s.execute("symbol.breakLink", &json!({})).unwrap();
+        let (angles, clips) = expanded_angles(&s, NodeId(r["ids"][0].as_u64().unwrap()));
+        assert!(clips, "the frame is drawn in clip groups");
+        let want = if reset { 0.0 } else { 20.0 };
+        assert!(angles.iter().all(|a| (a - want).abs() < 1e-6), "reset {reset}: {angles:?}");
     }
 }
