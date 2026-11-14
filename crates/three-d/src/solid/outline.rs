@@ -123,7 +123,8 @@ fn contour(path: &mut BezPath, ring: &Ring, points: &[Point], step: &Along, budg
     while i < n {
         let end = |k: usize| points.get((k + 1) % n).copied().unwrap_or(first);
         let Some(span) = ring.spans.get(i).copied().flatten() else {
-            if i + 1 < n {
+            // A corner cut square (see `square_corners`) whose two copies did not move apart.
+            if i + 1 < n && points.get(i).copied() != Some(end(i)) {
                 path.line_to(end(i));
             }
             i += 1;
