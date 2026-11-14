@@ -4743,6 +4743,7 @@ axis	Both	Les deux
 @msg	no action set to save	aucun jeu de scripts à enregistrer
 @msg	the action set file can't be read in full	le fichier de jeu de scripts ne peut pas être lu en entier
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	« {name} » chargé : {n} étape a été ignorée|« {name} » chargé : {n} étapes ont été ignorées
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	« {name} » chargé : {n} étape a une commande inconnue et a été conservée : « {action} », étape {step}, `{command}`|« {name} » chargé : {n} étapes ont des commandes inconnues et ont été conservées ; la première : « {action} », étape {step}, `{command}`
 @msg	not an action set file	ce n’est pas un fichier de jeu de scripts
 @msg	the action set file is larger than 8 MiB	le fichier de jeu de scripts dépasse 8 Mio
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}` : la référence dépasserait {MAX_BYTES} octets
@@ -4984,6 +4985,7 @@ axis	Both	Les deux
 @msg	tool shortcuts must be a single key (optionally with Shift)	les raccourcis d’outils doivent être une seule touche (éventuellement avec Maj)
 @msg	truncated	tronqué
 @msg	unknown command `{0}`	commande inconnue `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	l’étape {step} de « {action} » exécute la commande inconnue `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	commande inconnue `{0}` ; vouliez-vous dire `{1}` ?
 @msg	unknown effect `{id}`	effet inconnu `{id}`
 @msg	unknown format	format inconnu
