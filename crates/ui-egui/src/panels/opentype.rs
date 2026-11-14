@@ -1,6 +1,6 @@
 //! OpenType panel: per-character OpenType features (ligatures, alternates, swashes, small caps,
-//! ordinals, fractions, figure style, position) for the selected text or the Type tool's selected
-//! characters.
+//! ordinals, fractions, figure style, position) for the selected text (every frame of each
+//! selected threaded story) or the Type tool's selected characters.
 
 use egui::Ui;
 use serde_json::json;
@@ -112,6 +112,22 @@ fn position_label(shown: Option<usize>) -> &'static str {
     shown.and_then(|i| POSITIONS.get(i).copied()).unwrap_or("Mixed")
 }
 
+/// The Figure menu entry for the characters the panel acts on, or `None` when they differ.
+fn shown_figure(app: &VectorcraftApp) -> Option<usize> {
+    shared(app, |s| figure(&OtFeatures::from_tags(s.features.iter().map(String::as_str))))
+}
+
+/// Whether `flag` is on for every character the panel acts on (`Some(true)`), for none of them
+/// (`Some(false)`), or only for some (`None`).
+fn shown_flag(app: &VectorcraftApp, flag: Flag) -> Option<bool> {
+    shared(app, |s| flag.get(&OtFeatures::from_tags(s.features.iter().map(String::as_str))))
+}
+
+/// The Figure menu's text for entry `shown`: Mixed when the characters differ.
+fn figure_label(shown: Option<usize>) -> &'static str {
+    shown.and_then(|i| FIGURES.get(i).copied()).unwrap_or("Mixed")
+}
+
 /// A change one of the panel's controls makes to the features of each character it acts on.
 #[derive(Clone, Copy)]
 enum Change {
@@ -161,7 +177,8 @@ fn set(app: &mut VectorcraftApp, f: OtFeatures) {
 }
 
 /// Send `tags` as the `key` param (`features` or `featureChanges`) for the Type tool's range or
-/// caret, or else for the selected type.
+/// caret, or else for every frame of the selected stories
+/// ([`super::character::selected_stories`]).
 fn run_features(app: &mut VectorcraftApp, key: &str, tags: Vec<String>) {
     // After Select All in threaded text: every frame of the story.
     let story = super::character::text_story(app).and_then(|story| story.first().copied());
@@ -169,7 +186,11 @@ fn run_features(app: &mut VectorcraftApp, key: &str, tags: Vec<String>) {
         (Some(_), Some(first)) => ("text.setRangeStyle", json!({ "id": first.0, "story": true })),
         (Some((id, a, b)), None) if b > a => ("text.setRangeStyle", json!({ "id": id.0, "start": a, "end": b })),
         (Some((id, _, _)), None) => ("text.setRangeStyle", json!({ "id": id.0 })),
-        (None, _) => ("text.setStyle", json!({})),
+        (None, _) => {
+            let mut p = json!({});
+            super::character::target_selected_stories(app, &mut p);
+            ("text.setStyle", p)
+        }
     };
     p[key] = json!(tags);
     if let Err(e) = app.run(cmd, p) {
@@ -184,10 +205,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let cur = OtFeatures::from_tags(st.features.iter().map(String::as_str));
     let mut change = None;
+    let fig = shown_figure(app);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Figure:"));
-        let fig = figure(&cur);
-        if let Some(i) = widgets::dropdown(ui, "ot-figure", FIGURES[fig], &FIGURES, 170.0) {
+        if let Some(i) = widgets::dropdown(ui, "ot-figure", figure_label(fig), &FIGURES, 170.0) {
             change = Some(Change::Figure(i));
         }
     });
@@ -199,26 +220,30 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     });
     widgets::divider(ui);
-    let mut next = cur;
-    if let Some(c) = change {
-        c.apply(&mut next);
-    }
+    // A row whose characters differ shows a dash, and a click turns the feature on for all of them.
     for (label, flag) in rows() {
-        let on = flag.get(&next);
-        if widgets::check(ui, label, on, true) {
-            change = Some(Change::Toggle(flag, !on));
+        let shown = shown_flag(app, flag);
+        if widgets::check3(ui, label, shown, true) {
+            change = Some(Change::Toggle(flag, shown != Some(true)));
         }
     }
     // The font, not the text, decides which numbered sets can be offered. Each set is an
     // independent feature, so the menu permits several at once. A font's own label wins over
-    // the numbered fallback. See the public Stylistic Sets help page.
-    let sets = offered_sets(&st);
+    // the numbered fallback. See the public Stylistic Sets help page. A set is checked when every
+    // character has it.
+    let sets: Vec<(StylisticSet, Flag, bool)> = offered_sets(&st)
+        .into_iter()
+        .map(|set| {
+            let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
+            let on = shown_flag(app, flag) == Some(true);
+            (set, flag, on)
+        })
+        .collect();
     ui.add_enabled_ui(!sets.is_empty(), |ui| {
         ui.menu_button(tl!("Stylistic Sets"), |ui| {
             widgets::menu_scroll(ui, |ui| {
-                for set in &sets {
-                    let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
-                    let on = flag.get(&next);
+                for (set, flag, on) in &sets {
+                    let (flag, on) = (*flag, *on);
                     if widgets::check_name(ui, &set_label(set), on) {
                         change = Some(Change::Toggle(flag, !on));
                     }
@@ -478,6 +503,90 @@ mod tests {
         for (id, want) in [(&a, vec!["sups"]), (&b, vec!["smcp", "sups"])] {
             app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
             assert_eq!(text_style(&app).unwrap().0.features, want);
+        }
+    }
+
+    /// The features of every run of `id`, each as its tags.
+    fn frame_features(app: &VectorcraftApp, id: u64) -> Vec<Vec<String>> {
+        match &app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => t.runs.iter().map(|r| r.style.features.clone()).collect(),
+            _ => panic!("not text"),
+        }
+    }
+
+    /// With the Selection tool a selected frame of threaded text stands for its whole story: the
+    /// Figure and Position menus show Mixed when a locked or hidden frame differs, and a choice
+    /// reaches every frame in one undo step, each keeping its other features, while other type keeps
+    /// its own. A story selected through two frames and a group is changed once.
+    #[test]
+    fn selection_tool_features_reach_every_frame_of_the_story() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog 1234.\n".repeat(12);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+        let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+        let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other 12", "size": 12})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [b]})).unwrap();
+        app.run("object.lock", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [c]})).unwrap();
+        app.run("object.hide", json!({})).unwrap();
+        app.run("text.setStyle", json!({"ids": [c], "features": ["onum", "smcp", "sups", "-liga"]})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        for id in [a, b, c] {
+            assert!(!frame_features(&app, id).is_empty(), "frame {id} holds text");
+        }
+        assert_eq!(shown_figure(&app), None, "the hidden frame's figures differ");
+        assert_eq!(figure_label(shown_figure(&app)), "Mixed");
+        assert_eq!(shown_position(&app), None, "the hidden frame's position differs");
+        let hidden = frame_features(&app, c);
+        let has = |app: &VectorcraftApp, id: u64, tag: &str| frame_features(app, id).iter().all(|f| f.iter().any(|t| t == tag));
+
+        let undo = undo_steps(&app);
+        edit(&mut app, Change::Figure(1));
+        assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+        assert_eq!(shown_figure(&app), Some(1));
+        for id in [a, b] {
+            assert!(frame_features(&app, id).iter().all(|f| *f == ["tnum"]), "frame {id}: {:?}", frame_features(&app, id));
+        }
+        assert!(
+            ["smcp", "sups", "-liga", "tnum"].iter().all(|t| has(&app, c, t))
+                && frame_features(&app, c).iter().all(|f| !f.iter().any(|t| t == "onum")),
+            "{:?}",
+            frame_features(&app, c)
+        );
+        assert!(frame_features(&app, other).iter().all(Vec::is_empty), "other type keeps its features");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(frame_features(&app, c), hidden, "undo restores the hidden frame");
+
+        // Standard Ligatures is off in the hidden frame only: its row shows a dash, and a click on
+        // it turns ligatures on in every frame.
+        let liga = rows().into_iter().find(|(l, _)| *l == "Standard Ligatures").map(|(_, f)| f);
+        let Some(liga) = liga else { panic!("no Standard Ligatures row") };
+        assert_eq!(shown_flag(&app, liga), None);
+        let ctx = egui::Context::default();
+        let draw = |app: &mut VectorcraftApp, ui: &mut Ui| show(app, ui);
+        super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], draw);
+        let texts = super::super::tests_appearance::frame_events(&ctx, &mut app, vec![], draw);
+        let at = super::super::tests_appearance::text_rect(&texts, "Standard Ligatures").center();
+        let undo = undo_steps(&app);
+        super::super::tests_appearance::click(&ctx, &mut app, at, draw);
+        assert_eq!(undo_steps(&app), undo + 1, "one undo step");
+        assert_eq!(shown_flag(&app, liga), Some(true));
+        for id in [a, b, c] {
+            assert!(frame_features(&app, id).iter().all(|f| !f.iter().any(|t| t == "-liga")), "frame {id} has ligatures");
+        }
+        assert!(has(&app, c, "smcp"), "the hidden frame keeps its other features");
+
+        // Two frames of the story and the other type in a group: each story once.
+        app.run("object.unlockAll", json!({})).unwrap();
+        app.run("select.set", json!({"ids": [a, other]})).unwrap();
+        let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [group, b]})).unwrap();
+        edit(&mut app, Change::Position(1));
+        for id in [a, b, c, other] {
+            assert!(frame_features(&app, id).iter().all(|f| f.iter().filter(|t| *t == "sups").count() == 1), "frame {id} has sups once");
         }
     }
 
