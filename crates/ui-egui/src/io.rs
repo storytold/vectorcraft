@@ -465,7 +465,10 @@ mod tests {
         assert_eq!(&written.borrow()[0].1[1..4], b"PNG");
         app.run("document.exportSelection", json!({"path": "/tmp/sel2.png", "scale": 2})).unwrap();
         assert_eq!(*asked.borrow(), 1, "a path writes without the save panel");
-        assert_eq!(written.borrow().len(), 2);
+        let w = written.borrow();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0].0, "/tmp/sel.png", "the picked file");
+        assert_eq!(w[1].0, "/tmp/sel2.png", "the given path");
     }
 
     #[test]
