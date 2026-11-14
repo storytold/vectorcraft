@@ -130,11 +130,9 @@ fn reset_defaults_restores_missing_swatches_or_replaces_them() {
     assert_eq!(s.paint.fill, Paint::solid(Color::from_hex("#abcdef").unwrap()), "the default fill is unlinked too");
 }
 
-/// A fresh scratch folder for one test.
-fn temp_dir(name: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("vc-swatchlib-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    d
+/// A fresh scratch folder for one test, removed when the returned value is dropped.
+fn temp_dir(name: &str) -> vectorcraft_testkit::TempDir {
+    vectorcraft_testkit::TempDir::new(&format!("swatchlib-{name}"))
 }
 
 #[test]

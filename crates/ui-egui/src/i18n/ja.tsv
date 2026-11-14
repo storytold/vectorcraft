@@ -182,6 +182,8 @@ digits	Malayalam	マラヤーラム数字
 	Blend Vertically	上下にブレンド
 	Convert to CMYK	CMYK に変換
 	Convert to Grayscale	グレースケールに変換
+	Convert to Indexed Color	インデックスカラーに変換
+	Convert to Indexed Color…	インデックスカラーに変換…
 	Convert to RGB	RGB に変換
 	Invert Colors	カラー反転
 	Overprint Black…	オーバープリントブラック…
@@ -1992,6 +1994,8 @@ antiAlias	Sharp	シャープ
 	Objects on Path Tool	パス上のオブジェクトツール
 	Attach Objects on Path	パス上のオブジェクトをアタッチ
 	Expand Objects on Path	パス上のオブジェクトを拡張
+	Detach	切り離し
+	Detach Object from Path	オブジェクトをパスから切り離し
 	Release Live Paint	ライブペイントを解除
 	Release Repeat	リピートを解除
 	Release Slice	スライスを解除
@@ -2435,6 +2439,29 @@ antiAlias	Sharp	シャープ
 	Bristle Brush	剛毛ブラシ
 	Pattern Brush	パターンブラシ
 	missing from the Brushes panel	ブラシパネルにありません
+	built in	内蔵
+	embedding not allowed	埋め込み不可
+	embedding for editing	編集用に埋め込み可
+	embedding for preview and print	プレビューと印刷用に埋め込み可
+	embedding allowed	埋め込み可
+	{file}; {embedding}	{file}、{embedding}
+	substituted: shown in {family} {style} ({detail})	代替: {family} {style} で表示 ({detail})
+	missing: shown in {family} {style}	見つかりません: {family} {style} で表示
+	missing	見つかりません
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}、{instances}
+	{kind}, {rows} × {cols}	{kind}、{rows} × {cols}
+	{grid}, {instances}	{grid}、{instances}
+	Linear gradient	線形グラデーション
+	Radial gradient	円形グラデーション
+	Conic gradient	円錐グラデーション
+	Diamond gradient	ひし形グラデーション
+	Freeform gradient	フリーグラデーション
+@plural	{n} instance|{n} instances	インスタンス {n} 個
+@plural	{n} row|{n} rows	{n} 行
+@plural	{n} column|{n} columns	{n} 列
 	Select art to make a scatter, art or pattern brush.	散布ブラシ、アートブラシ、パターンブラシを作成するには、アートを選択します。
 	Brush Art	ブラシのアート
 	New Calligraphic Brush	新規絵筆ブラシ
@@ -2789,6 +2816,11 @@ mark-style	Japanese	日本式
 	Rating:	評価:
 	Real World:	実寸:
 	Real-time Drawing and Editing	リアルタイム描画および編集
+	Use Monitor Profile for Canvas	キャンバスにモニタープロファイルを使用
+	The canvas is drawn in sRGB.	キャンバスは sRGB で描画されます。
+	Canvas display profile:	キャンバスのディスプレイプロファイル:
+	The system matches the window to the display's colors.	システムがウィンドウをディスプレイのカラーに合わせます。
+	No usable display profile was found: the canvas is drawn in sRGB.	使用できるディスプレイプロファイルが見つかりません。キャンバスは sRGB で描画されます。
 	Rearrange All Artboards	すべてのアートボードを再配置
 	Rearrange	再配置
 	Select All Artboards	すべてのアートボードを選択
@@ -2960,6 +2992,9 @@ mark-style	Japanese	日本式
 	Reset the rows to the artwork's colors	行をアートワークのカラーにリセット
 	Color Theme Picker	カラーテーマピッカー
 	Click or drag across the art to pick its colors; Shift adds more	アートワークをクリックまたはドラッグしてカラーを取得します。Shift キーで追加します
+	Prominent Colors	主要カラー
+	Save All Colors	すべてのカラーを保存
+	Save Prominent Colors	主要カラーを保存
 	Reset to Default	初期設定に戻す
 	Reset to White, Black	白、黒にリセット
 	Reset {name}	{name}をリセット
@@ -3284,6 +3319,20 @@ mark-style	Japanese	日本式
 	Spot Color Objects	特色を使用したオブジェクト
 	Pattern Objects	パターンを使用したオブジェクト
 	Gradient Objects	グラデーションを使用したオブジェクト
+	Font Details	フォントの詳細
+	Linked Images	リンク画像
+	Embedded Images	埋め込み画像
+	Compound Paths	複合パス
+	Text Objects	テキストオブジェクト
+	Placed Documents	配置ドキュメント
+	Symbol Instances	シンボルインスタンス
+	Gradient Meshes	グラデーションメッシュ
+	Blends	ブレンド
+	Envelopes	エンベロープ
+	Intertwine Groups	織り交ぜグループ
+	Opacity Masks	不透明マスク
+	Objects with Effects	効果を使用したオブジェクト
+	Pattern Swatches	パターンスウォッチ
 	Spot Colors	特色
 	Spot Colors…	特色…
 	Spread:	拡散:
@@ -3364,6 +3413,8 @@ mark-style	Japanese	日本式
 	Rename Library Group	ライブラリグループ名を変更
 	Delete Library Group	ライブラリグループを削除
 	Move Library Item to Group	ライブラリ項目をグループに移動
+	Rename Library Item	ライブラリ項目名を変更
+	Add to Character Styles	文字スタイルに追加
 	Library	ライブラリ
 	Rename Library	ライブラリ名を変更
 	Show Library	ライブラリを表示
@@ -3990,6 +4041,11 @@ file-filter	Templates	テンプレート
 	Tate-chu-yoko	縦中横
 	Tate-chu-yoko Settings…	縦中横の設定…
 	Tate-chu-yoko Settings	縦中横の設定
+	Warichu	割注
+	Warichu Settings…	割注の設定…
+	Warichu Settings	割注の設定
+	Lines:	行数:
+	Line Gap:	行間:
 	Composite Fonts…	合成フォント…
 	Composite Fonts	合成フォント
 	Export Composite Fonts	合成フォントを書き出し
@@ -4143,6 +4199,10 @@ axis	Both	両方
 	Dock Panel	パネルをドッキング
 	Dock to Top	上部にドッキング
 	Dock to Bottom	下部にドッキング
+	Dock to Left	左側にドッキング
+	Dock to Right	右側にドッキング
+	Dock Toolbar	ツールバーをドッキング
+	Float Toolbar	ツールバーをフローティング
 	Control Bar Options	コントロールバーオプション
 	Tool Options	ツールオプション
 	Object Options	オブジェクトオプション
@@ -4491,6 +4551,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the layer to flatten into is hidden	統合先のレイヤーが非表示になっています
 @msg	there are no objects to release	レイヤーに分配するオブジェクトがありません
 @msg	no library `{id}`	ライブラリ `{id}` が見つかりません
+@msg	the library has another item of that kind named `{name}`	ライブラリには同じ種類の項目 `{name}` がすでにあります
 @msg	{path}: not a file	{path}: ファイルではありません
 @msg	{path}: {e}	{path}: {e}
 @msg	can't write .{ext} images	.{ext} 画像は書き出せません
@@ -4534,6 +4595,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	direct-select anchor points to cut at (not the end points of open paths)	ダイレクト選択ツールで、カットする位置のアンカーポイントを選択してください (オープンパスの端点を除く)
 @msg	select paths or anchor points	パスまたはアンカーポイントを選択してください
 @msg	Divide Objects Below: select a path	背面のオブジェクトで型抜き: パスを選択してください
+@msg	select a path	パスを選択してください
 @msg	Divide Objects Below: select exactly one path	背面のオブジェクトで型抜き: パスを 1 つだけ選択してください
 @msg	Offset Path: select paths	パスのオフセット: パスを選択してください
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	パスのオフセット: オフセットすると選択したパスが何も残りません (内側へのオフセットがシェイプより大きい)
@@ -4553,6 +4615,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	select a repeat	リピートを選択してください
 @msg	select an Intertwine group	織り交ぜグループを選択してください
 @msg	select an Objects on Path group	パス上のオブジェクトグループを選択してください
+@msg	choose the object to detach with its Select/Move widget	切り離すオブジェクトを選択/移動ウィジェットで選んでください
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	複合パス、ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のパスにはオブジェクトをアタッチできません
 @msg	a clipping path can't take objects	クリッピングパスにはオブジェクトをアタッチできません
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	ブレンド、エンベロープ、リピートまたは織り交ぜグループ内のオブジェクトはパスにアタッチできません
@@ -4563,6 +4626,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	Web 版ではファイルパスからはインストールできないため、モジュールは `dataBase64` で渡してください
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` は `auto` か、`en` や `zh-hant` などの言語コードにしてください
 @msg	`{key}` must be a #rrggbb color	`{key}` は #rrggbb 形式のカラーにしてください
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` は #rrggbb 形式のカラーかレイヤーカラー名にしてください
+@msg	unknown Live Paint option `{key}`	不明なライブペイントオプション `{key}`
+@msg	unknown Shape Builder option `{key}`	不明なシェイプ形成ツールオプション `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a string	`{key}` は文字列にしてください
 @msg	`{key}` must be a profile name or null	`{key}` はプロファイル名または null にしてください
@@ -4673,6 +4739,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	レイヤーを保持するため、{_1} × {_2} ピクセルの埋め込み画像を {_3} × {_4} ピクセルに縮小しました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft の上限を超えるリンクされたテキストエリアは省略されました
+@msg	the Line Breaking setting of legacy type was left out	旧形式のテキストの行分割の設定は読み込まれませんでした
+@msg	the Japanese layout rules of legacy type were left out	旧形式のテキストの日本語組版ルールは読み込まれませんでした
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	テキストオブジェクト内で書字方向が変わる文字は、最初の文字の方向で開きます
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	リンクされたエリア、テキストの回り込み、複合パス内でマスクとして使われた文字はクリップしません
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ファイルにプレビューのないリンク画像は、元のファイルが見つかるまでプレースホルダーで表示されます：リンクパネルで再リンクしてください
@@ -4770,6 +4838,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	cannot read PDF: {0}	PDF を読み込めません: {0}
 @msg	invalid PDF setting: {0}	PDF の設定が正しくありません: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: UserUnit {unit} で書き出されるため、UserUnit を無視するアプリではその倍率だけ小さく表示されます
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: UserUnit {unit} で書き出されるため、UserUnit を無視するアプリではその倍率だけ小さく表示されます: 「200 in より長いページを実寸のポイントで書き出す」をオンにしてください
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: {label} のページは UserUnit なしでポイント単位で書き出され、上限を守るアプリではページが 200 in で切り取られます
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 には、14,400 pt (200 in) を超えるページがサイズを保つために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 には、14,400 pt (200 in) を超えるページが PDF/A-2 のページ上限 14,400 単位に収まるために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
@@ -5155,19 +5224,28 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no user library folder here	この環境にはユーザーライブラリフォルダーがありません
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} を配置できませんでした: ドロップ先のドキュメントは閉じられています
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} を配置できませんでした: 配置先のドキュメントは閉じられています
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} を配置できませんでした: ドロップ先のドキュメントは保存済みの状態に戻されました
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} を配置できませんでした: 配置先のドキュメントは保存済みの状態に戻されました
+@msg	Couldn't paste: the document it was pasted in was reverted	貼り付けられませんでした: 貼り付け先のドキュメントは保存済みの状態に戻されました
 @msg	no files to place	配置するファイルがありません
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` は VectorCraft ドキュメント、PDF、PDF 互換の .ai ファイルのいずれでもありません
 @msg	paths: give at least one file	paths: ファイルを 1 つ以上指定してください
 @msg	replace: the object to replace was changed or deleted	replace: 置き換えるオブジェクトは変更または削除されています
+@msg	the document it was prepared for is no longer active	準備したときのドキュメントがもうアクティブではありません
 @msg	Couldn't place {name}: {e}	{name} を配置できませんでした: {e}
 @msg	no print service	プリントサービスがありません
 @msg	the print job has no data	プリントジョブにデータがありません
 @msg	there are no printer settings to open here	この環境では開けるプリンター設定がありません
 @msg	Couldn't save recovery data: {e}	復帰用データを保存できませんでした: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title} の復帰用データを保存できませんでした: {e}。コピーの保存先は {folder} (デフォルトの復帰用フォルダー) です。別のフォルダーを使うには、「環境設定 → ファイル管理 → データ復帰 → フォルダー」 (recoveryFolder) を設定してください
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title} の復帰用データを保存できませんでした: {e}。コピーの保存先は {folder} (環境設定で指定したフォルダー) です。別のフォルダーを使うには、「環境設定 → ファイル管理 → データ復帰 → フォルダー」 (recoveryFolder) を設定してください
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	復帰用データを保存できませんでした: {e}。コピーの保存先は {folder} (デフォルトの復帰用フォルダー) です。別のフォルダーを使うには、「環境設定 → ファイル管理 → データ復帰 → フォルダー」 (recoveryFolder) を設定してください
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	復帰用データを保存できませんでした: {e}。コピーの保存先は {folder} (環境設定で指定したフォルダー) です。別のフォルダーを使うには、「環境設定 → ファイル管理 → データ復帰 → フォルダー」 (recoveryFolder) を設定してください
 @msg	Saved recovery data for {title}	{title} の復帰用データを保存しました
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	復帰用データのドキュメントを {n} 件破棄しました
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	復帰用データからドキュメントを {n} 件復元しました: 残すには保存してください
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	ドキュメントを開きました (注意 {n} 件): {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。ドキュメントを開きました (注意 {n} 件): {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} を保存しましたが、注意事項が {n} 件あります: {first}
 @msg	Saving recovery data for {_1}	{_1} の復帰用データを保存中
 @msg	This shortcut file is in a form VectorCraft can't read.	このショートカットファイルは VectorCraft で読み込めない形式です。
@@ -5222,6 +5300,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	every numbered name for it is taken in the Fonts folder	Fonts フォルダーでは、このファイルの番号付きの名前がすべて使われています
 @msg	every numbered name for {name} is taken in the document's folder	ドキュメントのフォルダーでは、{name} の番号付きの名前がすべて使われています
 @msg	No linked files to look for	検索するリンクファイルがありません
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	このリンクはシンボル、グラフデザイン、パターン、または不透明マスクの中にあり、カンバス上に位置がありません
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` はステップ参照 {r} です。ステップ参照を解決できるのは `run` と `command_batch` だけです
 @msg	`ids` must be an array of object ids, not {v}	`ids` はオブジェクト ID の配列にしてください ({v} は使えません)
 @msg	`colors` must be an array of colors, not {v}	`colors` は色の配列にしてください ({v} は使えません)
@@ -5594,7 +5673,10 @@ lighting	Light	ライト
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` の face には front または back を指定してください
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` の {key} は {lo} から {hi} までの数値にしてください
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` は配列にしてください
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	グラフィックは平らな面にマッピングされます。オブジェクトの種類に押し出しまたは平面を使用してください
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます
+	Graphics map onto the Plane, Extrude and Revolve object types.	グラフィックはオブジェクトの種類が平面、押し出し、回転体のときにマッピングされます。
+@msg	Revolve maps graphics onto its side: map them onto the front	回転体はグラフィックを側面にマッピングします。前面にマッピングしてください
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	グラフィックがこのサーフェスには複雑すぎます。シンボルのアートを単純化するか、分割数を減らしてください
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` に指定できるグラフィックは {MAX_GRAPHICS} 個までです
 @msg	A plane has one face: map its graphics onto the front	平面には面が 1 つしかありません。グラフィックは前面にマッピングしてください
 @msg	The graphics are too complex: simplify the symbols' art	グラフィックが複雑すぎます。シンボルのアートを単純化してください
@@ -5786,6 +5868,7 @@ lighting	Light	ライト
 @msg	no such color	指定されたカラーが見つかりません
 @msg	{_1} cannot be used on Windows	{_1} は Windows では使用できません
 @msg	more than one action is named “{_1}”	「{_1}」という名前のアクションが複数あります
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	アクション「{_1}」がフォルダーの環境設定 {_2} を設定しています。セットを保存するにはそのステップを削除してください
 @msg	no symbol named `{n}`	`{n}` という名前のシンボルはありません
 	Smudge Stick…	スマッジスティック…
 	Smudge Stick	スマッジスティック
@@ -5971,7 +6054,9 @@ axis	Y Axis	Y 軸
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` はグラデーションの塗りに適用されます (paint.setFill)
 @msg	`dither` must be true or false	`dither` には true または false を指定してください
 	Perceptual	知覚的
-@msg	`method` must be classic or perceptual	`method` には classic または perceptual を指定してください
+	Hue Clockwise	時計回りの色相
+	Hue Counterclockwise	反時計回りの色相
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` には classic、perceptual、hue-clockwise または hue-counterclockwise を指定してください
 @msg	`spread` must be pad, repeat or reflect	`spread` には pad、repeat または reflect を指定してください
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` には 1 から {MAX_REPEATS} までの整数を指定してください
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` は線形、円形、円錐およびひし形グラデーションに適用されます
@@ -6214,12 +6299,14 @@ axis	Y Axis	Y 軸
 	Continue	続行
 	Continue Action	アクションを続行
 	Delete Action Step	アクションステップを削除
+	Move Action Step	アクションステップを移動
 	Press Play Current Selection in the Actions panel to go on.	続行するには、アクションパネルの「選択項目を再生」を押します。
 	Stop: {message}	停止: {message}
 @msg	no action is waiting at a stop	停止で待機中のアクションはありません
 @msg	message must be text	message にはテキストを指定してください
 @msg	allowContinue must be true or false	allowContinue には true または false を指定してください
 @msg	Batch cannot play an action with a stop	バッチでは停止を含むアクションを再生できません
+@msg	Batch cannot play an action with a View menu step	バッチでは表示メニューのステップを含むアクションを再生できません
 	Insert Menu Item…	メニュー項目を挿入…
 	Insert Menu Item	メニュー項目を挿入
 	Insert Select Path	パスの選択を挿入
@@ -6384,6 +6471,22 @@ axis	Y Axis	Y 軸
 	Graphite Pencil	黒鉛鉛筆
 	Wax Crayon	ワックスクレヨン
 	Charcoal Dust	木炭の粉
+	Notched Ribbon	ノッチリボン
+	Double Line	二重線
+	Wave	波
+	Teardrop	しずく
+	Striped Ribbon	ストライプリボン
+	Fine Nib	細いペン先
+	Broad Nib	太いペン先
+	Chisel	平ノミ
+	Round Pen	丸ペン
+	Pressure Pen	筆圧ペン
+	Beads	ビーズ
+	Dash Dot	一点鎖線
+	Scallops	スカラップ
+	Stars	星
+	Triangles	三角形
+	Sparkles	きらめき
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)
@@ -6403,6 +6506,13 @@ axis	Y Axis	Y 軸
 	Area Text	エリア内文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	文字を字形の境界で測定
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	ピクセルにスナップのオプション
+	Pixel Snapping Options…	ピクセルにスナップのオプション…
+	Snap to Pixel While Drawing	描画時にピクセルにスナップ
+	Snap to Pixel While Moving	移動時にピクセルにスナップ
+	Snap to Pixel While Scaling	拡大・縮小時にピクセルにスナップ
+	These options take effect when View › Snap to Pixel is on.	これらのオプションは、表示 › ピクセルにスナップがオンのときに有効になります。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	グリフにスナップのオプションを表示
 	Hide Snap to Glyph Options	グリフにスナップのオプションを隠す
@@ -6488,6 +6598,8 @@ anchor	Points:	ポイント:
 	Anchor Inspector	アンカーポイントインスペクター
 	Add Points at Crossings	交差点にポイントを追加
 	Split at Crossings	交差点で分割
+	Trim at Crossings Tool	交差点でトリムツール
+	Trim at Crossings	交差点でトリム
 	Extend Path	パスを延長
 	Measure & Inspect	計測・検査
 	Set Anchor	アンカーポイントを設定
@@ -7034,6 +7146,19 @@ breakText	Glyphs	字形
 	Show where this tool is	このツールの場所を表示
 @msg	missing `tutorial` (see learn.list)	`tutorial` が指定されていません (learn.list を参照)
 @msg	unknown tutorial `{id}` (see learn.list)	`{id}` は不明なチュートリアルです (learn.list を参照)
+	View more	詳細を見る
+	Finish tutorial	チュートリアルを完了
+	Next Up	次へ
+	You finished the last tutorial in this skill.	このスキルの最後のチュートリアルを完了しました。
+	Back to skills	スキルに戻る
+	Open Tutorial Sample	チュートリアルのサンプルを開く
+	Finish Tutorial	チュートリアルを完了
+	Next Tutorial	次のチュートリアル
+	Back to Skills	スキルに戻る
+@msg	tutorial `{id}` has no practice sample	チュートリアル `{id}` には練習用サンプルがありません
+@msg	open the practice sample of `{id}` first (see learn.openSample)	先に `{id}` の練習用サンプルを開いてください (learn.openSample を参照)
+@msg	finish `{id}` first (see learn.finish)	先に `{id}` を完了してください (learn.finish を参照)
+@msg	`{id}` is the last tutorial in its skill	`{id}` はこのスキルの最後のチュートリアルです
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	保留中の効果を更新
@@ -7057,3 +7182,9 @@ breakText	Glyphs	字形
 	Margin	マージン
 	Box	枠
 	Swatch	スウォッチ
+	Banner Hems and Grommets…	バナーの折り返しとハトメ…
+	Banner Hems and Grommets	バナーの折り返しとハトメ
+	Hem	折り返し
+	Grommets	ハトメ
+	Grommet Inset	端からハトメまでの距離
+	Diameter	直径

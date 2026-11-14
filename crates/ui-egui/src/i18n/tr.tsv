@@ -608,6 +608,8 @@ font-technology	Variable	Değişken
 	Convert to Artboards	Çalışma Yüzeylerine Dönüştür
 	Convert to CMYK	CMYK'ye dönüştür
 	Convert to Grayscale	Gri Tonlamaya Dönüştür
+	Convert to Indexed Color	Dizinlenmiş Renge Dönüştür
+	Convert to Indexed Color…	Dizinlenmiş Renge Dönüştür…
 	Convert To Outlines	Anahatlara Dönüştür
 	Convert To Point Type	Nokta Türüne Dönüştür
 	Convert to RGB	RGB'ye dönüştür
@@ -2507,6 +2509,11 @@ digits	Malayalam	Malayalam
 	Rating:	Değerlendirme:
 	Real World:	Gerçek Dünya:
 	Real-time Drawing and Editing	Gerçek Zamanlı Çizim ve Düzenleme
+	Use Monitor Profile for Canvas	Tuval için Monitör Profilini Kullan
+	The canvas is drawn in sRGB.	Tuval sRGB olarak çizilir.
+	Canvas display profile:	Tuvalin ekran profili:
+	The system matches the window to the display's colors.	Sistem pencereyi ekranın renklerine uyarlar.
+	No usable display profile was found: the canvas is drawn in sRGB.	Kullanılabilir ekran profili bulunamadı: tuval sRGB olarak çizilir.
 	Rearrange All Artboards	Tüm Çalışma Yüzeylerini Yeniden Düzenleme
 	Rearrange	Yeniden Düzenle
 	Select All Artboards	Tüm Çalışma Yüzeylerini Seç
@@ -2716,6 +2723,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Satırları resmin renklerine göre sıfırlayın
 	Color Theme Picker	Renk Teması Seçici
 	Click or drag across the art to pick its colors; Shift adds more	Renklerini almak için resme tıklayın veya üzerinde sürükleyin; Shift daha fazlasını ekler
+	Prominent Colors	Belirgin Renkler
+	Save All Colors	Tüm Renkleri Kaydet
+	Save Prominent Colors	Belirgin Renkleri Kaydet
 	Reset to Default	Varsayılana Sıfırla
 	Reset to White, Black	Beyaz, Siyah'a Sıfırla
 	Reset with Mesh	Mesh ile Sıfırla
@@ -3283,6 +3293,19 @@ digits	Malayalam	Malayalam
 	Spot Color Objects	Spot Renkli Nesneler
 	Pattern Objects	Desenli Nesneler
 	Gradient Objects	Degradeli Nesneler
+	Font Details	Yazı Tipi Ayrıntıları
+	Linked Images	Bağlantılı Görseller
+	Embedded Images	Gömülü Görseller
+	Compound Paths	Bileşik Yollar
+	Text Objects	Metin Nesneleri
+	Placed Documents	Yerleştirilen Belgeler
+	Symbol Instances	Sembol Örnekleri
+	Gradient Meshes	Degrade Örgüler
+	Blends	Karışımlar
+	Envelopes	Zarflar
+	Intertwine Groups	İç İçe Geçme Grupları
+	Opacity Masks	Opaklık Maskeleri
+	Objects with Effects	Efektli Nesneler
 	Spot Colors	Nokta Renkleri
 	Spot Colors…	Nokta Renkleri…
 	Spread:	Yayılma:
@@ -3394,6 +3417,8 @@ digits	Malayalam	Malayalam
 	Rename Library Group	Kitaplık Grubunu Yeniden Adlandır
 	Delete Library Group	Kütüphane Grubunu Sil
 	Move Library Item to Group	Kitaplık Öğesini Gruba Taşı
+	Rename Library Item	Kitaplık Öğesini Yeniden Adlandır
+	Add to Character Styles	Karakter Stillerine Ekle
 	Library	Kütüphane
 	Rename Library	Kitaplığı Yeniden Adlandır
 	Show Library	Kitaplığı Göster
@@ -3427,6 +3452,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko Ayarları…
 	Tate-chu-yoko Settings	Tate-chu-yoko Ayarları
+	Warichu	Warichu
+	Warichu Settings…	Warichu Ayarları…
+	Warichu Settings	Warichu Ayarları
+	Lines:	Satırlar:
+	Line Gap:	Satır Aralığı:
 	Composite Fonts…	Bileşik Fontlar…
 	Composite Fonts	Bileşik Fontlar
 	Export Composite Fonts	Bileşik Fontları Dışa Aktar
@@ -3950,6 +3980,10 @@ axis	Both	Her İkisi
 	Dock Panel	Bağlantı İstasyonu Paneli
 	Dock to Top	Üste yerleştir
 	Dock to Bottom	Alta yerleştir
+	Dock to Left	Sola yerleştir
+	Dock to Right	Sağa yerleştir
+	Dock Toolbar	Araç çubuğunu yerleştir
+	Float Toolbar	Araç Çubuğunu Yüzer Yap
 	Control Bar Options	Kontrol Çubuğu Seçenekleri
 	Tool Options	Araç Seçenekleri
 	Object Options	Nesne Seçenekleri
@@ -3962,6 +3996,7 @@ axis	Both	Her İkisi
 	Drag to the window's left or right edge to dock	Sabitlemek için pencerenin sol veya sağ kenarına sürükleyin
 	Float Tool Group	Araç Grubunu Yüzer Yap
 @msg	no library `{id}`	`{id}` kütüphanesi yok
+@msg	the library has another item of that kind named `{name}`	kitaplıkta zaten bu türden `{name}` adlı başka bir öğe var
 @msg	select some type first	önce bir tür seçin
 @msg	kerning must be a number, "auto", or "optical"	kerning bir sayı, “auto” veya “optical” olmalıdır
 @msg	the selection has no gradient fill	seçimin degrade dolgusu yok
@@ -4106,8 +4141,15 @@ axis	Both	Her İkisi
 @msg	Couldn't open {name}: {e}	{name} açılamadı: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} yerleştirilemedi: bırakıldığı belge kapatıldı
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} yerleştirilemedi: yerleştirildiği belge kapatıldı
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} yerleştirilemedi: bırakıldığı belge geri döndürüldü
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} yerleştirilemedi: yerleştirildiği belge geri döndürüldü
+@msg	Couldn't paste: the document it was pasted in was reverted	Yapıştırılamadı: yapıştırıldığı belge geri döndürüldü
 @msg	Couldn't read {name}: {e}	{name} okunamadı: {e}
 @msg	Couldn't save recovery data: {e}	Kurtarma verileri kaydedilemedi: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title} için kurtarma verileri kaydedilemedi: {e}. Kopyalar varsayılan kurtarma klasörüne, {folder} konumuna kaydedilir; başka bir klasör kullanmak için Tercihler → Dosya İşleme → Veri Kurtarma → Klasör (recoveryFolder) ayarını yapın
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title} için kurtarma verileri kaydedilemedi: {e}. Kopyalar Tercihler'de ayarlanan klasöre, {folder} konumuna kaydedilir; başka bir klasör kullanmak için Tercihler → Dosya İşleme → Veri Kurtarma → Klasör (recoveryFolder) ayarını yapın
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kurtarma verileri kaydedilemedi: {e}. Kopyalar varsayılan kurtarma klasörüne, {folder} konumuna kaydedilir; başka bir klasör kullanmak için Tercihler → Dosya İşleme → Veri Kurtarma → Klasör (recoveryFolder) ayarını yapın
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kurtarma verileri kaydedilemedi: {e}. Kopyalar Tercihler'de ayarlanan klasöre, {folder} konumuna kaydedilir; başka bir klasör kullanmak için Tercihler → Dosya İşleme → Veri Kurtarma → Klasör (recoveryFolder) ayarını yapın
 @msg	Create Outlines: select text objects	Anahatlar Oluştur: metin nesnelerini seçin
 @msg	Create from Guides: the document has no artboard	Kılavuzlardan Oluştur: belgede çalışma yüzeyi yok
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Kılavuzlardan Oluşturun: kılavuzlar {MAX_PIECES} dilimlerinden daha fazlasını oluşturur
@@ -4117,6 +4159,7 @@ axis	Both	Her İkisi
 @msg	Plug-ins can't be loaded from {path}: {e}	Eklentiler {path} konumundan yüklenemiyor: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	kesilecek bağlantı noktalarını doğrudan seçin (açık yolların bitiş noktalarını değil)
 @msg	Divide Objects Below: select a path	Aşağıdaki Nesneleri Böl: bir yol seçin
+@msg	select a path	bir yol seçin
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
 @msg	Downloaded {what}	{what} indirildi
 @msg	Expand Appearance: the selection has a basic appearance	Görünümü Genişlet: seçimin temel bir görünümü vardır
@@ -4323,6 +4366,7 @@ axis	Both	Her İkisi
 @msg	internal error: {msg} (please report this bug)	dahili hata: {msg} (lütfen bu hatayı bildirin)
 @msg	invalid PDF setting: {0}	geçersiz PDF ayarı: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {unit} UserUnit değeriyle yazılır, bu yüzden UserUnit'i yok sayan uygulamalar onu o kadar kat küçük gösterir
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {unit} UserUnit değeriyle yazılır, bu yüzden UserUnit'i yok sayan uygulamalar onu o kadar kat küçük gösterir: "200 in'den uzun sayfaları tam boyutta, punto olarak yaz" seçeneğini açın
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	{n} çalışma yüzeyinin sayfası {size}, PDF'nin 14.400 pt (200 in) sayfa sınırından uzun: {label} sayfaları UserUnit olmadan, punto cinsinden yazılır ve sınıra uyan uygulamalar sayfayı 200 in'de keser
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5'te, 14.400 pt (200 in) uzunluğunu aşan bir sayfanın boyutunu koruması için gereken UserUnit yoktur: dosya PDF 1.6 olarak yazılır
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4'te, 14.400 pt (200 in) uzunluğunu aşan bir sayfanın PDF/A-2'nin 14.400 birimlik sayfa sınırı içinde kalması için gereken UserUnit yoktur: dosya PDF 1.6 olarak yazılır
@@ -4499,6 +4543,7 @@ axis	Both	Her İkisi
 @msg	paths contain invalid coordinates	yollar geçersiz koordinatlar içeriyor
 @msg	paths: give at least one file	yollar: en az bir dosya verin
 @msg	replace: the object to replace was changed or deleted	değiştir: değiştirilecek nesne değiştirildi veya silindi
+@msg	the document it was prepared for is no longer active	hazırlandığı belge artık etkin değil
 @msg	pattern missing	desen eksik
 @msg	patterns nested too deeply are filled with mid-grey	çok derin iç içe geçmiş desenler orta gri renkle dolu
 @msg	percent must be above 0 and at most 6400, not {p}	percent 0'ın üzerinde ve en fazla 6400 olmalıdır, {p} değil
@@ -4733,6 +4778,7 @@ axis	Both	Her İkisi
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Kurtarılan {n} belge atıldı
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Kurtarılan {n} belge geri yüklendi: saklamak için kaydedin
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} notla açıldı: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. {n} notla açıldı: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path}, {n} notla kaydedildi: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} görsel gömüldü; {missing} eksik: önce onları yeniden bağlayın
 @msgplural	Embedded {n} image|Embedded {n} images	{n} görsel gömüldü
@@ -4812,6 +4858,8 @@ axis	Both	Her İkisi
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	katmanları korumak için {_1} × {_2} piksellik gömülü bir resim {_3} × {_4} piksele küçültüldü
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft sınırlarını aşan bağlantılı metin alanları dışarıda bırakıldı
+@msg	the Line Breaking setting of legacy type was left out	eski biçimdeki metnin satır kesme ayarı atlandı
+@msg	the Japanese layout rules of legacy type were left out	eski biçimdeki metnin Japonca dizgi kuralları atlandı
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	bir metin nesnesi içinde yazı yönünü değiştiren metin, ilk karakterinin yönünde açılır
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	bağlantılı alanlarda, kaydırılan metinde veya bileşik yolda maske olarak kullanılan metin kırpmaz
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	dosyada önizlemesi olmayan bağlantılı resimler, dosyaları bulunana kadar bir yer tutucu gösterir: bunları Bağlantılar panelinde yeniden bağlayın
@@ -4837,6 +4885,7 @@ axis	Both	Her İkisi
 @msg	every numbered name for it is taken in the Fonts folder	bunun için numaralandırılmış her ad Yazı Tipleri klasöründe alınır
 @msg	every numbered name for {name} is taken in the document's folder	{name} için numaralandırılmış her ad belgenin klasöründe alınır
 @msg	No linked files to look for	Aranacak bağlantılı dosya yok
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Bağlantı bir sembolün, grafik tasarımının, desenin veya opaklık maskesinin içinde ve tuvalde yeri yok
 	Services	Hizmetler
 	Hide VectorCraft	VectorCraft'ı gizle
 	Zoom	Yakınlaştır
@@ -5201,7 +5250,9 @@ lighting	Light	Işık
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` face değeri front veya back olmalıdır
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` {key} değeri {lo} ile {hi} arasında bir sayı olmalıdır
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` bir dizi olmalıdır
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafikler düz yüzlere eşlenir: Ekstrüzyon veya Düzlem nesne türünü kullan
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafikler Düzlem, Ekstrüzyon ve Döndür nesne türlerine eşlenir
+@msg	Revolve maps graphics onto its side: map them onto the front	Döndür grafikleri yan yüzeyine eşler: onları ön yüze eşle
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikler bu yüzey için çok karmaşık: sembollerin resmini basitleştir veya Segmentler değerini azalt
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` en fazla {MAX_GRAPHICS} grafik alır
 @msg	A plane has one face: map its graphics onto the front	Bir düzlemin tek yüzü vardır: grafiklerini ön yüze eşle
 @msg	The graphics are too complex: simplify the symbols' art	Grafikler çok karmaşık: sembollerin resmini basitleştir
@@ -5443,6 +5494,8 @@ lighting	Light	Işık
 	Pen	Kalem
 	Pentagram	Pentagram
 	Perceptual	algısal
+	Hue Clockwise	Renk tonu saat yönünde
+	Hue Counterclockwise	Renk tonu saat yönünün tersine
 	Phone 360×800	Telefon 360×800
 	Phone 375×667	Telefon 375×667
 	Phone 375×812	Telefon 375×812
@@ -5775,6 +5828,7 @@ theme	Appearance	Görünüm
 @msg	no such color	öyle bir renk yok
 @msg	{_1} cannot be used on Windows	{_1} Windows'ta kullanılamaz
 @msg	more than one action is named “{_1}”	birden fazla eylemin adı “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	“{_1}” eylemi {_2} klasör tercihini ayarlıyor; seti kaydetmek için o adımı silin
 @msg	no symbol named `{n}`	`{n}` adında bir sembol yok
 	Artboard Options: edit with the Artboard tool	Çalışma Yüzeyi Seçenekleri: Çalışma Yüzeyi aracıyla düzenleme
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	bu henüz açılamayan bir PostScript dosyasıdır (eski bir formatta kaydedilmiş veya PDF uyumluluğu olmayan bir .ai veya bir EPS dosyası): PDF, PDF uyumlu .ai veya SVG olarak kaydedin
@@ -5916,6 +5970,9 @@ theme	Appearance	Görünüm
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Kaydet {_1} yazar, {_2} değil: yazmak için file.saveAsTemplate kullanın
 @msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` bir kütüphane paneli değil (bkz. window.swatchLibrary)
 @msg	`{key}` must be a #rrggbb color	`{key}` bir #rrggbb rengi olmalıdır
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` bir #rrggbb rengi ya da katman rengi adı olmalıdır
+@msg	unknown Live Paint option `{key}`	bilinmeyen Canlı Boyama seçeneği `{key}`
+@msg	unknown Shape Builder option `{key}`	bilinmeyen Şekil Oluşturucu seçeneği `{key}`
 @msg	a key object sits on that point	bu noktanın üzerinde bir anahtar nesne bulunuyor
 @msg	a linked image can't become a gradient mesh: embed it first	bağlantılı bir görüntü degrade ağına dönüştürülemez: önce görüntüyü gömün
 @msg	a mask has more than one art block	bir maskede birden fazla çizim bloğu var
@@ -5974,6 +6031,7 @@ theme	Appearance	Görünüm
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	{name} veri kümesinden hiçbir şey uygulanmadı: değer içerdiği bir değişkene bağlı hiçbir nesne yok
 @msg	no bound object reports a value (locked objects and embedded images report none)	bağlı hiçbir nesne bir değer bildirmiyor (kilitli nesneler ve gömülü görüntüler değer bildirmez)
 @msg	select an Objects on Path group	bir Yol Üzerindeki Nesneler grubu seçin
+@msg	choose the object to detach with its Select/Move widget	ayrılacak nesneyi Seç/Taşı denetimiyle seçin
 @msg	the Simplify slider is not open	Basitleştirme kaydırıcısı açık değil
 @msg	the Smooth slider is not open	Düzgünleştirme kaydırıcısı açık değil
 @msg	{_1} is an exporter (File › Export › Export As…)	{_1} bir dışa aktarma eklentisidir (Dosya › Dışa Aktar › Farklı Dışa Aktar…)
@@ -6006,6 +6064,8 @@ theme	Appearance	Görünüm
 	Chrome	Krom
 	Chrome…	Krom…
 	Expand Objects on Path	Yol Üzerindeki Nesneleri Genişlet
+	Detach	Ayır
+	Detach Object from Path	Nesneyi Yoldan Ayır
 	Graphic Pen	Grafik Kalemi
 	Graphic Pen…	Grafik Kalemi…
 	Move Anchor Point	Bağlantı Noktasını Taşı
@@ -6081,6 +6141,29 @@ theme	Appearance	Görünüm
 	New Brush	Yeni Fırça
 	Pattern Brush	Desen Fırçası
 	missing from the Brushes panel	Fırçalar panelinde yok
+	built in	yerleşik
+	embedding not allowed	gömmeye izin verilmiyor
+	embedding for editing	düzenleme için gömme
+	embedding for preview and print	önizleme ve yazdırma için gömme
+	embedding allowed	gömmeye izin veriliyor
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	yerine konan: {family} {style} ile gösteriliyor ({detail})
+	missing: shown in {family} {style}	eksik: {family} {style} ile gösteriliyor
+	missing	eksik
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Doğrusal degrade
+	Radial gradient	Radyal degrade
+	Conic gradient	Konik degrade
+	Diamond gradient	Elmas degrade
+	Freeform gradient	Serbest biçimli degrade
+@plural	{n} instance|{n} instances	{n} örnek
+@plural	{n} row|{n} rows	{n} satır
+@plural	{n} column|{n} columns	{n} sütun
 	Pick Color From:	Rengi Buradan Al:
 	Scatter Brush	Serpme Fırçası
 	Select art to make a scatter, art or pattern brush.	Bir serpme, resim veya desen fırçası oluşturmak için çizim seçin.
@@ -6237,7 +6320,7 @@ axis	Y Axis	Y ekseni
 	Optical Effects	Optik Efektler
 	Geometric Patterns	Geometrik Desenler
 	Grit Textures	Grenli Dokular
-@msg	`method` must be classic or perceptual	`method` classic veya perceptual olmalıdır
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` classic, perceptual, hue-clockwise veya hue-counterclockwise olmalıdır
 @msg	`spread` must be pad, repeat or reflect	`spread` pad, repeat veya reflect olmalıdır
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 1 ile {MAX_REPEATS} arasında bir tam sayı olmalıdır
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` doğrusal, radyal, konik ve elmas degradeler için geçerlidir
@@ -6480,12 +6563,14 @@ axis	Y Axis	Y ekseni
 	Continue	Devam Et
 	Continue Action	Eyleme Devam Et
 	Delete Action Step	Eylem Adımını Sil
+	Move Action Step	Eylem Adımını Taşı
 	Press Play Current Selection in the Actions panel to go on.	Devam etmek için Eylemler panelinde Geçerli Seçimi Oynat'a basın.
 	Stop: {message}	Durak: {message}
 @msg	no action is waiting at a stop	durakta bekleyen eylem yok
 @msg	message must be text	"message" metin olmalıdır
 @msg	allowContinue must be true or false	"allowContinue" true veya false olmalıdır
 @msg	Batch cannot play an action with a stop	Toplu işlem durak içeren bir eylemi oynatamaz
+@msg	Batch cannot play an action with a View menu step	Toplu işlem Görünüm menüsü adımı içeren bir eylemi oynatamaz
 	Insert Menu Item…	Menü Öğesi Ekle…
 	Insert Menu Item	Menü Öğesi Ekle
 	Insert Select Path	Yol Seçimi Ekle
@@ -6650,6 +6735,22 @@ axis	Y Axis	Y ekseni
 	Graphite Pencil	Grafit Kalem
 	Wax Crayon	Mum Boya
 	Charcoal Dust	Kömür Tozu
+	Notched Ribbon	Çentikli Şerit
+	Double Line	Çift Çizgi
+	Wave	Dalga
+	Teardrop	Gözyaşı
+	Striped Ribbon	Çizgili Şerit
+	Fine Nib	İnce Uç
+	Broad Nib	Geniş Uç
+	Chisel	Keski
+	Round Pen	Yuvarlak Kalem
+	Pressure Pen	Basınçlı Kalem
+	Beads	Boncuklar
+	Dash Dot	Çizgi Nokta
+	Scallops	Fistolar
+	Stars	Yıldızlar
+	Triangles	Üçgenler
+	Sparkles	Parıltılar
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)
@@ -6669,6 +6770,13 @@ axis	Y Axis	Y ekseni
 	Area Text	Alan Metni
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Yazıyı Glif Sınırlarına Göre Ölç
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Piksel'e Yapışma Seçenekleri
+	Pixel Snapping Options…	Piksel'e Yapışma Seçenekleri…
+	Snap to Pixel While Drawing	Çizerken Piksel'e Yapış
+	Snap to Pixel While Moving	Taşırken Piksel'e Yapış
+	Snap to Pixel While Scaling	Ölçeklerken Piksel'e Yapış
+	These options take effect when View › Snap to Pixel is on.	Bu seçenekler Görünüm › Piksel'e Yapış açıkken etkili olur.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Göster
 	Hide Snap to Glyph Options	Glif'e Yapışma Seçeneklerini Gizle
@@ -6754,6 +6862,8 @@ anchor	Points:	Noktalar:
 	Anchor Inspector	Bağlantı Noktası Denetçisi
 	Add Points at Crossings	Kesişimlere Nokta Ekle
 	Split at Crossings	Kesişimlerden Böl
+	Trim at Crossings Tool	Kesişimlerden Kırpma Aracı
+	Trim at Crossings	Kesişimlerden Kırp
 	Extend Path	Yolu Uzat
 	Measure & Inspect	Ölç ve İncele
 	Set Anchor	Bağlantı Noktasını Ayarla
@@ -7296,6 +7406,19 @@ breakText	Glyphs	Glifler
 	Show where this tool is	Bu aracın nerede olduğunu göster
 @msg	missing `tutorial` (see learn.list)	`tutorial` eksik (bkz. learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	bilinmeyen öğretici `{id}` (bkz. learn.list)
+	View more	Daha fazlasını gör
+	Finish tutorial	Öğreticiyi bitir
+	Next Up	Sıradaki
+	You finished the last tutorial in this skill.	Bu becerinin son öğreticisini bitirdiniz.
+	Back to skills	Becerilere dön
+	Open Tutorial Sample	Öğretici Örneğini Aç
+	Finish Tutorial	Öğreticiyi Bitir
+	Next Tutorial	Sonraki Öğretici
+	Back to Skills	Becerilere Dön
+@msg	tutorial `{id}` has no practice sample	`{id}` öğreticisinin alıştırma örneği yok
+@msg	open the practice sample of `{id}` first (see learn.openSample)	önce `{id}` öğreticisinin alıştırma örneğini açın (bkz. learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	önce `{id}` öğreticisini bitirin (bkz. learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}`, becerisinin son öğreticisidir
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile
@@ -7319,3 +7442,9 @@ breakText	Glyphs	Glifler
 	Margin	Kenar Boşluğu
 	Box	Kutu
 	Swatch	Renk Örneği
+	Banner Hems and Grommets…	Afiş Kenar Kıvırma ve Kuşgözleri…
+	Banner Hems and Grommets	Afiş Kenar Kıvırma ve Kuşgözleri
+	Hem	Kenar Kıvırma
+	Grommets	Kuşgözleri
+	Grommet Inset	Kuşgözlerinin kenara uzaklığı
+	Diameter	Çap

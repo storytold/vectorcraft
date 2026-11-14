@@ -7,7 +7,7 @@ use super::props::set_props;
 use super::shape::{expand_shape, set_live_shape};
 use super::transform::{move_cmd, nudge, reflect, rotate, scale, shear, transform, transform_again};
 use super::{CommandSpec, cmd, has_doc, has_multi, has_selection, has_selection_or_guides};
-use crate::cmd::has_selected_member;
+use crate::cmd::has_selected_member_or_guide;
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -151,8 +151,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Selection",
             ["Object", "Lock"],
             Some("Cmd+2"),
-            "{ids?: [id…] (selected first; default: the selection; in isolation mode, only those inside the isolated object)}",
-            has_selected_member,
+            "{ids?: [id…] (selected first; default: the selection, selected ruler guides included; in isolation mode, only the objects inside the isolated object)}",
+            has_selected_member_or_guide,
             lock
         ),
         cmd!(
@@ -160,7 +160,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Unlock All",
             ["Object"],
             Some("Cmd+Alt+2"),
-            "{scope?: \"document\"|\"group\" (default document, which in isolation mode is the isolated object; group: only the objects inside the groups that hold the selected objects, a selected group holding its own; the in-window menu item chosen with Shift+Alt)} unlock the locked objects and select them → {count}",
+            "{scope?: \"document\"|\"group\" (default document, which in isolation mode is the isolated object; group: only the objects inside the groups that hold the selected objects, a selected group holding its own; the in-window menu item chosen with Shift+Alt)} unlock the locked objects and select them; document scope outside isolation mode also unlocks ruler guides locked on their own → {count}",
             has_doc,
             unlock_all
         ),
@@ -169,8 +169,8 @@ pub fn specs() -> Vec<CommandSpec> {
             "Selection",
             ["Object", "Hide"],
             Some("Cmd+3"),
-            "{ids?: [id…] (selected first; default: the selection; in isolation mode, only those inside the isolated object)}",
-            has_selected_member,
+            "{ids?: [id…] (selected first; default: the selection, selected ruler guides included; in isolation mode, only the objects inside the isolated object)}",
+            has_selected_member_or_guide,
             hide
         ),
         cmd!(
@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Show All",
             ["Object"],
             Some("Cmd+Alt+3"),
-            "{scope?: \"document\"|\"group\" (default document, which in isolation mode is the isolated object; group: only the objects inside the groups that hold the selected objects, a selected group holding its own; the in-window menu item chosen with Shift+Alt)} show the hidden objects and select them → {count}",
+            "{scope?: \"document\"|\"group\" (default document, which in isolation mode is the isolated object; group: only the objects inside the groups that hold the selected objects, a selected group holding its own; the in-window menu item chosen with Shift+Alt)} show the hidden objects and select them; document scope outside isolation mode also shows ruler guides hidden on their own → {count}",
             has_doc,
             show_all
         ),
@@ -251,7 +251,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Object Properties",
             [],
             None,
-            "{ids?|id?, name?, visible?, locked? (visible: false or locked: true deselects every selected object hidden or locked after the call, the key object included), opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, data?: {key: \"value\" | null (removes it)} (the object's own data, SVG data-* attributes: {pivot: \"100,180\"} is data-pivot; document.node → attrs.data)}. On a path directly in a graph series, the graph also stores the object's opacity and blend mode (exceptions: docs/mcp.md)",
+            "{ids?|id?, name?, visible?, locked? (visible: false or locked: true deselects every selected object hidden or locked after the call, the key object included), opacity?: 0..100, blend?: \"Multiply\"…, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, data?: {key: \"value\" | null (removes it)} (the object's own data, SVG data-* attributes: {pivot: \"100,180\"} is data-pivot; document.node → attrs.data)}. On a path directly in a graph series, the graph also stores the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, the graph stores the label's opacity and blend mode for every label of its kind",
             has_doc,
             set_props
         ),

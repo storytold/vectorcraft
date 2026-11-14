@@ -108,6 +108,8 @@
 	Blend Vertically	Prolnout svisle
 	Convert to CMYK	Převést na CMYK
 	Convert to Grayscale	Převést na stupně šedi
+	Convert to Indexed Color	Převést na indexované barvy
+	Convert to Indexed Color…	Převést na indexované barvy…
 	Convert to RGB	Převést na RGB
 	Invert Colors	Invertovat barvy
 	Overprint Black…	Přetisknout černou…
@@ -923,6 +925,10 @@
 	Dock Panel	Ukotvit panel
 	Dock to Top	Ukotvit nahoru
 	Dock to Bottom	Ukotvit dolů
+	Dock to Left	Ukotvit vlevo
+	Dock to Right	Ukotvit vpravo
+	Dock Toolbar	Ukotvit panel nástrojů
+	Float Toolbar	Plovoucí panel nástrojů
 	Control Bar Options	Možnosti ovládacího panelu
 	Tool Options	Možnosti nástroje
 	Object Options	Možnosti objektu
@@ -1630,6 +1636,11 @@ digits	Malayalam	Malajálamské
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Nastavení Tate-chu-yoko…
 	Tate-chu-yoko Settings	Nastavení Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Nastavení Warichu…
+	Warichu Settings	Nastavení Warichu
+	Lines:	Řádky:
+	Line Gap:	Mezera mezi řádky:
 	Composite Fonts…	Složená písma…
 	Composite Fonts	Složená písma
 	Export Composite Fonts	Exportovat složená písma
@@ -1840,6 +1851,8 @@ digits	Malayalam	Malajálamské
 	Objects on Path Tool	Nástroj Objekty na cestě
 	Attach Objects on Path	Připojit objekty na cestu
 	Expand Objects on Path	Rozložit objekty na cestě
+	Detach	Odpojit
+	Detach Object from Path	Odpojit objekt od cesty
 	Release Live Paint	Uvolnit živou malbu
 	Release Repeat	Uvolnit opakování
 	Release Slice	Uvolnit řez
@@ -2891,6 +2904,9 @@ digits	Malayalam	Malajálamské
 	Reset the rows to the artwork's colors	Obnovit řádky na barvy kresby
 	Color Theme Picker	Výběr barevného motivu
 	Click or drag across the art to pick its colors; Shift adds more	Klepnutím nebo tažením přes kresbu převezmete její barvy; Shift přidá další
+	Prominent Colors	Převládající barvy
+	Save All Colors	Uložit všechny barvy
+	Save Prominent Colors	Uložit převládající barvy
 	Separate colors into rows	Rozdělit barvy do řádků
 	Unlink harmony colors	Zrušit propojení barev harmonie
 	1 Color Job	Zakázka s 1 barvou
@@ -3390,6 +3406,29 @@ theme	Appearance	Motiv
 	Bristle Brush	Štětinový štětec
 	Pattern Brush	Vzorkový štětec
 	missing from the Brushes panel	chybí v panelu Štětce
+	built in	vestavěné
+	embedding not allowed	vkládání není povoleno
+	embedding for editing	vkládání pro úpravy
+	embedding for preview and print	vkládání pro náhled a tisk
+	embedding allowed	vkládání povoleno
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	nahrazeno: zobrazeno písmem {family} {style} ({detail})
+	missing: shown in {family} {style}	chybí: zobrazeno písmem {family} {style}
+	missing	chybí
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineární přechod
+	Radial gradient	Kruhový přechod
+	Conic gradient	Kuželový přechod
+	Diamond gradient	Kosočtverečný přechod
+	Freeform gradient	Volný přechod
+@plural	{n} instance|{n} instances	{n} instance|{n} instance|{n} instancí
+@plural	{n} row|{n} rows	{n} řádek|{n} řádky|{n} řádků
+@plural	{n} column|{n} columns	{n} sloupec|{n} sloupce|{n} sloupců
 	Select art to make a scatter, art or pattern brush.	Vyberte kresbu, abyste mohli vytvořit rozptylový, obrazový nebo vzorkový štětec.
 	Brush Art	Kresba štětce
 	New Symbol	Nový symbol
@@ -3604,6 +3643,8 @@ theme	Appearance	Motiv
 	Rename Library Group	Přejmenovat skupinu knihovny
 	Delete Library Group	Odstranit skupinu knihovny
 	Move Library Item to Group	Přesunout položku knihovny do skupiny
+	Rename Library Item	Přejmenovat položku knihovny
+	Add to Character Styles	Přidat do stylů znaků
 	Rename Library	Přejmenovat knihovnu
 	Show Library	Zobrazit knihovnu
 	Use Library Item	Použít položku knihovny
@@ -3878,6 +3919,11 @@ theme	Appearance	Motiv
 	Primary	Primární
 	Printing / Exporting	Tisk / export
 	Real-time Drawing and Editing	Kreslení a úpravy v reálném čase
+	Use Monitor Profile for Canvas	Použít profil monitoru pro plátno
+	The canvas is drawn in sRGB.	Plátno se vykresluje v sRGB.
+	Canvas display profile:	Profil displeje pro plátno:
+	The system matches the window to the display's colors.	Systém přizpůsobuje okno barvám displeje.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nebyl nalezen použitelný profil displeje: plátno se vykresluje v sRGB.
 	Render Threads (-1 = Automatic)	Vlákna vykreslování (-1 = automaticky)
 	Reset Preferences	Obnovit předvolby
 	Export Preferences…	Exportovat předvolby…
@@ -4010,6 +4056,19 @@ theme	Appearance	Motiv
 	Spot Color Objects	Objekty s přímými barvami
 	Pattern Objects	Objekty se vzorky
 	Gradient Objects	Objekty s přechody
+	Font Details	Podrobnosti písem
+	Linked Images	Propojené obrazy
+	Embedded Images	Vložené obrazy
+	Compound Paths	Složené cesty
+	Text Objects	Textové objekty
+	Placed Documents	Umístěné dokumenty
+	Symbol Instances	Instance symbolů
+	Gradient Meshes	Přechodové sítě
+	Blends	Prolnutí
+	Envelopes	Obálky
+	Intertwine Groups	Skupiny proplétání
+	Opacity Masks	Masky krytí
+	Objects with Effects	Objekty s efekty
 	Spot Colors	Přímé barvy
 	Spot Colors (0)	Přímé barvy (0)
 	Swatch Options	Možnosti položky vzorníku
@@ -4477,6 +4536,7 @@ imageTrace	Outline	Obrys
 
 # Status and error messages
 @msg	no library `{id}`	knihovna `{id}` neexistuje
+@msg	the library has another item of that kind named `{name}`	knihovna už má jinou položku tohoto druhu s názvem `{name}`
 @msg	select some type first	nejprve vyberte text
 @msg	kerning must be a number, "auto", or "optical"	kerning musí být číslo, „auto“ nebo „optical“
 @msg	the selection has no gradient fill	výběr nemá přechodovou výplň
@@ -4626,8 +4686,15 @@ imageTrace	Outline	Obrys
 @msg	Couldn't open {name}: {e}	{name} nelze otevřít: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	{name} nelze umístit: dokument, na který byl přetažen, byl zavřen
 @msg	Couldn't place {name}: the document it was placed in was closed	{name} nelze umístit: dokument, do kterého se umísťoval, byl zavřen
+@msg	Couldn't place {name}: the document it was dropped on was reverted	{name} nelze umístit: dokument, na který byl přetažen, byl vrácen k uložené verzi
+@msg	Couldn't place {name}: the document it was placed in was reverted	{name} nelze umístit: dokument, do kterého se umísťoval, byl vrácen k uložené verzi
+@msg	Couldn't paste: the document it was pasted in was reverted	Nelze vložit: dokument, do kterého se vkládalo, byl vrácen k uložené verzi
 @msg	Couldn't read {name}: {e}	{name} nelze přečíst: {e}
 @msg	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Data pro obnovení dokumentu {title} nelze uložit: {e}. Kopie se ukládají do {folder}, výchozí složky pro obnovení; chcete-li použít jinou složku, nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Data pro obnovení dokumentu {title} nelze uložit: {e}. Kopie se ukládají do {folder}, složky nastavené v Předvolbách; chcete-li použít jinou složku, nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Data pro obnovení nelze uložit: {e}. Kopie se ukládají do {folder}, výchozí složky pro obnovení; chcete-li použít jinou složku, nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Data pro obnovení nelze uložit: {e}. Kopie se ukládají do {folder}, složky nastavené v Předvolbách; chcete-li použít jinou složku, nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
 @msg	Create Outlines: select text objects	Převést na křivky: vyberte textové objekty
 @msg	Create from Guides: the document has no artboard	Vytvořit z vodítek: dokument nemá žádnou pracovní plochu
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Vytvořit z vodítek: vodítka vytvářejí více než {MAX_PIECES} řezů
@@ -4637,6 +4704,7 @@ imageTrace	Outline	Obrys
 @msg	Plug-ins can't be loaded from {path}: {e}	Zásuvné moduly nelze načíst z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	nástrojem Přímý výběr vyberte kotevní body, kde se má cesta rozdělit (ne koncové body otevřených cest)
 @msg	Divide Objects Below: select a path	Rozdělit objekty pod: vyberte cestu
+@msg	select a path	vyberte cestu
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
 @msg	Downloaded {what}	Staženo: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozložit vzhled: výběr má základní vzhled
@@ -4712,6 +4780,9 @@ imageTrace	Outline	Obrys
 @msg	`{keep}` is not a side of this axis	`{keep}` není strana této osy
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` musí být `auto` nebo kód jazyka, například `en` nebo `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` musí být barva #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` musí být barva #rrggbb nebo název barvy vrstvy
+@msg	unknown Live Paint option `{key}`	neznámá možnost živé malby `{key}`
+@msg	unknown Shape Builder option `{key}`	neznámá možnost tvorby tvarů `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` musí být barva #rrggbb
 @msg	`{key}` must be a number	`{key}` musí být číslo
 @msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}
@@ -4871,6 +4942,7 @@ imageTrace	Outline	Obrys
 @msg	internal error: {msg} (please report this bug)	vnitřní chyba: {msg} (nahlaste prosím tuto chybu)
 @msg	invalid PDF setting: {0}	neplatné nastavení PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): zapisuje se s UserUnit {unit}, takže aplikace, které UserUnit ignorují, ji zobrazí tolikrát menší
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): zapisuje se s UserUnit {unit}, takže aplikace, které UserUnit ignorují, ji zobrazí tolikrát menší: zapněte „Zapsat stránky delší než 200 in v plné velikosti v bodech“
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): stránky {label} se zapisují bez UserUnit, v bodech, a aplikace, které limit dodržují, stránku oříznou na 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 nemá UserUnit, který stránka delší než 14 400 pt (200 in) potřebuje, aby si zachovala velikost: soubor se zapíše jako PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 nemá UserUnit, který stránka delší než 14 400 pt (200 in) potřebuje, aby zůstala v limitu stránky PDF/A-2, 14 400 jednotek: soubor se zapíše jako PDF 1.6
@@ -5053,6 +5125,7 @@ imageTrace	Outline	Obrys
 @msg	paths contain invalid coordinates	cesty obsahují neplatné souřadnice
 @msg	paths: give at least one file	paths: zadejte alespoň jeden soubor
 @msg	replace: the object to replace was changed or deleted	replace: objekt k nahrazení byl změněn nebo odstraněn
+@msg	the document it was prepared for is no longer active	dokument, pro který bylo připraveno, už není aktivní
 @msg	pattern missing	chybí vzorek
 @msg	patterns nested too deeply are filled with mid-grey	příliš hluboko vnořené vzorky se vyplní středně šedou
 @msg	percent must be above 0 and at most 6400, not {p}	percent musí být větší než 0 a nejvýše 6400, ne {p}
@@ -5088,6 +5161,7 @@ imageTrace	Outline	Obrys
 @msg	select a repeat	vyberte opakování
 @msg	select an Intertwine group	vyberte skupinu propletení
 @msg	select an Objects on Path group	vyberte skupinu objektů na cestě
+@msg	choose the object to detach with its Select/Move widget	vyberte objekt k odpojení jeho ovládacím prvkem Vybrat/Přesunout
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	cesta uvnitř složené cesty, prolnutí, obálky, opakování nebo skupiny propletení nemůže přijmout objekty
 @msg	a clipping path can't take objects	ořezová cesta nemůže přijmout objekty
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekty uvnitř prolnutí, obálky, opakování nebo skupiny propletení nelze připojit na cestu
@@ -5308,6 +5382,7 @@ imageTrace	Outline	Obrys
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Zahozen {n} obnovený dokument|Zahozeny {n} obnovené dokumenty|Zahozeno {n} obnovených dokumentů
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Obnoven {n} dokument; pokud ho chcete zachovat, uložte ho|Obnoveny {n} dokumenty; pokud je chcete zachovat, uložte je|Obnoveno {n} dokumentů; pokud je chcete zachovat, uložte je
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otevřeno, {n} poznámka: {first}|Otevřeno, {n} poznámky: {first}|Otevřeno, {n} poznámek: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otevřeno, {n} poznámka: {first}|{notice}. Otevřeno, {n} poznámky: {first}|{notice}. Otevřeno, {n} poznámek: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Uloženo: {path}, {n} poznámka: {first}|Uloženo: {path}, {n} poznámky: {first}|Uloženo: {path}, {n} poznámek: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Vložen {n} obrázek; chybí {missing}: nejprve je znovu propojte|Vloženy {n} obrázky; chybí {missing}: nejprve je znovu propojte|Vloženo {n} obrázků; chybí {missing}: nejprve je znovu propojte
 @msgplural	Embedded {n} image|Embedded {n} images	Vložen {n} obrázek|Vloženy {n} obrázky|Vloženo {n} obrázků
@@ -5387,6 +5462,8 @@ imageTrace	Outline	Obrys
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	vložený obrázek o rozměrech {_1} × {_2} pixelů byl zmenšen na {_3} × {_4} pixelů, aby se zachovaly vrstvy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	propojené obrázky se zobrazují jako náhled v nízkém rozlišení uložený v souboru, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
 @msg	linked type areas past VectorCraft's limits were left out	propojené textové oblasti nad limity aplikace VectorCraft byly vynechány
+@msg	the Line Breaking setting of legacy type was left out	nastavení zalamování řádků textu ve starém formátu bylo vynecháno
+@msg	the Japanese layout rules of legacy type were left out	japonská pravidla sazby textu ve starém formátu byla vynechána
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	text, který mění směr psaní uvnitř textového objektu, se otevře ve směru svého prvního znaku
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	text použitý jako maska v propojených oblastech, obtékaném textu nebo složené cestě neořezává
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	propojené obrázky bez náhledu v souboru se zobrazují jako zástupný symbol, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
@@ -5412,6 +5489,7 @@ imageTrace	Outline	Obrys
 @msg	every numbered name for it is taken in the Fonts folder	ve složce Fonts jsou obsazena všechna číslovaná jména pro tento soubor
 @msg	every numbered name for {name} is taken in the document's folder	ve složce dokumentu jsou obsazena všechna číslovaná jména pro {name}
 @msg	No linked files to look for	Žádné propojené soubory k vyhledání
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Propojení je uvnitř symbolu, návrhu grafu, vzorku nebo masky krytí a nemá na plátně žádné místo
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musí být pole barev, ne {v}
@@ -5686,6 +5764,8 @@ imageTrace	Outline	Obrys
 	Spectrum	Spektrum
 # Rendering intents, recolor methods, gradient kinds
 	Perceptual	Percepční
+	Hue Clockwise	Odstín ve směru hodinových ručiček
+	Hue Counterclockwise	Odstín proti směru hodinových ručiček
 	Relative Colorimetric	Relativní kolorimetrický
 	Absolute Colorimetric	Absolutní kolorimetrický
 	Exact	Přesná
@@ -5935,7 +6015,9 @@ mark-style	Japanese	Japonské
 @msg	`{GRAPHICS}` face must be front or back	face v `{GRAPHICS}` musí být front nebo back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} v `{GRAPHICS}` musí být číslo od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musí být pole
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafika se mapuje na rovinné stěny: použijte typ objektu Vysunutí nebo Rovina
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafika se mapuje na typy objektu Rovina, Vysunutí a Rotační těleso
+@msg	Revolve maps graphics onto its side: map them onto the front	Rotační těleso mapuje grafiku na svůj bok: umístěte ji na přední stranu
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafika je pro tento povrch příliš složitá: zjednodušte kresbu symbolů nebo snižte Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` přijímá nejvýše {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Rovina má jednu stranu: umístěte její grafiku na přední stranu
 @msg	The graphics are too complex: simplify the symbols' art	Grafika je příliš složitá: zjednodušte kresbu symbolů
@@ -6121,6 +6203,7 @@ mark-style	Japanese	Japonské
 @msg	no such color	taková barva neexistuje
 @msg	{_1} cannot be used on Windows	Zkratku {_1} nelze ve Windows použít
 @msg	more than one action is named “{_1}”	název „{_1}“ má více než jedna akce
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	akce „{_1}“ nastavuje předvolbu složky {_2}; chcete-li sadu uložit, tento krok smažte
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
 	Smudge Stick…	Rozmazávací tyčinka…
 	Smudge Stick	Rozmazávací tyčinka
@@ -6281,7 +6364,7 @@ axis	Y Axis	osa Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` platí pro výplně přechodem (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` platí pro výplně přechodem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musí být true nebo false
-@msg	`method` must be classic or perceptual	`method` musí být classic nebo perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` musí být classic, perceptual, hue-clockwise nebo hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` musí být pad, repeat nebo reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musí být celé číslo od 1 do {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` platí pro lineární, kruhové, kuželové a kosočtverečné přechody
@@ -6524,12 +6607,14 @@ axis	Y Axis	osa Y
 	Continue	Pokračovat
 	Continue Action	Pokračovat v akci
 	Delete Action Step	Odstranit krok akce
+	Move Action Step	Přesunout krok akce
 	Press Play Current Selection in the Actions panel to go on.	Chcete-li pokračovat, stiskněte na panelu Akce tlačítko Přehrát aktuální výběr.
 	Stop: {message}	Zastavení: {message}
 @msg	no action is waiting at a stop	žádná akce nečeká na zastavení
 @msg	message must be text	message musí být text
 @msg	allowContinue must be true or false	allowContinue musí být true nebo false
 @msg	Batch cannot play an action with a stop	Dávka nemůže přehrát akci se zastavením
+@msg	Batch cannot play an action with a View menu step	Dávka nemůže přehrát akci s krokem z nabídky Zobrazení
 	Insert Menu Item…	Vložit položku nabídky…
 	Insert Menu Item	Vložit položku nabídky
 	Insert Select Path	Vložit výběr cesty
@@ -6694,6 +6779,22 @@ axis	Y Axis	osa Y
 	Graphite Pencil	Grafitová tužka
 	Wax Crayon	Vosková pastelka
 	Charcoal Dust	Uhlový prach
+	Notched Ribbon	Vroubkovaná stuha
+	Double Line	Dvojitá čára
+	Wave	Vlna
+	Teardrop	Slza
+	Striped Ribbon	Pruhovaná stuha
+	Fine Nib	Jemný hrot
+	Broad Nib	Široký hrot
+	Chisel	Dláto
+	Round Pen	Kulaté pero
+	Pressure Pen	Tlakové pero
+	Beads	Korálky
+	Dash Dot	Čárka-tečka
+	Scallops	Feston
+	Stars	Hvězdy
+	Triangles	Trojúhelníky
+	Sparkles	Jiskry
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)
@@ -6713,6 +6814,13 @@ axis	Y Axis	osa Y
 	Area Text	Text v oblasti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Měřit text podle hranic glyfů
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Možnosti přichytávání k obrazovým bodům
+	Pixel Snapping Options…	Možnosti přichytávání k obrazovým bodům…
+	Snap to Pixel While Drawing	Přichytávat k obrazovým bodům při kreslení
+	Snap to Pixel While Moving	Přichytávat k obrazovým bodům při přesouvání
+	Snap to Pixel While Scaling	Přichytávat k obrazovým bodům při změně velikosti
+	These options take effect when View › Snap to Pixel is on.	Tyto volby se uplatní, když je zapnuto Zobrazení › Přichytávat k obrazovým bodům.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Zobrazit možnosti přichytávání ke glyfům
 	Hide Snap to Glyph Options	Skrýt možnosti přichytávání ke glyfům
@@ -6798,6 +6906,8 @@ anchor	Points:	Body:
 	Anchor Inspector	Inspektor kotevních bodů
 	Add Points at Crossings	Přidat body v křížení
 	Split at Crossings	Rozdělit v křížení
+	Trim at Crossings Tool	Nástroj Zastřihnout v křížení
+	Trim at Crossings	Zastřihnout v křížení
 	Extend Path	Prodloužit cestu
 	Measure & Inspect	Měřit a zkoumat
 	Set Anchor	Nastavit kotevní bod
@@ -7340,6 +7450,19 @@ breakText	Glyphs	Glyfy
 	Show where this tool is	Zobrazit, kde je tento nástroj
 @msg	missing `tutorial` (see learn.list)	chybí `tutorial` (viz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	neznámý výukový kurz `{id}` (viz learn.list)
+	View more	Zobrazit více
+	Finish tutorial	Dokončit výukový kurz
+	Next Up	Další
+	You finished the last tutorial in this skill.	Dokončili jste poslední výukový kurz této dovednosti.
+	Back to skills	Zpět na dovednosti
+	Open Tutorial Sample	Otevřít ukázku výukového kurzu
+	Finish Tutorial	Dokončit výukový kurz
+	Next Tutorial	Další výukový kurz
+	Back to Skills	Zpět na dovednosti
+@msg	tutorial `{id}` has no practice sample	výukový kurz `{id}` nemá cvičnou ukázku
+@msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	nejprve dokončete `{id}` (viz learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` je poslední výukový kurz své dovednosti
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty
@@ -7363,3 +7486,9 @@ breakText	Glyphs	Glyfy
 	Margin	Okraj
 	Box	Rámeček
 	Swatch	Vzorek
+	Banner Hems and Grommets…	Lemy a průchodky banneru…
+	Banner Hems and Grommets	Lemy a průchodky banneru
+	Hem	Lem
+	Grommets	Průchodky
+	Grommet Inset	Odstup průchodek od okraje
+	Diameter	Průměr

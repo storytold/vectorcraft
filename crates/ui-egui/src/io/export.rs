@@ -28,7 +28,8 @@ pub fn hide_exports(app: &mut VectorcraftApp) -> Value {
 /// `document.export` options in `params` (artboard, range, useArtboards, selectedOnly, ppi, SVG
 /// options…): every file it writes (one per artboard, linked images) goes next to `path`. The
 /// document keeps its path. → `{path, warnings, files?}` (`files`: every file when there are
-/// several).
+/// several). When automation asked for the export, `warnings` also name each option the written
+/// format doesn't read, as `document.export`'s do.
 pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<String>, params: &Value) -> Result<Value, String> {
     // Options given as anything but an object are none: the path and format still reach the
     // encoder (an exporter plug-in is told the file it writes).
@@ -40,6 +41,7 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // A `.ai` file names the view's active artboard.
     remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;
+    fileio::check_linked_scripts("file.exportAs", f.id, st).map_err(|e| e.to_string())?;
     let doc = match fileio::export_doc(st, f, params).map_err(|e| e.to_string())? {
         std::borrow::Cow::Borrowed(_) => st.doc.clone(),
         std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
@@ -62,6 +64,10 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
         Some(z) if f.id == "svg" && z.id == "svgz" => z,
         _ => f,
     };
+    // An export that automation asked for, also through a save panel it opened, names the options
+    // the file doesn't read, as `document.export` does. A person's export gets no such notes.
+    let unused = if app.automation_asked() { fileio::unused_option_notes("document.export", f, params) } else { Vec::new() };
+    let noted = unused.clone();
     // Background Export: encoded and written from this snapshot while editing goes on. The
     // encoder is told the file it writes (an exporter plug-in gets its name and extension).
     let label = format!("Exporting {}", fileio::file_name(&path));
@@ -93,7 +99,13 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
                 return Ok(json!({ "replaces": replaced }));
             }
             let files = write_encoded(write, &doc, &path, &enc)?;
-            let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": enc.notes() });
+            let mut warnings = enc.notes();
+            for note in noted {
+                if !warnings.contains(&note) {
+                    warnings.push(note);
+                }
+            }
+            let mut out = json!({ "path": files.first().unwrap_or(&path), "warnings": warnings });
             if files.len() > 1 {
                 out["files"] = json!(files);
             }
@@ -131,6 +143,11 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     })?;
     if r.get("path").is_none() {
         r["path"] = json!(target);
+    }
+    // A Background Export returns before the file is written: its reply names the unused options
+    // at once, as a background save's does.
+    if r["background"] == true && !unused.is_empty() {
+        r["warnings"] = json!(unused);
     }
     Ok(r)
 }
