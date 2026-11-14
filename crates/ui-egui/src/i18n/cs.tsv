@@ -991,6 +991,11 @@
 	NTSC Colors	Barvy NTSC
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Zásada RGB:
+	CMYK Policy:	Zásada CMYK:
+	Preserve Embedded Profiles	Zachovat vložené profily
+	Convert to Working Space	Převést do pracovního prostoru
+	Preserve Numbers	Zachovat čísla
 	CMYK	CMYK
 	Texture	Textura
 	Craquelure…	Krakelování…

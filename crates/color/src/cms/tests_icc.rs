@@ -252,3 +252,18 @@ fn settings_built_before_a_reload_dont_leave_the_old_transform_to_the_new_ones()
     assert!(in_srgb.iter().zip(want).any(|(a, b)| (a - b).abs() > 0.05), "sRGB {in_srgb:?} vs ProPhoto {want:?}");
     assert!(in_prophoto.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-4), "after the reload {in_prophoto:?}, want {want:?}");
 }
+
+/// A CMYK profile converts into another CMYK profile, ink for ink, and refuses a profile
+/// of another model or inks of the wrong count.
+#[test]
+fn cmyk_profiles_convert_into_each_other_directly() {
+    let generic = IccProfile::from_bytes(Some("A".into()), &icc_bytes(GENERIC_CMYK).unwrap()).unwrap();
+    let device = IccProfile::from_bytes(Some("B".into()), &icc_bytes(DEVICE_CMYK).unwrap()).unwrap();
+    let srgb = IccProfile::from_bytes(None, &icc_bytes(SRGB).unwrap()).unwrap();
+    let inks = [0.2, 0.4, 0.6, 0.1];
+    let out = generic.to_same_model_of(&device, &inks, Intent::RelativeColorimetric).unwrap();
+    assert_eq!(out.len(), 4);
+    assert!(out.iter().zip(inks).any(|(a, b)| (a - b).abs() > 0.01), "{out:?}");
+    assert!(generic.to_same_model_of(&srgb, &inks, Intent::RelativeColorimetric).is_none());
+    assert!(generic.to_same_model_of(&device, &inks[..3], Intent::RelativeColorimetric).is_none());
+}

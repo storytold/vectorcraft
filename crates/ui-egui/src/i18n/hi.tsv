@@ -884,6 +884,11 @@ antiAlias	Sharp	शार्प
 	CMYK Images	CMYK इमेज
 	CMYK profile in effect	इफ़ेक्ट में CMYK प्रोफ़ाइल
 	CMYK:	CMYK:
+	RGB Policy:	RGB नीति:
+	CMYK Policy:	CMYK नीति:
+	Preserve Embedded Profiles	एम्बेड की गई प्रोफ़ाइल बनाए रखें
+	Convert to Working Space	वर्किंग स्पेस में बदलें
+	Preserve Numbers	संख्याएँ बनाए रखें
 	Coarse Dots	मोटे बिंदु
 	Coincidence:	संयोग:
 	Collapse Panel Group	पैनल समूह संक्षिप्त करें

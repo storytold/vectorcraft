@@ -1432,6 +1432,11 @@
 	NTSC Colors	NTSC-kleuren
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-beleid:
+	CMYK Policy:	CMYK-beleid:
+	Preserve Embedded Profiles	Ingesloten profielen behouden
+	Convert to Working Space	Omzetten naar werkruimte
+	Preserve Numbers	Waarden behouden
 	CMYK	CMYK
 	Texture	Textuur
 	Craquelure…	Craquelure…

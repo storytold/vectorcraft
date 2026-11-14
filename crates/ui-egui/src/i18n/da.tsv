@@ -914,6 +914,11 @@
 	NTSC Colors	NTSC-farver
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-politik:
+	CMYK Policy:	CMYK-politik:
+	Preserve Embedded Profiles	Bevar indlejrede profiler
+	Convert to Working Space	Konverter til arbejdsfarverum
+	Preserve Numbers	Bevar tal
 	CMYK	CMYK
 	Texture	Tekstur
 	Craquelure…	Krakelering…

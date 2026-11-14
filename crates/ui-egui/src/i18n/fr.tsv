@@ -5294,6 +5294,11 @@ axis	Both	Les deux
 @msg	Imported library {name}	Bibliothèque {name} importée
 	RGB:	RVB :
 	CMYK:	CMJN :
+	RGB Policy:	Règle RVB :
+	CMYK Policy:	Règle CMJN :
+	Preserve Embedded Profiles	Conserver les profils incorporés
+	Convert to Working Space	Convertir en espace de travail
+	Preserve Numbers	Conserver les valeurs numériques
 	Texture	Texture
 	Craquelure…	Craquelure…
 	Grain…	Grain…

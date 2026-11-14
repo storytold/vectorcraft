@@ -5380,6 +5380,11 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Imported library {name}	ライブラリ {name} を読み込みました
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB ポリシー:
+	CMYK Policy:	CMYK ポリシー:
+	Preserve Embedded Profiles	埋め込まれたプロファイルを保持
+	Convert to Working Space	作業用スペースに変換
+	Preserve Numbers	カラー値を保持
 	Texture	テクスチャ
 	Craquelure…	クラッキング…
 	Grain…	粒状…

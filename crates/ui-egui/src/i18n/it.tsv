@@ -5339,6 +5339,11 @@ axis	Both	Entrambi
 @msg	Imported library {name}	Libreria {name} importata
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Criterio RGB:
+	CMYK Policy:	Criterio CMYK:
+	Preserve Embedded Profiles	Mantieni profili incorporati
+	Convert to Working Space	Converti nello spazio di lavoro
+	Preserve Numbers	Mantieni valori numerici
 	Texture	Texture
 	Craquelure…	Craquelé…
 	Grain…	Granulosità…

@@ -975,6 +975,11 @@
 	NTSC Colors	NTSC-värit
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-käytäntö:
+	CMYK Policy:	CMYK-käytäntö:
+	Preserve Embedded Profiles	Säilytä upotetut profiilit
+	Convert to Working Space	Muunna työväriavaruuteen
+	Preserve Numbers	Säilytä lukuarvot
 	CMYK	CMYK
 	Texture	Tekstuuri
 	Craquelure…	Krakelyyri…

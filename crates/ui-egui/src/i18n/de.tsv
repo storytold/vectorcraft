@@ -5274,6 +5274,11 @@ theme	Appearance	Erscheinungsbild
 	The key color becomes the stroke color. The other colors shift their hue by the same amount and keep their saturation and brightness.	Die Hauptfarbe wird zur Konturfarbe. Die anderen Farben wandern ebenso weit um den Farbkreis wie die Hauptfarbe und behalten ihre Sättigung und Helligkeit.
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-Richtlinie:
+	CMYK Policy:	CMYK-Richtlinie:
+	Preserve Embedded Profiles	Eingebettete Profile beibehalten
+	Convert to Working Space	In Arbeitsfarbraum konvertieren
+	Preserve Numbers	Werte beibehalten
 # PSD files.
 @msg	not a PSD file	keine PSD-Datei
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	PSD-Dateien im Mehrkanalmodus können nicht gelesen werden: Speichern Sie die Datei im RGB-, CMYK- oder Graustufenmodus

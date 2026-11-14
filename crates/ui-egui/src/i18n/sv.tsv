@@ -5198,6 +5198,11 @@ axis	Both	Båda
 @msg	Imported library {name}	Importerade biblioteket {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB-princip:
+	CMYK Policy:	CMYK-princip:
+	Preserve Embedded Profiles	Behåll inbäddade profiler
+	Convert to Working Space	Konvertera till arbetsfärgrymd
+	Preserve Numbers	Behåll värden
 	Texture	Textur
 	Craquelure…	Krakelering…
 	Grain…	Korn…

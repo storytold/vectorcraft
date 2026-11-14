@@ -880,6 +880,11 @@
 	NTSC Colors	NTSC ფერები
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	RGB წესი:
+	CMYK Policy:	CMYK წესი:
+	Preserve Embedded Profiles	ჩაშენებული პროფილების შენარჩუნება
+	Convert to Working Space	სამუშაო სივრცეში გადაყვანა
+	Preserve Numbers	რიცხვების შენარჩუნება
 	CMYK	CMYK
 	Texture	ტექსტურა
 	Craquelure…	კრაკელიური…

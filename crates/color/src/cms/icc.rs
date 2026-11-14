@@ -34,6 +34,9 @@ type Xf = Option<Arc<TransformF32Executor>>;
 /// generation only lets the cache drop what reloads left behind.
 type DirectKey = (u64, u64, usize, bool);
 
+/// The two transforms of [`IccProfile::to_same_model_of`].
+type SameModel = (Arc<TransformF32Executor>, Arc<TransformF32Executor>);
+
 /// A parsed ICC profile plus lazily-built transforms to/from sRGB.
 pub struct IccProfile {
     pub name: String,
@@ -49,6 +52,10 @@ pub struct IccProfile {
     /// Direct transforms into other RGB profiles ([`Self::to_rgb_of`]), by destination, intent
     /// and black-point compensation.
     direct: Mutex<Vec<(DirectKey, Option<Arc<Direct>>)>>,
+    /// Transforms into other profiles of the same model ([`Self::to_same_model_of`]), keyed as
+    /// [`Self::direct`] is (black-point compensation always off): into ProPhoto RGB, and from it
+    /// into the destination.
+    same_model: Mutex<Vec<(DirectKey, Option<SameModel>)>>,
 }
 
 /// A transform from one profile into an RGB profile without passing through sRGB: into the
@@ -99,6 +106,7 @@ impl IccProfile {
             to_srgb: Default::default(),
             from_srgb: Default::default(),
             direct: Mutex::new(Vec::new()),
+            same_model: Mutex::new(Vec::new()),
         })
     }
 
@@ -247,6 +255,40 @@ impl IccProfile {
             0.0
         };
         Some(Direct { to_linear, to_dest: Some(to_dest), black })
+    }
+
+    /// Device values of this profile → device values of `dest`, a profile of the same model,
+    /// converted with `intent` through ProPhoto RGB rather than sRGB, so colours outside sRGB
+    /// keep their place. `None` when `dest` is of another model or no transform can be built.
+    pub fn to_same_model_of(&self, dest: &IccProfile, v: &[f32], intent: Intent) -> Option<Vec<f32>> {
+        if dest.kind != self.kind || v.len() != self.channels() {
+            return None;
+        }
+        let generation = profiles_generation();
+        let key = (dest.id, generation, intent_index(intent), false);
+        let (into, out_of) = {
+            let mut cache = self.same_model.lock().unwrap_or_else(|e| e.into_inner());
+            cache.retain(|(k, _)| k.1 == generation);
+            match cache.iter().find(|(k, _)| *k == key) {
+                Some((_, xf)) => xf.clone(),
+                None => {
+                    let wide = rgb_space(super::PROPHOTO_RGB);
+                    let xf = wide.and_then(|w| {
+                        let into = self.profile.create_transform_f32(self.layout(), &w, Layout::Rgb, Self::opts(intent)).ok()?;
+                        let out_of = w.create_transform_f32(Layout::Rgb, &dest.profile, dest.layout(), Self::opts(intent)).ok()?;
+                        Some((into, out_of))
+                    });
+                    cache.push((key, xf.clone()));
+                    xf
+                }
+            }
+        }?;
+        let mut rgb = [0.0f32; 3];
+        into.transform(v, &mut rgb).ok()?;
+        let rgb = rgb.map(|x| x.clamp(0.0, 1.0));
+        let mut out = vec![0.0f32; dest.channels()];
+        out_of.transform(&rgb, &mut out).ok()?;
+        Some(out.into_iter().map(|x| x.clamp(0.0, 1.0)).collect())
     }
 
     /// Whether transforms can be built for this profile (checked at registration).

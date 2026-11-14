@@ -5323,6 +5323,11 @@ axis	Both	Обидві
 @msg	Imported library {name}	Імпортовано бібліотеку {name}
 	RGB:	RGB:
 	CMYK:	CMYK:
+	RGB Policy:	Правило RGB:
+	CMYK Policy:	Правило CMYK:
+	Preserve Embedded Profiles	Зберігати вбудовані профілі
+	Convert to Working Space	Перетворювати в робочий простір
+	Preserve Numbers	Зберігати числа
 	Texture	Текстура
 	Craquelure…	Кракелюри…
 	Grain…	Зерно…

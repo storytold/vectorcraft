@@ -1237,14 +1237,23 @@ fn revert(s: &mut Session, _: &Value) -> Result<Value> {
     let bytes = read_file(&path).map_err(|e| super::access::naming_in_error(e, &path))?;
     let Loaded { mut doc, native_pdf_compatible, .. } = load(&path, &bytes)?.with_grid_prefs(&s.prefs).with_unit_prefs(&s.prefs);
     doc.template = false;
+    // The color management policies apply as when the file is opened.
+    let (notes, policy_changed) = crate::cmd::colormgmt::apply_open_policies(&mut doc);
     // Back to the saved file: its recovery copy has nothing left to recover.
     let uid = s.doc()?.uid;
     crate::cmd::recovery::forget(s, uid);
     s.replace_document(index, doc);
+    if policy_changed {
+        s.doc_mut()?.mark_unsaved();
+    }
     if let Some(pdf) = native_pdf_compatible {
         s.doc_mut()?.save_options.insert("pdfCompatible".into(), json!(pdf));
     }
-    Ok(json!({ "path": path }))
+    let mut reply = json!({ "path": path });
+    if !notes.is_empty() {
+        reply["warnings"] = json!(notes);
+    }
+    Ok(reply)
 }
 
 /// `file.formatOptions`: a writable format's options with the values Save would use.
@@ -1352,7 +1361,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Revert",
             ["File"],
             Some("F12"),
-            "{confirmed?: bool (the app's own: it asks first, then runs the command with it)} discard the changes: reload the saved file into the same tab (history cleared; the tab keeps its place and view). Saved, modified documents only; if the file can't be read the document is left as it is → {path}. The app asks first (a confirm dialog) unless confirmed: true",
+            "{confirmed?: bool (the app's own: it asks first, then runs the command with it)} discard the changes: reload the saved file into the same tab (history cleared; the tab keeps its place and view). Saved, modified documents only; if the file can't be read the document is left as it is → {path, warnings?: the notes of the color management policies of edit.colorSettings, which apply as at document.open}. The app asks first (a confirm dialog) unless confirmed: true",
             can_revert,
             revert
         ),
