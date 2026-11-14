@@ -473,6 +473,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "perspective.grid.snap",
     "perspective.move",
     "perspective.nudge",
+    "perspective.plane.infer",
     "perspective.plane.matchObject",
     "perspective.plane.move",
     "perspective.plane.set",
