@@ -1509,6 +1509,7 @@ lighting	Light	Lys
 	Proportional Metrics	Proportionale metrikker
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
+	Tsume	Tsume
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
@@ -1635,6 +1636,9 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Skrifttypen for det markerede tegn er ikke tilgængelig.
 	No alternates for the selected character.	Ingen alternativer til det markerede tegn.
 	Double-click to replace	Dobbeltklik for at erstatte
+	Click to replace	Klik for at erstatte
+	Show all alternates in the Glyphs panel	Vis alle alternativer i Glyffer-panelet
+	Show Character Alternates	Vis tegnalternativer
 	Select one character with the Type tool first.	Markér først ét tegn med tekstværktøjet.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} er et glyf i {font}, ikke i den skrifttype, den markerede tekst er sat i ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hører til {base} (U+{base_code}) {place}; din markering er {sel} (U+{code}).
@@ -6874,11 +6878,20 @@ breakText	Glyphs	Glyffer
 	Open Tutorial Sample	Åbn eksempel til vejledning
 	Finish Tutorial	Afslut vejledning
 	Next Tutorial	Næste vejledning
+	Show Learn Tab	Vis fane i Lær
+	Show Skill	Vis færdighed
+	Back One Level	Ét niveau tilbage
 	Back to Skills	Tilbage til færdigheder
 @msg	tutorial `{id}` has no practice sample	vejledningen `{id}` har intet øvelseseksempel
 @msg	open the practice sample of `{id}` first (see learn.openSample)	åbn først øvelseseksemplet til `{id}` (se learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	afslut først `{id}` (se learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` er den sidste vejledning i sin færdighed
+	Reset progress	Nulstil fremskridt
+	Mark Tutorial Step	Markér trin i vejledning
+	Reset Learn Progress	Nulstil læringsfremskridt
+@msg	missing `step` (see learn.show)	`step` mangler (se learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` skal være et trinnummer fra 0 til {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` er afsluttet (se learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Opdatér udskudte effekter

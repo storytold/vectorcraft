@@ -1,7 +1,8 @@
 use super::{
-    Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, Paint, PathData, Point,
-    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint,
-    json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+    Appearance, AppearanceItem, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId,
+    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json,
+    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
+    switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -84,6 +85,35 @@ pub(super) fn lp_make(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
+/// What Merge carries from a face or edge to the part it makes again in its place, another path:
+/// the appearance, visibility, opacity and blending mode. Gradients fitted to the old outline keep
+/// that fit, and the strokes' pen pressure, tilt, bearing and rotation stay behind.
+struct Carried {
+    appearance: Appearance,
+    visible: bool,
+    opacity: f32,
+    blend: vectorcraft_color::BlendMode,
+}
+
+impl Carried {
+    fn of(n: &Node) -> Self {
+        let mut appearance = (*n.appearance).clone().without_pressure();
+        if appearance.has_unplaced_gradient()
+            && let Some(bounds) = n.geometric_bounds()
+        {
+            appearance.pin_gradients(bounds);
+        }
+        Self { appearance, visible: n.visible, opacity: n.opacity, blend: n.blend }
+    }
+
+    fn onto(self, n: &mut Node) {
+        n.appearance = self.appearance.into();
+        n.visible = self.visible;
+        n.opacity = self.opacity;
+        n.blend = self.blend;
+    }
+}
+
 /// Add the other `roots` (back → front) to the first Live Paint group among them, which keeps its
 /// id, the paint of its faces and edges, and its own properties apart from the Gap Options, which
 /// are merged; returns (group, faces, edges).
@@ -95,18 +125,16 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         .ok_or_else(|| EngineError::Other("Live Paint Merge: select a Live Paint group and the paths to add".into()))?;
     check_live_paint_takes(d, roots)?;
     let old = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
-    // Paint to carry over: (point inside face, fill) and (point on edge, stroke).
-    let keep_faces: Vec<(Point, Paint)> = b::faces(&old)
-        .iter()
-        .filter(|f| !f.appearance.fill_paint().is_none())
-        .filter_map(|f| Some((po::interior_point(f.path_data()?)?, f.appearance.fill_paint())))
-        .collect();
-    let keep_edges: Vec<(Point, Appearance)> = b::edges(&old)
+    // Paint to carry over: (point inside face, paint) for faces that draw, and (point on edge,
+    // paint) for every edge.
+    let keep_faces: Vec<(Point, Carried)> =
+        b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
+    let keep_edges: Vec<(Point, Carried)> = b::edges(&old)
         .iter()
         .filter_map(|e| {
             let pd = e.path_data()?;
             let sp = pd.subpaths.first().filter(|sp| sp.segment_count() > 0)?;
-            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), (*e.appearance).clone()))
+            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), Carried::of(e)))
         })
         .collect();
     let mut sources = source_nodes(&old);
@@ -126,20 +154,20 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         *ch = children;
     }
     g.extras_mut().live_paint_gaps = stored_gap_options(options);
-    for (pt, paint) in keep_faces {
+    for (pt, carried) in keep_faces {
         if let Some(fid) = face_at(&g, pt).map(|f| f.id)
             && let Some(ch) = g.children_mut()
             && let Some(f) = ch.iter_mut().find(|c| c.id == fid)
         {
-            Arc::make_mut(f).appearance.set_fill(paint);
+            carried.onto(Arc::make_mut(f));
         }
     }
-    for (pt, app) in keep_edges {
+    for (pt, carried) in keep_edges {
         if let Some(eid) = edge_near(&g, pt, 0.5).map(|e| e.id)
             && let Some(ch) = g.children_mut()
             && let Some(e) = ch.iter_mut().find(|c| c.id == eid)
         {
-            Arc::make_mut(e).appearance = app.into();
+            carried.onto(Arc::make_mut(e));
         }
     }
     let mut merged = Beside::replacing(d, roots);
@@ -191,6 +219,13 @@ pub(super) fn lp_release(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&ids) }))
 }
 
+/// Does face or edge `n` draw on the canvas: it is shown, its opacity is above 0, and a fill or
+/// stroke row of its appearance draws (see [`Appearance::has_drawn_fill`] and
+/// [`Appearance::has_drawn_stroke`])?
+fn draws(n: &Node) -> bool {
+    n.visible && n.opacity > 0.0 && (n.appearance.has_drawn_fill() || n.appearance.has_drawn_stroke())
+}
+
 pub(super) fn lp_expand(s: &mut Session, p: &Value) -> Result<Value> {
     let targets = live_targets(s, p)?;
     s.edit("Expand Live Paint", |d, sel| {
@@ -205,8 +240,7 @@ pub(super) fn lp_expand(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(ch) = n.children_mut() {
                 ch.retain(|c| match c.name.as_deref() {
                     Some(SOURCES_NAME) => false,
-                    Some(FACE_NAME) => !c.appearance.fill_paint().is_none(),
-                    Some(EDGE_NAME) => !c.appearance.stroke_paint().is_none() && c.appearance.stroke_width() > 0.0,
+                    Some(FACE_NAME | EDGE_NAME) => draws(c),
                     _ => true,
                 });
             }
@@ -491,6 +525,37 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "group": g.0, "edge": edge.0 }))
 }
 
+/// Every fill and stroke row of face or edge `n`, bottom first, as `livePaint.info` lists them. A
+/// row is `drawn` when the part is shown with an opacity above 0 and the row is shown, has paint
+/// and has an opacity above 0 (a stroke also a weight above 0): the rule of [`draws`], row by row.
+fn appearance_rows(n: &Node) -> Vec<Value> {
+    let part_shown = n.visible && n.opacity > 0.0;
+    n.appearance
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let shown = part_shown && item.visible() && !item.paint().is_none() && item.opacity() > 0.0;
+            let mut row = json!({
+                "index": i,
+                "kind": item.kind_name(),
+                "paint": item.paint().label(),
+                "opacity": item.opacity(),
+                "visible": item.visible(),
+            });
+            let drawn = match item {
+                AppearanceItem::Fill(_) => shown,
+                AppearanceItem::Stroke(st) => {
+                    row["width"] = json!(st.width);
+                    shown && st.width > 0.0
+                }
+            };
+            row["drawn"] = json!(drawn);
+            row
+        })
+        .collect()
+}
+
 pub(super) fn lp_info(s: &mut Session, p: &Value) -> Result<Value> {
     let g = match object_param(p, "group", "livePaint.info")? {
         Some(g) => g,
@@ -502,12 +567,24 @@ pub(super) fn lp_info(s: &mut Session, p: &Value) -> Result<Value> {
         .iter()
         .map(|f| {
             let bb = f.geometric_bounds().unwrap_or(Rect::ZERO);
-            json!({ "id": f.id.0, "fill": f.appearance.fill_paint().label(), "bounds": [bb.x0, bb.y0, bb.x1, bb.y1] })
+            json!({
+                "id": f.id.0,
+                "fill": f.appearance.fill_paint().label(),
+                "bounds": [bb.x0, bb.y0, bb.x1, bb.y1],
+                "appearance": appearance_rows(f),
+            })
         })
         .collect();
     let edges: Vec<Value> = b::edges(n)
         .iter()
-        .map(|e| json!({ "id": e.id.0, "stroke": e.appearance.stroke_paint().label(), "width": e.appearance.stroke_width() }))
+        .map(|e| {
+            json!({
+                "id": e.id.0,
+                "stroke": e.appearance.stroke_paint().label(),
+                "width": e.appearance.stroke_width(),
+                "appearance": appearance_rows(e),
+            })
+        })
         .collect();
     let sources = b::sources(n).and_then(|g| g.children()).map(|c| c.len()).unwrap_or(0);
     let options = n.gap_options();
