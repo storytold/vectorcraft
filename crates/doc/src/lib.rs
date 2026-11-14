@@ -73,6 +73,7 @@ pub use symbols::SymbolBoxes;
 pub mod text;
 pub mod trace;
 pub mod twist;
+pub mod typst;
 pub mod variables;
 pub mod xml_id;
 

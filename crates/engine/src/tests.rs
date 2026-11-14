@@ -209,6 +209,7 @@ mod typearea;
 mod typeglyphbounds;
 mod typescale;
 mod typeundo;
+mod typst;
 mod units;
 mod variables;
 mod warp_images;

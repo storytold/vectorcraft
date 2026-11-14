@@ -54,6 +54,8 @@ pub struct NodeExtras {
     /// Object › Objects on Path: the group's path and the objects attached to it (see
     /// [`crate::objects_on_path`]).
     pub objects_on_path: Option<Box<crate::objects_on_path::ObjectsOnPath>>,
+    /// Typst object: the group's art was typeset from this source (Type › Typst…).
+    pub typst: Option<Box<crate::typst::TypstSpec>>,
     /// A grayscale or 1-bit image's fill color (`paint.setFill` on the image): a solid paint that
     /// colorizes it. Each pixel is drawn in this color, as opaque as the pixel is dark, so white
     /// pixels are transparent. `None`: the image shows its own pixels.
@@ -100,6 +102,7 @@ pub(super) static NO_EXTRAS: NodeExtras = NodeExtras {
     intertwine_tiers: Vec::new(),
     live_paint_gaps: None,
     objects_on_path: None,
+    typst: None,
     colorize: None,
     compound_shape: false,
     shape_mode: crate::ShapeMode::Add,

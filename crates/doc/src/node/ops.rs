@@ -137,6 +137,7 @@ impl Node {
             NodeKind::Layer { .. } => "Layer",
             NodeKind::Group { clip: true, .. } => "Clip Group",
             NodeKind::Group { .. } if self.extras().objects_on_path.is_some() => "Objects on Path",
+            NodeKind::Group { .. } if self.extras().typst.is_some() => "Typst",
             NodeKind::Group { .. } if self.extras().compound_shape => "Compound Shape",
             NodeKind::Group { .. } => "Group",
             NodeKind::Path { live: Some(l), .. } => l.label(),
@@ -546,6 +547,12 @@ impl Node {
             && let Some(on_path) = &mut e.objects_on_path
         {
             on_path.transform(a, on_path_before.as_ref().zip(on_path_after.as_ref()));
+        }
+        // A Typst object's page moves with its art, so typesetting it again keeps its place.
+        if let Some(e) = self.extras_if_any()
+            && let Some(typst) = &mut e.typst
+        {
+            typst.transform(a);
         }
         if let Some(m) = self.extras_if_any().and_then(|e| e.mask.as_mut())
             && m.linked

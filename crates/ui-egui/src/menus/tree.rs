@@ -452,6 +452,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Fill with Placeholder Text", "type.fillPlaceholder"),
                 c("Insert Inline Symbol", "text.insertInline"),
+                c("Typst…", "ui.typst"),
                 Sep,
                 c("Show Hidden Characters", "type.hiddenCharacters"),
                 sub("Type Orientation", vec![c("Horizontal", "type.orientation.horizontal"), c("Vertical", "type.orientation.vertical")]),

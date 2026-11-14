@@ -49,6 +49,7 @@ impl Serialize for Node {
             e.intertwine_tiers.is_empty(),
             e.live_paint_gaps.is_none(),
             e.objects_on_path.is_none(),
+            e.typst.is_none(),
             e.colorize.is_none(),
             is_default(&e.compound_shape),
             is_default(&e.shape_mode),
@@ -94,6 +95,7 @@ impl Serialize for Node {
         field!("intertwine_tiers", &e.intertwine_tiers);
         field!("live_paint_gaps", &e.live_paint_gaps);
         field!("objects_on_path", &e.objects_on_path);
+        field!("typst", &e.typst);
         field!("colorize", &e.colorize);
         field!("compound_shape", &e.compound_shape);
         field!("shape_mode", &e.shape_mode);
@@ -234,6 +236,8 @@ pub(super) struct NodeWire {
     #[serde(default)]
     objects_on_path: Option<Box<crate::objects_on_path::ObjectsOnPath>>,
     #[serde(default)]
+    typst: Option<Box<crate::typst::TypstSpec>>,
+    #[serde(default)]
     colorize: Option<Box<vectorcraft_color::Paint>>,
     #[serde(default)]
     compound_shape: bool,
@@ -271,6 +275,7 @@ impl From<NodeWire> for Node {
             intertwine_tiers: w.intertwine_tiers,
             live_paint_gaps: w.live_paint_gaps,
             objects_on_path: w.objects_on_path,
+            typst: w.typst,
             colorize: w.colorize,
             compound_shape: w.compound_shape,
             shape_mode: w.shape_mode,
