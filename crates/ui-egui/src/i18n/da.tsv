@@ -91,6 +91,44 @@
 @msg	$.evalFile requires a file path	$.evalFile kræver en filsti
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: tidsgrænsen skal være et endeligt antal millisekunder, 0 eller mere
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: tager en filsti og en tidsgrænse
+@msg	assignment to a constant binding	tildeling til en konstant binding
+@msg	invalid array length	ugyldig arraylængde
+@msg	array literal too long	arrayliteralen er for lang
+@msg	the value is not a function	værdien er ikke en funktion
+@msg	apply was called on a value that is not a function	apply blev kaldt på en værdi, der ikke er en funktion
+@msg	the argument list is not an object	argumentlisten er ikke et objekt
+@msg	too many arguments	for mange argumenter
+@msg	the value is not a constructor	værdien er ikke en konstruktør
+@msg	cannot convert the object to a primitive value	objektet kan ikke konverteres til en primitiv værdi
+@msg	cannot convert undefined or null to an object	undefined eller null kan ikke konverteres til et objekt
+@msg	the right side of 'in' is not an object	højre side af 'in' er ikke et objekt
+@msg	the right side of 'instanceof' is not a function	højre side af 'instanceof' er ikke en funktion
+@msg	the function's prototype is not an object	funktionens prototype er ikke et objekt
+@msg	Error: {e}	Error: {e}
+@msg	TypeError: {e}	TypeError: {e}
+@msg	ReferenceError: {e}	ReferenceError: {e}
+@msg	RangeError: {e}	RangeError: {e}
+@msg	SyntaxError: {e}	SyntaxError: {e}
+@msg	EvalError: {e}	EvalError: {e}
+@msg	URIError: {e}	URIError: {e}
+@msg	{ident} is not defined	{ident} er ikke defineret
+@msg	cannot read property '{key}' of {base}	egenskaben '{key}' for {base} kan ikke læses
+@msg	cannot set property '{key}' of {base}	egenskaben '{key}' for {base} kan ikke sættes
+@msg	cannot read a property of {base}	en egenskab for {base} kan ikke læses
+@msg	cannot set a property of {base}	en egenskab for {base} kan ikke sættes
+@msg	cannot define property '{key}': {why}	egenskaben '{key}' kan ikke defineres: {why}
+@msg	cannot assign to property '{key}': {why}	der kan ikke tildeles til egenskaben '{key}': {why}
+@msg	cannot delete property '{key}'	egenskaben '{key}' kan ikke slettes
+@msg	cannot declare function {ident}	funktionen {ident} kan ikke erklæres
+@msg	invalid assignment target	ugyldigt tildelingsmål
+@msg	the array's length is read-only	arrayets længde er skrivebeskyttet
+@msg	the property cannot be redefined	egenskaben kan ikke defineres igen
+@msg	the object is not extensible	objektet kan ikke udvides
+@msg	the length cannot be redefined	længden kan ikke defineres igen
+@msg	it is read-only	den er skrivebeskyttet
+@msg	an element cannot be deleted	et element kan ikke slettes
+@msg	it has only a getter	den har kun en getter
+@msg	the value is a primitive	værdien er primitiv
 @msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: linje {line}, kolonne {column} i {file}: {e} (kastet)
 @msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: linje {line}, kolonne {column}: {e} (kastet)
 @msg	{name}: {e} (thrown)	{name}: {e} (kastet)
