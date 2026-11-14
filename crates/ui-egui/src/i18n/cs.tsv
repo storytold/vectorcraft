@@ -6288,6 +6288,7 @@ mark-style	Japanese	Japonské
 	Single Word Justification:	Zarovnání jednoho slova:
 	Full Justify	Zarovnat do bloku
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: minimum nesmí překročit požadovanou hodnotu ani požadovaná hodnota maximum
 	Justification	Zarovnání do bloku
 	Add filters from the list above	Přidejte filtry ze seznamu výše
 	Add to Stack	Přidat na zásobník

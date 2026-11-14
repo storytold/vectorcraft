@@ -2978,6 +2978,7 @@ digits	Malayalam	Malayalam
 	Letter Spacing:	Harf Boşluğu:
 	Lights	Işıklar
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum, İstenen'i; İstenen ise Maksimum'u aşmamalıdır.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum, İstenen'i; İstenen ise Maksimum'u aşmamalıdır
 	Select by Color	Renge Göre Seç
 	Set History Limit…	Geçmiş Sınırını Ayarla…
 	Single Word Justification:	Tek Sözcük Yaslama:

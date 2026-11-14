@@ -6283,6 +6283,7 @@ theme	Appearance	Apparence
 	Single Word Justification:	Justification d’un mot isolé :
 	Full Justify	Justification complète
 	Minimum must not exceed Desired, nor Desired Maximum.	Le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}` : le minimum ne doit pas dépasser la valeur optimale, ni la valeur optimale le maximum
 	Justification	Justification
 	Add filters from the list above	Ajoutez des filtres à partir de la liste ci-dessus
 	Add to Stack	Ajouter à la pile

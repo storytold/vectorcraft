@@ -2575,7 +2575,8 @@ digits	Malayalam	Malaiàlam
 	Minimal	Mínim
 	Minimize	Minimitza
 	Minimum	Mínim
-	Minimum must not exceed Desired, nor Desired Maximum.	El mínim no pot superar el desitjat ni el màxim desitjat.
+	Minimum must not exceed Desired, nor Desired Maximum.	El mínim no pot superar el desitjat, ni el desitjat el màxim.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: el mínim no pot superar el desitjat, ni el desitjat el màxim
 	Minus Back	Resta al darrere
 	Minus Front	Resta al davant
 	Mirror	Reflexa

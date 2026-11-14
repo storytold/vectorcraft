@@ -5909,6 +5909,7 @@ lighting	Light	Luce
 	Single Word Justification:	Giustificazione parola singola:
 	Full Justify	Giustificazione completa
 	Minimum must not exceed Desired, nor Desired Maximum.	Il minimo non può superare il valore desiderato, né il desiderato il massimo.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: il minimo non può superare il valore desiderato, né il desiderato il massimo
 	Minimum	Minimo
 	Justification	Giustificazione
 	Add filters from the list above	Aggiungi filtri dall'elenco sopra

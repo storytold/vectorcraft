@@ -2061,6 +2061,22 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
     }
 }
 
+/// The error that `text.setFormat` and the paragraph style commands give when a justification
+/// setting's Minimum, Desired and Maximum are out of order is translated in every
+/// complete-message language, with the setting's name kept.
+#[test]
+fn justification_order_error_translates_with_the_setting_name() {
+    for name in ["wordSpacing", "justification.glyph_scaling"] {
+        let error = format!("`{name}`: Minimum must not exceed Desired, nor Desired Maximum");
+        for code in COMPLETE_MESSAGES {
+            let lang = Lang::from_code(code).expect("registered");
+            let shown = message(lang, &error);
+            assert!(shown != error && !shown.contains("Desired"), "{code}: {shown}");
+            assert!(shown.contains(&format!("`{name}`")), "{code}: {shown}");
+        }
+    }
+}
+
 #[test]
 fn package_status_message_templates_parse() {
     let c = Catalog::parse(concat!(

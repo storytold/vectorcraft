@@ -6191,6 +6191,7 @@ imageTrace	Outline	კონტური
 	Letter Spacing:	ასოებს შორის დაშორება:
 	Word Spacing:	სიტყვებს შორის დაშორება:
 	Minimum must not exceed Desired, nor Desired Maximum.	მინიმალური არ უნდა აღემატებოდეს სასურველს, ხოლო სასურველი — მაქსიმალურს.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: მინიმალური არ უნდა აღემატებოდეს სასურველს, ხოლო სასურველი — მაქსიმალურს
 	Single Word Justification:	ერთი სიტყვის სწორება:
 	Apply {name}	სტილის „{name}“ გამოყენება
 	Redefine {name}	სტილის „{name}“ ხელახლა განსაზღვრა

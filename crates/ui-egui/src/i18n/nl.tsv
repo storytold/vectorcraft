@@ -6568,6 +6568,7 @@ swatch	Bright Violet	Felviolet
 	Single Word Justification:	Uitvullen van één woord:
 	Full Justify	Volledig uitvullen
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum mag niet groter zijn dan Gewenst, en Gewenst niet groter dan Maximum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum mag niet groter zijn dan Gewenst, en Gewenst niet groter dan Maximum
 	Justification	Uitvullen
 	Add filters from the list above	Voeg filters toe uit de lijst hierboven
 	Add to Stack	Toevoegen aan stapel
