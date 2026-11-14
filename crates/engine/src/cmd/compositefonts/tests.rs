@@ -536,6 +536,80 @@ fn a_document_replaced_in_the_back_is_measured_when_the_front_one_closes() {
     assert_eq!(actual.cached_bounds, Some(expected));
 }
 
+/// The type of document `index` with id `id`, wherever its tab is.
+fn text_in(s: &Session, index: usize, id: u64) -> vectorcraft_doc::TextObject {
+    match &s.documents()[index].doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (**t).clone(),
+        _ => panic!("not text"),
+    }
+}
+
+/// A document replaced while in the back has its type measured in its own composite fonts at once,
+/// while the front document stays in front with its own definition registered; coming to the front
+/// does not measure that type again.
+#[test]
+fn a_document_replaced_in_the_back_is_measured_before_it_comes_to_the_front() {
+    let (bytes, id, width) = full_roman_file("CF Pane");
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Pane")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    assert_eq!(s.active_index(), Some(1));
+    let front = vectorcraft_text::FontDb::global().composite_font("CF Pane").unwrap();
+    assert_eq!(front.parts.get(vectorcraft_doc::CharClass::Roman).size, 50.0);
+    let measured = text_in(&s, 0, id);
+    assert!((measured.cached_bounds.unwrap().width() - width).abs() < 1e-6);
+    let node = s.documents()[0].doc.node(NodeId(id)).unwrap().geometric_bounds().unwrap();
+    assert!((node.width() - width).abs() < 1e-6);
+    let doc = std::sync::Arc::as_ptr(&s.documents()[0].doc);
+    assert!(s.set_active(0));
+    assert!(std::ptr::eq(doc, std::sync::Arc::as_ptr(&s.documents()[0].doc)));
+    assert_eq!(text(&s, id).cached_bounds, measured.cached_bounds);
+}
+
+/// Type a document replaced in the back sets in a composite font that only the front document
+/// defines is measured in that font while the front one is registered, and again, as missing, when
+/// the replaced document comes to the front.
+#[test]
+fn a_document_replaced_in_the_back_measures_a_font_it_lacks_again_in_front() {
+    let mut s = session();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": "CF Lacked"})).unwrap()["id"].as_u64().unwrap();
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Lacked")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    let back = text_in(&s, 0, id);
+    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &back).bounds;
+    assert_eq!(back.cached_bounds, Some(expected));
+    assert!(s.set_active(0));
+    assert!(vectorcraft_text::FontDb::global().composite_font("CF Lacked").is_none());
+    let actual = text(&s, id);
+    let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &actual).bounds;
+    assert_eq!(actual.cached_bounds, Some(expected));
+}
+
+/// Text holding an inline graphic whose symbol's art is type in a composite font, in a document
+/// replaced in the back, is measured with the graphic at the size the document's own definition
+/// gives it before it comes to the front.
+#[test]
+fn a_document_replaced_in_the_back_measures_inline_graphics_in_its_own_definition() {
+    let mut s = session();
+    let mut full = font("CF Back Inline");
+    full["parts"]["roman"]["size"] = json!(100);
+    s.execute("type.compositeFonts.set", &json!({"fonts": [full]})).unwrap();
+    let art =
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Ab12", "size": 20, "font": "CF Back Inline"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("symbol.new", &json!({"name": "CF Back Inline Mark", "ids": [art]})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "x", "size": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("text.insertInline", &json!({"id": id, "at": 0, "symbol": "CF Back Inline Mark"})).unwrap();
+    let width = text(&s, id).cached_bounds.unwrap().width();
+    let bytes = vectorcraft_format::save_file(&s.doc().unwrap().doc);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Back Inline")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    assert!((text_in(&s, 0, id).cached_bounds.unwrap().width() - width).abs() < 1e-6);
+}
+
 /// A failed batch takes back the composite fonts it set, in the font database too.
 #[test]
 fn a_failed_batch_takes_back_its_composite_fonts() {

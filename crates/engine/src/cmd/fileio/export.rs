@@ -12,7 +12,8 @@ use crate::DocState;
 use super::super::{Result, Session, bad, check_switches, edit, number_or, switch_or, text_param};
 use super::encode::single_artboard;
 use super::{
-    ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,
+    ARTBOARD_PARAMS, Format, check_linked_scripts, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded,
+    write_or_return,
 };
 
 /// The keys the export commands take for every format, beside the path, the format and the
@@ -31,28 +32,28 @@ pub fn unused_option_notes(cmd: &str, f: &Format, p: &Value) -> Vec<String> {
     }
     let listed = |k: &str| super::FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).any(|o| o.name == k);
     let written = super::save::written_as(cmd, f, p);
-    let legacy = f.id == "ai" && super::legacy_ai::wanted(cmd, f, p).unwrap_or(false);
-    let reads = |k: &str| match (f.id, k) {
-        // A legacy `.ai` file is not a PDF: it reads its own options only.
-        ("ai", _) if legacy => super::legacy_ai::reads(k),
-        // The other `.ai` files don't read the legacy file's options, and `preserveEditing` is
-        // on for them whatever is given.
-        ("ai", "preserveEditing") => false,
-        ("ai", _) if super::legacy_ai::LEGACY_ONLY.contains(&k) => false,
-        // An export writes one file: only a save writes each artboard to a file of its own, and
-        // a native file's `range` names those files.
-        ("vectorcraft" | "template" | "ai", "separateArtboards") | ("vectorcraft" | "template", "range") => false,
-        _ => super::save::reads_option(f, k),
-    };
+    let legacy = super::save::legacy_file(cmd, f, p);
     given
         .iter()
-        .filter(|(k, v)| !v.is_null() && !EXPORT_PARAMS.contains(&k.as_str()) && listed(k) && !reads(k))
+        .filter(|(k, v)| !v.is_null() && !EXPORT_PARAMS.contains(&k.as_str()) && listed(k) && !export_reads(f, legacy, k))
         .map(|(k, _)| super::save::unused_option_note(k, &written))
         .collect()
 }
 
+/// Does the file an export writes in `f` read option `key`, `legacy` when it is a legacy `.ai`
+/// file? As a save's file does ([`super::save::file_reads`]), except that an export writes one
+/// file: only a save writes each artboard to a file of its own, and a native file's `range` names
+/// those files.
+pub(super) fn export_reads(f: &Format, legacy: bool, key: &str) -> bool {
+    match (f.id, key) {
+        ("vectorcraft" | "template" | "ai", "separateArtboards") | ("vectorcraft" | "template", "range") => false,
+        _ => super::save::file_reads(f, legacy, key),
+    }
+}
+
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(text_param(p, "format", "document.serialize")?.unwrap_or("vectorcraft")), None)?;
+    check_linked_scripts("document.serialize", f.id, s.doc()?)?;
     let unused = unused_option_notes("document.serialize", f, p);
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
@@ -96,6 +97,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, "document.export")?;
     }
     let f = writable("document.export", text_param(p, "format", "document.export")?, path)?;
+    check_linked_scripts("document.export", f.id, s.doc()?)?;
     let unused = unused_option_notes("document.export", f, p);
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
@@ -355,6 +357,7 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
     let f = writable(C, text_param(p, "format", C)?, path)?;
+    check_linked_scripts(C, f.id, s.doc()?)?;
     let unused = unused_option_notes(C, f, p);
     let expanded = expand_presets(s, C, p)?;
     let p = with_black_output(s, &expanded);

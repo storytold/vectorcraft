@@ -235,6 +235,8 @@ digits	Malayalam	말라얄람어
 	Crop Image	이미지 자르기
 	Image Tools	이미지 도구
 	Remove Background…	배경 제거…
+	Draw (Pencil)	그리기(연필)
+	Place Image	이미지 가져오기
 	Remove Background	배경 제거
 	Background	배경
 	Edge Color	가장자리 색상
@@ -4522,6 +4524,7 @@ theme	Appearance	외관
 @msg	direct-select anchor points to cut at (not the end points of open paths)	자를 앵커 포인트를 직접 선택하세요(열린 패스의 끝점 제외)
 @msg	select paths or anchor points	패스 또는 앵커 포인트를 선택하세요
 @msg	Divide Objects Below: select a path	아래 개체 분할: 패스를 선택하세요
+@msg	select a path	패스를 선택하세요
 @msg	Divide Objects Below: select exactly one path	아래 개체 분할: 패스를 하나만 선택하세요
 @msg	Offset Path: select paths	패스 오프셋: 패스를 선택하세요
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	패스 오프셋: 오프셋을 적용하면 선택한 패스가 남지 않습니다(안쪽 오프셋이 모양보다 큼)
@@ -4665,6 +4668,8 @@ theme	Appearance	외관
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	레이어를 유지하기 위해 {_1} × {_2} 픽셀의 포함된 이미지를 {_3} × {_4} 픽셀로 줄였습니다
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	연결된 그림은 해당 파일을 찾을 때까지 파일에 저장된 저해상도 미리 보기로 표시됩니다: 링크 패널에서 다시 연결하세요
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft 한도를 넘는 연결된 문자 영역은 제외되었습니다
+@msg	the Line Breaking setting of legacy type was left out	이전 형식 문자의 줄 바꿈 설정이 생략되었습니다
+@msg	the Japanese layout rules of legacy type were left out	이전 형식 문자의 일본어 조판 규칙이 생략되었습니다
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	문자 개체 안에서 쓰기 방향이 바뀌는 문자는 첫 글자의 방향으로 열립니다
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	연결된 영역, 문자 감싸기 또는 컴파운드 패스에서 마스크로 사용된 문자는 클리핑하지 않습니다
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	파일에 미리 보기가 없는 연결된 그림은 해당 파일을 찾을 때까지 자리 표시자로 표시됩니다: 링크 패널에서 다시 연결하세요
@@ -4935,6 +4940,7 @@ theme	Appearance	외관
 @msg	`select` must be true or false	`select`은(는) true 또는 false여야 합니다
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors`와 `maxAnchors`는 정수여야 합니다
 @msg	`{key}` must be a number not below 0	`{key}`은(는) 0 이상의 숫자여야 합니다
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}`은(는) 0 이상의 숫자 네 개여야 합니다: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}`은(는) [x, y, width, height]여야 합니다: 유한한 숫자 네 개이며 너비와 높이는 음수가 아니어야 합니다
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}`이(가) `{max_key}`보다 큽니다
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	다음 중 하나 이상을 지정하세요: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -5343,6 +5349,7 @@ effect	Vertical	세로
 	VectorCraft Title Bar on Every Desktop	모든 데스크톱에서 VectorCraft 제목 표시줄
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	환경 변수 VECTORCRAFT_TITLEBAR가 설정되어 있는 동안에는 이 변수가 제목 표시줄을 정합니다.
 	System Title Bar takes precedence over this option while it is on.	시스템 제목 표시줄이 켜져 있는 동안에는 그 설정이 이 옵션보다 우선합니다.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	모든 데스크톱에서 VectorCraft 제목 표시줄이 꺼져 있는 동안에는 이 옵션을 켜든 끄든 이 데스크톱이 창의 제목 표시줄을 그립니다.
 	Value Axis	값 축
 	On Left Side	왼쪽
 	On Right Side	오른쪽
@@ -5782,6 +5789,7 @@ lighting	Light	광원
 @msg	no such color	해당 색상이 없습니다
 @msg	{_1} cannot be used on Windows	{_1}은(는) Windows에서 사용할 수 없습니다
 @msg	more than one action is named “{_1}”	“{_1}”(이)라는 이름의 액션이 둘 이상 있습니다
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	액션 “{_1}”이(가) 폴더 환경 설정 {_2}을(를) 설정합니다. 세트를 저장하려면 해당 단계를 삭제하세요
 @msg	no symbol named `{n}`	이름이 `{n}`인 심볼이 없습니다
 	Smudge Stick…	문지르기 막대…
 	Smudge Stick	문지르기 막대
@@ -6183,6 +6191,8 @@ axis	Y Axis	Y축
 	Action Options…	액션 옵션…
 	Action Options	액션 옵션
 	Playback Options…	재생 옵션…
+	Button Mode	버튼 모드
+	No actions.	동작이 없습니다.
 	Insert Stop…	중지 삽입…
 	Insert Stop	중지 삽입
 	Record Stop	중지 기록
@@ -7081,3 +7091,1817 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+# Status and error messages of commands, scripts, file import and export, and plug-ins.
+@msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	엄격 모드 함수에서는 'caller', 'callee', 'arguments'를 사용할 수 없습니다
+@msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	프로파일 하나에는 회전체 효과를 하나만 쓸 수 있습니다. 기존 효과의 옵션을 편집하세요.
+@msg	Add Points at Crossings: a path went missing	교차점에 점 추가: 패스가 사라졌습니다
+@msg	Alignment must be one of the choices	정렬은 선택 항목 중 하나여야 합니다
+@msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Boolean이 아닌 값에서 Boolean.prototype.{name}을(를) 호출했습니다
+@msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	샘플을 CMYK로 읽을 수 없는 CMYK 이미지는 RGB로 가져왔습니다
+@msg	CSS options: {e}	CSS 옵션: {e}
+@msg	CSV has a header but no data rows	CSV에 머리글은 있지만 데이터 행이 없습니다
+@msg	CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark	CSV에 NUL 바이트가 있습니다: UTF-8로 저장하거나 바이트 순서 표시가 있는 UTF-16으로 저장하세요
+@msg	CSV is empty	CSV가 비어 있습니다
+@msg	CSV is larger than {MAX_CSV_BYTES} bytes	CSV가 {MAX_CSV_BYTES}바이트보다 큽니다
+@msg	CSV is not UTF-16	CSV가 UTF-16이 아닙니다
+@msg	CSV is not UTF-8	CSV가 UTF-8이 아닙니다
+@msg	CSV would be larger than {MAX_CSV_BYTES} bytes	CSV가 {MAX_CSV_BYTES}바이트보다 커집니다
+@msg	Cannot write to the location of “{name}”; choose where to save it	“{name}”의 위치에 쓸 수 없습니다. 저장할 위치를 선택하세요
+@msg	Choose original artwork, not a dimension's generated paths	치수가 만든 패스가 아닌 원본 아트웍을 선택하세요
+@msg	Contour: select paths or shapes	윤곽: 패스나 모양을 선택하세요
+@msg	Contour: the Offset Path effect is not available	윤곽: 패스 간격 띄우기 효과를 사용할 수 없습니다
+@msg	Create needs fills, strokes or both	만들려면 칠이나 선, 또는 둘 다 필요합니다
+@msg	DCS files can only be placed linked: use File › Place with Link on	DCS 파일은 연결된 상태로만 가져올 수 있습니다: 링크를 켜고 파일 › 가져오기를 사용하세요
+@msg	DXF options: {e}	DXF 옵션: {e}
+@msg	DXF scale must be a positive number up to {_1}, not {scale}	DXF 비율은 {_1} 이하의 양수여야 합니다: {scale}
+@msg	DXF {field} `{s}`: {allowed}	DXF {field} `{s}`: {allowed}이어야 합니다
+@msg	Date.prototype method called on a value that is not a Date object	Date 개체가 아닌 값에서 Date.prototype 메서드를 호출했습니다
+@msg	Dimension is locked or hidden	치수가 잠겨 있거나 숨겨져 있습니다
+@msg	Dimension mode does not match its source	치수 모드가 원본과 맞지 않습니다
+@msg	Draw Inside needs exactly one selected path, compound path or text	안쪽에 그리기에는 선택한 패스, 컴파운드 패스 또는 텍스트가 정확히 하나 필요합니다
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	EPS 저장은 모든 아트웍을 기록합니다: 선택 항목만 EPS로 기록하려면 document.export를 사용하세요
+@msg	EPS flattener: {e}	EPS 병합: {e}
+@msg	EPS options: {e}	EPS 옵션: {e}
+@msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}이어야 합니다
+@msg	Error.prototype.toString was called on a value that is not an object	개체가 아닌 값에서 Error.prototype.toString을 호출했습니다
+@msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	화면용 내보내기는 png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai 또는 vectorcraft로 기록합니다
+@msg	Flare click coordinates must be finite numbers	플레어 클릭 좌표는 유한한 숫자여야 합니다
+@msg	Function.prototype.toString was called on a value that is not a function	함수가 아닌 값에서 Function.prototype.toString을 호출했습니다
+@msg	HTML Text applies to object slices of type only	HTML 텍스트는 문자의 개체 슬라이스에만 적용됩니다
+@msg	Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)	개체 식별 기준이 XML ID입니다: 이름은 올바른 XML ID여야 합니다(글자, 밑줄 또는 콜론으로 시작하고 공백이 없어야 함)
+@msg	Image Trace failed: internal error: its thread stopped (please report this bug)	이미지 추적 실패: 내부 오류: 스레드가 멈췄습니다(이 버그를 보고해 주세요)
+@msg	Image Trace failed: {e}	이미지 추적 실패: {e}
+@msg	Image Trace finished, but its document was closed	이미지 추적이 끝났지만 문서가 닫혔습니다
+@msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	이미지 추적이 끝났지만 그 사이에 이미지나 설정이 바뀌었습니다: 다시 추적하세요
+@msg	Import SVG Filter reads SVG files, not SVGZ	SVG 필터 가져오기는 SVGZ가 아닌 SVG 파일을 읽습니다
+@msg	Invalid dimension offset	잘못된 치수 오프셋
+@msg	Invalid point	잘못된 점
+@msg	JSON.parse: {why} (at offset {at})	JSON.parse: {why}(오프셋 {at})
+@msg	JSON.stringify cannot write a structure that contains itself	JSON.stringify는 자신을 포함하는 구조를 기록할 수 없습니다
+@msg	Join: a subpath went missing	연결: 하위 패스가 사라졌습니다
+@msg	Line Gap must be a number	행 간격은 숫자여야 합니다
+@msg	Lock Workspace is not available in VectorCraft	VectorCraft에서는 작업 영역 잠그기를 사용할 수 없습니다
+@msg	Move Panel to New Window is not available: floating panels stay in the main window	패널을 새 창으로 이동은 사용할 수 없습니다: 떠 있는 패널은 기본 창 안에 있습니다
+@msg	Namespace.prototype.toString needs a Namespace	Namespace.prototype.toString에는 Namespace가 필요합니다
+@msg	New Document profiles need the preferences folder, which this run doesn't have	새 문서 프로파일에는 환경 설정 폴더가 필요한데, 이번 실행에는 그 폴더가 없습니다
+@msg	Number.prototype.{name} was called on a value that is not a number	숫자가 아닌 값에서 Number.prototype.{name}을(를) 호출했습니다
+@msg	Object.create's prototype must be an object or null	Object.create의 프로토타입은 개체 또는 null이어야 합니다
+@msg	Object.{function} was given a value that is not an object	Object.{function}에 개체가 아닌 값을 전달했습니다
+@msg	Offset Path: the path is too complex to offset	패스 간격 띄우기: 패스가 너무 복잡해서 간격을 띄울 수 없습니다
+@msg	Offset Path: {e}	패스 간격 띄우기: {e}
+@msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	PDF 내용이 불완전하거나 읽기 한도를 넘습니다. 문서를 가져오지 않았습니다
+@msg	PDF flattener: {e}	PDF 병합: {e}
+@msg	PDF options: {e}	PDF 옵션: {e}
+@msg	QName.prototype.toString needs a QName	QName.prototype.toString에는 QName이 필요합니다
+@msg	Recolor Artwork is no longer open	아트웍 색상 재지정이 더 이상 열려 있지 않습니다
+@msg	RegExp.prototype.{name} was called on a value that is not a RegExp object	RegExp 개체가 아닌 값에서 RegExp.prototype.{name}을(를) 호출했습니다
+@msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	SVG가 UTF-8, UTF-16 또는 ISO 8859-1이 아닙니다
+@msg	Save writes one artboard: name one, or export several with document.export	저장은 아트보드 하나를 기록합니다: 하나를 지정하거나 document.export로 여러 개를 내보내세요
+@msg	Select a dimension first	먼저 치수를 선택하세요
+@msg	Select dimensions to update	업데이트할 치수를 선택하세요
+@msg	Select only dimensions	치수만 선택하세요
+@msg	Select two or more objects, or a group	개체를 두 개 이상 선택하거나 그룹을 선택하세요
+@msg	Shaper needs 1–64 source paths	셰이퍼에는 원본 패스가 1–64개 필요합니다
+@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	스텐실 브리지: 선택한 아트웍이 너무 크거나 세밀해서 브리지를 만들 수 없습니다
+@msg	String.prototype.toString was called on a value that is not a string	문자열이 아닌 값에서 String.prototype.toString을 호출했습니다
+@msg	Switch x/y is for scatter graphs	x/y 전환은 분산형 그래프에 사용합니다
+@msg	Text options: {e}	텍스트 옵션: {e}
+@msg	The {name} profile could not be read, so the new document has the default settings: {reason}	{name} 프로파일을 읽을 수 없어 새 문서에 기본 설정을 사용했습니다: {reason}
+@msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	트랩: 트랩할 만큼 가까운 개체 쌍이 {_1}개보다 많거나, 같은 가로 범위에 있는 개체가 너무 많습니다. 한 번에 더 적은 개체를 트랩하세요
+@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	위딩 상자 및 선: 아트웍 바깥에 들어갈 위딩 선이 없고 위딩 상자가 꺼져 있습니다
+@msg	\ at end of pattern	패턴 끝에 \이(가) 있습니다
+@msg	`alignOn` cannot be empty	`alignOn`은(는) 비워 둘 수 없습니다
+@msg	`alignOn` must be a string	`alignOn`은(는) 문자열이어야 합니다
+@msg	`align` is start, center or end	`align`은(는) start, center 또는 end입니다
+@msg	`align` must be a string	`align`은(는) 문자열이어야 합니다
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors`은(는) [subpath, anchor] 쌍의 배열이어야 합니다
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors`에는 앵커 인덱스(0, 1, 2…)를 나열해야 합니다: {k}
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors`에는 앵커 인덱스(0, 1, 2…)를 나열해야 합니다: {v}
+@msg	`answer` for this {kind} dialog must be one of: {_1}	이 {kind} 대화 상자의 `answer`은(는) 다음 중 하나여야 합니다: {_1}
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers`에 응답이 {MAX_ANSWERS}개보다 많습니다
+@msg	`answers` is larger than 1 MiB	`answers`이(가) 1 MiB보다 큽니다
+@msg	`answers` must be a list of answers	`answers`은(는) 응답 목록이어야 합니다
+@msg	`artboard` must be the index of an artboard of the document	`artboard`은(는) 문서에 있는 아트보드의 인덱스여야 합니다
+@msg	`artboardsAt` must be [x, y]	`artboardsAt`은(는) [x, y]여야 합니다
+@msg	`artboards` must be a list of artboard indices	`artboards`은(는) 아트보드 인덱스 목록이어야 합니다
+@msg	`artboards` names an artboard the document does not have	`artboards`에 문서에 없는 아트보드가 있습니다
+@msg	`artboards` names an artboard twice	`artboards`에 같은 아트보드가 두 번 있습니다
+@msg	`asset` is the asset id (see assets.list)	`asset`은(는) 에셋 id입니다(assets.list 참조)
+@msg	`at` must be [x, y] (got {at})	`at`은(는) [x, y]여야 합니다({at} 입력됨)
+@msg	`at` must be a byte offset	`at`은(는) 바이트 오프셋이어야 합니다
+@msg	`at` must be a point [x, y]	`at`은(는) 점 [x, y]여야 합니다
+@msg	`autoLeading` must be a number	`autoLeading`은(는) 숫자여야 합니다
+@msg	`background` must be "", "matte" or #rrggbb	`background`은(는) "", "matte" 또는 #rrggbb여야 합니다
+@msg	`beside` needs `side`	`beside`에는 `side`가 필요합니다
+@msg	`burasagari` must be "none", "standard" or "forced"	`burasagari`은(는) "none", "standard" 또는 "forced"여야 합니다
+@msg	`center` must be [x, y]	`center`은(는) [x, y]여야 합니다
+@msg	`charAlign` must be "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" or "icfBottom"	`charAlign`은(는) "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" 또는 "icfBottom"이어야 합니다
+@msg	`charDirection` must be "default", "leftToRight" or "rightToLeft"	`charDirection`은(는) "default", "leftToRight" 또는 "rightToLeft"여야 합니다
+@msg	`clearStroke` requires `stroke: false`, `ids: []` and no `stop`	`clearStroke`에는 `stroke: false`와 `ids: []`가 필요하며 `stop`은 쓸 수 없습니다
+@msg	`clear` must be a list of type object ids, not {v}	`clear`은(는) 문자 개체 id 목록이어야 합니다: {v}
+@msg	`clear` must list type objects; {_1} is not one	`clear`에는 문자 개체를 나열해야 합니다. {_1}은(는) 문자 개체가 아닙니다
+@msg	`clear` must not list `id`	`clear`에 `id`를 넣을 수 없습니다
+@msg	`code` must be a whole number	`code`은(는) 정수여야 합니다
+@msg	`colorMode` must be one of rgb, cmyk	`colorMode`은(는) rgb, cmyk 중 하나여야 합니다
+@msg	`color` needs a `rule` to make the theme from	`color`에는 테마를 만들 `rule`이 필요합니다
+@msg	`colors` does not apply to the {name} reduction	`colors`은(는) {name} 감소에는 적용되지 않습니다
+@msg	`colors` is empty	`colors`이(가) 비어 있습니다
+@msg	`colors` must be a whole number from 2 to 256	`colors`은(는) 2에서 256 사이의 정수여야 합니다
+@msg	`colors` must be at least 9 for the uniform reduction	uniform 감소에서는 `colors`이(가) 9 이상이어야 합니다
+@msg	`colors` must be between 1 and {MAX_THEME_COLORS} (got {n})	`colors`은(는) 1에서 {MAX_THEME_COLORS} 사이여야 합니다({n} 입력됨)
+@msg	`columnType` is vertical, uniform, repeating or sliding	`columnType`은(는) vertical, uniform, repeating 또는 sliding입니다
+@msg	`columns` must be a whole number 1..50	`columns`은(는) 1..50의 정수여야 합니다
+@msg	`commands` must not be empty	`commands`은(는) 비어 있으면 안 됩니다
+@msg	`contents` goes with `to`	`contents`은(는) `to`와 함께 씁니다
+@msg	`corners` must be sharp, round or square, not `{other}`	`corners`은(는) sharp, round 또는 square여야 합니다: `{other}`
+@msg	`corners` must list anchor indices (0, 1, 2…), not {v}	`corners`에는 앵커 인덱스(0, 1, 2…)를 나열해야 합니다: {v}
+@msg	`count` must be a whole number from 0 to {MAX_COUNT}	`count`은(는) 0에서 {MAX_COUNT} 사이의 정수여야 합니다
+@msg	`count` must be a whole number from 1 to 100	`count`은(는) 1에서 100 사이의 정수여야 합니다
+@msg	`dataBase64` is larger than the module limit	`dataBase64`이(가) 모듈 한도보다 큽니다
+@msg	`dataBase64` is not valid base64	`dataBase64`이(가) 올바른 base64가 아닙니다
+@msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly`은(는) `ids`, `reverse` 또는 `append`와 함께 쓸 수 없습니다
+@msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth`와 `childLimit`은 요약을 잘라 냅니다: `summary: true`를 전달하세요
+@msg	`design` is a design name, or null for plain columns	`design`은(는) 디자인 이름이며, 일반 막대에는 null입니다
+@msg	`design` is a design name, or null for the default marker	`design`은(는) 디자인 이름이며, 기본 마커에는 null입니다
+@msg	`destinationFolder` is required when destination is `folder`	destination이 `folder`이면 `destinationFolder`가 필요합니다
+@msg	`destination` must be `none`, `saveAndClose` or `folder`	`destination`은(는) `none`, `saveAndClose` 또는 `folder`여야 합니다
+@msg	`diameter` must be from 0.1 to 2500 pt	`diameter`은(는) 0.1에서 2500 pt 사이여야 합니다
+@msg	`digits` must be one of {_1}	`digits`은(는) {_1} 중 하나여야 합니다
+@msg	`dimImages` is a percentage or false	`dimImages`은(는) 백분율 또는 false입니다
+@msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction`은(는) "auto", "leftToRight" 또는 "rightToLeft"여야 합니다
+@msg	`ditherAmount` must be a number from 0 to 100	`ditherAmount`은(는) 0에서 100 사이의 숫자여야 합니다
+@msg	`each` is the value one design stands for, more than 0	`each`은(는) 디자인 하나가 나타내는 값이며 0보다 커야 합니다
+@msg	`end` must be "start" or "end"	`end`은(는) "start" 또는 "end"여야 합니다
+@msg	`ends` applies to joining exactly two paths	`ends`은(는) 정확히 두 패스를 연결할 때 적용됩니다
+@msg	`event` must be one of {_1}	`event`은(는) {_1} 중 하나여야 합니다
+@msg	`every` must be "all", "odd" or "even", not {v}	`every`은(는) "all", "odd" 또는 "even"이어야 합니다: {v}
+@msg	`expand` must be true or false	`expand`은(는) true 또는 false여야 합니다
+@msg	`fidelity` must be from {lo} to {hi} pt	`fidelity`은(는) {lo}에서 {hi} pt 사이여야 합니다
+@msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files`은(는) 마지막 text.findFontFiles 검색에서 찾은 글꼴 파일의 경로 1개에서 1000개여야 합니다
+@msg	`focal` and `radius` cannot be used together	`focal`과 `radius`는 함께 쓸 수 없습니다
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal`은(는) [subpath, anchor] 쌍의 배열이어야 합니다
+@msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal`의 [{si}, {ai}]은(는) 패스의 앵커가 아닙니다
+@msg	`folder` must be an absolute folder path	`folder`은(는) 폴더의 절대 경로여야 합니다
+@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes`은(는) {"wght"}처럼 축 태그와 값으로 이루어진 개체여야 합니다
+@msg	`format` must be a string	`format`은(는) 문자열이어야 합니다
+@msg	`format` must be one of {_1}	`format`은(는) {_1} 중 하나여야 합니다
+@msg	`fractions` is chop or scale	`fractions`은(는) chop 또는 scale입니다
+@msg	`from` and `to` must differ	`from`과 `to`는 서로 달라야 합니다
+@msg	`from` has an empty frame	`from`에 빈 프레임이 있습니다
+@msg	`from` must be a non-negative integer	`from`은(는) 음이 아닌 정수여야 합니다
+@msg	`from` must be area type or type on a path	`from`은(는) 영역 문자 또는 패스 위 문자여야 합니다
+@msg	`gid` must be a glyph id, not {v}	`gid`은(는) 글리프 id여야 합니다: {v}
+@msg	`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)	`glyphAlternate`은(는) 문자 스타일이 아니라 글자 하나에 속합니다(text.setGlyphAlternate로 설정)
+@msg	`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)	`glyphAlternate`에는 글리프 선택을 없애는 null만 쓸 수 있습니다(선택은 text.setGlyphAlternate로 지정)
+@msg	`group` must be one of {_1}	`group`은(는) {_1} 중 하나여야 합니다
+@msg	`group` must be the Objects on Path group of `member` and `target`	`group`은(는) `member`와 `target`이 속한 패스 위 개체 그룹이어야 합니다
+@msg	`guide` must be a guide index (guide.list)	`guide`은(는) 안내선 인덱스여야 합니다(guide.list)
+@msg	`hAlign` must be default, left, center or right	`hAlign`은(는) default, left, center 또는 right여야 합니다
+@msg	`id` is an object id, not {v}	`id`은(는) 개체 id입니다: {v}
+@msg	`id` must be a node id	`id`은(는) 노드 id여야 합니다
+@msg	`id` must be an object id, not {v}	`id`은(는) 개체 id여야 합니다: {v}
+@msg	`ids` must name Objects on Path groups or objects in them	`ids`에는 패스 위 개체 그룹이나 그 안의 개체를 지정해야 합니다
+@msg	`ids` takes at most {MAX_INSPECT_IDS} ids	`ids`에는 id를 최대 {MAX_INSPECT_IDS}개까지 넣을 수 있습니다
+@msg	`imageMap` must be none, rectangle or polygon	`imageMap`은(는) none, rectangle 또는 polygon이어야 합니다
+@msg	`includeArtboardFill` must be true or false	`includeArtboardFill`은(는) true 또는 false여야 합니다
+@msg	`includeSubdirs` must be true or false	`includeSubdirs`은(는) true 또는 false여야 합니다
+@msg	`index` must be a point index	`index`은(는) 점 인덱스여야 합니다
+@msg	`index` must be a whole number or null	`index`은(는) 정수 또는 null이어야 합니다
+@msg	`indices` must be a non-empty array of item indices	`indices`은(는) 항목 인덱스가 하나 이상 있는 배열이어야 합니다
+@msg	`item` needs `index`	`item`에는 `index`가 필요합니다
+@msg	`items` is a list of {kind, item}	`items`은(는) {kind, item}의 목록입니다
+@msg	`items` is empty	`items`이(가) 비어 있습니다
+@msg	`items` must be a list of {id, points}	`items`은(는) {id, points}의 목록이어야 합니다
+@msg	`items` must be a list of {{id, anchors?}}, not {v}	`items`은(는) {{id, anchors?}}의 목록이어야 합니다: {v}
+@msg	`items` must be an array of {id, anchors}	`items`은(는) {id, anchors}의 배열이어야 합니다
+@msg	`items` must be an array of {{id, corners?}}, not {v}	`items`은(는) {{id, corners?}}의 배열이어야 합니다: {v}
+@msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida`은(는) "none", "short", "medium", "long" 또는 "stylistic"이어야 합니다
+@msg	`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)	`kerningBefore`은(는) 문자 스타일이 아니라 줄의 첫 글자에 속합니다(text.setRangeStyle로 설정)
+@msg	`kind` is one of {_1}	`kind`은(는) {_1} 중 하나입니다
+@msg	`kind` must be "round", "invertedRound" or "chamfer", not {v}	`kind`은(는) "round", "invertedRound" 또는 "chamfer"여야 합니다: {v}
+@msg	`kind` must be `text`, `visibility`, `image` or `graph`	`kind`은(는) `text`, `visibility`, `image` 또는 `graph`여야 합니다
+@msg	`kind` must be a string	`kind`은(는) 문자열이어야 합니다
+@msg	`kind` must be image, noImage or htmlText	`kind`은(는) image, noImage 또는 htmlText여야 합니다
+@msg	`kinsokuType` must be "pushInFirst", "pushOutFirst" or "pushOutOnly"	`kinsokuType`은(는) "pushInFirst", "pushOutFirst" 또는 "pushOutOnly"여야 합니다
+@msg	`kinsoku` must be "none", "hard" or "soft"	`kinsoku`은(는) "none", "hard" 또는 "soft"여야 합니다
+@msg	`label` must be a non-empty name of at most 200 characters	`label`은(는) 비어 있지 않은 최대 200자의 이름이어야 합니다
+@msg	`language` must be a language name or tag, such as "Turkish" or "tr"	`language`은(는) "Turkish"나 "tr" 같은 언어 이름 또는 태그여야 합니다
+@msg	`leader` must be a string	`leader`은(는) 문자열이어야 합니다
+@msg	`leadingModel` must be "romanBaseline" or "emBoxTop"	`leadingModel`은(는) "romanBaseline" 또는 "emBoxTop"이어야 합니다
+@msg	`leading` must be from 0.1 to 5000, or null for Auto	`leading`은(는) 0.1에서 5000 사이이거나, 자동이면 null이어야 합니다
+@msg	`length` must be a number of at most 1000000 pt either way	`length`은(는) 양쪽 방향으로 최대 1000000 pt의 숫자여야 합니다
+@msg	`line` must be true or false	`line`은(는) true 또는 false여야 합니다
+@msg	`max` must be 1 to {MAX_SUGGESTIONS}	`max`은(는) 1에서 {MAX_SUGGESTIONS} 사이여야 합니다
+@msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle`({min_angle}°)은 `maxAngle`({max_angle}°)보다 클 수 없습니다
+@msg	`mode` must be "handles", "straight" or "smooth"	`mode`은(는) "handles", "straight" 또는 "smooth"여야 합니다
+@msg	`mode` must be "straight", "bezier" or "arc"	`mode`은(는) "straight", "bezier" 또는 "arc"여야 합니다
+@msg	`mode` must be one of {_1}	`mode`은(는) {_1} 중 하나여야 합니다
+@msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi`은(는) "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" 또는 "lineEndHalf"여야 합니다
+@msg	`name` must be a name that is not empty	`name`은(는) 비어 있지 않은 이름이어야 합니다
+@msg	`name` must not be empty	`name`은(는) 비어 있으면 안 됩니다
+@msg	`names` is a list of preset names	`names`은(는) 사전 설정 이름 목록입니다
+@msg	`names` lists preset names	`names`에는 사전 설정 이름을 나열합니다
+@msg	`names` must be a list of names	`names`은(는) 이름 목록이어야 합니다
+@msg	`names` must be a list of swatch names	`names`은(는) 견본 이름 목록이어야 합니다
+@msg	`names` must be an array of style names	`names`은(는) 스타일 이름의 배열이어야 합니다
+@msg	`new` is a design name, or true	`new`은(는) 디자인 이름 또는 true입니다
+@msg	`origin` must be [x, y] in points	`origin`은(는) 포인트 단위의 [x, y]여야 합니다
+@msg	`path` must be a folder	`path`은(는) 폴더여야 합니다
+@msg	`path` must be a path object	`path`은(는) 패스 개체여야 합니다
+@msg	`picks` must be an array (got {v})	`picks`은(는) 배열이어야 합니다({v} 입력됨)
+@msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks`에는 선택을 1개에서 {MAX_PICKS}개까지 넣어야 합니다({_1} 입력됨)
+@msg	`pivot` must be a whole number from 0 to 8	`pivot`은(는) 0에서 8 사이의 정수여야 합니다
+@msg	`points` must be a list of [x, y] points	`points`은(는) [x, y] 점의 목록이어야 합니다
+@msg	`points` must be a list of point indexes	`points`은(는) 점 인덱스 목록이어야 합니다
+@msg	`points` must be an array of point indices	`points`은(는) 점 인덱스의 배열이어야 합니다
+@msg	`points` must be point indexes	`points`은(는) 점 인덱스여야 합니다
+@msg	`points` must hold from 2 to 100000 points	`points`에는 점이 2개에서 100000개 있어야 합니다
+@msg	`port` must be "in" or "out"	`port`은(는) "in" 또는 "out"이어야 합니다
+@msg	`position` is above or below	`position`은(는) above 또는 below입니다
+@msg	`preset` must be a string	`preset`은(는) 문자열이어야 합니다
+@msg	`radius` must be 0 or more	`radius`은(는) 0 이상이어야 합니다
+@msg	`ratio` must be from 0.1 to 0.5	`ratio`은(는) 0.1에서 0.5 사이여야 합니다
+@msg	`rect` must be [x, y, width, height]	`rect`은(는) [x, y, width, height]여야 합니다
+@msg	`rect` must be [x, y, width, height] with a positive size	`rect`은(는) 크기가 양수인 [x, y, width, height]여야 합니다
+@msg	`rect` must be [x0, y0, x1, y1] (got {r})	`rect`은(는) [x0, y0, x1, y1]이어야 합니다({r} 입력됨)
+@msg	`relation` must be overlap, inside or outside	`relation`은(는) overlap, inside 또는 outside여야 합니다
+@msg	`replace` must be a string	`replace`은(는) 문자열이어야 합니다
+@msg	`reversed` must be true or false	`reversed`은(는) true 또는 false여야 합니다
+@msg	`rotate` must be a finite number	`rotate`은(는) 유한한 숫자여야 합니다
+@msg	`rows` must be lists of numbers or nulls, not {r}	`rows`은(는) 숫자 또는 null의 목록이어야 합니다: {r}
+@msg	`rule` must be nonZero or evenOdd	`rule`은(는) nonZero 또는 evenOdd여야 합니다
+@msg	`scale` must be a number from 0.001 to 1000	`scale`은(는) 0.001에서 1000 사이의 숫자여야 합니다
+@msg	`scale` must be a number in (0, 100]	`scale`은(는) (0, 100] 범위의 숫자여야 합니다
+@msg	`scope.{key}` must be a non-empty array	`scope.{key}`은(는) 비어 있지 않은 배열이어야 합니다
+@msg	`scope` must be "document", {artboards} or {layers}	`scope`은(는) "document", {artboards} 또는 {layers}여야 합니다
+@msg	`scope` must be "selection" or "document", not {other}	`scope`은(는) "selection" 또는 "document"여야 합니다: {other}
+@msg	`script` must be a string	`script`은(는) 문자열이어야 합니다
+@msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes`은(는) 계열 인덱스가 하나 이상 있는 목록입니다
+@msg	`seriesIndexes` needs a `type` or a `valueAxis`	`seriesIndexes`에는 `type` 또는 `valueAxis`가 필요합니다
+@msg	`shift` must be a number of points	`shift`은(는) 포인트 단위의 숫자여야 합니다
+@msg	`showCenter` must be true or false	`showCenter`은(는) true 또는 false여야 합니다
+@msg	`side` must be "left", "right", "top" or "bottom"	`side`은(는) "left", "right", "top" 또는 "bottom"이어야 합니다
+@msg	`side` places the artboard: leave out x, y, width and height	`side`가 아트보드의 위치를 정합니다: x, y, width, height는 생략하세요
+@msg	`singleWordJustification` must be "fullJustify", "alignLeft", "alignCenter" or "alignRight"	`singleWordJustification`은(는) "fullJustify", "alignLeft", "alignCenter" 또는 "alignRight"여야 합니다
+@msg	`size` is a percentage of the base text's size, 1 to 100	`size`은(는) 기준 텍스트 크기에 대한 백분율이며 1에서 100 사이입니다
+@msg	`source` and `target` are the same object	`source`와 `target`이 같은 개체입니다
+@msg	`source` is the only path in series group `target`	`source`은(는) 계열 그룹 `target`에 있는 유일한 패스입니다
+@msg	`source` must be `folder` or `datasets`	`source`은(는) `folder` 또는 `datasets`여야 합니다
+@msg	`spacing` makes more than {MAX_COUNT} lines across the box	`spacing` 값으로는 상자에 선이 {MAX_COUNT}개보다 많이 생깁니다
+@msg	`spacing` must be a number	`spacing`은(는) 숫자여야 합니다
+@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing`은(는) 0 이상의 포인트 값이거나 "auto"여야 합니다
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing`은(는) 0보다 크고 {MAX_DISTANCE} pt 이하여야 합니다
+@msg	`start` must be a finite number	`start`은(는) 유한한 숫자여야 합니다
+@msg	`starts` must be an array of anchor indices (or nulls)	`starts`은(는) 앵커 인덱스(또는 null)의 배열이어야 합니다
+@msg	`status` must be linked, embedded, missing or modified, or a list of them	`status`은(는) linked, embedded, missing 또는 modified이거나 이들의 목록이어야 합니다
+@msg	`stop` must be a stop index	`stop`은(는) 정지점 인덱스여야 합니다
+@msg	`story` styles the whole story: give no `start` or `end`	`story`은(는) 스토리 전체에 스타일을 적용합니다: `start`와 `end`는 지정하지 마세요
+@msg	`story` takes the whole story: give no `start` or `end`	`story`은(는) 스토리 전체를 대상으로 합니다: `start`와 `end`는 지정하지 마세요
+@msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode`은(는) 선에 적용됩니다(stroke: true)
+@msg	`style` must be roman or japanese	`style`은(는) roman 또는 japanese여야 합니다
+@msg	`subpaths` must be two integer indices	`subpaths`은(는) 정수 인덱스 두 개여야 합니다
+@msg	`symbol` must be a symbol name	`symbol`은(는) 심볼 이름이어야 합니다
+@msg	`target` must be "object" or "contents", not {v}	`target`은(는) "object" 또는 "contents"여야 합니다: {v}
+@msg	`target` must be an object of the same Objects on Path group as `member`	`target`은(는) `member`와 같은 패스 위 개체 그룹에 있는 개체여야 합니다
+@msg	`tint` applies to global and spot colours	`tint`은(는) 글로벌 색상과 별색에 적용됩니다
+@msg	`tint` goes with a global or spot `swatch`	`tint`은(는) 글로벌 색상 또는 별색 `swatch`와 함께 씁니다
+@msg	`tint` must be a number (%)	`tint`은(는) 숫자(%)여야 합니다
+@msg	`tint` needs a global or spot colour	`tint`에는 글로벌 색상이나 별색이 필요합니다
+@msg	`to` is already threaded	`to`은(는) 이미 스레드로 연결되어 있습니다
+@msg	`to` is the design's new name	`to`은(는) 디자인의 새 이름입니다
+@msg	`to` must be [x, y]	`to`은(는) [x, y]여야 합니다
+@msg	`to` must be a closed path, area type or type on a path other than `from`	`to`은(는) `from`이 아닌 닫힌 패스, 영역 문자 또는 패스 위 문자여야 합니다
+@msg	`to` must be a whole number	`to`은(는) 정수여야 합니다
+@msg	`to` takes the rows of one object's stack, not aligned rows	`to`에는 정렬된 행이 아니라 한 개체 스택의 행을 지정합니다
+@msg	`tolerance` must be from 0 to 100 pt	`tolerance`은(는) 0에서 100 pt 사이여야 합니다
+@msg	`useLab` must be true or false	`useLab`은(는) true 또는 false여야 합니다
+@msg	`vAlign` must be default, top, middle, baseline or bottom	`vAlign`은(는) default, top, middle, baseline 또는 bottom이어야 합니다
+@msg	`values` must be a list	`values`은(는) 목록이어야 합니다
+@msg	`values` must be an object	`values`은(는) 개체여야 합니다
+@msg	`values` must name hex, rgb, cmyk, lab or gray	`values`에는 hex, rgb, cmyk, lab 또는 gray를 지정해야 합니다
+@msg	`values` names a kind twice	`values`에 같은 종류가 두 번 있습니다
+@msg	`version` must be 0 or {_1}	`version`은(는) 0 또는 {_1}이어야 합니다
+@msg	`version` must be 0 or {newest}	`version`은(는) 0 또는 {newest}이어야 합니다
+@msg	`warichuAlign` must be one of {_1}	`warichuAlign`은(는) {_1} 중 하나여야 합니다
+@msg	`warichuLines` must be a whole number from {_1} to {_2}	`warichuLines`은(는) {_1}에서 {_2} 사이의 정수여야 합니다
+@msg	`weight` must be from 0.01 to 1000 pt	`weight`은(는) 0.01에서 1000 pt 사이여야 합니다
+@msg	`weights` must be a list of {_1} numbers, one per row (got {v})	`weights`은(는) 행마다 하나씩 숫자 {_1}개의 목록이어야 합니다({v} 입력됨)
+@msg	`xml` must be a string	`xml`은(는) 문자열이어야 합니다
+@msg	`{KEY}` entry {n} gives the paragraph at byte {start} of {_1} other indents than an entry before it	`{KEY}` 항목 {n}은(는) {_1}의 바이트 {start}에 있는 단락에 앞선 항목과 다른 들여쓰기를 지정합니다
+@msg	`{KEY}` entry {n} must be an object	`{KEY}` 항목 {n}은(는) 개체여야 합니다
+@msg	`{KEY}` entry {n} sets neither `leftIndent` nor `firstLineIndent`	`{KEY}` 항목 {n}이(가) `leftIndent`와 `firstLineIndent` 중 어느 것도 설정하지 않습니다
+@msg	`{KEY}` entry {n}: `id` must be an object id	`{KEY}` 항목 {n}: `id`은(는) 개체 id여야 합니다
+@msg	`{KEY}` entry {n}: `start` must be a byte offset	`{KEY}` 항목 {n}: `start`은(는) 바이트 오프셋이어야 합니다
+@msg	`{KEY}` entry {n}: `{k}` must be a number from -{MAX_PARA} to {MAX_PARA} pt	`{KEY}` 항목 {n}: `{k}`은(는) -{MAX_PARA}에서 {MAX_PARA} pt 사이의 숫자여야 합니다
+@msg	`{KEY}` entry {n}: no paragraph of {_1} starts at byte {start}	`{KEY}` 항목 {n}: {_1}에는 바이트 {start}에서 시작하는 단락이 없습니다
+@msg	`{KEY}` entry {n}: unknown key `{k}`	`{KEY}` 항목 {n}: 알 수 없는 키 `{k}`
+@msg	`{KEY}` entry {n}: {_1} is not a type object	`{KEY}` 항목 {n}: {_1}은(는) 문자 개체가 아닙니다
+@msg	`{KEY}` is empty	`{KEY}`이(가) 비어 있습니다
+@msg	`{KEY}` must be a list	`{KEY}`은(는) 목록이어야 합니다
+@msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}`에는 항목을 최대 {MAX_PARAGRAPH_INDENTS}개까지 넣을 수 있습니다({_1} 입력됨)
+@msg	`{KEY}` takes no `{other}` beside it	`{KEY}`은(는) `{other}`와(과) 함께 쓸 수 없습니다
+@msg	`{_1}` can't be edited or removed	`{_1}`은(는) 편집하거나 제거할 수 없습니다
+@msg	`{_1}` is built in and always listed	`{_1}`은(는) 기본 제공 항목이며 항상 목록에 있습니다
+@msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}`은(는) 마지막 text.findFontFiles 검색에서 찾은 글꼴 파일이 아닙니다
+@msg	`{_1}` would be overwritten by the package: choose a different folder or name	패키지가 `{_1}`을(를) 덮어쓰게 됩니다: 다른 폴더나 이름을 선택하세요
+@msg	`{base}` is larger than {_1} MB	`{base}`이(가) {_1} MB보다 큽니다
+@msg	`{base}` is not in the DCS file's folder	`{base}`이(가) DCS 파일의 폴더에 없습니다
+@msg	`{file}` has no art to place	`{file}`에 가져올 아트웍이 없습니다
+@msg	`{file}` is over {_1} MB	`{file}`이(가) {_1} MB를 넘습니다
+@msg	`{f}` belongs to a VectorCraft that is running	`{f}`은(는) 실행 중인 VectorCraft가 사용하고 있습니다
+@msg	`{f}` is the copy of a document open now	`{f}`은(는) 지금 열려 있는 문서의 복사본입니다
+@msg	`{id}` is no writable format (see document.formats)	`{id}`은(는) 기록할 수 있는 형식이 아닙니다(document.formats 참조)
+@msg	`{id}` isn't a loaded library	`{id}`은(는) 불러온 라이브러리가 아닙니다
+@msg	`{key}` has no colours	`{key}`에 색상이 없습니다
+@msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}`에 단어가 {MAX_EDIT_WORDS}개보다 많습니다
+@msg	`{key}` is a design name	`{key}`은(는) 디자인 이름입니다
+@msg	`{key}` is a design name or a list of them	`{key}`은(는) 디자인 이름 또는 디자인 이름 목록입니다
+@msg	`{key}` is longer than {MAX_NAME} characters	`{key}`이(가) {MAX_NAME}자보다 깁니다
+@msg	`{key}` is out of range	`{key}`이(가) 범위를 벗어났습니다
+@msg	`{key}` must be 0 or more	`{key}`은(는) 0 이상이어야 합니다
+@msg	`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent	`{key}`은(는) 백분율 단위의 [min, desired, max] 또는 {{min?, desired?, max?}}여야 합니다
+@msg	`{key}` must be [x, y] numbers	`{key}`은(는) 숫자 [x, y]여야 합니다
+@msg	`{key}` must be a list of words	`{key}`은(는) 단어 목록이어야 합니다
+@msg	`{key}` must be a list, not {v}	`{key}`은(는) 목록이어야 합니다: {v}
+@msg	`{key}` must be a non-negative integer	`{key}`은(는) 음이 아닌 정수여야 합니다
+@msg	`{key}` must be a number or null, not {v}	`{key}`은(는) 숫자 또는 null이어야 합니다: {v}
+@msg	`{key}` must be a number {_1}..{_2}	`{key}`은(는) {_1}..{_2}의 숫자여야 합니다
+@msg	`{key}` must be a whole number of 0 or more	`{key}`은(는) 0 이상의 정수여야 합니다
+@msg	`{key}` must be a whole number of at least 0, not {n}	`{key}`은(는) 0 이상의 정수여야 합니다: {n}
+@msg	`{key}` must be an appearance item index (paint order) or null	`{key}`은(는) 모양새 항목 인덱스(칠하는 순서) 또는 null이어야 합니다
+@msg	`{key}` must be an array of asset ids (see assets.list)	`{key}`은(는) 에셋 id의 배열이어야 합니다(assets.list 참조)
+@msg	`{key}` must be from 0 to 180 degrees, not {a}	`{key}`은(는) 0도에서 180도 사이여야 합니다: {a}
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}`은(는) 0에서 {MAX_DISTANCE} pt 사이여야 합니다
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}`은(는) 0.01에서 1000 pt 사이여야 합니다
+@msg	`{key}` must be from {_1} to {shift_max}	`{key}`은(는) {_1}에서 {shift_max} 사이여야 합니다
+@msg	`{key}` must be from {lo} to {hi}, not {v}	`{key}`은(는) {lo}에서 {hi} 사이여야 합니다: {v}
+@msg	`{key}` must be one of auto, always, never	`{key}`은(는) auto, always, never 중 하나여야 합니다
+@msg	`{key}` must be one of miter, round, bevel	`{key}`은(는) miter, round, bevel 중 하나여야 합니다
+@msg	`{key}` must be one word of at most {_1} characters	`{key}`은(는) 최대 {_1}자의 단어 하나여야 합니다
+@msg	`{key}` must hold single words of at most {_1} characters	`{key}`에는 최대 {_1}자의 단어를 하나씩 넣어야 합니다
+@msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}`에는 패스 위 개체 그룹의 패스에 부착된 개체를 지정해야 합니다
+@msg	`{key}` names an object that is hidden or locked	`{key}`에 지정한 개체가 숨겨졌거나 잠겨 있습니다
+@msg	`{key}`: not a colour: {v}	`{key}`: 색상이 아닙니다: {v}
+@msg	`{k}.family` is required	`{k}.family`가 필요합니다
+@msg	`{k}` is a number 0..1	`{k}`은(는) 0..1의 숫자입니다
+@msg	`{k}` is true or false	`{k}`은(는) true 또는 false입니다
+@msg	`{k}` isn't an export setting: {_1}	`{k}`은(는) 내보내기 설정이 아닙니다: {_1}
+@msg	`{k}` must be a byte offset	`{k}`은(는) 바이트 오프셋이어야 합니다
+@msg	`{k}` must be a number	`{k}`은(는) 숫자여야 합니다
+@msg	`{k}` must be a number of points	`{k}`은(는) 포인트 단위의 숫자여야 합니다
+@msg	`{k}` must be a string	`{k}`은(는) 문자열이어야 합니다
+@msg	`{k}` must be a whole number	`{k}`은(는) 정수여야 합니다
+@msg	`{k}` must be from {lo} to {hi} for {key}	{key}에서는 `{k}`이(가) {lo}에서 {hi} 사이여야 합니다
+@msg	`{k}` must be {what}, not {v}	`{k}`은(는) {what}이어야 합니다: {v}
+@msg	`{l}` isn't a global or spot colour	`{l}`은(는) 글로벌 색상이나 별색이 아닙니다
+@msg	`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText	`{m}`은(는) 비트맵이 아닙니다: clipboard.importSvg, importPdf 또는 importText를 사용하세요
+@msg	`{name}` can't be deleted	`{name}`은(는) 삭제할 수 없습니다
+@msg	`{name}` can't be duplicated	`{name}`은(는) 복제할 수 없습니다
+@msg	`{name}` can't be edited	`{name}`은(는) 편집할 수 없습니다
+@msg	`{name}` can't be edited this way	`{name}`은(는) 이 방법으로 편집할 수 없습니다
+@msg	`{name}` can't be renamed	`{name}`은(는) 이름을 바꿀 수 없습니다
+@msg	`{name}` can't name a folder	`{name}`은(는) 폴더 이름으로 쓸 수 없습니다
+@msg	`{name}` has no art to place	`{name}`에 가져올 아트웍이 없습니다
+@msg	`{name}` has no text to place	`{name}`에 가져올 텍스트가 없습니다
+@msg	`{name}` in the Word document is not UTF-8 or UTF-16 text	Word 문서의 `{name}`이(가) UTF-8 또는 UTF-16 텍스트가 아닙니다
+@msg	`{name}` in the Word document is not well-formed XML: {e}	Word 문서의 `{name}`이(가) 올바른 형식의 XML이 아닙니다: {e}
+@msg	`{name}` in the Word document nests elements more than {MAX_NESTING} deep	Word 문서의 `{name}`에 요소가 {MAX_NESTING}단계보다 깊게 중첩되어 있습니다
+@msg	`{name}` is a built-in preset and is read-only: save it under another name	`{name}`은(는) 기본 제공 사전 설정이며 읽기 전용입니다: 다른 이름으로 저장하세요
+@msg	`{name}` is a built-in preset: save under another name	`{name}`은(는) 기본 제공 사전 설정입니다: 다른 이름으로 저장하세요
+@msg	`{name}` is a built-in profile and stays	`{name}`은(는) 기본 제공 프로파일이므로 그대로 남습니다
+@msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}`은(는) 별도의 파일이며 DCS 파일의 경로 옆에서만 찾을 수 있습니다
+@msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}`은(는) `{base}`의 색조입니다: `{base}`을(를) 편집하세요(색조 견본은 이름만 바꿀 수 있습니다)
+@msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}`은(는) 작업 공간입니다: 먼저 edit.colorSettings로 다른 작업 공간을 선택하세요
+@msg	`{name}` is built in and stays	`{name}`은(는) 기본 제공 항목이므로 그대로 남습니다
+@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}`에는 같은 종류의 페인트(색상, 그레이디언트 또는 패턴)만 지정할 수 있습니다
+@msg	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
+@msg	`{n}` can't be deleted	`{n}`은(는) 삭제할 수 없습니다
+@msg	`{n}` can't be merged	`{n}`은(는) 병합할 수 없습니다
+@msg	`{n}` can't be moved	`{n}`은(는) 이동할 수 없습니다
+@msg	`{n}` is not a colour swatch	`{n}`은(는) 색상 견본이 아닙니다
+@msg	`{n}` isn't a solid colour	`{n}`은(는) 단색이 아닙니다
+@msg	`{n}`: colour groups hold solid colours only	`{n}`: 색상 그룹에는 단색만 넣을 수 있습니다
+@msg	`{other}` doesn't trace an image	`{other}`은(는) 이미지를 추적하지 않습니다
+@msg	`{s}`: the step's references copy in more than {_1} MB of values	`{s}`: 이 단계의 참조가 {_1} MB보다 많은 값을 복사해 넣습니다
+@msg	`{tag}` is not an axis tag: a tag is four characters, such as "wght"	`{tag}`은(는) 축 태그가 아닙니다: 태그는 "wght"처럼 네 글자입니다
+@msg	`{to}` is empty or already used	`{to}`이(가) 비어 있거나 이미 사용 중입니다
+@msg	`{u}` is no Unicode character	`{u}`은(는) 유니코드 문자가 아닙니다
+@msg	`{what}` is longer than {MAX_TEXT} bytes	`{what}`이(가) {MAX_TEXT}바이트보다 깁니다
+@msg	`{what}` must be text	`{what}`은(는) 텍스트여야 합니다
+@msg	`{word}` isn't in the custom dictionary	`{word}`은(는) 사용자 사전에 없습니다
+@msg	a CMap has too many mappings	CMap에 매핑이 너무 많습니다
+@msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	DXF 도면에는 원점이 하나입니다: 아트보드마다 도면을 하나씩 만들려면 useArtboards: true를 전달하세요
+@msg	a PDF presets file with over {_1} presets	사전 설정이 {_1}개를 넘는 PDF 사전 설정 파일입니다
+@msg	a \u escape needs four hexadecimal digits	\u 이스케이프에는 16진수 네 자리가 필요합니다
+@msg	a batch preview cannot switch documents	일괄 처리 미리 보기에서는 문서를 전환할 수 없습니다
+@msg	a brush named `{nn}` exists	`{nn}` 브러시가 이미 있습니다
+@msg	a comma in an XPath expression must separate function arguments	XPath 식의 쉼표는 함수 인수를 구분해야 합니다
+@msg	a container of the listed objects is gone	나열한 개체의 컨테이너 하나가 없어졌습니다
+@msg	a content stream can't be read	콘텐츠 스트림을 읽을 수 없습니다
+@msg	a content stream isn't a stream	콘텐츠 스트림이 스트림이 아닙니다
+@msg	a design holds at most {_1} objects	디자인에는 개체를 최대 {_1}개까지 넣을 수 있습니다
+@msg	a design needs a name	디자인에는 이름이 필요합니다
+@msg	a dictionary grew too large	사전이 너무 커졌습니다
+@msg	a document holds at most {_1} SVG filters	문서에는 SVG 필터를 최대 {_1}개까지 둘 수 있습니다
+@msg	a document keeps at most {_1} graph designs	문서에는 그래프 디자인을 최대 {_1}개까지 둘 수 있습니다
+@msg	a document keeps at most {_1} saved selections	문서에는 저장된 선택 영역을 최대 {_1}개까지 둘 수 있습니다
+@msg	a document keeps at most {_1} views	문서에는 보기를 최대 {_1}개까지 둘 수 있습니다
+@msg	a document links at most {MAX_SVG_SCRIPTS} JavaScript files	문서에는 JavaScript 파일을 최대 {MAX_SVG_SCRIPTS}개까지 연결할 수 있습니다
+@msg	a document with unsaved changes has no recovery copy	저장하지 않은 변경 내용이 있는 문서에는 복구 복사본이 없습니다
+@msg	a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes	feConvolveMatrix 필터의 order가 {x}×{y}여서 usvg의 커널 크기 곱셈이 오버플로됩니다
+@msg	a font's data is too large	글꼴 데이터가 너무 큽니다
+@msg	a font's subroutines are too large	글꼴의 서브루틴이 너무 큽니다
+@msg	a function declaration without a name	이름이 없는 함수 선언입니다
+@msg	a gradient preset is already called {n}	{n}(이)라는 그레이디언트 사전 설정이 이미 있습니다
+@msg	a graph has at most {_1} series, so it transposes with at most that many categories	그래프에는 계열이 최대 {_1}개이므로 범주가 그 개수 이하일 때만 행과 열을 바꿀 수 있습니다
+@msg	a host value has too many entries	호스트 값에 항목이 너무 많습니다
+@msg	a host value is nested too deep	호스트 값이 너무 깊게 중첩되어 있습니다
+@msg	a layer can't be merged into its own sublayer	레이어는 자신의 하위 레이어에 병합할 수 없습니다
+@msg	a layer's form box isn't an array	레이어 폼의 상자가 배열이 아닙니다
+@msg	a layer's form can't be read	레이어의 폼을 읽을 수 없습니다
+@msg	a layer's form has no box	레이어의 폼에 상자가 없습니다
+@msg	a layer's form has no dictionary	레이어의 폼에 사전이 없습니다
+@msg	a legend draws at most {MAX_CHIPS} swatches	범례에는 견본을 최대 {MAX_CHIPS}개까지 그립니다
+@msg	a name names one asset: give multiple: false, or one object	이름은 에셋 하나를 가리킵니다: multiple: false를 지정하거나 개체 하나를 지정하세요
+@msg	a namespace declaration uses a reserved prefix or URI	네임스페이스 선언에 예약된 접두사나 URI를 사용했습니다
+@msg	a namespace qualifier is undefined	네임스페이스 한정자가 정의되지 않았습니다
+@msg	a namespace with an empty URI cannot have a prefix	URI가 빈 네임스페이스에는 접두사를 붙일 수 없습니다
+@msg	a number has no digits	숫자에 자릿수가 없습니다
+@msg	a number's exponent has no digits	숫자의 지수에 자릿수가 없습니다
+@msg	a number's fraction has no digits	숫자의 소수부에 자릿수가 없습니다
+@msg	a page can't be read	페이지를 읽을 수 없습니다
+@msg	a page object is used by something else	페이지 개체를 다른 항목이 사용하고 있습니다
+@msg	a page thumbnail must be RGB pixels, 1 to {THUMBNAIL_SIZE} a side (got {w} × {h})	페이지 미리 보기 이미지는 한 변이 1에서 {THUMBNAIL_SIZE}인 RGB 픽셀이어야 합니다({w} × {h} 입력됨)
+@msg	a pattern layer doesn't end what it starts	패턴 레이어가 시작한 것을 끝내지 않습니다
+@msg	a pattern layer's colors hold something else	패턴 레이어의 색상에 다른 것이 들어 있습니다
+@msg	a pattern named `{n}` exists	`{n}` 패턴이 이미 있습니다
+@msg	a plug-in with id {_1} is already installed	id가 {_1}인 플러그인이 이미 설치되어 있습니다
+@msg	a preset named `{n}` exists	`{n}` 사전 설정이 이미 있습니다
+@msg	a print presets file with over {_1} presets	사전 설정이 {_1}개를 넘는 인쇄 사전 설정 파일입니다
+@msg	a profile is already called {n}	{n}(이)라는 프로파일이 이미 있습니다
+@msg	a property descriptor cannot have both a value or writable and a get or set	속성 설명자에는 value 또는 writable과 get 또는 set을 함께 둘 수 없습니다
+@msg	a property descriptor must be an object	속성 설명자는 개체여야 합니다
+@msg	a property's {name} must be a function or undefined	속성의 {name}은(는) 함수 또는 undefined여야 합니다
+@msg	a row can't go into itself	행을 자기 자신 안으로 옮길 수 없습니다
+@msg	a series goes on the left or the right value axis	계열은 왼쪽 또는 오른쪽 값 축에 놓입니다
+@msg	a start must be an anchor index ≥ 0 or null	시작은 0 이상의 앵커 인덱스 또는 null이어야 합니다
+@msg	a stream in it would decode to more than 256 MB, or its decode parameters can't be applied	그 안의 스트림을 디코딩하면 256 MB를 넘거나 디코딩 매개변수를 적용할 수 없습니다
+@msg	a string holds a control character	문자열에 제어 문자가 있습니다
+@msg	a string holds an escape sequence JSON does not have	문자열에 JSON에 없는 이스케이프 시퀀스가 있습니다
+@msg	a string is not closed	문자열이 닫히지 않았습니다
+@msg	a style named `{name}` already exists	`{name}` 스타일이 이미 있습니다
+@msg	a style named `{to}` already exists	`{to}` 스타일이 이미 있습니다
+@msg	a swatch needs a colour, gradient or pattern	견본에는 색상, 그레이디언트 또는 패턴이 필요합니다
+@msg	a symbol named `{n}` already exists	`{n}` 심볼이 이미 있습니다
+@msg	a theme has 1 to {THEME_SIZE} colours	테마에는 색상이 1개에서 {THEME_SIZE}개 있습니다
+@msg	a theme is already called {name} (replace: "{name}" overwrites it)	{name}(이)라는 테마가 이미 있습니다(replace: "{name}"을(를) 지정하면 덮어씁니다)
+@msg	a toolbar name has at most {MAX_NAME} characters	도구 막대 이름은 최대 {MAX_NAME}자입니다
+@msg	a view named `{_1}` exists	`{_1}` 보기가 이미 있습니다
+@msg	a view named `{name}` exists	`{name}` 보기가 이미 있습니다
+@msg	a workspace keeps at most {MAX} toolbars	작업 영역에는 도구 막대를 최대 {MAX}개까지 둘 수 있습니다
+@msg	a {_1} series can't go in a {_2} graph	{_1} 계열은 {_2} 그래프에 넣을 수 없습니다
+@msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}: "pdf"(PDF 호환, 기본값) 또는 "7"(이전 .ai, 버전 7)이어야 합니다
+@msg	already editing an opacity mask	이미 불투명 마스크를 편집하고 있습니다
+@msg	already editing another object's opacity mask	이미 다른 개체의 불투명 마스크를 편집하고 있습니다
+@msg	already in pattern editing mode	이미 패턴 편집 모드입니다
+@msg	an SVG filter is named by its id: give `xml` with `name`	SVG 필터의 이름은 id입니다: `name`과 함께 `xml`을 지정하세요
+@msg	an XML element has two attributes with the same name	XML 요소에 이름이 같은 속성이 두 개 있습니다
+@msg	an XML value cannot be inserted into itself or its descendants	XML 값을 자기 자신이나 그 하위 항목에 삽입할 수 없습니다
+@msg	an XML value's children cannot be assigned by position	XML 값의 자식은 위치로 대입할 수 없습니다
+@msg	an XML value's children cannot be deleted by position	XML 값의 자식은 위치로 삭제할 수 없습니다
+@msg	an XMLList converts to XML only when it has one item	XMLList는 항목이 하나일 때만 XML로 변환됩니다
+@msg	an XPath node test is missing	XPath 노드 테스트가 없습니다
+@msg	an XPath operand is missing	XPath 피연산자가 없습니다
+@msg	an XPath operator is missing	XPath 연산자가 없습니다
+@msg	an XPath predicate or step cannot follow here	여기에는 XPath 조건자나 단계가 올 수 없습니다
+@msg	an XPath predicate or step follows a value that is not a node-set	노드 집합이 아닌 값 뒤에 XPath 조건자나 단계가 있습니다
+@msg	an XPath step is missing	XPath 단계가 없습니다
+@msg	an artboard is listed twice	아트보드가 두 번 나열되었습니다
+@msg	an empty artboard has no width or height to scale to	빈 아트보드에는 맞춰 비율을 조정할 너비나 높이가 없습니다
+@msg	an image couldn't be decoded and is missing from the picture	이미지를 디코딩할 수 없어 그림에서 빠졌습니다
+@msg	an image is too large for DXF and was left out	이미지가 DXF에 쓰기에는 너무 커서 제외되었습니다
+@msg	an image of {_1} MB, at most {_2} MB	이미지가 {_1} MB입니다(최대 {_2} MB)
+@msg	an image of {declared_w} × {declared_h} pixels is too large to draw	{declared_w} × {declared_h} 픽셀 이미지는 너무 커서 그릴 수 없습니다
+@msg	an image of {width} × {height} pixels is too large to draw	{width} × {height} 픽셀 이미지는 너무 커서 그릴 수 없습니다
+@msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	{w} × {h} 픽셀 이미지는 너무 커서 변환할 수 없습니다(최대 {_1} 픽셀)
+@msg	an index must be a whole number	인덱스는 정수여야 합니다
+@msg	an inline graphic has no glyphs	인라인 그래픽에 글리프가 없습니다
+@msg	an invisible text form can't be read	보이지 않는 텍스트 폼을 읽을 수 없습니다
+@msg	an object is missing	개체가 없습니다
+@msg	an object's header is missing	개체의 헤더가 없습니다
+@msg	an overprinting form can't be read	오버프린트 폼을 읽을 수 없습니다
+@msg	an unread object has no readable bounds	읽지 않은 개체에 읽을 수 있는 경계가 없습니다
+@msg	an unread object holds a frame of threaded type	읽지 않은 개체에 스레드 문자의 프레임이 있습니다
+@msg	an unread object is missing from its layer	읽지 않은 개체가 레이어에 없습니다
+@msg	anchor `smooth` must be true or false	앵커의 `smooth`은(는) true 또는 false여야 합니다
+@msg	anchor `{key}` must be [x, y]	앵커의 `{key}`은(는) [x, y]여야 합니다
+@msg	anchor `{key}` must be a number	앵커의 `{key}`은(는) 숫자여야 합니다
+@msg	angle and roundness must be finite	각도와 원형률은 유한해야 합니다
+@msg	angles must be a list as long as pins (degrees or null)	angles는 pins와 길이가 같은 목록이어야 합니다(도 또는 null)
+@msg	appearance must be flat|center|edge	appearance는 flat|center|edge여야 합니다
+@msg	apply is "fill" or "stroke", not `{other}`	apply는 "fill" 또는 "stroke"입니다: `{other}`
+@msg	apply was called on a value that is not a function	함수가 아닌 값에서 apply를 호출했습니다
+@msg	area must be a closed polygon of 3 to 100000 [x, y] points	area는 [x, y] 점 3개에서 100000개로 이루어진 닫힌 다각형이어야 합니다
+@msg	area type in a thread cannot use Dynamic Text: {frames}	스레드로 연결된 영역 문자에는 동적 텍스트를 사용할 수 없습니다: {frames}
+@msg	area type needs a path that encloses an area	영역 문자에는 영역을 둘러싸는 패스가 필요합니다
+@msg	area type {_1} is named twice	영역 문자 {_1}이(가) 두 번 지정되었습니다
+@msg	array literal too long	배열 리터럴이 너무 깁니다
+@msg	arrowAlign must be extend|tip, got {o}	arrowAlign은 extend|tip이어야 합니다({o} 입력됨)
+@msg	arrowScale must be [start, end]	arrowScale은 [start, end]여야 합니다
+@msg	artboard is a 0-based index	artboard는 0부터 시작하는 인덱스입니다
+@msg	artboard must be a 0-based index	artboard는 0부터 시작하는 인덱스여야 합니다
+@msg	artboard {i} doesn't print	아트보드 {i}은(는) 인쇄되지 않습니다
+@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout은 {layout?, columns?, spacing?, rightToLeft?}여야 합니다
+@msg	artboardLayout.columns must be 1 or more	artboardLayout.columns는 1 이상이어야 합니다
+@msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout은 gridByRow, gridByColumn, row 또는 column이어야 합니다
+@msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft는 true 또는 false여야 합니다
+@msg	artboardLayout.spacing must be 0–{MAX_SPACING} pt	artboardLayout.spacing은 0–{MAX_SPACING} pt여야 합니다
+@msg	artboards must be a non-empty list	artboards는 비어 있지 않은 목록이어야 합니다
+@msg	artboards must be a number	artboards는 숫자여야 합니다
+@msg	asset `{_1}` has no art to export	에셋 `{_1}`에 내보낼 아트웍이 없습니다
+@msg	assignment to a constant binding	상수 바인딩에 대입했습니다
+@msg	at least one row that isn't excluded needs a weight above 0	제외되지 않은 행 중 하나 이상은 가중치가 0보다 커야 합니다
+@msg	at most {MAX_KEYWORDS} keywords	키워드는 최대 {MAX_KEYWORDS}개입니다
+@msg	at most {MAX_MATCHES} matches are kept	일치 항목은 최대 {MAX_MATCHES}개까지 보관합니다
+@msg	at most {MAX_POINTS} points	점은 최대 {MAX_POINTS}개입니다
+@msg	at most {MAX_QUEUE} files	파일은 최대 {MAX_QUEUE}개입니다
+@msg	at must be [x, y]	at은 [x, y]여야 합니다
+@msg	at/rect lie outside the canvas	at/rect가 캔버스 밖에 있습니다
+@msg	attribute must be size|leading|tracking|kerning|baselineShift	attribute는 size|leading|tracking|kerning|baselineShift여야 합니다
+@msg	attrs must be an object	attrs는 개체여야 합니다
+@msg	automation path rejected: the folder's name isn't valid text	자동화 경로가 거부되었습니다: 폴더 이름이 올바른 텍스트가 아닙니다
+@msg	automation path rejected: {_1} isn't valid text	자동화 경로가 거부되었습니다: {_1}이(가) 올바른 텍스트가 아닙니다
+@msg	automation path rejected: {why}: {path}	자동화 경로가 거부되었습니다: {why}: {path}
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`	axis는 "vertical", "horizontal" 또는 도 단위 각도여야 합니다: `{given}`
+@msg	backgroundContents must be transparent or white	backgroundContents는 transparent 또는 white여야 합니다
+@msg	bad AES key	잘못된 AES 키
+@msg	bad `runs`: {e}	잘못된 `runs`: {e}
+@msg	bad arrowScale	잘못된 arrowScale
+@msg	bad base64	잘못된 base64
+@msg	bad color {c}	잘못된 색상 {c}
+@msg	bad colour	잘못된 색상
+@msg	bad colour in `colors`	`colors`에 잘못된 색상이 있습니다
+@msg	bad colour {v}	잘못된 색상 {v}
+@msg	bad colour {v} in groupColors	groupColors에 잘못된 색상 {v}이(가) 있습니다
+@msg	bad cross-reference entry	잘못된 상호 참조 항목
+@msg	bad cross-reference table	잘못된 상호 참조 테이블
+@msg	bad current colour {v}	잘못된 현재 색상 {v}
+@msg	bad dataBase64	잘못된 dataBase64
+@msg	bad edit	잘못된 편집
+@msg	bad fill {v}	잘못된 칠 {v}
+@msg	bad fit: {e}	잘못된 fit: {e}
+@msg	bad model {other} (keep, new or document)	잘못된 model {other}(keep, new 또는 document)
+@msg	bad new colour {v}	잘못된 새 색상 {v}
+@msg	bad object	잘못된 개체
+@msg	bad object number	잘못된 개체 번호
+@msg	bad offset	잘못된 오프셋
+@msg	bad path data: {e}	잘못된 패스 데이터: {e}
+@msg	bad point {v}: expected [x, y]	잘못된 점 {v}: [x, y]여야 합니다
+@msg	bad point {v}: expected [x, y] or [x, y, pressure]	잘못된 점 {v}: [x, y] 또는 [x, y, pressure]여야 합니다
+@msg	bad reference	잘못된 참조
+@msg	bad trailer size	잘못된 트레일러 크기
+@msg	bad {k} colour	잘못된 {k} 색상
+@msg	batches cannot nest	일괄 처리는 중첩할 수 없습니다
+@msg	bind something to a variable first	먼저 변수에 항목을 바인딩하세요
+@msg	bleed must be 0–{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}	bleed는 0–{MAX_BLEED} pt여야 합니다: 숫자, [top, bottom, left, right] 또는 {{top, bottom, left, right}}
+@msg	blend must be a mode name	blend는 모드 이름이어야 합니다
+@msg	both sides of an XPath | must select nodes	XPath |의 양쪽은 모두 노드를 선택해야 합니다
+@msg	brush must be a name or null	brush는 이름 또는 null이어야 합니다
+@msg	by must be a number	by는 숫자여야 합니다
+@msg	can't add page thumbnails: {why}	페이지 미리 보기 이미지를 추가할 수 없습니다: {why}
+@msg	can't add the editing data for other apps: {why}	다른 앱용 편집 데이터를 추가할 수 없습니다: {why}
+@msg	can't edit the written PDF: {why}	기록한 PDF를 편집할 수 없습니다: {why}
+@msg	can't encrypt the PDF: {why}	PDF를 암호화할 수 없습니다: {why}
+@msg	can't linearise the PDF: {why}	PDF를 선형화할 수 없습니다: {why}
+@msg	can't open `{_1}`: {_2}	`{_1}`을(를) 열 수 없습니다: {_2}
+@msg	can't open `{_1}`: {e}	`{_1}`을(를) 열 수 없습니다: {e}
+@msg	can't open `{name}`: not a format VectorCraft reads (see document.formats)	`{name}`을(를) 열 수 없습니다: VectorCraft가 읽는 형식이 아닙니다(document.formats 참조)
+@msg	can't place `{name}`: not a format VectorCraft reads (see document.formats)	`{name}`을(를) 가져올 수 없습니다: VectorCraft가 읽는 형식이 아닙니다(document.formats 참조)
+@msg	can't read back the written PDF: {e}	기록한 PDF를 다시 읽을 수 없습니다: {e}
+@msg	can't read this Word document: {why}	이 Word 문서를 읽을 수 없습니다: {why}
+@msg	can't write .{e} images: use .png, .jpg, .gif, .webp, .tif or .bmp	.{e} 이미지는 기록할 수 없습니다: .png, .jpg, .gif, .webp, .tif 또는 .bmp를 사용하세요
+@msg	can't write PDF layers, overprint or invisible text: {why}	PDF 레이어, 오버프린트 또는 보이지 않는 텍스트를 기록할 수 없습니다: {why}
+@msg	can't write the file's copyright: {why}	파일의 저작권을 기록할 수 없습니다: {why}
+@msg	can't write the file's modification date: {why}	파일의 수정 날짜를 기록할 수 없습니다: {why}
+@msg	can't write the pages' user units: {why}	페이지의 사용자 단위를 기록할 수 없습니다: {why}
+@msg	canceled	취소됨
+@msg	cannot convert the object to a primitive value	개체를 기본 값으로 변환할 수 없습니다
+@msg	cannot convert undefined or null to an object	undefined 또는 null은 개체로 변환할 수 없습니다
+@msg	cannot distort a zero-size or non-finite bounding box	크기가 0이거나 유한하지 않은 테두리 상자는 왜곡할 수 없습니다
+@msg	cannot move an object into itself	개체를 자기 자신 안으로 이동할 수 없습니다
+@msg	case must be upper|lower|title|sentence	case는 upper|lower|title|sentence여야 합니다
+@msg	category `{c}`: one of {_1}	category `{c}`: {_1} 중 하나여야 합니다
+@msg	center must be [x, y]	center는 [x, y]여야 합니다
+@msg	character dimensions cannot be represented with the source text transform	원본 텍스트 변형으로는 문자 치수를 나타낼 수 없습니다
+@msg	character dimensions cannot be represented with the target text transform	대상 텍스트 변형으로는 문자 치수를 나타낼 수 없습니다
+@msg	choose at least one artboard	아트보드를 하나 이상 선택하세요
+@msg	choose at least one status	상태를 하나 이상 선택하세요
+@msg	clip must be true or false	clip은 true 또는 false여야 합니다
+@msg	clippingMask must be true or false	clippingMask는 true 또는 false여야 합니다
+@msg	closed must be a boolean	closed는 부울이어야 합니다
+@msg	collapsed must be true or false	collapsed는 true 또는 false여야 합니다
+@msg	color.profile: no RGB or CMYK profile is called “{profile}”	color.profile: “{profile}”(이)라는 RGB 또는 CMYK 프로파일이 없습니다
+@msg	colorMode must be rgb or cmyk, not `{m}`	colorMode는 rgb 또는 cmyk여야 합니다: `{m}`
+@msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel은 {own}(문서의 모드), grayscale 또는 bitmap이어야 합니다
+@msg	colour groups can't go into colour groups	색상 그룹은 색상 그룹 안에 넣을 수 없습니다
+@msg	colour, mode and spot apply to solid-colour swatches only	colour, mode, spot은 단색 견본에만 적용됩니다
+@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	{column}열: `{cell}`은(는) 그래프 데이터 파일의 `%` 열이며, 이 열은 읽지 않습니다
+@msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	{column}열: `{cell}`이(가) 가리키는 `{name}`은(는) {_1} 변수입니다
+@msg	column {column}: `{cell}` names no variable	{column}열: `{cell}`이(가) 가리키는 변수가 없습니다
+@msg	column {column}: the variable name is longer than {MAX_NAME} characters	{column}열: 변수 이름이 {MAX_NAME}자보다 깁니다
+@msg	column: true floats the whole column and takes no onto, above or below	column: true는 열 전체를 띄우며 onto, above, below와 함께 쓸 수 없습니다
+@msg	command must be a shape.* command	command는 shape.* 명령이어야 합니다
+@msg	commands[{i}]: missing `command`	commands[{i}]: `command`가 없습니다
+@msg	composer must be "singleLine" or "everyLine"	composer는 "singleLine" 또는 "everyLine"이어야 합니다
+@msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	컴파운드 모양에는 패스, 컴파운드 패스, 그룹, 컴파운드 모양, 문자, 블렌드, 엔벨로프를 넣을 수 있습니다
+@msg	compound {_1} must contain exactly one open path to join	컴파운드 {_1}에는 연결할 열린 패스가 정확히 하나 있어야 합니다
+@msg	connect needs a path other than the one extended	connect에는 연장한 패스가 아닌 다른 패스가 필요합니다
+@msg	connect needs id	connect에는 id가 필요합니다
+@msg	connect path has no open end	connect 패스에 열린 끝이 없습니다
+@msg	continuation must be an array of path chunks	continuation은 패스 조각의 배열이어야 합니다
+@msg	continuation requires points	continuation에는 points가 필요합니다
+@msg	copy needs path: the file to copy into the document's folder	copy에는 path가 필요합니다: 문서의 폴더에 복사할 파일입니다
+@msg	copy takes images only: relink placed documents where their files are	copy는 이미지에만 쓸 수 있습니다: 가져온 문서는 파일이 있는 위치로 다시 연결하세요
+@msg	copying a file isn't available on the web	웹에서는 파일을 복사할 수 없습니다
+@msg	copyrightStatus must be unknown, copyrighted or publicDomain	copyrightStatus는 unknown, copyrighted 또는 publicDomain이어야 합니다
+@msg	copyrightUrl must be a URL (no spaces, at most 2048 characters)	copyrightUrl은 URL이어야 합니다(공백 없이 최대 2048자)
+@msg	corners must be 4 [x, y] points (TL, TR, BR, BL)	corners는 [x, y] 점 4개여야 합니다(TL, TR, BR, BL)
+@msg	counterPer `{c}`: item or file	counterPer `{c}`: item 또는 file이어야 합니다
+@msg	crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"	crop `{_1}`: art, trim, bleed, media 상자는 PDF 페이지에만 있습니다. "crop" 또는 "bounding"을 사용하세요
+@msg	crop rectangle doesn't overlap the image	자르기 사각형이 이미지와 겹치지 않습니다
+@msg	cross-reference and object streams aren't supported	상호 참조 스트림과 개체 스트림은 지원하지 않습니다
+@msg	damaged compressed data: {e}	압축 데이터가 손상되었습니다: {e}
+@msg	dash lengths must be numbers, got {v}	대시 길이는 숫자여야 합니다({v} 입력됨)
+@msg	dash must be a list of lengths or null, got {v}	dash는 길이 목록 또는 null이어야 합니다({v} 입력됨)
+@msg	data key `{k}`: letters, digits, -, _ and . (not name or vc-…)	data 키 `{k}`: 글자, 숫자, -, _, .만 쓸 수 있습니다(name 또는 vc-…는 안 됨)
+@msg	data must be an object of key: value, not {v}	data는 key: value로 이루어진 개체여야 합니다: {v}
+@msg	data set `{name}` holds a value for `{var}`, which the library doesn't declare	데이터 세트 `{name}`에 라이브러리가 선언하지 않은 `{var}`의 값이 있습니다
+@msg	data set `{name}` holds two values for `{var}`	데이터 세트 `{name}`에 `{var}`의 값이 두 개 있습니다
+@msg	data set `{name}` is declared twice	데이터 세트 `{name}`이(가) 두 번 선언되었습니다
+@msg	data takes at most {MAX_DATA} keys at once	data에는 한 번에 키를 최대 {MAX_DATA}개까지 넣을 수 있습니다
+@msg	dataset `{name}` already exists	데이터 세트 `{name}`이(가) 이미 있습니다
+@msg	dataset `{to}` already exists	데이터 세트 `{to}`이(가) 이미 있습니다
+@msg	date `{d}`: YYYY-MM-DD	date `{d}`: YYYY-MM-DD 형식이어야 합니다
+@msg	decoded data is too large	디코딩한 데이터가 너무 큽니다
+@msg	define a variable first	먼저 변수를 정의하세요
+@msg	detect must be true or false	detect는 true 또는 false여야 합니다
+@msg	direct-select anchor points of a path	패스의 앵커 포인트를 직접 선택하세요
+@msg	distance must be > 0	distance는 0보다 커야 합니다
+@msg	dx and dy give the arrow's direction	dx와 dy는 화살표의 방향을 지정합니다
+@msg	dx and dy must be numbers	dx와 dy는 숫자여야 합니다
+@msg	dxf fitTo must be [width, height], positive	dxf fitTo는 양수인 [width, height]여야 합니다
+@msg	dxf must be an object of DXF import options	dxf는 DXF 가져오기 옵션 개체여야 합니다
+@msg	dxf scale must be a positive number up to {_1}, not {s}	dxf scale은 {_1} 이하의 양수여야 합니다: {s}
+@msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf unit `{u}`: mm, cm, in, pt 같은 단위여야 합니다
+@msg	dxf: {e}	dxf: {e}
+@msg	each format is an object {format, scale?, suffix?}	각 형식은 {format, scale?, suffix?} 개체입니다
+@msg	each item needs an id	각 항목에는 id가 필요합니다
+@msg	each match needs `kind`	각 일치 항목에는 `kind`가 필요합니다
+@msg	each match needs a `name`	각 일치 항목에는 `name`이 필요합니다
+@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	`fonts`의 각 항목은 {family, style?}이며 1개에서 1000개까지 지정합니다
+@msg	each of `items` is {kind, item}	`items`의 각 항목은 {kind, item}입니다
+@msg	each of `items` is {{id, corners?}} with an object id, not {it}	`items`의 각 항목은 개체 id가 있는 {{id, corners?}}입니다: {it}
+@msg	each path chunk must contain 1 to 4096 points	각 패스 조각에는 점이 1개에서 4096개 있어야 합니다
+@msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	각 선택은 {{at: [x, y]}} 또는 {{rect: [x0, y0, x1, y1]}}입니다({v} 입력됨)
+@msg	each row needs `from`	각 행에는 `from`이 필요합니다
+@msg	each stop needs a position	각 정지점에는 위치가 필요합니다
+@msg	each subpath needs an anchors array	각 하위 패스에는 anchors 배열이 필요합니다
+@msg	each weight must be a number of 0 or more (got {v})	각 가중치는 0 이상의 숫자여야 합니다({v} 입력됨)
+@msg	easingType must be easeIn, easeOut, easeInOut or easeOutIn	easingType은 easeIn, easeOut, easeInOut 또는 easeOutIn이어야 합니다
+@msg	editingData must be true or false	editingData는 true 또는 false여야 합니다
+@msg	editingData must be true, false or "always"	editingData는 true, false 또는 "always"여야 합니다
+@msg	edits overlap	편집 범위가 겹칩니다
+@msg	effects of objects whose appearances differ can't be moved together	모양새가 서로 다른 개체의 효과는 함께 이동할 수 없습니다
+@msg	empty header in column {_1}	{_1}열의 머리글이 비어 있습니다
+@msg	encoding `{_1}`: utf8 or utf16	encoding `{_1}`: utf8 또는 utf16이어야 합니다
+@msg	ends must be two of "first" and "last"	ends는 "first"와 "last" 중에서 고른 두 개여야 합니다
+@msg	every numbered name for the result is taken	결과에 붙일 번호 이름이 모두 사용 중입니다
+@msg	expanded SVG styles exceed the import size limit	확장한 SVG 스타일이 가져오기 크기 한도를 넘습니다
+@msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	내보내기 사전 설정 파일이 {MAX_PRESET_FILE_BYTES}바이트보다 큽니다
+@msg	exportText must be editable or appearance	exportText는 editable 또는 appearance여야 합니다
+@msg	exportType must be movieClip or graphic, not `{s}`	exportType은 movieClip 또는 graphic이어야 합니다: `{s}`
+@msg	extend needs id	extend에는 id가 필요합니다
+@msg	featureChanges lists at most {MAX_FEATURE_CHANGES} tags	featureChanges에는 태그를 최대 {MAX_FEATURE_CHANGES}개까지 나열할 수 있습니다
+@msg	featureChanges must be a list of tags	featureChanges는 태그 목록이어야 합니다
+@msg	features must be a list of tags	features는 태그 목록이어야 합니다
+@msg	fidelity must be 0..100	fidelity는 0..100이어야 합니다
+@msg	files must be {name, dataBase64}	files는 {name, dataBase64}여야 합니다
+@msg	finally table {t} out of range	finally 테이블 {t}이(가) 범위를 벗어났습니다
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit은 none|autoHeight|shrinkText|block이어야 합니다({id} 입력됨)
+@msg	flags cannot be given with a RegExp object	RegExp 개체와 함께 플래그를 지정할 수 없습니다
+@msg	flattener: {e}	병합: {e}
+@msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`: high, medium, low 또는 저장된 사전 설정이어야 합니다(flattener.presets.list 참조)
+@msg	flipProfile must be along|across, got {o}	flipProfile은 along|across여야 합니다({o} 입력됨)
+@msg	folders `{f}`: none, rows, format, item or itemFormat	folders `{f}`: none, rows, format, item 또는 itemFormat이어야 합니다
+@msg	folders deeper than {MAX_BATCH_DEPTH} levels	폴더가 {MAX_BATCH_DEPTH}단계보다 깊습니다
+@msg	folders deeper than {MAX_DEPTH} levels	폴더가 {MAX_DEPTH}단계보다 깊습니다
+@msg	font family `{family}` is not available	글꼴 모음 `{family}`을(를) 사용할 수 없습니다
+@msg	font family `{tf}` is not available	글꼴 모음 `{tf}`을(를) 사용할 수 없습니다
+@msg	format `{f}`: pdf or postscript	format `{f}`: pdf 또는 postscript여야 합니다
+@msg	format `{f}`: text or json	format `{f}`: text 또는 json이어야 합니다
+@msg	format is `{format}`	format은 `{format}`입니다
+@msg	formats must be an array of rows, not {v}	formats는 행의 배열이어야 합니다: {v}
+@msg	frequency must be between 1 and 300 lines per inch	frequency는 인치당 1줄에서 300줄 사이여야 합니다
+@msg	from and to must be finite	from과 to는 유한해야 합니다
+@msg	from must be [x0, y0, x1, y1]	from은 [x0, y0, x1, y1]이어야 합니다
+@msg	function declaration index out of range	함수 선언 인덱스가 범위를 벗어났습니다
+@msg	give `before` or `after`, not both	`before`와 `after` 중 하나만 지정하세요
+@msg	give `char`, `text`, `code` or `unicode`	`char`, `text`, `code` 또는 `unicode`를 지정하세요
+@msg	give `colors`, or `color` and `rule`	`colors`를 지정하거나 `color`와 `rule`을 지정하세요
+@msg	give `count` or `spacing`, not both	`count`와 `spacing` 중 하나만 지정하세요
+@msg	give `event`, such as onclick	onclick 같은 `event`를 지정하세요
+@msg	give `file`, the JavaScript file's path or URL	JavaScript 파일의 경로나 URL인 `file`을 지정하세요
+@msg	give `fill` and/or `stroke`	`fill`이나 `stroke`, 또는 둘 다 지정하세요
+@msg	give `fill`, `stroke` or both	`fill`이나 `stroke`, 또는 둘 다 지정하세요
+@msg	give `folder`	`folder`를 지정하세요
+@msg	give `fonts`, or open a document	`fonts`를 지정하거나 문서를 여세요
+@msg	give `from` or `indices`, not both	`from`과 `indices` 중 하나만 지정하세요
+@msg	give `id` (no text is being edited)	`id`를 지정하세요(편집 중인 텍스트가 없습니다)
+@msg	give `id` and `anchors`, or `items`, not both	`id`와 `anchors`를 지정하거나 `items`를 지정하세요. 둘 다 지정할 수는 없습니다
+@msg	give `id` or `guide`, not both	`id`와 `guide` 중 하나만 지정하세요
+@msg	give `length` or `to`	`length` 또는 `to`를 지정하세요
+@msg	give `matches`: [{kind, name, target}]	`matches`를 지정하세요: [{kind, name, target}]
+@msg	give `name` (or edit a pattern)	`name`을 지정하세요(또는 패턴을 편집하세요)
+@msg	give `name` or `names`	`name` 또는 `names`를 지정하세요
+@msg	give `name`, an SVG filter's name	SVG 필터의 이름인 `name`을 지정하세요
+@msg	give `path` (a .wasm file) or `dataBase64` (the module)	`path`(.wasm 파일) 또는 `dataBase64`(모듈)를 지정하세요
+@msg	give `path`, `data` or `dataBase64`	`path`, `data` 또는 `dataBase64`를 지정하세요
+@msg	give `path`, `data`, `dataBase64` or `csv`	`path`, `data`, `dataBase64` 또는 `csv`를 지정하세요
+@msg	give `path`, `xml` or `dataBase64`	`path`, `xml` 또는 `dataBase64`를 지정하세요
+@msg	give `path`, an SVG file, or `svg`, SVG text	SVG 파일인 `path` 또는 SVG 텍스트인 `svg`를 지정하세요
+@msg	give `script`, the JavaScript the event runs ("" removes the event)	이벤트가 실행할 JavaScript인 `script`를 지정하세요(""는 이벤트를 제거합니다)
+@msg	give `text` (the reading) or `remove`	`text`(읽는 법) 또는 `remove`를 지정하세요
+@msg	give `x` and `y` (and a `tolerance` of 0 or more)	`x`와 `y`를 지정하세요(`tolerance`는 0 이상)
+@msg	give `xml`, one SVG <filter> element	SVG <filter> 요소 하나인 `xml`을 지정하세요
+@msg	give a mode or r/g/b, c/m/y/k, gray or tint adjustments	mode를 지정하거나 r/g/b, c/m/y/k, gray 또는 tint 조정값을 지정하세요
+@msg	give a name, or paint the active proxy with a saved preset	이름을 지정하거나 활성 프록시를 저장된 사전 설정으로 칠하세요
+@msg	give a name, or select a stroke with a saved profile	이름을 지정하거나 저장된 프로파일이 있는 선을 선택하세요
+@msg	give a pattern name or select an object painted with a pattern	패턴 이름을 지정하거나 패턴으로 칠한 개체를 선택하세요
+@msg	give at least one of clip, invert, disabled, linked	clip, invert, disabled, linked 중 하나 이상을 지정하세요
+@msg	give color, none, swatch or gradient	color, none, swatch 또는 gradient를 지정하세요
+@msg	give dataBase64	dataBase64를 지정하세요
+@msg	give either at (a click) or area (a path drawn around the overlaps)	at(클릭) 또는 area(겹친 부분 둘레에 그린 패스) 중 하나를 지정하세요
+@msg	give exactly one of `at`, `rect` and `points`	`at`, `rect`, `points` 중 정확히 하나를 지정하세요
+@msg	give exactly one of `path`, `data` and `dataBase64`	`path`, `data`, `dataBase64` 중 정확히 하나를 지정하세요
+@msg	give formats or a preset, not both	formats와 사전 설정 중 하나만 지정하세요
+@msg	give index or indexes, not both	index와 indexes 중 하나만 지정하세요
+@msg	give newName or delete	newName 또는 delete를 지정하세요
+@msg	give offset or by	offset 또는 by를 지정하세요
+@msg	give one <filter> element	<filter> 요소 하나를 지정하세요
+@msg	give one of `to`, `rect` or `at`	`to`, `rect`, `at` 중 하나를 지정하세요
+@msg	give one of assets, layers, selection or fullDocument	assets, layers, selection, fullDocument 중 하나를 지정하세요
+@msg	give only one of onto, above, below, icon and a column place	onto, above, below, icon, 열 위치 중 하나만 지정하세요
+@msg	give opacity or blend	opacity 또는 blend를 지정하세요
+@msg	give origin: [x, y], or reset: true	origin: [x, y] 또는 reset: true를 지정하세요
+@msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	overprintFill, overprintStroke, showCenter, imageMap, url 또는 note를 지정하세요
+@msg	give path (a file) or folder	path(파일) 또는 folder를 지정하세요
+@msg	give path, or name and dataBase64	path를 지정하거나 name과 dataBase64를 지정하세요
+@msg	give paths or files	paths 또는 files를 지정하세요
+@msg	give rows, rowHeight, columns or columnWidth	rows, rowHeight, columns 또는 columnWidth를 지정하세요
+@msg	give svg, or dataBase64 of an SVG or SVGZ file	svg를 지정하거나 SVG 또는 SVGZ 파일의 dataBase64를 지정하세요
+@msg	give text	text를 지정하세요
+@msg	give the asset a name	에셋에 이름을 지정하세요
+@msg	give the preset a `name`	사전 설정에 `name`을 지정하세요
+@msg	give the preset a name	사전 설정에 이름을 지정하세요
+@msg	give the preset a name (1–64 characters)	사전 설정에 이름을 지정하세요(1–64자)
+@msg	give the settings to change, e.g. {"formats"}]}	변경할 설정을 지정하세요(예: {"formats"}]})
+@msg	give the style a name	스타일에 이름을 지정하세요
+@msg	give two or more style `names`	스타일 `names`를 두 개 이상 지정하세요
+@msg	give two or more swatches	견본을 두 개 이상 지정하세요
+@msg	give x, y, or a handle's length or angle	x, y 또는 핸들의 길이나 각도를 지정하세요
+@msg	give {key, value} or {values}	{key, value} 또는 {values}를 지정하세요
+@msg	global must be true or false	global은 true 또는 false여야 합니다
+@msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	글자의 스타일(예: 모두 대문자, 작은 대문자 또는 숫자 체계)에서는 {ch}에 글리프 {_1}을(를) 그리지 않습니다
+@msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	글리프 {g}은(는) {_1} {_2}에서 {ch}의 대체 글리프가 아닙니다
+@msg	gradient must be "objects" or "mesh"	gradient는 "objects" 또는 "mesh"여야 합니다
+@msg	grays must be "profile" or "black", not `{g}`	grays는 "profile" 또는 "black"이어야 합니다: `{g}`
+@msg	gridColors must be a preset name or two colours	gridColors는 사전 설정 이름 또는 색상 두 개여야 합니다
+@msg	gridSize must be small, medium or large	gridSize는 small, medium 또는 large여야 합니다
+@msg	guide {g} is not selected	안내선 {g}이(가) 선택되어 있지 않습니다
+@msg	handle must be 0..3	handle은 0..3이어야 합니다
+@msg	handler at {_1} expects {_2} values but its range starts with {d}	{_1}의 처리기는 값 {_2}개가 필요하지만 그 범위는 {d}개로 시작합니다
+@msg	handler depth too large	처리기 깊이가 너무 큽니다
+@msg	handler range {_1}..{_2} out of range	처리기 범위 {_1}..{_2}이(가) 범위를 벗어났습니다
+@msg	hiddenLayers must be true or false	hiddenLayers는 true 또는 false여야 합니다
+@msg	hiddenObjects {v}: "layer" (the default), "omit" or "visible"	hiddenObjects {v}: "layer"(기본값), "omit" 또는 "visible"이어야 합니다
+@msg	highlight a layer to merge into	병합해 넣을 레이어를 강조 표시하세요
+@msg	highlight two or more rows in one layer or group	한 레이어나 그룹에서 행을 두 개 이상 강조 표시하세요
+@msg	highlight two or more rows to merge	병합할 행을 두 개 이상 강조 표시하세요
+@msg	hvcC	hvcC
+@msg	icon docks a panel in the icon column: use window.panel.dock	icon은 패널을 아이콘 열에 도킹합니다: window.panel.dock을 사용하세요
+@msg	id must be a dimension id	id는 치수 id여야 합니다
+@msg	image has no bounds	이미지에 경계가 없습니다
+@msg	image {_1} is linked already	이미지 {_1}은(는) 이미 연결되어 있습니다
+@msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client 또는 server여야 합니다
+@msg	images in a spot ink whose samples couldn't be read were imported in RGB	샘플을 읽을 수 없는 별색 잉크 이미지는 RGB로 가져왔습니다
+@msg	images past the most pixels one file may hold were left out	파일 하나에 담을 수 있는 최대 픽셀 수를 넘는 이미지는 제외되었습니다
+@msg	images too large to read were left out	너무 커서 읽을 수 없는 이미지는 제외되었습니다
+@msg	index out of range	인덱스가 범위를 벗어났습니다
+@msg	indexes may hold at most {MAX_GUIDE_INDEXES} entries	indexes에는 항목을 최대 {MAX_GUIDE_INDEXES}개까지 넣을 수 있습니다
+@msg	indexes must be an array of guide indexes	indexes는 안내선 인덱스의 배열이어야 합니다
+@msg	instances must be 1..1000	instances는 1..1000이어야 합니다
+@msg	instruction out of range	명령이 범위를 벗어났습니다
+@msg	instruction {pc} ({op}) pops below the stack	명령 {pc}({op})이(가) 스택 바닥 아래에서 값을 꺼냅니다
+@msg	instruction {pc} reached with stack depths {seen} and {d}	명령 {pc}에 스택 깊이 {seen}와(과) {d}(으)로 도달했습니다
+@msg	invalid `color`	잘못된 `color`
+@msg	invalid anchor index {v}: expected a non-negative integer	잘못된 앵커 인덱스 {v}: 음이 아닌 정수여야 합니다
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	잘못된 앵커 참조 {v}: [subpath, anchor]여야 합니다
+@msg	invalid angle	잘못된 각도
+@msg	invalid array length	잘못된 배열 길이
+@msg	invalid brush: {e}	잘못된 브러시: {e}
+@msg	invalid color	잘못된 색상
+@msg	invalid colour {c}	잘못된 색상 {c}
+@msg	invalid delta	잘못된 델타
+@msg	invalid group	잘못된 그룹
+@msg	invalid object id {v}: expected a non-negative integer	잘못된 개체 id {v}: 음이 아닌 정수여야 합니다
+@msg	invalid point	잘못된 점
+@msg	invalid regular expression flag '{_1}'	잘못된 정규식 플래그 '{_1}'
+@msg	invalid regular expression: {m}	잘못된 정규식: {m}
+@msg	invalid size	잘못된 크기
+@msg	invalid t	잘못된 t
+@msg	invalid time value	잘못된 시간 값
+@msg	invalid tolerance	잘못된 허용치
+@msg	is a confirm's answer, whose `value` must be true or false	confirm의 응답이며 `value`은(는) true 또는 false여야 합니다
+@msg	is a prompt's answer, whose `value` must be a string or null	prompt의 응답이며 `value`은(는) 문자열 또는 null이어야 합니다
+@msg	is an alert's answer, whose `value` must be "ok"	alert의 응답이며 `value`은(는) "ok"여야 합니다
+@msg	is longer than 16 KiB	16 KiB보다 깁니다
+@msg	it draws its image through a clipping path	이미지를 클리핑 패스를 통해 그립니다
+@msg	it draws no image	이미지를 그리지 않습니다
+@msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	{MAX_DICTIONARY_FILE_BYTES}바이트보다 큽니다
+@msg	it isn't a file	파일이 아닙니다
+@msg	it names {_1} plates, and at most {MAX_PLATES} are read	색판 {_1}개를 지정하지만 최대 {MAX_PLATES}개까지만 읽습니다
+@msg	its art is too long or too detailed for a head	아트웍이 화살촉으로 쓰기에는 너무 길거나 세밀합니다
+@msg	its art paints nothing	아트웍이 아무것도 칠하지 않습니다
+@msg	its artboards all lie beyond the canvas (more than {_1} pt from the origin)	아트보드가 모두 캔버스 밖에 있습니다(원점에서 {_1} pt 넘게 떨어져 있음)
+@msg	its clipping masks are nested too deeply	클리핑 마스크가 너무 깊게 중첩되어 있습니다
+@msg	its image is too large to read	이미지가 너무 커서 읽을 수 없습니다
+@msg	its metadata has no description	메타데이터에 설명이 없습니다
+@msg	its metadata has no direct length	메타데이터에 직접 길이가 없습니다
+@msg	its plates are too large: more than {MAX_SAMPLES} pixels together	색판이 너무 큽니다: 모두 합쳐 {MAX_SAMPLES} 픽셀을 넘습니다
+@msg	its plates are too large: {_1} plates of {w} × {h} pixels	색판이 너무 큽니다: {w} × {h} 픽셀 색판 {_1}개
+@msg	its plates can't be kept together	색판을 함께 보관할 수 없습니다
+@msg	its shapes could not be combined into one	모양을 하나로 결합할 수 없습니다
+@msg	join two different paths	서로 다른 두 패스를 연결하세요
+@msg	jump to {pc}, past the end	끝을 지나 {pc}(으)로 점프합니다
+@msg	justify must be auto|left|center|right|justifyAll	justify는 auto|left|center|right|justifyAll이어야 합니다
+@msg	kbps must be a positive number, not {kbps}	kbps는 양수여야 합니다: {kbps}
+@msg	keywords must be a list of words or a comma-separated string	keywords는 단어 목록이거나 쉼표로 구분한 문자열이어야 합니다
+@msg	keywords must be at most {MAX_KEYWORD} characters, without control characters	keywords는 제어 문자 없이 최대 {MAX_KEYWORD}자여야 합니다
+@msg	kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)	kind는 1, 2 또는 3이어야 합니다. 아니면 사전 설정 `name`을 지정하세요(perspective.presets.list 참조)
+@msg	kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle	kind는 graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle 또는 paraStyle이어야 합니다
+@msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout은 "on", "off", "neutral" 또는 부울이어야 합니다: {v}
+@msg	layer `{name}` has no art to export	레이어 `{name}`에 내보낼 아트웍이 없습니다
+@msg	layer must name a layer or sublayer	layer에는 레이어나 하위 레이어를 지정해야 합니다
+@msg	layers can't be intertwined: select the objects in them	레이어는 교차할 수 없습니다: 레이어 안의 개체를 선택하세요
+@msg	layers go only at the top level or in layers, objects in layers and groups	레이어는 최상위나 레이어 안에만, 개체는 레이어와 그룹 안에만 둘 수 있습니다
+@msg	layers must be true or false	layers는 true 또는 false여야 합니다
+@msg	layout must be gridByRow, gridByColumn, row or column	layout은 gridByRow, gridByColumn, row 또는 column이어야 합니다
+@msg	leading must be a number or "auto"	leading은 숫자 또는 "auto"여야 합니다
+@msg	left/right must be non-negative widths	left/right는 음이 아닌 너비여야 합니다
+@msg	legacyNameEncoding must be one of {_1}	legacyNameEncoding은 {_1} 중 하나여야 합니다
+@msg	level `{t}`: 2 or 3	level `{t}`: 2 또는 3이어야 합니다
+@msg	line {line}: more than {MAX_CSV_COLS} columns	{line}행: 열이 {MAX_CSV_COLS}개보다 많습니다
+@msg	line {line}: unclosed quote	{line}행: 따옴표가 닫히지 않았습니다
+@msg	line {line}: value for `{var}` must match its variable kind	{line}행: `{var}`의 값은 변수 종류와 맞아야 합니다
+@msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`: lf 또는 crlf여야 합니다
+@msg	loading profiles from disk isn't available in the browser	브라우저에서는 디스크에서 프로파일을 불러올 수 없습니다
+@msg	localize: the first argument must be a localization object or a string	localize: 첫 번째 인수는 지역화 개체 또는 문자열이어야 합니다
+@msg	margin: a {m} pt margin leaves no imageable area on the paper	margin: 여백이 {m} pt이면 용지에 인쇄 가능 영역이 남지 않습니다
+@msg	matrix must be finite and invertible, depth finite	matrix는 유한하고 역행렬이 있어야 하며 depth는 유한해야 합니다
+@msg	matte: {e}	matte: {e}
+@msg	member is for order front, forward, backward or back	member는 order가 front, forward, backward 또는 back일 때 씁니다
+@msg	missing `artboards`	`artboards`가 없습니다
+@msg	missing `at` [x, y]	`at` [x, y]가 없습니다
+@msg	missing `attrs`	`attrs`가 없습니다
+@msg	missing `color` or `opacity`	`color` 또는 `opacity`가 없습니다
+@msg	missing `colors`	`colors`가 없습니다
+@msg	missing `commands`	`commands`가 없습니다
+@msg	missing `destinationFolder`	`destinationFolder`가 없습니다
+@msg	missing `effect` id	`effect` id가 없습니다
+@msg	missing `family`	`family`가 없습니다
+@msg	missing `find`	`find`가 없습니다
+@msg	missing `gid` (a glyph id, or null for the default glyph)	`gid`가 없습니다(글리프 id, 기본 글리프는 null)
+@msg	missing `group`	`group`이 없습니다
+@msg	missing `id`	`id`가 없습니다
+@msg	missing `id`: give one, or select one type object	`id`가 없습니다: id를 지정하거나 문자 개체 하나를 선택하세요
+@msg	missing `index` (a point index, or null to clear)	`index`가 없습니다(점 인덱스, 지우려면 null)
+@msg	missing `index` (a stop index, or null to clear)	`index`가 없습니다(정지점 인덱스, 지우려면 null)
+@msg	missing `index` (an item index or null)	`index`가 없습니다(항목 인덱스 또는 null)
+@msg	missing `item`	`item`이 없습니다
+@msg	missing `library`	`library`가 없습니다
+@msg	missing `library` (see graphicStyle.libraries)	`library`가 없습니다(graphicStyle.libraries 참조)
+@msg	missing `library` (see swatch.library.list)	`library`가 없습니다(swatch.library.list 참조)
+@msg	missing `map` (rows [{from, to}] or {current})	`map`이 없습니다(행 [{from, to}] 또는 {current})
+@msg	missing `matrix` [a,b,c,d,e,f]	`matrix` [a,b,c,d,e,f]가 없습니다
+@msg	missing `name` (see gradient.presets.list)	`name`이 없습니다(gradient.presets.list 참조)
+@msg	missing `offset` (a distance in points)	`offset`이 없습니다(포인트 단위 거리)
+@msg	missing `path`	`path`가 없습니다
+@msg	missing `path` (a path object id)	`path`가 없습니다(패스 개체 id)
+@msg	missing `picks`	`picks`가 없습니다
+@msg	missing `rule`	`rule`이 없습니다
+@msg	missing `source` id	`source` id가 없습니다
+@msg	missing `start` (the byte offset of a character)	`start`가 없습니다(글자의 바이트 오프셋)
+@msg	missing `status`: linked, embedded, missing or modified	`status`가 없습니다: linked, embedded, missing 또는 modified
+@msg	missing `target` id	`target` id가 없습니다
+@msg	missing `text`	`text`가 없습니다
+@msg	missing `to`	`to`가 없습니다
+@msg	missing `to` (an index)	`to`가 없습니다(인덱스)
+@msg	missing `to`: a non-negative integer	`to`가 없습니다: 음이 아닌 정수
+@msg	missing `type`	`type`이 없습니다
+@msg	missing `value`	`value`가 없습니다
+@msg	missing `word`	`word`가 없습니다
+@msg	missing `{key}`	`{key}`이(가) 없습니다
+@msg	missing `{k}`	`{k}`이(가) 없습니다
+@msg	missing anchor	앵커가 없습니다
+@msg	missing anchors	anchors가 없습니다
+@msg	missing anchors [[subpath, anchor]…]	anchors [[subpath, anchor]…]가 없습니다
+@msg	missing array `{key}`	배열 `{key}`이(가) 없습니다
+@msg	missing case	case가 없습니다
+@msg	missing color	color가 없습니다
+@msg	missing commands	commands가 없습니다
+@msg	missing destination folder	대상 폴더가 없습니다
+@msg	missing from	from이 없습니다
+@msg	missing group	group이 없습니다
+@msg	missing id or ids	id 또는 ids가 없습니다
+@msg	missing ids	ids가 없습니다
+@msg	missing indexes	indexes가 없습니다
+@msg	missing matrix [a,b,c,d,e,f]	matrix [a,b,c,d,e,f]가 없습니다
+@msg	missing name	name이 없습니다
+@msg	missing op	op가 없습니다
+@msg	missing or invalid `color`	`color`가 없거나 잘못되었습니다
+@msg	missing or unknown `tool`	`tool`이 없거나 알 수 없는 값입니다
+@msg	missing point	점이 없습니다
+@msg	missing point [x,y]	점 [x,y]가 없습니다
+@msg	missing point `{key}` ([x, y])	점 `{key}`([x, y])이(가) 없습니다
+@msg	missing points	points가 없습니다
+@msg	missing points [[x,y]…]	points [[x,y]…]가 없습니다
+@msg	missing segment	세그먼트가 없습니다
+@msg	missing stops	stops가 없습니다
+@msg	missing subpaths	subpaths가 없습니다
+@msg	missing target	target이 없습니다
+@msg	missing to	to가 없습니다
+@msg	missing x, y	x, y가 없습니다
+@msg	mode is set, add or toggle, not `{other}`	mode는 set, add 또는 toggle입니다: `{other}`
+@msg	mode must be "cmyk" or "rgb"	mode는 "cmyk" 또는 "rgb"여야 합니다
+@msg	mode must be area|onPath, got {o}	mode는 area|onPath여야 합니다({o} 입력됨)
+@msg	more than 10000 linked files: package dependencies in smaller parts	연결된 파일이 10000개보다 많습니다: 종속 파일을 더 작게 나누어 패키지하세요
+@msg	more than 256 commands	명령이 256개보다 많습니다
+@msg	more than {MAX_BATCH_FILES} data sets	데이터 세트가 {MAX_BATCH_FILES}개보다 많습니다
+@msg	more than {MAX_BATCH_FILES} files	파일이 {MAX_BATCH_FILES}개보다 많습니다
+@msg	more than {MAX_CSV_ROWS} data rows	데이터 행이 {MAX_CSV_ROWS}개보다 많습니다
+@msg	more than {MAX_FILES} images	이미지가 {MAX_FILES}개보다 많습니다
+@msg	more than {MAX_IMPORT} presets	사전 설정이 {MAX_IMPORT}개보다 많습니다
+@msg	moved must be [[x,y]…]	moved는 [[x,y]…]여야 합니다
+@msg	must be an object with `kind` and `value`	`kind`와 `value`가 있는 개체여야 합니다
+@msg	must have `kind` alert, confirm or prompt	`kind`가 alert, confirm 또는 prompt여야 합니다
+@msg	must have exactly `kind` and `value`	`kind`와 `value`만 있어야 합니다
+@msg	name (a toolbar's name) is required	name(도구 막대 이름)이 필요합니다
+@msg	name (a toolbar's name) must be a string	name(도구 막대 이름)은 문자열이어야 합니다
+@msg	name must be a toolbar's name	name은 도구 막대 이름이어야 합니다
+@msg	names is empty	names가 비어 있습니다
+@msg	names must be an array of symbol names	names는 심볼 이름의 배열이어야 합니다
+@msg	need `anchor` or `segment` + `t`	`anchor` 또는 `segment` + `t`가 필요합니다
+@msg	need at least one anchor	앵커가 하나 이상 필요합니다
+@msg	need at least one point	점이 하나 이상 필요합니다
+@msg	need at least two points	점이 두 개 이상 필요합니다
+@msg	needs a closing quote after the name	이름 뒤에 닫는 따옴표가 필요합니다
+@msg	needs a name	이름이 필요합니다
+@msg	needs a name of at most 64 bytes	최대 64바이트의 이름이 필요합니다
+@msg	needs a name of letters, digits and _, or a quoted name	글자, 숫자, _로 이루어진 이름이나 따옴표로 묶은 이름이 필요합니다
+@msg	needs a name without control characters	제어 문자가 없는 이름이 필요합니다
+@msg	needs points	points가 필요합니다
+@msg	nesting too deep	중첩이 너무 깊습니다
+@msg	nineSlice must be true or false	nineSlice는 true 또는 false여야 합니다
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides는 [left, top, right, bottom]이어야 하고, 각 값은 -16..16이며 left + right < 1, top + bottom < 1이어야 합니다
+@msg	no HP-GL format	HP-GL 형식이 없습니다
+@msg	no New Document profile called `{shown}` ({_1})	`{shown}`(이)라는 새 문서 프로파일이 없습니다({_1})
+@msg	no PDF preset named `{n}`	`{n}` PDF 사전 설정이 없습니다
+@msg	no SVG filter at index {k}	인덱스 {k}에 SVG 필터가 없습니다
+@msg	no action set is current	현재 액션 세트가 없습니다
+@msg	no active data set	활성 데이터 세트가 없습니다
+@msg	no appearance item {index}	모양새 항목 {index}이(가) 없습니다
+@msg	no arrowheads file here	여기에는 화살촉 파일이 없습니다
+@msg	no artboard {_1}	아트보드 {_1}이(가) 없습니다
+@msg	no artboard {artboard} (0-based; the document has {_1})	아트보드 {artboard}이(가) 없습니다(0부터 시작, 문서의 아트보드 수: {_1})
+@msg	no asset {id}	에셋 {id}이(가) 없습니다
+@msg	no asset {id} (see assets.list)	에셋 {id}이(가) 없습니다(assets.list 참조)
+@msg	no assets to export	내보낼 에셋이 없습니다
+@msg	no assets yet: collect art for export first (assets.add)	아직 에셋이 없습니다: 먼저 내보낼 아트웍을 수집하세요(assets.add)
+@msg	no brush named `{n}`	`{n}` 브러시가 없습니다
+@msg	no character at byte {start}	바이트 {start}에 글자가 없습니다
+@msg	no character has code {code}	코드가 {code}인 글자가 없습니다
+@msg	no colour	색상이 없습니다
+@msg	no colour group `{group}`	색상 그룹 `{group}`이(가) 없습니다
+@msg	no colour group `{name}`	색상 그룹 `{name}`이(가) 없습니다
+@msg	no custom arrowhead {name} (see stroke.arrowheads.list)	사용자 정의 화살촉 {name}이(가) 없습니다(stroke.arrowheads.list 참조)
+@msg	no data sets	데이터 세트가 없습니다
+@msg	no dataset named `{from}`	`{from}` 데이터 세트가 없습니다
+@msg	no dataset named `{name}`	`{name}` 데이터 세트가 없습니다
+@msg	no datasets	데이터 세트가 없습니다
+@msg	no design named `{name}`	`{name}` 디자인이 없습니다
+@msg	no design named `{n}`	`{n}` 디자인이 없습니다
+@msg	no design named `{old}`	`{old}` 디자인이 없습니다
+@msg	no encoder for {_1} yet	아직 {_1} 인코더가 없습니다
+@msg	no export preset `{name}` (see document.exportPresets.list)	내보내기 사전 설정 `{name}`이(가) 없습니다(document.exportPresets.list 참조)
+@msg	no file to open	열 파일이 없습니다
+@msg	no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder	폴더가 없습니다: `path`를 전달하거나 환경 설정 › 플러그인 & 스크래치 디스크 › 추가 플러그인 폴더를 설정하세요
+@msg	no fonts to look for: they are all available	찾을 글꼴이 없습니다: 모든 글꼴을 사용할 수 있습니다
+@msg	no formats to export	내보낼 형식이 없습니다
+@msg	no gradient preset `{name}` (see gradient.presets.list)	그레이디언트 사전 설정 `{name}`이(가) 없습니다(gradient.presets.list 참조)
+@msg	no graphic style `{n}` in `{_1}`	`{_1}`에 그래픽 스타일 `{n}`이(가) 없습니다
+@msg	no graphic style library `{key}` (see graphicStyle.libraries)	그래픽 스타일 라이브러리 `{key}`이(가) 없습니다(graphicStyle.libraries 참조)
+@msg	no guide selected	선택한 안내선이 없습니다
+@msg	no guide selected (or give an index)	선택한 안내선이 없습니다(또는 인덱스를 지정하세요)
+@msg	no guide {i}	안내선 {i}이(가) 없습니다
+@msg	no images in the folder	폴더에 이미지가 없습니다
+@msg	no instructions	명령이 없습니다
+@msg	no item at index {_1}	인덱스 {_1}에 항목이 없습니다
+@msg	no item at index {from}	인덱스 {from}에 항목이 없습니다
+@msg	no item at one of the indices {idx}	인덱스 {idx} 중 하나에 항목이 없습니다
+@msg	no layer	레이어가 없습니다
+@msg	no layer to rename	이름을 바꿀 레이어가 없습니다
+@msg	no layer {id} (see layer.list)	레이어 {id}이(가) 없습니다(layer.list 참조)
+@msg	no layers to export	내보낼 레이어가 없습니다
+@msg	no library `{key}`	라이브러리 `{key}`이(가) 없습니다
+@msg	no metafile format	메타파일 형식이 없습니다
+@msg	no object {_1}	개체 {_1}이(가) 없습니다
+@msg	no objects	개체가 없습니다
+@msg	no parent layer	상위 레이어가 없습니다
+@msg	no perspective grid preset named `{b}` (see perspective.presets.list)	`{b}` 원근 격자 사전 설정이 없습니다(perspective.presets.list 참조)
+@msg	no perspective grid preset named `{n}`	`{n}` 원근 격자 사전 설정이 없습니다
+@msg	no point selected (give `index`)	선택한 점이 없습니다(`index`를 지정하세요)
+@msg	no preset called `{from}` (see file.newPresets)	`{from}` 사전 설정이 없습니다(file.newPresets 참조)
+@msg	no preset called `{name}` (see file.newPresets)	`{name}` 사전 설정이 없습니다(file.newPresets 참조)
+@msg	no preset named `{n}`	`{n}` 사전 설정이 없습니다
+@msg	no print preset named `{b}` (see print.presets.list)	`{b}` 인쇄 사전 설정이 없습니다(print.presets.list 참조)
+@msg	no print preset named `{name}` (presets: {_1})	`{name}` 인쇄 사전 설정이 없습니다(사전 설정: {_1})
+@msg	no print preset named `{n}`	`{n}` 인쇄 사전 설정이 없습니다
+@msg	no profile named `{name}`	`{name}` 프로파일이 없습니다
+@msg	no random numbers ({e})	난수를 얻을 수 없습니다({e})
+@msg	no readable files in the folder	폴더에 읽을 수 있는 파일이 없습니다
+@msg	no recovery copy `{f}` (see file.recovery.list)	복구 복사본 `{f}`이(가) 없습니다(file.recovery.list 참조)
+@msg	no rows	행이 없습니다
+@msg	no saved PDF preset named `{name}`	`{name}`(이)라는 저장된 PDF 사전 설정이 없습니다
+@msg	no saved export preset `{name}`	저장된 내보내기 사전 설정 `{name}`이(가) 없습니다
+@msg	no saved gradient preset called {name}	{name}(이)라는 저장된 그레이디언트 사전 설정이 없습니다
+@msg	no saved gradient presets	저장된 그레이디언트 사전 설정이 없습니다
+@msg	no saved preset called `{name}`	`{name}`(이)라는 저장된 사전 설정이 없습니다
+@msg	no saved presets to export (name [Default] in `names` to export it)	내보낼 저장된 사전 설정이 없습니다([Default]를 내보내려면 `names`에 지정하세요)
+@msg	no saved presets to export (name built-in ones in `names`)	내보낼 저장된 사전 설정이 없습니다(기본 제공 사전 설정은 `names`에 지정하세요)
+@msg	no saved print preset named `{name}`	`{name}`(이)라는 저장된 인쇄 사전 설정이 없습니다
+@msg	no saved profile called {name}	{name}(이)라는 저장된 프로파일이 없습니다
+@msg	no saved selection `{name}`	저장된 선택 영역 `{name}`이(가) 없습니다
+@msg	no saved theme called {name} (see colorTheme.list)	{name}(이)라는 저장된 테마가 없습니다(colorTheme.list 참조)
+@msg	no saved views	저장된 보기가 없습니다
+@msg	no selected or given object has a visible 3D effect	선택하거나 지정한 개체 중에 보이는 3D 효과가 있는 개체가 없습니다
+@msg	no series {i}	계열 {i}이(가) 없습니다
+@msg	no slice {n} in the image (see slice.list)	이미지에 슬라이스 {n}이(가) 없습니다(slice.list 참조)
+@msg	no source art	원본 아트웍이 없습니다
+@msg	no stop {i} (the gradient has {n})	정지점 {i}이(가) 없습니다(그레이디언트의 정지점 수: {n})
+@msg	no style `{name}`	스타일 `{name}`이(가) 없습니다
+@msg	no such artboard {v}	해당 아트보드가 없습니다: {v}
+@msg	no such assets (see assets.list)	해당 에셋이 없습니다(assets.list 참조)
+@msg	no such frame anchor, or the frame would reach past the canvas	해당 프레임 앵커가 없거나 프레임이 캔버스를 벗어납니다
+@msg	no such objects	해당 개체가 없습니다
+@msg	no such path anchor, or the path would reach past the canvas	해당 패스 앵커가 없거나 패스가 캔버스를 벗어납니다
+@msg	no such rows	해당 행이 없습니다
+@msg	no swatch `{keep}`	견본 `{keep}`이(가) 없습니다
+@msg	no swatch `{n}`	견본 `{n}`이(가) 없습니다
+@msg	no swatch `{n}` (swatches and colour groups move separately)	견본 `{n}`이(가) 없습니다(견본과 색상 그룹은 따로 이동합니다)
+@msg	no swatch library `{key}` (see swatch.library.list)	견본 라이브러리 `{key}`이(가) 없습니다(swatch.library.list 참조)
+@msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	견본 라이브러리 `{key}`이(가) 없습니다(swatch.library.list 참조, "document": 문서의 견본)
+@msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	견본 라이브러리 `{key}`이(가) 없습니다(swatch.library.list 참조, "{DOCUMENT_SWATCHES}": 문서의 견본)
+@msg	no swatch named `{n}`	`{n}` 견본이 없습니다
+@msg	no swatch or colour group `{n}`	견본 또는 색상 그룹 `{n}`이(가) 없습니다
+@msg	no swatch or colour group `{n}` in `{_1}`	`{_1}`에 견본 또는 색상 그룹 `{n}`이(가) 없습니다
+@msg	no symbol named `{_1}`	`{_1}` 심볼이 없습니다
+@msg	no symbol named `{name}`	`{name}` 심볼이 없습니다
+@msg	no text objects selected	선택한 텍스트 개체가 없습니다
+@msg	no toolbar named `{_1}`	`{_1}` 도구 막대가 없습니다
+@msg	no toolbar named `{name}`	`{name}` 도구 막대가 없습니다
+@msg	no tracing preset `{preset}` (see imageTrace.presets)	추적 사전 설정 `{preset}`이(가) 없습니다(imageTrace.presets 참조)
+@msg	no user library folder here (save with a path, or without one to get the data)	여기에는 사용자 라이브러리 폴더가 없습니다(경로를 지정해 저장하거나, 경로 없이 저장해 데이터를 받으세요)
+@msg	no variable named `{from}`	`{from}` 변수가 없습니다
+@msg	no variable named `{name}`	`{name}` 변수가 없습니다
+@msg	no variable named `{var}`	`{var}` 변수가 없습니다
+@msg	no variable named `{v}`	`{v}` 변수가 없습니다
+@msg	no view named `{name}`	`{name}` 보기가 없습니다
+@msg	node {_1} already has the text variable `{_2}`	노드 {_1}에 이미 텍스트 변수 `{_2}`이(가) 있습니다
+@msg	node {_1} is not a graph	노드 {_1}은(는) 그래프가 아닙니다
+@msg	node {_1} is not an image	노드 {_1}은(는) 이미지가 아닙니다
+@msg	node {_1} is not type	노드 {_1}은(는) 문자가 아닙니다
+@msg	not a DCS file	DCS 파일이 아닙니다
+@msg	not a PDF presets file (format `{_1}`)	PDF 사전 설정 파일이 아닙니다(형식 `{_1}`)
+@msg	not a PDF presets file: {e}	PDF 사전 설정 파일이 아닙니다: {e}
+@msg	not a RegExp object	RegExp 개체가 아닙니다
+@msg	not a Word document: its WordDocument stream doesn't start with a file information block	Word 문서가 아닙니다: WordDocument 스트림이 파일 정보 블록으로 시작하지 않습니다
+@msg	not a Word document: its compound file has no WordDocument stream	Word 문서가 아닙니다: 복합 파일에 WordDocument 스트림이 없습니다
+@msg	not a Word document: its main part is not a WordprocessingML document	Word 문서가 아닙니다: 주 부분이 WordprocessingML 문서가 아닙니다
+@msg	not a Word document: its package has no main document part	Word 문서가 아닙니다: 패키지에 주 문서 부분이 없습니다
+@msg	not a closed path	닫힌 패스가 아닙니다
+@msg	not a flattener presets file (format `{_1}`)	병합 사전 설정 파일이 아닙니다(형식 `{_1}`)
+@msg	not a flattener presets file: {e}	병합 사전 설정 파일이 아닙니다: {e}
+@msg	not a layer or group	레이어나 그룹이 아닙니다
+@msg	not a library file: {e}	라이브러리 파일이 아닙니다: {e}
+@msg	not a mesh envelope point	메시 엔벨로프 점이 아닙니다
+@msg	not a perspective grid presets file (format `{_1}`)	원근 격자 사전 설정 파일이 아닙니다(형식 `{_1}`)
+@msg	not a perspective grid presets file: {e}	원근 격자 사전 설정 파일이 아닙니다: {e}
+@msg	not a print presets file (format `{_1}`)	인쇄 사전 설정 파일이 아닙니다(형식 `{_1}`)
+@msg	not a print presets file: {e}	인쇄 사전 설정 파일이 아닙니다: {e}
+@msg	not a regular expression	정규식이 아닙니다
+@msg	not a stored or deflated central record	저장 방식이나 deflate 방식의 중앙 레코드가 아닙니다
+@msg	not a valid SVGZ file: {e}	올바른 SVGZ 파일이 아닙니다: {e}
+@msg	not an RTF file: it doesn't start with {\rtf	RTF 파일이 아닙니다: {\rtf(으)로 시작하지 않습니다
+@msg	not an action set: the text doesn't start with /version and a number	액션 세트가 아닙니다: 텍스트가 /version과 숫자로 시작하지 않습니다
+@msg	not an image VectorCraft reads (see document.formats)	VectorCraft가 읽는 이미지가 아닙니다(document.formats 참조)
+@msg	not area type (text in a frame) outside perspective	원근 밖의 영역 문자(프레임 안의 텍스트)가 아닙니다
+@msg	not editing an opacity mask	불투명 마스크를 편집하고 있지 않습니다
+@msg	not type on a path outside perspective	원근 밖의 패스 위 문자가 아닙니다
+@msg	nothing prints	인쇄할 것이 없습니다
+@msg	nothing to bind	바인딩할 항목이 없습니다
+@msg	nothing to change	변경할 항목이 없습니다
+@msg	nothing to change: give dx, dy, hScale, vScale or rotation	변경할 항목이 없습니다: dx, dy, hScale, vScale 또는 rotation을 지정하세요
+@msg	nothing to crop	자를 항목이 없습니다
+@msg	nothing to export	내보낼 항목이 없습니다
+@msg	nothing to export: the document has no visible art	내보낼 항목이 없습니다: 문서에 보이는 아트웍이 없습니다
+@msg	nothing to mark	표시할 항목이 없습니다
+@msg	nothing to print: every artboard picked is blank	인쇄할 것이 없습니다: 선택한 아트보드가 모두 비어 있습니다
+@msg	nothing to print: the document has no art that prints	인쇄할 것이 없습니다: 문서에 인쇄되는 아트웍이 없습니다
+@msg	nothing to repeat	반복할 항목이 없습니다
+@msg	numbers out of order in {_1} quantifier	{_1} 수량자의 숫자 순서가 잘못되었습니다
+@msg	object is not a path	개체가 패스가 아닙니다
+@msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	개체 투명도는 강조 표시한 글자에 샘플링할 수 없습니다. 스포이드 옵션에서 투명도를 끄거나 개체 전체를 선택하세요
+@msg	object {_1} can't be set as point type	개체 {_1}은(는) 포인트 문자로 설정할 수 없습니다
+@msg	object {_1} has lost its file's contents: relink it	개체 {_1}이(가) 파일 내용을 잃었습니다: 다시 연결하세요
+@msg	object {_1} has no path	개체 {_1}에 패스가 없습니다
+@msg	object {_1} has no size	개체 {_1}에 크기가 없습니다
+@msg	object {_1} is hidden or locked, or on a locked artboard	개체 {_1}이(가) 숨겨졌거나 잠겨 있거나 잠긴 아트보드에 있습니다
+@msg	object {_1} is not a placed document	개체 {_1}은(는) 가져온 문서가 아닙니다
+@msg	object {_1} is not an Intertwine group	개체 {_1}은(는) 교차 그룹이 아닙니다
+@msg	object {_1} is not an image	개체 {_1}은(는) 이미지가 아닙니다
+@msg	object {_1} is not an image or a linked file	개체 {_1}은(는) 이미지나 연결된 파일이 아닙니다
+@msg	object {_1} is not an image or a placed document	개체 {_1}은(는) 이미지나 가져온 문서가 아닙니다
+@msg	object {_1} is not in this Intertwine group	개체 {_1}은(는) 이 교차 그룹에 없습니다
+@msg	object {_1} needs a 3D effect	개체 {_1}에는 3D 효과가 필요합니다
+@msg	object {_1} needs a 3D effect at index {index}	개체 {_1}에는 인덱스 {index}에 3D 효과가 필요합니다
+@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	개체 {_1}: 속이 빈 돌출 및 경사에는 캡이 없습니다: 그래픽을 매핑하려면 캡을 켜세요
+@msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	개체 {_1}: 깊이가 0이면 개체에 면이 하나뿐입니다: 그래픽을 앞면에 매핑하세요
+@msg	object {_1}: {_2}	개체 {_1}: {_2}
+@msg	object {_1}: {e}	개체 {_1}: {e}
+@msg	object {_1}: {name} at index {index} has no lighting presets; set its lights with effect.setParams	개체 {_1}: 인덱스 {index}의 {name}에는 조명 사전 설정이 없습니다. effect.setParams로 조명을 설정하세요
+@msg	object {id} has anchors 0–{_1} for `corners`, not {past}	개체 {id}에서 `corners`에 쓸 수 있는 앵커는 0–{_1}입니다: {past}
+@msg	object {id} has {n} anchors, so no anchor {past}	개체 {id}에는 앵커가 {n}개이므로 앵커 {past}은(는) 없습니다
+@msg	objects must be none, move or copy	objects는 none, move 또는 copy여야 합니다
+@msg	objects were left out	개체가 제외되었습니다
+@msg	offset out of range	오프셋이 범위를 벗어났습니다
+@msg	on must be true or false	on은 true 또는 false여야 합니다
+@msg	only groups, layers, type and images have a Contents (Characters) row	콘텐츠(글자) 행은 그룹, 레이어, 문자, 이미지에만 있습니다
+@msg	only interior mesh lines can be deleted	안쪽 메시 선만 삭제할 수 있습니다
+@msg	only solid colours can be added (not gradients or patterns)	단색만 추가할 수 있습니다(그레이디언트나 패턴은 안 됨)
+@msg	only solid-colour swatches can be spot colours	단색 견본만 별색이 될 수 있습니다
+@msg	only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first	이 Affinity 파일은 포함된 미리 보기만 읽을 수 있었습니다: 파일 › 열기로 경고와 함께 확인하거나 먼저 Affinity에서 SVG나 PDF로 내보내세요
+@msg	only this Affinity file's embedded preview could be read; use File › Open to see it with its warning	이 Affinity 파일은 포함된 미리 보기만 읽을 수 있었습니다. 파일 › 열기로 경고와 함께 확인하세요
+@msg	onto, above, below, icon and a column place belong to window.panel.float and window.panel.dock	onto, above, below, icon, 열 위치는 window.panel.float와 window.panel.dock에 씁니다
+@msg	onto, above, below, icon and a column place take no anchor, side, zone or before	onto, above, below, icon, 열 위치는 anchor, side, zone, before와 함께 쓸 수 없습니다
+@msg	onto, above, below, icon and a column place take no x, y, width or height	onto, above, below, icon, 열 위치는 x, y, width, height와 함께 쓸 수 없습니다
+@msg	opacity must be a number	opacity는 숫자여야 합니다
+@msg	open a document to look for its linked files	연결된 파일을 찾으려면 문서를 여세요
+@msg	operand too large	피연산자가 너무 큽니다
+@msg	options must be an object (see file.formatOptions)	options는 개체여야 합니다(file.formatOptions 참조)
+@msg	order is a whole number from 0 to {others}, not `{v}`	order는 0에서 {others} 사이의 정수입니다: `{v}`
+@msg	order must be leftToRight or rightToLeft	order는 leftToRight 또는 rightToLeft여야 합니다
+@msg	orientation must be portrait or landscape, not `{o}`	orientation은 portrait 또는 landscape여야 합니다: `{o}`
+@msg	outlineText {v}: true or false	outlineText {v}: true 또는 false여야 합니다
+@msg	output intent profile: {e}	출력 의도 프로파일: {e}
+@msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: “{name}”(이)라는 RGB 또는 CMYK 프로파일이 없습니다
+@msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1} 파일은 CMYK인데 “{name}”은(는) RGB 프로파일입니다
+@msg	output.destination: {e}	output.destination: {e}
+@msg	output.inks: no ink is set to print	output.inks: 인쇄하도록 설정된 잉크가 없습니다
+@msg	output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile	output.outputIntent: “{name}”(이)라는 프로파일이 없으며, {std} 출력 의도는 프로파일을 포함해야 합니다
+@msg	output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)	output.outputIntent: “{name}”(이)라는 프로파일이 없습니다: {std} 출력 의도는 프로파일을 포함하거나 등록된 인쇄 조건(outputConditionId와 registry)을 지정합니다
+@msg	output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile	output.outputIntent: {std} 파일은 CMYK로 인쇄하는데 “{name}”은(는) RGB 프로파일입니다
+@msg	output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent	output.outputIntent: “{name}”은(는) 회색 프로파일이어서 {std} 출력 의도로 쓸 수 없습니다
+@msg	overlap: {o} pt is half a tile or more	overlap: {o} pt는 타일의 절반 이상입니다
+@msg	overlapping Shaper paths must be in the same layer or group	겹치는 셰이퍼 패스는 같은 레이어나 그룹에 있어야 합니다
+@msg	overlapping edits	편집 범위가 겹칩니다
+@msg	page art conflicts with image data for {key}	페이지 아트웍이 {key}의 이미지 데이터와 충돌합니다
+@msg	page art conflicts with pattern {name}	페이지 아트웍이 패턴 {name}와(과) 충돌합니다
+@msg	page art conflicts with swatch {name}	페이지 아트웍이 견본 {name}와(과) 충돌합니다
+@msg	page art is missing image data for {key}	페이지 아트웍에 {key}의 이미지 데이터가 없습니다
+@msg	page art is missing pattern {name}	페이지 아트웍에 패턴 {name}이(가) 없습니다
+@msg	page art is missing swatch {name}	페이지 아트웍에 견본 {name}이(가) 없습니다
+@msg	page must be a whole number from 1	page는 1 이상의 정수여야 합니다
+@msg	page thumbnail: {e}	페이지 미리 보기 이미지: {e}
+@msg	page {page} of the PDF has no objects	PDF의 {page}페이지에 개체가 없습니다
+@msg	page {page}: `{file}` has {n} {artboards}	{page}페이지: `{file}`에는 {artboards}이(가) {n}개 있습니다
+@msg	page {page}: `{name}` has {n} {pages}	{page}페이지: `{name}`에는 {pages}이(가) {n}개 있습니다
+@msg	pages must be a range such as "2-3" or a page number, not {v}	pages는 "2-3" 같은 범위 또는 페이지 번호여야 합니다: {v}
+@msg	pages: {e}	pages: {e}
+@msg	panel position must be finite	패널 위치는 유한해야 합니다
+@msg	parameters must be an object	매개변수는 개체여야 합니다
+@msg	params must be an object	params는 개체여야 합니다
+@msg	passwords can have up to {MAX_PASSWORD} bytes	암호는 최대 {MAX_PASSWORD}바이트까지 쓸 수 있습니다
+@msg	path chunks must share their boundary point	패스 조각은 경계 점을 공유해야 합니다
+@msg	path has no open end	패스에 열린 끝이 없습니다
+@msg	paths must be strings	paths는 문자열이어야 합니다
+@msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false를 쓰려면 편집 가능한 아트웍을 보존하도록 모든 아트보드를 포함해야 합니다
+@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	useArtboards가 false일 때 pdfCompatible: false를 쓰려면 편집 가능한 아트웍을 보존하도록 아트보드를 포함해야 합니다
+@msg	pdfs `{m}`: single or multiple	pdfs `{m}`: single 또는 multiple이어야 합니다
+@msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom은 "artwork" 또는 "swatches"입니다: {v}
+@msg	pins and moved must be non-empty lists of the same length	pins와 moved는 길이가 같고 비어 있지 않은 목록이어야 합니다
+@msg	pins must be [[x,y]…]	pins는 [[x,y]…]여야 합니다
+@msg	pins must be finite	pins는 유한해야 합니다
+@msg	place is above, below or inside, not `{other}`	place는 above, below 또는 inside입니다: `{other}`
+@msg	plane must be left|right|ground	plane은 left|right|ground여야 합니다
+@msg	plane must be left|right|ground|none	plane은 left|right|ground|none이어야 합니다
+@msg	point is outside the mesh	점이 메시 밖에 있습니다
+@msg	point x must be a number	점의 x는 숫자여야 합니다
+@msg	point y must be a number	점의 y는 숫자여야 합니다
+@msg	points must be [t, left, right] with non-negative widths	points는 너비가 음이 아닌 [t, left, right]여야 합니다
+@msg	points must be [x,y] pairs	points는 [x,y] 쌍이어야 합니다
+@msg	points must be a non-empty [[x,y,pressure?]…] list	points는 비어 있지 않은 [[x,y,pressure?]…] 목록이어야 합니다
+@msg	points must be a non-empty list of finite [x,y]	points는 유한한 [x,y]의 비어 있지 않은 목록이어야 합니다
+@msg	points must be an array or null	points는 배열 또는 null이어야 합니다
+@msg	points must be finite	points는 유한해야 합니다
+@msg	points must be finite [x,y] pairs	points는 유한한 [x,y] 쌍이어야 합니다
+@msg	points must be finite canvas points	points는 유한한 캔버스 점이어야 합니다
+@msg	points must contain 1–4096 coordinates	points에는 좌표가 1–4096개 있어야 합니다
+@msg	position must be normal, superscript or subscript	position은 normal, superscript 또는 subscript여야 합니다
+@msg	position must be topLeft, topRight, bottomLeft or bottomRight	position은 topLeft, topRight, bottomLeft 또는 bottomRight여야 합니다
+@msg	positions must be between 0 and 100000 pt	positions는 0에서 100000 pt 사이여야 합니다
+@msg	ppi must be a positive number, not {ppi}	ppi는 양수여야 합니다: {ppi}
+@msg	ppi must be between 1 and 2400	ppi는 1에서 2400 사이여야 합니다
+@msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}`은(는) transforms|bounds|fileDimensions|fit|fill이 아닙니다
+@msg	preserveShape must be clippingMask|transparency	preserveShape는 clippingMask|transparency여야 합니다
+@msg	preset `{id}`: mobile or density	preset `{id}`: mobile 또는 density여야 합니다
+@msg	preset must be standard, diffuse, topLeft or right	preset은 standard, diffuse, topLeft 또는 right여야 합니다
+@msg	preset must be the name of a print preset	preset은 인쇄 사전 설정의 이름이어야 합니다
+@msg	previewMode must be default, pixel or overprint	previewMode는 default, pixel 또는 overprint여야 합니다
+@msg	print settings: {e}	인쇄 설정: {e}
+@msg	procedures nest too deeply	프로시저가 너무 깊게 중첩되어 있습니다
+@msg	procedures nested too deeply	프로시저가 너무 깊게 중첩되었습니다
+@msg	quotes must be {double?, single?}	quotes는 {double?, single?}여야 합니다
+@msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	quotes.{k}은(는) 여는 따옴표와 닫는 따옴표여야 합니다(예: "“”")
+@msg	range out of order in character class	문자 클래스의 범위 순서가 잘못되었습니다
+@msg	rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)	rasterEffectsPpi는 1–2400이어야 합니다(72 screen, 150 medium, 300 high)
+@msg	rating must be a whole number from 0 to {MAX_RATING}	rating은 0에서 {MAX_RATING} 사이의 정수여야 합니다
+@msg	rect and {k} contradict each other: give the area or the artboards	rect와 {k}이(가) 서로 맞지 않습니다: 영역이나 아트보드 중 하나를 지정하세요
+@msg	rect applies to raster formats, not {_1}	rect는 래스터 형식에 적용되며 {_1}에는 적용되지 않습니다
+@msg	rect is [x, y, width, height] in points	rect는 포인트 단위의 [x, y, width, height]입니다
+@msg	rect must be [x, y, width, height]	rect는 [x, y, width, height]여야 합니다
+@msg	rect must be [x, y, width, height] with a positive width and height	rect는 너비와 높이가 양수인 [x, y, width, height]여야 합니다
+@msg	rect needs finite numbers and a positive width and height	rect에는 유한한 숫자와 양수인 너비와 높이가 필요합니다
+@msg	redraw needs id	redraw에는 id가 필요합니다
+@msg	redraw within must be a finite distance of 0 or more	redraw의 within은 0 이상의 유한한 거리여야 합니다
+@msg	reduce of an empty array with no initial value	초기값 없이 빈 배열에 reduce를 호출했습니다
+@msg	registration must be 0..8	registration은 0..8이어야 합니다
+@msg	regular expression flag '{_1}' given twice	정규식 플래그 '{_1}'을(를) 두 번 지정했습니다
+@msg	release a layer or a group	레이어나 그룹을 해제하세요
+@msg	replace keeps the replaced object's place and transform: drop template, at and rect	replace는 바꾼 개체의 위치와 변형을 유지합니다: template, at, rect를 빼세요
+@msg	replace: select the one object to replace	replace: 바꿀 개체 하나를 선택하세요
+@msg	resolution must be a number or screen|medium|high	resolution은 숫자 또는 screen|medium|high여야 합니다
+@msg	resolution must be between 1 and 2400 ppi	resolution은 1에서 2400 ppi 사이여야 합니다
+@msg	rotation must be a number of degrees	rotation은 도 단위의 숫자여야 합니다
+@msg	rotation must be finite	rotation은 유한해야 합니다
+@msg	rows and cols must be 1..50	rows와 cols는 1..50이어야 합니다
+@msg	rows and columns must be 1..500	rows와 columns는 1..500이어야 합니다
+@msg	rows of objects whose appearances differ can't be reordered together	모양새가 서로 다른 개체의 행은 함께 순서를 바꿀 수 없습니다
+@msg	sampled text would exceed the canvas (coordinates out of range)	샘플링한 텍스트가 캔버스를 벗어납니다(좌표 범위 초과)
+@msg	save the document first: Package collects a saved document	먼저 문서를 저장하세요: 패키지는 저장된 문서를 수집합니다
+@msg	save the document first: copy puts the file in its folder	먼저 문서를 저장하세요: copy는 파일을 문서의 폴더에 넣습니다
+@msg	savedPreset: {e}	savedPreset: {e}
+@msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	scale `{s}`: 2x 같은 배율, 너비(100w), 높이(100h) 또는 해상도(72ppi)여야 합니다
+@msg	scale must be a number above 0, at most 64	scale은 0보다 크고 64 이하인 숫자여야 합니다
+@msg	scale must be non-zero	scale은 0이 아니어야 합니다
+@msg	scope must be selection or all (got {other})	scope는 selection 또는 all이어야 합니다({other} 입력됨)
+@msg	scribble is too long	스크리블이 너무 깁니다
+@msg	segment does not exist	세그먼트가 없습니다
+@msg	select a Shaper group	셰이퍼 그룹을 선택하세요
+@msg	select a blend to set easing or color shift	이징이나 색상 이동을 설정할 블렌드를 선택하세요
+@msg	select a compound shape	컴파운드 모양을 선택하세요
+@msg	select a graph	그래프를 선택하세요
+@msg	select a group or layer with visible, unlocked members	보이고 잠기지 않은 구성원이 있는 그룹이나 레이어를 선택하세요
+@msg	select a layer	레이어를 선택하세요
+@msg	select a text object	텍스트 개체를 선택하세요
+@msg	select an SVG filter	SVG 필터를 선택하세요
+@msg	select an image (or an Image Trace group)	이미지(또는 이미지 추적 그룹)를 선택하세요
+@msg	select an image, or pass id	이미지를 선택하거나 id를 전달하세요
+@msg	select an object (or pass `id`)	개체를 선택하세요(또는 `id`를 전달하세요)
+@msg	select an object with a 3D effect	3D 효과가 있는 개체를 선택하세요
+@msg	select an object with a 3D effect, or give its id in ids	3D 효과가 있는 개체를 선택하거나 ids에 그 id를 지정하세요
+@msg	select an object with a freeform gradient	자유 형태 그레이디언트가 있는 개체를 선택하세요
+@msg	select an object with an opacity mask	불투명 마스크가 있는 개체를 선택하세요
+@msg	select area type	영역 문자를 선택하세요
+@msg	select area type (text in a frame)	영역 문자(프레임 안의 텍스트)를 선택하세요
+@msg	select area type and closed paths (at least one area type object)	영역 문자와 닫힌 패스를 선택하세요(영역 문자 개체가 하나 이상 있어야 함)
+@msg	select area type whose first line can fit its frame	첫 줄이 프레임에 들어가는 영역 문자를 선택하세요
+@msg	select artwork to add its colours	색상을 추가할 아트웍을 선택하세요
+@msg	select artwork to make a group of its colours	색상으로 그룹을 만들 아트웍을 선택하세요
+@msg	select artwork to recolour, or give a colour `group`	색상을 재지정할 아트웍을 선택하거나 색상 `group`을 지정하세요
+@msg	select exactly two path ends to join	연결할 패스 끝을 정확히 두 개 선택하세요
+@msg	select members of a compound shape	컴파운드 모양의 구성원을 선택하세요
+@msg	select objects or give ids	개체를 선택하거나 ids를 지정하세요
+@msg	select objects to align to the guide	안내선에 정렬할 개체를 선택하세요
+@msg	select one Intertwine group	교차 그룹 하나를 선택하세요
+@msg	select one image or pass id	이미지 하나를 선택하거나 id를 전달하세요
+@msg	select one layer, group or object to rename	이름을 바꿀 레이어, 그룹 또는 개체를 하나 선택하세요
+@msg	select paths	패스를 선택하세요
+@msg	select paths or compound paths	패스나 컴파운드 패스를 선택하세요
+@msg	select rows or objects to collect	수집할 행이나 개체를 선택하세요
+@msg	select something to export	내보낼 항목을 선택하세요
+@msg	select something to export (or turn off selectedOnly)	내보낼 항목을 선택하세요(또는 selectedOnly를 끄세요)
+@msg	select text to redefine the style from	스타일을 재정의할 기준 텍스트를 선택하세요
+@msg	select the art and, on top of it, the mask object	아트웍과 그 위에 있는 마스크 개체를 선택하세요
+@msg	select the art for the design	디자인에 쓸 아트웍을 선택하세요
+@msg	select the art for the pattern tile	패턴 타일에 쓸 아트웍을 선택하세요
+@msg	select the art to add first	먼저 추가할 아트웍을 선택하세요
+@msg	select the art to collect (or give its ids)	수집할 아트웍을 선택하세요(또는 ids를 지정하세요)
+@msg	select the art to weed	위딩할 아트웍을 선택하세요
+@msg	select the banner, or mark every artboard	배너를 선택하거나 모든 아트보드에 표시하세요
+@msg	select the content and a path on top	콘텐츠와 그 위의 패스를 선택하세요
+@msg	select the images to relink, or pass ids	다시 연결할 이미지를 선택하거나 ids를 전달하세요
+@msg	select the images, or pass ids	이미지를 선택하거나 ids를 전달하세요
+@msg	select the linked images or placed documents, or pass ids	연결된 이미지나 가져온 문서를 선택하거나 ids를 전달하세요
+@msg	select the object to copy from	복사해 올 개체를 선택하세요
+@msg	select the objects (or give their ids)	개체를 선택하세요(또는 ids를 지정하세요)
+@msg	select the objects to attach to the path	패스에 부착할 개체를 선택하세요
+@msg	select the objects to bind	바인딩할 개체를 선택하세요
+@msg	select two or more objects to intertwine	교차할 개체를 두 개 이상 선택하세요
+@msg	select two or more slices to combine	결합할 슬라이스를 두 개 이상 선택하세요
+@msg	select type on a path	패스 위 문자를 선택하세요
+@msg	select type on a path or area type	패스 위 문자 또는 영역 문자를 선택하세요
+@msg	selection `{m}`: one or each	selection `{m}`: one 또는 each여야 합니다
+@msg	settings is an object of document.exportForScreens params	settings는 document.exportForScreens 매개변수의 개체입니다
+@msg	settings must be an object	settings는 개체여야 합니다
+@msg	show `{show}`: all, missing, modified or embedded	show `{show}`: all, missing, modified 또는 embedded여야 합니다
+@msg	show must be true or false	show는 true 또는 false여야 합니다
+@msg	side is left or right, not `{v}`	side는 left 또는 right입니다: `{v}`
+@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size는 "small", "medium", "large"이거나 0보다 크고 {_1} 이하인 포인트 값이어야 합니다
+@msg	size must be positive	size는 양수여야 합니다
+@msg	sizeMode is "fixed" or "pressure", not `{other}`	sizeMode는 "fixed" 또는 "pressure"입니다: `{other}`
+@msg	sizeMode is "fixed" or "pressure", not {other}	sizeMode는 "fixed" 또는 "pressure"입니다: {other}
+@msg	sizeVariation must be 0 or more	sizeVariation은 0 이상이어야 합니다
+@msg	smallCaps must be true or false	smallCaps는 true 또는 false여야 합니다
+@msg	sort `{x}`: name, kind or status	sort `{x}`: name, kind 또는 status여야 합니다
+@msg	source paths are too large for Shaper	원본 패스가 셰이퍼에 쓰기에는 너무 큽니다
+@msg	source text transform is collapsed or unrepresentable	원본 텍스트 변형이 축소되었거나 나타낼 수 없습니다
+@msg	spot, mode and group apply to solid colours only	spot, mode, group은 단색에만 적용됩니다
+@msg	status `{s}`: linked, embedded, missing or modified	status `{s}`: linked, embedded, missing 또는 modified여야 합니다
+@msg	steps must be 1..1000	steps는 1..1000이어야 합니다
+@msg	steps must be 1..{MAX_STEPS}	steps는 1..{MAX_STEPS}이어야 합니다
+@msg	stop {i}: `plates` must be four numbers from 0 to 1 (C, M, Y, K)	정지점 {i}: `plates`은(는) 0에서 1 사이의 숫자 네 개(C, M, Y, K)여야 합니다
+@msg	stopped before the archive was finished	아카이브를 끝내기 전에 중지되었습니다
+@msg	strokeMode must be within|along|across, got {m}	strokeMode는 within|along|across여야 합니다({m} 입력됨)
+@msg	strokeOptions must be an object of stroke.set options	strokeOptions는 stroke.set 옵션의 개체여야 합니다
+@msg	strokeWidth must be a positive number of pixels	strokeWidth는 픽셀 단위의 양수여야 합니다
+@msg	subpath {si} is not an open subpath	하위 패스 {si}은(는) 열린 하위 패스가 아닙니다
+@msg	subpaths required when joining the same path	같은 패스를 연결할 때는 subpaths가 필요합니다
+@msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict는 "merge" 또는 "add"여야 합니다: {v}
+@msg	table must be true or false	table은 true 또는 false여야 합니다
+@msg	takes one name	이름 하나만 지정할 수 있습니다
+@msg	target text transform is collapsed or unrepresentable	대상 텍스트 변형이 축소되었거나 나타낼 수 없습니다
+@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text는 {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}여야 합니다
+@msg	text transform is collapsed or unrepresentable	텍스트 변형이 축소되었거나 나타낼 수 없습니다
+@msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces는 2에서 100 사이의 정수여야 합니다
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: "{_1}" 또는 "{_2}"을(를) 사용하세요
+@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: 이미지 파일의 {path} 또는 {name, dataBase64}를 지정하거나 effect.list가 제공하는 텍스처를 지정하세요
+@msg	textureImage: {e}	textureImage: {e}
+@msg	that makes more than {MAX_PIECES} slices	그러면 슬라이스가 {MAX_PIECES}개보다 많아집니다
+@msg	that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer	그러면 조각(최대 100000개)이나 대시 단계가 너무 많아집니다: 대시 패턴을 단순하게 하거나 대시를 더 길게 하세요
+@msg	that object is not in the overlap	그 개체는 겹친 부분에 없습니다
+@msg	the Affinity document has no page with a size	Affinity 문서에 크기가 있는 페이지가 없습니다
+@msg	the CMYK image couldn't be written	CMYK 이미지를 기록할 수 없습니다
+@msg	the Layers panel is not shown	레이어 패널이 표시되어 있지 않습니다
+@msg	the Layers panel's search, filter or Show Layers Only hides its row	레이어 패널의 검색, 필터 또는 레이어만 표시 때문에 해당 행이 숨겨져 있습니다
+@msg	the Objects on Path group is hidden or locked	패스 위 개체 그룹이 숨겨졌거나 잠겨 있습니다
+@msg	the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected	PDF 보안 설정이 암호 없이 저장되었습니다: openPassword 또는 permissionsPassword를 다시 지정하거나, 보호 없이 내보내려면 passwordRequired가 없는 security를 지정하세요
+@msg	the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)	RTF 파일에 단락이나 서식 변경이 너무 많아 문자로 가져올 수 없습니다(최대 단락 {MAX_PARAGRAPHS}개, 런 {MAX_RUNS}개)
+@msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 파일이 너무 커서 문자로 가져올 수 없습니다(최대 {_1} MB)
+@msg	the SVG expands to more than {0} nested SVG images	SVG를 확장하면 중첩된 SVG 이미지가 {0}개보다 많아집니다
+@msg	the SVG expands to more than {0} objects	SVG를 확장하면 개체가 {0}개보다 많아집니다
+@msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	SVG 파일이 {MAX_IMPORT_BYTES}바이트보다 큽니다
+@msg	the SVG has no drawable objects	SVG에 그릴 수 있는 개체가 없습니다
+@msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 파일의 압축을 풀면 {_1} MB를 넘습니다
+@msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 문서의 속성이 {MAX_PAGES}페이지보다 많아 가져올 수 없습니다
+@msg	the Word document has more than {MAX_RUNS} runs of character or paragraph properties, too many to place	Word 문서에 문자 또는 단락 속성의 런이 {MAX_RUNS}개보다 많아 가져올 수 없습니다
+@msg	the Word document has more than {_1} MB of formatting properties, too many to place	Word 문서의 서식 속성이 {_1} MB보다 많아 가져올 수 없습니다
+@msg	the Word document has too much text or formatting to place as type (at most {MAX_PARAGRAPHS} paragraphs, {MAX_RUNS} runs and {_1} MB of text)	Word 문서에 텍스트나 서식이 너무 많아 문자로 가져올 수 없습니다(최대 단락 {MAX_PARAGRAPHS}개, 런 {MAX_RUNS}개, 텍스트 {_1} MB)
+@msg	the Word document has too much text to place as type (at most {_1} MB)	Word 문서에 텍스트가 너무 많아 문자로 가져올 수 없습니다(최대 {_1} MB)
+@msg	the Word document is encrypted or protected with a password; save it without one to place it	Word 문서가 암호화되었거나 암호로 보호되어 있습니다. 가져오려면 암호 없이 저장하세요
+@msg	the Word document is too large to place (its {name} stream holds more than {_1} MB)	Word 문서가 너무 커서 가져올 수 없습니다({name} 스트림이 {_1} MB를 넘습니다)
+@msg	the Word document was last saved with fast save, which VectorCraft doesn't read; save it again with fast save turned off	Word 문서가 마지막에 빠른 저장으로 저장되었는데, VectorCraft는 이 방식을 읽지 않습니다. 빠른 저장을 끄고 다시 저장하세요
+@msg	the Word document was saved by Word 6.0 or Word 95, which VectorCraft doesn't read; save it as a Word 97-2003 document	Word 문서가 Word 6.0 또는 Word 95에서 저장되었는데, VectorCraft는 이 형식을 읽지 않습니다. Word 97-2003 문서로 저장하세요
+@msg	the Word document's text is made of more than {MAX_PIECES} pieces, too many to place	Word 문서의 텍스트가 {MAX_PIECES}개보다 많은 조각으로 이루어져 있어 가져올 수 없습니다
+@msg	the XML operation needs an XML or XMLList value	XML 연산에는 XML 또는 XMLList 값이 필요합니다
+@msg	the XPath expression does not evaluate to a node-set	XPath 식의 결과가 노드 집합이 아닙니다
+@msg	the XPath expression ends early	XPath 식이 중간에 끝났습니다
+@msg	the XPath expression has an unmatched )	XPath 식에 짝이 없는 )가 있습니다
+@msg	the XPath expression has an unmatched ]	XPath 식에 짝이 없는 ]가 있습니다
+@msg	the XPath expression has an unmatched closing bracket	XPath 식에 짝이 없는 닫는 괄호가 있습니다
+@msg	the XPath expression selects a namespace node, which is not an XML value	XPath 식이 XML 값이 아닌 네임스페이스 노드를 선택합니다
+@msg	the XPath expression selects the root node, which is not an XML value	XPath 식이 XML 값이 아닌 루트 노드를 선택합니다
+@msg	the XPath function {name} needs a node-set	XPath 함수 {name}에는 노드 집합이 필요합니다
+@msg	the XPath function {name} takes the wrong number of arguments	XPath 함수 {name}의 인수 개수가 맞지 않습니다
+@msg	the XPath name functions need a node-set	XPath 이름 함수에는 노드 집합이 필요합니다
+@msg	the XPath prefix {shown} is not bound to a namespace	XPath 접두사 {shown}이(가) 네임스페이스에 바인딩되어 있지 않습니다
+@msg	the XPath variable ${shown} is not bound	XPath 변수 ${shown}이(가) 바인딩되어 있지 않습니다
+@msg	the action set ids are not a list	액션 세트 id가 목록이 아닙니다
+@msg	the active paint is not a gradient	활성 페인트가 그레이디언트가 아닙니다
+@msg	the argument list is not an object	인수 목록이 개체가 아닙니다
+@msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	아트보드가 캔버스에 들어가지 않습니다: 아트보드 수나 간격, 크기를 줄이세요
+@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	아트웍이 EPS에 쓰기에는 너무 큽니다: PostScript 256 MB 이후의 내용은 제외되었습니다
+@msg	the banner has no width or height	배너에 너비나 높이가 없습니다
+@msg	the bitmaps hold more pixels than one file may	비트맵의 픽셀 수가 파일 하나에 담을 수 있는 양보다 많습니다
+@msg	the character's size can't be measured	글자의 크기를 잴 수 없습니다
+@msg	the code runs past its last instruction	코드가 마지막 명령을 지나 실행됩니다
+@msg	the compound shape is too complex to expand	컴파운드 모양이 너무 복잡해서 확장할 수 없습니다
+@msg	the container of the listed objects is gone	나열한 개체의 컨테이너가 없어졌습니다
+@msg	the copy `{user_id}` can't be read as a library	복사본 `{user_id}`을(를) 라이브러리로 읽을 수 없습니다
+@msg	the copy would leave the canvas	복사본이 캔버스를 벗어납니다
+@msg	the curve tolerance must be from 0.01 to 10 points	곡선 허용치는 0.01에서 10포인트 사이여야 합니다
+@msg	the custom dictionary couldn't be saved to {_1}: {e}	사용자 사전을 {_1}에 저장할 수 없습니다: {e}
+@msg	the custom dictionary {_1} can't be read ({why}), so it is left as it is	사용자 사전 {_1}을(를) 읽을 수 없어({why}) 그대로 둡니다
+@msg	the cut cannot be made on this art: {e}	이 아트웍은 자를 수 없습니다: {e}
+@msg	the data isn't an EMF or WMF picture	데이터가 EMF 또는 WMF 그림이 아닙니다
+@msg	the data isn't an EPS or PostScript picture	데이터가 EPS 또는 PostScript 그림이 아닙니다
+@msg	the deferred paste is no longer available	지연된 붙여넣기를 더 이상 사용할 수 없습니다
+@msg	the design is too big to draw at every data point of this graph	디자인이 너무 커서 이 그래프의 모든 데이터 점에 그릴 수 없습니다
+@msg	the design is too big to draw in every column of this graph	디자인이 너무 커서 이 그래프의 모든 막대에 그릴 수 없습니다
+@msg	the dialog it was opened over is no longer open	이 대화 상자가 열렸던 바탕 대화 상자가 더 이상 열려 있지 않습니다
+@msg	the dictionary stack overflowed	사전 스택이 오버플로되었습니다
+@msg	the document already has an SVG filter named {name}	문서에 {name}(이)라는 SVG 필터가 이미 있습니다
+@msg	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it	문서에 {name}(이)라는 다른 SVG 필터가 있습니다: svgFilter.apply를 사용하거나, 편집하려면 `replace`와 함께 svgFilter.define을 사용하세요
+@msg	the document has no SVG filter named {name}	문서에 {name}(이)라는 SVG 필터가 없습니다
+@msg	the document has no SVG filter named {r}	문서에 {r}(이)라는 SVG 필터가 없습니다
+@msg	the document has no color swatches	문서에 색상 견본이 없습니다
+@msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	문서의 견본에 색상이 {_1}개 있습니다. document 감소는 최대 255개까지 쓸 수 있습니다
+@msg	the editing data's hash has no place	편집 데이터의 해시를 넣을 자리가 없습니다
+@msg	the entities the document declares expand to too much text	문서가 선언한 엔티티를 확장하면 텍스트가 너무 많아집니다
+@msg	the envelope's content has no bounds	엔벨로프의 콘텐츠에 경계가 없습니다
+@msg	the envelope's mesh is malformed	엔벨로프의 메시가 올바르지 않습니다
+@msg	the file holds no `variableSets` element	파일에 `variableSets` 요소가 없습니다
+@msg	the file is larger than {_1} MB	파일이 {_1} MB보다 큽니다
+@msg	the file is too large	파일이 너무 큽니다
+@msg	the file isn't valid SVG: {e}	파일이 올바른 SVG가 아닙니다: {e}
+@msg	the file names no plate	파일에 지정된 색판이 없습니다
+@msg	the file was updated or encrypted already	파일이 이미 업데이트되었거나 암호화되었습니다
+@msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	줄의 첫 글자는 앞에 커닝할 글자가 없습니다: 위아래로만 이동합니다(dy)
+@msg	the font {_1} is not available	글꼴 {_1}을(를) 사용할 수 없습니다
+@msg	the format has no file extension	이 형식에는 파일 확장자가 없습니다
+@msg	the function's prototype is not an object	함수의 프로토타입이 개체가 아닙니다
+@msg	the graphic can't be read: {e}	그래픽을 읽을 수 없습니다: {e}
+@msg	the graphic is empty	그래픽이 비어 있습니다
+@msg	the graphic's data is damaged	그래픽의 데이터가 손상되었습니다
+@msg	the graphic's document has no artboard	그래픽의 문서에 아트보드가 없습니다
+@msg	the grommet inset is too large for the banner	가장자리에서 아일렛까지 거리가 배너에 비해 너무 큽니다
+@msg	the guide is hidden or locked	안내선이 숨겨졌거나 잠겨 있습니다
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}`의 머리글 `{cell}`은(는) 변수 `{other}`(으)로 다시 읽힙니다: 둘 중 하나의 이름을 바꾸세요
+@msg	the hem is too deep for the banner	단 접기가 배너에 비해 너무 깊습니다
+@msg	the image `{path}` isn't followed: {r}	이미지 `{path}`을(를) 따라가지 않습니다: {r}
+@msg	the image has no embedded pixels	이미지에 포함된 픽셀이 없습니다
+@msg	the image is empty	이미지가 비어 있습니다
+@msg	the image is fully transparent	이미지가 완전히 투명합니다
+@msg	the image is not on an artboard; pass rect	이미지가 아트보드 위에 없습니다. rect를 전달하세요
+@msg	the image's pixels are missing	이미지의 픽셀이 없습니다
+@msg	the image's pixels aren't in the document	이미지의 픽셀이 문서에 없습니다
+@msg	the image's pixels can't be read: {e}	이미지의 픽셀을 읽을 수 없습니다: {e}
+@msg	the image's transparency doesn't fit it	이미지의 투명도가 이미지와 맞지 않습니다
+@msg	the job would print more than {MAX_PAGES} pages	이 작업은 {MAX_PAGES}페이지보다 많이 인쇄하게 됩니다
+@msg	the job would print more than {_1} pages	이 작업은 {_1}페이지보다 많이 인쇄하게 됩니다
+@msg	the layers hold no art to mask	레이어에 마스크할 아트웍이 없습니다
+@msg	the layout moved	레이아웃이 이동했습니다
+@msg	the library has a group `{name}` already	라이브러리에 `{name}` 그룹이 이미 있습니다
+@msg	the library has no group `{name}`	라이브러리에 `{name}` 그룹이 없습니다
+@msg	the library has no item `{item}`	라이브러리에 `{item}` 항목이 없습니다
+@msg	the library has no item `{other}`	라이브러리에 `{other}` 항목이 없습니다
+@msg	the library holds {MAX_GROUPS} groups already	라이브러리에 이미 그룹이 {MAX_GROUPS}개 있습니다
+@msg	the library holds {MAX_ITEMS} items of this kind already	라이브러리에 이 종류의 항목이 이미 {MAX_ITEMS}개 있습니다
+@msg	the library's file is outside the read roots	라이브러리 파일이 읽기 루트 밖에 있습니다
+@msg	the line is too long, or the paths it passes too many, to check	선이 너무 길거나 선이 지나는 패스가 너무 많아 확인할 수 없습니다
+@msg	the method needs an XML value	이 메서드에는 XML 값이 필요합니다
+@msg	the name is empty	이름이 비어 있습니다
+@msg	the object has no fill, stroke or effect	개체에 칠, 선 또는 효과가 없습니다
+@msg	the object has no graphic style (pass `name`)	개체에 그래픽 스타일이 없습니다(`name`을 전달하세요)
+@msg	the objects don't match the plan	개체가 계획과 맞지 않습니다
+@msg	the open and permissions passwords must differ	열기 암호와 권한 암호는 서로 달라야 합니다
+@msg	the operand stack overflowed	피연산자 스택이 오버플로되었습니다
+@msg	the page has no area	페이지에 면적이 없습니다
+@msg	the page's type in an unread object's box isn't in its page art	읽지 않은 개체의 상자에 있는 페이지 문자가 페이지 아트웍에 없습니다
+@msg	the paint behind the proxy is not a gradient	프록시 뒤의 페인트가 그레이디언트가 아닙니다
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	페인트가 자유 형태 그레이디언트가 아닙니다(paint.editGradient {kind}(으)로 적용하세요)
+@msg	the parameters or body do not form one function	매개변수나 본문이 하나의 함수를 이루지 않습니다
+@msg	the parent must be a layer or sublayer	상위 항목은 레이어나 하위 레이어여야 합니다
+@msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	붙여넣은 SVG 필터 {name}은(는) 문서에 있는 같은 이름의 필터와 다르게 그려지며, 쓸 수 있는 빈 이름이 없습니다
+@msg	the path can't be extended	패스를 연장할 수 없습니다
+@msg	the path can't be inside one of the objects to attach	패스가 부착할 개체 안에 있으면 안 됩니다
+@msg	the path has no segments to measure	패스에 잴 세그먼트가 없습니다
+@msg	the path is empty	패스가 비어 있습니다
+@msg	the path is too short to shorten that much	패스가 너무 짧아 그만큼 줄일 수 없습니다
+@msg	the paths are too many or too tangled to find where they cross	패스가 너무 많거나 너무 얽혀 있어 교차하는 곳을 찾을 수 없습니다
+@msg	the pen table holds more than 255 pens	펜 테이블에 펜이 255개보다 많습니다
+@msg	the picture has no objects	그림에 개체가 없습니다
+@msg	the plates can't be kept	색판을 보관할 수 없습니다
+@msg	the position table does not match the instructions	위치 테이블이 명령과 맞지 않습니다
+@msg	the program runs too long	프로그램 실행 시간이 너무 깁니다
+@msg	the program uses too much memory	프로그램이 메모리를 너무 많이 사용합니다
+@msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	프롬프트의 텍스트가 {MAX_PROMPT_BYTES}바이트보다 깁니다
+@msg	the radix must be between 2 and 36	기수는 2에서 36 사이여야 합니다
+@msg	the rectangle must have a width and a height	사각형에는 너비와 높이가 있어야 합니다
+@msg	the rectangle needs a size and must lie on the canvas	사각형에는 크기가 있어야 하고 캔버스 위에 있어야 합니다
+@msg	the rectangle or line reaches too many paths to check	사각형이나 선이 닿는 패스가 너무 많아 확인할 수 없습니다
+@msg	the right side of 'in' is not an object	'in'의 오른쪽이 개체가 아닙니다
+@msg	the right side of 'instanceof' is not a function	'instanceof'의 오른쪽이 함수가 아닙니다
+@msg	the selected art has no width	선택한 아트웍에 너비가 없습니다
+@msg	the selected art is nested more than {MAX_DEPTH} levels deep	선택한 아트웍이 {MAX_DEPTH}단계보다 깊게 중첩되어 있습니다
+@msg	the selected art is too large to measure	선택한 아트웍이 너무 커서 잴 수 없습니다
+@msg	the selection draws nothing	선택 영역이 아무것도 그리지 않습니다
+@msg	the selection has no area	선택 영역에 면적이 없습니다
+@msg	the selection has no art to export	선택 영역에 내보낼 아트웍이 없습니다
+@msg	the selection has no bounds	선택 영역에 경계가 없습니다
+@msg	the selection has no graphic style	선택 영역에 그래픽 스타일이 없습니다
+@msg	the selection has no outlines to weed around	선택 영역에 둘레를 위딩할 윤곽선이 없습니다
+@msg	the slice would leave the canvas	슬라이스가 캔버스를 벗어납니다
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	이 간격으로는 아일렛이 {MAX_GROMMETS}개보다 많아집니다
+@msg	the spot colour couldn't be added	별색을 추가할 수 없습니다
+@msg	the subpath has no ends to extend (it is closed or a single point)	하위 패스에 연장할 끝이 없습니다(닫혀 있거나 점 하나입니다)
+@msg	the symbols are nested too deeply to expand their instances	심볼이 너무 깊게 중첩되어 있어 인스턴스를 확장할 수 없습니다
+@msg	the text file is too large to place as type (at most {_1} MB)	텍스트 파일이 너무 커서 문자로 가져올 수 없습니다(최대 {_1} MB)
+@msg	the text is empty	텍스트가 비어 있습니다
+@msg	the text is over {_1} MB	텍스트가 {_1} MB를 넘습니다
+@msg	the top object must be a path	맨 위 개체는 패스여야 합니다
+@msg	the trace was cancelled	추적이 취소되었습니다
+@msg	the trailer has no size	트레일러에 크기가 없습니다
+@msg	the type object is flattened to nothing	문자 개체를 병합하면 아무것도 남지 않습니다
+@msg	the value bind was called on is not a function	bind를 호출한 값이 함수가 아닙니다
+@msg	the value is not a constructor	값이 생성자가 아닙니다
+@msg	the value is not a function	값이 함수가 아닙니다
+@msg	the value is not a valid XML name	값이 올바른 XML 이름이 아닙니다
+@msg	the value is not an XML attribute name	값이 XML 속성 이름이 아닙니다
+@msg	the value is not an XML name	값이 XML 이름이 아닙니다
+@msg	the value of axis `{tag}` must be a number or null	축 `{tag}`의 값은 숫자 또는 null이어야 합니다
+@msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	변수 라이브러리가 데이터 세트를 {MAX_LIBRARY_DATASETS}개보다 많이 선언합니다
+@msg	the variable library declares more than {MAX_LIBRARY_ENTITIES} entities	변수 라이브러리가 엔티티를 {MAX_LIBRARY_ENTITIES}개보다 많이 선언합니다
+@msg	the variable library declares more than {MAX_LIBRARY_VARIABLES} variables	변수 라이브러리가 변수를 {MAX_LIBRARY_VARIABLES}개보다 많이 선언합니다
+@msg	the variable library declares no variables	변수 라이브러리가 변수를 선언하지 않습니다
+@msg	the variable library is larger than {MAX_LIBRARY_BYTES} bytes	변수 라이브러리가 {MAX_LIBRARY_BYTES}바이트보다 큽니다
+@msg	the variable library is not UTF-8	변수 라이브러리가 UTF-8이 아닙니다
+@msg	the variable library is not well-formed XML: {e}	변수 라이브러리가 올바른 형식의 XML이 아닙니다: {e}
+@msg	the variable library nests elements more than {MAX_LIBRARY_NESTING} deep	변수 라이브러리에 요소가 {MAX_LIBRARY_NESTING}단계보다 깊게 중첩되어 있습니다
+@msg	the variable library's document type declaration holds something other than entities of plain text	변수 라이브러리의 문서 형식 선언에 일반 텍스트 엔티티가 아닌 것이 있습니다
+@msg	the variable library's entities expand to more than {MAX_LIBRARY_BYTES} bytes	변수 라이브러리의 엔티티를 확장하면 {MAX_LIBRARY_BYTES}바이트를 넘습니다
+@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	위딩 선이 아트웍의 윤곽선과 너무 많이 교차해 잴 수 없습니다. 선을 줄이세요
+@msg	the weeding lines pass too close to too many outline segments to measure; use fewer lines or a smaller gap	위딩 선이 너무 많은 윤곽선 세그먼트에 너무 가깝게 지나가 잴 수 없습니다. 선을 줄이거나 간격을 줄이세요
+@msg	the weeding lines would be more than {max_pieces} pieces	위딩 선이 {max_pieces}개보다 많은 조각이 됩니다
+@msg	the window has no dock	창에 도킹 영역이 없습니다
+@msg	the written PDF has no catalog	기록한 PDF에 카탈로그가 없습니다
+@msg	the written PDF has no cross-reference table	기록한 PDF에 상호 참조 테이블이 없습니다
+@msg	the written PDF's metadata can't be edited	기록한 PDF의 메타데이터를 편집할 수 없습니다
+@msg	the {_1} plate lies outside the file	{_1} 색판이 파일 밖에 있습니다
+@msg	there are no colour swatches to draw	그릴 색상 견본이 없습니다
+@msg	there is already a design named `{name}`	`{name}` 디자인이 이미 있습니다
+@msg	there is already a design named `{to}`	`{to}` 디자인이 이미 있습니다
+@msg	there is already a toolbar named `{name}`	`{name}` 도구 막대가 이미 있습니다
+@msg	there is already a toolbar named `{to}`	`{to}` 도구 막대가 이미 있습니다
+@msg	there is no banner to mark	표시할 배너가 없습니다
+@msg	there is no library: create one first	라이브러리가 없습니다: 먼저 하나 만드세요
+@msg	these paths are too degenerate for Shaper	이 패스는 셰이퍼에 쓰기에는 지나치게 퇴화되어 있습니다
+@msg	this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that	바이너리 DXF 파일은 읽을 수 없습니다. CAD 앱에서 ASCII DXF로 저장한 후 여세요
+@msg	this warp's points can't be edited: use Reset with Mesh first	이 왜곡의 점은 편집할 수 없습니다: 먼저 메시로 재설정을 사용하세요
+@msg	thumbnail: no page {v} (the {what} has {count})	thumbnail: 페이지 {v}이(가) 없습니다({what}의 페이지 수: {count})
+@msg	tileRange of {what}: {e}	{what}의 tileRange: {e}
+@msg	title can't be empty	title은 비워 둘 수 없습니다
+@msg	to (the new name) is required	to(새 이름)가 필요합니다
+@msg	to must be fill or stroke	to는 fill 또는 stroke여야 합니다
+@msg	to must be smooth or corner	to는 smooth 또는 corner여야 합니다
+@msg	toExponential() digits must be between 0 and 20	toExponential()의 자릿수는 0에서 20 사이여야 합니다
+@msg	toFixed() digits must be between 0 and 20	toFixed()의 자릿수는 0에서 20 사이여야 합니다
+@msg	toISOString is not a function	toISOString이 함수가 아닙니다
+@msg	toPrecision() argument must be between 1 and 21	toPrecision()의 인수는 1에서 21 사이여야 합니다
+@msg	toSource: a getter cannot be written as source	toSource: getter는 소스로 기록할 수 없습니다
+@msg	toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source	toSource: 요소 외에 속성이 있거나, 열거할 수 없는 속성이 있거나, 프로토타입이 다른 배열은 소스로 기록할 수 없습니다
+@msg	toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source	toSource: 열거할 수 없는 속성이 있거나 프로토타입이 Object.prototype이 아닌 개체는 소스로 기록할 수 없습니다
+@msg	toSource: the source is too long	toSource: 소스가 너무 깁니다
+@msg	toSource: the value contains itself	toSource: 값이 자신을 포함합니다
+@msg	toSource: the value has too many entries	toSource: 값에 항목이 너무 많습니다
+@msg	toSource: the value is nested too deep	toSource: 값이 너무 깊게 중첩되어 있습니다
+@msg	toString is not a function	toString이 함수가 아닙니다
+@msg	too large for a zip archive: package to a folder	zip 아카이브에 넣기에는 너무 큽니다: 폴더로 패키지하세요
+@msg	too many Shaper edits	셰이퍼 편집이 너무 많습니다
+@msg	too many `points` (at most 100000)	`points`가 너무 많습니다(최대 100000개)
+@msg	too many arguments	인수가 너무 많습니다
+@msg	too many characters: at most {MAX_CHARS}	글자가 너무 많습니다: 최대 {MAX_CHARS}자
+@msg	too many dots for this size: lower the frequency	이 크기에는 점이 너무 많습니다: 주파수를 낮추세요
+@msg	too many filters over one file	한 파일에 필터가 너무 많습니다
+@msg	too many overlapping paths for Shaper	셰이퍼에 쓰기에는 겹치는 패스가 너무 많습니다
+@msg	too many quantifiers	수량자가 너무 많습니다
+@msg	too many saved clips	저장된 클립이 너무 많습니다
+@msg	too many saved graphics states	저장된 그래픽 상태가 너무 많습니다
+@msg	toolbar (a toolbar's name) must be a string	toolbar(도구 막대 이름)는 문자열이어야 합니다
+@msg	toolbar name can't be empty	도구 막대 이름은 비워 둘 수 없습니다
+@msg	transparentImages {v}: "flatten" (the default) or "omit"	transparentImages {v}: "flatten"(기본값) 또는 "omit"이어야 합니다
+@msg	turn on at least one side	한쪽 이상을 켜세요
+@msg	two saved selections would be named `{_1}`	저장된 선택 영역 두 개의 이름이 `{_1}`이(가) 됩니다
+@msg	type dimension cannot be represented with this text transform	이 텍스트 변형으로는 문자 치수를 나타낼 수 없습니다
+@msg	type dimension must be finite	문자 치수는 유한해야 합니다
+@msg	unexpected resources	예상하지 못한 리소스
+@msg	unknown CMYK profile `{name}`	알 수 없는 CMYK 프로파일 `{name}`
+@msg	unknown File Info field `{k}`	알 수 없는 파일 정보 필드 `{k}`
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	알 수 없는 OpenType 기능 `{t}`(liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt. 끄려면 앞에 -를 붙이세요. swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt는 대체 글리프 번호를 `tag=N` 형식으로 받으며 N은 0에서 {_1} 사이입니다. 예: `salt=2`)
+@msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	featureChanges의 알 수 없는 OpenType 기능 `{t}`(`features`가 받는 태그를 사용하세요)
+@msg	unknown PDF preset `{name}` (presets: {_1})	알 수 없는 PDF 프리셋 `{name}`(프리셋: {_1})
+@msg	unknown Warp style	알 수 없는 왜곡 스타일
+@msg	unknown alignToPath `{a}`	알 수 없는 alignToPath `{a}`
+@msg	unknown arrowhead {v}	알 수 없는 화살촉 {v}
+@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	알 수 없는 artboardLayout 키 `{k}`(layout, columns, spacing, rightToLeft)
+@msg	unknown attribute `{attribute}`	알 수 없는 속성 `{attribute}`
+@msg	unknown attribute `{k}`	알 수 없는 속성 `{k}`
+@msg	unknown axis `{other}` (vertical|horizontal|free)	알 수 없는 축 `{other}`(vertical|horizontal|free)
+@msg	unknown blend mode `{b}`	알 수 없는 혼합 모드 `{b}`
+@msg	unknown blend mode {b}	알 수 없는 혼합 모드 {b}
+@msg	unknown brush type `{o}`	알 수 없는 브러시 유형 `{o}`
+@msg	unknown category `{c}`	알 수 없는 범주 `{c}`
+@msg	unknown category `{c}` ({_1})	알 수 없는 범주 `{c}`({_1})
+@msg	unknown character `{c}`	알 수 없는 문자 `{c}`
+@msg	unknown character style number field	알 수 없는 문자 스타일 숫자 필드
+@msg	unknown dither `{d}` (diffusion, pattern, noise or none)	알 수 없는 디더 `{d}`(diffusion, pattern, noise 또는 none)
+@msg	unknown effect `{e}`	알 수 없는 효과 `{e}`
+@msg	unknown end {e}	알 수 없는 끝 {e}
+@msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	알 수 없는 flattenerPreset `{name}`(High Resolution, Medium Resolution, Low Resolution 또는 저장된 프리셋: flattener.presets.list 참조)
+@msg	unknown format `{f}` (vcswatches, gpl, ase or css)	알 수 없는 형식 `{f}`(vcswatches, gpl, ase 또는 css)
+@msg	unknown from {f}	알 수 없는 from {f}
+@msg	unknown graph type `{t}`	알 수 없는 그래프 유형 `{t}`
+@msg	unknown grid colours `{name}` (one of {_1})	알 수 없는 격자 색상 `{name}`({_1} 중 하나)
+@msg	unknown gridType `{t}`	알 수 없는 gridType `{t}`
+@msg	unknown highlight `{v}`	알 수 없는 강조 `{v}`
+@msg	unknown intent `{i}`	알 수 없는 의도 `{i}`
+@msg	unknown issue kind {id}	알 수 없는 문제 종류 {id}
+@msg	unknown issue kind {v}	알 수 없는 문제 종류 {v}
+@msg	unknown knockout state {k}	알 수 없는 녹아웃 상태 {k}
+@msg	unknown language `{language}` (one of {_1})	알 수 없는 언어 `{language}`({_1} 중 하나)
+@msg	unknown language `{l}` (one of {_1})	알 수 없는 언어 `{l}`({_1} 중 하나)
+@msg	unknown method `{m}` ({_1})	알 수 없는 방법 `{m}`({_1})
+@msg	unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)	알 수 없는 모드 `{other}`(gray, rgb, hsb, lab, cmyk 또는 web)
+@msg	unknown mode `{other}` (mono|cmyk)	알 수 없는 모드 `{other}`(mono|cmyk)
+@msg	unknown mode `{other}` (rgb|cmyk|gray|global)	알 수 없는 모드 `{other}`(rgb|cmyk|gray|global)
+@msg	unknown mode `{other}` (set, add, subtract)	알 수 없는 모드 `{other}`(set, add, subtract)
+@msg	unknown mode `{o}`	알 수 없는 모드 `{o}`
+@msg	unknown mode {m}	알 수 없는 모드 {m}
+@msg	unknown model `{other}`	알 수 없는 모델 `{other}`
+@msg	unknown model `{other}` (keep, new or document)	알 수 없는 모델 `{other}`(keep, new 또는 document)
+@msg	unknown op {o}	알 수 없는 연산 {o}
+@msg	unknown order `{o}`: toggle, front, forward, backward or back	알 수 없는 순서 `{o}`: toggle, front, forward, backward 또는 back
+@msg	unknown overprints `{v}` (preserve, simulate or discard)	알 수 없는 오버프린트 `{v}`(preserve, simulate 또는 discard)
+@msg	unknown panel	알 수 없는 패널
+@msg	unknown panel `{panel}`	알 수 없는 패널 `{panel}`
+@msg	unknown parameter `{key}`	알 수 없는 매개변수 `{key}`
+@msg	unknown parameter `{within}settings.{format}`; {why}	알 수 없는 매개변수 `{within}settings.{format}`: {why}
+@msg	unknown parameter `{within}{key}`; {why}	알 수 없는 매개변수 `{within}{key}`: {why}
+@msg	unknown pieLegend `{v}` (none, standard or wedges)	알 수 없는 pieLegend `{v}`(none, standard 또는 wedges)
+@msg	unknown piePosition `{v}` (even, ratio or stacked)	알 수 없는 piePosition `{v}`(even, ratio 또는 stacked)
+@msg	unknown pieSort `{v}` (none, all or first)	알 수 없는 pieSort `{v}`(none, all 또는 first)
+@msg	unknown plate `{n}`	알 수 없는 색판 `{n}`
+@msg	unknown preference `{k}`	알 수 없는 환경 설정 `{k}`
+@msg	unknown profile {id} (see stroke.widthProfile.list)	알 수 없는 프로파일 {id}(stroke.widthProfile.list 참조)
+@msg	unknown proof target `{t}`	알 수 없는 교정 대상 `{t}`
+@msg	unknown quotes key `{k}` (double, single)	알 수 없는 따옴표 키 `{k}`(double, single)
+@msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	알 수 없는 색상 축소 방식 `{reduction}`(selective, perceptual, adaptive, web, gray, blackWhite, uniform 또는 document)
+@msg	unknown resolution `{v}`	알 수 없는 해상도 `{v}`
+@msg	unknown rule `{rule}` ({_1})	알 수 없는 규칙 `{rule}`({_1})
+@msg	unknown rule `{r}` (see color.harmony)	알 수 없는 규칙 `{r}`(color.harmony 참조)
+@msg	unknown setting `{k}`	알 수 없는 설정 `{k}`
+@msg	unknown shape `{v}` (circle|ellipse|square|diamond|line)	알 수 없는 모양 `{v}`(circle|ellipse|square|diamond|line)
+@msg	unknown spacing `{o}` (smooth|steps|distance)	알 수 없는 간격 `{o}`(smooth|steps|distance)
+@msg	unknown tileType `{t}` ({_1})	알 수 없는 tileType `{t}`({_1})
+@msg	unknown units	알 수 없는 단위
+@msg	unknown units `{u}`	알 수 없는 단위 `{u}`
+@msg	unknown value axis `{v}` (left, right or both)	알 수 없는 값 축 `{v}`(left, right 또는 both)
+@msg	unknown variation `{v}` (tintsShades|warmCool|vividMuted)	알 수 없는 변형 `{v}`(tintsShades|warmCool|vividMuted)
+@msg	unknown warp style `{s}`	알 수 없는 왜곡 스타일 `{s}`
+@msg	unknown {key} `{v}` (none, short or full)	알 수 없는 {key} `{v}`(none, short 또는 full)
+@msg	unknown {key} profile `{n}`	알 수 없는 {key} 프로파일 `{n}`
+@msg	unknown {k} key `{key}` (size, position)	알 수 없는 {k} 키 `{key}`(size, position)
+@msg	unmatched ')'	짝이 맞지 않는 ')'
+@msg	unreadable object	읽을 수 없는 개체
+@msg	unsafe destination file name	안전하지 않은 대상 파일 이름
+@msg	unterminated character class	닫히지 않은 문자 클래스
+@msg	unterminated group	닫히지 않은 그룹
+@msg	use paths or compound paths	패스나 컴파운드 패스를 사용하세요
+@msg	useArtboards must be true or false, not {v}	useArtboards는 {v}이(가) 아니라 true 또는 false여야 합니다
+@msg	value for `{var}` must match its variable kind	`{var}`의 값은 변수 종류와 맞아야 합니다
+@msg	variable `{_1}` is already defined	변수 `{_1}`이(가) 이미 정의되어 있습니다
+@msg	variable `{name}` has no `trait`	변수 `{name}`에 `trait`이(가) 없습니다
+@msg	variable `{name}` is already defined	변수 `{name}`이(가) 이미 정의되어 있습니다
+@msg	variable `{name}` is declared twice	변수 `{name}`이(가) 두 번 선언되었습니다
+@msg	variable `{to}` already exists	변수 `{to}`이(가) 이미 있습니다
+@msg	view is required	view가 필요합니다
+@msg	view must be one of {_1}	view는 {_1} 중 하나여야 합니다
+@msg	warpStyle can only edit an applied Warp effect	warpStyle은 적용된 왜곡 효과만 편집할 수 있습니다
+@msg	width and height must be more than 0 and at most {limit}	너비와 높이는 0보다 크고 {limit} 이하여야 합니다
+@msg	width factors must be finite	너비 계수는 유한해야 합니다
+@msg	width must be positive	width는 양수여야 합니다
+@msg	width out of range	너비가 범위를 벗어났습니다
+@msg	width/height must be > 0	너비/높이는 0보다 커야 합니다
+@msg	with no hem and no grommets there is nothing to mark	단 접기와 아일렛이 모두 없으면 표시할 것이 없습니다
+@msg	wordGap and lineGap need area type in the selection	wordGap과 lineGap을 쓰려면 선택 항목에 영역 문자가 있어야 합니다
+@msg	x and y must be finite numbers	x와 y는 유한한 숫자여야 합니다
+@msg	x and y must be given together	x와 y는 함께 지정해야 합니다
+@msg	xpath needs its variables as an object	xpath는 변수를 개체로 받아야 합니다
+@msg	xpath needs the expression as a string	xpath는 식을 문자열로 받아야 합니다
+@msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone에는 기준이 필요합니다: anchor로 패널 옆에 도킹하거나 side(Start 또는 End)로 새 도크 열에 도킹하세요
+@msg	zoom must be positive	zoom은 양수여야 합니다
+@msg	{C}: no effect at index {list}	{C}: 인덱스 {list}에 효과가 없습니다
+@msg	{DEFAULT_PRESET} is protected and stays	{DEFAULT_PRESET}은(는) 보호되어 있어 그대로 유지됩니다
+@msg	{DEFAULT_PRESET} is protected: save the settings under another name	{DEFAULT_PRESET}은(는) 보호되어 있습니다: 설정을 다른 이름으로 저장하세요
+@msg	{GRANT_NOT_REMOVED}, and its settings and cache can't be moved back from {_1} to {_2}: {e}	{GRANT_NOT_REMOVED}. 또한 설정과 캐시를 {_1}에서 {_2}(으)로 되돌려 옮길 수 없습니다: {e}
+@msg	{LABEL} produced an empty result	{LABEL}의 결과가 비어 있습니다
+@msg	{_1} MB of document, at most {_2} MB	문서 {_1} MB, 최대 {_2} MB
+@msg	{_1} MB of images, at most {_2} MB	이미지 {_1} MB, 최대 {_2} MB
+@msg	{_1} bytes of RGBA data for a {width} × {height} image	{width} × {height} 이미지에 대한 RGBA 데이터 {_1}바이트
+@msg	{_1} can't be read, or changed since it was read: relink or update it first	{_1}을(를) 읽을 수 없거나 읽은 뒤에 바뀌었습니다: 먼저 다시 연결하거나 업데이트하세요
+@msg	{_1} can't go into {into}	{_1}은(는) {into}에 넣을 수 없습니다
+@msg	{_1} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing	{_1}은(는) 인쇄를 저해상도로 제한할 수 없습니다: PDF 1.4 이상을 선택하거나 고해상도 인쇄를 허용하세요
+@msg	{_1} files can't be opened yet	{_1} 파일은 아직 열 수 없습니다
+@msg	{_1} files can't be password-protected: remove the passwords or choose no standard	{_1} 파일은 암호로 보호할 수 없습니다: 암호를 제거하거나 표준을 선택하지 마세요
+@msg	{_1} files can't be {_2}	{_1} 파일은 {_2}일 수 없습니다
+@msg	{_1} files can't carry editing data: turn off preserveEditing	{_1} 파일에는 편집 데이터를 담을 수 없습니다: preserveEditing을 끄세요
+@msg	{_1} files can't have PDF layers: turn off createLayers	{_1} 파일에는 PDF 레이어를 둘 수 없습니다: createLayers를 끄세요
+@msg	{_1} files need a creation date, and this platform has no clock to give one	{_1} 파일에는 작성 날짜가 필요하지만 이 플랫폼에는 날짜를 알려 줄 시계가 없습니다
+@msg	{_1} is not a folder: {e}	{_1}은(는) 폴더가 아닙니다: {e}
+@msg	{_1} isn't a path	{_1}은(는) 패스가 아닙니다
+@msg	{_1} options: {e}	{_1} 옵션: {e}
+@msg	{_1} paints nothing to rasterize	{_1}에는 래스터화할 칠이 없습니다
+@msg	{_1} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)	{_1} 암호에는 ASCII 문자를 {MAX_LEGACY_PASSWORD}자까지 쓸 수 있습니다(PDF 1.7 이상은 모든 문자를 받습니다)
+@msg	{_1} with linked images or an image map writes several files: use document.export	연결된 이미지나 이미지 맵이 있는 {_1}은(는) 여러 파일을 기록합니다: document.export를 사용하세요
+@msg	{_1} writes one file per artboard here: use document.export, or name one artboard	여기서 {_1}은(는) 아트보드마다 파일을 하나씩 기록합니다: document.export를 사용하거나 아트보드 하나를 지정하세요
+@msg	{_1} × {_2} pixels is too large for {_3} (at most {max} pixels a side): lower the scale	{_1} × {_2}픽셀은 {_3}에 너무 큽니다(한 변 최대 {max}픽셀): 비율을 낮추세요
+@msg	{_1}: belongs to another account	{_1}: 다른 계정의 소유입니다
+@msg	{_1}: not a folder of its own	{_1}: 자체 폴더가 아닙니다
+@msg	{_1}: not a plain file	{_1}: 일반 파일이 아닙니다
+@msg	{_1}: {_2} and {_3} are in the way	{_1}: {_2}와(과) {_3}이(가) 가로막고 있습니다
+@msg	{code}: {0}	{code}: {0}
+@msg	{dest}: {e}	{dest}: {e}
+@msg	{dir}: {e}	{dir}: {e}
+@msg	{doc} has no folder	{doc}에는 폴더가 없습니다
+@msg	{file} isn't linked	{file}은(는) 연결되어 있지 않습니다
+@msg	{file} names more than one linked JavaScript file	{file}이(가) 연결된 JavaScript 파일을 둘 이상 지정합니다
+@msg	{folder} is not a package folder	{folder}은(는) 패키지 폴더가 아닙니다
+@msg	{folder}: more than {max} files and folders	{folder}: 파일과 폴더가 {max}개를 넘습니다
+@msg	{folder}: {e}	{folder}: {e}
+@msg	{g} is not a Live Paint group	{g}은(는) 라이브 페인트 그룹이 아닙니다
+@msg	{id} is not a slice	{id}은(는) 슬라이스가 아닙니다
+@msg	{key} must be 0–{MAX_ADD_AROUND} pt	{key}은(는) 0–{MAX_ADD_AROUND} pt여야 합니다
+@msg	{key} must be [x,y]	{key}은(는) [x,y]여야 합니다
+@msg	{key} must be a percentage {min}..100	{key}은(는) {min}..100 사이의 백분율이어야 합니다
+@msg	{key} must be a positive number, not {n}	{key}은(는) {n}이(가) 아니라 양수여야 합니다
+@msg	{key} must be a positive number, not {v}	{key}은(는) {v}이(가) 아니라 양수여야 합니다
+@msg	{key} must be one of {_1}	{key}은(는) {_1} 중 하나여야 합니다
+@msg	{key} must be {_1}, got {s}	{key}은(는) {_1}이어야 합니다({s} 입력됨)
+@msg	{key} must name a floating panel	{key}은(는) 떠 있는 패널을 지정해야 합니다
+@msg	{key} must name a panel in another group	{key}은(는) 다른 그룹의 패널을 지정해야 합니다
+@msg	{key} must name a panel that shows	{key}은(는) 표시된 패널을 지정해야 합니다
+@msg	{key} must name a registered panel	{key}은(는) 등록된 패널을 지정해야 합니다
+@msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 파일에는 투명도가 없는데 이 파일에는 {what}이(가) 있게 됩니다: 먼저 병합하세요(object.flattenTransparency)
+@msg	{kind} images can't be opened (see document.formats)	{kind} 이미지는 열 수 없습니다(document.formats 참조)
+@msg	{k} `{v}` is not one of the choices	{k} `{v}`은(는) 선택 항목 중 하나가 아닙니다
+@msg	{k} has control characters{_1}	{k}에 제어 문자가 있습니다{_1}
+@msg	{k} is too long (at most {MAX_TEXT} characters)	{k}이(가) 너무 깁니다(최대 {MAX_TEXT}자)
+@msg	{k} must be > 0	{k}은(는) 0보다 커야 합니다
+@msg	{k} must be a number (pt) or a length such as "210 mm"	{k}은(는) 숫자(pt) 또는 "210 mm" 같은 길이여야 합니다
+@msg	{k} must be a number from {min} to {max}	{k}은(는) {min}에서 {max} 사이의 숫자여야 합니다
+@msg	{k} must be a number or "auto"	{k}은(는) 숫자 또는 "auto"여야 합니다
+@msg	{k} must be a string	{k}은(는) 문자열이어야 합니다
+@msg	{k} must be text	{k}은(는) 텍스트여야 합니다
+@msg	{k} must be true or false	{k}은(는) true 또는 false여야 합니다
+@msg	{k} must be {{size?, position?}}	{k}은(는) {{size?, position?}}여야 합니다
+@msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}: 사용자 정의 화살촉의 패스에는 칠할 영역이 있어야 하고 기준점은 {most}개 이하, 하위 패스는 {most}개 이하여야 하며, 각 기준점은 끝에서 화살촉 단위로 {far} 이내에 있어야 합니다
+@msg	{k}: bad custom arrowhead path: {e}	{k}: 잘못된 사용자 정의 화살촉 패스: {e}
+@msg	{k}: bad custom arrowhead: {e}	{k}: 잘못된 사용자 정의 화살촉: {e}
+@msg	{k}: can't read `{s}` as a length	{k}: `{s}`을(를) 길이로 읽을 수 없습니다
+@msg	{k}: custom must be a name	{k}: custom은 이름이어야 합니다
+@msg	{label} must be a number at most {max}	{label}은(는) {max} 이하의 숫자여야 합니다
+@msg	{label} must be a number from -1296 to 1296	{label}은(는) -1296에서 1296 사이의 숫자여야 합니다
+@msg	{label} must be a number from 1 to 10000	{label}은(는) 1에서 10000 사이의 숫자여야 합니다
+@msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
+@msg	{name} is built in and can't be deleted	{name}은(는) 기본 제공 항목이라 삭제할 수 없습니다
+@msg	{name} must be a number	{name}은(는) 숫자여야 합니다
+@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name}은(는) {lo}–{hi}{unit}여야 합니다({v} 입력됨)
+@msg	{name}: CRC or size mismatch	{name}: CRC 또는 크기가 일치하지 않습니다
+@msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: 이 Affinity 파일은 포함된 미리 보기만 읽을 수 있었습니다. 경고와 함께 보려면 파일 › 열기를 사용하거나, 가져오기 전에 Affinity에서 SVG 또는 PDF로 내보내세요
+@msg	{name}: {e}	{name}: {e}
+@msg	{native}; its embedded preview can't be read either ({e})	{native}. 포함된 미리 보기도 읽을 수 없습니다({e})
+@msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}: 복사는 색판이 파일 안에 있는 DCS 파일만 받습니다. 색판 파일이 있는 위치의 파일로 다시 연결하세요
+@msg	{path}: larger than {_1} MB	{path}: {_1} MB보다 큽니다
+@msg	{saving} failed: {e}	{saving} 실패: {e}
+@msg	{shown} is not an XPath 1.0 function	{shown}은(는) XPath 1.0 함수가 아닙니다
+@msg	{std} files are CMYK, and the file would have colours in {_1}	{std} 파일은 CMYK인데 이 파일에는 {_1} 색상이 있게 됩니다
+@msg	{std} files embed their fonts, and the file would have one that isn't	{std} 파일은 글꼴을 포함하는데 이 파일에는 포함되지 않은 글꼴이 있게 됩니다
+@msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	{target}은(는) 이 문서를 읽어 온 파일이며 읽을 때 빠진 내용이 있습니다({what}): 덮어쓰면 그 내용을 영구히 잃습니다. 다른 파일에 기록하거나, 그래도 바꾸려면 acknowledgeLoss: true를 전달하세요
+@msg	{ty} brushes need selected art (or params.{k})	{ty} 브러시에는 선택한 아트웍(또는 params.{k})이 필요합니다
+@msg	{v} is not an asset id	{v}은(는) 에셋 id가 아닙니다
+@msg	{v} names no layer or sublayer	{v}에 해당하는 레이어나 하위 레이어가 없습니다
+@msg	{what} can't be intertwined	{what}은(는) 교차할 수 없습니다
+@msg	{what} doesn't fit the paper with its bleed and marks	{what}은(는) 도련과 표시를 포함하면 용지에 맞지 않습니다
+@msg	{what} is not a function	{what}은(는) 함수가 아닙니다
+@msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what}은(는) 한 장에 {MAX_COPIES_PER_SHEET}개보다 많이 인쇄됩니다: 크기를 키우세요
+@msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}은(는) 타일 {MAX_TILES}개보다 많이 나뉘어 인쇄됩니다: 크기를 줄이세요
+@msg	{what} {i} out of range	{what} {i}이(가) 범위를 벗어났습니다
