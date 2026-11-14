@@ -631,6 +631,8 @@ antiAlias	Sharp	Nítido
 	Crop Image	Recortar Imagem
 	Image Tools	Ferramentas de imagem
 	Remove Background…	Remover Fundo…
+	Draw (Pencil)	Desenhar (Lápis)
+	Place Image	Colocar Imagem
 	Remove Background	Remover Fundo
 	Background	Fundo
 	Edge Color	Cor da Borda
@@ -3490,6 +3492,7 @@ imageTrace	Outline	Contorno
 	VectorCraft Title Bar on Every Desktop	Barra de título do VectorCraft em todas as áreas de trabalho
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Enquanto estiver definida, a variável de ambiente VECTORCRAFT_TITLEBAR escolhe a barra de título.
 	System Title Bar takes precedence over this option while it is on.	Enquanto estiver ativada, Barra de título do sistema tem prioridade sobre esta opção.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Enquanto Barra de título do VectorCraft em todas as áreas de trabalho estiver desativada, esta área de trabalho desenha a barra de título da janela com esta opção ativada ou desativada.
 	Exit	Sair
 	Distort	Distorcer
 	Diffuse Glow…	Brilho difuso…
@@ -3952,6 +3955,7 @@ axis	Both	Ambos
 @msg	`select` must be true or false	`select` deve ser true ou false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` e `maxAnchors` devem ser números inteiros
 @msg	`{key}` must be a number not below 0	`{key}` deve ser um número não inferior a 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` deve ser quatro números não inferiores a 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` deve ser [x, y, width, height]: quatro números finitos, com largura e altura não negativas
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` é maior que `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	informe pelo menos um de `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -6515,6 +6519,8 @@ axis	Y Axis	Eixo Y
 	Action Options…	Opções da Ação…
 	Action Options	Opções da Ação
 	Playback Options…	Opções de Reprodução…
+	Button Mode	Modo de Botão
+	No actions.	Nenhuma ação.
 	Insert Stop…	Inserir Parada…
 	Insert Stop	Inserir Parada
 	Record Stop	Gravar Parada
@@ -7681,7 +7687,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`alignOn` must be a string	`alignOn` deve ser uma string
 @msg	`align` is start, center or end	`align` é start, center ou end
 @msg	`align` must be a string	`align` deve ser uma string
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` deve ser uma matriz de pares [subcaminho, ponto de ancoragem]
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` deve ser uma matriz de pares [subpath, anchor]
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` deve listar índices de pontos de ancoragem (0, 1, 2…), não {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` deve listar índices de pontos de ancoragem (0, 1, 2…), não {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` para esta caixa de diálogo {kind} deve ser um de: {_1}
@@ -7746,7 +7752,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` deve estar entre {lo} e {hi} pt
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` deve ter de 1 a 1000 caminhos de arquivos de fonte encontrados pela última pesquisa de text.findFontFiles
 @msg	`focal` and `radius` cannot be used together	`focal` e `radius` não podem ser usados juntos
-@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` deve ser uma matriz de pares [subcaminho, ponto de ancoragem]
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` deve ser uma matriz de pares [subpath, anchor]
 @msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` indica [{si}, {ai}], que não é um ponto de ancoragem do caminho
 @msg	`folder` must be an absolute folder path	`folder` deve ser um caminho absoluto de pasta
 @msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` deve ser um objeto de tags de eixo e valores, como {"wght"}
@@ -8411,7 +8417,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	instruction {pc} reached with stack depths {seen} and {d}	instrução {pc} alcançada com profundidades de pilha {seen} e {d}
 @msg	invalid `color`	`color` inválido
 @msg	invalid anchor index {v}: expected a non-negative integer	índice de ponto de ancoragem inválido {v}: esperado um inteiro não negativo
-@msg	invalid anchor reference {v}: expected [subpath, anchor]	referência de ponto de ancoragem inválida {v}: esperado [subcaminho, ponto de ancoragem]
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	referência de ponto de ancoragem inválida {v}: esperado [subpath, anchor]
 @msg	invalid angle	ângulo inválido
 @msg	invalid array length	comprimento de matriz inválido
 @msg	invalid brush: {e}	pincel inválido: {e}
@@ -8520,7 +8526,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	missing `{k}`	falta `{k}`
 @msg	missing anchor	falta o ponto de ancoragem
 @msg	missing anchors	faltam os pontos de ancoragem
-@msg	missing anchors [[subpath, anchor]…]	faltam os pontos de ancoragem [[subcaminho, ponto de ancoragem]…]
+@msg	missing anchors [[subpath, anchor]…]	faltam os pontos de ancoragem [[subpath, anchor]…]
 @msg	missing array `{key}`	falta a matriz `{key}`
 @msg	missing case	falta case
 @msg	missing color	falta a cor
