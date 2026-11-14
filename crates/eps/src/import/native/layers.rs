@@ -1,4 +1,6 @@
-use super::build::{PAGE_MOVE, Page, alone_scale, build, build_from, build_on_page, build_weighing, build_without_page, reid_page_art};
+use super::build::{
+    PAGE_MOVE, Page, alone_scale, build, build_from, build_on_page, build_weighing, build_without_page, reid_page_art, scale_symbol_art,
+};
 use super::slots::LAYERS_UNREAD;
 use super::{Affine, Arc, Cow, Document, Imported, Node, NodeKind, PathData, Rect, Vec2, ai};
 
@@ -45,7 +47,7 @@ pub(in super::super) fn layered(ps: &[u8], visible: Imported, trust: bool, illus
                 let own_palette = use_palette(data, &mut v.document, &mut read);
                 use_brushes(data, &mut v.document, have, &mut v.warnings, &mut read);
                 use_styles(data, &mut v.document, true, 1.0, None, &mut read);
-                use_symbols(data, &mut v.document, own_palette, &mut v.warnings, &mut read);
+                use_symbols(data, &mut v.document, own_palette, None, &mut v.warnings, &mut read);
                 use_variables(data, &mut v.document, &mut v.warnings, &mut read);
                 add_notes(&mut v.warnings, read.notes());
             }
@@ -153,7 +155,7 @@ pub fn layered_ai_from(
         let own_palette = use_palette(&data, &mut visible, &mut read);
         use_brushes(&data, &mut visible, have, &mut warnings, &mut read);
         use_styles(&data, &mut visible, false, unit, Some(&boards), &mut read);
-        use_symbols(&data, &mut visible, own_palette, &mut warnings, &mut read);
+        use_symbols(&data, &mut visible, own_palette, Some((unit, boards.as_slice())), &mut warnings, &mut read);
         use_variables(&data, &mut visible, &mut warnings, &mut read);
         add_notes(&mut warnings, read.notes());
         return (visible, warnings, false);
@@ -172,7 +174,7 @@ pub fn layered_ai_from(
         use_brushes(&data, &mut visible, have, &mut warnings, &mut read);
         use_styles(&data, &mut visible, false, unit, Some(&boards), &mut read);
         let mut all = unread(warnings, why);
-        use_symbols(&data, &mut visible, own_palette, &mut all, &mut read);
+        use_symbols(&data, &mut visible, own_palette, Some((unit, boards.as_slice())), &mut all, &mut read);
         use_variables(&data, &mut visible, &mut all, &mut read);
         add_notes(&mut all, read.notes());
         (visible, all, false)
@@ -377,24 +379,32 @@ fn use_styles(data: &[u8], doc: &mut Document, large_canvas: bool, unit: f64, bo
     if styles.is_empty() {
         return;
     }
-    if !large_canvas && (unit != 1.0 || canvas != 1.0) {
-        let read;
-        let boards = match boards {
-            Some(b) => b,
-            None => {
-                read = ai::artboards(data, &mut ai::Names::default()).0;
-                &read
-            }
-        };
-        let k = board_scale(boards, doc, unit).or_else(|| board_scale(boards, doc, canvas));
-        if let Some(k) = k.filter(|k| *k != 1.0) {
-            for g in &mut styles {
-                g.appearance.scale_strokes(k);
-                g.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
-            }
+    if !large_canvas && let Some(k) = data_scale(data, doc, unit, canvas, boards) {
+        for g in &mut styles {
+            g.appearance.scale_strokes(k);
+            g.appearance.scale_effects(k, vectorcraft_effects::scale_effect);
         }
     }
     doc.graphic_styles = styles.into();
+}
+
+/// How many times as large `doc` (a file read as its PDF part) draws the art of its editing data
+/// `data`, whose declared large canvas scale is `canvas`, when it isn't 1: `unit` when the editing
+/// data's artboards (`boards`, or read from `data`) are the size of `doc`'s pages in units of
+/// `unit` points, else `canvas` when they are the pages' size at that scale ([`board_scale`]).
+fn data_scale(data: &[u8], doc: &Document, unit: f64, canvas: f64, boards: Option<&[(String, Rect)]>) -> Option<f64> {
+    if unit == 1.0 && canvas == 1.0 {
+        return None;
+    }
+    let read;
+    let boards = match boards {
+        Some(b) => b,
+        None => {
+            read = ai::artboards(data, &mut ai::Names::default()).0;
+            &read
+        }
+    };
+    board_scale(boards, doc, unit).or_else(|| board_scale(boards, doc, canvas)).filter(|k| *k != 1.0)
 }
 
 /// `doc` (a file read as its page or PDF part, in place of its layers) with the symbols of its
@@ -405,15 +415,34 @@ fn use_styles(data: &[u8], doc: &mut Document, large_canvas: bool, unit: f64, bo
 /// of the name, which the art then names, as does one whose name a color group has), as [`build`] gives a document read from the layers, and
 /// the note about instances that can't be drawn added to `warnings`. An object of their art linked
 /// to a graphic style keeps the link when [`use_styles`] gave `doc` the editing data's styles. The
-/// symbols' art keeps the editing data's units, as in a document read from the layers: when
-/// [`use_styles`] draws the styles' strokes and effects larger (a file in larger units), linked art
-/// isn't scaled with them. Left as it is when `doc` has symbols already or the editing data has
-/// none this reads. `names` reads the symbols' names and keeps the notes on them.
-fn use_symbols(data: &[u8], doc: &mut Document, own_palette: bool, warnings: &mut Vec<String>, names: &mut ai::Names) {
+/// symbols' art is drawn as large as a document read from the layers draws it
+/// ([`scale_symbol_art`]): with `units` `None` (an EPS's page), as many times as large as the data's
+/// declared large canvas scale; with `Some((unit, boards))`, as many times as large as
+/// [`use_styles`] draws the styles' strokes and effects ([`data_scale`], `boards` the editing data's
+/// artboards); at its own size in data VectorCraft wrote. Left as it is when `doc` has symbols
+/// already or the editing data has none this reads. `names` reads the symbols' names and keeps the
+/// notes on them.
+fn use_symbols(
+    data: &[u8],
+    doc: &mut Document,
+    own_palette: bool,
+    units: Option<(f64, &[(String, Rect)])>,
+    warnings: &mut Vec<String>,
+    names: &mut ai::Names,
+) {
     if !doc.symbols.is_empty() {
         return;
     }
-    let Some(ai::Symbols { symbols, images, swatches }) = ai::symbols(data, names) else { return };
+    let Some(ai::Symbols { symbols, images, swatches, canvas_scale, own_size }) = ai::symbols(data, names) else { return };
+    let (mut symbols, registrations): (Vec<_>, Vec<_>) = symbols.into_iter().unzip();
+    let k = match units {
+        _ if own_size => None,
+        None => Some(canvas_scale),
+        Some((unit, boards)) => data_scale(data, doc, unit, canvas_scale, Some(boards)),
+    };
+    if let Some(k) = k {
+        scale_symbol_art(&mut symbols, k);
+    }
     for (key, blob) in images {
         doc.images.entry(key).or_insert(blob);
     }
@@ -444,7 +473,7 @@ fn use_symbols(data: &[u8], doc: &mut Document, own_palette: bool, warnings: &mu
         *link = Some(new.clone());
         true
     };
-    for (mut symbol, registration) in symbols {
+    for (mut symbol, registration) in symbols.into_iter().zip(registrations) {
         let mut art = reid_page_art(doc, &symbol.art);
         if !renamed.is_empty() {
             vectorcraft_doc::swatches::map_node_solid_paints(&mut art, &mut follow);

@@ -94,7 +94,7 @@ pub(crate) use ai::{
 };
 pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES, record_version};
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
-pub(crate) use native::{MAX_TEXT, scale_document};
+pub(crate) use native::{MAX_TEXT, scale_document, scale_symbols};
 pub use text::family_style;
 pub(crate) use text::{document_font, postscript_face};
 
