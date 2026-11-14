@@ -650,6 +650,10 @@ fn structured_junk() {
             )}),
         ),
         ("svgFilter.apply", json!({"name": "\u{0}", "ids": [u64::MAX]})),
+        ("svgFilter.apply", json!({"name": "Glow", "index": u64::MAX, "item": -1})),
+        ("svgFilter.apply", json!({"name": "Rough Edges", "index": [0], "ids": "x"})),
+        ("svgFilter.define", json!({"xml": "<filter id=\"x\"/>", "replace": "Glow"})),
+        ("svgFilter.delete", json!({"name": "Glow"})),
         ("svgFilter.delete", json!({"name": ["a"]})),
         (
             "effect.apply",

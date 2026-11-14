@@ -5172,8 +5172,19 @@ it. The native format keeps the events and the files.
 
 ## SVG filters
 
-Effect › SVG Filters lists the document's SVG filters below Apply SVG Filter… and Import SVG Filter…; choosing one
-applies it to the selection. `svgFilter.list {}` returns them as `filters: [{name, xml}]`. Each is one `<filter>`
+Effect › SVG Filters lists the default SVG filters and then the document's other filters below Apply SVG Filter… and
+Import SVG Filter…; choosing one applies it to the selection
+([apply SVG filter effects](https://helpx.adobe.com/illustrator/desktop/special-effects-styles/apply-filter-effects/apply-svg-filter-effects.html)).
+The 14 defaults are VectorCraft's own set, written with [SVG 1.1 filter primitives](https://www.w3.org/TR/SVG11/filters.html):
+Soft Blur, Heavy Blur, Soft Shadow, Hard Shadow, Glow, Bevel, Emboss, Thicken, Thin, Rough Edges, Grain, Grayscale,
+Invert and Hue Shift. Every document lists them, and a document holds none of them until one is applied or edited
+there. `svgFilter.apply` with a default's name copies the default into the document in the same undo step (refused
+when the document already holds 64 filters), and `svgFilter.define` with `replace` naming a default adds the edited
+copy under that name (code equal to the default's adds nothing). The document's filter of a default's name is then
+listed in the default's place. `svgFilter.delete` refuses a default the document holds no copy of; deleting the copy
+lists the default again, and applying the default again makes the effects that still name it draw with it.
+`svgFilter.list {}` returns the document's filters as `filters: [{name, xml}]` and the defaults as
+`defaults: [{name, xml, inDocument}]`. Each filter is one `<filter>`
 element whose `id` is its name, with 1 to 64 primitives and at most 64 KB of XML (`feTurbulence` octaves up to 10,
 `feConvolveMatrix` kernels up to 9 cells a side, `feMorphology` radii and `kernelUnitLength` up to 100 and
 `stdDeviation` up to 500 user units, elements nested at most 16 deep). It holds only filter primitives,
@@ -5184,8 +5195,9 @@ a filter after the others, or with `replace` replaces the filter of that name, w
 filter has is refused, and the same filter again records no undo step. `svgFilter.delete {name}` removes one, and `svgFilter.import
 {path?|svg?}` adds the `<filter>` elements of an SVG file (at most 16 MB, not SVGZ, the first 256 filters) or of SVG text, leaving out the names the
 document already has and the filters `svgFilter.define` would refuse (`{added, skipped}`). Each change is one undo
-step. `svgFilter.apply {name, ids?|id?, item?}` applies one as the live effect `svg.filter`, as `effect.apply` does,
-in one undo step. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
+step. `svgFilter.apply {name, ids?|id?, item?, index?}` applies one as the live effect `svg.filter`, as `effect.apply` does,
+in one undo step; with `index` it puts the filter in the place of the applied `svg.filter` effect at that index of
+`item`, as `effect.setParams` does, and an index that is not an applied SVG filter is an error. The effect (`{name, xml, scale, origin}`) names the document's filter: editing the filter changes
 what every object that uses it draws, in the edit's one undo step, and an application after an edit takes the edited
 filter. Deleting a filter that objects use leaves their effects in place, still named, drawing nothing (their `xml`
 empty) until a filter of that name is defined or imported again. A pasted effect that names one of the document's
