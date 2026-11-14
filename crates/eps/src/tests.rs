@@ -1582,6 +1582,23 @@ fn an_instance_whose_brush_art_reaches_the_region_is_written() {
 }
 
 #[test]
+fn symbol_art_effects_are_written_where_they_draw() {
+    // The symbol's square at (10, 40), which a Transform effect moves 100 pt right, is drawn from
+    // x = 110 and not from x = 10.
+    let mut d = doc_with(|d| vec![Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY })]);
+    let mut art = path(&mut d, shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    art.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(art) });
+    let page = page_of(&d, &opts(&d));
+    let starts: Vec<f64> = page.lines().filter(|l| l.ends_with(" m")).filter_map(|l| l.split_whitespace().next()?.parse().ok()).collect();
+    assert!(!starts.is_empty() && starts.iter().all(|x| (110.0..=120.0).contains(x)), "{starts:?}\n{page}");
+}
+
+#[test]
 fn level_preview_and_overprint_ids_read_back() {
     for l in Level::ALL {
         assert_eq!(Level::from_id(l.id()), Some(l));
