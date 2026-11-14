@@ -19,7 +19,7 @@ mod wrap;
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
 pub use char_style::{
-    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, MAX_AKI, MAX_WARICHU_GAP, ScriptMetrics, WARICHU_LINES,
+    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, MAX_AKI, MAX_TSUME, MAX_WARICHU_GAP, ScriptMetrics, WARICHU_LINES,
     WARICHU_SCALE, WarichuAlign,
 };
 pub use composite::{

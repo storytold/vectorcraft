@@ -2641,6 +2641,7 @@ mark-style	Japanese	Japanisch
 	Proportional Metrics	Proportionale Metrik
 	Insert Aki Left	Aki links einfügen
 	Insert Aki Right	Aki rechts einfügen
+	Tsume	Tsume
 	Character Direction	Zeichenrichtung
 	Digits	Ziffern
 	Arabic	Arabisch
@@ -5994,8 +5995,8 @@ axis	Y Axis	Y-Achse
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ein Export-Plug-in gibt 1 bis {MAX_EXTENSIONS} `extensions` an
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	höchstens {MAX_UNGROUPED} Parameter außerhalb von Gruppen: Geben Sie den anderen eine `group`
 @msg	can't encode the input	die Eingabe kann nicht codiert werden
-@msg	expected {"dataBase64"}	erwartet: {"dataBase64"}
-@msg	expected {"objects"}	erwartet: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	erwartet: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	erwartet: {{"objects": [...]}}
 @msg	export `{name}`: {e}	Modulexport `{name}`: {e}
 @msg	extension {e} is listed twice	die Dateiendung {e} ist doppelt aufgeführt
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	Dateiendung {e}: Verwenden Sie 1-16 Kleinbuchstaben und Ziffern, ohne Punkt
@@ -6059,11 +6060,11 @@ axis	Y Axis	Y-Achse
 @msg	a painted live effect returns only `objects`	ein malender Live-Effekt gibt nur `objects` zurück
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills` und `strokes`
 @msg	a read-only object was left out	ein schreibgeschütztes Objekt wurde weggelassen
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {"id"} allein oder so, wie es übergeben wurde
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {{"id": …}} allein oder so, wie es übergeben wurde
 @msg	a string	eine Zeichenkette
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	eine Kontur hat nur `paint`, `width`, `join`, `cap` und `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	eine Kontur muss {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} sein
-@msg	an effect must be {"id", "params"?, "visible"?}	ein Effekt muss {"id", "params"?, "visible"?} sein
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	eine Kontur muss {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} sein
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ein Effekt muss {{"id", "params"?, "visible"?}} sein
 @msg	an effect on a fill returns only `fills`	ein Effekt auf einer Fläche gibt nur `fills` zurück
 @msg	an effect on a stroke returns only `strokes`	ein Effekt auf einer Kontur gibt nur `strokes` zurück
 @msg	an object must be a JSON object	ein Objekt muss ein JSON-Objekt sein

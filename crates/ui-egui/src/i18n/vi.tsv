@@ -3022,6 +3022,7 @@ mark-style	Japanese	Kiểu Nhật
 	Proportional Metrics	Số liệu theo tỷ lệ
 	Insert Aki Left	Chèn aki bên trái
 	Insert Aki Right	Chèn aki bên phải
+	Tsume	Tsume
 	Proportional Lining	Số tỷ lệ đứng
 	Position:	Vị trí:
 	Default Position	Vị trí mặc định
@@ -6009,8 +6010,8 @@ axis	Y Axis	Trục Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	plug-in xuất khai báo từ 1 đến {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	tối đa {MAX_UNGROUPED} tham số nằm ngoài nhóm: hãy đặt `group` cho các tham số còn lại
 @msg	can't encode the input	không thể mã hóa dữ liệu đầu vào
-@msg	expected {"dataBase64"}	cần có {"dataBase64"}
-@msg	expected {"objects"}	cần có {"objects"}
+@msg	expected {{"dataBase64": "…"}}	cần có {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	cần có {{"objects": [...]}}
 @msg	export `{name}`: {e}	export `{name}` của mô-đun: {e}
 @msg	extension {e} is listed twice	phần mở rộng {e} được liệt kê hai lần
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	phần mở rộng {e}: dùng 1-16 chữ thường và chữ số, không có dấu chấm
@@ -6074,11 +6075,11 @@ axis	Y Axis	Trục Y
 @msg	a painted live effect returns only `objects`	hiệu ứng động kiểu tô chỉ trả về `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills` và `strokes`
 @msg	a read-only object was left out	một đối tượng chỉ đọc đã bị bỏ sót
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {"id"} hoặc như khi được nhận
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {{"id": …}} hoặc như khi được nhận
 @msg	a string	một chuỗi
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	nét chỉ có `paint`, `width`, `join`, `cap` và `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	nét phải có dạng {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	hiệu ứng phải có dạng {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	nét phải có dạng {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	hiệu ứng phải có dạng {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	hiệu ứng trên phần tô chỉ trả về `fills`
 @msg	an effect on a stroke returns only `strokes`	hiệu ứng trên nét chỉ trả về `strokes`
 @msg	an object must be a JSON object	đối tượng phải là một đối tượng JSON
