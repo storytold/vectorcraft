@@ -41,6 +41,7 @@ use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
+use vectorcraft_engine::cmd::ParamsPlace;
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
@@ -427,17 +428,19 @@ impl Hiding {
 }
 
 /// The paths outside the read roots that `v`'s strings and keys name at any depth, written as paths
-/// ([`unreadable_path_like`]) or held by a path param
-/// ([`vectorcraft_engine::file_access::is_path_key`]), a relative one too, each as a hidden library id
-/// (`loaded/<path>`) with `loaded/<file name>` shown. A reply hides them as it hides a hidden library's
-/// path, with that file name also for a hidden library shown as `loaded/<file name> (2)`, so that it
-/// reads the same whether or not a library was loaded from one of them.
+/// ([`unreadable_path_like`]) or held by a path param, a relative one too, each as a hidden library id
+/// (`loaded/<path>`) with `loaded/<file name>` shown. A param is a path param as the command it is
+/// for reads it ([`ParamsPlace`]: `engine.execute`'s `params`, a `command.batch` step's and a
+/// recorded step's), so a web link or an export's folder grouping is not one. A reply hides them as
+/// it hides a hidden library's path, with that file name also for a hidden library shown as
+/// `loaded/<file name> (2)`, so that it reads the same whether or not a library was loaded from one
+/// of them.
 fn sent_paths(v: &Value, out: &mut Vec<(String, String)>) {
-    collect_sent_paths(v, false, out);
+    collect_sent_paths(v, ParamsPlace::top(None), false, out);
 }
 
-/// [`sent_paths`] on `v`, which a path param holds when `path_param` is set.
-fn collect_sent_paths(v: &Value, path_param: bool, out: &mut Vec<(String, String)>) {
+/// [`sent_paths`] on `v`, found at `place`, which a path param holds when `path_param` is set.
+fn collect_sent_paths(v: &Value, place: ParamsPlace, path_param: bool, out: &mut Vec<(String, String)>) {
     fn add(s: &str, path_param: bool, out: &mut Vec<(String, String)>) {
         if !unreadable_path_like(s) && !(path_param && !readable_value(s)) {
             return;
@@ -459,11 +462,18 @@ fn collect_sent_paths(v: &Value, path_param: bool, out: &mut Vec<(String, String
     }
     match v {
         Value::String(s) => add(s, path_param, out),
-        Value::Array(items) => items.iter().for_each(|item| collect_sent_paths(item, path_param, out)),
+        Value::Array(items) => {
+            let step = ParamsPlace::step(items);
+            for (i, item) in items.iter().enumerate() {
+                collect_sent_paths(item, place.item(i, step), path_param, out);
+            }
+        }
         Value::Object(fields) => {
+            let carried = ParamsPlace::carried(fields);
             for (key, item) in fields {
                 add(key, false, out);
-                collect_sent_paths(item, vectorcraft_engine::file_access::is_path_key(key), out);
+                let (below, location) = place.member(key, carried);
+                collect_sent_paths(item, below, location.is_some(), out);
             }
         }
         _ => {}
@@ -1057,7 +1067,7 @@ fn steps_mut(set: &mut Value) -> impl Iterator<Item = (String, &mut serde_json::
 /// [`leave_out_unreadable_params`] takes out, each in one pass over the params.
 fn leave_out_unreadable_step(command: &str, params: &mut serde_json::Map<String, Value>) {
     leave_out_unreadable_pref_steps(command, params);
-    leave_out_unreadable_params(params);
+    leave_out_unreadable_params(params, ParamsPlace::of(command));
 }
 
 /// Takes out of the params of a step running `command` the folder preferences' values the request
@@ -1087,39 +1097,46 @@ fn leave_out_unreadable_pref_steps(command: &str, params: &mut serde_json::Map<S
     }
 }
 
-/// Takes out of a recorded step's params, at any depth (the commands of a `command.batch` step), the
-/// paths the request may not read: the value of a path param
-/// ([`vectorcraft_engine::file_access::is_path_key`]: `path`, `file`, `diffPath`, `destinationFolder`
-/// and the like), each path of a list under such a param, and under any other param, as a key too, a
-/// string written as a path ([`unreadable_path_like`]). An empty or blank value names no path and stays.
-fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>) {
-    use vectorcraft_engine::file_access::is_path_key;
+/// Takes out of a recorded step's params at `place`, at any depth (the commands of a `command.batch`
+/// step), the paths the request may not read: the value of a path param as the command reads it
+/// ([`ParamsPlace`]: `path`, `file`, `diffPath`, `destinationFolder` and the like, but not a key that
+/// names part of the document in that command), each path of a list under such a param, and under
+/// any other param, as a key too, a string written as a path ([`unreadable_path_like`]). A web link,
+/// a choice or a switch whose name ends like a path param's (`alignToPath`, `linksFolder`) stays, and
+/// so does an empty or blank value, which names no path.
+fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>, place: ParamsPlace) {
     let shown = |p: &str| p.trim().is_empty() || readable_value(p);
+    let carried = ParamsPlace::carried(params);
     params.retain(|key, v| {
         !unreadable_path_like(key)
             && match v.as_str() {
-                Some(p) => !unreadable_path_like(p) && !(is_path_key(key) && !shown(p)),
+                Some(p) => !unreadable_path_like(p) && !(place.member(key, carried).1.is_some() && !shown(p)),
                 None => true,
             }
     });
+    let carried = ParamsPlace::carried(params);
     for (key, v) in params.iter_mut() {
+        let (below, location) = place.member(key, carried);
         if let Value::Array(paths) = v
-            && is_path_key(key)
+            && location.is_some()
         {
             paths.retain(|p| p.as_str().is_none_or(shown));
         }
-        leave_out_unreadable_values(v);
+        leave_out_unreadable_values(v, below);
     }
 }
 
-/// [`leave_out_unreadable_params`] on each object `v` holds, and a string written as a path that the
-/// request may not read ([`unreadable_path_like`]) taken out of each list.
-fn leave_out_unreadable_values(v: &mut Value) {
+/// [`leave_out_unreadable_params`] on each object `v`, found at `place`, holds, and a string written
+/// as a path that the request may not read ([`unreadable_path_like`]) taken out of each list.
+fn leave_out_unreadable_values(v: &mut Value, place: ParamsPlace) {
     match v {
-        Value::Object(fields) => leave_out_unreadable_params(fields),
+        Value::Object(fields) => leave_out_unreadable_params(fields, place),
         Value::Array(items) => {
             items.retain(|item| !item.as_str().is_some_and(unreadable_path_like));
-            items.iter_mut().for_each(leave_out_unreadable_values);
+            let step = ParamsPlace::step(items);
+            for (i, item) in items.iter_mut().enumerate() {
+                leave_out_unreadable_values(item, place.item(i, step));
+            }
         }
         _ => {}
     }
@@ -1282,7 +1299,7 @@ fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: 
         return;
     }
     let mut given = Vec::new();
-    written_paths(sent, false, &mut given);
+    written_paths(sent, ParamsPlace::top(None), false, &mut given);
     let kept = kept_written_paths(reply, &given);
     let mut hiding = unreadable_library_ids(app);
     hiding.merge(before);
@@ -1291,23 +1308,31 @@ fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: 
     // The status text of a recovery copy that failed names the recovery folder it went to.
     let current = vectorcraft_engine::cmd::recovery::folder(&app.session).map(|(f, _)| f);
     for folder in app.recovery.named.iter().chain(current.as_ref()) {
-        collect_sent_paths(&json!(folder), true, &mut paths);
+        collect_sent_paths(&json!(folder), ParamsPlace::top(None), true, &mut paths);
     }
     hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
     restore_written_paths(reply, kept);
 }
 
-/// The strings that `v`'s path params hold at any depth ([`vectorcraft_engine::file_access::is_path_key`])
-/// that name a file inside the write roots; `v` is a path param's value when `path_param` is set.
-fn written_paths(v: &Value, path_param: bool, out: &mut Vec<String>) {
-    use vectorcraft_engine::file_access::{Access, current, is_path_key};
+/// The strings that `v`'s path params hold at any depth, as the command they are for reads them
+/// ([`ParamsPlace`]), that name a file inside the write roots; `v`, found at `place`, is a path
+/// param's value when `path_param` is set.
+fn written_paths(v: &Value, place: ParamsPlace, path_param: bool, out: &mut Vec<String>) {
+    use vectorcraft_engine::file_access::{Access, current};
     match v {
         Value::String(s) if path_param && !s.is_empty() && current().is_some_and(|r| r.check(s, Access::Write).is_ok()) => out.push(s.clone()),
-        Value::Array(items) => items.iter().for_each(|item| written_paths(item, path_param, out)),
+        Value::Array(items) => {
+            let step = ParamsPlace::step(items);
+            for (i, item) in items.iter().enumerate() {
+                written_paths(item, place.item(i, step), path_param, out);
+            }
+        }
         Value::Object(fields) => {
+            let carried = ParamsPlace::carried(fields);
             for (key, item) in fields {
-                written_paths(item, is_path_key(key), out);
+                let (below, location) = place.member(key, carried);
+                written_paths(item, below, location.is_some(), out);
             }
         }
         _ => {}
