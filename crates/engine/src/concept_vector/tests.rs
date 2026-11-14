@@ -664,6 +664,22 @@ fn insert_goes_beside_the_image_in_a_group_with_art_far_away() {
     assert!(placed.x0 >= 1000.0 + GAP, "painted clipping path: {placed:?}");
 }
 
+/// An Image Trace object whose art paints past its image (here a drop shadow) keeps the row clear
+/// of what it paints.
+#[test]
+fn insert_moves_the_row_past_what_a_traced_source_paints() {
+    let (mut s, _) = doc_with(&art());
+    let traced = s.execute("imageTrace.make", &json!({"preset": "Default"})).unwrap()["id"].as_u64().unwrap();
+    let shadow = json!({"effect": "stylize.dropShadow", "params": {"x": 60, "y": 0, "blur": 0}, "ids": [traced]});
+    s.execute("effect.apply", &shadow).unwrap();
+    let painted = bounds(&s, traced);
+    assert!(painted.x1 > 364.0, "the shadow reaches where the row would start: {painted:?}");
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["flatColor"], "id": traced})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["flatColor"]})).unwrap();
+    let placed = bounds(&s, r["ids"][0].as_u64().unwrap());
+    assert!(placed.x0 >= painted.x1 + GAP - 2.0, "{placed:?} after {painted:?}");
+}
+
 /// A variation's paths reaching past the image's box keep clear of art there too.
 #[test]
 fn insert_moves_the_row_past_art_that_a_variation_reaches_beyond_the_image_box() {
