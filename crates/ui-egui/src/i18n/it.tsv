@@ -7092,6 +7092,12 @@ breakText	Glyphs	Glifi
 @msg	open the practice sample of `{id}` first (see learn.openSample)	apri prima l’esempio di esercitazione di `{id}` (vedi learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	termina prima `{id}` (vedi learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` è l’ultimo tutorial della sua competenza
+	Reset progress	Reimposta i progressi
+	Mark Tutorial Step	Segna il passaggio del tutorial
+	Reset Learn Progress	Reimposta i progressi di apprendimento
+@msg	missing `step` (see learn.show)	manca `step` (vedi learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` deve essere un numero di passaggio da 0 a {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` è terminato (vedi learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Aggiorna effetti rimandati

@@ -6873,6 +6873,12 @@ breakText	Glyphs	Glif
 @msg	open the practice sample of `{id}` first (see learn.openSample)	buka contoh latihan `{id}` terlebih dahulu (lihat learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	selesaikan `{id}` terlebih dahulu (lihat learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` adalah tutorial terakhir dalam keterampilannya
+	Reset progress	Atur ulang kemajuan
+	Mark Tutorial Step	Tandai langkah tutorial
+	Reset Learn Progress	Atur ulang kemajuan belajar
+@msg	missing `step` (see learn.show)	`step` tidak ada (lihat learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` harus berupa nomor langkah dari 0 sampai {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` sudah selesai (lihat learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Segarkan efek yang ditunda

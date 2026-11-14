@@ -7418,6 +7418,12 @@ breakText	Glyphs	Glifler
 @msg	open the practice sample of `{id}` first (see learn.openSample)	önce `{id}` öğreticisinin alıştırma örneğini açın (bkz. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	önce `{id}` öğreticisini bitirin (bkz. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}`, becerisinin son öğreticisidir
+	Reset progress	İlerlemeyi sıfırla
+	Mark Tutorial Step	Öğretici Adımını İşaretle
+	Reset Learn Progress	Öğrenme İlerlemesini Sıfırla
+@msg	missing `step` (see learn.show)	`step` eksik (bkz. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step`, 0 ile {last} arasında bir adım numarası olmalıdır
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` bitirildi (bkz. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile

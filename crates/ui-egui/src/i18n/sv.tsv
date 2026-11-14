@@ -8900,6 +8900,12 @@ digits	Hindi	Hindi
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öppna först övningsexemplet för `{id}` (se learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	slutför först `{id}` (se learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` är den sista självstudien i sin färdighet
+	Reset progress	Återställ framsteg
+	Mark Tutorial Step	Markera steg i självstudie
+	Reset Learn Progress	Återställ inlärningsframsteg
+@msg	missing `step` (see learn.show)	`step` saknas (se learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` måste vara ett stegnummer från 0 till {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` är slutförd (se learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uppdatera uppskjutna effekter

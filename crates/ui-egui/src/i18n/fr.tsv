@@ -7457,6 +7457,12 @@ breakText	Glyphs	Glyphes
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ouvrez d’abord le fichier d’exercice de `{id}` (voir learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	terminez d’abord `{id}` (voir learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` est le dernier tutoriel de sa compétence
+	Reset progress	Réinitialiser la progression
+	Mark Tutorial Step	Marquer une étape du tutoriel
+	Reset Learn Progress	Réinitialiser la progression d’apprentissage
+@msg	missing `step` (see learn.show)	`step` manquant (voir learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` doit être un numéro d’étape de 0 à {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` est terminé (voir learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualiser les effets différés

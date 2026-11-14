@@ -7462,6 +7462,12 @@ breakText	Glyphs	Glyfy
 @msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	nejprve dokončete `{id}` (viz learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` je poslední výukový kurz své dovednosti
+	Reset progress	Obnovit postup
+	Mark Tutorial Step	Označit krok výukového kurzu
+	Reset Learn Progress	Obnovit postup učení
+@msg	missing `step` (see learn.show)	chybí `step` (viz learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` musí být číslo kroku od 0 do {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` je dokončen (viz learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty

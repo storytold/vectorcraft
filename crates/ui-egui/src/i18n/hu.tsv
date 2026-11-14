@@ -7446,6 +7446,12 @@ breakText	Glyphs	Glifák
 @msg	open the practice sample of `{id}` first (see learn.openSample)	előbb nyissa meg a gyakorló mintafájlt ehhez: `{id}` (lásd: learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	előbb fejezze be ezt: `{id}` (lásd: learn.finish)
 @msg	`{id}` is the last tutorial in its skill	a készsége utolsó oktatóanyaga: `{id}`
+	Reset progress	Előrehaladás visszaállítása
+	Mark Tutorial Step	Oktatóanyag lépésének megjelölése
+	Reset Learn Progress	Tanulási előrehaladás visszaállítása
+@msg	missing `step` (see learn.show)	hiányzik: `step` (lásd: learn.show)
+@msg	`step` must be a step number from 0 to {last}	a `step` értéke 0 és {last} közötti lépésszám legyen
+@msg	`{id}` is finished (see learn.resetProgress)	befejezve: `{id}` (lásd: learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Elhalasztott effektusok frissítése

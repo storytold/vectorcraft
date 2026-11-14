@@ -7073,6 +7073,12 @@ breakText	Glyphs	Glyph
 @msg	open the practice sample of `{id}` first (see learn.openSample)	hãy mở tệp mẫu thực hành của `{id}` trước (xem learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	hãy hoàn tất `{id}` trước (xem learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` là hướng dẫn cuối cùng trong kỹ năng của nó
+	Reset progress	Đặt lại tiến độ
+	Mark Tutorial Step	Đánh dấu bước hướng dẫn
+	Reset Learn Progress	Đặt lại tiến độ học
+@msg	missing `step` (see learn.show)	thiếu `step` (xem learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` phải là số bước từ 0 đến {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` đã hoàn tất (xem learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn

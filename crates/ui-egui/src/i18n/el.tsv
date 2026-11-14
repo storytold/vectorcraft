@@ -7415,6 +7415,12 @@ breakText	Glyphs	Γλύφοι
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ανοίξτε πρώτα το δείγμα εξάσκησης του `{id}` (δείτε learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	ολοκληρώστε πρώτα το `{id}` (δείτε learn.finish)
 @msg	`{id}` is the last tutorial in its skill	το `{id}` είναι ο τελευταίος οδηγός εκμάθησης της δεξιότητάς του
+	Reset progress	Επαναφορά προόδου
+	Mark Tutorial Step	Σήμανση βήματος οδηγού εκμάθησης
+	Reset Learn Progress	Επαναφορά προόδου εκμάθησης
+@msg	missing `step` (see learn.show)	λείπει το `step` (δείτε learn.show)
+@msg	`step` must be a step number from 0 to {last}	το `step` πρέπει να είναι αριθμός βήματος από 0 έως {last}
+@msg	`{id}` is finished (see learn.resetProgress)	το `{id}` έχει ολοκληρωθεί (δείτε learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή

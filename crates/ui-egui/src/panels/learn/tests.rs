@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use egui::accesskit::Node;
-use serde_json::json;
+use egui::accesskit::{Node, Role, Toggled};
+use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 
 use super::{ID, Practice, Tab, View, catalog, samples, show};
@@ -225,7 +225,8 @@ fn learn_show_opens_a_tutorial_and_learn_list_lists_them() {
     assert_eq!(skills.len(), catalog::SKILLS.len());
     let count: usize = skills.iter().map(|s| s["tutorials"].as_array().map_or(0, Vec::len)).sum();
     assert_eq!(count, catalog::SKILLS.iter().map(|s| s.tutorials.len()).sum::<usize>());
-    assert_eq!(skills[2]["tutorials"][1], json!({"id": "gradient", "title": "Add a gradient", "steps": 3}));
+    assert_eq!(skills[2]["tutorials"][1], json!({"id": "gradient", "title": "Add a gradient", "steps": 3, "finished": false, "completedSteps": []}));
+    assert_eq!((skills[2]["done"].clone(), skills[2]["total"].clone()), (json!(0), json!(3)));
 }
 
 /// Every tutorial has one sample of its own, in the catalog's order, each one small and read
@@ -279,7 +280,8 @@ fn view_more_opens_the_tutorial_s_sample_as_a_new_untitled_document() {
     assert_eq!(docs[0].doc.node_count(), work, "the open document stays as it was");
     assert!(docs[1].path.is_none() && docs[1].title().starts_with("Untitled-"), "{}", docs[1].title());
     let pen = docs[1].doc.node_count();
-    assert_eq!(app.ui.learn_practice, Practice { opened: vec!["pen-paths"], finished: vec![] });
+    assert_eq!(app.ui.learn_practice, Practice { opened: vec!["pen-paths"] });
+    assert!(app.ui.learn_progress.is_empty(), "opening a sample marks nothing");
 
     let r = app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
     assert_eq!(r["tutorial"], "gradient");
@@ -306,7 +308,7 @@ fn finishing_a_tutorial_offers_next_up_in_its_skill() {
     let text = painted_text(&mut app, show);
     assert!(text.contains("Finish tutorial") && !text.contains("Next Up"), "{text}");
     click(&mut app, &ctx, "Finish tutorial", show);
-    assert_eq!(app.ui.learn_practice.finished, ["pen-paths"]);
+    assert_eq!(app.ui.learn_progress.finished, ["pen-paths"]);
     let text = painted_text(&mut app, show);
     assert!(text.contains("Next Up") && text.contains("Draw smooth curves") && !text.contains("Finish tutorial"), "{text}");
     let docs = app.session.documents().len();
@@ -350,7 +352,7 @@ fn the_practice_controls_work_from_the_keyboard() {
     assert_eq!(app.ui.learn_practice.opened, ["pen-paths"]);
     tab_to(&mut app, &ctx, "Finish tutorial", show);
     key(&mut app, &ctx, egui::Key::Enter, show);
-    assert_eq!(app.ui.learn_practice.finished, ["pen-paths"]);
+    assert_eq!(app.ui.learn_progress.finished, ["pen-paths"]);
     tab_to(&mut app, &ctx, "Next Up", show);
     key(&mut app, &ctx, egui::Key::Enter, show);
     assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("smooth-curves") });
@@ -408,13 +410,14 @@ fn learn_finish_and_learn_next_follow_the_practice() {
     assert_eq!(app.run("learn.finish", json!({"tutorial": "gradient"})).unwrap_err(), open);
     assert_eq!(app.run("learn.next", json!({"tutorial": "gradient"})).unwrap_err(), "finish `gradient` first (see learn.finish)");
     assert_eq!(app.ui.learn_practice, Practice::default());
+    assert!(app.ui.learn_progress.is_empty());
     app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
     assert_eq!(app.run("learn.next", json!({"tutorial": "gradient"})).unwrap_err(), "finish `gradient` first (see learn.finish)");
     for _ in 0..2 {
         let r = app.run("learn.finish", json!({"tutorial": "gradient"})).unwrap();
         assert_eq!(r, json!({"tutorial": "gradient", "finished": true, "next": "copy-colors"}));
     }
-    assert_eq!(app.ui.learn_practice.finished, ["gradient"], "finishing again keeps one entry");
+    assert_eq!(app.ui.learn_progress.finished, ["gradient"], "finishing again keeps one entry");
     let r = app.run("learn.next", json!({"tutorial": "gradient"})).unwrap();
     assert_eq!(r, json!({"skill": "color", "tutorial": "copy-colors", "title": "Copy colors from other art"}));
     assert!(shown(&app));
@@ -471,6 +474,7 @@ fn the_practice_commands_reject_a_missing_or_unknown_tutorial() {
             assert_eq!(app.run(cmd, params).unwrap_err(), error, "{cmd}");
             assert_eq!(app.ui.learn, View::default());
             assert_eq!(app.ui.learn_practice, Practice::default());
+            assert!(app.ui.learn_progress.is_empty());
             assert_eq!(app.session.documents().len(), 1);
             assert!(!shown(&app));
         }
@@ -580,4 +584,275 @@ fn learn_locate_tool_is_unavailable_while_the_toolbars_are_hidden() {
     let reply = app.run("learn.locateTool", json!({"tool": "pen"})).unwrap();
     assert_eq!(reply["location"], "unavailable", "{reply}");
     assert!(app.ui.learn_locate.is_none() && !app.ui.toolbar && app.ui.tab_hid.is_some(), "Tab's state stays");
+}
+
+/// The screen-reader name of step `i` of the Pen tutorial's check box.
+fn pen_step(i: usize) -> String {
+    let (_, tutorial) = catalog::tutorial("pen-paths").unwrap();
+    format!("{}. {}", i + 1, tutorial.steps[i].plain())
+}
+
+/// The check boxes of what `draw` draws, from the top, as (enabled, checked).
+fn check_boxes(app: &mut VectorcraftApp, ctx: &egui::Context, draw: fn(&mut VectorcraftApp, &mut egui::Ui)) -> Vec<(bool, bool)> {
+    let nodes = frame(app, ctx, vec![], draw);
+    let mut boxes: Vec<&Node> = nodes.iter().filter(|n| n.role() == Role::CheckBox).collect();
+    boxes.sort_by(|a, b| a.bounds().map_or(0.0, |r| r.y0).total_cmp(&b.bounds().map_or(0.0, |r| r.y0)));
+    boxes.iter().map(|n| (!n.is_disabled(), n.toggled() == Some(Toggled::True))).collect()
+}
+
+/// Each step has a check box, off until the tutorial's sample is open. A click marks only its own
+/// step and a second click clears it; marking every step does not finish the tutorial. A finished
+/// tutorial shows every step done, and its check boxes and `learn.markStep` no longer change them.
+#[test]
+fn a_step_s_check_box_marks_only_that_step() {
+    let mut app = app();
+    let ctx = context();
+    assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(false, false); 3], "off before View more");
+    click(&mut app, &ctx, &pen_step(1), pen_paths);
+    assert!(app.ui.learn_progress.is_empty(), "a check box that is off changes nothing");
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    click(&mut app, &ctx, &pen_step(1), pen_paths);
+    assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(true, false), (true, true), (true, false)], "{}", app.ui.status);
+    let list = app.run("learn.list", json!({})).unwrap();
+    assert_eq!(list["skills"][1]["tutorials"][0]["completedSteps"], json!([1]));
+    assert_eq!(list["skills"][1]["tutorials"][1]["completedSteps"], json!([]), "other tutorials stay as they are");
+    click(&mut app, &ctx, &pen_step(1), pen_paths);
+    assert!(app.ui.learn_progress.is_empty(), "a second click clears the mark");
+    for i in 0..3 {
+        click(&mut app, &ctx, &pen_step(i), pen_paths);
+    }
+    assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(true, true); 3]);
+    assert!(!app.ui.learn_progress.is_finished("pen-paths"), "marking every step does not finish the tutorial");
+    assert!(painted_text(&mut app, pen_paths).contains("Finish tutorial"));
+    click(&mut app, &ctx, &pen_step(0), pen_paths);
+    click(&mut app, &ctx, "Finish tutorial", pen_paths);
+    assert_eq!(app.ui.learn_progress.finished, ["pen-paths"]);
+    assert!(app.ui.learn_progress.steps.is_empty(), "a finished tutorial keeps no marks of its own");
+    assert_eq!(check_boxes(&mut app, &ctx, pen_paths), [(false, true); 3], "Finish marks every step");
+    let before = app.ui.learn_progress.clone();
+    click(&mut app, &ctx, &pen_step(2), pen_paths);
+    let error = app.run("learn.markStep", json!({"tutorial": "pen-paths", "step": 2, "complete": false})).unwrap_err();
+    assert_eq!(error, "`pen-paths` is finished (see learn.resetProgress)");
+    assert_eq!(app.ui.learn_progress, before);
+}
+
+/// The check boxes are reached with Tab and changed with Space.
+#[test]
+fn a_step_s_check_box_works_from_the_keyboard() {
+    let mut app = app();
+    let ctx = context();
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    frame(&mut app, &ctx, vec![], pen_paths);
+    tab_to(&mut app, &ctx, &pen_step(2), pen_paths);
+    key(&mut app, &ctx, egui::Key::Space, pen_paths);
+    assert_eq!(app.ui.learn_progress.steps.get("pen-paths"), Some(&vec![2]), "{}", app.ui.status);
+}
+
+/// Finishing tutorials fills only their own skill's ring and count, once each however often they
+/// are finished; the skill's tutorial rows show which are finished; `learn.list` answers the same.
+#[test]
+fn finishing_tutorials_fills_their_skill_s_ring_and_count() {
+    let mut app = app();
+    let ctx = context();
+    for id in ["pen-paths", "smooth-curves"] {
+        app.run("learn.openSample", json!({"tutorial": id})).unwrap();
+        for _ in 0..2 {
+            app.run("learn.finish", json!({"tutorial": id})).unwrap();
+        }
+    }
+    let values = |app: &mut VectorcraftApp, view: View| {
+        app.ui.learn = view;
+        let nodes = frame(app, &ctx, vec![], show);
+        nodes
+            .iter()
+            .filter(|n| n.role() == Role::Button)
+            .map(|n| (n.label().unwrap_or_default().to_string(), n.value().map(str::to_string)))
+            .collect::<Vec<_>>()
+    };
+    let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
+    let rows = values(&mut app, skills.clone());
+    for skill in catalog::SKILLS {
+        let count = if skill.id == "draw" { "2/3".to_string() } else { format!("0/{}", skill.tutorials.len()) };
+        assert!(rows.contains(&(skill.title.to_string(), Some(count.clone()))), "{} {count} in {rows:?}", skill.id);
+    }
+    assert!(painted_text(&mut app, show).contains("2/3"));
+    let list = app.run("learn.list", json!({})).unwrap();
+    let draw = &list["skills"][1];
+    assert_eq!((draw["done"].clone(), draw["total"].clone()), (json!(2), json!(3)));
+    assert_eq!(draw["tutorials"][1]["finished"], json!(true));
+    assert_eq!(draw["tutorials"][1]["completedSteps"], json!([0, 1, 2]));
+    assert_eq!(list["skills"][2]["done"], json!(0), "other skills stay at 0");
+
+    let rows = values(&mut app, View { tab: Tab::Skills, skill: Some("draw"), tutorial: None });
+    assert!(rows.contains(&("Draw paths with the Pen".to_string(), Some("Finished".to_string()))), "{rows:?}");
+    assert!(rows.contains(&("Draw smooth curves".to_string(), Some("Finished".to_string()))), "{rows:?}");
+    assert!(rows.contains(&("Sketch with the Pencil".to_string(), None)), "{rows:?}");
+
+    app.run("learn.openSample", json!({"tutorial": "pencil-sketch"})).unwrap();
+    app.run("learn.finish", json!({"tutorial": "pencil-sketch"})).unwrap();
+    let rows = values(&mut app, skills);
+    assert!(rows.contains(&("Draw and build".to_string(), Some("3/3".to_string()))), "every tutorial finished: {rows:?}");
+}
+
+/// A skill row with no tutorials, which the catalog does not have today, shows an empty ring and
+/// 0/0.
+fn empty_skill(_: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    super::row(ui, "Empty skill", super::Mark::Ring { done: 0, total: 0 });
+}
+
+#[test]
+fn a_skill_with_no_tutorials_shows_0_of_0() {
+    let mut app = app();
+    let text = painted_text(&mut app, empty_skill);
+    assert!(text.contains("Empty skill") && text.contains("0/0"), "{text}");
+}
+
+/// `learn.markStep` marks a step done by default and with `complete: true`, clears it with `false`,
+/// and answers what it did; a bad param is an error and changes nothing.
+#[test]
+fn learn_mark_step_checks_its_params() {
+    let mut app = app();
+    let open = "open the practice sample of `gradient` first (see learn.openSample)";
+    assert_eq!(app.run("learn.markStep", json!({"tutorial": "gradient", "step": 0})).unwrap_err(), open);
+    assert!(app.ui.learn_progress.is_empty());
+    app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    assert_eq!(
+        app.run("learn.markStep", json!({"tutorial": "gradient", "step": 0})).unwrap(),
+        json!({"tutorial": "gradient", "step": 0, "complete": true})
+    );
+    let before = app.ui.learn_progress.clone();
+    let missing = "missing `step` (see learn.show)";
+    let range = "`step` must be a step number from 0 to 2";
+    for (params, error) in [
+        (json!({"tutorial": "gradient"}), missing),
+        (json!({"tutorial": "gradient", "step": null}), missing),
+        (json!({"tutorial": "gradient", "step": 3}), range),
+        (json!({"tutorial": "gradient", "step": -1}), range),
+        (json!({"tutorial": "gradient", "step": 1.5}), range),
+        (json!({"tutorial": "gradient", "step": "1"}), range),
+        (json!({"tutorial": "gradient", "step": u64::MAX}), range),
+        (json!({"tutorial": "gradient", "step": 1, "complete": "yes"}), "`complete` must be true or false"),
+        (json!({"tutorial": "nope", "step": 1}), "unknown tutorial `nope` (see learn.list)"),
+        (json!({"step": 1}), "missing `tutorial` (see learn.list)"),
+    ] {
+        assert_eq!(app.run("learn.markStep", params.clone()).unwrap_err(), error, "{params}");
+        assert_eq!(app.ui.learn_progress, before, "{params}");
+    }
+    let r = app.run("learn.markStep", json!({"tutorial": "gradient", "step": 2, "complete": null})).unwrap();
+    assert_eq!(r, json!({"tutorial": "gradient", "step": 2, "complete": true}));
+    let r = app.run("learn.markStep", json!({"tutorial": "gradient", "step": 0, "complete": false})).unwrap();
+    assert_eq!(r, json!({"tutorial": "gradient", "step": 0, "complete": false}));
+    let r = app.run("learn.markStep", json!({"tutorial": "gradient", "step": 0, "complete": false})).unwrap();
+    assert_eq!(r["complete"], json!(false), "clearing a step that is not marked is no error");
+    assert_eq!(app.ui.learn_progress.steps.get("gradient"), Some(&vec![2]));
+    assert!(app.ui.learn_progress.finished.is_empty());
+}
+
+/// `learn.resetProgress` and Reset progress clear every tutorial finished and every step marked;
+/// documents, opened samples and the Learn view stay. Reset progress shows only when there is
+/// progress.
+#[test]
+fn reset_progress_clears_only_the_progress() {
+    let mut app = app();
+    let ctx = context();
+    let skills = View { tab: Tab::Skills, skill: None, tutorial: None };
+    app.ui.learn = skills.clone();
+    assert!(!painted_text(&mut app, show).contains("Reset progress"));
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    app.run("learn.finish", json!({"tutorial": "pen-paths"})).unwrap();
+    app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    app.run("learn.markStep", json!({"tutorial": "gradient", "step": 1})).unwrap();
+    let view = app.ui.learn.clone();
+    let docs = app.session.documents().len();
+    let reply = app.run("learn.resetProgress", json!({})).unwrap();
+    assert!(app.ui.learn_progress.is_empty());
+    assert_eq!(reply, app.run("learn.list", json!({})).unwrap());
+    assert_eq!(reply["skills"][1]["done"], json!(0));
+    assert_eq!((app.ui.learn.clone(), app.session.documents().len()), (view, docs));
+    assert_eq!(app.ui.learn_practice.opened, ["pen-paths", "gradient"], "opened samples stay open for practice");
+
+    app.run("learn.finish", json!({"tutorial": "gradient"})).unwrap();
+    app.ui.learn = skills.clone();
+    assert!(painted_text(&mut app, show).contains("Reset progress"));
+    click(&mut app, &ctx, "Reset progress", show);
+    assert!(app.ui.learn_progress.is_empty(), "{}", app.ui.status);
+    assert_eq!(app.ui.learn, skills);
+    assert!(!painted_text(&mut app, show).contains("Reset progress"));
+}
+
+/// The UI state after its preferences are saved and read again, as at the next start.
+fn restarted(app: &VectorcraftApp) -> crate::state::UiState {
+    let bytes = serde_json::to_vec(&app.ui).unwrap();
+    crate::state::UiState::read_preferences(&bytes).expect("the preferences read").ui.sanitized()
+}
+
+/// The preferences keep the tutorials finished and the steps marked; the opened samples, the
+/// Learn view and a tool's mark last only while the app runs, so a step can be marked again only
+/// after View more.
+#[test]
+fn the_preferences_keep_the_progress() {
+    let mut app = app();
+    app.run("learn.openSample", json!({"tutorial": "pen-paths"})).unwrap();
+    app.run("learn.finish", json!({"tutorial": "pen-paths"})).unwrap();
+    app.run("learn.openSample", json!({"tutorial": "gradient"})).unwrap();
+    for step in [2, 0] {
+        app.run("learn.markStep", json!({"tutorial": "gradient", "step": step})).unwrap();
+    }
+    let list = app.run("learn.list", json!({})).unwrap();
+    let ui = restarted(&app);
+    assert_eq!(ui.learn_progress, app.ui.learn_progress);
+    assert_eq!(ui.learn_progress.steps.get("gradient"), Some(&vec![0, 2]));
+    assert_eq!((ui.learn_practice.clone(), ui.learn.clone(), ui.learn_locate.is_none()), (Practice::default(), View::default(), true));
+
+    let mut next = self::app();
+    next.ui = ui;
+    assert_eq!(next.run("learn.list", json!({})).unwrap(), list);
+    assert_eq!(next.run("learn.next", json!({"tutorial": "pen-paths"})).unwrap()["tutorial"], "smooth-curves");
+    let again = next.run("learn.finish", json!({"tutorial": "pen-paths"})).unwrap();
+    assert_eq!(again, json!({"tutorial": "pen-paths", "finished": true, "next": "smooth-curves"}), "finishing again needs no sample");
+    assert_eq!(next.ui.learn_progress.finished, ["pen-paths"]);
+    let open = "open the practice sample of `gradient` first (see learn.openSample)";
+    assert_eq!(next.run("learn.markStep", json!({"tutorial": "gradient", "step": 1})).unwrap_err(), open);
+}
+
+/// Saved preferences with `learn_progress` set to `progress` (left out for None), and
+/// `control_bar` on, read as at a start.
+fn read_progress(progress: Option<Value>) -> crate::state::UiState {
+    let mut saved = serde_json::to_value(crate::state::UiState::default()).unwrap();
+    let fields = saved.as_object_mut().unwrap();
+    fields.insert("control_bar".into(), json!(true));
+    match progress {
+        Some(p) => fields.insert("learn_progress".into(), p),
+        None => fields.remove("learn_progress"),
+    };
+    let ui = crate::state::UiState::read_preferences(&serde_json::to_vec(&saved).unwrap()).expect("the preferences read").ui;
+    assert!(ui.control_bar, "the other preferences read as usual");
+    ui
+}
+
+/// Preferences saved before the progress was kept read with none. Saved progress keeps only the
+/// catalog's tutorials and steps, each once, and a value of the wrong kind, or a huge list, does not
+/// stop the rest of the preferences from reading.
+#[test]
+fn saved_progress_is_read_leniently() {
+    assert!(read_progress(None).learn_progress.is_empty());
+    for bad in [json!("garbage"), json!(3), json!(null), json!([1, 2]), json!({"finished": "pen-paths", "steps": [0]})] {
+        assert!(read_progress(Some(bad.clone())).learn_progress.is_empty(), "{bad}");
+    }
+    let ui = read_progress(Some(json!({
+        "finished": ["pen-paths", "nope", 3, "pen-paths", "gradient"],
+        "steps": {
+            "gradient": [0],
+            "smooth-curves": [2, 0, 2, 99, -1, "1", 1.5],
+            "nope": [0],
+            "copy-colors": "x",
+            "add-headline": [],
+        },
+    })));
+    assert_eq!(ui.learn_progress.finished, ["pen-paths", "gradient"]);
+    let steps: Vec<(&str, Vec<usize>)> = ui.learn_progress.steps.iter().map(|(id, s)| (*id, s.clone())).collect();
+    assert_eq!(steps, [("smooth-curves", vec![0, 2])], "a finished tutorial keeps no marks");
+    let ui = read_progress(Some(json!({"finished": vec!["pen-paths"; 100_000], "steps": {"smooth-curves": vec![1; 100_000]}})));
+    assert_eq!(ui.learn_progress.finished, ["pen-paths"]);
+    assert_eq!(ui.learn_progress.steps.get("smooth-curves"), Some(&vec![1]));
 }

@@ -7551,6 +7551,12 @@ shape	Open	Открытый
 @msg	open the practice sample of `{id}` first (see learn.openSample)	сначала откройте учебный пример урока `{id}` (см. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	сначала завершите `{id}` (см. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` является последним уроком своего навыка
+	Reset progress	Сбросить прогресс
+	Mark Tutorial Step	Отметить шаг урока
+	Reset Learn Progress	Сбросить прогресс обучения
+@msg	missing `step` (see learn.show)	отсутствует `step` (см. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` должен быть номером шага от 0 до {last}
+@msg	`{id}` is finished (see learn.resetProgress)	урок `{id}` завершён (см. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Обновить отложенные эффекты

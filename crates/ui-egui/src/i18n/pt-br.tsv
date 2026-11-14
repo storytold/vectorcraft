@@ -7535,6 +7535,12 @@ swatch	Yellow Green	Verde-amarelado
 @msg	open the practice sample of `{id}` first (see learn.openSample)	abra primeiro a amostra de prática de `{id}` (veja learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	conclua primeiro `{id}` (veja learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` é o último tutorial da sua habilidade
+	Reset progress	Redefinir progresso
+	Mark Tutorial Step	Marcar Etapa do Tutorial
+	Reset Learn Progress	Redefinir Progresso de Aprendizagem
+@msg	missing `step` (see learn.show)	falta `step` (veja learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` deve ser um número de etapa de 0 a {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` está concluído (veja learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Atualizar Efeitos Adiados
