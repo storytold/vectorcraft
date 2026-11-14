@@ -11284,6 +11284,61 @@ fn text_threads_run_from_each_out_port_to_the_next_in_port() {
     assert!(thread_overlays(&app, zoom).is_empty());
 }
 
+#[test]
+fn text_thread_overlays_keep_document_order_with_mixed_selection() {
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::text::{Port, port_centre};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+    let text = "Words that fill more than the frame holds. ".repeat(10);
+    let id = |value: serde_json::Value| NodeId(value["id"].as_u64().unwrap());
+    let first = id(app.run("text.create", json!({"x": 20, "y": 20, "text": text, "area": {"width": 150, "height": 60}})).unwrap());
+    let first_next = id(app.run("text.thread.add", json!({"from": first.0, "at": [300, 20]})).unwrap());
+    let second = id(app
+        .run(
+            "text.create",
+            json!({"x": 20, "y": 200, "text": "Words that fill more than the frame holds. ".repeat(10), "area": {"width": 150, "height": 60}}),
+        )
+        .unwrap());
+    let second_next = id(app.run("text.thread.add", json!({"from": second.0, "at": [300, 200]})).unwrap());
+    let unselected = id(app
+        .run("text.create", json!({"x": 20, "y": 100, "text": "An unselected story. ".repeat(20), "area": {"width": 150, "height": 60}}))
+        .unwrap());
+    let unselected_next = id(app.run("text.thread.add", json!({"from": unselected.0, "at": [300, 100]})).unwrap());
+    let unrelated = id(app.run("shape.rectangle", json!({"x": 450, "y": 300, "width": 20, "height": 20})).unwrap());
+    app.run("select.set", json!({"ids": [second_next.0, unrelated.0, first.0]})).unwrap();
+
+    let state = app.session.active().unwrap();
+    assert_eq!(state.doc.text_threads, [vec![first, first_next], vec![second, second_next], vec![unselected, unselected_next]]);
+    let frame = |id| match &state.doc.node(id).unwrap().kind {
+        NodeKind::Text(text) => (**text).clone(),
+        _ => panic!("thread member is text"),
+    };
+    let px = 1.0;
+    let expected = [
+        (port_centre(&frame(first), Port::Out, px).unwrap(), port_centre(&frame(first_next), Port::In, px).unwrap()),
+        (port_centre(&frame(second), Port::Out, px).unwrap(), port_centre(&frame(second_next), Port::In, px).unwrap()),
+    ];
+    let overlays = thread_overlays(&app, 1.0);
+    let lines: Vec<_> = overlays
+        .iter()
+        .filter_map(|overlay| match overlay {
+            Overlay::Line { a, b, .. } if expected.iter().any(|(from, to)| *a == *from && *b == *to) => Some((*a, *b)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lines, expected, "thread lines follow document order, not selection order");
+    assert_eq!(overlays.iter().filter(|overlay| matches!(overlay, Overlay::Line { .. })).count(), 14, "two thread links and their port arrows only");
+    let ports: Vec<_> = overlays
+        .iter()
+        .filter_map(|overlay| match overlay {
+            Overlay::Highlight { quad, .. } => Some(quad[0].midpoint(quad[2])),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ports, expected.into_iter().flat_map(|(from, to)| [from, to]).collect::<Vec<_>>());
+}
+
 /// A double-click with the Selection tool on the out port of a threaded frame breaks the
 /// thread there: no new frame is threaded on, and the story flows back into the first frame.
 #[test]
@@ -11332,6 +11387,103 @@ fn text_threads_of_a_huge_selection_have_lines_but_no_ports() {
     let o = thread_overlays(&app, 1.0);
     assert!(o.iter().any(|x| matches!(x, Overlay::Line { .. })), "the thread lines");
     assert!(!o.iter().any(|x| matches!(x, Overlay::Highlight { .. } | Overlay::Path { .. })), "no port boxes");
+}
+
+/// An ignored diagnostic for the miss-heavy selection-membership work in `thread_overlays`.
+/// Construct the document and selection before timing: T unrelated threads of F frames each miss
+/// in a selection of S ordinary paths. There is deliberately no timing threshold; run on an idle
+/// machine and compare the printed cases.
+#[test]
+#[ignore = "manual performance diagnostic; no stable timing threshold"]
+fn thread_overlays_miss_heavy_selection_membership_diagnostic() {
+    use std::sync::Arc;
+    use std::time::Instant;
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_tools::text::ported;
+
+    fn fixture(threads: usize, frames_per_thread: usize, selected: usize) -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 600, "height": 400})).unwrap();
+        let text = "Words that fill more than the frame holds. ".repeat(10);
+        let first = NodeId(
+            app.run("text.create", json!({"x": 20, "y": 20, "text": text, "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap(),
+        );
+        let second = NodeId(app.run("text.thread.add", json!({"from": first.0, "at": [300, 200]})).unwrap()["id"].as_u64().unwrap());
+        let path = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 300, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        let (thread_ids, selected_ids) = {
+            let st = app.session.active_mut().unwrap();
+            let doc = Arc::make_mut(&mut st.doc);
+            let first_template = doc.node(first).unwrap().clone();
+            let second_template = doc.node(second).unwrap().clone();
+            let path_template = doc.node(path).unwrap().clone();
+            let mut thread_ids = vec![vec![first, second]];
+            let mut additions = Vec::with_capacity(
+                (threads.saturating_sub(1) * frames_per_thread) + frames_per_thread.saturating_sub(2) + selected.saturating_sub(1),
+            );
+
+            for _ in 2..frames_per_thread {
+                let mut next = second_template.clone();
+                next.id = doc.alloc_id();
+                thread_ids[0].push(next.id);
+                additions.push(Arc::new(next));
+            }
+
+            for _ in 1..threads {
+                let mut a = first_template.clone();
+                a.id = doc.alloc_id();
+                let mut b = second_template.clone();
+                b.id = doc.alloc_id();
+                let mut thread = vec![a.id, b.id];
+                additions.push(Arc::new(a));
+                additions.push(Arc::new(b));
+                for _ in 2..frames_per_thread {
+                    let mut next = second_template.clone();
+                    next.id = doc.alloc_id();
+                    thread.push(next.id);
+                    additions.push(Arc::new(next));
+                }
+                thread_ids.push(thread);
+            }
+
+            let mut selected_ids = vec![path];
+            for _ in 1..selected {
+                let mut p = path_template.clone();
+                p.id = doc.alloc_id();
+                selected_ids.push(p.id);
+                additions.push(Arc::new(p));
+            }
+
+            doc.text_threads = thread_ids.clone();
+            Arc::make_mut(&mut doc.layers[0]).children_mut().unwrap().extend(additions);
+            doc.drop_lookup_cache();
+            (thread_ids, selected_ids)
+        };
+        app.run("select.set", json!({"ids": selected_ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.text_threads, thread_ids);
+        assert!(thread_ids.iter().all(|thread| thread.len() == frames_per_thread));
+        assert_eq!(st.selection.objects, selected_ids);
+        assert!(thread_ids.iter().flatten().all(|id| ported(&st.doc, *id).is_some()), "all thread frames have ports");
+        assert!(selected_ids.iter().all(|id| thread_ids.iter().flatten().all(|frame| frame != id)), "selection misses every thread");
+        app
+    }
+
+    const REPEATS: usize = 2_000;
+    for (threads, frames_per_thread, selected) in [(256, 2, 256), (256, 2, 512), (512, 2, 256), (512, 2, 512), (512, 2, 1), (1, 1024, 512)] {
+        let app = fixture(threads, frames_per_thread, selected);
+        let st = app.session.active().unwrap();
+        assert!(vectorcraft_tools::text::ports_shown(&st.doc, &st.selection.objects));
+
+        // Warm Document's id index and verify the negative output before timing.
+        assert!(thread_overlays(&app, 1.0).is_empty());
+        let started = Instant::now();
+        for _ in 0..REPEATS {
+            let overlays = thread_overlays(std::hint::black_box(&app), 1.0);
+            assert!(overlays.is_empty());
+        }
+        println!("thread_overlays diagnostic T={threads} F={frames_per_thread} S={selected} repeats={REPEATS} elapsed={:?}", started.elapsed());
+    }
 }
 
 /// A frame of a thread in perspective has no ports: Show Text Threads draws no port box on it

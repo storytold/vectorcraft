@@ -6,6 +6,8 @@
 
 **Feature evidence last updated:** 2026-11-03.
 
+> **Text thread overlay update (2026-11-11):** repeated selection lookups share an index when needed (#6543); four focused output controls passed; scores and estimates unchanged.
+
 Raster rendering fits and preflattens curved stroke outlines more tightly only below four times the raster tolerance, retaining thin-band coverage without changing stroke weight or vector export geometry. Current cached character/object outlines, cropped long strokes, gradient clips and effect rasters share the helper; cropped-region reuse and guarded flattening remain. The unchanged `fractional_curved_strokes_retain_coverage_between_notches` regression covers fractional weights, rotation, phase, opacity and f32-rounded endpoints. This is a quality/cost tradeoff, not a speed claim. Scores and estimates unchanged.
 
 Icon-strip flyouts resize from the canvas-side edge, the top, the bottom and the corners on the canvas side, keeping the icon-column edge anchored (#5713, storytold/craft-libs#1094); a top-edge resize keeps the bottom and saves the moved top per group in workspaces. Independent group heights and flyout widths persist in workspaces; saved heights override content fitting while untouched heights still fit content. Shared panel button bars and the Glyphs font row stay at the bottom after enlargement; the Artboards list grows into the extra space. Regressions: `panel_docking::tests::glyphs_and_artboards_flyouts_keep_user_sizes` and `expanded_panel_footers_stay_at_the_bottom_with_short_and_long_lists`. Scores and estimates unchanged.
@@ -719,6 +721,11 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 ## G15 Performance budgets and a GPU renderer
 
+- **Improved (#6543):** text thread overlays share an index for repeated selection membership checks,
+  keeping the first lookup and selections of one object direct. Four focused controls preserve thread
+  order, links, ports and perspective exclusions. With 512 two-frame threads and 512 unrelated selected paths,
+  2,000 calls took 647.28 ms before and 160.94 ms after in matched quiet runs. The one-selected-path control
+  adds 1.45 µs per call. [All component figures and controls](target-app-parity.md#text-thread-overlay-filtering).
 - **Improved (2026-11-05):** after an edit, a long open stroke with an undashed width profile
   outlines the part near the view and keeps each point's original position along the profile.
   A 200,000-segment outline took 59.95 ms whole and 8.44 ms cropped in local median runs; this
@@ -885,6 +892,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 | 2026-11-11 | minor | G5: built-in Skill Icons symbol library (Attack, Defend, Heal, Buff, Ult); Missing trimmed; estimate 6–16 → 5–15 h; MCP Symbol libraries list Skill Icons. |
 | 2026-11-11 | minor | G5: built-in Status Effects graphic style library (Poison Tint, Freeze Edge, Burn Aura, Stun Pulse, Stealth Fade, Shield Buff); Missing trimmed; estimate 7–17 → 6–16 h; MCP docs list UI Frames and Map Markers under Symbol libraries. |
 | 2026-11-11 | minor | G5: built-in Inventory Icons symbol library (Sword, Shield, Potion, Key, Gem; no default 9-slice); Missing trimmed; estimate 8–18 → 7–17 h. |
+| 2026-11-11 | minor | M5/G15: text thread overlay membership indexing, focused output controls and matched component timings (#6543); scores and estimates unchanged. |
 | 2026-11-10 | minor | G6: MCP catalogue (#6460): headless lists `UI_COMMANDS` (`ui: true`), eight prompts, effect vs command ids, 33 tools, commands/reference; estimate unchanged. |
 | 2026-11-10 | minor | G4 type: Edit › Edit Custom Dictionary… adds, deletes and changes the custom dictionary's words, #4936; the Check Spelling dialog remains; scores and estimates unchanged. |
 | 2026-11-10 | minor | Tidy-up, no content change: in Feature submission evidence, a stray table row and two "PR #NNNN revision" notes move into Feature revisions, the three "Feature evidence last updated" lines become one, the duplicate Flyout update note goes (its row stays), and eight reconciliation rows become two. Scores and estimates unchanged. |

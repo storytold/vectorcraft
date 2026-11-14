@@ -10,6 +10,8 @@
 >
 > Vector Halftone preview update (2026-11-10): temporary dot selection marks are hidden, and the bounding box stays available (#6369).
 >
+> **Text thread overlay update (2026-11-11):** repeated selection lookups share an index when needed (#6543); four focused output controls passed; scores and estimates unchanged.
+>
 > **Flyout update:** 2026-11-06 — resizable icon-strip flyouts and bottom-aligned panel footers (#5713); scores and estimates unchanged.
 
 > **PDF import status (2026-11-14, #6957):** Outlined Indic glyphs retain their full stroke properties; translucent glyphs stay separate, and a soft mask attaches to each glyph separately. Scores and estimates unchanged.
@@ -419,7 +421,7 @@ what keeps it from beta, not from alpha.
 | File formats | 75% | 15–30 | estimated | [file-format-parity.md](file-format-parity.md) |
 | Hardware (GPU, pen, touch, displays) | 35% | 25–45 | estimated | [hardware-parity.md](hardware-parity.md) |
 | Localization (the 12 key languages, equally weighted) | 74% | 50–85 | measured from catalogs | [localization-parity.md](localization-parity.md) |
-| Performance | ~60% | 15–25 | estimated (unverified budgets; measured long-path hits and large-selection nudges) | [gaps.md](gaps.md) |
+| Performance | ~60% | 15–25 | estimated (unverified budgets; measured long-path hits, large-selection nudges and text thread filtering) | [gaps.md](gaps.md) |
 | Stability | ~60% | 30–50 | estimated | [gaps.md](gaps.md) |
 | Platforms (macOS, Windows x64/arm64, Linux, FreeBSD, web) | 80% | 15–25 | estimated | [gaps.md](gaps.md) |
 | Ecosystem and plug-ins (scripting, third-party plug-ins) | 15% | 30–60 | estimated | [gaps.md](gaps.md) |
@@ -1805,6 +1807,22 @@ Moved from the ROADMAP's "Shipped so far" on 2026-10-10. Update it when a featur
   actual OS display and Caps Lock remain unverified. Behaviour reference: [public tool-pointer documentation](https://helpx.adobe.com/illustrator/using/tools.html#change_tool_pointers). Tool cursors are painted into the window on Wayland (#1652; not run on Linux, #1645 stays open until confirmed). A Precise Cursors command toggles the preference and can take a shortcut (#1663). On macOS the root document canvas now requests native AppKit delivery of the existing artwork, with aligned 1×/2× representations and a visible system fallback (#2292). While the host owns the cursor it sets it again on every pass instead of comparing it with `NSCursor.currentCursor`, which is the app's last set cursor rather than the one on screen, so the tool's cursor no longer gives way to the system arrow when the pointer moves (#6362). `cursors/native_request` and `canvas` tests cover pixel/hotspot alignment, preferences and fallback routing; `mac_cursor` tests cover real AppKit image construction and the ownership protocol against a fake backend. The host releases on native-menu tracking and loss of eligibility; detached document viewports retain the visible system fallback. The pre-platform-output rectangle strategy, real focus/menu/handback behavior, mixed displays, Spotlight and native full-screen Spaces remain unverified; #2020 and #2292 are not declared closed.
   In a rotated view the resize and rotate cursors turn with the view, to the nearest 45°.
 - **Performance:** 20k shapes + 1k texts render in 27 ms per full-retina frame (7.8 ms zoomed), 7× faster than the first version. The UI thread never blocks. The web build is 7.1 MB gzipped. Print-size images (more than 512 MB decoded, up to 2 GB) draw in the canvas and in raster exports and can be trimmed with Crop Image; an image with a side past 65,535 px is shrunk to fit, a raster export says when an image could not be decoded, and Crop Image's trim leaves CMYK images alone (#1517). On Windows `vectorcraft-cli perf` reports the cores busy and, with `--deep`, its working set, and warns on a busy machine as it does on macOS and Linux (#1502).
+
+  <a id="text-thread-overlay-filtering"></a>
+  Text thread overlay filtering (#6543) keeps the first membership lookup direct and indexes later lookups for selections of more than one object. A singleton selection stays direct. Four focused controls cover document ordering, mixed selections, hidden ports and perspective exclusions.
+  The ignored diagnostic constructs and warms its fixture before timing 2,000 calls; it checks real thread and selection counts, valid ports, disjoint selected IDs and empty output.
+  In one quiet Windows x64 run using the optimized test profile, the matched two-frame fixtures gave these totals for 2,000 calls (fixture construction and lookup warmup are outside the timer):
+
+  | Threads | Selected unrelated paths | Before (ms) | After (ms) |
+  |---:|---:|---:|---:|
+  | 256 | 256 | 192.76 | 81.27 |
+  | 256 | 512 | 374.79 | 142.70 |
+  | 512 | 256 | 333.64 | 100.80 |
+  | 512 | 512 | 647.28 | 160.94 |
+  | 512 | 1 (control) | 4.07 | 6.97 |
+
+  The control adds 1.45 µs per call; the four large-selection cases take 58–75% less time. These measure filtering, not a complete frame. An additional single 1,024-frame thread with 512 unrelated selected paths passed the same empty-output checks and took 158.75 ms for 2,000 calls; that case has no measured baseline pair.
+
   Hard-edge rendering, including the internal hard-edge frame of Art Optimized supersampled raster exports, draws a knockout element with one opaque solid fill once instead of erasing and adding it through separate layers. Analytical antialiasing keeps the existing compositor and rounding. Synthetic path/compound-hole tests compare exact pixels against the general knockout path across precision, supersampling, translucent parent groups and backdrop blending; translucent fills retain their knockout behavior.
   An image whose pixels can't be decoded, such as a PNG cut short or an image over the 2 GB decoding allowance as RGBA that can't be drawn at reduced size, is tried once: the renderer notes it and does not try to decode it again on later frames. An image refused only because the images being drawn leave no room for it is tried again on the next render. On the canvas such an image draws as a light gray box crossed from corner to corner, and the status bar says once for each image that it couldn't be decoded; exports leave it out and report it as before.
   A PNG, JPEG, GIF or WebP image that takes more than 2 GiB as RGBA (512 MiB in the web app) draws in the canvas and in raster exports at the largest size within that allowance, instead of as that crossed box on the canvas and not at all in exports. Each pixel of the result is the mean of the image's pixels it covers, and the document keeps the whole file. A PNG that isn't interlaced is read a row at a time, and other images are read whole when their decoded samples fit in the allowance. A 16-bit PNG that isn't interlaced, whose decoded samples take more than the allowance and whose RGBA fits in it, draws at its own size, read a row at a time. An image of more pixels than the allowance has bytes (on the desktop, 46,341 × 46,341 is more) still draws as the crossed box, and so does one whose decoded samples take more than the allowance, other than a PNG that isn't interlaced. Open, Place and the Links panel say "an image of W × H pixels is shown at reduced size", and say "too large to draw" of an image that is not drawn at reduced size.
@@ -2380,6 +2398,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 | 2026-11-11 | minor | Bundled content: built-in Status Effects graphic style library; style libraries evidence updated; ~40% → ~42%; MCP Symbol libraries list UI Frames and Map Markers; more built-in graphic-style libraries remain. |
 | 2026-11-11 | minor | Bundled content: built-in Inventory Icons symbol library (Sword, Shield, Potion, Key, Gem); symbol libraries evidence updated; ~38% → ~40%; more built-in symbol libraries remain. |
 | 2026-11-11 | minor | Guides and snapping: a Shift move slides the selection along its line onto a ruler guide by its edges and centre, as a move without Shift does (#4312); a guide a nearly parallel line only reaches a long way off pulls nothing. Score and hours unchanged (estimated). |
+| 2026-11-11 | minor | M5/G15: text thread overlay membership indexing, focused output controls and matched component timings (#6543); scores and estimates unchanged. |
 | 2026-11-10 | minor | Automation: MCP tool count 33; headless `command_list` lists `UI_COMMANDS` (`ui: true`); eight prompts; effect-id vs command-id clarified (#6460); scores and hours unchanged. |
 | 2026-11-10 | minor | Type advanced: the Edit Custom Dictionary dialog, #4936; evidence added; the Check Spelling dialog remains; scores and hours unchanged. |
 | 2026-11-10 | minor | File formats: in a `.ai` or EPS opened from its editing data, an envelope of type opens live where it draws as its drawn art and the layers with it draw as the page (the envelope weighed as the art it draws); elsewhere, and where a text or visibility variable binds its type, it keeps its drawn art, with a note (#3179); evidence updated; scores and hours unchanged. |
