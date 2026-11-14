@@ -4781,6 +4781,7 @@ axis	Both	Обидві
 @msg	no action set to save	немає набору дій для збереження
 @msg	the action set file can't be read in full	файл набору дій неможливо прочитати повністю
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Завантажено «{name}»: пропущено {n} крок|Завантажено «{name}»: пропущено {n} кроки|Завантажено «{name}»: пропущено {n} кроків
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Завантажено «{name}»: {n} крок із невідомою командою збережено: «{action}», крок {step}, `{command}`|Завантажено «{name}»: {n} кроки з невідомими командами збережено; перший: «{action}», крок {step}, `{command}`|Завантажено «{name}»: {n} кроків із невідомими командами збережено; перший: «{action}», крок {step}, `{command}`
 @msg	not an action set file	це не файл набору дій
 @msg	the action set file is larger than 8 MiB	файл набору дій більший за 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: довідник був би більшим за {MAX_BYTES} байтів
@@ -5022,6 +5023,7 @@ axis	Both	Обидві
 @msg	tool shortcuts must be a single key (optionally with Shift)	поєднання інструментів має бути однією клавішею (необов’язково з Shift)
 @msg	truncated	усічено
 @msg	unknown command `{0}`	невідома команда `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	крок {step} дії «{action}» виконує невідому команду `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	невідома команда `{0}`; можливо, ви мали на увазі `{1}`?
 @msg	unknown effect `{id}`	невідомий ефект `{id}`
 @msg	unknown format	невідомий формат
@@ -7080,6 +7082,12 @@ breakText	Glyphs	Гліфи
 @msg	open the practice sample of `{id}` first (see learn.openSample)	спочатку відкрийте навчальний приклад уроку `{id}` (див. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	спочатку завершіть `{id}` (див. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` є останнім уроком своєї навички
+	Reset progress	Скинути прогрес
+	Mark Tutorial Step	Позначити крок уроку
+	Reset Learn Progress	Скинути прогрес навчання
+@msg	missing `step` (see learn.show)	відсутній `step` (див. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` має бути номером кроку від 0 до {last}
+@msg	`{id}` is finished (see learn.resetProgress)	урок `{id}` завершено (див. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Оновити відкладені ефекти
