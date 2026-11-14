@@ -7083,3 +7083,6 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	클립보드

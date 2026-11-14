@@ -7487,3 +7487,6 @@ breakText	Glyphs	Glyphes
 	Grommets	Œillets
 	Grommet Inset	Distance des œillets au bord
 	Diameter	Diamètre
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Presse-papiers

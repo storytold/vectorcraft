@@ -711,3 +711,54 @@ fn a_picture_the_host_read_from_a_paste_pastes_without_the_service() {
     app.paste_from_host(&ctx, Flavour { mime: SVG, data: svg.as_bytes().to_vec() }, egui::Modifiers::COMMAND);
     assert!(matches!(pasted(&app)[0].kind, NodeKind::Path { .. }));
 }
+
+/// A PNG of `w` × `h` pixels.
+fn png(w: u32, h: u32) -> Vec<u8> {
+    let mut out = std::io::Cursor::new(Vec::new());
+    image::RgbaImage::new(w, h).write_to(&mut out, image::ImageFormat::Png).unwrap();
+    out.into_inner()
+}
+
+fn dialog_field(app: &VectorcraftApp, k: &str) -> Value {
+    app.ui.dialog.as_ref().and_then(|d| d.fields.get(k).cloned()).unwrap_or_default()
+}
+
+/// New Document matches the clipboard (photocraft#2034): a 100 × 200 picture another app copied
+/// opens it at 100 × 200 px on the Clipboard preset, under Recent, also with no document open;
+/// Create makes that size.
+#[test]
+fn new_document_takes_the_size_of_a_copied_picture() {
+    let board = Rc::new(RefCell::new(Board::default()));
+    let services = Services { system_clipboard: Some(Box::new(Fake(board.clone()))), ..Default::default() };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    copy_elsewhere(&board, vec![(PNG, png(100, 200))]);
+    run(&mut app, "file.newDialog", json!({}));
+    assert_eq!((dialog_field(&app, "width"), dialog_field(&app, "height")), (json!(100.0), json!(200.0)));
+    assert_eq!(
+        (dialog_field(&app, "preset"), dialog_field(&app, "category"), dialog_field(&app, "units")),
+        (json!("Clipboard"), json!("Recent"), json!("Pixels"))
+    );
+    crate::dialogs::confirm(&mut app).unwrap();
+    let ab = app.session.active().unwrap().doc.artboards[0].rect;
+    assert_eq!((ab.width(), ab.height()), (100.0, 200.0));
+}
+
+/// Objects copied here give their size as drawn (the 1 pt stroke included); another app's copy
+/// that isn't a picture replaces them, so New Document then offers no Clipboard preset; a picture
+/// copied after them wins, as Paste would take it.
+#[test]
+fn new_document_takes_the_size_of_copied_art_until_another_app_copies() {
+    let (mut app, board) = app();
+    copy_rect(&mut app);
+    run(&mut app, "file.newDialog", json!({}));
+    assert_eq!(dialog_field(&app, "preset"), json!("Clipboard"));
+    assert_eq!((dialog_field(&app, "width"), dialog_field(&app, "height")), (json!(41.0), json!(21.0)));
+    app.ui.dialog = None;
+    copy_elsewhere(&board, vec![(TEXT, b"hello".to_vec())]);
+    run(&mut app, "file.newDialog", json!({}));
+    assert_ne!(dialog_field(&app, "preset"), json!("Clipboard"), "the text replaced the copied art");
+    app.ui.dialog = None;
+    copy_elsewhere(&board, vec![(PNG, png(30, 60)), (TEXT, b"".to_vec())]);
+    run(&mut app, "file.newDialog", json!({}));
+    assert_eq!((dialog_field(&app, "width"), dialog_field(&app, "height")), (json!(30.0), json!(60.0)));
+}

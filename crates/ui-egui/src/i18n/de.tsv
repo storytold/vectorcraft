@@ -8893,3 +8893,6 @@ breakText	Glyphs	Glyphen
 	Grommets	Ösen
 	Grommet Inset	Randabstand der Ösen
 	Diameter	Durchmesser
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Zwischenablage

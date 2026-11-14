@@ -8913,3 +8913,6 @@ breakText	Glyphs	Гліфи
 @msg	turn on at least one side	увімкніть принаймні одну сторону
 @msg	with no hem and no grommets there is nothing to mark	без підгину й люверсів немає чого розмічати
 @msg	{saving} failed: {e}	{saving}: не вдалося: {e}
+
+# New Document: the Clipboard preset (photocraft#2034).
+	Clipboard	Буфер обміну
