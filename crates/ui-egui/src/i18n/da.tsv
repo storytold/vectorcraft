@@ -1584,6 +1584,7 @@ digits	Malayalam	Malayalam
 	Create New Swatch…	Opret ny farveprøve…
 	Name 40%	Navn 40%
 	Out of Gamut Warning	Advarsel: uden for gamut
+	Show Out-of-Gamut Colors	Vis farver uden for gamut
 	Out of Web Color Warning	Advarsel: ikke-websikker farve
 	Web Safe RGB	Websikker RGB
 	{warning}: click to correct to the closest color ({hex})	{warning}: klik for at rette til den nærmeste farve ({hex})

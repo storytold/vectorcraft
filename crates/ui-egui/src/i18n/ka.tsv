@@ -1522,6 +1522,7 @@ digits	Malayalam	მალაიალამური
 	Create New Swatch…	ახალი ფერის ნიმუშის შექმნა…
 	Name 40%	სახელი 40%
 	Out of Gamut Warning	ფერთა გამიდან გასვლის გაფრთხილება
+	Show Out-of-Gamut Colors	ფერთა გამის გარეთ მყოფი ფერების ჩვენება
 	Out of Web Color Warning	გაფრთხილება: ფერი ვებფერი არ არის
 	Web Safe RGB	ვებისთვის უსაფრთხო RGB
 	{warning}: click to correct to the closest color ({hex})	{warning}: დაწკაპეთ უახლოეს ფერზე ჩასასწორებლად ({hex})

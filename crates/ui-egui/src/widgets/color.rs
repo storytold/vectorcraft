@@ -383,11 +383,26 @@ fn focus_outline(ui: &Ui, resp: &Response, rect: Rect) {
 pub fn color_field(
     ui: &mut Ui,
     id: impl std::hash::Hash,
-    (name, axes): (&str, [FieldAxis<'_>; 2]),
+    labels: (&str, [FieldAxis<'_>; 2]),
     size: Vec2,
     pos: (f32, f32),
     marked: bool,
     color_at: &dyn Fn(f32, f32) -> Color32,
+) -> (Option<(f32, f32)>, Live) {
+    color_field_shaded(ui, id, labels, size, pos, marked, (color_at, &[]))
+}
+
+/// A [`color_field`] with the cells `shade` marks grayed out under its marker, each run of them
+/// edged with a dark and a light line. `shade` holds a row of an n × n grid over the field for each
+/// of its n rows (16 at most) from the top, and bit `i` of a row marks its cell `i` from the left.
+pub fn color_field_shaded(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    (name, axes): (&str, [FieldAxis<'_>; 2]),
+    size: Vec2,
+    pos: (f32, f32),
+    marked: bool,
+    (color_at, shade): (&dyn Fn(f32, f32) -> Color32, &[u16]),
 ) -> (Option<(f32, f32)>, Live) {
     use egui::accesskit::{Action, ActionData};
     let t = Tokens::get(ui.ctx());
@@ -396,6 +411,7 @@ pub fn color_field(
     focus_on_press(&resp);
     let painter = ui.painter_at(rect.expand(6.0));
     painter.add(color_mesh(rect, (32, 32), color_at));
+    shade_cells(&painter, rect, shade);
     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     focus_outline(ui, &resp, rect);
     let (x, y) = pos;
@@ -444,6 +460,55 @@ pub fn color_field(
         return (Some(moved), Live::Released);
     }
     (None, Live::Idle)
+}
+
+/// The gray over a shaded cell of a [`color_field_shaded`].
+const SHADE: Color32 = Color32::from_rgba_premultiplied(96, 96, 96, 192);
+
+/// Whether cell `col` of row `row` of `shade` is marked; a cell outside the grid is not.
+fn shaded(shade: &[u16], col: usize, row: usize) -> bool {
+    col < shade.len().min(16) && shade.get(row).is_some_and(|bits| (bits >> col) & 1 == 1)
+}
+
+/// The lines between the marked and the unmarked cells of `shade` (see [`color_field_shaded`]),
+/// each from one grid point to the next, as (column, row) from the top-left corner.
+pub(crate) fn shade_edges(shade: &[u16]) -> Vec<[(usize, usize); 2]> {
+    let n = shade.len().min(16);
+    let mut edges = Vec::new();
+    for row in 0..n {
+        for col in 0..n {
+            let here = shaded(shade, col, row);
+            if col + 1 < n && here != shaded(shade, col + 1, row) {
+                edges.push([(col + 1, row), (col + 1, row + 1)]);
+            }
+            if row + 1 < n && here != shaded(shade, col, row + 1) {
+                edges.push([(col, row + 1), (col + 1, row + 1)]);
+            }
+        }
+    }
+    edges
+}
+
+/// Gray out the cells `shade` marks over `rect`, and draw the lines between them and the others
+/// dark under light.
+fn shade_cells(painter: &egui::Painter, rect: Rect, shade: &[u16]) {
+    let n = shade.len().min(16);
+    if n == 0 {
+        return;
+    }
+    let cell = rect.size() / n as f32;
+    let at = |(col, row): (usize, usize)| rect.min + vec2(col as f32 * cell.x, row as f32 * cell.y);
+    for row in 0..n {
+        for col in (0..n).filter(|&col| shaded(shade, col, row)) {
+            painter.rect_filled(Rect::from_min_size(at((col, row)), cell), 0.0, SHADE);
+        }
+    }
+    let edges = shade_edges(shade);
+    for stroke in [Stroke::new(2.0, Color32::BLACK), Stroke::new(1.0, Color32::WHITE)] {
+        for [a, b] in &edges {
+            painter.line_segment([at(*a), at(*b)], stroke);
+        }
+    }
 }
 
 /// A smoothly shaded colour area: a `cols` × `rows` grid over `rect` with `color_at(x, y)` (0..1

@@ -3934,6 +3934,7 @@ file-filter	Templates	템플릿
 	Offset X	X 오프셋
 	Other Libraries	기타 라이브러리
 	Out of Gamut Warning	색상 범위 초과 경고
+	Show Out-of-Gamut Colors	색상 범위를 벗어난 색상 표시
 	Out of Web Color Warning	웹 색상 초과 경고
 	Output	출력
 	Output Black	출력 검정

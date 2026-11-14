@@ -11,11 +11,16 @@
 //! channel strip at its right, for the channel picked under Box Channel (Hue, Saturation,
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
 //! Picker's axes. The view and the channel are kept with the preferences (`ui.colorWheel`).
+//!
+//! Show Out-of-Gamut Colors grays out the cells of the wheel's square and the box's field whose
+//! colors the CMYK space cannot print, by the out-of-gamut warning's test ([`Cms::out_of_gamut`]),
+//! on a [`GAMUT_CELLS`] by [`GAMUT_CELLS`] grid kept until the channel, its value, the color
+//! settings or the loaded profiles change.
 
 use egui::{Ui, UiBuilder, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use vectorcraft_color::cms::{self, Cms};
+use vectorcraft_color::cms::{self, Cms, ColorSettings};
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, rgb_to_hsb};
 use vectorcraft_doc::{ColorMode, NodeId};
 
@@ -67,6 +72,14 @@ pub struct Settings {
     pub view: View,
     #[serde(serialize_with = "serialize_channel", deserialize_with = "deserialize_channel")]
     pub channel: Channel,
+    /// Show Out-of-Gamut Colors: gray out the colors the CMYK space cannot print.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub gamut: bool,
+}
+
+fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or_default())
 }
 
 fn deserialize_view<'de, D: serde::Deserializer<'de>>(d: D) -> Result<View, D::Error> {
@@ -90,11 +103,11 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?}`: show the wheel or the box, and pick the box's channel. Keys
-/// left out keep their values; params that are not an object, another key or a value off the list
-/// are an error and change nothing. → the settings.
+/// `ui.colorWheel {view?, channel?, gamut?}`: show the wheel or the box, pick the box's channel,
+/// and show or hide the out-of-gamut shading. Keys left out keep their values; params that are not
+/// an object, another key or a value off the list are an error and change nothing. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    const KEYS: [&str; 2] = ["view", "channel"];
+    const KEYS: [&str; 3] = ["view", "channel", "gamut"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -113,11 +126,19 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         None | Some(Value::Null) => {}
         Some(v) => set.channel = v.as_str().and_then(Channel::parse).ok_or("`channel` must be hue, saturation, brightness, red, green or blue")?,
     }
+    match p.get("gamut") {
+        None | Some(Value::Null) => {}
+        Some(v) => {
+            let key = "gamut";
+            set.gamut = v.as_bool().ok_or_else(|| format!("`{key}` must be true or false"))?;
+        }
+    }
     app.ui.color_wheel = set;
     Ok(json!(app.ui.color_wheel))
 }
 
-/// The panel menu: Wheel View and Box View, and Box Channel while the box shows.
+/// The panel menu: Wheel View and Box View, Box Channel while the box shows, and Show
+/// Out-of-Gamut Colors.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -134,6 +155,68 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
+    ui.separator();
+    if menu_item(ui, tl!("Show Out-of-Gamut Colors"), true, set.gamut) {
+        command(app, &json!({ "gamut": !set.gamut })).ok();
+    }
+}
+
+/// The cells across and down of the grid the out-of-gamut shading tests.
+pub(crate) const GAMUT_CELLS: usize = 16;
+
+/// The cells of a field whose colors are out of the CMYK gamut, a row per [`GAMUT_CELLS`] from the
+/// top: bit `i` of a row is its cell `i` from the left.
+pub(crate) type GamutGrid = [u16; GAMUT_CELLS];
+
+/// The out-of-gamut cells of the box of channel `ch` at strip value `z` through `cms`, each tested
+/// at its center by the out-of-gamut warning's test ([`Cms::out_of_gamut`]) on the color a pick
+/// there stores in the working RGB space. The wheel's square is the box of [`Channel::Hue`] at the
+/// ring's hue.
+pub(crate) fn gamut_grid(cms: &Cms, ch: Channel, z: f32) -> GamutGrid {
+    let n = GAMUT_CELLS as f32;
+    let mut grid = [0; GAMUT_CELLS];
+    for (row, bits) in grid.iter_mut().enumerate() {
+        for col in 0..GAMUT_CELLS {
+            let (x, y) = ((col as f32 + 0.5) / n, (row as f32 + 0.5) / n);
+            // A gray has no hue, and the hue a gray keeps does not change its color.
+            let [r, g, b] = cms.srgb_to_rgb(hsb_to_rgb(box_pick(ch, z, x, y, [0.0; 3])));
+            if cms.out_of_gamut(&Color::rgb(r, g, b)) {
+                *bits |= 1 << col;
+            }
+        }
+    }
+    grid
+}
+
+/// What the out-of-gamut grid depends on: the channel, its value's bits, the color settings and
+/// [`cms::profiles_generation`], which changes when a profile is loaded again under the same name.
+pub(crate) type GamutKey = (Channel, u32, ColorSettings, u64);
+
+/// The grid for `key` from `slot`, computed with `compute` and kept in `slot` when `slot` holds
+/// another key's.
+pub(crate) fn cached_grid(slot: &mut Option<(GamutKey, GamutGrid)>, key: GamutKey, compute: impl FnOnce() -> GamutGrid) -> GamutGrid {
+    match slot {
+        Some((k, grid)) if *k == key => *grid,
+        _ => {
+            let grid = compute();
+            *slot = Some((key, grid));
+            grid
+        }
+    }
+}
+
+/// Panel state: the out-of-gamut grid drawn last and its [`GamutKey`].
+pub(crate) const GAMUT: &str = "color-wheel-gamut";
+
+/// The out-of-gamut grid of channel `ch` at value `z` through `cms`, kept in the panel state so a
+/// frame with the same channel, value, color settings and loaded profiles does not test the colors
+/// again.
+fn gamut_shade(ui: &Ui, cms: &Cms, ch: Channel, z: f32) -> GamutGrid {
+    let mut slot = pstate::<Option<(GamutKey, GamutGrid)>>(ui.ctx(), GAMUT);
+    let key = (ch, z.to_bits(), cms.settings().clone(), cms::profiles_generation());
+    let grid = cached_grid(&mut slot, key, || gamut_grid(cms, ch, z));
+    set_pstate(ui.ctx(), GAMUT, slot);
+    grid
 }
 
 /// The display values of HSB `hsb` in `ch`'s space, from 0 to 1: hue, saturation and brightness,
@@ -180,16 +263,19 @@ fn strip_number(ch: Channel, hsb: [f32; 3]) -> (f64, &'static str, f64) {
 }
 
 /// The box in a `size` × `size` area: the field of channel `ch` and its strip, on HSB `hsb`, with
-/// markers when `marked`. Returns the HSB a click, a drag, a key or a screen reader's action picks,
-/// and its phase.
-fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) -> Option<([f32; 3], Live)> {
+/// markers when `marked` and the field's out-of-gamut cells grayed out when `gamut`. Returns the
+/// HSB a click, a drag, a key or a screen reader's action picks, and its phase.
+fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32, gamut: Option<&Cms>) -> Option<([f32; 3], Live)> {
     let (z, x, y) = box_pos(ch, hsb);
     let mut pick = None;
+    let grid = gamut.map(|cms| gamut_shade(ui, cms, ch, z));
+    let shade = grid.as_ref().map_or(&[][..], |g| &g[..]);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = STRIP_GAP;
         let field = vec2((size - STRIP_GAP - STRIP).max(1.0), size);
         let at = |x: f32, y: f32| widgets::hsb32(box_pick(ch, z, x, y, hsb));
-        if let (Some((x, y)), phase) = widgets::color_field(ui, "color-wheel-box", (tl!("Color box"), ch.field_axes()), field, (x, y), marked, &at) {
+        let labels = (tl!("Color box"), ch.field_axes());
+        if let (Some((x, y)), phase) = widgets::color_field_shaded(ui, "color-wheel-box", labels, field, (x, y), marked, (&at, shade)) {
             pick = Some((box_pick(ch, z, x, y, hsb), phase));
         }
         // The hue strip shows the whole spectrum; the others change only their own component.
@@ -310,6 +396,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         (c, _) => display_hsb(&cms, &c.unwrap_or(app.session.last_solid)),
     };
     let marked = color.is_some();
+    let gamut = app.ui.color_wheel.gamut.then_some(&*cms);
     let mut pick: Option<([f32; 3], Live)> = None;
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
@@ -318,7 +405,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
         let size = ui.available_width().min(MAX_WHEEL);
         if app.ui.color_wheel.view == View::Box {
-            pick = show_box(ui, app.ui.color_wheel.channel, hsb, marked, size);
+            pick = show_box(ui, app.ui.color_wheel.channel, hsb, marked, size, gamut);
             return;
         }
         let ring = widgets::hue_ring(ui, "color-wheel-ring", tl!("Hue ring"), size, hsb[0], marked);
@@ -328,7 +415,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             [FieldAxis { name: tl!("Saturation"), units: 100.0, suffix: "%" }, FieldAxis { name: tl!("Brightness"), units: 100.0, suffix: "%" }];
         let at = |x: f32, y: f32| widgets::hsb32([hsb[0], x, 1.0 - y]);
         let name = tl!("Saturation and brightness");
-        let (field, field_phase) = widgets::color_field(&mut field_ui, "field", (name, axes), square.size(), (hsb[1], 1.0 - hsb[2]), marked, &at);
+        // The square is the hue box at the ring's hue, so it shares the box's grid.
+        let grid = gamut.map(|cms| gamut_shade(ui, cms, Channel::Hue, box_pos(Channel::Hue, hsb).0));
+        let shade = grid.as_ref().map_or(&[][..], |g| &g[..]);
+        let pos = (hsb[1], 1.0 - hsb[2]);
+        let (field, field_phase) = widgets::color_field_shaded(&mut field_ui, "field", (name, axes), square.size(), pos, marked, (&at, shade));
         if let Some((h, phase)) = ring.hue {
             pick = Some(([h, hsb[1], hsb[2]], phase));
         }

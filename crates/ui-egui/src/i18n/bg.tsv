@@ -2373,6 +2373,7 @@ font-technology	Variable	Променливи
 	The Scripts folder cannot be read	Папката Scripts не може да бъде прочетена
 	Other Script…	Друг скрипт…
 	Out of Gamut Warning	Предупреждение за излизане извън цветовата гама
+	Show Out-of-Gamut Colors	Показване на цветовете извън цветовата гама
 	Out of Web Color Warning	Предупреждение за цвят извън уеб палитрата
 	Out Tangent Handles	Външни тангентни дръжки
 	Outer Glow…	Външно разсейване…

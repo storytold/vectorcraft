@@ -1678,6 +1678,7 @@ digits	Malayalam	Malajálamské
 	Create New Swatch…	Vytvořit novou položku vzorníku…
 	Name 40%	Název 40 %
 	Out of Gamut Warning	Upozornění na barvu mimo gamut
+	Show Out-of-Gamut Colors	Zobrazit barvy mimo gamut
 	Out of Web Color Warning	Upozornění na barvu mimo webovou paletu
 	Web Safe RGB	Webově bezpečné RGB
 	{warning}: click to correct to the closest color ({hex})	{warning}: kliknutím opravíte na nejbližší barvu ({hex})

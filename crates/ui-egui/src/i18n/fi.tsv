@@ -1651,6 +1651,7 @@ digits	Malayalam	Malajalam
 	Create New Swatch…	Luo uusi värimalli…
 	Name 40%	Nimi 40%
 	Out of Gamut Warning	Väriavaruuden ulkopuolella -varoitus
+	Show Out-of-Gamut Colors	Näytä väriavaruuden ulkopuoliset värit
 	Out of Web Color Warning	Verkkovärien ulkopuolella -varoitus
 	Web Safe RGB	Verkkoturvallinen RGB
 	{warning}: click to correct to the closest color ({hex})	{warning}: korjaa lähimpään väriin ({hex}) napsauttamalla
