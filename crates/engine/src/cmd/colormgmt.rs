@@ -662,8 +662,15 @@ fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color
         }
     }
     let styles = &mut g.label_styles;
-    for st in [&mut styles.values, &mut styles.categories, &mut styles.legend].into_iter().flatten() {
-        map_paint_colors(&mut st.fill, f);
+    // A legend fill of the labels' own stays theirs when `f` makes it black. The default black legend fill stays black,
+    // so the labels on dark pie wedges are still drawn white.
+    styles.mark_own_legend_fill();
+    let own = styles.legend_fill_is_own();
+    for (st, fill) in [(&mut styles.values, true), (&mut styles.categories, true), (&mut styles.legend, own)] {
+        let Some(st) = st else { continue };
+        if fill {
+            map_paint_colors(&mut st.fill, f);
+        }
         map_paint_colors(&mut st.stroke, f);
     }
     for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows].into_iter().flatten() {

@@ -150,6 +150,10 @@ pub struct LabelStyles {
     pub categories: Option<crate::CharStyle>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub legend: Option<crate::CharStyle>,
+    /// The fill of [`Self::legend`] was set on the legend labels, so it is drawn on every pie wedge with Legends in
+    /// Wedges. `false`: a black fill there is the default, and the labels on dark wedges are drawn white.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub legend_fill_set: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub values_para: Option<crate::ParaStyle>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -181,6 +185,18 @@ pub struct LabelStyles {
 impl LabelStyles {
     fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Is the kept legend fill the legend labels' own: set on them ([`Self::legend_fill_set`]), or not black (a file
+    /// saved without the mark)? Otherwise it is the default black, which edits that map the kept paints leave as it is.
+    pub fn legend_fill_is_own(&self) -> bool {
+        self.legend.as_ref().is_some_and(|st| self.legend_fill_set || st.fill != vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK))
+    }
+
+    /// Mark a kept legend fill that is the labels' own ([`Self::legend_fill_is_own`]) as set on them, before an edit
+    /// that maps the kept paints can turn it black.
+    pub fn mark_own_legend_fill(&mut self) {
+        self.legend_fill_set = self.legend_fill_is_own();
     }
 }
 

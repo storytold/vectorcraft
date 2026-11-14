@@ -849,7 +849,8 @@ stored without its placement (its vector, aspect ratio, focal point and freeform
 own box when the graph is drawn again, so `paint.setGradientGeom` and the `paint.freeform.*` edits do not store the
 placement they set there. A stroke weight and dashes are stored as the label shows them, also on a label that was
 scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
-a pie with Legends in Wedges whose legend labels have no fill of their own, the legend labels' fill is stored only when
+a pie with Legends in Wedges, a fill a command sets on the legend labels is drawn on every wedge, black included, until
+that command is undone; a size, font or stroke change does not set one. Before that, their fill is stored only when
 every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
 a dark wedge. These commands do not store the colors they give a graph's axis lines, ticks and radar rings, which are
 drawn again with their default paint.
