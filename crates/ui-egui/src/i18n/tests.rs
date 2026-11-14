@@ -2544,17 +2544,20 @@ fn freehand_choice_refusals_translate_with_their_values() {
     let b = s.execute("path.create", &json!({"d": "M10 50 L20 50"})).unwrap()["id"].clone();
     let points = json!([[20, 10], [30, 30], [20, 50]]);
     let refusals = [
-        (json!({"points": points, "style": "ink"}), ["style", "\"pencil\"", "\"brush\""]),
-        (json!({"points": points, "extend": {"id": a, "end": "middle"}}), ["extend", "\"start\"", "\"end\""]),
-        (json!({"points": points, "extend": {"id": a}, "connect": {"id": b, "end": "middle"}}), ["connect", "\"start\"", "\"end\""]),
+        (json!({"points": points, "style": "ink"}), "style", ["pencil", "brush"]),
+        (json!({"points": points, "extend": {"id": a, "end": "middle"}}), "extend", ["start", "end"]),
+        (json!({"points": points, "extend": {"id": a}, "connect": {"id": b, "end": "middle"}}), "connect", ["start", "end"]),
     ];
-    for (p, words) in &refusals {
+    // A catalog may put the accepted values in its own quotation marks (German „start“).
+    let quotes = [("\"", "\""), ("„", "“"), ("“", "”"), ("«", "»"), ("« ", " »"), ("「", "」"), ("‘", "’")];
+    for (p, key, values) in &refusals {
         let e = s.execute("path.freehand", p).unwrap_err().to_string();
         assert!(e.starts_with("invalid parameters for `path.freehand`: ") && e.contains(" must be "), "{e}");
         for code in COMPLETE_MESSAGES {
             let shown = message(Lang::from_code(code).expect("registered"), &e);
-            assert!(!shown.contains(" must be ") && shown.contains("`path.freehand`"), "{code}: {e} -> {shown}");
-            assert!(words.iter().all(|w| shown.contains(w)), "{code}: {e} -> {shown}");
+            assert!(!shown.contains(" must be ") && shown.contains("`path.freehand`") && shown.contains(key), "{code}: {e} -> {shown}");
+            let quoted = |v: &str| quotes.iter().any(|(open, close)| shown.contains(&format!("{open}{v}{close}")));
+            assert!(values.iter().all(|v| quoted(v)), "{code}: {e} -> {shown}");
         }
     }
 }
