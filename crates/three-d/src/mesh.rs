@@ -11,7 +11,7 @@
 use vectorcraft_geom::{FillRule, PathData, Rect};
 
 use crate::solid::{Face3, Keep, extrude_faces, inflate_faces, plane_faces};
-use crate::{Extrude, Inflate, Revolve, V3, View};
+use crate::{Extrude, Facet, Inflate, Revolve, V3, View};
 
 /// Most steps the triangulation of one solid may take: a face's ears and bridges each test the
 /// face's other corners.
@@ -73,6 +73,48 @@ pub fn inflate_meshes(
     view: View,
 ) -> impl Iterator<Item = Result<Mesh, String>> + use<> {
     inflate_faces(shapes, bounds, options, view, Keep::Faces).map(|r| r.and_then(|(_, faces, _)| mesh(&faces?)))
+}
+
+/// One solid built once for both its drawing and its mesh: the facets [`crate::extrude`] or
+/// [`crate::inflate_each`] gives, and the faces before projection that [`MeshedSolid::mesh`] cuts
+/// into the mesh [`extrude_mesh`] or [`inflate_meshes`] gives.
+#[derive(Clone, Debug)]
+pub struct MeshedSolid {
+    pub facets: Vec<Facet>,
+    /// The faces before projection, or the error the mesh alone gives when there are too many.
+    faces: Result<Vec<Face3>, String>,
+}
+
+/// A solid with no facets and an empty mesh.
+impl Default for MeshedSolid {
+    fn default() -> Self {
+        Self { facets: vec![], faces: Ok(vec![]) }
+    }
+}
+
+impl MeshedSolid {
+    /// The solid as a mesh. The faces are cut into triangles on each call.
+    pub fn mesh(&self) -> Result<Mesh, String> {
+        mesh(self.faces.as_ref().map_err(String::clone)?)
+    }
+}
+
+/// Extrude & Bevel's solid ([`crate::extrude`]) and its mesh ([`extrude_mesh`]) from one build. An
+/// error where [`crate::extrude`] gives one.
+pub fn extrude_meshed(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<MeshedSolid, String> {
+    extrude_faces(path, rule, bounds, options, view, Keep::Both).map(|(facets, faces, _)| MeshedSolid { facets, faces })
+}
+
+/// Inflate's solids for several shapes of one object ([`crate::inflate_each`]) and their meshes
+/// ([`inflate_meshes`]), each solid built once, as the iterator reaches it. An error where
+/// [`crate::inflate_each`] gives one.
+pub fn inflate_meshed(
+    shapes: &[(&PathData, FillRule)],
+    bounds: Rect,
+    options: Inflate,
+    view: View,
+) -> impl Iterator<Item = Result<MeshedSolid, String>> + use<> {
+    inflate_faces(shapes, bounds, options, view, Keep::Both).map(|r| r.map(|(facets, faces, _)| MeshedSolid { facets, faces }))
 }
 
 /// Revolve's surface ([`crate::revolve`]) as a mesh. As the effect draws it, a sweep of less than

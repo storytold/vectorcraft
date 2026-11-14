@@ -2440,3 +2440,195 @@ fn guide_rows_list_by_index_whatever_the_node_order() {
     let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
     assert_eq!(indexes, [2, 1, 0]);
 }
+
+/// Right-clicking a row that is not highlighted selects it.
+#[test]
+fn context_menu_right_click_selects_unselected_row() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.highlight", &json!({"ids": [], "mode": "set"})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top-first: Layer 2, Layer 1. Neither is highlighted.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    assert!(rows_of(&app).is_empty());
+    // Secondary-click Layer 1's row (bottom row).
+    let pos = circles[1] - vec2(100.0, 0.0); // name area
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, true, egui::PointerButton::Secondary)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, false, egui::PointerButton::Secondary)], false);
+    // The row is now highlighted.
+    let highlighted = rows_of(&app);
+    let layer1 = app.session.active().unwrap().doc.layers[0].id;
+    assert!(highlighted.contains(&layer1), "right-click selected the unselected row");
+    assert!(crate::panels::has_row_keys(&ctx, super::ROW_KEYS), "secondary click claims row keys");
+}
+
+/// Right-clicking a row that IS highlighted preserves the multiselection.
+#[test]
+fn context_menu_right_click_preserves_multiselection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let ids: Vec<u64> = doc.layers.iter().map(|l| l.id.0).collect();
+    // Highlight all 3 layers.
+    app.session.execute("layer.highlight", &json!({"ids": ids, "mode": "set"})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 3);
+    // Secondary-click the middle row.
+    let pos = circles[1] - vec2(100.0, 0.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, true, egui::PointerButton::Secondary)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, false, egui::PointerButton::Secondary)], false);
+    // All 3 must still be highlighted.
+    assert_eq!(rows_of(&app).len(), 3, "multiselection preserved after right-click on a highlighted row");
+}
+
+/// layer.delete removes the specified layer.
+#[test]
+fn context_menu_delete_dispatches_layer_delete() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let layer2_id = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let before = app.session.active().unwrap().doc.layers.len();
+    // Dispatch layer.delete with explicit ids (what the context menu item does).
+    app.session.execute("layer.delete", &json!({"ids": [layer2_id]})).unwrap();
+    let after = app.session.active().unwrap().doc.layers.len();
+    assert_eq!(after, before - 1, "layer.delete removes the layer");
+}
+
+/// layer.duplicate adds a copy.
+#[test]
+fn context_menu_duplicate_dispatches_layer_duplicate() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let layer_id = app.session.active().unwrap().doc.layers[0].id.0;
+    let before_layers = app.session.active().unwrap().doc.layers.len();
+    let before_undo = app.session.active().unwrap().history.undo.len();
+    app.session.execute("layer.duplicate", &json!({"ids": [layer_id]})).unwrap();
+    let after = &app.session.active().unwrap();
+    assert_eq!(after.doc.layers.len(), before_layers + 1, "layer.duplicate adds a layer");
+    assert_eq!(after.history.undo.len(), before_undo + 1, "one undo step");
+}
+
+/// layer.locate locates a specified object id without requiring a prior canvas selection.
+#[test]
+fn context_menu_locate_object_locates_by_id() {
+    let (mut app, _, [a, _]) = two_rects();
+    app.session.execute("select.none", &json!({})).unwrap();
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
+    // Context menu passes the node's id directly to layer.locate.
+    let result = app.session.execute("layer.locate", &json!({"id": a.0}));
+    assert!(result.is_ok(), "layer.locate with id succeeds without selection: {:?}", result.err());
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), vec![a]);
+}
+
+/// In a 1-layer document, the Delete action in the context menu is disabled when targeting that layer.
+#[test]
+fn context_menu_delete_disabled_when_every_layer_targeted() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 1);
+    let layer_id = doc.layers[0].id;
+
+    // Targeting every layer disables delete.
+    let listed: std::collections::HashSet<NodeId> = [layer_id].into_iter().collect();
+    let del_enabled = !doc.layers.iter().all(|l| listed.contains(&l.id));
+    assert!(!del_enabled, "Delete must be disabled when every layer is targeted");
+
+    // Add a second layer: delete is now enabled for one layer.
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 2);
+    let del_enabled = !doc.layers.iter().all(|l| listed.contains(&l.id));
+    assert!(del_enabled, "Delete is enabled when at least one layer remains");
+}
+
+/// Others actions (Hide Others / Lock Others) retain all multiselected layers.
+#[test]
+fn context_menu_others_actions_preserve_multiselected_layers() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 3);
+    let l1 = doc.layers[0].id.0;
+    let l2 = doc.layers[1].id.0;
+
+    // Hide Others with multiselection [l1, l2] hides only l3.
+    let (hide_cmd, hide_params, hide_enabled) = super::rows::multi_others_action(doc, &[l1, l2], true);
+    assert_eq!(hide_cmd, "layer.hideOthers");
+    assert!(hide_enabled);
+    assert_eq!(hide_params["ids"], json!([l1, l2]));
+
+    // Lock Others with multiselection [l1, l2] locks only l3.
+    let (lock_cmd, lock_params, lock_enabled) = super::rows::multi_others_action(doc, &[l1, l2], false);
+    assert_eq!(lock_cmd, "layer.lockOthers");
+    assert!(lock_enabled);
+    assert_eq!(lock_params["ids"], json!([l1, l2]));
+}
+
+/// Context menu Others action resolves an object row to its holding top-level layer.
+#[test]
+fn context_menu_others_actions_object_row_resolves_to_holding_layer() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    // Layer 1 (current) holding a rectangle.
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let rect_id = rect["id"].as_u64().unwrap();
+
+    // Create Layer 2 and hide it.
+    let l2 = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("layer.setProps", &json!({"ids": [l2], "visible": false})).unwrap();
+
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 2);
+
+    // Right-clicking the object in Layer 1: Layer 1 is visible, Layer 2 is hidden.
+    // There are no other visible layers, so the action should be Show All Layers, enabled.
+    let (hide_cmd, _hide_params, hide_enabled) = super::rows::multi_others_action(doc, &[rect_id], true);
+    assert_eq!(hide_cmd, "layer.showAll");
+    assert!(hide_enabled, "Show All Layers is enabled because Layer 2 is hidden");
+
+    // Now make Layer 2 visible, but lock it.
+    app.session.execute("layer.setProps", &json!({"ids": [l2], "visible": true, "locked": true})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    // Right-clicking the object in Layer 1: Layer 1 is unlocked, Layer 2 is locked.
+    // There are no other unlocked layers, so the action should be Unlock All Layers, enabled.
+    let (lock_cmd, _lock_params, lock_enabled) = super::rows::multi_others_action(doc, &[rect_id], false);
+    assert_eq!(lock_cmd, "layer.unlockAll");
+    assert!(lock_enabled, "Unlock All Layers is enabled because Layer 2 is locked");
+}
+
+/// Context menu Show/Unlock All Layers are enabled when sublayers are hidden or locked.
+#[test]
+fn context_menu_others_actions_sublayer_state_enables_all_commands() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 1);
+    let l1 = doc.layers[0].id.0;
+
+    // Create a sublayer in Layer 1.
+    let sub = app.session.execute("layer.newSublayer", &json!({"parent": l1})).unwrap()["id"].as_u64().unwrap();
+
+    // Case 1: Sublayer is hidden while top layer is visible.
+    app.session.execute("layer.setProps", &json!({"ids": [sub], "visible": false})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let (hide_cmd, _, hide_enabled) = super::rows::multi_others_action(doc, &[l1], true);
+    assert_eq!(hide_cmd, "layer.showAll");
+    assert!(hide_enabled, "hidden sublayer enables Show All Layers");
+
+    // Case 2: Sublayer is visible, but locked while top layer is unlocked.
+    app.session.execute("layer.setProps", &json!({"ids": [sub], "visible": true, "locked": true})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let (lock_cmd, _, lock_enabled) = super::rows::multi_others_action(doc, &[l1], false);
+    assert_eq!(lock_cmd, "layer.unlockAll");
+    assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
+}

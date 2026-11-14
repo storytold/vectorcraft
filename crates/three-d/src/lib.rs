@@ -19,7 +19,7 @@ mod lights;
 pub use lights::{Light, Lights, MAX_LIGHTS};
 mod caps;
 mod mesh;
-pub use mesh::{Mesh, extrude_mesh, inflate_meshes, plane_mesh, revolve_mesh};
+pub use mesh::{Mesh, MeshedSolid, extrude_mesh, extrude_meshed, inflate_meshed, inflate_meshes, plane_mesh, revolve_mesh};
 mod shadow;
 pub use shadow::{
     MAX_SHADOW_FACES, Shadow, ShadowCaster, ShadowPlane, ShadowPosition, SolidFaces, TOO_COMPLEX_SHADOW, extrude_shadowed, inflate_shadowed,
