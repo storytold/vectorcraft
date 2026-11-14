@@ -289,7 +289,13 @@ the suite) keep the agent to the folders you give it:
 - The preferences that move folders the app reads or writes on its own (`fontsFolder`,
   `pluginsFolder`, `recoveryFolder`, `templatesFolder`) can only be set inside the roots. The app's own folders
   (preferences, Data Recovery, the User Defined library folders, VectorCraft's Fonts folder) are not
-  confined: no agent names a path there.
+  confined. These commands that act on a file there are confined: `stroke.arrowheads.edit` and
+  `stroke.arrowheads.reload` refuse an arrowheads file outside the read roots, and `stroke.arrowheads.list` gives its
+  `file` as `null` there (see [Arrowheads](#arrowheads)); `file.newProfiles.edit` needs read and write access to the
+  New Document profile's file, `file.newProfiles.reset` needs write access, and `file.new` starts with the defaults
+  when the read roots leave out the profiles folder (see [New Document profiles](#new-document-profiles));
+  `script.listInstalled` lists the Scripts folder and `ui.runInstalledScript` runs a script only inside a read root
+  (see [Script engines](#script-engines)).
 - The roots must be existing folders; a missing one stops the server with an error. Each flag takes one
   folder per use (`--flag <dir>` or `--flag=<dir>`) and may be used again for more.
 
