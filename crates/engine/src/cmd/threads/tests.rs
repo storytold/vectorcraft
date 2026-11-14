@@ -245,6 +245,28 @@ fn a_frame_left_alone_by_a_dropped_repeat_stops_continuing() {
     assert_eq!(t.plain_text(), "Tail");
 }
 
+/// [`ThreadIndex::threaded`] answers as [`story_of`] does, by the first thread that lists an
+/// object, also for threads listed more than once, with point type, other art and missing ids.
+#[test]
+fn thread_index_matches_story_of() {
+    let (mut s, a, b) = setup();
+    s.execute("text.thread.create", &json!({})).unwrap();
+    let c = s.execute("text.create", &json!({"x": 400, "y": 10, "text": "C", "area": {"width": 150, "height": 60}})).unwrap()["id"].as_u64().unwrap();
+    let p = s.execute("text.create", &json!({"x": 10, "y": 250, "text": "Point"})).unwrap()["id"].as_u64().unwrap();
+    let r = s.execute("shape.rectangle", &json!({"x": 400, "y": 200, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let mut d = (*s.doc().unwrap().doc).clone();
+    let [fa, fb, fc, fp, fr, fx] = [a, b, c, p, r, 9_999_999].map(NodeId);
+    // a's first thread has one frame beside point type, c's has one beside a rectangle, and b's
+    // lists a twice.
+    d.text_threads = vec![vec![fp, fa], vec![fa, fb, fa], vec![fc, fr], vec![fc, fb], vec![fx, fb]];
+    let index = ThreadIndex::of(&d);
+    let got: Vec<(bool, bool)> = [fa, fb, fc, fp, fr, fx].iter().map(|id| (index.threaded(*id), !story_of(&d, *id).is_empty())).collect();
+    let want: Vec<(bool, bool)> = [false, true, false, false, false, false].iter().map(|t| (*t, *t)).collect();
+    assert_eq!(got, want);
+    d.text_threads.clear();
+    assert!(!ThreadIndex::of(&d).threaded(fb));
+}
+
 #[test]
 fn edits_copy_only_the_stories_of_threads_whose_frames_changed() {
     let (mut s, a, b) = setup();
