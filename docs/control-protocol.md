@@ -345,7 +345,10 @@ Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) 
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.
 A `color` with an alpha part (`#rrggbbaa` or `#rgba`) is an error, and the preference does not change.
 
-Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
+Window title bar: on Windows the window has no OS decorations and the app bar is the title bar. On Linux and the BSDs
+the app bar is the title bar by default only on a Wayland session without server-side decorations, such as GNOME, in a
+window not opened through XWayland. Elsewhere the desktop draws the frame and the app bar has no caption buttons,
+unless VectorCraft Title Bar on Every Desktop or `VECTORCRAFT_TITLEBAR=app` turns the app frame on (see below). The
 caption buttons (Minimize, Maximize/Restore, Close) are 46 pt each. By default all three sit at the bar's right end.
 On Linux and the BSDs, when the desktop leaves the window's frame to the app (a Wayland session without server-side
 decorations, such as GNOME), the window is not opened through XWayland and `VECTORCRAFT_TITLEBAR` is unset, they
@@ -370,7 +373,11 @@ each one that applies. `VECTORCRAFT_TITLEBAR` also takes precedence over System 
 `app` keeps the app bar as the title bar with System Title Bar on. Only the values `app`, `system` and `desktop` take
 precedence (case-sensitive, surrounding spaces ignored); any other value, such as `unknown`, is ignored and does not
 override System Title Bar. While the variable is set to one of those values, the Preferences dialog dims
-System Title Bar and its `__titlebarFromEnv` field is `true`.
+System Title Bar and its `__titlebarFromEnv` field is `true`. The dialog's `__desktopKeepsFrame` field is `true` when
+the variable is unset and the desktop would draw the frame without VectorCraft Title Bar on Every Desktop, whether
+or not that preference is on. The app works it out when it starts, so a Linux Display Server change does not change
+it until the next start. While the field is `true` and VectorCraft Title Bar on Every Desktop is off in the dialog, a
+note under System Title Bar says that the desktop draws the title bar with System Title Bar on or off.
 
 Fill/Stroke chips and panel shortcuts: the Control bar's and Properties' Fill and Stroke chips bring their proxy
 forward (`paint.toggleActive {fill}`) and open a popover with the Swatches panel (Shift-click: the Color panel's mixer);
@@ -810,7 +817,12 @@ instance keeps, so instances started side by side for screenshots don't get it).
 saved}]`, from `file.recovery.list`) and `discard`. `ui.dialog.confirm` restores them all (`file.recovery.restore`
 each, opening "<name> [Recovered]" documents), `discard: true` then confirm deletes them, `ui.dialog.cancel` keeps them
 for the next launch. While copies are written in the background `ui.inspect` lists them under `background`
-("Saving recovery data for <name>").
+("Saving recovery data for <name>"). After a restore the status bar shows the count followed by the first of the
+restored documents' notes: each document's lines about its linked files, then its warnings (what reading the copy left
+out first), named with the document's title when more than one was restored. Hovering the message lists them all. The
+questions about each document's missing or modified linked files open one document at a time, with that document made
+the current one. When a copy can't be restored, confirm returns the error and the status bar shows it; its hover lists
+the count and the notes of the documents that were restored.
 
 Native save options: File → Save As to a native or `.ai` file opens the `saveOptions` dialog after the save panel
 (heading "VectorCraft Options" or "PDF-compatible .ai Options"). Fields: `separateArtboards`, `all` (true: every

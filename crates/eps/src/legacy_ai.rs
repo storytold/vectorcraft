@@ -124,6 +124,7 @@ const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
 const LIVE: &str = "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art";
+const GRAPHS: &str = "graphs are written as their art, without their data or settings";
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
