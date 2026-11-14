@@ -561,6 +561,15 @@ pub(crate) fn given_object_ids(p: &Value, command: &str) -> Result<Option<Vec<No
 pub(crate) fn index(v: u64) -> usize {
     usize::try_from(v).unwrap_or(usize::MAX)
 }
+/// The whole number of 0 or more that `p` gives for `key`, read with [`index`], or `None` when `p`
+/// leaves it out or gives null. Any other value, such as `"3"`, `2.5`, `-1` or `true`, is an error
+/// under `cmd`: "`{key}` must be a whole number".
+pub(crate) fn index_opt(p: &Value, key: &str, cmd: &str) -> Result<Option<usize>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(|n| Some(index(n))).ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
+    }
+}
 /// Validate all explicit targets before a command changes the document or selection.
 pub(crate) fn checked_ids_param(s: &Session, p: &Value, key: &str, command: &str) -> Result<Vec<NodeId>> {
     checked_nodes_param(s, p, key, command, false)

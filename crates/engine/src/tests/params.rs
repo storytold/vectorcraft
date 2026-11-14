@@ -850,3 +850,75 @@ fn journal_entries_pass_the_check() {
         assert!(check_params(id, params).is_ok(), "{id} {params}");
     }
 }
+
+/// An index of a path, type, panel, library, style or ruler command given as something other than a
+/// whole number of 0 or more (`"3"`, `2.5`, `-1`, `true`, `[]`, `{}`) is refused as the wrong type,
+/// naming its key. A required one is not reported as missing, and an optional one (`subpath` of
+/// `path.appendAnchor`, `path.close` and `path.reverse`, `artboard` of the ruler origin commands) is
+/// not read as its default. A required one left out or null is still missing, and an optional one left
+/// out or null keeps its default. Neither changes the document or records an undo step.
+#[test]
+fn a_malformed_index_is_not_missing_or_its_default() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("path.create", &json!({"d": "M0 0 L10 0 M20 0 L30 0"})).unwrap()["id"].clone();
+    s.execute("library.create", &json!({"name": "Brand"})).unwrap();
+    s.execute("library.createGroup", &json!({"name": "Warm"})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let with = |base: &serde_json::Value, key: &str, v: Option<serde_json::Value>| {
+        let mut p = base.clone();
+        let o = p.as_object_mut().unwrap();
+        match v {
+            Some(v) => o.insert(key.into(), v),
+            None => o.remove(key),
+        };
+        p
+    };
+    let refused = |s: &mut Session, cmd: &str, p: &serde_json::Value, want: &str| match s.execute(cmd, p) {
+        Err(EngineError::BadParams { cmd: c, msg }) => assert_eq!((c.as_str(), msg.as_str()), (cmd, want), "{p}"),
+        other => panic!("{cmd} {p}: {other:?}"),
+    };
+    let malformed = [json!("3"), json!(2.5), json!(-1), json!(true), json!([]), json!({})];
+    let handle = json!({"id": id, "x": 5, "y": 5});
+    let required = [
+        ("path.setHandle", handle.clone(), "anchor", "missing anchor"),
+        ("path.moveAnchor", handle.clone(), "anchor", "missing anchor"),
+        ("path.insertAnchor", json!({"id": id}), "segment", "missing segment"),
+        ("text.setPathHandle", handle.clone(), "anchor", "missing anchor"),
+        ("artboard.reorder", json!({"index": 0}), "to", "missing to"),
+        ("library.moveGroup", json!({"group": "Warm"}), "to", "missing `to` (an index)"),
+        ("graphicStyle.move", json!({"name": "Default"}), "to", "missing `to` (an index)"),
+    ];
+    for (cmd, base, key, missing) in &required {
+        for v in &malformed {
+            refused(&mut s, cmd, &with(base, key, Some(v.clone())), &format!("`{key}` must be a whole number"));
+        }
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            refused(&mut s, cmd, &p, missing);
+        }
+    }
+    let optional = [
+        ("path.appendAnchor", handle.clone(), "subpath"),
+        ("path.close", json!({"id": id}), "subpath"),
+        ("path.reverse", json!({"ids": [id]}), "subpath"),
+        ("document.rulerOrigin", json!({}), "artboard"),
+        ("document.setRulerOrigin", json!({"x": 5, "y": 5}), "artboard"),
+        ("document.resetRulerOrigin", json!({}), "artboard"),
+    ];
+    for (cmd, base, key) in &optional {
+        for v in &malformed {
+            refused(&mut s, cmd, &with(base, key, Some(v.clone())), &format!("`{key}` must be a whole number"));
+        }
+    }
+    // A whole number that names no artboard is still out of range.
+    refused(&mut s, "document.resetRulerOrigin", &json!({"artboard": 1}), "index out of range");
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // Left out or null, an optional one keeps its default.
+    for (cmd, base, key) in &optional {
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        }
+    }
+}

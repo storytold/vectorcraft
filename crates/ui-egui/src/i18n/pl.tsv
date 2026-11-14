@@ -171,6 +171,8 @@
 	Crop Image	Kadruj obraz
 	Image Tools	Narzędzia obrazu
 	Remove Background…	Usuń tło…
+	Draw (Pencil)	Rysuj (ołówek)
+	Place Image	Umieść obraz
 	Remove Background	Usuń tło
 	Background	Tło
 	Edge Color	Kolor krawędzi
@@ -4628,6 +4630,7 @@ imageTrace	Outline	Kontur
 @msg	`select` must be true or false	`select` musi mieć wartość true lub false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` i `maxAnchors` muszą być liczbami całkowitymi
 @msg	`{key}` must be a number not below 0	`{key}` musi być liczbą nie mniejszą niż 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` musi być czterema liczbami nie mniejszymi niż 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` musi mieć postać [x, y, width, height]: cztery skończone liczby, szerokość i wysokość nieujemne
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` jest większe niż `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	podaj co najmniej jeden z parametrów `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`

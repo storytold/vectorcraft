@@ -878,8 +878,8 @@ fn load_texture(params: &mut Value, cmd: &str) -> Result<()> {
 /// Has `n` an appearance Expand Appearance turns into objects: a path that isn't basic (several
 /// fills or strokes, effects, transparency of a fill or stroke, a brush), a group or layer with
 /// fills, strokes or effects of its own or such members, other objects with effects, type with
-/// fills or strokes of its own, or a symbol instance whose active fill or stroke has a geometry
-/// effect ([`effects::has_item_geometry`])?
+/// fills or strokes of its own, or a symbol instance whose active fill or stroke has a geometry or
+/// raster effect ([`effects::has_item_geometry`], [`effects::has_instance_row_raster`])?
 pub(crate) fn expandable(n: &Node) -> bool {
     expandable_except(n, &[])
 }
@@ -896,7 +896,9 @@ pub(crate) fn expandable_except(n: &Node, skip: &[NodeId]) -> bool {
             !n.appearance.items.is_empty() || !n.appearance.effects.is_empty() || children.iter().any(|c| expandable_except(c, skip))
         }
         NodeKind::Text(_) => !n.appearance.items.is_empty() || !n.appearance.effects.is_empty(),
-        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => effects::has_item_geometry(n) || !n.appearance.effects.is_empty(),
+        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => {
+            effects::has_item_geometry(n) || effects::has_instance_row_raster(n) || !n.appearance.effects.is_empty()
+        }
         _ => !n.appearance.effects.is_empty(),
     }
 }

@@ -699,6 +699,8 @@ font-technology	Variable	Варіативні
 	Crop Image	Обрізати зображення
 	Image Tools	Інструменти зображення
 	Remove Background…	Видалити фон…
+	Draw (Pencil)	Малювати (Олівець)
+	Place Image	Помістити зображення
 	Remove Background	Видалити фон
 	Background	Фон
 	Edge Color	Колір краю
@@ -4530,6 +4532,7 @@ axis	Both	Обидві
 @msg	`select` must be true or false	`select` має бути true або false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` і `maxAnchors` мають бути цілими числами
 @msg	`{key}` must be a number not below 0	`{key}` має бути числом, не меншим за 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` має бути чотирма числами, не меншими за 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` має бути [x, y, width, height]: чотири скінченні числа, ширина й висота невід’ємні
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` більше за `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	укажіть принаймні один із параметрів `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
