@@ -122,6 +122,26 @@ pub(crate) fn joins(script: Script) -> bool {
     )
 }
 
+/// Is `script` one a Standard composer leaves unshaped: Indic (conjuncts, half forms, marks placed
+/// by the font's layout tables), Arabic-like ([`joins`]) and Hebrew?
+fn is_complex_script(script: Script) -> bool {
+    joins(script)
+        || matches!(
+            script,
+            Script::Hebrew
+                | Script::Devanagari
+                | Script::Bengali
+                | Script::Gurmukhi
+                | Script::Gujarati
+                | Script::Oriya
+                | Script::Tamil
+                | Script::Telugu
+                | Script::Kannada
+                | Script::Malayalam
+                | Script::Sinhala
+        )
+}
+
 /// How `vpal` and the vertical kerning with it move an upright glyph in vertical type and change
 /// its length down the column, in points: `advance` down the column, `dx` and `dy` in glyph space
 /// (y down; `dy` is down the column once the glyph stands upright). `proportional`: `vpal` itself
@@ -1374,7 +1394,12 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let source_runs = &(source_runs.start + first..source_runs.start + last);
     let text_seg = &text[range.clone()];
     // The segment's script: that of its first character of a script of its own.
-    let cursive = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited)).is_some_and(joins);
+    let first_script = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited));
+    let cursive = first_script.is_some_and(joins);
+    // A Standard composer sets a complex script glyph by glyph (no layout tables, nominal glyphs).
+    // shortcut: decided for the whole segment by its first strong script, as `cursive` is; segments
+    // already split where the script changes.
+    let unshaped = feats.unshaped_complex && first_script.is_some_and(is_complex_script);
     let full = st.size.max(0.0);
     // Superscript/subscript and small capitals shrink the glyphs; line metrics keep the full size.
     let (_, pos_shift) = st.position.scale_shift(full);
@@ -1453,7 +1478,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             .and_then(|l| l.parse::<harfrust::Language>().ok());
         let mut shaped = Shaped::default();
         let Shaped { raw, proportional, vpal, chars } = &mut shaped;
-        let hb_shaped = face.hb().map(|hb| {
+        let hb_shaped = face.hb().filter(|_| !unshaped).map(|hb| {
             let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
             // The baseline and character-level pass use exactly the same resolved features.
             // Alternate positioning passes still resolve their own features, with `more` last.
@@ -1558,7 +1583,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             }
         });
         if hb_shaped.is_none() {
-            // Fallback: nominal glyphs and hmtx advances, no shaping.
+            // Fallback: nominal glyphs and hmtx advances, no shaping (also a complex script under a
+            // Standard composer).
             if let Some(f) = face.skrifa() {
                 let cmap = f.charmap();
                 let gm = f.glyph_metrics(Size::unscaled(), face.location());
@@ -1571,6 +1597,10 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                         let adv = gm.advance_width(g).unwrap_or(face.upem as f32 * 0.5);
                         raw.push((g.to_u32(), cl, adv.round() as i32, 0, 0));
                     }
+                }
+                // Shaped right-to-left text comes out in visual order, which layout expects.
+                if unshaped && level.is_rtl() {
+                    raw.reverse();
                 }
             }
         }

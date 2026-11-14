@@ -229,11 +229,14 @@ impl Ctx<'_> {
         out
     }
 
-    /// Shape paragraph `r` (its bidi resolution `bidi`).
-    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>) -> Vec<SGlyph> {
+    /// Shape paragraph `r` (its bidi resolution `bidi`, its attributes `para`). A Standard composer
+    /// sets a complex script glyph by glyph ([`OtFeatures::unshaped_complex`]).
+    fn shape_para(&self, r: Range<usize>, bidi: Option<&BidiInfo<'_>>, para: &ParaStyle) -> Vec<SGlyph> {
         let mut v = Vec::with_capacity(r.len());
         let levels = bidi.map_or(&[][..], |b| &b.levels);
-        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &self.opts.features, levels, &mut v);
+        let standard = !self.opts.composer.unwrap_or(para.composer).shapes_complex_scripts();
+        let feats = OtFeatures { unshaped_complex: standard, ..self.opts.features };
+        shape_runs(self.db, self.text, r, &self.runs, &self.inlines, &self.faces, &feats, levels, &mut v);
         self.finish_shaping(&mut v, |g| self.style_at(g.byte));
         v
     }

@@ -1947,7 +1947,8 @@ digits	Malayalam	Malajalam
 	Tabular Lining	Tabelaryczne nowoczesne
 	Tabular Oldstyle	Tabelaryczne nautyczne
 	Titling Alternates	Alternatywy tytułowe
-	Every-line Composer	Kompozytor wielowierszowy
+	Middle Eastern & South Asian Every-line Composer	Kompozytor wielowierszowy (Bliski Wschód i Azja Południowa)
+	Standard Every-line Composer	Standardowy kompozytor wielowierszowy
 	First-line Left Indent	Wcięcie pierwszego wiersza
 	Hyphenation…	Dzielenie wyrazów…
 	Words Longer Than:	Wyrazy dłuższe niż:
@@ -1987,7 +1988,8 @@ digits	Malayalam	Malajalam
 	East Asian Composition Settings	Ustawienia składu wschodnioazjatyckiego
 	Korean Composition Settings	Ustawienia składu koreańskiego
 	Select a text object to edit its paragraph attributes.	Zaznacz obiekt tekstowy, aby edytować atrybuty akapitu.
-	Single-line Composer	Kompozytor jednowierszowy
+	Middle Eastern & South Asian Single-line Composer	Kompozytor jednowierszowy (Bliski Wschód i Azja Południowa)
+	Standard Single-line Composer	Standardowy kompozytor jednowierszowy
 	Toggle Line Composer	Przełącz kompozytor wierszy
 	Space After Paragraph	Odstęp po akapicie
 	Space Before Paragraph	Odstęp przed akapitem
@@ -8205,7 +8207,7 @@ breakText	Glyphs	Glify
 @msg	column: true floats the whole column and takes no onto, above or below	column: true odłącza całą kolumnę i nie przyjmuje onto, above ani below
 @msg	command must be a shape.* command	command musi być poleceniem shape.*
 @msg	commands[{i}]: missing `command`	commands[{i}]: brak `command`
-@msg	composer must be "singleLine" or "everyLine"	composer musi mieć wartość "singleLine" lub "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer musi mieć wartość "singleLine", "everyLine", "standardSingleLine" lub "standardEveryLine"
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	kształty złożone przyjmują ścieżki, ścieżki złożone, grupy, kształty złożone, tekst, przejścia i koperty
 @msg	compound {_1} must contain exactly one open path to join	obiekt złożony {_1} musi zawierać dokładnie jedną otwartą ścieżkę do połączenia
 @msg	connect needs a path other than the one extended	connect wymaga ścieżki innej niż przedłużana

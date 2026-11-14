@@ -82,6 +82,69 @@ fn paragraph_mixed_composer_checks_neither_menu_item() {
     assert_eq!(shared_composer(&app), Some(Composer::EveryLine));
 }
 
+/// Cmd+Alt+Shift+C switches between Single-line and Every-line and keeps what each paragraph's
+/// composer does with complex scripts: a Standard composer toggles to the other Standard one.
+#[test]
+fn toggling_the_line_composer_keeps_the_shaping() {
+    let (mut app, id) = editing_text("A\nB\n");
+    for (from, first, second) in [
+        ("standardEveryLine", "standardSingleLine", "standardEveryLine"),
+        ("everyLine", "singleLine", "everyLine"),
+        ("standardSingleLine", "standardEveryLine", "standardSingleLine"),
+    ] {
+        app.run("text.setFormat", json!({"id": id, "composer": from})).unwrap();
+        app.session.set_tool_option("selectAll", &json!(true));
+        assert_eq!(toggle_composer(&mut app).unwrap(), json!(first), "{from}");
+        assert_eq!(toggle_composer(&mut app).unwrap(), json!(second), "{from} again");
+    }
+    // Paragraphs that differ take Every-line, as before the Standard composers existed.
+    app.run("text.setFormat", json!({"id": id, "composer": "standardSingleLine"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "composer": "singleLine"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(toggle_composer(&mut app).unwrap(), json!("everyLine"));
+}
+
+/// The Paragraph panel menu lists the four composers, and ticks the one every selected paragraph has.
+#[test]
+fn the_paragraph_menu_sets_each_of_the_four_composers() {
+    let (mut app, id) = editing_text("A\nB\n");
+    app.session.set_tool_option("selectAll", &json!(true));
+    let ctx = egui::Context::default();
+    let items = |app: &mut VectorcraftApp| {
+        let mut seen = vec![];
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| menu(app, ui));
+        out.textures_delta.clear();
+        for shape in out.shapes {
+            collect_texts(&shape.shape, &mut seen);
+        }
+        seen
+    };
+    fn collect_texts(shape: &egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Vec(v) => v.iter().for_each(|s| collect_texts(s, out)),
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            _ => {}
+        }
+    }
+    let texts = items(&mut app);
+    for label in [
+        "Middle Eastern & South Asian Single-line Composer",
+        "Middle Eastern & South Asian Every-line Composer",
+        "Standard Single-line Composer",
+        "Standard Every-line Composer",
+    ] {
+        assert!(texts.iter().any(|t| t == label), "{label} in {texts:?}");
+    }
+    for (value, want) in [
+        ("standardEveryLine", Composer::StandardEveryLine),
+        ("singleLine", Composer::SingleLine),
+        ("standardSingleLine", Composer::StandardSingleLine),
+    ] {
+        app.run("text.setFormat", json!({"id": id, "composer": value})).unwrap();
+        assert_eq!(shared_composer(&app), Some(want), "{value}");
+    }
+}
+
 #[test]
 fn paragraph_mixed_hyphenate_checks_off() {
     let (mut app, id) = editing_text("A\nB\n");

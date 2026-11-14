@@ -1048,7 +1048,8 @@ font-technology	Variable	Variabla
 	Every (minutes)	Intervall (minuter)
 	Every option is at its default.	Alla alternativ har standardvärden.
 	Every option matches {base}.	Alla alternativ matchar {base}.
-	Every-line Composer	Flerradssättning
+	Middle Eastern & South Asian Every-line Composer	Flerradssättning (Mellanöstern och Sydasien)
+	Standard Every-line Composer	Standard-flerradssättning
 	Exact dash lengths	Exakta strecklängder
 	Exceptions (comma separated)	Undantag (kommaavgränsade)
 	Exclude	Uteslut
@@ -3325,7 +3326,8 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Enkelt vänster citattecken
 	Single Quotes:	Enkla citattecken:
 	Single Right Quotation Mark	Enkelt höger citattecken
-	Single-line Composer	Enradssättare
+	Middle Eastern & South Asian Single-line Composer	Enradssättare (Mellanöstern och Sydasien)
+	Standard Single-line Composer	Standard-enradssättare
 	Toggle Line Composer	Växla radsättare
 	Sixth Space	Sjättedelsblanksteg
 	Size	Storlek
@@ -7874,7 +7876,7 @@ digits	Hindi	Hindi
 @msg	column: true floats the whole column and takes no onto, above or below	column: true gör hela kolumnen flytande och tar inte onto, above eller below
 @msg	command must be a shape.* command	command måste vara ett shape.*-kommando
 @msg	commands[{i}]: missing `command`	commands[{i}]: `command` saknas
-@msg	composer must be "singleLine" or "everyLine"	composer måste vara "singleLine" eller "everyLine"
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer måste vara "singleLine", "everyLine", "standardSingleLine" eller "standardEveryLine"
 @msg	compound {_1} must contain exactly one open path to join	sammansatt {_1} måste innehålla exakt en öppen bana att foga samman
 @msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	sammansatta former tar banor, sammansatta banor, grupper, sammansatta former, text, övergångar och kuvert
 @msg	connect end must be "start" or "end"	connect end måste vara "start" eller "end"

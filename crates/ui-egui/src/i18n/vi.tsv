@@ -1245,7 +1245,8 @@ font-technology	Variable	Biến thiên
 	Every (minutes)	Mỗi (phút)
 	Every option is at its default.	Mọi tùy chọn đang ở mặc định.
 	Every option matches {base}.	Mọi tùy chọn khớp với {base}.
-	Every-line Composer	Soạn theo từng dòng
+	Middle Eastern & South Asian Every-line Composer	Soạn theo từng dòng (Trung Đông và Nam Á)
+	Standard Every-line Composer	Soạn theo từng dòng tiêu chuẩn
 	Exact dash lengths	Độ dài nét đứt chính xác
 	Exceptions (comma separated)	Ngoại lệ (phân cách bằng dấu phẩy)
 	Exclude	Loại trừ
@@ -3795,7 +3796,8 @@ mark-style	Japanese	Kiểu Nhật
 	Single Left Quotation Mark	Dấu nháy đơn mở
 	Single Quotes:	Dấu nháy đơn:
 	Single Right Quotation Mark	Dấu nháy đơn đóng
-	Single-line Composer	Soạn thảo một dòng
+	Middle Eastern & South Asian Single-line Composer	Soạn thảo một dòng (Trung Đông và Nam Á)
+	Standard Single-line Composer	Soạn thảo một dòng tiêu chuẩn
 	Toggle Line Composer	Chuyển đổi cách soạn dòng
 	Sixth Space	Dấu cách 1/6
 	Size	Kích thước
@@ -7106,3 +7108,4 @@ breakText	Glyphs	Glyph
 	Grommets	Khoen
 	Grommet Inset	Khoảng cách từ mép đến khoen
 	Diameter	Đường kính
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer phải là "singleLine", "everyLine", "standardSingleLine" hoặc "standardEveryLine"

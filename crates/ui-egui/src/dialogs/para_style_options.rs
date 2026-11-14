@@ -361,7 +361,12 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
     }
 
     let same = unchanged("composer", "__resetComposition");
-    keep_or(&mut attrs, "composer", same, choice("composer").filter(|v| matches!(v.as_str(), Some("singleLine" | "everyLine"))));
+    keep_or(
+        &mut attrs,
+        "composer",
+        same,
+        choice("composer").filter(|v| matches!(v.as_str(), Some("singleLine" | "everyLine" | "standardSingleLine" | "standardEveryLine"))),
+    );
     let same = unchanged("roman_hanging", "__resetComposition");
     keep_or(&mut attrs, "roman_hanging", same, switch("roman_hanging"));
 
@@ -637,7 +642,9 @@ fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(&str, &str)]
     let shown = options.iter().find(|(value, _)| *value == selected).map_or("", |(_, label)| *label);
     let labels: Vec<&str> = std::iter::once(" ").chain(options.iter().map(|(_, label)| *label)).collect();
     ui.add_enabled_ui(enabled, |ui| {
-        if let Some(i) = crate::widgets::dropdown(ui, (KIND, key), shown, &labels, 190.0) {
+        // shortcut: 7 pt per character approximates the widest label; measure the text when a label wraps.
+        let width = (labels.iter().map(|l| l.chars().count()).max().unwrap_or(0) as f32 * 7.0).max(190.0);
+        if let Some(i) = crate::widgets::dropdown(ui, (KIND, key), shown, &labels, width) {
             d.fields.insert(key.into(), if i == 0 { Value::Null } else { options.get(i - 1).map_or(Value::Null, |(value, _)| json!(value)) });
         }
     });
@@ -842,11 +849,16 @@ pub(crate) fn clear_tabs(d: &mut Dialog) {
     d.fields.remove("__tabEdited");
 }
 
-/// Composition: the Single-line or Every-line Composer, and Roman Hanging Punctuation.
+/// Composition: the Middle Eastern & South Asian or Standard, Single-line or Every-line Composer, and Roman Hanging Punctuation.
 pub(crate) fn composition_body(ui: &mut egui::Ui, d: &mut Dialog) {
     egui::Grid::new("paragraph-style-composition").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         let row = ui.label(tl!("Composition"));
-        let composers = [("singleLine", tl!("Single-line Composer")), ("everyLine", tl!("Every-line Composer"))];
+        let composers = [
+            ("singleLine", tl!("Middle Eastern & South Asian Single-line Composer")),
+            ("everyLine", tl!("Middle Eastern & South Asian Every-line Composer")),
+            ("standardSingleLine", tl!("Standard Single-line Composer")),
+            ("standardEveryLine", tl!("Standard Every-line Composer")),
+        ];
         ui.label_inputs_by(row.id, |ui| choice(ui, d, "composer", &composers, true));
         ui.end_row();
         switch(ui, d, "roman_hanging", tl!("Roman Hanging Punctuation"), true);
@@ -857,7 +869,7 @@ pub(crate) fn composition_body(ui: &mut egui::Ui, d: &mut Dialog) {
 /// unset; Hyphenation Zone is also inactive with the Every-line Composer, which does not use it.
 pub(crate) fn hyphenation_body(ui: &mut egui::Ui, d: &mut Dialog) {
     let on = d.fields.get("hyphenate").and_then(Value::as_bool) == Some(true);
-    let single_line = d.fields.get("composer").and_then(Value::as_str) == Some("singleLine");
+    let single_line = matches!(d.fields.get("composer").and_then(Value::as_str), Some("singleLine" | "standardSingleLine"));
     egui::Grid::new("paragraph-style-hyphenation").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
         switch(ui, d, "hyphenate", tl!("Hyphenation"), true);
         for (key, suffix) in [

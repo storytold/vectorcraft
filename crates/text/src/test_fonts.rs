@@ -534,7 +534,8 @@ pub fn half_form_font(half: bool) -> Option<Vec<u8>> {
 pub const CONJUNCT_FAMILY: &str = "Conjuncttest Sans";
 
 /// A test-only cmap over bundled Source Sans 3: Devanagari Ka uses K, the halant uses a period and
-/// the vowel sign I (drawn before its syllable) uses i. The `GSUB` table's `dev2` script has an
+/// the vowel sign I (drawn before its syllable) uses i; Gujarati Ka, virama and vowel sign I use the
+/// same glyphs. The `GSUB` table's `dev2` and `gjr2` scripts have an
 /// `aalt` single substitution of K by k and a `salt` one of K by i, which list k and the vowel
 /// sign's glyph as alternates of Ka, and a `half` ligature of K and the period into k (Ka's half
 /// form). Family [`CONJUNCT_FAMILY`]. `None` when it can't be built.
@@ -549,7 +550,7 @@ pub fn conjunct_font() -> Option<Vec<u8>> {
     const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
     let font = skrifa::FontRef::new(BASE).ok()?;
     let charmap = font.charmap();
-    let mapping = [('क', 'K'), ('\u{094D}', '.'), ('\u{093F}', 'i')];
+    let mapping = [('क', 'K'), ('\u{094D}', '.'), ('\u{093F}', 'i'), ('ક', 'K'), ('\u{0ACD}', '.'), ('\u{0ABF}', 'i')];
     let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
     let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
     let family = CONJUNCT_FAMILY;
@@ -574,7 +575,8 @@ pub fn conjunct_font() -> Option<Vec<u8>> {
         SubstitutionLookup::Ligature(Lookup::new(Default::default(), vec![half])),
         SubstitutionLookup::Single(Lookup::new(Default::default(), vec![salt.into()])),
     ]);
-    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), Script::new(Some(LangSys::new(vec![0, 1, 2])), vec![]))]);
+    let langsys = || Script::new(Some(LangSys::new(vec![0, 1, 2])), vec![]);
+    let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"dev2"), langsys()), ScriptRecord::new(Tag::new(b"gjr2"), langsys())]);
     builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());

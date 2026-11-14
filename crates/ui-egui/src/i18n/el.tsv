@@ -1013,7 +1013,8 @@ font-technology	Variable	Μεταβλητές
 	Every (minutes)	Κάθε (λεπτά)
 	Every option is at its default.	Όλες οι επιλογές έχουν τις προεπιλεγμένες τιμές τους.
 	Every option matches {base}.	Όλες οι επιλογές ταιριάζουν με το {base}.
-	Every-line Composer	Σύνθεση όλων των γραμμών
+	Middle Eastern & South Asian Every-line Composer	Σύνθεση όλων των γραμμών (Μέση Ανατολή και Νότια Ασία)
+	Standard Every-line Composer	Τυπική σύνθεση όλων των γραμμών
 	Exact dash lengths	Ακριβή μήκη παυλών
 	Exceptions (comma separated)	Εξαιρέσεις (χωρισμένες με κόμμα)
 	Exclude	Εξαίρεση
@@ -3954,7 +3955,8 @@ digits	Malayalam	Μαλαγιάλαμ
 	Single Left Quotation Mark	Μονό αριστερό εισαγωγικό
 	Single Quotes:	Μονά εισαγωγικά:
 	Single Right Quotation Mark	Μονό δεξί εισαγωγικό
-	Single-line Composer	Σύνθεση μονής γραμμής
+	Middle Eastern & South Asian Single-line Composer	Σύνθεση μονής γραμμής (Μέση Ανατολή και Νότια Ασία)
+	Standard Single-line Composer	Τυπική σύνθεση μονής γραμμής
 	Toggle Line Composer	Εναλλαγή σύνθεσης γραμμών
 	Sixth Space	Διάστημα ενός έκτου
 	Size Tile to Art	Προσαρμογή μεγέθους πλακιδίου στο σχέδιο
@@ -7448,3 +7450,4 @@ breakText	Glyphs	Γλύφοι
 	Grommets	Τρουκς
 	Grommet Inset	Απόσταση τρουκς από την άκρη
 	Diameter	Διάμετρος
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	το composer πρέπει να είναι "singleLine", "everyLine", "standardSingleLine" ή "standardEveryLine"

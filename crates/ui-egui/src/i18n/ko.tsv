@@ -1656,7 +1656,8 @@ antiAlias	Sharp	날카롭게
 	Every (minutes)	간격 (분)
 	Every option is at its default.	모든 옵션이 기본값입니다.
 	Every option matches {base}.	모든 옵션이 {base}와(과) 같습니다.
-	Every-line Composer	전체 줄 컴포저
+	Middle Eastern & South Asian Every-line Composer	전체 줄 컴포저 (중동·남아시아)
+	Standard Every-line Composer	표준 전체 줄 컴포저
 	Exact dash lengths	정확한 대시 길이
 	Exceptions (comma separated)	예외 (쉼표로 구분)
 	Exclusion	제외
@@ -3245,7 +3246,8 @@ mark-style	Japanese	일본식
 	Simulate Colored Paper	색 용지 시뮬레이션
 	Simulate Paper	용지 시뮬레이션
 	Single Quotes:	작은따옴표:
-	Single-line Composer	한 줄 조판
+	Middle Eastern & South Asian Single-line Composer	한 줄 조판 (중동·남아시아)
+	Standard Single-line Composer	표준 한 줄 조판
 	Toggle Line Composer	줄 조판 방식 전환
 	Size Tile to Art	타일을 아트웍 크기에 맞춤
 	Size/Leading	크기/행간
@@ -7086,3 +7088,4 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer는 "singleLine", "everyLine", "standardSingleLine" 또는 "standardEveryLine"이어야 합니다

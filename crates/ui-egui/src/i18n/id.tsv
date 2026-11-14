@@ -1837,7 +1837,8 @@ digits	Malayalam	Malayalam
 	Tabular Lining	Lining tabular
 	Tabular Oldstyle	Oldstyle tabular
 	Titling Alternates	Alternatif judul
-	Every-line Composer	Komposer tiap baris
+	Middle Eastern & South Asian Every-line Composer	Komposer tiap baris (Timur Tengah dan Asia Selatan)
+	Standard Every-line Composer	Komposer standar tiap baris
 	First-line Left Indent	Indentasi kiri baris pertama
 	Hyphenation…	Pemenggalan kata…
 	Justification…	Justifikasi…
@@ -1869,7 +1870,8 @@ digits	Malayalam	Malayalam
 	East Asian Composition Settings	Pengaturan komposisi Asia Timur
 	Korean Composition Settings	Pengaturan komposisi Korea
 	Select a text object to edit its paragraph attributes.	Pilih objek teks untuk mengedit atribut paragrafnya.
-	Single-line Composer	Komposer satu baris
+	Middle Eastern & South Asian Single-line Composer	Komposer satu baris (Timur Tengah dan Asia Selatan)
+	Standard Single-line Composer	Komposer standar satu baris
 	Toggle Line Composer	Alihkan komposer baris
 	Space After Paragraph	Spasi setelah paragraf
 	Space Before Paragraph	Spasi sebelum paragraf
@@ -6899,3 +6901,4 @@ breakText	Glyphs	Glif
 	Grommets	Mata ayam
 	Grommet Inset	Jarak mata ayam dari tepi
 	Diameter	Diameter
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer harus "singleLine", "everyLine", "standardSingleLine", atau "standardEveryLine"

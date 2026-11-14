@@ -1040,7 +1040,8 @@ font-technology	Variable	Değişken
 	Every (minutes)	Her (dakika)
 	Every option is at its default.	Her seçenek varsayılan değerdedir.
 	Every option matches {base}.	Her seçenek {base} ile eşleşir.
-	Every-line Composer	Her Satır Bestecisi
+	Middle Eastern & South Asian Every-line Composer	Her Satır Bestecisi (Orta Doğu ve Güney Asya)
+	Standard Every-line Composer	Standart Her Satır Bestecisi
 	Exact dash lengths	Tam çizgi uzunlukları
 	Exceptions (comma separated)	İstisnalar (virgülle ayrılmış)
 	Exclude	Hariç tut
@@ -3201,7 +3202,8 @@ digits	Malayalam	Malayalam
 	Single Left Quotation Mark	Tek Sol Tırnak İşareti
 	Single Quotes:	Tek Alıntılar:
 	Single Right Quotation Mark	Tek Sağ Tırnak İşareti
-	Single-line Composer	Tek Satır Oluşturucu
+	Middle Eastern & South Asian Single-line Composer	Tek Satır Oluşturucu (Orta Doğu ve Güney Asya)
+	Standard Single-line Composer	Standart Tek Satır Oluşturucu
 	Toggle Line Composer	Satır Oluşturucuyu Değiştir
 	Sixth Space	Altıncı Uzay
 	Size	Boyut
@@ -7451,3 +7453,4 @@ breakText	Glyphs	Glifler
 	Grommets	Kuşgözleri
 	Grommet Inset	Kuşgözlerinin kenara uzaklığı
 	Diameter	Çap
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer "singleLine", "everyLine", "standardSingleLine" veya "standardEveryLine" olmalıdır

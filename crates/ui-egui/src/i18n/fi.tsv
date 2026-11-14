@@ -1990,7 +1990,8 @@ digits	Malayalam	Malajalam
 	Tabular Lining	Taulukkonumerot
 	Tabular Oldstyle	Vanhanaikaiset taulukkonumerot
 	Titling Alternates	Otsikkovaihtoehdot
-	Every-line Composer	Kaikkien rivien asettelu
+	Middle Eastern & South Asian Every-line Composer	Kaikkien rivien asettelu (Lähi-itä ja Etelä-Aasia)
+	Standard Every-line Composer	Tavallinen kaikkien rivien asettelu
 	First-line Left Indent	Ensimmäisen rivin vasen sisennys
 	Hyphenation…	Tavutus…
 	Words Longer Than:	Sanat, jotka ovat pidempiä kuin:
@@ -2030,7 +2031,8 @@ digits	Malayalam	Malajalam
 	East Asian Composition Settings	Itäaasialaisen ladonnan asetukset
 	Korean Composition Settings	Korean ladonnan asetukset
 	Select a text object to edit its paragraph attributes.	Valitse tekstiobjekti, jonka kappalemääritteitä haluat muokata.
-	Single-line Composer	Yhden rivin asettelu
+	Middle Eastern & South Asian Single-line Composer	Yhden rivin asettelu (Lähi-itä ja Etelä-Aasia)
+	Standard Single-line Composer	Tavallinen yhden rivin asettelu
 	Toggle Line Composer	Vaihda rivien asettelu
 	Space After Paragraph	Väli kappaleen jälkeen
 	Space Before Paragraph	Väli ennen kappaletta
@@ -7530,3 +7532,4 @@ breakText	Glyphs	Merkit
 	Grommets	Purjerenkaat
 	Grommet Inset	Purjerenkaiden etäisyys reunasta
 	Diameter	Halkaisija
+@msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer on oltava "singleLine", "everyLine", "standardSingleLine" tai "standardEveryLine"
