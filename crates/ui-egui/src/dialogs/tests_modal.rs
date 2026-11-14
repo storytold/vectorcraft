@@ -847,3 +847,29 @@ fn offset_path_takes_a_decimal_comma() {
     let offset = app.ui.dialog.as_ref().unwrap().f64("offset", 0.0);
     assert!((offset - mm).abs() < 1e-9, "reopened on 0.1 mm: {offset} pt");
 }
+
+/// #1477: in Preferences, a press on a checkbox and a drag down over the checkboxes under it sets
+/// them all to the state the first one switched to; OK applies them.
+#[test]
+fn preferences_checkboxes_set_by_one_drag() {
+    let ctx = ctx();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    crate::prefs_dialog::open(&mut app, Some("Selection & Anchor Display"));
+    settle(&ctx, &mut app);
+    let texts = frame(&ctx, &mut app, vec![]);
+    let boxes = ["Highlight anchors on mouse over", "Show handles when multiple anchors are selected"];
+    let at = |label: &str| {
+        let r = texts.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label}: {texts:?}")).1;
+        r.left_center() - vec2(11.0, 0.0)
+    };
+    let (first, last) = (at(boxes[0]), at(boxes[1]));
+    let fields = |app: &VectorcraftApp| {
+        let d = app.ui.dialog.as_ref().unwrap();
+        (d.bool("highlightAnchorsOnHover"), d.bool("showHandlesMultipleAnchors"))
+    };
+    assert_eq!(fields(&app), (true, true));
+    drag(&ctx, &mut app, first, last - first);
+    assert_eq!(fields(&app), (false, false), "both cleared by one drag");
+    drag(&ctx, &mut app, last, first - last);
+    assert_eq!(fields(&app), (true, true), "and set again by a drag back up");
+}

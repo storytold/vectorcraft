@@ -1,12 +1,19 @@
 use super::{Color32, CornerRadius, Rect, Response, Sense, Stroke, StrokeKind, Tokens, Ui, Vec2, pos2, vec2};
 
 /// The row of a checkbox or radio button: allocates a 13 pt box plus `text` (already translated),
-/// draws the text and returns the box, the response and the box's border colour.
-fn choice_row(ui: &mut Ui, text: &str, enabled: bool) -> (Rect, Response, Color32) {
+/// draws the text and returns the box, the response and the box's border colour. A checkbox row
+/// (`drag`) also senses drags, for [`drag_toggle`].
+fn choice_row(ui: &mut Ui, text: &str, enabled: bool, drag: bool) -> (Rect, Response, Color32) {
     let t = Tokens::get(ui.ctx());
     let galley = ui.painter().layout_no_wrap(text.to_string(), egui::FontId::proportional(12.5), if enabled { t.text } else { t.text_disabled });
-    let (rect, resp) =
-        ui.allocate_exact_size(vec2(18.0 + galley.size().x, 20.0f32.max(galley.size().y)), if enabled { Sense::click() } else { Sense::hover() });
+    let (rect, resp) = ui.allocate_exact_size(
+        vec2(18.0 + galley.size().x, 20.0f32.max(galley.size().y)),
+        match (enabled, drag) {
+            (true, true) => Sense::click_and_drag(),
+            (true, false) => Sense::click(),
+            (false, _) => Sense::hover(),
+        },
+    );
     let bx = Rect::from_min_size(pos2(rect.left(), rect.center().y - 6.5), Vec2::splat(13.0));
     ui.painter().galley(pos2(bx.right() + 5.0, rect.center().y - galley.size().y / 2.0), galley, t.text);
     let border = if !enabled {
@@ -62,7 +69,8 @@ fn check_row(ui: &mut Ui, text: &str, value: Option<bool>, enabled: bool) -> (bo
 /// [`check_row`] that screen readers call `name` instead of its `text`.
 fn check_row_named(ui: &mut Ui, text: &str, name: &str, value: Option<bool>, enabled: bool) -> (bool, Response) {
     let t = Tokens::get(ui.ctx());
-    let (bx, resp, border) = choice_row(ui, text, enabled);
+    let (bx, resp, border) = choice_row(ui, text, enabled, true);
+    let toggled = enabled && drag_toggle(ui, &resp, value);
     let checked = value == Some(true);
     ui.painter().rect_filled(bx, CornerRadius::same(2), if checked && enabled { t.accent_strong } else { t.input });
     ui.painter().rect_stroke(bx, CornerRadius::same(2), Stroke::new(1.0, border), StrokeKind::Inside);
@@ -82,7 +90,34 @@ fn check_row_named(ui: &mut Ui, text: &str, name: &str, value: Option<bool>, ena
         Some(on) => egui::WidgetInfo::selected(egui::Role::CheckBox, enabled && ui.is_enabled(), on, name),
         None => egui::WidgetInfo::labeled(egui::Role::CheckBox, enabled && ui.is_enabled(), name),
     });
-    (enabled && resp.clicked(), resp)
+    (toggled, resp)
+}
+
+/// The state a drag across checkboxes sets (#1477), while the primary button is down.
+fn drag_target_id() -> egui::Id {
+    egui::Id::unique("checkbox-drag-target")
+}
+
+/// Click or drag across checkboxes (#1477). A click toggles the box. A press and drag toggles it
+/// and keeps its new state; every other checkbox the pointer then goes over takes that state, as
+/// the eye and lock columns of the Layers panel do, until the button is released. `resp` is the
+/// row's response (it senses drags) and `value` the box's state (`None`: mixed, which a drag
+/// leaves alone). Returns true when the box must toggle: the caller flips it, as for a click.
+fn drag_toggle(ui: &Ui, resp: &Response, value: Option<bool>) -> bool {
+    let ctx = ui.ctx();
+    if !ctx.input(|i| i.pointer.primary_down()) {
+        ctx.data_mut(|d| d.remove::<bool>(drag_target_id()));
+    }
+    if resp.drag_started_by(egui::PointerButton::Primary) {
+        ctx.data_mut(|d| d.insert_temp(drag_target_id(), value != Some(true)));
+        return true;
+    }
+    if resp.clicked() {
+        return true;
+    }
+    let Some(target) = ctx.data(|d| d.get_temp::<bool>(drag_target_id())) else { return false };
+    let over = ctx.input(|i| i.pointer.latest_pos()).is_some_and(|p| resp.rect.contains(p));
+    over && value == Some(!target)
 }
 
 /// Radio button in the style of [`check`], with a disabled state. Returns true when clicked.
@@ -99,7 +134,7 @@ pub fn radio_button(ui: &mut Ui, name: &str, selected: bool, enabled: bool) -> b
 /// [`radio`] with its `text` already translated, which screen readers call `name`.
 fn radio_row(ui: &mut Ui, text: &str, name: &str, selected: bool, enabled: bool) -> bool {
     let t = Tokens::get(ui.ctx());
-    let (bx, resp, border) = choice_row(ui, text, enabled);
+    let (bx, resp, border) = choice_row(ui, text, enabled, false);
     let c = bx.center();
     ui.painter().circle(c, 6.0, if selected && enabled { t.accent_strong } else { t.input }, Stroke::new(1.0, border));
     if selected {
@@ -107,4 +142,68 @@ fn radio_row(ui: &mut Ui, text: &str, name: &str, selected: bool, enabled: bool)
     }
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, enabled && ui.is_enabled(), selected, name));
     enabled && resp.clicked()
+}
+
+#[cfg(test)]
+mod drag_toggle_tests {
+    use egui::{Event, PointerButton, Pos2};
+
+    use super::*;
+
+    /// Runs one frame of a column of checkboxes over `state` (`None`: mixed) with `events`,
+    /// toggling a box as its callers do. Returns the rect of each row.
+    fn frame(ctx: &egui::Context, state: &mut [Option<bool>], events: Vec<Event>) -> Vec<Rect> {
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))), events, ..Default::default() };
+        let mut rects = vec![];
+        let mut out = ctx.run_ui(input, |ui| {
+            rects.clear();
+            for v in state.iter_mut() {
+                let (toggled, resp) = check_row(ui, "Box", *v, true);
+                if toggled {
+                    *v = Some(*v != Some(true));
+                }
+                rects.push(resp.rect);
+            }
+        });
+        out.textures_delta.clear();
+        rects
+    }
+
+    fn press(at: Pos2, pressed: bool) -> Event {
+        Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE }
+    }
+
+    /// Moves the pointer from `a` to `b` in small steps, one frame each.
+    fn sweep(ctx: &egui::Context, state: &mut [Option<bool>], a: Pos2, b: Pos2) {
+        for i in 1..=8 {
+            frame(ctx, state, vec![Event::PointerMoved(a + (b - a) * (i as f32 / 8.0))]);
+        }
+    }
+
+    /// #1477: a press on a checkbox and a drag over its neighbours sets them all to the state the
+    /// first one switched to. A box past the drag, and a mixed box, stay as they are.
+    #[test]
+    fn dragging_across_checkboxes_sets_them_like_the_first() {
+        let ctx = egui::Context::default();
+        let mut state = [Some(false), Some(true), None, Some(false), Some(false)];
+        let rects = frame(&ctx, &mut state, vec![]);
+        let at = |i: usize| rects[i].left_center() + vec2(6.0, 0.0);
+        frame(&ctx, &mut state, vec![Event::PointerMoved(at(0)), press(at(0), true)]);
+        sweep(&ctx, &mut state, at(0), at(3));
+        frame(&ctx, &mut state, vec![press(at(3), false)]);
+        frame(&ctx, &mut state, vec![]);
+        assert_eq!(state, [Some(true), Some(true), None, Some(true), Some(false)]);
+        // After the release, moving over a box changes nothing.
+        sweep(&ctx, &mut state, at(3), at(4));
+        assert_eq!(state[4], Some(false));
+        // A drag from a checked box clears the boxes it goes over.
+        frame(&ctx, &mut state, vec![press(at(4), true)]);
+        frame(&ctx, &mut state, vec![press(at(4), false)]);
+        assert_eq!(state[4], Some(true), "a click toggles one box");
+        frame(&ctx, &mut state, vec![Event::PointerMoved(at(4)), press(at(4), true)]);
+        sweep(&ctx, &mut state, at(4), at(0));
+        frame(&ctx, &mut state, vec![press(at(0), false)]);
+        frame(&ctx, &mut state, vec![]);
+        assert_eq!(state, [Some(false), Some(false), None, Some(false), Some(false)]);
+    }
 }
