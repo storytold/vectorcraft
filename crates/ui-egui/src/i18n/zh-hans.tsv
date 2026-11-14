@@ -5994,6 +5994,8 @@ lighting	Light	光源
 	Save Variable Library…	保存变量库…
 @msg	a variable library holds text variables, and the document has none	变量库包含文本变量，而文档中没有文本变量
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	无法将变量 `{name}` 保存到变量库中：请重命名，使其以字母或 `_` 开头，且不含空格或 `-`、`_`、`.` 以外的符号
+@msg	{k} has control characters	{k} 包含控制字符
+@msg	{k} has control characters or line breaks	{k} 包含控制字符或换行
 @msg	data set `{name}` holds a control character, which a variable library can't hold	数据集 `{name}` 包含变量库无法保存的控制字符
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	数据集 `{name}` 的开头或结尾有变量库无法保存的空白字符
 	Make Graph Dynamic	使图表动态化
@@ -9122,7 +9124,6 @@ breakText	Glyphs	字形
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 文件不支持透明度，而该文件会包含 {what}：请先拼合 (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	无法打开 {kind} 图像 (参见 document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` 不在可选项之中
-@msg	{k} has control characters{_1}	{k} 含有控制字符{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} 过长 (最多 {MAX_TEXT} 个字符)
 @msg	{k} must be > 0	{k} 必须 > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} 必须是数字 (pt) 或 "210 mm" 这样的长度

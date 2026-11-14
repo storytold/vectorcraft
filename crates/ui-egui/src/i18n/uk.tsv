@@ -5752,6 +5752,8 @@ lighting	Light	Світло
 	Save Variable Library…	Зберегти бібліотеку змінних…
 @msg	a variable library holds text variables, and the document has none	бібліотека змінних містить текстові змінні, а в документі їх немає
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	змінну `{name}` не можна зберегти в бібліотеці змінних: перейменуйте її так, щоб ім’я починалося з літери або `_` і не містило пробілів і символів, крім `-`, `_` і `.`
+@msg	{k} has control characters	{k} містить керівні символи
+@msg	{k} has control characters or line breaks	{k} містить керівні символи або розриви рядків
 @msg	data set `{name}` holds a control character, which a variable library can't hold	набір даних `{name}` містить керівний символ, який бібліотека змінних не може містити
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	набір даних `{name}` починається або закінчується пробілом, який бібліотека змінних не може містити
 	Make Graph Dynamic	Зробити діаграму динамічною
@@ -8855,7 +8857,6 @@ breakText	Glyphs	Гліфи
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	файли {kind} не мають прозорості, а файл містив би таке: {what}; спочатку зведіть прозорість (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	зображення {kind} не можна відкрити (див. document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` не є одним із варіантів
-@msg	{k} has control characters{_1}	{k} містить керівні символи{_1}
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} задовгий (не більше {MAX_TEXT} символів)
 @msg	{k} must be > 0	{k} має бути > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} має бути числом (pt) або довжиною на зразок "210 mm"
