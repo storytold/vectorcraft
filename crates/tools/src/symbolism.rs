@@ -238,10 +238,15 @@ impl Default for BrushPaintTool {
 }
 
 impl BrushPaintTool {
+    /// The tool's brush, else the document's current brush, skipping a name the document's brush
+    /// library no longer has (a deleted brush), so the stroke is drawn without it.
     fn brush_name(&self, cx: &ToolContext) -> Option<String> {
-        self.brush.clone().or_else(|| cx.doc.unknown.get("currentBrush").and_then(Value::as_str).map(str::to_string))
+        [self.brush.clone(), vectorcraft_brush::current(cx.doc)].into_iter().flatten().find(|n| vectorcraft_brush::find(cx.doc, n).is_some())
     }
     fn map(&self, cx: &ToolContext, acts: Vec<Action>) -> Vec<Action> {
+        if !acts.iter().any(|a| matches!(a, Action::Preview(c, _) if c == "path.freehand")) {
+            return acts;
+        }
         let Some(b) = self.brush_name(cx) else { return acts };
         acts.into_iter()
             .map(|a| match a {
@@ -402,5 +407,24 @@ mod tests {
         assert!(matches!(&a[1], Action::Preview(c, v) if c == "brush.freehand" && v["brush"] == "Charcoal"));
         t.set_option("brush", &json!("Dots"));
         assert_eq!(t.options()["brush"], "Dots");
+    }
+
+    #[test]
+    fn paintbrush_skips_a_brush_the_document_does_not_have() {
+        let (mut d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let drag = |d: &vectorcraft_doc::Document, t: &mut BrushPaintTool| {
+            let cx = cx(d, &s, &p);
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 30.0, 0.0)).swap_remove(1)
+        };
+        d.unknown.insert("currentBrush".into(), json!("Charcoal"));
+        let mut t = BrushPaintTool::default();
+        t.set_option("brush", &json!("Deleted"));
+        let a = drag(&d, &mut t);
+        assert!(matches!(&a, Action::Preview(c, v) if c == "brush.freehand" && v["brush"] == "Charcoal"), "the current brush: {a:?}");
+        d.unknown.insert("currentBrush".into(), json!("Also deleted"));
+        let a = drag(&d, &mut BrushPaintTool::default());
+        assert!(matches!(&a, Action::Preview(c, v) if c == "path.freehand" && v.get("brush").is_none()), "no brush: {a:?}");
     }
 }
