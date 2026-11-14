@@ -149,13 +149,32 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
 }
 
 /// `ids` with each graph series group replaced by the paths directly inside it, as [`paint_targets`] reads a series
-/// group: the graph draws its series groups again with no rows of their own. A series group with no such path, other
-/// ids and the art of a graph design pass through, and the order of `ids` is kept.
+/// group: the graph draws its series groups again with no rows of their own. A graph's Axes group is replaced by the
+/// lines and labels directly inside it, and its Legend group by the labels directly inside it, which the graph keeps
+/// rows for ([`capture_label_rows`]). A group with no such member, other ids and the art of a graph design pass
+/// through, and the order of `ids` is kept.
 pub(crate) fn series_group_marks(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     series_group_marks_where(doc, ids, |_| true)
 }
 
-/// [`series_group_marks`] for the series groups `stands` accepts; the others pass through.
+/// The lines and labels directly in `n` when it is the Axes group of a graph, or the labels directly in it when it is
+/// the graph's Legend group, in paint order. `None` for any other object.
+pub(crate) fn graph_part_members(doc: &Document, n: &Node) -> Option<Vec<NodeId>> {
+    if !matches!(n.kind, NodeKind::Group { .. }) || n.extras().series_index.is_some() {
+        return None;
+    }
+    let axes = match n.name.as_deref() {
+        Some("Axes") => true,
+        Some("Legend") => false,
+        _ => return None,
+    };
+    let spec = doc.parent_of(n.id).and_then(|parent| doc.node(parent)).and_then(|parent| parent.extras().graph.as_deref())?;
+    let member = |c: &Node| matches!(c.kind, NodeKind::Text(_)) || (axes && line_in(spec, n, c).is_some());
+    Some(n.children().into_iter().flatten().filter(|c| member(c)).map(|c| c.id).collect())
+}
+
+/// [`series_group_marks`] for the series groups, Axes groups and Legend groups `stands` accepts; the others pass
+/// through.
 pub(crate) fn series_group_marks_where(doc: &Document, ids: &[NodeId], stands: impl Fn(&Node) -> bool) -> Vec<NodeId> {
     // A series group is a child of a graph with one of the graph's series indexes ([`series_members`]). Each id is
     // looked up through its parent, with no pass over the document: the panels call this while they draw.
@@ -173,6 +192,10 @@ pub(crate) fn series_group_marks_where(doc: &Document, ids: &[NodeId], stands: i
                     group.children().into_iter().flatten().filter(|m| matches!(m.kind, NodeKind::Path { .. })).map(|m| m.id).collect();
                 if marks.is_empty() { out.push(*id) } else { out.extend(marks) }
             }
+            Some(part) if stands(part) => match graph_part_members(doc, part) {
+                Some(members) if !members.is_empty() => out.extend(members),
+                _ => out.push(*id),
+            },
             _ => out.push(*id),
         }
     }

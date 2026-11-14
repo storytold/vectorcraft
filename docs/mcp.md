@@ -790,10 +790,25 @@ look was edited keep their look. Read as a source, by `graphicStyle.new`, `graph
 style link of its own gives the look and the style link of the topmost path directly in it, and a move with
 `appearance.transfer` clears each of those paths; a series group that has one of them is read itself.
 
-The other commands given a series group's id edit the group itself, and the graph does not store what they set on it:
-`transparency.set` and `object.setProps` with an opacity or blend mode for the object, the `effect.*` commands and
-`appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
-group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
+The commands in the paragraph above read a graph's Axes group and Legend group, given by id or selected with Group
+Selection, as they read a series group: the Axes group stands for the axis lines, tick marks, radar rings and labels
+directly in it, and the Legend group for the legend labels directly in it. The graph stores what they set for every
+line and label of each kind, as described below for a line or label given itself, and the groups keep no rows of their
+own. An Axes or Legend group that has a fill or stroke row of its own, or holds no line or label, is edited itself,
+except by `graphicStyle.redefine`, which passes the style to the lines and labels of a linked group whatever the group
+holds. An `index`, `indices` or fill or stroke `item` given an Axes or Legend group whose lines and labels have
+different rows, as the lines and labels of a new graph do, is an error unless `aligned` is true, which makes it a row
+of the stack of the backmost line or label in the group, and `appearance.moveItem` does not move the rows of such a
+group. The graph keeps no graphic style link on its lines and
+labels: they keep the look of a style applied to them, and are unlinked when the graph is drawn again. The commands
+find these groups by their names, so a renamed Axes or Legend group is edited itself.
+
+The other commands given a series group's id, or a graph's Axes or Legend group, edit the group itself, and the graph
+does not store what they set on it: `transparency.set` and `object.setProps` with an opacity or blend mode for the
+object, the `effect.*` commands and `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or
+stroke `item`, which is a row of the group's own stack. `paint.setFill`, `paint.setStroke` and the recolor commands
+given the Axes group store the line rows, as described below. The Appearance panel and `appearance.setActiveItem` read
+the selected group's own rows.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
@@ -852,9 +867,10 @@ On a graph's axis lines and tick marks, and separately on a radar graph's rings,
 the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order, and the line's object
 opacity and blend mode. `paint.setFill`, `paint.setStroke` and the recolor commands also store them when given the
 graph, its Axes group or a group that holds the graph, so the lines keep the paint those commands give a whole graph.
-The other commands store them when given the line itself. `transparency.set` without an `item` and `object.setProps`
-store only the object opacity and blend mode. `appearance.copyFrom` stores the rows whatever it picks up, with or
-without `append`. The recolor commands, `paint.swap` and `paint.default` store a line's rows when they change them. The
+The other commands store them when given the line itself, and the `appearance.*` and graphic style commands and
+`transparency.set` with an `item` also when given the Axes group, as described above. `transparency.set` without an
+`item` and `object.setProps` store only the object opacity and blend mode. `appearance.copyFrom` stores the rows
+whatever it picks up, with or without `append`. The recolor commands, `paint.swap` and `paint.default` store a line's rows when they change them. The
 other commands store them even when the line already showed them, except that rows equal to a kind's default stroke
 (0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
 paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
