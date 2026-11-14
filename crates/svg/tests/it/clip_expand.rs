@@ -20,6 +20,15 @@ fn gradient(kind: GradientKind) -> Appearance {
     Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(g))), Paint::None, 0.0)
 }
 
+/// A fill at half opacity.
+fn half(r: u8, g: u8, b: u8) -> Appearance {
+    let mut a = fill(r, g, b);
+    if let Some(f) = a.fill_mut() {
+        f.opacity = 0.5;
+    }
+    a
+}
+
 /// A document whose clipping group clips a 60×60 red square (30,30)–(90,90) to the blue square
 /// (10,10)–(50,50): most of the art lies outside the clip.
 fn clipped_square(art: Appearance) -> Document {
@@ -185,4 +194,27 @@ fn a_knockout_clip_group_keeps_its_clip_path() {
     let out = export_full(&d, &ExportOptions { expand_clips: true, ..Default::default() }, None);
     assert!(out.svg.contains("<clipPath"), "{}", out.svg);
     assert!(out.warnings.iter().any(|w| w.contains("Expand Clipping Masks")), "{:?}", out.warnings);
+}
+
+#[test]
+fn an_off_clip_group_inside_a_knockout_parent_composites_normally() {
+    // The group is `Off`, so its children composite normally even though the parent knocks out;
+    // written while the parent's knockout state is still in force, their overlaps would be masked.
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let clip = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 90.0)), fill(0, 0, 255));
+    let first = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 20.0, 70.0, 70.0)), half(255, 0, 0));
+    let second = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(40.0, 40.0, 90.0, 90.0)), half(0, 255, 0));
+    let subgroup = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(first), Arc::new(second)], clip: false });
+    let mut group = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(subgroup)], clip: true });
+    group.knockout = Knockout::Off;
+    let mut outer = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(group)], clip: false });
+    outer.knockout = Knockout::On;
+    d.insert(Some(layer), usize::MAX, outer).expect("insert");
+
+    let expanded = export(&d, &ExportOptions { expand_clips: true, ..Default::default() });
+    let kept = export(&d, &ExportOptions::default());
+    assert!(!expanded.contains("<clipPath"), "{expanded}");
+    let diff = max_channel_diff(&render(&expanded), &render(&kept));
+    assert!(diff <= 1, "the Off clip group's children composite normally inside a knockout parent: {diff}");
 }

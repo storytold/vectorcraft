@@ -891,9 +891,9 @@ impl Writer<'_> {
         if let Some(fill) = &paint.fill {
             self.node(fill);
         }
-        for c in &children {
-            self.node(c);
-        }
+        // `Off` inside a knockout parent: the children composite normally, as the `<clipPath>`
+        // branch's `group_children` does.
+        self.group_children(n, &children);
         if let Some(stroke) = &paint.stroke {
             let anonymous = self.anonymous;
             self.anonymous |= paint.fill.is_some();
