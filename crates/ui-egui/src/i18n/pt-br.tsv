@@ -814,6 +814,9 @@ antiAlias	Sharp	Nítido
 	The selected character's font is not available.	A fonte do caractere selecionado não está disponível.
 	No alternates for the selected character.	Nenhuma alternativa para o caractere selecionado.
 	Double-click to replace	Clique duplo para substituir
+	Click to replace	Clique para substituir
+	Show all alternates in the Glyphs panel	Mostrar todas as alternativas no painel Glifos
+	Show Character Alternates	Mostrar Alternativas de Caractere
 	Select one character with the Type tool first.	Primeiro selecione um caractere com a ferramenta Texto.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} é um glifo de {font}, não da fonte do texto selecionado ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertence a {base} (U+{base_code}) {place}; sua seleção é {sel} (U+{code}).
@@ -1200,6 +1203,7 @@ antiAlias	Sharp	Nítido
 	Format	Formato
 	Format Options	Opções de Formato
 	Format Settings	Configurações de Formato
+	Format Settings…	Configurações de Formato…
 	Format:	Formato:
 	Formats:	Formatos:
 	Fractions	Frações
@@ -2394,8 +2398,8 @@ digits	Malayalam	Malaiala
 	Release Opacity Mask	Liberar Máscara de Opacidade
 	Release Selection	Liberar Seleção
 	Release with Perspective	Liberar com Perspectiva
-	Relink	Revinculcar
-	Relink to Folder…	Revinculcar Pasta…
+	Relink	Revincular
+	Relink to Folder…	Revincular Pasta…
 	Each Link Separately	Cada Vínculo Separadamente
 	Selected Instances	Instâncias Selecionadas
 	All Instances	Todas as Instâncias
@@ -2404,7 +2408,7 @@ digits	Malayalam	Malaiala
 @msg	scope each and paths go together: paths lists entries of ids and path, in place of ids, path and folder	scope each e paths andam juntos: paths lista entradas com ids e path, no lugar de ids, path e folder
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	a entrada {i} de paths precisa de path e ids (ids de objeto que nenhuma outra entrada tenha)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder recebe path: os outros vínculos ausentes são procurados na pasta desse arquivo
-	Relink…	Revinculcar…
+	Relink…	Revincular…
 	Reload Plug-ins	Recarregar Plug-ins
 	Remove	Remover
 	Remove Anchor Points	Remover Pontos de Ancoragem
@@ -3963,10 +3967,10 @@ axis	Both	Ambos
 @msg	`{k}` must be [x, y]	`{k}` deve ser [x, y]
 @msg	`{name}` has no options	`{name}` não tem opções
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` é um espaço de trabalho integrado; escolha outro nome
-@msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` é uma cor de seleção: os matizes se aplicam a cores globais e especiais
+@msg	`{name}` is a process colour: tints apply to global and spot colours	`{name}` é uma cor de processo: os matizes se aplicam a cores globais e especiais
 @msg	`{name}` is no recovery entry name	`{name}` não é o nome de uma entrada de recuperação
 @msg	`{name}` isn't a colour swatch	`{name}` não é uma amostra de cor
-@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	uma cor de seleção não pode colorir uma imagem em escala de cinza com transparência: use uma cor especial, preto ou branco
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	uma cor de processo não pode colorir uma imagem em escala de cinza com transparência: use uma cor especial, preto ou branco
 @msg	`{path}` must be a bool or an object of bools	`{path}` deve ser um booleano ou um objeto de booleanos
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` não é uma cor (#rrggbb ou o nome de uma predefinição)
 @msg	`{tool}` isn't a Liquify tool	`{tool}` não é uma ferramenta de Liquidificar
@@ -6589,7 +6593,7 @@ axis	Y Axis	Eixo Y
 @plural	Result: {n}|Results: {n}	Resultado: {n}|Resultados: {n}
 @msg	select one object	selecione um objeto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A edição global funciona com demarcadores, demarcadores compostos, instâncias de símbolos e grupos deles
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nenhum objeto semelhante encontrado (cópias giradas ou refletidas não são correspondidas); altere as opções de edição global e tente novamente
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nenhum objeto semelhante encontrado (cópias refletidas não são correspondidas); altere as opções de edição global e tente novamente
 @msg	Global Edit is off	A edição global está desativada
 @msg	only an object of the Global Edit other than the one it started from can be left out	só é possível deixar fora da edição global um objeto diferente daquele com que ela começou
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ou um intervalo como 1, 3-5, não {v}
@@ -7656,6 +7660,9 @@ swatch	Yellow Green	Verde-amarelado
 	Open Tutorial Sample	Abrir Amostra do Tutorial
 	Finish Tutorial	Concluir Tutorial
 	Next Tutorial	Próximo Tutorial
+	Show Learn Tab	Mostrar Guia de Aprender
+	Show Skill	Mostrar Habilidade
+	Back One Level	Voltar um Nível
 	Back to Skills	Voltar às Habilidades
 @msg	tutorial `{id}` has no practice sample	o tutorial `{id}` não tem amostra de prática
 @msg	open the practice sample of `{id}` first (see learn.openSample)	abra primeiro a amostra de prática de `{id}` (veja learn.openSample)
@@ -9513,3 +9520,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	turn on at least one side	ative pelo menos um lado
 @msg	with no hem and no grommets there is nothing to mark	sem bainha e sem ilhoses não há nada para marcar
 @msg	{saving} failed: {e}	{saving} falhou: {e}
+	Nest Shapes…	Aninhar formas…
+	Nest Shapes	Aninhar formas
+	Roll	Rolo

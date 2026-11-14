@@ -1642,6 +1642,9 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Czcionka zaznaczonego znaku jest niedostępna.
 	No alternates for the selected character.	Brak alternatyw dla zaznaczonego znaku.
 	Double-click to replace	Kliknij dwukrotnie, aby zastąpić
+	Click to replace	Kliknij, aby zastąpić
+	Show all alternates in the Glyphs panel	Pokaż wszystkie alternatywy w panelu Glify
+	Show Character Alternates	Pokaż alternatywy znaku
 	Select one character with the Type tool first.	Najpierw zaznacz jeden znak narzędziem Tekst.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} to glif czcionki {font}, a nie czcionki zaznaczonego tekstu ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} należy do znaku {base} (U+{base_code}) {place}; Twoje zaznaczenie to {sel} (U+{code}).
@@ -2448,6 +2451,7 @@ digits	Malayalam	Malajalam
 	Export Asset	Eksportuj zasób
 	Export to:	Eksportuj do:
 	Format Settings	Ustawienia formatu
+	Format Settings…	Ustawienia formatu…
 	Formats:	Formaty:
 	Full Document	Cały dokument
 	Include Bleed	Uwzględnij spad
@@ -6529,7 +6533,7 @@ axis	Y Axis	Oś Y
 @plural	Result: {n}|Results: {n}	Wynik: {n}|Wyniki: {n}|Wyniki: {n}
 @msg	select one object	zaznacz jeden obiekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edycja globalna działa na ścieżkach, ścieżkach złożonych, wystąpieniach symboli i ich grupach
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
 @msg	Global Edit is off	Edycja globalna jest wyłączona
 @msg	only an object of the Global Edit other than the one it started from can be left out	z edycji globalnej można wykluczyć tylko obiekt inny niż ten, od którego się zaczęła
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
@@ -7324,6 +7328,9 @@ breakText	Glyphs	Glify
 	Open Tutorial Sample	Otwórz przykład samouczka
 	Finish Tutorial	Zakończ samouczek
 	Next Tutorial	Następny samouczek
+	Show Learn Tab	Pokaż kartę panelu Nauka
+	Show Skill	Pokaż umiejętność
+	Back One Level	Wróć o jeden poziom
 	Back to Skills	Powrót do umiejętności
 @msg	tutorial `{id}` has no practice sample	samouczek `{id}` nie ma przykładu do ćwiczeń
 @msg	open the practice sample of `{id}` first (see learn.openSample)	najpierw otwórz przykład do ćwiczeń samouczka `{id}` (patrz learn.openSample)
@@ -9179,6 +9186,9 @@ breakText	Glyphs	Glify
 @msg	{what} can't be intertwined	{what} nie można przeplatać
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} nie mieści się na papierze wraz ze spadem i znacznikami
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}: wydruk zająłby ponad {MAX_TILES} kafelków: zmniejsz skalę
+	Nest Shapes…	Rozmieść kształty…
+	Nest Shapes	Rozmieść kształty
+	Roll	Rolka
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Efekty 3D wymagają skończonych współrzędnych w zakresie 100 milionów punktów
