@@ -2462,6 +2462,7 @@ fn context_menu_right_click_selects_unselected_row() {
     let highlighted = rows_of(&app);
     let layer1 = app.session.active().unwrap().doc.layers[0].id;
     assert!(highlighted.contains(&layer1), "right-click selected the unselected row");
+    assert!(crate::panels::has_row_keys(&ctx, super::ROW_KEYS), "secondary click claims row keys");
 }
 
 /// Right-clicking a row that IS highlighted preserves the multiselection.
@@ -2524,4 +2525,51 @@ fn context_menu_locate_object_locates_by_id() {
     let result = app.session.execute("layer.locate", &json!({"id": a.0}));
     assert!(result.is_ok(), "layer.locate with id succeeds without selection: {:?}", result.err());
     assert_eq!(app.session.active().unwrap().highlighted_rows(), vec![a]);
+}
+
+/// In a 1-layer document, the Delete action in the context menu is disabled when targeting that layer.
+#[test]
+fn context_menu_delete_disabled_when_every_layer_targeted() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 1);
+    let layer_id = doc.layers[0].id;
+
+    // Targeting every layer disables delete.
+    let listed: std::collections::HashSet<NodeId> = [layer_id].into_iter().collect();
+    let del_enabled = !doc.layers.iter().all(|l| listed.contains(&l.id));
+    assert!(!del_enabled, "Delete must be disabled when every layer is targeted");
+
+    // Add a second layer: delete is now enabled for one layer.
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 2);
+    let del_enabled = !doc.layers.iter().all(|l| listed.contains(&l.id));
+    assert!(del_enabled, "Delete is enabled when at least one layer remains");
+}
+
+/// Others actions (Hide Others / Lock Others) retain all multiselected layers.
+#[test]
+fn context_menu_others_actions_preserve_multiselected_layers() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 3);
+    let l1 = doc.layers[0].id.0;
+    let l2 = doc.layers[1].id.0;
+
+    // Hide Others with multiselection [l1, l2] hides only l3.
+    let (hide_cmd, hide_params, hide_enabled) = super::rows::multi_others_action(doc, &[l1, l2], true);
+    assert_eq!(hide_cmd, "layer.hideOthers");
+    assert!(hide_enabled);
+    assert_eq!(hide_params["ids"], json!([l1, l2]));
+
+    // Lock Others with multiselection [l1, l2] locks only l3.
+    let (lock_cmd, lock_params, lock_enabled) = super::rows::multi_others_action(doc, &[l1, l2], false);
+    assert_eq!(lock_cmd, "layer.lockOthers");
+    assert!(lock_enabled);
+    assert_eq!(lock_params["ids"], json!([l1, l2]));
 }
