@@ -36,6 +36,16 @@ Any static file server works for `dist/web`, for example `python3 -m http.server
 
 URL flag: `?webgl` forces the WebGL2 backend.
 
+To build and serve the web app entirely in Docker, run from the repository root:
+
+```sh
+docker build --load -t vectorcraft-web:local .
+docker run --rm -p 8080:8080 vectorcraft-web:local
+```
+
+Open http://localhost:8080/. See [Docker hosting](../packaging/web/README.md#docker) for
+HTTPS/reverse-proxy deployment and browser limitations.
+
 How the web shell (`apps/vectorcraft-web/src/web.rs`) differs from desktop:
 
 - **Open** sets `Services::open_async`, which shows `rfd::AsyncFileDialog`. The bytes arrive in `Services::inbox`, which the app drains every frame.

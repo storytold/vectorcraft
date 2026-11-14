@@ -12,6 +12,61 @@ static site in `vectorcraft-web-<version>/`:
 
 There is no server-side code. Upload the folder's contents anywhere that serves static files.
 
+## Docker
+
+> The Docker recipe (`Dockerfile`, `.dockerignore`, `packaging/web/nginx.conf`) is
+> **community-maintained**: it is not built in CI or used for releases, so it can lag behind the
+> official web build above. Fixes are welcome.
+
+From the repository root:
+
+```sh
+docker build --load -t vectorcraft-web:local .
+docker run -d --name vectorcraft-web --restart unless-stopped \
+  -p 8080:8080 vectorcraft-web:local
+```
+
+Open **http://localhost:8080/**. The multi-stage `Dockerfile` builds the existing Rust/Wasm
+app with Trunk, then copies only the static site into NGINX.
+
+### Docker Compose
+
+If you prefer Compose, run these commands from the repository root. Docker Compose builds the
+image from the local source tree, publishes port `8080`, and restarts the container unless it
+has been explicitly stopped:
+
+```sh
+docker compose up --build -d
+```
+
+Open **http://localhost:8080/** to use VectorCraft. To check the service status and health check:
+
+```sh
+docker compose ps
+docker compose logs -f vectorcraft-web
+```
+
+Stop and remove the container with:
+
+```sh
+docker compose down
+```
+
+The included `compose.yaml` uses the local image name `vectorcraft-web:local` and maps host
+port `8080` to container port `8080`. If port 8080 is already in use, set `PORT=8081`
+(e.g. `PORT=8081 docker compose up -d`) or change the host side of the mapping in
+`compose.yaml`, for example `"8081:8080"`, and then open **http://localhost:8081/**.
+The first build downloads the Rust and WebAssembly toolchain and dependencies, so it can take
+several minutes. Subsequent builds reuse Cargo caches. The builder supports Linux amd64 and arm64;
+the default Rust version is the stable release CI used when the `Dockerfile` was last updated.
+
+The runtime runs as the `nginx` user on port **8080**, with a `/healthz` endpoint and Docker
+health check. It serves precompressed gzip assets when available and dynamically compresses
+WebAssembly and JavaScript responses, along with immutable hashed assets and an HTML page that
+revalidates after deployments. No Rust installation, Node.js, database, GPU passthrough, or
+document volume is needed on the host.
+
+
 ## Any path works
 
 All URLs in `index.html` are relative (`public_url = "./"` in `apps/vectorcraft-web/Trunk.toml`),
