@@ -840,6 +840,24 @@ fn an_opacity_sort_objects_stores_the_frontmost_mark_it_changes() {
     assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.6));
 }
 
+/// A Sort Objects that gives series marks the opacities they already have changes nothing: the value the graph stores
+/// stays and no undo step is made, even when the evenly stepped percentage differs from a mark's in the last digits.
+#[test]
+fn an_opacity_sort_objects_that_changes_no_mark_keeps_the_stored_opacity() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("object.setProps", &json!({"id": marks[1].0, "opacity": 65})).unwrap();
+    s.execute("object.setProps", &json!({"id": marks[0].0, "opacity": 30})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.3));
+    // From left to right the columns have 30%, 65% and 100%, the values an even step from 30% to 100% gives them.
+    let undo = s.doc().unwrap().history.undo.len();
+    let ids = [marks[0].0, marks[1].0, marks[2].0];
+    s.execute("addon.arrange.sort", &json!({"ids": ids, "by": "x", "apply": "opacity", "distribute": true})).unwrap();
+    let opacities: Vec<f32> = marks[..3].iter().map(|m| s.doc().unwrap().doc.node(*m).unwrap().opacity).collect();
+    assert_eq!(opacities, [0.3, 0.65, 1.0]);
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.3));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
+}
+
 /// An object opacity, blend mode, fill, stroke and weight that Global Edit gives a mark of another series from the mark
 /// that was edited are stored on the graph for that series in the same undo step, and every mark of the series has them
 /// when the graph is drawn again.
