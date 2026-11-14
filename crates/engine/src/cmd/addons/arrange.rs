@@ -516,16 +516,18 @@ fn sort(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let wanted: Vec<(&Sorted, f64)> = rank.iter().filter_map(|i| items.get(*i)).zip(values).collect();
     if apply == "opacity" {
-        if wanted.iter().all(|(o, v)| (o.opacity - v).abs() < 1e-6) {
+        // The opacity each object is given, as stored; an object whose stored opacity it already is has not changed.
+        let given: Vec<(NodeId, f32)> = wanted.iter().map(|(o, v)| (o.id, (v / 100.0) as f32)).collect();
+        let changed: Vec<NodeId> = given.iter().filter(|(id, a)| d.node(*id).is_some_and(|n| n.opacity != *a)).map(|(id, _)| *id).collect();
+        if changed.is_empty() {
             return Ok(count);
         }
         s.edit("Sort Objects", |d, _| {
-            for (o, v) in &wanted {
-                if let Some(n) = d.node_mut(o.id) {
-                    n.opacity = (v / 100.0) as f32;
+            for (id, a) in &given {
+                if let Some(n) = d.node_mut(*id) {
+                    n.opacity = *a;
                 }
             }
-            let changed: Vec<NodeId> = wanted.iter().filter(|(o, v)| (o.opacity - v).abs() >= 1e-6).map(|(o, _)| o.id).collect();
             keep_series_opacity(d, &changed);
             Ok(())
         })?;
