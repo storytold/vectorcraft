@@ -9717,7 +9717,9 @@ and turn, shear and flip about it (`origin`).
 
 WebAssembly plug-ins ([plugins.md](plugins.md)) are reached through commands; the desktop app and an unconfined
 `vectorcraft-cli` keep the ones `plugin.install` installs in a `Plug-ins` folder next to the preferences and install
-them again at startup (`plugin.remove` deletes them there):
+them again at startup (`plugin.remove` deletes them there). A window or process locks `disabled.lock` in that folder
+while it changes it, so installs, removals, grants and plug-in settings from two of them do not mix; when the file can't
+be locked, `plugin.install` and `plugin.remove` fail and change nothing:
 `plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
 schema, defaults). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
 undo step; it may change, delete or add objects, and the result is selected). A filter whose manifest lists `inputs`
