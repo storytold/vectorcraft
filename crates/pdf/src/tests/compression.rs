@@ -292,6 +292,11 @@ fn tagged(img: &DynamicImage, icc: &[u8], format: ImageFormat) -> Vec<u8> {
             enc.set_icc_profile(icc.to_vec()).unwrap();
             img.write_with_encoder(enc).unwrap();
         }
+        ImageFormat::Jpeg => {
+            let mut enc = image::codecs::jpeg::JpegEncoder::new(&mut out);
+            enc.set_icc_profile(icc.to_vec()).unwrap();
+            img.write_with_encoder(enc).unwrap();
+        }
         _ => {
             let mut enc = image::codecs::png::PngEncoder::new(&mut out);
             enc.set_icc_profile(icc.to_vec()).unwrap();
@@ -423,11 +428,12 @@ fn tagged_tiffs_keep_their_icc_profile() {
         let spaces = export(&tiff(&colour(), &rgb), json!({"output": {"conversion": "destination", "destination": destination}}));
         assert!(spaces.len() == 1 && spaces[0].icc.as_deref() != Some(rgb.as_slice()), "converted to {destination}: {spaces:?}");
     }
-    // PDF/X-1a has device colours only: a tagged gray TIFF or PNG is written in DeviceGray, kept as
-    // it is, resampled or compressed with JPEG.
+    // PDF/X-1a allows no ICC-based color spaces: a tagged gray TIFF, PNG or JPEG is written in
+    // DeviceGray, kept as it is, resampled or compressed with JPEG.
     let compressions = [json!({}), json!({"gray": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}), json!({"gray": {"compression": "jpeg"}})];
     let png = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Png), "image/png");
-    for (format, d) in [("TIFF", tiff(&colour().grayscale(), &gray)), ("PNG", png)] {
+    let jpeg = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Jpeg), "image/jpeg");
+    for (format, d) in [("TIFF", tiff(&colour().grayscale(), &gray)), ("PNG", png), ("JPEG", jpeg)] {
         for compression in &compressions {
             let mut settings: PdfSettings =
                 serde_json::from_value(json!({"standard": "pdfX1a", "compatibility": "1.3", "compression": compression.clone()})).unwrap();

@@ -144,8 +144,8 @@ pub(crate) fn from_decoded(img: DynamicImage, icc: Option<Vec<u8>>, interpolate:
 }
 
 /// Image `bytes` decoded within [`limits`], with the ICC profile it carries ([`source_icc`]) when
-/// `profiles` allows it (not in PDF/X-1a, which has device colours only), as [`from_decoded`]
-/// writes it. `None` when it can't be decoded.
+/// `profiles` allows it (not in PDF/X-1a, which allows no ICC-based color spaces), as
+/// [`from_decoded`] writes it. `None` when it can't be decoded.
 pub(crate) fn decoded_image(bytes: &[u8], interpolate: bool, sixteen_bit: bool, profiles: bool) -> Option<Image> {
     from_decoded(decoded(bytes)?, profiles.then(|| source_icc(bytes)).flatten(), interpolate, sixteen_bit)
 }
@@ -371,7 +371,7 @@ fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> Dynamic
 /// Encoded image `bytes` placed `size` points wide and high, as the Compression settings `c` ask:
 /// resampled when its resolution is above the threshold, compressed with ZIP or JPEG, its colours
 /// converted by `convert` (colour images). Pixels that keep their colours keep the ICC profile
-/// they carry when `profiles` allows it (not in PDF/X-1a, which has device colours only).
+/// they carry when `profiles` allows it (not in PDF/X-1a, which allows no ICC-based color spaces).
 /// `interpolate` lets viewers smooth it. An image that can't be decoded is kept as it is.
 pub(crate) fn recode(
     bytes: &[u8],
