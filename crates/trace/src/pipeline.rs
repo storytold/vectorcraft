@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use super::layers::{Layers, parallel_map_at_most};
 use super::params::{Method, Mode, TraceParams};
 use super::raster::{Raster, TraceError};
-use super::{AtomicUsize, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, gradient, group, logo, quantize, smooth};
+use super::{AtomicUsize, PathData, Quantized, TRANSPARENT, TracedGradient, TracedShape, deblock, gradient, group, logo, quantize, smooth};
 
 /// One traced shape: an outer contour plus its holes, filled with `color`, or (with `stroke`)
 /// lines stroked with it.
@@ -265,7 +265,8 @@ impl std::ops::Deref for Source<'_> {
 /// A trace with its colour layers found and ordered, none of them traced yet.
 struct Prepared<'a> {
     src: Source<'a>,
-    /// A photo's copy with its noise smoothed away, traced in its place (see `smooth`).
+    /// A copy with a JPEG's block edges (see `deblock`) or a photo's noise (see `smooth`) smoothed
+    /// away, traced in its place.
     smoothed: Option<Raster>,
     params: TraceParams,
     q: Quantized,
@@ -444,8 +445,20 @@ fn prepare<'a>(src: Source<'a>, params: &TraceParams, max_anchors: usize, steps:
         Some(name) if params.ignore_white => Some(logo::parse_hex(name).ok_or_else(|| TraceError::BadPalette(name.clone()))?),
         _ => None,
     };
-    // A photo is traced from a copy with its noise smoothed away (see `smooth`).
-    let smoothed = (params.mode != Mode::BlackAndWhite && quantize::continuous_tone(&src)).then(|| smooth::smoothed(&src));
+    // A JPEG's 8 x 8 block edges are smoothed away first (see `deblock`).
+    let strength = match params.mode {
+        Mode::BlackAndWhite => deblock::BLACK_AND_WHITE,
+        _ if params.colors > 16 => deblock::MANY_COLORS,
+        _ => deblock::FEW_COLORS,
+    };
+    // A photo is traced from a copy with its noise smoothed away (see `smooth`); the deblocked copy is
+    // dropped once it is smoothed.
+    let photo = |img: &Raster| params.mode != Mode::BlackAndWhite && quantize::continuous_tone(img);
+    let smoothed = match deblock::deblocked(&src, strength) {
+        Some(deblocked) if photo(&deblocked) => Some(smooth::smoothed(&deblocked)),
+        Some(deblocked) => Some(deblocked),
+        None => photo(&src).then(|| smooth::smoothed(&src)),
+    };
     let img = smoothed.as_ref().unwrap_or(&*src);
     go_on()?;
     // Gradients are found first and kept out of the palette: no colour is spent on bands of them.

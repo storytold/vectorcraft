@@ -49,6 +49,7 @@
 
 mod centerline;
 mod contour;
+mod deblock;
 mod fit;
 mod gradient;
 mod group;
