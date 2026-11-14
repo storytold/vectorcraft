@@ -23,6 +23,7 @@ pub(in crate::ai_editing) const LARGE_CANVAS_STYLES: &str = "on a large canvas, 
 pub(in crate::ai_editing) const PANEL_STYLES: &str = "graphic styles with gradient or pattern fills, with fills, strokes or effects the editing data can't hold as a graphic style, with a name another style has, with names over 1,024 bytes, or past 4,096 styles, are left out of the editing data for other apps";
 pub(in crate::ai_editing) const PANEL_EMPTY: &str =
     "a Graphic Styles panel with no style written opens from the editing data with a new document's styles";
+pub(in crate::ai_editing) const WARPED_IMAGES: &str = "images with a Warp after the first 256 envelopes and images with a Warp are written as their drawn look, without their Warp, in the editing data for other apps";
 pub(in crate::ai_editing) const STYLE_LINKS: &str = "links to graphic styles are left out of the editing data for other apps on type, images, symbol instances, knockout shapes and other objects that aren't written with their graphic style";
 
 /// How many objects of `doc`'s layers, opacity masks and symbols are linked to a graphic style.
@@ -719,6 +720,23 @@ impl Writer<'_> {
         items_keep && m.children().is_none_or(|c| c.iter().all(|c| self.member_keeps_outline(c)))
     }
 
+    /// Whether `orig` may be written with its art style as far as the reader's checks go: an image
+    /// with a Warp takes one of them, as an envelope does ([`Self::envelope`]); with none left, it is
+    /// written as its drawn look, with a warning. One whose pixels can't be read takes none: it is
+    /// written as its gray outline ([`Self::image`]).
+    pub(super) fn check_left(&mut self, orig: &Node) -> bool {
+        if !warped_image(orig) || self.checks_left > 0 {
+            return true;
+        }
+        if let NodeKind::Image(im) = &orig.kind
+            && !self.image_readable(&self.doc.shown_image(orig, im))
+        {
+            return true;
+        }
+        self.warn(WARPED_IMAGES);
+        false
+    }
+
     /// Object `n` (as baking left it; `orig` before baking) with the style `name`: its lock and
     /// hidden state; its drawn look (a group of its vector art as baking left it, without shadows,
     /// glows or feathers, the object's transparency
@@ -729,7 +747,8 @@ impl Writer<'_> {
     /// `1 (name) XW`.
     /// The look's group and the object itself are counted first ([`Self::take_objects`]): without
     /// room for them, nothing is written, and the object counts neither as written with its graphic
-    /// style nor as written with a brush on its stroke.
+    /// style nor as written with a brush on its stroke. An image written as an image takes one of
+    /// the reader's checks ([`Self::check_left`]).
     pub(super) fn styled_object(&mut self, n: &Node, orig: &Node, name: &str) {
         let own = match &orig.kind {
             NodeKind::Path { path, .. } => super::object_count(path.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()),
@@ -784,9 +803,12 @@ impl Writer<'_> {
         match &orig.kind {
             NodeKind::Path { path, rule, .. } => self.styled_outline(orig, path, *rule, fit, xy),
             NodeKind::Compound { rule, .. } => self.styled_outline(orig, &compound_path(orig), *rule, fit, xy),
+            // The reader checks the object only when it is an image, not its gray outline.
             NodeKind::Image(im) => {
                 let was = std::mem::replace(&mut self.styled_copy, on_layers);
-                self.image(&self.doc.shown_image(orig, im), xy);
+                if self.image(&self.doc.shown_image(orig, im), xy) {
+                    self.checks_left = self.checks_left.saturating_sub(1);
+                }
                 self.styled_copy = was;
             }
             NodeKind::Group { children, .. } => {

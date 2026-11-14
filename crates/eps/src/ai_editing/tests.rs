@@ -9785,6 +9785,119 @@ fn envelopes_past_the_readers_checks_are_written_as_their_art() {
     assert!(!notes.iter().any(|n| n == crate::import::ENVELOPE_DRAWN), "{notes:?}");
 }
 
+/// A document of `envelopes` envelopes and `images` embedded images with one Warp, the images first
+/// when `images_first`, saved and opened again: the live envelopes, the images with their Warp live
+/// and all the objects it opens with, the save's warnings and the open's notes.
+fn envelopes_and_warped_images(envelopes: usize, images: usize, images_first: bool) -> (usize, usize, usize, Vec<String>, Vec<String>) {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let add_images = |doc: &mut Document| {
+        for _ in 0..images {
+            let photo = warped_photo(doc, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]);
+            doc.insert(Some(layer), usize::MAX, photo).unwrap();
+        }
+    };
+    if images_first {
+        add_images(&mut doc);
+    }
+    for _ in 0..envelopes {
+        let points = [(30.0, 10.0), (170.0, 0.0), (30.0, 90.0), (170.0, 90.0)].map(kurbo::Point::from).to_vec();
+        let kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+        let envelope = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+        doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    }
+    if !images_first {
+        add_images(&mut doc);
+    }
+    let (p, warnings) = private_data(&doc, &opts()).unwrap();
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    let a = back.layers[0].children().unwrap();
+    let live = a.iter().filter(|n| matches!(n.kind, NodeKind::Envelope { .. })).count();
+    let warped = a.iter().filter(|n| matches!(n.kind, NodeKind::Image(_)) && n.appearance.effects.iter().any(|e| e.id == "warp.arc")).count();
+    (live, warped, a.len(), warnings, notes)
+}
+
+/// Images with a Warp take the reader's checks as envelopes do: past them, an image is written as
+/// its drawn look, with a warning, and the file opens with every object written live still live.
+#[test]
+fn warped_images_past_the_readers_checks_are_written_as_their_drawn_look() {
+    // GUARDS: images with a Warp were written live past the checks the envelopes left, and the
+    // file opened with the last one as its drawn look and no warning on saving.
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let (live, warped, all, warnings, notes) = envelopes_and_warped_images(limit - 1, 2, false);
+    assert_eq!((live, warped, all), (limit - 1, 1, limit + 1), "{warnings:?} {notes:?}");
+    assert!(warnings.iter().any(|w| w == writer::WARPED_IMAGES), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(!notes.iter().any(|n| n.contains("drawn look") || n == crate::import::ENVELOPE_DRAWN), "{notes:?}");
+}
+
+/// An image with a Warp whose pixels can't be read is written as its gray outline, which the reader
+/// doesn't check: it leaves its check to the objects after it.
+#[test]
+fn a_warped_image_written_as_its_outline_takes_no_check() {
+    // GUARDS: an image written as its gray outline took a check, and the image after it lost its Warp.
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for _ in 0..limit - 1 {
+        let points = [(30.0, 10.0), (170.0, 0.0), (30.0, 90.0), (170.0, 90.0)].map(kurbo::Point::from).to_vec();
+        let kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+        let envelope = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+        doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    }
+    let arc = || fx("warp.arc", serde_json::json!({"bend": 40.0}));
+    let mut broken = image_node(&mut doc, ImageBlob::png(b"not a png".to_vec()), (8, 8), Affine::new([10.0, 0.0, 0.0, 10.0, 20.0, 10.0]), None);
+    broken.appearance = Appearance { effects: vec![arc()], ..Appearance::default() }.into();
+    doc.insert(Some(layer), usize::MAX, broken).unwrap();
+    let photo = warped_photo(&mut doc, vec![arc()]);
+    doc.insert(Some(layer), usize::MAX, photo).unwrap();
+    let (p, warnings) = private_data(&doc, &opts()).unwrap();
+    assert!(warnings.iter().any(|w| w == writer::IMAGES), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::WARPED_IMAGES), "{warnings:?}");
+    let (back, notes) = crate::ai_alone(&p.data).unwrap();
+    let a = back.layers[0].children().unwrap();
+    let warped = a.iter().filter(|n| matches!(n.kind, NodeKind::Image(_)) && n.appearance.effects.iter().any(|e| e.id == "warp.arc")).count();
+    assert_eq!(warped, 1, "{notes:?}");
+}
+
+/// Past the reader's checks, an image with a Warp whose pixels can't be read is still written as its
+/// gray outline, with the warning for its pixels and not the one for the checks.
+#[test]
+fn an_unreadable_warped_image_past_the_checks_is_warned_about_its_pixels() {
+    // GUARDS: an image whose pixels can't be read was warned about as past the checks.
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    for _ in 0..limit {
+        let points = [(30.0, 10.0), (170.0, 0.0), (30.0, 90.0), (170.0, 90.0)].map(kurbo::Point::from).to_vec();
+        let kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] };
+        let envelope = envelope_node(&mut doc, kind, 50.0, false, EnvelopeOptions::NEW);
+        doc.insert(Some(layer), usize::MAX, envelope).unwrap();
+    }
+    let mut broken = image_node(&mut doc, ImageBlob::png(b"not a png".to_vec()), (8, 8), Affine::new([10.0, 0.0, 0.0, 10.0, 20.0, 10.0]), None);
+    broken.appearance = Appearance { effects: vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))], ..Appearance::default() }.into();
+    doc.insert(Some(layer), usize::MAX, broken).unwrap();
+    let (_, warnings) = private_data(&doc, &opts()).unwrap();
+    assert!(warnings.iter().any(|w| w == writer::IMAGES), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::WARPED_IMAGES), "{warnings:?}");
+}
+
+/// Envelopes after images with a Warp get the checks the images left: past them, an envelope is
+/// written as its art, with a warning.
+#[test]
+fn envelopes_get_the_checks_warped_images_left() {
+    // GUARDS: envelopes were written live past the checks the images with a Warp before them left.
+    let limit = crate::import::ENVELOPE_CHECKS;
+    let (live, warped, all, warnings, notes) = envelopes_and_warped_images(limit - 1, 2, true);
+    assert_eq!((live, warped, all), (limit - 2, 2, limit + 1), "{warnings:?} {notes:?}");
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w == writer::WARPED_IMAGES), "{warnings:?}");
+    assert!(!notes.iter().any(|n| n.contains("drawn look") || n == crate::import::ENVELOPE_DRAWN), "{notes:?}");
+}
+
 /// Every Envelope Options switch and the ends of Fidelity come back as saved.
 #[test]
 fn envelope_options_and_fidelity_are_read_back() {

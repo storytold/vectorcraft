@@ -92,26 +92,33 @@ impl Samples {
 }
 
 impl Writer<'_> {
+    /// Whether [`Self::image`] can read `im`'s pixels, rather than write its gray outline.
+    pub(super) fn image_readable(&self, im: &ImageObject) -> bool {
+        self.doc.image_blob(im).and_then(Samples::of).is_some()
+    }
+
     /// Image object `im` of transparency `xy`: embedded, a raster ([`Self::raster`]); linked, a
     /// placed file with a preview ([`Self::placed_file`]), except in a part of the data written on
     /// `%_` lines (other than a styled object's copy on the layers, [`Self::styled_object`]) and in
     /// a symbol's art. One whose pixels can't be read is its outline filled mid gray. Where the art is
-    /// cut to a clipping path, the image is in a clipping group of that path.
-    pub(super) fn image(&mut self, im: &ImageObject, xy: Xy) {
+    /// cut to a clipping path, the image is in a clipping group of that path. True when the image
+    /// is written as an image.
+    pub(super) fn image(&mut self, im: &ImageObject, xy: Xy) -> bool {
         let doc = self.doc;
         let Some((samples, deep)) = doc.image_blob(im).and_then(Samples::of) else {
             let bounds = PathData::from_bezpath(&(im.xf * Rect::new(0.0, 0.0, f64::from(im.width), f64::from(im.height)).to_path(0.1)));
             self.warn(IMAGES);
-            return self.fill_object(&bounds, FillRule::NonZero, &FillLayer::new(Paint::solid(Color::gray(0.5))), xy);
+            self.fill_object(&bounds, FillRule::NonZero, &FillLayer::new(Paint::solid(Color::gray(0.5))), xy);
+            return false;
         };
         // A region that has nothing left hides the image.
         if self.clip.as_ref().is_some_and(|c| c.subpaths.iter().all(|sp| sp.anchors.is_empty())) {
-            return;
+            return false;
         }
         // The image, and where it is cut, the clipping group and its clipping path.
         let clipping = self.clip.as_ref().map_or(0, |c| 1 + super::object_count(c.subpaths.iter().filter(|sp| !sp.anchors.is_empty()).count()));
         if !self.take_objects(1 + clipping) {
-            return;
+            return false;
         }
         if deep {
             self.warn(IMAGE_DEPTH);
@@ -157,6 +164,7 @@ impl Writer<'_> {
             self.end_group("Q", Xy::PLAIN);
         }
         self.clip = cut;
+        true
     }
 
     /// An embedded image whose pixels `xf` places in the document: `%AI5_File:`,
