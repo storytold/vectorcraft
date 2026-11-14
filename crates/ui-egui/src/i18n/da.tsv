@@ -163,6 +163,7 @@
 @msg	`select` must be true or false	`select` skal være true eller false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` og `maxAnchors` skal være heltal
 @msg	`{key}` must be a number not below 0	`{key}` skal være et tal, der ikke er under 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` skal være fire tal, der ikke er under 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` skal være [x, y, width, height]: fire endelige tal, hvor width og height ikke er negative
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` er større end `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	angiv mindst én af `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
