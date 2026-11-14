@@ -566,7 +566,13 @@ key, and report a key left out or null as missing. The optional `group` of `live
 (`x` of `shape.rectangle`, `pos` of `guide.add`, `index`, `x` and `y` of the `object.mesh.*` and
 `object.envelope.setMeshPoint` point commands, and the others like them) refuses a value that is not a number with
 `` `x` must be a number, not "40" ``, naming the key and showing the value as given, and reports a key left out or null
-as `` missing number `x` ``; it changes nothing either way. A command that leaves out an object selected inside a
+as `` missing number `x` ``; it changes nothing either way. A command that needs a whole number of 0 or more (`index`
+of `appearance.setItem`, `anchor` of `path.removeAnchor` and `addon.pen.removePoint`, `sourceDocument` of
+`edit.dropSelection`, `index` of `document.activate`, `to` of `document.move`, and the others like them) refuses a
+value such as `"3"`, `2.5`, `-1` or `true` with `` `index` must be a whole number ``, naming the key, and reports a key
+left out or null as missing (such as `` missing integer `index` ``). An optional one, such as `subpath`, keeps its default when
+left out or null; `appearance.setActiveItem` reads a null `index` as clearing the active item.
+A command that leaves out an object selected inside a
 selected group also leaves it out when `ids` list it together with a group that holds it. Every command that takes
 `ids` (or `slices`, for the slice commands) refuses a list with an entry that is not a non-negative integer, or a value
 that is not a list, and changes nothing; it does not act on the other entries. The error for an entry names the key,
@@ -5161,7 +5167,7 @@ path by its control points when one of them has an x or y that is infinite or la
 the canvas (coordinates out of range)".
 `path.curvatureEdit`, `path.removeAnchor`, `path.convertAnchor`, `path.reshapeSegment`, `path.split`,
 `path.setHandle`, `path.moveAnchor` and `path.insertAnchor` edit subpath 0 when `subpath` is absent or null, and refuse a `subpath` that
-is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
+is not a whole number of 0 or more, such as 1.5, -1 or "1" ("`subpath` must be a whole number"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
 `path.moveAnchor` to the point the anchor is at, and `path.setHandle` to the point the handle is at on an anchor that
 keeps its kind, leave the document as it is and record no undo step.
