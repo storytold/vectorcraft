@@ -6812,6 +6812,7 @@ version = "0.24.1"
 dependencies = [
  "craft-docpath",
  "craft-svg",
+ "data-url",
  "flate2",
  "image",
  "kurbo 0.13.1",
