@@ -11,7 +11,9 @@ use super::{
 // ---------- Pencil / Paintbrush ----------
 
 /// Fit a freehand polyline: drop jitter, build a spline through the samples (sharp turns stay
-/// corners) and simplify it to `tol`.
+/// corners) and simplify it to `tol`. A closed stroke is fitted as the open one is and closed by a
+/// straight segment from its end back to its start: fitting round the gap would curve that segment
+/// on from both ends, past them and back.
 fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
     let min = (tol * 0.3).max(vectorcraft_tools::draw2::MIN_FIT_TOLERANCE * 0.3);
     let (Some(&p0), Some(&pn)) = (pts.first(), pts.last()) else { return SubPath::new(vec![], closed) };
@@ -41,15 +43,26 @@ fn fit_freehand(pts: &[Point], tol: f64, closed: bool) -> SubPath {
             (kept[i], corner)
         })
         .collect();
-    let sp = vectorcraft_tools::draw2::catmull_rom(&marked, closed);
+    let sp = vectorcraft_tools::draw2::catmull_rom(&marked, false);
     if sp.anchors.len() < 3 {
-        return sp;
+        // Two anchors closed would run back over the line itself.
+        return SubPath::new(sp.anchors, closed && n > 2);
     }
     let fitted = po::simplify_with(
         &PathData::single(sp.clone()),
         &SimplifyOptions { tolerance: tol, corner_angle_deg: 60.0, straight_lines: false, ..Default::default() },
     );
-    fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp)
+    let mut anchors = fitted.subpaths.into_iter().next().filter(|s| s.anchors.len() >= 2).unwrap_or(sp).anchors;
+    if closed {
+        // No handle on either side of the closing segment.
+        if let Some(l) = anchors.last_mut() {
+            l.h_out = l.p;
+        }
+        if let Some(f) = anchors.first_mut() {
+            f.h_in = f.p;
+        }
+    }
+    SubPath::new(anchors, closed)
 }
 
 /// The path of a freehand stroke: fitted at `tol` ([`fit_freehand`]), or with no `tol` the points
