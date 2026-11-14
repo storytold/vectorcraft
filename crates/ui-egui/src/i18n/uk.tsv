@@ -906,6 +906,9 @@ font-technology	Variable	Варіативні
 	The selected character's font is not available.	Шрифт виділеного символу недоступний.
 	No alternates for the selected character.	Виділений символ не має альтернатив.
 	Double-click to replace	Двічі клацніть для заміни
+	Click to replace	Клацніть для заміни
+	Show all alternates in the Glyphs panel	Показати всі альтернативи на панелі «Гліфи»
+	Show Character Alternates	Показувати альтернативи символу
 	Select one character with the Type tool first.	Спершу виділіть один символ інструментом «Текст».
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — гліф шрифту {font}, а не шрифту виділеного тексту ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} належить символу {base} (U+{base_code}) {place}; виділено символ {sel} (U+{code}).
@@ -1353,6 +1356,7 @@ file-filter	Templates	Шаблони
 	Format	Формат
 	Format Options	Параметри формату
 	Format Settings	Параметри формату
+	Format Settings…	Параметри формату…
 	Format:	Формат:
 	Formats:	Формати:
 	Fractional Widths	Дробові ширини
@@ -6280,7 +6284,7 @@ axis	Y Axis	Вісь Y
 @plural	Result: {n}|Results: {n}	Результат: {n}|Результати: {n}|Результати: {n}
 @msg	select one object	виберіть один об’єкт
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальне редагування працює з контурами, складеними контурами, екземплярами символів та їхніми групами
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
 @msg	Global Edit is off	Глобальне редагування вимкнено
 @msg	only an object of the Global Edit other than the one it started from can be left out	виключити з глобального редагування можна лише об’єкт, відмінний від того, з якого воно почалося
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
@@ -7077,6 +7081,9 @@ breakText	Glyphs	Гліфи
 	Open Tutorial Sample	Відкрити приклад уроку
 	Finish Tutorial	Завершити урок
 	Next Tutorial	Наступний урок
+	Show Learn Tab	Показати вкладку панелі «Навчання»
+	Show Skill	Показати навичку
+	Back One Level	На рівень назад
 	Back to Skills	Назад до навичок
 @msg	tutorial `{id}` has no practice sample	урок `{id}` не має навчального прикладу
 @msg	open the practice sample of `{id}` first (see learn.openSample)	спочатку відкрийте навчальний приклад уроку `{id}` (див. learn.openSample)
@@ -8928,3 +8935,6 @@ breakText	Glyphs	Гліфи
 @msg	turn on at least one side	увімкніть принаймні одну сторону
 @msg	with no hem and no grommets there is nothing to mark	без підгину й люверсів немає чого розмічати
 @msg	{saving} failed: {e}	{saving}: не вдалося: {e}
+	Nest Shapes…	Розкладка фігур…
+	Nest Shapes	Розкладка фігур
+	Roll	Рулон

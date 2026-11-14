@@ -891,6 +891,9 @@ font-technology	Variable	Variabel
 	The selected character's font is not available.	Die Schrift des ausgewählten Zeichens ist nicht verfügbar.
 	No alternates for the selected character.	Keine Alternativen für das ausgewählte Zeichen.
 	Double-click to replace	Doppelklicken zum Ersetzen
+	Click to replace	Klicken zum Ersetzen
+	Show all alternates in the Glyphs panel	Alle Alternativen im Bedienfeld „Glyphen“ anzeigen
+	Show Character Alternates	Zeichenalternativen anzeigen
 	Select one character with the Type tool first.	Wählen Sie zuerst mit dem Text-Werkzeug ein Zeichen aus.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} ist eine Glyphe von {font}, nicht der Schrift, in der der ausgewählte Text gesetzt ist ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} gehört zu {base} (U+{base_code}) {place}; Ihre Auswahl ist {sel} (U+{code}).
@@ -1329,6 +1332,7 @@ file-filter	Templates	Vorlagen
 	Format	Format
 	Format Options	Formatoptionen
 	Format Settings	Formateinstellungen
+	Format Settings…	Formateinstellungen…
 	Format:	Format:
 	Formats:	Formate:
 	Fractional Widths	Gebrochene Breiten
@@ -6266,7 +6270,7 @@ axis	Y Axis	Y-Achse
 @plural	Result: {n}|Results: {n}	Ergebnis: {n}|Ergebnisse: {n}
 @msg	select one object	wählen Sie ein Objekt aus
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden, Symbolinstanzen und Gruppen daraus
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gedrehte oder gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut
 @msg	Global Edit is off	Globale Bearbeitung ist nicht aktiv
 @msg	only an object of the Global Edit other than the one it started from can be left out	nur ein Objekt der globalen Bearbeitung außer dem, mit dem sie begonnen hat, kann ausgeschlossen werden
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all oder ein Bereich wie 1, 3-5, nicht {v}
@@ -7063,6 +7067,9 @@ breakText	Glyphs	Glyphen
 	Open Tutorial Sample	Übungsdatei des Lernprogramms öffnen
 	Finish Tutorial	Lernprogramm abschließen
 	Next Tutorial	Nächstes Lernprogramm
+	Show Learn Tab	Registerkarte in Lernen anzeigen
+	Show Skill	Fertigkeit anzeigen
+	Back One Level	Eine Ebene zurück
 	Back to Skills	Zurück zu den Fertigkeiten
 @msg	tutorial `{id}` has no practice sample	das Lernprogramm `{id}` hat keine Übungsdatei
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öffnen Sie zuerst die Übungsdatei von `{id}` (siehe learn.openSample)
@@ -9036,3 +9043,6 @@ breakText	Glyphs	Glyphen
 	Grommets	Ösen
 	Grommet Inset	Randabstand der Ösen
 	Diameter	Durchmesser
+	Nest Shapes…	Formen verschachteln…
+	Nest Shapes	Formen verschachteln
+	Roll	Rolle
