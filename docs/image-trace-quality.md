@@ -259,9 +259,10 @@ leaves 1.4 specks (was 0.5), and Outline's stroked centre lines lie 0.095 px off
 anchors a stroke (was 3.0). ΔE changes by 0.01 or less except Line Art and Outline (2.62 and 2.61 to 2.66
 and 2.67); edge ΔE rises in 8 of the 12, for example 4.79 to 5.25 (16 Colors), 3.98 to 4.46 (3 Colors) and 9.46 to 10.03
 (Black and White Logo). On synthetic shapes and photos of 300 to 4,000 px traced outside this harness,
-High Fidelity Photo makes 41% fewer anchors and 16 Colors 15% fewer; the mean pixel difference of each
-trace changes by −0.23 to +0.25 of a level; 16 Colors leaves 91 staircases of steps of 2 px or more where it left 85, and High
-Fidelity Photo 473 where it left 461. The tables below are the previous measurement, not a rerun.
+High Fidelity Photo makes 41% fewer anchors and 16 Colors 20% fewer; the mean pixel difference of each
+trace changes by −0.23 to +0.26 of a level; 16 Colors leaves 41 staircases of steps of 2 px or more where it left 40, High
+Fidelity Photo 440 where it left 391, and Low Fidelity Photo 96 where it left 77. The tables below are the previous
+measurement, not a rerun.
 Test: `presets_have_their_paths_corners_and_noise` in `crates/trace/src/tests.rs`.
 
 ## A simpler contour walk
