@@ -8698,8 +8698,9 @@ Settings…'s OK, shown with the East Asian options) replaces the active documen
 step, and records none when nothing changes. `cannotStart` lists the characters that never start a line, `cannotEnd`
 those that never end one, and `hanging` the punctuation that Burasagari hangs outside a line's end, each as text, one
 character after another. `inseparable` lists sequences of 2 to 16 characters that a line never breaks inside while
-Bunri-Kinshi is on. Each category keeps each character once, sorted, and holds at most 4096 characters (a sequence
-counts each of its characters); a control or space character in a category fails the call. Names are trimmed, 1 to 128 characters, unique in any
+Bunri-Kinshi is on. `cannotStart`, `cannotEnd` and `hanging` keep each character once, sorted; `inseparable` keeps each
+sequence once, sorted, so a sequence may repeat a character (`……`). Each category holds at most 4096 characters (a
+sequence counts each of its characters); a control or space character in a category fails the call. Names are trimmed, 1 to 128 characters, unique in any
 case and never None, Hard or Soft; a document holds at most 256 sets. These limits are VectorCraft's own. A set with
 the name of a set the document has (any case) and no `from` edits that set; `from` names the set it renames. Every
 paragraph and paragraph style using an edited set takes its new characters and name, and those using a set left out
