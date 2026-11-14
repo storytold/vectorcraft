@@ -30,6 +30,7 @@ mod clipflavours;
 mod clippaint;
 mod cmdsplit;
 mod cmykflatten;
+mod colorcontrast;
 mod colorguide;
 mod colorguidelib;
 mod colorize;

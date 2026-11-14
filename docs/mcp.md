@@ -629,8 +629,11 @@ and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
 shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel}`, and both settings are kept with
-the preferences.
+the list return an error and change nothing. `{"contrast": true}` shows Show Contrast's row under the wheel or the
+box, `contrastFor` (`normalText`, `largeText` or `graphics`) picks the category its AA and AAA results are for, and
+`contrastBackground` (a color, or `null` for the color behind the selection) pins the background it measures against,
+as `color.contrast` below answers it. The command returns `{view, channel, contrast, contrastFor,
+contrastBackground}`, and the settings are kept with the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
@@ -956,6 +959,30 @@ or `"document"` for the document's swatches) every colour snaps to the library's
 panel's Limit to Library does (`ui.colorGuideLimit`); Recolor Artwork's `limitTo` takes the same values. A `limitTo`
 that is not a string, such as `5`, names no library and gets the same error as an unknown name; `null` or `""` sets no
 limit.
+
+`color.contrast {color?, against?, opacity?}` answers the WCAG 2 contrast ratio
+([definition](https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio)) of a color against a background, from 1 to 21, and
+whether it meets AA and AAA for normal text (4.5:1 and 7:1), large text (3:1 and 4.5:1) and graphics (3:1, AA only):
+`{ratio, against, normalText: {aa, aaa}, largeText: {aa, aaa}, graphics: {aa}}`. The results compare the unrounded
+ratio. `color` defaults to the active Fill or Stroke proxy's color (its selected gradient stop or freeform point; for
+a picked object of a dynamic symbol instance, its solid color mixed towards the fill that stains the instance), at
+the opacity it is drawn with (the object's opacity times that of its groups and layer, and for a picked object of a
+dynamic symbol instance also of the instance and the groups of the symbol's art around it, of its fill or stroke row,
+which type's character paint does not use, and of a stop or point; a translucent group or layer draws the art inside
+it, the art behind the object included, over what is outside it) and with the blend modes it is drawn with (its
+fill or stroke row's, the object's and those of its groups and layer, innermost first, each blending the result with
+the background; the modes inside an object, group or layer that isolates its blending do not apply);
+`opacity` (0 to 100) replaces that opacity. A given `color` is drawn in Normal mode, at `opacity` or fully opaque.
+`against` takes a color, or `"below"` (the default, also for `null`): the color VectorCraft draws at the center of the
+selection's bounds with the selected objects hidden, as the canvas shows it (locked art, opacity, blend modes and
+images included; template layers and guides left out, as exports leave them out; the artboard's white where nothing
+is drawn); a picked object of a dynamic symbol instance hides only itself, and the color is read at its own center.
+These are errors: `"below"` with nothing selected; a "?" proxy (hidden objects count there, as in the Color panel);
+selected objects that draw one color with different blend modes, or at different opacities without `opacity` (with
+`"below"`, also in different translucent groups or layers), where hidden objects do not count; and a proxy of None, a
+pattern or a hidden row without `color`. `against` in the answer is the background as a working RGB `#rrggbb`, the form
+`against` takes; the sampled background is rounded to 8 bits, so giving it back answers the same ratio. Headless MCP
+answers it too.
 
 Color Themes (local only: no online service) keeps five-colour themes in the preferences. `colorTheme.save
 {colors: [...]}` saves up to five colours as they are, `colorTheme.save {color, rule}` saves the five-colour theme a

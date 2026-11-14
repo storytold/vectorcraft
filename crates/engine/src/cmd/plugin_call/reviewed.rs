@@ -702,6 +702,7 @@ pub(super) const DENIED: &[&str] = &[
     "addon.cleanup.splitText",
     "addon.pathtools.movePointsTogether",
     "addon.pen.nextSegment",
+    "color.contrast",
     "effect.refreshDeferred",
     "graphicStyle.setOptions",
     "object.blend.createSpine",

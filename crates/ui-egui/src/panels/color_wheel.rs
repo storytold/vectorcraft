@@ -11,16 +11,22 @@
 //! channel strip at its right, for the channel picked under Box Channel (Hue, Saturation,
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
 //! Picker's axes. The view and the channel are kept with the preferences (`ui.colorWheel`).
+//!
+//! Panel menu › Show Contrast adds a row under the wheel or the box with the WCAG 2 contrast ratio
+//! (<https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio>) of the color against the color drawn
+//! behind the selection, or against a color pinned with Contrast Background › Current Color, and
+//! whether it meets AA and AAA for the category picked under Contrast For (`color.contrast`).
 
 use egui::{Ui, UiBuilder, vec2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms};
+use vectorcraft_color::wcag::{self, Category};
 use vectorcraft_color::{Color, Paint, hsb_to_rgb, rgb_to_hsb};
 use vectorcraft_doc::{ColorMode, NodeId};
 
 use super::color::{Target, apply, wheel_target};
-use super::{pstate, set_pstate};
+use super::{color_json, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::color_picker::Channel;
 use crate::widgets::{self, FieldAxis, Live, SliderValue, menu_item};
@@ -67,6 +73,16 @@ pub struct Settings {
     pub view: View,
     #[serde(serialize_with = "serialize_channel", deserialize_with = "deserialize_channel")]
     pub channel: Channel,
+    /// Show Contrast: the contrast row under the wheel or the box.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub contrast: bool,
+    /// Contrast For: the category whose AA and AAA results the row shows.
+    #[serde(serialize_with = "serialize_category", deserialize_with = "deserialize_category")]
+    pub contrast_for: Category,
+    /// Contrast Background › Current Color: the pinned background; None for the color behind the
+    /// selection.
+    #[serde(deserialize_with = "deserialize_background")]
+    pub contrast_background: Option<Color>,
 }
 
 fn deserialize_view<'de, D: serde::Deserializer<'de>>(d: D) -> Result<View, D::Error> {
@@ -83,6 +99,29 @@ fn deserialize_channel<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Channel
     Ok(v.as_str().and_then(Channel::parse).unwrap_or_default())
 }
 
+fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    Ok(<Value as Deserialize>::deserialize(d)?.as_bool().unwrap_or_default())
+}
+
+fn serialize_category<S: serde::Serializer>(c: &Category, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(c.id())
+}
+
+fn deserialize_category<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Category, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_str().and_then(Category::parse).unwrap_or_default())
+}
+
+/// A pinned background as saved (`{model, …}`) or as `ui.colorWheel` takes it (any color the
+/// paint commands take); anything else reads as no pin.
+fn background_value(v: &Value) -> Option<Color> {
+    serde_json::from_value(v.clone()).ok().or_else(|| vectorcraft_engine::cmd::color_value(v))
+}
+
+fn deserialize_background<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Color>, D::Error> {
+    Ok(background_value(&<Value as Deserialize>::deserialize(d)?))
+}
+
 /// Serde reader for the saved settings ([`crate::UiState::color_wheel`]): a value that is not an
 /// object reads as the defaults, so it doesn't lose the rest of the preferences.
 pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Settings, D::Error> {
@@ -90,11 +129,13 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?}`: show the wheel or the box, and pick the box's channel. Keys
-/// left out keep their values; params that are not an object, another key or a value off the list
-/// are an error and change nothing. → the settings.
+/// `ui.colorWheel {view?, channel?, contrast?, contrastFor?, contrastBackground?}`: show the wheel
+/// or the box, pick the box's channel, and set the contrast row, its category and its pinned
+/// background (`contrastBackground: null` unpins it). Keys left out keep their values; params that
+/// are not an object, another key or a value off the list are an error and change nothing. → the
+/// settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    const KEYS: [&str; 2] = ["view", "channel"];
+    const KEYS: [&str; 5] = ["view", "channel", "contrast", "contrastFor", "contrastBackground"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -113,11 +154,40 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         None | Some(Value::Null) => {}
         Some(v) => set.channel = v.as_str().and_then(Channel::parse).ok_or("`channel` must be hue, saturation, brightness, red, green or blue")?,
     }
+    match p.get("contrast") {
+        None | Some(Value::Null) => {}
+        Some(v) => {
+            let key = "contrast";
+            set.contrast = v.as_bool().ok_or_else(|| format!("`{key}` must be true or false"))?;
+        }
+    }
+    match p.get("contrastFor") {
+        None | Some(Value::Null) => {}
+        Some(v) => {
+            let key = "contrastFor";
+            let ids: Vec<&str> = Category::ALL.iter().map(|c| c.id()).collect();
+            set.contrast_for = v.as_str().and_then(Category::parse).ok_or_else(|| format!("`{key}` must be one of {}", ids.join(", ")))?;
+        }
+    }
+    match p.get("contrastBackground") {
+        None => {}
+        Some(Value::Null) => set.contrast_background = None,
+        Some(v) => {
+            let key = "contrastBackground";
+            set.contrast_background = Some(background_value(v).ok_or_else(|| format!("`{key}` must be a color or {}", "null"))?);
+        }
+    }
     app.ui.color_wheel = set;
     Ok(json!(app.ui.color_wheel))
 }
 
-/// The panel menu: Wheel View and Box View, and Box Channel while the box shows.
+/// A Contrast For category's menu label in the interface language.
+pub(super) fn category_name(c: Category) -> &'static str {
+    tl!(c.label())
+}
+
+/// The panel menu: Wheel View and Box View, Box Channel while the box shows, Show Contrast,
+/// Contrast For and Contrast Background.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -133,6 +203,28 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
             }
         });
+    });
+    ui.separator();
+    if menu_item(ui, tl!("Show Contrast"), true, set.contrast) {
+        command(app, &json!({ "contrast": !set.contrast })).ok();
+    }
+    ui.menu_button(format!("   {}", tl!("Contrast For")), |ui| {
+        for c in Category::ALL {
+            if menu_item(ui, category_name(c), true, set.contrast_for == c) {
+                command(app, &json!({ "contrastFor": c.id() })).ok();
+            }
+        }
+    });
+    ui.menu_button(format!("   {}", tl!("Contrast Background")), |ui| {
+        if menu_item(ui, tl!("Behind Selection"), true, set.contrast_background.is_none()) {
+            command(app, &json!({ "contrastBackground": null })).ok();
+        }
+        let current = wheel_target(app, ui).color();
+        if menu_item(ui, tl!("Current Color"), current.is_some(), set.contrast_background.is_some())
+            && let Some(c) = current
+        {
+            command(app, &json!({ "contrastBackground": color_json(&c) })).ok();
+        }
     });
 }
 
@@ -207,6 +299,132 @@ fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) ->
 
 /// Panel state: the HSB picked last, its [`Owner`] and the display sRGB of the color it stored.
 const MEMORY: &str = "color-wheel-hsb";
+/// Panel state: the color behind the selection, as `#rrggbb`, with the [`BehindKey`] it was read for.
+const BEHIND: &str = "color-wheel-behind";
+/// Panel state: the contrast row's `color.contrast` answer, with the [`RatioKey`] it was asked for.
+const RATIO: &str = "color-wheel-ratio";
+/// The side of the contrast row's background chip.
+const CHIP: f32 = 16.0;
+
+/// What the color behind the selection depends on: the document and its revision, the selected
+/// objects, the picked object of a dynamic symbol instance, the on-screen Appearance of Black and
+/// the color settings ([`under`]).
+type BehindKey = (u64, u64, Vec<NodeId>, Option<Vec<u32>>, String, Under);
+/// What the contrast row's answer depends on: the background, the active proxy's paint (with nothing
+/// selected it is the default for new art, which no revision counts), the document, its revision,
+/// the selection and its picked symbol object, the proxy, the appearance item, the selected
+/// gradient stop and freeform point, the on-screen Appearance of Black and the color settings.
+pub(super) type RatioKey =
+    (String, String, Option<(u64, u64)>, Vec<NodeId>, Option<Vec<u32>>, bool, Option<usize>, Option<usize>, Option<usize>, String, Under);
+
+/// The active color settings and profiles generation, which change how a color displays without
+/// a document revision (Edit › Color Settings, a document's assigned profiles).
+pub(super) type Under = (cms::ColorSettings, u64);
+
+fn under() -> Under {
+    (cms::active_settings(), cms::profiles_generation())
+}
+
+/// The path of the picked object of a dynamic symbol instance, if one is picked.
+fn picked_part(st: &vectorcraft_engine::DocState) -> Option<Vec<u32>> {
+    st.selection.symbol_part.as_ref().map(|sp| sp.path.clone())
+}
+
+/// The background the contrast row measures against: the pinned color, else the color
+/// `color.contrast` reads behind the selection, kept per document revision and selection, and kept
+/// as it is while an interaction is in progress (the selection being dragged is hidden from it).
+/// None with nothing selected.
+fn background(app: &mut VectorcraftApp, ui: &Ui) -> Option<Color> {
+    if let Some(c) = app.ui.color_wheel.contrast_background {
+        return Some(c);
+    }
+    let st = app.session.active()?;
+    let key: BehindKey = (st.uid, st.revision, st.selection.objects.clone(), picked_part(st), app.session.prefs.black_on_screen.clone(), under());
+    // During an interaction only the revision may differ: another document, selection or setting is
+    // read again.
+    let same_but_revision = |k: &BehindKey| k.0 == key.0 && k.2 == key.2 && k.3 == key.3 && k.4 == key.4 && k.5 == key.5;
+    let hex = match pstate::<Option<(BehindKey, Option<String>)>>(ui.ctx(), BEHIND) {
+        Some((k, hex)) if k == key || (app.session.in_interaction() && same_but_revision(&k)) => hex,
+        _ => {
+            // Any opaque color reads the background; only `against` is used.
+            let r = app.session.execute("color.contrast", &json!({ "color": "#000000" })).ok();
+            let hex = r.and_then(|r| r["against"].as_str().map(str::to_string));
+            set_pstate(ui.ctx(), BEHIND, Some((key, hex.clone())));
+            hex
+        }
+    };
+    // `against` is written in working RGB, the form a color takes.
+    Color::from_hex(&hex?)
+}
+
+/// The contrast row: the background's chip, the ratio cut off at two decimals and the AA and AAA
+/// results for the chosen category; a dash when there is no background or no color to measure.
+/// Without a pinned background the row asks `color.contrast` for the color behind the selection
+/// (`against: "below"`), also during an interaction, so translucent groups and layers count as the
+/// command counts them; the chip then shows the background in the answer, else the pinned color or
+/// the one kept by [`background`].
+fn contrast_row(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let category = app.ui.color_wheel.contrast_for;
+    let pinned = app.ui.color_wheel.contrast_background.is_some();
+    let against = background(app, ui);
+    let sampled = !pinned;
+    let answer = against.as_ref().and_then(|bg| {
+        let st = app.session.active();
+        let key: RatioKey = (
+            if sampled { "below".to_string() } else { format!("{bg:?}") },
+            format!("{:?}", super::active_paint(app)),
+            st.map(|d| (d.uid, d.revision)),
+            st.map(|d| d.selection.objects.clone()).unwrap_or_default(),
+            st.and_then(picked_part),
+            app.session.fill_active,
+            app.session.appearance_item(),
+            app.session.selected_stop(),
+            app.session.selected_freeform_point(),
+            app.session.prefs.black_on_screen.clone(),
+            under(),
+        );
+        match pstate::<Option<(RatioKey, Option<Value>)>>(ui.ctx(), RATIO) {
+            Some((k, r)) if k == key => r,
+            _ => {
+                let against = if sampled { json!("below") } else { color_json(bg) };
+                let r = app.session.execute("color.contrast", &json!({ "against": against })).ok();
+                set_pstate(ui.ctx(), RATIO, Some((key, r.clone())));
+                r
+            }
+        }
+    });
+    let resp = ui
+        .horizontal(|ui| {
+            let (rect, _) = ui.allocate_exact_size(vec2(CHIP, CHIP), egui::Sense::hover());
+            // The chip shows the background the ratio was measured against.
+            let measured = answer.as_ref().filter(|_| sampled).and_then(|r| r["against"].as_str()).and_then(Color::from_hex);
+            match measured.or(against) {
+                Some(c) => widgets::swatch_tile(ui, rect, &Paint::solid(c), false, false),
+                None => widgets::swatch_tile(ui, rect, &Paint::None, false, false),
+            }
+            let Some(ratio) = answer.as_ref().and_then(|r| r["ratio"].as_f64()) else {
+                ui.label("—");
+                return;
+            };
+            ui.label(wcag::ratio_text(ratio));
+            let (aa, aaa) = category.passes(ratio);
+            let result = |pass: bool| if pass { tl!("Pass") } else { tl!("Fail") };
+            ui.label(format!("AA {}", result(aa)));
+            if let Some(aaa) = aaa {
+                ui.label(format!("AAA {}", result(aaa)));
+            }
+        })
+        .response;
+    let mut tip = tl!(
+        "WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11)."
+    )
+    .to_string();
+    if !pinned {
+        tip.push(' ');
+        tip.push_str(tl!("The background is read at the center of the selection."));
+    }
+    resp.on_hover_text(tip);
+}
 
 /// What the HSB picked last belongs to: the document, the selected objects or text characters,
 /// the appearance item, the proxy, the gradient stop or freeform point, its paint, and the color
@@ -344,6 +562,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             pick = Some(([hsb[0], x, 1.0 - y], field_phase));
         }
     });
+    if app.ui.color_wheel.contrast {
+        contrast_row(app, ui);
+    }
     let Some((hsb, phase)) = pick else { return };
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);

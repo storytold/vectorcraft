@@ -746,6 +746,8 @@ mod tests_color_wheel;
 #[cfg(test)]
 mod tests_color_wheel_box;
 #[cfg(test)]
+mod tests_color_wheel_contrast;
+#[cfg(test)]
 mod tests_constrain;
 #[cfg(test)]
 mod tests_css_properties;
