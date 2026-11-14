@@ -841,12 +841,22 @@ pub(crate) fn too_large_note(bytes: &[u8]) -> Option<String> {
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
         return Some(format!("an image of {w} × {h} pixels is too large to draw"));
     }
-    let d = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_decoder().ok()?;
+    let reader = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    let format = reader.format()?;
+    let d = reader.into_decoder().ok()?;
     let (w, h) = d.dimensions();
     // The allowance also counts the pixels as RGBA: an image of fewer than 4 bytes a pixel (gray,
     // gray with alpha, RGB) takes more than the decoder counts (#1717).
     let rgba_over = u64::from(w) * u64::from(h) > MAX_RASTER_ALLOC / 4;
-    (rgba_over || d.total_bytes() > MAX_RASTER_ALLOC).then(|| format!("an image of {w} × {h} pixels is too large to draw"))
+    let samples_over = d.total_bytes() > MAX_RASTER_ALLOC;
+    // The renderer can stream a non-interlaced PNG a row at a time when those buffers fit. Its
+    // full decoded byte count can exceed the allowance even though drawing it at native size is
+    // safe; use the renderer's decision for that case instead of warning from total_bytes alone.
+    let png_streams_at_size = samples_over
+        && format == Some(image::ImageFormat::Png)
+        && vectorcraft_render::reduced_size(bytes) == Some((w, h));
+    (rgba_over || (samples_over && !png_streams_at_size))
+        .then(|| format!("an image of {w} × {h} pixels is too large to draw"))
 }
 
 /// What Open, Place and the Links panel say of encoded image `bytes` that [`too_large_note`] is
