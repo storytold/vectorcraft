@@ -2206,6 +2206,59 @@ fn tinted_flat_art_stays_flat_art() {
     }
 }
 
+/// `levels` clean gray bands 20 px wide, evenly spaced from black to white.
+fn even_gray_bands(levels: u32) -> Raster {
+    Raster::from_fn(levels * 20, 60, |x, _| {
+        let v = (x / 20 * 255 / (levels - 1)) as u8;
+        [v, v, v, 255]
+    })
+}
+
+#[test]
+fn flat_art_of_up_to_sixteen_clean_levels_stays_flat_art() {
+    // Equal bands: eight colors leave more than a tenth of what a single color leaves.
+    let tints: [(&str, &[[f64; 3]]); 4] = [("gray", &GRAY_RAMP), ("sepia", &SEPIA), ("blue", &BLUE), ("duotone", &DUOTONE)];
+    let mut smoothed = vec![];
+    for (name, stops) in tints {
+        for levels in [10, 12, 14, 16] {
+            let bands = tinted(&even_gray_bands(levels), stops, 0.0);
+            if quantize::continuous_tone(&bands) {
+                smoothed.push(format!("{levels} {name} bands"));
+            }
+            if quantize::continuous_tone(&beside_transparent_colors(&bands)) {
+                smoothed.push(format!("{levels} {name} bands beside transparent colors"));
+            }
+        }
+    }
+    assert!(smoothed.is_empty(), "continuous tone: {smoothed:?}");
+}
+
+#[test]
+fn thin_lines_on_flat_art_of_up_to_sixteen_clean_levels_are_traced() {
+    for levels in [12, 16] {
+        for (name, stops) in [("gray", &GRAY_RAMP[..]), ("sepia", &SEPIA[..])] {
+            let bands = even_gray_bands(levels);
+            // A 1 px black line across the bands at y = 30, and a 1 px white line down the second
+            // band at x = 25.
+            let lined = Raster::from_fn(bands.width, bands.height, |x, y| {
+                if y == 30 {
+                    [0, 0, 0, 255]
+                } else if x == 25 {
+                    [255, 255, 255, 255]
+                } else {
+                    let i = ((y * bands.width + x) * 4) as usize;
+                    [bands.rgba[i], bands.rgba[i + 1], bands.rgba[i + 2], 255]
+                }
+            });
+            let res = trace(&tinted(&lined, stops, 0.0), &sixteen_colors());
+            assert_eq!(res.palette.len(), levels as usize, "{levels} {name} bands: {:?}", res.palette);
+            // The black band with the black line; the white band above and below the line; the
+            // white line above and below it; the second band in four; each other band in two.
+            assert_eq!(res.paths.len(), 1 + 2 + 2 + 4 + 2 * (levels as usize - 3), "{levels} {name} bands");
+        }
+    }
+}
+
 #[test]
 fn pictures_without_tones_are_not_continuous_tone() {
     let photo = tinted(&photo_scene(6.0, true), &SEPIA, 2.0);
