@@ -893,8 +893,8 @@ graph, its Axes group or a group that holds the graph, so the lines keep the pai
 The other commands store them when given the line itself, and the `appearance.*` and graphic style commands and
 `transparency.set` with an `item` also when given the Axes group, as described above. `transparency.set` without an
 `item` and `object.setProps` store only the object opacity and blend mode. `appearance.copyFrom` stores the rows when it
-picks up a fill or stroke attribute or adds rows with `append`; a pick of only the object's transparency stores only the
-object opacity and blend mode. The recolor commands and `paint.swap` store a line's rows when they change them. The
+picks up a paint, a stroke weight or a row's opacity and blend mode, or adds rows with `append`; any other pick stores
+only the object opacity and blend mode, when it picks them up. The recolor commands and `paint.swap` store a line's rows when they change them. The
 other commands store them even when the line already showed them, except that rows equal to a kind's default stroke
 (0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved, and an edit of a hidden row that
 leaves the topmost visible rows as they were stores nothing. When one command reaches several lines of one kind, the frontmost line in

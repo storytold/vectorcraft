@@ -6349,23 +6349,29 @@ fn an_edit_of_a_hidden_row_of_an_axis_line_keeps_what_its_kind_keeps() {
     });
 }
 
-/// An Eyedropper pick of only the object's opacity on an axis line keeps the stroke its kind keeps from another line,
-/// though the line it is given still shows the default stroke.
+/// An Eyedropper pick of only the object's opacity, or of only stroke options the graph does not keep, on an axis line
+/// keeps the stroke its kind keeps from another line, though the line it is given still shows the default stroke.
 #[test]
 fn an_eyedropper_pick_of_only_the_opacity_keeps_the_stroke_its_kind_keeps() {
-    let mut s = Session::new();
-    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
-    let id = graph(&mut s, "column");
-    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
-    s.execute("object.setProps", &json!({"ids": [rect.0], "opacity": 50})).unwrap();
-    let lines = line_nodes(&s, id);
-    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
     let fill = json!({"color": false, "transparency": false, "overprint": false});
-    let stroke = json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": false});
-    let opacity_only = json!({"appearance": {"transparency": true, "fill": fill, "stroke": stroke}});
-    s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "pickUp": opacity_only})).unwrap();
-    let looks = redrawn_line_looks(&mut s, id);
-    assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{looks:?}");
+    let stroke = |dash: bool| json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": dash});
+    let cases = [
+        (json!({"appearance": {"transparency": true, "fill": fill, "stroke": stroke(false)}}), 0.5),
+        (json!({"appearance": {"transparency": false, "fill": fill, "stroke": stroke(true)}}), 1.0),
+    ];
+    every_case(cases, |(pick, opacity)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+        s.execute("object.setProps", &json!({"ids": [rect.0], "opacity": 50})).unwrap();
+        s.execute("stroke.set", &json!({"ids": [rect.0], "dash": [4, 2]})).unwrap();
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "pickUp": pick})).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - *opacity).abs() < 1e-6), "{pick}: {looks:?}");
+    });
 }
 
 /// Default Fill and Stroke on a label or an axis line that already shows the default paint is kept for its kind, in
