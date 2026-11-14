@@ -431,6 +431,7 @@ impl Disk {
         }
         let (Some((script, hash)), Some(store)) = (&self.script, self.store_path()) else { return };
         let (script, code) = (shown(script), self.ran.iter().cloned().collect::<Vec<_>>());
+        let Ok(_lock) = lock_store(&store) else { return };
         let Ok(mut grants) = try_read_store(&store) else { return };
         for g in &mut grants {
             let ours = g["script"] == *script
@@ -566,6 +567,7 @@ impl Disk {
     fn keep(&self, paths: &[std::path::PathBuf], write: bool, folder: bool) -> Result<(), &'static str> {
         let (Some((script, hash)), Some(store)) = (&self.script, self.store_path()) else { return Err(NO_ALWAYS) };
         // A grants file that is there but cannot be read is left as it is.
+        let _lock = lock_store(&store).map_err(|_| NOT_SAVED)?;
         let mut grants = try_read_store(&store).map_err(|_| NOT_SAVED)?;
         let script = shown(script);
         let code: Vec<&String> = self.ran.iter().collect();
@@ -882,8 +884,10 @@ fn read_head(real: &Path, max: usize) -> std::io::Result<Vec<u8>> {
 }
 
 /// The grants the grants file at `store` holds; none when it is missing or cannot be read. A grant
-/// that is not well formed is left out.
+/// that is not well formed is left out. It is read under [`lock_store`]'s lock when that can be
+/// taken, so it is read between two changes.
 fn read_store(store: &Path) -> Vec<serde_json::Value> {
+    let _lock = lock_store(store).ok();
     load_store(store, false).unwrap_or_default()
 }
 
@@ -928,8 +932,13 @@ fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Val
     Ok(v["grants"].as_array().map(|a| a.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect()).unwrap_or_default())
 }
 
-/// Writes `grants` as the grants file at `store`: to a file beside it, which then takes its place.
-/// `Err`, with the file left as it was, when the grants take more than [`MAX_STORE_BYTES`].
+/// The number in the name of the next file [`write_store`] writes before it takes the grants file's
+/// place.
+pub(crate) static NEXT_PART: AtomicU32 = AtomicU32::new(0);
+
+/// Writes `grants` as the grants file at `store`: to a new file beside it, named for this process
+/// and this write, which then takes its place. `Err`, with the file left as it was, when the grants
+/// take more than [`MAX_STORE_BYTES`] or the new file cannot be written or take its place.
 fn write_store(store: &Path, grants: Vec<serde_json::Value>) -> std::io::Result<()> {
     let text = serde_json::to_vec_pretty(&serde_json::json!({"version": 1, "grants": grants})).map_err(std::io::Error::other)?;
     if text.len() > MAX_STORE_BYTES {
@@ -938,12 +947,47 @@ fn write_store(store: &Path, grants: Vec<serde_json::Value>) -> std::io::Result<
     if let Some(dir) = store.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let part = store.with_extension("json.part");
-    std::fs::write(&part, text)?;
+    // A name an earlier write left behind is passed over, up to 64 times, and only the file made here
+    // is removed.
+    let mut tries = 0;
+    let (part, mut file) = loop {
+        let n = NEXT_PART.fetch_add(1, Ordering::Relaxed);
+        let part = store.with_extension(format!("json.{}-{n}.part", std::process::id()));
+        match std::fs::File::options().write(true).create_new(true).open(&part) {
+            Ok(file) => break (part, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && tries < 63 => tries += 1,
+            Err(e) => return Err(e),
+        }
+    };
+    let written = std::io::Write::write_all(&mut file, &text);
+    drop(file);
     // `rename` replaces a grants file that is there, on Windows too (`MOVEFILE_REPLACE_EXISTING`).
-    std::fs::rename(&part, store).inspect_err(|_| {
+    written.and_then(|()| std::fs::rename(&part, store)).inspect_err(|_| {
         let _ = std::fs::remove_file(&part);
     })
+}
+
+/// The lock file beside the grants file at `store` (`Script Grants.lock`), locked until it is
+/// dropped and waiting while another process holds it, so that processes that read and change the
+/// grants file take turns. A change is not made when the lock cannot be taken.
+#[cfg(not(target_arch = "wasm32"))]
+fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
+    let lock = store.with_extension("lock");
+    let opened = store
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::File::options().create(true).truncate(false).read(true).write(true).open(&lock));
+    let file = opened.and_then(|f| f.lock().map(|()| f));
+    if let Err(e) = &file {
+        log::warn!("can't lock {}: {e}", lock.display());
+    }
+    file
+}
+
+/// The browser has no folders to keep anything in.
+#[cfg(target_arch = "wasm32")]
+fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
 /// The grants the grants file beside the data folder `data_dir` keeps: each script, the SHA-256 of
@@ -957,6 +1001,7 @@ pub(crate) fn stored_grants(data_dir: &Path) -> Vec<serde_json::Value> {
 /// → how many were removed.
 pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&str>, path: Option<&str>) -> std::io::Result<usize> {
     let store = data_dir.with_file_name(GRANTS_FILE);
+    let _lock = lock_store(&store)?;
     let grants = try_read_store(&store)?;
     let before = grants.len();
     let kept: Vec<serde_json::Value> =

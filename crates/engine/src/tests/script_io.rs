@@ -576,6 +576,43 @@ fn a_copy_of_a_link_that_leads_elsewhere_after_it_was_looked_up_copies_nothing()
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// The grants file is written through a temporary file of its own, so a temporary file another
+/// process left beside it, or one an earlier write left under the name this write takes first,
+/// does not stop a change and is left where it is.
+#[test]
+fn a_grants_change_does_not_use_another_writers_temporary_file() {
+    let base = folder("grants-part");
+    let data = base.join("settings/Script Data");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    write(&base.join("settings/Script Grants.json"), json!({"version": 1, "grants": [grant]}).to_string().as_bytes());
+    std::fs::create_dir_all(base.join("settings/Script Grants.json.part/held")).unwrap();
+    let next = crate::script::files::NEXT_PART.load(std::sync::atomic::Ordering::Relaxed);
+    let left_behind: Vec<PathBuf> =
+        (next..next + 8).map(|n| base.join(format!("settings/Script Grants.json.{}-{n}.part", std::process::id()))).collect();
+    for p in &left_behind {
+        write(p, b"earlier");
+    }
+    assert_eq!(crate::script::files::revoke_grants(&data, None, None).unwrap(), 1);
+    let left: Value = serde_json::from_slice(&std::fs::read(base.join("settings/Script Grants.json")).unwrap()).unwrap();
+    assert_eq!(left["grants"], json!([]));
+    assert!(left_behind.iter().all(|p| std::fs::read(p).is_ok_and(|b| b == b"earlier")), "files this write did not make stay");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A change to the grants file is not made when its lock cannot be taken.
+#[test]
+fn a_grants_change_without_its_lock_changes_nothing() {
+    let base = folder("grants-lock");
+    let data = base.join("settings/Script Data");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    let text = json!({"version": 1, "grants": [grant]}).to_string();
+    write(&base.join("settings/Script Grants.json"), text.as_bytes());
+    std::fs::create_dir_all(base.join("settings/Script Grants.lock/held")).unwrap();
+    assert!(crate::script::files::revoke_grants(&data, None, None).is_err());
+    assert_eq!(std::fs::read_to_string(base.join("settings/Script Grants.json")).unwrap(), text);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `rename` of a file an earlier run wrote names both its old and its new path in `written`.
 #[test]
 fn a_renamed_file_names_its_old_and_new_paths_in_written() {
