@@ -5267,11 +5267,17 @@ axis	Both	Ambos
 @msg	the file holds two composite fonts named `{_1}`	o arquivo contém duas fontes compostas chamadas `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` não pode nomear uma fonte composta
 @msg	{k}: give a font	{k}: informe uma fonte
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: informe uma fonte
 @msg	{k}: size must be {_1} to {_2}%	{k}: size deve estar entre {_1} e {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size deve estar entre {_1} e {_2}%
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline deve estar entre {_1} e {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline deve estar entre {_1} e {_2}%
 @msg	{k}: scale must be {_1} to {_2}%	{k}: a escala deve estar entre {_1} e {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: a escala deve estar entre {_1} e {_2}%
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: só kana, roman e numerals podem ser escalados
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: só kana, roman e numerals podem ser escalados
 @msg	{k}: only kana can be scaled at the center	{k}: só kana pode ser escalado a partir do centro
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: só kana pode ser escalado a partir do centro
 @msg	no composite font	nenhuma fonte composta
 	Delete Font	Excluir fonte
 	Kanji	Kanji

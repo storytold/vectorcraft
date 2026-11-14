@@ -3629,11 +3629,17 @@ digits	Malayalam	Malayalam
 @msg	the file holds two composite fonts named `{_1}`	filen innehåller två sammansatta typsnitt som heter `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` kan inte vara namnet på ett sammansatt typsnitt
 @msg	{k}: give a font	{k}: ange ett typsnitt
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: ange ett typsnitt
 @msg	{k}: size must be {_1} to {_2}%	{k}: size måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size måste vara {_1} till {_2} %
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline måste vara {_1} till {_2} %
 @msg	{k}: scale must be {_1} to {_2}%	{k}: skalan måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skalan måste vara {_1} till {_2} %
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: bara kana, roman och numerals kan skalas
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: bara kana, roman och numerals kan skalas
 @msg	{k}: only kana can be scaled at the center	{k}: bara kana kan skalas från mitten
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: bara kana kan skalas från mitten
 @msg	no composite font	inget sammansatt typsnitt
 	Delete Font	Ta bort typsnitt
 	Kanji	Kanji

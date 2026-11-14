@@ -4823,11 +4823,17 @@ digits	Malayalam	馬來亞拉姆數字
 @msg	the file holds two composite fonts named `{_1}`	檔案中有兩個複合字體都名為 `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` 不能作為複合字體的名稱
 @msg	{k}: give a font	{k}：請指定字體
+@msg	`{name}`: {k}: give a font	`{name}`: {k}：請指定字體
 @msg	{k}: size must be {_1} to {_2}%	{k}：size 必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}：size 必須為 {_1}% 到 {_2}%
 @msg	{k}: baseline must be {_1} to {_2}%	{k}：baseline 必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}：baseline 必須為 {_1}% 到 {_2}%
 @msg	{k}: scale must be {_1} to {_2}%	{k}：縮放必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}：縮放必須為 {_1}% 到 {_2}%
 @msg	{k}: only kana, roman and numerals can be scaled	{k}：只有 kana、roman 和 numerals 可以縮放
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}：只有 kana、roman 和 numerals 可以縮放
 @msg	{k}: only kana can be scaled at the center	{k}：只有 kana 可以從中心縮放
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}：只有 kana 可以從中心縮放
 @msg	no composite font	沒有複合字體
 	Delete Font	刪除字體
 	Kanji	漢字

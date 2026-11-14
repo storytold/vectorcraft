@@ -3746,11 +3746,17 @@ effect	Points	Точки
 @msg	the file holds two composite fonts named `{_1}`	у файлі два складені шрифти з назвою `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` не може бути назвою складеного шрифту
 @msg	{k}: give a font	{k}: вкажіть шрифт
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: вкажіть шрифт
 @msg	{k}: size must be {_1} to {_2}%	{k}: size має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size має бути від {_1} до {_2}%
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline має бути від {_1} до {_2}%
 @msg	{k}: scale must be {_1} to {_2}%	{k}: масштаб має бути від {_1} до {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: масштаб має бути від {_1} до {_2}%
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: масштабувати можна лише kana, roman і numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: масштабувати можна лише kana, roman і numerals
 @msg	{k}: only kana can be scaled at the center	{k}: масштабувати від центру можна лише kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: масштабувати від центру можна лише kana
 @msg	no composite font	немає складеного шрифту
 	Delete Font	Видалити шрифт
 	Kanji	Кандзі

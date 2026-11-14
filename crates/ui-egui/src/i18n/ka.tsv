@@ -1522,11 +1522,17 @@ digits	Malayalam	მალაიალამური
 @msg	the file holds two composite fonts named `{_1}`	ფაილი შეიცავს ორ კომპოზიტურ შრიფტს სახელით `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` ვერ იქნება კომპოზიტური შრიფტის სახელი
 @msg	{k}: give a font	{k}: მიუთითეთ შრიფტი
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: მიუთითეთ შრიფტი
 @msg	{k}: size must be {_1} to {_2}%	{k}: size უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size უნდა იყოს {_1}-დან {_2}%-მდე
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline უნდა იყოს {_1}-დან {_2}%-მდე
 @msg	{k}: scale must be {_1} to {_2}%	{k}: მასშტაბი უნდა იყოს {_1}-დან {_2}%-მდე
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: მასშტაბი უნდა იყოს {_1}-დან {_2}%-მდე
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: მასშტაბირება შეიძლება მხოლოდ kana, roman და numerals ნაწილებში
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: მასშტაბირება შეიძლება მხოლოდ kana, roman და numerals ნაწილებში
 @msg	{k}: only kana can be scaled at the center	{k}: ცენტრიდან მასშტაბირება შეიძლება მხოლოდ kana ნაწილში
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: ცენტრიდან მასშტაბირება შეიძლება მხოლოდ kana ნაწილში
 @msg	no composite font	კომპოზიტური შრიფტი არ არის
 	Delete Font	შრიფტის წაშლა
 	Kanji	კანძი

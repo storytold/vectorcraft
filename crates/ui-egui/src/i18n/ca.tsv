@@ -4680,11 +4680,17 @@ digits	Malayalam	Malaiàlam
 @msg	the file holds two composite fonts named `{_1}`	el fitxer conté dos tipus de lletra compostos anomenats `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` no pot anomenar un tipus de lletra compost
 @msg	{k}: give a font	{k}: indiqueu un tipus de lletra
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indiqueu un tipus de lletra
 @msg	{k}: size must be {_1} to {_2}%	{k}: size ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size ha d’estar entre {_1} i {_2} %
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline ha d’estar entre {_1} i {_2} %
 @msg	{k}: scale must be {_1} to {_2}%	{k}: l’escala ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: l’escala ha d’estar entre {_1} i {_2} %
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: només kana, roman i numerals es poden escalar
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: només kana, roman i numerals es poden escalar
 @msg	{k}: only kana can be scaled at the center	{k}: només kana es pot escalar des del centre
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: només kana es pot escalar des del centre
 @msg	no composite font	cap tipus de lletra compost
 	Delete Font	Suprimeix el tipus de lletra
 	Kanji	Kanji

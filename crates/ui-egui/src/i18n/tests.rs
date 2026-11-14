@@ -2103,6 +2103,12 @@ fn composite_font_errors_translate_in_complete_languages() {
         "{k}: scale must be {_1} to {_2}%",
         "{k}: only kana, roman and numerals can be scaled",
         "{k}: only kana can be scaled at the center",
+        "`{name}`: {k}: give a font",
+        "`{name}`: {k}: size must be {_1} to {_2}%",
+        "`{name}`: {k}: baseline must be {_1} to {_2}%",
+        "`{name}`: {k}: scale must be {_1} to {_2}%",
+        "`{name}`: {k}: only kana, roman and numerals can be scaled",
+        "`{name}`: {k}: only kana can be scaled at the center",
         "no composite font",
     ];
     // An error, English words its translation replaces, and the text it keeps.
@@ -4077,6 +4083,10 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("{k}: only kana can be scaled at the center", &["kana"]),
     ("{k}: only kana, roman and numerals can be scaled", &["kana", "roman", "numerals"]),
     ("{k}: size must be {_1} to {_2}%", &["size"]),
+    ("`{name}`: {k}: baseline must be {_1} to {_2}%", &["baseline"]),
+    ("`{name}`: {k}: only kana can be scaled at the center", &["kana"]),
+    ("`{name}`: {k}: only kana, roman and numerals can be scaled", &["kana", "roman", "numerals"]),
+    ("`{name}`: {k}: size must be {_1} to {_2}%", &["size"]),
 ];
 
 /// Every catalog's translation of a [`NAMED_KEYS`] message keeps each name the table lists, as

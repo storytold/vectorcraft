@@ -4082,11 +4082,17 @@ file-filter	Templates	テンプレート
 @msg	the file holds two composite fonts named `{_1}`	ファイルに `{_1}` という名前の合成フォントが 2 つあります
 @msg	`{_1}` can't name a composite font	`{_1}` は合成フォントの名前にできません
 @msg	{k}: give a font	{k}: フォントを指定してください
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: フォントを指定してください
 @msg	{k}: size must be {_1} to {_2}%	{k}: size は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size は {_1}～{_2}% にしてください
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline は {_1}～{_2}% にしてください
 @msg	{k}: scale must be {_1} to {_2}%	{k}: 比率は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: 比率は {_1}～{_2}% にしてください
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: 比率を変更できるのは kana、roman、numerals だけです
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: 比率を変更できるのは kana、roman、numerals だけです
 @msg	{k}: only kana can be scaled at the center	{k}: 中央を基準に比率を変更できるのは kana だけです
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: 中央を基準に比率を変更できるのは kana だけです
 @msg	no composite font	合成フォントがありません
 	Delete Font	フォントを削除
 	Kanji	漢字

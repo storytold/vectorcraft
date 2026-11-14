@@ -4375,11 +4375,17 @@ mark-style	Japanese	Japán
 @msg	the file holds two composite fonts named `{_1}`	a fájl két `{_1}` nevű összetett betűtípust tartalmaz
 @msg	`{_1}` can't name a composite font	`{_1}` nem lehet összetett betűtípus neve
 @msg	{k}: give a font	{k}: adjon meg egy betűtípust
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: adjon meg egy betűtípust
 @msg	{k}: size must be {_1} to {_2}%	{k}: a size értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: a size értéke {_1}–{_2}% lehet
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: a baseline értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: a baseline értéke {_1}–{_2}% lehet
 @msg	{k}: scale must be {_1} to {_2}%	{k}: a méretezés {_1}–{_2}% lehet
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: a méretezés {_1}–{_2}% lehet
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: csak a kana, roman és numerals méretezhető
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: csak a kana, roman és numerals méretezhető
 @msg	{k}: only kana can be scaled at the center	{k}: csak a kana méretezhető a középpontból
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: csak a kana méretezhető a középpontból
 @msg	no composite font	nincs összetett betűtípus
 	Delete Font	Betűtípus törlése
 	Kanji	Kandzsi

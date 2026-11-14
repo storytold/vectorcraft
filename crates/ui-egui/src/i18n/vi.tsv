@@ -4092,11 +4092,17 @@ mark-style	Japanese	Kiểu Nhật
 @msg	the file holds two composite fonts named `{_1}`	tệp chứa hai phông chữ tổ hợp cùng tên `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` không thể là tên phông chữ tổ hợp
 @msg	{k}: give a font	{k}: hãy cung cấp một phông chữ
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: hãy cung cấp một phông chữ
 @msg	{k}: size must be {_1} to {_2}%	{k}: size phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size phải từ {_1} đến {_2}%
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline phải từ {_1} đến {_2}%
 @msg	{k}: scale must be {_1} to {_2}%	{k}: tỷ lệ phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: tỷ lệ phải từ {_1} đến {_2}%
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: chỉ kana, roman và numerals mới co giãn được
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: chỉ kana, roman và numerals mới co giãn được
 @msg	{k}: only kana can be scaled at the center	{k}: chỉ kana mới co giãn từ tâm được
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: chỉ kana mới co giãn từ tâm được
 @msg	no composite font	không có phông chữ tổ hợp
 	Delete Font	Xóa phông chữ
 	Kanji	Kanji

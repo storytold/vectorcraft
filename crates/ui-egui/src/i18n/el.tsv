@@ -4192,11 +4192,17 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	the file holds two composite fonts named `{_1}`	το αρχείο περιέχει δύο σύνθετες γραμματοσειρές με όνομα `{_1}`
 @msg	`{_1}` can't name a composite font	το `{_1}` δεν μπορεί να είναι όνομα σύνθετης γραμματοσειράς
 @msg	{k}: give a font	{k}: δώστε γραμματοσειρά
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: δώστε γραμματοσειρά
 @msg	{k}: size must be {_1} to {_2}%	{k}: το size πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: το size πρέπει να είναι από {_1} έως {_2}%
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: το baseline πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: το baseline πρέπει να είναι από {_1} έως {_2}%
 @msg	{k}: scale must be {_1} to {_2}%	{k}: η κλίμακα πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: η κλίμακα πρέπει να είναι από {_1} έως {_2}%
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: μόνο τα kana, roman και numerals αλλάζουν κλίμακα
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: μόνο τα kana, roman και numerals αλλάζουν κλίμακα
 @msg	{k}: only kana can be scaled at the center	{k}: μόνο το kana αλλάζει κλίμακα από το κέντρο
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: μόνο το kana αλλάζει κλίμακα από το κέντρο
 @msg	no composite font	καμία σύνθετη γραμματοσειρά
 	Delete Font	Διαγραφή γραμματοσειράς
 	Kanji	Κάντζι

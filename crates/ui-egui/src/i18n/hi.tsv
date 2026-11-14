@@ -5065,11 +5065,17 @@ antiAlias	Sharp	शार्प
 @msg	the file holds two composite fonts named `{_1}`	फ़ाइल में `{_1}` नाम के दो कंपोज़िट फ़ॉन्ट हैं
 @msg	`{_1}` can't name a composite font	`{_1}` कंपोज़िट फ़ॉन्ट का नाम नहीं हो सकता
 @msg	{k}: give a font	{k}: एक फ़ॉन्ट दें
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: एक फ़ॉन्ट दें
 @msg	{k}: size must be {_1} to {_2}%	{k}: size {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size {_1} से {_2}% तक होना चाहिए
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline {_1} से {_2}% तक होना चाहिए
 @msg	{k}: scale must be {_1} to {_2}%	{k}: स्केल {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: स्केल {_1} से {_2}% तक होना चाहिए
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: केवल kana, roman और numerals को स्केल किया जा सकता है
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: केवल kana, roman और numerals को स्केल किया जा सकता है
 @msg	{k}: only kana can be scaled at the center	{k}: केंद्र से केवल kana को स्केल किया जा सकता है
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: केंद्र से केवल kana को स्केल किया जा सकता है
 @msg	no composite font	कोई कंपोज़िट फ़ॉन्ट नहीं
 	Delete Font	फ़ॉन्ट हटाएँ
 	Kanji	कांजी

@@ -1678,11 +1678,17 @@ digits	Malayalam	Malajálamské
 @msg	the file holds two composite fonts named `{_1}`	soubor obsahuje dvě složená písma s názvem `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` nemůže být názvem složeného písma
 @msg	{k}: give a font	{k}: zadejte písmo
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: zadejte písmo
 @msg	{k}: size must be {_1} to {_2}%	{k}: size musí být {_1} až {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size musí být {_1} až {_2} %
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline musí být {_1} až {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline musí být {_1} až {_2} %
 @msg	{k}: scale must be {_1} to {_2}%	{k}: měřítko musí být {_1} až {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: měřítko musí být {_1} až {_2} %
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: měnit měřítko lze jen u kana, roman a numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: měnit měřítko lze jen u kana, roman a numerals
 @msg	{k}: only kana can be scaled at the center	{k}: měřítko od středu lze měnit jen u kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: měřítko od středu lze měnit jen u kana
 @msg	no composite font	žádné složené písmo
 	Delete Font	Odstranit písmo
 	Kanji	Kandži

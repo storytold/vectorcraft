@@ -3753,11 +3753,17 @@ digits	Malayalam	Malayalam
 @msg	the file holds two composite fonts named `{_1}`	il file contiene due font compositi di nome `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` non può essere il nome di un font composito
 @msg	{k}: give a font	{k}: indica un font
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indica un font
 @msg	{k}: size must be {_1} to {_2}%	{k}: size deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size deve essere tra {_1} e {_2}%
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline deve essere tra {_1} e {_2}%
 @msg	{k}: scale must be {_1} to {_2}%	{k}: la scala deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: la scala deve essere tra {_1} e {_2}%
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: solo kana, roman e numerals si possono ridimensionare
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: solo kana, roman e numerals si possono ridimensionare
 @msg	{k}: only kana can be scaled at the center	{k}: solo kana si può ridimensionare dal centro
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: solo kana si può ridimensionare dal centro
 @msg	no composite font	nessun font composito
 	Delete Font	Elimina font
 	Kanji	Kanji

@@ -3699,11 +3699,17 @@ digits	Malayalam	Malayalam
 @msg	the file holds two composite fonts named `{_1}`	le fichier contient deux polices composites nommées `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` ne peut pas nommer une police composite
 @msg	{k}: give a font	{k} : indiquez une police
+@msg	`{name}`: {k}: give a font	`{name}`: {k} : indiquez une police
 @msg	{k}: size must be {_1} to {_2}%	{k} : size doit être compris entre {_1} et {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k} : size doit être compris entre {_1} et {_2} %
 @msg	{k}: baseline must be {_1} to {_2}%	{k} : baseline doit être compris entre {_1} et {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k} : baseline doit être compris entre {_1} et {_2} %
 @msg	{k}: scale must be {_1} to {_2}%	{k} : l’échelle doit être comprise entre {_1} et {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k} : l’échelle doit être comprise entre {_1} et {_2} %
 @msg	{k}: only kana, roman and numerals can be scaled	{k} : seuls kana, roman et numerals peuvent être mis à l’échelle
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k} : seuls kana, roman et numerals peuvent être mis à l’échelle
 @msg	{k}: only kana can be scaled at the center	{k} : seul kana peut être mis à l’échelle depuis le centre
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k} : seul kana peut être mis à l’échelle depuis le centre
 @msg	no composite font	aucune police composite
 	Delete Font	Supprimer la police
 	Kanji	Kanji

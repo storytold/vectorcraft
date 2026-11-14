@@ -1590,11 +1590,17 @@ digits	Malayalam	Malajalam
 @msg	the file holds two composite fonts named `{_1}`	plik zawiera dwa fonty złożone o nazwie `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` nie może być nazwą fontu złożonego
 @msg	{k}: give a font	{k}: podaj font
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: podaj font
 @msg	{k}: size must be {_1} to {_2}%	{k}: size musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size musi wynosić od {_1} do {_2}%
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline musi wynosić od {_1} do {_2}%
 @msg	{k}: scale must be {_1} to {_2}%	{k}: skala musi wynosić od {_1} do {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skala musi wynosić od {_1} do {_2}%
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: skalować można tylko kana, roman i numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: skalować można tylko kana, roman i numerals
 @msg	{k}: only kana can be scaled at the center	{k}: od środka można skalować tylko kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: od środka można skalować tylko kana
 @msg	no composite font	brak fontu złożonego
 	Delete Font	Usuń font
 	Kanji	Kanji

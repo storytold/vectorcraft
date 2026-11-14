@@ -3659,11 +3659,17 @@ effect	Points	Punkte
 @msg	the file holds two composite fonts named `{_1}`	die Datei enthält zwei zusammengesetzte Schriften namens `{_1}`
 @msg	`{_1}` can't name a composite font	`{_1}` kann keine zusammengesetzte Schrift benennen
 @msg	{k}: give a font	{k}: geben Sie eine Schrift an
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: geben Sie eine Schrift an
 @msg	{k}: size must be {_1} to {_2}%	{k}: size muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size muss {_1} bis {_2} % sein
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline muss {_1} bis {_2} % sein
 @msg	{k}: scale must be {_1} to {_2}%	{k}: die Skalierung muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: die Skalierung muss {_1} bis {_2} % sein
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: nur kana, roman und numerals lassen sich skalieren
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: nur kana, roman und numerals lassen sich skalieren
 @msg	{k}: only kana can be scaled at the center	{k}: nur kana lässt sich am Mittelpunkt skalieren
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: nur kana lässt sich am Mittelpunkt skalieren
 @msg	no composite font	keine zusammengesetzte Schrift
 	Delete Font	Schrift löschen
 	Kanji	Kanji

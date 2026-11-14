@@ -3493,11 +3493,17 @@ digits	Malayalam	Malayalam
 @msg	the file holds two composite fonts named `{_1}`	dosyada `{_1}` adlı iki bileşik font var
 @msg	`{_1}` can't name a composite font	`{_1}` bir bileşik fontun adı olamaz
 @msg	{k}: give a font	{k}: bir font verin
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: bir font verin
 @msg	{k}: size must be {_1} to {_2}%	{k}: size %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size %{_1} ile %{_2} arasında olmalı
 @msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline %{_1} ile %{_2} arasında olmalı
 @msg	{k}: scale must be {_1} to {_2}%	{k}: ölçek %{_1} ile %{_2} arasında olmalı
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: ölçek %{_1} ile %{_2} arasında olmalı
 @msg	{k}: only kana, roman and numerals can be scaled	{k}: yalnızca kana, roman ve numerals ölçeklenebilir
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: yalnızca kana, roman ve numerals ölçeklenebilir
 @msg	{k}: only kana can be scaled at the center	{k}: merkezden yalnızca kana ölçeklenebilir
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: merkezden yalnızca kana ölçeklenebilir
 @msg	no composite font	bileşik font yok
 	Delete Font	Fontu Sil
 	Kanji	Kanji
