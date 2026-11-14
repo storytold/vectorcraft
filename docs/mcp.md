@@ -857,8 +857,10 @@ own box when the graph is drawn again, so `paint.setGradientGeom` and the `paint
 placement they set there. A stroke weight and dashes are stored as the label shows them, also on a label that was
 scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
 a pie with Legends in Wedges whose legend labels have no fill of their own, the legend labels' fill is stored only when
-every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
-a dark wedge. What they change on a graph's axis lines, tick marks and radar rings is stored as described below.
+every legend label the command reaches ends up with the same fill. The recolor commands also need to be given the legend
+labels themselves: a recolor given the graph or a group that holds it does not store their fill. When their fill is not
+stored, they are drawn again in black, or white on a dark wedge. What these commands change on a graph's axis lines, tick marks
+and radar rings is stored as described below.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
