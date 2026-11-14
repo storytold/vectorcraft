@@ -403,3 +403,42 @@ fn lab_colours_round_trip_through_the_cms() {
     let Color::Gray { k } = c.convert(&Color::lab(50.0, 0.0, 0.0), Model::Gray, ri) else { panic!("Gray") };
     assert!((k - 0.53).abs() < 0.01, "{k}");
 }
+
+#[test]
+fn with_active_puts_settings_in_place_on_this_thread_only() {
+    let p3 = Arc::new(Cms::new(&ColorSettings { rgb: DISPLAY_P3.into(), cmyk: DEVICE_CMYK.into(), ..Default::default() }).unwrap());
+    let (rgb, ink) = (Color::Rgb { r: 0.2, g: 0.6, b: 0.4 }, Color::Cmyk { c: 0.2, m: 0.3, y: 0.4, k: 0.1 });
+    let before = (rgb.to_rgb(), ink.to_rgb());
+    let (inside, ink_inside, other_thread, nested) = with_active(p3.clone(), || {
+        let other = std::thread::spawn(move || rgb.to_rgb()).join().unwrap();
+        let nested = with_active(Arc::new(cms()), || rgb.to_rgb());
+        (rgb.to_rgb(), ink.to_rgb(), other, nested)
+    });
+    assert_eq!(inside, p3.display_rgb(&rgb), "RGB is drawn through the settings given");
+    assert_ne!(inside, before.0);
+    assert_eq!(ink_inside, naive_cmyk_to_rgb([0.2, 0.3, 0.4, 0.1]), "CMYK takes the device formula of the settings given");
+    assert_eq!(other_thread, before.0, "another thread keeps the active settings");
+    assert_eq!(nested, before.0, "an inner call puts its own settings in place");
+    assert_eq!((rgb.to_rgb(), ink.to_rgb()), before, "the active settings come back after");
+    let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| with_active(p3.clone(), || panic!("unwinds"))));
+    assert!(unwound.is_err());
+    assert_eq!((rgb.to_rgb(), ink.to_rgb()), before, "the active settings come back after a panic");
+}
+
+#[test]
+fn a_document_gets_the_same_context_for_the_same_profiles() {
+    // Other tests load profiles meanwhile, and a load makes the contexts again: try until one pair
+    // of calls sees none.
+    let same = (0..100).any(|_| {
+        let generation = profiles_generation();
+        let (a, b) = (for_document(Some(DISPLAY_P3), None), for_document(Some(DISPLAY_P3), None));
+        profiles_generation() == generation && Arc::ptr_eq(&a, &b)
+    });
+    assert!(same, "the same profiles give the same context");
+    let p3 = for_document(Some(DISPLAY_P3), None);
+    assert_eq!(p3.settings().rgb, DISPLAY_P3);
+    assert_eq!(p3.settings().cmyk, working_settings().cmyk, "the working CMYK space stays");
+    assert_eq!(for_document(None, None).settings(), &working_settings(), "no profiles: the working settings");
+    let unknown = for_document(Some("no such profile"), Some(SRGB));
+    assert_eq!(unknown.settings(), &working_settings(), "an unknown profile or one of the other model leaves the working space");
+}

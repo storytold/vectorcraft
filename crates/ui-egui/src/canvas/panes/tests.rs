@@ -358,3 +358,147 @@ fn a_resized_window_fits_the_tiled_documents_again_unless_one_was_zoomed() {
     }
     assert_eq!(app.views[1].zoom, zoomed.zoom, "the zoomed document keeps its zoom");
 }
+
+/// The RGB of the middle pixel of the render that document `i`'s pane uploaded in `out`.
+fn pane_middle(app: &VectorcraftApp, out: &egui::FullOutput, i: usize) -> [u8; 3] {
+    let uid = app.session.documents()[i].uid;
+    let id = app.canvas.panes.shown.iter().find(|(slot, _)| slot.0 == uid).map(|(_, (_, tex))| tex.id()).unwrap();
+    let image = out.textures_delta.set.iter().find(|(t, _)| **t == id).and_then(|(_, d)| d.last()).map(|d| d.image.clone()).unwrap();
+    let egui::ImageData::Color(img) = image;
+    let p = img.pixels[img.size[1] / 2 * img.size[0] + img.size[0] / 2];
+    [p.r(), p.g(), p.b()]
+}
+
+#[test]
+fn other_panes_draw_through_their_documents_profiles() {
+    const CHILD: &str = "VECTORCRAFT_TEST_PANE_PROFILES";
+    if std::env::var_os(CHILD).is_none() {
+        // Color settings are process-wide: assign profiles in a separate test process.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "canvas::panes::tests::other_panes_draw_through_their_documents_profiles", "--nocapture"])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "isolated pane profile test failed:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+    use vectorcraft_color::cms::{self, Cms, ColorSettings};
+    let mut app = app_with(2);
+    app.session.prefs.monitor_profile_display = false;
+    // Each document is covered by one RGB rectangle; the second is assigned Display P3.
+    for i in 0..2 {
+        app.run("document.activate", json!({"index": i})).unwrap();
+        app.run("shape.rectangle", json!({"x": -50, "y": -50, "width": 500, "height": 400})).unwrap();
+        app.run("paint.setFill", json!({"color": "#339966"})).unwrap();
+    }
+    app.run("edit.assignProfile", json!({"rgb": cms::DISPLAY_P3})).unwrap();
+    // Its simulated paper shows in another color.
+    app.run("document.setup", json!({"gridColors": ["#cc6633", "#ffffff"], "simulatePaper": true})).unwrap();
+    let in_p3 = |r: u8, g: u8, b: u8| {
+        let color = vectorcraft_color::Color::Rgb { r: r as f32 / 255.0, g: g as f32 / 255.0, b: b as f32 / 255.0 };
+        let p3 = Cms::new(&ColorSettings { rgb: cms::DISPLAY_P3.into(), ..cms::working_settings() }).unwrap().display_rgb(&color);
+        (color, p3.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8))
+    };
+    let (color, p3) = in_p3(0x33, 0x99, 0x66);
+    let srgb = [0x33, 0x99, 0x66];
+    assert_ne!(p3, srgb, "Display P3 draws the color differently");
+    let (_, paper_p3) = in_p3(0xcc, 0x66, 0x33);
+    let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 1);
+    // Whether `out` fills a shape with the RGB `rgb`, give or take one.
+    let fills = |out: &egui::FullOutput, rgb: [u8; 3]| {
+        fn any(s: &Shape, f: &dyn Fn(Color32) -> bool) -> bool {
+            match s {
+                Shape::Vec(v) => v.iter().any(|s| any(s, f)),
+                Shape::Path(p) => f(p.fill),
+                _ => false,
+            }
+        }
+        out.shapes.iter().any(|c| any(&c.shape, &|c: Color32| c.a() == 255 && near([c.r(), c.g(), c.b()], rgb)))
+    };
+    let ctx = egui::Context::default();
+    let raw = || egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+        max_texture_side: Some(8192),
+        ..Default::default()
+    };
+    app.run("window.arrange.tile", json!({})).unwrap();
+    // The first document in front: the second one's pane draws through Display P3, its paper too.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let mut out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
+    let shown = pane_middle(&app, &out, 1);
+    assert!(fills(&out, paper_p3), "the back document's paper draws through its Display P3: {paper_p3:?}");
+    assert!(!fills(&out, [0xcc, 0x66, 0x33]), "the back document's paper does not draw through the working space");
+    out.textures_delta.clear();
+    assert!(near(shown, p3), "the back document draws through its Display P3: {shown:?}, not {p3:?}");
+    // The same in a floating window.
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let floating = |app: &mut VectorcraftApp| {
+        ctx.run_ui(raw(), |ui| {
+            app.canvas_area(ui);
+            crate::doc_windows::show(app, ui.ctx());
+        })
+    };
+    // The window takes its place in the first frame and fades in over the next few.
+    for _ in 0..30 {
+        floating(&mut app).textures_delta.clear();
+    }
+    app.canvas.panes.clear();
+    let mut out = floating(&mut app);
+    let shown = pane_middle(&app, &out, 1);
+    assert!(fills(&out, paper_p3), "the floating document's paper draws through its Display P3: {paper_p3:?}");
+    out.textures_delta.clear();
+    assert!(near(shown, p3), "the floating document draws through its Display P3: {shown:?}, not {p3:?}");
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.canvas.panes.clear();
+    // The second document in front: the first one's pane draws through the working sRGB.
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let mut out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
+    let shown = pane_middle(&app, &out, 0);
+    out.textures_delta.clear();
+    assert!(near(shown, srgb), "the back document draws through the working space: {shown:?}, not {srgb:?}");
+    // The same off the UI thread.
+    app.canvas.panes.clear();
+    app.canvas.panes.worker = crate::thumb_worker::ThumbWorker::start(&ctx, "test-panes");
+    app.canvas.panes.worker_started = true;
+    ctx.run_ui(raw(), |ui| app.canvas_area(ui)).textures_delta.clear();
+    let done = app.canvas.panes.worker.as_ref().unwrap().wait().unwrap();
+    assert_eq!(done.key.0.0, app.session.documents()[0].uid);
+    let img = done.img.unwrap();
+    let at = ((img.height / 2 * img.width + img.width / 2) * 4) as usize;
+    let shown = [img.pixels[at], img.pixels[at + 1], img.pixels[at + 2]];
+    assert!(near(shown, srgb), "the worker draws the back document through the working space: {shown:?}, not {srgb:?}");
+    // A CMYK document behind the front one draws through its own assigned CMYK profile.
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let steps = json!([
+        {"command": "edit.assignProfile", "params": {"cmyk": cms::DEVICE_CMYK}},
+        {"command": "file.documentColorMode", "params": {"mode": "cmyk"}},
+    ]);
+    app.run("command.batch", json!({"commands": steps})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    app.run("paint.setFill", json!({"color": {"c": 60, "m": 10, "y": 80, "k": 0}})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let ink = vectorcraft_color::Color::cmyk(0.6, 0.1, 0.8, 0.0);
+    let to_u8 = |c: [f32; 3]| c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
+    let device = to_u8(Cms::new(&ColorSettings { cmyk: cms::DEVICE_CMYK.into(), ..cms::working_settings() }).unwrap().display_rgb(&ink));
+    let front = to_u8(cms::active().display_rgb(&ink));
+    let close = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 3);
+    assert!(!close(device, front), "the two CMYK profiles draw the color differently: {device:?}, {front:?}");
+    app.canvas.panes.clear();
+    ctx.run_ui(raw(), |ui| app.canvas_area(ui)).textures_delta.clear();
+    let done = app.canvas.panes.worker.as_ref().unwrap().wait().unwrap();
+    assert_eq!(done.key.0.0, app.session.documents()[0].uid);
+    let img = done.img.unwrap();
+    let at = ((img.height / 2 * img.width + img.width / 2) * 4) as usize;
+    let shown = [img.pixels[at], img.pixels[at + 1], img.pixels[at + 2]];
+    assert!(close(shown, device), "the back CMYK document draws through its Device CMYK: {shown:?}, not {device:?} (front: {front:?})");
+    assert!(near(cms::active().display_rgb(&color).map(|v| (v * 255.0).round() as u8), p3), "the front document's profile stays active");
+}

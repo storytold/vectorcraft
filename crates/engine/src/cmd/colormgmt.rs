@@ -9,7 +9,8 @@
 //! ([`use_front_profiles`]): when they are assigned, when the working settings change, and when the
 //! document comes to the front or its assignment comes back (an open, a switch, a close, a revert,
 //! an undo or a rollback, [`Session::sync_front_profiles`]); the working spaces stay as Edit → Color
-//! Settings set them.
+//! Settings set them. A document drawn while another is in front draws through its own profiles
+//! ([`doc_cms`]).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -236,6 +237,9 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     } else if proof_targets(&info.name) {
         // A new file of the CMYK profile View → Proof Setup targets: redraw.
         touch_all(s);
+    } else {
+        // Documents behind the front one draw through their own profiles: those assigned it redraw.
+        touch_assigned(s, &info.name);
     }
     Ok(json!({"name": info.name, "kind": info.kind, "remembered": remembered}))
 }
@@ -266,7 +270,19 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     if proof_targets(&info.name) {
         touch_all(s);
     }
+    // Documents behind the front one draw through their own profiles: those assigned it redraw.
+    touch_assigned(s, &info.name);
     Ok(json!({"removed": info.name}))
+}
+
+/// Redraw the open documents assigned the profile `name`.
+fn touch_assigned(s: &mut Session, name: &str) {
+    for d in &mut s.docs {
+        let (rgb, cmyk) = doc_profiles(&d.doc);
+        if [rgb, cmyk].iter().any(|n| n.as_deref() == Some(name)) {
+            d.revision += 1;
+        }
+    }
 }
 
 /// Whether View → Proof Setup targets the CMYK profile `name`.
@@ -283,6 +299,14 @@ fn load_profile(_: &mut Session, _: &Value) -> Result<Value> {
 pub fn doc_profiles(d: &vectorcraft_doc::Document) -> (Option<String>, Option<String>) {
     let get = |n: &Option<String>| n.as_deref().map(|n| cms::canonical_name(n).to_string());
     (get(&d.color_profiles.rgb), get(&d.color_profiles.cmyk))
+}
+
+/// The color-management context the document draws through: the working settings with its
+/// assigned profiles in place of the working spaces, whether or not it is in front
+/// ([`cms::for_document`]).
+pub fn doc_cms(d: &vectorcraft_doc::Document) -> Arc<cms::Cms> {
+    let (rgb, cmyk) = doc_profiles(d);
+    cms::for_document(rgb.as_deref(), cmyk.as_deref())
 }
 
 fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
