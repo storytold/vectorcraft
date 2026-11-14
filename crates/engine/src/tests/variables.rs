@@ -2201,6 +2201,16 @@ fn datasets_csv_reads_utf16_files_without_a_byte_order_mark() {
         let e = import(&mut s, &bytes).unwrap_err().to_string();
         assert!(e.contains("CSV has a header but no data rows"), "{e}");
     }
+    // With no line break, the side of each unit that holds the NUL byte gives the byte order, and a
+    // tie is little-endian.
+    let order = crate::cmd::utf16_order_without_mark;
+    assert_eq!(order(&utf16("City", false)), Some(false));
+    assert_eq!(order(&utf16("City", true)), Some(true));
+    assert_eq!(order(b"\0aa\0"), Some(true));
+    assert_eq!(order(&[utf16("City\n", false), vec![0x0A]].concat()), Some(false), "an odd last byte is left out");
+    // Read big-endian, this one-line file ends in an unpaired surrogate.
+    let e = import(&mut s, b"\0a\0b\xd8\0").unwrap_err().to_string();
+    assert!(e.contains("CSV holds NUL bytes"), "{e}");
     import(&mut s, &utf16("City\tName\n一二三丁目\tKai\n", true)).unwrap();
     assert_eq!(value(&s, "Data Set 1"), text_value("一二三丁目"));
     // Most units hold their NUL byte where a big-endian file would (U+4E00); the line breaks
