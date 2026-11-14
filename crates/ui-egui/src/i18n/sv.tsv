@@ -4683,6 +4683,7 @@ axis	Both	Båda
 @msg	no action set to save	ingen åtgärdsuppsättning att spara
 @msg	the action set file can't be read in full	filen med åtgärdsuppsättning kan inte läsas helt
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Läste in ”{name}”: {n} steg utelämnades|Läste in ”{name}”: {n} steg utelämnades
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Läste in ”{name}”: {n} steg har ett okänt kommando och behölls: ”{action}”, steg {step}, `{command}`|Läste in ”{name}”: {n} steg har okända kommandon och behölls; det första: ”{action}”, steg {step}, `{command}`
 @msg	not an action set file	inte en fil med åtgärdsuppsättning
 @msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: referensen skulle bli större än {MAX_BYTES} byte
@@ -4917,6 +4918,7 @@ axis	Both	Båda
 @msg	tool shortcuts must be a single key (optionally with Shift)	kortkommandon för verktyg måste vara en enda tangent (eventuellt med Shift)
 @msg	truncated	avkortad
 @msg	unknown command `{0}`	okänt kommando `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	steg {step} i ”{action}” kör det okända kommandot `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	okänt kommando `{0}`; menade du `{1}`?
 @msg	unknown effect `{id}`	okänd effekt `{id}`
 @msg	unknown format	okänt format

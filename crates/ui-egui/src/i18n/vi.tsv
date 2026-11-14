@@ -5132,6 +5132,7 @@ theme	Appearance	Giao diện
 @msg	no action set to save	không có bộ hành động nào để lưu
 @msg	the action set file can't be read in full	không thể đọc hết tệp bộ hành động
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Đã tải “{name}”: bỏ qua {n} bước
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Đã tải “{name}”: giữ lại {n} bước có lệnh không xác định; bước đầu tiên: “{action}”, bước {step}, `{command}`
 @msg	not an action set file	không phải tệp bộ hành động
 @msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: tài liệu tham khảo sẽ lớn hơn {MAX_BYTES} byte
@@ -5573,6 +5574,7 @@ theme	Appearance	Giao diện
 @msg	truncated	bị cắt ngắn
 @msg	Unembedded to {_1}	Đã bỏ nhúng vào {_1}
 @msg	unknown command `{0}`	lệnh không xác định `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	bước {step} của “{action}” chạy lệnh không xác định `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	lệnh không xác định `{0}`; ý bạn là `{1}`?
 @msg	unknown effect `{id}`	hiệu ứng không xác định `{id}`
 @msg	unknown format	định dạng không xác định

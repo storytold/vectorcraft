@@ -4783,6 +4783,7 @@ axis	Both	Ambos
 @msg	no action set to save	no hay ningún conjunto de acciones que guardar
 @msg	the action set file can't be read in full	el archivo de conjunto de acciones no se puede leer completo
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Se cargó “{name}”: se omitió {n} paso|Se cargó “{name}”: se omitieron {n} pasos
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Se cargó “{name}”: {n} paso tiene un comando desconocido y se conservó: “{action}”, paso {step}, `{command}`|Se cargó “{name}”: {n} pasos tienen comandos desconocidos y se conservaron; el primero: “{action}”, paso {step}, `{command}`
 @msg	not an action set file	no es un archivo de conjunto de acciones
 @msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referencia superaría los {MAX_BYTES} bytes
@@ -5024,6 +5025,7 @@ axis	Both	Ambos
 @msg	tool shortcuts must be a single key (optionally with Shift)	los atajos de herramientas deben ser una sola tecla (opcionalmente con Shift)
 @msg	truncated	truncado
 @msg	unknown command `{0}`	comando desconocido `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	el paso {step} de “{action}” ejecuta el comando desconocido `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	comando desconocido `{0}`; ¿quiso decir `{1}`?
 @msg	unknown effect `{id}`	efecto desconocido `{id}`
 @msg	unknown format	formato desconocido

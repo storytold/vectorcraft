@@ -617,7 +617,7 @@ An **importer** gets the bytes of the file being opened, as they are (not JSON),
   `paint`, `width` in points, `join` (`"miter"`, `"round"` or `"bevel"`), `cap` (`"butt"`, `"round"` or `"square"`)
   and `miterLimit`. Paints use the native file format's form: `{"type": "solid", "color", "swatch"?, "tint"?}`,
   `{"type": "gradient", "gradient": {"kind": "Linear"|"Radial"|"Freeform", "stops": [{offset, color, opacity,
-  midpoint}], "dither"?, "method"?: "Perceptual"|"HueClockwise"|"HueCounterclockwise"}, "geom"?, "angle", "freeform"?}`, `{"type": "pattern", "pattern",
+  midpoint, swatch?, tint?, plates?}], "dither"?, "method"?: "Perceptual"|"HueClockwise"|"HueCounterclockwise"}, "geom"?, "angle", "freeform"?}`, `{"type": "pattern", "pattern",
   "xf"?}`. Colours are `{"model": "rgb", r, g, b}`, `{"model": "cmyk", c, m, y, k}`, `{"model": "gray", k}` (ink: 0
   white, 1 black) or `{"model": "lab", l, a, b}`; components 0–1 except Lab's.
 - `effects` (filters): the object's own effects in order, as its effect records: `id` (as `effect.list` lists it, or
@@ -742,7 +742,7 @@ most 100,000 objects and 4,000,000 anchors, 256 fills, strokes or gradient stops
 clamped into range, stroke weights to 0–1,000 pt and miter limits to 1–500; a pattern must exist in the document. A
 gradient stop's four process `plates` are clamped to 0–1 as well: a value that is not a number becomes 0, and an
 infinite one becomes 0 or 1 by its sign. A paint returned unchanged keeps its swatch link; any other paint is
-unlinked. One refused effect record refuses the whole output.
+unlinked, and each of its gradient stops then has no swatch, a tint of 1 and no `plates`. One refused effect record refuses the whole output.
 
 A filter's output may also hold `documentData`: any JSON of at most 1 MiB, which replaces what the plug-in keeps with
 the document (`null` removes it), in the same undo step as its objects. Settings that belong to the whole document
