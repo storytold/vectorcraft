@@ -9326,7 +9326,7 @@ font-script	Japanese	იაპონური
 @msg	this warp's points can't be edited: use Reset with Mesh first	ამ გაღუნვის წერტილების რედაქტირება შეუძლებელია: ჯერ გამოიყენეთ „ბადით ჩამოყრა“
 @msg	thumbnail: no page {v} (the {what} has {count})	ესკიზი: გვერდი {v} არ არის ({what}: {count} გვერდი)
 @msg	tileRange of {what}: {e}	tileRange ({what}): {e}
-@msg	title can't be empty	სათაური ცარიელი ვერ იქნება
+@msg	title can't be empty	title ცარიელი ვერ იქნება
 @msg	to (the new name) is required	to (ახალი სახელი) აუცილებელია
 @msg	to must be fill or stroke	to უნდა იყოს fill ან stroke
 @msg	to must be smooth or corner	to უნდა იყოს smooth ან corner
