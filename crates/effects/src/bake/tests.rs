@@ -1172,3 +1172,75 @@ fn placing_symbols_keeps_dynamic_instances_changes() {
     assert!(fills.contains(&(110.0, 40.0, red)), "{fills:?}");
     assert!(fills.contains(&(10.0, 60.0, Paint::solid(Color::WHITE))), "{fills:?}");
 }
+
+fn is_instance(d: &Document, id: u64) -> bool {
+    d.node(NodeId(id)).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
+}
+
+/// The art placed for an export is counted as baked: the copies an effect makes count, so an
+/// instance whose baked art passes what is left of the budget stays an instance, and the budget
+/// holds the baked art of the instances placed, exactly.
+#[test]
+fn placing_symbols_counts_the_baked_art() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(901, "S", Affine::translate((0.0, 100.0)))).unwrap();
+    add_symbol(&mut d, "S", gradient_copies(800));
+    let all = bake(&d, Some((true, u64::MAX))).unwrap();
+    let each = all.node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    assert!(each > 2, "the instance's group, and the copies as objects of their own: {each}");
+    assert_eq!(all.node(NodeId(901)).map(|n| n.count_with_masks() as u64), Some(each));
+    let fits = bake(&d, Some((true, 2 * each))).unwrap();
+    assert!(!is_instance(&fits, 900) && !is_instance(&fits, 901));
+    let short = bake(&d, Some((true, 2 * each - 1))).unwrap();
+    assert_eq!(usize::from(is_instance(&short, 900)) + usize::from(is_instance(&short, 901)), 1, "one instance stays as it is");
+}
+
+/// The baked art of an instance placed inside another's art is counted once: a budget of exactly
+/// the outer instance's baked art places both.
+#[test]
+fn placing_symbols_counts_nested_art_once() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", gradient_copies(800));
+    add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(instance(802, "Inner", Affine::IDENTITY))]));
+    let all = bake(&d, Some((true, u64::MAX))).unwrap();
+    let total = all.node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    let exact = bake(&d, Some((true, total))).unwrap();
+    assert!(!is_instance(&exact, 900) && !is_instance(&exact, 802), "both are placed within {total}");
+    let short = bake(&d, Some((true, total - 1))).unwrap();
+    assert!(is_instance(&short, 900), "the outer instance stays as it is");
+}
+
+/// `leaf` in `levels` groups, with ids from `id` up.
+fn in_groups(id: u64, levels: u64, leaf: Node) -> Node {
+    (0..levels).fold(leaf, |n, i| Node::group(NodeId(id + i), vec![Arc::new(n)]))
+}
+
+/// Placed art is drawn no deeper than the document may draw: an instance whose art's effects add
+/// a level past it stays an instance, and the instances around it are placed.
+#[test]
+fn placing_symbols_keeps_the_baked_art_within_the_drawn_depth() {
+    use vectorcraft_doc::depth::{DrawnHeights, MAX_DRAWN_DEPTH};
+    use vectorcraft_geom::Affine;
+    // The instance on the layer is 2 deep; A to D each hold the next 31 objects down, and E's
+    // square is 2 deep in its art: 2 + 4 × 31 + 2 = MAX_DRAWN_DEPTH.
+    let mut d = doc_with(instance(900, "A", Affine::IDENTITY));
+    for (i, (name, next)) in [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E")].into_iter().enumerate() {
+        let base = 1000 * (i as u64 + 1);
+        add_symbol(&mut d, name, in_groups(base, 30, instance(base + 100, next, Affine::IDENTITY)));
+    }
+    add_symbol(&mut d, "E", in_groups(5000, 1, gradient_copies(5100)));
+    assert!(!d.too_deep(None));
+    assert_eq!(DrawnHeights::of(&d).deepest(&d.layers[0], 1), MAX_DRAWN_DEPTH);
+    let out = bake_document_placing_symbols(&d, true).unwrap();
+    // E's square becomes a group of copies, a level past the cap: E's instance stays.
+    assert!(is_instance(&out, 4100), "E's instance stays as it is");
+    assert!(!is_instance(&out, 900) && !is_instance(&out, 3100), "A to D are placed");
+    assert!(DrawnHeights::of(&out).deepest(&out.layers[0], 1) <= MAX_DRAWN_DEPTH);
+    // Without the chain above it, E's art is placed.
+    let mut shallow = doc_with(instance(900, "E", Affine::IDENTITY));
+    add_symbol(&mut shallow, "E", in_groups(5000, 1, gradient_copies(5100)));
+    assert!(!is_instance(&bake_document_placing_symbols(&shallow, true).unwrap(), 900));
+}

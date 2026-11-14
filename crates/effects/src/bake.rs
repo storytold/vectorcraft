@@ -117,9 +117,20 @@ thread_local! {
     /// While [`bake_document_placing_symbols`] bakes: the symbols whose instances become their
     /// placed art ([`placed_symbol_art`]).
     static PLACING: std::cell::RefCell<Option<Rc<Placing>>> = const { std::cell::RefCell::new(None) };
-    /// The objects of symbol art that [`placed_symbol_art`] has placed for one export, counted
-    /// against [`vectorcraft_doc::MAX_SYMBOL_NODES`].
+    /// The objects in the baked art of the instances that [`bake_node`] has replaced by their
+    /// placed art for one export ([`placed_symbol_art`]), counted against [`Placing::most_nodes`].
     static PLACED_NODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// How deep the object [`bake_node`] is baking sits in the tree it returns: a top-level layer
+    /// is 1 deep.
+    static LEVEL: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
+}
+
+/// `f` run for an object one level deeper ([`LEVEL`]) than the one being baked.
+fn one_deeper<T>(f: impl FnOnce() -> T) -> T {
+    LEVEL.with(|c| c.set(c.get() + 1));
+    let out = f();
+    LEVEL.with(|c| c.set(c.get().saturating_sub(1)));
+    out
 }
 
 /// The symbols whose instances [`bake_document_placing_symbols`] replaces by their placed art, and
@@ -131,6 +142,27 @@ struct Placing {
     /// Whether 9-slice cells are clipped ([`Document::place_symbol_art`]) or not
     /// ([`Document::place_symbol_art_unclipped`]).
     clip_slices: bool,
+    /// Most objects the baked art of all placed instances may hold together:
+    /// [`vectorcraft_doc::MAX_SYMBOL_NODES`] for an export.
+    most_nodes: u64,
+    /// How deep the document's symbols and patterns draw, for the instances and pattern paints
+    /// left in placed art.
+    heights: vectorcraft_doc::depth::DrawnHeights,
+}
+
+/// Can `baked`, the baked art of a placed instance, take the instance's place [`LEVEL`] deep,
+/// when the art placed for the export so far holds `spent` objects? `Some` with the objects
+/// placed then, when its objects (opacity masks' art included) fit within
+/// [`Placing::most_nodes`] and nothing in it, the symbols and patterns it uses included, draws
+/// deeper than [`vectorcraft_doc::depth::MAX_DRAWN_DEPTH`].
+fn placed_fits(baked: &Node, spent: u64) -> Option<u64> {
+    PLACING.with(|p| {
+        let p = p.borrow();
+        let p = p.as_ref()?;
+        let spent = spent.saturating_add(baked.count_with_masks() as u64);
+        let deepest = p.heights.deepest(baked, LEVEL.with(|c| c.get()));
+        (spent <= p.most_nodes && deepest <= vectorcraft_doc::depth::MAX_DRAWN_DEPTH).then_some(spent)
+    })
 }
 
 /// The names of the symbols of `d` whose art needs baking ([`needs_bake`]), and of those whose art
@@ -183,12 +215,13 @@ fn holds_placed_symbol(n: &Node) -> bool {
 /// place it, in a group with the instance's id, name, visibility, transparency, opacity mask and
 /// raster effects. The art is placed before its effects are baked, as the canvas draws it, so an
 /// instance that scales its art does not scale what its effects do. `None` for other objects,
-/// for instances nested [`vectorcraft_doc::depth::MAX_DEPTH`] deep in such art, and once the art
-/// placed for one export would pass [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects; those
-/// instances stay as they are.
+/// for instances nested [`vectorcraft_doc::depth::MAX_DEPTH`] deep in such art, and when the art
+/// as placed, before its effects are baked, would already take the art placed for the export
+/// past [`Placing::most_nodes`]; those instances stay as they are. [`bake_node`] checks the baked
+/// art with [`placed_fits`].
 fn placed_symbol_art(d: &Document, n: &Node) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return None };
-    let clip = PLACING.with(|p| p.borrow().as_ref().filter(|p| p.symbols.contains(symbol)).map(|p| p.clip_slices))?;
+    let (clip, most_nodes) = PLACING.with(|p| p.borrow().as_ref().filter(|p| p.symbols.contains(symbol)).map(|p| (p.clip_slices, p.most_nodes)))?;
     if INSTANCE_DEPTH.with(|c| c.get()) >= vectorcraft_doc::depth::MAX_DEPTH {
         return None;
     }
@@ -199,11 +232,9 @@ fn placed_symbol_art(d: &Document, n: &Node) -> Option<Node> {
         Some(m) => m.most_placed_unclipped(&art, d),
         None => art.count_with_masks() as u64,
     };
-    let spent = PLACED_NODES.with(|c| c.get()).saturating_add(most);
-    if spent > vectorcraft_doc::MAX_SYMBOL_NODES {
+    if PLACED_NODES.with(|c| c.get()).saturating_add(most) > most_nodes {
         return None;
     }
-    PLACED_NODES.with(|c| c.set(spent));
     let placed = if clip { d.place_symbol_art(symbol, &art, *xf) } else { d.place_symbol_art_unclipped(symbol, &art, *xf) }?;
     Some(dressed(Node::group(n.id, vec![Arc::new(placed)]), n))
 }
@@ -272,12 +303,20 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         return Some(baked.unwrap_or(m));
     }
     // Symbol instances whose art draws live effects, when the caller asks for them: the art
-    // placed, then baked.
+    // placed, then baked. When the baked art passes the export's budget, or would draw too deep
+    // where the instance is, it is dropped with the art placed for the instances inside it, and
+    // the instance stays as it is.
     if let Some(m) = placed_symbol_art(d, n) {
+        let spent = PLACED_NODES.with(|c| c.get());
         INSTANCE_DEPTH.with(|c| c.set(c.get() + 1));
         let baked = bake_node(d, &m);
         INSTANCE_DEPTH.with(|c| c.set(c.get() - 1));
-        return Some(baked.unwrap_or(m));
+        let baked = baked.unwrap_or(m);
+        if let Some(now) = placed_fits(&baked, spent) {
+            PLACED_NODES.with(|c| c.set(now));
+            return Some(baked);
+        }
+        PLACED_NODES.with(|c| c.set(spent));
     }
     // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its
     // patterns: each copy an object of its own, so its gradient fits it rather than spanning
@@ -300,7 +339,7 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
             return bake_leaf(d, n);
         }
         let mut m = n.clone();
-        let baked: Vec<Arc<Node>> = ch.iter().map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone())).collect();
+        let baked: Vec<Arc<Node>> = ch.iter().map(|c| one_deeper(|| bake_node(d, c)).map(Arc::new).unwrap_or_else(|| c.clone())).collect();
         if let Some(ch) = m.children_mut() {
             *ch = baked;
         }
@@ -319,7 +358,7 @@ fn bake_pieces(d: &mut Document, mut m: Node) -> Node {
         .into_iter()
         .map(|c| {
             let c = Arc::unwrap_or_clone(c);
-            let mut c = bake_node(d, &c).unwrap_or(c);
+            let mut c = one_deeper(|| bake_node(d, &c)).unwrap_or(c);
             fresh_ids(d, &mut c, &mut seen);
             Arc::new(c)
         })
@@ -808,25 +847,29 @@ pub fn bake_document(doc: &Document) -> Option<Document> {
 /// ([`Document::place_symbol_art`]) or not ([`Document::place_symbol_art_unclipped`]), as the
 /// exporter places other instances. The symbols' own art is left as it is.
 pub fn bake_document_placing_symbols(doc: &Document, clip_slices: bool) -> Option<Document> {
-    bake(doc, Some(clip_slices))
+    bake(doc, Some((clip_slices, vectorcraft_doc::MAX_SYMBOL_NODES)))
 }
 
 /// Restores what [`bake`] changes in the thread's baking state when it ends.
-struct Restore(Option<Rc<Placing>>, u64);
+struct Restore(Option<Rc<Placing>>, u64, usize);
 
 impl Drop for Restore {
     fn drop(&mut self) {
         PLACING.with(|p| *p.borrow_mut() = self.0.take());
         PLACED_NODES.with(|c| c.set(self.1));
+        LEVEL.with(|c| c.set(self.2));
     }
 }
 
-/// [`bake_document`], or with `placing` [`bake_document_placing_symbols`] with that `clip_slices`.
-fn bake(doc: &Document, placing: Option<bool>) -> Option<Document> {
+/// [`bake_document`], or with `placing` [`bake_document_placing_symbols`] with that `clip_slices`
+/// and [`Placing::most_nodes`].
+fn bake(doc: &Document, placing: Option<(bool, u64)>) -> Option<Document> {
     let placed = doc.with_placed_art();
-    let placing = placing.map(|clip_slices| Placing { symbols: drawn_symbols(&placed), clip_slices }).filter(|p| !p.symbols.is_empty());
+    let placing = placing.map(|(clip_slices, most_nodes)| (drawn_symbols(&placed), clip_slices, most_nodes)).filter(|p| !p.0.is_empty()).map(
+        |(symbols, clip_slices, most_nodes)| Placing { symbols, clip_slices, most_nodes, heights: vectorcraft_doc::depth::DrawnHeights::of(&placed) },
+    );
     // A bake inside another one (of art an effect makes) places symbols only when it asks to.
-    let _restore = Restore(PLACING.with(|p| p.replace(placing.map(Rc::new))), PLACED_NODES.with(|c| c.replace(0)));
+    let _restore = Restore(PLACING.with(|p| p.replace(placing.map(Rc::new))), PLACED_NODES.with(|c| c.replace(0)), LEVEL.with(|c| c.replace(1)));
     if !placed.layers.iter().any(|l| needs_bake(l) || holds_placed_symbol(l)) {
         return match placed {
             std::borrow::Cow::Owned(d) => Some(d),
