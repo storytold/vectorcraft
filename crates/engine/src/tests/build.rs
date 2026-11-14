@@ -1490,6 +1490,93 @@ fn shape_builder_open_filled_paths_cut_without_open_filled_as_closed() {
     assert!((area(&s, NodeId(r["merged"].as_u64().unwrap())) - 5000.0).abs() < 1e-6);
 }
 
+/// The fill rows of an open path's appearance (bottom first) for the open-path tests below, with
+/// a 1 pt black stroke on top: a painted fill under an unpainted top fill, a painted fill that is
+/// hidden, one with an opacity of 0, and a painted fill under a hidden painted top fill.
+fn open_path_fill_stacks() -> [(&'static str, Vec<AppearanceItem>, bool); 4] {
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    let fill = |p: Paint, visible: bool, opacity: f32| {
+        let mut f = FillLayer::new(p);
+        f.visible = visible;
+        f.opacity = opacity;
+        AppearanceItem::Fill(f)
+    };
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = || Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let stroke = || AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 1.0));
+    [
+        ("a painted fill under an unpainted top fill", vec![fill(red(), true, 1.0), fill(Paint::None, true, 1.0), stroke()], true),
+        ("a hidden painted fill", vec![fill(red(), false, 1.0), stroke()], false),
+        ("a painted fill with an opacity of 0", vec![fill(red(), true, 0.0), stroke()], false),
+        ("a painted fill under a hidden painted top fill", vec![fill(red(), true, 1.0), fill(blue(), false, 1.0), stroke()], true),
+    ]
+}
+
+/// Consider Open Filled Paths as Closed: an open path counts as filled when any of its fill rows
+/// draws (shown, painted and above 0% opacity), whichever row is on top. The map, a merge inside
+/// the area and what a merge keeps of the path follow the rows that draw; with the option off, none
+/// of the paths closes.
+#[test]
+fn shape_builder_closes_open_paths_by_the_fill_rows_that_draw() {
+    for (what, items, closes) in open_path_fill_stacks() {
+        let mut s = session();
+        let r = s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}]})).unwrap();
+        let p = NodeId(r["id"].as_u64().unwrap());
+        s.edit("t", |d, _| {
+            d.node_mut(p).unwrap().appearance.items = items;
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [p.0]})).unwrap();
+        let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+        assert_eq!(
+            (r["regions"].as_array().unwrap().len(), r["lines"].as_array().unwrap().len()),
+            if closes { (1, 0) } else { (0, 1) },
+            "{what}: {r}"
+        );
+        let r = s.execute("shapeBuilder.regions", &json!({"openFilledAsClosed": false})).unwrap();
+        assert_eq!((r["regions"].as_array().unwrap().len(), r["lines"].as_array().unwrap().len()), (0, 1), "{what}, option off: {r}");
+        let n = node(&s, p);
+        for on in [true, false] {
+            let inputs = vectorcraft_tools::builder::merge_inputs(&[&n], on);
+            assert_eq!(inputs.iter().map(|i| i.fill_closes).collect::<Vec<_>>(), vec![closes && on], "{what}, option {on}");
+        }
+        let merged = s.execute("shapeBuilder.merge", &json!({"points": [[75, 25]]}));
+        if closes {
+            assert!((area(&s, NodeId(merged.unwrap()["merged"].as_u64().unwrap())) - 5000.0).abs() < 1e-6, "{what}");
+        } else {
+            assert!(merged.is_err(), "{what}: the open path encloses no region");
+        }
+    }
+}
+
+/// Clicking Stroke Splits the Path on the middle side of an open U cuts it along the outline its
+/// drawn fill closes: with a fill row that draws, what is left runs on from the cut round the
+/// implied closing edge (the top side, then the bottom side); without one, what is left is the
+/// open path's two ends in path order (the bottom side, then the top side).
+#[test]
+fn shape_builder_stroke_split_closes_open_paths_by_the_fill_rows_that_draw() {
+    for (what, items, closes) in open_path_fill_stacks() {
+        let mut s = session();
+        let r =
+            s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}]})).unwrap();
+        let p = NodeId(r["id"].as_u64().unwrap());
+        s.edit("t", |d, _| {
+            d.node_mut(p).unwrap().appearance.items = items;
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [p.0]})).unwrap();
+        let r = s.execute("shapeBuilder.merge", &json!({"points": [[101, 50]], "splitStroke": true})).unwrap();
+        let out = ids(&r);
+        assert_eq!(shapes_of(&s, &out), vec![(false, 4, 200.0), (false, 2, 100.0)], "{what}");
+        let (rest, _) = outline(&node(&s, out[0]));
+        let starts: Vec<(f64, f64)> = rest.subpaths.iter().map(|sp| (sp.anchors[0].p.x.round(), sp.anchors[0].p.y.round())).collect();
+        let order = if closes { vec![(100.0, 100.0), (0.0, 0.0)] } else { vec![(0.0, 0.0), (100.0, 100.0)] };
+        assert_eq!(starts, order, "{what}");
+    }
+}
+
 /// Pick Color From Color Swatches: the merged shape takes the current fill, not the fill of the
 /// object under the first point; setting the current fill without `ids` leaves the selection's.
 #[test]
@@ -4002,6 +4089,49 @@ fn shape_builder_uses_the_filled_faces_of_a_live_paint_group() {
     // The outline of 0..150 × 0..100 and the edge at x = 100 keep their strokes; the edge at x = 50
     // between the merged faces is removed.
     assert!((stroked_length(&s, &out) - 600.0).abs() < 1.0, "{}", stroked_length(&s, &out));
+}
+
+/// The Shape Builder takes a Live Paint face or edge when any of its fill or stroke rows draws,
+/// whichever row is on top: a painted lower row under an unpainted top row counts, and a part
+/// whose only painted row is hidden, transparent or (for an edge) 0 pt wide does not.
+#[test]
+fn shape_builder_takes_the_live_paint_faces_and_edges_that_draw() {
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let stroke = |p: Paint, w: f64| AppearanceItem::Stroke(StrokeLayer::new(p, w));
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let hidden = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.visible = false,
+            AppearanceItem::Stroke(st) => st.visible = false,
+        }
+        i
+    };
+    let clear = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.opacity = 0.0,
+            AppearanceItem::Stroke(st) => st.opacity = 0.0,
+        }
+        i
+    };
+    let mut s = session();
+    let g = live(&mut s);
+    let lower_fill = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![fill(red()), fill(Paint::None)], 1.0);
+    let hidden_fill = set_live_part(&mut s, g, Some((125.0, 50.0)), None, vec![hidden(fill(red()))], 1.0);
+    let clear_fill = set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![clear(fill(red()))], 1.0);
+    let lower_stroke = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke(red(), 2.0), stroke(Paint::None, 1.0)], 1.0);
+    let hidden_stroke = set_live_part(&mut s, g, None, Some((150.0, 50.0)), vec![hidden(stroke(red(), 2.0))], 1.0);
+    let thin_stroke = set_live_part(&mut s, g, None, Some((100.0, 50.0)), vec![stroke(red(), 0.0)], 1.0);
+    let clear_stroke = set_live_part(&mut s, g, None, Some((50.0, 50.0)), vec![clear(stroke(red(), 2.0))], 1.0);
+    let parts = [lower_fill, hidden_fill, clear_fill, lower_stroke, hidden_stroke, thin_stroke, clear_stroke];
+    assert_eq!(parts.iter().collect::<std::collections::HashSet<_>>().len(), parts.len());
+    let d = s.doc().unwrap();
+    let (_, leaves) = vectorcraft_tools::builder::shape_builder_shapes(&d.doc, &[g], true);
+    let taken: Vec<NodeId> = leaves.iter().map(|l| l.id).collect();
+    assert!(taken.contains(&lower_fill) && taken.contains(&lower_stroke), "a painted lower row draws: {taken:?}");
+    for id in [hidden_fill, clear_fill, hidden_stroke, thin_stroke, clear_stroke] {
+        assert!(!taken.contains(&id), "{id:?} draws nothing: {taken:?}");
+    }
 }
 
 /// An edge that closes on itself is a line around its face, not a second shape over it.

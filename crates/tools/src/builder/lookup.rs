@@ -162,8 +162,8 @@ fn collect_members<'a>(n: &'a Node, builder: bool, out: &mut Vec<&'a Node>) {
         NodeKind::Path { guide: true, .. } | NodeKind::Path { clipping: true, .. } => {}
         NodeKind::Path { .. } | NodeKind::Compound { .. } => out.push(n),
         NodeKind::Group { .. } if builder && is_live_paint(n) => {
-            out.extend(faces(n).into_iter().filter(|f| !f.visible || f.locked || !f.appearance.fill_paint().is_none()).map(|f| &**f));
-            out.extend(edges(n).into_iter().filter(|e| !e.visible || e.locked || !e.appearance.stroke_paint().is_none()).map(|e| &**e));
+            out.extend(faces(n).into_iter().filter(|f| !f.visible || f.locked || f.appearance.has_drawn_fill()).map(|f| &**f));
+            out.extend(edges(n).into_iter().filter(|e| !e.visible || e.locked || e.appearance.has_drawn_stroke()).map(|e| &**e));
         }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
             for c in children {
@@ -244,10 +244,12 @@ fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], builder: bool) -> (Vec<po:
 /// Shape Builder inputs: [`shapes_for`], with the open subpaths of filled paths closed where that
 /// encloses an area (the fill bounds a region, as if an invisible edge closed it) when
 /// `open_filled_as_closed`. Unfilled open paths and straight lines stay open and cut the regions
-/// they cross, and so do filled open paths without `open_filled_as_closed`. A Live Paint group
-/// contributes its filled faces as shapes and its stroked edges as open lines; its unfilled faces
-/// and its edges without a stroke are left out. Locked objects, and objects in a locked group or
-/// layer, give nothing.
+/// they cross, and so do filled open paths without `open_filled_as_closed`. A path, face or edge
+/// counts as filled or stroked when any of its fill or stroke rows draws
+/// ([`vectorcraft_doc::Appearance::has_drawn_fill`], [`vectorcraft_doc::Appearance::has_drawn_stroke`]),
+/// whichever row is on top. A Live Paint group contributes its filled faces as shapes and its
+/// stroked edges as open lines; its unfilled faces and its edges without a stroke are left out.
+/// Locked objects, and objects in a locked group or layer, give nothing.
 pub fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let (mut shapes, leaves) = shapes_of(doc, roots, true);
     for (s, l) in shapes.iter_mut().zip(&leaves) {
@@ -257,7 +259,7 @@ pub fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled
             s.path.subpaths = s.path.subpaths.iter().flat_map(|sp| sp.cut_at(&start)).collect();
             continue;
         }
-        if !open_filled_as_closed || l.appearance.fill_paint().is_none() {
+        if !open_filled_as_closed || !l.appearance.has_drawn_fill() {
             continue;
         }
         for sp in s.path.subpaths.iter_mut().filter(|sp| !sp.closed) {

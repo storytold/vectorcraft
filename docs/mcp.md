@@ -10109,7 +10109,8 @@ A canvas-click dialog also has `preview` (initially on): tentative settings draw
 ```
 
 The Shape Builder tool's options are its Shape Builder Tool Options (dialog `shapeBuilderOptions`):
-`openFilledAsClosed` (on: a filled open path bounds a region as if an invisible edge closed it; off: it cuts regions
+`openFilledAsClosed` (on: a filled open path bounds a region as if an invisible edge closed it; a path counts as
+filled when any of its fill rows is shown, painted and above 0% opacity, whichever row is on top; off: it cuts regions
 as an unfilled path does), `pickColorFrom` (`artwork`, the default: a merged shape takes the appearance, opacity and
 blending mode of the front-most selected object under the drag's first point, else of the one under its last point,
 else of the front-most selected object; `swatches`: the current fill, and the Left and Right arrow keys without
