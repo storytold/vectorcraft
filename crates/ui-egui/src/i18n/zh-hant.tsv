@@ -7160,6 +7160,9 @@ breakText	Glyphs	字符
 	Grommets	扣眼
 	Grommet Inset	扣眼邊距
 	Diameter	直徑
+	Nest Shapes…	形狀排料…
+	Nest Shapes	形狀排料
+	Roll	捲材
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D 效果需要位於 1 億點以內的有限座標

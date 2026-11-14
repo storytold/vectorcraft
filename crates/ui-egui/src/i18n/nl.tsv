@@ -9358,6 +9358,9 @@ breakText	Glyphs	Glyphs
 	Grommets	Zeilringen
 	Grommet Inset	Afstand van zeilringen tot de rand
 	Diameter	Diameter
+	Nest Shapes…	Vormen nesten…
+	Nest Shapes	Vormen nesten
+	Roll	Rol
 
 # Status and error messages: 3D effects and Revolve, image export, color profiles, swatch exchange files and
 # color books, regular expressions in scripts, whole-number parameters, and DXF and DWG files.

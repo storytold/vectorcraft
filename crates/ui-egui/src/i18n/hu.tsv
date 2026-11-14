@@ -7497,6 +7497,10 @@ breakText	Glyphs	Glifák
 	Grommets	Ringlik
 	Grommet Inset	Ringlik távolsága a széltől
 	Diameter	Átmérő
+	Nest Shapes…	Alakzatok elrendezése…
+	Nest Shapes	Alakzatok elrendezése
+	Roll	Tekercs
+
 # Status and error messages of commands, scripts, file import and export, and plug-ins.
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	a 'caller', a 'callee' és az 'arguments' nem használható szigorú módú függvényeken
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Egy profilon egy Forgatás tengely körül effektus lehet. Inkább a meglévő effektus beállításait szerkeszd.
