@@ -12,7 +12,7 @@ use vectorcraft_geom::{BezPath, FillRule, PathData};
 /// fills and strokes: the region is then the union of the paths they give, as an export bakes them.
 /// `None` when there is nothing to clip by (the clipped art is then hidden).
 pub fn clip_outline(clip: &Node) -> Option<(BezPath, FillRule)> {
-    match clip_effects_applied(clip, true) {
+    match clip_effects_applied(clip, true, || true) {
         Some(m) => m.clip_outline(Some(&outline_text), &unite),
         None => clip.clip_outline(Some(&outline_text), &unite),
     }
@@ -31,14 +31,26 @@ pub fn clip_outline(clip: &Node) -> Option<(BezPath, FillRule)> {
 /// geometry effects of its own fills and strokes live instead. `None` when nothing in it has a
 /// geometry effect. Effects on the clip group or around it then reshape the result, after its own.
 pub(crate) fn with_clip_effects_applied(n: &Node) -> Option<Node> {
-    let paint = n.clip_paint();
-    clip_effects_applied(n, paint.fill.is_none() && paint.stroke.is_none())
+    with_clip_effects_applied_while(n, || true)
 }
 
-/// [`with_clip_effects_applied`]; with `items` unset (a clipping path that paints, and the paths of
-/// a compound path, which draw with the compound path's fills and strokes), the geometry effects of
-/// `n`'s own fills and strokes are left out.
-fn clip_effects_applied(n: &Node, items: bool) -> Option<Node> {
+/// [`with_clip_effects_applied`] that calls `take` before it visits each member of a group, layer
+/// or compound path in `n`, at every depth: once `take` returns `false`, that member and the
+/// members after it are not visited. The members of a group or layer that are not visited stay as
+/// they are, with their effects. A compound path with geometry effects of its own still becomes a
+/// path of its reshaped geometry. In a clipping path that does not paint, one whose fills or
+/// strokes have geometry effects still becomes a group of one path per fill and stroke. In both
+/// cases the paths in it that are not visited go
+/// into that geometry as they are, and their own effects are not applied.
+pub(crate) fn with_clip_effects_applied_while(n: &Node, take: fn() -> bool) -> Option<Node> {
+    let paint = n.clip_paint();
+    clip_effects_applied(n, paint.fill.is_none() && paint.stroke.is_none(), take)
+}
+
+/// [`with_clip_effects_applied_while`]; with `items` unset (a clipping path that paints, and the
+/// paths of a compound path, which draw with the compound path's fills and strokes), the geometry
+/// effects of `n`'s own fills and strokes are left out.
+fn clip_effects_applied(n: &Node, items: bool, take: fn() -> bool) -> Option<Node> {
     let mut m: Option<Node> = None;
     let members: &[std::sync::Arc<Node>] = match &n.kind {
         NodeKind::Group { children, clip: true } => children.get(..1).unwrap_or_default(),
@@ -53,7 +65,10 @@ fn clip_effects_applied(n: &Node, items: bool) -> Option<Node> {
     // The paths of a compound path draw with the compound path's fills and strokes, and stay paths.
     let compound = matches!(n.kind, NodeKind::Compound { .. });
     for (i, c) in members.iter().enumerate().skip(skip).filter(|(_, c)| all || c.visible) {
-        if let Some(r) = clip_effects_applied(c, items && !compound)
+        if !take() {
+            break;
+        }
+        if let Some(r) = clip_effects_applied(c, items && !compound, take)
             && let Some(slot) = m.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
         {
             *slot = std::sync::Arc::new(r);
