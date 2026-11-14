@@ -951,7 +951,8 @@ fn paints(ap: &Appearance, fill: bool) -> Vec<&Paint> {
 }
 
 /// `p` without swatch links: a plug-in's colours are its own, so only paints it returned
-/// unchanged keep theirs.
+/// unchanged keep theirs. A gradient stop also loses its process plates, which print only with
+/// a spot swatch.
 fn unlinked(mut p: Paint) -> Paint {
     match &mut p {
         Paint::Solid { swatch, tint, .. } => {
@@ -961,8 +962,7 @@ fn unlinked(mut p: Paint) -> Paint {
         Paint::Gradient(g) => {
             g.swatch = None;
             for s in &mut g.gradient.stops {
-                s.swatch = None;
-                s.tint = 1.0;
+                s.set_color(s.color, None);
             }
         }
         Paint::None | Paint::Pattern { .. } => {}
