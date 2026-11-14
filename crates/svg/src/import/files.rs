@@ -23,6 +23,13 @@ use crate::{ImportOptions, MAX_ELEMENT_DEPTH, MAX_SVGZ, SvgError};
 /// Most nested SVG images an imported SVG may decode (#3564).
 pub const MAX_NESTED_SVG_IMAGES: usize = 256;
 
+/// Most nested SVG images an imported SVG may read, decoded or not: each one read is checked and
+/// parsed, and an image that fails is read again wherever it is shown.
+pub const MAX_NESTED_SVG_READS: usize = 1024;
+
+/// Most bytes of nested SVG image text an imported SVG may read, decoded or not, all reads together.
+pub const MAX_NESTED_SVG_TEXT: u64 = 512 << 20;
+
 /// The files an SVG's images link to.
 #[derive(Default)]
 pub(in crate::import) struct Files {
@@ -48,6 +55,12 @@ pub(in crate::import) struct Files {
     svg_images: AtomicUsize,
     /// SVG images were left out for exceeding [`MAX_NESTED_SVG_IMAGES`].
     too_many_svg_images: AtomicBool,
+    /// How many nested SVG images were read so far, decoded or not.
+    svg_reads: AtomicUsize,
+    /// The bytes of text those reads took.
+    svg_text: AtomicU64,
+    /// SVG images were left out for exceeding [`MAX_NESTED_SVG_READS`] or [`MAX_NESTED_SVG_TEXT`].
+    too_much_svg_read: AtomicBool,
     /// The CMYK TIFF stored in place of a turned CMYK image, by the address of the PNG usvg got
     /// (kept here too, so the address stays its own).
     cmyk: Mutex<HashMap<usize, (Bytes, Bytes)>>,
@@ -253,6 +266,12 @@ impl Files {
         if self.too_many_svg_images.load(Ordering::Relaxed) {
             notes.push(format!("SVG images were left out: more than {MAX_NESTED_SVG_IMAGES} nested SVG images"));
         }
+        if self.too_much_svg_read.load(Ordering::Relaxed) {
+            notes.push(format!(
+                "SVG images were left out: nested SVG images, valid or not, are read at most {MAX_NESTED_SVG_READS} times and {} MB of text",
+                MAX_NESTED_SVG_TEXT >> 20
+            ));
+        }
         notes
     }
 
@@ -308,11 +327,33 @@ impl Files {
 
     /// The SVG image `text` as usvg reads it with `opts`. `None`, the image left out as one usvg
     /// can't read, when it isn't SVG or when its elements nest deeper than the SVGs around it
-    /// leave: usvg reads it while it reads them, on the same stack.
+    /// leave: usvg reads it while it reads them, on the same stack. Only a decoded image, with the
+    /// images decoded inside it, counts toward [`MAX_NESTED_SVG_IMAGES`]; every image read counts
+    /// toward [`MAX_NESTED_SVG_READS`] and [`MAX_NESTED_SVG_TEXT`].
     fn svg(&self, text: &str, opts: &usvg::Options) -> Option<ImageKind> {
-        if self.svg_images.fetch_add(1, Ordering::Relaxed) >= MAX_NESTED_SVG_IMAGES {
+        let decoded = self.svg_images.load(Ordering::Relaxed);
+        if decoded >= MAX_NESTED_SVG_IMAGES {
             return leave_out(&self.too_many_svg_images, true);
         }
+        let reads = self.svg_reads.load(Ordering::Relaxed);
+        let read = self.svg_text.load(Ordering::Relaxed).saturating_add(text.len() as u64);
+        if reads >= MAX_NESTED_SVG_READS || read > MAX_NESTED_SVG_TEXT {
+            return leave_out(&self.too_much_svg_read, true);
+        }
+        self.svg_reads.store(reads + 1, Ordering::Relaxed);
+        self.svg_text.store(read, Ordering::Relaxed);
+        // The image's place is taken while usvg reads it, so the images inside it get what is left.
+        // usvg reads them all on this thread, so no other read comes between these steps.
+        self.svg_images.store(decoded + 1, Ordering::Relaxed);
+        let tree = self.svg_tree(text, opts);
+        if tree.is_none() {
+            self.svg_images.store(decoded, Ordering::Relaxed);
+        }
+        tree
+    }
+
+    /// [`Files::svg`]'s image once it is counted.
+    fn svg_tree(&self, text: &str, opts: &usvg::Options) -> Option<ImageKind> {
         // Measured as the SVG holding it is (`import`): the text before the XML reader.
         let used = self.depth.load(Ordering::Relaxed);
         let left = MAX_ELEMENT_DEPTH.saturating_sub(used);
@@ -323,11 +364,12 @@ impl Files {
         let Some(height) = depth::height(&xml, left) else { return leave_out(&self.too_deep, true) };
         // usvg's parser would overflow on it, as on the SVG holding it (`import`).
         super::convolve_matrices_ok(&xml).ok()?;
-        self.note_text(text);
         self.depth.store(used + height, Ordering::Relaxed);
         let tree = usvg::Tree::from_data_nested(text.as_bytes(), opts);
         self.depth.store(used, Ordering::Relaxed);
-        tree.ok().map(ImageKind::SVG)
+        let tree = tree.ok()?;
+        self.note_text(text);
+        Some(ImageKind::SVG(tree))
     }
 }
 
@@ -586,5 +628,35 @@ mod tests {
         };
         assert!(!read("2147483647"));
         assert!(read("1"));
+    }
+
+    /// The nested SVG images read, decoded or not, take at most [`MAX_NESTED_SVG_TEXT`] bytes of
+    /// text together: an image whose text goes past it is left out and noted. A broken image's
+    /// text counts too, and its decoded place is given back.
+    #[test]
+    fn svg_images_share_the_text_cap() {
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="1" height="1"/></svg>"#;
+        let broken = &svg[..20];
+        let files = Files::default();
+        let resolver = files.resolver(1);
+        let opts = usvg::Options::default();
+        let read =
+            |text: &str| matches!((resolver.resolve_data)("image/svg+xml", Arc::new(text.as_bytes().to_vec()), &opts), Some(ImageKind::SVG(_)));
+        assert!(!read(broken));
+        assert_eq!(files.svg_text.load(Ordering::Relaxed), broken.len() as u64);
+        assert_eq!((files.svg_reads.load(Ordering::Relaxed), files.svg_images.load(Ordering::Relaxed)), (1, 0));
+        files.svg_text.store(MAX_NESTED_SVG_TEXT - svg.len() as u64, Ordering::Relaxed);
+        assert!(read(svg));
+        assert_eq!((files.svg_reads.load(Ordering::Relaxed), files.svg_images.load(Ordering::Relaxed)), (2, 1));
+        assert!(files.left_out().is_empty());
+        assert!(!read(svg) && !read(broken));
+        assert_eq!(files.svg_text.load(Ordering::Relaxed), MAX_NESTED_SVG_TEXT, "past the cap, nothing is read");
+        assert_eq!(
+            files.left_out(),
+            [format!(
+                "SVG images were left out: nested SVG images, valid or not, are read at most {MAX_NESTED_SVG_READS} times and {} MB of text",
+                MAX_NESTED_SVG_TEXT >> 20
+            )]
+        );
     }
 }

@@ -22,6 +22,7 @@ fn the_plugins_submenu_selects_the_tools_and_opens_the_anchor_inspector() {
         ("Measure & Inspect Tool", "measureInspect"),
         ("Parametric Shape Tool", "parametricShape"),
         ("Slide Anchor Along Path", "slideAnchor"),
+        ("Trim at Crossings Tool", "trimAtCrossings"),
     ] {
         let e = under(label).expect(label);
         assert_eq!((e.command.as_deref(), &e.params), (Some("tool.select"), &json!({ "tool": tool })));

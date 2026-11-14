@@ -571,6 +571,25 @@ fn distort_command_warps_the_linked_mask_of_a_path_in_a_group() {
     assert_eq!(a.extras().mask.as_ref().unwrap().art.path_data(), a.path_data(), "and so is its mask");
 }
 
+/// Corners where the box already stands change nothing: no undo step, the document as it was. A
+/// corner moved by a hundredth of a point is a warp.
+#[test]
+fn unchanged_distort_records_no_history() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let n = undo_len(&s);
+    let at = |x1: f64| json!([[b.x0, b.y0], [x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]]);
+    assert_eq!(s.execute("object.distort", &json!({"corners": at(b.x1)})).unwrap()["ids"], json!([a.0]));
+    assert_eq!(undo_len(&s), n);
+    assert!(s.doc().unwrap().doc == doc, "the document is unchanged");
+    s.execute("object.distort", &json!({"corners": at(b.x1 + 0.01)})).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    assert!(s.doc().unwrap().doc != doc);
+}
+
 #[test]
 fn distort_perspective_midpoint_is_projective() {
     // Distort a tiny probe at the centre of a 100×100 source box into a trapezoid: with a real
@@ -598,6 +617,35 @@ fn free_transform_distort_mode_via_pointer() {
     assert!(pts.iter().any(|p| p.distance(Point::new(250.0, 260.0)) < 1e-6), "{pts:?}");
     assert!(pts.iter().any(|p| p.distance(Point::new(100.0, 100.0)) < 1e-6));
     assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
+}
+
+/// With Constrain on, a Free Distort corner keeps to the diagonal through the opposite corner, in
+/// one undo step that undoes and redoes whole.
+#[test]
+fn free_transform_constrained_distort_keeps_the_corner_on_its_diagonal() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    let v = ViewInfo::default();
+    s.select_tool("freeTransform", v).unwrap();
+    s.set_tool_option("mode", &json!("distort"));
+    s.set_tool_option("constrain", &json!(true));
+    let before = undo_len(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 320.0, 230.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 340.0, 260.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 340.0, 260.0), v).unwrap();
+    let pts = |s: &Session| -> Vec<Point> { s.doc().unwrap().doc.node(a).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect() };
+    let has_all = |pts: &[Point], want: [(f64, f64); 4]| want.iter().all(|&(x, y)| pts.iter().any(|q| q.distance(Point::new(x, y)) < 1e-6));
+    // (40, 60) along the diagonal (200, 100) is 0.28 of it, (56, 28).
+    let distorted = [(100.0, 100.0), (300.0, 100.0), (356.0, 228.0), (100.0, 200.0)];
+    let original = [(100.0, 100.0), (300.0, 100.0), (300.0, 200.0), (100.0, 200.0)];
+    assert!(has_all(&pts(&s), distorted), "{:?}", pts(&s));
+    assert_eq!(undo_len(&s), before + 1);
+    assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(has_all(&pts(&s), original), "{:?}", pts(&s));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert!(has_all(&pts(&s), distorted), "{:?}", pts(&s));
 }
 
 #[test]
@@ -1210,7 +1258,7 @@ fn distort_reads_from_in_a_turned_frame_and_rejects_a_bad_angle() {
     }
     s.execute("object.distort", &json!({"corners": corners, "from": [-100, 0, 0, 100], "angle": 90, "ids": [a.0]})).unwrap();
     assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));
-    assert_eq!(undo_len(&s), history + 1);
+    assert_eq!(undo_len(&s), history, "corners where the box stands change nothing");
     // Without `from`, the box is the objects' bounds in the turned frame: the same box here.
     s.execute("object.distort", &json!({"corners": corners, "angle": 90, "ids": [a.0]})).unwrap();
     assert!(close(bounds(&s, a), original), "{:?}", bounds(&s, a));

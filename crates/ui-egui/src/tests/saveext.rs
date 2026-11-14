@@ -392,6 +392,22 @@ fn every_write_through_a_save_panel_asks_before_replacing() {
     assert!(w.borrow().is_empty());
 }
 
+/// Export As to a format without Use Artboards (a template holds the whole document) gives the
+/// export no artboard option, so an export that automation confirms gets no note that one was
+/// not used.
+#[test]
+fn export_as_a_template_is_given_no_artboard_option() {
+    for use_artboards in [false, true] {
+        let (mut app, w) = saving_app("/tmp/out");
+        app.ui.answering_control = true;
+        app.run("file.exportAs", json!({"format": "template", "useArtboards": use_artboards})).unwrap();
+        let r = dialogs::confirm(&mut app).unwrap();
+        assert_eq!(last(&w), "/tmp/out.vctemplate");
+        assert!(r["warnings"].as_array().is_some_and(|w| !w.iter().any(|w| w.to_string().contains("was not used"))), "{r}");
+        assert!(!app.ui.status.contains("was not used"), "{}", app.ui.status);
+    }
+}
+
 #[test]
 fn typed_extensions_are_kept() {
     let (mut app, w) = saving_app("/tmp/art.svg");

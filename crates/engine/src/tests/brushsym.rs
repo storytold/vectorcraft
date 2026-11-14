@@ -631,6 +631,37 @@ fn brush_options_rename_duplicate_and_delete_update_strokes() {
     assert!(s.execute("brush.delete", &json!({"name": "5 pt. Round"})).is_err());
 }
 
+/// A document whose brushes repeat a name opens with the later brush numbered: strokes of the name
+/// keep the first brush, and renaming or deleting one brush leaves the other and its strokes alone.
+#[test]
+fn a_repeated_brush_name_is_numbered_when_the_document_opens() {
+    use vectorcraft_brush::{Brush, BrushKind, Calligraphic};
+    let nib = |size: f64| Brush { name: "Nib".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+    let mut s = session();
+    vectorcraft_brush::store(std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc), &[nib(1.0), nib(2.0)]);
+    let a = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    s.execute("brush.apply", &json!({"name": "Nib", "ids": [a.0]})).unwrap();
+    let saved = s.execute("document.serialize", &json!({})).unwrap()["dataBase64"].clone();
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "a.vectorcraft", "dataBase64": saved})).unwrap();
+    let names = |o: &mut Session| -> Vec<String> {
+        let list = o.execute("brush.list", &json!({})).unwrap();
+        list["brushes"].as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap().to_string()).collect()
+    };
+    assert_eq!(names(&mut o), ["Nib", "Nib 2"]);
+    assert_eq!(brush_of(&o, a).as_deref(), Some("Nib"));
+    assert_eq!(o.execute("brush.get", &json!({"name": "Nib"})).unwrap()["size"], json!(1.0));
+    assert_eq!(o.execute("brush.get", &json!({"name": "Nib 2"})).unwrap()["size"], json!(2.0));
+    let b = rect(&mut o, 80.0, 10.0, 50.0, 50.0);
+    o.execute("brush.apply", &json!({"name": "Nib 2", "ids": [b.0]})).unwrap();
+    o.execute("brush.options", &json!({"name": "Nib", "newName": "Pen"})).unwrap();
+    assert_eq!(names(&mut o), ["Pen", "Nib 2"]);
+    assert_eq!((brush_of(&o, a).as_deref(), brush_of(&o, b).as_deref()), (Some("Pen"), Some("Nib 2")));
+    o.execute("brush.delete", &json!({"name": "Nib 2"})).unwrap();
+    assert_eq!(names(&mut o), ["Pen"]);
+    assert_eq!((brush_of(&o, a).as_deref(), brush_of(&o, b)), (Some("Pen"), None));
+}
+
 /// `brush.move`, which the Brushes panel runs when a brush is dragged, reorders brushes among those of
 /// their type in one undo step and refuses to move one into another type.
 #[test]

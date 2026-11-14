@@ -49,6 +49,10 @@
 //!   member with another order, and any other change to the list (items moved, or several added
 //!   or removed at once), takes the model's whole list of fills and strokes.
 //!
+//! A path directly in a graph series that takes an edit from another member (a graph's paths are
+//! members only while the graph is isolated) also has what changed stored on its graph, so that
+//! every path of the series takes it when the graph is drawn again (docs/mcp.md).
+//!
 //! Members that are hidden or locked at the time are left as they are. An edit that would take any
 //! member past the canvas (beyond [`vectorcraft_doc::MAX_COORD`]) is refused whole, as one that
 //! takes the selection there is. Whenever the document is put back (Undo, Redo, a cancelled drag
@@ -432,15 +436,23 @@ fn can_toggle(s: &Session) -> std::result::Result<(), String> {
     let [id] = st.selection.objects.as_slice() else {
         return Err(if st.selection.is_empty() { "nothing selected" } else { "select one object" }.into());
     };
-    // A group's contents are checked when Global Edit starts: measuring them here would walk
-    // every object in it each time the menu or the Properties panel asks. Other objects are
-    // measured ([`supported`]), not reduced to their form: the Control bar asks every frame.
-    match st.doc.node(*id) {
-        Some(n) if n.extras().mask.is_none() && plain_group(n) => Ok(()),
-        Some(n) if supported(n) => Ok(()),
-        _ => Err(UNSUPPORTED.into()),
-    }
+    // The object, a group's contents included, is measured ([`supported`]), not reduced to its
+    // form, and the answer is kept until the document's revision moves: the Control bar asks
+    // every frame, and a group's walk takes time with the anchors in it.
+    let ok = match st.global_edit_support.get() {
+        Some((rev, key, ok)) if rev == st.revision && key == *id => ok,
+        _ => {
+            let ok = st.doc.node(*id).is_some_and(supported);
+            st.global_edit_support.set(Some((st.revision, *id, ok)));
+            ok
+        }
+    };
+    if ok { Ok(()) } else { Err(UNSUPPORTED.into()) }
 }
+
+/// [`can_toggle`]'s answer for the one selected object: the revision and the object it was found
+/// for, and whether Global Edit supports it.
+pub type SupportCache = std::cell::Cell<Option<(u64, NodeId, bool)>>;
 
 fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.global_edit.is_some() {
@@ -779,7 +791,20 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
         }
         super::object::keep_compound_aligned(d, *id, Scaling::default());
     }
+    keep_series_changes(before, d, &edited);
     edited
+}
+
+/// Store on their graphs what the members `edited`, and the objects in them, took on the paths directly in a graph
+/// series, for the graph's next redraw. The edited member is left to the edit's own command.
+fn keep_series_changes(before: &Document, d: &mut Document, edited: &[NodeId]) {
+    let mut taken = vec![];
+    for id in edited {
+        if let Some(n) = d.node(*id) {
+            n.walk(&mut |c: &Node| taken.push(c.id));
+        }
+    }
+    super::appearance::capture_series_changes(before, d, &taken);
 }
 
 /// The outlines of the members of the active document's Global Edit that are not selected, hold
@@ -990,8 +1015,7 @@ mod tests {
                 continue;
             }
             asked += 1;
-            let today = n.extras().mask.is_none() && plain_group(&n) || by_form(&n);
-            assert_eq!(can_toggle(&s).is_ok(), today, "seed {seed}");
+            assert_eq!(can_toggle(&s).is_ok(), by_form(&n), "seed {seed}");
             match s.execute(C, &json!({})) {
                 Ok(_) => {
                     assert!(by_form(&n), "seed {seed}");

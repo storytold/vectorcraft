@@ -9,7 +9,7 @@ use super::{
     ROTATED_TYPE, Rect, STROKES, SUBLAYERS, Shape, StrokeLayer, SubPath, TITLE_AND_COLOR_NAMES, TRANSPARENCY, TYPE, TYPE_ATTRIBUTES, TextKind,
     TextObject, UNDECODED, Vec2, Write, ai_ops, latin, ps, stroke,
 };
-use super::{CONIC, CONIC_WEDGES, DIAMOND, SPREAD, SPREAD_CAPPED};
+use super::{CONIC, CONIC_WEDGES, DIAMOND, HUE_STOPS, SPREAD, SPREAD_CAPPED};
 
 pub(super) struct Writer<'a> {
     doc: &'a Document,
@@ -693,6 +693,16 @@ impl<'a> Writer<'a> {
     /// (its distance a fraction of the radius, at most 1, §3.5.5; `0 0 0 0 Bh` at the center,
     /// §3.5.6), `1 (name) x y angle length 1 0 0 1 0 0 Bg`.
     fn gradient(&mut self, g: &GradientPaint, bounds: Rect) -> String {
+        // A gradient mixed around the hue wheel (the format's gradients mix their stops' colors
+        // directly): the stops on its curve, no more than the reader reads, in a definition of
+        // its own.
+        if g.gradient.method.is_hue() {
+            self.warn(HUE_STOPS);
+            let curve = g.gradient.as_classic_curve();
+            let gradient = if curve.is_spread() { curve } else { curve.fitted(crate::import::MAX_GRADIENT_STOPS).into_owned() };
+            let p = GradientPaint { gradient, swatch: None, ..g.clone() };
+            return self.gradient(&p, bounds);
+        }
         // A gradient that repeats or reflects (the format's gradients pad past their ends): its
         // stops repeated as many times as `bounds` needs, in a definition of its own, no more
         // stops than the reader reads.
@@ -833,6 +843,8 @@ impl<'a> Writer<'a> {
         self.line("TP");
         let mut para = 0usize;
         let mut para_start = true;
+        // No character of the current paragraph has been written.
+        let mut line_start = true;
         for run in &t.runs {
             let text = if run.style.all_caps { run.text.to_uppercase() } else { run.text.clone() };
             let mut pieces = text.split('\n').peekable();
@@ -846,14 +858,38 @@ impl<'a> Writer<'a> {
                     para_start = false;
                 }
                 self.char_style(&run.style, t.para_at(para));
-                let mut bytes: Vec<u8> = piece.chars().filter_map(latin::encode).collect();
+                // The space before a line's first character, kerning before it (§15.4.6.1).
+                if line_start && !piece.is_empty() && run.style.kerning_before != 0.0 {
+                    self.kern(run.style.kerning_before);
+                }
+                line_start = false;
+                // Manual kerning after each character (0 included, which differs from automatic
+                // kerning), a soft hyphen as a discretionary hyphen (§15.4.10.1).
+                let kerning = run.style.kerning;
+                let mut bytes = vec![];
+                for c in piece.chars() {
+                    if c == '\u{ad}' {
+                        self.text_string(&mut bytes);
+                        self.line("T+");
+                        if let Some(k) = kerning {
+                            self.kern(k);
+                        }
+                        continue;
+                    }
+                    let Some(b) = latin::encode(c) else { continue };
+                    bytes.push(b);
+                    if let Some(k) = kerning {
+                        self.text_string(&mut bytes);
+                        self.kern(k);
+                    }
+                }
                 if ends_paragraph {
                     bytes.push(b'\r');
                     para += 1;
                     para_start = true;
+                    line_start = true;
                 }
-                self.body.push_str(&ps::bytes(&bytes));
-                self.line(" Tx");
+                self.text_string(&mut bytes);
             }
         }
         if self.kumi {
@@ -861,6 +897,22 @@ impl<'a> Writer<'a> {
             self.kumi = false;
         }
         self.line("TO");
+    }
+
+    /// `bytes` as a string of characters, `(…) Tx`, when there are any; `bytes` is left empty.
+    fn text_string(&mut self, bytes: &mut Vec<u8>) {
+        if !bytes.is_empty() {
+            self.body.push_str(&ps::bytes(bytes));
+            self.line(" Tx");
+            bytes.clear();
+        }
+    }
+
+    /// Manual kerning of `k` 1/1000 em between the characters before and after it: `0 k Tk`.
+    fn kern(&mut self, k: f64) {
+        self.body.push_str("0 ");
+        ps::push_num(&mut self.body, finite(k, 0.0));
+        self.line(" Tk");
     }
 
     /// A paragraph's attributes: alignment `Ta` and indents `Ti` (first line's, left, right).

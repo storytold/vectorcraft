@@ -54,8 +54,8 @@ pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, 
 use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{
     EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, TypeInk, envelope_bounds, envelope_content_bounds,
-    envelope_content_boxes, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin,
-    set_type_ink, smooth_handles, warp_grid,
+    envelope_content_boxes, envelope_content_boxes_with, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of,
+    envelope_overlay, envelope_stroke_margin, set_type_ink, smooth_handles, warp_grid,
 };
 pub(crate) use expand::max_outset;
 pub use expand::{
@@ -1245,6 +1245,62 @@ mod tests {
             let before = m.clone();
             assert!(!m.remove_point_lines(index), "{rows}×{cols}, point {index}");
             assert_eq!(m, before);
+        }
+    }
+
+    /// The pieces of a mesh-warped image make a knockout group, each knocking out its triangle
+    /// (clipping path or opacity mask art); the group keeps the image's transparency.
+    #[test]
+    fn mesh_warp_image_pieces_knock_out_by_their_triangles() {
+        let im = crate::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(NodeId(3), NodeKind::Image(Box::new(im.clone())));
+        n.opacity = 0.5;
+        n.blend = crate::color::BlendMode::Multiply;
+        let same = |p: Point| p;
+        for masked in [false, true] {
+            let g = mesh_warp_image(&n, &im, &same, 2, false, masked);
+            assert_eq!((g.knockout, g.opacity, g.blend, g.isolate), (crate::Knockout::On, 0.5, crate::color::BlendMode::Multiply, false));
+            let NodeKind::Group { children, clip: false } = &g.kind else { panic!("a group") };
+            assert_eq!(children.len(), 8);
+            for c in children {
+                assert!(c.extras().warp_piece);
+                let outline = c.knockout_outline().unwrap_or_else(|| panic!("masked {masked}: an outline"));
+                let NodeKind::Path { path, .. } = &outline.kind else { panic!("a path") };
+                assert_eq!(path.anchor_count(), 3);
+            }
+        }
+        // A clip group or masked image that is not a piece knocks out by what it paints.
+        let mut plain = mesh_warp_image(&n, &im, &same, 1, false, false);
+        let NodeKind::Group { children, .. } = &mut plain.kind else { panic!("a group") };
+        let piece = Arc::make_mut(&mut children[0]);
+        piece.extras_mut().warp_piece = false;
+        assert!(piece.knockout_outline().is_none());
+    }
+
+    /// More cells than the objects live art may make cut no pieces (the count overflowed).
+    #[test]
+    fn mesh_warp_image_past_the_budget_makes_an_empty_group() {
+        let im = crate::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let n = Node::new(NodeId(3), NodeKind::Image(Box::new(im.clone())));
+        for cells in [usize::MAX, 1000] {
+            let g = mesh_warp_image(&n, &im, &|p| p, cells, false, false);
+            assert!(matches!(&g.kind, NodeKind::Group { children, .. } if children.is_empty()), "{cells}");
         }
     }
 }
