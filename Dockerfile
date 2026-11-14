@@ -45,9 +45,9 @@ RUN set -eu; \
 WORKDIR /src
 COPY . .
 WORKDIR /src/apps/vectorcraft-web
-# Docker serving has no static-host per-file size cap. Thin LTO uses less build
-# memory than the release zip's fat LTO; retain the profile's other optimizations.
-ARG CARGO_PROFILE_WASM_RELEASE_LTO=thin
+# Trunk's `--release` selects Cargo's `release` profile. Set its actual LTO
+# override explicitly (the workspace release profile also defaults to thin LTO).
+ARG CARGO_PROFILE_RELEASE_LTO=thin
 ARG CARGO_BUILD_JOBS=1
 # Optional build provenance shown in About and `--version` (crates/engine/src/build_info.rs).
 # .git is not in the build context, so pass it in, e.g.
@@ -55,7 +55,7 @@ ARG CARGO_BUILD_JOBS=1
 # Left empty, the build reports itself as a dev build.
 ARG VECTORCRAFT_BUILD_SHA=
 ARG VECTORCRAFT_BUILD_DATE=
-# index.html selects the wasm-release profile and wasm-opt -Oz.
+# index.html selects the wasm target and wasm-opt -Oz; Trunk's --release uses Cargo's release profile.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     --mount=type=cache,target=/root/.cache/trunk \
@@ -65,12 +65,27 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     fi; \
     trunk build --release --locked \
     && test -s /src/dist/web/index.html \
-    && gzip -9 -k /src/dist/web/*.wasm /src/dist/web/*.js /src/dist/web/index.html
+    && gzip -9 -k /src/dist/web/*.wasm /src/dist/web/*.js /src/dist/web/index.html \
+    && mkdir -p /distribution-notices \
+    && for f in README.md LICENSE LICENSE-MIT LICENSE-APACHE COPYRIGHT NOTICE ASSETS.md; do \
+         if [ -f "/src/$f" ]; then cp "/src/$f" /distribution-notices/; fi; \
+       done \
+    && if [ -d /src/licenses ]; then \
+         mkdir -p /distribution-notices/licenses \
+         && cp -R /src/licenses/. /distribution-notices/licenses/; \
+       fi \
+    && if [ -d /craft-fonts/fonts ]; then \
+         for ofl in /craft-fonts/fonts/*/OFL.txt; do \
+           [ -f "$ofl" ] || continue; \
+           family="$(basename "$(dirname "$ofl")")"; \
+           cp "$ofl" "/distribution-notices/OFL-$family.txt"; \
+         done; \
+       fi
 
 FROM nginx:${NGINX_VERSION} AS runtime
 COPY packaging/web/nginx.conf /etc/nginx/nginx.conf
 COPY --from=builder /src/dist/web/ /usr/share/nginx/html/
-COPY LICENSE-MIT LICENSE-APACHE NOTICE ASSETS.md /usr/share/nginx/html/
+COPY --from=builder /distribution-notices/ /usr/share/nginx/html/
 # Bypass the stock entrypoint: this configuration needs no runtime rewriting.
 USER nginx
 EXPOSE 8080
