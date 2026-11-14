@@ -5273,6 +5273,25 @@ font-technology	Variable	ცვლადი
 @msg	a 3D effect on a group's fill or stroke draws nothing	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი არაფერს ხატავს
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ჯგუფის შევსებაზე ან კონტურზე 3D ეფექტი ექსპორტისთვის არაფერს ხატავს
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
+@msg	give one <filter> element	მიუთითეთ ერთი <filter> ელემენტი
+@msg	the <filter> element needs an id, the filter's name	<filter> ელემენტს სჭირდება id, ფილტრის სახელი
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG ფილტრის id მაქსიმუმ {MAX_NAME} სიმბოლოა
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> არ არის SVG ფილტრის ელემენტი
+@msg	an SVG filter has no event attributes such as {_1}	SVG ფილტრს არ აქვს მოვლენის ატრიბუტები, როგორიცაა {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG ფილტრის გამოსახულებები PNG, JPEG, GIF ან WebP data: URL-ებია
+@msg	the SVG filter isn't valid XML: {e}	SVG ფილტრი არ არის სწორი XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence-ის numOctaves მაქსიმუმ {MAX_OCTAVES}-ია
+@msg	{what} is at most {max}	{what}: მაქსიმუმ {max}
+@msg	feConvolveMatrix's order	feConvolveMatrix-ის order
+@msg	feMorphology's radius	feMorphology-ის radius
+@msg	a blur's stdDeviation	დაბინდვის stdDeviation
+@msg	the SVG filter has no primitives	SVG ფილტრს არ აქვს პრიმიტივები
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG ფილტრს აქვს მაქსიმუმ {MAX_PRIMITIVES} პრიმიტივი
+@msg	the SVG filter is too large once its attributes are written out	SVG ფილტრი ზედმეტად დიდია მისი ატრიბუტების ჩაწერის შემდეგ
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG ფილტრის გამოსახულებებს სულ მაქსიმუმ {MAX_IMAGE_PIXELS} პიქსელი აქვს
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG ფილტრის დახატვა შეუძლებელია: შეამოწმეთ მისი პრიმიტივები და მათი შემავალი მონაცემები
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG ფილტრის ელემენტები მაქსიმუმ {MAX_DEPTH} დონის სიღრმეზეა ჩადგმული
+@msg	an SVG filter is at most {_1} KB	SVG ფილტრი მაქსიმუმ {_1} KB-ია
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
 @msg	bevel must be none or one of {_1}	bevel უნდა იყოს none ან ერთ-ერთი: {_1}

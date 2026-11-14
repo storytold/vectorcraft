@@ -5341,7 +5341,7 @@ effect	Soft	Doux
 	On Both Sides	Des deux côtés
 	Short	Courte
 	Full Width	Toute la largeur
-	Distort	Déformation
+	Distort	Distorsion
 	Diffuse Glow…	Lueur diffuse…
 	Glass…	Verre…
 	Ocean Ripple…	Océan…
@@ -5559,6 +5559,25 @@ lighting	Light	Lumière
 @msg	a 3D effect on a group's fill or stroke draws nothing	un effet 3D sur le fond ou le contour d'un groupe ne dessine rien
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un effet 3D sur le fond ou le contour d'un groupe ne dessine rien à exporter
 @msg	The 3D object is too complex to export	L'objet 3D est trop complexe pour être exporté
+@msg	give one <filter> element	indiquez un seul élément <filter>
+@msg	the <filter> element needs an id, the filter's name	l’élément <filter> doit avoir un id, le nom du filtre
+@msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG compte au plus {MAX_NAME} caractères
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> n’est pas un élément de filtre SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtre SVG n’a pas d’attributs d’événement tels que {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	les images d’un filtre SVG sont des URL data: PNG, JPEG, GIF ou WebP
+@msg	the SVG filter isn't valid XML: {e}	le filtre SVG n’est pas du XML valide : {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence vaut au plus {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} vaut au plus {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation d’un flou
+@msg	the SVG filter has no primitives	le filtre SVG n’a aucune primitive
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtre SVG a au plus {MAX_PRIMITIVES} primitives
+@msg	the SVG filter is too large once its attributes are written out	le filtre SVG est trop volumineux une fois ses attributs écrits
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	les images d’un filtre SVG comptent au plus {MAX_IMAGE_PIXELS} pixels au total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	le filtre SVG ne peut pas être dessiné : vérifiez ses primitives et leurs entrées
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	les éléments d’un filtre SVG s’imbriquent sur au plus {MAX_DEPTH} niveaux
+@msg	an SVG filter is at most {_1} KB	un filtre SVG fait au plus {_1} Ko
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'objet n'a aucun effet 3D (Extrusion et biseautage, Révolution, Gonfler ou Rotation)
 @msg	its 3D effect builds no solid	son effet 3D ne construit aucun volume
 @msg	bevel must be none or one of {_1}	bevel doit valoir none ou l’une de ces valeurs : {_1}

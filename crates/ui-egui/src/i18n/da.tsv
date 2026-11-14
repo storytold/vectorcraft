@@ -34,7 +34,7 @@
 	Clear Recent Files	Ryd seneste filer
 	Show in Folder	Vis i mappe
 	Close	Luk
-@id	file.close	file.close
+@id	file.close	Luk
 	Close All	Luk alle
 	Save	Gem
 	Save As…	Gem som…
@@ -499,7 +499,7 @@
 	Zig Zag…	Zigzag…
 	Pathfinder	Pathfinder
 	Add	Foren
-@id	pathfinder.add	pathfinder.add
+@id	pathfinder.add	Foren
 	Intersect	Skæring
 	Exclude	Udeluk
 	Subtract	Træk fra

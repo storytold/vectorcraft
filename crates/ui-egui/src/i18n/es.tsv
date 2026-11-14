@@ -5932,6 +5932,25 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada que exportar
 @msg	The 3D object is too complex to export	El objeto 3D es demasiado complejo para exportarlo
+@msg	give one <filter> element	indique un elemento <filter>
+@msg	the <filter> element needs an id, the filter's name	el elemento <filter> necesita un id, el nombre del filtro
+@msg	an SVG filter's id is at most {MAX_NAME} characters	el id de un filtro SVG tiene como máximo {MAX_NAME} caracteres
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> no es un elemento de un filtro SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtro SVG no tiene atributos de evento como {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	las imágenes de un filtro SVG son URL data: en PNG, JPEG, GIF o WebP
+@msg	the SVG filter isn't valid XML: {e}	el filtro SVG no es XML válido: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence es como máximo {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} es como máximo {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation de un desenfoque
+@msg	the SVG filter has no primitives	el filtro SVG no tiene primitivas
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtro SVG tiene como máximo {MAX_PRIMITIVES} primitivas
+@msg	the SVG filter is too large once its attributes are written out	el filtro SVG es demasiado grande una vez escritos sus atributos
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	las imágenes de un filtro SVG tienen como máximo {MAX_IMAGE_PIXELS} píxeles en total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	el filtro SVG no se puede dibujar: compruebe sus primitivas y sus entradas
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	los elementos de un filtro SVG se anidan como máximo {MAX_DEPTH} niveles
+@msg	an SVG filter is at most {_1} KB	un filtro SVG ocupa como máximo {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	el objeto no tiene ningún efecto 3D (Extrusión y biselado, Revolución, Inflar o Rotar)
 @msg	its 3D effect builds no solid	su efecto 3D no construye ningún sólido
 @msg	bevel must be none or one of {_1}	bevel debe ser none o uno de estos: {_1}

@@ -4844,7 +4844,7 @@ digits	Malayalam	Malaiàlam
 	Triangle	Triangle
 	Triangle (open)	Triangle (obert)
 	Triangle to Bar	Triangle a barra
-	Trim	Retalla
+	Trim	Poda
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	Retalla la geometria coberta en expandir l’aparença. La previsualització en directe manté tota la superfície. Les pintures transparents i les superfícies que superen els límits de visibilitat conserven totes les cares.
 	Trim mark weight:	Gruix de les marques de retall:
 	Trim marks	Marques de retall
@@ -6169,6 +6169,25 @@ digits	Malayalam	Malaiàlam
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecte 3D al farciment o al traç d’un grup no dibuixa res
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
+@msg	give one <filter> element	indica un element <filter>
+@msg	the <filter> element needs an id, the filter's name	l’element <filter> necessita un id, el nom del filtre
+@msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG té com a màxim {MAX_NAME} caràcters
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> no és un element d’un filtre SVG
+@msg	an SVG filter has no event attributes such as {_1}	un filtre SVG no té atributs d’esdeveniment com ara {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	les imatges d’un filtre SVG són URL data: en PNG, JPEG, GIF o WebP
+@msg	the SVG filter isn't valid XML: {e}	el filtre SVG no és un XML vàlid: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence és com a màxim {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} és com a màxim {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation d’un desenfocament
+@msg	the SVG filter has no primitives	el filtre SVG no té primitives
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtre SVG té com a màxim {MAX_PRIMITIVES} primitives
+@msg	the SVG filter is too large once its attributes are written out	el filtre SVG és massa gran un cop escrits els seus atributs
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	les imatges d’un filtre SVG tenen com a màxim {MAX_IMAGE_PIXELS} píxels en total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	no es pot dibuixar el filtre SVG: comprova’n les primitives i les seves entrades
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	els elements d’un filtre SVG s’imbriquen com a màxim {MAX_DEPTH} nivells
+@msg	an SVG filter is at most {_1} KB	un filtre SVG ocupa com a màxim {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objecte no té cap efecte 3D (Extrudeix i bisella, Revoluciona, Infla o Gira)
 @msg	its 3D effect builds no solid	el seu efecte 3D no construeix cap sòlid
 @msg	bevel must be none or one of {_1}	bevel ha de ser none o un de {_1}
