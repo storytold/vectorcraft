@@ -574,6 +574,10 @@ pub struct UiState {
     #[serde(skip)]
     pub touch_drawing_tool: Option<String>,
     pub status: String,
+    /// How many times [`crate::VectorcraftApp::status`] has set `status`, so that work finishing
+    /// later can tell whether the line it started with is still the latest one. Not saved.
+    #[serde(skip)]
+    pub status_sets: u64,
     /// The Replace Font request behind the status bar's warning ([`ReplaceFontWarning`]). Not saved.
     #[serde(skip)]
     pub replace_font_warning: Option<ReplaceFontWarning>,
@@ -1163,6 +1167,7 @@ impl Default for UiState {
             group_tool: vectorcraft_tools::TOOL_GROUPS.iter().map(|g| g[0].id.to_string()).collect(),
             touch_drawing_tool: None,
             status: String::new(),
+            status_sets: 0,
             replace_font_warning: None,
             status_notes: None,
             palette_open: false,

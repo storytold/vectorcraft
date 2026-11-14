@@ -793,7 +793,7 @@ fn type_outlined_next_to_type_that_stays_type_keeps_its_look() {
 }
 
 #[test]
-fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
+fn type_in_a_clipping_group_with_a_fill_of_its_own_keeps_its_effect() {
     if skip_without_craft_fonts() {
         return;
     }
@@ -808,9 +808,9 @@ fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
     g.children_mut().unwrap().push(Arc::new(clip));
     let d = bake_document(&doc_with(g)).unwrap();
     assert_eq!(type_origins(&d), [(20.0, 60.0), (220.0, 60.0)]);
-    // The type clips by its plain outlines, as the canvas clips by them: its own effect is left out.
+    // The type clips by its outlines moved by its own effect, as the canvas clips by them.
     let b = d.node(NodeId(59)).and_then(|n| n.geometric_bounds()).unwrap();
-    assert!(b.y0 > 30.0 && b.y1 < 70.0, "{b:?}");
+    assert!(b.y0 > 330.0 && b.y1 < 370.0, "{b:?}");
 }
 
 #[test]

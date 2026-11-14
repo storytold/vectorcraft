@@ -207,8 +207,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             items.push((tl!("Remove Anchor Points"), "pen-tool-delete", "path.removeAnchors", none()));
             items.push((tl!("Connect"), "dc-join", "path.join", none()));
             items.push((tl!("Cut Path"), "scissors", "path.cutAtAnchors", none()));
-            items.push((tl!("Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
-            items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
+            items.push((tl!("Convert Selected Anchor Points to Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
+            items.push((tl!("Convert Selected Anchor Points to Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
         }
         // As in the reference app, open paths offer Join and Edit Path, compound paths and clipping
         // masks their Release, images selected with vector art Make Clipping Mask, type converts
@@ -257,14 +257,17 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         } else if is_image {
             // Offset Path and Simplify don't apply to an image.
         } else if !anchors && direct {
-            // Corner and Smooth convert every anchor of a path selected whole; Remove and Cut
-            // need anchors picked out, so they wait for them.
+            // The two convert buttons convert every anchor of a path selected whole; Remove and Cut
+            // need anchors picked out, so they wait for them. Simplify and Smooth open their
+            // sliders, as Object › Path › Simplify… and Smooth… do; the page above names Smooth as
+            // adjusting the path's curvature, apart from converting its anchor points.
             if open_path {
                 items.push((tl!("Connect"), "dc-join", "path.join", none()));
             }
-            items.push((tl!("Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
-            items.push((tl!("Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
+            items.push((tl!("Convert Selected Anchor Points to Corner"), "dc-anchor", TASK_BAR_TO_CORNER, none()));
+            items.push((tl!("Convert Selected Anchor Points to Smooth"), "dc-anchor-smooth", TASK_BAR_TO_SMOOTH, none()));
             items.push((tl!("Simplify"), "spline", "object.path.simplify", none()));
+            items.push((tl!("Smooth"), "dc-smooth", "object.path.smooth", none()));
         } else if !anchors {
             if open_path {
                 items.push((tl!("Join"), "dc-join", "path.join", none()));
@@ -292,7 +295,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
             .into_iter()
             .filter_map(|(shown, chip)| shown.then_some(chip))
             .collect();
-    let widths: Vec<f32> = items.iter().map(|(label, ..)| action_width(ui, label)).collect();
+    let widths: Vec<f32> = items.iter().map(|(label, _, cmd, _)| if icon_only(cmd) { BAR_MORE } else { action_width(ui, label) }).collect();
     let font_w = fonts.then(|| {
         let w = crate::panels::character::TASK_BAR_WIDTHS;
         w.iter().sum::<f32>() + BAR_GAP * (w.len() - 1) as f32
@@ -367,7 +370,17 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                             }
                         }
                         for ((label, icon, cmd, params), at) in items.iter().zip(&layout.actions) {
-                            if *at == Some(row) && action_button(ui, &t, label, icon) {
+                            if *at != Some(row) {
+                                continue;
+                            }
+                            // The convert buttons show their icon alone, named by their hover text, as
+                            // the Control bar's do.
+                            let clicked = if icon_only(cmd) {
+                                widgets::icon_button(ui, icon, label, false, BAR_MORE).clicked()
+                            } else {
+                                action_button(ui, &t, label, icon)
+                            };
+                            if clicked {
                                 run = Some((*cmd, params.clone()));
                             }
                         }
@@ -459,7 +472,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
         Some((TASK_BAR_ARTBOARD_OPTIONS, _)) => crate::menus::invoke(app, "tool.options", json!({"tool": "artboard"})),
         Some((TASK_BAR_DUPLICATE_ARTBOARDS, _)) => crate::panels::artboards::duplicate_picked(app),
         Some((TASK_BAR_REARRANGE_ARTBOARDS, _)) => crate::panels::artboards::open_rearrange(app),
-        // Corner and Smooth convert the direct-selected anchors, as the Control bar's buttons do.
+        // The convert buttons convert the direct-selected anchors, as the Control bar's buttons do.
         Some((TASK_BAR_TO_CORNER, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "corner"})),
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
         Some((c, p)) => crate::menus::invoke(app, c, p),
@@ -664,6 +677,11 @@ fn paint_or_object_chip(
     }
 }
 
+/// Whether the bar's item that runs `cmd` shows its icon alone: the anchor convert buttons.
+fn icon_only(cmd: &str) -> bool {
+    matches!(cmd, TASK_BAR_TO_CORNER | TASK_BAR_TO_SMOOTH)
+}
+
 /// The paints the Fill and Stroke chips show, and whether each is mixed ("?"): the proxies', or
 /// while a Type tool edits type, the edited characters' fill, which a swatch picked then paints.
 pub(crate) fn chip_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (vectorcraft_color::Paint, vectorcraft_color::Paint, bool, bool) {
@@ -714,8 +732,11 @@ const TASK_BAR_DUPLICATE_ARTBOARDS: &str = "taskBar.duplicateArtboards";
 /// The Contextual Task Bar's Rearrange All button with the Artboard tool.
 const TASK_BAR_REARRANGE_ARTBOARDS: &str = "taskBar.rearrangeArtboards";
 
-/// The Contextual Task Bar's Corner button for direct-selected anchors.
+/// The Contextual Task Bar's Convert Selected Anchor Points to Corner button, for direct-selected
+/// anchors or a path selected whole with Direct Selection.
 const TASK_BAR_TO_CORNER: &str = "taskBar.toCorner";
 
-/// The Contextual Task Bar's Smooth button for direct-selected anchors.
+/// The Contextual Task Bar's Convert Selected Anchor Points to Smooth button, for direct-selected
+/// anchors or a path selected whole with Direct Selection. The bar's Smooth button runs
+/// `object.path.smooth` instead.
 const TASK_BAR_TO_SMOOTH: &str = "taskBar.toSmooth";
