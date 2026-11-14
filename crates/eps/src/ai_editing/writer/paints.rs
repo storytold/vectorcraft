@@ -391,8 +391,8 @@ impl Writer<'_> {
     /// A stop's color and its style: gray `lightness 0`, CMYK `c m y k 1`, RGB (and Lab, as RGB)
     /// `c m y k r g b 2` with its CMYK equivalent; a spot color its full color's CMYK equivalent,
     /// then its RGB values when it isn't CMYK, its name and how much lighter than the full color,
-    /// then `3` (CMYK), or `1 4` (RGB, and Lab as RGB). RGB values are an RGB color's own (in the
-    /// working RGB space) and a Lab color's display RGB ([`ai_ops::rgb_values`]). An RGB color's CMYK
+    /// then `3` (CMYK), or `1 4` (RGB, and Lab as RGB). RGB values are in the working RGB space: an
+    /// RGB color's own and a Lab color's converted ([`ai_ops::rgb_values`]). An RGB color's CMYK
     /// equivalent is converted from its values as written ([`ai_ops::as_written`]), a Lab color's
     /// from its Lab values, and a spot color's CMYK equivalent and RGB values both come from its full
     /// color as the palette writes it.

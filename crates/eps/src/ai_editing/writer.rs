@@ -1434,8 +1434,8 @@ impl<'a> Writer<'a> {
         self.plain_color(*color, stroke);
     }
 
-    /// A color that names no swatch: `g` (gray), `k` (CMYK), else `c m y k r g b Xa` (RGB in the
-    /// working RGB space, and Lab as display RGB), with its CMYK equivalent (an RGB color's from its
+    /// A color that names no swatch: `g` (gray), `k` (CMYK), else `c m y k r g b Xa` (RGB, and Lab
+    /// as RGB, in the working RGB space), with its CMYK equivalent (an RGB color's from its
     /// values as written, a Lab color's from its Lab values).
     fn plain_color(&mut self, color: Color, stroke: bool) {
         let s = &mut self.body;
