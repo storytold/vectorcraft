@@ -98,6 +98,9 @@ pub struct GestureTool {
     /// A release where the pointer last dragged to would close the stroke because it ends near
     /// its start (Close Paths When Ends Are Within): the cursor shows the closing ring.
     near_start: bool,
+    /// A release where the pointer last dragged to would connect the continued path to another
+    /// selected path's open end (`finish`): the cursor shows the continuation cursor.
+    connects: bool,
     /// Pencil/Paintbrush continuing a selected open path: (path, continue from its start).
     extend: Option<(NodeId, bool)>,
     /// The other end of the path `extend` continues: a release near it closes the path.
@@ -819,6 +822,7 @@ impl GestureTool {
             active: false,
             began: false,
             near_start: false,
+            connects: false,
             extend: None,
             close_to: None,
             connect_to: vec![],
@@ -1303,6 +1307,7 @@ impl Tool for GestureTool {
                 self.active = true;
                 self.began = false;
                 self.near_start = false;
+                self.connects = false;
                 // Alt switches the Pencil when its toggle is on, the Blob Brush always, and the
                 // Paintbrush when the press has a selected path.
                 self.smoothing = ev.mods.alt
@@ -1380,10 +1385,12 @@ impl Tool for GestureTool {
                     let kept = self.points.last().copied().filter(|l| l.distance(p) < cx.tol(1.0) && !self.snaps());
                     let release_end = kept.unwrap_or(end);
                     self.near_start = self.release_closes_near_start(cx, release_end);
+                    self.connects = self.connects_at(cx, release_end).is_some();
                     return vec![];
                 }
                 self.push(p, ev);
                 self.near_start = self.release_closes_near_start(cx, end);
+                self.connects = self.connects_at(cx, end).is_some();
                 if !self.draws_path() || self.smoothing {
                     return vec![];
                 }
@@ -1444,6 +1451,7 @@ impl Tool for GestureTool {
                 self.active = false;
                 self.began = false;
                 self.near_start = false;
+                self.connects = false;
                 self.smoothing = false;
                 self.straight = false;
                 self.unconstrained = false;
@@ -1479,6 +1487,7 @@ impl Tool for GestureTool {
                 self.active = false;
                 self.began = false;
                 self.near_start = false;
+                self.connects = false;
                 self.smoothing = false;
                 self.straight = false;
                 self.unconstrained = false;
@@ -1509,6 +1518,7 @@ impl Tool for GestureTool {
         self.snap.clear();
         self.active = false;
         self.near_start = false;
+        self.connects = false;
         self.began = false;
         self.smoothing = false;
         self.straight = false;
@@ -1597,8 +1607,8 @@ impl Tool for GestureTool {
             return if self.find_extend(cx, p).is_some() { Cursor::PencilContinue } else { Cursor::PencilStraight };
         }
         // A continuing Pencil stroke that a release would connect to another selected path's open
-        // end (`finish`) shows that it continues on.
-        if self.id == "pencil" && self.active && self.points.last().is_some_and(|&end| self.connects_at(cx, end).is_some()) {
+        // end (`finish`) shows that it continues on; `connects` tests the point the release keeps.
+        if self.id == "pencil" && self.active && self.connects {
             return Cursor::PencilContinue;
         }
         // Alt held at the release closes the path (`finish`).

@@ -959,6 +959,40 @@ fn a_continued_stroke_shows_where_it_connects_or_closes() {
     assert_eq!((shown, v["closed"].clone()), (Cursor::Pencil, json!(false)), "at 0 px");
 }
 
+/// The continuation cursor tests where the release ends, after snapping, not the pointer: here
+/// Snap to Grid moves a stroke's end from 13 pt away from another selected path's end (outside Edit
+/// Selected Paths' 12 px) to 9 pt away, so the release connects, and the cursor says so.
+#[test]
+fn the_continuation_cursor_follows_the_snapped_release() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let add = |d: &mut vectorcraft_doc::Document, a: (f64, f64), b: (f64, f64)| {
+        let id = d.alloc_id();
+        let els = vec![vectorcraft_geom::PathEl::MoveTo(Point::new(a.0, a.1)), vectorcraft_geom::PathEl::LineTo(Point::new(b.0, b.1))];
+        let pd = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(els));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, pd, vectorcraft_doc::Appearance::default_art())).unwrap();
+        id
+    };
+    // On the 9 pt grid.
+    let a = add(&mut d, (306.0, 306.0), (405.0, 405.0));
+    let b = add(&mut d, (504.0, 504.0), (603.0, 504.0));
+    let p = paint();
+    let mut both = Selection::default();
+    both.set([a, b]);
+    let mut cx = cx(&d, &both, &p);
+    cx.smart_guides = false;
+    cx.snap_to_point = false;
+    cx.snap_to_grid = true;
+    let mut t = GestureTool::new("pencil");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 405.0, 405.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 460.0, 450.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 517.0, 504.0));
+    assert_eq!(t.cursor(&cx, Point::new(517.0, 504.0), Mods::default()), Cursor::PencilContinue);
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 517.0, 504.0));
+    let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+    assert_eq!(v["connect"], json!({"id": b.0, "end": "start"}), "{v}");
+}
+
 /// #3846: Alt during a Shift line doesn't promise a close the release can't do, and with Alt
 /// Toggles to Smooth, Alt pressed after the press doesn't turn the line into a smoothing drag.
 #[test]
