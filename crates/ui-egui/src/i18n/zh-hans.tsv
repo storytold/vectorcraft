@@ -6233,8 +6233,8 @@ axis	Y Axis	Y 轴
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	导出增效工具声明 1 到 {MAX_EXTENSIONS} 个 `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	组外最多 {MAX_UNGROUPED} 个参数：请为其余参数指定 `group`
 @msg	can't encode the input	无法编码输入
-@msg	expected {"dataBase64"}	应为 {"dataBase64"}
-@msg	expected {"objects"}	应为 {"objects"}
+@msg	expected {{"dataBase64": "…"}}	应为 {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	应为 {{"objects": [...]}}
 @msg	export `{name}`: {e}	模块导出 `{name}`：{e}
 @msg	extension {e} is listed twice	扩展名 {e} 列出了两次
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	扩展名 {e}：请使用 1-16 个小写字母和数字，不带点
@@ -6298,11 +6298,11 @@ axis	Y Axis	Y 轴
 @msg	a painted live effect returns only `objects`	绘制型实时效果只返回 `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	绘制型实时效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一个只读对象
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	漏掉了一个只读对象：请以单独的 {"id"} 或原样返回它
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一个只读对象：请以单独的 {{"id": …}} 或原样返回它
 @msg	a string	字符串
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	描边只有 `paint`、`width`、`join`、`cap` 和 `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	描边必须是 {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} 形式
-@msg	an effect must be {"id", "params"?, "visible"?}	效果必须是 {"id", "params"?, "visible"?} 形式
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	描边必须是 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 形式
+@msg	an effect must be {{"id", "params"?, "visible"?}}	效果必须是 {{"id", "params"?, "visible"?}} 形式
 @msg	an effect on a fill returns only `fills`	填色上的效果只返回 `fills`
 @msg	an effect on a stroke returns only `strokes`	描边上的效果只返回 `strokes`
 @msg	an object must be a JSON object	对象必须是 JSON 对象

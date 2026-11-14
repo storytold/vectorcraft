@@ -6389,8 +6389,8 @@ axis	Y Axis	Axe Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un module externe d’exportation déclare de 1 à {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	{MAX_UNGROUPED} paramètres au plus hors des groupes : donnez un `group` aux autres
 @msg	can't encode the input	impossible d’encoder l’entrée
-@msg	expected {"dataBase64"}	attendu : {"dataBase64"}
-@msg	expected {"objects"}	attendu : {"objects"}
+@msg	expected {{"dataBase64": "…"}}	attendu : {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	attendu : {{"objects": [...]}}
 @msg	export `{name}`: {e}	export du module `{name}` : {e}
 @msg	extension {e} is listed twice	l’extension {e} figure deux fois
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extension {e} : utilisez 1-16 lettres minuscules et chiffres, sans le point
@@ -6454,11 +6454,11 @@ axis	Y Axis	Axe Y
 @msg	a painted live effect returns only `objects`	un effet dynamique de peinture renvoie seulement `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	une pièce d’un effet dynamique de peinture a seulement `path`, `fillRule`, `fills` et `strokes`
 @msg	a read-only object was left out	un objet en lecture seule a été omis
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	un objet en lecture seule a été omis : renvoyez-le, sous la forme {"id"} seul ou tel qu’il a été fourni
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	un objet en lecture seule a été omis : renvoyez-le, sous la forme {{"id": …}} seul ou tel qu’il a été fourni
 @msg	a string	une chaîne
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un contour a seulement `paint`, `width`, `join`, `cap` et `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un contour doit être {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	un effet doit être {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un contour doit être {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	un effet doit être {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un effet sur un fond renvoie seulement `fills`
 @msg	an effect on a stroke returns only `strokes`	un effet sur un contour renvoie seulement `strokes`
 @msg	an object must be a JSON object	un objet doit être un objet JSON
