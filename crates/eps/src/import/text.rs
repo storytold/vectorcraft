@@ -1377,7 +1377,15 @@ impl Interp<'_> {
             // size, so a huge font dictionary in a loop runs out of the budget.
             let entries = g.font.borrow().len();
             self.spend(entries as u64)?;
-            let selected = transformed(&g.font, g.outer);
+            // Without a matrix, a Type 42 font or a Type 2 CIDFont is in ems, as `composite_glyph`
+            // and `cid_glyph_at` draw it.
+            let selected = {
+                let f = g.font.borrow();
+                let default = if units(&f) == 1.0 { 1.0 } else { 0.001 };
+                let mut d = f.clone();
+                d.insert(Key::name("FontMatrix"), matrix_obj(g.outer * font_matrix(&f, default)));
+                DictRef::new(d)
+            };
             self.cshow = Some(CShowFont { selected: selected.clone(), root: composite.clone(), code: None, mapped: Some(g.clone()) });
             self.g.font = Some(selected);
             let go = self.body(proc);

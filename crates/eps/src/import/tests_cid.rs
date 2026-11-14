@@ -213,6 +213,22 @@ fn type2_cidfonts_draw_their_truetype_glyphs_through_cidmap() {
     }
 }
 
+/// A `cshow` procedure over a Type 2 CIDFont without a `FontMatrix` sees the CIDFont current at
+/// the scale its glyphs are drawn at: an em of the composite font's size, as with the identity.
+#[test]
+fn cshow_over_a_type2_cidfont_without_a_matrix_sees_it_at_its_drawn_scale() {
+    let (h, i) = (glyph('H').0, glyph('I').0);
+    let with = cid2_font(&format!("<0000{h:04x}{i:04x}>"));
+    let without = with.replace("/FontMatrix [1 0 0 1 0 0] def", "");
+    assert_ne!(with, without);
+    for fonts in [with, without] {
+        check(&format!(
+            "{fonts}/T2 /Identity-H [/TestCID2] composefont 50 scalefont setfont \
+             {{pop pop pop currentfont /FontMatrix get 0 get /m exch def}} <0001> cshow m 50 sub abs 0.01 lt"
+        ));
+    }
+}
+
 /// `Identity-V`: each glyph an em below the one before (writing mode 1).
 #[test]
 fn identity_v_sets_glyphs_downwards() {

@@ -141,6 +141,23 @@ fn cshow_runs_once_for_each_composite_character_in_its_descendant() {
     super::tests::check(&format!("{two} /Comp findfont 50 scalefont setfont [ {{pop pop}} (\\001\\002) cshow ] dup length 1 eq exch 0 get 2 eq and"));
 }
 
+/// A `cshow` procedure over a Type 42 descendant without a `FontMatrix` sees it current at the
+/// scale its characters are drawn at: another character it measures there is as wide as the
+/// composite font sets it, as with the identity.
+#[test]
+fn cshow_over_a_type42_descendant_without_a_matrix_sees_it_at_its_drawn_scale() {
+    let (_, wi) = glyph('I');
+    let with = fonts();
+    let without = with.replacen("/FontType 42 def /FontMatrix [1 0 0 1 0 0] def", "/FontType 42 def", 1);
+    assert_ne!(with, without);
+    for fonts in [with, without] {
+        super::tests::check(&format!(
+            "{fonts} /Comp findfont 50 scalefont setfont {{pop pop pop (\\002) stringwidth pop /w exch def}} (\\000\\001) cshow w {} sub abs 0.01 lt",
+            50.0 * wi
+        ));
+    }
+}
+
 /// `kshow` runs its procedure between each two characters of a composite font, with the values of
 /// their codes (font number times 256 plus code), and the next character follows where it moves
 /// the current point (PLRM 3rd ed., `kshow`).
