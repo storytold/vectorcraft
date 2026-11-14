@@ -85,8 +85,10 @@ object is where the art was.
 | Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
 | Bevel both sides | The back is bevelled too. |
 
-Holes stay holes, with walls of their own. Bevels move each corner along its bisector (mitres are limited to four
-times the width), so a bevel wider than a narrow part of the shape folds over itself. Each facet has a seam ([Seams](#seams)).
+Holes stay holes, with walls of their own. Bevels move each corner along its bisector. A corner the bevel opens (a
+sharp point with the bevel outside, a narrow notch with it inside) whose miter would reach past four times the width is
+cut square across instead; at the other corners the miter is limited to four times the width. A bevel wider than a
+narrow part of the shape folds over itself. Each facet has a seam ([Seams](#seams)).
 
 ## Inflate
 

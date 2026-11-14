@@ -120,7 +120,8 @@ fn near_segment_in_band(a: Point, b: Point, top: f64, bottom: f64, r: f64) -> Op
 }
 
 /// [`band_intervals`] less every x at which some point of the band `top..bottom` is closer than
-/// `inset` to an edge of `polys` (holes included), measured from the edge itself.
+/// `inset` to an edge of `polys` (holes included), measured from the edge itself. A stretch of an
+/// edge that contours meet along bounds no part of the shape, so the inset does not apply beside it.
 fn band_inset_intervals(polys: &[Vec<Point>], top: f64, bottom: f64, inset: f64) -> Vec<(f64, f64)> {
     let iv = band_intervals(polys, top, bottom);
     if inset <= 0.0 || iv.is_empty() {
@@ -130,8 +131,66 @@ fn band_inset_intervals(polys: &[Vec<Point>], top: f64, bottom: f64, inset: f64)
         return vec![];
     }
     let (top, bottom) = (top.min(bottom), top.max(bottom));
-    let near = polys.iter().flat_map(|p| (0..p.len()).filter_map(move |i| near_segment_in_band(p[i], p[(i + 1) % p.len()], top, bottom, inset)));
+    let edges = boundary_segments(polys, |lo, hi| hi > top - inset && lo < bottom + inset);
+    let near = edges.into_iter().filter_map(|(a, b)| near_segment_in_band(a, b, top, bottom, inset));
     subtract_intervals(&iv, &union_intervals(near.collect()))
+}
+
+/// The stretches of the edges of `polys` that bound the shape (even-odd), among the edges whose y
+/// range `lo..hi` `keep` accepts. Edges that lie exactly along one line and overlap there (contours
+/// that meet along an edge, however each one divides it) count by parity, as in
+/// [`slant_boundaries`]: a stretch that an even number of them cover has the shape on both sides
+/// and is left out. Edges of no length are left out. At most [`MAX_EDGE_PAIRS`] pairs are compared;
+/// edges left unpaired count whole.
+fn boundary_segments(polys: &[Vec<Point>], keep: impl Fn(f64, f64) -> bool) -> Vec<(Point, Point)> {
+    fn root(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+    let mut edges: Vec<(Point, Point)> = polys
+        .iter()
+        .flat_map(|p| (0..p.len()).map(move |i| (p[i], p[(i + 1) % p.len()])))
+        .filter(|&(a, b)| a != b && keep(a.y.min(b.y), a.y.max(b.y)))
+        .collect();
+    // Edges along one line overlap in x, so only edges whose x ranges overlap are compared.
+    edges.sort_by(|u, v| u.0.x.min(u.1.x).total_cmp(&v.0.x.min(v.1.x)));
+    let mut parent: Vec<usize> = (0..edges.len()).collect();
+    let mut pairs = 0;
+    'edges: for (i, &(p, q)) in edges.iter().enumerate() {
+        // The x ranges of edges along one line can differ by rounding, as in `slant_boundaries`.
+        let scale = p.x.abs().max(p.y.abs()).max(q.x.abs()).max(q.y.abs()).max(1.0);
+        let x1 = p.x.max(q.x) + 4.0 * f64::EPSILON * scale;
+        for (j, &(r, s)) in edges.iter().enumerate().skip(i + 1).take_while(|(_, o)| o.0.x.min(o.1.x) <= x1) {
+            pairs += 1;
+            if pairs > MAX_EDGE_PAIRS {
+                break 'edges;
+            }
+            if on_line_exactly(p, q, r) && on_line_exactly(p, q, s) {
+                let (a, b) = (root(&mut parent, i), root(&mut parent, j));
+                parent[a] = b;
+            }
+        }
+    }
+    let mut groups: Vec<(usize, usize)> = (0..edges.len()).map(|i| (root(&mut parent, i), i)).collect();
+    groups.sort_unstable();
+    let mut out = Vec::new();
+    for run in groups.chunk_by(|a, b| a.0 == b.0) {
+        if let [(_, i)] = run {
+            out.push(edges[*i]);
+            continue;
+        }
+        // The stretches an odd number of the edges cover: pairs of their ends, sorted along the
+        // line by whichever coordinate changes more along it.
+        let (p, q) = edges[run[0].1];
+        let by_x = (q.x - p.x).abs() >= (q.y - p.y).abs();
+        let mut ends: Vec<Point> = run.iter().flat_map(|&(_, i)| [edges[i].0, edges[i].1]).collect();
+        ends.sort_by(|a, b| if by_x { a.x.total_cmp(&b.x) } else { a.y.total_cmp(&b.y) });
+        out.extend(ends.as_chunks::<2>().0.iter().filter(|c| c[0] != c[1]).map(|c| (c[0], c[1])));
+    }
+    out
 }
 
 /// Union of sorted-or-not intervals.
@@ -500,6 +559,9 @@ fn eroded_cover(polys: &[Vec<Point>], top: f64, bottom: f64, d: f64) -> Vec<(f64
             cuts.dedup();
         }
     }
+    // A stretch of an edge that contours meet along bounds no part of the shape, so the shape is
+    // not shrunk beside it.
+    let edges = boundary_segments(polys, |lo, hi| hi > top - r && lo < bottom + r);
     let mut out = Vec::new();
     // A band of no height keeps its two equal cuts: one piece of no height, measured at its y.
     for w in cuts.windows(2) {
@@ -510,13 +572,10 @@ fn eroded_cover(polys: &[Vec<Point>], top: f64, bottom: f64, d: f64) -> Vec<(f64
         }
         // The points closer than `d` to an edge make a convex shape, so a vertical line within
         // the piece lies in it when both its ends do.
-        let near = polys.iter().flat_map(|p| {
-            (0..p.len()).filter_map(move |i| {
-                let (s, t) = (p[i], p[(i + 1) % p.len()]);
-                let (u, v) = (near_segment(s, t, a, r)?, near_segment(s, t, b, r)?);
-                let (x, y) = (u.0.max(v.0), u.1.min(v.1));
-                (y > x).then_some((x, y))
-            })
+        let near = edges.iter().filter_map(|&(s, t)| {
+            let (u, v) = (near_segment(s, t, a, r)?, near_segment(s, t, b, r)?);
+            let (x, y) = (u.0.max(v.0), u.1.min(v.1));
+            (y > x).then_some((x, y))
         });
         out.extend(subtract_intervals(&cover, &union_intervals(near.collect())));
     }
@@ -1088,6 +1147,36 @@ fn inset_keeps_text_clear_of_a_hole_s_sloped_edges() {
     let spans = cell_spans(&closed(&[&square, &diamond]), &LayoutOptions { inset: 5.0, ..LayoutOptions::default() }, &[], 40.0, 44.0);
     let clear = 5.0 * std::f64::consts::SQRT_2;
     assert_spans(&spans[0], &[(5.0, 36.0 - clear), (64.0 + clear, 95.0)]);
+}
+
+/// The inset is not kept beside an edge two contours share, vertical, horizontal or slanted with an
+/// extra anchor on one side, and is still kept beside the part of an edge only one contour covers.
+#[cfg(test)]
+#[test]
+fn inset_is_not_kept_beside_an_edge_two_contours_share() {
+    let opts = LayoutOptions { inset: 5.0, ..LayoutOptions::default() };
+    let side = closed(&[&[(0.0, 0.0), (50.0, 0.0), (50.0, 100.0), (0.0, 100.0)], &[(50.0, 0.0), (100.0, 0.0), (100.0, 100.0), (50.0, 100.0)]]);
+    assert_spans(&cell_spans(&side, &opts, &[], 40.0, 44.0)[0], &[(5.0, 95.0)]);
+    let seam = closed(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], &[(0.0, 50.0), (100.0, 50.0), (100.0, 100.0), (0.0, 100.0)]]);
+    assert_spans(&cell_spans(&seam, &opts, &[], 46.0, 54.0)[0], &[(5.0, 95.0)]);
+    let slanted =
+        closed(&[&[(0.0, 0.0), (40.0, 0.0), (50.0, 50.0), (60.0, 100.0), (0.0, 100.0)], &[(40.0, 0.0), (100.0, 0.0), (100.0, 100.0), (60.0, 100.0)]]);
+    assert_spans(&cell_spans(&slanted, &opts, &[], 40.0, 44.0)[0], &[(5.0, 95.0)]);
+    // The lower contour covers only the left half of the upper one's bottom edge: the right half
+    // and the corner where they meet still keep the inset.
+    let step = closed(&[&[(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)], &[(0.0, 50.0), (50.0, 50.0), (50.0, 100.0), (0.0, 100.0)]]);
+    assert_spans(&cell_spans(&step, &opts, &[], 46.0, 48.0)[0], &[(5.0, 50.0 - 21f64.sqrt())]);
+}
+
+/// A negative wrap offset does not shrink a wrap object beside an edge two of its contours share,
+/// with or without Invert Wrap.
+#[cfg(test)]
+#[test]
+fn negative_wrap_offset_does_not_shrink_beside_an_edge_two_contours_share() {
+    let left: &[(f64, f64)] = &[(40.0, 40.0), (50.0, 40.0), (50.0, 60.0), (40.0, 60.0)];
+    let right: &[(f64, f64)] = &[(50.0, 40.0), (60.0, 40.0), (60.0, 60.0), (50.0, 60.0)];
+    assert_spans(&wrap_spans(&[left, right], -5.0, false, 44.0, 50.0), &[(0.0, 45.0), (55.0, 100.0)]);
+    assert_spans(&wrap_spans(&[left, right], -5.0, true, 46.0, 54.0), &[(45.0, 55.0)]);
 }
 
 /// In a frame of columns, the inset is kept once from a column's inner edge and once from the
