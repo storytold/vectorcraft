@@ -599,6 +599,100 @@ fn with_link_a_pdf_page_places_linked() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
+/// The colour at the centre of `r` in `doc`.
+fn colour_at(doc: &Document, r: Rect) -> [u8; 3] {
+    let img = vectorcraft_render::Renderer::new().render_region(doc, r, 1.0, true);
+    let [red, g, b, _] = img.pixel((r.width() / 2.0) as u32, (r.height() / 2.0) as u32);
+    [red, g, b]
+}
+
+#[test]
+fn link_pages_opens_each_picked_pdf_page_as_a_linked_placed_document() {
+    let dir = Folder::new("open-pdf-link-pages");
+    let src = dir.file("flyer.pdf");
+    pdf_source(&src, "pdf", &[RED, BLUE, RED], 0);
+    let mut s = Session::new();
+    let r = s.execute("document.open", &json!({"path": src, "linkPages": true, "pages": "2-3"})).unwrap();
+    assert_eq!((r["format"].as_str(), r["restored"].as_bool()), (Some("pdf"), Some(false)), "{r}");
+    let st = s.doc().unwrap();
+    assert_eq!(st.path, None, "Save asks for a name instead of writing over the PDF");
+    let d = &st.doc;
+    let boards: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
+    assert_eq!(boards, [Rect::new(0.0, 0.0, 100.0, 50.0), Rect::new(136.0, 0.0, 236.0, 50.0)]);
+    let layers: Vec<_> = d.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(layers, ["Page 2", "Page 3"]);
+    let mut ids = vec![];
+    for (layer, (page, board)) in d.layers.iter().zip([(2, boards[0]), (3, boards[1])]) {
+        let kids = layer.children().unwrap();
+        assert_eq!(kids.len(), 1);
+        let p = placed(&s, kids[0].id);
+        assert_eq!((p.link.path.as_str(), p.link.page, p.bounding), (src.as_str(), Some(page), false), "{p:?}");
+        assert_eq!(bounds(&s, kids[0].id), board);
+        ids.push(kids[0].id);
+    }
+    assert!(near(colour_at(d, boards[0]), BLUE));
+    assert!(near(colour_at(d, boards[1]), RED));
+    let links = s.execute("links.list", &json!({})).unwrap()["links"].clone();
+    assert_eq!(links.as_array().map(Vec::len), Some(2), "{links}");
+    assert!(links.as_array().unwrap().iter().all(|row| row["document"] == true && row["status"] == "ok"), "{links}");
+    // Embed makes a page editable art.
+    s.execute("links.embed", &json!({"ids": [ids[0].0]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.node(ids[0]).unwrap().kind_label(), "Clip Group");
+    assert_eq!(bounds(&s, ids[0]), boards[0]);
+    assert!(near(colour_at(d, boards[0]), BLUE));
+    // Every page, with the art's bounds as the artboard.
+    s.execute("document.open", &json!({"path": src, "linkPages": true, "cropTo": "bounding"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.artboards.len(), 3);
+    assert!(d.layers.iter().flat_map(|l| l.children().unwrap()).all(|n| matches!(&n.kind, NodeKind::PlacedDocument(p) if p.bounding)));
+}
+
+#[test]
+fn linked_pages_share_one_copy_of_the_file_and_open_in_the_pages_color_mode() {
+    use vectorcraft_testkit::pdf::{PdfPage, pdf};
+    let dir = Folder::new("open-pdf-link-pages-cmyk");
+    let src = dir.file("cmyk.pdf");
+    let page = || PdfPage::new(100.0, 50.0, "0 0.5 1 0 k 0 0 100 50 re f");
+    write(&src, &pdf(&[page(), page(), page()], None));
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": src, "linkPages": true})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.color_mode, vectorcraft_doc::ColorMode::Cmyk, "pages painted in CMYK open as a CMYK document");
+    let blobs: Vec<_> = d.images.values().map(|b| b.bytes.clone()).collect();
+    assert_eq!(blobs.len(), 3);
+    assert!(blobs.iter().all(|b| std::sync::Arc::ptr_eq(b, &blobs[0])), "one copy of the file for every page");
+    s.execute("document.open", &json!({"path": src, "linkPages": true, "colorMode": "rgb"})).unwrap();
+    assert_eq!(s.doc().unwrap().doc.color_mode, vectorcraft_doc::ColorMode::Rgb, "colorMode wins");
+}
+
+#[test]
+fn link_pages_is_refused_without_a_path_for_other_files_and_with_a_password_or_outlines() {
+    let dir = Folder::new("open-pdf-link-pages-refused");
+    let src = dir.file("flyer.pdf");
+    pdf_source(&src, "pdf", &[RED, BLUE], 0);
+    let bytes = std::fs::read(&src).unwrap();
+    let logo = dir.file("logo.vectorcraft");
+    source(&logo, 100.0, 50.0, RED, 0);
+    let mut s = Session::new();
+    let cases = [
+        (json!({"name": "flyer.pdf", "dataBase64": vectorcraft_format::base64_encode(&bytes), "linkPages": true}), "needs the file's path"),
+        (json!({"path": logo, "linkPages": true}), "isn't a PDF"),
+        (json!({"path": src, "linkPages": true, "password": "secret"}), "password"),
+        (json!({"path": src, "linkPages": true, "textAs": "outlines"}), "textAs: outlines"),
+        (json!({"path": src, "linkPages": "yes"}), "linkPages must be true or false"),
+        (json!({"path": src, "linkPages": true, "pages": "3"}), "pages:"),
+    ];
+    for (p, says) in cases {
+        let e = s.execute("document.open", &p).unwrap_err().to_string();
+        assert!(e.contains(says), "{p}: {e}");
+    }
+    assert!(s.documents().is_empty(), "nothing opened");
+    // Off, the pages open as editable art.
+    s.execute("document.open", &json!({"path": src, "linkPages": false})).unwrap();
+    assert!(!s.doc().unwrap().doc.has_placed());
+}
+
 #[test]
 fn a_changed_pdf_is_modified_and_update_links_reads_it_again() {
     let dir = Folder::new("placed-pdf-update");

@@ -891,6 +891,9 @@ font-technology	Variable	Variabel
 	The selected character's font is not available.	Die Schrift des ausgewählten Zeichens ist nicht verfügbar.
 	No alternates for the selected character.	Keine Alternativen für das ausgewählte Zeichen.
 	Double-click to replace	Doppelklicken zum Ersetzen
+	Click to replace	Klicken zum Ersetzen
+	Show all alternates in the Glyphs panel	Alle Alternativen im Bedienfeld „Glyphen“ anzeigen
+	Show Character Alternates	Zeichenalternativen anzeigen
 	Select one character with the Type tool first.	Wählen Sie zuerst mit dem Text-Werkzeug ein Zeichen aus.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} ist eine Glyphe von {font}, nicht der Schrift, in der der ausgewählte Text gesetzt ist ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} gehört zu {base} (U+{base_code}) {place}; Ihre Auswahl ist {sel} (U+{code}).
@@ -1338,6 +1341,7 @@ file-filter	Templates	Vorlagen
 	Format	Format
 	Format Options	Formatoptionen
 	Format Settings	Formateinstellungen
+	Format Settings…	Formateinstellungen…
 	Format:	Format:
 	Formats:	Formate:
 	Fractional Widths	Gebrochene Breiten
@@ -1698,6 +1702,7 @@ file-filter	Templates	Vorlagen
 	Images:	Bilder:
 	Import Keyboard Shortcuts…	Tastaturbefehle importieren…
 	Import PDF	PDF importieren
+	Import PDF pages as links	PDF-Seiten als Verknüpfungen importieren
 	Import PDF Presets	PDF-Vorgaben importieren
 	Import Perspective Grid Presets	Vorgaben für Perspektivenraster importieren
 	Import Print Presets	Druckvorgaben importieren
@@ -3420,6 +3425,18 @@ effect	Points	Punkte
 	Smart Guides (View → Smart Guides)	Intelligente Hilfslinien (Ansicht → Intelligente Hilfslinien)
 	Smart Guides (⌘U)	Intelligente Hilfslinien (⌘U)
 	Smart Punctuation…	Typografische Satzzeichen…
+	Smart Punctuation	Typografische Satzzeichen
+	ff, fi, ffi Ligatures	Ligaturen ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaturen ff, fl, ffl
+	Smart Quotes	Typografische Anführungszeichen
+	Smart Spaces	Intelligente Leerzeichen
+	En, Em Dashes	Halbgeviert- und Geviertstriche
+	Ellipses	Auslassungspunkte
+	Expert Fractions	Expertenbrüche
+	Replace In	Ersetzen in
+	Selected Text Only	Nur ausgewählter Text
+	Entire Document	Gesamtes Dokument
+	Report Results	Ergebnisse anzeigen
 	Smooth	Glatt
 	Corner	Ecke
 	Relative	Relativ
@@ -3450,6 +3467,7 @@ effect	Points	Punkte
 	Solid	Gefüllt
 	Sort by Kind	Nach Art sortieren
 	Sort by Name	Nach Name sortieren
+	Sort by Size	Nach Größe sortieren
 	Sort by Status	Nach Status sortieren
 	Source code on GitHub	Quellcode auf GitHub
 	Source Sans 3	Source Sans 3
@@ -6275,7 +6293,7 @@ axis	Y Axis	Y-Achse
 @plural	Result: {n}|Results: {n}	Ergebnis: {n}|Ergebnisse: {n}
 @msg	select one object	wählen Sie ein Objekt aus
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globale Bearbeitung funktioniert mit Pfaden, zusammengesetzten Pfaden, Symbolinstanzen und Gruppen daraus
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gedrehte oder gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	keine ähnlichen Objekte gefunden (gespiegelte Kopien werden nicht erkannt); ändern Sie die Optionen für globale Bearbeitung und versuchen Sie es erneut
 @msg	Global Edit is off	Globale Bearbeitung ist nicht aktiv
 @msg	only an object of the Global Edit other than the one it started from can be left out	nur ein Objekt der globalen Bearbeitung außer dem, mit dem sie begonnen hat, kann ausgeschlossen werden
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all oder ein Bereich wie 1, 3-5, nicht {v}
@@ -7072,6 +7090,9 @@ breakText	Glyphs	Glyphen
 	Open Tutorial Sample	Übungsdatei des Lernprogramms öffnen
 	Finish Tutorial	Lernprogramm abschließen
 	Next Tutorial	Nächstes Lernprogramm
+	Show Learn Tab	Registerkarte in Lernen anzeigen
+	Show Skill	Fertigkeit anzeigen
+	Back One Level	Eine Ebene zurück
 	Back to Skills	Zurück zu den Fertigkeiten
 @msg	tutorial `{id}` has no practice sample	das Lernprogramm `{id}` hat keine Übungsdatei
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öffnen Sie zuerst die Übungsdatei von `{id}` (siehe learn.openSample)
@@ -8585,6 +8606,7 @@ breakText	Glyphs	Glyphen
 @msg	the RTF file is too large to place as type (at most {_1} MB)	die RTF-Datei ist zu groß, um als Text platziert zu werden (höchstens {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	das SVG wird zu mehr als {0} verschachtelten SVG-Bildern erweitert
 @msg	the SVG expands to more than {0} objects	das SVG wird zu mehr als {0} Objekten erweitert
+@msg	the SVG's styles expand to more than {0} MB	die Stile des SVG werden auf mehr als {0} MB erweitert
 @msg	the SVG has no drawable objects	das SVG hat keine zeichenbaren Objekte
 @msg	the SVGZ file unpacks to more than {_1} MB	die SVGZ-Datei wird auf mehr als {_1} MB entpackt
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	das Word-Dokument hat mehr als {MAX_PAGES} Seiten an Eigenschaften, zu viele zum Platzieren
@@ -9045,3 +9067,6 @@ breakText	Glyphs	Glyphen
 	Grommets	Ösen
 	Grommet Inset	Randabstand der Ösen
 	Diameter	Durchmesser
+	Nest Shapes…	Formen verschachteln…
+	Nest Shapes	Formen verschachteln
+	Roll	Rolle

@@ -143,33 +143,52 @@ fn shared_styles<T: PartialEq>(
     app: &VectorcraftApp,
     f: impl Fn(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool) -> Option<T>,
 ) -> Option<T> {
-    let st = app.session.active()?;
+    let mut acc = Shared::None;
+    each_style(app, |t, para, style, inline| acc.add(f(t, para, style, inline)));
+    acc.value().flatten()
+}
+
+/// Whether `f` holds for any of the character styles [`shared`] reads.
+pub(crate) fn any_style(app: &VectorcraftApp, f: impl Fn(&CharStyle) -> bool) -> bool {
+    let mut any = false;
+    each_style(app, |_, _, style, _| any = any || f(style));
+    any
+}
+
+/// Call `f` with each character style the panels act on, as [`shared_styles`] describes: the
+/// caret's style at a Type tool caret, else each piece of the runs the Type tool's selection
+/// covers, else of every run of every frame of the selected stories.
+fn each_style(app: &VectorcraftApp, mut f: impl FnMut(&vectorcraft_doc::TextObject, &vectorcraft_doc::ParaStyle, &CharStyle, bool)) {
+    let Some(st) = app.session.active() else {
+        return;
+    };
     let text = |id: NodeId| match st.doc.node(id).map(|n| &n.kind) {
         Some(NodeKind::Text(t)) => Some(t),
         _ => None,
     };
-    let mut acc = Shared::None;
     if let Some((id, a, b)) = text_editing(app) {
-        let t = text(id)?;
+        let Some(t) = text(id) else {
+            return;
+        };
         if b <= a {
             let para = t.plain_text().get(..a).map_or(0, |s| s.bytes().filter(|&c| c == b'\n').count());
-            return f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
+            f(t, t.para_at(para), &vectorcraft_text::edit::insertion_style(&t.runs, a, b), false);
+            return;
         }
         match text_story(app) {
             // After Select All in threaded text: all the text of every frame of the story.
             Some(story) => {
                 for t in story.into_iter().filter_map(text) {
-                    each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
+                    each_paragraph_run(t, None, |para, style, inline| f(t, para, style, inline));
                 }
             }
-            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| acc.add(f(t, para, style, inline))),
+            None => each_paragraph_run(t, Some((a, b)), |para, style, inline| f(t, para, style, inline)),
         }
     } else {
         for t in selected_story_texts(app) {
-            each_paragraph_run(t, None, |para, style, inline| acc.add(f(t, para, style, inline)));
+            each_paragraph_run(t, None, |para, style, inline| f(t, para, style, inline));
         }
     }
-    acc.value().flatten()
 }
 
 /// `f` of the paragraph and style of each piece of `t`'s runs that lies in one paragraph (a
