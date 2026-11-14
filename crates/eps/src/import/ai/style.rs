@@ -32,6 +32,10 @@
 //! gradient (`Bb` … `flag (name) x y angle length … Bg` … `BB`); `stroke fill Xd` says whether it
 //! paints at all. A blend filter's `mode opacity isolate knockout shape Xy` is its transparency.
 //!
+//! A style with no filters is one paint (`/SimpleStyle :` … `/Paint ;` in place of `/ActiveStyle`):
+//! the fill's and stroke's colors and the stroke's style as an object's own paint operators write
+//! them, `stroke fill Xd` turning each on, and an `Xy` for its transparency.
+//!
 //! A stroke with a Calligraphic or Art brush is its own basic filter, `(Adobe Calligraphic Brush
 //! Tool)` or `(Adobe ArtOnPath Brush Tool)`, with its stroke's style and the brush's settings for
 //! the object as entries (see [`super::brush`]).
@@ -189,6 +193,10 @@ pub(super) struct ArtStyle {
     /// the effects any object takes that don't move the outline: what a path or compound path is
     /// read with when each gradient is placed as its drawn look has it (`read::ops`' `styled`).
     pub stacked: bool,
+    /// It is one Warp on the whole object, under fills and strokes that paint nothing and have no
+    /// effects of their own: what an image is read with when its live warp draws as its drawn look
+    /// (`read::ops`' `styled`).
+    pub image_warp: bool,
     /// Its fills and strokes, bottom first.
     pub items: Vec<StyleItem>,
     /// Each item's own visibility, transparency and effects, in the order of [`Self::items`].
@@ -206,6 +214,11 @@ pub(super) struct ArtStyle {
     /// paint is a pattern: its [`StyleItem::Pattern`]. A text document's characters name such
     /// styles for their fills and strokes (`ate`). `None` for any other paint or style.
     pub simple_pattern: Option<StyleItem>,
+    /// A style that is one paint: its fill and stroke, bottom first, each there when its
+    /// `stroke fill Xd` turns it on (none when neither is on). `Err` when it turns on a fill or
+    /// stroke whose paint isn't read here (a gradient, a pattern, a color that isn't read) or has
+    /// no `Xd`. `None` for a style with filters, whose paint is [`Self::items`].
+    pub one_paint: Option<Result<Vec<StyleItem>, ()>>,
 }
 
 impl ArtStyle {
@@ -412,12 +425,22 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
     let mut in_basic = false;
     // A style that is one paint being read, and its pattern so far.
     let mut simple: Option<Option<StyleItem>> = None;
-    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>, simple_pattern: Option<StyleItem>| {
+    // The same style's paint operators so far.
+    let mut one_paint: Option<OnePaint> = None;
+    let mut finish = |name: Option<String>, filters: &mut Vec<Filter>, simple_pattern: Option<StyleItem>, one_paint: Option<OnePaint>| {
         if let Some(name) = name {
             // Only a style that is one paint holds a pattern for type: one with filters as well
             // paints with more than that.
             let simple_pattern = simple_pattern.filter(|_| filters.is_empty());
-            styles.insert(name, ArtStyle { simple_pattern, ..style(filters) });
+            let mut st = ArtStyle { simple_pattern, ..style(filters) };
+            if let Some(one) = one_paint.filter(|_| filters.is_empty()) {
+                if let Some((mode, opacity)) = one.paint.xy {
+                    let (isolate, knockout) = one.paint.xy_group.unwrap_or((false, Knockout::Off));
+                    st.transparency = Some((opacity, super::read::blend_mode(mode), isolate, knockout));
+                }
+                st.one_paint = Some(one.items());
+            }
+            styles.insert(name, st);
         }
         filters.clear();
     };
@@ -454,12 +477,12 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             }
             Tok::Name(n) => match n {
                 b"KnownStyle" => {
-                    finish(name.take(), &mut filters, simple.take().flatten());
+                    finish(name.take(), &mut filters, simple.take().flatten(), one_paint.take());
                     operands.clear();
                     open.clear();
                     (pending, in_basic, style_entry, other_entry) = (None, false, None, None);
                 }
-                b"SimpleStyle" if filters.is_empty() => simple = Some(None),
+                b"SimpleStyle" if filters.is_empty() => (simple, one_paint) = (Some(None), Some(OnePaint::default())),
                 b"FillStyle" => style_entry = Some(Kind::Fill),
                 b"StrokeStyle" | b"BlendStyle" => style_entry = Some(Kind::Other),
                 b"Name" if name.is_none() && filters.is_empty() => name = operands.iter().rev().find_map(|v| names.text(v)),
@@ -559,7 +582,7 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
                         f.repeated |= f.kinds.insert(key, kind).is_some();
                     }
                 }
-                style_paint_op(&mut filters, &mut simple, op, &operands, names);
+                style_paint_op(&mut filters, &mut simple, &mut one_paint, op, &operands, names);
                 if op == "," || op == ";" || op.starts_with('X') || op.starts_with('B') || op.len() <= 2 {
                     operands.clear();
                 }
@@ -571,7 +594,7 @@ pub(super) fn art_styles_in(data: &[u8], names: &mut Names) -> HashMap<String, A
             operands.clear();
         }
     }
-    finish(name, &mut filters, simple.take().flatten());
+    finish(name, &mut filters, simple.take().flatten(), one_paint.take());
     styles
 }
 
@@ -729,12 +752,98 @@ fn pattern_operands(vals: &[V], names: &mut Names) -> Option<(String, Option<[f6
 }
 
 /// A paint operator in a style being read: one of the last filter's (`filters`), else one of a style
-/// that is one paint (`simple`, while one is read).
-fn style_paint_op(filters: &mut [Filter], simple: &mut Option<Option<StyleItem>>, op: &str, vals: &[V], names: &mut Names) {
+/// that is one paint (`simple` and `one_paint`, while one is read).
+fn style_paint_op(
+    filters: &mut [Filter],
+    simple: &mut Option<Option<StyleItem>>,
+    one_paint: &mut Option<OnePaint>,
+    op: &str,
+    vals: &[V],
+    names: &mut Names,
+) {
     if let Some(f) = filters.last_mut() {
         paint_op(f, op, vals, names);
-    } else if let Some(paint) = simple.as_mut() {
+        return;
+    }
+    if let Some(paint) = simple.as_mut() {
         simple_paint_op(paint, op, vals, names);
+    }
+    if let Some(one) = one_paint.as_mut() {
+        one.op(op, vals, names);
+    }
+}
+
+/// The paint operators of a style that is one paint (`/SimpleStyle :` … `/Paint ;`), read as a
+/// fill's or stroke's style reads them.
+#[derive(Default)]
+struct OnePaint {
+    paint: Filter,
+    /// Its `stroke fill Xd` was read.
+    xd: bool,
+    /// Its last fill paint is a pattern (`p`) or may be a gradient (`Bg`).
+    fill_unread: bool,
+    /// Its last stroke paint is a pattern (`P`) or may be a gradient (`Bg`).
+    stroke_unread: bool,
+    /// Inside a gradient instance (`flag Bb` … `BB`): whether it paints the stroke (flag 1).
+    instance: Option<bool>,
+}
+
+impl OnePaint {
+    fn op(&mut self, op: &str, vals: &[V], names: &mut Names) {
+        match op {
+            "Xd" => self.xd |= vals.iter().filter_map(V::num).count() >= 2,
+            "p" => self.fill_unread = true,
+            "P" => self.stroke_unread = true,
+            // The flag of the instance it is in says which one it paints, as an object's does
+            // (`Instance::begin` in `paint.rs`); outside one it is read as either one's.
+            "Bb" => self.instance = Some(vals.iter().filter_map(V::num).next_back() == Some(1.0)),
+            "BB" => self.instance = None,
+            "Bg" => match self.instance {
+                Some(true) => self.stroke_unread = true,
+                Some(false) => self.fill_unread = true,
+                None => (self.fill_unread, self.stroke_unread) = (true, true),
+            },
+            // A color replaces what came before it; one that isn't read leaves none.
+            "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "xa" | "xx" | "xk" | "xs" | "xz" => {
+                (self.fill_unread, self.paint.fill) = (false, None);
+            }
+            "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" => (self.stroke_unread, self.paint.stroke) = (false, None),
+            _ => {}
+        }
+        paint_op(&mut self.paint, op, vals, names);
+    }
+
+    /// Its fill and stroke ([`ArtStyle::one_paint`]).
+    fn items(&self) -> Result<Vec<StyleItem>, ()> {
+        let f = &self.paint;
+        if !self.xd {
+            return Err(());
+        }
+        let (stroked, filled) = f.paints;
+        let mut items = vec![];
+        if filled {
+            match &f.fill {
+                Some(p) if !self.fill_unread => items.push(StyleItem::Fill(p.clone())),
+                _ => return Err(()),
+            }
+        }
+        if stroked {
+            match &f.stroke {
+                Some(p) if !self.stroke_unread => items.push(StyleItem::Stroke {
+                    paint: p.clone(),
+                    width: f.width,
+                    cap: f.cap,
+                    join: f.join,
+                    miter: f.miter,
+                    dash: f.dash.clone(),
+                    profile: None,
+                    align: StrokeAlign::Center,
+                    brush: None,
+                }),
+                _ => return Err(()),
+            }
+        }
+        Ok(items)
     }
 }
 
@@ -1391,11 +1500,30 @@ const ART_ENTRIES: [&str; 18] = [
     "Adobe Effect Expand Before Version", // brand-ok: the entry's name in the files
 ];
 
-/// An Art brush's filter `f` as the stroke it paints: `None` when it isn't a stroke in a color, names
-/// no Art brush, holds an entry that isn't read, or its settings aren't those of art that stretches
-/// along the path, unflipped, at the brush's own width (`Scaling` 1), in Tints (`Colorization` 1),
-/// with `FoldAdjustment` 1, which is [`vectorcraft_brush::ArtBrush`]'s `overlap: false`: its drawn
-/// look stays.
+/// The entries of an Art brush's filter that hold its settings, in the order of
+/// [`super::brush::ArtSettings`], with how each is written and its value when the filter leaves it
+/// out (`None`: the filter must hold it).
+const ART_SETTINGS: [(&str, Kind, Option<f64>); 14] = [
+    ("Colorization", Kind::Int, None),
+    ("Scaling", Kind::Real, None),
+    ("Spacing", Kind::Real, Some(0.0)),
+    ("Adjustment", Kind::Int, Some(1.0)),
+    ("Counterclockwise", Kind::Int, Some(0.0)),
+    ("UpsideDown", Kind::Int, Some(0.0)),
+    ("Proportional", Kind::Bool, Some(0.0)),
+    ("MinScaling", Kind::Real, Some(1.0)),
+    ("MaxScaling", Kind::Real, Some(1.0)),
+    ("ScaleYDependsOn", Kind::Int, Some(0.0)),
+    ("Segmented", Kind::Bool, Some(0.0)),
+    ("StartSegmentLength", Kind::Real, Some(0.0)),
+    ("EndSegmentLength", Kind::Real, Some(0.0)),
+    ("FoldAdjustment", Kind::Bool, Some(1.0)),
+];
+
+/// An Art brush's filter `f` as the stroke it paints, with its settings: `None` when it isn't a
+/// stroke in a color, names no Art brush, holds an entry that isn't read or a setting that isn't a
+/// number of its kind, or tints its art with a swatch's color: its drawn look stays. Whether the
+/// brush draws as these settings is [`super::brush::draws_as`]'s to say.
 fn art_stroke(f: &Filter) -> Option<StyleItem> {
     if !f.paints.0
         || f.gradient
@@ -1410,28 +1538,13 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
     if plugin != ART_BRUSH {
         return None;
     }
-    let off = |key: &str, kind: Kind| matches!(entry(f, key, kind), Ok(None | Some(0.0)));
-    let plain = off("Proportional", Kind::Bool)
-        && off("Segmented", Kind::Bool)
-        && off("UpsideDown", Kind::Int)
-        && off("Counterclockwise", Kind::Int)
-        && off("ScaleYDependsOn", Kind::Int)
-        && off("Spacing", Kind::Real)
-        && off("StartSegmentLength", Kind::Real)
-        && off("EndSegmentLength", Kind::Real);
-    if !plain || entry(f, "Adjustment", Kind::Int).ok()?.unwrap_or(1.0) != 1.0 || entry(f, "FoldAdjustment", Kind::Bool).ok()?.unwrap_or(1.0) != 1.0 {
-        return None;
-    }
-    let one = |key: &str| entry(f, key, Kind::Real).is_ok_and(|v| v.unwrap_or(1.0) == 1.0);
-    if entry(f, "Scaling", Kind::Real).ok()?? != 1.0 || !one("MinScaling") || !one("MaxScaling") {
-        return None;
-    }
-    if entry(f, "Colorization", Kind::Int).ok()?? != 1.0 {
-        return None;
+    let mut settings = [0.0; 14];
+    for (slot, (key, kind, missing)) in settings.iter_mut().zip(ART_SETTINGS) {
+        *slot = entry(f, key, kind).ok()?.or(missing)?;
     }
     let paint = f.stroke.clone()?;
     // The tinted pieces are process colors, so a swatch's ink would be lost.
-    if matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
+    if settings[0] == 1.0 && matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
         return None;
     }
     Some(StyleItem::Stroke {
@@ -1443,7 +1556,7 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
         dash: None,
         profile: None,
         align: StrokeAlign::Center,
-        brush: Some((name.clone(), PathBrush::Art)),
+        brush: Some((name.clone(), PathBrush::Art(settings))),
     })
 }
 
@@ -1673,6 +1786,10 @@ fn style(filters: &[Filter]) -> ArtStyle {
         && st.items.iter().all(|i| matches!(i, StyleItem::Fill(_) | StyleItem::Gradient { .. } | StyleItem::Stroke { brush: None, .. }))
         && st.looks.iter().all(|l| l.effects.is_empty())
         && st.effects.iter().all(any_object_takes);
+    st.image_warp = st.plain
+        && matches!(st.effects.as_slice(), [e] if e.id.starts_with("warp."))
+        && st.items.iter().all(|i| matches!(i, StyleItem::Fill(p) | StyleItem::Stroke { paint: p, .. } if p.is_none()))
+        && st.looks.iter().all(|l| l.effects.is_empty());
     st
 }
 

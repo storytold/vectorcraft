@@ -1,6 +1,6 @@
 //! File (document-level) and Edit commands, plus document queries.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -11,9 +11,9 @@ use super::clipboard::SwatchChoices;
 use super::{
     CommandSpec, Result, Session, always, bad, can_clear_history, can_redo, can_undo, check_numbers, checked_ids_param, clock_date, cmd, date_param,
     f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, index, number_or,
-    object_param, ok, point_param, str_param, switch_or,
+    object_param, ok, point_param, str_param, switch_or, u64_req,
 };
-use crate::{Clipboard, EngineError, inspect};
+use crate::{Clipboard, EngineError, SourceLayer, inspect};
 
 /// Register editing commands, including document-to-document artwork drops and their parameter contracts.
 pub fn specs() -> Vec<CommandSpec> {
@@ -179,7 +179,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste",
             ["Edit"],
             Some("Cmd+V"),
-            "{center?: [x, y], artboardsAt?: [x, y], dx?, dy?, swatchConflict?} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers they came from (by name; made when missing). Artboards copied with artboard.copy come with their art, together right of the last artboard as they lay, or centered on `artboardsAt` (the Artboard tool's canvas menu passes the right-click point; a value that is not [x, y] is an error) (the other paste commands but Paste on All Artboards: where they were), their art back in the layers it came from, and the Artboard tool, when chosen, selects them. In Draw Inside (view.drawMode) the objects go inside the object drawn into, as new art does, and Paste Remembers Layers doesn't apply; edit.pasteInPlace and edit.pasteOnAllArtboards do the same, and in Draw Behind they go behind the selection as edit.pasteInBack puts them; edit.pasteInFront and edit.pasteInBack ignore the drawing mode → {ids, artboard: the first new artboard's index or null, artboards: the new artboards' indices, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
+            "{center?: [x, y], artboardsAt?: [x, y], dx?, dy?, swatchConflict?} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers and sublayers they came from (by the names of the layer and the layers around it in another document; a missing sublayer is made inside its layer; a hidden or locked one is an error and nothing is pasted). Artboards copied with artboard.copy come with their art, together right of the last artboard as they lay, or centered on `artboardsAt` (the Artboard tool's canvas menu passes the right-click point; a value that is not [x, y] is an error) (the other paste commands but Paste on All Artboards: where they were), their art back in the layers it came from, and the Artboard tool, when chosen, selects them. In Draw Inside (view.drawMode) the objects go inside the object drawn into, as new art does, and Paste Remembers Layers doesn't apply; edit.pasteInPlace and edit.pasteOnAllArtboards do the same, and in Draw Behind they go behind the selection as edit.pasteInBack puts them; edit.pasteInFront and edit.pasteInBack ignore the drawing mode → {ids, artboard: the first new artboard's index or null, artboards: the new artboards' indices, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Offset)
         ),
@@ -249,7 +249,10 @@ fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.activate", "missing index"))?;
+    let i = match p.get("index") {
+        None | Some(Value::Null) => return Err(bad("document.activate", "missing index")),
+        Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.activate", "`index` must be a whole number"))?,
+    };
     if s.set_active(i) { ok() } else { Err(bad("document.activate", "no such document")) }
 }
 
@@ -262,7 +265,10 @@ fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {
     if from >= n {
         return Err(bad("document.move", "no such document"));
     }
-    let to = p.get("to").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.move", "missing `to`: a non-negative integer"))?;
+    let to = match p.get("to") {
+        None | Some(Value::Null) => return Err(bad("document.move", "missing `to`: a non-negative integer")),
+        Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.move", "`to` must be a whole number"))?,
+    };
     let to = to.min(n.saturating_sub(1));
     if !s.move_document(from, to) {
         return Err(bad("document.move", "no such document"));
@@ -562,12 +568,11 @@ fn switch_units(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "units": next.label() }))
 }
 
-/// The `artboard` param of the ruler origin commands: an artboard index, 0 when not given.
+/// The `artboard` param of the ruler origin commands: an artboard index, 0 when left out or null. A
+/// value that is not a whole number is "`artboard` must be a whole number"; one past the artboards
+/// is "index out of range".
 fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
-    let index = match p.get("artboard") {
-        None => 0,
-        Some(v) => v.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| bad(c, "index out of range"))?,
-    };
+    let index = super::index_opt(p, "artboard", c)?.unwrap_or(0);
     if index >= s.doc()?.doc.artboards.len() {
         return Err(bad(c, "index out of range"));
     }
@@ -577,14 +582,15 @@ fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
 fn ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     // A document without artboards measures from its global zero point.
-    let index = if d.artboards.is_empty() && p.get("artboard").is_none() { 0 } else { artboard_param(s, p, "document.rulerOrigin")? };
+    let index =
+        if d.artboards.is_empty() && p.get("artboard").is_none_or(Value::is_null) { 0 } else { artboard_param(s, p, "document.rulerOrigin")? };
     Ok(json!(s.doc()?.doc.ruler_origin_for(index)))
 }
 
 fn set_ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.setRulerOrigin";
     let origin = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
-    let index = if s.doc()?.doc.rulers == RulerMode::Global && p.get("artboard").is_none() { 0 } else { artboard_param(s, p, C)? };
+    let index = if s.doc()?.doc.rulers == RulerMode::Global && p.get("artboard").is_none_or(Value::is_null) { 0 } else { artboard_param(s, p, C)? };
     change_ruler_origin(s, index, Some(origin), "Ruler Origin")
 }
 
@@ -678,12 +684,22 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// under an interaction that would then preview on, or cancel to, the document from before (#1719).
 /// A typing session also ends in the Type tool, whose caret and marked text (IME) must follow the
 /// document. A preview that Real-time Drawing off left unapplied is applied first, as the tool's own
-/// commit applies it; when it fails, the interaction is canceled.
+/// commit applies it; when it fails, the interaction is canceled. The applied preview's warning
+/// goes to the running command's result or the tool's status messages, as the tool's own commit
+/// reports it ([`Session::note_settled_warning`]).
 pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
     let typing = typing_in_progress(s);
     match s.unapplied_interaction_preview().filter(|_| !s.previewing) {
-        Some((cmd, p)) if s.preview(&cmd, &p).is_err() => s.cancel_interaction()?,
-        _ => s.commit_interaction()?,
+        Some((cmd, p)) => match s.preview(&cmd, &p) {
+            Ok(v) => {
+                if let Some(w) = v.get("warning").and_then(Value::as_str) {
+                    s.note_settled_warning(w);
+                }
+                s.commit_interaction()?
+            }
+            Err(_) => s.cancel_interaction()?,
+        },
+        None => s.commit_interaction()?,
     }
     if typing {
         s.set_tool_option("endTyping", &Value::Bool(true));
@@ -1086,7 +1102,7 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
                     subpaths.extend(super::path::without_segments(sp, &cuts));
                 } else {
                     // Picked anchors leave the path with their connections, as Clear removes them.
-                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flatten().filter_map(|&(s, a)| (s == si).then_some(a)).collect();
+                    let gone: BTreeSet<usize> = anchor_refs.into_iter().flat_map(|refs| super::path::subpath_refs(refs, si)).collect();
                     subpaths.extend(super::path::without_anchors(sp, &gone));
                 }
             }
@@ -1180,8 +1196,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
 fn drop_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "edit.dropSelection";
-    let key = "sourceDocument";
-    let uid = p[key].as_u64().ok_or_else(|| bad(CMD, format!("missing integer `{key}`")))?;
+    let uid = u64_req(p, "sourceDocument", CMD)?;
     let point = |key: &str| finite_numbers::<2>(&p[key]).ok_or_else(|| bad(CMD, format!("{key} must be [x, y] with finite coordinates")));
     let grab = point("grab")?;
     let at = point("at")?;
@@ -1380,6 +1395,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         && inside.is_none()
         && (st.doc.paste_remembers_layers || boards.is_some())
         && parent.is_some_and(|p| st.doc.node(p).is_some_and(Node::is_layer));
+    // Each object's remembered layer, found before anything is pasted: a hidden or locked one
+    // refuses the whole paste.
+    let remembered = if remember { remembered_layers(&st.doc, &clip.source_layers, same_doc)? } else { vec![] };
     // Front/back: relative to the selection (top-most / bottom-most selected object); with
     // nothing selected, the top / bottom of the current layer. Art other than paths goes beside
     // the compound path that holds the selected object, not into it.
@@ -1423,7 +1441,8 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
             .flat_map(|(all, dv)| all.iter().map(move |a| (a, dv)))
             .map(|(a, dv)| super::panelcmds::push_artboard_copy(d, a, a.rect + dv))
             .collect();
-        let mut layers: BTreeMap<&str, NodeId> = BTreeMap::new();
+        // The layers made for remembered layers the document lacks, by parent and name.
+        let mut made = HashMap::new();
         // Objects pasted into each parent so far (keeps their order in front and back pastes).
         let mut placed: BTreeMap<Option<NodeId>, usize> = BTreeMap::new();
         let mut new_ids = vec![];
@@ -1437,8 +1456,9 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
                     // including the pattern phase, independently of transform-tool settings.
                     c.transform(xf, sc);
                 }
-                let layer = match clip.source_layers.get(k) {
-                    Some(Some(name)) if remember => Some(*layers.entry(name).or_insert_with(|| layer_named(d, name))),
+                let layer = match remembered.get(k) {
+                    Some(Some(Remembered::Layer(l))) => Some(*l),
+                    Some(Some(Remembered::Make { parent, names })) => make_layers(d, &mut made, *parent, names)?,
                     _ => None,
                 };
                 // In a clip group or a clipping layer the bottom child is the clipping path: art pasted
@@ -1557,17 +1577,111 @@ fn paste_anchor(doc: &Document, id: NodeId, can_enter_compound: bool) -> NodeId 
     }
 }
 
-/// The first unlocked layer or sublayer called `name` (topmost first), or a new top layer.
-fn layer_named(d: &mut Document, name: &str) -> NodeId {
-    let mut found = None;
-    for l in d.layers.iter().rev() {
-        l.walk(&mut |n| {
-            if found.is_none() && n.is_layer() && !n.locked && n.name.as_deref() == Some(name) {
-                found = Some(n.id);
+/// Where Paste Remembers Layers puts an object: a layer or sublayer of the document, or new
+/// layers `names`, each inside the one before, the first under `parent` (none: on top).
+#[derive(Clone, Debug, PartialEq)]
+enum Remembered {
+    Layer(NodeId),
+    Make { parent: Option<NodeId>, names: Vec<String> },
+}
+
+/// [`remembered_layer`] for each object's source layer, worked out once for each layer.
+fn remembered_layers(d: &Document, sources: &[Option<SourceLayer>], same_doc: bool) -> Result<Vec<Option<Remembered>>> {
+    let mut found: HashMap<&SourceLayer, Remembered> = HashMap::new();
+    sources
+        .iter()
+        .map(|src| {
+            let Some(src) = src else { return Ok(None) };
+            if let Some(r) = found.get(src) {
+                return Ok(Some(r.clone()));
             }
-        });
+            let r = remembered_layer(d, src, same_doc)?;
+            found.insert(src, r.clone());
+            Ok(Some(r))
+        })
+        .collect()
+}
+
+/// The layer `src` names in `d`. In the document it was copied from, the layer that held the
+/// object is kept while it is there with its name, wherever it was moved; else the layers around
+/// it still where they were (by id) are kept. Below them, and in another document from the top,
+/// each name is matched among the layers inside the one above (the topmost of the same name whose
+/// layers match the most names, a shown and unlocked one first). The names left unmatched are
+/// made. A matched layer that is hidden or locked, or inside one that is, is an error.
+fn remembered_layer(d: &Document, src: &SourceLayer, same_doc: bool) -> Result<Remembered> {
+    let held = |id: &NodeId| d.node(*id).is_some_and(|n| n.is_layer() && n.name.as_ref() == src.names.last());
+    let kept = if same_doc && src.ids.last().is_some_and(held) {
+        src.ids.len()
+    } else if same_doc {
+        (1..=src.ids.len())
+            .rev()
+            .find(|&j| d.node(src.ids[j - 1]).is_some_and(Node::is_layer) && d.ancestry(src.ids[j - 1]).is_some_and(|a| a == src.ids[..j]))
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let rest = &src.names[kept..];
+    let (end, matched, _) = named_chain(d, kept.checked_sub(1).map(|j| src.ids[j]), rest);
+    if let Some(l) = end
+        && !d.ancestry(l).is_some_and(|a| a.iter().all(|i| d.node(*i).is_some_and(|n| n.visible && !n.locked)))
+    {
+        return Err(EngineError::Other("the target layer is locked or hidden".into()));
     }
-    found.unwrap_or_else(|| d.add_layer(Some(name)))
+    Ok(match end {
+        Some(l) if matched == rest.len() => Remembered::Layer(l),
+        parent => Remembered::Make { parent, names: rest[matched..].to_vec() },
+    })
+}
+
+/// The deepest chain of layers inside `parent` (none: the top level) named `names` one inside the
+/// other: its last layer (`parent` when none matches), how many names it matched and whether all
+/// its layers are shown and unlocked. Of chains as deep, the topmost shown and unlocked one wins.
+fn named_chain(d: &Document, parent: Option<NodeId>, names: &[String]) -> (Option<NodeId>, usize, bool) {
+    let mut best = (parent, 0, true);
+    let Some((name, rest)) = names.split_first() else { return best };
+    let siblings = match parent {
+        None => Some(&d.layers),
+        Some(p) => d.node(p).and_then(Node::children),
+    };
+    for l in siblings.into_iter().flatten().rev().filter(|l| l.is_layer() && l.name.as_deref() == Some(name.as_str())) {
+        let (end, n, open) = named_chain(d, Some(l.id), rest);
+        let chain = (end, n + 1, open && l.visible && !l.locked);
+        if (chain.1, chain.2) > (best.1, best.2) {
+            best = chain;
+        }
+    }
+    best
+}
+
+/// Layers `names`, each inside the one before, the first under `parent` (none: on top); `made`
+/// keeps the ones a paste has made, by parent and name, so they are made once. The last one, or
+/// none when `names` is empty.
+fn make_layers(
+    d: &mut Document,
+    made: &mut HashMap<(Option<NodeId>, String), NodeId>,
+    parent: Option<NodeId>,
+    names: &[String],
+) -> Result<Option<NodeId>> {
+    let mut at = parent;
+    for name in names {
+        let key = (at, name.clone());
+        let id = match made.get(&key) {
+            Some(id) => *id,
+            None => {
+                let id = match at {
+                    None => d.add_layer(Some(name)),
+                    Some(p) => {
+                        let layer = super::layer::make_layer(d, Some(name));
+                        d.insert(Some(p), usize::MAX, layer)?
+                    }
+                };
+                made.insert(key, id);
+                id
+            }
+        };
+        at = Some(id);
+    }
+    Ok(at.filter(|_| !names.is_empty()))
 }
 
 fn duplicate(s: &mut Session, p: &Value) -> Result<Value> {

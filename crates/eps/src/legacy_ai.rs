@@ -33,7 +33,9 @@
 //! - Type (§15): point type, area type and type on a path as text objects, `type To`, `a b c d tx
 //!   ty startPt Tp` (the text matrix; the frame or path in art space between it and `TP`), each
 //!   run's paint style, `Tr` (fill, stroke, both or neither), `/_font size ascent descent Tf`,
-//!   `Ts Tz Tt TA Tl Ta Ti` and its characters `(…) Tx` (`\r` ends a paragraph), `TO`. Standard
+//!   `Ts Tz Tt TA Tl Ta Ti` and its characters `(…) Tx` (`\r` ends a paragraph), with manual
+//!   kerning as `0 value Tk` after each character that has it and before a paragraph's first
+//!   character that has space before it (§15.4.6.1) and soft hyphens as `T+` (§15.4.10.1), `TO`. Standard
 //!   Vertical Roman Alignment is written as `1 Tv` and `0 Tv`, and Tate-chu-yoko in horizontal
 //!   type as a Kumi block recorded for later use, `1 TY` … `0 TY` (§15.3.4); neither operator is
 //!   written for type that has neither mark. Only the
@@ -99,7 +101,7 @@ const HEX_LINE: usize = 60;
 pub const SUBLAYERS: &str = "sublayers are written as groups in their top-level layer (legacy .ai files have no sublayers)";
 pub const TYPE: &str = "type a legacy .ai can't hold as text (characters outside Windows Latin-1, vertical type, ruby, inline graphics, gradient or pattern fills) is written as outlines";
 pub const ROTATED_TYPE: &str = "type with rotated characters is written as outlines, which keep the rotation, and is no longer editable text (legacy .ai text can't rotate characters)";
-pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, manual kerning, optical kerning, small caps, superscript and subscript, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
+pub const TYPE_ATTRIBUTES: &str = "type attributes legacy .ai files don't have (underline, strikethrough, optical kerning, small caps, superscript and subscript, OpenType features, Variable Font settings, optical margin alignment, System Layout, fractional widths off, area type options, type on a path's effect, alignment and spacing, an end bracket short of the path's end, subpaths after the first in an area type frame or a type path, space after paragraphs, tabs, bulleted and numbered lists) are left out";
 pub const DYNAMIC_TEXT: &str = "Dynamic Text is written as the sizes the type is drawn at (legacy .ai files don't have it)";
 pub const HIDDEN: &str = "hidden objects are left out (hidden layers are kept, hidden)";
 pub const HIDDEN_LAYER: &str = "hidden objects are moved to a hidden layer above their own (legacy .ai files can hide only layers)";
@@ -115,12 +117,14 @@ const CONIC: &str = "conic gradients are written as solid wedges clipped to the 
 const DIAMOND: &str = "diamond gradients are written as four linear gradients clipped to the shape (legacy .ai files have no diamond gradient)";
 const SPREAD: &str = "gradients that repeat or reflect are written with their stops repeated across the shape (legacy .ai gradients only pad)";
 const SPREAD_CAPPED: &str = "gradients that repeat or reflect are written with at most 256 stops; they pad past those";
+const HUE_STOPS: &str = "gradients mixed around the hue wheel are written in process colors, with the colors between their stops as stops of their own (at most 256; legacy .ai gradients mix their stops' colors directly)";
 /// Wedges a conic gradient is written as: one a degree.
 const CONIC_WEDGES: usize = 360;
 const STROKES: &str =
     "strokes a plain line can't draw (inside or outside the path, variable width, gradients, brushes, arrowheads) are written as filled outlines";
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
 const LIVE: &str = "symbols, blends, envelopes, meshes, repeats, placed documents and intertwines are written as their art";
+const GRAPHS: &str = "graphs are written as their art, without their data or settings";
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).
 const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";

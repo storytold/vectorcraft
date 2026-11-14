@@ -3128,6 +3128,73 @@ fn type_from_the_text_document_takes_its_character_styles_attributes() {
     assert_eq!(style(2), (solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), Some(18.0)), "the run's own colour");
 }
 
+/// The PostScript name and version of the face that type from a text document whose font record is
+/// `record` (in place of `/0 (Helvetica)`) is set in.
+fn face_set_from(record: &str) -> (String, String) {
+    let doc = text_document(&[("Hamburg\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]).replacen("/0 (Helvetica)", record, 1);
+    let art = native_with_text(&(layer("Back", true, &square(10, 10)) + &layer("Spare", false, &text_object(0))), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{record}: {:?}", r.warnings);
+    let face = vectorcraft_text::FontDb::global().style_face(&texts[0].runs[0].style).unwrap();
+    (face.postscript_name(), face.version.clone())
+}
+
+/// Installs the copies of each font `copies` lists, the first of each loaded first.
+fn install(copies: &[(bool, vectorcraft_text::test_fonts::CopyNames<'_>)]) {
+    for (inter, names) in copies {
+        let font = vectorcraft_text::test_fonts::named_copy(*inter, *names).unwrap();
+        assert_eq!(vectorcraft_text::FontDb::global().add_font(font), 1, "{names:?}");
+    }
+}
+
+/// Type from the text document is set in the installed face of exactly the PostScript name its
+/// font record gives, whatever other installed copies answer to that name too: one whose family
+/// is spelled alike but for case and punctuation (`SAMPLE INK` beside `Sample/Ink`, PostScript name
+/// `SampleInk`), one whose PostScript name differs only in case or punctuation (in its own family or
+/// another), or another copy of the same family and style under another PostScript name (an older
+/// build of the font: the type names its version). Those copies set the type at other widths.
+#[test]
+fn type_from_the_text_document_takes_the_face_of_its_exact_postscript_name() {
+    install(&[
+        (true, ("FUZZTEST INK", "Regular", "Version 1.000", "FUZZTESTINK-Regular")),
+        (false, ("Fuzztest/Ink", "Regular", "Version 1.000", "FuzztestInk")),
+        (true, ("CASETEST INK", "Regular", "Version 1.000", "CASETESTINK")),
+        (false, ("Casetest Ink", "Regular", "Version 2.000", "CasetestInk")),
+        (true, ("Copytest Ink", "Regular", "Version 1.000", "CopytestInk-Light")),
+        (false, ("Copytest Ink", "Regular", "Version 2.000", "CopytestInk-Regular")),
+        (true, ("NeuetestInk", "Bold", "Version 1.000", "NeuetestInkBold")),
+        (false, ("Neuetest Ink", "Bold", "Version 1.000", "NeuetestInk-Bold")),
+    ]);
+    assert_eq!(face_set_from("/0 (FuzztestInk)").0, "FuzztestInk", "not the family spelled alike");
+    assert_eq!(face_set_from("/0 (FUZZTESTINK-Regular)").0, "FUZZTESTINK-Regular");
+    assert_eq!(face_set_from("/0 (CasetestInk)").0, "CasetestInk", "not the name in other case, loaded first");
+    assert_eq!(face_set_from("/0 (CASETESTINK)").0, "CASETESTINK");
+    assert_eq!(face_set_from("/0 (CopytestInk-Regular)"), ("CopytestInk-Regular".to_string(), "Version 2.000".to_string()));
+    assert_eq!(face_set_from("/0 (CopytestInk-Light)"), ("CopytestInk-Light".to_string(), "Version 1.000".to_string()));
+    assert_eq!(face_set_from("/0 (NeuetestInk-Bold)").0, "NeuetestInk-Bold", "not the name without its hyphen, in another family");
+    // A name in a case no installed face has still finds the font.
+    assert_eq!(face_set_from("/0 (casetestink)").0, "CASETESTINK");
+}
+
+/// A font record may keep the font's version string (key 5, name ID 5): of two installed copies
+/// with one PostScript name, family and style, the type is set in that version, also when the
+/// record spells the name with other punctuation. A version that isn't installed, or a record
+/// without one, gives the copy the family and style resolve to.
+#[test]
+fn type_from_the_text_document_takes_the_version_its_font_record_keeps() {
+    install(&[(true, ("Vertest Ink", "Regular", "1.0", "VertestInk-Regular")), (false, ("Vertest Ink", "Regular", "1.1", "VertestInk-Regular"))]);
+    let version = |record: &str| face_set_from(record).1;
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (1.1)"), "1.1");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (1.0)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 (9.9)"), "1.0");
+    assert_eq!(version("/0 (VertestInk-Regular) /5 ()"), "1.0");
+    // A record whose name differs from the copies' in punctuation alone still picks its version.
+    assert_eq!(version("/0 (Vertest-Ink-Regular) /5 (1.1)"), "1.1");
+    assert_eq!(version("/0 (Vertest-Ink-Regular)"), "1.0");
+}
+
 /// A story with no runs, and a run or paragraph that names no style, is set in `[Normal Character
 /// Style]` and `[Normal Paragraph Style]` before the text document's base attributes. A Large
 /// Canvas copy (1:10) writes the styles at the art's scale (1.2 for 12 points, 0.6 for a 6-point
@@ -5461,6 +5528,11 @@ fn type_envelope(keys: &str, drawn: &str) -> String {
 /// [`type_envelope`], with `after` (on plain lines, written on `%_` ones) after the text object in
 /// its contents, such as the text object's XML id.
 fn type_envelope_with(keys: &str, drawn: &str, after: &str) -> String {
+    type_envelope_of(0, keys, drawn, after)
+}
+
+/// [`type_envelope_with`] around the type of story `story`.
+fn type_envelope_of(story: u32, keys: &str, drawn: &str, after: &str) -> String {
     let corner = |x: f64, y: f64, nx: f64, ny: f64, px: f64, py: f64| format!("[0.8 1 {x} {y} {nx} {ny} 1 {px} {py} 1] /N X#\n");
     let mesh = format!(
         "/Mesh X!\n2 /Version X#\n/Cartesian /Type X#\n[1 1] /Size X#\n/Data X#\n/DeviceGray /CS X#\n[0 0] /P X#\n{}{}{}{}/E X#\n/End X!\n",
@@ -5469,18 +5541,23 @@ fn type_envelope_with(keys: &str, drawn: &str, after: &str) -> String {
         corner(80.0, 70.0, 80.0, 60.0, 70.0, 70.0),
         corner(80.0, 40.0, 70.0, 40.0, 80.0, 50.0),
     );
-    type_envelope_on(keys, &mesh, drawn, after)
+    type_envelope_on_story(story, keys, &mesh, drawn, after)
 }
 
 /// [`type_envelope_with`], with `shape` (on plain lines, written on `%_` ones) in the group before
 /// its dictionary, where the editing data saves the envelope's mesh.
 fn type_envelope_on(keys: &str, shape: &str, drawn: &str, after: &str) -> String {
+    type_envelope_on_story(0, keys, shape, drawn, after)
+}
+
+/// [`type_envelope_on`] around the type of story `story`.
+fn type_envelope_on_story(story: u32, keys: &str, shape: &str, drawn: &str, after: &str) -> String {
     let hidden = |s: &str| -> String { s.lines().map(|l| format!("%_{l}\n")).collect() };
     format!(
         "{}{}%_X=\n{}%_X+\n%_ (AIDeformArtKey) ,\n%_1 /Int (AIDeformStyle) ,\n%_;\n%_\n%_9 () XW\nu\n{drawn}U\n9 () XW\n(Adobe Deform Plugin) 1 0 0 XP\n",
         hidden(&format!("u\n{shape}U\n")),
         hidden(&format!("/ArtDictionary :\n{keys}")),
-        hidden(&format!("u\n{}{after}U\n9 () XW\n", text_object(0))),
+        hidden(&format!("u\n{}{after}U\n9 () XW\n", text_object(story))),
     )
 }
 
@@ -5527,7 +5604,12 @@ fn arc_envelope(text: &Node, bend: f64) -> Node {
 /// The type of the file with an envelope of type whose drawn art is `drawn`, read with its text
 /// document `doc`: the hidden text object it keeps, as the reader makes it.
 fn made_envelope_type(doc: &str) -> Node {
-    let art = native_with_text(&layer("Art", true, &type_envelope(&arc_keys(0.3), &format!("{}\n", square(10, 10)))), doc);
+    made_envelope_type_of(doc, 0)
+}
+
+/// [`made_envelope_type`] of story `story`.
+fn made_envelope_type_of(doc: &str, story: u32) -> Node {
+    let art = native_with_text(&layer("Art", true, &type_envelope_of(story, &arc_keys(0.3), &format!("{}\n", square(10, 10)), "")), doc);
     let r = import(&eps(&page_square(10, 10), &art)).unwrap();
     let mut text = None;
     r.document.walk(|n| {
@@ -5618,9 +5700,9 @@ fn an_envelope_of_white_type_that_draws_apart_from_its_drawn_art_keeps_it() {
 
 /// A `.ai` whose layers would open alone, without its PDF part, waits on the PDF part when an
 /// envelope of type is in them, as for the other live envelopes: one opens live only where the
-/// layers with it draw as the page. Where they don't, they open alone as before, the envelope
-/// keeping its drawn art and its type, hidden, with the note, even though it would draw as that
-/// drawn art; where they do, it opens live (#3179).
+/// layers with it draw as the page. Where they don't, the page drawing nothing where the envelope
+/// is, they open alone as before, the envelope keeping its drawn art and its type, hidden, with the
+/// note, even though it would draw as that drawn art; where they do, it opens live (#3179).
 #[test]
 fn an_envelope_of_type_waits_on_the_page_of_layers_that_would_open_alone() {
     let Some(family) = installed_family() else { return };
@@ -5684,9 +5766,10 @@ fn an_envelope_of_type_that_draws_apart_from_the_page_does_not_open_live() {
 }
 
 /// Layers used though they draw differently from the page (the editing data trusted) leave an
-/// envelope of type its drawn art and its type, hidden, with the note, even where it draws as that
-/// drawn art: one opens live only where the layers with it draw as the page. A `.ai` whose layers
-/// would open alone then opens alone, as it would without the envelope (#3179).
+/// envelope of type its drawn art and its type, hidden, with the note, where the page draws
+/// nothing where the envelope is, even where it draws as that drawn art: one opens live only where
+/// the layers with it draw as the page there. A `.ai` whose layers would open alone then opens
+/// alone, as it would without the envelope (#3179).
 #[test]
 fn trusted_layers_that_draw_apart_from_the_page_leave_an_envelope_of_type_its_drawn_art() {
     let Some(family) = installed_family() else { return };
@@ -5722,19 +5805,27 @@ fn trusted_layers_that_draw_apart_from_the_page_leave_an_envelope_of_type_its_dr
     assert!(!notes.iter().any(|n| n.ends_with("they come from its editing data all the same")), "{notes:?}");
 }
 
-/// Layers whose objects that draw differently from the page come in as its art leave an envelope
-/// of type its drawn art and its type, hidden, with the note, even where the envelope draws as the
-/// page: the layers with it don't (#3179).
-#[test]
-fn layers_with_objects_that_come_in_as_the_page_art_leave_an_envelope_of_type_its_drawn_art() {
-    let Some(family) = installed_family() else { return };
-    let doc = type_envelope_text(&family, None);
-    let (drawn, page) = drawn_envelope(&arc_envelope(&made_envelope_type(&doc), 30.0));
-    // A square black in the layers and cyan on the page, away from the envelope.
+/// The layers and the page of a file with an envelope of type that draws as its drawn art, and a
+/// square black in the layers and cyan on the page, away from the envelope; the page draws the
+/// envelope bent by `page_bend` (percent).
+fn envelope_beside_a_differing_square(family: &str, page_bend: f64) -> (String, String) {
+    let doc = type_envelope_text(family, None);
+    let text = made_envelope_type(&doc);
+    let (drawn, _) = drawn_envelope(&arc_envelope(&text, 30.0));
+    let (_, page) = drawn_envelope(&arc_envelope(&text, page_bend));
     let body = format!("{}\n{}\n{}", square(10, 10), square_16(76, BLACK), type_envelope(&arc_keys(0.3), &drawn));
-    let art = native_with_text(&layer("Art", true, &body), &doc);
     let cyan = "1 0 0 0 setcmykcolor 76 10 moveto 92 10 lineto 92 26 lineto 76 26 lineto closepath fill";
-    let r = import(&eps(&format!("{}\n{cyan}\n{page}", page_square(10, 10)), &art)).unwrap();
+    (native_with_text(&layer("Art", true, &body), &doc), format!("{}\n{cyan}\n{page}", page_square(10, 10)))
+}
+
+/// Layers whose objects that draw differently from the page come in as its art keep an envelope of
+/// type live where the envelope draws as the page: the art that differs isn't the envelope's, and
+/// the layers with it then draw as the page (#3179).
+#[test]
+fn layers_with_objects_that_come_in_as_the_page_art_keep_an_envelope_of_type_that_draws_as_the_page_live() {
+    let Some(family) = installed_family() else { return };
+    let (art, page) = envelope_beside_a_differing_square(&family, 30.0);
+    let r = import(&eps(&page, &art)).unwrap();
     assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
     assert!(
         r.warnings.iter().any(|n| n.starts_with("objects that drew differently from the file's own page came in as its art")),
@@ -5742,10 +5833,167 @@ fn layers_with_objects_that_come_in_as_the_page_art_leave_an_envelope_of_type_it
         r.warnings
     );
     let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
+    assert!(!r.warnings.iter().any(|n| n == crate::import::ai::ENVELOPE_TYPE_DRAWN), "{:?}", r.warnings);
+}
+
+/// Layers used though they draw differently from the page (the editing data trusted) leave an
+/// envelope of type its drawn art and its type, hidden, with the note, where the page draws it
+/// otherwise than they do (bent the other way), though other art differs too: the page holds the
+/// envelope against them where it is (#3179).
+#[test]
+fn trusted_layers_leave_an_envelope_of_type_the_page_draws_otherwise_its_drawn_art() {
+    let Some(family) = installed_family() else { return };
+    let (art, page) = envelope_beside_a_differing_square(&family, -30.0);
+    let r = crate::import_trusting(&eps(&page, &art), true, true).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|n| n.ends_with("they come from its editing data all the same")), "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
     assert!(envelopes.is_empty(), "{envelopes:?}");
     assert_eq!(loose, [("FLUX".to_string(), false)], "{:?}", r.warnings);
-    assert_eq!(loose_type_names(&r.document), [None]);
     assert!(r.warnings.iter().any(|n| n == crate::import::ai::ENVELOPE_TYPE_DRAWN), "{:?}", r.warnings);
+}
+
+/// Layers used though they draw differently from the page (the editing data trusted) keep an
+/// envelope of type live where the page draws it as they do and the art that differs is elsewhere
+/// (#3179).
+#[test]
+fn trusted_layers_keep_an_envelope_of_type_live_where_other_art_differs_from_the_page() {
+    let Some(family) = installed_family() else { return };
+    let (art, page) = envelope_beside_a_differing_square(&family, 30.0);
+    let r = crate::import_trusting(&eps(&page, &art), true, true).unwrap();
+    assert_eq!(names(&r.document), ["Art"], "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|n| n.ends_with("they come from its editing data all the same")), "{:?}", r.warnings);
+    let (envelopes, loose) = envelopes_and_type(&r.document);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{:?}", r.warnings);
+    assert!(loose.is_empty(), "{loose:?}");
+    assert!(!r.warnings.iter().any(|n| n == crate::import::ai::ENVELOPE_TYPE_DRAWN), "{:?}", r.warnings);
+}
+
+/// A `.ai` whose layers would open alone, and that waits on its PDF part for an envelope of type,
+/// opens alone with the envelope live where the page draws it as the layers do, though the page
+/// also draws art the layers don't have: the envelope's drawn art put back wouldn't make the layers
+/// draw as the page (#3179).
+#[test]
+fn layers_that_would_open_alone_keep_an_envelope_of_type_live_where_other_art_differs_from_the_page() {
+    let Some(family) = installed_family() else { return };
+    let stories = [("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0), ("Note\r", 0, (8170.0, 8220.0), (0.0, 0.0), 0.0)];
+    let mut doc = text_document(&stories).replace("(Helvetica)", &format!("({family})"));
+    // [`native_with_text`] writes 60 characters a line: the end of the data, `~>`, isn't split.
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    let (drawn, _) = drawn_envelope(&arc_envelope(&made_envelope_type(&doc), 30.0));
+    let art = format!("u\n{}U\n{}", text_object(1), type_envelope(&arc_keys(0.3), &drawn));
+    let file = private(&native_with_text(&layer("Art", true, &art), &doc));
+    let names = crate::NameEncoding::default();
+    let open = |page: Document| {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, page, vec![], false, false, 1.0, names)
+    };
+    // The layers alone, with the envelope's drawn art: what the page draws.
+    let (mut page, notes, _) = open(pdf_part(80.0, 80.0));
+    assert!(envelopes_and_type(&page).0.is_empty(), "{notes:?}");
+    // And a black square the layers don't have, away from the type.
+    add_black_square(&mut page, 80.0, 4.0);
+    let (d, notes, read) = open(page);
+    assert!(read, "{notes:?}");
+    let (envelopes, loose) = envelopes_and_type(&d);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{notes:?}");
+    assert_eq!(loose, [("Note".to_string(), true)], "{notes:?}");
+    assert!(!notes.iter().any(|n| n == crate::import::ai::ENVELOPE_TYPE_DRAWN), "{notes:?}");
+}
+
+/// A black square of 16 points at (`x`, `y`) put on top of `page`'s first layer.
+fn add_black_square(page: &mut Document, x: f64, y: f64) {
+    let paint = vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK);
+    let item = vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(paint));
+    let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, y, x + 16.0, y + 16.0));
+    let square = Node::path(page.alloc_id(), path, vectorcraft_doc::Appearance { items: vec![item], ..Default::default() });
+    let layer = page.layers[0].id;
+    page.insert(Some(layer), 0, square).unwrap();
+}
+
+/// A `.ai` whose layers would open alone, with the editing data trusted, opens alone with an
+/// envelope of type live where the page draws it as the layers do, though the page also draws art
+/// they don't have: not from the layers compared with the page, which would say they come from the
+/// editing data all the same (#3179).
+#[test]
+fn trusted_layers_that_would_open_alone_open_alone_with_an_envelope_of_type_the_page_doesnt_hold_live() {
+    let Some(family) = installed_family() else { return };
+    let stories = [("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0), ("Note\r", 0, (8170.0, 8220.0), (0.0, 0.0), 0.0)];
+    let mut doc = text_document(&stories).replace("(Helvetica)", &format!("({family})"));
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    let (drawn, _) = drawn_envelope(&arc_envelope(&made_envelope_type(&doc), 30.0));
+    let art = format!("u\n{}U\n{}", text_object(1), type_envelope(&arc_keys(0.3), &drawn));
+    let file = private(&native_with_text(&layer("Art", true, &art), &doc));
+    let names = crate::NameEncoding::default();
+    let open = |page: Document, trust: bool| {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, page, vec![], false, trust, 1.0, names)
+    };
+    let (mut page, _, _) = open(pdf_part(80.0, 80.0), false);
+    add_black_square(&mut page, 80.0, 4.0);
+    let (d, notes, read) = open(page, true);
+    assert!(read, "{notes:?}");
+    let (envelopes, loose) = envelopes_and_type(&d);
+    assert_eq!(envelopes, [vec!["FLUX".to_string()]], "{notes:?}");
+    assert_eq!(loose, [("Note".to_string(), true)], "{notes:?}");
+    assert!(notes.is_empty(), "{notes:?}");
+}
+
+/// Of two envelopes of type in a `.ai` whose layers would open alone, the one the page holds
+/// against the layers (it draws nothing where the envelope is) keeps its drawn art and its type,
+/// hidden, with the note, and the other opens live: each by its place among the envelopes of type
+/// as the layers are read, both times they are (#3179).
+#[test]
+fn layers_that_would_open_alone_keep_live_only_the_envelopes_of_type_the_page_doesnt_hold() {
+    let Some(family) = installed_family() else { return };
+    let stories = [
+        ("FLUX\r", 0, (8170.0, 8180.0), (0.0, 0.0), 0.0),
+        ("HILL\r", 0, (8170.0, 8200.0), (0.0, 0.0), 0.0),
+        ("Note\r", 0, (8170.0, 8220.0), (0.0, 0.0), 0.0),
+    ];
+    let mut doc = text_document(&stories).replace("(Helvetica)", &format!("({family})"));
+    while ascii85(doc.as_bytes()).len() % 60 == 1 {
+        doc.push('\n');
+    }
+    let drawn = |story| drawn_envelope(&arc_envelope(&made_envelope_type_of(&doc, story), 30.0)).0;
+    let art = format!(
+        "u\n{}U\n{}{}",
+        text_object(2),
+        type_envelope_of(0, &arc_keys(0.3), &drawn(0), ""),
+        type_envelope_of(1, &arc_keys(0.3), &drawn(1), "")
+    );
+    let file = private(&native_with_text(&layer("Art", true, &art), &doc));
+    let names = crate::NameEncoding::default();
+    let open = |page: Document| {
+        let Err(layers) = crate::ai_layers_alone(&file, &[(100.0, 100.0)], 1.0, names) else { panic!("opened without the page") };
+        crate::layered_ai_from(layers, page, vec![], false, false, 1.0, names)
+    };
+    // The layers alone, with the drawn art of both envelopes, but the first's: the page draws
+    // nothing where the first is.
+    let (mut page, notes, _) = open(pdf_part(80.0, 80.0));
+    let top = page.layers[0].clone();
+    let first = top
+        .children()
+        .into_iter()
+        .flatten()
+        .filter(|n| matches!(n.kind, NodeKind::Group { .. }))
+        .min_by(|a, b| a.visual_bounds().map_or(f64::MAX, |r| r.y0).total_cmp(&b.visual_bounds().map_or(f64::MAX, |r| r.y0)))
+        .map(|n| n.id)
+        .unwrap_or_else(|| panic!("no drawn art: {notes:?}"));
+    page.remove(first).unwrap();
+    let (d, notes, read) = open(page);
+    assert!(read, "{notes:?}");
+    let (envelopes, mut loose) = envelopes_and_type(&d);
+    assert_eq!(envelopes, [vec!["HILL".to_string()]], "{notes:?}");
+    loose.sort();
+    assert_eq!(loose, [("FLUX".to_string(), false), ("Note".to_string(), true)], "{notes:?}");
+    assert!(notes.iter().any(|n| n == crate::import::ai::ENVELOPE_TYPE_DRAWN), "{notes:?}");
 }
 
 /// An envelope of type whose type a visibility variable binds keeps its drawn art, as one whose type

@@ -13,10 +13,10 @@
 //!   per-format options (`file.formatOptions`); [`save_with`] is the one save path of every frontend.
 //! - `pdf`: PDF settings and presets for every PDF export, `document.exportPdf`.
 //! - `pdfimport`: the PDF pages, box and password `document.open` and Place read, `document.pdfInfo`.
-//! - `dxf`: DXF export options, `document.exportDxf`, and the formats that can't be written (DWG, PICT).
+//! - `dxf`: DXF export options, `document.exportDxf`, and the formats that can't be written (DWG, PageMaker).
 //! - `eps`: EPS export options (flattened transparency, previews, the embedded document), `document.exportEps`.
 //! - `dxfimport`: the DXF options `document.open` and Place read, `document.dxfInfo`.
-//! - `metafile`: EMF and WMF export, open and place.
+//! - `metafile`: EMF and WMF export, open and place; PICT open and place.
 //! - `hpgl`: HP-GL export options and plots.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
@@ -69,8 +69,8 @@ pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, Note, NoteKind, encode, encode_all, encode_with_notes, encode_with_warnings, note_texts};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
-pub(crate) use export::{export_crop, isolated};
-pub use export::{export_doc, export_source};
+pub(crate) use export::{EXPORT_PARAMS, export_crop, isolated};
+pub use export::{export_doc, export_source, unused_option_notes};
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::is_placeholder;
@@ -92,7 +92,7 @@ pub use pdfimport::{LoadOptions, page_document};
 pub(crate) use save::job_for;
 pub(crate) use save::save as save_document;
 pub use save::{
-    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, documents_dialog_folder, export_folder,
+    SAVE_FORMATS, SaveJob, SaveMode, SavePlan, StreamWrite, TEMPLATE_FORMATS, dialog_folder, documents_dialog_folder, export_folder, file_reads,
     leave_out_unreadable_save_paths, reads_option as save_reads_option, remembered_save_options, save_filters, save_format, save_job, save_plan,
     save_with, stamp_save_dates, template_filters, templates_dialog_folder, templates_folder,
 };
@@ -123,7 +123,7 @@ mod formats;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::list_dir;
-pub use access::{write_file_with, write_save_file, write_save_file_with};
+pub use access::{check_linked_scripts, write_file_with, write_save_file, write_save_file_with};
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests_readonly;
@@ -217,6 +217,8 @@ mod tests_dxfimport;
 mod tests_hpgl;
 #[cfg(test)]
 mod tests_metafile;
+#[cfg(test)]
+mod tests_pict;
 
 #[cfg(test)]
 mod tests_pdfoutput;

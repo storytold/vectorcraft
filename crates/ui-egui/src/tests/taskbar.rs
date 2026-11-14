@@ -1,7 +1,8 @@
 //! The Contextual Task Bar's actions for each kind of selection: open paths offer Join and Edit
 //! Path, compound paths and clipping masks their Release, images selected with vector art Make
 //! Clipping Mask, type converts between point and area type, type on a path opens its options, and
-//! a basic shape shows its properties in place of Lock.
+//! a basic shape shows its properties in place of Lock. Type, and the Type tools while they edit it,
+//! show the font family, font style and Font Size controls.
 
 use egui::{Event, PointerButton, Pos2, Rect, vec2};
 use serde_json::json;
@@ -121,12 +122,10 @@ fn an_image_with_vector_art_offers_make_clipping_mask() {
     image::RgbaImage::from_pixel(20, 20, image::Rgba([0, 128, 255, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
-    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-taskbar-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("blue.png");
-    std::fs::write(&path, &png).unwrap();
+    let dir = crate::tests_folder::Folder::new("ui-taskbar");
+    let path = dir.file("blue.png", &png);
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
-    app.run("file.place", json!({"path": path.to_string_lossy(), "link": false})).unwrap();
+    app.run("file.place", json!({"path": path, "link": false})).unwrap();
     let img = app.session.active().unwrap().selection.objects[0].0;
     assert!(matches!(kind(&app, img), NodeKind::Image(_)));
     let shape = id(app.run("shape.ellipse", json!({"x": 150, "y": 100, "width": 60, "height": 60})).unwrap());
@@ -535,6 +534,495 @@ fn the_task_bar_follows_the_active_document() {
     let (_, texts) = click_lock_slot(&mut app);
     assert!(has(&texts, "Rectangle Properties:"), "{texts:?}");
     assert!(!locked(&app, rect), "the button doesn't lock the shape");
+}
+
+/// A blank canvas, a new document with a selection tool in use, offers Draw (Pencil) and Place
+/// Image centered under the active artboard (under the canvas's center when the artboard is out of
+/// view), with the handle and More Options but none of a selection's actions or its Fill, Stroke,
+/// Recolor Artwork and Lock. Other tools, artwork in the document and a selection each leave the
+/// blank canvas actions out; ruler guides do not count as artwork.
+#[test]
+fn a_blank_canvas_offers_draw_and_place_image() {
+    let mut app = app();
+    let board = app.session.active().unwrap().doc.artboards[0].rect;
+    // The artboard at 50% in the middle of the window, after the first frame fits it in.
+    bar(&mut app);
+    let view = app.view_mut().unwrap();
+    (view.center, view.zoom) = (board.center(), 0.5);
+    for tool in ["selection", "directSelection", "groupSelection"] {
+        app.run("tool.select", json!({ "tool": tool })).unwrap();
+        let (ctx, texts) = bar_texts(&mut app);
+        assert!(at(&texts, "Draw (Pencil)").x < at(&texts, "Place Image").x, "{tool}: {texts:?}");
+        let shown = canvas::task_bar_rect(&ctx).unwrap();
+        let xf = canvas::Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        let bottom = xf.quad(board).iter().map(|c| c.y).fold(f32::NEG_INFINITY, f32::max);
+        let middle = xf.to_screen(board.center()).x;
+        assert!(shown.top() > bottom && (shown.center().x - middle).abs() < 2.0, "{tool}: {shown:?} centered under {board:?}");
+        assert!(app.canvas_rect.unwrap().contains_rect(shown), "{tool}: {shown:?} on the canvas");
+    }
+    // The artboard out of view: under the canvas's center.
+    app.view_mut().unwrap().center = board.center() + vectorcraft_geom::Vec2::new(5000.0, 5000.0);
+    let (ctx, _) = bar(&mut app);
+    let (shown, middle) = (canvas::task_bar_rect(&ctx).unwrap(), app.canvas_rect.unwrap().center());
+    assert!((shown.center().x - middle.x).abs() < 2.0 && shown.top() > middle.y && shown.top() < middle.y + 60.0, "{shown:?} under {middle:?}");
+    app.view_mut().unwrap().center = board.center();
+
+    let tree = crate::widgets::accessibility_tests::tree(|ui| canvas::show(&mut app, ui));
+    for label in ["Draw (Pencil)", "Place Image", "More Options"] {
+        assert_eq!(crate::widgets::accessibility_tests::named(&tree, label).role(), egui::accesskit::Role::Button, "{label}");
+    }
+    let named = |label: &str| tree.iter().any(|n| n.label().is_some_and(|l| l.starts_with(label)));
+    for label in ["Fill", "Stroke", "Recolor Artwork", "Lock", "Duplicate"] {
+        assert!(!named(label), "{label} is left out");
+    }
+
+    for tool in ["pen", "rectangle", "type", "artboard"] {
+        app.run("tool.select", json!({ "tool": tool })).unwrap();
+        let (_, texts) = bar_texts(&mut app);
+        assert!(!has(&texts, "Draw (Pencil)") && !has(&texts, "Place Image"), "{tool}: {texts:?}");
+    }
+
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+    select(&mut app, &[rect]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(has(&texts, "Duplicate") && !has(&texts, "Draw (Pencil)"), "{texts:?}");
+    select(&mut app, &[]);
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "artwork with nothing selected: no bar");
+    select(&mut app, &[rect]);
+    app.run("edit.clear", json!({})).unwrap();
+    app.run("guide.add", json!({"pos": 50})).unwrap();
+    assert!(has(&bar_texts(&mut app).1, "Draw (Pencil)"), "a ruler guide is not artwork");
+}
+
+/// Draw (Pencil) switches to the Pencil tool. Place Image picks files for the Place dialog;
+/// canceling the pick leaves the document as it was.
+#[test]
+fn the_blank_canvas_bar_draws_with_the_pencil_and_places_an_image() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    click(&mut app, "Draw (Pencil)");
+    assert_eq!(app.session.tool_id(), "pencil");
+
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    app.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+    click(&mut app, "Place Image");
+    assert!(app.ui.dialog.is_none(), "canceled: no Place dialog");
+    assert!(app.session.active().unwrap().doc.layers.iter().all(|l| l.children().is_none_or(|c| c.is_empty())), "nothing placed");
+
+    let path = std::env::temp_dir().join("vectorcraft-task-bar-place.png").to_string_lossy().into_owned();
+    let picked = path.clone();
+    app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(picked.clone())));
+    click(&mut app, "Place Image");
+    let d = app.ui.dialog.take().expect("the Place dialog");
+    assert_eq!((d.kind.as_str(), &d.fields["files"]), (crate::dialogs::place::KIND, &json!([{ "path": path }])));
+}
+
+/// On a canvas too narrow for one row, the blank canvas bar's actions wrap onto a second row and the
+/// bar stays whole on the canvas.
+#[test]
+fn the_blank_canvas_bar_wraps_on_a_narrow_canvas() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(240.0, 400.0), 3);
+    assert!(canvas.contains_rect(r), "{r:?} on {canvas:?}");
+    let (draw, place) = (at(&texts, "Draw (Pencil)"), at(&texts, "Place Image"));
+    assert!(place.y > draw.y + 20.0, "Place Image wraps under Draw (Pencil): {draw:?} {place:?}");
+}
+
+/// The Type tools whose bar shows the font and Fill controls.
+const TYPE_TOOLS: [&str; 6] = ["type", "areaType", "typeOnPath", "verticalType", "verticalAreaType", "verticalTypeOnPath"];
+
+/// The labels drawn inside the task bar (none while it isn't shown), with the context.
+fn bar_texts(app: &mut VectorcraftApp) -> (egui::Context, Vec<(String, Rect)>) {
+    let (ctx, texts) = bar(app);
+    let Some(r) = canvas::task_bar_rect(&ctx) else { return (ctx, vec![]) };
+    (ctx, texts.into_iter().filter(|(_, t)| r.contains(t.center())).collect())
+}
+
+/// Point type "Hello" at 20 pt, made with `tool` and edited by it as after a click with it.
+fn edited_type(app: &mut VectorcraftApp, tool: &str) -> u64 {
+    app.run("tool.select", json!({ "tool": tool })).unwrap();
+    let t = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    assert!(crate::panels::character::text_editing(app).is_some(), "{tool} edits the type");
+    t
+}
+
+/// The font family and style of type `t`'s first character.
+fn font_of(app: &VectorcraftApp, t: u64) -> (String, String) {
+    match kind(app, t) {
+        NodeKind::Text(t) => (t.first_style().font_family, t.first_style().font_style),
+        k => panic!("{k:?}"),
+    }
+}
+
+/// The size of each run of type `t`, with its text.
+fn sizes(app: &VectorcraftApp, t: u64) -> Vec<(String, f64)> {
+    match kind(app, t) {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.size)).collect(),
+        k => panic!("{k:?}"),
+    }
+}
+
+/// Each Type tool that adds or edits type shows the font family, font style and Font Size controls
+/// and the Fill, without the selection tools' object actions, the Stroke chip or Lock.
+#[test]
+fn the_type_tools_show_font_and_fill_controls() {
+    for tool in TYPE_TOOLS {
+        let mut app = app();
+        let t = edited_type(&mut app, tool);
+        let (family, style) = font_of(&app, t);
+        let (_, texts) = bar_texts(&mut app);
+        for label in [family.as_str(), style.as_str(), "20 pt"] {
+            assert!(has(&texts, label), "{tool}: {label} in {texts:?}");
+        }
+        for label in ["Create Outlines", "Convert To Area Type", "Dynamic Text", "Duplicate"] {
+            assert!(!has(&texts, label), "{tool}: {label} in {texts:?}");
+        }
+        let tree = crate::widgets::accessibility_tests::tree(|ui| canvas::show(&mut app, ui));
+        let named = |label: &str| tree.iter().any(|n| n.label().is_some_and(|l| l.starts_with(label)));
+        assert!(named("Fill"), "{tool}: the Fill shows");
+        for label in ["Stroke", "Recolor Artwork", "Lock"] {
+            assert!(!named(label), "{tool}: {label} is left out");
+        }
+    }
+}
+
+/// A Type tool shows no bar before it adds type, nor with other art selected; the Touch Type tool
+/// shows none with type selected.
+#[test]
+fn the_type_tools_show_no_bar_without_type() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "nothing to format");
+    let rect = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 80, "height": 60})).unwrap());
+    select(&mut app, &[rect]);
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "a rectangle is not type");
+    let t = id(app.run("text.create", json!({"x": 60, "y": 180, "text": "Hello", "size": 20})).unwrap());
+    app.run("tool.select", json!({"tool": "touchType"})).unwrap();
+    select(&mut app, &[t]);
+    let (ctx, _) = bar(&mut app);
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "Touch Type has its own handles");
+}
+
+/// Selected type keeps its actions and gains the font controls, for one type object or several;
+/// type selected with other art does not.
+#[test]
+fn selected_type_shows_font_controls_beside_its_actions() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let a = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
+    let b = id(app.run("text.create", json!({"x": 60, "y": 160, "text": "World", "size": 20})).unwrap());
+    let rect = id(app.run("shape.rectangle", json!({"x": 200, "y": 40, "width": 80, "height": 60})).unwrap());
+    let (family, _) = font_of(&app, a);
+    select(&mut app, &[a]);
+    let (_, texts) = bar_texts(&mut app);
+    for label in ["Create Outlines", "Convert To Area Type", "Duplicate", family.as_str(), "20 pt"] {
+        assert!(has(&texts, label), "{label} in {texts:?}");
+    }
+    select(&mut app, &[a, b]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(has(&texts, family.as_str()) && has(&texts, "20 pt"), "{texts:?}");
+    select(&mut app, &[a, rect]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(has(&texts, "Group") && !has(&texts, family.as_str()) && !has(&texts, "20 pt"), "{texts:?}");
+    select(&mut app, &[rect]);
+    let (_, texts) = bar_texts(&mut app);
+    assert!(!has(&texts, family.as_str()) && !has(&texts, "20 pt"), "{texts:?}");
+}
+
+/// The bar's Font Size sets the characters a Type tool selects, one undo step; with type selected
+/// it sets every selected type object, as the Character panel's does.
+#[test]
+fn the_task_bars_font_size_sets_what_the_character_panel_would() {
+    let mut app = app();
+    let t = edited_type(&mut app, "type");
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    let (ctx, texts) = bar_texts(&mut app);
+    type_into(&mut app, &ctx, &texts, "20 pt", "30");
+    assert_eq!(sizes(&app, t), [("He".to_string(), 30.0), ("llo".to_string(), 20.0)]);
+    // Mixed sizes leave the field blank, as in the Character panel.
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 5}));
+    let (_, texts) = bar_texts(&mut app);
+    assert!(!has(&texts, "20 pt") && !has(&texts, "30 pt"), "{texts:?}");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(sizes(&app, t), [("Hello".to_string(), 20.0)]);
+
+    let mut app = self::app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let a = id(app.run("text.create", json!({"x": 60, "y": 80, "text": "Hello", "size": 20})).unwrap());
+    let b = id(app.run("text.create", json!({"x": 60, "y": 160, "text": "World", "size": 20})).unwrap());
+    select(&mut app, &[a, b]);
+    let (ctx, texts) = bar_texts(&mut app);
+    type_into(&mut app, &ctx, &texts, "20 pt", "14");
+    assert_eq!(sizes(&app, a), [("Hello".to_string(), 14.0)]);
+    assert_eq!(sizes(&app, b), [("World".to_string(), 14.0)]);
+}
+
+/// At a caret, with no characters selected, the bar's Font Size sets the edited type as the
+/// Character panel's does, and the characters typed next take it.
+#[test]
+fn the_task_bars_font_size_at_a_caret_sets_what_is_typed_next() {
+    let mut app = app();
+    let t = edited_type(&mut app, "type");
+    app.session.set_tool_option("select", &json!({"start": 5, "end": 5}));
+    assert_eq!(crate::panels::character::text_editing(&app), Some((NodeId(t), 5, 5)), "a caret after the type");
+    let (ctx, texts) = bar_texts(&mut app);
+    type_into(&mut app, &ctx, &texts, "20 pt", "30");
+    app.session.tool_typed_text("!", app.view_info()).unwrap();
+    assert_eq!(sizes(&app, t), [("Hello!".to_string(), 30.0)]);
+}
+
+/// The Type tool's Fill chip makes the Fill active and brings up the Swatches panel.
+#[test]
+fn the_type_tools_fill_chip_activates_the_fill() {
+    let mut app = app();
+    edited_type(&mut app, "type");
+    app.session.fill_active = false;
+    let (ctx, _) = bar_texts(&mut app);
+    let r = canvas::task_bar_rect(&ctx).expect("the task bar shows");
+    // Right to left: the frame's margin, More Options, then the Fill chip.
+    let p = Pos2::new(r.right() - 8.0 - 30.0 - 6.0 - 13.0, r.center().y);
+    let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(p)]);
+    frame(&mut app, &ctx, vec![press(true)]);
+    frame(&mut app, &ctx, vec![press(false)]);
+    assert!(app.session.fill_active, "the Fill is active");
+    assert!(crate::panels::character::text_editing(&app).is_some(), "the type is still edited");
+}
+
+/// Screen readers name the Type tool bar's controls, and the bar stays on the canvas for type at
+/// its lower right corner.
+#[test]
+fn the_type_tools_bar_is_named_and_stays_on_the_canvas() {
+    use crate::widgets::accessibility_tests::{named, tree};
+    let mut app = app();
+    edited_type(&mut app, "type");
+    let tree = tree(|ui| canvas::show(&mut app, ui));
+    for label in ["Font Family", "Style", "Font Size", "Fill"] {
+        named(&tree, label);
+    }
+    let mut app = self::app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    app.run("text.create", json!({"x": 380, "y": 290, "text": "Corner", "size": 20})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    // The type near the canvas's lower edge, so the bar's place under it is off the canvas.
+    let view = app.view_mut().unwrap();
+    (view.center, view.zoom) = (vectorcraft_geom::Point::new(200.0, 20.0), 1.0);
+    let (ctx, _) = bar(&mut app);
+    let r = canvas::task_bar_rect(&ctx).expect("the task bar shows");
+    let canvas = app.canvas_rect.expect("the canvas is laid out");
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+}
+
+/// The task bar's rect after a few frames on a `width` by 700 screen, and the canvas's rect.
+fn bar_on_screen(app: &mut VectorcraftApp, width: f32) -> (Rect, Rect) {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0));
+    for _ in 0..3 {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+        out.textures_delta.clear();
+    }
+    (canvas::task_bar_rect(&ctx).expect("the task bar shows"), app.canvas_rect.expect("the canvas is laid out"))
+}
+
+/// On a canvas narrower than one row of the bar, the font controls go on a second row, narrowed to
+/// fit, and the bar stays whole on the canvas: selected type's actions, and a Type tool's Fill.
+#[test]
+fn selected_types_font_controls_take_a_second_row_on_a_narrow_canvas() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let t = id(app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 20})).unwrap());
+    select(&mut app, &[t]);
+    let (r, canvas) = bar_on_screen(&mut app, 760.0);
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+    assert!(r.height() > 60.0, "the font controls take a second row: {r:?}");
+
+    let mut app = self::app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 20})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    // Narrower than the font controls at their full widths too.
+    let (r, canvas) = bar_on_screen(&mut app, 300.0);
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+    assert!(r.height() > 60.0, "the font controls take a second row: {r:?}");
+    let (r, _) = bar_on_screen(&mut app, 1000.0);
+    assert!(r.height() < 60.0, "one row where it fits: {r:?}");
+    // The Type tool's bar has only the Fill and More Options beside the controls: one row fits.
+    let (r, canvas) = bar_on_screen(&mut app, 460.0);
+    assert!(canvas.contains_rect(r) && r.height() < 60.0, "one row on a 460 px screen: {r:?} in {canvas:?}");
+    // Too narrow for the controls at their narrowest: the bar leaves them out.
+    let (r, canvas) = bar_on_screen(&mut app, 160.0);
+    assert!(canvas.contains_rect(r) && r.height() < 60.0, "no font controls on a 160 px screen: {r:?} in {canvas:?}");
+}
+
+/// The labels drawn inside the task bar after `frames` frames on a screen `size` points in `ctx`,
+/// with the bar's rect and the canvas's.
+fn bar_texts_on_screen(app: &mut VectorcraftApp, ctx: &egui::Context, size: egui::Vec2, frames: usize) -> (Vec<(String, Rect)>, Rect, Rect) {
+    let screen = Rect::from_min_size(Pos2::ZERO, size);
+    let mut texts = vec![];
+    for _ in 0..frames {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+        out.textures_delta.clear();
+        texts = shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+    }
+    let r = canvas::task_bar_rect(ctx).expect("the task bar shows");
+    (texts.into_iter().filter(|(_, t)| r.contains(t.center())).collect(), r, app.canvas_rect.expect("the canvas is laid out"))
+}
+
+/// On a canvas narrower than one row of the bar's actions, the actions wrap onto more rows, in
+/// order, and the bar stays whole on the canvas, also on the first frame after the canvas narrows.
+#[test]
+fn a_task_bars_actions_wrap_on_a_narrow_canvas() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let circle = id(app.run("path.create", json!({"d": "M100 300 A100 100 0 1 1 300 300 A100 100 0 1 1 100 300 Z"})).unwrap());
+    let t = id(app.run("text.createInPath", json!({"path": circle, "mode": "onPath", "text": "Round", "at": [90, 300]})).unwrap());
+    select(&mut app, &[t]);
+    let actions = ["Create Outlines", "Type on a Path Options", "Center on Top", "Center on Bottom", "Dynamic Text", "Duplicate"];
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(1800.0, 700.0), 3);
+    assert!(canvas.contains_rect(r) && r.height() < 60.0, "one row where it fits: {r:?} in {canvas:?}");
+    // The first frame after the canvas narrows, then once the bar settles.
+    for frames in [1, 3] {
+        let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(760.0, 700.0), frames);
+        assert!(canvas.contains_rect(r), "{frames} frames: {r:?} in {canvas:?}");
+        let ys: Vec<f32> = actions.iter().map(|label| at(&texts, label).y).collect();
+        assert!(ys.windows(2).all(|w| w[0] <= w[1]), "{frames} frames: the actions keep their order: {ys:?}");
+        assert!(ys[0] < ys[ys.len() - 1], "{frames} frames: the actions take more than one row: {texts:?}");
+    }
+    assert!(actions.iter().all(|label| has(&texts, label)), "{texts:?}");
+}
+
+/// On a canvas too narrow for an action's button, or too short for the rows the actions would
+/// wrap onto, More Options lists those actions, and the chips take rows after the actions when they
+/// don't fit beside the handle and More Options. Narrower than the handle and More Options, the bar
+/// doesn't show.
+#[test]
+fn a_task_bar_action_wider_than_the_canvas_goes_in_more_options() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "selection"})).unwrap();
+    let a = id(app.run("shape.rectangle", json!({"x": 40, "y": 40, "width": 120, "height": 100})).unwrap());
+    let b = id(app.run("shape.ellipse", json!({"x": 70, "y": 60, "width": 50, "height": 50})).unwrap());
+    select(&mut app, &[a, b]);
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(160.0, 700.0), 3);
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+    assert!(has(&texts, "Edit Path") && has(&texts, "Duplicate") && !has(&texts, "Release Compound Path"), "{texts:?}");
+    // More Options, after the frame's margin and the handle on the first row.
+    let more = r.min + vec2(9.0 + 4.0 + 6.0 + 15.0, 7.0 + 15.0);
+    let click = |app: &mut VectorcraftApp, p: Pos2| {
+        let press = |pressed| Event::PointerButton { pos: p, button: PointerButton::Primary, pressed, modifiers: Default::default() };
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(160.0, 700.0));
+        let mut texts = vec![];
+        for events in [vec![Event::PointerMoved(p)], vec![press(true)], vec![press(false)], vec![]] {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| canvas::show(app, ui));
+            out.textures_delta.clear();
+            texts = shapes_text(&out.shapes.iter().map(|c| c.shape.clone()).collect::<Vec<_>>());
+        }
+        texts
+    };
+    let texts = click(&mut app, more);
+    // Menu items are drawn after a space for the check mark.
+    let item = |label: &str| texts.iter().find(|(t, _)| t.trim() == label).map(|(_, r)| r.center());
+    assert!(item("Hide Bar").is_some(), "More Options opens: {texts:?}");
+    let release = item("Release Compound Path").unwrap_or_else(|| panic!("More Options lists the action: {texts:?}"));
+    click(&mut app, release);
+    let st = app.session.active().unwrap();
+    assert_eq!(st.selection.objects.len(), 2, "the paths come apart, selected");
+    assert!(st.selection.objects.iter().all(|i| matches!(st.doc.node(*i).unwrap().kind, NodeKind::Path { .. })));
+
+    // On a canvas too short for the rows the actions would wrap onto, More Options lists them, in
+    // order: the bar keeps at most the first.
+    let (texts, r, canvas) = bar_texts_on_screen(&mut app, &ctx, vec2(160.0, 150.0), 3);
+    assert!(canvas.contains_rect(r), "{r:?} in {canvas:?}");
+    let shown = ["Group", "Unite", "Duplicate"].map(|label| has(&texts, label));
+    assert!(!shown[1] && !shown[2], "{texts:?}");
+
+    let screen = Rect::from_min_size(Pos2::ZERO, vec2(60.0, 700.0));
+    for _ in 0..3 {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(&mut app, ui));
+        out.textures_delta.clear();
+    }
+    assert!(canvas::task_bar_rect(&ctx).is_none(), "no room for the handle and More Options: no bar");
+}
+
+/// When the canvas narrows so far that the bar leaves its font controls out, the font family
+/// field it drew before no longer takes the mouse wheel.
+#[test]
+fn a_task_bar_without_its_font_controls_leaves_their_wheel() {
+    let mut app = app();
+    app.run("tool.select", json!({"tool": "type"})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 60, "text": "Hello", "size": 20})).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let draw = |app: &mut VectorcraftApp, width: f32| {
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(width, 700.0));
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| canvas::show(app, ui));
+            out.textures_delta.clear();
+        }
+    };
+    draw(&mut app, 1000.0);
+    let bar = canvas::task_bar_rect(&ctx).expect("the task bar shows");
+    let viewport = egui::ViewportId::ROOT;
+    let points = (0..(bar.width() / 4.0) as usize).flat_map(|x| (0..(bar.height() / 4.0) as usize).map(move |y| (x, y)));
+    let field = points
+        .map(|(x, y)| bar.min + vec2(x as f32 * 4.0, y as f32 * 4.0))
+        .find(|p| crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, *p).is_some())
+        .expect("the bar's font family field takes the wheel");
+    draw(&mut app, 160.0);
+    assert!(canvas::task_bar_rect(&ctx).is_some(), "the bar still shows, without its font controls");
+    crate::font_menu::sync_wheel_target(&app, &ctx, viewport);
+    assert!(crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_none(), "the left-out field at {field:?} still takes the wheel");
+
+    // Hiding the bar (Window › Contextual Task Bar) releases the field before the next layout.
+    draw(&mut app, 1000.0);
+    assert!(crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_some(), "the field is back");
+    app.run("window.taskBar", json!({})).unwrap();
+    crate::font_menu::sync_wheel_target(&app, &ctx, viewport);
+    assert!(
+        crate::font_menu::wheel_field_layer_for_test(&ctx, viewport, field).is_none(),
+        "the hidden bar's field at {field:?} still takes the wheel"
+    );
+}
+
+/// While a Type tool edits type, the Fill chip shows the selected characters' fill, and "?" where
+/// their fills differ.
+#[test]
+fn the_type_tools_fill_chip_shows_the_edited_characters_fill() {
+    let mut app = app();
+    let t = edited_type(&mut app, "type");
+    app.session.set_tool_option("select", &json!({"start": 2, "end": 5}));
+    app.run("paint.setFill", json!({"color": "#ff0000"})).unwrap();
+    let fills: Vec<_> = match kind(&app, t) {
+        NodeKind::Text(t) => t.runs.iter().map(|r| (r.text.clone(), r.style.fill.clone())).collect(),
+        k => panic!("{k:?}"),
+    };
+    let [(he, he_fill), (llo, llo_fill)] = &fills[..] else { panic!("{fills:?}") };
+    assert_eq!((he.as_str(), llo.as_str()), ("He", "llo"));
+    assert_ne!(he_fill, llo_fill);
+    let ctx = egui::Context::default();
+    let (fill, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    assert!(fill == *llo_fill && !mixed, "{fill:?} {mixed}");
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    let (fill, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    assert!(fill == *he_fill && !mixed, "{fill:?} {mixed}");
+    app.session.set_tool_option("select", &json!({"start": 0, "end": 5}));
+    let (_, _, mixed, _) = canvas::chip_paints(&app, &ctx);
+    assert!(mixed, "the fills differ");
 }
 
 /// The task bar shows the selection as it is after an edit and after Undo: Join leaves once the

@@ -3,16 +3,16 @@
 
 use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use vectorcraft_doc::text::{CharStyle, TextObject};
+use vectorcraft_doc::text::{CharStyle, TextKind, TextObject};
 use vectorcraft_doc::{Node, NodeKind};
-use vectorcraft_geom::Point;
+use vectorcraft_geom::{PathData, Point};
 
 use crate::*;
 
-/// Taken to add fonts, or to look up an installed one by name (`FontDb::face` loads it, which
-/// changes the fonts too). Renderers lay type out again when the fonts change, so tests of what
-/// they keep between frames hold it shared ([`fonts_steady`]) and the tests that change the fonts
-/// hold it alone ([`adding_fonts`]).
+/// Taken to add fonts, to look up an installed one by name (`FontDb::face` loads it, which
+/// changes the fonts too) or to change the hyphenation exceptions. Renderers lay type out again
+/// when the fonts or the exceptions change, so tests of what they keep between frames hold it
+/// shared ([`fonts_steady`]) and the tests that change them hold it alone ([`adding_fonts`]).
 static FONTS: RwLock<()> = RwLock::new(());
 
 /// No fonts are added by these tests until the guard is dropped.
@@ -29,14 +29,12 @@ pub(crate) fn adding_fonts() -> RwLockWriteGuard<'static, ()> {
 /// What `step` returns from a run in which the fonts stayed the same. The fonts can change while
 /// [`fonts_steady`] is held: the first lookup by family name catalogs the installed fonts, and
 /// resolving a cataloged family, or a character no loaded font has, loads a face. `step` runs up
-/// to 100 times, until [`vectorcraft_text::FontDb::generation`] is the same after a run as before
-/// it.
+/// to 100 times, until [`vectorcraft_text::layout_inputs`] is the same after a run as before it.
 pub(crate) fn with_fonts_unchanged<T>(mut step: impl FnMut() -> T) -> T {
-    let db = vectorcraft_text::FontDb::global();
     for _ in 0..100 {
-        let before = db.generation();
+        let before = vectorcraft_text::layout_inputs();
         let out = step();
-        if db.generation() == before {
+        if vectorcraft_text::layout_inputs() == before {
             return out;
         }
     }
@@ -208,6 +206,60 @@ fn a_documents_own_composite_font_draws_without_being_registered() {
         "a placed document's art drawn exactly"
     );
     assert!(db.composite_font(NAME).is_none(), "given back after each render");
+}
+
+/// A placed document draws its type in its own definition of a composite font that the document
+/// placing it defines differently.
+#[test]
+fn a_placed_document_draws_its_own_definition_of_a_name_the_page_defines() {
+    use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts, ImageBlob, LinkInfo, PlacedDocument};
+    let _adding = adding_fonts();
+    const NAME: &str = "CF Placed Twice";
+    let definition = |roman: &str| {
+        let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
+        parts.roman = CompositePart::new(roman, "Regular");
+        CompositeFont { name: NAME.into(), parts }
+    };
+    let typed = |family: &str| {
+        let mut d = Document::new(300.0, 150.0);
+        let style = CharStyle { size: 60.0, font_family: family.into(), ..Default::default() };
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 100.0), "Hamburg", style))));
+        let l = d.layers[0].id;
+        let id = d.insert(Some(l), 0, n).unwrap();
+        (d, id)
+    };
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    // A page placing `d` (drawn exactly), defining `fonts`.
+    let page = |d: &Document, id: NodeId, key: &str, fonts: Vec<CompositeFont>| {
+        let blob = ImageBlob::new("application/json", key.as_bytes().to_vec());
+        let p = PlacedDocument {
+            link: LinkInfo::new("/art/type.vectorcraft"),
+            key: key.into(),
+            bounding: false,
+            page_box: Default::default(),
+            width: 300.0,
+            height: 150.0,
+            xf: Affine::IDENTITY,
+            placement: Default::default(),
+        };
+        let art = d.node(id).unwrap().clone();
+        vectorcraft_doc::placed_document::prime(&p, blob.bytes.clone(), (d.clone(), art, Rect::new(0.0, 0.0, 300.0, 150.0)));
+        let mut page = Document::new(300.0, 150.0);
+        page.composite_fonts.extend(fonts);
+        page.images.insert(key.into(), blob);
+        let n = Node::new(page.alloc_id(), NodeKind::PlacedDocument(Box::new(p)));
+        let l = page.layers[0].id;
+        page.insert(Some(l), 0, n).unwrap();
+        Renderer::new().render(&page, 300, 150, Affine::IDENTITY, &opts).pixels
+    };
+    let (mut placed, id) = typed(NAME);
+    placed.composite_fonts.push(definition("JetBrains Mono"));
+    let (plain, plain_id) = typed("JetBrains Mono");
+    let (inter, inter_id) = typed("Inter");
+    let own = page(&placed, id, "fontchange-placed-twice", vec![definition("Inter")]);
+    assert!(own == page(&plain, plain_id, "fontchange-placed-twice-plain", vec![]), "drawn in the placed document's definition");
+    assert!(own != page(&inter, inter_id, "fontchange-placed-twice-inter", vec![]), "not in the page's");
+    assert!(vectorcraft_text::FontDb::global().composite_font(NAME).is_none());
 }
 
 /// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes
@@ -409,6 +461,75 @@ fn enveloped_type_under_effects_redraws_when_its_font_becomes_available() {
         let after = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
         assert_ne!(before, after, "{what}: drawn in the font that arrived");
         assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "{what}: as a new renderer draws it");
+    }
+}
+
+/// Hyphenated area type redraws with its new line breaks when Preferences › Hyphenation ›
+/// Exceptions change: its glyph geometry, the pixels of its raster effects, the art drawn for
+/// geometry effects, the art kept for a symbol instance and an envelope's evaluation are made
+/// again.
+#[test]
+fn hyphenated_type_redraws_when_the_exceptions_change() {
+    let _adding = adding_fonts();
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            vectorcraft_text::set_hyphenation_exceptions("");
+        }
+    }
+    let _clear = Clear;
+    use vectorcraft_doc::Effect;
+    let moved = || Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 0.0}), visible: true };
+    const WORDS: &str = "Extraordinarily comprehensive typographical considerations notwithstanding everything.";
+    const NEVER: &str = "extraordinarily, comprehensive, typographical, considerations, notwithstanding";
+    let cases = ["the area type", "the type with a drop shadow", "the group with a Transform effect", "the symbol instance", "the envelope"];
+    for (i, what) in cases.into_iter().enumerate() {
+        vectorcraft_text::set_hyphenation_exceptions("");
+        let mut d = Document::new(300.0, 150.0);
+        let mut t = TextObject::point(Point::ZERO, WORDS, CharStyle { size: 14.0, ..Default::default() });
+        t.kind = TextKind::Area { frame: PathData::from_bezpath(&Rect::new(10.0, 10.0, 130.0, 145.0).to_path(0.1)) };
+        t.xf = Affine::IDENTITY;
+        t.para.hyphenate = true;
+        let mut object = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+        match i {
+            0 => {}
+            1 => {
+                let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+                object.appearance.effects.push(Effect { id: "stylize.dropShadow".into(), params, visible: true });
+            }
+            2 => {
+                object = Node::group(d.alloc_id(), vec![Arc::new(object)]);
+                object.appearance.effects.push(moved());
+            }
+            3 => {
+                object.appearance.effects.push(moved());
+                let art = Node::group(d.alloc_id(), vec![Arc::new(object)]);
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Words".into(), art: Arc::new(art) });
+                object = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Words".into(), xf: Affine::IDENTITY });
+            }
+            _ => {
+                let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+                let envelope = NodeKind::Envelope {
+                    content: vec![Arc::new(object)],
+                    kind: Box::new(kind),
+                    fidelity: 50.0,
+                    editing: false,
+                    options: Default::default(),
+                    frame: Box::new(Affine::IDENTITY),
+                };
+                object = Node::new(d.alloc_id(), envelope);
+            }
+        }
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, object).unwrap();
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut r = Renderer::new();
+        let before = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+        vectorcraft_text::set_hyphenation_exceptions(NEVER);
+        let after = r.render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+        let fresh = Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels;
+        assert_ne!(before, fresh, "{what}: the words in the list are not broken");
+        assert!(after == fresh, "{what}: drawn as a new renderer draws it");
     }
 }
 

@@ -771,6 +771,27 @@ fn rasterize_on_an_image_takes_in_its_strokes_shape() {
     assert_eq!((lum(img.pixel(8, 35)), lum(img.pixel(12, 35)), img.pixel(35, 35)), (WHITE, 0, [255, 0, 0, 255]));
 }
 
+#[test]
+fn an_images_outline_object_stroke_follows_new_pixels_under_the_same_key() {
+    // The opaque image's stroke runs along its frame, from 18 to 22.
+    let mut d = stroked_image_doc(vec![fx("path.outlineObject", json!({}))], false);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), img.pixel(26, 35)), (0, [255, 0, 0, 255]));
+    // New pixels under the same key, as Update Link stores them, with the node unchanged: an
+    // opaque disc of radius 8 pixels in the middle. The stroke follows its edge at 26.5.
+    let disc = image::RgbaImage::from_fn(30, 30, |x, y| {
+        let r = (f64::from(x) + 0.5 - 15.0).hypot(f64::from(y) + 0.5 - 15.0);
+        image::Rgba([255, 0, 0, if r <= 8.0 { 255 } else { 0 }])
+    });
+    let mut png = vec![];
+    disc.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), lum(img.pixel(26, 35))), (WHITE, 0));
+}
+
 /// A 40 pt square filled with `fill` carrying effect `id`, in a 100×100 document.
 fn glowing_square(fill: Color, id: &str, params: Value) -> Document {
     let mut n = Node::path(NodeId(0), shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)), Appearance::basic(Paint::solid(fill), Paint::None, 0.0));
@@ -1156,4 +1177,45 @@ fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
     assert!(!r.charge_fx_instance(&d, &inst), "the next does not");
     assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+}
+
+/// A closed path of 30,000 curves along the x axis, 2 pt apart: drawn with about 420,000 lines,
+/// and with more than the effect budget's 8 million once scaled 1000 times.
+fn wavy() -> vectorcraft_geom::PathData {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let anchors = (0..=30_000)
+        .map(|i| {
+            let x = 2.0 * f64::from(i);
+            Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// A Transform effect left out past the effect budget leaves the art where it is, and the drop
+/// shadow before it (the object's, or the fill's before the fill's own Transform effect) reaches
+/// as far as it is drawn: by its own offset, not by a thousand times it.
+#[test]
+fn a_shadow_before_a_skipped_transform_reaches_as_far_as_it_is_drawn() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 5, "blur": 0}));
+    let big = fx("distort.transform", json!({"scaleH": 100000, "scaleV": 100000}));
+    let path = wavy();
+    let art = path.bounds().unwrap();
+    let mut object = Node::path(NodeId(1), path.clone(), Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+    let mut fill = object.clone();
+    object.appearance.effects = vec![shadow.clone(), big.clone()];
+    if let Some(item) = fill.appearance.items.first_mut() {
+        *item.effects_mut() = vec![shadow, big];
+    }
+    let d = Document::new(100.0, 100.0);
+    let symbols = d.symbol_boxes();
+    // Within the shadow's 10 pt on every side (the visual bounds grow each side by the most any
+    // side reaches).
+    let within = |b: Rect| b.x0 >= art.x0 - 11.0 && b.y0 >= art.y0 - 11.0 && b.x1 <= art.x1 + 11.0 && b.y1 <= art.y1 + 11.0;
+    for (what, n) in [("object", &object), ("fill", &fill)] {
+        let b = crate::fx::visual_bounds(&symbols, n).unwrap();
+        assert!(within(b), "{what}: visual {b:?} for art {art:?}");
+        let b = crate::fx::painted_reach(&symbols, n).unwrap();
+        assert!(within(b), "{what}: painted {b:?} for art {art:?}");
+    }
 }

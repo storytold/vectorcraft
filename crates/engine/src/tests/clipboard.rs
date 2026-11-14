@@ -468,6 +468,72 @@ fn styles_symbols_and_images_of_the_same_name_are_renamed() {
     assert_eq!(key(&s, img2), src_key);
 }
 
+/// A graph whose series fill, value labels and legend rows paint with global swatch "Brand" and
+/// whose value labels are set in character style "Emphasis" and paragraph style "Body", as a
+/// later redraw would give them to its marks and labels.
+fn styled_graph(s: &mut Session) -> NodeId {
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#ff0000", "global": true})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Emphasis", "attrs": {"size": 24.0}})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"space_after": 8.0}})).unwrap();
+    let v = s.execute("graph.create", &json!({"type": "column", "x": 200, "y": 200, "width": 60, "height": 40, "csv": ",2024\nQ1,3\nQ2,5"}));
+    let id = id_of(&v.unwrap());
+    let brand = linked(hex("#ff0000"), "Brand", 1.0);
+    let mut extras = doc_mut(s).node_mut(id).unwrap().extras_mut();
+    let g = extras.graph.as_mut().unwrap();
+    g.series_paints = vec![vectorcraft_doc::SeriesPaint { fill: Some(brand.clone()), ..Default::default() }];
+    let l = &mut g.label_styles;
+    l.values = Some(vectorcraft_doc::CharStyle { fill: brand.clone(), style_name: Some("Emphasis".into()), ..Default::default() });
+    l.values_para = Some(vectorcraft_doc::ParaStyle { style_name: Some("Body".into()), ..Default::default() });
+    let rows = vectorcraft_doc::SeriesPaint { stroke: Some(brand), ..Default::default() };
+    l.legend_rows = Some(vectorcraft_doc::graph::LabelRows { paint: rows, ..Default::default() });
+    id
+}
+
+/// The swatch names a graph's stored paints link to, and its value labels' character and
+/// paragraph style names.
+fn graph_links(s: &Session, id: NodeId) -> (Vec<String>, Option<String>, Option<String>) {
+    let n = node(s, id);
+    let swatches = vectorcraft_doc::swatches::graph_paints(&n).filter_map(|p| match p {
+        Paint::Solid { swatch: Some(w), .. } => Some(w.clone()),
+        _ => None,
+    });
+    let l = &n.extras().graph.as_deref().unwrap().label_styles;
+    let values = l.values.as_ref().and_then(|st| st.style_name.clone());
+    (swatches.collect(), values, l.values_para.as_ref().and_then(|pa| pa.style_name.clone()))
+}
+
+/// A pasted graph brings the swatches and text styles its series and labels keep, and follows
+/// them when they come in under new names.
+#[test]
+fn a_pasted_graph_brings_and_follows_its_label_styles_and_paints() {
+    let mut s = session();
+    let g = styled_graph(&mut s);
+    copy(&mut s, &[g]);
+
+    new_doc(&mut s);
+    let v = s.execute("edit.pasteInPlace", &json!({})).unwrap();
+    let d = doc(&s);
+    assert!(d.swatch("Brand").is_some(), "{v}");
+    assert!(d.char_styles.iter().any(|x| x.name == "Emphasis") && d.para_styles.iter().any(|x| x.name == "Body"), "{v}");
+    let brand = vec!["Brand".to_string(); 3];
+    assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand.clone(), Some("Emphasis".into()), Some("Body".into())));
+
+    // Into a document that gives each name something else: they come in renamed.
+    new_doc(&mut s);
+    s.execute("swatch.new", &json!({"name": "Brand", "color": "#0000ff", "global": true})).unwrap();
+    s.execute("charStyle.new", &json!({"name": "Emphasis", "attrs": {"size": 8.0}})).unwrap();
+    s.execute("paraStyle.new", &json!({"name": "Body", "attrs": {"space_after": 2.0}})).unwrap();
+    let v = s.execute("edit.pasteInPlace", &json!({"swatchConflict": "add"})).unwrap();
+    let brand2 = vec!["Brand 2".to_string(); 3];
+    assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand2, Some("Emphasis 2".into()), Some("Body 2".into())), "{v}");
+
+    // Without formatting: the labels' text styles stay behind.
+    new_doc(&mut s);
+    let v = s.execute("edit.pasteWithoutFormatting", &json!({})).unwrap();
+    assert!(doc(&s).char_styles.is_empty() && doc(&s).para_styles.is_empty(), "{v}");
+    assert_eq!(graph_links(&s, ids_of(&v)[0]), (brand, None, None));
+}
+
 #[test]
 fn pasting_again_reuses_what_an_earlier_paste_added() {
     let mut s = session();
@@ -1094,7 +1160,8 @@ fn paste_remembers_layers_restores_the_source_layers() {
     let art = id_of(&s.execute("layer.new", &json!({"name": "Art"})).unwrap());
     let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
     copy(&mut s, &[a, b]);
-    assert_eq!(s.clipboard.source_layers, [Some("Layer 1".to_string()), Some("Art".to_string())]);
+    let names: Vec<_> = s.clipboard.source_layers.iter().map(|l| l.as_ref().map(|l| l.names.clone())).collect();
+    assert_eq!(names, [Some(vec!["Layer 1".to_string()]), Some(vec!["Art".to_string()])]);
     let other = id_of(&s.execute("layer.new", &json!({"name": "Other"})).unwrap());
     assert_eq!(s.execute("layer.pasteRemembersLayers", &json!({})).unwrap()["on"], true);
     assert!(doc(&s).paste_remembers_layers);
@@ -1119,6 +1186,157 @@ fn paste_remembers_layers_restores_the_source_layers() {
     s.execute("layer.setCurrent", &json!({"id": other.0})).unwrap();
     let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
     assert!(ids.iter().all(|id| doc(&s).parent_of(*id) == Some(other)));
+}
+
+/// A sublayer `name` made inside `parent`; it becomes the current layer.
+fn sublayer(s: &mut Session, parent: NodeId, name: &str) -> NodeId {
+    id_of(&s.execute("layer.newSublayer", &json!({"parent": parent.0, "name": name})).unwrap())
+}
+
+/// The names of the layers around `id`, the top-level layer first.
+fn layer_path(s: &Session, id: NodeId) -> Vec<String> {
+    let d = doc(s);
+    d.ancestry(id).unwrap().iter().filter_map(|a| d.node(*a).filter(|n| n.is_layer())).map(|l| l.name.clone().unwrap()).collect()
+}
+
+/// Art from two sublayers of the same name in different layers pastes back into each one; in
+/// another document a missing sublayer is made inside its layer, and a missing layer on top with
+/// the sublayer inside, in the paste's one undo step.
+#[test]
+fn paste_remembers_layers_keeps_same_named_sublayers_apart() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    let sub1 = sublayer(&mut s, first, "Sub");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let second = id_of(&s.execute("layer.new", &json!({"name": "Layer 2", "top": true})).unwrap());
+    let sub2 = sublayer(&mut s, second, "Sub");
+    let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[a, b]);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    s.execute("layer.setCurrent", &json!({"id": first.0})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let parents: Vec<_> = ids.iter().map(|id| doc(&s).parent_of(*id)).collect();
+    assert_eq!(parents, [Some(sub1), Some(sub2)]);
+    new_doc(&mut s);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let before = doc(&s).clone();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let paths: Vec<_> = ids.iter().map(|id| layer_path(&s, *id)).collect();
+    assert_eq!(paths, [["Layer 1", "Sub"], ["Layer 2", "Sub"]]);
+    assert_eq!(doc(&s).layers.len(), 2, "Layer 1 is kept; Layer 2 is new");
+    assert_eq!(doc(&s).layers[0].children().unwrap().len(), 1, "Sub is made inside Layer 1");
+    let after = doc(&s).clone();
+    // Pasting again finds the layers made.
+    let again = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let parents: Vec<_> = again.iter().map(|id| doc(&s).parent_of(*id)).collect();
+    assert_eq!(parents, ids.iter().map(|id| doc(&s).parent_of(*id)).collect::<Vec<_>>());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*doc(&s), after);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*doc(&s), before, "one undo step takes the art and the layers made for it");
+}
+
+/// Art whose sublayer was deleted after the copy pastes into a new sublayer of that name inside
+/// the same layer, not into a sublayer of that name in another layer.
+#[test]
+fn paste_remembers_layers_makes_a_deleted_sublayer_again_inside_its_layer() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    let sub = sublayer(&mut s, first, "Sub");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let second = id_of(&s.execute("layer.new", &json!({"name": "Layer 2", "top": true})).unwrap());
+    let elsewhere = sublayer(&mut s, second, "Sub");
+    copy(&mut s, &[a]);
+    s.execute("layer.delete", &json!({"id": sub.0})).unwrap();
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    let made = doc(&s).parent_of(ids[0]).unwrap();
+    assert_ne!(made, elsewhere);
+    assert_eq!(doc(&s).parent_of(made), Some(first));
+    assert_eq!(layer_path(&s, ids[0]), ["Layer 1", "Sub"]);
+}
+
+/// Art whose sublayer was moved into another layer after the copy pastes into that sublayer where
+/// it is now; no sublayer is made where it was.
+#[test]
+fn paste_remembers_layers_follows_a_moved_sublayer() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    let sub = sublayer(&mut s, first, "Sub");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    let second = id_of(&s.execute("layer.new", &json!({"name": "Layer 2", "top": true})).unwrap());
+    copy(&mut s, &[a]);
+    s.execute("layer.move", &json!({"id": sub.0, "target": second.0})).unwrap();
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert_eq!(doc(&s).parent_of(ids[0]), Some(sub));
+    assert_eq!(layer_path(&s, ids[0]), ["Layer 2", "Sub"]);
+    assert!(node(&s, first).children().unwrap().is_empty(), "no Sub is made in Layer 1");
+}
+
+/// In another document with layers of the same names, art goes into the topmost chain of layers
+/// that matches the most names, a shown and unlocked one before a hidden or locked one.
+#[test]
+fn paste_remembers_layers_takes_the_topmost_open_match_of_repeated_names() {
+    let mut s = session();
+    let first = doc(&s).layers[0].id;
+    sublayer(&mut s, first, "Sub");
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[a]);
+    new_doc(&mut s);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let lower = doc(&s).layers[0].id;
+    let lower_sub = sublayer(&mut s, lower, "Sub");
+    s.execute("layer.new", &json!({"name": "Sub", "top": true})).unwrap();
+    let upper = id_of(&s.execute("layer.new", &json!({"name": "Layer 1", "top": true})).unwrap());
+    // The upper Layer 1 has no Sub, and a top-level Sub is not inside a Layer 1: the lower chain
+    // matches both names.
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert_eq!(doc(&s).parent_of(ids[0]), Some(lower_sub));
+    let upper_sub = sublayer(&mut s, upper, "Sub");
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert_eq!(doc(&s).parent_of(ids[0]), Some(upper_sub), "the topmost of two full matches");
+    s.execute("layer.setProps", &json!({"id": upper_sub.0, "locked": true})).unwrap();
+    let ids = ids_of(&s.execute("edit.paste", &json!({})).unwrap());
+    assert_eq!(doc(&s).parent_of(ids[0]), Some(lower_sub), "an unlocked match before a locked one");
+}
+
+/// A remembered layer or sublayer that is hidden or locked, or inside a layer that is, refuses the
+/// whole paste: the document, the selection and the undo history stay as they were.
+#[test]
+fn paste_remembers_layers_refuses_a_hidden_or_locked_layer() {
+    let (locked, hidden) = (json!({"locked": true}), json!({"visible": false}));
+    for (on_sub, props) in [(true, &locked), (true, &hidden), (false, &locked), (false, &hidden)] {
+        let mut s = session();
+        let first = doc(&s).layers[0].id;
+        let sub = sublayer(&mut s, first, "Sub");
+        let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+        let other = id_of(&s.execute("layer.new", &json!({"name": "Other", "top": true})).unwrap());
+        let b = rect(&mut s, 20.0, 0.0, 10.0, 10.0);
+        copy(&mut s, &[b, a]);
+        s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+        let mut p = props.clone();
+        p["id"] = json!(if on_sub { sub.0 } else { first.0 });
+        s.execute("layer.setProps", &p).unwrap();
+        s.execute("layer.setCurrent", &json!({"id": other.0})).unwrap();
+        let before = s.doc().unwrap().clone();
+        assert!(s.execute("edit.paste", &json!({})).is_err(), "{p}");
+        assert_eq!(s.doc().unwrap().doc, before.doc, "{p}");
+        assert_eq!(s.doc().unwrap().selection, before.selection, "{p}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before.history.undo.len(), "{p}");
+    }
+    // In another document, a locked layer of the copied layer's name is refused too.
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    copy(&mut s, &[a]);
+    new_doc(&mut s);
+    s.execute("layer.pasteRemembersLayers", &json!({"on": true})).unwrap();
+    let locked = doc(&s).layers[0].id;
+    id_of(&s.execute("layer.new", &json!({"name": "Flyer"})).unwrap());
+    s.execute("layer.setProps", &json!({"id": locked.0, "locked": true})).unwrap();
+    let before = doc(&s).clone();
+    assert!(s.execute("edit.paste", &json!({})).is_err());
+    assert_eq!(*doc(&s), before, "no second Layer 1 is made");
 }
 
 #[test]

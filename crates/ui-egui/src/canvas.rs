@@ -67,8 +67,10 @@ pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned, render_job};
 pub use selection_marks::SelectionMarks;
+#[cfg(test)]
+pub(crate) use task_bar::chip_paints;
 use task_bar::task_bar;
-pub(crate) use task_bar::{has_colors, task_bar_rect};
+pub(crate) use task_bar::{has_colors, task_bar_rect, task_bar_shows_fonts, task_bar_shows_type};
 #[cfg(test)]
 use tool_overlays::{DIAL_RADIUS, HiddenMarks};
 pub use tool_overlays::{HiddenChars, SpellingMarks};
@@ -476,7 +478,7 @@ fn canvas_cursor(app: &mut VectorcraftApp, ui: &Ui, view_info: vectorcraft_engin
         return;
     }
     let m = ui.input(|i| i.modifiers);
-    let space = ui.input(|i| i.key_down(egui::Key::Space));
+    let space = drag::space_lends_view_tools(app, m, ui.input(|i| i.key_down(egui::Key::Space)));
     let drag = ui.data(|d| d.get_temp::<Drag>(drag_id()));
     let panning = matches!(drag, Some(Drag::Pan { .. }));
     let tool_holds = drag.is_some_and(drag::tool_holds);
@@ -619,6 +621,8 @@ fn cache_key(
         dragging: app.session.in_interaction() && ui.data(|d| d.get_temp::<Drag>(drag_id())) == Some(Drag::Tool),
         // The Image Trace panel's eye button, while it is held.
         trace_source: app.ui.trace_hold_source.clone(),
+        // Preferences › Performance › Use Monitor Profile for Canvas.
+        display: app.display_profile.key(app.session.prefs.monitor_profile_display),
     }
 }
 
@@ -870,6 +874,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
     // A new view can copy from the worker's last frame. The frame shown asked for again renders
     // whole. The worker keeps either one for the next pan to copy from.
     let may_copy = app.canvas.key.as_ref() != Some(key);
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     let mut landed = None;
     match (&mut app.canvas.worker, heavy, changed) {
         // Only the document changed since the frame shown, in a part of it: that part is
@@ -882,7 +887,9 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             }
             if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
                 let renderer = &mut app.canvas.renderer;
-                let part = effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, Affine::translate((-f64::from(x0), -f64::from(y0))) * view, &opts));
+                let mut part =
+                    effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, Affine::translate((-f64::from(x0), -f64::from(y0))) * view, &opts));
+                crate::display_profile::convert(display.as_deref(), &mut part.pixels);
                 let color = color_image(&part);
                 let options = if pixel.is_some() { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
                 tex.set_partial([x0 as usize, y0 as usize], color, options);
@@ -907,6 +914,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
                 effects: effects.clone(),
                 may_copy,
                 may_keep: true,
+                display,
             });
             // A light document's first frame is ready within the grace and shows in this frame,
             // with no frame of bare paper. Waited for once, when the frame is queued.
@@ -917,8 +925,9 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
         _ => {
             let t0 = now_ms();
             let renderer = &mut app.canvas.renderer;
-            let img = effects.view(|| renderer.render(doc, w, h, view, &opts));
+            let mut img = effects.view(|| renderer.render(doc, w, h, view, &opts));
             effects.first_view_done();
+            crate::display_profile::convert(display.as_deref(), &mut img.pixels);
             upload(app, ui.ctx(), img, pixel.is_some());
             app.canvas.key = Some(key.clone());
             app.canvas.shown = Some((doc.clone(), opts.clone()));
@@ -967,13 +976,18 @@ fn paint_paper(
     // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
     // rounded. The transparency grid, while it shows, covers it as it covers the others.
     painter.rect_filled(rect, 0.0, t.pasteboard);
+    // The paper and the transparency grid are document colors: they go through the display
+    // profile as the art does. The pasteboard and the shadows are the interface's.
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
+    let on_display = |c: Color32| crate::display_profile::color32(display.as_deref(), c);
     if !shows_artboards(app) {
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
         let setup = &doc.setup;
-        painter.rect_filled(rect, 0.0, if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE });
+        painter.rect_filled(rect, 0.0, on_display(if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE }));
     } else {
         let setup = &doc.setup;
-        let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent).then(|| checker_texture(ui.ctx(), setup));
+        let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent)
+            .then(|| checker_texture(ui.ctx(), setup, display.as_deref()));
         let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
         for ab in &doc.artboards {
             let q = xf.quad(ab.rect);
@@ -985,7 +999,7 @@ fn paint_paper(
                 Some((tex, cell)) => checker(painter, &q, ab.rect, xf.zoom, tex.id(), *cell),
                 None => {
                     let fill = ab.color.map_or(paper, |c| crate::panels::c32(&c) * paper);
-                    painter.add(Shape::convex_polygon(q, fill, Stroke::NONE));
+                    painter.add(Shape::convex_polygon(q, on_display(fill), Stroke::NONE));
                 }
             }
         }
@@ -1264,6 +1278,10 @@ fn selection_visuals(
     } else {
         vec![]
     };
+    // The tool shows the rest of its overlays on the next frame.
+    if app.session.tool_overlays_pending() {
+        painter.ctx().request_repaint();
+    }
     // Gap Options' Preview shows the gaps it finds.
     overlays.extend(crate::dialogs::live_paint_gaps::overlays(app));
     if app.ui.view.edges && !revolve_edit {

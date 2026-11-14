@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, Node, NodeId};
+use vectorcraft_doc::{Appearance, AppearanceItem, Node, NodeId};
 use vectorcraft_geom::{BezPath, Rect};
 
 use super::*;

@@ -47,7 +47,7 @@ pub use fontdb::{
     user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
-pub use layout::{envelope_ink, register_envelope_ink};
+pub use layout::{envelope_ink, layout_inputs, register_envelope_ink};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
@@ -180,6 +180,14 @@ pub struct PositionedGlyph {
     /// path stands with its top toward the path's start, and its cell starts at its top: 0.12 em
     /// before the pen without the font's vertical metrics.
     pub width_start: f64,
+    /// A glyph of a warichu block: the byte offset of the block's first character, which names the
+    /// block. The block's lines share its line of text, so hit testing takes the block line nearest
+    /// the point before the nearest caret stop along it. `None` for any other glyph.
+    pub warichu: Option<usize>,
+    /// A glyph of a warichu block: the baseline of its block line across the line, from the
+    /// line's baseline before Character Alignment moves the glyph (y down). It names the block
+    /// line whatever the alignment of each character on it. 0 for any other glyph.
+    pub warichu_line: f64,
 }
 
 /// How a glyph on a path is bent along it: a point of its pen space (x along its advance from its
@@ -631,11 +639,18 @@ pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
     }) else {
         return 0;
     };
-    byte_in_line(layout, li, p.x)
+    byte_near(layout, li, p.x, Some(p.y))
 }
 
 /// Byte offset nearest to `x` on line `li`.
 pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
+    byte_near(layout, li, x, None)
+}
+
+/// Byte offset nearest to `x` on line `li`; with `y` (text space, as `x`), a warichu block's caret
+/// stops count only on the block line whose baseline is nearest `y`, since the block's lines share
+/// one line of text.
+fn byte_near(layout: &TextLayout, li: usize, x: f64, y: Option<f64>) -> usize {
     let Some(line) = layout.lines.get(li) else { return 0 };
     let glyphs = &layout.glyphs[line.glyph_start..line.glyph_end];
     // A cluster drawn with several adjacent glyphs (a Devanagari pre-base matra and its consonant,
@@ -653,11 +668,42 @@ pub fn byte_in_line(layout: &TextLayout, li: usize, x: f64) -> usize {
             _ => clusters.push((left, right, g)),
         }
     }
+    // Each warichu block's line whose baseline is nearest `y`: the block, the block line
+    // ([`PositionedGlyph::warichu_line`]) and its distance, sorted by block.
+    let mut rows: Vec<(usize, f64, f64)> = Vec::new();
+    if let Some(y) = y {
+        for (block, row, baseline) in warichu_rows(layout, line) {
+            let d = (baseline - y).abs();
+            match rows.last_mut() {
+                Some((b, best_row, best)) if *b == block => {
+                    if d < *best {
+                        (*best_row, *best) = (row, d);
+                    }
+                }
+                _ => rows.push((block, row, d)),
+            }
+        }
+    }
+    let on_row = |g: &PositionedGlyph| match (g.warichu, y) {
+        (Some(block), Some(_)) => {
+            rows.binary_search_by_key(&block, |r| r.0).ok().and_then(|k| rows.get(k)).is_none_or(|(_, row, _)| (g.warichu_line - row).abs() < 1e-9)
+        }
+        _ => true,
+    };
+    // A stop of the block line taken wins over a stop of the text around the block at the same
+    // place: at the block's start the text before it ends where both of its lines start.
     let nearest = clusters
         .iter()
-        .flat_map(|&(left, right, g)| g.stops_along(right - left).map(move |(b, d)| (if g.rtl { right - d } else { left + d }, b)))
-        .min_by(|a, b| (a.0 - x).abs().total_cmp(&(b.0 - x).abs()));
-    nearest.map_or(line.start, |(_, byte)| byte)
+        .filter(|(_, _, g)| on_row(g))
+        .flat_map(|&(left, right, g)| {
+            let row = y.is_some() && g.warichu.is_some();
+            g.stops_along(right - left).map(move |(b, d)| (if g.rtl { right - d } else { left + d }, b, row))
+        })
+        .min_by(|a, b| {
+            let (da, db) = ((a.0 - x).abs(), (b.0 - x).abs());
+            if a.2 != b.2 && (da - db).abs() <= 1e-9 { b.2.cmp(&a.2) } else { da.total_cmp(&db) }
+        });
+    nearest.map_or(line.start, |(_, byte, _)| byte)
 }
 
 /// Caret byte at the end of line `li`: a soft-wrapped line ends before its trailing space so the
@@ -711,6 +757,46 @@ pub fn caret_vertical(layout: &TextLayout, byte: usize, delta: i32, goal_x: f64)
     byte_in_line(layout, li as usize, goal_x)
 }
 
+/// The warichu blocks' lines on line `l`: one entry per block line, as the byte that names its
+/// block, its [`PositionedGlyph::warichu_line`] and its baseline across the line in text space,
+/// sorted by block and then from the top. Each block's lines are measured from where Character
+/// Alignment sets its characters on average, so the characters of a block line share one
+/// baseline whatever their own alignment.
+fn warichu_rows(layout: &TextLayout, l: &LineInfo) -> Vec<(usize, f64, f64)> {
+    let glyphs = layout.glyphs.get(l.glyph_start..l.glyph_end).unwrap_or_default();
+    // Where each block is set across the line: its characters' baselines less their block lines,
+    // summed, and how many there are.
+    let mut sets: Vec<(usize, f64, f64)> =
+        glyphs.iter().filter_map(|g| g.warichu.map(|block| (block, layout.logical_point(g.origin).y - g.warichu_line, 1.0))).collect();
+    sets.sort_by_key(|s| s.0);
+    sets.dedup_by(|next, kept| {
+        let same = next.0 == kept.0;
+        if same {
+            (kept.1, kept.2) = (kept.1 + next.1, kept.2 + next.2);
+        }
+        same
+    });
+    let mut rows: Vec<(usize, f64, f64)> = glyphs.iter().filter_map(|g| g.warichu.map(|block| (block, g.warichu_line, 0.0))).collect();
+    rows.sort_by(|x, y| x.0.cmp(&y.0).then(x.1.total_cmp(&y.1)));
+    rows.dedup_by(|x, y| x.0 == y.0 && (x.1 - y.1).abs() < 1e-9);
+    for row in &mut rows {
+        let set = sets.binary_search_by_key(&row.0, |s| s.0).ok().and_then(|k| sets.get(k)).map_or(0.0, |s| s.1 / s.2);
+        row.2 = set + row.1;
+    }
+    rows
+}
+
+/// A glyph of a warichu block line, for [`selection_quads`]: its block and block line, its extent
+/// along the line and its band across it (text space), and whether the selection covers it.
+struct BlockPiece {
+    row: (usize, usize),
+    x0: f64,
+    x1: f64,
+    top: f64,
+    bottom: f64,
+    selected: bool,
+}
+
 /// Highlight quads (text space, clockwise from top-left) covering the selected bytes `a..b`.
 pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4]> {
     let (a, b) = (a.min(b), a.max(b));
@@ -729,6 +815,47 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         let (f0, f1) = if g.rtl { (g.advance - fb, g.advance - fa) } else { (fa, fb) };
         (f0.min(f1), f0.max(f1))
     };
+    // A list marker's glyphs stand for no characters.
+    let selected = |i: usize, g: &PositionedGlyph| g.byte < b && g.byte + g.len > a && layout.marker_of(i).is_none();
+    let quad = |x0: f64, x1: f64, top: f64, bottom: f64| {
+        [Point::new(x0, top), Point::new(x1, top), Point::new(x1, bottom), Point::new(x0, bottom)].map(|q| layout.physical_point(q))
+    };
+    // The quads over the selected characters of the warichu blocks on line `l`. The block lines
+    // share the line of text: each takes the band out to halfway to the block lines next to it,
+    // and gets one quad over each run of selected characters drawn side by side on it, over the
+    // space a justified block line sets between them too.
+    let block_quads = |l: &LineInfo| {
+        let rows = warichu_rows(layout, l);
+        let mut pieces: Vec<BlockPiece> = Vec::new();
+        for (i, g) in layout.glyphs.iter().enumerate().take(l.glyph_end).skip(l.glyph_start) {
+            let Some(block) = g.warichu else { continue };
+            let lines = rows.get(rows.partition_point(|r| r.0 < block)..rows.partition_point(|r| r.0 <= block)).unwrap_or_default();
+            let row = lines.partition_point(|r| r.1 < g.warichu_line - 1e-9);
+            let Some(own) = lines.get(row).filter(|r| (r.1 - g.warichu_line).abs() < 1e-9) else { continue };
+            let top = row.checked_sub(1).and_then(|k| lines.get(k)).map_or(l.baseline - l.ascent, |above| (above.2 + own.2) * 0.5);
+            let bottom = lines.get(row + 1).map_or(l.baseline + l.descent, |below| (below.2 + own.2) * 0.5);
+            let x = layout.logical_point(g.origin).x;
+            let selected = selected(i, g);
+            let (f0, f1) = if selected { covered(g) } else { (0.0, g.advance) };
+            pieces.push(BlockPiece { row: (block, row), x0: x + f0, x1: x + f1, top, bottom, selected });
+        }
+        pieces.sort_by(|p, q| p.row.cmp(&q.row).then(p.x0.total_cmp(&q.x0)));
+        let mut quads = Vec::new();
+        let mut open: Option<BlockPiece> = None;
+        for piece in pieces {
+            match &mut open {
+                Some(run) if run.row == piece.row && piece.selected => run.x1 = run.x1.max(piece.x1),
+                _ => {
+                    quads.extend(open.take().map(|run| quad(run.x0, run.x1, run.top, run.bottom)));
+                    if piece.selected {
+                        open = Some(piece);
+                    }
+                }
+            }
+        }
+        quads.extend(open.map(|run| quad(run.x0, run.x1, run.top, run.bottom)));
+        quads
+    };
     if layout.on_path {
         // A list marker's glyphs stand for no characters.
         for g in layout.glyphs.iter().filter(|g| g.byte < b && g.byte + g.len > a && g.len > 0) {
@@ -742,27 +869,44 @@ pub fn selection_quads(layout: &TextLayout, a: usize, b: usize) -> Vec<[Point; 4
         return out;
     }
     if layout.glyphs.iter().any(|g| g.rtl) {
-        // A list marker's glyphs stand for no characters.
-        let glyphs = layout.glyphs.iter().enumerate().filter(|(i, g)| g.byte < b && g.byte + g.len > a && layout.marker_of(*i).is_none());
-        for (_, g) in glyphs {
+        // The last line whose warichu blocks were highlighted (glyphs come line by line).
+        let mut blocks_done = usize::MAX;
+        for (_, g) in layout.glyphs.iter().enumerate().filter(|(i, g)| selected(*i, g)) {
             let Some(l) = layout.lines.get(g.line) else { continue };
+            if g.warichu.is_some() {
+                if blocks_done != g.line {
+                    blocks_done = g.line;
+                    out.extend(block_quads(l));
+                }
+                continue;
+            }
             let p = layout.logical_point(g.origin);
             let (f0, f1) = covered(g);
-            let (x0, x1) = (p.x + f0, p.x + f1);
-            out.push(
-                [
-                    Point::new(x0, l.baseline - l.ascent),
-                    Point::new(x1, l.baseline - l.ascent),
-                    Point::new(x1, l.baseline + l.descent),
-                    Point::new(x0, l.baseline + l.descent),
-                ]
-                .map(|p| layout.physical_point(p)),
-            );
+            out.push(quad(p.x + f0, p.x + f1, l.baseline - l.ascent, l.baseline + l.descent));
         }
         return out;
     }
     for (li, l) in layout.lines.iter().enumerate() {
         if l.start > b || l.end < a || (l.end == a && l.start < a && layout.lines.get(li + 1).is_some_and(|n| n.start == l.end)) {
+            continue;
+        }
+        // A line with selected characters of a warichu block: each selected glyph outside the
+        // blocks is highlighted across the line, and the blocks' characters on their own lines.
+        let line_glyphs = || layout.glyphs.iter().enumerate().take(l.glyph_end).skip(l.glyph_start).filter(|(i, g)| selected(*i, g));
+        if line_glyphs().any(|(_, g)| g.warichu.is_some()) {
+            let (t, bt) = (l.baseline - l.ascent, l.baseline + l.descent);
+            for (_, g) in line_glyphs().filter(|(_, g)| g.warichu.is_none()) {
+                let p = layout.logical_point(g.origin);
+                let (f0, f1) = covered(g);
+                out.push(quad(p.x + f0, p.x + f1, t, bt));
+            }
+            out.extend(block_quads(l));
+            if b > l.end {
+                // The selection continues past the line: include the line break / trailing space.
+                let glyphs = layout.glyphs.get(l.glyph_start..l.glyph_end).unwrap_or_default();
+                let last = glyphs.iter().map(|g| layout.logical_point(g.origin).x + g.advance).fold(l.x0, f64::max);
+                out.push(quad(last, last.max(l.x1) + (l.ascent + l.descent) * 0.25, t, bt));
+            }
             continue;
         }
         // A list marker before the line's first character is not part of the selection.

@@ -156,6 +156,75 @@ under 0.9 px RMS from the gradient's contours, 1.13 px when smoothed as edges, a
 four corners); `layers::tests` (a ramp, flat colors in palette entries far apart, close flat colors, a
 thin flat stroke, colors off the line between their entries, and Grayscale's grays, each read from both
 sides of the crack) and `subpixel::tests` (the rule, and one decision for a whole piece from either side).
+## Blurred edges
+`settled` moved a blend pixel to a side of its edge only when the picture's own colors on both sides lay
+within 2 px of it, so the middle of an edge blurred over more than about 4 px kept the palette's
+in-between tones and traced as rings of thin paths around the edge. In Color with a Limited palette of
+at most 16 colors and in Grayscale with at most 16 grays, `cut_edge::settled_wide` now does the work, by
+VectorCraft's own rule (RGB distances, 0 to 255 a channel; Grayscale reads each pixel as its gray). A
+blend pixel with no own pixel of its color within 4 px pairs the 8 own colors within 8 px that are nearest
+to its color. It takes the nearer side of the pair it is best a blend of when that pair explains it twice
+as well as its own color, or when it lies between the two and off the line between them by less than 0.15
+of their distance apart. Of two pairs that fit equally well it takes the closer pair. Other palettes,
+High Fidelity Photo, Low Fidelity Photo and Black and White keep `settled`.
+Measured with the harness below on `main` at `77970c6924`, before and after the change (256 px variants
+unless stated): 16 Colors on blurred flat art 9.0 paths to 3.0, 158 anchors to 34, 0.239 px off to 0.069;
+6 Colors 6.0 paths to 3.0, 118 anchors to 33, 0.226 px off to 0.071; scanned, 16 Colors 8.0 paths to 3.0
+and 0.259 px off to 0.110, 6 Colors 7.5 paths to 3.0 and 0.235 px off to 0.093. On each preset's own
+inputs (section 1), 6 Colors went from 4.1 paths to 3.0 and 0.143 px off to 0.101, and 16 Colors from 4.6
+paths to 3.0 and 0.145 px off to 0.100. Auto Color does not change. Worse by more than 5% (25 of 211 rows
+that moved, most of them variants of the same inputs): askew shapes, odd px 11 to 22 with 6 Colors (paths
+4.0 to 4.3, odd colours 0.3 to 0.7), 23 to 26 with 3 Colors, 17 to 22 with 16 Colors and 27 to 30 with
+Shades of Gray; thin lines, missed max 23.5 to 45.3 px with 16 Colors, and with Shades of Gray paths 5.3 to
+7.3, anchors 36 to 41 and odd colours 3.0 to 5.0; linear gradients with 3 Colors, paths 3.0 to 3.3, and
+with 6 Colors with Gradients, paths 1.3 to 1.5 and anchors 13 to 16; two- and three-stop gradients with 6
+Colors with Gradients, paths 1.2 to 1.3; gradient and photo with 16 Colors, overlap px 0.0 to 0.2 and
+specks 0.8 to 1.0. The tables below are the previous measurement, not a rerun.
+Tests on code-drawn images: `tests::a_blurred_edge_is_no_ring_of_a_tone_between_its_sides` (a disc
+blurred into a 10 px ramp, 16 Colors), `tests::grayscale_settles_a_blurred_edge_between_its_own_two_grays`,
+`tests::grayscale_settles_a_tinted_blurred_edge_by_its_lightness`,
+`tests::the_photo_presets_keep_the_tones_of_a_blurred_edge` and `quantize::cut_edge::tests`.
+## Staircases in smooth areas
+Where a band border in a gradient or a shaded area runs at a slant, its pixels form a staircase whose
+steps are two or more pixels long. One piece of outline can run along a sharp edge in the image and then
+along such a border with no junction between them. That piece as a whole is not a contour (see above),
+and the outline kept a corner at every step. `subpixel::outline` now reads a run of three or more edges of
+1 to 8 px (`STAIR_MAX`), each turning one way where it starts and the other where it ends, with no
+junction on it, as a staircase when the run's own cracks pass `subpixel::low_contrast`. A run is cut at
+any step whose own cracks show half of the step between the two colors or more. The 8 px limit and the
+one-half cut are VectorCraft's own values. The run's edges are then steps, as one-pixel steps already
+were: the outline has no corner where two of them meet, and each gives one point, its middle, moved by the
+mean of its cracks' shifts. Where a run meets an edge that is not a step, the corner between them stays,
+so a straight edge longer than 8 px next to a staircase stays straight. A straight edge of 8 px or less
+between two turns of opposite sign is read as one more step of the run. Inside a run, two one-pixel steps
+between longer ones are read as part of the slope and do not make a notch. A staircase of longer steps,
+and one whose cracks read as an edge, keep their corners, and Black and White traces do not use the rule.
+The runs are the same from either side of the border.
+Measured with the harness below, before and after the change: rows of the "flat colour art" inputs do not
+change. On gradient and photo inputs, anchors change in 106 rows, 101 of them fewer, by −64% to +6.4%: for
+example 390 to 142 (Shades of Gray, linear gradients), 1,860 to 1,537 (High Fidelity Photo, linear
+gradients), 6,766 to 6,542 (High Fidelity Photo, gradient and photo) and 47 to 50 (High Fidelity Photo with
+Gradients, blurred). On gradient and photo, 6 Colors, 6 Colors with Shapes, with Auto Grouping, without
+Gradients and enhanced each leave a gap of 0.9 px (was 1.2) and an overlap of 1.0 px (was 0.8). Edge ΔE
+of Shades of Gray on linear gradients goes from 8.36 to 8.40 (8.39 enhanced), and that of 6 Colors with
+Gradients on a blurred input from 2.24 to 2.22; other ΔE and edge ΔE values change by 0.01 or less.
+Lines % changes by −2 to +3, grouped % by −1 to +4, upright % by +1 in 3 rows (Shades of Gray on a blurred
+input), and specks do not change. On synthetic photos of 800 and 4,000 px traced outside this harness,
+the corners of rectilinear staircases per 100 px of outline fall from 0.57 to 0.46 and from 1.09 to 0.94
+with High Fidelity Photo. On the 800 px photo, the 95th percentile of the pixel difference with High
+Fidelity Photo rises from 6.33 to 6.67, and 16 Colors leaves 2 staircases of steps of 2 px or more where
+it left none. The tables below are the previous measurement, not a rerun.
+Tests on code-drawn outlines in `subpixel::tests`:
+`a_staircase_of_longer_steps_in_a_smooth_area_becomes_the_slope_through_its_steps` (a piece with a
+staircase of 2 × 3 px steps in a smooth area, a straight run and the same staircase on a sharp edge: the
+first gives its steps' middles and none of its corners, the straight run keeps the corners at its ends, the
+second staircase keeps its corners, both regions get the same points, and 10 px steps keep their corners
+in a smooth area), `a_staircase_that_runs_on_from_a_smooth_area_into_an_edge_keeps_the_edges_corners`,
+`a_staircase_whose_cracks_do_not_read_as_a_contour_keeps_its_corners` (two flat colors),
+`a_staircase_step_moves_by_the_mean_shift_of_its_cracks`,
+`a_staircase_of_mixed_one_pixel_and_longer_steps_is_one_slope_without_a_notch`,
+`a_run_of_two_steps_keeps_its_corners`, `a_junction_on_a_step_ends_the_staircase_there` and
+`a_step_whose_cracks_read_as_an_edge_ends_the_staircase_there`.
 ## A simpler contour walk
 `contour::trace_mask` follows each region's outline along the pixel cracks with the inside on the
 right. It used to build a table of outgoing directions for every pixel corner in a raster pass and
@@ -1171,8 +1240,10 @@ One trace at a time on this machine (all cores); memory is the peak allocated ab
 
 ## Centre lines
 
-Measured 2026-10-17 with maximal-disc pruning and junction merging, against base `3e44478f`.
-Earlier preset and cost tables retain their previous measurements. Regenerate only this class:
+Measured 2026-11-13 against `1e4e3534`, with Create Strokes deciding stroke or fill per feature.
+Two runs gave identical rows in every column but ms, which varies between runs. Earlier preset and
+cost tables retain their previous measurements.
+Regenerate only this class:
 
 ```text
 TRACE_QUALITY_CLASS=centre-lines TRACE_QUALITY_REPORT=centre-lines.md cargo test --release -p vectorcraft-trace --test quality quality_report -- --ignored --nocapture
@@ -1183,9 +1254,13 @@ branches shorter than `r + max(2, 0.5 × min(2r, Stroke))` are pruned, shortest 
 self-loops inside the junction disc are removed; overlapping junctions and geometrically split
 crossings merge, and runs join through degree-two nodes. Simplification is bounded to 32 rounds;
 nodes and branches are each capped at 200,000. An over-budget blob stays with the fill path.
-Whole-blob selection, ink refinement, cap detection and curve fitting retain their current rules.
+A blob wider than Stroke keeps its wide part as a fill, and its thin features are traced as
+strokes. The mixed-width body scene measures that split on its own: one disc of radius 24 px with
+three arms of 2, 3 and 5 px that start inside it, Stroke 6 px, and no other ink. Its found % covers
+the arms outside the disc, its fill→fill % covers the disc, and its paths column counts both kinds.
+Ink refinement, cap detection and curve fitting retain their current rules.
 
-Code-drawn scenes only: 23 scenes, each anti-aliased (8×8 coverage samples) and hard (that coverage thresholded at 0.5). Coordinates, widths and scene Stroke values are fixed; junction/letter/crossing coordinates include the 0.27/0.41 px offset. Create Fills and Strokes are on, Stroke is the scene's limit (13 px, mix 6 px, varying 12 px), Black and White threshold 128, Noise 4, Ignore White on, other settings at their defaults. Today's tracer has no minimum-length setting (the dashed scenes specify 0 for future use).
+Code-drawn scenes only: 24 scenes, each anti-aliased (8×8 coverage samples) and hard (that coverage thresholded at 0.5). Coordinates, widths and scene Stroke values are fixed; junction/letter/crossing/mixed-width body coordinates include the 0.27/0.41 px offset. Create Fills and Strokes are on, Stroke is the scene's limit (13 px, mix and mixed-width body 6 px, varying 12 px), Black and White threshold 128, Noise 4, Ignore White on, other settings at their defaults. Today's tracer has no minimum-length setting (the dashed scenes specify 0 for future use).
 
 Distances use dense exact centre samples (≤0.25 px), emitted curves sampled at ≤0.5 px control-polygon steps, and nearest-point searches capped at 30 px. Found is the fraction of true samples within 1.5 px; width errors use output samples within 2 px of a true stroke. Samples inside exact fills are excluded. Topology is recovered from emitted subpath endpoints and intersections, merging coincident positions within 0.05 px; an endpoint contributes one arm, an interior two. Junction matching radius is local true width + 3 px; ends use half-width + 4 px. Each match is used once. Free ends exclude true junctions, corners, other strokes and fills; unmatched emitted ends are spurs. Junctions/ends within 2 px of fills are excluded. End error is distance, with signed error along the outward tangent in parentheses. Coverage is a union of painted output at pixel centres (0.02 px flattening tolerance, actual emitted caps), compared with the exact swept shape at pixel centres, for both input variants. Area error is signed relative to exact area. Anchors counts stroke anchors, including all compound subpaths; paths counts stroked + filled paths. Time covers tracing only, one scene at a time. Profile-dependent columns are unavailable (–).
 
@@ -1235,8 +1310,10 @@ Distances use dense exact centre samples (≤0.25 px), emitted curves sampled at
 | letters w3 | hard | 7+0 | 0.33 / 0.92 | 0.34 / 0.71 | 99.0 | 0.06 / 0.20 | – | – |
 | letters w5 | aa | 7+0 | 0.27 / 1.49 | 0.29 / 1.31 | 95.9 | 0.02 / 0.20 | – | – |
 | letters w5 | hard | 7+0 | 0.40 / 1.48 | 0.41 / 1.29 | 96.2 | 0.05 / 0.20 | – | – |
-| mix | aa | 3+1 | 0.10 / 0.21 | 12.89 / 30.00 | 57.3 | 0.03 / 0.14 | – | – |
-| mix | hard | 3+1 | 0.22 / 0.43 | 12.95 / 30.00 | 57.3 | 0.08 / 0.15 | – | – |
+| mix | aa | 6+3 | 0.09 / 0.19 | 0.15 / 0.28 | 99.9 | 0.02 / 0.14 | – | – |
+| mix | hard | 6+3 | 0.24 / 0.52 | 0.28 / 0.56 | 99.8 | 0.07 / 0.20 | – | – |
+| mixed-width body | aa | 3+1 | 0.09 / 0.27 | 0.15 / 0.31 | 100.0 | 0.05 / 0.14 | – | – |
+| mixed-width body | hard | 3+1 | 0.18 / 0.42 | 0.22 / 0.42 | 100.0 | 0.05 / 0.12 | – | – |
 | varying | aa | 5+0 | 0.13 / 0.28 | 0.19 / 0.31 | 99.5 | 1.89 / 4.13 | – | – |
 | varying | hard | 5+0 | 0.20 / 0.51 | 0.24 / 0.52 | 99.7 | 1.90 / 4.22 | – | – |
 
@@ -1244,56 +1321,58 @@ Distances use dense exact centre samples (≤0.25 px), emitted curves sampled at
 
 | scene | input | junctions ok / wrong deg / missed / extra | junction pos err | ends found | end err (signed) | spurs | IoU uniform / profile | area err uniform / profile | fill→fill % | anchors | width pts | ms |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| lines w1 | aa | 0 / 0 / 0 / 76 | – | 43/48 | 0.71 (-0.69) | 88 | 0.790 / – | -6.2% / – | – | 186 | – | 4.6 |
-| lines w1 | hard | 0 / 0 / 0 / 0 | – | 42/48 | 1.50 (-1.42) | 142 | 0.644 / – | -25.8% / – | – | 184 | – | 3.6 |
-| lines w2 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.32 (-0.20) | 0 | 0.914 / – | -0.3% / – | – | 71 | – | 4.3 |
-| lines w2 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.38 (-0.10) | 0 | 0.808 / – | -2.0% / – | – | 58 | – | 4.2 |
-| lines w3 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.26 (-0.17) | 0 | 0.931 / – | -3.0% / – | – | 64 | – | 4.4 |
-| lines w3 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.46 (-0.24) | 0 | 0.881 / – | -2.5% / – | – | 50 | – | 4.3 |
-| lines w4 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.25 (-0.18) | 0 | 0.964 / – | -0.6% / – | – | 70 | – | 4.6 |
-| lines w4 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.40 (-0.15) | 0 | 0.906 / – | -0.1% / – | – | 54 | – | 4.5 |
-| lines w6 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.30 (-0.18) | 0 | 0.965 / – | -0.3% / – | – | 65 | – | 5.1 |
-| lines w6 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.45 (-0.12) | 0 | 0.923 / – | 1.4% / – | – | 55 | – | 4.9 |
-| lines w8 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.37 (-0.20) | 0 | 0.967 / – | -1.0% / – | – | 66 | – | 5.4 |
-| lines w8 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.46 (-0.18) | 0 | 0.934 / – | -0.3% / – | – | 53 | – | 5.4 |
-| lines w10 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.35 (-0.16) | 0 | 0.969 / – | -0.7% / – | – | 66 | – | 5.9 |
-| lines w10 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.50 (-0.12) | 0 | 0.942 / – | -0.1% / – | – | 52 | – | 5.9 |
-| lines w12 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.40 (-0.16) | 0 | 0.969 / – | -0.6% / – | – | 70 | – | 6.4 |
-| lines w12 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.54 (-0.11) | 0 | 0.949 / – | -0.2% / – | – | 53 | – | 6.3 |
-| curves w2 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 0.18 (-0.13) | 0 | 0.921 / – | -0.6% / – | – | 34 | – | 4.7 |
-| curves w2 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 0.22 (-0.05) | 0 | 0.821 / – | -2.4% / – | – | 29 | – | 4.7 |
-| curves w4 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 0.56 (-0.42) | 0 | 0.949 / – | -0.8% / – | – | 35 | – | 5.1 |
-| curves w4 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 0.66 (-0.38) | 0 | 0.904 / – | -0.5% / – | – | 30 | – | 5.2 |
-| curves w8 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 2.24 (-2.01) | 0 | 0.956 / – | -0.9% / – | – | 42 | – | 5.9 |
-| curves w8 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 1.97 (-1.67) | 0 | 0.936 / – | -0.5% / – | – | 31 | – | 5.9 |
-| circles | aa | 0 / 0 / 0 / 0 | – | 0/0 | – (–) | 32 | 0.964 / – | -0.9% / – | – | 71 | – | 7.4 |
-| circles | hard | 0 / 0 / 0 / 0 | – | 0/0 | – (–) | 28 | 0.888 / – | -0.7% / – | – | 52 | – | 8.0 |
-| junctions w2 | aa | 7 / 0 / 0 / 0 | 1.17 | 23/23 | 0.32 (-0.16) | 0 | 0.889 / – | 6.1% / – | – | 84 | – | 3.7 |
-| junctions w2 | hard | 7 / 0 / 0 / 0 | 1.17 | 23/23 | 0.49 (-0.15) | 0 | 0.771 / – | 4.9% / – | – | 59 | – | 3.6 |
-| junctions w4 | aa | 7 / 0 / 0 / 1 | 1.62 | 23/23 | 0.33 (-0.26) | 0 | 0.919 / – | 5.0% / – | – | 100 | – | 4.1 |
-| junctions w4 | hard | 7 / 0 / 0 / 1 | 1.62 | 23/23 | 0.65 (-0.32) | 0 | 0.850 / – | 7.0% / – | – | 81 | – | 4.0 |
-| junctions w8 | aa | 7 / 0 / 0 / 2 | 2.76 | 23/23 | 0.43 (-0.27) | 0 | 0.937 / – | 2.7% / – | – | 93 | – | 4.7 |
-| junctions w8 | hard | 7 / 0 / 0 / 1 | 2.76 | 23/23 | 0.80 (-0.35) | 0 | 0.913 / – | 2.5% / – | – | 77 | – | 4.7 |
-| crossings w3 | aa | 5 / 0 / 0 / 2 | 0.25 | 20/20 | 0.27 (-0.18) | 0 | 0.935 / – | -1.1% / – | – | 74 | – | 2.8 |
-| crossings w3 | hard | 5 / 0 / 0 / 5 | 0.25 | 20/20 | 0.41 (-0.17) | 0 | 0.791 / – | -7.6% / – | – | 69 | – | 2.8 |
-| crossings w6 | aa | 5 / 0 / 0 / 1 | 0.25 | 20/20 | 0.35 (-0.17) | 0 | 0.925 / – | -3.6% / – | – | 112 | – | 3.3 |
-| crossings w6 | hard | 5 / 0 / 0 / 4 | 0.25 | 20/20 | 0.51 (-0.20) | 0 | 0.872 / – | -2.0% / – | – | 81 | – | 3.4 |
-| dashed w2 | aa | 0 / 0 / 0 / 0 | – | 62/62 | 0.28 (-0.20) | 0 | 0.927 / – | -2.6% / – | – | 64 | – | 2.0 |
-| dashed w2 | hard | 0 / 0 / 0 / 0 | – | 62/62 | 0.33 (-0.11) | 0 | 0.926 / – | -3.6% / – | – | 67 | – | 1.9 |
-| dashed w4 | aa | 0 / 0 / 0 / 0 | – | 58/58 | 0.30 (-0.20) | 0 | 0.952 / – | -0.1% / – | – | 61 | – | 2.1 |
-| dashed w4 | hard | 0 / 0 / 0 / 0 | – | 58/58 | 0.37 (-0.08) | 0 | 0.944 / – | -1.5% / – | – | 60 | – | 2.1 |
-| letters w3 | aa | 7 / 0 / 0 / 6 | 1.47 | 17/17 | 0.62 (-0.47) | 1 | 0.923 / – | -0.9% / – | – | 114 | – | 3.3 |
-| letters w3 | hard | 7 / 0 / 0 / 3 | 1.47 | 17/17 | 0.38 (-0.21) | 1 | 0.859 / – | -0.6% / – | – | 81 | – | 3.3 |
-| letters w5 | aa | 6 / 1 / 0 / 6 | 2.10 | 17/17 | 0.99 (-0.83) | 0 | 0.929 / – | -1.7% / – | – | 124 | – | 3.7 |
-| letters w5 | hard | 6 / 1 / 0 / 8 | 2.10 | 17/17 | 1.05 (-0.79) | 0 | 0.887 / – | -2.0% / – | – | 100 | – | 3.7 |
-| mix | aa | 0 / 0 / 0 / 0 | – | 6/7 | 0.24 (-0.17) | 0 | 0.986 / – | 0.1% / – | 99.7 | 11 | – | 6.5 |
-| mix | hard | 0 / 0 / 0 / 0 | – | 6/7 | 0.57 (-0.46) | 0 | 0.969 / – | -0.0% / – | 99.1 | 11 | – | 6.4 |
-| varying | aa | 0 / 0 / 0 / 0 | – | 10/10 | 2.03 (-1.08) | 0 | 0.735 / – | 4.8% / – | – | 22 | – | 5.2 |
-| varying | hard | 0 / 0 / 0 / 0 | – | 10/10 | 1.92 (-0.94) | 0 | 0.736 / – | 5.2% / – | – | 22 | – | 5.3 |
+| lines w1 | aa | 0 / 0 / 0 / 76 | – | 43/48 | 0.71 (-0.69) | 88 | 0.790 / – | -6.2% / – | – | 186 | – | 8.0 |
+| lines w1 | hard | 0 / 0 / 0 / 0 | – | 42/48 | 1.50 (-1.42) | 142 | 0.644 / – | -25.8% / – | – | 184 | – | 6.8 |
+| lines w2 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.32 (-0.20) | 0 | 0.914 / – | -0.3% / – | – | 71 | – | 7.7 |
+| lines w2 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.38 (-0.10) | 0 | 0.808 / – | -2.0% / – | – | 58 | – | 7.2 |
+| lines w3 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.26 (-0.17) | 0 | 0.931 / – | -3.0% / – | – | 64 | – | 8.0 |
+| lines w3 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.46 (-0.24) | 0 | 0.881 / – | -2.5% / – | – | 50 | – | 7.7 |
+| lines w4 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.25 (-0.18) | 0 | 0.964 / – | -0.6% / – | – | 70 | – | 7.8 |
+| lines w4 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.40 (-0.15) | 0 | 0.906 / – | -0.1% / – | – | 54 | – | 7.6 |
+| lines w6 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.30 (-0.18) | 0 | 0.965 / – | -0.3% / – | – | 65 | – | 8.4 |
+| lines w6 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.45 (-0.12) | 0 | 0.923 / – | 1.4% / – | – | 55 | – | 8.2 |
+| lines w8 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.37 (-0.20) | 0 | 0.967 / – | -1.0% / – | – | 66 | – | 9.8 |
+| lines w8 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.46 (-0.18) | 0 | 0.934 / – | -0.3% / – | – | 53 | – | 9.1 |
+| lines w10 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.35 (-0.16) | 0 | 0.969 / – | -0.7% / – | – | 66 | – | 10.1 |
+| lines w10 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.50 (-0.12) | 0 | 0.942 / – | -0.1% / – | – | 52 | – | 9.8 |
+| lines w12 | aa | 0 / 0 / 0 / 0 | – | 48/48 | 0.40 (-0.16) | 0 | 0.969 / – | -0.6% / – | – | 70 | – | 11.0 |
+| lines w12 | hard | 0 / 0 / 0 / 0 | – | 48/48 | 0.54 (-0.11) | 0 | 0.949 / – | -0.2% / – | – | 53 | – | 10.7 |
+| curves w2 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 0.18 (-0.13) | 0 | 0.921 / – | -0.6% / – | – | 34 | – | 7.6 |
+| curves w2 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 0.22 (-0.05) | 0 | 0.821 / – | -2.4% / – | – | 29 | – | 7.5 |
+| curves w4 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 0.56 (-0.42) | 0 | 0.949 / – | -0.8% / – | – | 35 | – | 8.3 |
+| curves w4 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 0.66 (-0.38) | 0 | 0.904 / – | -0.5% / – | – | 30 | – | 8.4 |
+| curves w8 | aa | 0 / 0 / 0 / 0 | – | 8/8 | 2.24 (-2.01) | 0 | 0.956 / – | -0.9% / – | – | 42 | – | 10.7 |
+| curves w8 | hard | 0 / 0 / 0 / 0 | – | 8/8 | 1.97 (-1.67) | 0 | 0.936 / – | -0.5% / – | – | 31 | – | 9.8 |
+| circles | aa | 0 / 0 / 0 / 0 | – | 0/0 | – (–) | 32 | 0.964 / – | -0.9% / – | – | 71 | – | 11.3 |
+| circles | hard | 0 / 0 / 0 / 0 | – | 0/0 | – (–) | 28 | 0.888 / – | -0.7% / – | – | 52 | – | 11.9 |
+| junctions w2 | aa | 7 / 0 / 0 / 0 | 1.17 | 23/23 | 0.32 (-0.16) | 0 | 0.889 / – | 6.1% / – | – | 84 | – | 6.3 |
+| junctions w2 | hard | 7 / 0 / 0 / 0 | 1.17 | 23/23 | 0.49 (-0.15) | 0 | 0.771 / – | 4.9% / – | – | 59 | – | 6.1 |
+| junctions w4 | aa | 7 / 0 / 0 / 1 | 1.62 | 23/23 | 0.33 (-0.26) | 0 | 0.919 / – | 5.0% / – | – | 100 | – | 6.9 |
+| junctions w4 | hard | 7 / 0 / 0 / 1 | 1.62 | 23/23 | 0.65 (-0.32) | 0 | 0.850 / – | 7.0% / – | – | 81 | – | 6.8 |
+| junctions w8 | aa | 7 / 0 / 0 / 2 | 2.76 | 23/23 | 0.43 (-0.27) | 0 | 0.937 / – | 2.7% / – | – | 93 | – | 7.9 |
+| junctions w8 | hard | 7 / 0 / 0 / 1 | 2.76 | 23/23 | 0.80 (-0.35) | 0 | 0.913 / – | 2.5% / – | – | 77 | – | 7.7 |
+| crossings w3 | aa | 5 / 0 / 0 / 2 | 0.25 | 20/20 | 0.27 (-0.18) | 0 | 0.935 / – | -1.1% / – | – | 74 | – | 4.6 |
+| crossings w3 | hard | 5 / 0 / 0 / 5 | 0.25 | 20/20 | 0.41 (-0.17) | 0 | 0.791 / – | -7.6% / – | – | 69 | – | 4.5 |
+| crossings w6 | aa | 5 / 0 / 0 / 1 | 0.25 | 20/20 | 0.35 (-0.17) | 0 | 0.925 / – | -3.6% / – | – | 112 | – | 5.6 |
+| crossings w6 | hard | 5 / 0 / 0 / 4 | 0.25 | 20/20 | 0.51 (-0.20) | 0 | 0.872 / – | -2.0% / – | – | 81 | – | 5.4 |
+| dashed w2 | aa | 0 / 0 / 0 / 0 | – | 62/62 | 0.28 (-0.20) | 0 | 0.927 / – | -2.6% / – | – | 64 | – | 3.7 |
+| dashed w2 | hard | 0 / 0 / 0 / 0 | – | 62/62 | 0.33 (-0.11) | 0 | 0.926 / – | -3.6% / – | – | 67 | – | 3.7 |
+| dashed w4 | aa | 0 / 0 / 0 / 0 | – | 58/58 | 0.30 (-0.20) | 0 | 0.952 / – | -0.1% / – | – | 61 | – | 3.9 |
+| dashed w4 | hard | 0 / 0 / 0 / 0 | – | 58/58 | 0.37 (-0.08) | 0 | 0.944 / – | -1.5% / – | – | 60 | – | 3.8 |
+| letters w3 | aa | 7 / 0 / 0 / 6 | 1.47 | 17/17 | 0.62 (-0.47) | 1 | 0.923 / – | -0.9% / – | – | 114 | – | 5.3 |
+| letters w3 | hard | 7 / 0 / 0 / 3 | 1.47 | 17/17 | 0.38 (-0.21) | 1 | 0.859 / – | -0.6% / – | – | 81 | – | 5.2 |
+| letters w5 | aa | 6 / 1 / 0 / 6 | 2.10 | 17/17 | 0.99 (-0.83) | 0 | 0.929 / – | -1.7% / – | – | 124 | – | 5.9 |
+| letters w5 | hard | 6 / 1 / 0 / 8 | 2.10 | 17/17 | 1.05 (-0.79) | 0 | 0.887 / – | -2.0% / – | – | 100 | – | 5.7 |
+| mix | aa | 0 / 0 / 0 / 0 | – | 7/7 | 0.25 (-0.18) | 0 | 0.988 / – | 0.2% / – | 99.9 | 22 | – | 10.2 |
+| mix | hard | 0 / 0 / 0 / 0 | – | 7/7 | 0.56 (-0.46) | 0 | 0.956 / – | -0.4% / – | 98.9 | 22 | – | 10.3 |
+| mixed-width body | aa | 0 / 0 / 0 / 0 | – | 3/3 | 0.23 (-0.05) | 0 | 0.985 / – | 0.3% / – | 99.3 | 9 | – | 4.4 |
+| mixed-width body | hard | 0 / 0 / 0 / 0 | – | 3/3 | 0.27 (-0.03) | 0 | 0.972 / – | -0.6% / – | 98.3 | 8 | – | 3.7 |
+| varying | aa | 0 / 0 / 0 / 0 | – | 10/10 | 2.03 (-1.08) | 0 | 0.735 / – | 4.8% / – | – | 22 | – | 9.4 |
+| varying | hard | 0 / 0 / 0 / 0 | – | 10/10 | 1.92 (-0.94) | 0 | 0.736 / – | 5.2% / – | – | 22 | – | 8.7 |
 
-**aa totals**: junctions 44 correct, 1 wrong degree, 0 missed, 94 extra (of 45); ends 682 of 688; spurs 121.
+**aa totals**: junctions 44 correct, 1 wrong degree, 0 missed, 94 extra (of 45); ends 686 of 691; spurs 121.
 
-**hard totals**: junctions 44 correct, 1 wrong degree, 0 missed, 22 extra (of 45); ends 681 of 688; spurs 171.
+**hard totals**: junctions 44 correct, 1 wrong degree, 0 missed, 22 extra (of 45); ends 685 of 691; spurs 171.
 
 **Scope of the improvement:** correct junction degrees rise from 30/45 to 44/45 in each variant;
 missed junctions fall from two to zero. Extra junctions fall from 104 to 94 aa and 27 to 22 hard.

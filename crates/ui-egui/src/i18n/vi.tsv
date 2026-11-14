@@ -721,6 +721,8 @@ font-technology	Variable	Biến thiên
 	Convert to Artboards	Chuyển thành bảng vẽ
 	Convert to CMYK	Chuyển sang CMYK
 	Convert to Grayscale	Chuyển sang thang xám
+	Convert to Indexed Color	Chuyển sang màu chỉ mục
+	Convert to Indexed Color…	Chuyển sang màu chỉ mục…
 	Convert To Outlines	Chuyển thành đường bao
 	Convert To Point Type	Chuyển sang chữ điểm
 	Convert to RGB	Chuyển sang RGB
@@ -804,6 +806,8 @@ font-technology	Variable	Biến thiên
 	Crop Image	Cắt xén ảnh
 	Image Tools	Công cụ hình ảnh
 	Remove Background…	Xóa nền…
+	Draw (Pencil)	Vẽ (Bút chì)
+	Place Image	Đặt hình ảnh
 	Remove Background	Xóa nền
 	Background	Nền
 	Edge Color	Màu cạnh
@@ -938,6 +942,8 @@ font-technology	Variable	Biến thiên
 	Delete Width Point	Xóa điểm chiều rộng
 	Delete Workspace	Xóa không gian làm việc
 	Delete {kind} Style	Xóa kiểu {kind}
+	Delete the selected items and their artwork?	Xóa các mục đã chọn và tác phẩm của chúng?
+	Delete this layer and its artwork?	Xóa lớp này và tác phẩm của nó?
 	Delete “{name}”?	Xóa “{name}”?
 	Depth	Độ sâu
 	Depth:	Độ sâu:
@@ -1010,6 +1016,10 @@ font-technology	Variable	Biến thiên
 	Dock Panel	Neo bảng
 	Dock to Top	Neo lên trên
 	Dock to Bottom	Neo xuống dưới
+	Dock to Left	Neo sang trái
+	Dock to Right	Neo sang phải
+	Dock Toolbar	Neo thanh công cụ
+	Float Toolbar	Thả nổi thanh công cụ
 	Control Bar Options	Tùy chọn thanh điều khiển
 	Tool Options	Tùy chọn công cụ
 	Object Options	Tùy chọn đối tượng
@@ -1198,12 +1208,14 @@ font-technology	Variable	Biến thiên
 	Enable Contextual Task Bar	Bật thanh tác vụ theo ngữ cảnh
 	Enable copying of text, images and other content	Bật sao chép văn bản, ảnh và nội dung khác
 	Enable in-menu font previews	Bật xem trước phông trong menu
+	Show samples on white	Hiển thị mẫu trên nền trắng
 	Enable Missing Glyph Protection	Bật bảo vệ glyph bị thiếu
 	Enable Opacity Mask	Bật mặt nạ độ mờ
 	Enable plaintext metadata	Bật siêu dữ liệu văn bản thuần
 	Enable Rubber Band for	Bật vùng chọn kéo cho
 	Enable text access for screen readers	Bật truy cập văn bản cho trình đọc màn hình
 	Enable Touch Gestures	Bật cử chỉ cảm ứng
+	Switch Selection and Drawing Modes	Chuyển giữa chế độ chọn và vẽ
 	Enable Touch Workspace	Bật không gian làm việc cảm ứng
 	Encoding	Mã hóa
 	Encoding:	Mã hóa:
@@ -1843,6 +1855,8 @@ digits	Hindi	Hindi
 	Objects on Path Tool	Công cụ Đối tượng trên đường dẫn
 	Attach Objects on Path	Gắn đối tượng lên đường dẫn
 	Expand Objects on Path	Mở rộng đối tượng trên đường dẫn
+	Detach	Tách
+	Detach Object from Path	Tách đối tượng khỏi đường dẫn
 	Release Live Paint	Giải phóng tô trực tiếp
 	Release Repeat	Giải phóng lặp lại
 	Release Slice	Giải phóng lát cắt
@@ -2388,6 +2402,10 @@ digits	Hindi	Hindi
 	Long	Dài
 	Stylistic	Kiểu cách
 	Mojikumi Set	Bộ Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Monitor RGB	RGB màn hình
 	Mono	Đơn sắc
 	Monochrome images	Ảnh đơn sắc
@@ -2416,6 +2434,8 @@ digits	Hindi	Hindi
 	Move Guide to Layer	Di chuyển đường căn vào lớp
 	Move in Perspective	Di chuyển theo phối cảnh
 	Move Library Item to Group	Di chuyển mục thư viện vào nhóm
+	Rename Library Item	Đổi tên mục thư viện
+	Add to Character Styles	Thêm vào các kiểu ký tự
 	Move Locked and Hidden Artwork with Artboard	Di chuyển tác phẩm đã khóa và ẩn cùng bảng vẽ
 	Move Mesh Point	Di chuyển điểm lưới
 	Move Mesh Points	Di chuyển các điểm lưới
@@ -2808,6 +2828,29 @@ digits	Hindi	Hindi
 	Pattern	Họa tiết
 	Pattern Brush	Cọ họa tiết
 	missing from the Brushes panel	không có trong bảng Cọ
+	built in	tích hợp sẵn
+	embedding not allowed	không cho phép nhúng
+	embedding for editing	nhúng để chỉnh sửa
+	embedding for preview and print	nhúng để xem trước và in
+	embedding allowed	cho phép nhúng
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	đã thay thế: hiển thị bằng {family} {style} ({detail})
+	missing: shown in {family} {style}	thiếu: hiển thị bằng {family} {style}
+	missing	thiếu
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Chuyển sắc tuyến tính
+	Radial gradient	Chuyển sắc hướng tâm
+	Conic gradient	Chuyển sắc hình nón
+	Diamond gradient	Chuyển sắc hình thoi
+	Freeform gradient	Chuyển sắc tự do
+@plural	{n} instance|{n} instances	{n} phiên bản
+@plural	{n} row|{n} rows	{n} hàng
+@plural	{n} column|{n} columns	{n} cột
 	Pattern Brush Options	Tùy chọn cọ họa tiết
 	Pattern Editing	Chỉnh sửa họa tiết
 	Pattern Options	Tùy chọn họa tiết
@@ -3033,6 +3076,11 @@ mark-style	Japanese	Kiểu Nhật
 	Real name	Tên thật
 	Real World:	Thực tế:
 	Real-time Drawing and Editing	Vẽ và chỉnh sửa theo thời gian thực
+	Use Monitor Profile for Canvas	Dùng hồ sơ màn hình cho vùng vẽ
+	The canvas is drawn in sRGB.	Vùng vẽ được hiển thị ở sRGB.
+	Canvas display profile:	Hồ sơ màn hình của vùng vẽ:
+	The system matches the window to the display's colors.	Hệ thống điều chỉnh cửa sổ theo màu của màn hình.
+	No usable display profile was found: the canvas is drawn in sRGB.	Không tìm thấy hồ sơ màn hình dùng được: vùng vẽ được hiển thị ở sRGB.
 	Rearrange	Sắp xếp lại
 	Select All Artboards	Chọn tất cả các bảng vẽ
 	Switch Orientation	Chuyển hướng
@@ -3227,6 +3275,9 @@ mark-style	Japanese	Kiểu Nhật
 	Reset the rows to the artwork's colors	Đặt lại các hàng về màu của tác phẩm
 	Color Theme Picker	Bộ chọn bộ màu
 	Click or drag across the art to pick its colors; Shift adds more	Nhấp hoặc kéo qua tác phẩm để lấy màu của nó; Shift để thêm
+	Prominent Colors	Màu nổi bật
+	Save All Colors	Lưu tất cả màu
+	Save Prominent Colors	Lưu màu nổi bật
 	Reset to Default	Đặt lại về mặc định
 	Reset to default	Đặt lại về mặc định
 	Reset to White, Black	Đặt lại về Trắng, Đen
@@ -3838,6 +3889,20 @@ mark-style	Japanese	Kiểu Nhật
 	Spot Color Objects	Đối tượng có màu đặc biệt
 	Pattern Objects	Đối tượng có họa tiết
 	Gradient Objects	Đối tượng có chuyển sắc
+	Font Details	Chi tiết phông chữ
+	Linked Images	Hình ảnh đã liên kết
+	Embedded Images	Hình ảnh đã nhúng
+	Compound Paths	Đường dẫn phức
+	Text Objects	Đối tượng văn bản
+	Placed Documents	Tài liệu đã đặt
+	Symbol Instances	Thực thể ký hiệu
+	Gradient Meshes	Lưới chuyển sắc
+	Blends	Hòa trộn
+	Envelopes	Envelope
+	Intertwine Groups	Nhóm đan xen
+	Opacity Masks	Mặt nạ độ mờ
+	Objects with Effects	Đối tượng có hiệu ứng
+	Pattern Swatches	Mẫu màu họa tiết
 	Spot Colors	Màu đặc biệt
 	Spot Colors…	Màu đặc biệt…
 	Spray Radius	Bán kính phun
@@ -3973,6 +4038,7 @@ mark-style	Japanese	Kiểu Nhật
 	VectorCraft Title Bar on Every Desktop	Thanh tiêu đề VectorCraft trên mọi màn hình nền
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Khi biến môi trường VECTORCRAFT_TITLEBAR được đặt, biến này chọn thanh tiêu đề.
 	System Title Bar takes precedence over this option while it is on.	Khi Thanh tiêu đề hệ thống được bật, tùy chọn đó được ưu tiên hơn tùy chọn này.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Khi Thanh tiêu đề VectorCraft trên mọi màn hình nền đang tắt, màn hình nền này vẽ thanh tiêu đề của cửa sổ dù tùy chọn này bật hay tắt.
 	Tab	Tab
 	Tab Stops	Vị trí tab
 	Table	Bảng
@@ -3987,6 +4053,11 @@ mark-style	Japanese	Kiểu Nhật
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Cài đặt Tate-chu-yoko…
 	Tate-chu-yoko Settings	Cài đặt Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Cài đặt Warichu…
+	Warichu Settings	Cài đặt Warichu
+	Lines:	Dòng:
+	Line Gap:	Khoảng cách dòng:
 	Composite Fonts…	Phông chữ tổ hợp…
 	Composite Fonts	Phông chữ tổ hợp
 	Export Composite Fonts	Xuất phông chữ tổ hợp
@@ -4487,6 +4558,9 @@ theme	Appearance	Giao diện
 @msg	`{keep}` is not a side of this axis	`{keep}` không phải là một cạnh của trục này
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` phải là `auto` hoặc mã ngôn ngữ như `en` hoặc `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` phải là màu #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` phải là màu #rrggbb hoặc tên màu lớp
+@msg	unknown Live Paint option `{key}`	tùy chọn Tô trực tiếp không xác định `{key}`
+@msg	unknown Shape Builder option `{key}`	tùy chọn Tạo hình dạng không xác định `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` phải là màu #rrggbb
 @msg	`{key}` must be a number	`{key}` phải là một số
 @msg	`{key}` must be a number, not {v}	`{key}` phải là một số, không phải {v}
@@ -4502,6 +4576,7 @@ theme	Appearance	Giao diện
 @msg	`select` must be true or false	`select` phải là true hoặc false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` và `maxAnchors` phải là số nguyên
 @msg	`{key}` must be a number not below 0	`{key}` phải là một số không nhỏ hơn 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` phải là bốn số không nhỏ hơn 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` phải là [x, y, width, height]: bốn số hữu hạn, chiều rộng và chiều cao không âm
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` lớn hơn `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	hãy cung cấp ít nhất một trong `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4772,9 +4847,16 @@ theme	Appearance	Giao diện
 @msg	Couldn't paste: the document it was pasted in was closed	Không thể dán: tài liệu mà nó được dán vào đã đóng
 @msg	Couldn't place {name}: the document it was dropped on was closed	Không thể đặt {name}: tài liệu mà nó được thả vào đã đóng
 @msg	Couldn't place {name}: the document it was placed in was closed	Không thể đặt {name}: tài liệu mà nó được đặt vào đã đóng
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Không thể đặt {name}: tài liệu mà nó được thả vào đã được hoàn về
+@msg	Couldn't place {name}: the document it was placed in was reverted	Không thể đặt {name}: tài liệu mà nó được đặt vào đã được hoàn về
+@msg	Couldn't paste: the document it was pasted in was reverted	Không thể dán: tài liệu mà nó được dán vào đã được hoàn về
 @msg	Couldn't place {name}: {e}	Không thể đặt {name}: {e}
 @msg	Couldn't read {name}: {e}	Không thể đọc {name}: {e}
 @msg	Couldn't save recovery data: {e}	Không thể lưu dữ liệu phục hồi: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi cho {title}: {e}. Bản sao được lưu vào {folder}, thư mục phục hồi mặc định; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi cho {title}: {e}. Bản sao được lưu vào {folder}, thư mục được đặt trong Tùy chọn; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi: {e}. Bản sao được lưu vào {folder}, thư mục phục hồi mặc định; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Không thể lưu dữ liệu phục hồi: {e}. Bản sao được lưu vào {folder}, thư mục được đặt trong Tùy chọn; để dùng thư mục khác, hãy đặt Tùy chọn → Xử lý tệp → Phục hồi dữ liệu → Thư mục (recoveryFolder)
 @msg	Create from Guides: the document has no artboard	Tạo từ đường căn: tài liệu không có bảng vẽ
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Tạo từ đường căn: các đường căn tạo ra hơn {MAX_PIECES} lát cắt
 @msg	Create from Selection: the selection has no area	Tạo từ vùng chọn: vùng chọn không có diện tích
@@ -4788,6 +4870,7 @@ theme	Appearance	Giao diện
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Đã loại bỏ {n} tài liệu đã phục hồi
 @msg	divide into 1 to {MAX_PIECES} slices	chia thành 1 đến {MAX_PIECES} lát cắt
 @msg	Divide Objects Below: select a path	Chia đối tượng bên dưới: hãy chọn một đường dẫn
+@msg	select a path	hãy chọn một đường dẫn
 @msg	Divide Objects Below: select exactly one path	Chia đối tượng bên dưới: chọn đúng một đường dẫn
 @msg	docking action contains an unknown panel or an excessive split path	hành động neo chứa bảng không xác định hoặc đường dẫn tách quá dài
 @msg	Downloaded {what}	Đã tải xuống {what}
@@ -4848,6 +4931,7 @@ theme	Appearance	Giao diện
 @msg	invalid parameters for `{cmd}`: {msg}	tham số không hợp lệ cho `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	cài đặt PDF không hợp lệ: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): trang được ghi với UserUnit là {unit}, nên các ứng dụng bỏ qua UserUnit sẽ hiển thị nó nhỏ đi bấy nhiêu lần
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): trang được ghi với UserUnit là {unit}, nên các ứng dụng bỏ qua UserUnit sẽ hiển thị nó nhỏ đi bấy nhiêu lần: hãy bật "Ghi các trang dài hơn 200 in ở kích thước đầy đủ, theo điểm"
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	trang của bảng vẽ {n} có kích thước {size}, dài hơn giới hạn trang PDF 14.400 pt (200 in): các trang {label} được ghi không có UserUnit, theo đơn vị điểm, và các ứng dụng tuân theo giới hạn sẽ cắt trang ở 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 không có UserUnit, thứ mà trang dài hơn 14.400 pt (200 in) cần để giữ kích thước: tệp được ghi dưới dạng PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 không có UserUnit, thứ mà trang dài hơn 14.400 pt (200 in) cần để nằm trong giới hạn trang 14.400 đơn vị của PDF/A-2: tệp được ghi dưới dạng PDF 1.6
@@ -4897,6 +4981,8 @@ theme	Appearance	Giao diện
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	dòng {line}: giá trị của `{var}` dài hơn {MAX_GRAPH_CSV} byte
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	ảnh liên kết hiển thị bản xem trước độ phân giải thấp đã lưu trong tệp cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
 @msg	linked type areas past VectorCraft's limits were left out	các vùng chữ liên kết vượt quá giới hạn của VectorCraft đã bị bỏ qua
+@msg	the Line Breaking setting of legacy type was left out	thiết lập ngắt dòng của chữ định dạng cũ đã bị bỏ qua
+@msg	the Japanese layout rules of legacy type were left out	các quy tắc dàn trang tiếng Nhật của chữ định dạng cũ đã bị bỏ qua
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	chữ đổi hướng viết bên trong một đối tượng văn bản sẽ mở theo hướng của ký tự đầu tiên
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	chữ dùng làm mặt nạ trong các vùng liên kết, chữ bao quanh hoặc đường dẫn phức không cắt xén
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ảnh liên kết không có bản xem trước trong tệp hiển thị ô giữ chỗ cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
@@ -4966,8 +5052,10 @@ theme	Appearance	Giao diện
 @msg	no interaction in progress	không có tương tác nào đang tiến hành
 @msg	no key object	không có đối tượng khóa
 @msg	no library `{id}`	không có thư viện `{id}`
+@msg	the library has another item of that kind named `{name}`	thư viện đã có một mục khác cùng loại tên là `{name}`
 @msg	no library `{key}` (see {list})	không có thư viện `{key}` (xem {list})
 @msg	No linked files to look for	Không có tệp liên kết để tìm kiếm
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Liên kết nằm trong ký hiệu, thiết kế biểu đồ, họa tiết hoặc mặt nạ độ mờ và không có vị trí trên canvas
 @msg	no Live Paint edge near that point	không có cạnh tô trực tiếp gần điểm đó
 @msg	no Live Paint face at that point	không có mặt tô trực tiếp tại điểm đó
 @msg	no native format	không có định dạng gốc
@@ -5054,6 +5142,7 @@ theme	Appearance	Giao diện
 @msg	This shortcut file is in a form VectorCraft can't read.	Tệp phím tắt này có dạng mà VectorCraft không đọc được.
 @msg	not an EMF or WMF file	không phải tệp EMF hoặc WMF
 @msg	not an HP-GL file	không phải tệp HP-GL
+@msg	not a PICT file	không phải tệp PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` phải là mảng từ 1 đến 255 màu #rrggbb
 @msg	not found	không tìm thấy
 @msg	not in pattern editing mode	không ở chế độ chỉnh sửa họa tiết
@@ -5095,6 +5184,7 @@ theme	Appearance	Giao diện
 @msg	onto must name a floating panel	onto phải đặt tên bảng đang thả nổi
 @msg	onto must name a panel floating in another group	onto phải đặt tên bảng đang thả nổi trong nhóm khác
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Đã mở với {n} ghi chú: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Đã mở với {n} ghi chú: {first}
 @msg	Opened {url}	Đã mở {url}
 @msg	Outline Stroke: no stroked paths selected	Đường bao nét: chưa chọn đường dẫn có nét
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Đã đóng gói {n} tệp trong {folder} ({note})
@@ -5108,6 +5198,7 @@ theme	Appearance	Giao diện
 @msg	paths contain invalid coordinates	đường dẫn chứa tọa độ không hợp lệ
 @msg	paths: give at least one file	đường dẫn: hãy cung cấp ít nhất một tệp
 @msg	replace: the object to replace was changed or deleted	thay thế: đối tượng cần thay thế đã bị thay đổi hoặc xóa
+@msg	the document it was prepared for is no longer active	tài liệu được chuẩn bị không còn hoạt động
 @msg	pattern missing	thiếu họa tiết
 @msg	patterns nested too deeply are filled with mid-grey	họa tiết lồng nhau quá sâu được tô bằng màu xám trung tính
 @msg	PDF settings are not an object	Cài đặt PDF không phải là đối tượng
@@ -5190,6 +5281,7 @@ theme	Appearance	Giao diện
 @msg	select a repeat	hãy chọn một đối tượng lặp
 @msg	select an Intertwine group	hãy chọn một nhóm đan xen
 @msg	select an Objects on Path group	hãy chọn một nhóm đối tượng trên đường dẫn
+@msg	choose the object to detach with its Select/Move widget	hãy chọn đối tượng cần tách bằng tiện ích Chọn/Di chuyển của nó
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	không thể gắn đối tượng lên một đường dẫn nằm trong đường dẫn phức, đối tượng hòa trộn, Envelope, đối tượng lặp hoặc nhóm đan xen
 @msg	a clipping path can't take objects	không thể gắn đối tượng lên đường dẫn cắt
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	không thể gắn các đối tượng nằm trong đối tượng hòa trộn, Envelope, đối tượng lặp hoặc nhóm đan xen lên đường dẫn
@@ -5261,7 +5353,69 @@ theme	Appearance	Giao diện
 @msg	t, dx and dy must be finite	t, dx và dy phải là số hữu hạn
 @msg	Targa files are RGB: colorModel rgb	Tệp Targa là RGB: colorModel rgb
 @msg	Text Wrap: select a wrap object	Bọc chữ: hãy chọn đối tượng bọc
+@msg	the active document changed while the question was open; nothing was deleted	tài liệu đang hoạt động đã thay đổi khi câu hỏi đang mở; không có gì bị xóa
 @msg	that document is no longer open	tài liệu đó không còn mở
+@msg	Extrude & Bevel	Kéo dài & vát
+@msg	Revolve	Xoay tròn
+@msg	Inflate	Phình
+@msg	Rotate	Xoay
+@msg	Extrude & Bevel (Classic)	Kéo dài & vát (cổ điển)
+@msg	Revolve (Classic)	Xoay tròn (cổ điển)
+@msg	Rotate (Classic)	Xoay (cổ điển)
+@msg	This effect	Hiệu ứng này
+@msg	clipping paths	đường dẫn cắt
+@msg	other objects	các đối tượng khác
+@msg	{label} requires a group holding a shape with at least two anchors	{label} yêu cầu một nhóm chứa hình dạng có ít nhất hai điểm neo
+@msg	Revolve requires a group holding a shape with at least two anchors	Xoay tròn yêu cầu một nhóm chứa hình dạng có ít nhất hai điểm neo
+@msg	Revolve requires a shape with at least two anchors	Xoay tròn yêu cầu một hình dạng có ít nhất hai điểm neo
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} trên nhóm cần đường dẫn, đường dẫn phức, văn bản, nhóm, nhóm cắt, hòa trộn và phiên bản ký hiệu: hãy nhả hoặc mở rộng các mục sau trước: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} trên nhóm nhận tối đa {MAX_MEMBERS} đối tượng
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Hiệu ứng 3D trên nhóm hoặc lớp được đặt trên chính nhóm, không phải trên phần tô hoặc nét của nó
+@msg	a 3D effect on a group's fill or stroke draws nothing	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	hiệu ứng 3D trên phần tô hoặc nét của nhóm không vẽ gì để xuất
+@msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
+@msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
+@msg	bevel must be none or one of {_1}	bevel phải là none hoặc một trong {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} không thể tạo khối từ hình vẽ này: các phiên bản ký hiệu, hòa trộn và nhóm cắt của nó chứa quá nhiều đối tượng
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} không thể tạo khối từ phiên bản của ký hiệu “{symbol}”: không có hình vẽ của ký hiệu
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: đường dẫn cắt quá phức tạp để cắt hình vẽ
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} nhận tối đa {MAX_MEMBERS} đối tượng
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} không thể tạo khối từ hình vẽ lồng sâu hơn {MAX_DEPTH} cấp
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Màu tô của Xoay tròn quá phức tạp cho bề mặt này; hãy giảm Đoạn hoặc đơn giản hóa chuyển sắc
+@msg	Revolve edge must be left or right	Xoay tròn: edge phải là left hoặc right
+@msg	Revolve cap must be a boolean	Xoay tròn: cap phải là giá trị boolean
+@msg	the revolved object has no fill or stroke	đối tượng xoay tròn không có phần tô hoặc nét
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor phải là màu RGB không trong suốt dạng #rrggbb
+@msg	lights must contain one to ten lights	lights phải chứa từ một đến mười nguồn sáng
+@msg	each light must be an object	mỗi nguồn sáng phải là một đối tượng
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	thiết lập nguồn sáng không xác định: hãy dùng color, intensity, rotation, height, softness hoặc behind
+@msg	light {key} must be a number from {min} to {max}	nguồn sáng: {key} phải là số từ {min} đến {max}
+@msg	light color must use opaque #rrggbb	color của nguồn sáng phải là #rrggbb không trong suốt
+@msg	light behind must be true or false	behind của nguồn sáng phải là true hoặc false
+@msg	shadow must be true or false	shadow phải là true hoặc false
+@msg	shadowPosition must be behind or below	shadowPosition phải là behind hoặc below
+@msg	{key} must be a number from {min} to {max}	{key} phải là số từ {min} đến {max}
+@msg	each of `{GRAPHICS}` must be an object	mỗi mục của `{GRAPHICS}` phải là một đối tượng
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	các mục của `{GRAPHICS}` nhận symbol, face, x, y, scale và rotation, không nhận `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	mỗi mục của `{GRAPHICS}` cần `symbol`, tên của một ký hiệu
+@msg	`{GRAPHICS}` face must be front or back	face của `{GRAPHICS}` phải là front hoặc back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} của `{GRAPHICS}` phải là số từ {lo} đến {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` phải là một mảng
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Đồ họa được đặt lên các loại đối tượng Mặt phẳng, Kéo dài và Xoay tròn
+@msg	Revolve maps graphics onto its side: map them onto the front	Xoay tròn đặt đồ họa lên mặt bên của nó: hãy đặt chúng lên mặt trước
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Đồ họa quá phức tạp cho bề mặt này: hãy đơn giản hóa hình vẽ của các ký hiệu hoặc giảm Đoạn
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` nhận tối đa {MAX_GRAPHICS} đồ họa
+@msg	A plane has one face: map its graphics onto the front	Mặt phẳng chỉ có một mặt: hãy đặt đồ họa của nó lên mặt trước
+@msg	The graphics are too complex: simplify the symbols' art	Đồ họa quá phức tạp: hãy đơn giản hóa hình vẽ của các ký hiệu
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Hình vẽ của một đồ họa chỉ được lồng tối đa {MAX_LEVELS} cấp: hãy đơn giản hóa hình vẽ của ký hiệu
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Hình vẽ của một đồ họa chỉ được lồng ký hiệu tối đa {MAX_NESTING} cấp: hãy đơn giản hóa hình vẽ của ký hiệu
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Hình vẽ của một đồ họa chứa quá nhiều đối tượng: hãy đơn giản hóa hình vẽ của ký hiệu
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Một đồ họa vẽ tối đa {MAX_PIECES} phần tô và nét: hãy đơn giản hóa hình vẽ của ký hiệu
+@msg	`surface` must be one of {_1}	`surface` phải là một trong {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} vẽ hình vẽ nguồn cho đối tượng này thay vì bề mặt 3D của nó
+@msg	{label} draws no faces for this object	{label} không vẽ mặt nào cho đối tượng này
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	khung dây có hơn {MAX_WIRE_EDGES} cạnh
 @msg	The 3D surface is too complex; simplify the shape	Bề mặt 3D quá phức tạp; hãy đơn giản hóa hình dạng
 @msg	the art could not be sampled	không thể lấy mẫu tác phẩm
 @msg	the art has no bounds	tác phẩm không có giới hạn
@@ -5655,6 +5809,7 @@ theme	Appearance	Giao diện
 @msg	no such color	không có màu như vậy
 @msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
 @msg	more than one action is named “{_1}”	có nhiều hành động tên là “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	hành động “{_1}” đặt tùy chọn thư mục {_2}; hãy xóa bước đó để lưu bộ
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
 	Smudge Stick…	Bút chì xóa mờ…
 	Smudge Stick	Bút chì xóa mờ
@@ -5818,7 +5973,9 @@ axis	Y Axis	Trục Y
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` áp dụng cho vùng tô chuyển sắc (paint.setFill)
 @msg	`dither` must be true or false	`dither` phải là true hoặc false
 	Perceptual	Theo cảm nhận
-@msg	`method` must be classic or perceptual	`method` phải là classic hoặc perceptual
+	Hue Clockwise	Sắc độ theo chiều kim đồng hồ
+	Hue Counterclockwise	Sắc độ ngược chiều kim đồng hồ
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` phải là classic, perceptual, hue-clockwise hoặc hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` phải là pad, repeat hoặc reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` phải là số nguyên từ 1 đến {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` áp dụng cho chuyển sắc tuyến tính, tỏa tròn, hình nón và hình thoi
@@ -5931,6 +6088,35 @@ axis	Y Axis	Trục Y
 @msg	the path has no anchor points	đường dẫn không có điểm neo
 @msg	too many anchor points (limit {MAX_ANCHORS})	quá nhiều điểm neo (giới hạn {MAX_ANCHORS})
 @msg	true or false	true hoặc false
+@msg	a number >= {_1}	một số >= {_1}
+@msg	a number > {_1}	một số > {_1}
+@msg	a number <= {_1}	một số <= {_1}
+@msg	a number < {_1}	một số < {_1}
+@msg	a number {_1} to {_2}	một số từ {_1} đến {_2}
+@msg	a number >= {_1} and < {_2}	một số >= {_1} và < {_2}
+@msg	a number > {_1} and <= {_2}	một số > {_1} và <= {_2}
+@msg	a number > {_1} and < {_2}	một số > {_1} và < {_2}
+@msg	a number ({_1})	một số ({_1})
+@msg	a number >= {_1} ({_2})	một số >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	một số > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	một số <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	một số < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	một số từ {_1} đến {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	một số >= {_1} và < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	một số > {_1} và <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	một số > {_1} và < {_2} ({_3})
+@msg	an integer	một số nguyên
+@msg	an integer >= {_1}	một số nguyên >= {_1}
+@msg	an integer <= {_1}	một số nguyên <= {_1}
+@msg	an integer {_1} to {_2}	một số nguyên từ {_1} đến {_2}
+@msg	one of {_1}	một trong các giá trị {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` phải là một trong các giá trị {_1}, không phải {got}
+@msg	an object id (a non-negative integer)	một ID đối tượng (một số nguyên không âm)
+@msg	a list of object ids	một danh sách ID đối tượng
+@msg	a color (a string, [r, g, b] or an object)	một màu (một chuỗi, [r, g, b] hoặc một đối tượng)
+@msg	[x, y] (two numbers)	[x, y] (hai số)
+@msg	an object	một đối tượng
+@msg	a list	một danh sách
 @msg	unknown key `{k}`; the keys here are {_1}	khóa không xác định `{k}`; các khóa ở đây là {_1}
 @msg	{_1} is listed twice	{_1} được liệt kê hai lần
 @msg	{_1} is not the id of an input object	{_1} không phải là id của một đối tượng đầu vào
@@ -6025,6 +6211,8 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Playback Options…	Tùy chọn phát lại…
+	Button Mode	Chế độ nút
+	No actions.	Không có hành động.
 	Insert Stop…	Chèn điểm dừng…
 	Insert Stop	Chèn điểm dừng
 	Record Stop	Ghi điểm dừng
@@ -6032,14 +6220,23 @@ axis	Y Axis	Trục Y
 	Continue	Tiếp tục
 	Continue Action	Tiếp tục hành động
 	Delete Action Step	Xóa bước hành động
+	Move Action Step	Di chuyển bước hành động
 	Press Play Current Selection in the Actions panel to go on.	Để tiếp tục, nhấn Phát vùng chọn hiện tại trong bảng Hành động.
 	Stop: {message}	Điểm dừng: {message}
 @msg	no action is waiting at a stop	không có hành động nào đang chờ ở điểm dừng
 @msg	message must be text	message phải là văn bản
 @msg	allowContinue must be true or false	allowContinue phải là true hoặc false
 @msg	Batch cannot play an action with a stop	Hàng loạt không thể phát hành động có điểm dừng
+@msg	Batch cannot play an action with a View menu step	Hàng loạt không thể phát hành động có bước của menu Hiển thị
 	Insert Menu Item…	Chèn mục menu…
 	Insert Menu Item	Chèn mục menu
+	Insert Select Path	Chèn chọn đường dẫn
+	Select Path	Chọn đường dẫn
+@msg	select one whole path or compound path	hãy chọn một đường dẫn trọn vẹn hoặc đường dẫn phức
+@msg	select only one path	chỉ chọn một đường dẫn
+@msg	the path is hidden or locked, or cannot be selected here	đường dẫn bị ẩn hoặc bị khóa, hoặc không thể chọn ở đây
+@msg	object {value} is not the stored path: it changed, or the document is another one	đối tượng {value} không phải là đường dẫn đã lưu: nó đã thay đổi, hoặc đây là tài liệu khác
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` phải là "v1:" và 16 chữ số thập lục phân viết thường
 	Select Object…	Chọn đối tượng…
 	Select Object	Chọn đối tượng
 	Set Selection	Đặt vùng chọn
@@ -6195,6 +6392,22 @@ axis	Y Axis	Trục Y
 	Graphite Pencil	Bút chì than chì
 	Wax Crayon	Bút sáp màu
 	Charcoal Dust	Bụi than
+	Notched Ribbon	Dải băng khía
+	Double Line	Đường đôi
+	Wave	Sóng
+	Teardrop	Giọt lệ
+	Striped Ribbon	Dải băng sọc
+	Fine Nib	Ngòi mảnh
+	Broad Nib	Ngòi rộng
+	Chisel	Đục
+	Round Pen	Bút tròn
+	Pressure Pen	Bút áp lực
+	Beads	Hạt cườm
+	Dash Dot	Gạch chấm
+	Scallops	Viền vỏ sò
+	Stars	Ngôi sao
+	Triangles	Tam giác
+	Sparkles	Lấp lánh
 	Save Brush Library…	Lưu thư viện cọ…
 @msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
 @msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)
@@ -6214,6 +6427,13 @@ axis	Y Axis	Trục Y
 	Area Text	Chữ vùng
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Đo chữ theo giới hạn glyph
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Tùy chọn hút vào pixel
+	Pixel Snapping Options…	Tùy chọn hút vào pixel…
+	Snap to Pixel While Drawing	Hút vào pixel khi vẽ
+	Snap to Pixel While Moving	Hút vào pixel khi di chuyển
+	Snap to Pixel While Scaling	Hút vào pixel khi thay đổi tỉ lệ
+	These options take effect when View › Snap to Pixel is on.	Các tùy chọn này có hiệu lực khi Hiển thị › Hút vào pixel đang bật.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Hiện tùy chọn hút vào glyph
 	Hide Snap to Glyph Options	Ẩn tùy chọn hút vào glyph
@@ -6299,6 +6519,8 @@ anchor	Points:	Điểm:
 	Anchor Inspector	Trình kiểm tra điểm neo
 	Add Points at Crossings	Thêm điểm tại chỗ giao nhau
 	Split at Crossings	Tách tại chỗ giao nhau
+	Trim at Crossings Tool	Công cụ Cắt xén tại chỗ giao nhau
+	Trim at Crossings	Cắt xén tại chỗ giao nhau
 	Extend Path	Kéo dài đường dẫn
 	Measure & Inspect	Đo và kiểm tra
 	Set Anchor	Đặt điểm neo
@@ -6764,7 +6986,9 @@ breakText	Glyphs	Glyph
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” mở tệp {_1}, không phải `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` là plug-in loại `{_2}`, không phải plug-in nhập
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` là plug-in loại `{_2}`, không phải plug-in xuất
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` là plug-in nhập: hãy mở tệp bằng document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` là plug-in xuất: hãy xuất bằng document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` là hiệu ứng trực tiếp: hãy áp dụng bằng effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	plug-in nhập không trả về đối tượng nào
 @msg	an importer returns `objects` and `warnings`, not `{key}`	plug-in nhập trả về `objects` và `warnings`, không phải `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	tệp lớn hơn {MAX_INPUT_BYTES} byte mà plug-in nhập đọc
@@ -6843,6 +7067,19 @@ breakText	Glyphs	Glyph
 	Show where this tool is	Hiện vị trí của công cụ này
 @msg	missing `tutorial` (see learn.list)	thiếu `tutorial` (xem learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	hướng dẫn không xác định `{id}` (xem learn.list)
+	View more	Xem thêm
+	Finish tutorial	Hoàn tất hướng dẫn
+	Next Up	Tiếp theo
+	You finished the last tutorial in this skill.	Bạn đã hoàn tất hướng dẫn cuối cùng của kỹ năng này.
+	Back to skills	Quay lại kỹ năng
+	Open Tutorial Sample	Mở tệp mẫu của hướng dẫn
+	Finish Tutorial	Hoàn tất hướng dẫn
+	Next Tutorial	Hướng dẫn tiếp theo
+	Back to Skills	Quay lại kỹ năng
+@msg	tutorial `{id}` has no practice sample	hướng dẫn `{id}` không có tệp mẫu thực hành
+@msg	open the practice sample of `{id}` first (see learn.openSample)	hãy mở tệp mẫu thực hành của `{id}` trước (xem learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	hãy hoàn tất `{id}` trước (xem learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` là hướng dẫn cuối cùng trong kỹ năng của nó
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Làm mới hiệu ứng bị hoãn
@@ -6866,3 +7103,9 @@ breakText	Glyphs	Glyph
 	Margin	Lề
 	Box	Khung
 	Swatch	Mẫu màu
+	Banner Hems and Grommets…	Viền gấp và khoen băng rôn…
+	Banner Hems and Grommets	Viền gấp và khoen băng rôn
+	Hem	Viền gấp
+	Grommets	Khoen
+	Grommet Inset	Khoảng cách từ mép đến khoen
+	Diameter	Đường kính

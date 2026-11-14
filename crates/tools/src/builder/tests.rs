@@ -920,6 +920,43 @@ fn shape_builder_shift_drag_shows_no_scissors_or_stroke_highlight() {
     assert_eq!(t.cursor(&cx, Point::new(75.0, 75.0), shift), Cursor::ShapeBuilder);
 }
 
+/// When the pointer leaves the canvas, the Shape Builder's region or stroke highlight and its
+/// cursor swatch preview go.
+#[test]
+fn shape_builder_hover_ended_drops_the_highlight_and_the_swatch_preview() {
+    let (d, s) = corner_rects();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    for (key, v) in [("pickColorFrom", json!("swatches")), ("cursorSwatchPreview", json!(true)), ("clickStrokeSplitsPath", json!(true))] {
+        t.set_option(key, &v);
+    }
+    // Over a region, then over a stroke a click would split.
+    for (x, y) in [(25.0, 25.0), (-1.0, 25.0)] {
+        t.pointer(&cx, &ev(PointerKind::Move, x, y));
+        let ov = t.overlays(&cx);
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Swatch { .. })) && ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+        t.hover_ended(&cx);
+        assert!(t.overlays(&cx).is_empty());
+    }
+}
+
+/// A map of a large selection that arrives after the pointer leaves the canvas highlights nothing
+/// under the point where the pointer was last seen.
+#[test]
+fn shape_builder_map_arriving_after_hover_ended_highlights_nothing() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let cx = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.waiting() && t.hover.is_none(), "the map is built on another thread");
+    t.hover_ended(&cx);
+    t.poll(&cx, true);
+    assert!(!t.waiting());
+    assert!(t.hover.is_none() && t.overlays(&cx).is_empty(), "{:?}", t.hover);
+}
+
 #[test]
 fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer() {
     let (d, s) = corner_rects();
@@ -1087,6 +1124,42 @@ fn bucket_click_fills_face_and_shift_click_strokes_edge() {
     assert_eq!(id, "livePaint.strokeEdge");
 }
 
+/// After a fill drag, the cursor swatch preview shows at the release point, not where the pointer
+/// last moved before the press.
+#[test]
+fn bucket_swatch_preview_follows_the_release_point() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let chip_x = |t: &LivePaintBucketTool| {
+        t.overlays(&cx).iter().find_map(|o| if let Overlay::Swatch { p, selected: true, .. } = o { Some(p.x) } else { None })
+    };
+    t.pointer(&cx, &ev(PointerKind::Move, 25.0, 25.0));
+    assert_eq!(chip_x(&t), Some(25.0));
+    t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 25.0));
+    assert_eq!(chip_x(&t), None, "no chips during the drag");
+    t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    assert_eq!(chip_x(&t), Some(75.0));
+}
+
+/// When the pointer leaves the canvas, the Live Paint Bucket's swatch preview and highlight go.
+#[test]
+fn bucket_hover_ended_drops_the_swatch_preview_and_highlight() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    let ov = t.overlays(&cx);
+    assert!(ov.iter().any(|o| matches!(o, Overlay::Swatch { .. })) && ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+    t.hover_ended(&cx);
+    assert!(t.overlays(&cx).is_empty());
+}
+
 #[test]
 fn bucket_options_choose_what_a_click_paints() {
     let (d, gid, ..) = live_group_doc();
@@ -1113,7 +1186,12 @@ fn bucket_options_choose_what_a_click_paints() {
     };
     let (face, edge) = (Some(Rect::new(50.0, 0.0, 100.0, 50.0)), Some(Rect::new(50.0, 0.0, 50.0, 50.0)));
     let mut t = LivePaintBucketTool::default();
-    assert_eq!(t.options(), json!({"paintFills": true, "paintStrokes": false, "highlight": true, "color": "#ff2a2a", "width": 4.0}));
+    assert_eq!(
+        t.options(),
+        json!({"paintFills": true, "paintStrokes": false, "cursorSwatchPreview": true, "highlight": true, "color": "#ff2a2a", "width": 4.0})
+    );
+    // The highlight alone, without the swatch chips.
+    t.set_option("cursorSwatchPreview", &json!(false));
     // Paint Fills alone: 1 pt from the edge, a click fills the face and Shift-click strokes the edge.
     assert_eq!((click(&mut t, 51.0, Mods::default()), hovered(&mut t, 51.0, Mods::default())), (fill(51.0), face));
     assert_eq!((click(&mut t, 51.0, shift), hovered(&mut t, 51.0, shift)), (stroke(51.0), edge));
@@ -1140,6 +1218,104 @@ fn bucket_options_choose_what_a_click_paints() {
     assert_eq!(t.options()["paintFills"], false);
 }
 
+/// The cursor says what a click paints: a filled bucket over a face it fills, a brush over an
+/// edge it paints, an empty bucket where it paints nothing, under each Paint Fills / Paint Strokes
+/// setting and Shift; Alt keeps the Eyedropper, and Use Precise Cursors turns each into the
+/// crosshair.
+#[test]
+fn bucket_cursor_shows_what_a_click_paints() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Default::default() };
+    let alt = Mods { alt: true, ..Default::default() };
+    let at = |t: &LivePaintBucketTool, x: f64, m: Mods| t.cursor(&cx, Point::new(x, 25.0), m);
+    let (face, edge, none) = (Cursor::LivePaintBucketFace, Cursor::LivePaintBucketEdge, Cursor::LivePaintBucket);
+    let mut t = LivePaintBucketTool::default();
+    // Paint Fills alone: the face, and with Shift the edge in reach.
+    assert_eq!([at(&t, 51.0, Mods::default()), at(&t, 75.0, Mods::default()), at(&t, 400.0, Mods::default())], [face, face, none]);
+    assert_eq!([at(&t, 51.0, shift), at(&t, 75.0, shift)], [edge, none]);
+    assert_eq!([at(&t, 51.0, alt), at(&t, 400.0, alt)], [Cursor::Eyedropper, Cursor::Eyedropper]);
+    // Paint Strokes alone: the edge in reach, nothing farther away; Shift fills the face.
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(true));
+    assert_eq!([at(&t, 51.0, Mods::default()), at(&t, 75.0, Mods::default())], [edge, none]);
+    assert_eq!([at(&t, 51.0, shift), at(&t, 75.0, shift)], [face, face]);
+    // Both: the edge in reach, else the face; Shift fills the face.
+    t.set_option("paintFills", &json!(true));
+    assert_eq!([at(&t, 51.0, Mods::default()), at(&t, 75.0, Mods::default()), at(&t, 400.0, Mods::default())], [edge, face, none]);
+    assert_eq!(at(&t, 51.0, shift), face);
+    // Both off: a click paints nothing.
+    t.set_option("paintFills", &json!(false));
+    t.set_option("paintStrokes", &json!(false));
+    assert_eq!([at(&t, 51.0, Mods::default()), at(&t, 75.0, shift)], [none, none]);
+    // Highlight off: the cursor still says what a click paints.
+    let mut t = LivePaintBucketTool::default();
+    t.set_option("highlight", &json!(false));
+    assert_eq!([at(&t, 75.0, Mods::default()), at(&t, 51.0, shift)], [face, edge]);
+    for c in [face, edge, none] {
+        assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        assert_eq!(c.stand_in(), None, "{c:?} is drawn");
+    }
+}
+
+/// Over a region of selected ordinary paths the cursor is the filled bucket once the pointer has
+/// moved there (the move makes the selection's map), with Highlight on or off; with Paint Strokes
+/// alone, a click there paints nothing and the bucket stays empty.
+#[test]
+fn bucket_cursor_fills_a_region_of_the_selected_paths() {
+    let (d, a, b) = two_rects();
+    let mut s = Selection::default();
+    s.set([a, b]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let pos = Point::new(75.0, 50.0);
+    for highlight in [true, false] {
+        let mut t = LivePaintBucketTool::default();
+        t.set_option("highlight", &json!(highlight));
+        assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucket, "no map yet, highlight {highlight}");
+        t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
+        t.poll(&cx, true);
+        assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucketFace, "highlight {highlight}");
+        assert_eq!(t.cursor(&cx, Point::new(400.0, 400.0), Mods::default()), Cursor::LivePaintBucket, "highlight {highlight}");
+        t.set_option("paintFills", &json!(false));
+        t.set_option("paintStrokes", &json!(true));
+        assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucket, "highlight {highlight}");
+        assert!(t.pointer(&cx, &ev(PointerKind::Down, 75.0, 50.0)).is_empty());
+    }
+}
+
+/// With a Live Paint group and ordinary paths selected, a region of the paths outside the group
+/// is highlighted and shows the filled bucket, as a click there fills it; with only the group
+/// selected, the same point shows the empty bucket.
+#[test]
+fn bucket_fills_a_region_of_a_selection_that_mixes_a_group_and_paths() {
+    let (mut d, a, b) = two_rects_at(200.0);
+    let (g, _) = live_square(&mut d, Rect::new(0.0, 0.0, 50.0, 50.0));
+    let p = paint();
+    let pos = Point::new(275.0, 50.0);
+    let mut s = Selection::default();
+    s.set([g, a, b]);
+    let mixed = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&mixed, &ev(PointerKind::Move, pos.x, pos.y));
+    t.poll(&mixed, true);
+    assert!(!t.overlays(&mixed).is_empty(), "the region is highlighted");
+    assert_eq!(t.cursor(&mixed, pos, Mods::default()), Cursor::LivePaintBucketFace);
+    let acts = t.pointer(&mixed, &ev(PointerKind::Down, pos.x, pos.y));
+    assert!(matches!(acts.as_slice(), [Action::Begin(_), Action::Preview(id, v)] if id == "livePaint.fill" && v.get("ids").is_some()), "{acts:?}");
+    let mut s = Selection::default();
+    s.set([g]);
+    let live = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
+    t.pointer(&live, &ev(PointerKind::Move, pos.x, pos.y));
+    t.poll(&live, true);
+    assert!(t.overlays(&live).is_empty());
+    assert_eq!(t.cursor(&live, pos, Mods::default()), Cursor::LivePaintBucket);
+}
+
 #[test]
 fn bucket_strokes_alone_paints_and_highlights_no_region_of_the_selection() {
     let (d, a, b) = two_rects();
@@ -1148,6 +1324,7 @@ fn bucket_strokes_alone_paints_and_highlights_no_region_of_the_selection() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
     t.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     t.poll(&cx, true);
     assert!(!t.overlays(&cx).is_empty(), "Paint Fills highlights the region");
@@ -1166,6 +1343,7 @@ fn bucket_options_set_the_highlight() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
     let highlight = |t: &mut LivePaintBucketTool| {
         t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
         match t.overlays(&cx).as_slice() {
@@ -1202,6 +1380,7 @@ fn bucket_highlights_an_edge_thinner_than_a_face() {
     let p = paint();
     let cx = cx(&d, &s, &p);
     let mut t = LivePaintBucketTool::default();
+    t.set_option("cursorSwatchPreview", &json!(false));
     let width = |t: &mut LivePaintBucketTool, x: f64, shift: bool| {
         t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(Mods { shift, ..Default::default() }));
         match t.overlays(&cx).as_slice() {
@@ -1269,7 +1448,7 @@ fn bucket_alt_shift_samples_only_solid_color_and_restores_hover() {
     let alt = Mods { alt: true, ..Default::default() };
     let both = Mods { alt: true, shift: true, ..Default::default() };
     let pos = Point::new(75.0, 25.0);
-    assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucket);
+    assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucketFace);
     t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
     assert!(!t.overlays(&cx).is_empty());
     t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0).with_mods(alt));
@@ -1282,7 +1461,7 @@ fn bucket_alt_shift_samples_only_solid_color_and_restores_hover() {
     );
     assert!(t.pointer(&cx, &ev(PointerKind::Down, 400.0, 400.0).with_mods(both)).is_empty());
     t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
-    assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucket);
+    assert_eq!(t.cursor(&cx, pos, Mods::default()), Cursor::LivePaintBucketFace);
     assert!(!t.overlays(&cx).is_empty());
 }
 
@@ -1420,7 +1599,7 @@ fn bucket_hover_builds_a_large_map_on_another_thread() {
     poll_until_ready(&mut t, &cx);
     assert!(matches!(t.hover, LpHover::Region(_)), "{:?}", t.hover);
     assert_eq!((t.cache.builds, t.cache.background), (1, 1));
-    assert_eq!(t.overlays(&cx).len(), 1);
+    assert_eq!(t.overlays(&cx).iter().filter(|o| matches!(o, Overlay::Path { .. })).count(), 1);
 }
 
 #[test]
@@ -1449,6 +1628,21 @@ fn live_paint_selection_hover_builds_no_map_of_the_selection() {
     assert_eq!(t.hover, LpHover::None);
     assert_eq!(t.cache.builds, 0);
     assert!(!t.waiting());
+}
+
+/// When the pointer leaves the canvas, the Live Paint Selection tool's highlight goes.
+#[test]
+fn live_paint_selection_hover_ended_drops_the_highlight() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintSelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    let ov = t.overlays(&cx);
+    assert!(ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+    t.hover_ended(&cx);
+    assert!(t.overlays(&cx).is_empty());
 }
 
 /// A Live Paint Selection click pressed with `down`: the press does nothing, and the release does
@@ -1537,6 +1731,84 @@ fn live_paint_selection_click_outside_the_faces_selects_the_edge_it_highlights()
     t.pointer(&cx, &ev(PointerKind::Move, 106.0, 50.0));
     assert!(t.overlays(&cx).is_empty());
     assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 106.0, 50.0)), vec![Action::Exec("select.none".into(), json!({}))]);
+}
+
+/// The Live Paint Selection pointer shows what a click at the point selects, from the point and
+/// the modifier keys alone (no move first): a face, an edge, or nothing. Groups the tool does not
+/// take (locked, hidden, outside isolation) show nothing to select. A press keeps its look until
+/// the release.
+#[test]
+fn live_paint_selection_cursor_shows_what_a_click_selects() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, _) = live_square(&mut d, Rect::new(0.0, 0.0, 100.0, 100.0));
+    let (other, _) = live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let s = Selection::default();
+    let p = paint();
+    let plain = Mods::default();
+    let alt = Mods { alt: true, ..Default::default() };
+    let (face, edge, out) = (Cursor::LivePaintSelectFace, Cursor::LivePaintSelectEdge, Cursor::LivePaintSelectOutside);
+    let at = |t: &LivePaintSelectionTool, cx: &ToolContext, x: f64, m: Mods| t.cursor(cx, Point::new(x, 50.0), m);
+    let mut t = LivePaintSelectionTool::default();
+    {
+        let cx = cx(&d, &s, &p);
+        // Both options on: a face inside the square; with Alt the side within reach, inside or
+        // outside the face; nothing away from the groups or from every side.
+        assert_eq!(
+            [at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, plain), at(&t, &cx, 102.0, plain), at(&t, &cx, 150.0, plain)],
+            [face, face, out, out]
+        );
+        assert_eq!([at(&t, &cx, 98.5, alt), at(&t, &cx, 102.0, alt), at(&t, &cx, 50.0, alt), at(&t, &cx, 150.0, alt)], [edge, edge, out, out]);
+        // The cursor agrees with what a click there selects.
+        let face_id = faces(d.node(g).unwrap())[0].id;
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 50.0, 50.0)), vec![Action::Exec("select.set".into(), json!({ "ids": [face_id.0] }))]);
+        assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 50.0, 50.0).with_mods(alt)), vec![Action::Exec("select.none".into(), json!({}))]);
+        // Select Fills off: a side without Alt too, never a face.
+        t.set_option("selectFills", &json!(false));
+        assert_eq!([at(&t, &cx, 98.5, plain), at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [edge, out, edge]);
+        // Select Strokes off: the face with Alt too, never a side.
+        t.set_option("selectFills", &json!(true));
+        t.set_option("selectStrokes", &json!(false));
+        assert_eq!([at(&t, &cx, 98.5, alt), at(&t, &cx, 102.0, alt)], [face, out]);
+        // Both off: nothing.
+        t.set_option("selectFills", &json!(false));
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [out, out]);
+    }
+    let mut t = LivePaintSelectionTool::default();
+    // A locked group shows nothing to select; the other group still does.
+    d.node_mut(g).unwrap().locked = true;
+    {
+        let cx = cx(&d, &s, &p);
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt), at(&t, &cx, 250.0, plain)], [out, out, face]);
+    }
+    d.node_mut(g).unwrap().locked = false;
+    // In isolation mode, a group outside the isolated art shows nothing to select.
+    {
+        let cx = ToolContext { isolation: Some(other), ..cx(&d, &s, &p) };
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 250.0, plain)], [out, face]);
+    }
+    // A hidden group shows nothing to select.
+    d.node_mut(g).unwrap().visible = false;
+    {
+        let cx = cx(&d, &s, &p);
+        assert_eq!([at(&t, &cx, 50.0, plain), at(&t, &cx, 98.5, alt)], [out, out]);
+    }
+    d.node_mut(g).unwrap().visible = true;
+    // A press keeps its look while the drag goes elsewhere, and the release lets it follow again.
+    let cx = cx(&d, &s, &p);
+    t.pointer(&cx, &ev(PointerKind::Down, 50.0, 50.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 150.0, 50.0));
+    assert_eq!(at(&t, &cx, 150.0, plain), face);
+    t.pointer(&cx, &ev(PointerKind::Up, 150.0, 50.0));
+    assert_eq!(at(&t, &cx, 150.0, plain), out);
+    t.pointer(&cx, &ev(PointerKind::Down, 150.0, 50.0));
+    t.pointer(&cx, &ev(PointerKind::Drag, 50.0, 50.0));
+    assert_eq!(at(&t, &cx, 50.0, plain), out);
+    t.key(&cx, ToolKey::Escape, plain);
+    assert_eq!(at(&t, &cx, 50.0, plain), face, "Escape ends the press");
+    for c in [face, edge, out] {
+        assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        assert_eq!(c.stand_in(), None, "{c:?} is drawn");
+    }
 }
 
 /// Presses at `from` with `m`, drags to `to` and releases there; returns what the release does
@@ -1708,6 +1980,7 @@ fn live_paint_edges_outside_the_faces_come_from_the_nearest_visible_group() {
         };
         assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, x, y).with_mods(alt)), vec![picked]);
         let mut bucket = LivePaintBucketTool::default();
+        bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, y).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2));
         let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, y], "tolerance": 4.0 })));
@@ -1751,6 +2024,7 @@ fn live_paint_tools_skip_hidden_edges() {
         };
         assert_eq!(lp_click(&mut sel, &cx, ev(PointerKind::Down, x, 50.0).with_mods(alt)), vec![picked], "x {x}");
         let mut bucket = LivePaintBucketTool::default();
+        bucket.set_option("cursorSwatchPreview", &json!(false));
         bucket.pointer(&cx, &ev(PointerKind::Move, x, 50.0).with_mods(shift));
         assert_eq!(edge_x(&bucket.overlays(&cx)), want.map(|w| w.2), "x {x}");
         let stroked = want.map(|(g, ..)| Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": [x, 50.0], "tolerance": 4.0 })));
@@ -1778,6 +2052,7 @@ fn live_paint_tools_skip_hidden_faces() {
     };
     // Where the faces overlap, both tools take the back group's face under the hidden one.
     let mut bucket = LivePaintBucketTool::default();
+    bucket.set_option("cursorSwatchPreview", &json!(false));
     bucket.pointer(&cx, &ev(PointerKind::Move, 75.0, 50.0));
     assert_eq!(part(&bucket.overlays(&cx)), Some(Rect::new(0.0, 0.0, 100.0, 100.0)));
     let fill = Action::Preview("livePaint.fill".into(), json!({ "group": back.0, "point": [75.0, 50.0] }));

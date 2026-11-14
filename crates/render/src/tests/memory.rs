@@ -320,13 +320,13 @@ fn kept_glyphs(r: &mut Renderer, d: &Document) -> Vec<Option<Arc<TextGeom>>> {
         .collect()
 }
 
-/// `f`'s result from a run during which the fonts did not change: other tests add fonts, and the
-/// renderer lays all type out again when the fonts change.
+/// `f`'s result from a run during which the fonts and the hyphenation exceptions did not change:
+/// other tests change them, and the renderer lays all type out again when they change.
 fn fonts_unchanged<T>(mut f: impl FnMut() -> T) -> T {
     loop {
-        let fonts = vectorcraft_text::FontDb::global().generation();
+        let inputs = vectorcraft_text::layout_inputs();
         let t = f();
-        if vectorcraft_text::FontDb::global().generation() == fonts {
+        if vectorcraft_text::layout_inputs() == inputs {
             return t;
         }
     }
@@ -931,6 +931,8 @@ fn brush_art_draws_edits_of_the_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
@@ -997,6 +999,8 @@ fn brush_art_draws_renamed_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
@@ -1716,7 +1720,8 @@ fn installing_a_plugin_keeps_what_is_kept_for_other_objects() {
 }
 
 /// The art drawn for an object's effects follows the plug-ins installed: in the next frame, a group
-/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), an
+/// with a plug-in effect, the same group feathered (Feather clips to the art's outline), a group
+/// with a Transform effect holding a square with a plug-in effect, an
 /// instance of symbol `S` ([`symbol_art`]) and type, each with a plug-in effect, are drawn as the
 /// plug-in installed again with another shape draws them.
 #[test]
@@ -1738,6 +1743,13 @@ fn effect_art_follows_the_plugins_installed() {
     plugin_change_draws_as_new(group(vec![]), ID, small.clone(), big.clone());
     let feather = effect("stylize.feather", serde_json::json!({"radius": 2.0}));
     plugin_change_draws_as_new(group(vec![feather]), ID, small.clone(), big.clone());
+    // A group with a Transform effect holding a square with the plug-in effect: the group's art
+    // holds what the plug-in draws for the square.
+    let mut d = Document::new(200.0, 100.0);
+    let square = filled(&mut d, rectangle(Rect::new(20.0, 30.0, 60.0, 70.0)), Paint::solid(Color::BLACK), vec![plugin()]);
+    let mut moved = Node::group(d.alloc_id(), vec![Arc::new(square)]);
+    moved.appearance.effects.push(effect("distort.transform", serde_json::json!({"moveH": 10.0})));
+    plugin_change_draws_as_new(with_art(d, vec![moved]), ID, small.clone(), big.clone());
     let mut d = Document::new(200.0, 100.0);
     let art = symbol_art(&mut d);
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "S".into(), art: Arc::new(art) });

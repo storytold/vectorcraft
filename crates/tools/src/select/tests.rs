@@ -751,7 +751,7 @@ fn escape_cancels_a_move_or_an_alt_drag_copy() {
 }
 
 /// #1534: with Smart Guides on (the default), the point a selection is dragged by still snaps
-/// to a ruler guide within the Snap to Point distance; not with Snap to Point off.
+/// to a ruler guide within the Snapping Tolerance; not with Snap to Point off.
 #[test]
 fn a_move_snaps_the_grabbed_point_to_a_ruler_guide_with_smart_guides_on() {
     let (mut d, id) = doc_with_rect();
@@ -795,6 +795,39 @@ fn a_shift_move_lands_the_edges_on_a_ruler_guide() {
     let off = ToolContext { snap_to_point: false, ..cx(&d, &s, &p) };
     let (m, _) = shift_moved(&off, (150.0 + 231.0, 150.0));
     assert!(moved_by(m, (231.0, 0.0)), "{m:?}");
+}
+
+/// With Smart Guides on, a moved selection reaches a ruler guide within the Snapping Tolerance
+/// (4 px), as drawing and handle drags do; with Smart Guides off, Snap to Point reaches it within
+/// its own distance (2 px).
+#[test]
+fn a_move_reaches_ruler_guides_within_the_snapping_tolerance() {
+    let (mut d, id) = doc_with_rect();
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 340.0));
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let dx = |c: &ToolContext, to: f64| {
+        let mut t = SelectionTool::default();
+        t.pointer(c, &ev(PointerKind::Down, 150.0, 150.0));
+        let a = t.pointer(c, &ev(PointerKind::Drag, to, 150.0));
+        let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+        v["matrix"][4].as_f64().unwrap()
+    };
+    let c = cx(&d, &s, &p);
+    assert!(c.smart_guides && c.snap_to_point && c.guides);
+    // The right edge, 3 px short of the guide, lands on it, with or without Shift.
+    assert_eq!(dx(&c, 150.0 + 137.0), 140.0);
+    let (m, _) = shift_moved(&c, (150.0 + 137.0, 150.0));
+    assert!(moved_by(m, (140.0, 0.0)), "{m:?}");
+    // The grabbed point, 3 px from the guide, lands on it.
+    assert_eq!(dx(&c, 337.0), 190.0);
+    // 5 px away is out of reach.
+    assert_eq!(dx(&c, 150.0 + 135.0), 135.0);
+    // Smart Guides off: the grabbed point lands on the guide from 1.5 px, not from 3 px.
+    let off = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    assert_eq!(dx(&off, 338.5), 190.0);
+    assert_eq!(dx(&off, 337.0), 187.0);
 }
 
 /// Alt pressed during a move makes a copy, which snaps to the original it leaves behind (as
@@ -1759,6 +1792,51 @@ fn handle_drag_lands_what_it_moves_on_whole_pixels() {
     t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0));
     let r = scaled(&t.pointer(&c, &ev(PointerKind::Drag, 212.4, 230.7)));
     assert!(near(r, Rect::new(100.0, 100.0, 212.0, 231.0)), "{r:?}");
+}
+
+/// Pixel Snapping Options › While Scaling off: a handle drag keeps the fractional size it is
+/// dragged to with Snap to Pixel on, and turned back on, the drag lands on whole pixels again; While
+/// Drawing and While Moving do not change it.
+#[test]
+fn handle_drag_follows_the_while_scaling_option() {
+    use crate::PixelSnap;
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let drag = |pixel_snap: PixelSnap| {
+        let c = ToolContext { snap_to_pixel: true, pixel_snap, smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+        let mut t = SelectionTool::default();
+        t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0));
+        scaled(&t.pointer(&c, &ev(PointerKind::Drag, 212.4, 230.7)))
+    };
+    let r = drag(PixelSnap { scaling: false, ..PixelSnap::default() });
+    assert!(near(r, Rect::new(100.0, 100.0, 212.4, 230.7)), "{r:?}");
+    let r = drag(PixelSnap { drawing: false, moving: false, scaling: true });
+    assert!(near(r, Rect::new(100.0, 100.0, 212.0, 231.0)), "{r:?}");
+}
+
+/// Pixel Snapping Options › While Moving off: a move keeps its fractional offset with Snap to
+/// Pixel on, and Smart Guides › Snap to Last Location works again for it.
+#[test]
+fn move_follows_the_while_moving_option() {
+    use crate::PixelSnap;
+    let (d, id) = doc_with_rect();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let pixel_snap = PixelSnap { moving: false, ..PixelSnap::default() };
+    let c = ToolContext { snap_to_pixel: true, pixel_snap, smart_guides: false, snap_to_point: false, ..cx(&d, &s, &p) };
+    let snap = MoveSnap::new(&c);
+    let (dv, _) = snap.snap(&c, Point::new(150.0, 150.0), Vec2::new(3.3, 4.6), false);
+    assert!((dv - Vec2::new(3.3, 4.6)).hypot() < 1e-9, "{dv:?}");
+    let on = ToolContext { pixel_snap: PixelSnap::default(), ..c };
+    let (dv, _) = MoveSnap::new(&on).snap(&on, Point::new(150.0, 150.0), Vec2::new(3.3, 4.6), false);
+    assert!((dv - Vec2::new(3.0, 5.0)).hypot() < 1e-9, "{dv:?}");
+    let back = ToolContext { smart_guides: true, snap_to_last_location: true, snapping_tolerance: 10.0, ..c };
+    assert!(Targets::for_move(&back, &back.selection.objects).snap_back(None, Vec2::new(1.0, 1.0), back.snap_tol()).is_some());
+    let pixels = ToolContext { pixel_snap: PixelSnap::default(), ..back };
+    assert!(Targets::for_move(&pixels, &pixels.selection.objects).snap_back(None, Vec2::new(1.0, 1.0), pixels.snap_tol()).is_none());
 }
 
 /// #2054: with Smart Guides off, View › Snap to Point lands a dragged handle on another

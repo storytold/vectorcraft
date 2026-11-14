@@ -581,6 +581,46 @@ fn system_title_bar_is_dimmed_while_the_environment_variable_chooses_the_frame()
     }
 }
 
+/// Where the desktop draws the frame with System Title Bar on or off (KDE, Sway, X11, a window
+/// opened through XWayland), a note under System Title Bar says so while VectorCraft Title Bar on
+/// Every Desktop is off and VECTORCRAFT_TITLEBAR is unset. Linux and the BSDs only.
+#[test]
+fn system_title_bar_says_when_the_desktop_keeps_the_frame() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let note = "This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.";
+    let supported = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
+    for keeps in [false, true] {
+        for from_env in [false, true] {
+            for (app_title_bar, system) in [(false, false), (false, true), (true, false), (true, true)] {
+                let mut a = app();
+                a.desktop_keeps_frame = keeps;
+                a.titlebar_from_env = from_env;
+                open(&mut a, Some("User Interface"));
+                let fields = &mut a.ui.dialog.as_mut().unwrap().fields;
+                fields.insert("appTitleBar".into(), json!(app_title_bar));
+                fields.insert("systemTitleBar".into(), json!(system));
+                let ctx = egui::Context::default();
+                crate::theme::install_fonts(&ctx);
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+                let mut shown = vec![];
+                out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+                let expected = supported && keeps && !from_env && !app_title_bar;
+                let label = format!("keeps {keeps}, variable {from_env}, app title bar {app_title_bar}, system {system}: {shown:?}");
+                assert_eq!(shown.iter().any(|t| t == note), expected, "{label}");
+            }
+        }
+    }
+}
+
 /// Performance › Linux Display Server (#2028): on Linux it shows the drawing-tablet note, and
 /// X11 (XWayland) When a Pen Is Attached is applied by OK and saved under the key the desktop
 /// app reads before the window opens.
@@ -959,6 +999,44 @@ fn scroll_sideways_with_cmd_wheel_dims_with_zoom_with_mouse_wheel() {
         frame(&mut d, vec![press(false)]);
         // A click turns it off while it is enabled, and leaves it on while it is dimmed.
         assert_eq!(d.fields["ctrlWheelScrollsSideways"], json!(zoom), "after a click, {what}");
+    }
+}
+
+/// Type › Show samples on white: its checkbox is dimmed while Enable in-menu font previews is
+/// unchecked in the dialog, and a click on it then leaves the setting as it was.
+#[test]
+fn show_samples_on_white_dims_without_in_menu_font_previews() {
+    fn label(s: &egui::Shape, text: &str) -> Option<(egui::Color32, egui::Rect)> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == text => t.galley.job.sections.first().map(|s| (s.format.color, t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| label(s, text)),
+            _ => None,
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut a = app();
+    let mut frame = |d: &mut Dialog, events: Vec<egui::Event>| {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 1400.0))),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| category_fields(ui, &mut a, d, "Type"));
+        out.textures_delta.clear();
+        out.shapes.iter().find_map(|c| label(&c.shape, "Show samples on white"))
+    };
+    let t = Tokens::get(&ctx);
+    for (preview, color, what) in [(true, t.text, "enabled while previews are on"), (false, t.text_disabled, "dimmed while they are off")] {
+        let mut d = Dialog::new("preferences", json!({"fontPreview": preview, "fontSamplesOnWhite": false}));
+        let (shown, at) = frame(&mut d, vec![]).unwrap_or_else(|| panic!("no label ({what})"));
+        assert_eq!(shown, color, "{what}");
+        let press =
+            |pressed| egui::Event::PointerButton { pos: at.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut d, vec![egui::Event::PointerMoved(at.center()), press(true)]);
+        frame(&mut d, vec![press(false)]);
+        // A click turns it on while it is enabled, and leaves it off while it is dimmed.
+        assert_eq!(d.fields["fontSamplesOnWhite"], json!(preview), "after a click, {what}");
     }
 }
 
