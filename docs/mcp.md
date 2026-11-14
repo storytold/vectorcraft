@@ -3611,6 +3611,16 @@ already walks Image Trace. Short agent entry points:
   a locked artboard, or in isolation mode outside the isolated art. In the app, the tool's cursor shows what a click
   at the pointer selects under these rules: the arrow with a filled square for a face, with a short line for an edge,
   and with an x for nothing. It keeps the look it had at the press until the release.
+  A double-click (`pointer_gesture` kind `doubleclick`, after the two clicks' `down` and `up`) on the face a click there
+  picks runs `select.set {ids}` with that face and the faces of its group that a flood from it reaches across edges
+  that are hidden or draw no stroke (an edge that is fully transparent, or whose strokes are each hidden, without
+  paint, 0 pt wide or fully transparent); a stroked edge and a Gap Detection gap stop the flood, and hidden faces are
+  left out. On the edge a click
+  there picks, it runs `select.set {ids}` with that edge and the edges of its group, not hidden, joined to it end to
+  end through edges that draw with the stroke paint it draws with (the paint of an edge's topmost stroke that is
+  shown, with paint, above 0 pt and not fully transparent; none for an edge that draws no stroke). With Shift held it runs `select.toggle {ids}` with the same faces or edges,
+  and where a click selects no face or edge it runs nothing. The same options, locks and isolation rules apply as for
+  a click.
   The Live Paint Bucket's options (`tool.setOption {tool: "livePaintBucket", values}`; double-clicking the tool opens
   them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `cursorSwatchPreview` (on),
   `highlight` (on), `color` (the
