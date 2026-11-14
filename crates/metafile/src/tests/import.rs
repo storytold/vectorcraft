@@ -539,7 +539,11 @@ fn a_clip_whose_box_holds_the_picture_still_clips() {
     // Two open figures through the four corners, the top edge and the bottom edge, which enclose
     // nothing: MOVETOEX, LINETO, MOVETOEX, LINETO.
     let edges = vec![(27, le(&[-500, -500])), (54, le(&[5500, -500])), (27, le(&[5500, 3500])), (54, le(&[-500, 3500]))];
-    for clip in [vec![(3, diamond)], vec![(3, bow_tie)], edges] {
+    // One figure through the four corners that runs back over its edges and encloses nothing:
+    // POLYLINE top-left, top-right, top-left, bottom-left, bottom-right, bottom-left.
+    let mut retraced = le(&[0, 0, 0, 0, 6]);
+    retraced.extend(le(&[-500, -500, 5500, -500, -500, -500, -500, 3500, 5500, 3500, -500, 3500]));
+    for clip in [vec![(3, diamond)], vec![(3, bow_tie)], edges, vec![(4, retraced)]] {
         let records = [vec![(59, vec![])], clip, vec![(60, vec![]), (67, le(&[5])), (43, le(&[0, 0, 5000, 3000]))]].concat();
         let back = import(&hand_emf(5000, 3000, &records)).unwrap();
         let layer = back.document.layers[0].children().unwrap();

@@ -46,7 +46,8 @@ fn sane(r: Rect) -> bool {
 
 /// Is `path` one upright rectangle around the whole of `frame`? Writers clip to one first; it clips
 /// nothing in the picture. A path of more than one figure is not one rectangle, even when its
-/// figures run along the sides of a box.
+/// figures run along the sides of a box. Nor is one figure that runs back over its own edges, so
+/// that it encloses less than the whole box.
 fn around(path: &BezPath, frame: Rect) -> bool {
     if path.elements().len() > 6 {
         return false;
@@ -58,6 +59,7 @@ fn around(path: &BezPath, frame: Rect) -> bool {
     // neighbor (corners are in order around the box), never across it.
     let along = |i: usize, j: usize| (i + 4 - j) % 4 != 2;
     let mut seen = [false; 4];
+    let mut points = Vec::with_capacity(6);
     let (mut first, mut last) = (None, None);
     for e in path.elements() {
         let (p, start) = match e {
@@ -77,10 +79,17 @@ fn around(path: &BezPath, frame: Rect) -> bool {
         }
         last = Some(i);
         seen[i] = true;
+        points.push(corners[i]);
     }
     if let (Some(f), Some(l)) = (first, last)
         && !along(f, l)
     {
+        return false;
+    }
+    // Every edge runs along a side, so the figure winds the same number of times around every
+    // point inside the box: once, when its area is the box's.
+    let twice_area: f64 = points.iter().zip(points.iter().cycle().skip(1)).map(|(p, q)| (*p - corners[0]).cross(*q - corners[0])).sum();
+    if (twice_area.abs() - 2.0 * b.area()).abs() > 1e-6 * (1.0 + 2.0 * b.area()) {
         return false;
     }
     let b = b.inflate(0.5, 0.5);
