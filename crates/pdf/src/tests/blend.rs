@@ -175,6 +175,32 @@ fn an_isolated_knockout_group_is_one_isolated_pdf_knockout_group() {
     }
 }
 
+/// A translucent knockout group is written as a form with its opacity around the `/K` group, and
+/// reads back as one knockout group with that opacity and its isolation.
+#[test]
+fn a_translucent_knockout_group_reads_back_as_one_group() {
+    for isolate in [false, true] {
+        let mut d = knockout_squares(3, false, isolate);
+        let g = d.layers[0].children().unwrap()[1].id;
+        d.node_mut(g).unwrap().opacity = 0.5;
+        let top = d.node(g).unwrap().children().unwrap()[2].id;
+        d.node_mut(top).unwrap().blend = BlendMode::Multiply;
+        let back = import(&export(&d, &PdfOptions::default()).unwrap()).unwrap();
+        let mut found = vec![];
+        back.walk(|n| {
+            if matches!(n.kind, vectorcraft_doc::NodeKind::Group { .. }) {
+                found.push((
+                    n.knockout == vectorcraft_doc::Knockout::On,
+                    n.isolate,
+                    (n.opacity * 100.0).round(),
+                    n.children().map_or(0, |c| c.len()),
+                ));
+            }
+        });
+        assert_eq!(found, [(true, isolate, 50.0, 3)], "isolate {isolate}");
+    }
+}
+
 /// Elements whose opacity defines their knockout shape knock out less than a PDF knockout group
 /// knocks out: each is drawn through one soft mask of the elements above it, so that 200 of them
 /// still read back, every one of them.
