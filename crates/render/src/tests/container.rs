@@ -217,9 +217,9 @@ fn type_in_a_group_keeps_its_transparency_and_visibility_under_the_groups_geomet
 
 #[test]
 fn type_in_a_clipping_path_clips_alike_under_the_groups_geometry_effects() {
-    // The red square is clipped by type with a Transform of its own, which the clip leaves out,
-    // then by a group of that type and a small square, with the type shown and hidden. Offset
-    // Path 0 on the clip group leaves every path as it is.
+    // The red square is clipped by type with a Transform of its own, then by a group of that type
+    // and a small square, with the type shown and hidden. Offset Path 0 on the clip group leaves
+    // every path as it is, so the clip group draws the same with it and without it.
     let doc = |effect: bool, grouped: bool, hidden: bool| {
         let mut d = Document::new(100.0, 100.0);
         let style = CharStyle { size: 40.0, fill: Paint::None, ..Default::default() };

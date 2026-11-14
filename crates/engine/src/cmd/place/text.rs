@@ -3,6 +3,7 @@
 
 use serde_json::Value;
 
+use super::super::utf16_order_without_mark;
 use super::{Point, Rect, Result, bad, bool_or, fileio, shapes, str_param};
 
 /// Text files as `file.place` reports them (not a format `document.open` reads).
@@ -76,8 +77,10 @@ pub(super) fn import(bytes: &[u8], o: TextOptions, cmd: &str) -> Result<String> 
     Ok(clean(&decode(bytes, o), o))
 }
 
-/// `bytes` as text: Unicode (UTF-8, or UTF-16 with a byte-order mark; bytes that aren't UTF-8 are
-/// read as the platform's 8-bit set), or the platform's 8-bit character set.
+/// `bytes` as text: Unicode (UTF-8, or UTF-16 with a byte-order mark, or without one when the
+/// file has an even length, reads as valid UTF-16 with no NUL character in the byte order
+/// [`utf16_order_without_mark`] gives; bytes that aren't UTF-8 are read as the platform's 8-bit
+/// set), or the platform's 8-bit character set.
 fn decode(bytes: &[u8], o: TextOptions) -> String {
     let eight_bit = |b: &[u8]| -> String { b.iter().map(|&c| if o.mac { mac_roman(c) } else { windows_1252(c) }).collect() };
     if o.ansi {
@@ -91,7 +94,17 @@ fn decode(bytes: &[u8], o: TextOptions) -> String {
         [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
         [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
         [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
-        _ => std::str::from_utf8(bytes).map_or_else(|_| eight_bit(bytes), str::to_string),
+        _ => {
+            let without_mark = (bytes.len().is_multiple_of(2) && bytes.contains(&0))
+                .then(|| utf16_order_without_mark(bytes))
+                .flatten()
+                .and_then(|le| {
+                    let units = bytes.as_chunks::<2>().0.iter().map(|&c| if le { u16::from_le_bytes(c) } else { u16::from_be_bytes(c) });
+                    char::decode_utf16(units).collect::<std::result::Result<String, _>>().ok()
+                })
+                .filter(|text| !text.contains('\0'));
+            without_mark.unwrap_or_else(|| std::str::from_utf8(bytes).map_or_else(|_| eight_bit(bytes), str::to_string))
+        }
     }
 }
 

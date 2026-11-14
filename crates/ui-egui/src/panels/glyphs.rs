@@ -564,6 +564,129 @@ fn apply_alternate(app: &mut VectorcraftApp, id: NodeId, bytes: (usize, usize), 
     }
 }
 
+/// The most alternate glyphs the canvas shows beside a selected character. Public behavior: at
+/// most five alternates show on the canvas, and an icon to their right opens the Glyphs panel when
+/// the font has more ("Replace a character with on-canvas alternate glyphs",
+/// <https://web.archive.org/web/20210601162814/https://helpx.adobe.com/pdf/illustrator_reference.pdf#page=479>).
+pub(crate) const ON_CANVAS_ALTERNATES: usize = 5;
+
+/// The alternate glyphs the canvas offers beside the Type tool's one selected character
+/// ([`on_canvas`]).
+pub(crate) struct OnCanvas {
+    /// The text the character is in.
+    pub id: NodeId,
+    /// The character's bytes in the text, start and end.
+    pub bytes: (usize, usize),
+    /// The face that draws the character's glyph.
+    face: std::sync::Arc<vectorcraft_text::FontFace>,
+    /// Up to [`ON_CANVAS_ALTERNATES`] glyphs, none of them the glyph the character is drawn with.
+    cells: Vec<Variant>,
+    /// Whether the character has alternates that [`Self::cells`] leaves out.
+    pub more: bool,
+    features: Vec<String>,
+    has_choice: bool,
+}
+
+impl OnCanvas {
+    /// How many glyphs are offered: 1 to [`ON_CANVAS_ALTERNATES`].
+    pub fn count(&self) -> usize {
+        self.cells.len()
+    }
+
+    /// The id of glyph `i`.
+    #[cfg(test)]
+    pub fn gid(&self, i: usize) -> Option<u32> {
+        self.cells.get(i).map(|c| c.gid)
+    }
+
+    /// The preview of glyph `i` in a square of `px` pixels.
+    pub fn texture(&self, ctx: &egui::Context, i: usize, px: u32) -> Option<egui::TextureHandle> {
+        self.cells.get(i).map(|c| glyph_texture(ctx, &self.face, c.gid, px))
+    }
+
+    /// The tooltip of glyph `i`: its id, the feature that draws it, and what a click does.
+    pub fn tip(&self, i: usize) -> String {
+        let Some(c) = self.cells.get(i) else { return String::new() };
+        let glyph = crate::i18n::fmt(tl!("glyph {id}"), &[("id", &c.gid.to_string())]);
+        let glyph = match (&c.apply, c.default) {
+            (_, true) => glyph,
+            (Some(tag), _) => format!("{glyph}  ({tag})"),
+            (None, _) => format!("{glyph}  ({})", String::from_utf8_lossy(&c.feature)),
+        };
+        let mut tip = format!("{glyph}\n{}", tl!("Click to replace"));
+        if !c.default && c.apply.is_none() {
+            tip.push('\n');
+            tip.push_str(tl!("No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors."));
+        }
+        tip
+    }
+
+    /// Draw the character with glyph `i`, as a double-click on that glyph in Show › Alternates for
+    /// Current Selection does: one command, so one undo step.
+    pub fn pick(&self, app: &mut VectorcraftApp, i: usize) {
+        let Some(c) = self.cells.get(i) else { return };
+        let pick = match (&c.apply, c.default) {
+            (_, true) => Pick::Default,
+            (Some(tag), _) => Pick::Feature(tag.clone()),
+            (None, _) => Pick::Glyph(c.gid),
+        };
+        super::character::end_typing(app);
+        apply_alternate(app, self.id, self.bytes, &self.features, self.has_choice, pick);
+    }
+}
+
+/// What the canvas offers beside the Type tool's selection: the alternates of the selected
+/// character as it stands in its word ([`alternates_found`], found once for each document
+/// revision), in the font's order and without the glyph the character is drawn with. A character
+/// drawn with an alternate gets its default glyph first. `None` unless the Type tool's selection
+/// is exactly one character of one type object whose font is available and gives it another glyph.
+pub(crate) fn on_canvas(app: &VectorcraftApp, ui: &Ui) -> Option<OnCanvas> {
+    let (_, a, b) = super::character::text_editing(app)?;
+    if a == b || super::character::text_story(app).is_some() {
+        return None;
+    }
+    let target = selected_target(app)?;
+    let (start, end) = (a.min(b), a.max(b));
+    if target.byte != start || start + target.ch.len_utf8() != end {
+        return None;
+    }
+    let db = FontDb::global();
+    let face = db.style_face(target.style).filter(|_| db.has_family(&target.style.font_family))?;
+    let found = alternates_found(app, ui, target.id, start, face.id())?;
+    let face = db.face_by_id(found.font_id).unwrap_or(face);
+    let default = (found.default != found.current).then_some(Variant { gid: found.default, feature: [0; 4], apply: None, default: true });
+    let others = found.alternates.iter().filter(|a| a.gid != found.default && a.gid != found.current).map(|a| Variant {
+        gid: a.gid,
+        feature: a.feature,
+        apply: a.apply.clone(),
+        default: false,
+    });
+    let mut cells: Vec<Variant> = default.into_iter().chain(others).collect();
+    if cells.is_empty() {
+        return None;
+    }
+    let more = cells.len() > ON_CANVAS_ALTERNATES;
+    cells.truncate(ON_CANVAS_ALTERNATES);
+    Some(OnCanvas {
+        id: target.id,
+        bytes: (start, end),
+        face,
+        cells,
+        more,
+        features: target.style.features.clone(),
+        has_choice: target.style.glyph_alternate.is_some(),
+    })
+}
+
+/// Show the Glyphs panel on Show › Alternates for Current Selection, for the canvas's control that
+/// stands for the alternates it leaves out. A panel that is already shown stays where it is.
+pub(crate) fn show_alternates(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    set_pstate(ctx, "gl-subset", SUBSETS.len());
+    if let Err(e) = crate::panel_docking::reveal_panel(app, "glyphs") {
+        app.status(e);
+    }
+}
+
 /// The Type tool's selected character, and what its word offers, for a double-click on a glyph no
 /// character maps in Show › Entire Font ([`Fit::pick`]).
 struct Fit {
