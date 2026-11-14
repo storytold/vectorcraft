@@ -59,6 +59,46 @@ fn object_effects_become_geometry_and_raster_effects_stay() {
     assert_eq!(m.appearance.effects[0].id, "stylize.dropShadow");
 }
 
+/// The fill colors of the paths under the layers of `d`, in paint order.
+fn path_fills(d: &Document) -> Vec<Color> {
+    let mut out = vec![];
+    d.walk(|n| {
+        if matches!(n.kind, NodeKind::Path { .. })
+            && let Some(c) = n.appearance.fill_paint().color()
+        {
+            out.push(c);
+        }
+    });
+    out
+}
+
+/// A symbol instance half stained red is baked in its stained colors, as the canvas draws it:
+/// moved by a Transform effect, and recolored by a color adjustment (Invert Colors) after the
+/// stain.
+#[test]
+fn a_stained_instance_is_baked_in_its_stained_colors() {
+    let blue = Color::rgb8(30, 90, 220);
+    let art = Node::path(NodeId(2), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(Paint::solid(blue), Paint::None, 0.0));
+    let mut inst = Node::new(NodeId(50), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: vectorcraft_geom::Affine::translate((20.0, 20.0)) });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    inst.appearance.items.retain(|i| i.is_fill());
+    if let vectorcraft_doc::AppearanceItem::Fill(f) = &mut inst.appearance.items[0] {
+        f.opacity = 0.5;
+    }
+    let stained = vectorcraft_doc::symbol_overrides::instance_art(&art, &inst).appearance.fill_paint().color().unwrap();
+    assert_ne!(stained.to_hex(), blue.to_hex());
+    let [r, g, b] = stained.to_rgb();
+    let inverted = Color::rgb(1.0 - r, 1.0 - g, 1.0 - b);
+    for (id, params, want) in [("distort.transform", json!({"moveH": 30.0}), stained), (crate::addons::color::INVERT, json!({}), inverted)] {
+        let mut n = inst.clone();
+        n.appearance.effects.push(fx(id, params));
+        let mut d = doc_with(n);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art.clone()) });
+        let fills = path_fills(&bake_document(&d).unwrap());
+        assert_eq!(fills.iter().map(Color::to_hex).collect::<Vec<_>>(), [want.to_hex()], "{id}");
+    }
+}
+
 #[test]
 fn a_baked_transform_moves_a_placed_gradient_with_the_path() {
     use vectorcraft_color::{Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop};

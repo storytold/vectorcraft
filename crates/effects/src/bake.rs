@@ -241,9 +241,11 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         if let Some(m) = moved_type_group(n) {
             return Some(bake_pieces(d, m));
         }
+        // A symbol instance's art as the canvas draws it: with its own appearance changes, stained
+        // by its fill.
         let symbol = match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
-                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n))
+                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::instance_art(&s.art, n))
             }
             _ => None,
         };
