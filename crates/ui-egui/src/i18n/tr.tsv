@@ -883,6 +883,9 @@ font-technology	Variable	Değişken
 	The selected character's font is not available.	Seçili karakterin yazı tipi kullanılamıyor.
 	No alternates for the selected character.	Seçili karakter için alternatif yok.
 	Double-click to replace	Değiştirmek için çift tıklayın
+	Click to replace	Değiştirmek için tıklayın
+	Show all alternates in the Glyphs panel	Tüm alternatifleri Glifler panelinde göster
+	Show Character Alternates	Karakter Alternatiflerini Göster
 	Select one character with the Type tool first.	Önce Yazım aracıyla bir karakter seçin.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph}, seçili metnin yazı tipine ({text_font}) değil, {font} yazı tipine ait bir glif.
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph}, {base} (U+{base_code}) karakterine aittir ({place}); seçiminiz {sel} (U+{code}).
@@ -1290,6 +1293,7 @@ font-technology	Variable	Değişken
 	Format	Biçim
 	Format Options	Biçim Seçenekleri
 	Format Settings	Biçim Ayarları
+	Format Settings…	Biçim Ayarları…
 	Format:	Biçim:
 	Formats:	Formatlar:
 	Fractional Widths	Kesirli Genişlikler
@@ -6766,7 +6770,7 @@ axis	Y Axis	Y ekseni
 @plural	Result: {n}|Results: {n}	Sonuç: {n}
 @msg	select one object	bir nesne seçin
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Genel düzenleme yollar, bileşik yollar, sembol örnekleri ve bunların grupları üzerinde çalışır
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	benzer nesne bulunamadı (döndürülmüş veya yansıtılmış kopyalar eşleşmez); Genel Düzenleme Seçeneklerini değiştirip yeniden deneyin
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	benzer nesne bulunamadı (yansıtılmış kopyalar eşleşmez); Genel Düzenleme Seçeneklerini değiştirip yeniden deneyin
 @msg	Global Edit is off	Genel düzenleme kapalı
 @msg	only an object of the Global Edit other than the one it started from can be left out	yalnızca genel düzenlemenin başladığı nesne dışındaki bir nesne düzenlemenin dışında bırakılabilir
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ya da 1, 3-5 gibi bir aralık olmalı, {v} değil
@@ -7559,6 +7563,9 @@ breakText	Glyphs	Glifler
 	Open Tutorial Sample	Öğretici Örneğini Aç
 	Finish Tutorial	Öğreticiyi Bitir
 	Next Tutorial	Sonraki Öğretici
+	Show Learn Tab	Öğren Sekmesini Göster
+	Show Skill	Beceriyi Göster
+	Back One Level	Bir Düzey Geri
 	Back to Skills	Becerilere Dön
 @msg	tutorial `{id}` has no practice sample	`{id}` öğreticisinin alıştırma örneği yok
 @msg	open the practice sample of `{id}` first (see learn.openSample)	önce `{id}` öğreticisinin alıştırma örneğini açın (bkz. learn.openSample)
@@ -7599,3 +7606,6 @@ breakText	Glyphs	Glifler
 	Grommets	Kuşgözleri
 	Grommet Inset	Kuşgözlerinin kenara uzaklığı
 	Diameter	Çap
+	Nest Shapes…	Şekilleri yerleştir…
+	Nest Shapes	Şekilleri yerleştir
+	Roll	Rulo
