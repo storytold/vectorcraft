@@ -31,6 +31,7 @@ impl<'a> Exporter<'a> {
             warnings: vec![],
             images: HashMap::new(),
             image_left_out: None,
+            warp_size: None,
             brushes: None,
             knockout: doc.page_knockout,
             lab_spots: vec![],

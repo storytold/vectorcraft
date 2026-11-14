@@ -46,7 +46,7 @@ pub mod importmatches;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
-mod layer;
+pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
 pub mod linkfiles;

@@ -502,3 +502,80 @@ fn batched_colored_inflate_preserves_compound_holes_and_surface_opacity() {
     s.execute("effect.expandAppearance", &json!({})).unwrap();
     assert_eq!(image.pixels, render(doc(&s)).pixels);
 }
+
+/// Under colored lights, an Inflate fill and stroke in solid colors draw each face on its own, in
+/// one depth order: zoomed in, the fill's faces show the colors the one composite of the surface
+/// shows (drawn when the stroke is translucent), with no seam between faces; at 1x, where a pixel
+/// holds several faces, all but a few pixels show the average of the zoomed-in colors; and the art
+/// keeps its colors through SVG export and Expand Appearance.
+#[test]
+fn colored_solid_inflate_faces_in_one_order_keep_the_composites_colors_and_seams() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width":400,"height":400})).unwrap();
+    s.execute("path.create", &json!({"d":"M100 100H300V300H100Z"})).unwrap();
+    s.execute("paint.setFill", &json!({"color":"#e0c080"})).unwrap();
+    s.execute("paint.setStroke", &json!({"color":"#204060","width":4})).unwrap();
+    s.execute(
+        "effect.apply",
+        &json!({"effect":"threeD.inflate","item":null,"params":{
+            "rotationX":0,"rotationY":0,"rotationZ":0,"lights":[{"color":"#ff4040"},{"color":"#4040ff","rotation":120}]
+        }}),
+    )
+    .unwrap();
+    let at = |d: &Document, scale: f64| {
+        vectorcraft_render::Renderer::new().render(
+            d,
+            400,
+            400,
+            kurbo::Affine::scale(scale) * kurbo::Affine::translate((-140.0, -140.0)),
+            &vectorcraft_render::RenderOptions { background: None, artboards: false, ..Default::default() },
+        )
+    };
+    let ordered = doc(&s).clone();
+    s.execute("transparency.set", &json!({"item":1,"opacity":99})).unwrap();
+    let whole = doc(&s).clone();
+    // The fill's puff, inside the stroke's: 150 to 250 pt across, 10 to 110 px at 1x.
+    let (near, near_whole, far) = (at(&ordered, 3.0), at(&whole, 3.0), at(&ordered, 1.0));
+    let (mut off, mut open) = (0, 0);
+    for y in 10..110u32 {
+        for x in 10..110u32 {
+            // At 3x each 1x pixel is nine pixels: the faces against the composite, pixel by pixel.
+            let mut sum = [0u32; 4];
+            for (dx, dy) in (0..9).map(|k| (k % 3, k / 3)) {
+                let (p, q) = (near.pixel(x * 3 + dx, y * 3 + dy), near_whole.pixel(x * 3 + dx, y * 3 + dy));
+                assert!(p[3] >= 254, "no seam at ({}, {}) at 3x: {p:?}", x * 3 + dx, y * 3 + dy);
+                assert!(
+                    p.into_iter().zip(q).all(|(p, q)| p.abs_diff(q) <= 1),
+                    "({}, {}) at 3x: {p:?} vs the composite's {q:?}",
+                    x * 3 + dx,
+                    y * 3 + dy
+                );
+                for (s, v) in sum.iter_mut().zip(p) {
+                    *s += u32::from(v);
+                }
+            }
+            // At 1x, where a pixel holds several faces, a pixel has about the average of its nine:
+            // a few pixels where thin faces meet are off by more than 3 or let a little through.
+            let p = far.pixel(x, y);
+            assert!(p[3] >= 240, "a seam at ({x},{y}) at 1x: {p:?}");
+            open += usize::from(p[3] < 255);
+            off += usize::from(p.into_iter().zip(sum).any(|(p, s)| u32::from(p).abs_diff(s / 9) > 3));
+        }
+    }
+    assert!(open <= 500, "{open} of 10,000 pixels at 1x let the background through");
+    assert!(off <= 300, "{off} of 10,000 pixels at 1x are off the zoomed-in colors");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(doc(&s), &ordered);
+    let live = render(doc(&s));
+    let svg = s.execute("document.serialize", &json!({"format":"svg"})).unwrap()["text"].as_str().unwrap().to_owned();
+    assert!(!svg.contains("<image"));
+    let roundtrip = render(&vectorcraft_svg::import(&svg).unwrap());
+    for y in (110..290).step_by(9) {
+        for x in (110..290).step_by(9) {
+            let (a, b) = (live.pixel(x, y), roundtrip.pixel(x, y));
+            assert!(a.into_iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 6), "SVG ({x},{y}): {a:?} vs {b:?}");
+        }
+    }
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(render(doc(&s)).pixels, live.pixels);
+}

@@ -174,6 +174,17 @@ impl Exporter<'_> {
         }
     }
 
+    /// [`Self::measured_children`] of a plain group or layer. When they are the pieces of a
+    /// mesh-warped image, every piece, on the page or not, takes part in the one size its pixels
+    /// are resampled for ([`Self::warp_image_size`]).
+    fn group_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured], isolated: bool) {
+        let outer = self.warp_image_size(children).map(|w| self.warp_size.replace(w));
+        self.measured_children(s, children, page, measured, isolated);
+        if let Some(outer) = outer {
+            self.warp_size = outer;
+        }
+    }
+
     /// The pieces of a partly transparent mesh-warped image (`elements`, each with its box) as the
     /// elements of a knockout group ([`vectorcraft_effects::warp_pieces_translucent`]). Each piece
     /// is drawn through one soft mask of where the pieces above it that reach its box don't cover
@@ -373,7 +384,7 @@ impl Exporter<'_> {
         }
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
-                self.measured_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()), isolated_children);
+                self.group_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()), isolated_children);
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // The region every output clips to; nothing to clip by hides the clipped art. The

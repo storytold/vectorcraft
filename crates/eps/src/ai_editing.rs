@@ -186,6 +186,7 @@
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
 
+use std::collections::HashSet;
 use std::fmt::Write;
 use std::sync::Arc;
 
@@ -385,9 +386,15 @@ fn splice(text: &[u8], payloads: &[Vec<u8>]) -> Vec<u8> {
 }
 
 /// `doc` with its geometry effects and group paint baked ([`vectorcraft_effects::bake_document`]),
-/// in its symbols' art and its patterns' tile art too (which instances and pattern fills are
-/// written as); `None` when nothing changes.
+/// in its symbols' art, its patterns' tile art (which instances and pattern fills are written as)
+/// and its opacity masks' art too ([`baked_masks`]); `None` when nothing changes.
 fn baked(doc: &Document) -> Option<Document> {
+    let art = baked_art(doc);
+    baked_masks(art.as_ref().unwrap_or(doc)).or(art)
+}
+
+/// [`baked`] for the layers, symbols and patterns, leaving opacity masks' art as it is.
+fn baked_art(doc: &Document) -> Option<Document> {
     let baked = vectorcraft_effects::bake_document(doc);
     let d = baked.as_ref().unwrap_or(doc);
     let needs = vectorcraft_effects::needs_bake;
@@ -414,6 +421,100 @@ fn baked(doc: &Document) -> Option<Document> {
         }
     }
     Some(out)
+}
+
+/// `doc` with the art of the opacity masks in its layers', symbols' and patterns' art baked as
+/// [`baked_art`] bakes the layers. Each round bakes the art of the outermost masks whose art needs
+/// it, and the next round the masks inside that art, at most [`writer::MAX_NEST`] rounds (the
+/// writer leaves masks nested deeper out). Baked art keeps its id, by which the writer finds the
+/// art as it was before baking ([`writer::styled_objects`]). `None` when no mask's art needs baking.
+fn baked_masks(doc: &Document) -> Option<Document> {
+    let mut out: Option<Document> = None;
+    // The masks' art baked so far, by id: it isn't baked again.
+    let mut done = HashSet::new();
+    for _ in 0..writer::MAX_NEST {
+        let d = out.as_ref().unwrap_or(doc);
+        let roots = || d.layers.iter().chain(d.symbols.iter().map(|s| &s.art)).chain(d.patterns.iter().flat_map(|p| p.art.iter()));
+        let mut arts = vec![];
+        for n in roots() {
+            mask_arts(n, &done, &mut arts);
+        }
+        if arts.is_empty() {
+            break;
+        }
+        // Each art baked as a layer of a copy of the document, as [`baked_art`] bakes symbols.
+        let mut copy = d.clone();
+        copy.layers = arts.iter().map(|a| Arc::new(Node::group(vectorcraft_doc::NodeId(0), vec![a.clone()]))).collect();
+        let Some(mut next) = vectorcraft_effects::bake_document(&copy) else { break };
+        let layers = std::mem::replace(&mut next.layers, d.layers.clone());
+        let mut baked = layers.iter().map(|l| l.children().and_then(|c| c.first().cloned()));
+        for l in next.layers.iter_mut() {
+            if let Some(n) = with_baked_masks(l, &done, &mut baked) {
+                *l = n;
+            }
+        }
+        for s in next.symbols.iter_mut() {
+            if let Some(n) = with_baked_masks(&s.art, &done, &mut baked) {
+                s.art = n;
+            }
+        }
+        for p in next.patterns.iter_mut() {
+            for a in p.art.iter_mut() {
+                if let Some(n) = with_baked_masks(a, &done, &mut baked) {
+                    *a = n;
+                }
+            }
+        }
+        done.extend(arts.iter().map(|a| a.id));
+        out = Some(next);
+    }
+    out
+}
+
+/// Does [`baked_masks`] bake the art of mask `m` in this round?
+fn bakes_mask_art(m: &vectorcraft_doc::OpacityMask, done: &HashSet<vectorcraft_doc::NodeId>) -> bool {
+    !done.contains(&m.art.id) && vectorcraft_effects::needs_bake(&m.art)
+}
+
+/// The art of the opacity masks in `n` that [`baked_masks`] bakes in this round, in the order
+/// [`with_baked_masks`] puts them back: a mask's art before the object's members, and the masks
+/// inside art that isn't baked.
+fn mask_arts(n: &Node, done: &HashSet<vectorcraft_doc::NodeId>, out: &mut Vec<Arc<Node>>) {
+    if let Some(m) = n.extras().mask.as_ref() {
+        if bakes_mask_art(m, done) {
+            out.push(m.art.clone());
+        } else {
+            mask_arts(&m.art, done, out);
+        }
+    }
+    for c in n.children().into_iter().flatten() {
+        mask_arts(c, done, out);
+    }
+}
+
+/// `n` with the art of its opacity masks taken from `baked` in the order [`mask_arts`] lists it;
+/// `None` when nothing in it changes.
+fn with_baked_masks(n: &Arc<Node>, done: &HashSet<vectorcraft_doc::NodeId>, baked: &mut dyn Iterator<Item = Option<Arc<Node>>>) -> Option<Arc<Node>> {
+    let art =
+        n.extras().mask.as_ref().and_then(|m| if bakes_mask_art(m, done) { baked.next().flatten() } else { with_baked_masks(&m.art, done, baked) });
+    let members: Vec<Option<Arc<Node>>> = n.children().map(|c| c.iter().map(|c| with_baked_masks(c, done, baked)).collect()).unwrap_or_default();
+    if art.is_none() && members.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut m = (**n).clone();
+    if let Some(a) = art
+        && let Some(mask) = m.extras_if_any().and_then(|e| e.mask.as_mut())
+    {
+        mask.art = a;
+    }
+    if let Some(children) = m.children_mut() {
+        for (c, new) in children.iter_mut().zip(members) {
+            if let Some(new) = new {
+                *c = new;
+            }
+        }
+    }
+    Some(Arc::new(m))
 }
 
 /// The editing data of `doc` as a `.ai` file's pages carry it: the program compressed with
