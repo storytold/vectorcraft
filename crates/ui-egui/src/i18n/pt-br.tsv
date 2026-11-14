@@ -9225,8 +9225,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	unknown panel	painel desconhecido
 @msg	unknown panel `{panel}`	painel desconhecido `{panel}`
 @msg	unknown parameter `{key}`	parâmetro desconhecido `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	parâmetro desconhecido `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	parâmetro desconhecido `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	pieLegend desconhecido `{v}` (none, standard ou wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	piePosition desconhecido `{v}` (even, ratio ou stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	pieSort desconhecido `{v}` (none, all ou first)
@@ -9354,7 +9352,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} é integrado e não pode ser excluído
 @msg	{name} must be a number	{name} deve ser um número
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} deve ser {lo}–{hi}{unit} (recebido {v})
 @msg	{name}: CRC or size mismatch	{name}: CRC ou tamanho não confere
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: só foi possível ler a prévia incorporada deste arquivo do Affinity; use Arquivo › Abrir para vê-la com o aviso, ou exporte SVG ou PDF pelo Affinity antes de colocar
 @msg	{name}: {e}	{name}: {e}

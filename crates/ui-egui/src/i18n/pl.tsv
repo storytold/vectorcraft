@@ -7745,8 +7745,6 @@ breakText	Glyphs	Glify
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	nieznane rozpraszanie `{d}` (diffusion, pattern, noise lub none)
 @msg	unknown panel `{panel}`	nieznany panel `{panel}`
 @msg	unknown parameter `{key}`	nieznany parametr `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	nieznany parametr `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	nieznany parametr `{within}{key}`; {why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	nieznana redukcja `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform lub document)
 @msg	unmatched ')'	niesparowany znak ')'
 @msg	unterminated character class	niezakończona klasa znaków
@@ -9159,7 +9157,6 @@ breakText	Glyphs	Glify
 @msg	{label} must be a number from 1 to 10000	{label} musi być liczbą od 1 do 10000
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} jest wbudowane i nie można go usunąć
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} musi wynosić {lo}–{hi}{unit} (podano {v})
 @msg	{name}: CRC or size mismatch	{name}: niezgodność CRC lub rozmiaru
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: udało się odczytać tylko osadzony podgląd tego pliku Affinity; użyj polecenia Plik › Otwórz, aby zobaczyć go wraz z ostrzeżeniem, albo przed umieszczeniem wyeksportuj SVG lub PDF z programu Affinity
 @msg	{name}: {e}	{name}: {e}

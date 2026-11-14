@@ -7504,7 +7504,6 @@ breakText	Glyphs	Glifi
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	dithering sconosciuto `{d}` (diffusion, pattern, noise o none)
 @msg	unknown panel `{panel}`	pannello sconosciuto `{panel}`
 @msg	unknown parameter `{key}`	parametro sconosciuto `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	parametro sconosciuto `{within}settings.{format}`; {why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	riduzione sconosciuta `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform o document)
 @msg	unmatched ')'	')' senza corrispondenza
 @msg	unterminated character class	classe di caratteri non terminata

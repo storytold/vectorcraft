@@ -8754,8 +8754,6 @@ breakText	Glyphs	Гліфи
 @msg	unknown panel	невідома панель
 @msg	unknown panel `{panel}`	невідома панель `{panel}`
 @msg	unknown parameter `{key}`	невідомий параметр `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	невідомий параметр `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	невідомий параметр `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	невідомий pieLegend `{v}` (none, standard або wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	невідомий piePosition `{v}` (even, ratio або stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	невідомий pieSort `{v}` (none, all або first)
@@ -8882,7 +8880,6 @@ breakText	Glyphs	Гліфи
 @msg	{label} must be a number from 1 to 10000	{label} має бути числом від 1 до 10000
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} є вбудованим, його не можна видалити
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} має бути {lo}–{hi}{unit} (отримано {v})
 @msg	{name}: CRC or size mismatch	{name}: невідповідність CRC або розміру
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: вдалося прочитати лише вбудований попередній перегляд цього файлу Affinity; скористайтеся командою Файл › Відкрити, щоб побачити його з попередженням, або перед розміщенням експортуйте SVG чи PDF з Affinity
 @msg	{name}: {e}	{name}: {e}
