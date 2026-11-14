@@ -2222,6 +2222,29 @@ file-filter	Templates	Шаблони
 	Bristle Brush	Щетинний пензель
 	Pattern Brush	Візерунковий пензель
 	missing from the Brushes panel	відсутній у панелі «Пензлі»
+	built in	вбудований
+	embedding not allowed	вбудовування заборонено
+	embedding for editing	вбудовування для редагування
+	embedding for preview and print	вбудовування для перегляду й друку
+	embedding allowed	вбудовування дозволено
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	замінено: показано шрифтом {family} {style} ({detail})
+	missing: shown in {family} {style}	відсутній: показано шрифтом {family} {style}
+	missing	відсутній
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Лінійний градієнт
+	Radial gradient	Радіальний градієнт
+	Conic gradient	Конічний градієнт
+	Diamond gradient	Ромбоподібний градієнт
+	Freeform gradient	Довільний градієнт
+@plural	{n} instance|{n} instances	{n} екземпляр|{n} екземпляри|{n} екземплярів
+@plural	{n} row|{n} rows	{n} рядок|{n} рядки|{n} рядків
+@plural	{n} column|{n} columns	{n} стовпець|{n} стовпці|{n} стовпців
 	Select art to make a scatter, art or pattern brush.	Виділіть малюнок, щоб створити пензель-розпорошення, художній або візерунковий пензель.
 	Brush Art	Малюнок пензля
 	New Calligraphic Brush	Новий каліграфічний пензель
@@ -4407,6 +4430,7 @@ axis	Both	Обидві
 @msg	Plug-ins can't be loaded from {path}: {e}	Не вдається завантажити модулі з {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	виділіть прямим виділенням опорні точки для розрізу (не кінцеві точки відкритих контурів)
 @msg	Divide Objects Below: select a path	Поділ об’єктів нижче: виділіть контур
+@msg	select a path	виділіть контур
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
 @msg	Downloaded {what}	Завантажено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Розбір оформлення: виділення основне оформлення
@@ -5166,6 +5190,8 @@ axis	Both	Обидві
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вбудоване зображення {_1} × {_2} пікселів зменшено до {_3} × {_4} пікселів, щоб зберегти шари
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	linked type areas past VectorCraft's limits were left out	пов’язані текстові області понад обмеження VectorCraft пропущено
+@msg	the Line Breaking setting of legacy type was left out	налаштування розриву рядків тексту старого формату пропущено
+@msg	the Japanese layout rules of legacy type were left out	японські правила верстки тексту старого формату пропущено
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, що змінює напрямок письма всередині текстового об’єкта, відкривається в напрямку свого першого символу
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, використаний як маска у пов’язаних областях, тексті з обтіканням або складеному контурі, не обрізає
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	пов’язані зображення без перегляду у файлі показуються як заповнювач, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»

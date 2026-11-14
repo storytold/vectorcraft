@@ -332,7 +332,7 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     let i = style_index(&s.doc()?.doc, name)?;
     let add = bool_or(p, "add", false);
     let chars = s.prefs.override_char_color;
-    let own = super::appearance::appearance_targets(s, p)?;
+    let own = super::appearance::edit_targets(s, p)?;
     let ids = super::appearance::rowless_series_marks(&s.doc()?.doc, &own);
     // The series groups their paths stand for: a style that replaces the appearance clears what they hold themselves,
     // and a style added on top unlinks them.

@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-13 · **Change:** Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained. Previously: Save location-refusal error (#6146); existing response shapes retained.
+> **Last updated:** 2026-11-13 · **Change:** Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
@@ -234,6 +234,14 @@ the suite) keep the agent to the folders you give it:
   file outside the read roots by its file name alone in `files`, as `document.json` does, and `removeFile` takes that
   name for it (see SVG interactivity). In a frame a request drives, the JavaScript Files dialog lists such a file by
   its file name, and `ui_inspect` gives the file selected in the dialog the same way.
+- An SVG or SVGZ of a document that links a JavaScript file outside the read roots (SVG Interactivity's files: a
+  path, a `file:` URL, or a relative path taken from the document's folder) is refused with "a linked JavaScript
+  file is outside the read roots", which names no file or folder: `document.serialize`, `document.export` (MCP's
+  `export`), `document.exportSelection`, `document.exportForScreens` and `assets.export` (before the folder is
+  made or any row is written), `document.save`, `file.save`, `file.saveAs` and `file.saveCopy` (also a save
+  without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
+  Show Code. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
+  person at the keyboard exports it as stored.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -802,6 +810,16 @@ The other commands given a series group's id edit the group itself, and the grap
 the `effect.*` commands and `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke
 `item`, which is a row of the group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected
 group's own rows.
+
+The graph draws the art of a column or marker design in a series again from the design, so the commands that add,
+change, move or remove fill and stroke rows, effects or graphic styles leave that art out: the `appearance.*` commands
+listed above, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit, move or remove an
+effect, `graphicStyle.apply` (and `graphicStyle.addFromLibrary` with `apply`), `transparency.set` with a fill or stroke
+`item`, and `appearance.copyFrom` as the target. The art is any object inside a series group other than a path directly
+in it, whether given by id, selected, or reached through `target: "contents"`. The commands edit the other objects they
+are given, and a command whose objects are all design art is an error. `appearance.transfer` with design art as its
+`target`, or as its `source` without `copy`, is an error. The paint commands leave the art out as well, without an
+error. To change the art, edit the design with `graph.design`.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
@@ -4983,7 +5001,8 @@ more than one linked file (two such files, or such a file and a file linked as t
 error and unlinks nothing. `ui.javascriptFilesDialog {}`
 opens the JavaScript Files dialog, whose Choose… puts a picked file in as a `file:///` URL. SVG export writes each event
 as an event attribute on the object's element (`onclick="…"`; with the SVG Tiny 1.2 profile it leaves them out with a
-warning) and each file as `<script xlink:href>`. SVG import reads the event attributes the panel lists and the
+warning) and each file as `<script xlink:href>`, as stored; for a caller with automation read roots, an SVG or SVGZ
+of a document that links a file outside them is refused (see the read roots above). SVG import reads the event attributes the panel lists and the
 `<script>` links back as text; it never reads a script file or runs a script, and leaves inline scripts and the links
 after the first 64 out with a warning. An unnamed `<g>` with event attributes of its own stays a group, apart from the object in
 it. The native format keeps the events and the files.
@@ -5102,6 +5121,8 @@ the canvas (coordinates out of range)".
 `path.setHandle`, `path.moveAnchor` and `path.insertAnchor` edit subpath 0 when `subpath` is absent or null, and refuse a `subpath` that
 is not a whole number of 0 or more, such as 1.5, -1 or "1" ("missing integer `subpath`"); `path.split` refuses such
 an `anchor` or `segment` in the same way. The document does not change and no undo step is recorded.
+`path.moveAnchor` to the point the anchor is at, and `path.setHandle` to the point the handle is at on an anchor that
+keeps its kind, leave the document as it is and record no undo step.
 `path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
@@ -5243,6 +5264,13 @@ round, such as a rectangle, stays as it is. Closed paths stay closed and open pa
 ```json
 {"name":"run_command","arguments":{"command":"object.path.smooth","params":{"level":80}}}
 ```
+
+`path.smoothRegion` (the Smooth tool) keeps the end points of an open path where they are. When the stretch it refits
+reaches the first or last anchor of an open path, the curve there leaves or arrives along the smoothed path within
+`radius` of that end rather than along the first or last segment, so a jagged end turns with the rest of the path; it
+keeps the segment's direction when the smoothed path there turns back by 90° or more. Where the stretch ends inside a
+path, the curve keeps the direction of the part outside the drag. `object.path.smooth` and Simplify keep each end's
+direction.
 
 In the desktop app, Object › Path › Smooth and the canvas context menu's Smooth… (listed while the selection holds a
 path) open the slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at
@@ -5821,7 +5849,7 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
 - `usePreciseCursors`: the Pen, Eyedropper, Slice and Blend tools' pointers are a crosshair.
 - `snapToPointTolerance` (1–8 px, 2 by default): with View › Snap to Point on and Smart Guides off (desktop app), the
   point a selection is dragged by, a drawn point and a transform tool's reference point land on an anchor or a ruler
-  guide that near.
+  guide that near, showing none of the Smart Guides labels or lines.
 - `moveLockedWithArtboard`: `artboard.move {moveArt: true}`, the Artboard tool and `artboard.rearrange` move locked and
   hidden art, and art that is also on a locked artboard, with the artboard too, and `artboard.setProps {scaleArt: true}`
   scales it too; off (the default) it stays where it is. `artboard.duplicate`, `artboard.copy` and `artboard.cut` copy or
@@ -7248,7 +7276,14 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
 embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
 its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
-fonts of the selected type), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
+fonts of the selected type), `fontDetails` (`[{font, match, family, style, file, embedding}]`: each font of `fonts`,
+in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
+`family` `style`), `missingWithFallback` (not installed, shown in `family` `style`) or `missing`; `file` is the face's
+file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previewPrint` or `forbidden`, null when no
+face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the
+linkedImages and embeddedImages categories list them, with the file a linked image's row shows and null for an
+embedded one), `document.unitId` (the document's units as Preferences › Units names them, such as `millimeters`, beside
+the English `document.units`), `brushNames` (the brushes the art's strokes use, each once, hidden strokes, strokes at an opacity of 0, strokes with no
 paint or width, guides, paths with no segment, type that draws no characters, a group's or layer's own strokes, a compound path member's own strokes and an image's strokes without a
 shape left out; with `selectionOnly`, the brushes the selected
 objects' strokes use), `brushes` (`[{name, type}]`: those brushes with their types, `calligraphic`, `scatter`, `art`,
@@ -7261,9 +7296,11 @@ whose drawn characters use a pattern included, hidden fills and strokes, fills a
 member's own fills and strokes, an image's fills and strokes that no Convert to Shape or Outline Object effect gives a
 shape, and characters that draw nothing (spaces and line breaks without an underline or strikethrough) left out, with
 the patterns it uses, which the patterns category lists as Pattern Objects and `objects.patterns` counts; with `selectionOnly`, those in the selection),
-`patternNames` (the patterns those objects use), `gradientObjects` (`[{id, name, gradients}]`: every object filled or
+`patternNames` (the patterns those objects use), `gradientObjects` (`[{id, name, gradients, kinds}]`: every object filled or
 stroked with a gradient, by the same rules as `patternObjects`, with the gradients it uses: the name of the gradient
-swatch a gradient is linked to, else `Linear gradient`, `Radial gradient` or `Freeform gradient`; the gradients category
+swatch a gradient is linked to, else its kind's name, such as `Linear gradient`, `Radial gradient` or `Freeform gradient`;
+`kinds` gives, for each of `gradients`, the kind (`linear`, `radial`, `conic`, `diamond` or `freeform`) of a gradient
+named by its kind and null for a swatch's name; the gradients category
 lists them as Gradient Objects and `objects.gradients` counts them; gradient swatches no art uses are not listed; with
 `selectionOnly`, those in the selection), `gradientNames` (the gradients those objects use), `spotObjects`
 (`[{id, name, spotColors}]`: every object filled or stroked with a spot color swatch, as a solid color or in the
@@ -11532,5 +11569,6 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | Snap to Point with Smart Guides off draws no Smart Guides labels or lines (#7250). |
 | 2026-11-13 | Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097). |
 | 2026-11-11 | Document READ_ONLY_LOCATION for saves (#6146); no response-shape change. |

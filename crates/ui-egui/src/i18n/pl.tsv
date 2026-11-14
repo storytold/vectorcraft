@@ -3285,6 +3285,29 @@ theme	Appearance	Wygląd
 	Bristle Brush	Pędzel włosiankowy
 	Pattern Brush	Pędzel wzorka
 	missing from the Brushes panel	brak w panelu Pędzle
+	built in	wbudowany
+	embedding not allowed	osadzanie niedozwolone
+	embedding for editing	osadzanie do edycji
+	embedding for preview and print	osadzanie do podglądu i drukowania
+	embedding allowed	osadzanie dozwolone
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	zastąpiony: wyświetlany krojem {family} {style} ({detail})
+	missing: shown in {family} {style}	brak: wyświetlany krojem {family} {style}
+	missing	brak
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Gradient liniowy
+	Radial gradient	Gradient promienisty
+	Conic gradient	Gradient stożkowy
+	Diamond gradient	Gradient rombowy
+	Freeform gradient	Gradient dowolny
+@plural	{n} instance|{n} instances	{n} wystąpienie|{n} wystąpienia|{n} wystąpień
+@plural	{n} row|{n} rows	{n} wiersz|{n} wiersze|{n} wierszy
+@plural	{n} column|{n} columns	{n} kolumna|{n} kolumny|{n} kolumn
 	Select art to make a scatter, art or pattern brush.	Zaznacz kompozycję, aby utworzyć pędzel rozproszony, artystyczny lub wzorka.
 	Brush Art	Kompozycja pędzla
 	New Symbol	Nowy symbol
@@ -4505,6 +4528,7 @@ imageTrace	Outline	Kontur
 @msg	Plug-ins can't be loaded from {path}: {e}	Nie można wczytać wtyczek z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	zaznacz bezpośrednio punkty kontrolne, w których ma nastąpić cięcie (nie punkty końcowe otwartych ścieżek)
 @msg	Divide Objects Below: select a path	Podziel obiekty poniżej: zaznacz ścieżkę
+@msg	select a path	zaznacz ścieżkę
 @msg	Divide Objects Below: select exactly one path	Podziel obiekty poniżej: zaznacz dokładnie jedną ścieżkę
 @msg	Downloaded {what}	Pobrano {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozszerz wygląd: zaznaczenie ma wygląd podstawowy
@@ -5265,6 +5289,8 @@ imageTrace	Outline	Kontur
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	osadzony obraz o wymiarach {_1} × {_2} pikseli zmniejszono do {_3} × {_4} pikseli, aby zachować warstwy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	połączone obrazy pokazują zapisany w pliku podgląd niskiej rozdzielczości, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
 @msg	linked type areas past VectorCraft's limits were left out	połączone obszary tekstu poza limitami VectorCraft zostały pominięte
+@msg	the Line Breaking setting of legacy type was left out	pominięto ustawienie łamania wierszy tekstu w starym formacie
+@msg	the Japanese layout rules of legacy type were left out	pominięto japońskie reguły składu tekstu w starym formacie
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst zmieniający kierunek pisania wewnątrz obiektu tekstowego otwiera się w kierunku swojego pierwszego znaku
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst użyty jako maska w połączonych obszarach, oblewanym tekście lub ścieżce złożonej nie przycina
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	połączone obrazy bez podglądu w pliku pokazują symbol zastępczy, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza

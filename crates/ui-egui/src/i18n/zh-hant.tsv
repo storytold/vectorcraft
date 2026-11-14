@@ -2006,6 +2006,7 @@ file-filter	Templates	範本
 @msg	direct-select anchor points to cut at (not the end points of open paths)	請直接選取要剪開的錨點 (不能是開放路徑的端點)
 @msg	select paths or anchor points	請選取路徑或錨點
 @msg	Divide Objects Below: select a path	分割下方物件：請選取路徑
+@msg	select a path	請選取路徑
 @msg	Divide Objects Below: select exactly one path	分割下方物件：請只選取一條路徑
 @msg	Offset Path: select paths	位移複製：請選取路徑
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	位移複製：位移後所選路徑不留任何部分 (內縮量大於形狀)
@@ -3295,6 +3296,29 @@ file-filter	Templates	範本
 	Bristle Brush	鬃毛筆刷
 	Pattern Brush	圖樣筆刷
 	missing from the Brushes panel	「筆刷」面板中沒有
+	built in	內建
+	embedding not allowed	不允許內嵌
+	embedding for editing	允許內嵌以供編輯
+	embedding for preview and print	允許內嵌以供預覽和列印
+	embedding allowed	允許內嵌
+	{file}; {embedding}	{file}；{embedding}
+	substituted: shown in {family} {style} ({detail})	已替代：以 {family} {style} 顯示 ({detail})
+	missing: shown in {family} {style}	遺失：以 {family} {style} 顯示
+	missing	遺失
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}，{instances}
+	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
+	{grid}, {instances}	{grid}，{instances}
+	Linear gradient	線性漸層
+	Radial gradient	放射狀漸層
+	Conic gradient	錐形漸層
+	Diamond gradient	菱形漸層
+	Freeform gradient	自由漸層
+@plural	{n} instance|{n} instances	{n} 個實例
+@plural	{n} row|{n} rows	{n} 列
+@plural	{n} column|{n} columns	{n} 欄
 	Select art to make a scatter, art or pattern brush.	選取圖稿以製作散佈筆刷、藝術筆刷或圖樣筆刷。
 	Brush Art	筆刷圖稿
 	New Calligraphic Brush	新增書法筆刷
@@ -4970,6 +4994,8 @@ digits	Malayalam	馬來亞拉姆數字
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 個連結影像已在磁碟上變更。要顯示新版本嗎？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	連結的圖片在找到其檔案之前顯示檔案中儲存的低解析度預覽：請在「連結」面板中重新連結
 @msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串連文字區域已略過
+@msg	the Line Breaking setting of legacy type was left out	已略過舊格式文字的換行設定
+@msg	the Japanese layout rules of legacy type were left out	已略過舊格式文字的日文排版規則
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	在文字物件內變更書寫方向的文字會依其第一個字元的方向開啟
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串連區域、繞圖文字或複合路徑中用作遮色片的文字不會剪裁
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	檔案中沒有預覽的連結圖片在找到其檔案之前顯示預留位置：請在「連結」面板中重新連結

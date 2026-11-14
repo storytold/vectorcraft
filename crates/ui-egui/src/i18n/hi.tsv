@@ -3397,6 +3397,29 @@ antiAlias	Sharp	शार्प
 	Pattern Borders	पैटर्न सीमा
 	Pattern Brush	पैटर्न ब्रश
 	missing from the Brushes panel	ब्रश पैनल में अनुपलब्ध
+	built in	अंतर्निहित
+	embedding not allowed	एम्बेडिंग की अनुमति नहीं
+	embedding for editing	संपादन के लिए एम्बेडिंग
+	embedding for preview and print	पूर्वावलोकन और प्रिंट के लिए एम्बेडिंग
+	embedding allowed	एम्बेडिंग की अनुमति है
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	प्रतिस्थापित: {family} {style} में दिखाया गया ({detail})
+	missing: shown in {family} {style}	अनुपलब्ध: {family} {style} में दिखाया गया
+	missing	अनुपलब्ध
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	लीनियर ग्रेडिएंट
+	Radial gradient	रेडियल ग्रेडिएंट
+	Conic gradient	कोनिक ग्रेडिएंट
+	Diamond gradient	डायमंड ग्रेडिएंट
+	Freeform gradient	फ्रीफॉर्म ग्रेडिएंट
+@plural	{n} instance|{n} instances	{n} इंस्टेंस|{n} इंस्टेंस
+@plural	{n} row|{n} rows	{n} पंक्ति|{n} पंक्तियाँ
+@plural	{n} column|{n} columns	{n} कॉलम|{n} कॉलम
 	Pattern Brush Options	पैटर्न ब्रश ऑप्शन्स
 	Pattern Editing	पैटर्न संपादन
 	Pattern Options	पैटर्न ऑप्शन्स
@@ -8353,6 +8376,8 @@ antiAlias	Sharp	शार्प
 @msg	type dimension must be finite	टाइप का आयाम परिमित होना चाहिए
 @msg	type must be static or dynamic, not {v}	type static या dynamic होना चाहिए, {v} नहीं
 @msg	type objects can't be isolated	टाइप ऑब्जेक्ट्स को आइसोलेट नहीं किया जा सकता
+@msg	the Line Breaking setting of legacy type was left out	पुराने प्रारूप के टेक्स्ट की लाइन ब्रेकिंग सेटिंग छोड़ दी गई
+@msg	the Japanese layout rules of legacy type were left out	पुराने प्रारूप के टेक्स्ट के जापानी लेआउट नियम छोड़ दिए गए
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	टेक्स्ट ऑब्जेक्ट के भीतर लेखन दिशा बदलने वाला टेक्स्ट अपने पहले वर्ण की दिशा में खुलता है
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	लिंक्ड एरिया, रैपअराउंड टेक्स्ट या कंपाउंड पाथ में मास्क के रूप में इस्तेमाल किया गया टाइप क्लिप नहीं करता
 @msg	Unembedded to {_1}	एम्बेड हटाकर {_1} में रखा गया

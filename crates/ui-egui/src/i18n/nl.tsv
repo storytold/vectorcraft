@@ -3656,6 +3656,29 @@ theme	Appearance	Vormgeving
 	Bristle Brush	Borstelpenseel
 	Pattern Brush	Patroonpenseel
 	missing from the Brushes panel	ontbreekt in het deelvenster Penselen
+	built in	ingebouwd
+	embedding not allowed	insluiten niet toegestaan
+	embedding for editing	insluiten voor bewerken
+	embedding for preview and print	insluiten voor voorvertoning en afdrukken
+	embedding allowed	insluiten toegestaan
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	vervangen: weergegeven in {family} {style} ({detail})
+	missing: shown in {family} {style}	ontbreekt: weergegeven in {family} {style}
+	missing	ontbreekt
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineair verloop
+	Radial gradient	Radiaal verloop
+	Conic gradient	Conisch verloop
+	Diamond gradient	Ruitverloop
+	Freeform gradient	Vrijvormverloop
+@plural	{n} instance|{n} instances	{n} exemplaar|{n} exemplaren
+@plural	{n} row|{n} rows	{n} rij|{n} rijen
+@plural	{n} column|{n} columns	{n} kolom|{n} kolommen
 	Select art to make a scatter, art or pattern brush.	Selecteer illustratie om een verspreidings-, art- of patroonpenseel te maken.
 	Brush Art	Penseelillustratie
 	New Symbol	Nieuw symbool
@@ -4791,6 +4814,7 @@ imageTrace	Outline	Contour
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Gegevensherstel heeft nergens ruimte om kopieën te bewaren: stel Voorkeuren → Bestandsafhandeling → Gegevensherstel → Map (recoveryFolder) in
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecteer met directe selectie ankerpunten om te knippen (niet de eindpunten van open paden)
 @msg	Divide Objects Below: select a path	Objecten eronder verdelen: selecteer een pad
+@msg	select a path	selecteer een pad
 @msg	Divide Objects Below: select exactly one path	Objecten eronder verdelen: selecteer precies één pad
 @msg	Downloaded {what}	{what} gedownload
 @msg	Expand Appearance: the selection has a basic appearance	Vormgeving uitbreiden: de selectie heeft een basisvormgeving
@@ -5439,6 +5463,8 @@ imageTrace	Outline	Contour
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	een ingesloten afbeelding van {_1} × {_2} pixels is verkleind tot {_3} × {_4} pixels om de lagen te behouden
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gekoppelde afbeeldingen tonen het in het bestand opgeslagen voorbeeld met lage resolutie totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
 @msg	linked type areas past VectorCraft's limits were left out	gekoppelde tekstvlakken buiten de limieten van VectorCraft zijn weggelaten
+@msg	the Line Breaking setting of legacy type was left out	de instelling voor regelafbreking van tekst in de oude indeling is weggelaten
+@msg	the Japanese layout rules of legacy type were left out	de Japanse opmaakregels van tekst in de oude indeling zijn weggelaten
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst die binnen een tekstobject van schrijfrichting verandert, wordt geopend in de richting van het eerste teken
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst die als masker wordt gebruikt in gekoppelde vlakken, tekstomloop of een samengesteld pad knipt niet uit
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gekoppelde afbeeldingen zonder voorbeeld in het bestand tonen een tijdelijke aanduiding totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen

@@ -373,8 +373,8 @@ fn removing_a_series_marks_fill_forgets_its_kept_opacity() {
     assert_eq!(spec(&s, id).series_paints[0].fill_opacity, None);
 }
 
-/// An opacity set on a row added to a graph design's copy inside a series is not kept for the series: the graph draws
-/// the design again from the design itself.
+/// A row or a row opacity is not given to a graph design's copy inside a series, and the graph keeps no opacity for the
+/// series: the graph draws the design again from the design itself.
 #[test]
 fn an_opacity_on_a_design_copy_in_a_series_is_not_kept() {
     let mut s = Session::new();
@@ -384,9 +384,141 @@ fn an_opacity_on_a_design_copy_in_a_series_is_not_kept() {
     s.execute("graph.column", &json!({"id": id.0, "design": "Square"})).unwrap();
     let copy = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].clone();
     assert!(matches!(copy.kind, NodeKind::Group { .. }));
-    s.execute("appearance.addFill", &json!({"ids": [copy.id.0]})).unwrap();
-    s.execute("transparency.set", &json!({"ids": [copy.id.0], "item": 0, "opacity": 40})).unwrap();
+    assert!(s.execute("appearance.addFill", &json!({"ids": [copy.id.0]})).is_err());
+    assert!(s.execute("transparency.set", &json!({"ids": [copy.id.0], "item": 0, "opacity": 40})).is_err());
     assert!(spec(&s, id).series_paints.first().is_none_or(|p| p.fill_opacity.is_none()));
+}
+
+/// A column graph whose series 0 draws the design "Square": the graph, series 0's first copy of the design, a path
+/// inside that copy, and the first mark of series 1, drawn plain.
+fn design_art() -> (Session, NodeId, NodeId, NodeId, NodeId) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    save_design(&mut s, "Square");
+    s.execute("graph.column", &json!({"id": id.0, "seriesIndexes": [0], "design": "Square"})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let copy = series(&n, 0).children().unwrap()[0].clone();
+    assert!(matches!(copy.kind, NodeKind::Group { .. }));
+    let mut art = vec![];
+    copy.walk(&mut |m| {
+        if matches!(m.kind, NodeKind::Path { .. }) {
+            art.push(m.id);
+        }
+    });
+    let mark = series(&n, 1).children().unwrap()[0].clone();
+    assert!(matches!(mark.kind, NodeKind::Path { .. }));
+    (s, id, copy.id, art[0], mark.id)
+}
+
+/// `cmd` with `p` is refused as an edit of graph design art, and the document keeps its undo history.
+fn refused_on_design_art(s: &mut Session, cmd: &str, p: serde_json::Value) {
+    let steps = s.doc().unwrap().history.undo.len();
+    let e = s.execute(cmd, &p).unwrap_err().to_string();
+    assert!(e.contains("drawn again from the design"), "{cmd}: {e}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+}
+
+/// The commands that give rows, effects or graphic styles refuse the art of a graph design inside a series, given by
+/// id (the design's copy or a path inside it) or selected: the graph draws that art again from the design.
+#[test]
+fn appearance_commands_refuse_a_graph_designs_art_in_a_series() {
+    let (mut s, _, copy, art, _) = design_art();
+    let (rect, _) = blue_style(&mut s, "Blue", false);
+    let graphic = s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].clone();
+    s.execute("threeD.addGraphic", &json!({"name": "Mark", "ids": [graphic]})).unwrap();
+    let fill = top_row(&s, art, true);
+    for ids in [json!([copy.0]), json!([art.0])] {
+        refused_on_design_art(
+            &mut s,
+            "graphicStyle.addFromLibrary",
+            json!({"library": "painted-sketched", "name": "Wet Ink", "apply": true, "ids": ids}),
+        );
+        for cmd in ["appearance.addFill", "appearance.addStroke", "appearance.clear", "appearance.reduceToBasic", "appearance.showAllHidden"] {
+            refused_on_design_art(&mut s, cmd, json!({"ids": ids}));
+        }
+        refused_on_design_art(&mut s, "appearance.moveItem", json!({"ids": ids, "from": "contents", "to": 0}));
+        refused_on_design_art(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "ids": ids}));
+        refused_on_design_art(&mut s, "appearance.addEffect", json!({"effect": "stylize.dropShadow", "ids": ids}));
+        refused_on_design_art(&mut s, "effect.apply", json!({"effect": "threeD.extrude", "item": null, "ids": ids}));
+        refused_on_design_art(&mut s, "effect.move", json!({"ids": ids, "from": 0, "to": 0}));
+        refused_on_design_art(&mut s, "effect.remove", json!({"ids": ids, "index": 0}));
+        refused_on_design_art(&mut s, "threeD.mapGraphic", json!({"ids": ids, "symbol": "Mark"}));
+        refused_on_design_art(&mut s, "graphicStyle.apply", json!({"name": "Blue", "ids": ids}));
+    }
+    for cmd in ["appearance.removeItem", "appearance.duplicateItem"] {
+        refused_on_design_art(&mut s, cmd, json!({"ids": [art.0], "index": fill}));
+    }
+    refused_on_design_art(&mut s, "appearance.setItem", json!({"ids": [art.0], "index": fill, "color": "#00ff00"}));
+    refused_on_design_art(&mut s, "appearance.moveItem", json!({"ids": [art.0], "from": fill, "to": 0}));
+    refused_on_design_art(&mut s, "transparency.set", json!({"ids": [art.0], "item": fill, "opacity": 40}));
+    refused_on_design_art(&mut s, "appearance.copyFrom", json!({"source": rect.0, "ids": [art.0]}));
+    refused_on_design_art(&mut s, "appearance.transfer", json!({"source": rect.0, "target": art.0, "copy": true}));
+    refused_on_design_art(&mut s, "appearance.transfer", json!({"source": art.0, "target": rect.0}));
+    // Selected, and through the contents of the design's copy.
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    refused_on_design_art(&mut s, "appearance.addFill", json!({}));
+    refused_on_design_art(&mut s, "graphicStyle.addFromLibrary", json!({"library": "painted-sketched", "name": "Wet Ink", "apply": true}));
+    refused_on_design_art(&mut s, "appearance.addStroke", json!({"ids": [copy.0], "target": "contents"}));
+    // A Pathfinder effect does not group the selected paths of the design's copy.
+    let mut paths = vec![];
+    s.doc().unwrap().doc.node(copy).unwrap().walk(&mut |m| {
+        if matches!(m.kind, NodeKind::Path { .. }) {
+            paths.push(m.id.0);
+        }
+    });
+    assert_eq!(paths.len(), 2);
+    s.execute("select.set", &json!({"ids": paths})).unwrap();
+    refused_on_design_art(&mut s, "effect.apply", json!({"effect": "pathfinder.add"}));
+    // Read as a source, the art gives its look.
+    s.execute("appearance.transfer", &json!({"source": art.0, "target": rect.0, "copy": true})).unwrap();
+}
+
+/// Given the art of a graph design in a series with other objects, the commands edit the other objects only.
+#[test]
+fn appearance_commands_edit_the_objects_given_with_a_graph_designs_art() {
+    let (mut s, id, copy, art, mark) = design_art();
+    let (rect, _) = blue_style(&mut s, "Blue", false);
+    let rows = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    let (copy_was, art_was, mark_was) = (rows(&s, copy), rows(&s, art), rows(&s, mark));
+    s.execute("appearance.addFill", &json!({"ids": [copy.0, mark.0]})).unwrap();
+    assert_eq!((rows(&s, copy), rows(&s, art)), (copy_was.clone(), art_was.clone()));
+    assert_eq!(rows(&s, mark).items.len(), mark_was.items.len() + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [art.0, mark.0]})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(rows(&s, mark).effects.len(), 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [art.0, mark.0]})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_ne!(rows(&s, mark), mark_was);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // The graph's contents: series 1's marks take the fill, the design's art does not.
+    s.execute("appearance.addFill", &json!({"ids": [id.0], "target": "contents"})).unwrap();
+    assert_eq!((rows(&s, copy), rows(&s, art)), (copy_was, art_was));
+    assert_eq!(rows(&s, mark).items.len(), mark_was.items.len() + 1);
+}
+
+/// The paint commands leave the art of a graph design in a series out, a copy of the design given by id with an item
+/// included.
+#[test]
+fn paint_targets_leave_a_graph_designs_copy_out() {
+    let (s, _, copy, art, mark) = design_art();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(super::paint_targets(d, &[copy, art, mark]), [mark]);
+}
+
+/// The art of a marker design in a series is refused too.
+#[test]
+fn effect_commands_refuse_a_marker_designs_art() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Pill");
+    let id = graph(&mut s, "line");
+    s.execute("graph.marker", &json!({"id": id.0, "seriesIndexes": [1], "design": "Pill"})).unwrap();
+    let marker = series(s.doc().unwrap().doc.node(id).unwrap(), 1).children().unwrap()[1].clone();
+    assert!(matches!(marker.kind, NodeKind::Group { .. }), "the design's art");
+    refused_on_design_art(&mut s, "effect.apply", json!({"effect": "stylize.dropShadow", "ids": [marker.id.0]}));
 }
 
 /// A series' kept opacity goes on its generated marks only: a column design made of one path keeps its own opacity.
@@ -1771,8 +1903,8 @@ fn a_paint_on_a_design_copy_or_the_other_kind_of_row_is_not_kept() {
     s.execute("graph.column", &json!({"id": id.0, "design": "Square"})).unwrap();
     let copy = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].clone();
     assert!(matches!(copy.kind, NodeKind::Group { .. }));
-    s.execute("appearance.addFill", &json!({"ids": [copy.id.0]})).unwrap();
-    s.execute("appearance.setItem", &json!({"ids": [copy.id.0], "index": 0, "color": "#0000ff"})).unwrap();
+    assert!(s.execute("appearance.addFill", &json!({"ids": [copy.id.0]})).is_err());
+    assert!(s.execute("appearance.setItem", &json!({"ids": [copy.id.0], "index": 0, "color": "#0000ff"})).is_err());
     assert!(spec(&s, id).series_paints.first().is_none_or(|p| p.fill.is_none()));
     // A path inside the design's copy is a member of the series too, and its paint is not kept either.
     let copy = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].clone();
@@ -1783,7 +1915,7 @@ fn a_paint_on_a_design_copy_or_the_other_kind_of_row_is_not_kept() {
         }
     });
     let art = paths[0];
-    s.execute("appearance.setItem", &json!({"ids": [art.0], "index": top_row(&s, art, true), "color": "#00ff00"})).unwrap();
+    assert!(s.execute("appearance.setItem", &json!({"ids": [art.0], "index": top_row(&s, art, true), "color": "#00ff00"})).is_err());
     assert!(spec(&s, id).series_paints.first().is_none_or(|p| p.fill.is_none()));
 
     let mut s = Session::new();

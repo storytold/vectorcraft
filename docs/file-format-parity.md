@@ -22,7 +22,7 @@ Ordinary File > Save offers Save As when its own location refuses writes with a 
 | | Illustrator | VectorCraft | Notes |
 |---|---:|---:|---|
 | Formats opened or placed | ~30 | 31 | missing: FreeHand, CorelDRAW, DWG, PS |
-| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, images, type, symbols, artboards, transparency, opacity masks, clipping) or as legacy version 7 (layers and groups, one artboard per file) |
+| Formats saved (Save As) | 6 (AI, AIT, PDF, EPS, SVG, SVGZ) | 6 + native | `.ai` written PDF-compatible (with an editing copy of the art: layers, groups, paths, colors, gradients, patterns, images, type, symbols, artboards, transparency, opacity masks, clipping, text wrap options) or as legacy version 7 (layers and groups, one artboard per file) |
 | Formats exported | ~16 | 18 | missing: DWG; extra: GIF/PNG-8 palette export, DXF up to 2018, layered PSD |
 | **Overall (weighted by use)** | | **~75%** | `.ai` and PDF dominate the weighting |
 
@@ -196,6 +196,11 @@ private editing data. VectorCraft:
   as that art, with one note that counts them. Type stays live without a comparison when the saved art paints
   nothing or draws type of its own, in frames of threaded type, when a text variable binds it, and when its text
   object doesn't come in as one text object.
+  Legacy `.ai` type keeps its manual kerning pairs (`Tk`, `TK`: the kerning after the character before the
+  pair, or at a line's start the space before its first character), its discretionary hyphens (`T+`, `T-`) as
+  soft hyphens and its hyphenation language (`XL`); a line breaking value (`TG`) and Japanese layout rules
+  (`Xu`, `Tu`) are not kept, with a warning. Legacy `.ai` saves write manual kerning as `Tk` and soft hyphens
+  as `T+`.
   Legacy `.ai` type keeps its paragraphs' letter and word spacing (`TC`, `TW`), hanging punctuation (`Tq`) and
   hyphenation (`Th`); its tab definitions (`Xb` … `XB`) set its paragraphs' tab stops. Paragraphs in a row with
   the same attributes share one copy of them while the text object is read, and those copies hold at most
