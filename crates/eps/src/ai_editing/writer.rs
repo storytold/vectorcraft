@@ -1037,22 +1037,25 @@ impl<'a> Writer<'a> {
 
     /// A container's members, the first one's outline cutting the others: its fills painted
     /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its text
-    /// wrap options are written once: with its fills, or without fills with its strokes.
+    /// wrap options are written once: with its fills, or with its strokes when no fill object is
+    /// written (it has no fills, or the region outside leaves nothing of them).
     fn clip_contents(&mut self, children: &[Arc<Node>]) {
         let Some((first, rest)) = children.split_first() else { return };
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(first) else { return };
         let mut paint = first.clip_paint();
-        if let (Some(_), Some(stroke)) = (&paint.fill, &mut paint.stroke)
-            && stroke.extras().wrap.is_some()
-        {
-            stroke.extras_mut().wrap = None;
-        }
         let outer = self.clip.clone();
         let region = self.cut(&PathData::from_bezpath(&outline), rule);
         self.clip = Some(region);
         if let Some(fill) = &paint.fill {
+            let objects = self.objects;
             self.node(fill);
+            if self.objects > objects
+                && let Some(stroke) = &mut paint.stroke
+                && stroke.extras().wrap.is_some()
+            {
+                stroke.extras_mut().wrap = None;
+            }
         }
         for c in rest {
             self.node(c);

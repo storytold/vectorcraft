@@ -1187,6 +1187,28 @@ fn a_symbol_definition_is_written_only_with_room_for_its_instance() {
     }
 }
 
+/// A symbol definition without room for its group, asked for by an instance in art drawn for an
+/// object (a stained instance's art), is left out and leaves the writing of that art as it was.
+#[test]
+fn a_symbol_definition_without_room_in_drawn_art_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let dot = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::gray(0.5));
+    doc.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(dot) });
+    let inner = instance(&mut doc, "Dot", Affine::IDENTITY);
+    doc.symbols.push(Symbol { dynamic: false, name: "Badge".into(), art: Arc::new(inner) });
+    let mut stained = instance(&mut doc, "Badge", Affine::translate((50.0, 10.0)));
+    stained.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    doc.insert(Some(layer), usize::MAX, stained).unwrap();
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    for max in 0..read {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "room for {max} of {read}");
+        let objects = crate::import::objects_read(&out.program).unwrap();
+        assert!(objects <= max, "{objects} objects read with room for {max}");
+    }
+}
+
 /// The writer's limit is the reader's, which its warning names.
 #[test]
 fn the_object_limit_is_the_readers() {
@@ -10017,14 +10039,15 @@ fn text_wrap_options_of_type_and_envelopes_are_read_back() {
 }
 
 /// A clipping path inside art cut to a clipping object is written as its fills and its strokes,
-/// two objects: its text wrap options are written once, whether it has both or only strokes.
+/// two objects: its text wrap options are written once, whether it has both or only strokes, and
+/// with its strokes when the region outside leaves nothing of its fills.
 #[test]
 fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
-    for fill in [solid(Color::gray(0.5)), Paint::None] {
+    for (fill, left, width) in [(solid(Color::gray(0.5)), 20.0, 2.0), (Paint::None, 20.0, 2.0), (solid(Color::gray(0.5)), 101.0, 4.0)] {
         let mut doc = Document::new(200.0, 100.0);
         let layer = doc.layers[0].id;
-        let mut cutter = clipping(&mut doc, shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)));
-        cutter.appearance = Appearance::basic(fill, solid(Color::BLACK), 2.0).into();
+        let mut cutter = clipping(&mut doc, shapes::rectangle(Rect::new(left, 20.0, left + 60.0, 80.0)));
+        cutter.appearance = Appearance::basic(fill, solid(Color::BLACK), width).into();
         let cutter = wrapped(cutter, 5.0, true);
         let member = square(&mut doc, Rect::new(30.0, 30.0, 120.0, 60.0), Color::rgb(1.0, 0.0, 0.0));
         let inner = group(&mut doc, vec![cutter, member], true);
