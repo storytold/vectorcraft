@@ -5,7 +5,7 @@
 
 use std::io::Cursor;
 
-use craft_pdf::syntax::object::{Name, Object};
+use craft_pdf::syntax::object::{Array, Name, Object, Stream};
 use image::{DynamicImage, ImageFormat};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
@@ -234,6 +234,176 @@ fn images_declaring_more_than_the_allowance_are_not_decoded() {
     assert_eq!(crate::images::mask_alpha(&blob, 60_000, 60_000, false), None);
     assert_eq!(crate::images::mask_alpha(&blob, 2, 2, false), None, "another size is not decoded at all");
     let c: CompressionSettings = serde_json::from_value(json!({"gray": {"downsample": "bicubic", "ppi": 72, "abovePpi": 100}})).unwrap();
-    let r = crate::images::recode(&png, (10.0, 10.0), &c, false, None);
+    let r = crate::images::recode(&png, (10.0, 10.0), &c, false, None, true);
     assert!(r.image.is_none(), "kept as it is");
+}
+
+/// A version 2.1 display ICC profile header for colour space `space` (`RGB ` or `GRAY`), `len`
+/// bytes in all, every byte after the header different from its neighbors.
+fn icc_profile(space: &[u8; 4], len: usize) -> Vec<u8> {
+    let mut icc: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+    icc[..4].copy_from_slice(&u32::try_from(len).unwrap().to_be_bytes());
+    icc[8..12].copy_from_slice(&[2, 0x10, 0, 0]);
+    icc[12..16].copy_from_slice(b"mntr");
+    icc[16..20].copy_from_slice(space);
+    icc[36..40].copy_from_slice(b"acsp");
+    icc
+}
+
+/// `img` encoded as `format` carrying ICC profile `icc`.
+fn tagged(img: &DynamicImage, icc: &[u8], format: ImageFormat) -> Vec<u8> {
+    use image::ImageEncoder as _;
+    let mut out = Vec::new();
+    match format {
+        ImageFormat::Tiff => {
+            let mut enc = image::codecs::tiff::TiffEncoder::new(Cursor::new(&mut out));
+            enc.set_icc_profile(icc.to_vec()).unwrap();
+            img.write_with_encoder(enc).unwrap();
+        }
+        _ => {
+            let mut enc = image::codecs::png::PngEncoder::new(&mut out);
+            enc.set_icc_profile(icc.to_vec()).unwrap();
+            img.write_with_encoder(enc).unwrap();
+        }
+    }
+    out
+}
+
+/// An image XObject as it is written.
+#[derive(Debug, PartialEq)]
+struct Written {
+    /// Its colour space's name: `ICCBased` for an ICC-based one.
+    space: String,
+    /// The profile an ICC-based colour space holds.
+    icc: Option<Vec<u8>>,
+    bits: u8,
+    filter: String,
+    smask: bool,
+}
+
+/// Each image XObject of `pdf` other than soft masks.
+fn image_spaces(pdf: &[u8]) -> Vec<Written> {
+    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let images: Vec<Stream<'_>> = file
+        .objects()
+        .into_iter()
+        .filter_map(|o| match o {
+            Object::Stream(s) if s.dict().get::<Name<'_>>(b"Subtype").is_some_and(|n| n.as_ref() == b"Image") => Some(s),
+            _ => None,
+        })
+        .collect();
+    let masks: Vec<Vec<u8>> = images.iter().filter_map(|s| s.dict().get::<Stream<'_>>(b"SMask")).map(|m| m.raw_data().to_vec()).collect();
+    let mut out = vec![];
+    for s in images.iter().filter(|s| !masks.contains(&s.raw_data().to_vec())) {
+        let d = s.dict();
+        let (space, icc) = match (d.get::<Name<'_>>(b"ColorSpace"), d.get::<Array<'_>>(b"ColorSpace")) {
+            (Some(n), _) => (n.as_str().to_string(), None),
+            (_, Some(a)) => {
+                let mut it = a.flex_iter();
+                let name = it.next::<Name<'_>>().unwrap().as_str().to_string();
+                (name, it.next::<Stream<'_>>().map(|s| s.decoded().unwrap().into_owned()))
+            }
+            _ => (String::new(), None),
+        };
+        let filter = d.get::<Name<'_>>(b"Filter").map(|n| n.as_str().to_string()).unwrap_or_default();
+        let (bits, smask) = (d.get::<u8>(b"BitsPerComponent").unwrap_or(0), d.get::<Stream<'_>>(b"SMask").is_some());
+        out.push(Written { space, icc, bits, filter, smask });
+    }
+    out
+}
+
+/// A gray or RGB TIFF that carries an ICC profile of its colour space is written in an ICC-based
+/// colour space holding the same profile, at 16 bits a sample from PDF 1.5 on, with its alpha as
+/// a soft mask; and so is a tagged TIFF or PNG that is resampled or compressed with JPEG. Pixels
+/// the Output settings convert, and a profile of another colour space, are written without it.
+#[test]
+fn tagged_tiffs_keep_their_icc_profile() {
+    let (rgb, gray) = (icc_profile(b"RGB ", 600), icc_profile(b"GRAY", 300));
+    let mut clear = colour().to_rgba8();
+    clear.put_pixel(0, 0, image::Rgba([10, 20, 30, 0]));
+    let tiff = |img: &DynamicImage, icc: &[u8]| doc(tagged(img, icc, ImageFormat::Tiff), "image/tiff");
+    let export = |d: &Document, settings: Value| {
+        let mut settings: PdfSettings = serde_json::from_value(settings).unwrap();
+        settings.compression.compress_text = false;
+        let r = export_with_report(d, &PdfOptions { settings, ..Default::default() }).unwrap();
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+        image_spaces(&r.bytes)
+    };
+    let icc_based = |icc: &[u8], bits: u8, filter: &str, smask: bool| {
+        vec![Written { space: "ICCBased".into(), icc: Some(icc.to_vec()), bits, filter: filter.into(), smask }]
+    };
+    let flate = "FlateDecode";
+    let cases = [
+        ("RGB", tiff(&colour(), &rgb), json!({}), icc_based(&rgb, 8, flate, false)),
+        ("gray", tiff(&colour().grayscale(), &gray), json!({}), icc_based(&gray, 8, flate, false)),
+        (
+            "RGB, 16 bits",
+            tiff(&DynamicImage::ImageRgb16(colour().to_rgb16()), &rgb),
+            json!({"compatibility": "1.7"}),
+            icc_based(&rgb, 16, flate, false),
+        ),
+        (
+            "RGB, 16 bits, PDF 1.4",
+            tiff(&DynamicImage::ImageRgb16(colour().to_rgb16()), &rgb),
+            json!({"compatibility": "1.4"}),
+            icc_based(&rgb, 8, flate, false),
+        ),
+        ("RGBA", tiff(&clear.clone().into(), &rgb), json!({}), icc_based(&rgb, 8, flate, true)),
+        (
+            "RGB, resampled",
+            tiff(&colour(), &rgb),
+            json!({"compression": {"color": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}}),
+            icc_based(&rgb, 8, flate, false),
+        ),
+        (
+            "gray, resampled",
+            tiff(&colour().grayscale(), &gray),
+            json!({"compression": {"gray": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}}),
+            icc_based(&gray, 8, flate, false),
+        ),
+        ("RGB, JPEG", tiff(&colour(), &rgb), json!({"compression": {"color": {"compression": "jpeg"}}}), icc_based(&rgb, 8, "DCTDecode", false)),
+        (
+            "gray, JPEG",
+            tiff(&colour().grayscale(), &gray),
+            json!({"compression": {"gray": {"compression": "jpeg"}}}),
+            icc_based(&gray, 8, "DCTDecode", false),
+        ),
+        (
+            "PNG, resampled",
+            doc(tagged(&colour(), &rgb, ImageFormat::Png), "image/png"),
+            json!({"compression": {"color": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}}),
+            icc_based(&rgb, 8, flate, false),
+        ),
+    ];
+    for (what, d, settings, want) in cases {
+        assert_eq!(export(&d, settings), want, "{what}");
+    }
+    // A gray image in an RGB profile stays RGB to keep it, resampled too.
+    let neutral = tiff(&DynamicImage::ImageRgb8(colour().grayscale().to_rgb8()), &rgb);
+    for settings in [json!({}), json!({"compression": {"color": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}})] {
+        assert_eq!(export(&neutral, settings.clone()), icc_based(&rgb, 8, flate, false), "neutral RGB, {settings}");
+    }
+    // A profile of another colour space is left out.
+    let spaces = export(&tiff(&colour(), &gray), json!({}));
+    assert!(spaces.len() == 1 && spaces[0].space == "DeviceRGB" && spaces[0].icc.is_none(), "RGB in a gray profile: {spaces:?}");
+    // Converted pixels are in the destination's colours, not the image's profile.
+    for destination in [vectorcraft_color::cms::DISPLAY_P3, vectorcraft_color::cms::GENERIC_CMYK] {
+        let spaces = export(&tiff(&colour(), &rgb), json!({"output": {"conversion": "destination", "destination": destination}}));
+        assert!(spaces.len() == 1 && spaces[0].icc.as_deref() != Some(rgb.as_slice()), "converted to {destination}: {spaces:?}");
+    }
+    // PDF/X-1a has device colours only: a tagged gray TIFF or PNG is written in DeviceGray, kept as
+    // it is, resampled or compressed with JPEG.
+    let compressions = [json!({}), json!({"gray": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}), json!({"gray": {"compression": "jpeg"}})];
+    let png = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Png), "image/png");
+    for (format, d) in [("TIFF", tiff(&colour().grayscale(), &gray)), ("PNG", png)] {
+        for compression in &compressions {
+            let mut settings: PdfSettings =
+                serde_json::from_value(json!({"standard": "pdfX1a", "compatibility": "1.3", "compression": compression.clone()})).unwrap();
+            settings.compression.compress_text = false;
+            let r = export_with_report(&d, &PdfOptions { settings, ..Default::default() });
+            let spaces = image_spaces(&r.unwrap_or_else(|e| panic!("PDF/X-1a, {format}, {compression}: {e}")).bytes);
+            let gray = spaces.len() == 1 && spaces[0].space == "DeviceGray" && spaces[0].icc.is_none();
+            assert!(gray, "PDF/X-1a, {format}, {compression}: {spaces:?}");
+        }
+    }
 }
