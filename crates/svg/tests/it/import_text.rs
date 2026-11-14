@@ -469,6 +469,9 @@ fn rtl_point_text_start_and_end_use_directional_edges() {
         (r#"<text x="200" y="60" direction="rtl" font-size="20"><tspan direction="ltr">Wave</tspan></text>"#, 0.0),
         (r#"<text x="200" y="60" text-anchor="start" font-size="20">Wave</text>"#, 0.0),
         (r#"<text x="200" y="60" direction="ltr" text-anchor="end" font-size="20">Wave</text>"#, 1.0),
+        // CSS keywords are case-insensitive.
+        (r#"<text x="200" y="60" direction="RTL" font-size="20">Wave</text>"#, 1.0),
+        (r#"<text x="200" y="60" style="direction: Rtl" text-anchor="end" font-size="20">Wave</text>"#, 0.0),
         // With `unicode-bidi: plaintext`, the direction of the chunk's first strong character.
         (r#"<text x="200" y="60" unicode-bidi="plaintext" font-size="20">&#x5D0;&#x5D1;&#x5D2;</text>"#, 1.0),
         (r#"<text x="200" y="60" unicode-bidi="plaintext" text-anchor="end" font-size="20">12 &#x5D0;&#x5D1;</text>"#, 0.0),
@@ -572,6 +575,8 @@ fn a_tspan_bidi_embedding_becomes_its_character_direction() {
         ("ltr", "rtl", "normal", None, false),
         ("rtl", "ltr", "normal", None, false),
         ("ltr", "rtl", "EMBED", Some(Rtl), false),
+        ("ltr", "RTL", "embed", Some(Rtl), false),
+        ("RTL", "ltr", "embed", Some(Ltr), false),
         ("ltr", "rtl", "sideways", None, false),
     ] {
         let (t, w) = read(&format!(
@@ -581,7 +586,7 @@ fn a_tspan_bidi_embedding_becomes_its_character_direction() {
         assert_eq!(t.plain_text(), "ab 1 2 cd", "{case}: the characters stay in logical order");
         assert_eq!(char_direction_of(&t, "1 2"), want, "{case}: {:?}", t.runs);
         assert_eq!(char_direction_of(&t, "ab"), None, "{case}");
-        assert_eq!(t.para_at(0).direction == Some(Rtl), outer == "rtl", "{case}: the paragraph keeps the text's direction");
+        assert_eq!(t.para_at(0).direction == Some(Rtl), outer.eq_ignore_ascii_case("rtl"), "{case}: the paragraph keeps the text's direction");
         assert_eq!(w.iter().any(|w| w.contains("bidi-override") && w.contains("not supported")), warns, "{case}: {w:?}");
         if !warns {
             assert!(w.is_empty(), "{case}: {w:?}");
