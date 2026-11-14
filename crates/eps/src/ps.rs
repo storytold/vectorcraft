@@ -21,9 +21,6 @@ VCdict begin
 end
 ";
 
-/// Longest line of encoded data (DSC readers take up to 255 characters).
-const LINE: usize = 76;
-
 /// `v` as PostScript writes it: at most four decimals, no trailing zeros (0 when not finite).
 pub(crate) fn num(v: f64) -> String {
     let mut s = String::new();
