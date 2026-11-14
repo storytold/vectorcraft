@@ -2491,6 +2491,7 @@ digits	Malayalam	Malajalam
 	Export Asset	Vie resurssi
 	Export to:	Vie kohteeseen:
 	Format Settings	Muotoasetukset
+	Format Settings…	Muotoasetukset…
 	Formats:	Muodot:
 	Full Document	Koko asiakirja
 	Include Bleed	Sisällytä leikkuuvara
@@ -7567,6 +7568,9 @@ breakText	Glyphs	Merkit
 	Grommets	Purjerenkaat
 	Grommet Inset	Purjerenkaiden etäisyys reunasta
 	Diameter	Halkaisija
+	Nest Shapes…	Sijoittele muodot…
+	Nest Shapes	Sijoittele muodot
+	Roll	Rulla
 
 # Messages of the effects, 3D, image and PDF export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-tehosteet vaativat äärelliset koordinaatit 100 miljoonan pisteen rajoissa

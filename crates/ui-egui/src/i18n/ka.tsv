@@ -2255,6 +2255,7 @@ digits	Malayalam	მალაიალამური
 	Export Asset	რესურსის ექსპორტირება
 	Export to:	ექსპორტის ადგილი:
 	Format Settings	ფორმატის პარამეტრები
+	Format Settings…	ფორმატის პარამეტრები…
 	Formats:	ფორმატები:
 	Full Document	მთელი დოკუმენტი
 	Include Bleed	ჭრისპირა არის ჩართვა
@@ -7646,3 +7647,6 @@ font-script	Japanese	იაპონური
 	Grommets	ლუვერები
 	Grommet Inset	ლუვერების დაშორება კიდიდან
 	Diameter	დიამეტრი
+	Nest Shapes…	ფორმების განლაგება…
+	Nest Shapes	ფორმების განლაგება
+	Roll	რულონი

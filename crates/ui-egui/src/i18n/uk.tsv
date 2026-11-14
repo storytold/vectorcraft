@@ -1356,6 +1356,7 @@ file-filter	Templates	Шаблони
 	Format	Формат
 	Format Options	Параметри формату
 	Format Settings	Параметри формату
+	Format Settings…	Параметри формату…
 	Format:	Формат:
 	Formats:	Формати:
 	Fractional Widths	Дробові ширини
@@ -8952,3 +8953,6 @@ breakText	Glyphs	Гліфи
 @msg	turn on at least one side	увімкніть принаймні одну сторону
 @msg	with no hem and no grommets there is nothing to mark	без підгину й люверсів немає чого розмічати
 @msg	{saving} failed: {e}	{saving}: не вдалося: {e}
+	Nest Shapes…	Розкладка фігур…
+	Nest Shapes	Розкладка фігур
+	Roll	Рулон

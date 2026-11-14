@@ -2451,6 +2451,7 @@ digits	Malayalam	Malajalam
 	Export Asset	Eksportuj zasób
 	Export to:	Eksportuj do:
 	Format Settings	Ustawienia formatu
+	Format Settings…	Ustawienia formatu…
 	Formats:	Formaty:
 	Full Document	Cały dokument
 	Include Bleed	Uwzględnij spad
@@ -9198,6 +9199,9 @@ breakText	Glyphs	Glify
 @msg	{what} can't be intertwined	{what} nie można przeplatać
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} nie mieści się na papierze wraz ze spadem i znacznikami
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}: wydruk zająłby ponad {MAX_TILES} kafelków: zmniejsz skalę
+	Nest Shapes…	Rozmieść kształty…
+	Nest Shapes	Rozmieść kształty
+	Roll	Rolka
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Efekty 3D wymagają skończonych współrzędnych w zakresie 100 milionów punktów

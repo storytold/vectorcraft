@@ -1265,6 +1265,7 @@ font-technology	Variable	Μεταβλητές
 	Format	Μορφή
 	Format Options	Επιλογές μορφής
 	Format Settings	Ρυθμίσεις μορφής
+	Format Settings…	Ρυθμίσεις μορφής…
 	Format:	Μορφή:
 	Formats:	Μορφές:
 	Fractional Widths	Κλασματικά πλάτη
@@ -7485,6 +7486,9 @@ breakText	Glyphs	Γλύφοι
 	Grommets	Τρουκς
 	Grommet Inset	Απόσταση τρουκς από την άκρη
 	Diameter	Διάμετρος
+	Nest Shapes…	Ένθεση σχημάτων…
+	Nest Shapes	Ένθεση σχημάτων
+	Roll	Ρολό
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books, DXF import and PDF export.
 @msg	3D effects require finite coordinates within 100 million points	Τα εφέ 3D απαιτούν πεπερασμένες συντεταγμένες εντός 100 εκατομμυρίων τυπογραφικών στιγμών

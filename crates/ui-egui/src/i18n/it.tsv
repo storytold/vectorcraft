@@ -1362,6 +1362,7 @@ file-filter	Templates	Modelli
 	Format	Formato
 	Format Options	Opzioni formato
 	Format Settings	Impostazioni formato
+	Format Settings…	Impostazioni formato…
 	Format:	Formato:
 	Formats:	Formati:
 	Fractional Widths	Larghezze frazionarie
@@ -9093,3 +9094,6 @@ breakText	Glyphs	Glifi
 	Grommets	Occhielli
 	Grommet Inset	Distanza degli occhielli dal bordo
 	Diameter	Diametro
+	Nest Shapes…	Annida forme…
+	Nest Shapes	Annida forme
+	Roll	Rotolo
