@@ -162,6 +162,139 @@ fn pin_to_page(n: &mut Node, m: Affine) {
 }
 
 /// What SVG Tiny 1.2 does without masks.
+/// The warning when Expand Clipping Masks leaves a clipping group as a `<clipPath>`.
+const EXPAND_CLIPS_KEPT: &str = "Expand Clipping Masks left a clipping mask over art it can't clip as geometry (a stroke, type, an image, an effect or a nested clip) as a <clipPath>, which some viewers ignore";
+
+/// Deepest nesting Expand Clipping Masks follows inside a clipping group.
+const MAX_EXPAND_DEPTH: usize = 32;
+
+/// `n` with its geometry intersected with `region` (a clipping path's region in document space)
+/// under `region_rule`, for Expand Clipping Masks; `None` when `n` can't be written that way: art
+/// with a stroke, an effect, an opacity mask, a live object, type, an image or a nested clip stays
+/// a `<clipPath>`.
+fn clipped_copy(n: &Node, region: &PathData, region_rule: FillRule, depth: usize) -> Option<std::sync::Arc<Node>> {
+    if depth > MAX_EXPAND_DEPTH {
+        return None;
+    }
+    let extras = n.extras();
+    let live = extras.mask.is_some()
+        || extras.intertwine.is_some()
+        || !extras.intertwine_tiers.is_empty()
+        || extras.colorize.is_some()
+        || extras.live_paint_gaps.is_some()
+        || extras.objects_on_path.is_some()
+        || extras.shaper.is_some()
+        || extras.graph.is_some();
+    if live || !n.appearance.effects.is_empty() || !matches!(n.knockout, vectorcraft_doc::Knockout::Neutral) {
+        return None;
+    }
+    // A paint that carries an effect, or one written as a raster image behind an internal
+    // `<clipPath>`, can't be trimmed as geometry: it paints past the shape the intersection makes.
+    if paints_beyond_geometry(n) {
+        return None;
+    }
+    // Hidden art is left out anyway: there is nothing to clip.
+    if !n.visible {
+        return Some(std::sync::Arc::new(n.clone()));
+    }
+    let bounds = n.geometric_bounds();
+    let mut out = n.clone();
+    match &n.kind {
+        NodeKind::Path { path, rule, guide, .. } => {
+            if *guide || path.is_empty() {
+                return Some(std::sync::Arc::new(out));
+            }
+            if paints_a_stroke(n) {
+                return None;
+            }
+            let inter = vectorcraft_pathops::try_boolean(
+                path,
+                *rule,
+                region,
+                region_rule,
+                vectorcraft_pathops::BoolOp::Intersect,
+                vectorcraft_pathops::DEFAULT_PRECISION,
+            )
+            .ok()?;
+            pin_gradients(&mut out, bounds);
+            if let NodeKind::Path { path, rule, live, .. } = &mut out.kind {
+                *path = inter;
+                *rule = FillRule::NonZero;
+                *live = None;
+            }
+            Some(std::sync::Arc::new(out))
+        }
+        NodeKind::Compound { children, rule } => {
+            if paints_a_stroke(n) {
+                return None;
+            }
+            let mut all = PathData::default();
+            for child in children.iter().filter(|c| c.visible) {
+                if let Some(p) = child.path_data() {
+                    all.subpaths.extend(p.subpaths.iter().cloned());
+                }
+            }
+            if all.is_empty() {
+                return Some(std::sync::Arc::new(out));
+            }
+            let inter = vectorcraft_pathops::try_boolean(
+                &all,
+                *rule,
+                region,
+                region_rule,
+                vectorcraft_pathops::BoolOp::Intersect,
+                vectorcraft_pathops::DEFAULT_PRECISION,
+            )
+            .ok()?;
+            pin_gradients(&mut out, bounds);
+            out.kind = NodeKind::Path { path: inter, rule: FillRule::NonZero, live: None, clipping: false, guide: false };
+            Some(std::sync::Arc::new(out))
+        }
+        NodeKind::Group { children, clip: false } => {
+            let mut kids = Vec::with_capacity(children.len());
+            for child in children {
+                kids.push(clipped_copy(child, region, region_rule, depth + 1)?);
+            }
+            if let NodeKind::Group { children, .. } = &mut out.kind {
+                *children = kids;
+            }
+            Some(std::sync::Arc::new(out))
+        }
+        _ => None,
+    }
+}
+
+/// Whether `n` paints something the intersection can't reproduce: a visible paint with an effect
+/// (a blur paints outside the trimmed shape) or a paint the writer draws as a raster image behind
+/// an internal `<clipPath>` (a reader that ignores clip paths shows the image's box instead).
+fn paints_beyond_geometry(n: &Node) -> bool {
+    n.appearance
+        .items
+        .iter()
+        .filter(|i| i.visible() && !i.paint().is_none())
+        .any(|i| i.effects().iter().any(|e| e.visible) || pixel_gradient(i.paint(), i.is_fill()).is_some())
+}
+
+/// A gradient fitted to the object's box (`geom: None`) refits to the box of the intersection,
+/// stretching its stops over the part the clip keeps. Pin it to the box it was fitted to before
+/// the geometry changes, so the visible part keeps its colours.
+fn pin_gradients(n: &mut Node, bounds: Option<Rect>) {
+    let Some(bounds) = bounds else { return };
+    for item in &mut n.appearance.items {
+        if item.visible()
+            && let Paint::Gradient(g) = item.paint_mut()
+        {
+            g.pin(bounds);
+        }
+    }
+}
+
+/// Whether `n` paints a stroke: a clipped stroke needs its outline, which Expand Clipping Masks
+/// leaves as a `<clipPath>`.
+fn paints_a_stroke(n: &Node) -> bool {
+    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0))
+}
+
 const TINY_MASKS: &str = "SVG Tiny 1.2 has no masks: opacity masks are left out and knockout groups written as plain groups";
 
 /// What a knockout group too large to mask is written as.
@@ -804,6 +937,59 @@ impl Writer<'_> {
         }
     }
 
+    /// Writes `n`'s clipping group as clipped geometry instead of a `<clipPath>` (Expand Clipping
+    /// Masks), for readers that ignore `<clipPath>` (Qt SVG behind KDE's thumbnails and viewers,
+    /// some Office and CAD importers): every child is intersected with the clipping path's region,
+    /// the clipping path's fill painted behind it and its stroke over it, in the order
+    /// [`Self::node_body`] writes them. False when a child can't be expanded (a stroke, type, an
+    /// image, an effect, a nested clip), leaving the caller to write the `<clipPath>`.
+    fn expand_clip_group(&mut self, n: &Node, clip: &Node, rest: &[std::sync::Arc<Node>]) -> bool {
+        // A knockout group masks each child by the ones above it; written directly they would
+        // show through each other.
+        if n.knocks_out(self.knockout) {
+            self.warn(EXPAND_CLIPS_KEPT);
+            return false;
+        }
+        let paint = clip.clip_paint();
+        // The clipping path's fill is inside the `<clipPath>`; an effect on it would paint past
+        // the shape written here.
+        if paint.fill.as_ref().is_some_and(paints_beyond_geometry) {
+            self.warn(EXPAND_CLIPS_KEPT);
+            return false;
+        }
+        let Some((region, region_rule)) = vectorcraft_effects::clip_outline(clip) else { return false };
+        let region = PathData::from_bezpath(&region);
+        let mut children = Vec::with_capacity(rest.len());
+        for child in rest {
+            match clipped_copy(child, &region, region_rule, 0) {
+                Some(c) => children.push(c),
+                None => {
+                    self.warn(EXPAND_CLIPS_KEPT);
+                    return false;
+                }
+            }
+        }
+        let id = self.id_attr(n);
+        let a = self.attrs(&self.group_props(n));
+        self.line(&format!("<g{id}{a}>"));
+        self.depth += 1;
+        if let Some(fill) = &paint.fill {
+            self.node(fill);
+        }
+        // `Off` inside a knockout parent: the children composite normally, as the `<clipPath>`
+        // branch's `group_children` does.
+        self.group_children(n, &children);
+        if let Some(stroke) = &paint.stroke {
+            let anonymous = self.anonymous;
+            self.anonymous |= paint.fill.is_some();
+            self.node(stroke);
+            self.anonymous = anonymous;
+        }
+        self.depth -= 1;
+        self.line("</g>");
+        true
+    }
+
     /// An object, inside `<a>` when it links to a URL (Attributes panel).
     pub(super) fn node(&mut self, n: &Node) {
         // Ruler guides are not written, not even as a link.
@@ -859,6 +1045,11 @@ impl Writer<'_> {
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 let Some((clip, rest)) = children.split_first() else { return };
+                // Expand Clipping Masks: clipped geometry, which readers that ignore `<clipPath>`
+                // draw as the app does.
+                if self.opts.expand_clips && self.expand_clip_group(n, clip, rest) {
+                    return;
+                }
                 let cid = self.fresh_id("clip-path");
                 self.def(1, &format!("<clipPath id=\"{cid}\">"));
                 // The region every output clips to; with nothing to clip by, an empty clip path

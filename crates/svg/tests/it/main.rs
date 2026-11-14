@@ -4,6 +4,7 @@
 
 mod basic_shapes;
 mod blend_export;
+mod clip_expand;
 mod clip_text;
 mod colorized_images;
 mod colour_glyphs;

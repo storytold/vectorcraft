@@ -1,7 +1,7 @@
 //! SVG Options (Export As SVG, Save As / Save a Copy to .svg): profile, styling, fonts, images,
-//! object ids, decimals, encoding, minify, responsive, embedded fonts, artboards (export) or
-//! editing data (save), and a read-only view of the code. OK remembers the choices for next time and runs the export or save command with
-//! them as `svg: {…}`.
+//! object ids, decimals, encoding, minify, responsive, expanded clipping masks, embedded fonts,
+//! artboards (export) or editing data (save), and a read-only view of the code. OK remembers the
+//! choices for next time and runs the export or save command with them as `svg: {…}`.
 
 use std::sync::Arc;
 
@@ -76,6 +76,7 @@ pub(super) fn first_use() -> Map<String, Value> {
     m.remove("hiddenLayers");
     m.insert("styling".into(), json!("css"));
     m.insert("responsive".into(), json!(true));
+    m.insert("expandClips".into(), json!(true));
     m.insert("useArtboards".into(), json!(true));
     m
 }
@@ -230,6 +231,7 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
     if !screens {
         check(ui, d, "variableData", tl!("Include Variable Data"), true);
     }
+    check(ui, d, "expandClips", tl!("Expand Clipping Masks"), true);
 }
 
 /// Use Artboards: all of them or a range; off = the bounds of all art.
