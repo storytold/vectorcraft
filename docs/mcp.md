@@ -244,6 +244,21 @@ the suite) keep the agent to the folders you give it:
   without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
   Show Code. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
   person at the keyboard exports it as stored.
+- The same SVG and SVGZ outputs are refused with "a linked image file is outside the read roots", which names no
+  file or folder, when the file would name a linked image's file outside the read roots (a path, a `file:` URL,
+  or a relative path taken from the document's folder). An `<image>` names the file with `images: "link"`, and
+  with `embed` when the document holds no pixels for the image. An image colorized with a solid fill names
+  no file when its pixels are gray (the file gets the colorized pixels) or missing (the file leaves it out).
+  With `preserveEditing`, the document the SVG carries names every linked image and placed file, the relative
+  paths kept of them and each data set's image, in every symbol, pattern, graph design and brush, used or not,
+  colorized or not, and a stored brush entry that does not read as a brush is refused too, since its links
+  cannot be checked. Otherwise the images of the art the file writes,
+  in opacity masks and in the symbols, patterns and brushes that art uses, are checked: hidden layers and
+  objects only with `hiddenLayers` (a save keeps them unless it is `false`), and template layers and the
+  layer of opacity-mask or symbol editing mode never. `selectedOnly` and `document.exportSelection` check the
+  selected objects only, and `clipboard.exportSvg` checks the copied objects, following a relative path from
+  the document they came from while it is open; in a frame a request drives, Copy then puts no SVG on the
+  system clipboard. An image whose pixels the document holds exports embedded, and a URL is not checked.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
