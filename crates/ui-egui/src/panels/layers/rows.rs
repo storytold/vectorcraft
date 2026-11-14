@@ -81,7 +81,9 @@ pub(super) fn drag_ghost(ui: &Ui, view: &View, src: NodeId, pos: egui::Pos2) {
 }
 
 /// Resolve the row clicked this frame: plain (highlight it), Ctrl/Cmd (toggle it) or Shift
-/// (highlight the rows from the last one clicked down to it).
+/// (highlight the rows from the last one clicked down to it). A plain click also lets go of the
+/// selected ruler guides, keeping the selected art (#7340): a guide's row picks it the way a
+/// highlight picks a row, so picking another row alone drops it.
 pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     let Some((id, m)) = out.click.take() else { return };
     let anchor: Option<NodeId> = ui.data(|d| d.get_temp(key("anchor")));
@@ -95,6 +97,10 @@ pub(super) fn resolve_click(ui: &Ui, view: &View, list: &[Row], out: &mut Out) {
     widgets::apply_row_click(&mut rows, &click);
     out.rows_after_click = Some(rows);
     let ids = |rows: &[NodeId]| rows.iter().map(|r| r.0).collect::<Vec<_>>();
+    if matches!(click, widgets::RowClick::Only(_)) && !view.guides.is_empty() {
+        // Toggled out of the selection, so the selected art stays.
+        out.actions.push(("guide.select".into(), json!({"indexes": view.guides, "toggle": true})));
+    }
     out.actions.push(match click {
         widgets::RowClick::Only(id) => ("layer.setCurrent".into(), json!({"id": id.0})),
         widgets::RowClick::Toggle(id) => ("layer.highlight".into(), json!({"ids": [id.0], "mode": "toggle"})),

@@ -209,7 +209,7 @@ fn a_documents_own_composite_font_draws_without_being_registered() {
 }
 
 /// A placed document draws its type in its own definition of a composite font that the document
-/// placing it defines differently.
+/// placing it defines differently, and as missing in one only the document placing it defines.
 #[test]
 fn a_placed_document_draws_its_own_definition_of_a_name_the_page_defines() {
     use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts, ImageBlob, LinkInfo, PlacedDocument};
@@ -260,6 +260,55 @@ fn a_placed_document_draws_its_own_definition_of_a_name_the_page_defines() {
     assert!(own == page(&plain, plain_id, "fontchange-placed-twice-plain", vec![]), "drawn in the placed document's definition");
     assert!(own != page(&inter, inter_id, "fontchange-placed-twice-inter", vec![]), "not in the page's");
     assert!(vectorcraft_text::FontDb::global().composite_font(NAME).is_none());
+    // A placed document that defines no composite font draws type naming the page's as missing.
+    let (undefined, undefined_id) = typed(NAME);
+    let (missing, missing_id) = typed("CF Placed Nowhere");
+    let borrowed = page(&undefined, undefined_id, "fontchange-placed-undefined", vec![definition("Inter")]);
+    assert!(borrowed == page(&missing, missing_id, "fontchange-placed-missing", vec![]), "drawn as in a missing font");
+    assert!(borrowed != page(&inter, inter_id, "fontchange-placed-undefined-inter", vec![]), "not in the page's definition");
+}
+
+/// A document that defines no composite font, drawn while another document's composite font of
+/// the name its type is set in is registered (that document in front), draws that type as in a
+/// missing font: in a render, an ink render, a thumbnail and a node render.
+#[test]
+fn a_document_draws_type_in_another_documents_composite_font_as_missing() {
+    use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts};
+    let _adding = adding_fonts();
+    const NAME: &str = "CF Front Only";
+    let db = vectorcraft_text::FontDb::global();
+    let typed = |family: &str| {
+        let mut d = Document::new(300.0, 150.0);
+        let style = CharStyle { size: 60.0, font_family: family.into(), ..Default::default() };
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 100.0), "Hamburg", style))));
+        let l = d.layers[0].id;
+        let id = d.insert(Some(l), 0, n).unwrap();
+        (d, id)
+    };
+    let (back, id) = typed(NAME);
+    let (missing, missing_id) = typed("CF Front Nowhere");
+    let (plain, plain_id) = typed("JetBrains Mono");
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let region = Rect::new(0.0, 0.0, 300.0, 150.0);
+    let draw = |d: &Document, id: NodeId| {
+        let n = d.node(id).unwrap().clone();
+        (
+            Renderer::new().render(d, 300, 150, Affine::IDENTITY, &opts).pixels,
+            Renderer::new().render_region_inks(d, region, 1.0, &opts),
+            Renderer::new().render_thumbnail(d, id, 64).map(|r| r.pixels),
+            Renderer::new().render_node(d, &std::sync::Arc::new(n), 300, 150, Affine::IDENTITY).map(|r| r.pixels),
+        )
+    };
+    let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
+    parts.roman = CompositePart::new("JetBrains Mono", "Regular");
+    db.set_composite_font(&CompositeFont { name: NAME.into(), parts });
+    let (drawn, as_missing, in_front) = (draw(&back, id), draw(&missing, missing_id), draw(&plain, plain_id));
+    db.remove_composite_font(NAME);
+    assert!(drawn.0 != in_front.0, "not in the front document's definition");
+    assert!(drawn.0 == as_missing.0, "rendered");
+    assert!(drawn.1 == as_missing.1, "rendered as ink amounts");
+    assert!(drawn.2 == as_missing.2, "thumbnail");
+    assert!(drawn.3 == as_missing.3, "node");
 }
 
 /// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes

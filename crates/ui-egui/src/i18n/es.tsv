@@ -905,6 +905,9 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La fuente del carácter seleccionado no está disponible.
 	No alternates for the selected character.	No hay alternativas para el carácter seleccionado.
 	Double-click to replace	Doble clic para reemplazar
+	Click to replace	Clic para reemplazar
+	Show all alternates in the Glyphs panel	Mostrar todas las alternativas en el panel Glifos
+	Show Character Alternates	Mostrar alternativas de carácter
 	Select one character with the Type tool first.	Primero selecciona un carácter con la herramienta Texto.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} es un glifo de {font}, no de la fuente del texto seleccionado ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertenece a {base} (U+{base_code}) {place}; tu selección es {sel} (U+{code}).
@@ -1339,6 +1342,7 @@ font-technology	Variable	Variables
 	Format	Formato
 	Format Options	Opciones de formato
 	Format Settings	Ajustes de formato
+	Format Settings…	Ajustes de formato…
 	Format:	Formato:
 	Formats:	Formatos:
 	Fractional Widths	Anchuras fraccionarias
@@ -6618,7 +6622,7 @@ axis	Y Axis	Eje Y
 @plural	Result: {n}|Results: {n}	Resultado: {n}|Resultados: {n}
 @msg	select one object	seleccione un objeto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La edición global funciona con trazados, trazados compuestos, instancias de símbolos y grupos de ellos
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no se encontraron objetos similares (las copias giradas o reflejadas no coinciden); cambie las opciones de edición global e inténtelo de nuevo
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	no se encontraron objetos similares (las copias reflejadas no coinciden); cambie las opciones de edición global e inténtelo de nuevo
 @msg	Global Edit is off	La edición global no está activa
 @msg	only an object of the Global Edit other than the one it started from can be left out	solo se puede excluir un objeto de la edición global distinto de aquel con el que empezó
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervalo como 1, 3-5, no {v}
@@ -7528,6 +7532,9 @@ breakText	Glyphs	Glifos
 	Open Tutorial Sample	Abrir muestra del tutorial
 	Finish Tutorial	Terminar tutorial
 	Next Tutorial	Tutorial siguiente
+	Show Learn Tab	Mostrar pestaña de Aprender
+	Show Skill	Mostrar habilidad
+	Back One Level	Volver un nivel
 	Back to Skills	Volver a las habilidades
 @msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no tiene muestra de práctica
 @msg	open the practice sample of `{id}` first (see learn.openSample)	abre primero la muestra de práctica de `{id}` (consulta learn.openSample)
@@ -7568,3 +7575,6 @@ breakText	Glyphs	Glifos
 	Grommets	Ojales
 	Grommet Inset	Distancia de los ojales al borde
 	Diameter	Diámetro
+	Nest Shapes…	Anidar formas…
+	Nest Shapes	Anidar formas
+	Roll	Rollo
