@@ -229,7 +229,7 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context) {
             egui::Popup::is_any_open(ctx)
                 || crate::dialogs::brush_options::tips_open(d)
                 || crate::dialogs::new_document_popup_open(d)
-                || crate::dialogs::export_artboard_name_editing(d)
+                || crate::dialogs::export_artboard_name_editing(app, d)
         });
         // Escape in Preferences' search field with text clears the field first.
         if !popup && pressed_anew(ctx, Key::Escape) && !crate::prefs_dialog::clear_search_on_escape(app, ctx) {

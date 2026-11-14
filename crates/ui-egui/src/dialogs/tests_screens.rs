@@ -1446,3 +1446,104 @@ fn double_clicking_an_artboard_name_in_export_for_screens_renames_it() {
         assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old);
     }
 }
+
+/// #7275: the typed name goes to the artboard whose name was double-clicked, even when the
+/// artboards change order (a command from the control channel or MCP) while it is typed. When that
+/// artboard is deleted, the field closes and Escape closes the dialog.
+#[test]
+fn an_artboard_name_follows_its_artboard_while_it_is_typed() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(3, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let names = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+        let rename = |h: &mut ScreensFrame, app: &mut VectorcraftApp, label: &str| {
+            let out = h.settle(app);
+            let at = screen_text_at(&out, label);
+            h.frame(app, vec![egui::Event::PointerMoved(at)]);
+            for pressed in [true, false, true, false] {
+                h.frame(
+                    app,
+                    vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+                );
+            }
+            h.settle(app);
+            assert!(h.ctx.egui_wants_keyboard_input(), "{view}: the double-click opens the name");
+        };
+        let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        rename(&mut h, &mut app, "2  Artboard 2");
+        app.run("artboard.reorder", json!({"index": 1, "to": 0})).unwrap();
+        h.frame(&mut app, vec![egui::Event::Text("Hero".into())]);
+        h.frame(&mut app, vec![enter]);
+        h.settle(&mut app);
+        assert_eq!(names(&app), ["Hero", "Artboard 1", "Artboard 3"], "{view}");
+        assert_eq!(kind(&app), Some(export_for_screens::KIND), "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+        // The artboard is deleted while its name is typed: the field closes, no other artboard
+        // takes the name, and Escape closes the dialog again.
+        rename(&mut h, &mut app, "2  Artboard 1");
+        h.frame(&mut app, vec![egui::Event::Text("Gone".into())]);
+        app.run("artboard.delete", json!({"indices": [1]})).unwrap();
+        h.settle(&mut app);
+        assert!(!h.ctx.egui_wants_keyboard_input(), "{view}: the field of a deleted artboard closes");
+        assert_eq!(names(&app), ["Hero", "Artboard 3"], "{view}");
+        let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        h.time += 0.1;
+        let input = egui::RawInput {
+            events: vec![escape],
+            time: Some(h.time),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+            ..Default::default()
+        };
+        let mut out = h.ctx.run_ui(input, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+            super::show(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        h.settle(&mut app);
+        assert_eq!(kind(&app), None, "{view}: Escape closes the dialog");
+        assert_eq!(names(&app), ["Hero", "Artboard 3"], "{view}");
+        assert!(log.borrow().is_empty(), "{view}: renaming must not export");
+    }
+}
+
+/// #7275: a name typed while another document becomes active (a command from the control channel
+/// or MCP) renames no artboard in either document, and Escape closes the dialog.
+#[test]
+fn an_artboard_name_stays_with_its_document() {
+    let (mut app, log) = app(2, true);
+    app.run("file.new", json!({"width": 60, "height": 40, "artboards": 2})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    open(&mut app);
+    let mut h = ScreensFrame::new();
+    let names = |app: &VectorcraftApp, i: usize| app.session.documents()[i].doc.artboards.iter().map(|a| a.name.clone()).collect::<Vec<_>>();
+    let out = h.settle(&mut app);
+    let at = screen_text_at(&out, "2  Artboard 2");
+    h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+    for pressed in [true, false, true, false] {
+        h.frame(&mut app, vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }]);
+    }
+    h.settle(&mut app);
+    assert!(h.ctx.egui_wants_keyboard_input(), "the double-click opens the name");
+    h.frame(&mut app, vec![egui::Event::Text("Elsewhere".into())]);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let escape = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+    h.time += 0.1;
+    let input = egui::RawInput {
+        events: vec![escape],
+        time: Some(h.time),
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+        ..Default::default()
+    };
+    let mut out = h.ctx.run_ui(input, |ui| {
+        crate::shortcuts::handle(&mut app, ui.ctx());
+        super::show(&mut app, ui.ctx());
+    });
+    out.textures_delta.clear();
+    h.settle(&mut app);
+    assert_eq!(kind(&app), None, "Escape closes the dialog");
+    assert_eq!(names(&app, 0), ["Artboard 1", "Artboard 2"]);
+    assert_eq!(names(&app, 1), ["Artboard 1", "Artboard 2"]);
+    assert!(log.borrow().is_empty(), "renaming must not export");
+}
