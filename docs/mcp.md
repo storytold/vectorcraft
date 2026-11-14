@@ -8624,11 +8624,12 @@ on again.
 - `dashes` (default `true`): `--` becomes an en dash and `---` an em dash.
 - `ellipsis` (default `true`): `...` becomes an ellipsis.
 - `fractions` (default `false`): 1/2, 1/4, 3/4 and the other fractions Unicode encodes as one character (thirds,
-  fifths, sixths, sevenths, eighths, ninths and 1/10) become that character. A fraction with a digit, a slash or a
-  decimal point next to it, as in 1/25, 1/2/26 or 1/2.5, is left as it is, also when a change of style falls inside
-  it. An inline graphic separates the text before it from the text after it, for this option and for `spaces`.
+  fifths, sixths, sevenths, eighths, ninths and 1/10) become that character. A fraction with a digit of any script, a
+  slash or a decimal point next to it, as in 1/25, 1/2/26 or 1/2.5, is left as it is, also when a change of style falls
+  inside it. An inline graphic separates the text before it from the text after it, for this option and for `spaces`.
 
-A ligature or a fraction is written only where the run's font has a glyph for it; elsewhere the letters stay. A value
+A ligature or a fraction is written only where the run's font has a glyph for it; elsewhere the letters stay. Ruby
+stays on the characters it was set on, and no replacement joins characters on both sides of a ruby span's end. A value
 other than true, false or null is refused. The reply gives the number of text objects changed and how many of each
 replacement were made; with nothing to replace, no undo step is recorded. Type › Smart Punctuation… opens a dialog with
 these options, Replace In (Selected Text Only or Entire Document) and Report Results, which lists the count of each

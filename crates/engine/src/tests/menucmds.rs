@@ -3671,6 +3671,42 @@ fn smart_spaces_keeps_one_space_after_a_period() {
     assert_eq!(r["replaced"]["spaces"], 2);
 }
 
+/// Ruby stays on the characters it was set on when Smart Punctuation makes the text before them
+/// longer (curly quotes) or shorter (Smart Spaces), and no replacement takes in characters on both
+/// sides of a ruby span's end: the fi with ruby on its i stays as letters, and a second space after
+/// a period with ruby of its own stays.
+#[test]
+fn smart_punctuation_keeps_ruby_on_its_characters() {
+    let mut s = session();
+    let spans = |s: &Session, t| match node(s, t).kind {
+        NodeKind::Text(o) => o.ruby.iter().map(|r| (r.start, r.end)).collect::<Vec<_>>(),
+        _ => vec![],
+    };
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": "'A'.  base fit X.  Y", "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    for (start, end) in [(1, 2), (6, 10), (12, 13), (18, 19)] {
+        s.execute("type.ruby", &json!({"text": "r", "start": start, "end": end})).unwrap();
+    }
+    let r = s.execute("type.smartPunctuation", &json!({"spaces": true, "fiLigatures": true})).unwrap();
+    assert_eq!(plain(&s, t), "‘A’. base fit X.  Y");
+    assert_eq!((&r["replaced"]["spaces"], &r["replaced"]["fiLigatures"]), (&json!(1), &json!(0)));
+    let text = plain(&s, t);
+    let on: Vec<&str> = spans(&s, t).into_iter().map(|(a, b)| &text[a..b]).collect();
+    assert_eq!(on, ["A", "base", "i", " "]);
+}
+
+/// Expert Fractions leaves a fraction next to a digit of another script as it is.
+#[test]
+fn expert_fractions_skip_fractions_next_to_digits_of_any_script() {
+    let mut s = session();
+    let words = "\u{662}1/2 1/2\u{662} 1/2.\u{662} 1/2";
+    let t = id_of(&s.execute("text.create", &json!({"x": 50, "y": 50, "text": words, "font": "Source Sans 3"})).unwrap());
+    sel(&mut s, &[t]);
+    let r = s.execute("type.smartPunctuation", &json!({"fractions": true})).unwrap();
+    assert_eq!(plain(&s, t), "\u{662}1/2 1/2\u{662} 1/2.\u{662} ½");
+    assert_eq!(r["replaced"]["fractions"], 1);
+}
+
 #[test]
 fn convert_point_area_roundtrip() {
     let mut s = session();

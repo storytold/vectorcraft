@@ -367,7 +367,8 @@ fn smart_spaces(text: &str, after: &mut Option<usize>, n: &mut usize) -> String 
 }
 
 /// The fraction `cs` starts with, and its length in characters: one of [`FRACTIONS`] that no digit,
-/// slash or decimal part follows, so `1/25`, `1/2/2026` and `1/2.5` are left as they are.
+/// slash or decimal part follows, so `1/25`, `1/2/2026` and `1/2.5` are left as they are. A digit
+/// counts in any script.
 fn fraction_at(cs: &[char]) -> Option<(usize, char)> {
     FRACTIONS.iter().find_map(|(text, f)| {
         let len = text.chars().count();
@@ -375,8 +376,8 @@ fn fraction_at(cs: &[char]) -> Option<(usize, char)> {
             return None;
         }
         let ends = match &cs[len..] {
-            [c, ..] if c.is_ascii_digit() || *c == '/' => false,
-            ['.' | ',', d, ..] if d.is_ascii_digit() => false,
+            [c, ..] if c.is_numeric() || *c == '/' => false,
+            ['.' | ',', d, ..] if d.is_numeric() => false,
             _ => true,
         };
         ends.then_some((len, *f))
@@ -395,7 +396,7 @@ fn expert_fractions(text: &str, prev: Option<char>, next: [Option<char>; 2], cov
     let mut i = 0;
     while i < len_text {
         let before = if i == 0 { prev } else { Some(cs[i - 1]) };
-        let free = !before.is_some_and(|c| c.is_ascii_digit() || matches!(c, '/' | '.' | ','));
+        let free = !before.is_some_and(|c| c.is_numeric() || matches!(c, '/' | '.' | ','));
         let found = fraction_at(&cs[i..]).filter(|(len, f)| i + len <= len_text && covers(*f));
         if free && let Some((len, f)) = found {
             out.push(f);
@@ -527,27 +528,69 @@ fn smart_punctuation(s: &mut Session, p: &Value) -> Result<Value> {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let mut st = PunctState::default();
             let mut any = false;
+            // The ruby spans' ends, in the plain text as it was. Each run is rewritten in pieces
+            // between them, so no replacement crosses one, and `moved` records where each end and
+            // each run's start lands in the new text.
+            let mut edges: Vec<usize> = t.ruby.iter().flat_map(|r| [r.start, r.end]).collect();
+            edges.sort_unstable();
+            edges.dedup();
+            let mut moved = vec![];
+            let (mut old_at, mut new_at) = (0, 0);
             // Inline graphics are art, not characters to rewrite. Each run sees the first two
             // characters of the runs after it, up to the next inline graphic, as they were.
             for i in 0..t.runs.len() {
+                let len = t.runs[i].text.len();
+                moved.push((old_at, new_at));
                 if t.runs[i].inline.is_some() {
                     // A graphic separates the characters on either side of it for Smart Spaces and
                     // Expert Fractions; quotes still read the character before it.
                     st.after_period = None;
                     st.after_graphic = true;
+                    (old_at, new_at) = (old_at + len, new_at + len);
                     continue;
                 }
                 let mut after = t.runs[i + 1..].iter().take_while(|r| r.inline.is_none()).flat_map(|r| r.text.chars());
-                let next = [after.next(), after.next()];
+                let following = [after.next(), after.next()];
+                // Smart Spaces counts no space across a ruby span's end, so it removes no space on
+                // the other side of one.
+                if edges.binary_search(&old_at).is_ok() {
+                    st.after_period = None;
+                }
                 let r = &mut t.runs[i];
-                let new = smarten(&r.text, &r.style, next, &o, &mut st, &mut n);
+                let mut cuts: Vec<usize> =
+                    edges.iter().filter(|&&e| e > old_at && e < old_at + len && r.text.is_char_boundary(e - old_at)).map(|e| e - old_at).collect();
+                cuts.push(len);
+                let mut new = String::with_capacity(len);
+                let mut from = 0;
+                for cut in cuts {
+                    if from > 0 {
+                        moved.push((old_at + from, new_at + new.len()));
+                        st.after_period = None;
+                    }
+                    let mut after = r.text[cut..].chars().chain(following.into_iter().flatten());
+                    let next = [after.next(), after.next()];
+                    new.push_str(&smarten(&r.text[from..cut], &r.style, next, &o, &mut st, &mut n));
+                    from = cut;
+                }
+                (old_at, new_at) = (old_at + len, new_at + new.len());
                 if new != r.text {
                     r.text = new;
                     any = true;
                 }
             }
+            moved.push((old_at, new_at));
             if any {
                 changed += 1;
+                // Each ruby end moves with the text before it; an end inside a character keeps its
+                // distance from the last place recorded before it.
+                let to_new = |v: usize| {
+                    let k = moved.partition_point(|&(old, _)| old <= v).saturating_sub(1);
+                    moved.get(k).map_or(v, |&(old, new)| new + (v - old.min(v)))
+                };
+                for span in &mut t.ruby {
+                    (span.start, span.end) = (to_new(span.start), to_new(span.end));
+                }
+                t.normalize_ruby();
                 refresh_bounds(t);
             }
         }
