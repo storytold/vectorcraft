@@ -7058,10 +7058,18 @@ added is reused), which the pasted objects follow. Linked colours show the docum
 spot colour as its Spot Colors option says). The result reports `{ids, added, merged, renamed: [{kind, from,
 to}]}`.
 
+`edit.pasteWithoutFormatting` sets the labels of a pasted graph in a new graph's label character style and
+paragraph attributes, keeping each label's alignment. The pasted graph no longer keeps its labels' character and
+paragraph formats, so a later `graph.setData` or `graph.setType` sets the labels the same way. The rest of the
+graph's art is pasted as it was copied.
+
 A global or spot swatch whose name the document gives another colour is a conflict: `clipboard.conflicts` lists
 them, and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
 pasted swatch comes in renamed) or one answer per name. Pasting back into the document the objects came from uses
-its resources as they are now and raises no conflict.
+its resources as they are now and raises no conflict. When the document's swatches change the color of a pasted pie's
+wedges (after a merge, or in the document the pie came from after a swatch it uses was changed), the legend labels in
+those wedges are set white on a dark wedge and black on a light one, as a redraw sets them, unless the pie keeps a fill
+for its legend labels.
 
 Placement: `edit.paste {center}` centres the objects on a point (the app passes the view centre), else offsets them
 by `dx`/`dy` (the Paste Offset preference). With nothing selected, `edit.pasteInFront` / `edit.pasteInBack` put them

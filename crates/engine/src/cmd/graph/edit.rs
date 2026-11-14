@@ -88,6 +88,23 @@ pub(crate) fn keep_placed(d: &mut Document, graphs: &[(NodeId, Option<Rect>, Opt
     }
 }
 
+/// Let `edit` change the art of graph node `n` (a copy outside any document) without the next redraw reading the
+/// change as a move or scale: the plot rect first takes any move or scale of the art since it was generated, as a
+/// redraw measures it, and the bounds the graph keeps become those of the changed art (also for a graph that had none,
+/// so a later move is followed).
+pub(crate) fn edit_graph_art(n: &mut Node, edit: impl FnOnce(&mut Node)) {
+    let moved = measured(n).and_then(|(placed, now)| n.extras().graph.as_deref().and_then(|g| carried(g.rect, placed, now)));
+    if let (Some(rect), Some(g)) = (moved, n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) {
+        g.rect = rect;
+    }
+    edit(n);
+    let children = n.children();
+    let (whole, art) = (children.and_then(|c| children_bounds(c)), children.and_then(|c| art_bounds(c)));
+    if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+        (g.placed, g.placed_art) = (whole, art);
+    }
+}
+
 /// Regenerate graph `id` from `spec` (adjusting the plot rect for any move/scale since the last
 /// generation, which is recorded in the spec's `placed_art` bounds, or `placed` in graphs saved without them).
 pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> Result<()> {
