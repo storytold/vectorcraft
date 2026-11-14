@@ -511,7 +511,7 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
+                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n), *xf)
                 {
                     self.nest += 1;
                     self.node(&art, true);
