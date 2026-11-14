@@ -7134,6 +7134,7 @@ breakText	Glyphs	글리프
 @msg	WebP encoding failed: {e}	WebP 인코딩 실패: {e}
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`index` must be a whole number	`index`은(는) 정수여야 합니다
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`는 smallThumb, mediumThumb, largeThumb, smallList 또는 largeList여야 합니다
 @msg	a line can't run from a point to itself	선은 한 점에서 같은 점으로 이어질 수 없습니다
 @msg	a line needs at least two points	선에는 점이 두 개 이상 필요합니다
