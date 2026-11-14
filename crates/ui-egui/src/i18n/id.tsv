@@ -1645,6 +1645,9 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
 	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
 	Double-click to replace	Klik ganda untuk mengganti
+	Click to replace	Klik untuk mengganti
+	Show all alternates in the Glyphs panel	Tampilkan semua alternatif di panel Glif
+	Show Character Alternates	Tampilkan alternatif karakter
 	Select one character with the Type tool first.	Pilih satu karakter dengan alat teks terlebih dahulu.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} adalah glif {font}, bukan dari font yang dipakai teks terpilih ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} milik {base} (U+{base_code}) {place}; pilihan Anda adalah {sel} (U+{code}).
@@ -2335,6 +2338,7 @@ digits	Malayalam	Malayalam
 	Export Asset	Ekspor aset
 	Export to:	Ekspor ke:
 	Format Settings	Pengaturan format
+	Format Settings…	Pengaturan format…
 	Formats:	Format:
 	Full Document	Dokumen penuh
 	Include Bleed	Sertakan bleed
@@ -6884,11 +6888,20 @@ breakText	Glyphs	Glif
 	Open Tutorial Sample	Buka contoh tutorial
 	Finish Tutorial	Selesaikan tutorial
 	Next Tutorial	Tutorial berikutnya
+	Show Learn Tab	Tampilkan tab Belajar
+	Show Skill	Tampilkan keterampilan
+	Back One Level	Kembali satu tingkat
 	Back to Skills	Kembali ke keterampilan
 @msg	tutorial `{id}` has no practice sample	tutorial `{id}` tidak memiliki contoh latihan
 @msg	open the practice sample of `{id}` first (see learn.openSample)	buka contoh latihan `{id}` terlebih dahulu (lihat learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	selesaikan `{id}` terlebih dahulu (lihat learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` adalah tutorial terakhir dalam keterampilannya
+	Reset progress	Atur ulang kemajuan
+	Mark Tutorial Step	Tandai langkah tutorial
+	Reset Learn Progress	Atur ulang kemajuan belajar
+@msg	missing `step` (see learn.show)	`step` tidak ada (lihat learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` harus berupa nomor langkah dari 0 sampai {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` sudah selesai (lihat learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Segarkan efek yang ditunda
@@ -6911,3 +6924,6 @@ breakText	Glyphs	Glif
 	Grommets	Mata ayam
 	Grommet Inset	Jarak mata ayam dari tepi
 	Diameter	Diameter
+	Nest Shapes…	Susun Bentuk…
+	Nest Shapes	Susun Bentuk
+	Roll	Gulungan
