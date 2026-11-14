@@ -2,8 +2,8 @@
 //! picture, and the picture's items become document objects here.
 //!
 //! - A filled or stroked path becomes a path with a fill and a stroke (caps, joins, miter limit
-//!   and dashes from the pen). Strokes drawn one after another, each starting where the last one
-//!   ended, with the same pen and clip, join into one path.
+//!   and dashes from the pen). Opaque strokes drawn one after another, each starting where the
+//!   last one ended, with the same pen and clip, join into one path.
 //! - A path filled with a pattern or hatched brush is filled with the average color of the
 //!   brush's tile.
 //! - A bitmap becomes an image (its pixels as PNG) placed where the picture draws it, turned or
@@ -18,7 +18,7 @@
 //! at its device's pixels a millimetre (96 pixels an inch when the header doesn't say).
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use craft_metafile::{Cap, ClipPath, HAlign, Item, Join, LineStyle, Seg, VAlign};
 use vectorcraft_color::Paint;
@@ -106,6 +106,10 @@ struct Pending {
 type MadeClips = HashMap<*const ClipPath, (Arc<ClipPath>, Option<Arc<Clip>>)>;
 /// The last clip region and the clip made for it.
 type MadeRegion = (Vec<[f32; 4]>, Option<Arc<Clip>>);
+/// Brush tiles already averaged, by address: items filled with the same brush share its tile. The
+/// `Weak` keeps the address from being reused, and the tile's pixels are freed once the last item
+/// that uses it has been read.
+type Averaged = HashMap<*const craft_metafile::Tile, (Weak<craft_metafile::Tile>, Option<[u8; 4]>)>;
 
 struct Mapper {
     /// Picture units → points.
@@ -120,6 +124,7 @@ struct Mapper {
     paths: MadeClips,
     region: Option<MadeRegion>,
     pending: Option<Pending>,
+    averaged: Averaged,
 }
 
 fn color(c: [u8; 4]) -> Paint {
@@ -161,6 +166,7 @@ impl Mapper {
             paths: HashMap::new(),
             region: None,
             pending: None,
+            averaged: HashMap::new(),
         }
     }
 
@@ -317,8 +323,10 @@ impl Mapper {
                         PathEl::MoveTo(p) => Some(*p),
                         _ => None,
                     });
+                    // A translucent stroke stays apart, so where strokes overlap each one shows.
                     if let Some(p) = &mut self.pending
                         && p.pen == pen
+                        && pen.color[3] == u8::MAX
                         && start.is_some()
                         && p.path.elements().last().and_then(|e| e.end_point()) == start
                     {
@@ -338,7 +346,9 @@ impl Mapper {
             Item::Pattern { segs, even_odd, tile, region, clips } => {
                 self.flush();
                 let Some(chain) = self.chain(region, &clips) else { return };
-                let Some(c) = average(&tile.rgba) else { return };
+                let Some(c) = self.averaged.entry(Arc::as_ptr(&tile)).or_insert_with(|| (Arc::downgrade(&tile), average(&tile.rgba))).1 else {
+                    return;
+                };
                 self.warn(PATTERNS);
                 let bp = self.path(&segs);
                 if let Some(n) = self.path_node(bp, Some(c), None, even_odd) {

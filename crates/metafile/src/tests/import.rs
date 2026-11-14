@@ -549,6 +549,29 @@ fn dual_emf_plus_files_draw_their_emf_plus_records() {
 }
 
 #[test]
+fn translucent_strokes_drawn_one_after_another_stay_apart() {
+    // EmfPlusObject: pen 0, 1 pixel wide, with a solid brush of `argb`; then two EmfPlusDrawLines
+    // with it, from A to B and from B back to A.
+    let header = le(&[0xDBC0_1002u32 as i32, 0, 96, 96]);
+    let lines = |argb: u32| {
+        let pen = [le(&[0xDBC0_1002u32 as i32, 0, 0, 2]), le_f32(&[1.0]), le(&[0xDBC0_1002u32 as i32, 0, argb as i32])].concat();
+        let a_to_b = [le(&[2]), le_f32(&[1000.0, 1000.0, 3000.0, 1000.0])].concat();
+        let b_to_a = [le(&[2]), le_f32(&[3000.0, 1000.0, 1000.0, 1000.0])].concat();
+        let comment = emf_plus(&[(0x4001, 0, header.clone()), (0x4008, 0x0200, pen), (0x400D, 0, a_to_b), (0x400D, 0, b_to_a), (0x4002, 0, vec![])]);
+        paths(&import(&hand_emf(5000, 3000, &[(70, comment)])).unwrap().document)
+    };
+    // Each translucent stroke keeps its own opacity, so where they overlap both show.
+    let p = lines(0x80FF_0000);
+    assert_eq!(p.len(), 2, "{p:?}");
+    for n in &p {
+        let AppearanceItem::Stroke(st) = &n.appearance.items[0] else { panic!("a stroke") };
+        assert!((st.opacity - 128.0 / 255.0).abs() < 1e-6, "{}", st.opacity);
+    }
+    // Opaque strokes still join into one path.
+    assert_eq!(lines(0xFFFF_0000).len(), 1);
+}
+
+#[test]
 fn pattern_brushes_fill_with_their_average_color() {
     // CREATEDIBPATTERNBRUSHPT: a 2 × 2 tile of 24-bit pixels, two red and two blue (bottom-up rows
     // padded to 4 bytes); selected, a null pen, a rectangle.
