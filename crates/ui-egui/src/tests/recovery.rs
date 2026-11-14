@@ -177,6 +177,131 @@ fn the_timer_asks_for_frames_while_idle() {
     assert!(recovery::frame(&mut app, 1.0).is_none());
 }
 
+/// The end of a failed recovery round's status line: how to use another folder.
+const TO_DO: &str = "; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)";
+
+/// An app keeping its copies in `folder` (the folder the app sets) or the one the preference
+/// names, with a modified document, a recovery round every 2 minutes and the clock started.
+fn app_in_folder(folder: &str, services: Services) -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.session.recovery.set_default_folder(Some(folder.to_string()));
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    app.session.prefs.autosave_interval = 2;
+    recovery::tick(&mut app, 0.0);
+    app
+}
+
+/// A fresh empty folder for test `name`.
+fn scratch(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("vc-ui-recovery-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// A recovery round that can't start names the recovery folder in use, whether the preference or
+/// the app set it, the error, and what to do.
+#[test]
+fn a_round_that_fails_names_the_folder_in_use_and_what_to_do() {
+    let dir = scratch("round");
+    let file = dir.join("not-a-folder");
+    std::fs::write(&file, b"").unwrap();
+    let shown = file.to_string_lossy().into_owned();
+    let mut app = app_in_folder(&shown, Services::default());
+    assert_eq!(recovery::tick(&mut app, 120.0), 0);
+    let start = format!("Couldn't save recovery data: {shown} is not a folder: ");
+    let end = format!(". Copies go to {shown}, the default recovery folder{TO_DO}");
+    assert!(app.ui.status.starts_with(&start) && app.ui.status.ends_with(&end), "{}", app.ui.status);
+    // A preference of spaces is no preference.
+    app.session.prefs.recovery_folder = "  ".into();
+    assert_eq!(recovery::tick(&mut app, 240.0), 0);
+    assert!(app.ui.status.starts_with(&start) && app.ui.status.ends_with(&end), "{}", app.ui.status);
+    app.session.prefs.recovery_folder = format!(" {shown} ");
+    assert_eq!(recovery::tick(&mut app, 360.0), 0);
+    let end = format!(". Copies go to {shown}, the folder set in Preferences{TO_DO}");
+    assert!(app.ui.status.starts_with(&start) && app.ui.status.ends_with(&end), "{}", app.ui.status);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A copy that fails on the background worker is reported the same way, not as the job's own
+/// "Saving recovery data for … failed" line.
+#[test]
+fn a_copy_that_fails_in_the_background_names_the_folder_and_what_to_do() {
+    let dir = scratch("copy");
+    let folder = dir.join("recovery");
+    let shown = folder.to_string_lossy().into_owned();
+    let services = Services { write_shared: Some(Arc::new(|_: &str, _: &[u8]| Ok(()))), ..Default::default() };
+    let mut app = app_in_folder(&shown, services);
+    assert_eq!(recovery::tick(&mut app, 120.0), 1);
+    assert_eq!(app.background.jobs.len(), 1, "on the worker");
+    background::wait_all(&mut app);
+    assert_eq!(app.ui.status, "Saved recovery data for Untitled-1");
+    // A folder with a file in it takes the copy's place, so the next copy can't be written.
+    let name = app.session.doc().unwrap().recovery.as_ref().unwrap().file.clone();
+    let copy = folder.join(format!("{name}.vectorcraft"));
+    std::fs::remove_file(&copy).unwrap();
+    std::fs::create_dir(&copy).unwrap();
+    std::fs::write(copy.join("in-the-way"), b"").unwrap();
+    app.run("shape.ellipse", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap();
+    assert_eq!(recovery::tick(&mut app, 240.0), 1);
+    // A folder chosen while the copy runs isn't the one that failed.
+    app.session.prefs.recovery_folder = dir.join("chosen-later").to_string_lossy().into_owned();
+    background::wait_all(&mut app);
+    let end = format!(". Copies go to {shown}, the default recovery folder{TO_DO}");
+    assert!(app.ui.status.starts_with("Couldn't save recovery data for Untitled-1: ") && app.ui.status.ends_with(&end), "{}", app.ui.status);
+    // Kept for replies to automation clients, which hide it outside their read roots.
+    assert_eq!(app.recovery.named, std::slice::from_ref(&shown));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A store the host installed whose document copies can't be written (other entries, such as
+/// locks, can).
+struct Refusing(MemoryStore);
+
+impl RecoveryStore for Refusing {
+    fn list(&self) -> Result<Vec<String>, String> {
+        self.0.list()
+    }
+    fn read(&self, name: &str) -> Result<Vec<u8>, String> {
+        self.0.read(name)
+    }
+    fn write(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
+        if name.ends_with(".vectorcraft") { Err("the store is full".into()) } else { self.0.write(name, bytes) }
+    }
+    fn remove(&self, name: &str) -> Result<(), String> {
+        self.0.remove(name)
+    }
+    fn location(&self) -> String {
+        self.0.location()
+    }
+    fn lock(&self, area: &str) -> Result<vectorcraft_engine::cmd::recovery::Lock, String> {
+        self.0.lock(area)
+    }
+    fn now(&self) -> Option<i64> {
+        self.0.now()
+    }
+}
+
+/// With a store the host installed there is no folder to name: a copy that fails shows the job's
+/// own line with the document's title, both on the worker and when it is written right away.
+#[test]
+fn a_copy_that_fails_in_a_host_store_names_the_document() {
+    let worker = Services { write_shared: Some(Arc::new(|_: &str, _: &[u8]| Ok(()))), ..Default::default() };
+    for services in [worker, Services::default()] {
+        let store: Arc<dyn RecoveryStore> = Arc::new(Refusing(MemoryStore::default()));
+        let mut app = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store), ..services });
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+        app.session.prefs.autosave_interval = 2;
+        recovery::tick(&mut app, 0.0);
+        assert_eq!(recovery::tick(&mut app, 120.0), 1);
+        background::wait_all(&mut app);
+        assert_eq!(app.ui.status, "Saving recovery data for Untitled-1 failed: the store is full");
+    }
+}
+
 /// Issue #367: a tab whose timers were paused (in the background) long enough for another tab to
 /// take it for gone and discard its copy writes the copy again on its first heartbeat after it
 /// resumes, even with the timer off (the copy was written by hand).

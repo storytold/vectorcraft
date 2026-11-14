@@ -168,7 +168,9 @@ pub fn trace_within(img: &Raster, params: &TraceParams, max_anchors: usize) -> R
 
 /// [`trace_within`], telling `steps` how far it has got: `steps(done, total)` after each stage
 /// that prepares the colour layers (`total` 0 while they aren't known yet) and after each colour
-/// layer, from whichever thread traced it. Once `steps` answers `false` the trace stops at the
+/// layer, from whichever thread traced it. Overlapping with Fills (without Create Strokes) counts
+/// in finer units instead: a share of `total` after each pass of each layer, in every round of
+/// enclosed areas (see `Layers::stacked`). Once `steps` answers `false` the trace stops at the
 /// next stage or layer with [`TraceError::Cancelled`].
 pub fn trace_watched(
     img: &Raster,
@@ -207,6 +209,10 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: St
         Begun::Done(out) => return Ok(out),
         Begun::Layers(p) => p,
     };
+    if p.stacks() {
+        let paths = p.job(0).stacked(&p.layers, p.largest(), steps)?;
+        return Ok((*p).finish_stacked(paths));
+    }
     let traced = {
         let job = p.job(0);
         // A layer takes about ten bytes a pixel of its box while it is traced (its mask, the labels
@@ -214,8 +220,7 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: St
         // in half a gigabyte, so that a large image is not traced at the cost of gigabytes.
         // (Overlapping labels a layer's mask once more before it is traced, with its labels and stack
         // freed before the trace starts.)
-        let largest = job.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1);
-        let at_a_time = ((512 << 20) / (largest * 10)).max(1);
+        let at_a_time = ((512 << 20) / (p.largest() * 10)).max(1);
         let total = p.layers.len() as u64;
         if !steps(0, total) {
             return Err(TraceError::Cancelled);
@@ -305,6 +310,33 @@ impl Prepared<'_> {
         }
     }
 
+    /// Whether the layers are traced together: Overlapping with Fills fills each shape whole and
+    /// traces what it encloses again above it (see `Layers::stacked`). Lines (Create Strokes) and
+    /// outlines (no Fills) are traced a layer at a time.
+    fn stacks(&self) -> bool {
+        self.params.method == Method::Overlapping && self.params.fills && !self.params.strokes
+    }
+
+    /// The pixel count of the largest layer's box (at least 1).
+    fn largest(&self) -> usize {
+        self.boxes.iter().flatten().map(|b| (b.2 - b.0) * (b.3 - b.1)).max().unwrap_or(1).max(1)
+    }
+
+    /// The result of `paths`, the layers traced together ([`Prepared::stacks`]).
+    fn finish_stacked(self, paths: Vec<TracedPath>) -> TraceResult {
+        let mut out = TraceResult { paths, keep_unmatched: self.keep_unmatched, keep_ignored: self.keep_ignored, ..TraceResult::default() };
+        // The colors used, bottom layer first.
+        for &(_, ci) in &self.layers {
+            if let Some(&color) = self.q.palette.get(ci)
+                && !out.palette.contains(&color)
+                && out.paths.iter().any(|p| p.color == color)
+            {
+                out.palette.push(color);
+            }
+        }
+        out
+    }
+
     /// The result of `traced`, the paths of each of [`Prepared::layers`] in order (`None` for a
     /// layer that passed the anchor maximum).
     fn finish(self, traced: Vec<Option<Vec<TracedPath>>>) -> Result<TraceResult, TraceError> {
@@ -327,8 +359,9 @@ impl Prepared<'_> {
 
 /// A trace made a part at a time, for a caller with no thread to trace on that must let other
 /// work run between the parts (the web build). The first [`TraceSteps::step`] finds the colour
-/// layers and each later one traces one layer, bottom first, one at a time; the result is the
-/// one [`trace_within`] gives.
+/// layers and each later one traces one layer, bottom first, one at a time (Overlapping with
+/// Fills, without Create Strokes, traces all of them in the second step, as its layers are traced
+/// together); the result is the one [`trace_within`] gives.
 pub struct TraceSteps {
     img: Arc<Raster>,
     params: TraceParams,
@@ -371,6 +404,10 @@ impl TraceSteps {
             }
             StepState::Layers(p, traced, anchors) => (p, traced, anchors),
         };
+        if prepared.stacks() {
+            let paths = prepared.job(0).stacked(&prepared.layers, prepared.largest(), &|_, _| true)?;
+            return Ok(Some(grouped((*prepared).finish_stacked(paths), &self.img, &self.params)));
+        }
         let Some(&(r, ci)) = prepared.layers.get(traced.len()) else { return Ok(None) };
         let (paths, anchors) = {
             let job = prepared.job(anchors);

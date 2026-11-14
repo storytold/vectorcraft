@@ -32,6 +32,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.color.strokeToFill",
     "addon.color.swatchLegend",
     "addon.contour.set",
+    "addon.cutting.banner",
     "addon.cutting.bridges",
     "addon.cutting.weed",
     "addon.image.applyColorMask",
@@ -58,6 +59,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.pathtools.shape.set",
     "addon.pathtools.slideAnchor",
     "addon.pathtools.smooth",
+    "addon.pathtools.trim",
     "addon.pen.append",
     "addon.pen.close",
     "addon.pen.closeJoin",
@@ -167,6 +169,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "effect.deferredStatus",
     "effect.duplicate",
     "effect.expandAppearance",
+    "effect.expandAsWireframes",
     "effect.list",
     "effect.move",
     "effect.remove",
@@ -692,7 +695,8 @@ pub(super) const ALLOWED: &[&str] = &[
 
 /// Commands a plug-in may not call although no rule refuses them, in order: they change the
 /// preferences, a tool's options, a drag's state or the font names the whole app knows, run
-/// plug-ins again, or hand an image to a Concept to Vector provider and its results.
+/// plug-ins again, read a file and report where it is on disk, or hand an image to a Concept to
+/// Vector provider and its results.
 pub(super) const DENIED: &[&str] = &[
     "addon.cleanup.splitText",
     "addon.pathtools.movePointsTogether",
@@ -709,5 +713,6 @@ pub(super) const DENIED: &[&str] = &[
     "object.liquify",
     "object.pathfinder.options",
     "stroke.arrowheads.edit",
+    "stroke.arrowheads.list",
     "type.compositeFonts.set",
 ];
