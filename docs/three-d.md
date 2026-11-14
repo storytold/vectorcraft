@@ -119,6 +119,14 @@ How a facet carries its seam depends on the lights and the paint:
   groups clipped to the union of its facets, so no seam reaches past the surface; a gradient fill, and a solid-color
   fill or stroke whose faces share one depth order with another solid's, fills each facet's ramps through a clip of
   the facet and its seam, outlined with round joins.
+  The facets of a surface drawn this way lie over an underlay
+  of themselves whose seams are 2 pt wide, reaching 1 pt past each edge, and one clip to the union of the facets and
+  their seams removes what the underlay paints past the surface. Where two facets' antialiased edges meet, the
+  underlay fills the pixels they leave partly uncovered with the neighbors' own light, so no black channel backdrop
+  or background shows there. Compared with the same art drawn at 3x and averaged down, away from the surface's outline
+  and from places where the light changes sharply, a pixel drawn at 1:1 is opaque where the 3x art is opaque, and
+  otherwise its alpha is within 3 levels. Inflate seen straight on with an opaque fill also has each color channel
+  within 3 levels (VectorCraft's own measure).
 - Extrude & Bevel (Classic), Rotate (Classic) and Revolve (Classic): a path and a seam for every face; gradient and
   pattern faces seam only the base paint, and the shading and highlight layers cover the face alone. The Wireframe
   surface draws edges only, with no seam.
