@@ -27,7 +27,7 @@ mod demand;
 mod fonts;
 #[cfg(any(target_arch = "wasm32", test))]
 mod keys;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", test))]
 mod locks;
 #[cfg(any(target_arch = "wasm32", test))]
 mod pencil;

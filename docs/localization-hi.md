@@ -98,8 +98,12 @@ main added paragraph labels, spine-index validation and two error messages: six 
 Main's workspace version is still 0.21.0; this PR does not change release versioning.
 
 `cargo test -p vectorcraft-ui-egui --lib i18n::tests` passes all 55 tests in Ubuntu 24.04 (WSL).
-The untranslated report has no Hindi section, meaning it found no missing Hindi rows among the
-categories it checks. This does not check dynamically assembled strings that the scanners miss.
+On 2026-11-14 the untranslated report on main (`f793044f83`) has a Hindi section with 608
+missing rows: 28 menu strings, 30 `tl!` strings, 11 undo labels and 539 messages. Its
+`every language` section lists 68 more that every checked language lacks, Hindi included: 10 menu
+strings, 2 undo labels and 56 messages. These include labels for newer features and command
+parameter, script and file import or export errors, which show in English until a catalog row
+is added. The report does not check dynamically assembled strings that the scanners miss.
 Additional checks compare placeholders, backtick-delimited identifiers and numeric values.
 The native Hindi UI fallback test also passes with the installed Nirmala UI font. A running
 desktop preview was checked in Hindi, including the New Document dialog and File menu.
