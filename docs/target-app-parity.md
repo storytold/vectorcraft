@@ -204,11 +204,8 @@ tests and the CI gate. See [Calibration](#calibration).
 - **From the code (measured, origin/main `01e165af`):**
   - Menu tree (`crates/ui-egui/src/menus.rs`, laid out in Illustrator's menu order): 348 items bound to
     commands, 26 stubs (`todo(…)`/`todos(…)`), so 93.0% of menu items do something (348 and 26 after Snap to Glyph shipped in #3124; 348 and 27 after the
-    Revolve merge; 350 and 25, 93.3%, after Graph › Design and Marker; 353 and 22, 94.1%, after Extrude & Bevel, Inflate and Rotate). The stubs: Effect › 3D and Materials › Materials, Effect › SVG Filters, Edit › Spelling (3), Graph › Column, Live Paint
-    Gap Options, Optical Margin Alignment, global and video rulers (2),
-    Window › Arrange (4), SVG Interactivity, Other Script…, Help.
-    Gap Options, Optical Margin Alignment, Start Global Edit, global and video rulers (2),
-    Window › Arrange (4), SVG Interactivity, Other Script…, Help (the Brush and Symbol Libraries placeholders are gone: Window › Symbol Libraries works since 2026-10-23, Window › Brush Libraries since 2026-10-24).
+    Revolve merge; 350 and 25, 93.3%, after Graph › Design and Marker; 353 and 22, 94.1%, after Extrude & Bevel, Inflate and Rotate). The menu stubs on `a47d7eec` are Effect › 3D and Materials › Materials,
+    Edit › Spelling › Check Spelling and Help › VectorCraft Help.
   - Engine commands: ~710 ids registered with `cmd!` across `crates/engine/src/cmd` (plus macro-generated
     families), and 85 UI-only commands (`UI_COMMANDS`).
   - Tools: 91 in `crates/tools/src/catalog.rs`; Touch Type is listed but not implemented, and the Dimension
