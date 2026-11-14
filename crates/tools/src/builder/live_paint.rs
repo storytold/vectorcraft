@@ -179,7 +179,8 @@ enum LpPaint {
 /// paints every edge of the group with the edge's stroke (`scope: "samePaint"`). Each click of a
 /// double-click or triple-click paints as it arrives, as its own undo step, and the paint compared
 /// is the one the face or edge had before the first of its clicks. Shift and the options choose a
-/// face or an edge as for a click; with Alt held a double-click or triple-click paints nothing.
+/// face or an edge as for a click; with Alt held a double-click or triple-click paints nothing. With
+/// Space held for the view tools, a click, double-click or triple-click paints nothing.
 pub struct LivePaintBucketTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
@@ -202,6 +203,8 @@ pub struct LivePaintBucketTool {
 struct LpPress {
     /// The face or edge; None for the face of the Live Paint group the press makes.
     part: Option<NodeId>,
+    /// Where the press was.
+    at: Point,
     /// Its fill (a face) or stroke paint (an edge) before the press.
     before: Paint,
 }
@@ -295,20 +298,23 @@ impl LivePaintBucketTool {
         self.presses.push(press);
     }
 
-    /// Note a press that paints face or edge (`edge`) `n`.
-    fn note_part(&mut self, n: &Node, edge: bool) {
+    /// Note a press at `at` that paints face or edge (`edge`) `n`.
+    fn note_part(&mut self, n: &Node, edge: bool, at: Point) {
         let before = if edge { n.appearance.stroke_paint() } else { n.appearance.fill_paint() };
-        self.note_press(Some(LpPress { part: Some(n.id), before }));
+        self.note_press(Some(LpPress { part: Some(n.id), at, before }));
     }
 
-    /// The paint `part` had before the first press of a click sequence of `clicks` presses, when
-    /// those presses all painted `part` (the first may have made the group `part` is in); else
-    /// `now`.
-    fn before(&self, part: NodeId, clicks: usize, now: Paint) -> Paint {
+    /// The paint `part` had before the first of the last presses of a click sequence of `clicks`
+    /// presses that all painted `part` (the sequence's first press may have made the group `part`
+    /// is in, when the face it filled there is `part`); `now` when the last press did not paint it.
+    fn before(&self, cx: &ToolContext, part: NodeId, clicks: usize, now: Paint) -> Paint {
         let Some(run) = self.presses.len().checked_sub(clicks).and_then(|from| self.presses.get(from..)) else { return now };
-        let on_part = |(i, q): (usize, &Option<LpPress>)| q.as_ref().is_some_and(|q| q.part == Some(part) || (i == 0 && q.part.is_none()));
-        match run.first() {
-            Some(Some(first)) if run.iter().enumerate().all(on_part) => first.before.clone(),
+        let made_part = |q: &LpPress| live_paint_at(cx.doc, q.at).and_then(|g| visible_face_at(cx.doc.node(g)?, q.at)).is_some_and(|f| f.id == part);
+        let on_part =
+            |(i, q): (usize, &Option<LpPress>)| q.as_ref().is_some_and(|q| q.part == Some(part) || (i == 0 && q.part.is_none() && made_part(q)));
+        let from = run.len().saturating_sub(run.iter().enumerate().rev().take_while(|&iq| on_part(iq)).count());
+        match run.get(from) {
+            Some(Some(first)) => first.before.clone(),
             _ => now,
         }
     }
@@ -316,7 +322,8 @@ impl LivePaintBucketTool {
     /// What a double-click (`scope` "connected", 2 `clicks`) or a triple-click ("samePaint", 3) at
     /// `p` runs: the command a click there runs, with `scope`, and the paint it compares as `match`.
     fn multi_click(&self, cx: &ToolContext, p: Point, mods: Mods, scope: &str, clicks: usize) -> Vec<Action> {
-        if mods.alt {
+        // With Space held the press pans, zooms or rotates the view and does not reach the tool.
+        if mods.alt || mods.space {
             return vec![];
         }
         let point = json!([p.x, p.y]);
@@ -325,7 +332,7 @@ impl LivePaintBucketTool {
             && let Some((g, Some(e))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
         {
             let mut v = json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0), "scope": scope });
-            if let Ok(like) = serde_json::to_value(self.before(e.id, clicks, e.appearance.stroke_paint())) {
+            if let Ok(like) = serde_json::to_value(self.before(cx, e.id, clicks, e.appearance.stroke_paint())) {
                 v["match"] = like;
             }
             return vec![Action::Exec("livePaint.strokeEdge".into(), v)];
@@ -336,7 +343,7 @@ impl LivePaintBucketTool {
         let Some((g, f)) = live_paint_at(cx.doc, p).and_then(|g| Some((g, visible_face_at(cx.doc.node(g)?, p)?))) else { return vec![] };
         let mut v = json!({ "group": g.0, "point": point, "scope": scope });
         if scope == "samePaint"
-            && let Ok(like) = serde_json::to_value(self.before(f.id, clicks, f.appearance.fill_paint()))
+            && let Ok(like) = serde_json::to_value(self.before(cx, f.id, clicks, f.appearance.fill_paint()))
         {
             v["match"] = like;
         }
@@ -431,6 +438,11 @@ impl Tool for LivePaintBucketTool {
             }
             PointerKind::Down => {
                 self.hover = LpHover::None;
+                // With Space held the press pans, zooms or rotates the view.
+                if ev.mods.space {
+                    self.note_press(None);
+                    return vec![];
+                }
                 if ev.mods.alt {
                     self.note_press(None);
                     if ev.mods.shift {
@@ -459,7 +471,7 @@ impl Tool for LivePaintBucketTool {
                 if matches!(paint, LpPaint::Strokes | LpPaint::Both)
                     && let Some((g, Some(e))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
                 {
-                    self.note_part(e, true);
+                    self.note_part(e, true, p);
                     return vec![Action::Exec("livePaint.strokeEdge".into(), json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0) }))];
                 }
                 if !matches!(paint, LpPaint::Fills | LpPaint::Both) {
@@ -468,14 +480,14 @@ impl Tool for LivePaintBucketTool {
                 }
                 if let Some(g) = live_paint_at(cx.doc, p) {
                     match cx.doc.node(g).and_then(|n| visible_face_at(n, p)) {
-                        Some(f) => self.note_part(f, false),
+                        Some(f) => self.note_part(f, false, p),
                         None => self.note_press(None),
                     }
                     return self.begin_fill(json!({ "group": g.0, "point": point }), p);
                 }
                 if self.cache.at(cx, p).is_some() {
                     let roots = sorted_roots(cx.doc, &cx.selection.objects);
-                    self.note_press(Some(LpPress { part: None, before: made_face_fill(cx.doc, &roots, p) }));
+                    self.note_press(Some(LpPress { part: None, at: p, before: made_face_fill(cx.doc, &roots, p) }));
                     return self.begin_fill(json!({ "ids": json_ids(&roots), "point": point }), p);
                 }
                 self.note_press(None);

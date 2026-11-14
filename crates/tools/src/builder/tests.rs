@@ -1145,10 +1145,19 @@ fn bucket_double_and_triple_click_widen_what_a_click_paints() {
     assert_eq!(t.pointer(&later, &ev(PointerKind::DoubleClick, 51.0, 25.0).with_mods(shift)), stroke("connected", &edge_before));
     click(&mut t, &later, 51.0, shift);
     assert_eq!(t.pointer(&later, &ev(PointerKind::TripleClick, 51.0, 25.0).with_mods(shift)), stroke("samePaint", &edge_before));
-    // With Alt held, or with both options off, a double-click or triple-click paints nothing.
+    // With Alt or Space held, or with both options off, a double-click or triple-click paints nothing.
     let alt = Mods { alt: true, ..Default::default() };
+    let space = Mods { space: true, ..Default::default() };
     for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
         assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(alt)).is_empty(), "{k:?}");
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(space)).is_empty(), "{k:?} with Space");
+        assert!(t.pointer(&cx, &ev(k, 51.0, 25.0).with_mods(Mods { shift: true, ..space })).is_empty(), "{k:?} with Shift and Space");
+    }
+    // A press with Space held paints nothing either.
+    for m in [space, Mods { shift: true, ..space }] {
+        for (k, x) in [(PointerKind::Down, 75.0), (PointerKind::Up, 75.0), (PointerKind::Down, 51.0), (PointerKind::Up, 51.0)] {
+            assert!(t.pointer(&cx, &ev(k, x, 25.0).with_mods(m)).is_empty(), "{k:?} at {x} with {m:?}");
+        }
     }
     t.set_option("paintFills", &json!(false));
     for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
@@ -1204,6 +1213,45 @@ fn bucket_triple_click_on_a_made_group_skips_open_paths() {
     let [Action::Exec(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
     assert_eq!(id, "livePaint.fill");
     assert_eq!(v["match"], serde_json::to_value(&red).unwrap());
+}
+
+/// A triple-click whose first click makes the Live Paint group on one face and whose other two
+/// clicks fill another face matches the fill the second face had before the first click on it,
+/// not the fill under the first click or the fill the clicks gave it.
+#[test]
+fn bucket_triple_click_after_making_the_group_on_another_face_matches_its_own_face() {
+    use vectorcraft_color::{Color, Paint};
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let square = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(red.clone());
+    d.insert(Some(l), 0, Node::path(square, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look)).unwrap();
+    let mut s = Selection::default();
+    s.set([square]);
+    let p = paint();
+    let (made, _, f2, _) = live_group_doc();
+    let mut painted = made.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(blue.clone());
+    let none = Selection::default();
+    let (cx, later, after) = (cx(&d, &s, &p), cx(&made, &none, &p), cx(&painted, &none, &p));
+    let mut t = LivePaintBucketTool::default();
+    // The first click makes the group and fills the face at (25, 25); the next two fill (75, 25),
+    // the first of them painting it blue.
+    t.pointer(&cx, &ev(PointerKind::Down, 25.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Up, 25.0, 25.0));
+    for ctx in [&later, &after] {
+        t.pointer(ctx, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let acts = t.pointer(&after, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let [Action::Exec(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    let own = serde_json::to_value(made.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    assert_ne!(own, serde_json::to_value(&blue).unwrap());
+    assert_eq!(v["match"], own);
 }
 
 #[test]
