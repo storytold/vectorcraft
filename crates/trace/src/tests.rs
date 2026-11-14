@@ -2114,10 +2114,18 @@ fn small_accents_of_other_colors_leave_a_tinted_photo_continuous_tone() {
 /// `img` saved as a JPEG of `quality` and read back.
 fn through_jpeg(img: &Raster, quality: u8) -> Raster {
     let rgb: Vec<u8> = img.rgba.chunks(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-    let mut bytes = vec![];
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, quality)
-        .encode(&rgb, img.width, img.height, image::ExtendedColorType::Rgb8)
-        .unwrap();
+    let encoded = craft_image_codecs::Image::from_u8(
+        img.width,
+        img.height,
+        craft_image_codecs::ChannelLayout::Rgb,
+        rgb,
+    )
+    .unwrap();
+    let opts = craft_image_codecs::EncodeOptions {
+        jpeg_quality: quality,
+        ..Default::default()
+    };
+    let bytes = craft_image_codecs::encode(&encoded, craft_image_codecs::Format::Jpeg, &opts).unwrap();
     Raster::decode(&bytes).unwrap()
 }
 
