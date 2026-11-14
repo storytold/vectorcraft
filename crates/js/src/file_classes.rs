@@ -12,6 +12,11 @@
 //! the host's `parse` of that path. `Folder.current` is kept in the realm and starts at the host's
 //! `current`.
 //!
+//! `write` and `writeln` join their values as `String(value)` gives them, and `writeln` adds the
+//! line end `lineFeed` names: CRLF for `Windows`, CR for `Macintosh` and LF otherwise. The file
+//! dialogs are built-ins that ask the host's `pick` and may pause the run until the person answers
+//! ([`crate::interp::Pause`]); they give a `File`, a `Folder`, an array of `File`s or `null`.
+//!
 //! A method whose host call fails sets `error` and returns `false`, `null` or an empty string. A
 //! count or position that is not a finite number, a negative count and a seek mode other than 0, 1
 //! or 2 throw a `RangeError`; a method called on an object that is not a `File` or `Folder` throws
@@ -19,10 +24,10 @@
 //! true value for; every entry takes fuel.
 
 use crate::HostItem;
-use crate::builtins::{arg, constructor, data, method, native, put_at};
+use crate::builtins::{arg, constructor, data, method, native, pausable_method, put_at};
 use crate::heap::{CONFIGURABLE, Class, HIDDEN, NativeFn, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, key, string_bytes};
-use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
-use crate::value::Value;
+use crate::interp::{Abrupt, ErrorType, Interp, JsResult, Pause};
+use crate::value::{Value, index_key};
 
 /// The objects of `File` and `Folder`, kept by the realm, and `Folder.current`.
 #[derive(Clone, Debug)]
@@ -213,12 +218,19 @@ fn is_open(i: &Interp, o: ObjId) -> JsResult<Option<Value>> {
     Ok((this_run && matches!(h, Value::Number(n) if n >= 0.0)).then_some(h))
 }
 
-/// Closes the object's open file, if it has one.
-fn close_open(i: &mut Interp, o: ObjId) -> JsResult<()> {
+/// Closes the object's open file, if it has one, which writes what the script wrote to it. → false
+/// after setting `error` when that could not be written; the file then stays open, so a later
+/// `close` tries again.
+fn close_open(i: &mut Interp, o: ObjId) -> JsResult<bool> {
+    let mut written = true;
     if let Some(h) = is_open(i, o)? {
-        host(i, "close", &[h])?;
+        let r = host(i, "close", &[h])?;
+        written = outcome(i, o, &r)?;
     }
-    set_slot(i, o, HANDLE, Value::Number(-1.0))
+    if written {
+        set_slot(i, o, HANDLE, Value::Number(-1.0))?;
+    }
+    Ok(written)
 }
 
 fn date(i: &mut Interp, ms: Value) -> JsResult<Value> {
@@ -375,7 +387,10 @@ fn get_relative_uri(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsR
 
 fn change_path(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let (o, _) = this_path(i, &this, "changePath")?;
-    close_open(i, o)?;
+    // An object whose changes could not be written keeps its path; `error` says why.
+    if !close_open(i, o)? {
+        return Ok(Value::Bool(false));
+    }
     let p = parse(i, &arg(args, 0))?;
     let fs = i.rooted(std::slice::from_ref(&p), |i| field(i, &p, "fs"))?;
     set_slot(i, o, PATH, fs)?;
@@ -409,30 +424,305 @@ fn to_string(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Valu
     parsed(i, &this, "toString", "uri")
 }
 
-/// A method that writes: it sets `error` and returns `false`.
-fn no_writes(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    let (o, _) = this_path(i, &this, "write")?;
-    let m = message(i, "noWrites")?;
+/// Whether the host's answer `r` is not `{error}`; when it is, the object's `error` is set to it.
+fn outcome(i: &mut Interp, o: ObjId, r: &Value) -> JsResult<bool> {
+    let error = i.rooted(std::slice::from_ref(r), |i| field(i, r, "error"))?;
+    if matches!(error, Value::String(_)) {
+        set_slot(i, o, ERROR, error)?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+/// Calls the host function `name` with the object's path and `args`. → whether it did the work.
+fn path_call(i: &mut Interp, this: &Value, what: &str, name: &str, args: &[Value]) -> JsResult<Value> {
+    let (o, path) = this_path(i, this, what)?;
+    let mut all = vec![path];
+    all.extend_from_slice(args);
+    let r = i.rooted(&all, |i| host(i, name, &all))?;
+    Ok(Value::Bool(outcome(i, o, &r)?))
+}
+
+/// `createAlias`: not available, so it sets `error` and returns `false`.
+fn create_alias(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = this_path(i, &this, "createAlias")?;
+    let m = message(i, "noAlias")?;
     set_slot(i, o, ERROR, m)?;
     Ok(Value::Bool(false))
 }
 
-/// A setter that writes: it sets `error` and changes nothing.
-fn no_writes_setter(i: &mut Interp, this: Value, args: &[Value], construct: bool) -> JsResult<Value> {
-    no_writes(i, this, args, construct)?;
+/// Setting `hidden`: not available, so it sets `error` and changes nothing.
+fn set_hidden(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = this_path(i, &this, "hidden")?;
+    let m = message(i, "noHidden")?;
+    set_slot(i, o, ERROR, m)?;
     Ok(Value::Undefined)
 }
 
-/// A dialog method: it sets `error` and returns `null`.
-fn no_picker(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    let (o, _) = this_path(i, &this, "dialog")?;
-    let m = message(i, "noPicker")?;
-    set_slot(i, o, ERROR, m)?;
-    Ok(Value::Null)
+/// `remove()`: the file, or the folder when it is empty, deleted at once.
+fn remove(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    let (o, _) = this_path(i, &this, "remove")?;
+    // A file whose changes could not be written is not removed; `error` says why.
+    if !close_open(i, o)? {
+        return Ok(Value::Bool(false));
+    }
+    path_call(i, &this, "remove", "remove", &[])
 }
 
-fn null_static(_: &mut Interp, _: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    Ok(Value::Null)
+/// `rename(name)`: the object's file or folder named `name`, in the same folder; the object takes
+/// the new path.
+fn rename(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    let (o, path) = this_path(i, &this, "rename")?;
+    let name = Value::String(i.to_str(&arg(args, 0))?);
+    if !close_open(i, o)? {
+        return Ok(Value::Bool(false));
+    }
+    let r = i.rooted(&[path.clone(), name.clone()], |i| host(i, "rename", &[path.clone(), name.clone()]))?;
+    if !outcome(i, o, &r)? {
+        return Ok(Value::Bool(false));
+    }
+    let fs = i.rooted(std::slice::from_ref(&r), |i| field(i, &r, "fs"))?;
+    set_slot(i, o, PATH, fs)?;
+    Ok(Value::Bool(true))
+}
+
+/// `copy(target)`: the file copied to `target`, a path or a `File`, replacing a file there.
+fn copy(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    this_path(i, &this, "copy")?;
+    let p = parse(i, &arg(args, 0))?;
+    let fs = i.rooted(std::slice::from_ref(&p), |i| field(i, &p, "fs"))?;
+    i.rooted(std::slice::from_ref(&fs), |i| path_call(i, &this, "copy", "copy", std::slice::from_ref(&fs)))
+}
+
+/// `Folder.prototype.create()`: the folder, with the folders above it that are missing.
+fn create(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
+    path_call(i, &this, "create", "create", &[])
+}
+
+/// Setting `length`: the file cut, or filled with zero bytes, to that many bytes.
+fn set_length(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    this_path(i, &this, "length")?;
+    let n = i.to_number(&arg(args, 0))?;
+    if !n.is_finite() || n < 0.0 {
+        return Err(i.throw(ErrorType::Range, "File.length: the length must be a finite number, 0 or more"));
+    }
+    path_call(i, &this, "length", "setLength", &[Value::Number(n.floor())])?;
+    Ok(Value::Undefined)
+}
+
+/// Setting `readonly`.
+fn set_readonly(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    this_path(i, &this, "readonly")?;
+    let on = arg(args, 0).truthy();
+    path_call(i, &this, "readonly", "setReadonly", &[Value::Bool(on)])?;
+    Ok(Value::Undefined)
+}
+
+/// The line end the object's `lineFeed` names: CRLF for `Windows`, CR for `Macintosh` and LF for
+/// anything else, without regard to case.
+fn line_end(i: &Interp, o: ObjId) -> JsResult<&'static str> {
+    Ok(match slot(i, o, LINE_FEED)? {
+        Value::String(s) => match s.to_rust_string().to_ascii_lowercase().as_str() {
+            "windows" => "\r\n",
+            "macintosh" => "\r",
+            _ => "\n",
+        },
+        _ => "\n",
+    })
+}
+
+/// `write(...values)` and, with `line`, `writeln(...values)`: the values as `String(value)` gives
+/// them, written at the position of the object's open file. The values are joined only for an open
+/// file, and only while the text stays within twice the host's `maxWrite` UTF-16 code units: each
+/// character takes at least one byte and at most two code units, so a longer text cannot fit in a
+/// file, and the write sets `error` to the host's `tooLarge` and returns `false`.
+fn write_values(i: &mut Interp, this: &Value, args: &[Value], what: &str, line: bool) -> JsResult<Value> {
+    let (o, _) = this_path(i, this, what)?;
+    let Some(h) = opened(i, o)? else { return Ok(Value::Bool(false)) };
+    let c = classes(i)?;
+    let max = match i.get_value(&Value::Object(c.host), &key("maxWrite"))? {
+        Value::Number(n) if n.is_finite() && n >= 0.0 => (n as usize).saturating_mul(2),
+        _ => usize::MAX,
+    };
+    // The values are joined as UTF-16 code units and made text once, so a surrogate pair split
+    // between two values is one character.
+    let mut joined: Vec<u16> = Vec::new();
+    for a in args {
+        i.use_fuel()?;
+        let s = i.to_str(a)?;
+        if joined.len().saturating_add(s.len()) > max {
+            let m = message(i, "tooLarge")?;
+            set_slot(i, o, ERROR, m)?;
+            return Ok(Value::Bool(false));
+        }
+        joined.extend_from_slice(&s.flat());
+    }
+    let mut text = String::from_utf16_lossy(&joined);
+    drop(joined);
+    if line {
+        text.push_str(line_end(i, o)?);
+    }
+    i.reserve_heap(string_bytes(text.len()))?;
+    let text = Value::str(&text);
+    let r = i.rooted(&[h.clone(), text.clone()], |i| host(i, "write", &[h.clone(), text.clone()]))?;
+    Ok(Value::Bool(outcome(i, o, &r)?))
+}
+
+fn write(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    write_values(i, &this, args, "write", false)
+}
+
+fn writeln(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
+    write_values(i, &this, args, "writeln", true)
+}
+
+// ---- file dialogs ----
+
+/// Asks the host's `pick` for the dialog `kind` (`open`, `save` or `folder`), with the arguments
+/// `[kind, prompt, multi, start, types]`. `me` is the `File` or `Folder` whose `openDlg`, `saveDlg`
+/// or `selectDlg` was called, or `None` for the class's own dialog: the dialog starts at its path,
+/// and an `{error}` answer sets its `error`. The prompt is `String(prompt)`, or `""` for
+/// `undefined` and `null`. A `filter` that is a string gives the file types; one that is a function
+/// is called with each file picked ([`picked`]). The run may pause at `pick` until the person
+/// answers.
+fn ask_pick(i: &mut Interp, kind: &'static str, me: Option<&Value>, prompt: &Value, multi: bool, filter: &Value) -> JsResult<Pause> {
+    let start = match me {
+        None => Value::str(""),
+        Some(me) => this_path(i, me, "dialog")?.1,
+    };
+    let prompt = match prompt {
+        Value::Undefined | Value::Null => Value::str(""),
+        p => Value::String(i.to_str(p)?),
+    };
+    let types = match filter {
+        f @ Value::String(_) => f.clone(),
+        _ => Value::str(""),
+    };
+    let pick = host_value(i, "pick")?;
+    Ok(Pause {
+        host: pick,
+        args: vec![Value::str(kind), prompt, Value::Bool(multi), start, types],
+        keep: vec![Value::Bool(kind == "folder"), me.cloned().unwrap_or(Value::Null), filter.clone()],
+        resume: picked,
+    })
+}
+
+/// What a file dialog gives for `pick`'s `answer`, with `[folder, me, filter]` kept from
+/// [`ask_pick`]: the objects [`wrap`] makes, of which a `filter` that is a function keeps the
+/// files it gives a true value for, or `null` when it keeps none.
+fn picked(i: &mut Interp, keep: &[Value], answer: Value) -> JsResult<Value> {
+    let files = wrap(i, arg(keep, 0).truthy(), &arg(keep, 1), answer)?;
+    let filter = arg(keep, 2);
+    if !i.is_callable(&filter) {
+        return Ok(files);
+    }
+    let Some(o) = files.as_object() else { return Ok(files) };
+    let length = match &i.object(o)?.class {
+        Class::Array { length, .. } => Some(*length),
+        _ => None,
+    };
+    let Some(length) = length else {
+        let kept = i.rooted(std::slice::from_ref(&files), |i| i.call(&filter, &Value::Undefined, std::slice::from_ref(&files)))?;
+        return Ok(if kept.truthy() { files } else { Value::Null });
+    };
+    i.rooted(std::slice::from_ref(&files), |i| {
+        i.reserve_heap(OBJECT_BYTES)?;
+        let array_proto = i.intrinsics.array_proto;
+        let out = i.heap.alloc_object(Object::new(Class::Array { length: 0, length_writable: true }, Some(array_proto)));
+        i.rooted(&[Value::Object(out)], |i| {
+            let mut n = 0.0;
+            for at in 0..length {
+                i.use_fuel()?;
+                let file = i.get_value(&files, &index_key(at))?;
+                let kept = i.rooted(std::slice::from_ref(&file), |i| i.call(&filter, &Value::Undefined, std::slice::from_ref(&file)))?;
+                if kept.truthy() {
+                    put_at(i, out, n, file)?;
+                    n += 1.0;
+                }
+            }
+            Ok(if n > 0.0 { Value::Object(out) } else { Value::Null })
+        })
+    })
+}
+
+/// The `File` (a `Folder` for a `folder` dialog) for each path `pick` gave in `answer`, an array of
+/// them for a list, `null` for `null`, and `null` after setting the `error` of `me`, when it is a
+/// `File` or `Folder`, for `{error}`.
+fn wrap(i: &mut Interp, folder: bool, me: &Value, answer: Value) -> JsResult<Value> {
+    let c = classes(i)?;
+    let proto = if folder { c.folder_proto } else { c.file_proto };
+    match &answer {
+        Value::String(_) => return instance(i, proto, answer.clone()),
+        Value::Object(_) => {}
+        _ => return Ok(Value::Null),
+    }
+    let error = i.rooted(std::slice::from_ref(&answer), |i| field(i, &answer, "error"))?;
+    if matches!(error, Value::String(_)) {
+        if let Some(o) = me.as_object()
+            && matches!(slot(i, o, PATH)?, Value::String(_))
+        {
+            set_slot(i, o, ERROR, error)?;
+        }
+        return Ok(Value::Null);
+    }
+    i.rooted(std::slice::from_ref(&answer), |i| {
+        let length = i.get_value(&answer, &key("length"))?;
+        let n = i.to_number(&length)?;
+        i.reserve_heap(OBJECT_BYTES)?;
+        let array_proto = i.intrinsics.array_proto;
+        let out = i.heap.alloc_object(Object::new(Class::Array { length: 0, length_writable: true }, Some(array_proto)));
+        i.rooted(&[Value::Object(out)], |i| {
+            let mut at = 0.0;
+            while at < n {
+                i.use_fuel()?;
+                let fs = i.get_value(&answer, &crate::value::number_to_str(at).flat())?;
+                let item = i.rooted(std::slice::from_ref(&fs), |i| instance(i, proto, fs.clone()))?;
+                put_at(i, out, at, item)?;
+                at += 1.0;
+            }
+            Ok(Value::Object(out))
+        })
+    })
+}
+
+/// `File.openDialog(prompt, filter, multiSelect)`.
+fn open_dialog(i: &mut Interp, _: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "open", None, &arg(args, 0), arg(args, 2).truthy(), &arg(args, 1))
+}
+
+/// `File.saveDialog(prompt, filter)`.
+fn save_dialog(i: &mut Interp, _: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "save", None, &arg(args, 0), false, &arg(args, 1))
+}
+
+/// `File.prototype.openDlg(prompt, filter, multiSelect)`.
+fn open_dlg(i: &mut Interp, this: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "open", Some(&this), &arg(args, 0), arg(args, 2).truthy(), &arg(args, 1))
+}
+
+/// `File.prototype.saveDlg(prompt, filter)`.
+fn save_dlg(i: &mut Interp, this: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "save", Some(&this), &arg(args, 0), false, &arg(args, 1))
+}
+
+/// `Folder.selectDialog(prompt)`.
+fn select_dialog(i: &mut Interp, _: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "folder", None, &arg(args, 0), false, &Value::Null)
+}
+
+/// `Folder.prototype.selectDlg(prompt)`.
+fn select_dlg(i: &mut Interp, this: Value, args: &[Value]) -> JsResult<Pause> {
+    ask_pick(i, "folder", Some(&this), &arg(args, 0), false, &Value::Null)
+}
+
+/// Defines the file dialogs on `File`, `Folder` and their prototypes.
+fn dialogs(i: &mut Interp, file: ObjId, file_proto: ObjId, folder: ObjId, folder_proto: ObjId) -> JsResult<()> {
+    pausable_method(i, file, "openDialog", open_dialog, 3)?;
+    pausable_method(i, file, "saveDialog", save_dialog, 2)?;
+    pausable_method(i, file_proto, "openDlg", open_dlg, 3)?;
+    pausable_method(i, file_proto, "saveDlg", save_dlg, 2)?;
+    pausable_method(i, folder, "selectDialog", select_dialog, 1)?;
+    pausable_method(i, folder_proto, "selectDlg", select_dlg, 1)
 }
 
 fn text_static(i: &mut Interp, name: &str, args: &[Value]) -> JsResult<Value> {
@@ -530,19 +820,18 @@ fn open(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value>
         Value::Undefined => "r".to_string(),
         m => i.to_str(&m)?.to_rust_string().to_lowercase(),
     };
-    let refusal = match mode.as_str() {
-        "r" => None,
-        "w" | "e" | "a" => Some("noWrites"),
-        _ => Some("badMode"),
-    };
-    if let Some(name) = refusal {
-        let m = message(i, name)?;
+    if !matches!(mode.as_str(), "r" | "w" | "e" | "a") {
+        let m = message(i, "badMode")?;
         set_slot(i, o, ERROR, m)?;
         return Ok(Value::Bool(false));
     }
-    close_open(i, o)?;
+    // The object's earlier changes are written first; when they cannot be, it does not open again.
+    if !close_open(i, o)? {
+        return Ok(Value::Bool(false));
+    }
     let encoding = slot(i, o, ENCODING)?;
-    let r = host(i, "open", &[path, encoding])?;
+    let mode = Value::str(&mode);
+    let r = host(i, "open", &[path, encoding, mode])?;
     let (error, id) = i.rooted(std::slice::from_ref(&r), |i| Ok((field(i, &r, "error")?, field(i, &r, "id")?)))?;
     if matches!(error, Value::String(_)) {
         set_slot(i, o, ERROR, error)?;
@@ -559,8 +848,7 @@ fn close(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     if opened(i, o)?.is_none() {
         return Ok(Value::Bool(false));
     }
-    close_open(i, o)?;
-    Ok(Value::Bool(true))
+    Ok(Value::Bool(close_open(i, o)?))
 }
 
 fn read(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -599,7 +887,12 @@ fn seek(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value>
         return Err(i.throw(ErrorType::Range, "File.seek: the mode must be 0, 1 or 2"));
     }
     let Some(h) = opened(i, o)? else { return Ok(Value::Bool(false)) };
-    host(i, "seek", &[h, Value::Number(pos.floor()), Value::Number(mode)])
+    let r = host(i, "seek", &[h, Value::Number(pos.floor()), Value::Number(mode)])?;
+    // A seek the host refuses sets `error` and gives `false`.
+    if !outcome(i, o, &r)? {
+        return Ok(Value::Bool(false));
+    }
+    Ok(r)
 }
 
 fn tell(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
@@ -669,7 +962,7 @@ fn set_current(i: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Va
 
 /// `Folder.<place>`: a new `Folder` for the host's location `place`, or `null`.
 fn place(i: &mut Interp, place: &str) -> JsResult<Value> {
-    let all = host(i, "locations", &[])?;
+    let all = host(i, "locations", &[Value::str(place)])?;
     let fs = i.rooted(std::slice::from_ref(&all), |i| field(i, &all, place))?;
     if !matches!(fs, Value::String(_)) {
         return Ok(Value::Null);
@@ -735,8 +1028,8 @@ fn common(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     method(i, proto, "changePath", change_path, 1)?;
     method(i, proto, "resolve", resolve, 0)?;
     method(i, proto, "execute", execute, 0)?;
-    method(i, proto, "remove", no_writes, 0)?;
-    method(i, proto, "rename", no_writes, 1)?;
+    method(i, proto, "remove", remove, 0)?;
+    method(i, proto, "rename", rename, 1)?;
     method(i, ctor, "encode", encode, 1)?;
     method(i, ctor, "decode", decode, 1)?;
     method(i, ctor, "isEncodingAvailable", encoding_available, 1)?;
@@ -744,10 +1037,10 @@ fn common(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     data(i, ctor, "fs", system, HIDDEN)
 }
 
-fn file_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
-    accessor(i, proto, "length", length, Some(no_writes_setter))?;
-    accessor(i, proto, "hidden", hidden, Some(no_writes_setter))?;
-    accessor(i, proto, "readonly", readonly, Some(no_writes_setter))?;
+fn file_members(i: &mut Interp, proto: ObjId) -> JsResult<()> {
+    accessor(i, proto, "length", length, Some(set_length))?;
+    accessor(i, proto, "hidden", hidden, Some(set_hidden))?;
+    accessor(i, proto, "readonly", readonly, Some(set_readonly))?;
     accessor(i, proto, "creator", four_question_marks, None)?;
     accessor(i, proto, "type", four_question_marks, None)?;
     accessor(i, proto, "eof", eof, None)?;
@@ -760,21 +1053,15 @@ fn file_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     method(i, proto, "readch", read_char, 0)?;
     method(i, proto, "seek", seek, 2)?;
     method(i, proto, "tell", tell, 0)?;
-    method(i, proto, "write", no_writes, 1)?;
-    method(i, proto, "writeln", no_writes, 1)?;
-    method(i, proto, "copy", no_writes, 1)?;
-    method(i, proto, "createAlias", no_writes, 1)?;
-    method(i, proto, "openDlg", no_picker, 0)?;
-    method(i, proto, "saveDlg", no_picker, 0)?;
-    method(i, ctor, "openDialog", null_static, 0)?;
-    method(i, ctor, "saveDialog", null_static, 0)
+    method(i, proto, "write", write, 1)?;
+    method(i, proto, "writeln", writeln, 1)?;
+    method(i, proto, "copy", copy, 1)?;
+    method(i, proto, "createAlias", create_alias, 1)
 }
 
 fn folder_members(i: &mut Interp, ctor: ObjId, proto: ObjId) -> JsResult<()> {
     method(i, proto, "getFiles", get_files, 1)?;
-    method(i, proto, "create", no_writes, 0)?;
-    method(i, proto, "selectDlg", no_picker, 0)?;
-    method(i, ctor, "selectDialog", null_static, 0)?;
+    method(i, proto, "create", create, 0)?;
     accessor(i, ctor, "current", get_current, Some(set_current))?;
     for (place, get) in PLACES.into_iter().zip(PLACE_GETTERS) {
         accessor(i, ctor, place, get, None)?;
@@ -814,20 +1101,59 @@ pub(crate) fn install(i: &mut Interp, items: Vec<(String, HostItem)>) -> JsResul
         constructor(i, "Folder", folder, folder_proto)?;
         common(i, file, file_proto)?;
         common(i, folder, folder_proto)?;
-        file_members(i, file, file_proto)?;
-        folder_members(i, folder, folder_proto)
+        file_members(i, file_proto)?;
+        folder_members(i, folder, folder_proto)?;
+        dialogs(i, file, file_proto, folder, folder_proto)
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::rc::Rc;
 
-    use crate::{Data, HostItem, JsValue, Realm};
+    use crate::{Data, HostError, HostItem, JsValue, Progress, Realm};
 
     /// A host whose paths are `/` and a name, where `/d` is a folder holding `a` and `b` and every
     /// other path is missing.
     fn realm() -> Realm {
+        realm_with(|_| Vec::new())
+    }
+
+    /// [`realm`] with a `pick` that waits where it can and throws where it cannot. → the arguments
+    /// of each call, joined with `|`.
+    fn dialog_realm() -> (Realm, Rc<RefCell<Vec<String>>>) {
+        let asked: Rc<RefCell<Vec<String>>> = Rc::default();
+        let calls = asked.clone();
+        let r = realm_with(move |r| {
+            let can_wait = r.wait_flag();
+            let pick = move |a: Vec<Data>| -> Result<Data, HostError> {
+                let text = |d: &Data| match d {
+                    Data::String(s) => s.clone(),
+                    Data::Bool(b) => b.to_string(),
+                    other => format!("{other:?}"),
+                };
+                calls.borrow_mut().push(a.iter().map(text).collect::<Vec<_>>().join("|"));
+                if can_wait.get() { Err(HostError::Wait) } else { Err(HostError::Error("cannot wait here".into())) }
+            };
+            vec![("pick".into(), HostItem::Function(Rc::new(pick)))]
+        });
+        (r, asked)
+    }
+
+    /// Advances the run until it waits or ends. → its value when it ended.
+    fn until_wait(r: &mut Realm) -> Option<JsValue> {
+        for _ in 0..10_000 {
+            match r.advance(1_000).unwrap() {
+                Progress::Done(v) => return Some(v),
+                Progress::Paused if r.waits() => return None,
+                Progress::Paused => {}
+            }
+        }
+        panic!("the run neither waited nor ended")
+    }
+
+    fn realm_with(more: impl FnOnce(&Realm) -> Vec<(String, HostItem)>) -> Realm {
         let f = |g: fn(&[Data]) -> Data| HostItem::Function(Rc::new(move |a: Vec<Data>| Ok(g(&a))));
         let text = |a: &[Data], i: usize| match a.get(i) {
             Some(Data::String(s)) => s.clone(),
@@ -847,7 +1173,7 @@ mod tests {
                 ("parent", Data::String("/".into())),
             ])
         };
-        let messages = ["notOpen", "noWrites", "noPicker", "badMode"].map(|k| (k.to_string(), HostItem::Value(Data::String(k.into()))));
+        let messages = ["notOpen", "badMode", "noAlias", "noHidden"].map(|k| (k.to_string(), HostItem::Value(Data::String(k.into()))));
         let stat = move |a: Vec<Data>| -> Result<Data, crate::HostError> {
             let dir = text(&a, 0) == "/d";
             Ok(obj(vec![("exists", Data::Bool(dir)), ("dir", Data::Bool(dir))]))
@@ -857,7 +1183,7 @@ mod tests {
             Ok(obj(vec![("entries", Data::Array(vec![e("a"), e("b")]))]))
         };
         let mut r = Realm::new();
-        let items: Vec<(String, HostItem)> = vec![
+        let mut items: Vec<(String, HostItem)> = vec![
             ("text".into(), HostItem::Object(messages.to_vec())),
             ("system".into(), HostItem::Value(Data::String("Unix".into()))),
             ("lineFeed".into(), HostItem::Value(Data::String("Unix".into()))),
@@ -868,8 +1194,77 @@ mod tests {
             ("tempName".into(), f(|_| Data::String("/tmp1".into()))),
             ("locations".into(), f(|_| Data::Object(vec![]))),
         ];
+        items.extend(more(&r));
         r.define_file_classes(items).unwrap();
         r
+    }
+
+    #[test]
+    fn a_dialog_pauses_the_run_and_its_answer_becomes_files() {
+        let (mut r, asked) = dialog_realm();
+        let v = r.run("[File.openDialog.length, File.prototype.saveDlg.length, String(Folder.selectDialog).indexOf('[native code]') > 0].join()");
+        assert_eq!(v.unwrap(), JsValue::String("3,2,true".into()), "the dialogs are built-ins");
+        r.start("var f = File.openDialog('Pick', 'Text:*.txt', 1); [f.length, f[0].name, f[1].fsName, f[1] instanceof File].join()").unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        assert_eq!(*asked.borrow(), ["open|Pick|true||Text:*.txt"]);
+        r.answer(Data::Array(vec![Data::String("/a".into()), Data::String("/b".into())])).unwrap();
+        assert_eq!(until_wait(&mut r), Some(JsValue::String("2,a,/b,true".into())));
+        r.start("var g = new Folder('d').selectDlg(5); [g.name, g instanceof Folder].join()").unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        assert_eq!(asked.borrow()[1], "folder|5|false|/d|", "the folder's own dialog starts at its path");
+        r.answer(Data::String("/e".into())).unwrap();
+        assert_eq!(until_wait(&mut r), Some(JsValue::String("e,true".into())));
+    }
+
+    #[test]
+    fn a_canceled_dialog_gives_null_and_an_error_answer_sets_error() {
+        let (mut r, asked) = dialog_realm();
+        r.start(
+            "var d = new File('x'); var a = File.saveDialog(); var b = d.saveDlg('Save', function () { return true; }); [a, b, d.error].join('|')",
+        )
+        .unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        r.answer(Data::Null).unwrap();
+        assert_eq!(until_wait(&mut r), None, "a canceled dialog lets the run go on to the next one");
+        assert_eq!(asked.borrow()[1], "save|Save|false|/x|", "a filter that is not a string gives no file types");
+        r.answer(Data::Object(vec![("error".into(), Data::String("denied".into()))])).unwrap();
+        assert_eq!(until_wait(&mut r), Some(JsValue::String("||denied".into())));
+        r.start("File.openDialog(); 'went on'").unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        r.end();
+        assert!(!r.waits() && !r.is_running(), "a run ended at a dialog drops it");
+        assert_eq!(r.run("'next'").unwrap(), JsValue::String("next".into()));
+        let e = r.run("File.openDialog()").unwrap_err();
+        assert!(e.message.contains("cannot wait here"), "a run that cannot pause does not wait: {e:?}");
+        let e = r.run("File.prototype.openDlg.call({})").unwrap_err();
+        assert!(e.message.contains("is not a File or a Folder"), "{e:?}");
+    }
+
+    #[test]
+    fn a_dialog_in_a_function_or_a_loop_resumes_where_it_was_called() {
+        let (mut r, asked) = dialog_realm();
+        let script = "var seen = [];
+            function pickOne(n) {
+                try { var f = File.openDialog('n' + n, function (f) { return f.name !== 'skip'; }); return f === null ? 'none' : f.name; }
+                finally { seen.push('f' + n); }
+            }
+            for (var k = 0; k < 3; k++) seen.push(pickOne(k));
+            var many = File.openDialog('m', function (f) { return f.name !== 'b'; }, true);
+            var thrown;
+            try { File.openDialog('t', function () { throw new Error('no'); }); } catch (e) { thrown = e.message; }
+            seen.concat([many.length, many[1].name, thrown]).join()";
+        r.start(script).unwrap();
+        for answer in ["/a", "/skip", "/c"] {
+            assert_eq!(until_wait(&mut r), None);
+            r.answer(Data::String(answer.into())).unwrap();
+        }
+        assert_eq!(until_wait(&mut r), None);
+        r.answer(Data::Array(["/a", "/b", "/c"].map(|p| Data::String(p.into())).to_vec())).unwrap();
+        assert_eq!(until_wait(&mut r), None);
+        r.collect_garbage();
+        r.answer(Data::String("/a".into())).unwrap();
+        assert_eq!(until_wait(&mut r), Some(JsValue::String("f0,a,f1,none,f2,c,2,c,no".into())));
+        assert_eq!(asked.borrow().len(), 5, "each dialog asked once");
     }
 
     #[test]

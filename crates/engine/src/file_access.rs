@@ -25,7 +25,9 @@
 //! guard against other programs on the computer.
 //!
 //! [`ScriptScope`] holds the folders a running script's own files (its includes and `$.evalFile`)
-//! are read from, inside the roots.
+//! are read from, and the places its `File` and `Folder` objects read and write, inside the roots.
+//! [`ScriptGate`] holds the same places for the commands the script runs with `vc.run`, with the
+//! files of the open documents.
 
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -174,7 +176,7 @@ fn with_scope<T>(scope: Option<Scope>, f: impl FnOnce() -> T) -> T {
 /// Run `f` with `roots` in force on this thread (`None`: as things stand).
 pub fn confine<T>(roots: Option<&Arc<AutomationRoots>>, f: impl FnOnce() -> T) -> T {
     match roots {
-        Some(r) => with_scope(Some(Scope::Confined(r.clone())), f),
+        Some(r) => with_gate_reads_exempt(false, || with_scope(Some(Scope::Confined(r.clone())), f)),
         None => f(),
     }
 }
@@ -182,23 +184,109 @@ pub fn confine<T>(roots: Option<&Arc<AutomationRoots>>, f: impl FnOnce() -> T) -
 /// Run `f` with no roots in force on this thread: what the person at the keyboard does, and the
 /// app's own folders.
 pub fn unconfined<T>(f: impl FnOnce() -> T) -> T {
-    with_scope(Some(Scope::Unconfined), f)
+    with_gate_reads_exempt(true, || with_scope(Some(Scope::Unconfined), f))
 }
 
-/// This thread's scope, to carry to work it hands to another thread ([`ScopeHandle::run`]).
+thread_local! {
+    /// Are reads on this thread exempt from the gate of the script command it runs? Only inside an
+    /// [`unconfined`] entered after the gate was put in force ([`with_script_gate`]).
+    static GATE_READS_EXEMPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Puts the exemption it replaced back when dropped (also when `f` panics).
+struct RestoreExempt(bool);
+
+impl Drop for RestoreExempt {
+    fn drop(&mut self) {
+        GATE_READS_EXEMPT.with(|e| e.set(self.0));
+    }
+}
+
+fn with_gate_reads_exempt<T>(exempt: bool, f: impl FnOnce() -> T) -> T {
+    let _restore = RestoreExempt(GATE_READS_EXEMPT.with(|e| e.replace(exempt)));
+    f()
+}
+
+/// This thread's scope, with the gate of the script command it runs, to carry to work it hands to
+/// another thread ([`ScopeHandle::run`]).
 #[derive(Clone, Debug)]
-pub struct ScopeHandle(Option<Scope>);
+pub struct ScopeHandle(Option<Scope>, Option<Arc<ScriptGate>>, bool);
 
 impl ScopeHandle {
     /// The scope of the calling thread.
     pub fn capture() -> Self {
-        Self(SCOPE.with(|s| s.borrow().clone()))
+        Self(SCOPE.with(|s| s.borrow().clone()), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
     }
 
     /// Run `f` in the captured scope.
     pub fn run<T>(self, f: impl FnOnce() -> T) -> T {
-        with_scope(self.0, f)
+        let Self(scope, gate, exempt) = self;
+        with_gate(gate, || with_gate_reads_exempt(exempt, || with_scope(scope, f)))
     }
+}
+
+/// What a command a running script runs (`vc.run`) may read and write: the places the script's
+/// `File` and `Folder` objects may ([`ScriptScope`]), and the files the documents open in the app
+/// were opened from or saved to. The automation roots apply as well. A path refused by its name
+/// alone ([`ScriptScope::refused_by_name`]) is refused here too.
+#[derive(Clone, Debug)]
+pub(crate) struct ScriptGate {
+    pub(crate) read: ScriptScope,
+    pub(crate) write: ScriptScope,
+    /// The paths of the open documents' files, as the documents hold them.
+    pub(crate) documents: Vec<String>,
+}
+
+impl ScriptGate {
+    fn check(&self, path: &str, access: Access) -> Result<(), String> {
+        let real = if ScriptScope::refused_by_name(Path::new(path)) { None } else { resolve(path).ok() };
+        let allowed = real.is_some_and(|real| {
+            let scoped = match access {
+                Access::Read => self.read.allows(&real) || self.write.allows(&real),
+                Access::Write => self.write.allows(&real),
+            };
+            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real))
+        });
+        if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
+    }
+}
+
+thread_local! {
+    /// The gate of the script command this thread runs ([`with_script_gate`]).
+    static GATE: RefCell<Option<Arc<ScriptGate>>> = const { RefCell::new(None) };
+}
+
+/// Puts the gate it replaced back when dropped (also when `f` panics).
+struct RestoreGate(Option<Arc<ScriptGate>>);
+
+impl Drop for RestoreGate {
+    fn drop(&mut self) {
+        let previous = self.0.take();
+        GATE.with(|g| *g.borrow_mut() = previous);
+    }
+}
+
+fn with_gate<T>(gate: Option<Arc<ScriptGate>>, f: impl FnOnce() -> T) -> T {
+    let _restore = RestoreGate(GATE.with(|g| g.replace(gate)));
+    f()
+}
+
+/// Runs `f`, a command a script runs, with `gate` in force on this thread: every path it reads or
+/// writes must pass the gate as well as the automation roots, also when the run itself is
+/// [`unconfined`] (one the person started). Reads of the app's own folders, inside an
+/// [`unconfined`] the command enters, are not checked; writes there are, so a script's command
+/// does not save into the app's libraries.
+pub(crate) fn with_script_gate<T>(gate: ScriptGate, f: impl FnOnce() -> T) -> T {
+    with_gate(Some(Arc::new(gate)), || with_gate_reads_exempt(false, f))
+}
+
+/// May `path` be read (or written) by the script command this thread runs? Always outside one,
+/// and for a read inside an [`unconfined`] the command entered.
+fn check_gate(path: &str, access: Access) -> Result<(), String> {
+    if matches!(access, Access::Read) && GATE_READS_EXEMPT.with(std::cell::Cell::get) {
+        return Ok(());
+    }
+    GATE.with(|g| g.borrow().clone()).map_or(Ok(()), |g| g.check(path, access))
 }
 
 /// The roots in force on this thread, if any.
@@ -210,9 +298,11 @@ pub fn current() -> Option<Arc<AutomationRoots>> {
     }
 }
 
-/// May `path` be read here? Always, without roots in force.
+/// May `path` be read here? Always, without roots in force and outside a script's command
+/// ([`with_script_gate`]).
 pub fn check_read(path: &str) -> Result<(), String> {
-    current().map_or(Ok(()), |r| r.check(path, Access::Read))
+    current().map_or(Ok(()), |r| r.check(path, Access::Read))?;
+    check_gate(path, Access::Read)
 }
 
 /// Is `path`, under a read root, written as an absolute path of another platform: outside Windows, one
@@ -229,9 +319,11 @@ pub fn is_path_key(key: &str) -> bool {
     matches!(key, "path" | "paths" | "file" | "files" | "folder") || ["Path", "Paths", "File", "Files", "Folder"].iter().any(|end| key.ends_with(end))
 }
 
-/// May `path` be written here? Always, without roots in force.
+/// May `path` be written here? Always, without roots in force and outside a script's command
+/// ([`with_script_gate`]).
 pub fn check_write(path: &str) -> Result<(), String> {
     current().map_or(Ok(()), |r| r.check(path, Access::Write))?;
+    check_gate(path, Access::Write)?;
     WRITES.with(|w| {
         if let Some(paths) = w.borrow_mut().as_mut()
             && !paths.iter().any(|(p, _)| p == path)
@@ -323,6 +415,12 @@ fn inside(path: &Path, root: &Path) -> bool {
     root.components().all(|r| path.next().is_some_and(|p| same_component(p, r)))
 }
 
+/// Is `path` `root` or inside it, both with their links followed, compared as [`AutomationRoots`]
+/// compares them?
+pub(crate) fn path_inside(path: &Path, root: &Path) -> bool {
+    inside(path, root)
+}
+
 fn same_component(a: Component, b: Component) -> bool {
     if a == b {
         return true;
@@ -374,10 +472,21 @@ fn windows_name_refusal(path: &str) -> Option<&'static str> {
 /// The file opened is the path with its links followed, and after reading, the path is followed
 /// again and must still lead to the same place: a process that changes the folders twice in between
 /// can still win that race.
+///
+/// A scope can also be given more folders ([`ScriptScope::add`]) and single files
+/// ([`ScriptScope::add_file`]), and folders it keeps out even inside a granted folder
+/// ([`ScriptScope::fence`]), each but the places inside it that stay open. A granted file grants its
+/// own path only, also when a folder later takes its place.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ScriptScope {
     /// The granted folders, made absolute with their links followed.
     roots: Vec<PathBuf>,
+    /// The granted files, made absolute with their links followed.
+    files: Vec<PathBuf>,
+    /// The folders kept out, with their links followed.
+    fenced: Vec<PathBuf>,
+    /// The places inside a fenced folder that are not kept out.
+    open: Vec<PathBuf>,
 }
 
 /// Why a script's file was not read.
@@ -396,12 +505,62 @@ pub(crate) enum ScriptRead {
 impl ScriptScope {
     /// The scope of a script run from a file in folder `dir`: that folder.
     pub(crate) fn of_folder(dir: &Path) -> Self {
-        Self { roots: std::fs::canonicalize(dir).ok().into_iter().collect() }
+        Self { roots: std::fs::canonicalize(dir).ok().into_iter().collect(), ..Self::default() }
+    }
+
+    /// Grants the folder `real`, a path with its links followed, with everything inside it.
+    pub(crate) fn add(&mut self, real: PathBuf) {
+        if !self.roots.contains(&real) {
+            self.roots.push(real);
+        }
+    }
+
+    /// Grants the file `real`, a path with its links followed: that path and nothing below it.
+    pub(crate) fn add_file(&mut self, real: PathBuf) {
+        if !self.files.contains(&real) {
+            self.files.push(real);
+        }
+    }
+
+    /// Takes back the grant of the folder (`folder`) or file `real` that [`ScriptScope::add`] or
+    /// [`ScriptScope::add_file`] gave.
+    pub(crate) fn remove(&mut self, real: &Path, folder: bool) {
+        if folder { self.roots.retain(|r| r != real) } else { self.files.retain(|r| r != real) }
+    }
+
+    /// Is nothing granted?
+    fn is_empty(&self) -> bool {
+        self.roots.is_empty() && self.files.is_empty()
+    }
+
+    /// Keeps the folder `real` (links followed) and everything in it out, but for `open` and the
+    /// places inside it.
+    pub(crate) fn fence(&mut self, real: PathBuf, open: &[PathBuf]) {
+        self.fenced.push(real);
+        self.open.extend(open.iter().cloned());
+    }
+
+    /// Leaves the place `real` (links followed) and everything in it open inside a fenced folder.
+    pub(crate) fn fence_open(&mut self, real: PathBuf) {
+        self.open.push(real);
+    }
+
+    /// The granted folders, with their links followed.
+    pub(crate) fn roots(&self) -> &[PathBuf] {
+        &self.roots
+    }
+
+    /// Is the real path `real` a granted file or inside a granted folder, and not kept out? A place
+    /// left open counts only inside the fenced folder: one that holds the fenced folder opens none of it.
+    pub(crate) fn allows(&self, real: &Path) -> bool {
+        (self.files.iter().any(|f| inside(real, f) && real.components().count() == f.components().count())
+            || self.roots.iter().any(|r| inside(real, r)))
+            && !self.fenced.iter().any(|f| inside(real, f) && !self.open.iter().any(|o| inside(o, f) && inside(real, o)))
     }
 
     /// Is `path` refused by its name alone: a `..` component, a NUL, a Windows device name or
     /// stream, or a computer on the network?
-    fn refused_by_name(path: &Path) -> bool {
+    pub(crate) fn refused_by_name(path: &Path) -> bool {
         let text = path.to_string_lossy();
         text.contains('\0')
             || path.components().any(|c| c == Component::ParentDir)
@@ -411,7 +570,7 @@ impl ScriptScope {
     /// The real path of the file at `path` and its first `max` bytes, at most.
     pub(crate) fn read(&self, path: &Path, max: usize) -> Result<(PathBuf, Vec<u8>), ScriptRead> {
         use std::io::Read;
-        if self.roots.is_empty() || Self::refused_by_name(path) || check_read(&path.to_string_lossy()).is_err() {
+        if self.is_empty() || Self::refused_by_name(path) || check_read(&path.to_string_lossy()).is_err() {
             return Err(ScriptRead::Refused);
         }
         let real = match std::fs::canonicalize(path) {
@@ -422,7 +581,7 @@ impl ScriptScope {
             }
             Err(e) => return Err(ScriptRead::Failed(e.to_string())),
         };
-        if !self.roots.iter().any(|r| inside(&real, r)) {
+        if !self.allows(&real) {
             return Err(ScriptRead::Refused);
         }
         let file = std::fs::File::open(&real).map_err(|e| ScriptRead::Failed(e.to_string()))?;
@@ -450,24 +609,24 @@ impl ScriptScope {
         self.roots.first().map(|r| crate::cmd::findfiles::plain(r.clone()))
     }
 
-    /// Does the absolute path `path` name a granted folder or a place inside one, by its names
-    /// alone, without regard to case? A path that does not is refused before the file system is
-    /// asked anything about it.
+    /// Does the absolute path `path` name a granted file, a granted folder or a place inside one,
+    /// by its names alone, without regard to case? A path that does not is refused before the file
+    /// system is asked anything about it.
     fn names_inside(&self, path: &Path) -> bool {
         let lower = |c: Component| c.as_os_str().to_string_lossy().to_lowercase();
-        path.is_absolute()
-            && self.roots.iter().any(|r| {
-                let root = crate::cmd::findfiles::plain(r.clone());
-                let mut names = path.components();
-                root.components().all(|c| names.next().is_some_and(|n| lower(n) == lower(c)))
-            })
+        let names_under = |r: &PathBuf| {
+            let root = crate::cmd::findfiles::plain(r.clone());
+            let mut names = path.components();
+            root.components().all(|c| names.next().is_some_and(|n| lower(n) == lower(c)))
+        };
+        path.is_absolute() && (self.roots.iter().any(names_under) || self.files.iter().any(names_under))
     }
 
     /// The real path of the file or folder at `path`, which must be absolute: refused as
     /// [`ScriptScope::read`] refuses a path, and also when its names alone place it outside every
     /// granted folder, in which case the file system is not asked about it.
     pub(crate) fn locate(&self, path: &Path) -> Result<PathBuf, ScriptRead> {
-        if self.roots.is_empty() || Self::refused_by_name(path) || !self.names_inside(path) {
+        if self.is_empty() || Self::refused_by_name(path) || !self.names_inside(path) {
             return Err(ScriptRead::Refused);
         }
         probed();
@@ -484,22 +643,72 @@ impl ScriptScope {
             }
             Err(e) => return Err(ScriptRead::Failed(e.to_string())),
         };
-        if !self.roots.iter().any(|r| inside(&real, r)) {
+        if !self.allows(&real) {
             return Err(ScriptRead::Refused);
         }
         Ok(real)
     }
 
-    /// Is the missing `path` inside a granted folder: does the nearest folder above it that exists
-    /// lie inside one? On a file system where case matters, `MAIN/x` beside the granted `main` is
-    /// outside, whether `MAIN` exists or not. A link above it that leads to nothing is outside too,
-    /// so a script cannot tell whether the folder a link leads to exists.
+    /// The real path that writing to `path` writes: `path` with its links followed (the last
+    /// name's too only when `follow`), and for a path that does not exist yet, its nearest existing
+    /// folder's links followed and the rest appended. Refused as [`ScriptScope::locate`] refuses a
+    /// path, also when a link on the way leads nowhere, and when the automation write roots in force
+    /// ([`check_write`]) do not take it.
+    pub(crate) fn target(&self, path: &Path, follow: bool) -> Result<PathBuf, ScriptRead> {
+        if self.is_empty() || Self::refused_by_name(path) || !self.names_inside(path) {
+            return Err(ScriptRead::Refused);
+        }
+        probed();
+        if check_write(&path.to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else { return Err(ScriptRead::Refused) };
+        let real = match std::fs::symlink_metadata(path) {
+            Ok(_) if follow => std::fs::canonicalize(path).map_err(|_| ScriptRead::Refused)?,
+            Ok(m) => {
+                // Where case does not matter, the name given can differ in case from the name the
+                // file system keeps, so a file or folder that is not a link is checked under the
+                // kept name too.
+                if !m.file_type().is_symlink() && !std::fs::canonicalize(path).is_ok_and(|kept| self.allows(&kept)) {
+                    return Err(ScriptRead::Refused);
+                }
+                std::fs::canonicalize(parent).map_err(|_| ScriptRead::Refused)?.join(name)
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let mut missing = vec![name.to_os_string()];
+                let mut at = parent;
+                loop {
+                    match std::fs::symlink_metadata(at) {
+                        Ok(_) => break,
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                            missing.push(at.file_name().ok_or(ScriptRead::Refused)?.to_os_string());
+                            at = at.parent().ok_or(ScriptRead::Refused)?;
+                        }
+                        Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+                    }
+                }
+                let mut real = std::fs::canonicalize(at).map_err(|_| ScriptRead::Refused)?;
+                real.extend(missing.iter().rev());
+                real
+            }
+            Err(e) => return Err(ScriptRead::Failed(e.to_string())),
+        };
+        // The automation write roots take the place written as well as the path named.
+        if !self.allows(&real) || check_write(&crate::cmd::findfiles::plain(real.clone()).to_string_lossy()).is_err() {
+            return Err(ScriptRead::Refused);
+        }
+        Ok(real)
+    }
+
+    /// Is the missing `path` inside a granted place: with the links of the nearest folder above it
+    /// that exists followed, and the rest of its names appended, is it granted? On a file system
+    /// where case matters, `MAIN/x` beside the granted `main` is outside, whether `MAIN` exists or
+    /// not. A link above it that leads to nothing is outside too, so a script cannot tell whether
+    /// the folder a link leads to exists.
     fn missing_inside(&self, path: &Path) -> bool {
-        path.ancestors()
-            .skip(1)
-            .find(|a| std::fs::symlink_metadata(a).is_ok())
-            .and_then(|a| std::fs::canonicalize(a).ok())
-            .is_some_and(|real| self.roots.iter().any(|r| inside(&real, r)))
+        let Some(found) = path.ancestors().skip(1).find(|a| std::fs::symlink_metadata(a).is_ok()) else { return false };
+        let (Ok(real), Ok(rest)) = (std::fs::canonicalize(found), path.strip_prefix(found)) else { return false };
+        self.allows(&real.join(rest))
     }
 
     /// What the file or folder at `path` is, located as [`ScriptScope::locate`] locates it.
@@ -542,7 +751,7 @@ impl ScriptScope {
                 continue;
             }
             let Ok(target) = std::fs::canonicalize(entry.path()) else { continue };
-            if !self.roots.iter().any(|r| inside(&target, r)) || check_read(&entry.path().to_string_lossy()).is_err() {
+            if !self.allows(&target) || check_read(&entry.path().to_string_lossy()).is_err() {
                 continue;
             }
             if out.len() >= max {

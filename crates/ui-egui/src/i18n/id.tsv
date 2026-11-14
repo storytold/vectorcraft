@@ -4274,6 +4274,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Tampilkan Peringatan Skrip Eksternal
 	A Script Is Running	Skrip Sedang Berjalan
 	Script Alert	Peringatan Skrip
+	Script File Access	Akses Berkas Skrip
+	The script asks to read a file you choose.	Skrip meminta izin untuk membaca berkas yang Anda pilih.
+	The script asks to read and write a file you choose.	Skrip meminta izin untuk membaca dan menulis berkas yang Anda pilih.
+	The script asks to read and write a folder you choose, with everything in it.	Skrip meminta izin untuk membaca dan menulis folder yang Anda pilih, beserta seluruh isinya.
+	Allow Once	Izinkan Sekali
+	Always Allow This Script	Selalu Izinkan Skrip Ini
+	Deny	Tolak
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrip dapat mengubah dokumen yang terbuka dan menulis file melalui perintah yang dijalankannya. Jalankan hanya skrip yang Anda percayai.
 	Do not show this warning again	Jangan tampilkan peringatan ini lagi
 	Stop the script and undo what it did? Then quit again.	Hentikan skrip dan batalkan yang telah dilakukannya? Lalu keluar lagi.

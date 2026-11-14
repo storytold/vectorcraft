@@ -5478,6 +5478,13 @@ digits	Malayalam	Malaiàlam
 	Show External Script Warning	Mostra l'avís dels scripts externs
 	A Script Is Running	S'està executant un script
 	Script Alert	Avís de l'script
+	Script File Access	Accés de l’script als fitxers
+	The script asks to read a file you choose.	L’script demana llegir un fitxer que trieu.
+	The script asks to read and write a file you choose.	L’script demana llegir i escriure un fitxer que trieu.
+	The script asks to read and write a folder you choose, with everything in it.	L’script demana llegir i escriure una carpeta que trieu, amb tot el que conté.
+	Allow Once	Permet un cop
+	Always Allow This Script	Permet sempre aquest script
+	Deny	Denega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
 	Stop the script and undo what it did? Then quit again.	Voleu aturar l'script i desfer el que ha fet? Després, torneu a sortir.
@@ -5506,8 +5513,6 @@ digits	Malayalam	Malaiàlam
 @msg	Script file could not be read	No s'ha pogut llegir el fitxer de l'script
 @msg	Script folder has more than 2,048 entries	La carpeta de l'script té més de 2.048 entrades
 @msg	Script file open mode must be r, w, e or a	El mode d'obertura del fitxer de l'script ha de ser r, w, e o a
-@msg	Script file writing is not available	L'escriptura de fitxers de l'script no està disponible
-@msg	Script file dialogs are not available	Els quadres de diàleg de fitxers de l'script no estan disponibles
 @msg	Script files cannot be opened in another application	Els fitxers de l'script no es poden obrir en una altra aplicació
 @msg	Script file access is unavailable on the web	L'accés als fitxers de l'script no està disponible al web
 @msg	Script has 256 files open	L'script té 256 fitxers oberts
@@ -5578,6 +5583,27 @@ digits	Malayalam	Malaiàlam
 @msg	there is no script engine named {name}	no hi ha cap motor d'scripts anomenat {name}
 @msg	Running a script	S'està executant un script
 @msg	Copied the script report	S’ha copiat l’informe de l’script
+@msg	Script file access denied: {path}	S’ha denegat l’accés de l’script als fitxers: {path}
+@msg	Script file access to the app's own folders is not allowed	Els scripts no poden accedir a les carpetes pròpies de l’aplicació
+@msg	Script file cannot encode the text	El fitxer de l’script no pot codificar el text
+@msg	Script file could not be written	No s’ha pogut escriure el fitxer de l’script
+@msg	Script file dialogs need a person to answer them	Els diàlegs de fitxers de l’script necessiten una persona que els respongui
+@msg	Script file is not open for writing	El fitxer de l’script no està obert per escriure-hi
+@msg	Script file name is already in use	El nom del fitxer de l’script ja està en ús
+@msg	Script file name must be a name without a folder	El nom del fitxer de l’script ha de ser un nom sense carpeta
+@msg	Script file permission can be kept only for a script run from a file	El permís de fitxers només es pot conservar per a un script executat des d’un fitxer
+@msg	Script file permission could not be saved	No s’ha pogut desar el permís de fitxers de l’script
+@msg	Script folder is not empty	La carpeta de l’script no és buida
+@msg	Script files cannot make aliases	Els fitxers de l’script no poden crear àlies
+@msg	Script file hidden setting cannot be changed	No es pot canviar l’opció d’ocult del fitxer de l’script
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un diàleg de fitxers no es pot obrir dins d’una crida de retorn d’una funció integrada, d’un getter, d’una conversió o d’un fitxer que executa $.evalFile; crideu-lo des del codi propi de l’script
+@msg	the script wrote more file data than one run may write (32 MiB)	l’script ha escrit més dades de fitxers de les que pot escriure una execució (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` per al diàleg de fitxers d’un script ha de ser un d’aquests: once, always, deny, stop
+@msg	choose a file or folder first, or deny	trieu primer un fitxer o una carpeta, o denegueu
+@msg	the script file permissions could not be saved: {e}	no s’han pogut desar els permisos de fitxers dels scripts: {e}
+@msg	this script's file access can be allowed only once	l’accés als fitxers d’aquest script només es pot permetre una vegada
+@msg	Only the person at the keyboard can allow a script's file access	Només la persona al teclat pot permetre l’accés als fitxers d’un script
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Un script rep com a màxim 2.048 fitxers: els fitxers triats després d’aquests s’han deixat fora
 @msg	Corners edits the corners of a path	Cantonades edita les cantonades d’un traçat
 @msg	could not decode image: {0}	no s’ha pogut descodificar la imatge: {0}
 @msg	Couldn't copy to the system clipboard: {e}	No s’ha pogut copiar al porta-retalls del sistema: {e}

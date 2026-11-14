@@ -4584,6 +4584,13 @@ imageTrace	Outline	Obrys
 	Show External Script Warning	Zobrazit upozornění u externích skriptů
 	A Script Is Running	Běží skript
 	Script Alert	Upozornění skriptu
+	Script File Access	Přístup skriptu k souborům
+	The script asks to read a file you choose.	Skript žádá o čtení souboru, který vyberete.
+	The script asks to read and write a file you choose.	Skript žádá o čtení a zápis souboru, který vyberete.
+	The script asks to read and write a folder you choose, with everything in it.	Skript žádá o čtení a zápis složky, kterou vyberete, se vším, co obsahuje.
+	Allow Once	Povolit jednou
+	Always Allow This Script	Vždy povolit tento skript
+	Deny	Zamítnout
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skript může měnit otevřené dokumenty a prostřednictvím příkazů, které spouští, zapisovat soubory. Spouštějte jen skripty, kterým důvěřujete.
 	Do not show this warning again	Toto upozornění již nezobrazovat
 	Stop the script and undo what it did? Then quit again.	Zastavit skript a vrátit jeho změny? Potom aplikaci ukončete znovu.
@@ -4612,8 +4619,6 @@ imageTrace	Outline	Obrys
 @msg	Script file could not be read	Soubor skriptu se nepodařilo přečíst
 @msg	Script folder has more than 2,048 entries	Složka skriptu má více než 2 048 položek
 @msg	Script file open mode must be r, w, e or a	Režim otevření souboru skriptu musí být r, w, e nebo a
-@msg	Script file writing is not available	Zápis souborů skriptu není k dispozici
-@msg	Script file dialogs are not available	Dialogy souborů skriptu nejsou k dispozici
 @msg	Script files cannot be opened in another application	Soubory skriptu nelze otevřít v jiné aplikaci
 @msg	Script file access is unavailable on the web	Přístup k souborům skriptu není na webu k dispozici
 @msg	Script has 256 files open	Skript má otevřeno 256 souborů
@@ -4684,6 +4689,27 @@ imageTrace	Outline	Obrys
 @msg	there is no script engine named {name}	skriptovací jádro s názvem {name} neexistuje
 @msg	Running a script	Běží skript
 @msg	Copied the script report	Zpráva o skriptu zkopírována
+@msg	Script file access denied: {path}	Přístup skriptu k souborům byl odepřen: {path}
+@msg	Script file access to the app's own folders is not allowed	Skript nemá povolen přístup k vlastním složkám aplikace
+@msg	Script file cannot encode the text	Soubor skriptu nemůže zakódovat text
+@msg	Script file could not be written	Soubor skriptu nelze zapsat
+@msg	Script file dialogs need a person to answer them	Dialogy souborů skriptu potřebují osobu, která na ně odpoví
+@msg	Script file is not open for writing	Soubor skriptu není otevřený pro zápis
+@msg	Script file name is already in use	Název souboru skriptu se už používá
+@msg	Script file name must be a name without a folder	Název souboru skriptu musí být název bez složky
+@msg	Script file permission can be kept only for a script run from a file	Oprávnění k souborům lze zachovat jen pro skript spuštěný ze souboru
+@msg	Script file permission could not be saved	Oprávnění skriptu k souborům nelze uložit
+@msg	Script folder is not empty	Složka skriptu není prázdná
+@msg	Script files cannot make aliases	Soubory skriptu nemohou vytvářet aliasy
+@msg	Script file hidden setting cannot be changed	Nastavení skrytí souboru skriptu nelze změnit
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog souboru nelze otevřít uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; volejte jej z vlastního kódu skriptu
+@msg	the script wrote more file data than one run may write (32 MiB)	skript zapsal více dat souborů, než smí zapsat jeden běh (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pro dialog souboru skriptu musí být jedna z hodnot: once, always, deny, stop
+@msg	choose a file or folder first, or deny	nejprve vyberte soubor nebo složku, nebo odmítněte
+@msg	the script file permissions could not be saved: {e}	oprávnění skriptů k souborům nelze uložit: {e}
+@msg	this script's file access can be allowed only once	přístup tohoto skriptu k souborům lze povolit jen jednou
+@msg	Only the person at the keyboard can allow a script's file access	Přístup skriptu k souborům může povolit jen člověk u klávesnice
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Skript dostane nejvýše 2 048 souborů: soubory vybrané po nich byly vynechány
 @msg	Corners edits the corners of a path	Rohy upravuje rohy cesty
 @msg	Couldn't copy to the system clipboard: {e}	Nelze kopírovat do systémové schránky: {e}
 @msg	Couldn't open {name}: {e}	{name} nelze otevřít: {e}

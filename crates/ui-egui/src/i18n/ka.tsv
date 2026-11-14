@@ -5495,6 +5495,13 @@ imageTrace	Outline	კონტური
 	Show External Script Warning	გარე სკრიპტის გაფრთხილების ჩვენება
 	A Script Is Running	სკრიპტი მუშაობს
 	Script Alert	სკრიპტის შეტყობინება
+	Script File Access	სკრიპტის წვდომა ფაილებზე
+	The script asks to read a file you choose.	სკრიპტი ითხოვს თქვენ მიერ არჩეული ფაილის წაკითხვას.
+	The script asks to read and write a file you choose.	სკრიპტი ითხოვს თქვენ მიერ არჩეული ფაილის წაკითხვასა და ჩაწერას.
+	The script asks to read and write a folder you choose, with everything in it.	სკრიპტი ითხოვს თქვენ მიერ არჩეული საქაღალდისა და მთელი მისი შიგთავსის წაკითხვასა და ჩაწერას.
+	Allow Once	ერთხელ დაშვება
+	Always Allow This Script	ამ სკრიპტის ყოველთვის დაშვება
+	Deny	უარყოფა
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
 	Stop the script and undo what it did? Then quit again.	შეჩერდეს სკრიპტი და გაუქმდეს მისი ცვლილებები? შემდეგ ხელახლა გამოდით.
@@ -5523,8 +5530,6 @@ imageTrace	Outline	კონტური
 @msg	Script file could not be read	სკრიპტის ფაილის წაკითხვა ვერ მოხერხდა
 @msg	Script folder has more than 2,048 entries	სკრიპტის საქაღალდეში 2048-ზე მეტი ჩანაწერია
 @msg	Script file open mode must be r, w, e or a	სკრიპტის ფაილის გახსნის რეჟიმი უნდა იყოს r, w, e ან a
-@msg	Script file writing is not available	სკრიპტის ფაილების ჩაწერა მიუწვდომელია
-@msg	Script file dialogs are not available	სკრიპტის ფაილის დიალოგები მიუწვდომელია
 @msg	Script files cannot be opened in another application	სკრიპტის ფაილების სხვა აპლიკაციაში გახსნა შეუძლებელია
 @msg	Script file access is unavailable on the web	ვებში სკრიპტის ფაილებზე წვდომა მიუწვდომელია
 @msg	Script has 256 files open	სკრიპტს 256 ფაილი აქვს გახსნილი
@@ -5595,6 +5600,27 @@ imageTrace	Outline	კონტური
 @msg	there is no script engine named {name}	სკრიპტის ძრავა სახელით {name} არ არსებობს
 @msg	Running a script	სკრიპტი მუშაობს
 @msg	Copied the script report	კოპირებულია სკრიპტის ანგარიში
+@msg	Script file access denied: {path}	სკრიპტის წვდომა ფაილებზე უარყოფილია: {path}
+@msg	Script file access to the app's own folders is not allowed	სკრიპტს არ აქვს აპის საკუთარ საქაღალდეებზე წვდომის უფლება
+@msg	Script file cannot encode the text	სკრიპტის ფაილი ვერ აკოდირებს ტექსტს
+@msg	Script file could not be written	სკრიპტის ფაილის ჩაწერა ვერ მოხერხდა
+@msg	Script file dialogs need a person to answer them	სკრიპტის ფაილის დიალოგებს სჭირდება ადამიანი, რომელიც უპასუხებს
+@msg	Script file is not open for writing	სკრიპტის ფაილი ჩასაწერად გახსნილი არ არის
+@msg	Script file name is already in use	სკრიპტის ფაილის სახელი უკვე გამოიყენება
+@msg	Script file name must be a name without a folder	სკრიპტის ფაილის სახელი უნდა იყოს სახელი საქაღალდის გარეშე
+@msg	Script file permission can be kept only for a script run from a file	ფაილების ნებართვის შენახვა შესაძლებელია მხოლოდ ფაილიდან გაშვებული სკრიპტისთვის
+@msg	Script file permission could not be saved	სკრიპტის ფაილების ნებართვის შენახვა ვერ მოხერხდა
+@msg	Script folder is not empty	სკრიპტის საქაღალდე ცარიელი არ არის
+@msg	Script files cannot make aliases	სკრიპტის ფაილებს არ შეუძლიათ ფსევდონიმების შექმნა
+@msg	Script file hidden setting cannot be changed	სკრიპტის ფაილის დამალვის პარამეტრის შეცვლა შეუძლებელია
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ფაილის დიალოგი ვერ გაიხსნება ჩაშენებული ფუნქციის, getter-ის, გარდაქმნის ან $.evalFile-ის მიერ გაშვებული ფაილის callback-ში; გამოიძახეთ ის სკრიპტის საკუთარი კოდიდან
+@msg	the script wrote more file data than one run may write (32 MiB)	სკრიპტმა ჩაწერა იმაზე მეტი ფაილის მონაცემი, ვიდრე ერთ გაშვებას შეუძლია ჩაწეროს (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	სკრიპტის ფაილის დიალოგისთვის `answer` უნდა იყოს ერთ-ერთი: once, always, deny, stop
+@msg	choose a file or folder first, or deny	ჯერ აირჩიეთ ფაილი ან საქაღალდე, ან უარყავით
+@msg	the script file permissions could not be saved: {e}	სკრიპტების ფაილების ნებართვების შენახვა ვერ მოხერხდა: {e}
+@msg	this script's file access can be allowed only once	ამ სკრიპტის წვდომა ფაილებზე მხოლოდ ერთხელ შეიძლება დაიშვას
+@msg	Only the person at the keyboard can allow a script's file access	სკრიპტის წვდომას ფაილებზე მხოლოდ კლავიატურასთან მყოფი ადამიანი უშვებს
+@msg	A script is given at most 2,048 files: the files picked after them were left out	სკრიპტი იღებს მაქსიმუმ 2 048 ფაილს: მათ შემდეგ არჩეული ფაილები გამოტოვებულია
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	ტრაექტორიის წანაცვლება: წანაცვლების შემდეგ მონიშნული ტრაექტორიებიდან არაფერი რჩება (შიგნით წანაცვლება ფიგურებზე დიდია)
 @msg	{path}: not a file	{path}: ფაილი არ არის
 	Load EPS into Clipboard	EPS-ის ბუფერში ჩატვირთვა

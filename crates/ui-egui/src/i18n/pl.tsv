@@ -4408,6 +4408,13 @@ imageTrace	Outline	Kontur
 	Show External Script Warning	Pokazuj ostrzeżenie o skryptach zewnętrznych
 	A Script Is Running	Skrypt jest uruchomiony
 	Script Alert	Komunikat skryptu
+	Script File Access	Dostęp skryptu do plików
+	The script asks to read a file you choose.	Skrypt prosi o odczyt wybranego przez Ciebie pliku.
+	The script asks to read and write a file you choose.	Skrypt prosi o odczyt i zapis wybranego przez Ciebie pliku.
+	The script asks to read and write a folder you choose, with everything in it.	Skrypt prosi o odczyt i zapis wybranego przez Ciebie folderu wraz z całą jego zawartością.
+	Allow Once	Zezwól raz
+	Always Allow This Script	Zawsze zezwalaj temu skryptowi
+	Deny	Odmów
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
 	Stop the script and undo what it did? Then quit again.	Zatrzymać skrypt i cofnąć jego zmiany? Następnie zakończ program ponownie.
@@ -4436,8 +4443,6 @@ imageTrace	Outline	Kontur
 @msg	Script file could not be read	Nie udało się odczytać pliku skryptu
 @msg	Script folder has more than 2,048 entries	Folder skryptu ma więcej niż 2048 pozycji
 @msg	Script file open mode must be r, w, e or a	Tryb otwarcia pliku skryptu musi być r, w, e lub a
-@msg	Script file writing is not available	Zapisywanie plików skryptu jest niedostępne
-@msg	Script file dialogs are not available	Okna dialogowe plików skryptu są niedostępne
 @msg	Script files cannot be opened in another application	Plików skryptu nie można otworzyć w innej aplikacji
 @msg	Script file access is unavailable on the web	Dostęp do plików skryptu jest niedostępny w przeglądarce
 @msg	Script has 256 files open	Skrypt ma otwartych 256 plików
@@ -4508,6 +4513,27 @@ imageTrace	Outline	Kontur
 @msg	there is no script engine named {name}	nie ma silnika skryptów o nazwie {name}
 @msg	Running a script	Uruchamianie skryptu
 @msg	Copied the script report	Skopiowano raport skryptu
+@msg	Script file access denied: {path}	Odmówiono skryptowi dostępu do plików: {path}
+@msg	Script file access to the app's own folders is not allowed	Skrypt nie ma dostępu do własnych folderów aplikacji
+@msg	Script file cannot encode the text	Plik skryptu nie może zakodować tekstu
+@msg	Script file could not be written	Nie można zapisać pliku skryptu
+@msg	Script file dialogs need a person to answer them	Okna dialogowe plików skryptu wymagają osoby, która na nie odpowie
+@msg	Script file is not open for writing	Plik skryptu nie jest otwarty do zapisu
+@msg	Script file name is already in use	Nazwa pliku skryptu jest już używana
+@msg	Script file name must be a name without a folder	Nazwa pliku skryptu musi być nazwą bez folderu
+@msg	Script file permission can be kept only for a script run from a file	Uprawnienie do plików można zachować tylko dla skryptu uruchomionego z pliku
+@msg	Script file permission could not be saved	Nie można zapisać uprawnienia skryptu do plików
+@msg	Script folder is not empty	Folder skryptu nie jest pusty
+@msg	Script files cannot make aliases	Pliki skryptu nie mogą tworzyć aliasów
+@msg	Script file hidden setting cannot be changed	Nie można zmienić ustawienia ukrycia pliku skryptu
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: okna dialogowego plików nie można otworzyć w wywołaniu zwrotnym funkcji wbudowanej, gettera, konwersji ani pliku uruchamianego przez $.evalFile; wywołaj je z własnego kodu skryptu
+@msg	the script wrote more file data than one run may write (32 MiB)	skrypt zapisał więcej danych plików, niż może zapisać jedno uruchomienie (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` dla okna dialogowego plików skryptu musi być jedną z wartości: once, always, deny, stop
+@msg	choose a file or folder first, or deny	najpierw wybierz plik lub folder albo odmów
+@msg	the script file permissions could not be saved: {e}	nie można zapisać uprawnień skryptów do plików: {e}
+@msg	this script's file access can be allowed only once	na dostęp tego skryptu do plików można zezwolić tylko raz
+@msg	Only the person at the keyboard can allow a script's file access	Na dostęp skryptu do plików może zezwolić tylko osoba przy klawiaturze
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Skrypt otrzymuje najwyżej 2 048 plików: pliki wybrane po nich zostały pominięte
 @msg	Corners edits the corners of a path	Narożniki edytuje narożniki ścieżki
 @msg	Couldn't copy to the system clipboard: {e}	Nie udało się skopiować do schowka systemowego: {e}
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}

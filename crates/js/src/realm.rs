@@ -251,6 +251,7 @@ impl Realm {
         interp.last_error = Value::Null;
         interp.host_abort = None;
         interp.waiting = false;
+        interp.resuming = None;
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
         interp.finally_marks.clear();
@@ -286,6 +287,7 @@ impl Realm {
         interp.temp_roots.clear();
         interp.join_stack.clear();
         interp.waiting = false;
+        interp.resuming = None;
         interp.passing = Value::Undefined;
         match result {
             Ok(v) => Ok(interp.to_js_value(&v)),
@@ -375,7 +377,9 @@ impl Realm {
     }
 
     /// Gives the call that waits ([`crate::HostError::Wait`]) its result `d`; the next
-    /// [`Realm::advance`] goes on from there. A result past the heap limit ends the run with that
+    /// [`Realm::advance`] goes on from there. When a built-in such as `File.openDialog` made the
+    /// call, the built-in takes `d` first and gives its own result, and what it throws is thrown
+    /// at its call. A result past the heap limit ends the run with that
     /// limit, and with no call waiting this gives an internal error.
     pub fn answer(&mut self, d: crate::Data) -> Result<(), RunError> {
         let interp = &mut self.interp;
@@ -468,10 +472,12 @@ impl Realm {
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
-    /// `encode`, `decode`, `encodingAvailable`, `current` and `locations`, with the values `system`
-    /// and `lineFeed` and the messages `text.notOpen`, `text.noWrites`, `text.noPicker` and
-    /// `text.badMode`. Each object keeps its path, its `error` text, its open file's id, its
-    /// encoding and its line feed in properties that are not enumerable.
+    /// `write`, `copy`, `remove`, `rename`, `create`, `setLength`, `setReadonly`, `pick` (the file
+    /// dialogs, where a run may wait), `encode`, `decode`, `encodingAvailable`, `current` and
+    /// `locations`, with the values `system` and `lineFeed` and the messages `text.notOpen`,
+    /// `text.badMode`, `text.noAlias` and `text.noHidden`. Each object keeps its path, its `error`
+    /// text, its open file's id, its encoding and its line feed in properties that are not
+    /// enumerable.
     pub fn define_file_classes(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
         match crate::file_classes::install(&mut self.interp, items) {
             Ok(()) => Ok(()),
@@ -541,6 +547,14 @@ impl Realm {
     /// default local time is UTC.
     pub fn set_time_zone(&mut self, offset: impl Fn(f64) -> f64 + 'static) {
         self.interp.date_host.offset = std::rc::Rc::new(offset);
+    }
+
+    /// Calls `observe` with the text of each source the realm's scripts evaluate at run time, before
+    /// it is compiled: a string given to `eval` (direct or indirect), the parameters and body
+    /// `Function` joins, and a source an evaluator host function
+    /// ([`crate::HostItem::Evaluator`]) gives. Replaces an earlier observer.
+    pub fn observe_code(&mut self, observe: impl Fn(&[u16]) + 'static) {
+        self.interp.code_observer = Some(std::rc::Rc::new(observe));
     }
 
     /// Collects garbage now and returns the heap's estimated size in bytes afterwards.

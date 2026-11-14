@@ -181,6 +181,10 @@ pub struct Session {
     /// The folder of the New Document profiles `file.new` starts documents from; `None`: none,
     /// every document starts with the defaults ([`Session::attach_new_doc_profiles`]).
     new_doc_profile_dir: Option<std::path::PathBuf>,
+    /// The folder of each script's data folder (`Folder.userData`), beside which the grants file
+    /// keeps the file access people allowed scripts; `None`: no folder
+    /// ([`Session::attach_script_data`]).
+    script_data_dir: Option<std::path::PathBuf>,
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,

@@ -5304,6 +5304,13 @@ axis	Both	Ambos
 	Show External Script Warning	Mostrar aviso de scripts externos
 	A Script Is Running	Um script está em execução
 	Script Alert	Alerta do script
+	Script File Access	Acesso do script a arquivos
+	The script asks to read a file you choose.	O script pede para ler um arquivo que você escolher.
+	The script asks to read and write a file you choose.	O script pede para ler e gravar um arquivo que você escolher.
+	The script asks to read and write a folder you choose, with everything in it.	O script pede para ler e gravar uma pasta que você escolher, com todo o seu conteúdo.
+	Allow Once	Permitir uma vez
+	Always Allow This Script	Sempre permitir este script
+	Deny	Negar
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Um script pode alterar os documentos abertos e gravar arquivos pelos comandos que executa. Execute apenas scripts em que você confia.
 	Do not show this warning again	Não mostrar este aviso novamente
 	Stop the script and undo what it did? Then quit again.	Parar o script e desfazer o que ele fez? Depois, saia novamente.
@@ -5332,8 +5339,6 @@ axis	Both	Ambos
 @msg	Script file could not be read	Não foi possível ler o arquivo de script
 @msg	Script folder has more than 2,048 entries	A pasta de script tem mais de 2.048 entradas
 @msg	Script file open mode must be r, w, e or a	O modo de abertura do arquivo de script deve ser r, w, e ou a
-@msg	Script file writing is not available	A gravação de arquivos de script não está disponível
-@msg	Script file dialogs are not available	As caixas de diálogo de arquivos de script não estão disponíveis
 @msg	Script files cannot be opened in another application	Arquivos de script não podem ser abertos em outro aplicativo
 @msg	Script file access is unavailable on the web	O acesso a arquivos de script não está disponível na web
 @msg	Script has 256 files open	O script tem 256 arquivos abertos
@@ -5404,6 +5409,27 @@ axis	Both	Ambos
 @msg	there is no script engine named {name}	não há nenhum mecanismo de script chamado {name}
 @msg	Running a script	Executando um script
 @msg	Copied the script report	Relatório do script copiado
+@msg	Script file access denied: {path}	Acesso do script a arquivos negado: {path}
+@msg	Script file access to the app's own folders is not allowed	O script não pode acessar as pastas do próprio aplicativo
+@msg	Script file cannot encode the text	O arquivo do script não consegue codificar o texto
+@msg	Script file could not be written	Não foi possível gravar o arquivo do script
+@msg	Script file dialogs need a person to answer them	As caixas de diálogo de arquivo do script precisam de uma pessoa para respondê-las
+@msg	Script file is not open for writing	O arquivo do script não está aberto para gravação
+@msg	Script file name is already in use	O nome do arquivo do script já está em uso
+@msg	Script file name must be a name without a folder	O nome do arquivo do script deve ser um nome sem pasta
+@msg	Script file permission can be kept only for a script run from a file	A permissão de arquivos só pode ser mantida para um script executado a partir de um arquivo
+@msg	Script file permission could not be saved	Não foi possível salvar a permissão de arquivos do script
+@msg	Script folder is not empty	A pasta do script não está vazia
+@msg	Script files cannot make aliases	Os arquivos do script não podem criar aliases
+@msg	Script file hidden setting cannot be changed	A configuração de oculto do arquivo do script não pode ser alterada
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: uma caixa de diálogo de arquivo não pode abrir dentro de um callback de uma função integrada, de um getter, de uma conversão ou de um arquivo que $.evalFile executa; chame-a a partir do próprio código do script
+@msg	the script wrote more file data than one run may write (32 MiB)	o script gravou mais dados de arquivo do que uma execução pode gravar (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` para a caixa de diálogo de arquivo de um script deve ser um destes: once, always, deny, stop
+@msg	choose a file or folder first, or deny	escolha primeiro um arquivo ou uma pasta, ou negue
+@msg	the script file permissions could not be saved: {e}	não foi possível salvar as permissões de arquivos dos scripts: {e}
+@msg	this script's file access can be allowed only once	o acesso a arquivos deste script só pode ser permitido uma vez
+@msg	Only the person at the keyboard can allow a script's file access	Somente a pessoa ao teclado pode permitir o acesso a arquivos de um script
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Um script recebe no máximo 2.048 arquivos: os arquivos escolhidos depois deles foram deixados de fora
 @msg	This shortcut file is in a form VectorCraft can't read.	Este arquivo de atalhos está em um formato que o VectorCraft não consegue ler.
 @msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{v}`	axis deve ser "vertical", "horizontal" ou um ângulo em graus, não `{v}`
 @msg	give corners of the path: anchors where its sides meet at an angle	informe os cantos do caminho: pontos de ancoragem onde os lados se encontram em ângulo

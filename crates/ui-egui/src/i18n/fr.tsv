@@ -4262,6 +4262,13 @@ axis	Both	Les deux
 	Show External Script Warning	Afficher l’avertissement des scripts externes
 	A Script Is Running	Un script est en cours d’exécution
 	Script Alert	Alerte de script
+	Script File Access	Accès du script aux fichiers
+	The script asks to read a file you choose.	Le script demande à lire un fichier que vous choisissez.
+	The script asks to read and write a file you choose.	Le script demande à lire et écrire un fichier que vous choisissez.
+	The script asks to read and write a folder you choose, with everything in it.	Le script demande à lire et écrire un dossier que vous choisissez, avec tout son contenu.
+	Allow Once	Autoriser une fois
+	Always Allow This Script	Toujours autoriser ce script
+	Deny	Refuser
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script peut modifier les documents ouverts et écrire des fichiers au moyen des commandes qu’il exécute. N’exécutez que des scripts de confiance.
 	Do not show this warning again	Ne plus afficher cet avertissement
 	Stop the script and undo what it did? Then quit again.	Arrêter le script et annuler ce qu’il a fait ? Quittez ensuite à nouveau.
@@ -4290,8 +4297,6 @@ axis	Both	Les deux
 @msg	Script file could not be read	Le fichier de script n’a pas pu être lu
 @msg	Script folder has more than 2,048 entries	Le dossier de script contient plus de 2 048 entrées
 @msg	Script file open mode must be r, w, e or a	Le mode d’ouverture du fichier de script doit être r, w, e ou a
-@msg	Script file writing is not available	L’écriture de fichiers de script n’est pas disponible
-@msg	Script file dialogs are not available	Les boîtes de dialogue de fichiers de script ne sont pas disponibles
 @msg	Script files cannot be opened in another application	Les fichiers de script ne peuvent pas être ouverts dans une autre application
 @msg	Script file access is unavailable on the web	L’accès aux fichiers de script n’est pas disponible sur le web
 @msg	Script has 256 files open	Le script a 256 fichiers ouverts
@@ -4362,6 +4367,27 @@ axis	Both	Les deux
 @msg	there is no script engine named {name}	il n'y a aucun moteur de script nommé {name}
 @msg	Running a script	Exécution d’un script
 @msg	Copied the script report	Rapport du script copié
+@msg	Script file access denied: {path}	Accès du script aux fichiers refusé : {path}
+@msg	Script file access to the app's own folders is not allowed	L’accès du script aux dossiers propres à l’application n’est pas autorisé
+@msg	Script file cannot encode the text	Le fichier du script ne peut pas encoder le texte
+@msg	Script file could not be written	Le fichier du script n’a pas pu être écrit
+@msg	Script file dialogs need a person to answer them	Les boîtes de dialogue de fichiers du script ont besoin d’une personne pour y répondre
+@msg	Script file is not open for writing	Le fichier du script n’est pas ouvert en écriture
+@msg	Script file name is already in use	Le nom du fichier du script est déjà utilisé
+@msg	Script file name must be a name without a folder	Le nom du fichier du script doit être un nom sans dossier
+@msg	Script file permission can be kept only for a script run from a file	L’autorisation d’accès aux fichiers ne peut être conservée que pour un script exécuté depuis un fichier
+@msg	Script file permission could not be saved	L’autorisation d’accès aux fichiers du script n’a pas pu être enregistrée
+@msg	Script folder is not empty	Le dossier du script n’est pas vide
+@msg	Script files cannot make aliases	Les fichiers du script ne peuvent pas créer d’alias
+@msg	Script file hidden setting cannot be changed	Le réglage masqué du fichier du script ne peut pas être modifié
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name} : une boîte de dialogue de fichiers ne peut pas s’ouvrir dans un rappel d’une fonction intégrée, d’un accesseur, d’une conversion ou d’un fichier exécuté par $.evalFile ; appelez-la depuis le propre code du script
+@msg	the script wrote more file data than one run may write (32 MiB)	le script a écrit plus de données de fichiers qu’une exécution ne peut en écrire (32 Mio)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pour la boîte de dialogue de fichiers d’un script doit être l’une des valeurs : once, always, deny, stop
+@msg	choose a file or folder first, or deny	choisissez d’abord un fichier ou un dossier, ou refusez
+@msg	the script file permissions could not be saved: {e}	les autorisations d’accès aux fichiers des scripts n’ont pas pu être enregistrées : {e}
+@msg	this script's file access can be allowed only once	l’accès aux fichiers de ce script ne peut être autorisé qu’une fois
+@msg	Only the person at the keyboard can allow a script's file access	Seule la personne au clavier peut autoriser l’accès aux fichiers d’un script
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Un script reçoit au plus 2 048 fichiers : les fichiers choisis après eux ont été laissés de côté
 @msg	Corners edits the corners of a path	Angles modifie les angles d’un tracé
 @msg	Couldn't copy to the system clipboard: {e}	Impossible de copier dans le presse-papiers du système : {e}
 @msg	Couldn't open {name}: {e}	Impossible d’ouvrir {name} : {e}
@@ -7567,7 +7593,7 @@ breakText	Glyphs	Glyphes
 @msg	`alignOn` must be a string	`alignOn` doit être une chaîne
 @msg	`align` is start, center or end	`align` vaut start, center ou end
 @msg	`align` must be a string	`align` doit être une chaîne
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` doit être une liste de paires [sous-tracé, point d’ancrage]
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` doit être une liste de paires [subpath, anchor]
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` doit lister des indices de points d’ancrage (0, 1, 2…), pas {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` doit lister des indices de points d’ancrage (0, 1, 2…), pas {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pour cette boîte de dialogue {kind} doit valoir l’une de ces valeurs : {_1}
@@ -7631,7 +7657,7 @@ breakText	Glyphs	Glyphes
 @msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` doit être compris entre {lo} et {hi} pt
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` doit contenir de 1 à 1000 chemins de fichiers de police trouvés par la dernière recherche text.findFontFiles
 @msg	`focal` and `radius` cannot be used together	`focal` et `radius` ne peuvent pas être utilisés ensemble
-@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` doit être une liste de paires [sous-tracé, point d’ancrage]
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` doit être une liste de paires [subpath, anchor]
 @msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` désigne [{si}, {ai}], qui n’est pas un point d’ancrage du tracé
 @msg	`folder` must be an absolute folder path	`folder` doit être le chemin absolu d’un dossier
 @msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` doit être un objet de balises d’axe et de valeurs, comme {"wght"}

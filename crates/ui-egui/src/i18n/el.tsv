@@ -2343,6 +2343,13 @@ axis	Both	Και τα δύο
 	Show External Script Warning	Εμφάνιση προειδοποίησης για εξωτερικά σενάρια
 	A Script Is Running	Εκτελείται ένα σενάριο
 	Script Alert	Ειδοποίηση σεναρίου
+	Script File Access	Πρόσβαση σεναρίου σε αρχεία
+	The script asks to read a file you choose.	Το σενάριο ζητά να διαβάσει ένα αρχείο που θα επιλέξετε.
+	The script asks to read and write a file you choose.	Το σενάριο ζητά να διαβάσει και να γράψει ένα αρχείο που θα επιλέξετε.
+	The script asks to read and write a folder you choose, with everything in it.	Το σενάριο ζητά να διαβάσει και να γράψει έναν φάκελο που θα επιλέξετε, με όλο το περιεχόμενό του.
+	Allow Once	Να επιτραπεί μία φορά
+	Always Allow This Script	Να επιτρέπεται πάντα αυτό το σενάριο
+	Deny	Άρνηση
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
 	Stop the script and undo what it did? Then quit again.	Διακοπή του σεναρίου και αναίρεση όσων έκανε; Έπειτα κάντε ξανά έξοδο.
@@ -2371,8 +2378,6 @@ axis	Both	Και τα δύο
 @msg	Script file could not be read	Δεν ήταν δυνατή η ανάγνωση του αρχείου σεναρίου
 @msg	Script folder has more than 2,048 entries	Ο φάκελος σεναρίου έχει περισσότερες από 2.048 καταχωρίσεις
 @msg	Script file open mode must be r, w, e or a	Ο τρόπος ανοίγματος του αρχείου σεναρίου πρέπει να είναι r, w, e ή a
-@msg	Script file writing is not available	Η εγγραφή αρχείων σεναρίου δεν είναι διαθέσιμη
-@msg	Script file dialogs are not available	Τα παράθυρα διαλόγου αρχείων σεναρίου δεν είναι διαθέσιμα
 @msg	Script files cannot be opened in another application	Τα αρχεία σεναρίου δεν μπορούν να ανοίξουν σε άλλη εφαρμογή
 @msg	Script file access is unavailable on the web	Η πρόσβαση σε αρχεία σεναρίου δεν είναι διαθέσιμη στο web
 @msg	Script has 256 files open	Το σενάριο έχει 256 ανοιχτά αρχεία
@@ -2443,6 +2448,27 @@ axis	Both	Και τα δύο
 @msg	there is no script engine named {name}	δεν υπάρχει μηχανή σεναρίων με όνομα {name}
 @msg	Running a script	Εκτελείται σενάριο
 @msg	Copied the script report	Η αναφορά του σεναρίου αντιγράφηκε
+@msg	Script file access denied: {path}	Η πρόσβαση του σεναρίου σε αρχεία απορρίφθηκε: {path}
+@msg	Script file access to the app's own folders is not allowed	Δεν επιτρέπεται η πρόσβαση σεναρίων στους φακέλους της ίδιας της εφαρμογής
+@msg	Script file cannot encode the text	Το αρχείο του σεναρίου δεν μπορεί να κωδικοποιήσει το κείμενο
+@msg	Script file could not be written	Δεν ήταν δυνατή η εγγραφή του αρχείου του σεναρίου
+@msg	Script file dialogs need a person to answer them	Τα παράθυρα διαλόγου αρχείων του σεναρίου χρειάζονται ένα άτομο για να απαντήσει
+@msg	Script file is not open for writing	Το αρχείο του σεναρίου δεν είναι ανοιχτό για εγγραφή
+@msg	Script file name is already in use	Το όνομα του αρχείου του σεναρίου χρησιμοποιείται ήδη
+@msg	Script file name must be a name without a folder	Το όνομα του αρχείου του σεναρίου πρέπει να είναι όνομα χωρίς φάκελο
+@msg	Script file permission can be kept only for a script run from a file	Η άδεια αρχείων μπορεί να διατηρηθεί μόνο για σενάριο που εκτελείται από αρχείο
+@msg	Script file permission could not be saved	Δεν ήταν δυνατή η αποθήκευση της άδειας αρχείων του σεναρίου
+@msg	Script folder is not empty	Ο φάκελος του σεναρίου δεν είναι κενός
+@msg	Script files cannot make aliases	Τα αρχεία του σεναρίου δεν μπορούν να δημιουργήσουν ψευδώνυμα
+@msg	Script file hidden setting cannot be changed	Η ρύθμιση απόκρυψης του αρχείου του σεναρίου δεν μπορεί να αλλάξει
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: ένα παράθυρο διαλόγου αρχείων δεν μπορεί να ανοίξει μέσα σε callback ενσωματωμένης συνάρτησης, getter, μετατροπής ή αρχείου που εκτελεί το $.evalFile· καλέστε το από τον κώδικα του ίδιου του σεναρίου
+@msg	the script wrote more file data than one run may write (32 MiB)	το σενάριο έγραψε περισσότερα δεδομένα αρχείων από όσα επιτρέπεται να γράψει μία εκτέλεση (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	το `answer` για το παράθυρο διαλόγου αρχείων ενός σεναρίου πρέπει να είναι ένα από: once, always, deny, stop
+@msg	choose a file or folder first, or deny	επιλέξτε πρώτα ένα αρχείο ή έναν φάκελο, ή απορρίψτε
+@msg	the script file permissions could not be saved: {e}	δεν ήταν δυνατή η αποθήκευση των αδειών αρχείων των σεναρίων: {e}
+@msg	this script's file access can be allowed only once	η πρόσβαση αυτού του σεναρίου σε αρχεία μπορεί να επιτραπεί μόνο μία φορά
+@msg	Only the person at the keyboard can allow a script's file access	Μόνο το άτομο στο πληκτρολόγιο μπορεί να επιτρέψει την πρόσβαση ενός σεναρίου σε αρχεία
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Ένα σενάριο λαμβάνει το πολύ 2.048 αρχεία: τα αρχεία που επιλέχθηκαν μετά από αυτά παραλείφθηκαν
 @msg	Corners edits the corners of a path	Η εντολή Γωνίες επεξεργάζεται τις γωνίες μιας διαδρομής
 @msg	Couldn't copy to the system clipboard: {e}	Δεν ήταν δυνατή η αντιγραφή στο πρόχειρο συστήματος: {e}
 @msg	Couldn't open {name}: {e}	Δεν ήταν δυνατό το άνοιγμα του {name}: {e}

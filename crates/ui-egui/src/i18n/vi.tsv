@@ -4739,6 +4739,13 @@ theme	Appearance	Giao diện
 	Show External Script Warning	Hiện cảnh báo tập lệnh bên ngoài
 	A Script Is Running	Một tập lệnh đang chạy
 	Script Alert	Thông báo của tập lệnh
+	Script File Access	Quyền truy cập tệp của tập lệnh
+	The script asks to read a file you choose.	Tập lệnh yêu cầu đọc một tệp bạn chọn.
+	The script asks to read and write a file you choose.	Tập lệnh yêu cầu đọc và ghi một tệp bạn chọn.
+	The script asks to read and write a folder you choose, with everything in it.	Tập lệnh yêu cầu đọc và ghi một thư mục bạn chọn, cùng mọi thứ bên trong.
+	Allow Once	Cho phép một lần
+	Always Allow This Script	Luôn cho phép tập lệnh này
+	Deny	Từ chối
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
 	Do not show this warning again	Không hiện lại cảnh báo này
 	Stop the script and undo what it did? Then quit again.	Dừng tập lệnh và hoàn tác những gì nó đã làm? Sau đó hãy thoát lại.
@@ -4767,8 +4774,6 @@ theme	Appearance	Giao diện
 @msg	Script file could not be read	Không thể đọc tệp tập lệnh
 @msg	Script folder has more than 2,048 entries	Thư mục tập lệnh có hơn 2.048 mục
 @msg	Script file open mode must be r, w, e or a	Chế độ mở tệp tập lệnh phải là r, w, e hoặc a
-@msg	Script file writing is not available	Không thể ghi tệp tập lệnh
-@msg	Script file dialogs are not available	Không có hộp thoại tệp cho tập lệnh
 @msg	Script files cannot be opened in another application	Không thể mở tệp tập lệnh trong ứng dụng khác
 @msg	Script file access is unavailable on the web	Không thể truy cập tệp tập lệnh trên web
 @msg	Script has 256 files open	Tập lệnh đang mở 256 tệp
@@ -4839,6 +4844,27 @@ theme	Appearance	Giao diện
 @msg	there is no script engine named {name}	không có bộ máy tập lệnh nào tên {name}
 @msg	Running a script	Đang chạy tập lệnh
 @msg	Copied the script report	Đã sao chép báo cáo script
+@msg	Script file access denied: {path}	Quyền truy cập tệp của tập lệnh bị từ chối: {path}
+@msg	Script file access to the app's own folders is not allowed	Tập lệnh không được phép truy cập các thư mục riêng của ứng dụng
+@msg	Script file cannot encode the text	Tệp của tập lệnh không thể mã hóa văn bản
+@msg	Script file could not be written	Không thể ghi tệp của tập lệnh
+@msg	Script file dialogs need a person to answer them	Hộp thoại tệp của tập lệnh cần một người trả lời
+@msg	Script file is not open for writing	Tệp của tập lệnh chưa được mở để ghi
+@msg	Script file name is already in use	Tên tệp của tập lệnh đã được sử dụng
+@msg	Script file name must be a name without a folder	Tên tệp của tập lệnh phải là một tên không có thư mục
+@msg	Script file permission can be kept only for a script run from a file	Chỉ có thể giữ quyền truy cập tệp cho tập lệnh chạy từ một tệp
+@msg	Script file permission could not be saved	Không thể lưu quyền truy cập tệp của tập lệnh
+@msg	Script folder is not empty	Thư mục của tập lệnh không trống
+@msg	Script files cannot make aliases	Tệp của tập lệnh không thể tạo bí danh
+@msg	Script file hidden setting cannot be changed	Không thể thay đổi cài đặt ẩn của tệp tập lệnh
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: không thể mở hộp thoại tệp bên trong callback của hàm dựng sẵn, getter, phép chuyển đổi hoặc tệp mà $.evalFile chạy; hãy gọi nó từ mã riêng của tập lệnh
+@msg	the script wrote more file data than one run may write (32 MiB)	tập lệnh đã ghi nhiều dữ liệu tệp hơn mức một lần chạy được phép ghi (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` cho hộp thoại tệp của tập lệnh phải là một trong: once, always, deny, stop
+@msg	choose a file or folder first, or deny	hãy chọn một tệp hoặc thư mục trước, hoặc từ chối
+@msg	the script file permissions could not be saved: {e}	không thể lưu quyền truy cập tệp của các tập lệnh: {e}
+@msg	this script's file access can be allowed only once	quyền truy cập tệp của tập lệnh này chỉ có thể được cho phép một lần
+@msg	Only the person at the keyboard can allow a script's file access	Chỉ người ngồi tại bàn phím mới có thể cho phép tập lệnh truy cập tệp
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Một tập lệnh nhận tối đa 2.048 tệp: các tệp được chọn sau đó đã bị bỏ qua
 @msg	Corners edits the corners of a path	Corners chỉnh sửa các góc của đường dẫn
 @msg	could not decode image: {0}	không thể giải mã ảnh: {0}
 @msg	Couldn't copy to the system clipboard: {e}	Không thể sao chép vào khay nhớ tạm hệ thống: {e}

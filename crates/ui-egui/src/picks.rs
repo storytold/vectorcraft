@@ -32,10 +32,14 @@ pub enum PickRequest {
     Open(FilePick),
     /// An open dialog for files to place.
     OpenMany,
+    /// An open dialog for several files of the pick's types.
+    OpenFiles(FilePick),
     /// A save dialog.
     Save(FilePick),
     /// A folder picker.
     Folder,
+    /// A folder picker that starts in the folder given.
+    FolderAt(String),
 }
 
 /// The paths a dialog shown off the UI thread picked (none: cancelled). A save dialog that reports
@@ -192,10 +196,10 @@ impl Picks {
     /// The kind of dialog open off the UI thread (`ui.inspect`'s `fileDialog`).
     pub(crate) fn waiting_kind(&self) -> Option<&'static str> {
         self.waiting.as_ref().map(|w| match w.request {
-            PickRequest::Open(_) => "open",
+            PickRequest::Open(_) | PickRequest::OpenFiles(_) => "open",
             PickRequest::OpenMany => "place",
             PickRequest::Save(_) => "save",
-            PickRequest::Folder => "folder",
+            PickRequest::Folder | PickRequest::FolderAt(_) => "folder",
         })
     }
 }
@@ -350,9 +354,20 @@ pub(crate) fn folder(app: &mut VectorcraftApp) -> Option<String> {
     ask(app, PickRequest::Folder)?.into_iter().next()
 }
 
+/// A folder from the folder picker, which starts in `start` when the host can start it there.
+pub(crate) fn folder_at(app: &mut VectorcraftApp, start: &str) -> Option<String> {
+    ask(app, PickRequest::FolderAt(start.to_string()))?.into_iter().next()
+}
+
 /// Paths from the open dialog for files to place (none: cancelled).
 pub(crate) fn open_many(app: &mut VectorcraftApp) -> Vec<String> {
     ask(app, PickRequest::OpenMany).unwrap_or_default()
+}
+
+/// Paths from an open dialog for several files of `pick`'s types (none: cancelled, or shown off the
+/// UI thread for now).
+pub(crate) fn open_files(app: &mut VectorcraftApp, pick: &FilePick) -> Vec<String> {
+    ask(app, PickRequest::OpenFiles(pick.clone())).unwrap_or_default()
 }
 
 /// Whether the host shows `request`'s kind of dialog at all.
@@ -361,8 +376,10 @@ pub(crate) fn can(app: &VectorcraftApp, request: &PickRequest) -> bool {
     match request {
         PickRequest::Open(_) => s.pick_open.is_some(),
         PickRequest::OpenMany => s.pick_open_multi.is_some() || s.pick_open.is_some(),
+        PickRequest::OpenFiles(_) => s.pick_open_files.is_some() || s.pick_open.is_some(),
         PickRequest::Save(_) => s.pick_save.is_some(),
         PickRequest::Folder => s.pick_folder.is_some(),
+        PickRequest::FolderAt(_) => s.pick_folder_at.is_some() || s.pick_folder.is_some(),
     }
 }
 
@@ -402,9 +419,19 @@ fn ask(app: &mut VectorcraftApp, request: PickRequest) -> Option<PickAnswer> {
         PickRequest::Open(pick) => one(s.pick_open.as_mut().and_then(|f| f(pick))),
         PickRequest::Save(pick) => one(s.pick_save.as_mut().and_then(|f| f(pick))),
         PickRequest::Folder => one(s.pick_folder.as_mut().and_then(|f| f())),
+        PickRequest::FolderAt(start) => match (s.pick_folder_at.as_mut(), s.pick_folder.as_mut()) {
+            (Some(at), _) => one(at(start)),
+            (None, Some(f)) => one(f()),
+            (None, None) => None,
+        },
         PickRequest::OpenMany => match (s.pick_open_multi.as_mut(), s.pick_open.as_mut()) {
             (Some(many), _) => Some(many()),
             (None, Some(f)) => one(f(&FilePick::default())),
+            (None, None) => None,
+        },
+        PickRequest::OpenFiles(pick) => match (s.pick_open_files.as_mut(), s.pick_open.as_mut()) {
+            (Some(many), _) => Some(many(pick)),
+            (None, Some(f)) => one(f(pick)),
             (None, None) => None,
         },
     }
