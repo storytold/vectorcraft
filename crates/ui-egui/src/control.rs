@@ -1274,7 +1274,7 @@ fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: 
     // The status text of a recovery copy that failed names the recovery folder it went to.
     let current = vectorcraft_engine::cmd::recovery::folder(&app.session).map(|(f, _)| f);
     for folder in app.recovery.named.iter().chain(current.as_ref()) {
-        collect_sent_paths(&json!(folder), true, &mut paths);
+        collect_sent_paths(&json!(folder), ParamsPlace::top(None), true, &mut paths);
     }
     hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
