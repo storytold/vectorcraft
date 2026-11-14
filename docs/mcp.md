@@ -1804,6 +1804,13 @@ commands fail and change nothing, and `appearance.removeItem` removes nothing. A
 the item last. A text `start` or `end` is past the end of the text. `object.slice.divide` refuses such a `rows` or
 `columns`, `recolor.reduce` keeps each color in its own row for such a `colors`, and `layer.setProps` refuses such a
 `color`. `object.setBounds` reads a `reference` past 8 as 8, as `object.transformEach` does.
+An index or place given as a value that is not a whole number of 0 or more, such as `"3"`, `2.5`, `-1` or `true`, is
+refused with `` `anchor` must be a whole number ``, naming the key: `anchor` of `path.setHandle`, `path.moveAnchor` and
+`text.setPathHandle`, `segment` of `path.insertAnchor`, `to` of `artboard.reorder`, `library.moveGroup` and
+`graphicStyle.move`, `subpath` of `path.appendAnchor`, `path.close` and `path.reverse`, and `artboard` of
+`document.rulerOrigin`, `document.setRulerOrigin` and `document.resetRulerOrigin`. A required one left out or null is
+reported as missing (`missing anchor`). Left out or null, `subpath` takes the command's default and `artboard` is 0.
+Nothing changes and no undo step is recorded.
 The blend, envelope and gradient mesh commands refuse a string or another value that is not a number with the same
 message, as in `` `steps` must be a number, not "8" ``, and change nothing: `steps`, `distance` and `value` in
 `object.blend.make` and `object.blend.options`; `bend`, `h`, `v`, `horizontalDistortion` and `verticalDistortion` in
