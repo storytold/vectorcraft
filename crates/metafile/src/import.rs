@@ -44,8 +44,9 @@ fn sane(r: Rect) -> bool {
     [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= LIMIT)
 }
 
-/// Is `path` an upright rectangle around the whole of `frame`? Writers clip to one first; it clips
-/// nothing in the picture.
+/// Is `path` one upright rectangle around the whole of `frame`? Writers clip to one first; it clips
+/// nothing in the picture. A path of more than one figure is not one rectangle, even when its
+/// figures run along the sides of a box.
 fn around(path: &BezPath, frame: Rect) -> bool {
     if path.elements().len() > 6 {
         return false;
@@ -67,9 +68,7 @@ fn around(path: &BezPath, frame: Rect) -> bool {
         };
         let Some(i) = corners.iter().position(|c| near(*c, p)) else { return false };
         if start {
-            if let (Some(f), Some(l)) = (first, last)
-                && !along(f, l)
-            {
+            if first.is_some() {
                 return false;
             }
             first = Some(i);

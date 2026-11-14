@@ -524,8 +524,11 @@ fn a_clip_whose_box_holds_the_picture_still_clips() {
     // A bow tie through the four corners of a box around the picture.
     let mut bow_tie = le(&[0, 0, 0, 0, 4]);
     bow_tie.extend(le(&[-500, -500, 5500, 3500, 5500, -500, -500, 3500]));
-    for clip in [diamond, bow_tie] {
-        let records = vec![(59, vec![]), (3, clip), (60, vec![]), (67, le(&[5])), (43, le(&[0, 0, 5000, 3000]))];
+    // Two open figures through the four corners, the top edge and the bottom edge, which enclose
+    // nothing: MOVETOEX, LINETO, MOVETOEX, LINETO.
+    let edges = vec![(27, le(&[-500, -500])), (54, le(&[5500, -500])), (27, le(&[5500, 3500])), (54, le(&[-500, 3500]))];
+    for clip in [vec![(3, diamond)], vec![(3, bow_tie)], edges] {
+        let records = [vec![(59, vec![])], clip, vec![(60, vec![]), (67, le(&[5])), (43, le(&[0, 0, 5000, 3000]))]].concat();
         let back = import(&hand_emf(5000, 3000, &records)).unwrap();
         let layer = back.document.layers[0].children().unwrap();
         assert_eq!(layer.len(), 1);
