@@ -768,6 +768,223 @@ fn nested_objects_that_repeat_ids_open_with_ids_of_their_own() {
     assert!(image(&s, layer_image).link.is_some(), "the image in the layers stays linked");
 }
 
+/// The files of the linked images that the stored brushes of [`brush_links`] are made of: a scatter
+/// brush's, an art brush's and a pattern brush's side tile.
+const BRUSHED: [(&str, &str, &str); 3] = [("scatter.png", "scatter", "Specks"), ("art.png", "art", "Band"), ("side.png", "pattern", "Frame")];
+
+/// A document whose stored brushes are made of [`BRUSHED`]'s linked images in `dir`. The art
+/// brush's image is still in the layers too, so its brush art repeats that object's id; the other
+/// two images were cleared from the layers.
+fn brush_links(dir: &Folder) -> (Session, NodeId) {
+    for (i, (name, ..)) in (0u8..).zip(BRUSHED) {
+        write(&dir.file(name), &png(20, 10, [30 + 60 * i, 120, 90]));
+    }
+    let mut s = session();
+    let mut kept = NodeId(0);
+    for (name, kind, brush) in BRUSHED {
+        let id = place(&mut s, &dir.file(name));
+        s.execute("brush.new", &json!({"type": kind, "name": brush, "ids": [id.0]})).unwrap();
+        if kind == "art" {
+            kept = id;
+        } else {
+            s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+        }
+    }
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    (s, kept)
+}
+
+/// The image in the art of stored brush `name`, as the document stores it.
+fn brush_image(s: &Session, name: &str) -> ImageObject {
+    let b = vectorcraft_brush::find(&s.doc().unwrap().doc, name).unwrap_or_else(|| panic!("no brush {name}"));
+    let mut found = None;
+    b.art()[0].walk(&mut |n| {
+        if let (None, NodeKind::Image(im)) = (&found, &n.kind) {
+            found = Some((**im).clone());
+        }
+    });
+    found.unwrap_or_else(|| panic!("no image in brush {name}"))
+}
+
+/// The id of the image in the art of stored brush `name`, as the document stores it.
+fn brush_image_id(s: &Session, name: &str) -> u64 {
+    let b = vectorcraft_brush::find(&s.doc().unwrap().doc, name).unwrap();
+    let mut found = None;
+    b.art()[0].walk(&mut |n| {
+        if found.is_none() && matches!(n.kind, NodeKind::Image(_)) {
+            found = Some(n.id.0);
+        }
+    });
+    found.unwrap()
+}
+
+/// Images in the art of stored brushes are listed after the others, one row per image in each brush tile,
+/// each with an id no other object has (the layer tree keeps its own), the brush named as what holds it; Check
+/// Links and the missing filter count them, and the ids stay the same from one list to the next.
+#[test]
+fn links_in_stored_brush_art_are_listed_and_checked_with_ids() {
+    let dir = Folder::new("brush-ids");
+    let (mut s, kept) = brush_links(&dir);
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let rows = list["links"].as_array().unwrap();
+    let owners: Vec<(&str, &Value)> = rows.iter().map(|r| (r["name"].as_str().unwrap(), &r["owner"])).collect();
+    let library = vectorcraft_brush::library(&s.doc().unwrap().doc);
+    let index = |name: &str| library.iter().position(|b| b.name == name).unwrap();
+    assert_eq!(
+        owners,
+        [
+            ("art.png", &Value::Null),
+            ("scatter.png", &json!({"kind": "brush", "name": "Specks", "index": index("Specks")})),
+            ("art.png", &json!({"kind": "brush", "name": "Band", "index": index("Band")})),
+            ("side.png", &json!({"kind": "brush", "name": "Frame", "index": index("Frame"), "tile": "side"})),
+        ],
+        "{list}"
+    );
+    assert_eq!(rows[0]["id"], json!(kept.0), "the layer tree keeps its ids: {list}");
+    let ids: std::collections::BTreeSet<u64> = rows.iter().map(|r| r["id"].as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 4, "{list}");
+    assert!(!ids.contains(&0), "{list}");
+    assert!(rows.iter().all(|r| r["status"] == "ok" && r["linked"] == true), "{list}");
+    assert_eq!(s.execute("links.list", &json!({})).unwrap(), list, "the same ids each time");
+    let other = super::rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    s.execute("edit.clear", &json!({"ids": [other.0]})).unwrap();
+    assert_eq!(s.execute("links.list", &json!({})).unwrap(), list, "the same ids after other objects are made");
+    let check = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!(check["links"].as_array().unwrap().len(), 3, "{check}");
+    std::fs::remove_file(dir.file("side.png")).unwrap();
+    let check = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!(check["missing"].as_u64(), Some(1), "{check}");
+    let missing = s.execute("links.list", &json!({"show": "missing"})).unwrap();
+    assert_eq!(missing["links"][0]["id"], rows[3]["id"], "{missing}");
+}
+
+/// Every links command takes the id of an image in a stored brush's art and acts on that brush's art,
+/// never on the image in the layers whose id the art repeated: Link Info, Go To (which clears the
+/// selection and names the brush), Placement Options, Relink, Update and Embed. The ids each change
+/// gives the art are kept in the library, so the next list names the same rows.
+#[test]
+fn links_commands_act_on_images_in_stored_brush_art_by_id() {
+    let dir = Folder::new("brush-act");
+    let (mut s, kept) = brush_links(&dir);
+    let band = row_id_owned(&mut s, "art.png", "brush");
+    assert_ne!(band, kept.0);
+    let info = s.execute("links.info", &json!({"id": band})).unwrap();
+    assert_eq!((info["fileName"].as_str(), info["status"].as_str(), info["id"].as_u64()), (Some("art.png"), Some("ok"), Some(band)), "{info}");
+    s.execute("select.set", &json!({"ids": [kept.0]})).unwrap();
+    let go = s.execute("links.goTo", &json!({"id": band})).unwrap();
+    assert_eq!(
+        (go["onCanvas"].clone(), go["owner"]["kind"].clone(), go["owner"]["name"].clone()),
+        (json!(false), json!("brush"), json!("Band")),
+        "{go}"
+    );
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "nothing on the canvas is selected");
+    s.execute("links.placementOptions", &json!({"ids": [band], "preserve": "fit"})).unwrap();
+    assert_eq!(s.execute("links.placementOptions", &json!({"ids": [band]})).unwrap()["placement"]["preserve"], "fit");
+    assert_eq!(brush_image(&s, "Band").placement.preserve, vectorcraft_doc::links::Preserve::Fit);
+    assert_eq!(brush_image_id(&s, "Band"), band, "the brush keeps the id it is listed by");
+    assert_ne!(image(&s, kept).placement.preserve, vectorcraft_doc::links::Preserve::Fit, "the image in the layers is left as it was");
+    // Relink: the brush's image shows the new file; the image in the layers keeps its file.
+    let other = dir.file("other.png");
+    write(&other, &png(40, 20, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [band], "path": other})).unwrap();
+    assert_eq!(r["relinked"], json!([band]), "{r}");
+    assert_eq!(brush_image(&s, "Band").link.unwrap().path, other);
+    assert_eq!(image(&s, kept).link.unwrap().path, dir.file("art.png"));
+    assert_eq!(row_id_owned(&mut s, "other.png", "brush"), band, "{}", s.execute("links.list", &json!({})).unwrap());
+    // Update: a changed file is read again for the scatter brush's image.
+    let dots = row_id_owned(&mut s, "scatter.png", "brush");
+    let changed = png(30, 30, RED);
+    write(&dir.file("scatter.png"), &changed);
+    let r = s.execute("links.update", &json!({"ids": [dots]})).unwrap();
+    assert_eq!(r["updated"], json!([dots]), "{r}");
+    assert_eq!(brush_image(&s, "Specks").link.unwrap().size, Some(changed.len() as u64));
+    // Embed: the pattern brush's side tile keeps its pixels and no longer links.
+    let frame = row_id_owned(&mut s, "side.png", "brush");
+    let r = s.execute("links.embed", &json!({"ids": [frame]})).unwrap();
+    assert_eq!(r["embedded"], json!([frame]), "{r}");
+    assert!(brush_image(&s, "Frame").link.is_none());
+    let embedded = s.execute("links.list", &json!({"show": "embedded"})).unwrap();
+    assert_eq!(embedded["links"][0]["id"], json!(frame), "{embedded}");
+    // Relink All Instances takes the image in the layers and the brush's image of the same file.
+    let r = s.execute("links.relink", &json!({"ids": [kept.0], "path": dir.file("scatter.png"), "scope": "all"})).unwrap();
+    assert_eq!(r["relinked"], json!([kept.0]), "{r}");
+    let r = s.execute("links.relink", &json!({"ids": [dots], "path": other, "scope": "all"})).unwrap();
+    let mut relinked: Vec<u64> = r["relinked"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    relinked.sort();
+    let mut both = vec![kept.0, dots];
+    both.sort();
+    assert_eq!(relinked, both, "{r}");
+    assert_eq!(image(&s, kept).link.unwrap().path, other);
+    // One undo step puts the brushes back as they were.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(brush_image(&s, "Specks").link.unwrap().path, dir.file("scatter.png"));
+}
+
+/// The id of the `links.list` row of file `name` whose owner is of `kind`.
+fn row_id_owned(s: &mut Session, name: &str, kind: &str) -> u64 {
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == name && r["owner"]["kind"] == kind);
+    row.unwrap_or_else(|| panic!("{name} in {kind}: {list}"))["id"].as_u64().unwrap()
+}
+
+/// A document saved with links in its stored brushes opens with them reported by the ids the list
+/// gives them, and a library entry that does not read as a brush is kept as it was.
+#[test]
+fn links_in_stored_brush_art_open_by_id_and_unreadable_entries_stay() {
+    let dir = Folder::new("brush-open");
+    let (mut s, _) = brush_links(&dir);
+    let odd = json!({"name": "Odd", "type": "unknown", "art": {"id": 3}});
+    s.edit("Odd brush", |d, _| {
+        if let Some(list) = d.unknown.get_mut(vectorcraft_brush::DOC_KEY).and_then(Value::as_array_mut) {
+            list.push(odd.clone());
+        }
+        Ok(())
+    })
+    .unwrap();
+    let path = dir.file("poster.vectorcraft");
+    save(&mut s, &path);
+    std::fs::remove_file(dir.file("scatter.png")).unwrap();
+    let r = open(&mut s, &path);
+    let dots = row_id_owned(&mut s, "scatter.png", "brush");
+    assert_eq!(r["missingLinks"][0]["ids"], json!([dots]), "{r}");
+    assert_eq!(brush_image_id(&s, "Specks"), dots, "the library keeps the ids opening gave");
+    let band = row_id_owned(&mut s, "art.png", "brush");
+    s.execute("links.embed", &json!({"ids": [band]})).unwrap();
+    let doc = &s.doc().unwrap().doc;
+    let stored = doc.unknown[vectorcraft_brush::DOC_KEY].as_array().unwrap();
+    assert_eq!(stored.last(), Some(&odd), "the unreadable entry is left as it was");
+    assert!(doc.mounted_art.is_empty());
+}
+
+/// The Color Mask of an image in a stored brush's art is made again for the new pixels when Update
+/// reads the image's changed file.
+#[test]
+fn updating_an_image_in_stored_brush_art_makes_its_color_mask_again() {
+    let dir = Folder::new("brush-mask");
+    let path = dir.file("logo.png");
+    write(&path, &png(12, 10, RED));
+    let mut s = session();
+    let id = place(&mut s, &path);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let hide_white = json!({"background": "colors", "colors": "#ffffff", "contiguous": false, "tolerance": 0, "softness": 0});
+    s.execute("addon.image.colorMask", &hide_white).unwrap();
+    s.execute("brush.new", &json!({"type": "scatter", "name": "Masked", "ids": [id.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    write(&path, &png(14, 10, BLUE));
+    let row = row_id_owned(&mut s, "logo.png", "brush");
+    let r = s.execute("links.update", &json!({"ids": [row]})).unwrap();
+    assert_eq!(r["updated"], json!([row]), "{r}");
+    let doc = &s.doc().unwrap().doc;
+    let brush = vectorcraft_brush::find(doc, "Masked").unwrap();
+    let mut masks = vec![];
+    brush.art()[0].walk(&mut |n| {
+        if let (NodeKind::Image(im), Some(m)) = (&n.kind, Document::color_mask_of(n)) {
+            masks.push((m.made_for(im), doc.images.contains_key(&m.key)));
+        }
+    });
+    assert_eq!(masks, [(true, true)], "the mask is made for the new pixels");
+}
+
 /// An image that Placement Options clip, alone in a group the user made, goes into a new clip group
 /// inside that group when its file grows, in the layers and in a symbol's art; the user's group
 /// stays a plain group.

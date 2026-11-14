@@ -1219,3 +1219,26 @@ fn a_shadow_before_a_skipped_transform_reaches_as_far_as_it_is_drawn() {
         assert!(within(b), "{what}: painted {b:?} for art {art:?}");
     }
 }
+
+/// Each copy of a Transform effect draws the drop shadow listed before the effect under itself,
+/// scaled with it: the red square (10..30) and its copy scaled 200 % and moved 60 pt down (0..40
+/// across, 60..100 down) each have a green shadow to their right, 20 pt for the square and 40 pt
+/// for the copy. The bounds reach as far as the copy's shadow.
+#[test]
+fn each_copy_of_a_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}));
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut n = Node::path(NodeId(0), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), red);
+    n.appearance.effects = vec![shadow, copies];
+    let d = doc_with(Document::new(100.0, 100.0), n);
+    let img = render(&d);
+    assert_eq!(img.pixel(20, 20), [255, 0, 0, 255], "the square");
+    assert_eq!(img.pixel(45, 20), [0, 255, 0, 255], "the square's shadow");
+    assert_eq!(img.pixel(20, 80), [255, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(70, 80), [0, 255, 0, 255], "the copy's shadow, 40 pt to its right");
+    assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "past the copy's shadow");
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::fx::visual_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9, "{b:?}");
+}
