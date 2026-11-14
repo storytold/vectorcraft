@@ -160,8 +160,8 @@ impl AltCodes {
     }
 }
 
-/// winit's message hook for the keyboard: notes Alt + keypad codes and the characters they type.
-/// It never consumes the message.
+/// winit's message hook for the keyboard: notes Alt + keypad codes and the characters they type,
+/// and hands each message to `windows_symbol_chars`. It never consumes the message.
 #[cfg(windows)]
 #[allow(unsafe_code)]
 pub fn msg_hook(msg: *const std::ffi::c_void) {
@@ -171,6 +171,8 @@ pub fn msg_hook(msg: *const std::ffi::c_void) {
     let Some(msg) = (unsafe { msg.cast::<MSG>().as_ref() }) else {
         return;
     };
+    // Symbol-font characters (NHM Writer legacy Tamil), which egui-winit drops.
+    crate::windows_symbol_chars::message(msg.message, msg.wParam.0);
     if (WM_KEYDOWN..=WM_SYSCHAR).contains(&msg.message) {
         CODES.with(|c| {
             if let Ok(mut c) = c.try_borrow_mut() {
