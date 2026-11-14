@@ -53,7 +53,7 @@ pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
 pub use kept::{KeptLayoutsFrame, LayoutStamp, keep_layout, take_kept_layout};
 use kurbo::{Affine, BezPath, Point, Rect, Shape, Vec2};
-pub use layout::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
+pub use layout::{decorations, drawn, fit_first_line, fit_lines, fit_source_lines, layout, layout_with, scaled};
 pub use shape::{aki_space, inseparable, line_start_space, spacing_scale};
 pub use vectorcraft_doc::TextObject;
 

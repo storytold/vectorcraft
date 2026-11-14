@@ -515,6 +515,39 @@ fn fit_source_lines_keeps_the_last_lines_the_source_sets() {
     assert!(!fit_source_lines(db(), &mut p, 9));
 }
 
+/// #2769: a source whose lines are each a little shorter than they are here sets a last line more
+/// than a descent past the frame's bottom: the frame grows from its bottom by the least that lays
+/// the source's lines out, and only as many as the source has.
+#[test]
+fn fit_lines_grows_the_frame_until_the_source_s_lines_fit() {
+    let text = "one\ntwo\nthree";
+    let tall = layout(db(), &area(text, style(12.0), Rect::new(0.0, 0.0, 200.0, 400.0), Justify::Left));
+    let need = tall.lines[2].baseline + tall.lines[2].descent;
+    // More than a descent short: fit_source_lines leaves it, fit_lines doesn't.
+    let frame = Rect::new(0.0, 0.0, 200.0, tall.lines[1].baseline + tall.lines[1].descent + 1.0);
+    let mut t = area(text, style(12.0), frame, Justify::Left);
+    assert!(!fit_source_lines(db(), &mut t, 3));
+    // A source with no more lines than fit leaves the frame as it is.
+    assert!(!fit_lines(db(), &mut t, 2));
+    assert!(fit_lines(db(), &mut t, 3));
+    let fitted = layout(db(), &t);
+    assert!(!fitted.overflow && fitted.lines.len() == 3);
+    let TextKind::Area { frame: grown } = &t.kind else { panic!("area type") };
+    let grown = grown.bounds().unwrap();
+    assert!(grown.y0 == frame.y0 && grown.y1 > need - 0.5 && grown.y1 < need + 0.5, "{grown:?}, needs {need}");
+    // Fitted, nothing more to do.
+    assert!(!fit_lines(db(), &mut t, 3));
+    // A source that sets two of the three lines keeps the third overset.
+    let mut t = area(text, style(12.0), frame, Justify::Left);
+    assert!(!fit_lines(db(), &mut t, 2));
+    // Point type and vertical type aren't fitted.
+    let mut p = point(text, style(12.0));
+    assert!(!fit_lines(db(), &mut p, 9));
+    let mut v = area(text, style(12.0), frame, Justify::Left);
+    v.vertical = true;
+    assert!(!fit_lines(db(), &mut v, 9));
+}
+
 #[test]
 fn indents_and_paragraph_spacing() {
     let frame = Rect::new(0.0, 0.0, 200.0, 400.0);

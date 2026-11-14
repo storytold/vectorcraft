@@ -39,7 +39,7 @@ pub(crate) use bidi::{is_rtl, para_bidi, starts_bidi};
 use breaking::tab_advance;
 #[cfg(test)]
 use breaking::{break_line, candidates};
-pub use driver::{decorations, drawn, fit_first_line, fit_source_lines, layout, layout_with, scaled};
+pub use driver::{decorations, drawn, fit_first_line, fit_lines, fit_source_lines, layout, layout_with, scaled};
 #[cfg(test)]
 pub(crate) use driver::{fit_passes, layout_faces_per_call};
 #[cfg(test)]
