@@ -475,7 +475,7 @@
 @msg	“{name}” › {label}: {e}	„{name}” › {label}: {e}
 @msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	de module heeft niet de SHA-256 die `hash` opgeeft: er is niets geïnstalleerd
 @msg	select one object	selecteer één object
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	geen vergelijkbare objecten gevonden (gedraaide of gespiegelde kopieën worden niet herkend); wijzig de Opties voor globale bewerking en probeer het opnieuw
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	geen vergelijkbare objecten gevonden (gespiegelde kopieën worden niet herkend); wijzig de Opties voor globale bewerking en probeer het opnieuw
 @msg	Global Edit is off	Globale bewerking staat uit
 @msg	only an object of the Global Edit other than the one it started from can be left out	alleen een ander object van de globale bewerking dan het object waarmee die begon, kan worden weggelaten
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all of een bereik zoals 1, 3-5, niet {v}
@@ -2167,6 +2167,9 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Het lettertype van het geselecteerde teken is niet beschikbaar.
 	No alternates for the selected character.	Geen alternatieven voor het geselecteerde teken.
 	Double-click to replace	Dubbelklik om te vervangen
+	Click to replace	Klik om te vervangen
+	Show all alternates in the Glyphs panel	Alle alternatieven tonen in het paneel Glyphs
+	Show Character Alternates	Tekenalternatieven tonen
 	Select one character with the Type tool first.	Selecteer eerst één teken met het Type-gereedschap.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} is een glyph van {font}, niet van het lettertype van de geselecteerde tekst ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hoort bij {base} (U+{base_code}) {place}; uw selectie is {sel} (U+{code}).
@@ -9331,6 +9334,9 @@ breakText	Glyphs	Glyphs
 	Open Tutorial Sample	Oefenbestand van tutorial openen
 	Finish Tutorial	Tutorial voltooien
 	Next Tutorial	Volgende tutorial
+	Show Learn Tab	Tabblad van Leren tonen
+	Show Skill	Vaardigheid tonen
+	Back One Level	Eén niveau terug
 	Back to Skills	Terug naar vaardigheden
 @msg	tutorial `{id}` has no practice sample	tutorial `{id}` heeft geen oefenbestand
 @msg	open the practice sample of `{id}` first (see learn.openSample)	open eerst het oefenbestand van `{id}` (zie learn.openSample)

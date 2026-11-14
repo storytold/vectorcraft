@@ -1979,9 +1979,10 @@ fn fit_to_artwork_bounds_fits_each_artboard_to_its_own_art() {
     assert_eq!(boards(&s), [Rect::new(100.0, 100.0, 1050.0, 280.0), was[1], was[2]], "the first artboard by default");
 }
 
-/// Artboard Options and Fit to Selected Art fail with `no such artboard` on an `index` that names
-/// no artboard (past the last, negative, fractional, a string or null), and the artboards stay as
-/// they were. Artboard Options needs an `index`; Fit to Selected Art without one fits the first
+/// Artboard Options and Fit to Selected Art fail with `no such artboard` on a whole-number `index`
+/// past the last artboard, with "`index` must be a whole number" on one that is negative,
+/// fractional or a string, and with `missing index` on a null one, and the artboards stay as they
+/// were. Artboard Options needs an `index`; Fit to Selected Art without one fits the first
 /// artboard.
 #[test]
 fn artboard_options_and_fit_to_selected_art_refuse_an_index_that_names_no_artboard() {
@@ -1992,9 +1993,16 @@ fn artboard_options_and_fit_to_selected_art_refuse_an_index_that_names_no_artboa
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     let boards = |s: &Session| s.doc().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
     let (was, n) = (boards(&s), undo_len(&s));
-    for index in [json!(99), json!(-1), json!(1.5), json!("1"), Value::Null] {
+    for (index, error) in [
+        (json!(99), None),
+        (json!(-1), Some("`index` must be a whole number")),
+        (json!(1.5), Some("`index` must be a whole number")),
+        (json!("1"), Some("`index` must be a whole number")),
+        (Value::Null, Some("missing index")),
+    ] {
         for (cmd, p) in [("artboard.setProps", json!({"index": index, "width": 300})), ("artboard.fitToSelection", json!({"index": index}))] {
-            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), "no such artboard", "{cmd} {p}");
+            let want = error.map_or_else(|| "no such artboard".to_string(), |e| format!("invalid parameters for `{cmd}`: {e}"));
+            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
         }
     }
     let e = s.execute("artboard.setProps", &json!({"width": 300})).unwrap_err().to_string();
