@@ -3308,6 +3308,37 @@ fn live_paint_bucket_alt_shift_gradient_samples_active_stroke_only() {
 }
 
 #[test]
+fn live_paint_selection_double_click_selects_the_faces_no_stroked_edge_parts() {
+    let mut s = session();
+    let g = live(&mut s);
+    // The edge between the middle and right faces draws no stroke.
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100.0, 50.0], "none": true})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("livePaintSelection", v).unwrap();
+    let gn = node(&s, g);
+    let face = |x: f64| vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().id;
+    let before = s.doc().unwrap().doc.clone();
+    let double_click = |s: &mut Session, x: f64, m: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+            s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(m), v).unwrap();
+        }
+        let mut ids = s.doc().unwrap().selection.objects.clone();
+        ids.sort();
+        ids
+    };
+    let sorted = |mut ids: Vec<NodeId>| {
+        ids.sort();
+        ids
+    };
+    assert_eq!(double_click(&mut s, 125.0, Mods::default()), sorted(vec![face(75.0), face(125.0)]));
+    // The stroked edge at x = 50 parts the left face from the others.
+    assert_eq!(double_click(&mut s, 25.0, Mods::default()), vec![face(25.0)]);
+    // Shift-double-click adds the faces reached to the selection.
+    assert_eq!(double_click(&mut s, 75.0, Mods { shift: true, ..Default::default() }), sorted(vec![face(25.0), face(75.0), face(125.0)]));
+    assert_eq!(s.doc().unwrap().doc, before, "selecting changes no paint");
+}
+
+#[test]
 fn live_paint_selection_marquee_selects_what_it_touches() {
     let mut s = session();
     let g = live(&mut s);
