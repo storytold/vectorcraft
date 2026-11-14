@@ -592,6 +592,7 @@ pub(crate) mod sample {
             blanks: vec![],
             series_paints: vec![],
             placed: None,
+            placed_art: None,
             series_kinds: vec![],
             ..g.clone()
         };
