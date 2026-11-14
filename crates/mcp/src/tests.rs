@@ -16,6 +16,7 @@ mod gradient;
 mod limits;
 mod links;
 mod liquify;
+mod move_offsets;
 mod pen;
 mod persp;
 mod place;
@@ -2088,4 +2089,56 @@ fn add_text_reports_overflow_and_takes_a_fit() {
     assert!(auto["id"].is_u64() && auto.get("overflow").is_none(), "{auto}");
     let point = made(&call(&mut s, 3, "add_text", json!({"text": "NEON DRIVE", "x": 0, "y": 300, "size": 60})));
     assert!(point.get("overflow").is_none(), "{point}");
+}
+
+#[test]
+fn transform_rejects_nonnumeric_steps_before_editing() {
+    let inspect = |s: &mut Server, id| serde_json::from_str::<Value>(&text_of(&call(s, id, "doc_inspect", json!({})))).unwrap();
+    let mut s = server();
+    let first = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M10 10 L30 10 L30 25 Z"})));
+    let second = id_of(&call(&mut s, 2, "draw_path", json!({"d": "M40 40 L60 40 L60 55 Z"})));
+    let before = inspect(&mut s, 3);
+    assert_eq!(before["selection"], json!([second]));
+
+    let cases = [
+        ("rotate", json!({"dx": 10, "rotate": "bad"})),
+        ("scale", json!({"dx": 10, "scale": "bad"})),
+        ("scaleX", json!({"dx": 10, "scaleX": "bad", "scaleY": 150})),
+        ("scaleY", json!({"dx": 10, "scaleX": 150, "scaleY": "bad"})),
+        ("shear", json!({"dx": 10, "shear": "bad"})),
+    ];
+    for (index, (field, mut args)) in cases.into_iter().enumerate() {
+        args["ids"] = json!([first]);
+        let request_id = 4 + index as u64 * 2;
+        let rejected = call(&mut s, request_id, "transform", args);
+        assert_eq!(rejected["isError"], true, "{field}: {rejected}");
+        assert!(text_of(&rejected).contains(field), "{field}: {rejected}");
+        assert_eq!(inspect(&mut s, request_id + 1), before, "{field}");
+    }
+
+    let applied = call(&mut s, 14, "transform", json!({"ids": [first], "dx": 10, "rotate": null, "scale": 150, "scaleX": 125}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
+    assert_eq!(applied["applied"], json!(["move", "scale"]));
+    let after = inspect(&mut s, 15);
+    assert_ne!(after, before);
+    assert_eq!(after["objects"], before["objects"]);
+    assert_eq!(after["selection"], json!([first]));
+    let bounds = &after["selectionBounds"];
+    assert!((bounds["width"].as_f64().unwrap() - 25.0).abs() < 1e-6, "{bounds}");
+    assert!((bounds["height"].as_f64().unwrap() - 22.5).abs() < 1e-6, "{bounds}");
+    assert!(after["history"].as_array().unwrap().contains(&json!("Move")));
+    assert!(after["history"].as_array().unwrap().contains(&json!("Scale")));
+
+    let applied = call(&mut s, 16, "transform", json!({"ids": [second], "dx": 10, "rotate": 90, "origin": [0, 0]}));
+    assert_eq!(applied["isError"], false, "{applied}");
+    let applied: Value = serde_json::from_str(&text_of(&applied)).unwrap();
+    assert_eq!(applied["applied"], json!(["move", "rotate"]));
+    let after = inspect(&mut s, 17);
+    assert_eq!(after["selection"], json!([second]));
+    let bounds = &after["selectionBounds"];
+    for (field, expected) in [("x", 40.0), ("y", -70.0), ("width", 15.0), ("height", 20.0)] {
+        assert!((bounds[field].as_f64().unwrap() - expected).abs() < 1e-6, "{field}: {bounds}");
+    }
+    assert!(after["history"].as_array().unwrap().ends_with(&[json!("Move"), json!("Rotate")]));
 }
