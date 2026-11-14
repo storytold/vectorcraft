@@ -5331,6 +5331,7 @@ effect	Soft	Doux
 	VectorCraft Title Bar on Every Desktop	Barre de titre de VectorCraft sur tous les bureaux
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Tant qu’elle est définie, la variable d’environnement VECTORCRAFT_TITLEBAR choisit la barre de titre.
 	System Title Bar takes precedence over this option while it is on.	Tant qu’elle est activée, Barre de titre du système a priorité sur cette option.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Tant que Barre de titre de VectorCraft sur tous les bureaux est désactivée, ce bureau dessine la barre de titre de la fenêtre, que cette option soit activée ou non.
 	Value Axis	Axe des valeurs
 	On Left Side	À gauche
 	On Right Side	À droite
@@ -6614,6 +6615,8 @@ axis	Y Axis	Axe Y
 	Action Options…	Options de script…
 	Action Options	Options de script
 	Playback Options…	Options d’exécution…
+	Button Mode	Mode Bouton
+	No actions.	Aucun script.
 	Insert Stop…	Insérer un arrêt…
 	Insert Stop	Insérer un arrêt
 	Record Stop	Enregistrer un arrêt

@@ -88,6 +88,39 @@ fn opens_on_defaults_and_draws_every_view() {
     assert_eq!((spec(export_for_screens::KIND).ok_label.unwrap())(&app), "Export Artboard");
 }
 
+/// The dialog's own request, with a row of every format its Format menu offers and every format's
+/// settings as it opens, gets no note about an option a file doesn't read.
+#[test]
+fn the_dialogs_own_rows_and_settings_get_no_unused_option_notes() {
+    let (mut app, _) = app(1, true);
+    open(&mut app);
+    let rows: Vec<Value> = [
+        json!({"format": "png"}),
+        json!({"format": "png8"}),
+        json!({"format": "jpg", "quality": 100}),
+        json!({"format": "webp"}),
+        json!({"format": "gif"}),
+        json!({"format": "tiff"}),
+        json!({"format": "svg"}),
+        json!({"format": "pdf"}),
+        json!({"format": "pdf", "marks": {"trim": true}, "suffix": "-print"}),
+        json!({"format": "eps"}),
+        json!({"format": "ai"}),
+        json!({"format": "vectorcraft"}),
+    ]
+    .into_iter()
+    .map(|mut r| {
+        r["scale"] = json!("1x");
+        r
+    })
+    .collect();
+    set(&mut app, "formats", json!(rows));
+    let p = export_for_screens::params(&app, app.ui.dialog.as_ref().unwrap()).unwrap();
+    let r = app.session.execute("document.exportForScreens", &p).unwrap();
+    let unused: Vec<&str> = r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains("was not used")).collect();
+    assert!(unused.is_empty(), "{unused:?}");
+}
+
 #[test]
 fn checked_artboards_read_as_a_range() {
     let (mut app, _) = app(5, false);

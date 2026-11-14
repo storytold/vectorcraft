@@ -924,6 +924,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCrafts titellinje på alle skriveborde
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljøvariablen VECTORCRAFT_TITLEBAR vælger titellinjen, så længe den er angivet.
 	System Title Bar takes precedence over this option while it is on.	Systemtitellinje har forrang for denne indstilling, så længe den er slået til.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Så længe VectorCrafts titellinje på alle skriveborde er slået fra, tegner dette skrivebord vinduets titellinje, uanset om denne indstilling er slået til eller fra.
 	Exit	Afslut
 	Distort	Forvræng
 	Diffuse Glow…	Diffus glød…
@@ -4795,11 +4796,11 @@ imageTrace	Outline	Kontur
 @msg	unknown effect `{id}`	ukendt effekt `{id}`
 @msg	unknown format	ukendt format
 @msg	unknown format `{f}` (Save writes {_1})	ukendt format `{f}` (Gem skriver {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (punkter, linjer)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ukendt gradienttype `{k}` (lineær, radial, konisk, diamant, freeform)
+@msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ukendt gradienttype `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	ukendt fremhævning `{h}`
 @msg	unknown option `{path}.{k}`	ukendt indstilling `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (bevar, simulér eller forkast)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	ukendt panel `{raw}`
 @msg	unknown preference `{key}`	ukendt præference `{key}`
 @msg	Preferences imported.	Præferencerne er importeret.
@@ -4817,10 +4818,10 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be an object	`{key}` skal være et objekt
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` køres alene, ikke som et trin i en batch
 @msg	unknown preset (one of {_1})	ukendt forudindstilling (én af {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ukendt forudindstilling `{name}` (høj, mellem, lav eller en gemt: se flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ukendt forudindstilling `{name}` (high, medium, low eller en gemt: se flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ukendt forudindstilling `{name}` (se flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	ukendt forudindstilling `{name}` (se webExport.presets.list)
-@msg	unknown side `{other}` (left|right|top|bottom)	ukendt side `{other}` (venstre|højre|top|bund)
+@msg	unknown side `{other}` (left|right|top|bottom)	ukendt side `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	ukendt værktøj `{tool}`
 @msg	unknown tool `{t}`	ukendt værktøj `{t}`
 @msg	unknown tool or command `{key}`	ukendt værktøj eller kommando `{key}`
@@ -6073,6 +6074,8 @@ axis	Y Axis	Y-akse
 	Action Options…	Indstillinger for handling…
 	Action Options	Indstillinger for handling
 	Playback Options…	Afspilningsindstillinger…
+	Button Mode	Knaptilstand
+	No actions.	Ingen handlinger.
 	Insert Stop…	Indsæt stop…
 	Insert Stop	Indsæt stop
 	Record Stop	Optag stop
