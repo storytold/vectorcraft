@@ -8,7 +8,8 @@
 //!   next layers: a clipping group in each layer, read by [`masks`].
 //! - Ruler guides: a straight `(N) *` guide path, directly on a layer, that runs across the whole
 //!   canvas (16,383 points around the template box's centre) or from edge to edge of one artboard
-//!   is a ruler guide on that layer ([`Document::guides`]); other guide paths stay paths.
+//!   is a ruler guide on that layer ([`Document::guides`]), shown or hidden, with the path's name,
+//!   lock and visibility; other guide paths stay paths.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end. A wraparound group `*w` …
 //!   `*W` (version 7 specification §15.4.2) is a group whose objects other than its type wrap
@@ -437,8 +438,8 @@ struct BrushesKept {
     read: (usize, usize),
     /// Which of [`Reader::brush_drafts`] are kept as brushes.
     kept: Vec<bool>,
-    /// The art an Art brush draws as the file does.
-    bending: HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length.
+    bending: HashMap<String, f64>,
 }
 
 struct Reader<'a> {
