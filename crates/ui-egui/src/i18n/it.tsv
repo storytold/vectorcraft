@@ -1362,6 +1362,7 @@ file-filter	Templates	Modelli
 	Format	Formato
 	Format Options	Opzioni formato
 	Format Settings	Impostazioni formato
+	Format Settings…	Impostazioni formato…
 	Format:	Formato:
 	Formats:	Formati:
 	Fractional Widths	Larghezze frazionarie
@@ -1723,6 +1724,7 @@ file-filter	Templates	Modelli
 	Images:	Immagini:
 	Import Keyboard Shortcuts…	Importa scelte rapide da tastiera…
 	Import PDF	Importa PDF
+	Import PDF pages as links	Importa le pagine PDF come collegamenti
 	Import PDF Presets	Importa preset PDF
 	Import Perspective Grid Presets	Importa preset griglia prospettica
 	Import Print Presets	Importa preset di stampa
@@ -3489,6 +3491,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Guide sensibili (Visualizza → Guide sensibili)
 	Smart Guides (⌘U)	Guide sensibili (⌘U)
 	Smart Punctuation…	Punteggiatura intelligente…
+	Smart Punctuation	Punteggiatura intelligente
+	ff, fi, ffi Ligatures	Legature ff, fi, ffi
+	ff, fl, ffl Ligatures	Legature ff, fl, ffl
+	Smart Quotes	Virgolette intelligenti
+	Smart Spaces	Spazi intelligenti
+	En, Em Dashes	Trattini medi e lineette
+	Ellipses	Puntini di sospensione
+	Expert Fractions	Frazioni esperte
+	Replace In	Sostituisci in
+	Selected Text Only	Solo testo selezionato
+	Entire Document	Intero documento
+	Report Results	Mostra risultati
 	Smooth	Smussa
 	Corner	Angolo
 	Relative	Relativo
@@ -3519,6 +3533,7 @@ digits	Malayalam	Malayalam
 	Solid	Pieno
 	Sort by Kind	Ordina per tipo
 	Sort by Name	Ordina per nome
+	Sort by Size	Ordina per dimensione
 	Sort by Status	Ordina per stato
 	Source code on GitHub	Codice sorgente su GitHub
 	Source Sans 3	Source Sans 3
@@ -8630,6 +8645,7 @@ breakText	Glyphs	Glifi
 @msg	the RTF file is too large to place as type (at most {_1} MB)	il file RTF è troppo grande per essere inserito come testo (al massimo {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	l'SVG si espande in più di {0} immagini SVG annidate
 @msg	the SVG expands to more than {0} objects	l'SVG si espande in più di {0} oggetti
+@msg	the SVG's styles expand to more than {0} MB	gli stili dell'SVG si espandono a oltre {0} MB
 @msg	the SVG has no drawable objects	l'SVG non ha oggetti disegnabili
 @msg	the SVGZ file unpacks to more than {_1} MB	il file SVGZ si decomprime in più di {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	il documento Word ha più di {MAX_PAGES} pagine di proprietà, troppe per essere inserito
@@ -9075,3 +9091,6 @@ breakText	Glyphs	Glifi
 	Grommets	Occhielli
 	Grommet Inset	Distanza degli occhielli dal bordo
 	Diameter	Diametro
+	Nest Shapes…	Annida forme…
+	Nest Shapes	Annida forme
+	Roll	Rotolo

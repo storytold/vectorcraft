@@ -476,14 +476,18 @@ fn clip_group_with_type_clip(d: &mut Document, n: &Node) -> Option<Node> {
 
 /// `m`, art evaluated from an object, with its children baked and then given ids of their own (the
 /// pieces copied from the source keep the source's ids until then). The pieces are baked with the
-/// ids the renderer draws them with: Random in a Transform effect takes its seed from the id.
+/// ids the renderer draws them with: Random in a Transform effect takes its seed from the id. When
+/// `m` clips, its clipping path, unless it is type, first takes the geometry effects in it as the
+/// canvas clips by it ([`crate::clip::with_clip_effects_applied`]).
 fn bake_pieces(d: &mut Document, mut m: Node) -> Node {
     let mut seen = std::collections::HashSet::from([m.id]);
+    let clip = usize::from(m.clips() && !m.children().and_then(|ch| ch.first()).is_some_and(|c| matches!(c.kind, NodeKind::Text(_))));
     let children = m.children().cloned().unwrap_or_default();
     let children = children
         .into_iter()
-        .map(|c| {
-            let c = Arc::unwrap_or_clone(c);
+        .enumerate()
+        .map(|(i, c)| {
+            let c = (i < clip).then(|| crate::clip::with_clip_effects_applied(&c)).flatten().unwrap_or_else(|| Arc::unwrap_or_clone(c));
             let mut c = one_deeper(|| bake_node(d, &c)).unwrap_or(c);
             fresh_ids(d, &mut c, &mut seen);
             Arc::new(c)
