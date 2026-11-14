@@ -186,6 +186,11 @@ pub(crate) fn dragging(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<Drag>(drag_id()).is_some())
 }
 
+/// Whether the canvas is holding a Zoom tool drag: a marquee, which Space moves, or an animated zoom.
+pub(crate) fn dragging_zoom(ctx: &egui::Context) -> bool {
+    ctx.data(|d| matches!(d.get_temp::<Drag>(drag_id()), Some(Drag::ZoomBox { .. } | Drag::ZoomScrub { .. })))
+}
+
 /// The part of `outer` inside the scroll bars, and the part of that inside the rulers, which shows
 /// the document. Normal Screen Mode and Full Screen Mode with Menu Bar keep the scroll bars along
 /// the right and bottom edges; Full Screen and Presentation Mode have none.
