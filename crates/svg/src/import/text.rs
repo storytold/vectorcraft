@@ -711,9 +711,9 @@ struct Ctx {
     sizes: RefCell<HashMap<roxmltree::NodeId, f64>>,
     weights: RefCell<HashMap<roxmltree::NodeId, u16>>,
     elems: RefCell<HashMap<roxmltree::NodeId, Rc<ElemStyle>>>,
-    /// Whether the first strong character of each element read so far is right to left
-    /// ([`Self::first_strong_rtl`]); `None` where it holds none.
-    strong: RefCell<HashMap<roxmltree::NodeId, Option<bool>>>,
+    /// The first strong characters of each `<text>` read so far, by the `<text>`
+    /// ([`Self::first_strong_rtl`]).
+    strong: RefCell<HashMap<roxmltree::NodeId, Rc<FirstStrong>>>,
     /// The path each `<textPath>` read so far follows ([`Self::text_path`]); `None` where it has
     /// no usable one. The styles of a `<use>` instance share it, so each path is found and parsed
     /// once however many `<use>` elements show its text.
@@ -1006,22 +1006,39 @@ impl Ctx {
     }
 
     /// Whether the first strong character (UAX #9 P2) of the characters [`Self::collect`] reads
-    /// from element `n` is right to left; `None` when they hold none. Each element is read once.
+    /// from element `n` is right to left; `None` when they hold none. The characters of the whole
+    /// `<text>` are read once, as one sequence, so an isolate that opens in one text node and
+    /// closes in a later one is skipped whole ([`FirstStrong`]).
     fn first_strong_rtl(&self, n: XNode) -> Option<bool> {
-        if let Some(s) = self.strong.borrow().get(&n.id()) {
-            return *s;
+        // The `<text>` (or outermost element) whose characters hold those of `n`.
+        let mut root = n;
+        while let Some(p) = root.parent_element().filter(|_| root.tag_name().name() != "text" && self.is_inline_child(root)) {
+            root = p;
         }
-        let s = n.children().find_map(|c| {
-            if c.is_text() {
-                text_first_strong_rtl(c.text().unwrap_or(""))
-            } else if self.is_inline_child(c) {
-                self.first_strong_rtl(c)
-            } else {
-                None
-            }
+        let strong = self.strong.borrow().get(&root.id()).cloned();
+        let strong = strong.unwrap_or_else(|| {
+            let mut chars = vec![];
+            let mut spans = HashMap::new();
+            self.inline_chars(root, &mut chars, &mut spans);
+            let s = Rc::new(FirstStrong::new(&chars, spans));
+            self.strong.borrow_mut().insert(root.id(), s.clone());
+            s
         });
-        self.strong.borrow_mut().insert(n.id(), s);
-        s
+        strong.of(n.id())
+    }
+
+    /// Appends the characters of element `n` and of its shown inline children to `chars`, in
+    /// document order, and the range each of those elements holds to `spans`.
+    fn inline_chars(&self, n: XNode, chars: &mut Vec<char>, spans: &mut HashMap<roxmltree::NodeId, Range<usize>>) {
+        let start = chars.len();
+        for c in n.children() {
+            if c.is_text() {
+                chars.extend(c.text().unwrap_or("").chars());
+            } else if self.is_inline_child(c) {
+                self.inline_chars(c, chars, spans);
+            }
+        }
+        spans.insert(n.id(), start..chars.len());
     }
 
     /// Whether child `c` of a `<text>` content element holds characters of the text: a shown
@@ -1841,6 +1858,56 @@ fn text_first_strong_rtl(text: &str) -> Option<bool> {
     }
     // Without a strong character of its own, a right-to-left letter after it is the first one.
     (!vectorcraft_text::paragraph_is_rtl(&format!("{line}\u{5D0}"), None)).then_some(false)
+}
+
+/// The first strong characters (UAX #9 P2) of the elements of one `<text>`, found for each element
+/// in constant time from one pass over the text's characters. An isolate initiator is skipped to
+/// its matching PDI (UAX #9 BD9), and one without a matching PDI to the end; paragraph separators
+/// count as spaces, as in [`text_first_strong_rtl`].
+struct FirstStrong {
+    /// The characters each element holds: a range of indices into `next`.
+    spans: HashMap<roxmltree::NodeId, Range<usize>>,
+    /// For each character and for the end: the index of the first strong character from there on,
+    /// isolates skipped, and whether it is right to left; `None` when there is none.
+    next: Vec<Option<(usize, bool)>>,
+}
+
+impl FirstStrong {
+    fn new(chars: &[char], spans: HashMap<roxmltree::NodeId, Range<usize>>) -> Self {
+        use unicode_bidi::BidiClass::{AL, FSI, L, LRI, PDI, R, RLI};
+        let class = |c: char| unicode_bidi::bidi_class(c);
+        // The matching PDI of each isolate initiator.
+        let mut pdi = vec![None; chars.len()];
+        let mut open = vec![];
+        for (i, &c) in chars.iter().enumerate() {
+            match class(c) {
+                LRI | RLI | FSI => open.push(i),
+                PDI => {
+                    if let Some(at) = open.pop() {
+                        pdi[at] = Some(i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut next = vec![None; chars.len() + 1];
+        for (i, &c) in chars.iter().enumerate().rev() {
+            next[i] = match class(c) {
+                L => Some((i, false)),
+                R | AL => Some((i, true)),
+                LRI | RLI | FSI => pdi[i].and_then(|p| next[p + 1]),
+                _ => next[i + 1],
+            };
+        }
+        Self { spans, next }
+    }
+
+    /// Whether the first strong character of element `n` is right to left; `None` when it holds
+    /// none. An isolate that opens inside `n` and closes after it hides the rest of `n`.
+    fn of(&self, n: roxmltree::NodeId) -> Option<bool> {
+        let span = self.spans.get(&n)?;
+        self.next.get(span.start).copied().flatten().filter(|&(at, _)| at < span.end).map(|(_, rtl)| rtl)
+    }
 }
 
 /// A left-aligned point text of `runs` at the origin (for measuring).
