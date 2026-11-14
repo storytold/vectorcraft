@@ -545,12 +545,13 @@ mod tests {
             let (id, params) = t.command(Point::ZERO, Point::new(100.0, 0.0), Mods::default());
             assert_eq!(id, "shape.spiral");
             assert_eq!(params["decay"], json!(expected));
-            // Inspect the actual adjacent radii, not a second copy of the tool's clamp.
+            // Inspect the actual adjacent radii, not a second copy of the tool's clamp. Decay is per full
+            // wind and a segment is a quarter turn, so four segments give the decay.
             let path = vectorcraft_geom::shapes::spiral(Point::ZERO, 100.0, params["decay"].as_f64().unwrap(), 2, true);
             let anchors = &path.subpaths[0].anchors;
             let outer = anchors[2].p.distance(Point::ZERO);
             let next = anchors[1].p.distance(Point::ZERO);
-            assert!((100.0 * next / outer - expected).abs() < 1e-10);
+            assert!((100.0 * (next / outer).powi(4) - expected).abs() < 1e-9);
         }
         for invalid in [Value::Null, json!("80"), json!(false), json!({})] {
             t.set_option("decay", &invalid);

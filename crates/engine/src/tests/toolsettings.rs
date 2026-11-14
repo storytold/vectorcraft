@@ -290,9 +290,11 @@ fn legacy_spiral_decay_preferences_report_the_ratio_drawn_after_reopening() {
         assert_eq!(anchors.len(), 5);
         assert!(!path.is_closed());
         let center = Point::new(200.0, 200.0);
+        // The path runs from the centre end outwards, and decay is per full wind: four quarter-turn
+        // segments give the decay.
         for pair in anchors.windows(2) {
             let ratio = pair[0].p.distance(center) / pair[1].p.distance(center);
-            assert!((100.0 * ratio - decay).abs() < 1e-10);
+            assert!((100.0 * ratio.powi(4) - decay).abs() < 1e-9);
         }
         assert_eq!(s.prefs.tool_settings["spiral"]["decay"], json!(99.99));
         s.execute("edit.undo", &json!({})).unwrap();
