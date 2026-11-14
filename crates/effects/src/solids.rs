@@ -225,6 +225,10 @@ pub(crate) fn solid_paint_sources(n: &Node) -> (Vec<Option<&AppearanceItem>>, Ve
 }
 
 fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
+    #[cfg(test)]
+    if !is_plane(id) {
+        SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + 1));
+    }
     let view = view_options(p);
     match id {
         EXTRUDE => vectorcraft_three_d::extrude(path, rule, bounds, extrude_options(p), view),
@@ -246,6 +250,10 @@ fn facets_and_faces(
     cast: bool,
 ) -> Result<(Vec<Facet>, Option<SolidFaces>), String> {
     let view = view_options(p);
+    #[cfg(test)]
+    if cast && id == EXTRUDE {
+        SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + 1));
+    }
     let built = match id {
         EXTRUDE if cast => vectorcraft_three_d::extrude_shadowed(path, rule, bounds, extrude_options(p), view),
         ROTATE if cast => vectorcraft_three_d::plane_shadowed(path, rule, bounds, view),
@@ -314,7 +322,7 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
         let mut shapes = members(n, label)?;
         reshape_members(n, before, &mut shapes);
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
-        shapes.iter().try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))?;
+        check_profiles(id, p, &shapes, b)?;
         check_solids(id, p, &shapes)?;
         return cast_shadow(id, p, &shapes).map(|_| ());
     }
@@ -331,10 +339,22 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
         None => (geometry(&path, before, &ctx), solid_paints(n)),
     };
     let b = path.bounds().ok_or_else(anchors)?;
-    facets(id, &path, rule, b, p)?;
     let shapes = [Profile { path, rule, items, opacity: 1.0, scopes: vec![] }];
+    check_profiles(id, p, &shapes, b)?;
     check_solids(id, p, &shapes)?;
     cast_shadow(id, p, &shapes).map(|_| ())
+}
+
+/// Do the solids 3D effect `id` with parameters `p` builds from the profiles of `shapes` about `b`
+/// build? Only the profiles no solid of [`check_solids`] is built from are built here: every
+/// shape's for Rotate, and for Extrude & Bevel and Inflate the profile of a shape with no fill,
+/// whose solids are its strokes' outlines or none. A filled shape's profile is its fill's solid,
+/// which [`check_solids`] builds once, about the bounds the effect draws it about.
+fn check_profiles(id: &str, p: &Value, shapes: &[Profile], b: Rect) -> Result<(), String> {
+    shapes
+        .iter()
+        .filter(|s| is_plane(id) || !s.items.iter().any(|i| matches!(i, AppearanceItem::Fill(_))))
+        .try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))
 }
 
 /// Do the solids 3D effect `id` with parameters `p` builds from the fills and strokes of `shapes`
@@ -682,6 +702,9 @@ thread_local! {
     /// Rotate's planes drawn, the solids built to cast a shadow ([`cast_shadow`]) and Revolve's
     /// surfaces count too.
     pub(crate) static SOLIDS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many Extrude & Bevel (Classic included) and Inflate solids [`facets`] and
+    /// [`built_solids`] have built on this thread, for the tests.
+    static SOLID_GEOMETRY_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The solids Extrude & Bevel (Classic included) or Inflate `id` with parameters `p` builds from
@@ -736,7 +759,11 @@ fn built_solids_cast<'a>(
         #[cfg(test)]
         SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
         let built = match inflated.as_mut() {
-            Some(each) => each.next().unwrap_or_else(|| Ok((vec![], None))),
+            Some(each) => {
+                #[cfg(test)]
+                SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + 1));
+                each.next().unwrap_or_else(|| Ok((vec![], None)))
+            }
             None => facets_and_faces(id, area, *rule, bounds, p, cast),
         };
         let result = match built {
