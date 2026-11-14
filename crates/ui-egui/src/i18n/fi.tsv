@@ -985,6 +985,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Ympäristömuuttuja VECTORCRAFT_TITLEBAR valitsee otsikkorivin niin kauan kuin se on asetettu.
 	System Title Bar takes precedence over this option while it is on.	Järjestelmän otsikkorivi ohittaa tämän asetuksen niin kauan kuin se on käytössä.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Niin kauan kuin VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä ei ole käytössä, tämä työpöytäympäristö piirtää ikkunan otsikkorivin, oli tämä asetus käytössä tai ei.
 	Exit	Lopeta
 	Distort	Vääristä
 	Diffuse Glow…	Hajautettu hehku…
@@ -3345,6 +3346,29 @@ theme	Appearance	Ulkoasu
 	Bristle Brush	Harjassivellin
 	Pattern Brush	Kuviosivellin
 	missing from the Brushes panel	puuttuu Siveltimet-paneelista
+	built in	sisäänrakennettu
+	embedding not allowed	upottaminen ei sallittu
+	embedding for editing	upottaminen muokkausta varten
+	embedding for preview and print	upottaminen esikatselua ja tulostusta varten
+	embedding allowed	upottaminen sallittu
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	korvattu: näytetään fontilla {family} {style} ({detail})
+	missing: shown in {family} {style}	puuttuu: näytetään fontilla {family} {style}
+	missing	puuttuu
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineaarinen liukuväri
+	Radial gradient	Säteittäinen liukuväri
+	Conic gradient	Kartiomainen liukuväri
+	Diamond gradient	Vinoneliöliukuväri
+	Freeform gradient	Vapaamuotoinen liukuväri
+@plural	{n} instance|{n} instances	{n} esiintymä|{n} esiintymää
+@plural	{n} row|{n} rows	{n} rivi|{n} riviä
+@plural	{n} column|{n} columns	{n} sarake|{n} saraketta
 	Select art to make a scatter, art or pattern brush.	Valitse kuvitus, jotta voit luoda sirote-, taide- tai kuviosiveltimen.
 	Brush Art	Siveltimen kuvitus
 	New Symbol	Uusi symboli
@@ -4595,6 +4619,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Plug-ins can't be loaded from {path}: {e}	Laajennuksia ei voi ladata kansiosta {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	valitse suoravalinnalla ankkuripisteet, joista leikataan (ei avoimien polkujen päätepisteitä)
 @msg	Divide Objects Below: select a path	Jaa alla olevat objektit: valitse polku
+@msg	select a path	valitse polku
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
 @msg	Downloaded {what}	Ladattiin {what}
 @msg	Expand Appearance: the selection has a basic appearance	Laajenna ulkoasu: valinnalla on perusulkoasu
@@ -5337,6 +5362,8 @@ imageTrace	Outline	Ääriviiva
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	upotettu {_1} × {_2} kuvapisteen kuva pienennettiin kokoon {_3} × {_4} kuvapistettä, jotta tasot säilyvät
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkitetyt kuvat näyttävät tiedostoon tallennetun matalan tarkkuuden esikatselun, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraftin rajat ylittävät linkitetyt tekstialueet jätettiin pois
+@msg	the Line Breaking setting of legacy type was left out	vanhan muodon tekstin rivinvaihtoasetus jätettiin pois
+@msg	the Japanese layout rules of legacy type were left out	vanhan muodon tekstin japanilaiset asettelusäännöt jätettiin pois
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekstiobjektin sisällä kirjoitussuuntaa vaihtava teksti avautuu ensimmäisen merkkinsä suuntaan
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	maskina käytetty teksti linkitetyissä alueissa, rivitetyssä tekstissä tai yhdistelmäpolussa ei rajaa
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	linkitetyt kuvat, joilla ei ole esikatselua tiedostossa, näkyvät paikkamerkkinä, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
@@ -6140,6 +6167,7 @@ mark-style	Japanese	Japanilainen
 @msg	no such color	väriä ei ole
 @msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
 @msg	more than one action is named “{_1}”	useamman kuin yhden toiminnon nimi on ”{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	toiminto ”{_1}” asettaa kansioasetuksen {_2}; poista tämä vaihe, jotta voit tallentaa sarjan
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
 	Smudge Stick…	Sumennuskynä…
 	Smudge Stick	Sumennuskynä
@@ -6603,6 +6631,8 @@ axis	Y Axis	Y-akseli
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
 	Playback Options…	Toistoasetukset…
+	Button Mode	Painiketila
+	No actions.	Ei toimintoja.
 	Insert Stop…	Lisää pysäytys…
 	Insert Stop	Lisää pysäytys
 	Record Stop	Nauhoita pysäytys

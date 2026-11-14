@@ -3115,6 +3115,29 @@ digits	Malayalam	Malaiàlam
 	Pattern Borders	Vores de motiu
 	Pattern Brush	Pinzell de motiu
 	missing from the Brushes panel	absent del tauler Pinzells
+	built in	integrat
+	embedding not allowed	incrustació no permesa
+	embedding for editing	incrustació per a l’edició
+	embedding for preview and print	incrustació per a la visualització i la impressió
+	embedding allowed	incrustació permesa
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	substituït: es mostra amb {family} {style} ({detail})
+	missing: shown in {family} {style}	absent: es mostra amb {family} {style}
+	missing	absent
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Degradat lineal
+	Radial gradient	Degradat radial
+	Conic gradient	Degradat cònic
+	Diamond gradient	Degradat de rombe
+	Freeform gradient	Degradat de forma lliure
+@plural	{n} instance|{n} instances	{n} instància|{n} instàncies
+@plural	{n} row|{n} rows	{n} fila|{n} files
+@plural	{n} column|{n} columns	{n} columna|{n} columnes
 	Pattern Brush Options	Opcions del pinzell de motiu
 	Pattern Editing	Edició de motius
 	Pattern Options	Opcions del motiu
@@ -4072,6 +4095,8 @@ digits	Malayalam	Malaiàlam
 	Action Options…	Opcions de l’acció…
 	Action Options	Opcions de l’acció
 	Playback Options…	Opcions de reproducció…
+	Button Mode	Mode de botons
+	No actions.	No hi ha accions.
 	Insert Stop…	Insereix una aturada…
 	Insert Stop	Insereix una aturada
 	Record Stop	Enregistra una aturada
@@ -4590,6 +4615,7 @@ digits	Malayalam	Malaiàlam
 	VectorCraft Title Bar on Every Desktop	Barra de títol de VectorCraft a tots els escriptoris
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mentre està definida, la variable d’entorn VECTORCRAFT_TITLEBAR determina la barra de títol.
 	System Title Bar takes precedence over this option while it is on.	Mentre està activada, Barra de títol del sistema té prioritat sobre aquesta opció.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Mentre Barra de títol de VectorCraft a tots els escriptoris està desactivada, aquest escriptori dibuixa la barra de títol de la finestra tant si aquesta opció està activada com si no.
 	Tab	Tabulació
 	Tab Stops	Aturades de tabulació
 	Table	Taula
@@ -5583,6 +5609,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	S’ha descartat {n} document recuperat|S’han descartat {n} documents recuperats
 @msg	divide into 1 to {MAX_PIECES} slices	divideix en 1 a {MAX_PIECES} talls
 @msg	Divide Objects Below: select a path	Divideix els objectes de sota: seleccioneu un traçat
+@msg	select a path	seleccioneu un traçat
 @msg	Divide Objects Below: select exactly one path	Divideix els objectes de sota: seleccioneu exactament un traçat
 @msg	docking action contains an unknown panel or an excessive split path	l’acció d’acoblament conté un panell desconegut o un camí de divisió excessiu
 @msg	Downloaded {what}	S’ha baixat {what}
@@ -5709,6 +5736,8 @@ digits	Malayalam	Malaiàlam
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	linked type areas past VectorCraft's limits were left out	s’han omès les àrees de text enllaçades que superen els límits de VectorCraft
+@msg	the Line Breaking setting of legacy type was left out	s’ha omès l’ajust de salt de línia del text en format antic
+@msg	the Japanese layout rules of legacy type were left out	s’han omès les regles de composició japonesa del text en format antic
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	el text que canvia de direcció d’escriptura dins d’un objecte de text s’obre en la direcció del seu primer caràcter
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el text usat com a màscara en àrees enllaçades, en text ajustat o en un traçat compost no retalla
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les imatges enllaçades sense previsualització al fitxer mostren un marcador de posició fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
@@ -5745,6 +5774,7 @@ digits	Malayalam	Malaiàlam
 @msg	no such color	no existeix aquest color
 @msg	{_1} cannot be used on Windows	{_1} no es pot fer servir al Windows
 @msg	more than one action is named “{_1}”	més d’una acció es diu “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	l’acció “{_1}” defineix la preferència de carpeta {_2}; suprimiu aquest pas per desar el conjunt
 @msg	name the file	poseu un nom al fitxer
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu

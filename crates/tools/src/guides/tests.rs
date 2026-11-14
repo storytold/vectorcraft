@@ -714,6 +714,81 @@ fn pen_click_near_a_glyph_anchor_lands_on_it() {
     assert!(q.distance(anchor) > 1e-3, "{q:?} landed on the glyph anchor with Smart Guides off");
 }
 
+/// Snap to Glyph: the Parametric Shape tool's center (a drag and a double-click) and the point
+/// dragged out from it, and the Slice tool's corners, land on a glyph's anchor point as a Pen
+/// click does, with the guides shown while hovering, and not with Snap to Glyph off.
+#[test]
+fn parametric_shape_and_slice_points_land_on_a_glyph_anchor() {
+    use crate::addons::parametric_shape::ParametricShapeTool;
+    use crate::slice::SliceTool;
+    use crate::{Action, PointerEvent, PointerKind, Tool};
+    let (d, t) = glyph_doc("H", 0.0);
+    let lay = layout_text(FontDb::global(), &t);
+    let g = lay.glyphs.iter().find(|g| !g.outline.elements().is_empty()).expect("a glyph with an outline");
+    // An anchor inside the glyph's bounds, which no glyph bounds line passes through.
+    let bb = g.outline.bounding_box();
+    let inside = |p: Point| p.x > bb.x0 + 1.0 && p.x < bb.x1 - 1.0 && p.y > bb.y0 + 1.0 && p.y < bb.y1 - 1.0;
+    let anchor = t.xf * g.outline.segments().map(|s| s.start()).find(|p| inside(*p)).expect("an anchor inside the glyph");
+    let (s, p) = (Selection::default(), paint());
+    let click = anchor + Vec2::new(1.5, -1.0);
+    let ev = |kind, q: Point| PointerEvent::new(kind, q.x, q.y);
+    let center = |v: &serde_json::Value| Point::new(v["center"][0].as_f64().unwrap(), v["center"][1].as_f64().unwrap());
+    // A press away from the type, for drags that end at the click.
+    let away = anchor + Vec2::new(-83.3, -61.7);
+    for glyphs in [true, false] {
+        let c = ToolContext { snap_to_glyph: glyphs, ..cx(&d, &s, &p) };
+        let lands = |q: Point| q.distance(anchor) < 1e-9;
+        // A Parametric Shape drawn out from the click.
+        let mut tool = ParametricShapeTool::default();
+        tool.pointer(&c, &ev(PointerKind::Down, click));
+        let acts = tool.pointer(&c, &ev(PointerKind::Drag, click + Vec2::new(80.0, 60.0)));
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(lands(center(v)), glyphs, "drag, Snap to Glyph {glyphs}: {:?} vs {anchor:?}", center(v));
+        // A Parametric Shape dragged out to the click is sized and turned as one dragged out to
+        // the anchor itself.
+        let drawn_to = |q: Point| {
+            let mut tool = ParametricShapeTool::default();
+            tool.pointer(&c, &ev(PointerKind::Down, away));
+            tool.pointer(&c, &ev(PointerKind::Drag, q))
+        };
+        assert_eq!(drawn_to(click) == drawn_to(anchor), glyphs, "dragged point, Snap to Glyph {glyphs}");
+        // A click 3 px from the anchor draws nothing, though its center snaps onto the anchor.
+        let near = anchor + Vec2::new(2.5, -1.5);
+        let mut tool = ParametricShapeTool::default();
+        tool.pointer(&c, &ev(PointerKind::Down, near));
+        let acts = tool.pointer(&c, &ev(PointerKind::Drag, near));
+        let Some(Action::Preview(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(lands(center(v)), glyphs, "click, Snap to Glyph {glyphs}: {:?} vs {anchor:?}", center(v));
+        assert_eq!(tool.pointer(&c, &ev(PointerKind::Up, near)), vec![Action::Cancel], "click, Snap to Glyph {glyphs}");
+        // One placed with a double-click.
+        let mut tool = ParametricShapeTool::default();
+        let acts = tool.pointer(&c, &ev(PointerKind::DoubleClick, click));
+        let Some(Action::Exec(_, v)) = acts.first() else { panic!("{acts:?}") };
+        assert_eq!(lands(center(v)), glyphs, "double-click, Snap to Glyph {glyphs}: {:?} vs {anchor:?}", center(v));
+        // The pointer hovering at the click shows the guides of the anchor it would land on.
+        let mut tool = ParametricShapeTool::default();
+        tool.pointer(&c, &ev(PointerKind::Move, click));
+        assert_eq!(!tool.overlays(&c).is_empty(), glyphs, "hover, Snap to Glyph {glyphs}");
+        // A slice dragged from the click down and to the right starts at its top-left corner.
+        let mut tool = SliceTool::default();
+        tool.pointer(&c, &ev(PointerKind::Move, click));
+        assert_eq!(!tool.overlays(&c).is_empty(), glyphs, "slice hover, Snap to Glyph {glyphs}");
+        tool.pointer(&c, &ev(PointerKind::Down, click));
+        let acts = tool.pointer(&c, &ev(PointerKind::Drag, click + Vec2::new(80.0, 60.0)));
+        let Some(Action::Preview(_, v)) = acts.get(1) else { panic!("{acts:?}") };
+        let corner = Point::new(v["x"].as_f64().unwrap(), v["y"].as_f64().unwrap());
+        assert_eq!(lands(corner), glyphs, "slice, Snap to Glyph {glyphs}: {corner:?} vs {anchor:?}");
+        // One dragged from up and to the left ends at its bottom-right corner.
+        let mut tool = SliceTool::default();
+        tool.pointer(&c, &ev(PointerKind::Down, away));
+        let acts = tool.pointer(&c, &ev(PointerKind::Drag, click));
+        let Some(Action::Preview(_, v)) = acts.get(1) else { panic!("{acts:?}") };
+        let f = |k: &str| v[k].as_f64().unwrap();
+        let end = Point::new(f("x") + f("width"), f("y") + f("height"));
+        assert_eq!(end.distance(anchor) < 1e-6, glyphs, "slice end, Snap to Glyph {glyphs}: {end:?} vs {anchor:?}");
+    }
+}
+
 /// Snap to Glyph: a single line of type has an x-height guide; a paragraph shows glyph bounds only.
 #[test]
 fn drawn_points_line_up_with_the_x_height_of_a_single_line() {
@@ -951,4 +1026,27 @@ fn a_drawn_point_lands_on_a_corner_of_a_glyphs_bounds() {
             Targets::for_drawing(&d, &[], None, Some(GlyphSnap { anchors: false, proximity: false, ..GlyphSnap::default() })).snap_point(p, 4.0);
         assert!((q - tr).cross(dir).abs() < 1e-6, "angle {angle}: {q:?} is off the right edge");
     }
+}
+
+/// With Smart Guides off, View → Snap to Point still pulls a drawn point onto an anchor, but
+/// draws no Smart Guides: no "anchor" label, no lines.
+#[test]
+fn snap_to_point_without_smart_guides_shows_no_guides() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    // Within Snap to Point's 2 px of the anchor at (200, 200).
+    let at = Point::new(201.0, 199.0);
+    let off = ToolContext { smart_guides: false, snap_to_point: true, ..cx(&d, &s, &p) };
+    let mut snap = DrawSnap::default();
+    assert_eq!(snap.hover(&off, at, &[], None), Point::new(200.0, 200.0));
+    assert!(snap.guides().is_empty(), "{:?}", snap.guides());
+    assert_eq!(snap.press(&off, at, &[], None), Point::new(200.0, 200.0));
+    assert!(snap.guides().is_empty(), "{:?}", snap.guides());
+    // A dragged selection's grabbed point too.
+    let (q, ov) = Targets::snap_to_point(&off, &[]).unwrap().snap_point(at, 4.0);
+    assert_eq!((q, ov.len()), (Point::new(200.0, 200.0), 0), "{ov:?}");
+    // Smart Guides on: the same point says "anchor".
+    let mut snap = DrawSnap::default();
+    assert_eq!(snap.hover(&cx(&d, &s, &p), at, &[], None), Point::new(200.0, 200.0));
+    assert_eq!(labels(snap.guides()), ["anchor"]);
 }

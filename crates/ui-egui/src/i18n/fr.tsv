@@ -2184,6 +2184,29 @@ font-technology	Variable	Variables
 	Bristle Brush	Forme Soies
 	Pattern Brush	Forme de motif
 	missing from the Brushes panel	absente du panneau Formes
+	built in	intégrée
+	embedding not allowed	incorporation interdite
+	embedding for editing	incorporation pour la modification
+	embedding for preview and print	incorporation pour l’aperçu et l’impression
+	embedding allowed	incorporation autorisée
+	{file}; {embedding}	{file}, {embedding}
+	substituted: shown in {family} {style} ({detail})	remplacée, affichée en {family} {style} ({detail})
+	missing: shown in {family} {style}	absente, affichée en {family} {style}
+	missing	absente
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Dégradé linéaire
+	Radial gradient	Dégradé radial
+	Conic gradient	Dégradé conique
+	Diamond gradient	Dégradé en losange
+	Freeform gradient	Dégradé de forme libre
+@plural	{n} instance|{n} instances	{n} occurrence|{n} occurrences
+@plural	{n} row|{n} rows	{n} ligne|{n} lignes
+@plural	{n} column|{n} columns	{n} colonne|{n} colonnes
 	Select art to make a scatter, art or pattern brush.	Sélectionnez une illustration pour créer une forme diffuse, artistique ou de motif.
 	Brush Art	Illustration de la forme
 	New Calligraphic Brush	Nouvelle forme calligraphique
@@ -4360,6 +4383,7 @@ axis	Both	Les deux
 @msg	Plug-ins can't be loaded from {path}: {e}	Impossible de charger les plug-ins depuis {path} ({e})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	sélectionnez avec l’outil Sélection directe les points d’ancrage où couper (pas les extrémités des tracés ouverts)
 @msg	Divide Objects Below: select a path	Diviser les objets inférieurs : sélectionnez un tracé
+@msg	select a path	sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
 @msg	Downloaded {what}	{what} téléchargé
 @msg	Expand Appearance: the selection has a basic appearance	Décomposer l’aspect : la sélection a un aspect de base
@@ -5117,6 +5141,8 @@ axis	Both	Les deux
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	une image incorporée de {_1} × {_2} pixels a été réduite à {_3} × {_4} pixels pour conserver les calques
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	linked type areas past VectorCraft's limits were left out	les zones de texte liées au-delà des limites de VectorCraft ont été omises
+@msg	the Line Breaking setting of legacy type was left out	le réglage de coupure de ligne du texte à l’ancien format a été omis
+@msg	the Japanese layout rules of legacy type were left out	les règles de composition japonaise du texte à l’ancien format ont été omises
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	le texte qui change de sens d’écriture dans un objet texte s’ouvre dans le sens de son premier caractère
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	le texte utilisé comme masque dans des zones liées, un habillage de texte ou un tracé transparent ne découpe pas
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les images liées sans aperçu dans le fichier affichent un espace réservé tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
@@ -5305,6 +5331,7 @@ effect	Soft	Doux
 	VectorCraft Title Bar on Every Desktop	Barre de titre de VectorCraft sur tous les bureaux
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Tant qu’elle est définie, la variable d’environnement VECTORCRAFT_TITLEBAR choisit la barre de titre.
 	System Title Bar takes precedence over this option while it is on.	Tant qu’elle est activée, Barre de titre du système a priorité sur cette option.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Tant que Barre de titre de VectorCraft sur tous les bureaux est désactivée, ce bureau dessine la barre de titre de la fenêtre, que cette option soit activée ou non.
 	Value Axis	Axe des valeurs
 	On Left Side	À gauche
 	On Right Side	À droite
@@ -6172,6 +6199,7 @@ theme	Appearance	Apparence
 @msg	no such color	couleur inexistante
 @msg	{_1} cannot be used on Windows	{_1} ne peut pas être utilisé sous Windows
 @msg	more than one action is named “{_1}”	plusieurs scripts s’appellent « {_1} »
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	le script « {_1} » définit la préférence de dossier {_2} ; supprimez cette étape pour enregistrer le jeu
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
 	Smudge Stick…	Estompe…
 	Smudge Stick	Estompe
@@ -6568,6 +6596,8 @@ axis	Y Axis	Axe Y
 	Action Options…	Options de script…
 	Action Options	Options de script
 	Playback Options…	Options d’exécution…
+	Button Mode	Mode Bouton
+	No actions.	Aucun script.
 	Insert Stop…	Insérer un arrêt…
 	Insert Stop	Insérer un arrêt
 	Record Stop	Enregistrer un arrêt
