@@ -941,3 +941,69 @@ fn default_swatches_linked_native_nested_image_is_complete_or_capture_fails() {
     assert_eq!(images, 1, "the original image remains reachable through the pattern");
     assert_eq!(source.doc().unwrap().doc, original);
 }
+
+#[test]
+fn default_swatches_scripts_refuse_global_choices_directly_and_in_batches() {
+    let _cms = color_context();
+    let mut s = Session::new();
+    s.add_document(raw_palette(), None);
+    s.execute("shape.rectangle", &json!({"x": 2, "y": 3, "width": 12, "height": 9})).unwrap();
+    s.execute("swatch.defaults.save", &json!({})).unwrap();
+    let prefs = s.prefs.to_json();
+    let original = s.doc().unwrap().doc.clone();
+    let selection = s.doc().unwrap().selection.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let redo = s.doc().unwrap().history.redo.len();
+    assert!(undo > 0, "the script must preserve an existing document undo step");
+
+    let mut source = String::new();
+    let mut expected = Vec::new();
+    for batch in [false, true] {
+        for command in ["swatch.defaults.save", "swatch.defaults.reset"] {
+            let (id, params) =
+                if batch { ("command.batch", json!({"commands": [{"command": command, "params": {}}]})) } else { (command, json!({})) };
+            // Catch each refusal so the actual script exercises all four routes before assertions.
+            source.push_str(&format!(
+                "try {{ vc.run({}, {}); vc.log('allowed'); }} catch (e) {{ vc.log(e.message); }}\n",
+                serde_json::to_string(id).unwrap(),
+                params
+            ));
+            expected.push(format!("a script cannot run `{command}`"));
+        }
+    }
+    let report = s.execute("script.run", &json!({"source": source})).unwrap();
+    assert_eq!(report["ok"], true);
+    let log = report["log"].as_array().unwrap();
+    assert_eq!(log.len(), expected.len());
+    for (message, refusal) in log.iter().zip(expected) {
+        assert!(message.as_str().unwrap().contains(&refusal), "the actual script must refuse this global choice: {report}");
+    }
+    assert_eq!(s.prefs.to_json(), prefs, "refused script commands keep the previous application default");
+    assert_eq!(s.doc().unwrap().doc, original);
+    assert_eq!(s.doc().unwrap().selection, selection);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    assert_eq!(s.doc().unwrap().history.redo.len(), redo);
+}
+
+#[test]
+fn default_swatches_script_document_edits_and_existing_pref_refusal_remain_supported() {
+    let _cms = color_context();
+    let mut s = Session::new();
+    s.add_document(raw_palette(), None);
+    s.execute("swatch.defaults.save", &json!({})).unwrap();
+    let defaults = s.prefs.to_json()["defaultSwatches"].clone();
+    let original = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let source = concat!(
+        "try { vc.run('prefs.reset', {}); } catch (e) { vc.log(e.message); }",
+        "vc.run('shape.rectangle', {x:10,y:8,width:12,height:9});",
+        "vc.run('command.batch', {commands:[{command:'shape.rectangle',params:{x:30,y:8,width:12,height:9}}]});"
+    );
+    let report = s.execute("script.run", &json!({"source": source})).unwrap();
+    assert_eq!(report["ok"], true);
+    assert!(report["log"][0].as_str().unwrap().contains("a script cannot run `prefs.reset`"));
+    assert_eq!(report["changed"].as_array().unwrap().len(), 1, "ordinary direct and batched document edits still commit");
+    assert_ne!(s.doc().unwrap().doc, original);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "the document script remains one undo step");
+    assert_eq!(s.prefs.to_json()["defaultSwatches"], defaults);
+}
