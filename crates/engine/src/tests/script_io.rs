@@ -1850,6 +1850,21 @@ fn script_file_grants_never_reach_the_settings_folder() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A script in the Scripts folder inside the settings folder reads the files beside it, while the
+/// rest of the settings folder stays closed to it.
+#[test]
+fn a_script_in_the_settings_scripts_folder_reads_its_own_folder() {
+    let base = folder("installed");
+    let mut s = with_data(&base);
+    write(&base.join("settings/Scripts/x.txt"), b"beside");
+    write(&base.join("settings/other.txt"), b"settings");
+    let main = base.join("settings/Scripts/main.jsx");
+    write(&main, b"var f = new File('x.txt'), g = new File(f.parent.parent.fsName + '/other.txt'); vc.log([f.open('r'), f.read(), g.open('r')]);");
+    let r = s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap();
+    assert_eq!(r["log"], json!([[true, "beside", false]]));
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// A file dialog inside a built-in's callback throws in the app, where it cannot wait.
 #[test]
 fn script_file_dialog_in_a_callback_throws() {
