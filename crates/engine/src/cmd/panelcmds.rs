@@ -88,7 +88,7 @@ pub fn specs() -> Vec<CommandSpec> {
 fn artboard_reorder(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "artboard.reorder";
     let i = artboard_index(&s.doc()?.doc, p, C)?;
-    let to = p.get("to").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing to"))?;
+    let to = super::index_opt(p, "to", C)?.ok_or_else(|| bad(C, "missing to"))?;
     s.edit("Reorder Artboards", |d, _| {
         if i >= d.artboards.len() {
             return Err(EngineError::Other("no such artboard".into()));
