@@ -20,12 +20,12 @@ pub(super) const MASK_THUMB: &str = "tr-mask-thumb";
 
 /// The panel's values ([`vectorcraft_engine::Session::transparency_info`]) and its first target
 /// (the selection, or the object whose mask is being edited), recomputed only when the document
-/// or the selection changes.
+/// or the selection changes, or other gradient mesh points are picked.
 fn state(app: &VectorcraftApp, ctx: &egui::Context) -> (TransparencyInfo, Option<Node>) {
-    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>);
+    type Key = (u64, u64, usize, Option<NodeId>, Option<NodeId>, Option<Vec<(NodeId, Vec<usize>)>>);
     let Some(st) = app.session.active() else { return Default::default() };
     let sel = &st.selection.objects;
-    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied());
+    let key: Key = (st.uid, st.revision, sel.len(), sel.first().copied(), sel.last().copied(), app.session.mesh_points_picked());
     let id = egui::Id::unique("tr-state");
     if let Some((k, v)) = ctx.data(|d| d.get_temp::<(Key, (TransparencyInfo, Option<Node>))>(id))
         && k == key
@@ -349,6 +349,50 @@ mod tests {
         run(&mut app, "transparency.releaseOpacityMask", json!({}));
         assert!(frame(&mut app).iter().any(|t| t == "Make Mask"));
         assert!(app.session.active().unwrap().doc.mask_edit.is_none());
+    }
+
+    /// Picking other gradient mesh points (which gives the document no new revision) shows their
+    /// opacity, the one `transparency.set` changes then.
+    #[test]
+    fn picking_mesh_points_shows_their_opacity() {
+        use vectorcraft_engine::ViewInfo;
+        use vectorcraft_tools::{PointerEvent, PointerKind};
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let a = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50}))["id"].clone();
+        run(&mut app, "object.mesh.create", json!({"rows": 2, "cols": 2}));
+        run(&mut app, "object.mesh.setPointColor", json!({"id": a, "index": 0, "opacity": 0.3}));
+        run(&mut app, "paint.setStroke", json!({"color": "#000000"}));
+        let v = ViewInfo::default();
+        app.session.select_tool("mesh", v).unwrap();
+        let click = |app: &mut VectorcraftApp, x: f64, y: f64| {
+            for k in [PointerKind::Down, PointerKind::Up] {
+                app.session.pointer(&PointerEvent::new(k, x, y), v).unwrap();
+            }
+        };
+        let picked = |app: &VectorcraftApp| app.session.mesh_points_picked().map(|p| p.into_iter().flat_map(|(_, v)| v).collect::<Vec<_>>());
+        let ctx = egui::Context::default();
+        click(&mut app, 35.0, 10.0);
+        assert_ne!(picked(&app), Some(vec![0]), "the click picks the top middle point");
+        assert_eq!(picked(&app).map(|v| v.len()), Some(1));
+        assert_eq!(state(&app, &ctx).0.opacity, Some(100.0));
+        click(&mut app, 10.0, 10.0);
+        assert_eq!(picked(&app), Some(vec![0]), "the click picks the top-left point");
+        assert_eq!(state(&app, &ctx).0.opacity, Some(30.0), "the newly picked point's opacity");
+        // An active Appearance row takes the opacity, so the values are the object's again.
+        let rows = app
+            .session
+            .active()
+            .unwrap()
+            .selection
+            .objects
+            .first()
+            .map(|id| app.session.active().unwrap().doc.node(*id).unwrap().appearance.items.len());
+        assert!(rows.is_some_and(|n| n > 0), "the mesh has its stroke row");
+        run(&mut app, "appearance.setActiveItem", json!({"index": 0}));
+        assert_eq!(picked(&app), None);
+        assert_eq!(app.session.transparency_info().opacity, Some(100.0), "the object's opacity, not the point's");
+        assert_eq!(run(&mut app, "transparency.info", json!({}))["opacity"], json!(100.0));
     }
 
     #[test]

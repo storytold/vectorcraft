@@ -10634,7 +10634,12 @@ and the arrow keys nudge them by the keyboard increment. The active tool lists t
 (`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). On gradient meshes a solid fill colour (`paint.setFill`, from the
 Color panel, Swatches or the Eyedropper) recolours just the picked points, and when every target of
 `transparency.set` is a gradient mesh with points picked, its `opacity` fades those points instead of the objects
-(`transparency.info` then shows their opacity, `null` when it differs). Both are one undo step.
+(`transparency.info` then shows their opacity, `null` when it differs). Both are one undo step, and neither goes to the
+points while the Appearance panel's active row takes the fill or the opacity. When the first selected object is a
+gradient mesh with points picked, the Fill proxy, the Color panel, the Color Wheel and `paint.proxies` show its first
+picked point's color, and `fillMixed` compares the picked points' colors with each other and with the fills of the other
+selected objects. The Transparency panel shows the picked points' opacity (blank when it differs), and the Control
+bar shows the first picked point's opacity.
 
 `object.mesh.movePoints {id, points: [index…], dx, dy}` (or `{items: [{id, points}…], dx, dy}` over several meshes)
 moves points by (dx, dy), their handles with them; `object.mesh.setPointColor` takes `points` or `items` the same
