@@ -351,7 +351,8 @@ pub enum Direction {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "mode")]
 pub enum ArtScale {
-    /// Keep the art's proportions (length follows the path; width scales with it).
+    /// Keep the art's proportions (length follows the path; width scales with it, times the
+    /// stroke weight and the brush width).
     Proportional,
     /// Stretch the art to the path length.
     #[default]
