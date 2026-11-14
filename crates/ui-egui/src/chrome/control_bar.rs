@@ -164,9 +164,9 @@ const GLOBAL_EDIT_OPTIONS_WIDTH: f32 = 24.0;
 /// It opens the Properties panel's Global Edit Options, which set the same session options, and is
 /// off and closed while Global Edit is on, as that panel's dropdown is. It sits after Recolor
 /// Artwork, ahead of the X/Y/W/H fields that the bar leaves out when it runs short of room, and is
-/// left out only when no room is left for it.
-fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if !crate::menus::enabled(app, "select.globalEdit") || ui.available_width() < GLOBAL_EDIT_OPTIONS_WIDTH {
+/// left out when the room left, less `reserve` ([`transform_reserve`]), cannot hold it.
+fn global_edit_options(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
+    if !crate::menus::enabled(app, "select.globalEdit") || ui.available_width() < row_width(ui, &[GLOBAL_EDIT_OPTIONS_WIDTH]) + reserve {
         return;
     }
     let on = app.session.active().is_some_and(|d| d.global_edit.is_some());
@@ -333,20 +333,30 @@ fn end_width(app: &VectorcraftApp, ui: &Ui, nothing_selected: bool) -> f32 {
     }
 }
 
+/// The room the Control bar's Fill and Stroke, Opacity, Graphic Style and Character groups leave
+/// for the Transform link: the link and the gap and separator ahead of it, while something is
+/// `selected` and the panel menu has the Transform group on, or none. Those groups show each control
+/// only while this room is left after it, so the bar leaves them out before the link.
+fn transform_reserve(app: &VectorcraftApp, ui: &Ui, selected: bool) -> f32 {
+    if selected && group_on(app, "transform") { group_end_width(ui) + crate::panels::transform::link_width(ui) } else { 0.0 }
+}
+
 /// Draws the Control bar's groups between its Character controls and the Transform link, and
 /// returns whether the Transform link and X/Y/W/H follow (false: nothing is selected, and Document
 /// Setup and Preferences, drawn here, end the bar, or the Transform group is off). The groups are
 /// the Paragraph section and area type's vertical alignment (#3759), then the Align buttons, the
 /// Align To menu and, for two or more objects, the Distribute buttons (a single object keeps the bar
 /// as it was); each shows only while the end of the bar keeps its room. Groups the panel menu has
-/// off are left out, and take no room.
-fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize) -> bool {
+/// off are left out, and take no room. Without `room` (the Character group had none), all of these
+/// groups are left out, so the bar trims them from its right end before the Character group.
+fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize, room: bool) -> bool {
     let nothing = objects == 0;
     let end = end_width(app, ui, nothing);
-    if group_on(app, "paragraph") && crate::panels::paragraph::control_bar(app, ui, BUTTON, |ui| group_end_width(ui) + end) {
+    if room && group_on(app, "paragraph") && crate::panels::paragraph::control_bar(app, ui, BUTTON, |ui| group_end_width(ui) + end) {
         group_end(ui);
     }
-    if group_on(app, "verticalAlignment")
+    if room
+        && group_on(app, "verticalAlignment")
         && crate::panels::properties::vertical_align::shown(app).is_some()
         && ui.available_width() >= buttons_width(ui, 4) + group_end_width(ui) + end
         && crate::panels::properties::vertical_align::buttons(app, ui, BUTTON)
@@ -367,7 +377,7 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
     }
     let transform = group_on(app, "transform");
     let end = if transform { separator_width(ui) + end } else { 0.0 };
-    if group_on(app, "alignDistribute") && ui.available_width() >= buttons_width(ui, 7) + end {
+    if room && group_on(app, "alignDistribute") && ui.available_width() >= buttons_width(ui, 7) + end {
         crate::panels::align::align_buttons(app, ui, BUTTON);
         if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x + end {
             crate::panels::align::align_to_menu(app, ui, BUTTON);
@@ -582,9 +592,10 @@ fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
 /// The Control bar's Fill and Stroke group: the fill and stroke chips, the Stroke link, the weight
 /// and the width profile, and the separator after them while a control follows ([`group_separator`]).
 /// Short of room, the bar leaves out the width profile first, then the Stroke link with the weight,
-/// then the two chips; each shows only while the bar has room for all of it.
-fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if ui.available_width() < row_width(ui, &[CHIP_WIDTH, CHIP_WIDTH]) {
+/// then the two chips; each shows only while the bar has room for all of it and `reserve` after it
+/// ([`transform_reserve`]).
+fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui, reserve: f32) {
+    if ui.available_width() < row_width(ui, &[CHIP_WIDTH, CHIP_WIDTH]) + reserve {
         return;
     }
     let shown_stroke = crate::panels::current_stroke(app);
@@ -595,10 +606,10 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The link opens the Stroke panel as a popover under it; then the weight spinner
     // (with presets) and the width profile.
     let link = widgets::text_width(ui, stroke_panel::link_text(ui, tl!("Stroke:")));
-    if ui.available_width() >= row_width(ui, &[link, WEIGHT_FIELD_WIDTH]) {
+    if ui.available_width() >= row_width(ui, &[link, WEIGHT_FIELD_WIDTH]) + reserve {
         stroke_panel::link(app, ui, tl!("Stroke:"));
         stroke_panel::weight_field(app, ui, "cb-stroke", weight, WEIGHT_FIELD_WIDTH);
-        if ui.available_width() >= stroke_panel::PROFILE_DROPDOWN_WIDTH
+        if ui.available_width() >= row_width(ui, &[stroke_panel::PROFILE_DROPDOWN_WIDTH]) + reserve
             && let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref()))
         {
             app.run("stroke.set", json!({"profile": id})).ok();
@@ -611,13 +622,14 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// `selected`, its Graphic Style group (Style, Recolor Artwork and Global Edit Options), each while
 /// the panel menu has it on, and the separator after them while a control follows. Short of room,
 /// the bar leaves out Global Edit Options first, then Recolor Artwork, then the Style link with its
-/// chip, then the Opacity link with its field; each shows only while the bar has room for all of it.
-fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity: f32, selected: bool) {
+/// chip, then the Opacity link with its field; each shows only while the bar has room for all of it
+/// and `reserve` after it ([`transform_reserve`]).
+fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity: f32, selected: bool, reserve: f32) {
     let (opacity_on, style_on) = (group_on(app, "opacity"), group_on(app, "graphicStyle") && selected);
     let mut drawn = false;
     if opacity_on {
         let text = egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline();
-        if ui.available_width() < row_width(ui, &[widgets::text_width(ui, text.clone()), OPACITY_FIELD_WIDTH]) {
+        if ui.available_width() < row_width(ui, &[widgets::text_width(ui, text.clone()), OPACITY_FIELD_WIDTH]) + reserve {
             return;
         }
         // A click opens the Transparency panel; a drag scrubs the field (#4088).
@@ -632,7 +644,7 @@ fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity:
         drawn = true;
     }
     let text = egui::RichText::new(tl!("Style:")).size(12.0).color(t.text).underline();
-    if style_on && ui.available_width() >= GROUP_GAP + row_width(ui, &[widgets::text_width(ui, text.clone()), CHIP_WIDTH]) {
+    if style_on && ui.available_width() >= GROUP_GAP + row_width(ui, &[widgets::text_width(ui, text.clone()), CHIP_WIDTH]) + reserve {
         // Style picker: the selection's graphic style; its menu applies another.
         ui.add_space(GROUP_GAP);
         if ui.link(text).clicked() {
@@ -643,10 +655,13 @@ fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity:
         egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
         // Recolor Artwork, when the selection has colours to recolour.
         let colored = app.session.active().is_some_and(|st| crate::canvas::has_colors(&st.doc, &st.selection.objects));
-        if colored && ui.available_width() >= BUTTON && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, BUTTON).clicked() {
+        if colored
+            && ui.available_width() >= buttons_width(ui, 1) + reserve
+            && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, BUTTON).clicked()
+        {
             crate::menus::invoke(app, "ui.recolorDialog", json!({}));
         }
-        global_edit_options(app, ui);
+        global_edit_options(app, ui, reserve);
         drawn = true;
     }
     if drawn {
@@ -837,20 +852,22 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             crate::panels::symbols::control_bar(app, ui);
         }
         let opacity = if has_first { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
+        let reserve = transform_reserve(app, ui, !sel.is_empty());
         if !image && group_on(app, "fillStroke") {
-            fill_and_stroke(app, ui);
+            fill_and_stroke(app, ui, reserve);
         }
-        opacity_and_style(app, ui, t, opacity, !sel.is_empty());
-        if group_on(app, "character") {
-            crate::panels::character::control_bar(app, ui);
-        }
-        if !groups_before_transform(app, ui, sel.len()) {
+        opacity_and_style(app, ui, t, opacity, !sel.is_empty(), reserve);
+        // The Character group shows whole, with the Transform link's room left after it, or not at
+        // all; left out, it leaves out the groups between it and the link too.
+        let room = !group_on(app, "character") || crate::panels::character::control_bar(app, ui, reserve);
+        if !groups_before_transform(app, ui, sel.len(), room) {
             erase_trailing(ui);
             return;
         }
         // The Transform link opens the whole Transform panel (reference point, rotate,
         // shear, options) in a popover; X/Y/W/H follow inline while the bar has room. The
-        // groups ahead of the link keep its room, but those ahead of them can still take it.
+        // groups from Fill and Stroke on keep its room, but the controls ahead of them can
+        // still take it.
         if ui.available_width() < crate::panels::transform::link_width(ui) {
             erase_trailing(ui);
             return;

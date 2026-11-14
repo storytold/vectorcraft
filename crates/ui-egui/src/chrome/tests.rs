@@ -3056,8 +3056,8 @@ fn control_bar_overflow(app: &mut crate::VectorcraftApp, ctx: &egui::Context, sc
     Some(shapes.collect())
 }
 
-/// In a narrow window, the Control bar leaves out a control it has no room for, Fill and Stroke and
-/// Opacity included: every control it shows is drawn whole, left of the panel menu button, which
+/// In a narrow window, the Control bar leaves out a control it has no room for, Fill and Stroke,
+/// Opacity and Character included: every control it shows is drawn whole, left of the panel menu button, which
 /// shows in every width, with the bar docked to the top or the bottom or floating.
 #[test]
 fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
@@ -3093,6 +3093,11 @@ fn the_control_bar_s_controls_stay_inside_the_bar_in_a_narrow_window() {
     app.run("select.anchors", json!({"id": id, "anchors": [[0, 0]]})).unwrap();
     check(&mut app, "an anchor selected");
     app.select_tool("selection");
+    let text = app.run("text.create", json!({"x": 20, "y": 120, "text": "Point"})).unwrap()["id"].clone();
+    app.run("select.set", json!({ "ids": [text] })).unwrap();
+    let bar = control_frame(&mut app, &ctx, vec![]);
+    assert!(has(&bar, "Character:"), "the Character group shows in a wide window: {bar:?}");
+    check(&mut app, "type selected");
     app.run("select.set", json!({ "ids": [] })).unwrap();
     check(&mut app, "nothing selected");
     assert!(faults.is_empty(), "a control drawn past the bar's room: {faults:#?}");
