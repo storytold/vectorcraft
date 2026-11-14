@@ -326,7 +326,13 @@ fn composed_art(id: vectorcraft_doc::NodeId, path: &vectorcraft_geom::PathData, 
     use vectorcraft_doc::color::BlendMode;
     use vectorcraft_doc::{Appearance, Node, NodeKind, OpacityMask};
     use vectorcraft_geom::{Rect, shapes};
-    let (base, mask) = opaque_paint(paint);
+    // An unplaced gradient (and a freeform gradient without points) stays fitted to the face's
+    // bounds grown by 1 pt, not to the larger cover below.
+    let mut paint = paint.clone();
+    if let Paint::Gradient(g) = &mut paint {
+        g.pin(path.bounds().unwrap_or(Rect::ZERO).inflate(1.0, 1.0));
+    }
+    let (base, mask) = opaque_paint(&paint);
     // Clip once to the union of this single-contour face and its round seam stroke.
     let clip = Node::path(id, vectorcraft_geom::PathData::from_bezpath(&footprint(&path.to_bezpath(), seam)), Appearance::default());
     // Opaque rectangles cover the complete seam stroke, without separately antialiasing
@@ -468,5 +474,31 @@ mod tests {
         assert_eq!(point.at, Point::new(12.0, 18.0));
         assert_eq!(point.color.to_rgb(), [1.0, 0.25, 0.25]);
         assert_eq!(shaded.swatch, None, "a changed freeform point detaches the gradient swatch");
+    }
+
+    /// Under colored light, a face's unplaced source gradient is fitted to the face's bounds grown by
+    /// 1 pt, whatever the size of the cover rectangle that draws it; a placed one keeps its placement.
+    #[test]
+    fn composed_faces_fit_unplaced_gradients_to_the_face_not_the_cover() {
+        use vectorcraft_doc::NodeKind;
+        use vectorcraft_geom::{Rect, shapes};
+        use vectorcraft_three_d::{RgbGradient, ShadeGradient};
+        let face = shapes::rectangle(Rect::new(10.0, 20.0, 50.0, 40.0));
+        let ramp = |b| ShadeGradient { start: Point::new(10.0, 20.0), end: Point::new(50.0, 20.0), brightness: [b, 1.0] };
+        let light = RgbGradient { channels: [ramp(0.2), ramp(0.5), ramp(0.8)] };
+        let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)];
+        let unplaced = GradientPaint { gradient: Gradient::new(GradientKind::Linear, stops), geom: None, angle: 0.0, swatch: None, freeform: None };
+        let placed = GradientGeom { start: Point::new(0.0, 0.0), end: Point::new(80.0, 0.0), aspect: 1.0, focal: None };
+        let fitted = unplaced.resolve(Rect::new(9.0, 19.0, 51.0, 41.0));
+        for (geom, expected) in [(None, fitted), (Some(placed), placed)] {
+            let paint = Paint::Gradient(Box::new(GradientPaint { geom, ..unplaced.clone() }));
+            for seam in [0.05, 0.75] {
+                let art = facet_art(vectorcraft_doc::NodeId(1), &face, &paint, light, seam);
+                let NodeKind::Group { children, clip: true } = &art.kind else { panic!("a clipped composite") };
+                let base = &children[1].children().unwrap()[0];
+                let Paint::Gradient(g) = base.appearance.items[0].paint() else { panic!("the source gradient") };
+                assert_eq!(g.geom, Some(expected), "seam {seam}");
+            }
+        }
     }
 }
