@@ -1091,8 +1091,9 @@ way. `document.exportPdf {useArtboards: false}` writes that one page as well, an
 art's bounds is measured without what the plot leaves out: non-printing layers, objects at 0% opacity, placed images,
 gradient meshes whose every point is at 0% opacity, and paths without effects whose fills and strokes paint nothing.
 An image or a mesh with a Crop Marks effect, or with a Vector Halftone effect that makes dots, is measured.
-Such objects in the art of a symbol that is not dynamic are left out of its instances too, and an instance whose
-symbol holds nothing else is left out.
+Such objects in the art of a symbol are left out of its instances too, and an instance whose symbol holds nothing
+else is left out. In the art of a dynamic symbol, an object that an instance's fill, stroke or opacity makes
+the plot draw is measured.
 A document whose only visible art is left out is refused, and Export As refuses an HP-GL plot of it before the save
 dialog. A PDF of that page, from either command, carries no Preserve Editing data; when Preserve Editing is on (as it
 is in VectorCraft Default), the export comes back with a warning that says so. A `.ai` export with
