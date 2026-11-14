@@ -326,11 +326,12 @@ impl Writer<'_> {
     fn brush_out(&mut self, b: &Brush) -> Option<BrushOut> {
         let plugin = crate::import::brush_plugin_name(&b.kind);
         let section = format!("Brush Art {}", self.brush_set.sections + 1);
-        // The art as the reader reads it: a section is read with y down, and an Art brush's art is
-        // turned over after that (its section's y up is the right of the path).
+        // The art as the reader reads it: a section is read with y down, and a Scatter or Art
+        // brush's art is turned over after that (its section's y up is down the page in each
+        // Scatter copy and the right of the path in Art).
         let (params, art) = match &b.kind {
             BrushKind::Calligraphic(c) => (calligraphic_params(c), None),
-            BrushKind::Scatter(s) => (scatter_params(s, &section)?, Some((s.art.clone(), Affine::FLIP_Y))),
+            BrushKind::Scatter(s) => (scatter_params(s, &section)?, Some((s.art.clone(), Affine::IDENTITY))),
             BrushKind::Art(a) => (art_params(a, &section)?, Some((a.art.clone(), Affine::IDENTITY))),
             BrushKind::Pattern(_) | BrushKind::Bristle(_) => return None,
         };

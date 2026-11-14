@@ -452,7 +452,12 @@ pub(super) fn finish_brushes_within(
         let kind = match d.kind {
             _ if !kept => None,
             DraftKind::Calligraphic(c) => Some(BrushKind::Calligraphic(c)),
-            DraftKind::Scatter { brush, art: name } => copy(&name).map(|a| BrushKind::Scatter(Scatter { art: a, ..brush })),
+            DraftKind::Scatter { brush, art: name } => copy(&name).map(|mut a| {
+                // Each copy is the section turned over: its side with y up draws down the page
+                // before the copy's rotation, and a brush draws art's y (down here) down the page.
+                a.transform(Affine::scale_non_uniform(1.0, -1.0), false);
+                BrushKind::Scatter(Scatter { art: a, ..brush })
+            }),
             DraftKind::Art { brush, art: name, .. } => copy(&name).map(|mut a| {
                 // The side of the section with y up draws on the right of the path, and a brush
                 // draws art's y (down here) on the left of the path.

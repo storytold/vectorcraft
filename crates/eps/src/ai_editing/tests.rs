@@ -8336,6 +8336,40 @@ fn brush_art_of_a_straight_line_comes_back_as_the_line() {
     }
 }
 
+/// A Scatter brush's art is written turned over into its section (y up), so the side that is down the
+/// page in the brush's copies is up in the section: a triangle with its point down comes out with
+/// its point above its base, and comes back with its point down.
+#[test]
+fn a_scatter_brushs_art_is_written_turned_over() {
+    use vectorcraft_brush::{Brush, BrushKind, Scatter};
+    use vectorcraft_geom::{Point, SubPath};
+    let point_down = PathData { subpaths: vec![SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(20.0, 10.0)], true)] };
+    let art = Node::path(vectorcraft_doc::NodeId(1), point_down, Appearance::basic(black_fill(), Paint::None, 0.0));
+    let lib = vec![Brush { name: "Wedge".into(), kind: BrushKind::Scatter(Scatter { art, ..Scatter::default() }) }];
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    let text = program(&doc);
+    let start = text.find("%AI8_BeginBrushPattern").unwrap();
+    let end = start + text[start..].find("%AI8_EndBrushPattern").unwrap();
+    // The points of the frame and the triangle: the triangle's point is the one between the
+    // frame's left and right edges.
+    let points: Vec<(f64, f64)> = text[start..end]
+        .lines()
+        .filter_map(|l| l.strip_suffix(" m").or_else(|| l.strip_suffix(" L")))
+        .filter_map(|l| {
+            let mut n = l.split_whitespace().map(|v| v.parse::<f64>().ok());
+            Some((n.next()??, n.next()??))
+        })
+        .collect();
+    let (left, right) = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, r), p| (l.min(p.0), r.max(p.0)));
+    let bottom = points.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+    let tip: Vec<f64> = points.iter().filter(|p| p.0 > left + 1e-3 && p.0 < right - 1e-3).map(|p| p.1).collect();
+    assert!(!tip.is_empty() && tip.iter().all(|y| (y - bottom - 10.0).abs() < 1e-3), "the point is 10 above the base in the section: {points:?}");
+    let back = vectorcraft_brush::library(&read_back(&doc));
+    let (BrushKind::Scatter(got), BrushKind::Scatter(want)) = (&back[0].kind, &lib[0].kind) else { panic!("{back:?}") };
+    assert!(same_tree(&art_tree(&got.art), &art_tree(&want.art)), "{:#?}", got.art);
+}
+
 /// Brush art of a path with several subpaths is written as a compound path, which the reader reads as
 /// a compound path of one path for each subpath, and is weighed as the reader weighs that against the
 /// art it copies into one file's brushes: of two Art brushes whose art is a path of 30,000 squares,
