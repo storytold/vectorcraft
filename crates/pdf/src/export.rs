@@ -46,7 +46,7 @@ use exporter::{MAX_COORD, writable, xf};
 #[cfg(test)]
 use images::{png_8_bit, png_16_bit};
 #[cfg(test)]
-pub(crate) use nodes::{KNOCKOUT_SHAPES, MAX_KNOCKOUT_MASK_OBJECTS, MEASURES};
+pub(crate) use nodes::{KNOCKOUT_BRUSHES, KNOCKOUT_SHAPES, MAX_KNOCKOUT_MASK_OBJECTS, MEASURES};
 pub(crate) use writer::{Sheet, Writer};
 
 pub(crate) struct Exporter<'a> {
@@ -124,6 +124,14 @@ pub(crate) struct Exporter<'a> {
     /// The most [`Self::symbol_nodes`] may reach: [`vectorcraft_doc::MAX_SYMBOL_NODES`], or less
     /// while one of the copies on a sheet is drawn ([`Writer::page`]).
     pub(crate) symbol_limit: u64,
+    /// Objects the symbol instances in the copies drawn in knockout masks held, together: counted
+    /// apart from [`Self::symbol_nodes`], within [`vectorcraft_doc::MAX_SYMBOL_NODES`] of their own.
+    mask_symbol_nodes: u64,
+    /// Whether a knockout mask is being drawn: [`Self::symbol_nodes`] then counts
+    /// [`Self::mask_symbol_nodes`].
+    in_knockout_mask: bool,
+    /// Whether a knockout mask left out symbol art because the objects its copies may hold ran out.
+    mask_art_left_out: bool,
 }
 
 #[cfg(test)]
