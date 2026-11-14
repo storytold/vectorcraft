@@ -1,10 +1,14 @@
 //! Live Corners: the widgets inside the corners of the selected paths. The Selection tool shows
 //! them on live rectangles and polygons, Direct Selection on any path (a star, a pen path) at each
-//! corner anchor: one that isn't smooth, where two sides, straight or curved, meet at an angle. Dragging one rounds (or
-//! sharpens) the corners whose widgets show together, on every selected path (#938): every corner
-//! of a path selected whole, those with a selected anchor when Direct Selection picked some. Alt-clicking a widget cycles their corner
-//! kind (round, inverted round, chamfer), as the Up and Down arrows do while one is dragged
-//! (#2898); double-clicking one opens the Corners dialog. The
+//! corner anchor: one that isn't smooth, where two sides, straight or curved, meet at an angle. Every
+//! corner of a selected path shows its widget. Dragging one rounds (or sharpens) the picked corners
+//! together, on every selected path (#938): every corner of a path selected whole, those with a
+//! selected anchor when Direct Selection picked some. With Direct Selection the widgets of the
+//! selected corners are marked (the canvas fills them), a click on a widget selects its corner and
+//! Shift-click adds or removes one (#1232); a drag on a widget whose corner isn't picked rounds that
+//! corner alone, as if the press had selected it first. Alt-clicking a widget cycles the corner
+//! kind (round, inverted round, chamfer) of the same corners, as the Up and Down arrows do while one
+//! is dragged (#2898); double-clicking one opens the Corners dialog. The
 //! Selection and Direct Selection tools share this, and the canvas draws the widgets from the same
 //! geometry.
 
@@ -39,6 +43,11 @@ struct Widget {
     angle: f64,
     /// The widget's centre in the document.
     at: Point,
+    /// Its corner is picked: a drag on any picked widget edits every picked corner (all of them
+    /// when Direct Selection selected none of the path's corners).
+    picked: bool,
+    /// Direct Selection selected its corner (the canvas fills its widget, #1232).
+    selected: bool,
 }
 
 /// The corner widgets of one selected path.
@@ -47,7 +56,7 @@ struct PathWidgets {
     id: NodeId,
     /// Maps the corners' space into the document (a live rectangle's own; else none).
     xf: Affine,
-    /// The widgets that show (and which a drag edits), in anchor order.
+    /// The widgets that show, in anchor order.
     widgets: Vec<Widget>,
     /// Every corner of the path shows its widget.
     all: bool,
@@ -72,17 +81,29 @@ impl PathWidgets {
         }
         // Screen pixels per unit of the corners' space (a rectangle's may be skewed).
         let scale = zoom * det.sqrt();
+        // Every corner shows its widget, so Shift-click can add another corner to the selected
+        // ones (#1232); the picked ones are those a drag edits.
+        let selected = selection.partial(id).map(|a| lc.corners_of(a)).unwrap_or_default();
         let picked = lc.picked(selection.partial(id));
         let widgets: Vec<_> = lc
             .corners
             .iter()
-            .filter(|c| picked.contains(&c.index) && c.lu.min(c.lv) * scale >= MIN_SIDE_PX)
+            .filter(|c| c.lu.min(c.lv) * scale >= MIN_SIDE_PX)
             .map(|c| {
                 // On the bisector at the centre of the arc as drawn, at least the minimum inset
                 // in and at most half the shorter side.
                 let (radius, drawn) = (lc.radius(c.index), lc.drawn_radius(c.index));
                 let k = (drawn / c.sin()).max(MIN_INSET_PX / (scale * (1.0 + c.cos()).sqrt())).min(c.lu.min(c.lv) / 2.0);
-                Widget { corner: *c, radius, drawn, kind: lc.kind(c.index), angle: angle_in(lc.xf, c), at: lc.xf * c.on_bisector(k) }
+                Widget {
+                    corner: *c,
+                    radius,
+                    drawn,
+                    kind: lc.kind(c.index),
+                    angle: angle_in(lc.xf, c),
+                    at: lc.xf * c.on_bisector(k),
+                    picked: picked.contains(&c.index),
+                    selected: selected.contains(&c.index),
+                }
             })
             .collect();
         let all = widgets.len() == lc.corners.len();
@@ -93,6 +114,20 @@ impl PathWidgets {
     fn corners(&self) -> Vec<usize> {
         self.widgets.iter().map(|w| w.corner.index).collect()
     }
+
+    /// The picked corners whose widgets show: those the Corners dialog edits.
+    fn picked(&self) -> Vec<usize> {
+        self.widgets.iter().filter(|w| w.picked).map(|w| w.corner.index).collect()
+    }
+}
+
+/// The corners a drag, an arrow press or an Alt-click on a widget edits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Scope {
+    /// The picked corners of every selected path.
+    Picked,
+    /// One widget whose corner isn't picked: its path's and its own index among the shown ones.
+    One(usize, usize),
 }
 
 /// The corner widgets of the selected paths that have some.
@@ -147,6 +182,12 @@ impl CornerWidgets {
         self.paths.iter().flat_map(|p| p.widgets.iter().map(move |w| (p.id, w.at)))
     }
 
+    /// The centres of the widgets that show, each with the object it belongs to and whether
+    /// Direct Selection selected its corner (the canvas fills those, #1232).
+    pub fn visible_marked(&self) -> impl Iterator<Item = (NodeId, Point, bool)> + '_ {
+        self.paths.iter().flat_map(|p| p.widgets.iter().map(move |w| (p.id, w.at, w.selected)))
+    }
+
     /// The corners whose widgets show, path after path: anchor indices of each path's uncut
     /// outline.
     pub fn corners(&self) -> Vec<usize> {
@@ -168,23 +209,51 @@ impl CornerWidgets {
         self.paths.get(path).and_then(|p| p.widgets.get(k))
     }
 
-    /// `object.setLiveShape` params setting `key` on the shown corners (every corner of a path
-    /// unless some are hidden, which `corners` then leaves out): one path by its `id`, several as
-    /// `items`.
+    /// Is widget `k` of path `path` in `scope`?
+    fn in_scope(scope: Scope, path: usize, k: usize, w: &Widget) -> bool {
+        match scope {
+            Scope::Picked => w.picked,
+            Scope::One(p, j) => (p, j) == (path, k),
+        }
+    }
+
+    /// The scope of a gesture on widget `at` (its path's and its own index): the picked corners
+    /// when its corner is one of them, else that corner alone.
+    fn scope_of(&self, at: (usize, usize)) -> Scope {
+        if self.widget(at.0, at.1).is_some_and(|w| w.picked) { Scope::Picked } else { Scope::One(at.0, at.1) }
+    }
+
+    /// The corners of path `path` in `scope`, as anchor indices of its uncut outline.
+    fn corners_in(&self, scope: Scope, path: usize) -> Vec<usize> {
+        let Some(p) = self.paths.get(path) else { return vec![] };
+        p.widgets.iter().enumerate().filter(|(k, w)| Self::in_scope(scope, path, *k, w)).map(|(_, w)| w.corner.index).collect()
+    }
+
+    /// `object.setLiveShape` params setting `key` on the picked corners (every corner of a path
+    /// unless some are hidden or unpicked, which `corners` then leaves out).
+    #[cfg(test)]
     fn command(&self, key: &str, value: Value) -> Value {
-        let corners = |p: &PathWidgets| (!p.all).then(|| p.corners());
+        self.command_in(Scope::Picked, key, value)
+    }
+
+    /// `object.setLiveShape` params setting `key` on the corners in `scope`: one path by its `id`,
+    /// several as `items`. A path whose every corner is in scope leaves out `corners`.
+    fn command_in(&self, scope: Scope, key: &str, value: Value) -> Value {
+        let picked: Vec<(&PathWidgets, Vec<usize>)> =
+            self.paths.iter().enumerate().map(|(i, p)| (p, self.corners_in(scope, i))).filter(|(_, c)| !c.is_empty()).collect();
+        let corners = |p: &PathWidgets, c: &Vec<usize>| (!(p.all && c.len() == p.widgets.len())).then(|| c.clone());
         let mut out = Map::new();
-        match self.paths.as_slice() {
-            [p] => {
+        match picked.as_slice() {
+            [(p, c)] => {
                 out.insert("id".into(), json!(p.id.0));
-                if let Some(c) = corners(p) {
+                if let Some(c) = corners(p, c) {
                     out.insert("corners".into(), json!(c));
                 }
             }
             paths => {
                 let items: Vec<Value> = paths
                     .iter()
-                    .map(|p| match corners(p) {
+                    .map(|(p, c)| match corners(p, c) {
                         Some(c) => json!({ "id": p.id.0, "corners": c }),
                         None => json!({ "id": p.id.0 }),
                     })
@@ -210,12 +279,17 @@ pub fn over_widget(cx: &ToolContext, p: Point, any_path: bool) -> bool {
     CornerWidgets::for_tool(cx, any_path).and_then(|w| w.hit(p, cx.tol(5.0))).is_some()
 }
 
-/// A double-click on a corner widget opens the Corners dialog for the shown corners of its path.
+/// A double-click on a corner widget opens the Corners dialog for the picked corners of its path
+/// (that corner alone when it isn't picked).
 pub fn double_click(cx: &ToolContext, p: Point, any_path: bool) -> Option<Action> {
     let w = CornerWidgets::for_tool(cx, any_path)?;
-    let (i, _) = w.hit(p, cx.tol(5.0))?;
+    let (i, k) = w.hit(p, cx.tol(5.0))?;
     let path = w.paths.get(i)?;
-    Some(Action::Dialog(DIALOG.into(), json!({ "id": path.id.0, "corners": path.corners() })))
+    let corners = match w.scope_of((i, k)) {
+        Scope::Picked => path.picked(),
+        scope => w.corners_in(scope, i),
+    };
+    Some(Action::Dialog(DIALOG.into(), json!({ "id": path.id.0, "corners": corners })))
 }
 
 /// A path's uncut outline with its corners' radii and kinds, and the corners' space (to outline
@@ -248,6 +322,8 @@ pub struct CornerDrag {
     radius: f64,
     /// The pointer went past fully round: the dragged corner is at its largest radius.
     at_limit: bool,
+    /// The corners the gesture edits.
+    scope: Scope,
     at: Point,
     /// Direct Selection: what a click (no drag) on the pressed widget selects.
     click: Option<CornerClick>,
@@ -277,6 +353,7 @@ impl CornerDrag {
         let (widgets, p) = (CornerWidgets::for_tool(cx, any_path)?, ev.pos);
         let widget = widgets.hit(p, cx.tol(5.0))?;
         let radius = widgets.widget(widget.0, widget.1)?.radius;
+        let scope = widgets.scope_of(widget);
         let click = any_path
             .then(|| {
                 let path = widgets.paths.get(widget.0)?;
@@ -311,6 +388,7 @@ impl CornerDrag {
             alt: ev.mods.alt,
             radius,
             at_limit: false,
+            scope,
             at: p,
             click,
             kind: None,
@@ -331,21 +409,23 @@ impl CornerDrag {
         (r.min(max).max(0.0), max > 0.0 && r >= max)
     }
 
-    /// The largest radius `corner` of shown path `path` draws while the drag sets every shown
-    /// corner of that path to one radius: up to the cuts of its neighbours, as far as its own
+    /// The largest radius `corner` of shown path `path` draws while the drag sets every corner of
+    /// that path in its scope to one radius: up to the cuts of its neighbours, as far as its own
     /// sides when they are square (#2332).
     fn max_radius(&self, path: usize, corner: &Corner) -> f64 {
-        let (Some(shown), Some(o)) = (self.widgets.paths.get(path), self.outlines.get(path)) else { return corner.max_radius() };
-        corner.max_shared_radius(&o.corners, &o.radii, |k| shown.widgets.iter().any(|w| w.corner.index == k))
+        let Some(o) = self.outlines.get(path) else { return corner.max_radius() };
+        let edited = self.widgets.corners_in(self.scope, path);
+        corner.max_shared_radius(&o.corners, &o.radii, |k| edited.contains(&k))
     }
 
     /// The cuts of the edited corners that are at their largest radius, in document coordinates.
     fn corners_at_limit(&self) -> BezPath {
         let mut out = BezPath::new();
-        for (n, (shown, o)) in self.widgets.paths.iter().zip(&self.outlines).enumerate() {
-            let shown = &shown.widgets;
+        for (n, (path, o)) in self.widgets.paths.iter().zip(&self.outlines).enumerate() {
+            let shown: Vec<&Widget> =
+                path.widgets.iter().enumerate().filter(|(k, w)| CornerWidgets::in_scope(self.scope, n, *k, w)).map(|(_, w)| w).collect();
             let mut radii = o.radii.clone();
-            for w in shown {
+            for w in &shown {
                 if let Some(r) = radii.get_mut(w.corner.index) {
                     *r = self.radius;
                 }
@@ -394,14 +474,14 @@ impl CornerDrag {
     fn preview(&self) -> Action {
         let p = match (self.dragging, self.kind) {
             (true, kind) => {
-                let mut p = self.widgets.command("radius", json!(self.radius));
+                let mut p = self.widgets.command_in(self.scope, "radius", json!(self.radius));
                 if let Some(k) = kind {
                     p["kind"] = json!(k);
                 }
                 p
             }
-            (false, Some(k)) => self.widgets.command("kind", json!(k)),
-            (false, None) => self.widgets.command("radius", json!(self.radius)),
+            (false, Some(k)) => self.widgets.command_in(self.scope, "kind", json!(k)),
+            (false, None) => self.widgets.command_in(self.scope, "radius", json!(self.radius)),
         };
         Action::Preview("object.setLiveShape".into(), p)
     }
@@ -425,10 +505,10 @@ impl CornerDrag {
         if self.began {
             vec![Action::Commit]
         } else if let Some(w) = self.widgets.widget(self.widget.0, self.widget.1).filter(|_| self.alt) {
-            vec![Action::Exec("object.setLiveShape".into(), self.widgets.command("kind", json!(w.kind.next())))]
+            vec![Action::Exec("object.setLiveShape".into(), self.widgets.command_in(self.scope, "kind", json!(w.kind.next())))]
         } else if let Some(c) = self.click {
-            // Direct Selection: the click selects the widget's corner, so the next drag on this
-            // widget rounds that corner alone (its widget is then the only one showing).
+            // Direct Selection: the click selects the widget's corner (Shift: adds or removes it),
+            // so the next drag on a selected widget rounds the selected corners together (#1232).
             let mode = if c.shift { "toggle" } else { "set" };
             vec![Action::Exec("select.anchors".into(), json!({"id": c.id.0, "anchors": c.anchors, "mode": mode}))]
         } else {

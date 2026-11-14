@@ -223,12 +223,18 @@ mod tests {
     #[test]
     fn double_clicking_a_direct_selected_corner_edits_it_alone() {
         let (mut app, id) = app();
-        // Direct Selection picks the bottom-right anchor: only its widget shows.
+        // Direct Selection picks the bottom-right anchor: every widget shows, its widget marked
+        // (#1232).
         app.run("select.anchors", json!({"id": id, "anchors": [[0, 2]], "mode": "set"})).unwrap();
         app.select_tool("directSelection");
         let view = app.view_info();
         let st = app.session.active().unwrap();
-        let at: Vec<_> = CornerWidgets::of(&st.doc, &st.selection, view.zoom, true).unwrap().visible().collect();
+        let at: Vec<_> = CornerWidgets::of(&st.doc, &st.selection, view.zoom, true)
+            .unwrap()
+            .visible_marked()
+            .filter(|(_, _, m)| *m)
+            .map(|(_, at, _)| at)
+            .collect();
         assert_eq!(at.len(), 1);
         crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::DoubleClick, at[0].x, at[0].y), view);
         let d = app.ui.dialog.clone().expect("Corners opened");

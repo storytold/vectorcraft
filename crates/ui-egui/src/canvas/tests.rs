@@ -4815,6 +4815,22 @@ fn corner_widgets_hide_above_the_preference_angle() {
     assert_eq!(widgets(&mut app), 0);
 }
 
+/// #1232: with a corner Direct-Selected, every widget still shows, and the selected one is
+/// filled in the layer colour.
+#[test]
+fn a_selected_corner_fills_its_widget() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("directSelection");
+    app.session.execute("select.anchors", &json!({"id": id, "anchors": [[0, 2]], "mode": "set"})).unwrap();
+    let layer = c32(app.session.active().unwrap().doc.layer_color(vectorcraft_doc::NodeId(id)));
+    let ctx = egui::Context::default();
+    let circles = shapes(&mut app, &ctx);
+    let count = |fill: Color32| circles.iter().filter(|s| matches!(s, Shape::Circle(c) if c.radius == 3.0 && c.fill == fill)).count();
+    assert_eq!((count(Color32::WHITE), count(layer)), (3, 1));
+}
+
 /// View › Hide Edges hides a live rectangle's corner widgets, and the Selection tool then
 /// neither shows the corner cursor over one's place nor rounds the corners from it. With
 /// edges shown, a drag from the same widget rounds them.

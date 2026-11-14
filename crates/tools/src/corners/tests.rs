@@ -42,6 +42,11 @@ fn pts(w: &CornerWidgets) -> Vec<Point> {
     w.visible().collect()
 }
 
+/// Whether each shown widget's corner is Direct-Selected (the canvas fills those, #1232).
+fn marked(w: &CornerWidgets) -> Vec<bool> {
+    w.visible_marked().map(|(_, _, m)| m).collect()
+}
+
 fn radius(a: &Action) -> f64 {
     let Action::Preview(c, v) = a else { panic!("not a preview: {a:?}") };
     assert_eq!(c, "object.setLiveShape");
@@ -119,10 +124,11 @@ fn widgets_of_several_selected_paths_drag_together() {
     assert!((radius(&preview[1]) - 15.0).abs() < 1e-9);
     let Action::Preview(_, v) = &preview[1] else { panic!() };
     assert_eq!(v["items"], json!([{"id": a.0}, {"id": b.0}]));
-    // Direct Selection with one anchor of the first: its corner, and the whole second.
+    // Direct Selection with one anchor of the first: every widget still shows (#1232), and a drag
+    // edits its corner and the whole second.
     s.anchors.insert(a, [(0, 2)].into());
     let w = CornerWidgets::of(&d, &s, 1.0, true).unwrap();
-    assert_eq!(w.corners(), [2, 0, 1, 2, 3]);
+    assert_eq!(w.corners(), [0, 1, 2, 3, 0, 1, 2, 3]);
     assert_eq!(w.command("radius", json!(5.0)), json!({"items": [{"id": a.0, "corners": [2]}, {"id": b.0}], "radius": 5.0}));
 }
 
@@ -213,11 +219,11 @@ fn a_click_on_a_widget_with_direct_selection_selects_its_corner() {
     assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, w.x, w.y)).is_empty());
     let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, w.x, w.y));
     assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": anchors, "mode": "set"}))]);
-    // With that corner selected, its widget alone shows, and a drag rounds it alone
-    // (`direct_selected_corners_show_their_widgets_alone_and_round_alone`).
+    // With that corner selected, every widget still shows and its widget alone is marked (#1232;
+    // `direct_selected_corners_mark_their_widgets_and_round_together`).
     let mut part = selected(id);
     part.anchors.insert(id, anchors.iter().copied().collect());
-    assert_eq!(CornerWidgets::of(&d, &part, 1.0, true).unwrap().corners(), [2]);
+    assert_eq!(marked(&CornerWidgets::of(&d, &part, 1.0, true).unwrap()), [false, false, true, false]);
     // A Shift-click on it then deselects it.
     let shift = Mods { shift: true, ..Mods::default() };
     let one = crate::testutil::cx(&d, &part, &p);
@@ -259,8 +265,9 @@ fn a_shift_click_on_a_widget_of_a_whole_path_picks_its_corner() {
     // Two corners picked: a Shift-click on either widget deselects that corner.
     let mut two = selected(id);
     two.anchors.insert(id, [0, 2].into_iter().flat_map(anchors).collect());
-    let shown = pts(&CornerWidgets::of(&d, &two, 1.0, true).unwrap());
-    assert_eq!(shown, [w[0], w[2]]);
+    let shown = CornerWidgets::of(&d, &two, 1.0, true).unwrap();
+    assert_eq!(pts(&shown), w, "every widget shows (#1232)");
+    assert_eq!(marked(&shown), [true, false, true, false]);
     assert_eq!(click(&two, w[0]), pick(0, "toggle"));
 }
 
@@ -287,24 +294,37 @@ fn a_shift_click_on_a_widget_adds_to_anchors_that_are_no_corner() {
     assert_eq!(a, vec![Action::Exec("select.anchors".into(), json!({"id": id.0, "anchors": anchors, "mode": "toggle"}))]);
 }
 
+/// #1232: Direct Selection rounds the selected corners together. Every widget shows, the
+/// selected ones marked; a drag on a selected widget rounds every selected corner, and a drag on
+/// another rounds that corner alone, as if the press had selected it first.
 #[test]
-fn direct_selected_corners_show_their_widgets_alone_and_round_alone() {
+fn direct_selected_corners_mark_their_widgets_and_round_together() {
     let (d, id) = live_rect(0.0, Affine::translate((100.0, 100.0)));
+    let p = paint();
+    let drag = |s: &Selection, from: Point, to: Point| {
+        let cx = crate::testutil::cx(&d, s, &p);
+        let mut t = crate::create("directSelection");
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, from.x, from.y)).is_empty());
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, to.x, to.y));
+        assert_eq!(a[0], Action::Begin("Corner Radius".into()));
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, to.x, to.y)), vec![Action::Commit]);
+        a[1].clone()
+    };
+    let preview = |v: Value| Action::Preview("object.setLiveShape".into(), v);
     // Direct Selection picked the bottom-right anchor.
     let mut s = selected(id);
     s.anchors.insert(id, [(0, 2)].into());
-    let p = paint();
-    let cx = cx(&d, &s, &p);
     let w = CornerWidgets::of(&d, &s, 1.0, true).unwrap();
-    assert_eq!(w.corners(), [2]);
-    assert_eq!(pts(&w), [Point::new(190.0, 190.0)]);
-    assert!(!over_widget(&cx, Point::new(110.0, 110.0), true), "the other corners hide theirs");
-    let mut t = crate::create("directSelection");
-    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 190.0, 191.0)).is_empty());
-    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 175.0, 176.0));
-    assert_eq!(a[0], Action::Begin("Corner Radius".into()));
-    assert_eq!(a[1], Action::Preview("object.setLiveShape".into(), json!({"id": id.0, "radius": 15.0, "corners": [2]})));
-    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 175.0, 176.0)), vec![Action::Commit]);
+    assert_eq!(w.corners(), [0, 1, 2, 3]);
+    assert_eq!(marked(&w), [false, false, true, false]);
+    assert!(over_widget(&cx(&d, &s, &p), Point::new(110.0, 110.0), true), "an unselected corner shows its widget");
+    let (bottom_right, top_right) = (Point::new(190.0, 191.0), Point::new(190.0, 110.0));
+    assert_eq!(drag(&s, bottom_right, Point::new(175.0, 176.0)), preview(json!({"id": id.0, "radius": 15.0, "corners": [2]})));
+    // The top-left and bottom-right: a drag on either rounds both.
+    s.anchors.insert(id, [(0, 0), (0, 2)].into());
+    assert_eq!(drag(&s, bottom_right, Point::new(175.0, 176.0)), preview(json!({"id": id.0, "radius": 15.0, "corners": [0, 2]})));
+    // The unselected top-right: that corner alone.
+    assert_eq!(drag(&s, top_right, Point::new(175.0, 125.0)), preview(json!({"id": id.0, "radius": 15.0, "corners": [1]})));
 }
 
 /// #2332: one corner rounded alone goes past half the side, until its cut reaches the
@@ -326,7 +346,7 @@ fn a_corner_rounded_alone_rounds_up_to_its_neighbours() {
         s.anchors.insert(id, [(0, if top_right > 0.0 { 3 } else { 2 })].into());
         let p = paint();
         let cx = cx(&d, &s, &p);
-        assert_eq!(CornerWidgets::of(&d, &s, 1.0, true).unwrap().corners(), [2]);
+        assert_eq!(marked(&CornerWidgets::of(&d, &s, 1.0, true).unwrap()), [false, false, true, false]);
         let mut t = crate::create("directSelection");
         t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 190.0, 190.0));
         assert!((radius(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 130.0))[1]) - 60.0).abs() < 1e-9);
@@ -440,8 +460,9 @@ fn star_path(d: &Document, id: NodeId) -> PathData {
     path.clone()
 }
 
-/// #511: a Direct-Selected anchor of the star shows its corner's widget alone, and the
-/// preference hides the star's wide inner corners (about 125°) below their angle.
+/// #511: a Direct-Selected anchor of the star marks its corner's widget (every widget shows,
+/// #1232), which a drag rounds alone, and the preference hides the star's wide inner corners
+/// (about 125°) below their angle.
 #[test]
 fn star_corners_follow_the_anchors_and_the_angle_preference() {
     let (d, id) = star();
@@ -450,9 +471,11 @@ fn star_corners_follow_the_anchors_and_the_angle_preference() {
     let p = paint();
     let c = cx(&d, &s, &p);
     let w = CornerWidgets::for_tool(&c, true).unwrap();
-    assert_eq!(w.corners(), [3]);
+    assert_eq!(w.corners().len(), 10);
+    let at: Vec<Point> = w.visible_marked().filter(|(_, _, m)| *m).map(|(_, at, _)| at).collect();
+    assert_eq!(at.len(), 1);
+    let at = at[0];
     let mut t = crate::create("directSelection");
-    let at = pts(&w)[0];
     t.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x + 20.0, at.y + 20.0));
     assert!(matches!(&a[1], Action::Preview(_, v) if v["corners"] == json!([3])), "{a:?}");
