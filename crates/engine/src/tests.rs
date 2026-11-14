@@ -193,6 +193,7 @@ mod swatchlib;
 mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
+mod symbolism_options;
 mod symbollib;
 mod targeting;
 mod textcombos;

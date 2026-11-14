@@ -892,6 +892,10 @@ pub use buildcmds::live_paint_gaps;
 /// Control bar enable it when it changes one).
 pub use brushsym::reset_transformation_changes;
 
+/// Whether an object is a symbol set (the Symbolism Tools Options' Symbol Set Density applies to
+/// the selected ones).
+pub use brushsym::is_symbol_set;
+
 /// Command ids kept only so older scripts keep working: `(alias, the command it duplicates)`.
 /// They run as before but the command palette leaves them out (it lists the command once).
 pub const ALIASES: &[(&str, &str)] = &[("object.convertDocumentColorMode", "file.documentColorMode")];

@@ -23,7 +23,27 @@ const ROWS: &[Row] = &[
     // Global Brush Dimensions.
     (LIQUIFY, Some("liquify"), &["width", "height", "angle", "intensity", "usePressure", "showBrush"]),
     (LIQUIFY, None, &["detail", "simplify", "simplifyOn", "rate", "complexity", "horizontal", "vertical", "affectAnchors", "affectIn", "affectOut"]),
-    (SYMBOLISM, Some("symbolism"), &["diameter", "intensity", "density"]),
+    // Symbolism Tools Options: the general options, then the Symbol Sprayer's and the Symbol Sizer's.
+    (
+        SYMBOLISM,
+        Some("symbolism"),
+        &[
+            "diameter",
+            "intensity",
+            "density",
+            "usePressure",
+            "method",
+            "showBrush",
+            "sprayScrunch",
+            "spraySize",
+            "spraySpin",
+            "sprayScreen",
+            "sprayStain",
+            "sprayStyle",
+            "proportional",
+            "affectsDensity",
+        ],
+    ),
     (&["mirrorCut"], None, &["axis", "keep"]),
     (&["puppetWarp"], None, &["showMesh", "expand"]),
     (&["arc"], None, &["closed", "lengthX", "lengthY", "reference", "baseAlong", "slope", "fillArc"]),
