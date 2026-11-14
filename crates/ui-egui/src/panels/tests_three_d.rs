@@ -311,6 +311,28 @@ fn a_mixed_selection_still_lists_the_first_effects_own_custom_bevel() {
     }
 }
 
+/// An effect's own custom bevel named like a bevel of the bevels file with other points is listed
+/// under its own label, so Bevel Shape does not show two entries of one name.
+#[test]
+fn an_own_custom_bevel_named_like_a_file_bevel_gets_its_own_label() {
+    use crate::dialogs::revolve::bevel_options;
+    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-bevels-own-label-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = app();
+    app.session.attach_bevels_file(dir.join(vectorcraft_engine::cmd::bevels::FILE_NAME).to_string_lossy().to_string());
+    app.run("threeD.bevels.edit", json!({})).unwrap();
+    let file = app.session.bevels.get("Example Bevel").unwrap().profile_json();
+    let other = json!([[0.0, 0.0], [0.5, 0.5], [1.0, 1.0]]);
+    assert_ne!(file, other);
+    let fields = json!({"bevel": "custom", "bevelName": "Example Bevel", "bevelProfile": other}).as_object().cloned().unwrap();
+    let (options, builtin) = bevel_options(&app, &fields, "threeD.extrude");
+    let _ = std::fs::remove_dir_all(&dir);
+    let labels: Vec<&str> = options[builtin..].iter().map(|(l, _, _)| l.as_str()).collect();
+    assert_eq!(labels, ["Example Bevel", "Example Bevel (document)"]);
+    assert_eq!(options[builtin + 1].2, Some(("Example Bevel".to_string(), other)));
+}
+
 #[test]
 fn the_panel_finds_a_3d_effect_on_a_fill() {
     let mut app = app();

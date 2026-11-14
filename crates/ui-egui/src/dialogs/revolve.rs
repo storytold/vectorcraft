@@ -244,7 +244,7 @@ pub(crate) type BevelChoice = (String, Value, Option<(String, Value)>);
 /// The entries of [`bevel_choice`]'s menu for form `fields`, and how many are built in. The
 /// built-in labels are translated; custom bevels show their names as they are. The effect's own
 /// custom bevel, the panel's [`OWN_BEVEL`] else the form's, is listed unless the file lists it by
-/// name with the same points.
+/// name with the same points; while another entry has its label, " (document)" is added to it.
 pub(crate) fn bevel_options(app: &VectorcraftApp, fields: &serde_json::Map<String, Value>, effect: &str) -> (Vec<BevelChoice>, usize) {
     let mut options: Vec<BevelChoice> = super::effect::own_choices(effect, "bevel", false)
         .unwrap_or_default()
@@ -266,7 +266,11 @@ pub(crate) fn bevel_options(app: &VectorcraftApp, fields: &serde_json::Map<Strin
     if let Some((n, p)) = own
         && !options[builtin..].iter().any(|(_, _, c)| c.as_ref().is_some_and(|(cn, cp)| *cn == n && *cp == p))
     {
-        let shown = if n.is_empty() { tl!("Custom").to_string() } else { n.clone() };
+        let mut shown = if n.is_empty() { tl!("Custom").to_string() } else { n.clone() };
+        // Each pass makes the label longer, so this ends once no entry has it.
+        while options.iter().any(|(l, _, _)| *l == shown) {
+            shown = crate::i18n::fmt(tl!("{name} (document)"), &[("name", &shown)]);
+        }
         options.push((shown, json!("custom"), Some((n, p))));
     }
     (options, builtin)
@@ -302,7 +306,17 @@ pub(super) fn bevel_choice(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dial
         let labels: Vec<&str> = options.iter().map(|(l, _, _)| l.as_str()).collect();
         let shown = current.and_then(|i| labels.get(i)).copied().unwrap_or("");
         let width = VALUE_W + rail_width(ui) + 6.0;
-        if let Some(k) = widgets::dropdown_names(ui, ("three-d-choice", KEY), shown, &labels, width)
+        // Marked by index, not label: a custom bevel's name can match another entry's label.
+        let picked = widgets::combo(ui, ("three-d-choice", KEY), shown, width, |ui| {
+            let mut chosen = None;
+            for (i, l) in labels.iter().enumerate() {
+                if ui.add(egui::Button::selectable(current == Some(i), *l)).clicked() {
+                    chosen = Some(i);
+                }
+            }
+            chosen
+        });
+        if let Some(k) = picked
             && let Some((_, v, c)) = options.get(k)
         {
             d.fields.insert(KEY.into(), v.clone());
