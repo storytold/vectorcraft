@@ -83,6 +83,8 @@ fn junk_options_are_rejected() {
         json!({"svg": "css"}),
         json!({"images": "inline"}),
         json!({"useArtboards": "yes"}),
+        json!({"units": "furlong"}),
+        json!({"units": 7}),
     ] {
         let mut q = p.clone();
         q["format"] = json!("svg");
@@ -90,6 +92,30 @@ fn junk_options_are_rejected() {
     }
     // Other formats ignore the SVG options.
     assert!(s.execute("document.export", &json!({"format": "png", "styling": "fancy"})).is_ok());
+}
+
+/// #4462: width and height carry the chosen unit (the document is 200 × 100 pt, the viewBox stays
+/// in points), px is today's bare numbers, and Responsive leaves the size out whatever the unit.
+#[test]
+fn svg_export_writes_width_height_with_the_requested_unit() {
+    let mut s = session(1);
+    let plain = svg(&mut s, json!({}));
+    assert!(plain.contains(" width=\"200\" height=\"100\" viewBox=\"0 0 200 100\""), "{plain}");
+    assert_eq!(svg(&mut s, json!({"units": "px"})), plain, "px is the default, byte for byte");
+    for unit in ["mm", "cm", "in", "pt"] {
+        for decimals in [1, 3] {
+            for p in [json!({"units": unit, "decimals": decimals}), json!({"svg": {"units": unit, "decimals": decimals}})] {
+                let out = svg(&mut s, p);
+                assert!(out.contains(&format!("{unit}\"")) && out.contains("viewBox=\"0 0 200 100\""), "{unit}:\n{out}");
+                let back = vectorcraft_svg::import(&out).unwrap();
+                let rect = back.artboards[0].rect;
+                assert!((rect.width() - 200.0).abs() < 0.001 && (rect.height() - 100.0).abs() < 0.001, "{unit}: {rect:?}\n{out}");
+            }
+        }
+    }
+    let out = svg(&mut s, json!({"units": "mm", "responsive": true}));
+    assert!(!out.contains("mm\"") && !out.contains("height=\"100\" viewBox") && out.contains("viewBox=\"0 0 200 100\""), "{out}");
+    assert!(svg(&mut s, json!({"units": "mm", "decimals": 1})).contains("x=\"10.1\""), "coordinate precision is unchanged");
 }
 
 #[test]

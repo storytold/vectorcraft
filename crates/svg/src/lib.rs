@@ -184,6 +184,49 @@ impl Encoding {
     }
 }
 
+/// The unit of the `width` and `height` an export writes (SVG Options → Units, off Responsive).
+/// The `viewBox` stays in user units (points) whatever is chosen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SizeUnit {
+    /// Legacy bare numbers, unchanged: one per document point. CSS pixels are 96 per inch;
+    /// choose an explicit physical unit to preserve the document's physical size.
+    #[default]
+    #[serde(rename = "px")]
+    Px,
+    #[serde(rename = "pt")]
+    Pt,
+    #[serde(rename = "mm")]
+    Mm,
+    #[serde(rename = "cm")]
+    Cm,
+    #[serde(rename = "in")]
+    In,
+}
+
+impl SizeUnit {
+    /// This unit's size in points, and the suffix a length in it carries (`px` is written bare).
+    fn per_point(self) -> (f64, &'static str) {
+        match self {
+            Self::Px => (1.0, ""),
+            Self::Pt => (1.0, "pt"),
+            Self::Mm => (25.4 / 72.0, "mm"),
+            Self::Cm => (2.54 / 72.0, "cm"),
+            Self::In => (1.0 / 72.0, "in"),
+        }
+    }
+
+    /// `points` as a length in this unit. Physical sizes use at least six decimal places and
+    /// six significant digits, independent of coordinate precision, so rounding does not change
+    /// the viewBox's rendered scale. `px` keeps [`fmt_num`]'s selected `decimals`.
+    pub fn length(self, points: f64, decimals: u8) -> String {
+        let (scale, suffix) = self.per_point();
+        let v = points * scale;
+        let places =
+            if !suffix.is_empty() && v.is_finite() && v != 0.0 { decimals.max(6).max((5.0 - v.abs().log10().floor()) as u8) } else { decimals };
+        format!("{}{suffix}", fmt_num(v, places))
+    }
+}
+
 /// The SVG profile written (SVG Options → SVG Profile).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Profile {
@@ -230,6 +273,9 @@ pub struct ExportOptions {
     pub minify: bool,
     /// Omit `width`/`height` so the SVG scales to its container.
     pub responsive: bool,
+    /// The unit `width` and `height` are written in (ignored when `responsive`). `px`, the
+    /// default, writes bare numbers.
+    pub units: SizeUnit,
     /// Fonts → Convert to Outlines: text becomes paths (portable, no font needed to view it).
     pub outline_text: bool,
     /// Embed the native document (passed to [`export_full`]) in `<metadata>` so VectorCraft
@@ -267,6 +313,7 @@ impl Default for ExportOptions {
             images: ImageMode::Embed,
             minify: false,
             responsive: false,
+            units: SizeUnit::Px,
             outline_text: false,
             preserve_editing: false,
             metadata: false,
@@ -699,6 +746,22 @@ mod tests {
         assert_eq!(fmt_num(-0.0001, 3), "0");
         assert_eq!(fmt_num(10.5, 1), "10.5");
         assert_eq!(fmt_num(100.0, 0), "100");
+    }
+
+    #[test]
+    fn tiny_physical_sizes_keep_their_scale() {
+        for unit in [SizeUnit::Pt, SizeUnit::Mm, SizeUnit::Cm, SizeUnit::In] {
+            let (scale, suffix) = unit.per_point();
+            for points in [200.0, 10.0, 3.0, 0.001, 1e-14, 1e-30] {
+                let written = unit.length(points, 1);
+                let value: f64 = written.strip_suffix(suffix).unwrap().parse().unwrap();
+                assert!((value / scale / points - 1.0).abs() < 1e-5, "{points}pt: {written}");
+            }
+        }
+        assert_eq!(SizeUnit::In.length(0.0, 1), "0in");
+        // `px` is written exactly as `fmt_num` does.
+        assert_eq!(SizeUnit::Px.length(3.0, 1), "3");
+        assert_eq!(SizeUnit::Px.length(0.01, 1), "0");
     }
 
     #[test]

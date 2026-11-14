@@ -6,7 +6,7 @@ use vectorcraft_doc::{
     StrokeLayer, TextKind, TextObject,
 };
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect, shapes};
-use vectorcraft_svg::{ExportOptions, ObjectIds, Styling, export, import, import_with_report};
+use vectorcraft_svg::{ExportOptions, ObjectIds, SizeUnit, Styling, export, import, import_with_report};
 
 fn doc_with(nodes: Vec<Node>) -> Document {
     let mut d = Document::new(200.0, 200.0);
@@ -665,6 +665,47 @@ fn options_decimals_minify_responsive_artboard() {
     assert!(s.contains("viewBox=\"0 0 40.877 31\""), "{s}");
     let s = export(&d, &ExportOptions { object_ids: ObjectIds::Minimal, ..Default::default() });
     assert!(!s.contains("id=\"Layer_1\""));
+}
+
+/// An SVG written with a physical width and height (#4462) reopens at the artboard it was written from.
+#[test]
+fn svg_in_physical_units_reopens_at_the_same_size() {
+    let mut d = Document::new(200.0, 100.0);
+    let n = rect_node(&mut d, Rect::new(10.0, 10.0, 60.0, 50.0), Appearance::default_art());
+    let l = d.layers[0].id;
+    d.insert(Some(l), usize::MAX, n).unwrap();
+    for units in [SizeUnit::Mm, SizeUnit::Cm, SizeUnit::In, SizeUnit::Pt] {
+        let s = export(&d, &ExportOptions { units, ..Default::default() });
+        let back = import(&s).unwrap_or_else(|e| panic!("{units:?}: {e}\n{s}"));
+        let r = back.artboards[0].rect;
+        assert!((r.width() - 200.0).abs() < 0.1 && (r.height() - 100.0).abs() < 0.1, "{units:?}: {r:?}\n{s}");
+    }
+}
+
+/// A viewer's default `meet` scaling must preserve the artwork's physical extent, not just
+/// reopen an artboard with roughly the right width and height.
+#[test]
+fn physical_units_preserve_rendered_extent_at_low_coordinate_precision() {
+    for (width, height, decimals) in [(200.0, 10.0, 1), (10.0, 200.0, 1), (0.2, 0.1, 1), (0.002, 0.001, 3)] {
+        let mut d = Document::new(width, height);
+        let n = rect_node(&mut d, Rect::new(0.0, 0.0, width, height), Appearance::basic(solid("#000000"), Paint::None, 0.0));
+        let layer = d.layers[0].id;
+        d.insert(Some(layer), usize::MAX, n).unwrap();
+        for units in [SizeUnit::Mm, SizeUnit::Cm, SizeUnit::In, SizeUnit::Pt] {
+            let svg = export(&d, &ExportOptions { units, decimals, ..Default::default() });
+            let tree = usvg::Tree::from_str(&svg, &usvg::Options::default()).unwrap();
+            let extent = tree.root().abs_bounding_box();
+            // CSS consumers render physical lengths at 96 px/in, document geometry is 72 pt/in.
+            for (actual, expected) in [
+                (tree.size().width(), width * 96.0 / 72.0),
+                (tree.size().height(), height * 96.0 / 72.0),
+                (extent.width(), width * 96.0 / 72.0),
+                (extent.height(), height * 96.0 / 72.0),
+            ] {
+                assert!((f64::from(actual) / expected - 1.0).abs() < 2e-5, "{units:?}: {actual} != {expected}\n{svg}");
+            }
+        }
+    }
 }
 
 #[test]
