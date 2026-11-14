@@ -2692,3 +2692,117 @@ fn pencil_alt_toggles_to_smooth_when_enabled_and_closes_when_disabled() {
     assert!(matches!(&last[0], Action::Preview(_, v) if v["closed"] == true && v["style"] == "pencil"));
     assert_eq!(last[1], Action::Commit);
 }
+
+/// #2958: with Snap to Grid the Pencil's ends still land on grid points, but the stroke bends
+/// to them over a few times the distance they moved instead of jumping there: no hook (the
+/// samples keep running forward), and samples away from the ends stay where the hand went.
+#[test]
+fn pencil_strokes_ease_into_ends_snapped_to_the_grid() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let step = cx.grid_step();
+    // A straight stroke sampled every 2 pt, both ends between grid points.
+    let (x0, x1, y) = (step * 10.0 + step * 0.45, step * 30.0 + step * 0.45, step * 10.0 + step * 0.4);
+    let pts: Vec<(f64, f64)> = (0..).map(|i| x0 + 2.0 * f64::from(i)).take_while(|x| *x <= x1).map(|x| (x, y)).collect();
+    let mut t = GestureTool::new("pencil");
+    let acts = drag(&mut t, &cx, &pts, Mods::default());
+    let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+    let out: Vec<(f64, f64)> = v["points"].as_array().unwrap().iter().map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap())).collect();
+    let on_grid = |v: f64| (v / step - (v / step).round()).abs() < 1e-9;
+    let (first, last) = (out[0], out[out.len() - 1]);
+    assert!(on_grid(first.0) && on_grid(first.1) && on_grid(last.0) && on_grid(last.1), "ends on the grid: {first:?} {last:?}");
+    assert!(out.windows(2).all(|w| w[1].0 > w[0].0), "no hook: the stroke keeps running forward {out:?}");
+    // Halfway along, the hand's points as drawn.
+    let mid = out[out.len() / 2];
+    assert!((mid.1 - y).abs() < 1e-9, "{mid:?}");
+}
+
+/// #3013 review: a stroke shorter than the start's easing has its last sample moved by it; a
+/// release where that sample was drawn still adds no step back to the hand's position.
+#[test]
+fn a_short_eased_stroke_ends_without_a_step_back() {
+    let (mut d, _) = doc_with_rect();
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 100.0, subdivisions: 1 };
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("pencil");
+    // Pressed at x 51 (snaps to 100), dragged and released at 200, on a gridline.
+    let acts = drag(&mut t, &cx, &[(51.0, 100.0), (200.0, 100.0), (200.0, 100.0)], Mods::default());
+    let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+    let xs: Vec<f64> = v["points"].as_array().unwrap().iter().map(|q| q[0].as_f64().unwrap()).collect();
+    assert!(xs.windows(2).all(|w| w[1] > w[0]), "no step back: {xs:?}");
+    assert_eq!((xs.first().copied(), xs.last().copied()), (Some(100.0), Some(200.0)), "{xs:?}");
+}
+
+/// #3013 review: a short stroke whose start and end snap to the same grid point keeps every
+/// sample, and none is moved by both snaps at once: each moves by at most the larger of them.
+#[test]
+fn a_stroke_whose_ends_snap_together_keeps_its_samples_without_overshoot() {
+    let (mut d, _) = doc_with_rect();
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 100.0, subdivisions: 1 };
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    // A small loop around (106, 106): both ends snap to the grid point (100, 100).
+    let raw: Vec<(f64, f64)> =
+        (0..=24).map(|i| f64::from(i) * std::f64::consts::TAU / 24.0).map(|a| (106.0 + 4.0 * a.cos(), 106.0 + 4.0 * a.sin())).collect();
+    let mut t = GestureTool::new("pencil");
+    let acts = drag(&mut t, &cx, &raw, Mods::default());
+    let Some(Action::Preview(_, v)) = acts.last().and_then(|a| a.first()) else { panic!("{acts:?}") };
+    let out: Vec<(f64, f64)> = v["points"].as_array().unwrap().iter().map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap())).collect();
+    assert!(out.len() >= raw.len() - 1, "samples kept: {} of {}", out.len(), raw.len());
+    assert_eq!(out[0], (100.0, 100.0));
+    // Both ends moved from the same place to (100, 100): no sample moves further than that.
+    let most = (raw[0].0 - 100.0).hypot(raw[0].1 - 100.0) + 1e-9;
+    for (q, r) in out.iter().zip(&raw).skip(1) {
+        assert!((q.0 - r.0).hypot(q.1 - r.1) <= most, "{q:?} from {r:?}");
+    }
+}
+
+/// A Shift line with Snap to Grid starts on the grid and stays a two-point line from there,
+/// however long the drag: the snapped ends' easing (#2958) is for freehand strokes only.
+#[test]
+fn a_shift_line_with_snap_to_grid_stays_straight_from_the_grid() {
+    let (mut d, _) = doc_with_rect();
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 100.0, subdivisions: 1 };
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    cx.smart_guides = false;
+    let shift = Mods { shift: true, ..Default::default() };
+    let mut t = GestureTool::new("pencil");
+    let acts = drag_held(&mut t, &cx, &[(205.0, 196.0), (230.0, 197.0), (260.0, 199.0), (330.0, 203.0)], shift);
+    let last = acts.last().unwrap();
+    let Some(Action::Preview(_, v)) = last.first() else { panic!("{acts:?}") };
+    let pts = v["points"].as_array().unwrap();
+    assert_eq!((pts.len(), &pts[0]), (2, &json!([200.0, 200.0])), "{v}");
+    // Horizontal, as long as the drag from the snapped press.
+    let end = (pts[1][0].as_f64().unwrap(), pts[1][1].as_f64().unwrap());
+    assert!((end.1 - 200.0).abs() < 1e-9 && (end.0 - 200.0 - 130f64.hypot(3.0)).abs() < 1e-9, "{end:?}");
+}
+
+/// #3013 review: Alt pressed after a press whose start snapped to the grid turns the stroke into
+/// a smoothing pass that starts where the press was, not at the snapped point.
+#[test]
+fn a_smoothing_pass_after_a_snapped_press_starts_at_the_press() {
+    let (mut d, id) = doc_with_rect();
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 100.0, subdivisions: 1 };
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = ToolContext { snap_to_grid: true, ..cx(&d, &s, &p) };
+    let mut t = GestureTool::new("pencil");
+    t.set_option("altSmooth", &json!(true));
+    let alt = Mods { alt: true, ..Default::default() };
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 51.0, 151.0));
+    for x in [150.0, 250.0] {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, 151.0).with_mods(alt));
+    }
+    let last = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 151.0).with_mods(alt));
+    let Some(Action::Exec(c, v)) = last.first() else { panic!("{last:?}") };
+    assert_eq!(c, "path.smoothRegion");
+    assert_eq!(v["points"][0], json!([51.0, 151.0]), "{v}");
+}

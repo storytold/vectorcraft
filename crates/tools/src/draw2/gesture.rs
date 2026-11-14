@@ -166,6 +166,14 @@ pub struct GestureTool {
     /// Where the pointer went down, before any snap: a straight Knife cut released there cuts
     /// nothing, even when its press snapped elsewhere.
     pressed: Point,
+    /// Where the Pencil's stroke began, before its start snapped, and how far snapping moved it:
+    /// the samples near the start take part of that move ([`ease`]).
+    start_shift: (Point, Vec2),
+    /// Where the pointer was for the last sample taken, before easing moved it: the steps between
+    /// samples, and whether the release adds one, are measured from there.
+    last_raw: Point,
+    /// Where the pointer was for each of `points` (the Pencil's ends bend the stroke from these).
+    raw: Vec<Point>,
     /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
     /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
     tip_at: Option<Point>,
@@ -758,6 +766,26 @@ fn spans_cover(spans: &[(f64, f64)], from: f64, to: f64) -> bool {
     i > 0 && spans.get(i - 1).is_some_and(|s| s.1 >= to)
 }
 
+/// How far, in multiples of the move, the samples near a snapped end follow it (#2958).
+const EASE_SPAN: f64 = 4.0;
+
+/// `p` moved by part of `shift`: all of it at `from`, none from [`EASE_SPAN`] times the shift's
+/// length away, easing between. A stroke end that snaps (to the grid, a point or a guide) then
+/// bends the stroke smoothly to it instead of jumping there and leaving a hook (#2958).
+fn ease(p: Point, from: Point, shift: Vec2) -> Point {
+    p + shift * weight(p, from, shift)
+}
+
+/// How much of `shift` a sample at `p` takes when the end at `from` moved by it ([`ease`]): 1 at
+/// `from`, 0 from [`EASE_SPAN`] times the move away.
+fn weight(p: Point, from: Point, shift: Vec2) -> f64 {
+    let len = shift.hypot();
+    if !(len > 1e-9 && len.is_finite()) {
+        return 0.0;
+    }
+    (1.0 - (p.distance(from) / (EASE_SPAN * len)).min(1.0)).powi(2)
+}
+
 /// The paths a stroke can redraw for selected object `id`: the path itself, or a compound path's
 /// member paths.
 fn redraw_targets(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
@@ -843,6 +871,9 @@ impl GestureTool {
             close_within: 15.0,
             snap: DrawSnap::default(),
             pressed: Point::ZERO,
+            start_shift: (Point::ZERO, Vec2::ZERO),
+            last_raw: Point::ZERO,
+            raw: vec![],
             tip_at: None,
             light: false,
             length: 0.0,
@@ -981,12 +1012,58 @@ impl GestureTool {
         ]
     }
 
+    /// A freehand stroke released with the pointer at `p` and its end at `end`: its samples bend
+    /// to snapped ends, and the end is added, or moves the last step when that was where the
+    /// button went up.
+    fn release_freehand(&mut self, cx: &ToolContext, p: Point, end: Point, ev: &PointerEvent) {
+        // Was the last step away from where the button went up (before the samples bend)?
+        let away = !self.points.is_empty() && self.last_raw.distance(p) >= cx.tol(1.0);
+        self.bend_to_snapped_ends(p, end);
+        if away {
+            self.push(end, ev);
+        } else if self.snaps()
+            && !self.smoothing
+            && self.points.len() > 1
+            && let Some(last) = self.points.last_mut()
+        {
+            // The last step was where the button went up: it moves where that snaps.
+            *last = end;
+        }
+    }
+
+    /// On release, bend the samples before the Pencil's snapped ends to them (#2958), the pointer
+    /// let go at `p` and the stroke ending at `end`. Near both ends (a short stroke, or one whose
+    /// ends snap together) a sample takes a share of each move that adds up to at most the whole,
+    /// so none overshoots past either end (#3013 review). A smoothing pass (Alt, which may come
+    /// mid-drag) works on where the hand went. Only the Pencil's ends snap; the other tools' points
+    /// stay as they were placed (the Blob Brush's Shift moves earlier ones onto its line).
+    fn bend_to_snapped_ends(&mut self, p: Point, end: Point) {
+        if !self.snaps() {
+            return;
+        }
+        let (end_shift, (from, start_shift)) = if self.smoothing { (Vec2::ZERO, (p, Vec2::ZERO)) } else { (end - p, self.start_shift) };
+        for (q, r) in self.points.iter_mut().zip(&self.raw).skip(1) {
+            let (mut ws, mut we) = (weight(*r, from, start_shift), weight(*r, p, end_shift));
+            if ws + we > 1.0 {
+                (ws, we) = (ws / (ws + we), we / (ws + we));
+            }
+            *q = *r + start_shift * ws + end_shift * we;
+        }
+        // A smoothing pass that began after a snapped press starts where the press was.
+        if self.smoothing
+            && let (Some(q), Some(r)) = (self.points.first_mut(), self.raw.first())
+        {
+            *q = *r;
+        }
+    }
+
     /// Forget the stroke.
     fn clear(&mut self) {
         self.moved = false;
         self.points.clear();
         self.pressures.clear();
         self.poses.clear();
+        self.raw.clear();
         self.previewed = 0;
         self.shift_line = None;
         self.light = false;
@@ -1297,9 +1374,12 @@ impl Tool for GestureTool {
                 } else {
                     p
                 };
+                self.start_shift = (p, start - p);
+                self.last_raw = p;
                 self.clear();
                 self.pressed = p;
                 self.push(start, ev);
+                self.raw.push(p);
                 vec![]
             }
             PointerKind::Drag => {
@@ -1333,10 +1413,12 @@ impl Tool for GestureTool {
                     if self.back_at_press(cx, ev.pos, p) {
                         // Back at the press point there is no line: the one shown goes.
                         self.points.truncate(1);
+                        self.raw.truncate(1);
                         return if std::mem::take(&mut self.began) { vec![Action::Cancel] } else { vec![] };
                     }
                     self.points.truncate(1);
-                } else if self.points.last().is_some_and(|l| l.distance(p) < cx.tol(1.0)) || self.points.len() >= crate::MAX_STROKE_SAMPLES {
+                    self.raw.truncate(1);
+                } else if (!self.points.is_empty() && self.last_raw.distance(p) < cx.tol(1.0)) || self.points.len() >= crate::MAX_STROKE_SAMPLES {
                     // A release here keeps the last point unless it snaps (`Up`), so the ring
                     // follows the point `finish` will test.
                     let kept = self.points.last().copied().filter(|l| l.distance(p) < cx.tol(1.0) && !self.snaps());
@@ -1344,7 +1426,11 @@ impl Tool for GestureTool {
                     self.near_start = self.release_closes_near_start(cx, release_end);
                     return vec![];
                 }
-                self.push(p, ev);
+                let (from, shift) = self.start_shift;
+                self.last_raw = p;
+                self.raw.push(p);
+                // A straight line's end is the pointer: only a freehand stroke eases into its start.
+                self.push(if self.straight { p } else { ease(p, from, shift) }, ev);
                 self.near_start = self.release_closes_near_start(cx, end);
                 if !self.draws_path() || self.smoothing {
                     return vec![];
@@ -1392,15 +1478,8 @@ impl Tool for GestureTool {
                     } else {
                         cancel = self.began;
                     }
-                } else if self.points.last().is_some_and(|l| l.distance(p) >= cx.tol(1.0)) {
-                    self.push(end, ev);
-                } else if self.snaps()
-                    && !self.smoothing
-                    && self.points.len() > 1
-                    && let Some(last) = self.points.last_mut()
-                {
-                    // The last step was where the button went up: it moves where that snaps.
-                    *last = end;
+                } else {
+                    self.release_freehand(cx, p, end, ev);
                 }
                 let out = if cancel { vec![Action::Cancel] } else { self.finish(cx, ev.mods) };
                 self.active = false;
