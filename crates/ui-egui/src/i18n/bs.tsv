@@ -6186,6 +6186,7 @@ axis	Y Axis	Y osa
 	Checkpoint	Kontrolna tačka
 	Inventory Icons	Ikone inventara
 	Skill Icons	Ikone vještina
+	Weather Icons	Ikone vremena
 	Attack	Napad
 	Defend	Odbrana
 	Heal	Iscjeljenje
@@ -6534,6 +6535,12 @@ axis	Y Axis	Y osa
 	Soft Light Wash	Laviranje mekim svjetlom
 	Burst	Prasak
 	Rounded Square	Zaobljeni kvadrat
+	Sun	Sunce
+	Moon	Mjesec
+	Cloud	Oblak
+	Rain	Kiša
+	Thunder	Grom
+	Snow	Snijeg
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)

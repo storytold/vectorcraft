@@ -6297,6 +6297,7 @@ axis	Y Axis	Trục Y
 	Checkpoint	Điểm kiểm tra
 	Inventory Icons	Biểu tượng túi đồ
 	Skill Icons	Biểu tượng kỹ năng
+	Weather Icons	Biểu tượng thời tiết
 	Attack	Tấn công
 	Defend	Phòng thủ
 	Heal	Hồi máu
@@ -6645,6 +6646,12 @@ axis	Y Axis	Trục Y
 	Soft Light Wash	Loang ánh sáng mềm
 	Burst	Bùng nổ
 	Rounded Square	Hình vuông bo góc
+	Sun	Mặt trời
+	Moon	Mặt trăng
+	Cloud	Mây
+	Rain	Mưa
+	Thunder	Sấm
+	Snow	Tuyết
 	Bar	Thanh
 	Hexagon	Lục giác
 	Spectrum	Quang phổ

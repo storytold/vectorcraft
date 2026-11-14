@@ -8598,6 +8598,7 @@ axis	Y Axis	Y-as
 	Checkpoint	Controlepunt
 	Inventory Icons	Inventarisiconen
 	Skill Icons	Vaardigheidsiconen
+	Weather Icons	Weericonen
 	Attack	Aanval
 	Defend	Verdediging
 	Heal	Genezen
@@ -8940,6 +8941,12 @@ axis	Y Axis	Y-as
 	Soft Light Wash	Zacht-licht-wassing
 	Burst	Uitbarsting
 	Rounded Square	Afgerond vierkant
+	Sun	Zon
+	Moon	Maan
+	Cloud	Wolk
+	Rain	Regen
+	Thunder	Donder
+	Snow	Sneeuw
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen

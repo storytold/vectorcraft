@@ -6642,6 +6642,7 @@ axis	Y Axis	Άξονας Y
 	Checkpoint	Σημείο ελέγχου
 	Inventory Icons	Εικονίδια αποθέματος
 	Skill Icons	Εικονίδια δεξιοτήτων
+	Weather Icons	Εικονίδια καιρού
 	Attack	Επίθεση
 	Defend	Άμυνα
 	Heal	Θεραπεία
@@ -6990,6 +6991,12 @@ axis	Y Axis	Άξονας Y
 	Soft Light Wash	Αραίωση απαλού φωτός
 	Burst	Έκρηξη
 	Rounded Square	Στρογγυλεμένο τετράγωνο
+	Sun	Ήλιος
+	Moon	Φεγγάρι
+	Cloud	Σύννεφο
+	Rain	Βροχή
+	Thunder	Βροντή
+	Snow	Χιόνι
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)

@@ -6605,6 +6605,7 @@ axis	Y Axis	Eixo Y
 	Checkpoint	Ponto de verificação
 	Inventory Icons	Ícones de inventário
 	Skill Icons	Ícones de habilidade
+	Weather Icons	Ícones de clima
 	Attack	Ataque
 	Defend	Defesa
 	Heal	Cura
@@ -6953,6 +6954,12 @@ axis	Y Axis	Eixo Y
 	Soft Light Wash	Aguada Luz Suave
 	Burst	Explosão
 	Rounded Square	Quadrado Arredondado
+	Sun	Sol
+	Moon	Lua
+	Cloud	Nuvem
+	Rain	Chuva
+	Thunder	Trovão
+	Snow	Neve
 	Save Brush Library…	Salvar Biblioteca de Pincéis…
 @msg	`{_1}` has no brushes to apply	`{_1}` não tem pincéis para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

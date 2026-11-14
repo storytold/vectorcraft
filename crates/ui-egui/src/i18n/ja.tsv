@@ -6382,6 +6382,7 @@ axis	Y Axis	Y 軸
 	Checkpoint	チェックポイント
 	Inventory Icons	インベントリアイコン
 	Skill Icons	スキルアイコン
+	Weather Icons	天気アイコン
 	Attack	攻撃
 	Defend	防御
 	Heal	回復
@@ -6730,6 +6731,12 @@ axis	Y Axis	Y 軸
 	Soft Light Wash	ソフトライトのにじみ
 	Burst	バースト
 	Rounded Square	角丸の正方形
+	Sun	太陽
+	Moon	月
+	Cloud	雲
+	Rain	雨
+	Thunder	雷
+	Snow	雪
 	Bar	バー
 	Hexagon	六角形
 	Spectrum	スペクトル

@@ -694,6 +694,12 @@ antiAlias	Sharp	शार्प
 	Soft Light Wash	सॉफ़्ट लाइट वॉश
 	Burst	विस्फोट
 	Rounded Square	गोल कोनों वाला वर्ग
+	Sun	सूरज
+	Moon	चाँद
+	Cloud	बादल
+	Rain	बारिश
+	Thunder	गरज
+	Snow	बर्फ़
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -795,6 +801,7 @@ antiAlias	Sharp	शार्प
 	Checkpoint	चेकपॉइंट
 	Inventory Icons	इन्वेंटरी आइकन
 	Skill Icons	कौशल आइकन
+	Weather Icons	मौसम आइकन
 	Attack	आक्रमण
 	Defend	रक्षा
 	Heal	उपचार

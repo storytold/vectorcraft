@@ -468,6 +468,7 @@ antiAlias	Sharp	Nítid
 	Checkpoint	Punt de control
 	Inventory Icons	Icones d’inventari
 	Skill Icons	Icones d'habilitat
+	Weather Icons	Icones del temps
 	Attack	Atac
 	Defend	Defensa
 	Heal	Curació
@@ -4213,6 +4214,12 @@ digits	Malayalam	Malaiàlam
 	Soft Light Wash	Aiguada llum suau
 	Burst	Esclat
 	Rounded Square	Quadrat arrodonit
+	Sun	Sol
+	Moon	Lluna
+	Cloud	Núvol
+	Rain	Pluja
+	Thunder	Tro
+	Snow	Neu
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores

@@ -6277,6 +6277,7 @@ axis	Y Axis	Y축
 	Checkpoint	체크포인트
 	Inventory Icons	인벤토리 아이콘
 	Skill Icons	스킬 아이콘
+	Weather Icons	날씨 아이콘
 	Attack	공격
 	Defend	방어
 	Heal	치유
@@ -6625,6 +6626,12 @@ axis	Y Axis	Y축
 	Soft Light Wash	소프트 라이트 번짐
 	Burst	폭발
 	Rounded Square	둥근 사각형
+	Sun	해
+	Moon	달
+	Cloud	구름
+	Rain	비
+	Thunder	천둥
+	Snow	눈
 	Bar	막대
 	Hexagon	육각형
 	Spectrum	스펙트럼

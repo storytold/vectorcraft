@@ -451,7 +451,7 @@ fn built_in_library_symbol_names_are_in_complete_catalogs() {
             .flat_map(|(_, lib)| lib.doc.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
             .collect(),
     );
-    assert_eq!(names.len(), 26, "{names:?}");
+    assert_eq!(names.len(), 32, "{names:?}");
     let bad = lacking(&names, |c, n| c.plain(n).is_some());
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

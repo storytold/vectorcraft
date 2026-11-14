@@ -6155,6 +6155,7 @@ axis	Y Axis	Y-akse
 	Checkpoint	Kontrolpunkt
 	Inventory Icons	Inventarikoner
 	Skill Icons	Færdighedsikoner
+	Weather Icons	Vejrikoner
 	Attack	Angreb
 	Defend	Forsvar
 	Heal	Helbredelse
@@ -6497,6 +6498,12 @@ axis	Y Axis	Y-akse
 	Soft Light Wash	Blødt lys-lavering
 	Burst	Udbrud
 	Rounded Square	Afrundet kvadrat
+	Sun	Sol
+	Moon	Måne
+	Cloud	Sky
+	Rain	Regn
+	Thunder	Torden
+	Snow	Sne
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger

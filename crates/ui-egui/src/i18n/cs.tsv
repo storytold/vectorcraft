@@ -6690,6 +6690,7 @@ axis	Y Axis	osa Y
 	Checkpoint	Kontrolní bod
 	Inventory Icons	Ikony inventáře
 	Skill Icons	Ikony dovedností
+	Weather Icons	Ikony počasí
 	Attack	Útok
 	Defend	Obrana
 	Heal	Léčení
@@ -7038,6 +7039,12 @@ axis	Y Axis	osa Y
 	Soft Light Wash	Lavírka měkkého světla
 	Burst	Výbuch
 	Rounded Square	Zaoblený čtverec
+	Sun	Slunce
+	Moon	Měsíc
+	Cloud	Mrak
+	Rain	Déšť
+	Thunder	Hrom
+	Snow	Sníh
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)

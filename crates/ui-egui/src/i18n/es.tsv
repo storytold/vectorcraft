@@ -6633,6 +6633,7 @@ axis	Y Axis	Eje Y
 	Checkpoint	Punto de control
 	Inventory Icons	Iconos de inventario
 	Skill Icons	Iconos de habilidad
+	Weather Icons	Iconos del tiempo
 	Attack	Ataque
 	Defend	Defensa
 	Heal	Curación
@@ -6981,6 +6982,12 @@ axis	Y Axis	Eje Y
 	Soft Light Wash	Aguada luz suave
 	Burst	Estallido
 	Rounded Square	Cuadrado redondeado
+	Sun	Sol
+	Moon	Luna
+	Cloud	Nube
+	Rain	Lluvia
+	Thunder	Trueno
+	Snow	Nieve
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)

@@ -6316,6 +6316,7 @@ axis	Y Axis	Asse Y
 	Checkpoint	Punto di controllo
 	Inventory Icons	Icone inventario
 	Skill Icons	Icone abilità
+	Weather Icons	Icone meteo
 	Attack	Attacco
 	Defend	Difesa
 	Heal	Cura
@@ -6664,6 +6665,12 @@ axis	Y Axis	Asse Y
 	Soft Light Wash	Acquerello luce soffusa
 	Burst	Esplosione
 	Rounded Square	Quadrato arrotondato
+	Sun	Sole
+	Moon	Luna
+	Cloud	Nuvola
+	Rain	Pioggia
+	Thunder	Tuono
+	Snow	Neve
 	Bar	Barra
 	Hexagon	Esagono
 	Spectrum	Spettro

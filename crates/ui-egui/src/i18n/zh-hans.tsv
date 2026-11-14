@@ -6529,6 +6529,7 @@ axis	Y Axis	Y 轴
 	Checkpoint	检查点
 	Inventory Icons	物品栏图标
 	Skill Icons	技能图标
+	Weather Icons	天气图标
 	Attack	攻击
 	Defend	防御
 	Heal	治疗
@@ -6877,6 +6878,12 @@ axis	Y Axis	Y 轴
 	Soft Light Wash	柔光晕染
 	Burst	爆发
 	Rounded Square	圆角正方形
+	Sun	太阳
+	Moon	月亮
+	Cloud	云
+	Rain	雨
+	Thunder	雷
+	Snow	雪
 	Bar	条形
 	Hexagon	六边形
 	Triangle	三角

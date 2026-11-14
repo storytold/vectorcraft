@@ -4273,6 +4273,7 @@ antiAlias	Sharp	શાર્પ
 	Charge Wave	ચાર્જ તરંગ
 	Spark Trail	તણખાનો પથ
 	Skill Icons	કૌશલ્ય આઇકન
+	Weather Icons	હવામાન આઇકન
 	Attack	હુમલો
 	Defend	બચાવ
 	Heal	ઉપચાર
@@ -4946,6 +4947,12 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Pin	પિન
 	Potion	ઔષધ
 	Rounded Square	ગોળ ખૂણાવાળો ચોરસ
+	Sun	સૂર્ય
+	Moon	ચંદ્ર
+	Cloud	વાદળ
+	Rain	વરસાદ
+	Thunder	ગર્જના
+	Snow	બરફ
 	Shield	ઢાલ
 	Sword	તલવાર
 	Triangle	ત્રિકોણ

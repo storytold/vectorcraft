@@ -6763,6 +6763,7 @@ axis	Y Axis	Y ekseni
 	Checkpoint	Kontrol noktası
 	Inventory Icons	Envanter Simgeleri
 	Skill Icons	Yetenek Simgeleri
+	Weather Icons	Hava Durumu Simgeleri
 	Attack	Saldırı
 	Defend	Savunma
 	Heal	İyileştirme
@@ -7111,6 +7112,12 @@ axis	Y Axis	Y ekseni
 	Soft Light Wash	Yumuşak Işık Lavisi
 	Burst	Patlama
 	Rounded Square	Yuvarlatılmış Kare
+	Sun	Güneş
+	Moon	Ay
+	Cloud	Bulut
+	Rain	Yağmur
+	Thunder	Gök Gürültüsü
+	Snow	Kar
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)

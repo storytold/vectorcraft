@@ -6670,6 +6670,7 @@ axis	Y Axis	Y-axel
 	Checkpoint	Kontrollpunkt
 	Inventory Icons	Inventarieikoner
 	Skill Icons	Färdighetsikoner
+	Weather Icons	Väderikoner
 	Attack	Attack
 	Defend	Försvar
 	Heal	Retuschering
@@ -7018,6 +7019,12 @@ axis	Y Axis	Y-axel
 	Soft Light Wash	Mjukt ljus-lavering
 	Burst	Utbrott
 	Rounded Square	Rundad kvadrat
+	Sun	Sol
+	Moon	Måne
+	Cloud	Moln
+	Rain	Regn
+	Thunder	Åska
+	Snow	Snö
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)

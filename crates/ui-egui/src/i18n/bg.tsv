@@ -6139,6 +6139,7 @@ axis	Y Axis	Y ос
 	Checkpoint	Контролна точка
 	Inventory Icons	Икони на инвентара
 	Skill Icons	Икони на умения
+	Weather Icons	Икони за времето
 	Attack	Атака
 	Defend	Защита
 	Heal	Лечение
@@ -6481,6 +6482,12 @@ axis	Y Axis	Y ос
 	Soft Light Wash	Лавиране мека светлина
 	Burst	Взрив
 	Rounded Square	Закръглен квадрат
+	Sun	Слънце
+	Moon	Луна
+	Cloud	Облак
+	Rain	Дъжд
+	Thunder	Гръм
+	Snow	Сняг
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб

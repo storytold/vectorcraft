@@ -6282,6 +6282,7 @@ axis	Y Axis	Y-Achse
 	Checkpoint	Kontrollpunkt
 	Inventory Icons	Inventar-Symbole
 	Skill Icons	Fähigkeitssymbole
+	Weather Icons	Wettersymbole
 	Attack	Angriff
 	Defend	Verteidigung
 	Heal	Heilung
@@ -6630,6 +6631,12 @@ axis	Y Axis	Y-Achse
 	Soft Light Wash	Weiches-Licht-Lavierung
 	Burst	Strahlenkranz
 	Rounded Square	Abgerundetes Quadrat
+	Sun	Sonne
+	Moon	Mond
+	Cloud	Wolke
+	Rain	Regen
+	Thunder	Donner
+	Snow	Schnee
 	Bar	Balken
 	Fine Dots	Feine Punkte
 	Hexagon	Sechseck

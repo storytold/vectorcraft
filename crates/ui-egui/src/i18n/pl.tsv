@@ -6545,6 +6545,7 @@ axis	Y Axis	Oś Y
 	Checkpoint	Punkt kontrolny
 	Inventory Icons	Ikony ekwipunku
 	Skill Icons	Ikony umiejętności
+	Weather Icons	Ikony pogody
 	Attack	Atak
 	Defend	Obrona
 	Heal	Leczenie
@@ -6893,6 +6894,12 @@ axis	Y Axis	Oś Y
 	Soft Light Wash	Lawowanie łagodnym światłem
 	Burst	Wybuch
 	Rounded Square	Zaokrąglony kwadrat
+	Sun	Słońce
+	Moon	Księżyc
+	Cloud	Chmura
+	Rain	Deszcz
+	Thunder	Grzmot
+	Snow	Śnieg
 	Spectrum	Spektrum
 	Vivid	Żywe
 	Save Brush Library…	Zapisz bibliotekę pędzli…
