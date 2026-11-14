@@ -7501,6 +7501,9 @@ breakText	Glyphs	Glyfy
 	Grommets	Průchodky
 	Grommet Inset	Odstup průchodek od okraje
 	Diameter	Průměr
+	Nest Shapes…	Skládat tvary…
+	Nest Shapes	Skládat tvary
+	Roll	Role
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' a 'arguments' nelze použít u funkcí ve striktním režimu
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Profil podporuje jeden efekt Rotační těleso. Upravte místo toho volby stávajícího efektu.
 @msg	Add Points at Crossings: a path went missing	Přidat body v křížení: jedna cesta se ztratila

@@ -914,6 +914,12 @@ fn structured_junk() {
         ("addon.cutting.banner", json!({"hem": 0, "grommetInset": 0, "spacing": 0.01, "allArtboards": true})),
         ("addon.cutting.banner", json!({"spacing": "1 mm", "grommets": false, "swatch": 5, "left": null})),
         ("addon.cutting.banner", json!({"top": false, "right": false, "bottom": false, "left": false, "allArtboards": false})),
+        ("addon.cutting.nest", json!({"width": 1e6, "height": 1e6, "margin": 1e5, "spacing": 1e5, "roll": true})),
+        ("addon.cutting.nest", json!({"width": 1e-300, "height": f64::MAX, "margin": -1, "spacing": "1 mm", "artboard": u64::MAX})),
+        ("addon.cutting.nest", json!({"width": 0, "height": 0, "margin": 0, "spacing": 0, "usePreviewBounds": "no", "patterns": 1})),
+        ("addon.cutting.nest", json!({"roll": null, "artboard": -1, "width": "1 in", "height": [1]})),
+        ("addon.cutting.nest", json!({"rotate": true, "roll": true, "width": 1e-6, "margin": 0, "spacing": 0, "usePreviewBounds": true})),
+        ("addon.cutting.nest", json!({"rotate": "yes", "width": f64::NAN, "spacing": -0.0})),
         // Type Tools add-on.
         ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
         ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),

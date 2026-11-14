@@ -7148,6 +7148,9 @@ breakText	Glyphs	字符
 	Grommets	扣眼
 	Grommet Inset	扣眼邊距
 	Diameter	直徑
+	Nest Shapes…	形狀排料…
+	Nest Shapes	形狀排料
+	Roll	捲材
 
 # Status and error messages of commands, scripts, file import and export, and plug-ins.
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	嚴格模式的函式不能使用 'caller'、'callee' 和 'arguments'

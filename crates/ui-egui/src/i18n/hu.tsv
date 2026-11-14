@@ -7485,6 +7485,9 @@ breakText	Glyphs	Glifák
 	Grommets	Ringlik
 	Grommet Inset	Ringlik távolsága a széltől
 	Diameter	Átmérő
+	Nest Shapes…	Alakzatok elrendezése…
+	Nest Shapes	Alakzatok elrendezése
+	Roll	Tekercs
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	A 3D effektusokhoz 100 millió ponton belüli véges koordináták kellenek
