@@ -19,7 +19,7 @@ use vectorcraft_tools::distort::perspective::widget::{WidgetCorner, WidgetPlace}
 use vectorcraft_tools::distort::perspective::{GridDefinition, PerspectiveGrid};
 use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 
-use super::distortcmds::{grid_of, silent, store_grid};
+use super::distortcmds::{grid_kept, grid_of, silent, store_grid};
 use super::{CommandSpec, EngineError, Result, Session, always, bad, bool_or, cmd, has_doc, str_param, switch_or, unique_name};
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -261,10 +261,21 @@ pub(crate) fn grid_preset(s: &mut Session, p: &Value) -> Result<Value> {
     let g = s.perspective_preset_grid(&name, ab).ok_or_else(|| bad(C, format!("no perspective grid preset named `{name}`")))?;
     // The objects stay attached and the view options stay as they were.
     let g = PerspectiveGrid { attached: old.attached, locked: old.locked, lock_station: old.lock_station, snap: old.snap, rulers: old.rulers, ..g };
-    s.edit("Perspective Grid Preset", |d, _| {
-        store_grid(d, &g);
-        Ok(())
-    })?;
+    // When the document holds this grid already, apart from whether it shows and its active plane,
+    // the preset only sets those two, without an undo step (as perspective.grid.show and
+    // perspective.plane.set do).
+    let view = PerspectiveGrid { visible: old.visible, plane: old.plane, ..g.clone() };
+    if !grid_kept(&s.doc()?.doc, &view) {
+        s.edit("Perspective Grid Preset", |d, _| {
+            store_grid(d, &g);
+            Ok(())
+        })?;
+    } else if (old.visible, old.plane) != (g.visible, g.plane) {
+        silent(s, |cur| {
+            cur.visible = g.visible;
+            cur.plane = g.plane;
+        })?;
+    }
     Ok(g.definition_json())
 }
 
