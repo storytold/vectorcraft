@@ -185,3 +185,35 @@ fn every_effect_casts_a_shadow() {
     // The surface turns about the square's left edge, reaching 100 to either side of it.
     assert!(b.x1 > 100.0 && b.x0 < 100.0 + 1e-6, "{b:?}");
 }
+
+/// An Inflate shape that casts nothing still places the eye with its puff, but its solid is not
+/// built (nor, with no volume, its puff solved); the shapes that cast keep the very faces and
+/// projection they have when every shape casts.
+#[test]
+fn an_inflate_shape_that_casts_nothing_builds_no_solid() {
+    let (a, b) = (square(100.0, 100.0, 100.0), square(150.0, 150.0, 30.0));
+    let shapes = [(&a, FillRule::NonZero), (&b, FillRule::NonZero)];
+    let bounds = Rect::new(100.0, 100.0, 200.0, 200.0);
+    let view = View { perspective: 60.0, rotation_y: 30.0, ..front() };
+    let built = || crate::solid::INFLATED.with(std::cell::Cell::get);
+    let puffed = || crate::solid::PUFFED.with(std::cell::Cell::get);
+    for o in [Inflate::default(), Inflate { volume: 0.0, depth: 20.0, ..Inflate::default() }] {
+        let mut all = ShadowCaster::new();
+        let every = all.inflate(&shapes, &[true, true], bounds, o, view);
+        let (start, solved) = (built(), puffed());
+        let mut some = ShadowCaster::new();
+        let kept = some.inflate(&shapes, &[false, true], bounds, o, view);
+        assert_eq!(built(), start + 1, "{o:?}: only the casting shape's solid is built");
+        if o.volume == 0.0 {
+            assert_eq!(puffed(), solved + 1, "{o:?}: only the casting shape's puff is solved");
+        }
+        let (Ok(first), Ok(second)) = (&every[0], &every[1]) else { panic!("{every:?}") };
+        assert!(!first.is_empty() && !second.is_empty());
+        assert_eq!(kept, vec![Ok(0..0), Ok(0..second.len())]);
+        assert_eq!(format!("{:?}", some.faces), format!("{:?}", &all.faces[second.clone()]));
+        assert_eq!(some.projection, all.projection);
+        let mut none = ShadowCaster::new();
+        assert_eq!(none.inflate(&shapes, &[false, false], bounds, o, view), vec![Ok(0..0), Ok(0..0)]);
+        assert!(none.is_empty() && none.projection.is_none());
+    }
+}
