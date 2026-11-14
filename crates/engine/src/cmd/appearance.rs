@@ -547,7 +547,7 @@ pub(crate) fn edit_items(
     edit_items_then(s, ids, item, cmd, label, fill, f, |before, d, edited| {
         let series = capture_series_changes(before, d, edited);
         // The rows `f` edited are kept by `edit_items_then`.
-        let labels = super::graph::capture_label_changes(before, d, edited, false);
+        let labels = super::graph::capture_label_changes(before, d, edited, false, None);
         Ok(series || labels)
     })
 }

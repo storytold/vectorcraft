@@ -899,9 +899,11 @@ pub(crate) fn labels_in(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 /// and stroke attributes ([`RUN_PAINT`]) that changed on all of a label's characters, on the kind's kept style. The
 /// frontmost label of a kind sets what that kind keeps, whatever order `ids` are in. On a graph that colors its legend
 /// labels itself ([`picks_legend_fill`]), their fill is kept only when the legend labels among `ids` end up with one
-/// fill. The graph lines among `ids` whose rows changed keep them for every line of their kind ([`capture_line_rows`]),
-/// with or without `rows`. Called inside the same edit, so they undo together. Returns whether what a graph keeps changed.
-pub(crate) fn capture_label_changes(before: &Document, doc: &mut Document, ids: &[NodeId], rows: bool) -> bool {
+/// fill and the edit named them: with `named`, only a legend label among `named` (an edit that reached the others
+/// through the graph or a group leaves them the graph's black or white); without it, every label in `ids`. The graph
+/// lines among `ids` whose rows changed keep them for every line of their kind ([`capture_line_rows`]), with or without
+/// `rows`. Called inside the same edit, so they undo together. Returns whether what a graph keeps changed.
+pub(crate) fn capture_label_changes(before: &Document, doc: &mut Document, ids: &[NodeId], rows: bool, named: Option<&[NodeId]>) -> bool {
     let lines = capture_line_changes(before, doc, ids);
     if !ids.iter().any(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))) {
         return lines;
@@ -929,7 +931,8 @@ pub(crate) fn capture_label_changes(before: &Document, doc: &mut Document, ids: 
         if rows && label_rows(was) != label_rows(now) {
             changed_rows.push(id);
         }
-        let fill = kind.1 != Role::Legend || one_fill(kind.0);
+        let aimed = !wedge_fills.contains_key(&kind.0) || named.is_none_or(|n| n.contains(&id));
+        let fill = kind.1 != Role::Legend || (one_fill(kind.0) && aimed);
         characters.extend(run_paint_change(was, now, fill).map(|change| (kind, change)));
     }
     let mut changed = capture_label_rows(doc, &changed_rows) | lines;

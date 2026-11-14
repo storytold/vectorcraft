@@ -522,7 +522,7 @@ pub(crate) fn keeping_series_paint(d: &mut Document, roots: &[NodeId], recolor: 
     let n = recolor(d)?;
     if let Some(before) = before.filter(|_| n > 0) {
         super::appearance::capture_series_changes(&before, d, &marks);
-        super::graph::capture_label_changes(&before, d, &labels, true);
+        super::graph::capture_label_changes(&before, d, &labels, true, Some(roots));
     }
     Ok(n)
 }

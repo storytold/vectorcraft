@@ -5971,6 +5971,24 @@ fn a_recolor_leaves_wedge_legend_labels_their_contrast() {
     assert_eq!(kept.and_then(|f| f.color()).map(|c| c.to_hex()).as_deref(), Some("#ffffff"));
 }
 
+/// A recolor of the whole graph that turns every wedge legend label the same color (one series) still leaves them to
+/// the graph's black or white, so a label stays readable when its wedge is painted light again.
+#[test]
+fn a_recolor_of_a_one_series_pie_leaves_its_wedge_label_its_contrast() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "pie", ",a\nP1,1");
+    s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [series_0_group(&s, id).0.0], "color": "#ffffff"})).unwrap();
+    // The white wedge turns black and its black label white.
+    s.execute("edit.colors.invert", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.legend, None);
+    s.execute("paint.setFill", &json!({"ids": [series_0_group(&s, id).0.0], "color": "#ffffff"})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1]]})).unwrap();
+    let NodeKind::Text(t) = label_node(&s, id, "Legend", "a").kind else { panic!("a is not type") };
+    assert_eq!(t.runs[0].style.fill.color().map(|c| c.to_hex()).as_deref(), Some("#000000"));
+}
+
 /// The lines in graph `id`'s Axes group (axis lines, tick marks and a radar graph's rings), in paint order.
 fn line_nodes(s: &Session, id: NodeId) -> Vec<vectorcraft_doc::Node> {
     let n = s.doc().unwrap().doc.node(id).unwrap().clone();

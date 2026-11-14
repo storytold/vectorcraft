@@ -925,7 +925,7 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // The swap writes the paint of the topmost fill and stroke, not their opacity.
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (false, false), true, false);
-            let labels = super::graph::capture_label_changes(&before, d, &ids, false);
+            let labels = super::graph::capture_label_changes(&before, d, &ids, false, None);
             Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
         })?;
     }
@@ -955,7 +955,7 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, false);
-            let labels = super::graph::capture_label_changes(&before, d, &ids, false);
+            let labels = super::graph::capture_label_changes(&before, d, &ids, false, None);
             Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
         })?;
     }
