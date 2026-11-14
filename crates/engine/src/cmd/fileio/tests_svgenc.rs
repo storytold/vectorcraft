@@ -60,7 +60,7 @@ fn a_chosen_artboard_s_svg_holds_only_its_own_art() {
     let (first, third) = (x(&s, 0), x(&s, 2));
     s.execute("shape.rectangle", &json!({"x": first + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
     s.execute("shape.ellipse", &json!({"x": third + 10.0, "y": 10, "width": 30, "height": 30})).unwrap();
-    // A rectangle has straight sides only; the ellipse is curves.
+    // A rectangle has straight sides only; the ellipse is a circle or curves.
     let shapes = |svg: &str| (vectorcraft_testkit::svg_shapes(svg), svg.contains(" C") || svg.contains("<ellipse") || svg.contains("<circle"));
     let text = |v: &serde_json::Value| v["text"].as_str().unwrap().to_string();
     let third_only = text(&s.execute("document.serialize", &json!({"format": "svg", "useArtboards": true, "range": "3"})).unwrap());
