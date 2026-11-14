@@ -981,6 +981,9 @@ fn paint_paper(
     // on, the canvas multiplies it with the paper color: each sRGB channel is artboard × paper / 255,
     // rounded. The transparency grid, while it shows, covers it as it covers the others.
     painter.rect_filled(rect, 0.0, t.pasteboard);
+    let da = doc.drawing_area();
+    let da_quad = xf.quad(da);
+    painter.add(Shape::convex_polygon(da_quad, t.drawing_area_tint, Stroke::new(1.0, t.drawing_area_border)));
     // The paper and the transparency grid are document colors: they go through the display
     // profile as the art does. The pasteboard and the shadows are the interface's.
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
@@ -1233,17 +1236,16 @@ fn guides_of(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, (painter, 
     let labels = guide_labels(doc);
     let selected: &[vectorcraft_doc::NodeId] = &st.selection.guides;
     let key = st.selection.key_guide;
-    let view = view_bounds(xf);
     // Guides on a hidden layer hide with it.
     for g in doc.ruler_guides().iter().filter(|g| doc.guide_shown(g)) {
         let Some(i) = g.id else { continue };
         let at = |along: f64| xf.to_screen(if g.vertical { Point::new(g.pos, along) } else { Point::new(along, g.pos) });
-        // An artboard guide runs across its artboard, a canvas guide across the window (the part
-        // of its document line that the canvas shows, turned with the view).
+        // An artboard guide runs across its artboard, a canvas guide across the drawing area.
         let (a, b) = match doc.guide_span(g) {
             Some((from, to)) => (at(from), at(to)),
             None => {
-                let (from, to) = if g.vertical { (view.y0, view.y1) } else { (view.x0, view.x1) };
+                let gb = doc.guide_bounds(g);
+                let (from, to) = if g.vertical { (gb.y0, gb.y1) } else { (gb.x0, gb.x1) };
                 let Some(ends) = clip_segment(at(from), at(to), rect) else { continue };
                 ends
             }

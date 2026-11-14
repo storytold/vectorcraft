@@ -23,7 +23,17 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let Some(st) = app.session.active() else { return };
     let target = match how {
         "view.fitAll" => {
-            st.doc.art_bounds().map(|a| st.doc.artboards.iter().fold(a, |r, ab| r.union(ab.rect))).or(st.doc.artboards.first().map(|a| a.rect))
+            let da = st.doc.drawing_area();
+            let all_artboards = st.doc.artboards.first().map(|a| st.doc.artboards.iter().fold(a.rect, |r, ab| r.union(ab.rect)));
+            let art = st.doc.art_bounds().filter(|b| !st.doc.falls_off_drawing_area(*b));
+            let combined = match (all_artboards, art) {
+                (Some(abs), Some(art)) => abs.union(art),
+                (Some(abs), None) => abs,
+                (None, Some(art)) => art,
+                (None, None) => da,
+            };
+            let clamped = combined.intersect(da);
+            Some(if clamped.width() > 0.0 && clamped.height() > 0.0 { clamped } else { da })
         }
         crate::addons::arrange::ZOOM => st.doc.bounds_of(&st.selection.objects, true),
         // The navigator's artboard (the first if it has gone).
@@ -33,7 +43,8 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
     let zoom = if how == "view.actualSize" {
         actual_size_zoom(app.session.prefs.display_print_size)
     } else {
-        fit_zoom(rect, target, app.view().map_or(0.0, |v| v.rotation), app.canvas_ui_zoom)
+        let min_z = if st.doc.is_large_canvas() { 0.00313 } else { 0.0313 };
+        fit_zoom_min(rect, target, app.view().map_or(0.0, |v| v.rotation), app.canvas_ui_zoom, min_z)
     };
     let Some(v) = app.view_mut() else { return };
     v.center = target.center();
@@ -44,12 +55,18 @@ pub fn fit(app: &mut VectorcraftApp, how: &str) {
 /// The zoom at which `target`, turned `rotation` degrees with the view, fits in `rect` (points of
 /// an interface zoomed by `ui_zoom`) with a 30-point margin on each side.
 pub(super) fn fit_zoom(rect: egui::Rect, target: Rect, rotation: f64, ui_zoom: f32) -> f64 {
+    let min_z =
+        if target.width() > vectorcraft_doc::DRAWING_AREA_SIDE || target.height() > vectorcraft_doc::DRAWING_AREA_SIDE { 0.00313 } else { 0.0313 };
+    fit_zoom_min(rect, target, rotation, ui_zoom, min_z)
+}
+
+pub(super) fn fit_zoom_min(rect: egui::Rect, target: Rect, rotation: f64, ui_zoom: f32, min_zoom: f64) -> f64 {
     // The width and height of the box round the target turned with the view, at zoom 1.
     let (sn, cs) = rotation.to_radians().sin_cos();
     let (w, h) = (target.width(), target.height());
     let zx = (rect.width() as f64 - 60.0) / (w * cs.abs() + h * sn.abs()).max(1.0);
     let zy = (rect.height() as f64 - 60.0) / (w * sn.abs() + h * cs.abs()).max(1.0);
-    (zx.min(zy) * f64::from(ui_zoom)).clamp(0.0313, 640.0)
+    (zx.min(zy) * f64::from(ui_zoom)).clamp(min_zoom, 640.0)
 }
 
 /// How much one point of wheel motion zooms (as `exp(points × WHEEL_ZOOM)`).
