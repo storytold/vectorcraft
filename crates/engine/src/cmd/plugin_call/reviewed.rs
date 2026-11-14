@@ -708,5 +708,7 @@ pub(super) const DENIED: &[&str] = &[
     "object.pathfinder.options",
     "stroke.arrowheads.edit",
     "stroke.arrowheads.list",
+    "threeD.bevels.edit",
+    "threeD.bevels.list",
     "type.compositeFonts.set",
 ];

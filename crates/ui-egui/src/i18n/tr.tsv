@@ -2721,6 +2721,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Ok Uçlarını Düzenle
 	Edit Arrowheads…	Ok Uçlarını Düzenle…
 	Reload Arrowheads	Ok Uçlarını Yeniden Yükle
+	Bevels	Eğimler
+	Edit Bevels	Eğimleri Düzenle
+	Edit Bevels…	Eğimleri Düzenle…
+	{name} (document)	{name} (belge)
+	Reload Bevels	Eğimleri Yeniden Yükle
 	Reset Rotate View	Döndürme Görünümünü Sıfırla
 	Rotate View to Selection	Görünümü Seçime Döndür
 	Reset the rows to the artwork's colors	Satırları resmin renklerine göre sıfırlayın
@@ -5229,7 +5234,10 @@ lighting	Light	Işık
 @msg	The 3D object is too complex to export	3 boyutlu nesne dışa aktarmak için çok karmaşık
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	nesnenin 3 boyutlu efekti yok (Ekstrüzyon ve Eğim, Döndür, Şişir veya Döndür)
 @msg	its 3D effect builds no solid	3 boyutlu efekti hiçbir katı oluşturmuyor
-@msg	bevel must be none or one of {_1}	bevel, none veya {_1} değerlerinden biri olmalıdır
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel; none, {_1} değerlerinden biri veya {BEVEL_PROFILE} ile custom olmalıdır
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom için {BEVEL_PROFILE}, yani eğimin noktaları gerekir
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} bir dize olmalıdır
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE}, 2 ile {most} arasında [x, y] noktası olmalıdır; her oran 0 ile 1 arasında, [0, 0] (uç yüzeyin kenarı) ile [1, 1] (yan duvar) arasında
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} bu resimden katı oluşturamaz: sembol örnekleri, karışımları ve kırpma grupları çok fazla nesne içeriyor
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}, “{symbol}” sembolünün örneğinden katı oluşturamaz: sembolün resmi kullanılamıyor
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: kırpma yolu resmi kesmek için çok karmaşık

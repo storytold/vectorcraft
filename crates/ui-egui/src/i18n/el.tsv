@@ -3646,6 +3646,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Edit Arrowheads	Επεξεργασία αιχμών βελών
 	Edit Arrowheads…	Επεξεργασία αιχμών βελών…
 	Reload Arrowheads	Επαναφόρτωση αιχμών βελών
+	Bevels	Λοξοτμήσεις
+	Edit Bevels	Επεξεργασία λοξοτμήσεων
+	Edit Bevels…	Επεξεργασία λοξοτμήσεων…
+	{name} (document)	{name} (έγγραφο)
+	Reload Bevels	Επαναφόρτωση λοξοτμήσεων
 	Reset Rotate View	Επαναφορά περιστροφής προβολής
 	Rotate View to Selection	Περιστροφή προβολής ως προς την επιλογή
 	Reset the rows to the artwork's colors	Επαναφορά γραμμών στα χρώματα του σχεδίου
@@ -5353,7 +5358,10 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	The 3D object is too complex to export	Το αντικείμενο 3D είναι πολύ σύνθετο για εξαγωγή
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	το αντικείμενο δεν έχει εφέ 3D (Εξώθηση και λοξότμηση, Περιστροφή γύρω από άξονα, Φούσκωμα ή Περιστροφή)
 @msg	its 3D effect builds no solid	το εφέ 3D του δεν δημιουργεί στερεό
-@msg	bevel must be none or one of {_1}	το bevel πρέπει να είναι none ή ένα από τα {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	το bevel πρέπει να είναι none, ένα από τα {_1} ή custom με {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	το bevel custom χρειάζεται το {BEVEL_PROFILE}, τα σημεία της λοξότμησης
+@msg	{BEVEL_NAME} must be a string	το {BEVEL_NAME} πρέπει να είναι συμβολοσειρά
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	το {BEVEL_PROFILE} πρέπει να έχει 2 έως {most} σημεία [x, y], κάθε αναλογία μεταξύ 0 και 1, από [0, 0] (η ακμή της ακραίας όψης) έως [1, 1] (το πλευρικό τοίχωμα)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: δεν μπορούν να δημιουργηθούν στερεά από αυτό το σχέδιο· οι παρουσίες συμβόλων, οι αναμείξεις και οι ομάδες αποκοπής του περιέχουν πάρα πολλά αντικείμενα
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: δεν μπορεί να δημιουργηθεί στερεό από την παρουσία του συμβόλου «{symbol}»· το σχέδιο του συμβόλου δεν είναι διαθέσιμο
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: η διαδρομή αποκοπής είναι πολύ σύνθετη για να κόψει το σχέδιο

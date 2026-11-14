@@ -4018,6 +4018,11 @@ antiAlias	Sharp	शार्प
 	Edit Arrowheads	एरोहेड्स संपादित करें
 	Edit Arrowheads…	एरोहेड्स संपादित करें…
 	Reload Arrowheads	एरोहेड्स फिर से लोड करें
+	Bevels	बेवल्स
+	Edit Bevels	बेवल्स संपादित करें
+	Edit Bevels…	बेवल्स संपादित करें…
+	{name} (document)	{name} (दस्तावेज़)
+	Reload Bevels	बेवल्स फिर से लोड करें
 	Reset Rotate View	व्यू घुमाएँ रीसेट करें
 	Reset Ruler Origin	शासकीय उत्पत्ति रीसेट करें
 	Reset Symbol Instance	सिंबल इंस्टेंस रीसेट करें
@@ -8002,7 +8007,10 @@ antiAlias	Sharp	शार्प
 @msg	The 3D object is too complex to export	3D ऑब्जेक्ट एक्सपोर्ट करने के लिए बहुत जटिल है
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ऑब्जेक्ट पर कोई 3D इफ़ेक्ट नहीं है (एक्सट्रूडेड और बेवेल, रिवॉल्व, फुलाएँ या घुमाव)
 @msg	its 3D effect builds no solid	इसका 3D इफ़ेक्ट कोई ठोस नहीं बनाता
-@msg	bevel must be none or one of {_1}	bevel को none या {_1} में से एक होना चाहिए
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel को none, {_1} में से एक, या {BEVEL_PROFILE} के साथ custom होना चाहिए
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom के लिए {BEVEL_PROFILE} चाहिए, यानी बेवल के बिंदु
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} एक स्ट्रिंग होना चाहिए
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} में 2 से {most} [x, y] बिंदु होने चाहिए, हर हिस्सा 0 और 1 के बीच, [0, 0] (सिरे की सतह का किनारा) से [1, 1] (बगल की दीवार) तक
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} इस आर्ट से ठोस नहीं बना सकता: इसके सिंबल इंस्टेंस, ब्लेंड और क्लिपिंग ग्रुप में बहुत अधिक ऑब्जेक्ट हैं
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} सिंबल "{symbol}" के इंस्टेंस से ठोस नहीं बना सकता: सिंबल का आर्ट उपलब्ध नहीं है
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: क्लिपिंग पाथ आर्ट को काटने के लिए बहुत जटिल है

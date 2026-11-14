@@ -4057,6 +4057,11 @@ digits	Malayalam	馬來亞拉姆數字
 	Edit Arrowheads	編輯箭頭
 	Edit Arrowheads…	編輯箭頭…
 	Reload Arrowheads	重新載入箭頭
+	Bevels	斜角清單
+	Edit Bevels	編輯斜角
+	Edit Bevels…	編輯斜角…
+	{name} (document)	{name} (文件)
+	Reload Bevels	重新載入斜角
 	Rotate View	旋轉檢視
 	Reset Rotate View	重設旋轉檢視
 	Rotate View to Selection	依選取範圍旋轉檢視
@@ -5699,7 +5704,10 @@ lighting	Light	光源
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
-@msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel 必須是 none、{_1} 其中之一，或帶有 {BEVEL_PROFILE} 的 custom
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom 需要 {BEVEL_PROFILE}，也就是斜角的點
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} 必須是字串
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} 必須是 2 到 {most} 個 [x, y] 點，每個比例介於 0 和 1 之間，從 [0, 0]（端面的邊緣）到 [1, 1]（側壁）
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}無法從此圖稿產生實體：其符號實例、漸變和剪裁群組包含的物件過多
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}無法從符號「{symbol}」的實例產生實體：該符號的圖稿無法使用
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪裁路徑過於複雜，無法用來剪裁圖稿

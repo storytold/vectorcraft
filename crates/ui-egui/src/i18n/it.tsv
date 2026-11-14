@@ -2984,6 +2984,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Modifica punte di freccia
 	Edit Arrowheads…	Modifica punte di freccia…
 	Reload Arrowheads	Ricarica punte di freccia
+	Bevels	Smussi
+	Edit Bevels	Modifica smussi
+	Edit Bevels…	Modifica smussi…
+	{name} (document)	{name} (documento)
+	Reload Bevels	Ricarica smussi
 	Rotate View	Ruota vista
 	Reset Rotate View	Reimposta rotazione vista
 	Rotate View to Selection	Ruota vista in base alla selezione
@@ -5610,7 +5615,10 @@ lighting	Light	Luce
 @msg	The 3D object is too complex to export	L'oggetto 3D è troppo complesso per essere esportato
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l'oggetto non ha alcun effetto 3D (Estrusione e smusso, Rivoluzione, Gonfia o Ruota)
 @msg	its 3D effect builds no solid	il suo effetto 3D non costruisce alcun solido
-@msg	bevel must be none or one of {_1}	bevel deve essere none o uno dei seguenti: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel deve essere none, uno dei seguenti: {_1}, oppure custom con {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom richiede {BEVEL_PROFILE}, i punti dello smusso
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} deve essere una stringa
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} deve contenere da 2 a {most} punti [x, y], ogni proporzione tra 0 e 1, da [0, 0] (il bordo della faccia) a [1, 1] (la parete laterale)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} non può costruire solidi da questo disegno: le sue istanze di simbolo, fusioni e gruppi di ritaglio contengono troppi oggetti
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} non può costruire un solido dall'istanza del simbolo «{symbol}»: il disegno del simbolo non è disponibile
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: il tracciato di ritaglio è troppo complesso per ritagliare il disegno

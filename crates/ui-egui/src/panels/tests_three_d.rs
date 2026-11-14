@@ -211,6 +211,128 @@ fn a_change_reaches_each_selected_3d_effect_and_no_other_effect() {
     assert_eq!(fx(c)[0].params, c_shadow);
 }
 
+/// A custom bevel picked in the panel sends its name and points with `bevel`, to the effects that
+/// take a bevel only, and another custom bevel replaces them.
+#[test]
+fn a_custom_bevel_sends_its_name_and_points() {
+    let mut app = app();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    set_type(&mut app, "extrude").unwrap();
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.inflate", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    let pick = |name: &str, points: Value| {
+        Map::from_iter([
+            ("bevel".to_string(), json!("custom")),
+            (vectorcraft_effects::BEVEL_NAME.to_string(), json!(name)),
+            (vectorcraft_effects::BEVEL_PROFILE.to_string(), points),
+        ])
+    };
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    send(&mut app, &ctx, pick("Notch", notch.clone()), false);
+    let fx = |app: &VectorcraftApp, id: u64| {
+        app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params.clone()
+    };
+    let p = fx(&app, a);
+    assert_eq!(
+        (&p["bevel"], &p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]),
+        (&json!("custom"), &json!("Notch"), &notch)
+    );
+    assert!(fx(&app, b).get(vectorcraft_effects::BEVEL_PROFILE).is_none());
+    let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
+    send(&mut app, &ctx, pick("Steps", steps.clone()), false);
+    let p = fx(&app, a);
+    assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Steps"), &steps));
+}
+
+/// With one Extrude & Bevel on a custom bevel and one without, picking that custom bevel sends its
+/// name and points too, though the form already held them, so both effects take it.
+#[test]
+fn a_custom_bevel_picked_for_a_mixed_selection_reaches_every_effect() {
+    let mut app = app();
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    let custom = json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
+    super::mark_mixed(&app, &mut fields);
+    assert_eq!((&fields["bevel"], &fields[vectorcraft_effects::BEVEL_NAME]), (&Value::Null, &json!("Notch")));
+    let before = Value::Object(fields.clone());
+    fields.insert("bevel".into(), json!("custom"));
+    let changed = changed_settings(&before, &Value::Object(fields));
+    assert_eq!(Value::Object(changed.clone()), json!({"bevel": "custom", "bevelName": "Notch", "bevelProfile": notch}));
+    send(&mut app, &egui::Context::default(), changed, false);
+    let st = app.session.active().unwrap();
+    for id in [a, b] {
+        let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
+        assert_eq!((&p["bevel"], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("custom"), &notch), "{id}");
+    }
+}
+
+/// Two custom bevels the bevels file does not list: the mixed selection unsets the shown points,
+/// and Bevel Shape still lists the first effect's own bevel, which then reaches both effects.
+#[test]
+fn a_mixed_selection_still_lists_the_first_effects_own_custom_bevel() {
+    use crate::dialogs::revolve::{OWN_BEVEL, bevel_options};
+    let mut app = app();
+    let notch = json!([[0.0, 0.0], [0.2, 0.6], [0.7, 0.4], [1.0, 1.0]]);
+    let steps = json!([[0.0, 0.0], [0.0, 0.5], [0.5, 0.5], [0.5, 1.0], [1.0, 1.0]]);
+    let custom = |name: &str, points: &Value| json!({"bevel": "custom", "bevelName": name, "bevelProfile": points});
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom("Notch", &notch)})).unwrap();
+    let a = app.session.active().unwrap().selection.objects[0].0;
+    let b = app.run("shape.rectangle", json!({"x": 250, "y": 100, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    app.run("effect.apply", json!({"effect": "threeD.extrude", "item": null, "params": custom("Steps", &steps)})).unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    let mut fields = target(&app).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params)).unwrap().as_object().cloned().unwrap();
+    let own = super::own_bevel(&fields).unwrap();
+    super::mark_mixed(&app, &mut fields);
+    assert_eq!(fields[vectorcraft_effects::BEVEL_PROFILE], Value::Null);
+    fields.insert(OWN_BEVEL.into(), own);
+    let (options, builtin) = bevel_options(&app, &fields, "threeD.extrude");
+    assert_eq!(options.len(), builtin + 1);
+    let (label, value, picked) = options[builtin].clone();
+    assert_eq!((label.as_str(), value), ("Notch", json!("custom")));
+    let (name, points) = picked.unwrap();
+    assert_eq!(points, notch);
+    // Picking it sends the whole bevel to both effects.
+    fields.remove(OWN_BEVEL);
+    let before = Value::Object(fields.clone());
+    fields.insert(vectorcraft_effects::BEVEL_NAME.into(), json!(name));
+    fields.insert(vectorcraft_effects::BEVEL_PROFILE.into(), points);
+    send(&mut app, &egui::Context::default(), changed_settings(&before, &Value::Object(fields)), false);
+    let st = app.session.active().unwrap();
+    for id in [a, b] {
+        let p = &st.doc.node(vectorcraft_doc::NodeId(id)).unwrap().appearance.effects[0].params;
+        assert_eq!((&p[vectorcraft_effects::BEVEL_NAME], &p[vectorcraft_effects::BEVEL_PROFILE]), (&json!("Notch"), &notch), "{id}");
+    }
+}
+
+/// An effect's own custom bevel named like a bevel of the bevels file with other points is listed
+/// under its own label, so Bevel Shape does not show two entries of one name.
+#[test]
+fn an_own_custom_bevel_named_like_a_file_bevel_gets_its_own_label() {
+    use crate::dialogs::revolve::bevel_options;
+    let dir = std::env::temp_dir().join(format!("vectorcraft-ui-bevels-own-label-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = app();
+    app.session.attach_bevels_file(dir.join(vectorcraft_engine::cmd::bevels::FILE_NAME).to_string_lossy().to_string());
+    app.run("threeD.bevels.edit", json!({})).unwrap();
+    let file = app.session.bevels.get("Example Bevel").unwrap().profile_json();
+    let other = json!([[0.0, 0.0], [0.5, 0.5], [1.0, 1.0]]);
+    assert_ne!(file, other);
+    let fields = json!({"bevel": "custom", "bevelName": "Example Bevel", "bevelProfile": other}).as_object().cloned().unwrap();
+    let (options, builtin) = bevel_options(&app, &fields, "threeD.extrude");
+    let _ = std::fs::remove_dir_all(&dir);
+    let labels: Vec<&str> = options[builtin..].iter().map(|(l, _, _)| l.as_str()).collect();
+    assert_eq!(labels, ["Example Bevel", "Example Bevel (document)"]);
+    assert_eq!(options[builtin + 1].2, Some(("Example Bevel".to_string(), other)));
+}
+
 #[test]
 fn the_panel_finds_a_3d_effect_on_a_fill() {
     let mut app = app();

@@ -2475,6 +2475,11 @@ digits	Malayalam	Malaiala
 	Edit Arrowheads	Editar Pontas de Seta
 	Edit Arrowheads…	Editar Pontas de Seta…
 	Reload Arrowheads	Recarregar Pontas de Seta
+	Bevels	Chanfros
+	Edit Bevels	Editar Chanfros
+	Edit Bevels…	Editar Chanfros…
+	{name} (document)	{name} (documento)
+	Reload Bevels	Recarregar Chanfros
 	Rotate View	Girar Visualização
 	Reset Rotate View	Redefinir Visualização Girada
 	Rotate View to Selection	Girar Visualização para a Seleção
@@ -5943,7 +5948,10 @@ mark-style	Japanese	Japonesas
 @msg	The 3D object is too complex to export	O objeto 3D é complexo demais para ser exportado
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	o objeto não tem efeito 3D (Extrusão e Bisel, Revolver, Inflar ou Girar)
 @msg	its 3D effect builds no solid	seu efeito 3D não constrói nenhum sólido
-@msg	bevel must be none or one of {_1}	bevel deve ser none ou um de {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel deve ser none, um de {_1}, ou custom com {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom precisa de {BEVEL_PROFILE}, os pontos do chanfro
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} deve ser uma string
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} deve ter de 2 a {most} pontos [x, y], cada proporção entre 0 e 1, de [0, 0] (a borda da tampa) a [1, 1] (a parede lateral)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} não pode construir sólidos a partir desta arte: suas instâncias de símbolo, mesclagens e grupos de recorte contêm objetos demais
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} não pode construir um sólido a partir da instância do símbolo “{symbol}”: a arte do símbolo não está disponível
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: o caminho de recorte é complexo demais para recortar a arte

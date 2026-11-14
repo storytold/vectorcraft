@@ -2878,6 +2878,11 @@ digits	Malayalam	Malayalam
 	Edit Arrowheads	Redigera pilspetsar
 	Edit Arrowheads…	Redigera pilspetsar…
 	Reload Arrowheads	Läs in pilspetsar igen
+	Bevels	Fasningar
+	Edit Bevels	Redigera fasningar
+	Edit Bevels…	Redigera fasningar…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Läs in fasningar igen
 	Reset Rotate View	Återställ Rotera vy
 	Rotate View to Selection	Rotera vyn efter markeringen
 	Reset the rows to the artwork's colors	Återställ raderna till teckningens färger
@@ -5461,7 +5466,10 @@ lighting	Light	Ljus
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Extrudera och fasa, Rotera runt axel, Blås upp eller Rotera)
 @msg	its 3D effect builds no solid	dess 3D-effekt bygger ingen solid
-@msg	bevel must be none or one of {_1}	bevel måste vara none eller något av {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel måste vara none, något av {_1} eller custom med {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom kräver {BEVEL_PROFILE}, fasningens punkter
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} måste vara en sträng
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} måste vara 2 till {most} punkter [x, y], varje andel mellan 0 och 1, från [0, 0] (ändytans kant) till [1, 1] (sidoväggen)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan inte bygga solider av den här teckningen: dess symbolinstanser, blandningar och urklippsgrupper innehåller för många objekt
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan inte bygga en solid av instansen av symbolen ”{symbol}”: symbolens teckning är inte tillgänglig
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: urklippsbanan är för komplex för att klippa teckningen med

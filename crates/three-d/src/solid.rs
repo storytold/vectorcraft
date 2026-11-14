@@ -110,6 +110,8 @@ impl View {
 }
 
 /// The shape of a bevel's cross-section, from the cap's edge (0) to the side wall (1).
+// A custom profile takes 258 bytes; an extrusion copies its bevel a few times.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BevelShape {
     /// A straight 45° chamfer when width and height are equal.
@@ -123,11 +125,73 @@ pub enum BevelShape {
     Step,
     /// A convex then concave S curve.
     Ogee,
+    /// A cross-section of the user's own, drawn as an open path ([`BevelProfile`]).
+    Custom(BevelProfile),
+}
+
+/// A custom bevel's cross-section: points from the cap's edge, (0, 0), to the side wall, (1, 1),
+/// each a (share of the width, share of the height) pair in 0..1, joined by straight lines. The
+/// shares are kept to 1/32,768 in a fixed array, so the profile is `Copy` like the built-in shapes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BevelProfile {
+    points: [(u16, u16); BevelProfile::MAX_POINTS],
+    len: u8,
+}
+
+impl BevelProfile {
+    /// The most points a profile holds.
+    pub const MAX_POINTS: usize = 64;
+
+    /// A profile of `points`, or `None` unless there are 2 to [`Self::MAX_POINTS`] of them, every
+    /// share is a number in 0..1, and they start at (0, 0) and end at (1, 1).
+    pub fn new(points: &[(f64, f64)]) -> Option<Self> {
+        const END: f64 = 1e-6;
+        if !(2..=Self::MAX_POINTS).contains(&points.len()) || points.iter().any(|&(x, y)| !(0.0..=1.0).contains(&x) || !(0.0..=1.0).contains(&y)) {
+            return None;
+        }
+        let (first, last) = (points[0], points[points.len() - 1]);
+        if first.0 > END || first.1 > END || last.0 < 1.0 - END || last.1 < 1.0 - END {
+            return None;
+        }
+        let mut out = Self { points: [(0, 0); Self::MAX_POINTS], len: points.len() as u8 };
+        let share = |v: f64| (v * f64::from(Self::ONE)).round() as u16;
+        for (slot, &(x, y)) in out.points.iter_mut().zip(points) {
+            *slot = (share(x), share(y));
+        }
+        out.points[0] = (0, 0);
+        out.points[points.len() - 1] = (Self::ONE, Self::ONE);
+        Some(out)
+    }
+
+    /// A whole share in the stored points: shares are kept to 1/32,768, so halves and quarters
+    /// stay exact.
+    const ONE: u16 = 1 << 15;
+
+    /// The points, as (share of the width, share of the height).
+    pub fn points(&self) -> impl Iterator<Item = (f64, f64)> + '_ {
+        let share = |v: u16| f64::from(v) / f64::from(Self::ONE);
+        self.points[..usize::from(self.len)].iter().map(move |&(x, y)| (share(x), share(y)))
+    }
+
+    /// The point at `s` (0..1), the points spread evenly along `s` and joined by straight lines.
+    fn at(&self, s: f64) -> (f64, f64) {
+        // A profile holds at least two points (`new`).
+        let len = usize::from(self.len).max(2);
+        let share = |v: u16| f64::from(v) / f64::from(Self::ONE);
+        let k = s * (len - 1) as f64;
+        let i = (k.floor() as usize).min(len - 2);
+        let f = k - i as f64;
+        let (a, b) = (self.points[i], self.points[i + 1]);
+        let (ax, ay, bx, by) = (share(a.0), share(a.1), share(b.0), share(b.1));
+        (ax + (bx - ax) * f, ay + (by - ay) * f)
+    }
 }
 
 impl BevelShape {
+    /// The built-in shapes.
     pub const ALL: [BevelShape; 5] = [Self::Classic, Self::Rounded, Self::Cove, Self::Step, Self::Ogee];
 
+    /// The shape's parameter value; `custom` for a [`BevelShape::Custom`] one.
     pub fn id(self) -> &'static str {
         match self {
             Self::Classic => "classic",
@@ -135,9 +199,11 @@ impl BevelShape {
             Self::Cove => "cove",
             Self::Step => "step",
             Self::Ogee => "ogee",
+            Self::Custom(_) => "custom",
         }
     }
 
+    /// The built-in shape named `s`.
     pub fn parse(s: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|b| b.id() == s)
     }
@@ -147,6 +213,7 @@ impl BevelShape {
         let s = s.clamp(0.0, 1.0);
         let q = s * std::f64::consts::FRAC_PI_2;
         match self {
+            Self::Custom(profile) => profile.at(s),
             Self::Classic => (s, s),
             Self::Rounded => (1.0 - q.cos(), q.sin()),
             Self::Cove => (q.sin(), 1.0 - q.cos()),
@@ -174,6 +241,11 @@ impl BevelShape {
         match self {
             Self::Classic => vec![0.0, 1.0],
             Self::Step => vec![0.0, 0.25, 0.5, 0.75, 1.0],
+            // Each of its points, where the straight lines between them turn.
+            Self::Custom(profile) => {
+                let last = (usize::from(profile.len) - 1) as f64;
+                (0..usize::from(profile.len)).map(|i| i as f64 / last).collect()
+            }
             _ => (0..=8).map(|i| f64::from(i) / 8.0).collect(),
         }
     }

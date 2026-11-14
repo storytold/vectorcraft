@@ -2981,6 +2981,11 @@ mark-style	Japanese	일본식
 	Edit Arrowheads	화살촉 편집
 	Edit Arrowheads…	화살촉 편집…
 	Reload Arrowheads	화살촉 다시 불러오기
+	Bevels	베벨 목록
+	Edit Bevels	베벨 편집
+	Edit Bevels…	베벨 편집…
+	{name} (document)	{name}(문서)
+	Reload Bevels	베벨 다시 불러오기
 	Reset the rows to the artwork's colors	행을 아트웍 색상으로 재설정
 	Color Theme Picker	색상 테마 피커
 	Click or drag across the art to pick its colors; Shift adds more	아트웍을 클릭하거나 드래그하여 색상을 가져옵니다. Shift 키로 더 추가합니다
@@ -5571,7 +5576,10 @@ lighting	Light	광원
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
-@msg	bevel must be none or one of {_1}	bevel은 none 또는 {_1} 중 하나여야 합니다
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel은 none, {_1} 중 하나 또는 {BEVEL_PROFILE}을(를) 함께 지정한 custom이어야 합니다
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom에는 베벨의 포인트인 {BEVEL_PROFILE}이(가) 필요합니다
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME}은(는) 문자열이어야 합니다
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE}은(는) 2개에서 {most}개의 [x, y] 포인트여야 하며, 각 값은 0과 1 사이의 비율이고 [0, 0](끝면의 가장자리)에서 [1, 1](옆면 벽)까지여야 합니다
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}은(는) 이 아트로 입체를 만들 수 없습니다. 심볼 인스턴스, 블렌드, 클리핑 그룹에 개체가 너무 많습니다
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}은(는) 심볼 “{symbol}”의 인스턴스로 입체를 만들 수 없습니다. 심볼의 아트를 사용할 수 없습니다
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: 클리핑 패스가 너무 복잡하여 아트를 자를 수 없습니다

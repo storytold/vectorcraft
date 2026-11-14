@@ -97,6 +97,14 @@ pub fn attach_arrowheads(session: &mut vectorcraft_engine::Session) {
     }
 }
 
+/// Keep the custom bevels (`threeD.bevels.edit`) in the `Bevels.vectorcraft` file next to the
+/// settings, and list the bevels it holds.
+pub fn attach_bevels(session: &mut vectorcraft_engine::Session) {
+    if let Some(path) = store_dir(vectorcraft_engine::cmd::bevels::FILE_NAME) {
+        session.attach_bevels_file(path.to_string_lossy().to_string());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

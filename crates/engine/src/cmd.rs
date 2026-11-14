@@ -8,6 +8,7 @@ pub mod arrowheads;
 mod artboardalign;
 mod assets;
 mod attributes;
+pub mod bevels;
 pub mod brushlib;
 mod brushsym;
 mod buildcmds;
@@ -318,6 +319,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(draw2::specs());
         v.extend(xform::specs());
         v.extend(effectcmd::specs());
+        v.extend(bevels::specs());
         v.extend(wireframe::specs());
         v.extend(pathops::specs());
         v.extend(compoundshape::specs());

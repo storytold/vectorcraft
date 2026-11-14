@@ -9,10 +9,11 @@
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
-use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
+use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
 use super::{live_run, pstate, set_pstate};
 use crate::VectorcraftApp;
+use crate::dialogs::revolve::OWN_BEVEL;
 use crate::dialogs::three_d_materials as materials;
 use crate::state::Dialog;
 use crate::theme::Tokens;
@@ -153,9 +154,11 @@ pub(crate) fn send(app: &mut VectorcraftApp, ctx: &egui::Context, changed: Map<S
         .iter()
         .filter_map(|(id, t, same_lights)| {
             let takes = vectorcraft_effects::default_params(&t.effect).unwrap_or(Value::Null);
+            // A custom bevel's name and points go with `bevel` to the effects that take one.
+            let custom_bevel = |k: &str| (k == BEVEL_NAME || k == BEVEL_PROFILE) && takes.get("bevel").is_some();
             let params: Map<String, Value> = pending
                 .iter()
-                .filter(|(k, _)| takes.get(k.as_str()).is_some() && (k.as_str() != "lights" || *same_lights))
+                .filter(|(k, _)| (takes.get(k.as_str()).is_some() || custom_bevel(k)) && (k.as_str() != "lights" || *same_lights))
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             (!params.is_empty())
@@ -233,13 +236,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     // The applied effect's settings in the dialog's form, with the controls' own state.
     let mut fields = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap_or_default();
+    let own_bevel = own_bevel(&fields);
     mark_mixed(app, &mut fields);
     fields.extend(pstate::<Map<String, Value>>(&ctx, UI_STATE));
     fields.insert("__effect".into(), json!(t.effect));
     fields.insert("__panel".into(), json!(true));
+    if let Some(own) = own_bevel {
+        fields.insert(OWN_BEVEL.into(), own);
+    }
     let mut d = Dialog { kind: ID.into(), fields };
     let before = crate::dialogs::form::params(&d);
     crate::dialogs::revolve::controls(app, ui, &mut d);
+    d.fields.remove(OWN_BEVEL);
+    let edit_bevels = d.fields.remove("__editBevels").is_some();
     let action = d.fields.remove(materials::ACTION).and_then(|v| materials::Action::from_value(&v));
     let state: Map<String, Value> = d
         .fields
@@ -252,6 +261,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let changed = changed_settings(&before, &after);
     let dragging = ctx.input(|i| i.pointer.any_down());
     send(app, &ctx, changed, dragging);
+    // Bevel Shape's Edit Bevels…: the bevels file opens as a document of its own.
+    if edit_bevels {
+        finish(app, &ctx);
+        if let Err(e) = app.run("threeD.bevels.edit", json!({})) {
+            app.ui.status = e;
+        }
+        return;
+    }
     if quick_actions_shown(&d) {
         ui.add_space(10.0);
         let t = Tokens::get(ui.ctx());
@@ -483,10 +500,30 @@ pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut Map<String, Value>) 
     }
 }
 
+/// The custom bevel of an effect's settings `fields`, `[name, points]`, when its `bevel` is
+/// `"custom"` with points (the Bevel Shape menu lists it while a mixed selection unsets them).
+pub(crate) fn own_bevel(fields: &Map<String, Value>) -> Option<Value> {
+    let points = fields.get(BEVEL_PROFILE).filter(|v| !v.is_null())?;
+    let name = fields.get(BEVEL_NAME).and_then(Value::as_str).unwrap_or_default();
+    (fields.get("bevel").and_then(Value::as_str) == Some("custom")).then(|| json!([name, points]))
+}
+
 /// The settings whose values differ between `before` and `after`, with their values in `after`.
+/// A change to a custom bevel (`bevel` `"custom"`, its name or its points) sends all three, so an
+/// effect of a mixed selection that had none takes the whole bevel.
 pub(crate) fn changed_settings(before: &Value, after: &Value) -> Map<String, Value> {
     let Some(after) = after.as_object() else { return Map::new() };
-    after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect()
+    let mut changed: Map<String, Value> =
+        after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let custom = ["bevel", BEVEL_NAME, BEVEL_PROFILE];
+    if after.get("bevel").and_then(Value::as_str) == Some("custom") && custom.iter().any(|k| changed.contains_key(*k)) {
+        for k in custom {
+            if let Some(v) = after.get(k) {
+                changed.insert(k.into(), v.clone());
+            }
+        }
+    }
+    changed
 }
 
 #[cfg(test)]

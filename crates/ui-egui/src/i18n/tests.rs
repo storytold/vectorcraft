@@ -2443,6 +2443,22 @@ fn three_d_refusals_translate_with_their_values() {
         (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"depth": "deep"}))), "must be a number", vec!["`depth`"]),
         (refuse(vectorcraft_effects::validate_three_d(&instance, EXTRUDE, &json!({}))), "the symbol's art isn't available", vec!["Mine 7"]),
         (refuse(vectorcraft_effects::three_d_wireframe_in(None, &rect).map(drop)), "has no 3D effect", vec![]),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "wavy"}))),
+            "or custom with",
+            vec!["none", "classic", "custom", "bevelProfile"],
+        ),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "custom"}))),
+            "the bevel's points",
+            vec!["custom", "bevelProfile"],
+        ),
+        (refuse(vectorcraft_effects::validate_three_d(&rect, CLASSIC_EXTRUDE, &json!({"bevelName": 3}))), "must be a string", vec!["bevelName"]),
+        (
+            refuse(vectorcraft_effects::validate_three_d(&rect, EXTRUDE, &json!({"bevel": "custom", "bevelProfile": [[0, 0]]}))),
+            "each share between",
+            vec!["bevelProfile", "[x, y]", "[0, 0]", "[1, 1]"],
+        ),
     ];
     for (e, english, _) in &errors {
         assert!(e.starts_with("invalid parameters for `effect.apply`: ") && e.contains(english), "{e}");
@@ -3971,7 +3987,8 @@ const NAMED_KEYS: &[(&str, &[&str])] = &[
     ("axis must be \"vertical\", \"horizontal\" or an angle in degrees, not `{v}`", &["axis"]),
     ("balance must be between 0 and 100", &["balance"]),
     ("before must name a panel", &["before"]),
-    ("bevel must be none or one of {_1}", &["bevel", "none"]),
+    ("bevel custom needs {BEVEL_PROFILE}, the bevel's points", &["bevel", "custom"]),
+    ("bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}", &["bevel", "none", "custom"]),
     ("brightness must be dark|mediumDark|mediumLight|light", &["brightness", "dark", "mediumDark", "mediumLight", "light"]),
     ("clip must be true or false", &["clip"]),
     ("collapsed must be true or false", &["collapsed"]),

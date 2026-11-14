@@ -4026,6 +4026,11 @@ theme	Appearance	Motiv
 	Edit Arrowheads	Upravit šipky
 	Edit Arrowheads…	Upravit šipky…
 	Reload Arrowheads	Znovu načíst šipky
+	Bevels	Zkosení
+	Edit Bevels	Upravit zkosení
+	Edit Bevels…	Upravit zkosení…
+	{name} (document)	{name} (dokument)
+	Reload Bevels	Znovu načíst zkosení
 	Stroke Options	Možnosti tahu
 	Width Profiles	Profily šířky
 	Apply Graphic Style	Použít grafický styl
@@ -5994,7 +5999,10 @@ mark-style	Japanese	Japonské
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objekt nemá žádný 3D efekt (Vysunutí a zkosení, Rotační těleso, Nafouknutí ani Otočit)
 @msg	its 3D effect builds no solid	jeho 3D efekt nevytváří žádné těleso
-@msg	bevel must be none or one of {_1}	bevel musí být none nebo jedno z {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel musí být none, jedno z {_1} nebo custom s {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom vyžaduje {BEVEL_PROFILE}, body zkosení
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} musí být řetězec
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} musí mít 2 až {most} bodů [x, y], každý podíl mezi 0 a 1, od [0, 0] (hrana čelní plochy) do [1, 1] (boční stěna)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} nemůže z této kresby vytvořit tělesa: její instance symbolů, prolnutí a ořezové skupiny obsahují příliš mnoho objektů
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} nemůže vytvořit těleso z instance symbolu „{symbol}“: kresba symbolu není k dispozici
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: ořezová cesta je příliš složitá na oříznutí kresby

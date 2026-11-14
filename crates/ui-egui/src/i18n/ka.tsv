@@ -3586,6 +3586,11 @@ theme	Appearance	იერსახე
 	Edit Arrowheads	ისრის წვერების რედაქტირება
 	Edit Arrowheads…	ისრის წვერების რედაქტირება…
 	Reload Arrowheads	ისრის წვერების ხელახლა ჩატვირთვა
+	Bevels	წაკვეთები
+	Edit Bevels	წაკვეთების რედაქტირება
+	Edit Bevels…	წაკვეთების რედაქტირება…
+	{name} (document)	{name} (დოკუმენტი)
+	Reload Bevels	წაკვეთების ხელახლა ჩატვირთვა
 	Stroke Options	კონტურის პარამეტრები
 	Width Profiles	სიგანის პროფილები
 	Apply Graphic Style	გრაფიკული სტილის გამოყენება
@@ -5276,7 +5281,10 @@ font-technology	Variable	ცვლადი
 @msg	The 3D object is too complex to export	3D ობიექტი ზედმეტად რთულია ექსპორტისთვის
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	ობიექტს არ აქვს 3D ეფექტი (ამოწევა და წაკვეთა, ბრუნვა, გაბერვა ან შემობრუნება)
 @msg	its 3D effect builds no solid	მისი 3D ეფექტი სხეულს არ ქმნის
-@msg	bevel must be none or one of {_1}	bevel უნდა იყოს none ან ერთ-ერთი: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel უნდა იყოს none, ერთ-ერთი: {_1}, ან custom და {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom მოითხოვს {BEVEL_PROFILE}, წაკვეთის წერტილები
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} უნდა იყოს სტრიქონი
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} უნდა შეიცავდეს 2-დან {most}-მდე [x, y] წერტილს, თითოეული წილი 0-სა და 1-ს შორის, [0, 0]-დან (ბოლო წახნაგის კიდე) [1, 1]-მდე (გვერდითი კედელი)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ამ ნახატიდან სხეულების შექმნა შეუძლებელია: მისი სიმბოლოს ეგზემპლარები, გადასვლები და მომჭრელი ჯგუფები ზედმეტად ბევრ ობიექტს შეიცავს
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: სიმბოლოს „{symbol}“ ეგზემპლარიდან სხეულის შექმნა შეუძლებელია: სიმბოლოს ნახატი მიუწვდომელია
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: მომჭრელი ტრაექტორია ზედმეტად რთულია ნახატის მოსაჭრელად

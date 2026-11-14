@@ -3269,6 +3269,11 @@ mark-style	Japanese	Kiểu Nhật
 	Edit Arrowheads	Chỉnh sửa đầu mũi tên
 	Edit Arrowheads…	Chỉnh sửa đầu mũi tên…
 	Reload Arrowheads	Tải lại đầu mũi tên
+	Bevels	Các kiểu vát
+	Edit Bevels	Chỉnh sửa kiểu vát
+	Edit Bevels…	Chỉnh sửa kiểu vát…
+	{name} (document)	{name} (tài liệu)
+	Reload Bevels	Tải lại kiểu vát
 	Rotate View	Xoay chế độ xem
 	Reset Rotate View	Đặt lại xoay chế độ xem
 	Rotate View to Selection	Xoay chế độ xem theo vùng chọn
@@ -5377,7 +5382,10 @@ theme	Appearance	Giao diện
 @msg	The 3D object is too complex to export	Đối tượng 3D quá phức tạp để xuất
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	đối tượng không có hiệu ứng 3D (Kéo dài & vát, Xoay tròn, Phình hoặc Xoay)
 @msg	its 3D effect builds no solid	hiệu ứng 3D của nó không tạo ra khối nào
-@msg	bevel must be none or one of {_1}	bevel phải là none hoặc một trong {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel phải là none, một trong {_1}, hoặc custom kèm {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom cần {BEVEL_PROFILE}, các điểm của kiểu vát
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} phải là một chuỗi
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} phải có từ 2 đến {most} điểm [x, y], mỗi tỷ lệ từ 0 đến 1, từ [0, 0] (cạnh của mặt đầu) đến [1, 1] (thành bên)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} không thể tạo khối từ hình vẽ này: các phiên bản ký hiệu, hòa trộn và nhóm cắt của nó chứa quá nhiều đối tượng
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} không thể tạo khối từ phiên bản của ký hiệu “{symbol}”: không có hình vẽ của ký hiệu
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: đường dẫn cắt quá phức tạp để cắt hình vẽ

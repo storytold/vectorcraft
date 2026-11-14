@@ -2863,6 +2863,11 @@ digits	Malayalam	Малаялам
 	Edit Arrowheads	Редактиране на върхове на стрелки
 	Edit Arrowheads…	Редактиране на върхове на стрелки…
 	Reload Arrowheads	Презареждане на върхове на стрелки
+	Bevels	Фаски
+	Edit Bevels	Редактиране на фаски
+	Edit Bevels…	Редактиране на фаски…
+	{name} (document)	{name} (документ)
+	Reload Bevels	Презареждане на фаски
 	Reset Rotate View	Нулиране на изгледа на завъртане
 	Rotate View to Selection	Завъртане на изгледа спрямо селекцията
 	Reset the rows to the artwork's colors	Нулиране на редовете към цветовете на илюстрацията

@@ -378,13 +378,14 @@ impl Session {
     }
 }
 
-fn same_file(a: &str, b: &str) -> bool {
+pub(super) fn same_file(a: &str, b: &str) -> bool {
     let canon = |p: &str| std::fs::canonicalize(p).unwrap_or_else(|_| std::path::PathBuf::from(p));
     std::path::Path::new(a) == std::path::Path::new(b) || canon(a) == canon(b)
 }
 
-/// The document in the arrowheads file at `path`; `None` when there is no file.
-fn read(path: &str) -> std::result::Result<Option<Document>, String> {
+/// The document in the arrowheads file at `path` (or another such file of the user's, as the
+/// bevels file); `None` when there is no file.
+pub(super) fn read(path: &str) -> std::result::Result<Option<Document>, String> {
     let size = match std::fs::metadata(path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("{path}: {e}")),
@@ -412,13 +413,13 @@ fn skipped(s: &Session) -> Vec<Value> {
 /// The arrowheads file at `path` checked for reading against the automation roots in force: an agent
 /// confined to read roots reaches the file only inside them. The error names the file by its file
 /// name outside them.
-fn may_reach(path: &str) -> Result<()> {
+pub(super) fn may_reach(path: &str) -> Result<()> {
     crate::file_access::check_read(path).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), path))
 }
 
 /// `msg`, an error about the arrowheads file at `path`, as the request being served may see it: the
 /// file named whole inside the read roots, else by its file name.
-fn shown_error(msg: &str, path: Option<&str>) -> String {
+pub(super) fn shown_error(msg: &str, path: Option<&str>) -> String {
     let Some(path) = path else { return msg.to_string() };
     match super::fileio::naming_in_error(EngineError::Other(msg.to_string()), path) {
         EngineError::Other(m) => m,

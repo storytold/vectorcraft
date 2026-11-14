@@ -3500,6 +3500,11 @@ mark-style	Japanese	Japán
 	Edit Arrowheads	Nyílhegyek szerkesztése
 	Edit Arrowheads…	Nyílhegyek szerkesztése…
 	Reload Arrowheads	Nyílhegyek újratöltése
+	Bevels	Élletörések
+	Edit Bevels	Élletörések szerkesztése
+	Edit Bevels…	Élletörések szerkesztése…
+	{name} (document)	{name} (dokumentum)
+	Reload Bevels	Élletörések újratöltése
 	Reset Rotate View	Nézetforgatás visszaállítása
 	Rotate View to Selection	Nézet elforgatása a kijelöléshez
 	Reset the rows to the artwork's colors	Sorok visszaállítása a grafika színeire
@@ -5977,7 +5982,10 @@ imageTrace	Outline	Körvonal
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
-@msg	bevel must be none or one of {_1}	a bevel értéke none vagy ezek egyike lehet: {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	a bevel értéke none, ezek egyike: {_1}, vagy custom lehet {BEVEL_PROFILE} megadásával
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	a bevel custom értékéhez {BEVEL_PROFILE} kell, az élletörés pontjai
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME}: karakterlánc kell
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE}: legalább 2 és legfeljebb {most} [x, y] pont kell, minden arány 0 és 1 között, [0, 0]-tól (a fedőlap éle) [1, 1]-ig (az oldalfal)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}: ebből a rajzból nem hozható létre test: a szimbólumpéldányai, összemosásai és vágócsoportjai túl sok objektumot tartalmaznak
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}: nem hozható létre test a(z) „{symbol}” szimbólum példányából: a szimbólum rajza nem érhető el
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: a vágóútvonal túl összetett a rajz kivágásához
