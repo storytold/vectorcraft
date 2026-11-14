@@ -303,6 +303,7 @@ mod tests {
             cap: false,
             visibility_pieces: None,
             surface: None,
+            plane: None,
         }
     }
 

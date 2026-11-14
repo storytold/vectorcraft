@@ -166,13 +166,15 @@ fn walk_all<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
     }
 }
 
-/// The roots of `d`'s art: layers, symbol definitions and pattern swatches.
+/// The roots of `d`'s art: layers, symbol definitions, pattern swatches and
+/// [`Document::mounted_art`].
 fn roots(d: &Document) -> impl Iterator<Item = &Arc<Node>> {
     d.layers
         .iter()
         .chain(d.symbols.iter().map(|s| &s.art))
         .chain(d.graph_designs.iter().map(|g| &g.art))
         .chain(d.patterns.iter().flat_map(|p| &p.art))
+        .chain(d.mounted_art.iter().map(|(n, _)| n))
 }
 
 fn roots_mut(d: &mut Document) -> impl Iterator<Item = &mut Arc<Node>> {
@@ -181,6 +183,7 @@ fn roots_mut(d: &mut Document) -> impl Iterator<Item = &mut Arc<Node>> {
         .chain(d.symbols.iter_mut().map(|s| &mut s.art))
         .chain(d.graph_designs.iter_mut().map(|g| &mut g.art))
         .chain(d.patterns.iter_mut().flat_map(|p| &mut p.art))
+        .chain(d.mounted_art.iter_mut().map(|(n, _)| n))
 }
 
 impl Document {

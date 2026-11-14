@@ -4329,7 +4329,8 @@ proptest! {
                 "0 R", "0 O", "0 1 1 0 K", "1 0 0 0 k", "0 0 0 0 1 0 0 Xa", "0 0 0 0 1 0 0 XA", "0.5 G", "0 g", "K", "Xa",
                 "0 J 0 j 2 w 10 M []0 d", "-1 w", "1e400 w", "0 M", "[3 -1]0 d", "[]0 d",
                 "1 0 Xd", "0 1 Xd", "1 1 Xd", "0 0 Xd", "1 Xd", "Xd", "0 1 0 0 0 Xy", "1 0.5 1 1 0 Xy", "Xy",
-                "0 Bb", "2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg", "0 BB", "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p",
+                "0 Bb", "1 Bb", "2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg", "2 (Sky) 0 0 1e400 100 1 0 0 1 0 0 Bg", "2 (Dusk) 0 0 0 100 1 0 0 1 0 0 Bg",
+                "0 BB", "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p",
                 "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P", "0 XR",
             ]).prop_map(|op| (op.to_string(), true)),
             "[ -~]{0,12}".prop_map(|text| (text, false)),
@@ -4338,9 +4339,11 @@ proptest! {
     ) {
         use vectorcraft_testkit::ai;
         let close = if closed { "/Paint ;\n/Def ;\n" } else { "" };
-        // C, a red 2 pt stroke, comes first, so that it reads whatever A holds.
+        // C, a red 2 pt stroke, comes first, so that it reads whatever A holds. The file defines the
+        // gradient Sky, which a gradient paint of A may name.
         let header = format!(
-            "%AI9_BeginArtStyles\n/KnownStyle :\n(C) /Name ,\n/SimpleStyle :\n0 R\n0 1 1 0 K\n2 w\n1 0 Xd\n/Paint ;\n/Def ;\n\
+            "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n\
+             %AI9_BeginArtStyles\n/KnownStyle :\n(C) /Name ,\n/SimpleStyle :\n0 R\n0 1 1 0 K\n2 w\n1 0 Xd\n/Paint ;\n/Def ;\n\
              /KnownStyle :\n(A) /Name ,\n/SimpleStyle :\n{}\n{close}/KnownStyle :\n(B) /Name ,\n/SimpleStyle :\n1 0 Xd\n/Paint ;\n/Def ;\n\
              %AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(A)\n(B)\n(C)\n%AI9_EndArtStyleList\n",
             ops.iter().map(|(op, _)| op.as_str()).collect::<Vec<_>>().join("\n")

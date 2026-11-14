@@ -1,6 +1,7 @@
 //! Paint conversion (solid, gradients, patterns) and image decoding.
 
 use vectorcraft_color::{GradientKind, Paint};
+use vectorcraft_doc::resample::{Resample, resized};
 use vectorcraft_geom::{Rect, Vec2};
 use vello_cpu::RenderContext;
 use vello_cpu::peniko::{self, ColorStop};
@@ -446,7 +447,7 @@ fn fit_pixmap(img: image::DynamicImage) -> image::DynamicImage {
     }
     let s = max as f64 / w.max(h) as f64;
     let (nw, nh) = (((w as f64 * s).round() as u32).clamp(1, max), ((h as f64 * s).round() as u32).clamp(1, max));
-    img.resize_exact(nw, nh, image::imageops::FilterType::Triangle)
+    resized(img, nw, nh, Resample::Filter(image::imageops::FilterType::Triangle))
 }
 
 /// [`decode_pixmap_or_why`]'s pixels.
@@ -504,7 +505,7 @@ pub fn decode_pixmap_fit(bytes: &[u8], w: u16, h: u16) -> Option<vello_cpu::Pixm
         }
     };
     let img = if img.width() > w as u32 || img.height() > h as u32 {
-        img.resize_exact(w as u32, h as u32, image::imageops::FilterType::Triangle)
+        resized(img, w as u32, h as u32, Resample::Filter(image::imageops::FilterType::Triangle))
     } else {
         img
     };
@@ -586,5 +587,36 @@ mod tests {
         assert_eq!(room_for(MAX_DECODE_ALLOC + 1, 2 * MAX_DECODE_ALLOC), Err(Undecoded::Unreadable));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC + 1), Err(Undecoded::NoRoom));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC), Ok(()));
+    }
+
+    /// Opaque red beside clear black, every other column of a `w` × 1 image.
+    fn striped(w: u32) -> image::RgbaImage {
+        image::RgbaImage::from_fn(w, 1, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+    }
+
+    /// Does each pixel of `pm` hold red at its own coverage (premultiplied, within a step)?
+    fn red_at_its_coverage(pm: &vello_cpu::Pixmap) -> bool {
+        let m = |c: u8, a: u8| ((u16::from(c) * u16::from(a) + 127) / 255) as u8;
+        pm.data().iter().all(|p| p.r.abs_diff(m(200, p.a)) <= 1 && p.g.abs_diff(m(30, p.a)) <= 1 && p.b.abs_diff(m(30, p.a)) <= 1)
+    }
+
+    /// A placed image drawn smaller keeps the color of its opaque pixels at its cut-out edges: the
+    /// clear pixels beside them do not darken them.
+    #[test]
+    fn an_image_drawn_smaller_keeps_its_color_beside_clear_pixels() {
+        let mut png = Vec::new();
+        striped(8).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let pm = decode_pixmap_fit(&png, 2, 1).unwrap();
+        assert_eq!((pm.width(), pm.height()), (2, 1));
+        assert!(pm.data().iter().all(|p| p.a > 0));
+        assert!(red_at_its_coverage(&pm), "{:?}", pm.data());
+    }
+
+    /// An image wider than a pixmap may be is shrunk to fit with its colors weighted by alpha the same way.
+    #[test]
+    fn an_image_shrunk_to_fit_a_pixmap_keeps_its_color_beside_clear_pixels() {
+        let pm = decoded_pixmap(image::DynamicImage::ImageRgba8(striped(u32::from(u16::MAX) + 4465))).unwrap();
+        assert_eq!(pm.width(), u16::MAX);
+        assert!(red_at_its_coverage(&pm));
     }
 }
