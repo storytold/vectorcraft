@@ -29,9 +29,9 @@ pub use build::{extrude, plane};
 pub use face_map::{FaceMap, extrude_face_map, plane_face_map};
 #[cfg(test)]
 use inflate::GRID_WORK;
-#[cfg(test)]
-pub(crate) use inflate::INFLATED;
 pub(crate) use inflate::inflate_faces;
+#[cfg(test)]
+pub(crate) use inflate::{INFLATED, PUFFED, SOLVE_FIRST};
 pub use inflate::{inflate, inflate_each, inflate_together};
 #[cfg(test)]
 use membrane::{Edges, GRID_BUDGET, MAX_EDGE_ENTRIES, MAX_GRID_WORK, Membrane, cell_triangles};
