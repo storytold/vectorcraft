@@ -1374,6 +1374,8 @@ antiAlias	Sharp	शार्प
 	Crop Image	इमेज क्रॉप करें
 	Image Tools	इमेज टूल
 	Remove Background…	पृष्ठभूमि हटाएँ…
+	Draw (Pencil)	ड्रा (पेंसिल)
+	Place Image	इमेज प्लेस करें
 	Remove Background	पृष्ठभूमि हटाएँ
 	Background	पृष्ठभूमि
 	Edge Color	किनारे का रंग
@@ -3794,6 +3796,8 @@ antiAlias	Sharp	शार्प
 @msg	the action set would be larger than 8 MiB	एक्शन सेट 8 MiB से बड़ा हो जाएगा
 	Playback Options	प्लेबैक ऑप्शन्स
 	Playback Options…	प्लेबैक ऑप्शन्स…
+	Button Mode	बटन मोड
+	No actions.	कोई कार्रवाई नहीं।
 	Plug-in Info	प्लगइन जानकारी
 	Plug-in…	प्लग-इन…
 	Plug-ins	प्लग-इन्स
@@ -5231,6 +5235,7 @@ antiAlias	Sharp	शार्प
 	VectorCraft Title Bar on Every Desktop	हर डेस्कटॉप पर VectorCraft टाइटल बार
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	जब तक एनवायरनमेंट वेरिएबल VECTORCRAFT_TITLEBAR सेट है, टाइटल बार वही चुनता है।
 	System Title Bar takes precedence over this option while it is on.	जब तक सिस्टम टाइटल बार चालू है, उसे इस विकल्प पर प्राथमिकता मिलती है।
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	जब तक हर डेस्कटॉप पर VectorCraft टाइटल बार बंद है, यह डेस्कटॉप विंडो का टाइटल बार बनाता है, चाहे यह विकल्प चालू हो या बंद।
 	Tab	Tab
 	Tab Stops	टैब स्टॉप्स
 	Table	तालिका
@@ -6160,7 +6165,7 @@ antiAlias	Sharp	शार्प
 @msg	`{key}` is longer than {MAX_NAME} characters	`{key}` {MAX_NAME} अक्षरों से अधिक लंबा है
 @msg	`{key}` is out of range	`{key}` रेंज से बाहर है
 @msg	`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent	`{key}` को प्रतिशत में [min, desired, max] या {{min?, desired?, max?}} होना चाहिए
-@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` होना चाहिए [x, y, चौड़ाई, ऊंचाई]: चार परिमित संख्या, चौड़ाई और ऊंचाई नकारात्मक नहीं है
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` होना चाहिए [x, y, width, height]: चार परिमित संख्या, चौड़ाई और ऊंचाई नकारात्मक नहीं है
 @msg	`{key}` must be [x, y]	`{key}` होना चाहिए [x, y]
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` को `auto` या `en` या `zh-hant` जैसे भाषा कोड होना चाहिए।
 @msg	`{key}` must be 0..{max}	`{key}` होना चाहिए 0.{max}
@@ -6173,6 +6178,7 @@ antiAlias	Sharp	शार्प
 @msg	`{key}` must be a number	`{key}` एक संख्या होना चाहिए
 @msg	`{key}` must be a number {_1}..{_2}	`{key}` {_1}..{_2} की एक संख्या होना चाहिए
 @msg	`{key}` must be a number not below 0	`{key}` 0 से कम नहीं होने वाली संख्या होना चाहिए
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` 0 से कम नहीं होने वाली चार संख्याएँ होनी चाहिए: [tl, tr, br, bl]
 @msg	`{key}` must be a number, not {v}	`{key}` एक संख्या होना चाहिए, {v} नहीं
 @msg	`{key}` must be a profile name or null	`{key}` को प्रोफ़ाइल नाम या null होना चाहिए
 @msg	`{key}` must be a string	`{key}` एक स्ट्रिंग होना चाहिए
@@ -6245,7 +6251,7 @@ antiAlias	Sharp	शार्प
 @msg	`a` and `b` must be two different paths	`a` और `b` को दो अलग-अलग पाथ होना चाहिए
 @msg	`align` is start, center or end	`align` शुरू, केंद्र या अंत है
 @msg	`align` must be "left", "center" or "right", not {other}	`align` होना चाहिए "left", "center" या "right", नहीं {other}
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` को [subpath, एंकर] जोड़े की एक सारणी होना चाहिए
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` को [subpath, anchor] जोड़े की एक सारणी होना चाहिए
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {k} नहीं
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` में एंकर इंडेक्स (0, 1, 2…) की सूची होनी चाहिए, {v} नहीं
 @msg	`antiAlias` must be "none", "sharp", "crisp" or "strong"	`antiAlias` "none", "sharp", "crisp" या "strong" होना चाहिए
@@ -6631,7 +6637,7 @@ antiAlias	Sharp	शार्प
 @msg	area type in frames too short for a line of the font it shows in got taller frames ({_1}): their type wouldn't show otherwise	अपने फ़ॉन्ट की एक लाइन के लिए बहुत छोटे फ़्रेम वाले एरिया टाइप को लंबे फ़्रेम दिए गए ({_1}): वरना उनका टाइप नहीं दिखता
 @msg	area type needs a path that encloses an area	एरिया टाइप को ऐसा पाथ चाहिए जो किसी क्षेत्र को घेरता हो
 @msg	arrowAlign must be extend|tip, got {o}	arrowAlign को extend|tip होना चाहिए, {o} मिला
-@msg	arrowScale must be [start, end]	arrowScale होना चाहिए [शुरू, अंत]
+@msg	arrowScale must be [start, end]	arrowScale होना चाहिए [start, end]
 @msg	artboard {0} does not exist	आर्टबोर्ड {0} मौजूद नहीं है
 @msg	artboard {i} doesn't print	आर्टबोर्ड {i} प्रिंट नहीं करता है
 @msg	artboard is a 0-based index	artboard 0 से शुरू होने वाला इंडेक्स है
@@ -6692,14 +6698,14 @@ antiAlias	Sharp	शार्प
 @msg	bad edit	बुरा संपादन
 @msg	bad fill {v}	बुरा भर {v}
 @msg	bad fit: {e}	बुरा फिट: {e}
-@msg	bad model {other} (keep, new or document)	बुरा मॉडल {other} (keep, नया या डॉक्यूमेंट)
+@msg	bad model {other} (keep, new or document)	बुरा मॉडल {other} (keep, new या document)
 @msg	bad new colour {v}	बुरा नया रंग {v}
 @msg	bad object	बुरा ऑब्जेक्ट
 @msg	bad object number	खराब ऑब्जेक्ट संख्या
 @msg	bad offset	बुरा ऑफसेट
 @msg	bad page tree	बुरा पेज पेड़
 @msg	bad path data: {e}	बुरा पाथ डेटा: {e}
-@msg	bad point {v}: expected [x, y] or [x, y, pressure]	बुरा बिंदु {v}: उम्मीद [x, y] या [x, y, दबाव]
+@msg	bad point {v}: expected [x, y] or [x, y, pressure]	बुरा बिंदु {v}: उम्मीद [x, y] या [x, y, pressure]
 @msg	bad reference	बुरा संदर्भ
 @msg	bad shortcut	बुरा शॉर्टकट
 @msg	bad stream length	खराब धारा की लंबाई
@@ -7229,7 +7235,7 @@ antiAlias	Sharp	शार्प
 @msg	Internal error: {msg} (please report this bug)	आंतरिक त्रुटि: {msg} (कृपया इस बग की रिपोर्ट करें)
 @msg	invalid `color`	अमान्य `color`
 @msg	invalid anchor index {v}: expected a non-negative integer	अमान्य एंकर इंडेक्स {v}: एक गैर-नकारात्मक पूर्णांक की उम्मीद
-@msg	invalid anchor reference {v}: expected [subpath, anchor]	अमान्य एंकर संदर्भ {v}: उम्मीद [subpath, एंकर]
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	अमान्य एंकर संदर्भ {v}: उम्मीद [subpath, anchor]
 @msg	invalid angle	अमान्य कोण
 @msg	invalid brush: {e}	अमान्य ब्रश: {e}
 @msg	invalid color	अमान्य रंग
@@ -7406,7 +7412,7 @@ antiAlias	Sharp	शार्प
 @msg	missing `value`	लापता `value`
 @msg	missing anchor	लापता एंकर
 @msg	missing anchors	लापता एंकर
-@msg	missing anchors [[subpath, anchor]…]	लापता एंकर [[subpath, एंकर]...]
+@msg	missing anchors [[subpath, anchor]…]	लापता एंकर [[subpath, anchor]...]
 @msg	missing array `{key}`	लापता सरणी `{key}`
 @msg	missing case	लापता मामला
 @msg	missing color	लापता रंग
@@ -8618,7 +8624,7 @@ antiAlias	Sharp	शार्प
 @msg	Unembedded to {_1}	एम्बेड हटाकर {_1} में रखा गया
 @msg	unexpected host trap	होस्ट में अप्रत्याशित ट्रैप
 @msg	unexpected resources	अप्रत्याशित संसाधन
-@msg	unknown {k} key `{key}` (size, position)	अज्ञात {k} कुंजी `{key}` (आकार, स्थिति)
+@msg	unknown {k} key `{key}` (size, position)	अज्ञात {k} कुंजी `{key}` (size, position)
 @msg	unknown {key} `{v}` (none, short or full)	अज्ञात {key} `{v}` (none, short या full)
 @msg	unknown {key} profile `{n}`	अज्ञात {key} प्रोफ़ाइल `{n}`
 @msg	unknown align `{other}`	अज्ञात संरेखण `{other}`
@@ -8651,9 +8657,9 @@ antiAlias	Sharp	शार्प
 @msg	unknown format	अज्ञात स्वरूप
 @msg	unknown format `{f}` (Save writes {_1})	अज्ञात फ़ॉर्मैट `{f}` (सेव {_1} लिखता है)
 @msg	unknown format `{f}` (vcswatches, gpl, ase or css)	अज्ञात फ़ॉर्मैट `{f}` (vcswatches, gpl, ase या css)
-@msg	unknown freeform mode `{m}` (points, lines)	अज्ञात फ्रीफॉर्म मोड `{m}` (बिंदुओं, लाइनों)
+@msg	unknown freeform mode `{m}` (points, lines)	अज्ञात फ्रीफॉर्म मोड `{m}` (points, lines)
 @msg	unknown from {f}	{f} से अज्ञात
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	अज्ञात ग्रेडिएंट `{k}` (रैखिक, रेडियल, शंक्वाकार, डायमंड, फ्रीफॉर्म)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	अज्ञात ग्रेडिएंट `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown graph type `{t}`	अज्ञात ग्राफ प्रकार `{t}`
 @msg	unknown grid colours `{name}` (one of {_1})	अज्ञात ग्रिड रंग `{name}` ({_1} में से एक)
 @msg	unknown gridType `{t}`	अज्ञात gridType `{t}`
@@ -8668,20 +8674,20 @@ antiAlias	Sharp	शार्प
 @msg	unknown method `{m}` ({_1})	अज्ञात विधि `{m}` ({_1})
 @msg	unknown mode {m}	अज्ञात मोड {m}
 @msg	unknown mode `{o}`	अज्ञात मोड `{o}`
-@msg	unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)	अज्ञात मोड `{other}` (ग्रे, RGB, hsb, लैब, cmyk या वेब)
+@msg	unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)	अज्ञात मोड `{other}` (gray, rgb, hsb, lab, cmyk या web)
 @msg	unknown mode `{other}` (mono|cmyk)	अज्ञात मोड `{other}` (mono|cmyk)
 @msg	unknown mode `{other}` (rgb|cmyk|gray|global)	अज्ञात मोड `{other}` (rgb|cmyk|gray|global)
-@msg	unknown mode `{other}` (set, add, subtract)	अज्ञात मोड `{other}` (सेट, ऐड, घटाना)
+@msg	unknown mode `{other}` (set, add, subtract)	अज्ञात मोड `{other}` (set, add, subtract)
 @msg	unknown model `{other}`	अज्ञात मॉडल `{other}`
-@msg	unknown model `{other}` (keep, new or document)	अज्ञात मॉडल `{other}` (keep, नया या डॉक्यूमेंट)
+@msg	unknown model `{other}` (keep, new or document)	अज्ञात मॉडल `{other}` (keep, new या document)
 @msg	unknown op {o}	अज्ञात op {o}
 @msg	unknown OpenType feature `{t}`	अज्ञात ओपन टाइप सुविधा `{t}`
 @msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; prefix - to turn off)	अज्ञात OpenType फ़ीचर `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; बंद करने के लिए आगे - लगाएँ)
 @msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	featureChanges में अज्ञात OpenType फ़ीचर `{t}` (वे टैग जो `features` लेता है)
 @msg	unknown option `{path}.{k}`	अज्ञात ऑप्शन `{path}.{k}`
 @msg	unknown order `{o}`: toggle, front, forward, backward or back	अज्ञात आदेश `{o}`: टॉगल, फ्रंट, फॉरवर्ड, बैकवर्ड या बैक
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	अज्ञात ओवरप्रिंट `{o}` (preserve, अनुकरण या discard)
-@msg	unknown overprints `{v}` (preserve, simulate or discard)	अज्ञात ओवरप्रिंट `{v}` (प्ररक्षित, अनुकरण या त्यागपत्र)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	अज्ञात ओवरप्रिंट `{o}` (preserve, simulate या discard)
+@msg	unknown overprints `{v}` (preserve, simulate or discard)	अज्ञात ओवरप्रिंट `{v}` (preserve, simulate या discard)
 @msg	unknown panel	अज्ञात पैनल
 @msg	unknown panel `{raw}`	अज्ञात पैनल `{raw}`
 @msg	panels can't be shown in Presentation Mode	प्रस्तुति मोड में पैनल्स नहीं दिखाए जा सकते
@@ -8696,7 +8702,7 @@ antiAlias	Sharp	शार्प
 @msg	`{path}` is nested too deeply	`{path}` बहुत गहराई तक नेस्ट किया गया है
 @msg	unknown PDF preset `{name}` (presets: {_1})	अज्ञात PDF प्रीसेट `{name}` (presets: {_1})
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	अज्ञात pieLegend `{v}` (none, standard या wedges)
-@msg	unknown piePosition `{v}` (even, ratio or stacked)	अज्ञात piePosition `{v}` (यहां तक कि अनुपात या स्टैक्ड)
+@msg	unknown piePosition `{v}` (even, ratio or stacked)	अज्ञात piePosition `{v}` (even, ratio या stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	अज्ञात pieSort `{v}` (none, all या first)
 @msg	unknown plate `{n}`	अज्ञात प्लेट `{n}`
 @msg	unknown preference `{k}`	अज्ञात वरीयता `{k}`
@@ -8722,7 +8728,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	अज्ञात प्रीसेट `{name}`: एक अंतर्निहित या सेव किए गए प्रीसेट नहीं (imageTrace.presets देखें)
 @msg	unknown profile {id} (see stroke.widthProfile.list)	अज्ञात प्रोफ़ाइल {id} (stroke.widthProfile.list देखें)
 @msg	unknown proof target `{t}`	अज्ञात प्रमाण लक्ष्य `{t}`
-@msg	unknown quotes key `{k}` (double, single)	अज्ञात उद्धरण कुंजी `{k}` (डबल, सिंगल)
+@msg	unknown quotes key `{k}` (double, single)	अज्ञात उद्धरण कुंजी `{k}` (double, single)
 @msg	unknown resolution `{v}`	अज्ञात रिज़ॉल्यूशन `{v}`
 @msg	unknown rule `{r}` (see color.harmony)	अज्ञात नियम `{r}` (देखें color.harmony)
 @msg	unknown rule `{rule}` ({_1})	अज्ञात नियम `{rule}` ({_1})
@@ -8738,7 +8744,7 @@ antiAlias	Sharp	शार्प
 @msg	Unknown unit	अज्ञात इकाई
 @msg	unknown units	अज्ञात इकाइयों
 @msg	unknown units `{u}`	अज्ञात इकाइयों `{u}`
-@msg	unknown value axis `{v}` (left, right or both)	अज्ञात मान अक्ष `{v}` (बाएं, दाएं या दोनों)
+@msg	unknown value axis `{v}` (left, right or both)	अज्ञात मान अक्ष `{v}` (left, right या both)
 @msg	unknown variation `{v}` (tintsShades|warmCool|vividMuted)	अज्ञात variation `{v}` (tintsShades|warmCool|vividMuted)
 @msg	unknown Warp style	अज्ञात ताना स्टाइल
 @msg	unknown warp style `{s}`	अज्ञात ताना स्टाइल `{s}`
