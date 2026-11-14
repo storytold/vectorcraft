@@ -437,8 +437,8 @@ struct BrushesKept {
     read: (usize, usize),
     /// Which of [`Reader::brush_drafts`] are kept as brushes.
     kept: Vec<bool>,
-    /// The art an Art brush draws as the file does.
-    bending: HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length.
+    bending: HashMap<String, f64>,
 }
 
 struct Reader<'a> {
