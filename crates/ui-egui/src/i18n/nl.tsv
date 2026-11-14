@@ -5648,7 +5648,7 @@ imageTrace	Outline	Contour
 @msg	`alignOn` must be a string	`alignOn` moet een string zijn
 @msg	`align` is start, center or end	`align` is start, center of end
 @msg	`align` must be a string	`align` moet een string zijn
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` moet een array van paren [subpad, anker] zijn
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` moet een array van paren [subpath, anchor] zijn
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` moet ankerindexen bevatten (0, 1, 2…), niet {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` moet ankerindexen bevatten (0, 1, 2…), niet {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` voor dit dialoogvenster {kind} moet een van de volgende zijn: {_1}
@@ -5713,7 +5713,7 @@ imageTrace	Outline	Contour
 @msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` moet van {lo} tot {hi} pt zijn
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` moet 1 tot 1000 paden van lettertypebestanden bevatten die de laatste zoekopdracht van text.findFontFiles heeft gevonden
 @msg	`focal` and `radius` cannot be used together	`focal` en `radius` kunnen niet samen worden gebruikt
-@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` moet een array van paren [subpad, anker] zijn
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` moet een array van paren [subpath, anchor] zijn
 @msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` noemt [{si}, {ai}], en dat is geen anker van het pad
 @msg	`folder` must be an absolute folder path	`folder` moet een absoluut mappad zijn
 @msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` moet een object met astags en waarden zijn, zoals {"wght"}
@@ -5795,8 +5795,8 @@ imageTrace	Outline	Contour
 @msg	`preset` must be a string	`preset` moet een string zijn
 @msg	`radius` must be 0 or more	`radius` moet 0 of meer zijn
 @msg	`ratio` must be from 0.1 to 0.5	`ratio` moet van 0,1 tot 0,5 zijn
-@msg	`rect` must be [x, y, width, height]	`rect` moet [x, y, breedte, hoogte] zijn
-@msg	`rect` must be [x, y, width, height] with a positive size	`rect` moet [x, y, breedte, hoogte] met een positieve grootte zijn
+@msg	`rect` must be [x, y, width, height]	`rect` moet [x, y, width, height] zijn
+@msg	`rect` must be [x, y, width, height] with a positive size	`rect` moet [x, y, width, height] met een positieve grootte zijn
 @msg	`rect` must be [x0, y0, x1, y1] (got {r})	`rect` moet [x0, y0, x1, y1] zijn (kreeg {r})
 @msg	`relation` must be overlap, inside or outside	`relation` moet overlap, inside of outside zijn
 @msg	`replace` must be a string	`replace` moet een string zijn
@@ -6224,7 +6224,7 @@ imageTrace	Outline	Contour
 @msg	distance must be > 0	distance moet > 0 zijn
 @msg	dx and dy give the arrow's direction	dx en dy geven de richting van de pijl
 @msg	dx and dy must be numbers	dx en dy moeten getallen zijn
-@msg	dxf fitTo must be [width, height], positive	dxf fitTo moet [breedte, hoogte] zijn, positief
+@msg	dxf fitTo must be [width, height], positive	dxf fitTo moet [width, height] zijn, positief
 @msg	dxf must be an object of DXF import options	dxf moet een object met DXF-importopties zijn
 @msg	dxf scale must be a positive number up to {_1}, not {s}	dxf scale moet een positief getal tot en met {_1} zijn, niet {s}
 @msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf unit `{u}`: een eenheid zoals mm, cm, in of pt
@@ -6380,7 +6380,7 @@ imageTrace	Outline	Contour
 @msg	instruction {pc} reached with stack depths {seen} and {d}	instructie {pc} bereikt met stackdiepten {seen} en {d}
 @msg	invalid `color`	ongeldige `color`
 @msg	invalid anchor index {v}: expected a non-negative integer	ongeldige ankerindex {v}: verwacht een niet-negatief geheel getal
-@msg	invalid anchor reference {v}: expected [subpath, anchor]	ongeldige ankerverwijzing {v}: verwacht [subpad, anker]
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	ongeldige ankerverwijzing {v}: verwacht [subpath, anchor]
 @msg	invalid angle	ongeldige hoek
 @msg	invalid array length	ongeldige arraylengte
 @msg	invalid brush: {e}	ongeldig penseel: {e}
@@ -6489,7 +6489,7 @@ imageTrace	Outline	Contour
 @msg	missing `{k}`	`{k}` ontbreekt
 @msg	missing anchor	anker ontbreekt
 @msg	missing anchors	ankers ontbreken
-@msg	missing anchors [[subpath, anchor]…]	anchors [[subpad, anker]…] ontbreekt
+@msg	missing anchors [[subpath, anchor]…]	anchors [[subpath, anchor]…] ontbreekt
 @msg	missing array `{key}`	array `{key}` ontbreekt
 @msg	missing case	case ontbreekt
 @msg	missing color	color ontbreekt
@@ -6822,9 +6822,9 @@ imageTrace	Outline	Contour
 @msg	rating must be a whole number from 0 to {MAX_RATING}	rating moet een geheel getal van 0 tot {MAX_RATING} zijn
 @msg	rect and {k} contradict each other: give the area or the artboards	rect en {k} spreken elkaar tegen: geef het gebied of de tekengebieden
 @msg	rect applies to raster formats, not {_1}	rect geldt voor rasterindelingen, niet voor {_1}
-@msg	rect is [x, y, width, height] in points	rect is [x, y, breedte, hoogte] in punten
-@msg	rect must be [x, y, width, height]	rect moet [x, y, breedte, hoogte] zijn
-@msg	rect must be [x, y, width, height] with a positive width and height	rect moet [x, y, breedte, hoogte] met een positieve breedte en hoogte zijn
+@msg	rect is [x, y, width, height] in points	rect is [x, y, width, height] in punten
+@msg	rect must be [x, y, width, height]	rect moet [x, y, width, height] zijn
+@msg	rect must be [x, y, width, height] with a positive width and height	rect moet [x, y, width, height] met een positieve breedte en hoogte zijn
 @msg	rect needs finite numbers and a positive width and height	rect heeft eindige getallen en een positieve breedte en hoogte nodig
 @msg	redraw needs id	redraw heeft id nodig
 @msg	redraw within must be a finite distance of 0 or more	within van redraw moet een eindige afstand van 0 of meer zijn
