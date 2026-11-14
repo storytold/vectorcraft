@@ -53,10 +53,10 @@ pub(super) fn export_reads(f: &Format, legacy: bool, key: &str) -> bool {
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(text_param(p, "format", "document.serialize")?.unwrap_or("vectorcraft")), None)?;
-    check_linked_scripts("document.serialize", f.id, s.doc()?)?;
     let unused = unused_option_notes("document.serialize", f, p);
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
+    check_linked_scripts("document.serialize", f.id, s.doc()?, &p)?;
     let (doc, display_doc_title) = source(s, f, &p, "document.serialize")?;
     let doc = &*doc;
     let mut q = p.clone();
@@ -97,10 +97,10 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, "document.export")?;
     }
     let f = writable("document.export", text_param(p, "format", "document.export")?, path)?;
-    check_linked_scripts("document.export", f.id, s.doc()?)?;
     let unused = unused_option_notes("document.export", f, p);
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
+    check_linked_scripts("document.export", f.id, s.doc()?, &p)?;
     let (doc, display_doc_title) = source(s, f, &p, "document.export")?;
     let doc = &*doc;
     let mut q = p.clone();
@@ -367,10 +367,11 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
     let f = writable(C, text_param(p, "format", C)?, path)?;
-    check_linked_scripts(C, f.id, s.doc()?)?;
     let unused = unused_option_notes(C, f, p);
     let expanded = expand_presets(s, C, p)?;
     let p = with_black_output(s, &expanded);
+    // The selection is written on one artboard of its own: every artboard, whatever `p` picks.
+    check_linked_scripts(C, f.id, s.doc()?, &without_artboards(&p))?;
     let (d, bounds) = selection(s, C, f.id == "txt")?;
     // The encoder's warnings (options accepted but not applied, features approximated or left
     // out), as document.export reports them.

@@ -121,22 +121,54 @@ pub(crate) fn naming_in_message(msg: &str, path: &str, name: &str) -> String {
     out
 }
 
-/// The error for an SVG of a document that links a JavaScript file outside the read roots.
+/// The error for a file that would name a JavaScript file the document links outside the read roots.
 pub(crate) const SCRIPT_OUTSIDE: &str = "a linked JavaScript file is outside the read roots";
 
-/// `cmd` may write `st`'s document in format `format` (a format id): any format but SVG and SVGZ,
-/// and those too unless read roots are in force and the document links a JavaScript file outside
-/// them (`svg_scripts`, a relative path taken from the document's folder; a URL is not checked),
-/// which the file's `<script>` element would name. The error names no file or folder.
-pub fn check_linked_scripts(cmd: &str, format: &str, st: &crate::DocState) -> Result<()> {
-    if !matches!(format, "svg" | "svgz") || crate::file_access::current().is_none() {
+/// `cmd` may write `st`'s document in format `format` (a format id) with options `p` (presets
+/// written out): always, unless read roots are in force, the document links a JavaScript file
+/// outside them (`svg_scripts`, a relative path taken from the document's folder; a URL is not
+/// checked) and the file names it ([`names_linked_scripts`], with the artboards `p` picks counted
+/// in `st`'s document): an SVG's `<script>` element, or the native document that a native file, a
+/// `.ai` file, an EPS file or a PDF with Preserve Editing carries. The error names no file or folder.
+pub fn check_linked_scripts(cmd: &str, format: &str, st: &crate::DocState, p: &Value) -> Result<()> {
+    check_scripts_of(cmd, &st.doc, st.path.as_deref(), || names_linked_scripts(cmd, format, p, st.doc.artboards.len()))
+}
+
+/// `doc`, saved at `doc_path`, may be written by `cmd` in a file that names its linked JavaScript
+/// files when `names` says so: as [`check_linked_scripts`] allows it.
+pub(crate) fn check_scripts_of(cmd: &str, doc: &vectorcraft_doc::Document, doc_path: Option<&str>, names: impl FnOnce() -> bool) -> Result<()> {
+    if crate::file_access::current().is_none() || !doc.svg_scripts.iter().any(|f| crate::cmd::links::script_hidden(f, doc_path)) || !names() {
         return Ok(());
     }
-    let doc_path = st.path.as_deref();
-    if st.doc.svg_scripts.iter().any(|f| crate::cmd::links::script_hidden(f, doc_path)) {
-        return Err(bad(cmd, SCRIPT_OUTSIDE));
+    Err(bad(cmd, SCRIPT_OUTSIDE))
+}
+
+/// Does a file of a document with `artboards` artboards, written in format `format` with options
+/// `p`, name the JavaScript files the document links? SVG, SVGZ, native files, native templates and
+/// EPS files always do. A `.ai` or `.ait` file does unless it is a legacy version 7 `.ai` file or `p`
+/// picks only some of the artboards; a PDF does with Preserve Editing on (as its preset, standard and
+/// options leave it) unless `p` picks only some of the artboards. Neither a `.ai` file nor a PDF
+/// does when `useArtboards` is false in `p` (one page, the bounds of the art). Options the encoder
+/// refuses count as naming them.
+pub(crate) fn names_linked_scripts(cmd: &str, format: &str, p: &Value, artboards: usize) -> bool {
+    use serde::Deserialize;
+    let every_artboard = || {
+        let pick = if p.is_object() { super::ArtboardPick::deserialize(p).ok() } else { Some(super::ArtboardPick::default()) };
+        pick.and_then(|pick| pick.resolve(artboards).ok()).is_none_or(|v| v.is_none_or(|v| v.iter().copied().eq(0..artboards)))
+    };
+    let art_page = || super::encode::use_artboards(cmd, p).is_ok_and(|u| u == Some(false));
+    match format {
+        "svg" | "svgz" | "vectorcraft" | "template" | "eps" => true,
+        "ai" | "ait" => {
+            let legacy = super::format(format).is_some_and(|f| super::legacy_ai::wanted(cmd, f, p).unwrap_or(false));
+            !legacy && !(format == "ai" && art_page()) && every_artboard()
+        }
+        "pdf" => {
+            let editing = super::pdf::settings(cmd, p).ok().is_none_or(|s| s.preserve_editing);
+            editing && !art_page() && every_artboard()
+        }
+        _ => false,
     }
-    Ok(())
 }
 
 /// `path` checked for writing against the automation roots in force.

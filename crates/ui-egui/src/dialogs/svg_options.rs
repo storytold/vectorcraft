@@ -291,7 +291,7 @@ fn code_view(app: &VectorcraftApp, ui: &mut egui::Ui, d: &Dialog) {
         Some((_, c)) => c,
         None => {
             const MAX: usize = 200_000;
-            let encoded = vectorcraft_engine::cmd::fileio::check_linked_scripts("document.export", "svg", st)
+            let encoded = vectorcraft_engine::cmd::fileio::check_linked_scripts("document.export", "svg", st, &json!({}))
                 .and_then(|()| vectorcraft_engine::cmd::fileio::encode_all(&st.doc, "svg", &json!({ "svg": opts })));
             let mut text = match encoded {
                 // Shown as text whatever the file's encoding.

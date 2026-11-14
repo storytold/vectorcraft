@@ -319,6 +319,60 @@ fn a_confined_package_names_files_outside_the_read_root_by_name() {
     assert!(info.to_string().contains(&dir.file("art/red.png")), "the person's: {info}");
 }
 
+/// A confined request packages no document that links, or places a native document or a PDF with
+/// Preserve Editing that links, a JavaScript file outside its read roots: the package is refused
+/// before anything is written, with an error that names no file or folder. A JavaScript file inside
+/// them is packaged, and so is one outside them when the person packages.
+#[test]
+fn a_confined_package_refuses_a_linked_javascript_file_outside_the_read_root() {
+    let away = Folder::new("package-script-away");
+    let home = Folder::new("package-script-home");
+    let script = away.file("menu.js");
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned(), "menu.js".to_string()];
+    let refused = |s: &mut Session, p: Value| {
+        let e = crate::file_access::confine(Some(&roots), || s.execute("file.package", &p)).expect_err("refused");
+        assert!(matches!(e, EngineError::BadParams { .. }), "{p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{p} names {h}: {e}");
+        }
+    };
+    let mut part = session();
+    run(&mut part, "shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30}));
+    run(&mut part, "svgInteractivity.addFile", json!({"file": script}));
+    std::fs::create_dir_all(home.0.join("art")).unwrap();
+    let native = home.file("art/part.vectorcraft");
+    save(&mut part, &native);
+    let r = run(&mut part, "document.serialize", json!({"format": "pdf"}));
+    let pdf = home.file("art/part.pdf");
+    write(&pdf, &vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap());
+    let out = home.file("out");
+    refused(&mut part, json!({"folder": out}));
+    refused(&mut part, json!({}));
+    for placed in [&native, &pdf] {
+        let mut s = session();
+        let r = run(&mut s, "file.place", json!({"path": placed, "link": true}));
+        assert_eq!(r["linked"], true, "{r}");
+        save(&mut s, &home.file("poster.vectorcraft"));
+        refused(&mut s, json!({"folder": out}));
+        refused(&mut s, json!({}));
+        assert!(!std::path::Path::new(&out).exists(), "{placed}");
+        // The person's package copies it.
+        assert_eq!(run(&mut s, "file.package", json!({}))["links"], 1, "{placed}");
+    }
+    // A JavaScript file inside the read roots.
+    run(&mut part, "svgInteractivity.removeFile", json!({"file": script}));
+    run(&mut part, "svgInteractivity.addFile", json!({"file": home.file("menu.js")}));
+    save(&mut part, &native);
+    let mut s = session();
+    run(&mut s, "file.place", json!({"path": native, "link": true}));
+    save(&mut s, &home.file("poster.vectorcraft"));
+    let r = crate::file_access::confine(Some(&roots), || s.execute("file.package", &json!({"folder": out}))).unwrap();
+    assert_eq!(r["links"], 1, "{r}");
+}
+
 /// A missing link stored as a path relative to the document names a file inside a confined
 /// request's read root: the package report and Document Info give its stored path.
 #[test]

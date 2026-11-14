@@ -272,6 +272,39 @@ fn control_svg_export_refuses_a_linked_javascript_file_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export`, and `file.exportAs` run as a command, write no file that carries the native
+/// document (a PDF with Preserve Editing, a native file, a `.ai` or EPS file) of a document that
+/// links a JavaScript file outside the read root, and the error names no file or folder; a PDF
+/// without Preserve Editing is written, and the person at the keyboard exports the native file.
+#[test]
+fn control_native_export_refuses_a_linked_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("native-script");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let script = s(base.join("outside/menu.js"));
+    app.run("svgInteractivity.addFile", json!({"file": script})).unwrap();
+    let out = |name: &str| s(base.join("out").join(name));
+    for (method, params) in [
+        ("app.export", json!({"path": out("a.pdf"), "wait": true})),
+        ("app.export", json!({"path": out("a.ai"), "wait": true})),
+        ("app.export", json!({"format": "eps"})),
+        ("engine.execute", json!({"command": "file.exportAs", "params": {"path": out("a.vectorcraft"), "format": "vectorcraft"}})),
+    ] {
+        let r = request(&mut app, &tx, method, params.clone());
+        let e = r["error"].as_str().unwrap_or_default();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{method} {params}: {r}");
+        assert!(!e.contains("menu.js") && !e.contains(&s(base.clone())), "{method} {params}: {r}");
+    }
+    assert_eq!(std::fs::read_dir(base.join("out")).unwrap().count(), 0, "nothing written");
+    let r = request(&mut app, &tx, "app.export", json!({"path": out("b.pdf"), "preserveEditing": false, "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    // The person at the keyboard isn't confined.
+    app.run("file.exportAs", json!({"path": out("a.vectorcraft"), "format": "vectorcraft"})).unwrap();
+    let native = vectorcraft_format::load(&std::fs::read(out("a.vectorcraft")).unwrap()).unwrap();
+    assert_eq!(native.svg_scripts, [script]);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `app.export` with a path writes the file when given an option only another format reads, and
 /// its warnings name that option, as `document.export`'s do without a path. `file.exportAs` run
 /// as a command does the same; an export that automation did not ask for gets no such note.

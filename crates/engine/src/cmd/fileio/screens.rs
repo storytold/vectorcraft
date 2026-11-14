@@ -1089,6 +1089,29 @@ pub(crate) fn with_export_preset(s: &Session, cmd: &str, settings: &mut Map<Stri
     Ok(())
 }
 
+/// Does the file of `item` that row `r` writes carry the native document, and with it the
+/// JavaScript files the document links ([`super::access::names_linked_scripts`])? A PDF holds the
+/// artboards it is written with: those of `single` (Export PDFs As › Single file), every artboard
+/// (Full Document), else the item's artboard of its document.
+fn names_scripts(item: &Item, r: &Row, single: Option<&[usize]>) -> bool {
+    if r.format.id != "pdf" {
+        return super::access::names_linked_scripts(C, r.format.id, &r.options, item.doc.artboards.len());
+    }
+    let (doc, options) = match (single, &item.every_artboard) {
+        (Some(boards), _) => {
+            let mut options = r.options.clone();
+            options["range"] = json!(boards.iter().map(|b| (b + 1).to_string()).collect::<Vec<_>>().join(", "));
+            (&item.doc, options)
+        }
+        (None, Some(all)) => (all, r.options.clone()),
+        (None, None) => match r.options_for(item.region, item.artboard) {
+            Ok(options) => (&item.doc, options),
+            Err(_) => return true,
+        },
+    };
+    super::access::names_linked_scripts(C, "pdf", &options, doc.artboards.len())
+}
+
 /// Every chosen artboard (asset, layer, selected object) in every format row, one file each (a PDF
 /// holds its artboard alone), or with `fullDocument` one file per row (a PDF of every artboard,
 /// else the bounds of all art). Items that share a name get `-2`, `-3`… instead of overwriting, and
@@ -1105,10 +1128,6 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     o.one_source()?;
     // `<filename>`: the document's file, as Save names it, or its title before it is saved.
     let st = s.doc()?;
-    // Before the folder is made or any row is written.
-    for r in &rows {
-        super::check_linked_scripts(C, r.format.id, st)?;
-    }
     let naming = Naming::of(&o, st.path.as_deref().unwrap_or(&st.doc.title))?;
     let selection = o.selection_mode()?;
     let selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };
@@ -1125,6 +1144,10 @@ pub(crate) fn export(s: &mut Session, p: &Value, asked: &Value) -> Result<Value>
     };
     let crop = rows.iter().any(|r| r.format.id != "pdf");
     let items = items(&doc, &o, selection, &selected, &naming.filename, crop, true)?;
+    // Before the folder is made or any row is written, with the artboards each file holds.
+    let single: Option<Vec<usize>> = items.iter().map(|i| i.artboard).collect::<Option<Vec<_>>>().filter(|a| naming.single_pdf && a.len() > 1);
+    let st = s.doc()?;
+    super::check_scripts_of(C, &st.doc, st.path.as_deref(), || rows.iter().any(|r| items.iter().any(|i| names_scripts(i, r, single.as_deref()))))?;
     // Appearance of Black › Printing / Exporting for RGB raster rows.
     // Include Artboard Fill off: the encoders leave the background colors out.
     let fill = if o.include_artboard_fill == Some(false) { json!({ "includeArtboardFill": false }) } else { json!({}) };
