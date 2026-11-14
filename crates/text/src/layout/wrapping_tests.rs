@@ -646,6 +646,79 @@ fn a_negative_advance_after_a_tab_keeps_a_fitting_line_whole() {
     assert_eq!(ended, (5, false));
 }
 
+/// A tabbed line of glyphs with negative advances, past the frame in the order of its text: `a`,
+/// a tab to the default stop at 36 pt, `y` stepping back 1 pt, then `n` times `b` (1 pt), `z`
+/// (−1 pt) and a space, so its glyphs other than the tab never fill the frame. Its breaks end the
+/// line before glyph 2 and before 6 + 3u for each u.
+fn stepping_back_tabbed_line(n: usize) -> (String, Vec<SGlyph>) {
+    let text = format!("a\ty{}", "bz ".repeat(n));
+    let specs: Vec<_> = text
+        .char_indices()
+        .map(|(byte, ch)| {
+            let adv = match ch {
+                'y' | 'z' => -1.0,
+                ' ' => 0.0,
+                _ => 1.0,
+            };
+            (byte, ch.len_utf8(), adv, ch)
+        })
+        .collect();
+    let glyphs = synthetic_glyphs(&specs);
+    (text, glyphs)
+}
+
+/// A tabbed line with glyphs stepping back stops reading a bounded number of breaks past where it
+/// overflows in the order of its text: a long paragraph is not read to its end to set one line.
+#[test]
+fn a_tabbed_line_stepping_back_stops_reading_past_its_overflow() {
+    let (text, glyphs) = stepping_back_tabbed_line(2000);
+    // The latest break the line reads is the first it measures as drawn.
+    let furthest = std::cell::Cell::new(0);
+    let measured = std::cell::Cell::new(0usize);
+    let drawn_fits = |end: usize, _hyphenated: bool| {
+        furthest.set(furthest.get().max(end));
+        measured.set(measured.get() + 1);
+        end <= 10
+    };
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 30.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (9, false));
+    // 256 breaks past the overflow at `y`: the break before glyph 6 + 3 × 255.
+    assert_eq!(furthest.get(), 771, "read up to glyph {} of {}", furthest.get(), glyphs.len());
+    assert!(measured.get() <= 300, "measured {} breaks as drawn", measured.get());
+}
+
+/// Where a tabbed line with glyphs stepping back stops reading, it ends at the latest break read
+/// that fits as drawn, even when a break past those fits too.
+#[test]
+fn a_tabbed_line_stepping_back_ends_at_the_latest_break_read_that_fits() {
+    let (text, glyphs) = stepping_back_tabbed_line(400);
+    let end = |drawn_fits: &dyn Fn(usize, bool) -> bool| {
+        break_line(
+            &text,
+            &glyphs,
+            0,
+            30.0,
+            &[],
+            0.0,
+            None,
+            Burasagari::None,
+            Kinsoku::None,
+            KinsokuShoriType::PushOutOnly,
+            false,
+            false,
+            &[],
+            Some(drawn_fits),
+        )
+    };
+    // The break before glyph 1101 is past the 256 breaks read after the overflow (up to 771).
+    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 1101), (9, false));
+    // A break among those read keeps its place.
+    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 600), (600, false));
+    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 771), (771, false));
+}
+
 /// Mojikumi: the greedy breaker measures a line as it is set, with its last character narrowed
 /// (`line_end`): 」 set half width ends a measure of three and a half characters. Only the last
 /// glyph of the last cluster counts, and only where the line may end.
