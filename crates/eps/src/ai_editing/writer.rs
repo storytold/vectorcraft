@@ -282,6 +282,8 @@ pub(super) struct Writer<'a> {
     /// The outlines of the clipping groups the art being written is in, in the document (empty in
     /// a definition, an opacity mask's art and a brush's art, which are written apart from them).
     shown: Vec<vectorcraft_geom::BezPath>,
+    /// The copy of an image that the last [`Self::image`] wrote as a window, when it did.
+    windowed: Option<images::Windowed>,
 }
 
 impl<'a> Writer<'a> {
@@ -350,6 +352,7 @@ impl<'a> Writer<'a> {
             last_samples: None,
             whole_images: HashMap::new(),
             shown: vec![],
+            windowed: None,
         }
     }
 
@@ -657,6 +660,8 @@ impl<'a> Writer<'a> {
             xy.knockout = Knockout::Off;
         }
         let start = self.body.len();
+        // An image's copy written as the part that its opacity mask, among other regions, shows.
+        let mut mask_window = None;
         match &n.kind {
             NodeKind::Layer { .. } => {}
             NodeKind::Group { children, clip: true } => self.clip_group(children, xy),
@@ -690,14 +695,16 @@ impl<'a> Writer<'a> {
                     .extras()
                     .mask
                     .as_ref()
-                    .filter(|m| m.clip && !m.invert && !m.disabled)
+                    .filter(|m| m.clip && !m.invert && !m.disabled && self.nest < MAX_NEST)
                     .and_then(|m| vectorcraft_render::painted_bounds(self.doc, &m.art));
                 if let Some(b) = masked {
                     self.shown.push(b.to_path(0.1));
                 }
+                self.windowed = None;
                 self.image(&self.doc.shown_image(n, im), xy);
                 if masked.is_some() {
                     self.shown.pop();
+                    mask_window = self.windowed.take();
                 }
             }
             NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
@@ -763,9 +770,13 @@ impl<'a> Writer<'a> {
             // A group's dictionary goes between its end and its state block.
             let block = (self.block_end == self.body.len() && self.block_start >= start).then(|| self.body.split_off(self.block_start));
             self.block_end = usize::MAX;
-            self.dictionary(n);
+            let mask_written = self.dictionary(n);
             if let Some(b) = block {
                 self.body.push_str(&b);
+            }
+            // Without its opacity mask, the image shows whole.
+            if let Some(w) = mask_window.filter(|_| !mask_written) {
+                self.write_whole(w);
             }
         }
         // An envelope's plugin `XP` follows its distorted art, after the art's state block.
@@ -796,24 +807,27 @@ impl<'a> Writer<'a> {
     /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`]),
     /// is bound to variables ([`Self::bound_variables`]; without a name, it gets an XML id and an
     /// empty `AIArtName`), has an opacity mask (`AI9_Mask`, see [`Self::mask`]), or is a symbol's
-    /// art (its symbol's entries first, see [`Self::define_symbol`]).
-    fn dictionary(&mut self, n: &Node) {
+    /// art (its symbol's entries first, see [`Self::define_symbol`]). False when `n` has an opacity
+    /// mask that is left out: nested too deep, or its art doesn't fit.
+    fn dictionary(&mut self, n: &Node) -> bool {
         let name = n.name.as_deref().filter(|s| !s.is_empty());
         let placed = std::mem::take(&mut self.placed);
         let typed = std::mem::take(&mut self.typed);
         let bound = self.bound_variables(n, placed, typed);
         let mut mask = n.extras().mask.as_deref();
+        let mut mask_written = true;
         // Masks nested too deep are left out (an empty mask would hide the object).
         if mask.is_some() && self.nest >= MAX_NEST {
             self.warn(DEEP_MASKS);
             mask = None;
+            mask_written = false;
         }
         let entries = match &self.root_entries {
             Some((id, _)) if *id == n.id => self.root_entries.take().map(|(_, e)| e),
             _ => None,
         };
         if name.is_none() && mask.is_none() && bound.is_empty() && entries.is_none() {
-            return;
+            return mask_written;
         }
         let start = self.body.len();
         let has_id = name.is_some() || !bound.is_empty();
@@ -836,12 +850,15 @@ impl<'a> Writer<'a> {
         // A mask whose art doesn't fit is left out, and with nothing else in it the dictionary too.
         if let Some(m) = mask
             && !self.mask(m)
-            && !has_id
-            && !has_entries
         {
-            return self.body.truncate(start);
+            if !has_id && !has_entries {
+                self.body.truncate(start);
+                return false;
+            }
+            mask_written = false;
         }
         self.body.push_str("%_;\n%_\n");
+        mask_written
     }
 
     /// An `/ArtDictionary` whose `AI10_ArtUID` is `name` as an XML id.

@@ -30,6 +30,18 @@ pub(super) const SAMPLES_LINE: &str = "XI\u{1}";
 /// An image's pixels as the data holds them, and whether it had 16 bits a channel ([`Samples::of`]).
 pub(super) type Read = Arc<(Samples, bool)>;
 
+/// A copy of an image written as the part of it that its regions show ([`Writer::image`]).
+pub(super) struct Windowed {
+    /// Where its raster is in the body.
+    at: std::ops::Range<usize>,
+    /// The index of its samples in [`Writer::payloads`].
+    payload: usize,
+    /// The image's pixels.
+    samples: Read,
+    /// What places the image's whole pixel grid in the document.
+    xf: Affine,
+}
+
 /// An image's pixels as the data holds them.
 pub(super) struct Samples {
     /// `/DeviceGray`, `/DeviceRGB` or `/DeviceCMYK`.
@@ -166,11 +178,14 @@ impl Writer<'_> {
                         ai_ops::image_window(&clips, im.xf * fit, (samples.width, samples.height))
                     })
                     .flatten();
-                match window {
-                    Some(window) => {
-                        self.raster(&samples.window(window), im.xf * fit * Affine::translate((f64::from(window[0]), f64::from(window[1]))))
+                match (window, &read) {
+                    (Some(window), Some(read)) => {
+                        let at = self.body.len();
+                        self.raster(&samples.window(window), im.xf * fit * Affine::translate((f64::from(window[0]), f64::from(window[1]))));
+                        self.windowed =
+                            Some(Windowed { at: at..self.body.len(), payload: self.payloads.len() - 1, samples: read.clone(), xf: im.xf * fit });
                     }
-                    None => {
+                    _ => {
                         if let Some(d) = data {
                             // `raster` adds the samples as the next payload. A copy written whole on
                             // `%_` lines after an earlier whole copy keeps the earlier one's entry.
@@ -288,6 +303,18 @@ impl Writer<'_> {
         let read = Samples::of(blob).map(Arc::new);
         self.last_samples = Some((blob.clone(), read.clone()));
         read
+    }
+
+    /// The copy `w`, written as a window, written whole in its place, with fresh samples; its
+    /// window's samples are emptied.
+    pub(super) fn write_whole(&mut self, w: Windowed) {
+        let tail = self.body.split_off(w.at.end);
+        self.body.truncate(w.at.start);
+        if let Some(p) = self.payloads.get_mut(w.payload) {
+            *p = Vec::new();
+        }
+        self.raster(&w.samples.0, w.xf);
+        self.body.push_str(&tail);
     }
 
     /// Keep `bytes` to go in the program where the mark this returns is.

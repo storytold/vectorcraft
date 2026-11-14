@@ -7649,6 +7649,72 @@ fn a_masked_image_keeps_the_pixels_its_mask_effects_show() {
     assert!(sizes[1] >= 35 * 35 * 3, "{sizes:?}");
 }
 
+/// The speckled image with an opacity mask that clips it to six small white squares in its corner.
+fn photo_masked_to_its_corner(doc: &mut Document) -> Node {
+    let mut masked = speckled_photo(doc);
+    let squares = (0..6).map(|i| square(doc, Rect::new(20.0 + f64::from(i) * 5.0, 10.0, 23.0 + f64::from(i) * 5.0, 20.0), Color::WHITE)).collect();
+    let art = group(doc, squares, false);
+    masked.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(art), clip: true, invert: false, disabled: false, linked: true }));
+    masked
+}
+
+/// A copy of an image written whole already whose opacity mask is left out for the object limit is
+/// written whole: without the mask, it shows all of its pixels.
+#[test]
+fn a_masked_copy_whose_mask_is_left_out_keeps_all_of_its_pixels() {
+    // GUARDS: the copy was cut to its mask, and the mask then left out, so it read back cropped.
+    let doc = photo_doc(|d| {
+        let photo = speckled_photo(d);
+        let masked = photo_masked_to_its_corner(d);
+        group(d, vec![photo, masked], false)
+    });
+    let (mut left_out, mut kept) = (0, 0);
+    for (max, mask, _, shown) in samples_within_each_limit(&doc) {
+        if shown.len() < 2 {
+            continue;
+        }
+        if mask {
+            assert!(shown[1] < SPECKLED_WHOLE, "room for {max}: {shown:?}");
+            kept += 1;
+        } else {
+            assert_eq!(shown, [SPECKLED_WHOLE, SPECKLED_WHOLE], "room for {max}");
+            left_out += 1;
+        }
+    }
+    assert!(left_out > 0 && kept > 0, "{left_out} limits left the mask out, {kept} kept it");
+}
+
+/// A copy of an image written whole already whose opacity mask is nested too deep to be written is
+/// written whole.
+#[test]
+fn a_masked_copy_nested_too_deep_for_its_mask_keeps_all_of_its_pixels() {
+    // GUARDS: the copy was cut to its mask, and the mask then left out for its depth.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let photo = speckled_photo(&mut doc);
+    doc.insert(Some(layer), usize::MAX, photo).unwrap();
+    // Isolated instances are written as their art, each a level deeper: the masked copy is at the limit.
+    let art = photo_masked_to_its_corner(&mut doc);
+    doc.symbols.push(Symbol { dynamic: false, name: "S0".into(), art: Arc::new(art) });
+    for i in 1..writer::MAX_NEST {
+        let mut inner = instance(&mut doc, &format!("S{}", i - 1), Affine::IDENTITY);
+        inner.isolate = true;
+        doc.symbols.push(Symbol { dynamic: false, name: format!("S{i}"), art: Arc::new(inner) });
+    }
+    let mut outer = instance(&mut doc, &format!("S{}", writer::MAX_NEST - 1), Affine::IDENTITY);
+    outer.isolate = true;
+    doc.insert(Some(layer), usize::MAX, outer).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::DEEP_MASKS), "{:?}", out.warnings);
+    // The symbols' definitions hold copies too: each copy written with its mask is the part the
+    // mask shows, and each copy whose mask is left out is whole.
+    let sizes = sample_sizes(&doc);
+    let whole = sizes.iter().filter(|s| **s == SPECKLED_WHOLE).count();
+    let masks = String::from_utf8_lossy(&out.program).matches("(AI9_Mask)").count();
+    assert_eq!(sizes.len() - whole, masks, "{sizes:?}");
+    assert!(whole >= 2, "the first copy and a copy whose mask is left out: {sizes:?}");
+}
+
 /// A linked image, an image with an opacity mask, and an image with a Warp and another effect are
 /// written as their drawn art, with no art style.
 #[test]
