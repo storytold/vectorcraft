@@ -4894,6 +4894,7 @@ imageTrace	Outline	Obrys
 @msg	bad trailer	chybný trailer
 @msg	balance must be between 0 and 100	balance musí být mezi 0 a 100
 @msg	batch step {_1} (`{id}`) failed: {e}	krok dávky {_1} (`{id}`) selhal: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	krok akce {_1} (`{id}`) selhal: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness musí být dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	dokument nelze zakódovat: {0}
 @msg	can't parse shortcut `{c}`	klávesovou zkratku `{c}` nelze analyzovat

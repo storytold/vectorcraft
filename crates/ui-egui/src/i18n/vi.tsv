@@ -4699,6 +4699,7 @@ theme	Appearance	Giao diện
 @msg	bad trailer	trailer không hợp lệ
 @msg	balance must be between 0 and 100	balance phải nằm trong khoảng 0 đến 100
 @msg	batch step {_1} (`{id}`) failed: {e}	bước hàng loạt {_1} (`{id}`) thất bại: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	bước {_1} của hành động (`{id}`) thất bại: {reason}
 @msg	before must name a panel	before phải đặt tên bảng
 @msg	below and above must name a panel floating in another group	below và above phải đặt tên bảng đang thả nổi trong nhóm khác
 @msg	Blend colors: select at least three objects with filled colours	Hòa trộn màu: chọn ít nhất ba đối tượng có màu tô

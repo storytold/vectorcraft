@@ -1889,6 +1889,7 @@ file-filter	Templates	範本
 @msg	Expand: no gradient fills	展開：沒有漸層填色
 @msg	Expand: nothing to expand	展開：沒有可展開的內容
 @msg	batch step {_1} (`{id}`) failed: {e}	批次步驟 {_1} (`{id}`) 失敗：{e}
+@msg	action step {_1} (`{id}`) failed: {reason}	動作步驟 {_1} (`{id}`) 失敗：{reason}
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP 檔案為 RGB 或灰階：colorModel rgb 或 gray
 @msg	Targa files are RGB: colorModel rgb	Targa 檔案為 RGB：colorModel rgb
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`：none、art 或 type

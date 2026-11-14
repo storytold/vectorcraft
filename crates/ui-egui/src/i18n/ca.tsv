@@ -5426,6 +5426,7 @@ digits	Malayalam	Malaiàlam
 @msg	bad trailer	tràiler incorrecte
 @msg	balance must be between 0 and 100	balance ha d’estar entre 0 i 100
 @msg	batch step {_1} (`{id}`) failed: {e}	el pas de lot {_1} (`{id}`) ha fallat: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	el pas {_1} de l’acció (`{id}`) ha fallat: {reason}
 @msg	Batch: {count} processed	Lot: {count} processats
 @msg	Batch: {count} processed, {failed} failed	Lot: {count} processats, {failed} fallits
 @msg	before must name a panel	before ha de nomenar un panell

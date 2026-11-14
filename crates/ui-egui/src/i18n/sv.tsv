@@ -4484,6 +4484,7 @@ axis	Both	Båda
 @msg	bad trailer	ogiltig trailer
 @msg	balance must be between 0 and 100	balance måste vara mellan 0 och 100
 @msg	batch step {_1} (`{id}`) failed: {e}	batchsteg {_1} (`{id}`) misslyckades: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	åtgärdssteg {_1} (`{id}`) misslyckades: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness måste vara dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	kan inte koda dokumentet: {0}
 @msg	can't parse shortcut `{c}`	kan inte tolka kortkommandot `{c}`

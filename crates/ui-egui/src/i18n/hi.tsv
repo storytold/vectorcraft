@@ -6479,6 +6479,7 @@ antiAlias	Sharp	शार्प
 @msg	bad trailer size	बुरा ट्रेलर आकार
 @msg	balance must be between 0 and 100	balance 0 से 100 के बीच होना चाहिए
 @msg	batch step {_1} (`{id}`) failed: {e}	बैच चरण {_1} (`{id}`) विफल: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	कार्रवाई चरण {_1} (`{id}`) विफल: {reason}
 @msg	Batch: {count} processed	बैच: {count} संसाधित
 @msg	Batch: {count} processed, {failed} failed	बैच: {count} संसाधित, {failed} विफल
 @msg	batches cannot nest	बैच घोंसला नहीं कर सकते

@@ -4473,6 +4473,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	Expand: no gradient fills	拡張: グラデーションの塗りがありません
 @msg	Expand: nothing to expand	拡張: 拡張するものがありません
 @msg	batch step {_1} (`{id}`) failed: {e}	バッチのステップ {_1} (`{id}`) が失敗しました: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	アクションのステップ {_1} (`{id}`) が失敗しました: {reason}
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP ファイルが対応するのは RGB とグレースケールのみです: colorModel には rgb または gray を指定してください
 @msg	Targa files are RGB: colorModel rgb	Targa ファイルが対応するのは RGB のみです: colorModel には rgb を指定してください
 @msg	antiAlias `{id}`: none, art or type	antiAlias に `{id}` は指定できません: none、art、type のいずれかを指定してください
