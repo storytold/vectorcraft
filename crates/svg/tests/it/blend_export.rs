@@ -261,9 +261,12 @@ fn a_masked_group_spans_its_region_when_its_art_paints_past_its_shapes() {
         InGroup,
         InNestedGroup,
         FillEffect,
+        HiddenFill,
+        UnpaintedStroke,
         HiddenInGroup,
         Brushed,
         InSymbol,
+        OverriddenSymbol,
         InBlend,
     }
     use Case::*;
@@ -275,11 +278,17 @@ fn a_masked_group_spans_its_region_when_its_art_paints_past_its_shapes() {
         (InNestedGroup, true, true),
         (FillEffect, true, true),
         (FillEffect, false, false),
+        // A fill or stroke that isn't written doesn't count.
+        (HiddenFill, true, false),
+        (UnpaintedStroke, true, false),
         (HiddenInGroup, true, false),
         (Brushed, false, false),
         (Brushed, true, true),
         (InSymbol, true, true),
         (InSymbol, false, false),
+        // An unpainted fill in a dynamic symbol's art that the instance paints counts.
+        (OverriddenSymbol, true, true),
+        (OverriddenSymbol, false, false),
         (InBlend, true, true),
         (InBlend, false, false),
     ] {
@@ -290,15 +299,28 @@ fn a_masked_group_spans_its_region_when_its_art_paints_past_its_shapes() {
             stroke.brush = Some("Bristle Round".into());
             red.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(stroke));
         }
+        if matches!(case, UnpaintedStroke) {
+            red.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::None, 8.0)));
+        }
         if shadowed {
             match case {
-                FillEffect => red.appearance.items[0].effects_mut().push(drop_shadow()),
+                FillEffect | HiddenFill | OverriddenSymbol => red.appearance.items[0].effects_mut().push(drop_shadow()),
+                UnpaintedStroke => red.appearance.items.last_mut().unwrap().effects_mut().push(drop_shadow()),
                 _ => red.appearance.effects.push(drop_shadow()),
             }
+        }
+        if matches!(case, HiddenFill)
+            && let vectorcraft_doc::AppearanceItem::Fill(f) = &mut red.appearance.items[0]
+        {
+            f.visible = false;
+        }
+        if matches!(case, OverriddenSymbol) {
+            red.appearance.set_fill(Paint::None);
         }
         let group = |d: &mut Document, n: Node| Node::group(d.alloc_id(), vec![n.into()]);
         let mut masked = match case {
             Alone | FillEffect => red,
+            HiddenFill | UnpaintedStroke => group(&mut d, red),
             InGroup | Brushed => group(&mut d, red),
             InNestedGroup => {
                 let inner = group(&mut d, red);
@@ -311,6 +333,14 @@ fn a_masked_group_spans_its_region_when_its_art_paints_past_its_shapes() {
             InSymbol => {
                 d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Square".into(), art: std::sync::Arc::new(red) });
                 let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Square".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+                group(&mut d, instance)
+            }
+            OverriddenSymbol => {
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "Square".into(), art: std::sync::Arc::new(red) });
+                let mut instance =
+                    Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Square".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+                let fill = Some(Paint::solid(Color::rgb8(255, 0, 0)));
+                instance.extras_mut().symbol_overrides.push(vectorcraft_doc::symbol_overrides::SymbolOverride { fill, ..Default::default() });
                 group(&mut d, instance)
             }
             InBlend => {

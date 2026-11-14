@@ -449,17 +449,24 @@ impl Writer<'_> {
 
     /// Do `n`, its fills and strokes, its members at any depth, its symbols' art or the art its
     /// live objects are written as have a visible raster effect (shadow, glow, blur, feather)?
-    /// Objects that aren't written (hidden ones, unless the options keep them) are skipped. The
-    /// walk keeps its own stack, and looks at each symbol's art once.
+    /// Objects that aren't written (hidden ones, unless the options keep them) are skipped, and so
+    /// are fills and strokes that [`Self::shape`] doesn't write (hidden, unpainted or zero-width).
+    /// An instance with overrides is looked at in the art it is written as
+    /// ([`vectorcraft_brush::instance_art`]). The walk keeps its own stack, and looks at each
+    /// symbol's art once, and at each instance's overridden art once.
     fn holds_raster(&self, n: &Node) -> bool {
         let mut stack: Vec<std::sync::Arc<Node>> = vec![];
-        let mut symbols = std::collections::HashSet::new();
+        let mut symbols: std::collections::HashSet<(String, Option<vectorcraft_doc::NodeId>)> = std::collections::HashSet::new();
+        let paints = |i: &AppearanceItem| match i {
+            AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+            AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
+        };
         // Whether `n` itself has one; else its members, symbol art or expanded art go on the stack.
         let mut visit = |n: &Node, stack: &mut Vec<std::sync::Arc<Node>>| {
             if !(n.visible || self.opts.hidden_layers) {
                 return false;
             }
-            if has_raster(&n.appearance.effects) || n.appearance.items.iter().any(|i| has_raster(i.effects())) {
+            if has_raster(&n.appearance.effects) || n.appearance.items.iter().any(|i| paints(i) && has_raster(i.effects())) {
                 return true;
             }
             // A live object is written as its expanded art ([`Self::node_body`]), which holds no
@@ -471,11 +478,13 @@ impl Writer<'_> {
                     return false;
                 }
             }
-            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
-                && symbols.insert(symbol.clone())
-                && let Some(s) = self.doc.symbols.iter().find(|s| s.name == *symbol)
-            {
-                stack.push(s.art.clone());
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                let custom = !n.extras().symbol_overrides.is_empty();
+                if symbols.insert((symbol.clone(), custom.then_some(n.id)))
+                    && let Some(s) = self.doc.symbols.iter().find(|s| s.name == *symbol)
+                {
+                    stack.push(if custom { std::sync::Arc::new(vectorcraft_brush::instance_art(&s.art, n)) } else { s.art.clone() });
+                }
             }
             stack.extend(n.children().into_iter().flatten().cloned());
             false
