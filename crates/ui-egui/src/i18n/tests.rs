@@ -113,6 +113,59 @@ fn hindi_rows_keep_the_meaning_of_their_english() {
     assert!(all.contains("3 आर्टबोर्ड में से 1") && all.contains("सभी आर्टबोर्ड रखने के लिए"), "{all}");
     let left_out = message(hi, "the file was read up to an error (bad xref): what follows it was left out");
     assert!(left_out.contains("उसके बाद का हिस्सा छोड़ दिया गया"), "{left_out}");
+    assert_eq!(message(hi, "unknown align `left`"), "अज्ञात संरेखण `left`");
+    assert_eq!(tr(hi, "Delete Library Group"), "लाइब्रेरी ग्रुप हटाएँ");
+    assert_eq!(message(hi, "not editing an opacity mask"), "ओपेसिटी मास्क संपादित नहीं किया जा रहा है");
+    assert_eq!(
+        message(hi, "a page thumbnail must be RGB pixels, 1 to 256 a side (got 0 × 4)"),
+        "पेज थंबनेल RGB पिक्सल का होना चाहिए, हर तरफ़ 1 से 256 (मिला 0 × 4)"
+    );
+    assert_eq!(message(hi, "invalid angle"), "अमान्य कोण");
+}
+
+/// Hindi messages keep every `a|b|c` list of accepted values exactly as their English writes it.
+#[test]
+fn hindi_messages_keep_their_lists_of_accepted_values() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg") {
+        let lists = src.split(|c: char| !(c.is_ascii_alphabetic() || c == '|')).filter(|w| w.contains('|') && w.split('|').all(|v| !v.is_empty()));
+        for list in lists.filter(|list| !translation.contains(*list)) {
+            wrong.push(format!("{list} in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi messages change a list of values:\n{}", wrong.len(), wrong.join("\n"));
+}
+
+/// Hindi rows leave no English connecting word in their sentences. Text in backticks, quotes,
+/// braces and brackets is a name, value or placeholder and keeps its English.
+#[test]
+fn hindi_rows_keep_no_english_words_in_their_sentences() {
+    const ENGLISH: [&str; 13] = ["or", "and", "the", "must", "give", "see", "use", "most", "is", "of", "be", "not", "an"];
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let mut prose = String::new();
+        let mut close = None;
+        for c in translation.chars() {
+            match (close, c) {
+                (Some(end), _) if c == end => close = None,
+                (Some(_), _) => {}
+                (None, '`') => close = Some('`'),
+                (None, '"') => close = Some('"'),
+                (None, '“') => close = Some('”'),
+                (None, '{') => close = Some('}'),
+                (None, '[') => close = Some(']'),
+                (None, _) => prose.push(c),
+            }
+        }
+        if let Some(word) = prose.split(|c: char| !c.is_ascii_alphabetic()).find(|w| ENGLISH.contains(w)) {
+            wrong.push(format!("{word} in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows keep an English word:\n{}", wrong.len(), wrong.join("\n"));
 }
 
 /// Locale tags name their language by region or script (in either case, with an encoding or
@@ -406,6 +459,46 @@ fn document_info_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in &labels {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// The values Document Info makes and shows in the interface language: the font states and
+/// embedding permissions, the templates of the font, image, raster effects and Repeat object
+/// values, the names of gradients named by their kind, and the counted instances, rows and columns.
+#[test]
+fn document_info_values_are_in_complete_catalogs() {
+    const VALUES: [&str; 20] = [
+        "built in",
+        "embedding not allowed",
+        "embedding for editing",
+        "embedding for preview and print",
+        "embedding allowed",
+        "{file}; {embedding}",
+        "substituted: shown in {family} {style} ({detail})",
+        "missing: shown in {family} {style}",
+        "missing",
+        "{width} × {height} px",
+        "{size} — {file}",
+        "{n} ppi",
+        "{kind}, {instances}",
+        "{kind}, {rows} × {cols}",
+        "{grid}, {instances}",
+        "Linear gradient",
+        "Radial gradient",
+        "Conic gradient",
+        "Diamond gradient",
+        "Freeform gradient",
+    ];
+    const COUNTED: [(&str, &str); 3] = [("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
+    let gradient_kinds: Vec<String> = vectorcraft_color::GradientKind::ALL.iter().map(|k| format!("{} gradient", k.label())).collect();
+    assert!(gradient_kinds.iter().all(|k| VALUES.contains(&k.as_str())), "{gradient_kinds:?}");
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for value in VALUES {
+            assert!(lang.catalog().plain(value).is_some(), "{} is missing {value}", lang.code);
+        }
+        for (one, other) in COUNTED {
+            assert!(lang.catalog().plural(one, other, 0).is_some(), "{} is missing the row for {other}", lang.code);
         }
     }
 }

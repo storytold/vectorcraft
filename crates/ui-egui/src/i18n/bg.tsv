@@ -2120,6 +2120,29 @@ font-technology	Variable	Променливи
 	Bristle Brush	Четка с косъм
 	Pattern Brush	Четка с мостра
 	missing from the Brushes panel	липсва в панела „Четки“
+	built in	вграден
+	embedding not allowed	вграждането не е разрешено
+	embedding for editing	вграждане за редактиране
+	embedding for preview and print	вграждане за преглед и печат
+	embedding allowed	вграждането е разрешено
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	заместен: показан с {family} {style} ({detail})
+	missing: shown in {family} {style}	липсва: показан с {family} {style}
+	missing	липсва
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Линеен градиент
+	Radial gradient	Радиален градиент
+	Conic gradient	Конусен градиент
+	Diamond gradient	Ромбовиден градиент
+	Freeform gradient	Градиент със свободна форма
+@plural	{n} instance|{n} instances	{n} екземпляр|{n} екземпляра
+@plural	{n} row|{n} rows	{n} ред|{n} реда
+@plural	{n} column|{n} columns	{n} колона|{n} колони
 	Select art to make a scatter, art or pattern brush.	Изберете графика, за да създадете разпръсната четка, артистична четка или четка с мостра.
 	Brush Art	Графика на четка
 	New Calligraphic Brush	Нова калиграфска четка
@@ -4147,6 +4170,10 @@ axis	Both	И двете
 @msg	Couldn't paste: the document it was pasted in was reverted	Неуспешно поставяне: документът, в който се поставяше, е върнат към запазеното
 @msg	Couldn't read {name}: {e}	Неуспешно четене на {name}: {e}
 @msg	Couldn't save recovery data: {e}	Неуспешно запазване на данните за възстановяване: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване на {title}: {e}. Копията се записват в {folder}, папката за възстановяване по подразбиране; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване на {title}: {e}. Копията се записват в {folder}, папката, зададена в Предпочитания; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване: {e}. Копията се записват в {folder}, папката за възстановяване по подразбиране; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване: {e}. Копията се записват в {folder}, папката, зададена в Предпочитания; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Създаване на контури: изберете текстови обекти
 @msg	Create from Guides: the document has no artboard	Създаване от водачи: документът няма работна област
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Създаване от водачи: водачите правят повече от {MAX_PIECES} парчета
@@ -6845,3 +6872,9 @@ breakText	Glyphs	Глифи
 	Box	Рамка
 	Swatch	Образец
 	Direction	Посока
+	Banner Hems and Grommets…	Подгъви и капси за банер…
+	Banner Hems and Grommets	Подгъви и капси за банер
+	Hem	Подгъв
+	Grommets	Капси
+	Grommet Inset	Отстъп на капсите от ръба
+	Diameter	Диаметър

@@ -2439,6 +2439,29 @@ antiAlias	Sharp	シャープ
 	Bristle Brush	剛毛ブラシ
 	Pattern Brush	パターンブラシ
 	missing from the Brushes panel	ブラシパネルにありません
+	built in	内蔵
+	embedding not allowed	埋め込み不可
+	embedding for editing	編集用に埋め込み可
+	embedding for preview and print	プレビューと印刷用に埋め込み可
+	embedding allowed	埋め込み可
+	{file}; {embedding}	{file}、{embedding}
+	substituted: shown in {family} {style} ({detail})	代替: {family} {style} で表示 ({detail})
+	missing: shown in {family} {style}	見つかりません: {family} {style} で表示
+	missing	見つかりません
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}、{instances}
+	{kind}, {rows} × {cols}	{kind}、{rows} × {cols}
+	{grid}, {instances}	{grid}、{instances}
+	Linear gradient	線形グラデーション
+	Radial gradient	円形グラデーション
+	Conic gradient	円錐グラデーション
+	Diamond gradient	ひし形グラデーション
+	Freeform gradient	フリーグラデーション
+@plural	{n} instance|{n} instances	インスタンス {n} 個
+@plural	{n} row|{n} rows	{n} 行
+@plural	{n} column|{n} columns	{n} 列
 	Select art to make a scatter, art or pattern brush.	散布ブラシ、アートブラシ、パターンブラシを作成するには、アートを選択します。
 	Brush Art	ブラシのアート
 	New Calligraphic Brush	新規絵筆ブラシ
@@ -4602,6 +4625,9 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	Web 版ではファイルパスからはインストールできないため、モジュールは `dataBase64` で渡してください
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` は `auto` か、`en` や `zh-hant` などの言語コードにしてください
 @msg	`{key}` must be a #rrggbb color	`{key}` は #rrggbb 形式のカラーにしてください
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` は #rrggbb 形式のカラーかレイヤーカラー名にしてください
+@msg	unknown Live Paint option `{key}`	不明なライブペイントオプション `{key}`
+@msg	unknown Shape Builder option `{key}`	不明なシェイプ形成ツールオプション `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` は #rrggbb 形式のカラーにしてください
 @msg	`{key}` must be a string	`{key}` は文字列にしてください
 @msg	`{key}` must be a profile name or null	`{key}` はプロファイル名または null にしてください
@@ -4809,6 +4835,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	cannot read PDF: {0}	PDF を読み込めません: {0}
 @msg	invalid PDF setting: {0}	PDF の設定が正しくありません: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: UserUnit {unit} で書き出されるため、UserUnit を無視するアプリではその倍率だけ小さく表示されます
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: UserUnit {unit} で書き出されるため、UserUnit を無視するアプリではその倍率だけ小さく表示されます: 「200 in より長いページを実寸のポイントで書き出す」をオンにしてください
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	アートボード {n} のページは {size} で、PDF のページ上限 14,400 pt (200 in) を超えています: {label} のページは UserUnit なしでポイント単位で書き出され、上限を守るアプリではページが 200 in で切り取られます
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 には、14,400 pt (200 in) を超えるページがサイズを保つために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 には、14,400 pt (200 in) を超えるページが PDF/A-2 のページ上限 14,400 単位に収まるために必要な UserUnit がありません: ファイルは PDF 1.6 として書き出されます
@@ -5207,6 +5234,10 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	the print job has no data	プリントジョブにデータがありません
 @msg	there are no printer settings to open here	この環境では開けるプリンター設定がありません
 @msg	Couldn't save recovery data: {e}	復帰用データを保存できませんでした: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title} の復帰用データを保存できませんでした: {e}。コピーの保存先は {folder} (デフォルトの復帰用フォルダー) です。別のフォルダーを使うには、「環境設定 → ファイル管理 → データ復帰 → フォルダー」 (recoveryFolder) を設定してください
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title} の復帰用データを保存できませんでした: {e}。コピーの保存先は {folder} (環境設定で指定したフォルダー) です。別のフォルダーを使うには、「環境設定 → ファイル管理 → データ復帰 → フォルダー」 (recoveryFolder) を設定してください
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	復帰用データを保存できませんでした: {e}。コピーの保存先は {folder} (デフォルトの復帰用フォルダー) です。別のフォルダーを使うには、「環境設定 → ファイル管理 → データ復帰 → フォルダー」 (recoveryFolder) を設定してください
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	復帰用データを保存できませんでした: {e}。コピーの保存先は {folder} (環境設定で指定したフォルダー) です。別のフォルダーを使うには、「環境設定 → ファイル管理 → データ復帰 → フォルダー」 (recoveryFolder) を設定してください
 @msg	Saved recovery data for {title}	{title} の復帰用データを保存しました
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	復帰用データのドキュメントを {n} 件破棄しました
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	復帰用データからドキュメントを {n} 件復元しました: 残すには保存してください
@@ -7147,3 +7178,9 @@ breakText	Glyphs	字形
 	Margin	マージン
 	Box	枠
 	Swatch	スウォッチ
+	Banner Hems and Grommets…	バナーの折り返しとハトメ…
+	Banner Hems and Grommets	バナーの折り返しとハトメ
+	Hem	折り返し
+	Grommets	ハトメ
+	Grommet Inset	端からハトメまでの距離
+	Diameter	直径

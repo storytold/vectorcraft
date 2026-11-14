@@ -3345,6 +3345,29 @@ theme	Appearance	Ulkoasu
 	Bristle Brush	Harjassivellin
 	Pattern Brush	Kuviosivellin
 	missing from the Brushes panel	puuttuu Siveltimet-paneelista
+	built in	sisäänrakennettu
+	embedding not allowed	upottaminen ei sallittu
+	embedding for editing	upottaminen muokkausta varten
+	embedding for preview and print	upottaminen esikatselua ja tulostusta varten
+	embedding allowed	upottaminen sallittu
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	korvattu: näytetään fontilla {family} {style} ({detail})
+	missing: shown in {family} {style}	puuttuu: näytetään fontilla {family} {style}
+	missing	puuttuu
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineaarinen liukuväri
+	Radial gradient	Säteittäinen liukuväri
+	Conic gradient	Kartiomainen liukuväri
+	Diamond gradient	Vinoneliöliukuväri
+	Freeform gradient	Vapaamuotoinen liukuväri
+@plural	{n} instance|{n} instances	{n} esiintymä|{n} esiintymää
+@plural	{n} row|{n} rows	{n} rivi|{n} riviä
+@plural	{n} column|{n} columns	{n} sarake|{n} saraketta
 	Select art to make a scatter, art or pattern brush.	Valitse kuvitus, jotta voit luoda sirote-, taide- tai kuviosiveltimen.
 	Brush Art	Siveltimen kuvitus
 	New Symbol	Uusi symboli
@@ -4582,6 +4605,10 @@ imageTrace	Outline	Ääriviiva
 @msg	Couldn't paste: the document it was pasted in was reverted	Liittäminen ei onnistunut: asiakirja, johon liitettiin, on palautettu tallennettuun versioon
 @msg	Couldn't read {name}: {e}	Tiedostoa {name} ei voitu lukea: {e}
 @msg	Couldn't save recovery data: {e}	Palautustietoja ei voitu tallentaa: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kohteen {title} palautustietoja ei voitu tallentaa: {e}. Kopiot tallennetaan kansioon {folder}, joka on oletusarvoinen palautuskansio; jos haluat käyttää toista kansiota, määritä Asetukset → Tiedostojen käsittely → Tietojen palautus → Kansio (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kohteen {title} palautustietoja ei voitu tallentaa: {e}. Kopiot tallennetaan kansioon {folder}, joka on määritetty Asetuksissa; jos haluat käyttää toista kansiota, määritä Asetukset → Tiedostojen käsittely → Tietojen palautus → Kansio (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Palautustietoja ei voitu tallentaa: {e}. Kopiot tallennetaan kansioon {folder}, joka on oletusarvoinen palautuskansio; jos haluat käyttää toista kansiota, määritä Asetukset → Tiedostojen käsittely → Tietojen palautus → Kansio (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Palautustietoja ei voitu tallentaa: {e}. Kopiot tallennetaan kansioon {folder}, joka on määritetty Asetuksissa; jos haluat käyttää toista kansiota, määritä Asetukset → Tiedostojen käsittely → Tietojen palautus → Kansio (recoveryFolder)
 @msg	Create Outlines: select text objects	Muunna ääriviivoiksi: valitse tekstiobjekteja
 @msg	Create from Guides: the document has no artboard	Luo apuviivoista: asiakirjassa ei ole piirtoalustaa
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Luo apuviivoista: apuviivat muodostavat yli {MAX_PIECES} viipaletta
@@ -4666,6 +4693,9 @@ imageTrace	Outline	Ääriviiva
 @msg	`{keep}` is not a side of this axis	`{keep}` ei ole tämän akselin puoli
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` on oltava `auto` tai kielikoodi, kuten `en` tai `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` on oltava #rrggbb-väri
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` on oltava #rrggbb-väri tai tason värin nimi
+@msg	unknown Live Paint option `{key}`	tuntematon elävän maalauksen valinta `{key}`
+@msg	unknown Shape Builder option `{key}`	tuntematon muodonmuodostimen valinta `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` on oltava #rrggbb-väri
 @msg	`{key}` must be a number	`{key}` on oltava luku
 @msg	`{key}` must be a number, not {v}	`{key}` on oltava luku, ei {v}
@@ -4817,6 +4847,7 @@ imageTrace	Outline	Ääriviiva
 @msg	internal error: {msg} (please report this bug)	sisäinen virhe: {msg} (ilmoita tästä virheestä)
 @msg	invalid PDF setting: {0}	virheellinen PDF-asetus: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	piirtoalustan {n} sivu on {size}, pidempi kuin PDF:n 14 400 pt:n (200 in) sivuraja: se kirjoitetaan UserUnit-arvolla {unit}, joten UserUnitin ohittavat sovellukset näyttävät sen niin monta kertaa pienempänä
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	piirtoalustan {n} sivu on {size}, pidempi kuin PDF:n 14 400 pt:n (200 in) sivuraja: se kirjoitetaan UserUnit-arvolla {unit}, joten UserUnitin ohittavat sovellukset näyttävät sen niin monta kertaa pienempänä: ota käyttöön ”Kirjoita yli 200 in pitkät sivut täysikokoisina pisteinä”
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	piirtoalustan {n} sivu on {size}, pidempi kuin PDF:n 14 400 pt:n (200 in) sivuraja: {label}-sivut kirjoitetaan ilman UserUnitia, pisteinä, ja rajaa noudattavat sovellukset rajaavat sivun 200 in:iin
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5:ssä ei ole UserUnitia, jota yli 14 400 pt:n (200 in) sivu tarvitsee säilyttääkseen kokonsa: tiedosto kirjoitetaan PDF 1.6:na
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4:ssä ei ole UserUnitia, jota yli 14 400 pt:n (200 in) sivu tarvitsee pysyäkseen PDF/A-2:n 14 400 yksikön sivurajan sisällä: tiedosto kirjoitetaan PDF 1.6:na
@@ -7486,3 +7517,9 @@ breakText	Glyphs	Merkit
 	Margin	Marginaali
 	Box	Kehys
 	Swatch	Värimalli
+	Banner Hems and Grommets…	Bannerin päärmeet ja purjerenkaat…
+	Banner Hems and Grommets	Bannerin päärmeet ja purjerenkaat
+	Hem	Päärme
+	Grommets	Purjerenkaat
+	Grommet Inset	Purjerenkaiden etäisyys reunasta
+	Diameter	Halkaisija

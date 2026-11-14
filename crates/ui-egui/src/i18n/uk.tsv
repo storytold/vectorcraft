@@ -2222,6 +2222,29 @@ file-filter	Templates	Шаблони
 	Bristle Brush	Щетинний пензель
 	Pattern Brush	Візерунковий пензель
 	missing from the Brushes panel	відсутній у панелі «Пензлі»
+	built in	вбудований
+	embedding not allowed	вбудовування заборонено
+	embedding for editing	вбудовування для редагування
+	embedding for preview and print	вбудовування для перегляду й друку
+	embedding allowed	вбудовування дозволено
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	замінено: показано шрифтом {family} {style} ({detail})
+	missing: shown in {family} {style}	відсутній: показано шрифтом {family} {style}
+	missing	відсутній
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Лінійний градієнт
+	Radial gradient	Радіальний градієнт
+	Conic gradient	Конічний градієнт
+	Diamond gradient	Ромбоподібний градієнт
+	Freeform gradient	Довільний градієнт
+@plural	{n} instance|{n} instances	{n} екземпляр|{n} екземпляри|{n} екземплярів
+@plural	{n} row|{n} rows	{n} рядок|{n} рядки|{n} рядків
+@plural	{n} column|{n} columns	{n} стовпець|{n} стовпці|{n} стовпців
 	Select art to make a scatter, art or pattern brush.	Виділіть малюнок, щоб створити пензель-розпорошення, художній або візерунковий пензель.
 	Brush Art	Малюнок пензля
 	New Calligraphic Brush	Новий каліграфічний пензель
@@ -4394,6 +4417,10 @@ axis	Both	Обидві
 @msg	Couldn't paste: the document it was pasted in was reverted	Не вдалося вставити: документ, у який виконувалося вставлення, було повернуто до збереженої версії
 @msg	Couldn't read {name}: {e}	Неможливо прочитати {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не вдалося зберегти дані відновлення: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не вдалося зберегти дані відновлення для {title}: {e}. Копії зберігаються в {folder}, типовій папці відновлення; щоб використати іншу папку, задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не вдалося зберегти дані відновлення для {title}: {e}. Копії зберігаються в {folder}, папці, заданій в установках; щоб використати іншу папку, задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не вдалося зберегти дані відновлення: {e}. Копії зберігаються в {folder}, типовій папці відновлення; щоб використати іншу папку, задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не вдалося зберегти дані відновлення: {e}. Копії зберігаються в {folder}, папці, заданій в установках; щоб використати іншу папку, задайте Установки → Робота з файлами → Відновлення даних → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Створення контурів: виділіть текстові об’єкти
 @msg	Create from Guides: the document has no artboard	Створення з напрямних: у документі немає монтажної області
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Створення з напрямних: напрямні утворюють більше {MAX_PIECES} фрагментів
@@ -4479,6 +4506,9 @@ axis	Both	Обидві
 @msg	`{keep}` is not a side of this axis	`{keep}` не є стороною цієї осі
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` має бути `auto` або кодом мови, наприклад `en` або `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` має бути кольором #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` має бути кольором #rrggbb або назвою кольору шару
+@msg	unknown Live Paint option `{key}`	невідомий параметр швидкої заливки `{key}`
+@msg	unknown Shape Builder option `{key}`	невідомий параметр створення фігур `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` має бути кольором #rrggbb
 @msg	`{key}` must be a number	`{key}` має бути числом
 @msg	`{key}` must be a number, not {v}	`{key}` має бути числом, а не {v}
@@ -4638,6 +4668,7 @@ axis	Both	Обидві
 @msg	internal error: {msg} (please report this bug)	внутрішня помилка: {msg} (будь ласка, повідомте про цю помилку)
 @msg	invalid PDF setting: {0}	неприпустимий параметр PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): її записано з UserUnit {unit}, тому застосунки, які ігнорують UserUnit, показують її в стільки ж разів меншою
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): її записано з UserUnit {unit}, тому застосунки, які ігнорують UserUnit, показують її в стільки ж разів меншою: увімкніть «Записувати сторінки, довші за 200 in, у повному розмірі, у пунктах»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	сторінка монтажної області {n} має розмір {size}, що більше за обмеження PDF на розмір сторінки в 14 400 pt (200 in): сторінки {label} записуються без UserUnit, у пунктах, і застосунки, що дотримуються обмеження, обрізають сторінку до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	у PDF 1.5 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб зберегти розмір: файл записується як PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	у PDF 1.4 немає UserUnit, який потрібен сторінці, довшій за 14 400 pt (200 in), щоб вкластися в межу сторінки PDF/A-2 у 14 400 одиниць: файл записується як PDF 1.6
@@ -7061,3 +7092,9 @@ breakText	Glyphs	Гліфи
 	Margin	Поле
 	Box	Рамка
 	Swatch	Зразок
+	Banner Hems and Grommets…	Підгини та люверси банера…
+	Banner Hems and Grommets	Підгини та люверси банера
+	Hem	Підгин
+	Grommets	Люверси
+	Grommet Inset	Відступ люверсів від краю
+	Diameter	Діаметр

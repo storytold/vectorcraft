@@ -1827,6 +1827,29 @@ font-technology	Variable	Μεταβλητές
 	Bristle Brush	Πινέλο με τρίχες
 	Pattern Brush	Πινέλο μοτίβου
 	missing from the Brushes panel	λείπει από τον πίνακα Πινέλα
+	built in	ενσωματωμένη
+	embedding not allowed	η ενσωμάτωση δεν επιτρέπεται
+	embedding for editing	ενσωμάτωση για επεξεργασία
+	embedding for preview and print	ενσωμάτωση για προεπισκόπηση και εκτύπωση
+	embedding allowed	η ενσωμάτωση επιτρέπεται
+	{file}; {embedding}	{file}· {embedding}
+	substituted: shown in {family} {style} ({detail})	αντικαταστάθηκε: εμφανίζεται με {family} {style} ({detail})
+	missing: shown in {family} {style}	λείπει: εμφανίζεται με {family} {style}
+	missing	λείπει
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Γραμμικό ντεγκραντέ
+	Radial gradient	Ακτινικό ντεγκραντέ
+	Conic gradient	Κωνικό ντεγκραντέ
+	Diamond gradient	Ρομβοειδές ντεγκραντέ
+	Freeform gradient	Ντεγκραντέ ελεύθερης μορφής
+@plural	{n} instance|{n} instances	{n} παρουσία|{n} παρουσίες
+@plural	{n} row|{n} rows	{n} γραμμή|{n} γραμμές
+@plural	{n} column|{n} columns	{n} στήλη|{n} στήλες
 	Select art to make a scatter, art or pattern brush.	Επιλέξτε σχέδιο για να δημιουργήσετε πινέλο διασποράς, σχεδίου ή μοτίβου.
 	Brush Art	Σχέδιο πινέλου
 	New Layer…	Νέο επίπεδο…
@@ -2428,6 +2451,10 @@ axis	Both	Και τα δύο
 @msg	Couldn't paste: the document it was pasted in was reverted	Δεν ήταν δυνατή η επικόλληση: το έγγραφο στο οποίο γινόταν η επικόλληση επανήλθε στην αποθηκευμένη έκδοση
 @msg	Couldn't read {name}: {e}	Δεν ήταν δυνατή η ανάγνωση του {name}: {e}
 @msg	Couldn't save recovery data: {e}	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης για το {title}: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον προεπιλεγμένο φάκελο ανάκτησης. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης για το {title}: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον φάκελο που ορίστηκε στις Προτιμήσεις. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον προεπιλεγμένο φάκελο ανάκτησης. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον φάκελο που ορίστηκε στις Προτιμήσεις. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
 @msg	Create Outlines: select text objects	Δημιουργία περιγραμμάτων: επιλέξτε αντικείμενα κειμένου
 @msg	Create from Guides: the document has no artboard	Δημιουργία από οδηγούς: το έγγραφο δεν έχει πίνακα σχεδίασης
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Δημιουργία από οδηγούς: οι οδηγοί σχηματίζουν περισσότερες από {MAX_PIECES} τομές
@@ -2513,6 +2540,9 @@ axis	Both	Και τα δύο
 @msg	`{keep}` is not a side of this axis	Το `{keep}` δεν είναι πλευρά αυτού του άξονα
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	Το `{key}` πρέπει να είναι `auto` ή κωδικός γλώσσας όπως `en` ή `zh-hant`
 @msg	`{key}` must be a #rrggbb color	Το `{key}` πρέπει να είναι χρώμα #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	Το `{key}` πρέπει να είναι χρώμα #rrggbb ή όνομα χρώματος επιπέδου
+@msg	unknown Live Paint option `{key}`	άγνωστη επιλογή δυναμικής βαφής `{key}`
+@msg	unknown Shape Builder option `{key}`	άγνωστη επιλογή δημιουργίας σχημάτων `{key}`
 @msg	`{key}` must be a #rrggbb colour	Το `{key}` πρέπει να είναι χρώμα #rrggbb
 @msg	`{key}` must be a number	Το `{key}` πρέπει να είναι αριθμός
 @msg	`{key}` must be a number, not {v}	Το `{key}` πρέπει να είναι αριθμός, όχι {v}
@@ -4558,6 +4588,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	internal error: {msg} (please report this bug)	εσωτερικό σφάλμα: {msg} (αναφέρετε το σφάλμα)
 @msg	invalid PDF setting: {0}	μη έγκυρη ρύθμιση PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη: ενεργοποιήστε την «Εγγραφή σελίδων μεγαλύτερων από 200 in σε πλήρες μέγεθος, σε στιγμές»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): οι σελίδες {label} γράφονται χωρίς UserUnit, σε στιγμές, και οι εφαρμογές που τηρούν το όριο κόβουν τη σελίδα στις 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	το PDF 1.5 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να κρατήσει το μέγεθός της: το αρχείο γράφεται ως PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	το PDF 1.4 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να μείνει εντός του ορίου σελίδας του PDF/A-2, 14.400 μονάδων: το αρχείο γράφεται ως PDF 1.6
@@ -7404,3 +7435,9 @@ breakText	Glyphs	Γλύφοι
 	Margin	Περιθώριο
 	Box	Πλαίσιο
 	Swatch	Δείγμα χρώματος
+	Banner Hems and Grommets…	Στριφώματα και τρουκς πανό…
+	Banner Hems and Grommets	Στριφώματα και τρουκς πανό
+	Hem	Στρίφωμα
+	Grommets	Τρουκς
+	Grommet Inset	Απόσταση τρουκς από την άκρη
+	Diameter	Διάμετρος

@@ -3406,6 +3406,29 @@ theme	Appearance	Motiv
 	Bristle Brush	Štětinový štětec
 	Pattern Brush	Vzorkový štětec
 	missing from the Brushes panel	chybí v panelu Štětce
+	built in	vestavěné
+	embedding not allowed	vkládání není povoleno
+	embedding for editing	vkládání pro úpravy
+	embedding for preview and print	vkládání pro náhled a tisk
+	embedding allowed	vkládání povoleno
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	nahrazeno: zobrazeno písmem {family} {style} ({detail})
+	missing: shown in {family} {style}	chybí: zobrazeno písmem {family} {style}
+	missing	chybí
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineární přechod
+	Radial gradient	Kruhový přechod
+	Conic gradient	Kuželový přechod
+	Diamond gradient	Kosočtverečný přechod
+	Freeform gradient	Volný přechod
+@plural	{n} instance|{n} instances	{n} instance|{n} instance|{n} instancí
+@plural	{n} row|{n} rows	{n} řádek|{n} řádky|{n} řádků
+@plural	{n} column|{n} columns	{n} sloupec|{n} sloupce|{n} sloupců
 	Select art to make a scatter, art or pattern brush.	Vyberte kresbu, abyste mohli vytvořit rozptylový, obrazový nebo vzorkový štětec.
 	Brush Art	Kresba štětce
 	New Symbol	Nový symbol
@@ -4668,6 +4691,10 @@ imageTrace	Outline	Obrys
 @msg	Couldn't paste: the document it was pasted in was reverted	Nelze vložit: dokument, do kterého se vkládalo, byl vrácen k uložené verzi
 @msg	Couldn't read {name}: {e}	{name} nelze přečíst: {e}
 @msg	Couldn't save recovery data: {e}	Data pro obnovení nelze uložit: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Data pro obnovení dokumentu {title} nelze uložit: {e}. Kopie se ukládají do {folder}, výchozí složky pro obnovení; chcete-li použít jinou složku, nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Data pro obnovení dokumentu {title} nelze uložit: {e}. Kopie se ukládají do {folder}, složky nastavené v Předvolbách; chcete-li použít jinou složku, nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Data pro obnovení nelze uložit: {e}. Kopie se ukládají do {folder}, výchozí složky pro obnovení; chcete-li použít jinou složku, nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Data pro obnovení nelze uložit: {e}. Kopie se ukládají do {folder}, složky nastavené v Předvolbách; chcete-li použít jinou složku, nastavte Předvolby → Práce se soubory → Obnovení dat → Složka (recoveryFolder)
 @msg	Create Outlines: select text objects	Převést na křivky: vyberte textové objekty
 @msg	Create from Guides: the document has no artboard	Vytvořit z vodítek: dokument nemá žádnou pracovní plochu
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Vytvořit z vodítek: vodítka vytvářejí více než {MAX_PIECES} řezů
@@ -4752,6 +4779,9 @@ imageTrace	Outline	Obrys
 @msg	`{keep}` is not a side of this axis	`{keep}` není strana této osy
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` musí být `auto` nebo kód jazyka, například `en` nebo `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` musí být barva #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` musí být barva #rrggbb nebo název barvy vrstvy
+@msg	unknown Live Paint option `{key}`	neznámá možnost živé malby `{key}`
+@msg	unknown Shape Builder option `{key}`	neznámá možnost tvorby tvarů `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` musí být barva #rrggbb
 @msg	`{key}` must be a number	`{key}` musí být číslo
 @msg	`{key}` must be a number, not {v}	`{key}` musí být číslo, ne {v}
@@ -4911,6 +4941,7 @@ imageTrace	Outline	Obrys
 @msg	internal error: {msg} (please report this bug)	vnitřní chyba: {msg} (nahlaste prosím tuto chybu)
 @msg	invalid PDF setting: {0}	neplatné nastavení PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): zapisuje se s UserUnit {unit}, takže aplikace, které UserUnit ignorují, ji zobrazí tolikrát menší
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): zapisuje se s UserUnit {unit}, takže aplikace, které UserUnit ignorují, ji zobrazí tolikrát menší: zapněte „Zapsat stránky delší než 200 in v plné velikosti v bodech“
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	stránka pracovní plochy {n} má {size}, což přesahuje limit stránky PDF 14 400 pt (200 in): stránky {label} se zapisují bez UserUnit, v bodech, a aplikace, které limit dodržují, stránku oříznou na 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 nemá UserUnit, který stránka delší než 14 400 pt (200 in) potřebuje, aby si zachovala velikost: soubor se zapíše jako PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 nemá UserUnit, který stránka delší než 14 400 pt (200 in) potřebuje, aby zůstala v limitu stránky PDF/A-2, 14 400 jednotek: soubor se zapíše jako PDF 1.6
@@ -7451,3 +7482,9 @@ breakText	Glyphs	Glyfy
 	Margin	Okraj
 	Box	Rámeček
 	Swatch	Vzorek
+	Banner Hems and Grommets…	Lemy a průchodky banneru…
+	Banner Hems and Grommets	Lemy a průchodky banneru
+	Hem	Lem
+	Grommets	Průchodky
+	Grommet Inset	Odstup průchodek od okraje
+	Diameter	Průměr

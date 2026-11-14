@@ -3139,6 +3139,29 @@ theme	Appearance	Tampilan
 	Bristle Brush	Kuas bristle
 	Pattern Brush	Kuas pola
 	missing from the Brushes panel	tidak ada di panel Kuas
+	built in	bawaan
+	embedding not allowed	penyematan tidak diizinkan
+	embedding for editing	penyematan untuk pengeditan
+	embedding for preview and print	penyematan untuk pratinjau dan cetak
+	embedding allowed	penyematan diizinkan
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	diganti: ditampilkan dengan {family} {style} ({detail})
+	missing: shown in {family} {style}	tidak ada: ditampilkan dengan {family} {style}
+	missing	tidak ada
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Gradien linear
+	Radial gradient	Gradien radial
+	Conic gradient	Gradien kerucut
+	Diamond gradient	Gradien wajik
+	Freeform gradient	Gradien bentuk bebas
+@plural	{n} instance|{n} instances	{n} instans
+@plural	{n} row|{n} rows	{n} baris
+@plural	{n} column|{n} columns	{n} kolom
 	Select art to make a scatter, art or pattern brush.	Pilih karya seni untuk membuat kuas sebar, seni, atau pola.
 	Brush Art	Karya seni kuas
 	New Symbol	Simbol baru
@@ -4263,6 +4286,10 @@ imageTrace	Outline	Kontur
 @msg	Couldn't paste: the document it was pasted in was reverted	Tidak dapat menempel: dokumen tempatnya ditempel sudah dikembalikan
 @msg	Couldn't read {name}: {e}	Tidak dapat membaca {name}: {e}
 @msg	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan untuk {title}: {e}. Salinan disimpan di {folder}, folder pemulihan bawaan; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan untuk {title}: {e}. Salinan disimpan di {folder}, folder yang diatur di Preferensi; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan: {e}. Salinan disimpan di {folder}, folder pemulihan bawaan; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan: {e}. Salinan disimpan di {folder}, folder yang diatur di Preferensi; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
 @msg	Create Outlines: select text objects	Buat kontur: pilih objek teks
 @msg	Create from Guides: the document has no artboard	Buat dari panduan: dokumen tidak memiliki artboard
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Buat dari panduan: panduan menghasilkan lebih dari {MAX_PIECES} irisan
@@ -6860,3 +6887,9 @@ breakText	Glyphs	Glif
 	Box	Kotak
 	Swatch	Sampel warna
 	Direction	Arah
+	Banner Hems and Grommets…	Lipatan dan Mata Ayam Spanduk…
+	Banner Hems and Grommets	Lipatan dan Mata Ayam Spanduk
+	Hem	Lipatan
+	Grommets	Mata ayam
+	Grommet Inset	Jarak mata ayam dari tepi
+	Diameter	Diameter

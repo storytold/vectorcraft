@@ -2429,6 +2429,29 @@ antiAlias	Sharp	날카롭게
 	Bristle Brush	강모 브러시
 	Pattern Brush	패턴 브러시
 	missing from the Brushes panel	브러시 패널에 없음
+	built in	내장
+	embedding not allowed	포함 허용 안 됨
+	embedding for editing	편집용 포함
+	embedding for preview and print	미리 보기 및 인쇄용 포함
+	embedding allowed	포함 허용
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	대체됨: {family} {style}(으)로 표시({detail})
+	missing: shown in {family} {style}	없음: {family} {style}(으)로 표시
+	missing	없음
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	선형 그레이디언트
+	Radial gradient	방사형 그레이디언트
+	Conic gradient	원뿔형 그레이디언트
+	Diamond gradient	다이아몬드 그레이디언트
+	Freeform gradient	자유 형태 그레이디언트
+@plural	{n} instance|{n} instances	인스턴스 {n}개
+@plural	{n} row|{n} rows	{n}행
+@plural	{n} column|{n} columns	{n}열
 	Select art to make a scatter, art or pattern brush.	흩뿌리기, 아트 또는 패턴 브러시를 만들려면 아트웍을 선택하세요.
 	Brush Art	브러시 아트
 	New Calligraphic Brush	새 캘리그래피 브러시
@@ -4529,6 +4552,9 @@ theme	Appearance	외관
 @msg	installing from a path is not available on the web; pass the module as `dataBase64`	웹에서는 경로로 설치할 수 없습니다. 모듈을 `dataBase64`로 전달하세요
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}`은(는) `auto` 또는 `en`, `zh-hant` 같은 언어 코드여야 합니다
 @msg	`{key}` must be a #rrggbb color	`{key}`은(는) #rrggbb 색상이어야 합니다
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}`은(는) #rrggbb 색상이나 레이어 색상 이름이어야 합니다
+@msg	unknown Live Paint option `{key}`	알 수 없는 라이브 페인트 옵션 `{key}`
+@msg	unknown Shape Builder option `{key}`	알 수 없는 모양 빌더 옵션 `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}`은(는) #rrggbb 색상이어야 합니다
 @msg	`{key}` must be a string	`{key}`은(는) 문자열이어야 합니다
 @msg	`{key}` must be a profile name or null	`{key}`은(는) 프로파일 이름 또는 null이어야 합니다
@@ -4736,6 +4762,7 @@ theme	Appearance	외관
 @msg	cannot read PDF: {0}	PDF를 읽을 수 없습니다: {0}
 @msg	invalid PDF setting: {0}	잘못된 PDF 설정: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: UserUnit {unit}(으)로 기록되므로 UserUnit을 무시하는 앱에서는 그 배수만큼 작게 표시됩니다: "200 in보다 긴 페이지를 실제 크기의 포인트로 기록"을 켜세요
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	아트보드 {n}의 페이지는 {size}로 PDF 페이지 한도 14,400 pt (200 in)보다 깁니다: {label} 페이지는 UserUnit 없이 포인트 단위로 기록되며, 한도를 지키는 앱은 페이지를 200 in으로 자릅니다
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5에는 14,400 pt (200 in)보다 긴 페이지가 크기를 유지하는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4에는 14,400 pt (200 in)보다 긴 페이지가 PDF/A-2의 페이지 한도인 14,400 단위 안에 들어가는 데 필요한 UserUnit이 없습니다: 파일이 PDF 1.6으로 기록됩니다
@@ -5134,6 +5161,10 @@ theme	Appearance	외관
 @msg	the print job has no data	인쇄 작업에 데이터가 없습니다
 @msg	there are no printer settings to open here	여기에는 열 수 있는 프린터 설정이 없습니다
 @msg	Couldn't save recovery data: {e}	복구 데이터를 저장할 수 없습니다: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title}의 복구 데이터를 저장할 수 없습니다: {e}. 복사본은 기본 복구 폴더인 {folder}에 저장됩니다. 다른 폴더를 사용하려면 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title}의 복구 데이터를 저장할 수 없습니다: {e}. 복사본은 환경 설정에서 지정한 폴더인 {folder}에 저장됩니다. 다른 폴더를 사용하려면 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	복구 데이터를 저장할 수 없습니다: {e}. 복사본은 기본 복구 폴더인 {folder}에 저장됩니다. 다른 폴더를 사용하려면 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	복구 데이터를 저장할 수 없습니다: {e}. 복사본은 환경 설정에서 지정한 폴더인 {folder}에 저장됩니다. 다른 폴더를 사용하려면 환경 설정 → 파일 처리 → 데이터 복구 → 폴더(recoveryFolder)를 지정하세요
 @msg	Saved recovery data for {title}	{title}의 복구 데이터를 저장했습니다
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	복구된 문서 {n}개를 삭제했습니다
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	복구된 문서 {n}개를 복원했습니다: 보관하려면 저장하세요
@@ -7042,3 +7073,9 @@ breakText	Glyphs	글리프
 	Margin	여백
 	Box	상자
 	Swatch	견본
+	Banner Hems and Grommets…	배너 단 접기 및 아일렛…
+	Banner Hems and Grommets	배너 단 접기 및 아일렛
+	Hem	단 접기
+	Grommets	아일렛
+	Grommet Inset	가장자리에서 아일렛까지 거리
+	Diameter	지름
