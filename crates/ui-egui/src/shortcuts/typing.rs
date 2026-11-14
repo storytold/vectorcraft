@@ -42,6 +42,8 @@ enum Seq {
     Text(String),
     Preedit(String, Option<std::ops::Range<usize>>),
     Commit(String),
+    /// A space the IME commits during a Zoom tool drag on the canvas, where Space moves the marquee.
+    MarqueeSpace,
     Erase(ToolKey, Mods),
     /// An input method replaces text around the composition (upstream's character counts or
     /// the fork's exact UTF-8 byte counts), then commits.
@@ -82,6 +84,11 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     // Set once the IME commits text in this frame.
     let mut committed = false;
     for e in seq {
+        // With text marked, the IME's space commits that text as usual.
+        let e = match e {
+            Seq::MarqueeSpace if app.session.tool_composing() || app.ime_marked.is_some() => Seq::Commit(" ".into()),
+            e => e,
+        };
         // Before the UI, a changed composition or guard is settled `pending`: a token bound here
         // could outlive a route this pass invalidates later (a palette/dialog/Home) and attach to
         // the stock descriptor. The post-UI finalizer binds the confirmed replacement.
@@ -94,9 +101,15 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
             match &e {
                 // Accepted old payloads precede the fence even when their terminal arrives.
                 // None of these events proves the local reset has reached its boundary.
-                Seq::Commit(_) | Seq::DeleteSurrounding(..) | Seq::Preedit(..) => continue,
+                Seq::Commit(_) | Seq::MarqueeSpace | Seq::DeleteSurrounding(..) | Seq::Preedit(..) => continue,
                 _ => {}
             }
+        }
+        // Otherwise the IME's input ends there, and the space is not typed.
+        if matches!(e, Seq::MarqueeSpace) {
+            committed = true;
+            app.ime_compositions.remove(&viewport);
+            continue;
         }
         // A pointer/navigation/command notice has not reached its real handler yet. Text and
         // erases after it belong to the old caret, not to the destination it will establish.
@@ -135,10 +148,11 @@ pub(super) fn type_text(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
 }
 
 /// Take this frame's typed text, IME events, editing keys, Enter and clipboard events, in the order
-/// they arrived.
+/// they arrived. A space typed during the canvas's Zoom tool drag is not typed.
 fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
     let mut seq = vec![];
     let mut edits = vec![];
+    let zooming = crate::canvas::dragging_zoom(ctx);
     ctx.input_mut(|i| {
         // Move the events out instead of cloning their strings: a keyboard hook that reinjects a
         // batch keeps the batch in `seq` only, not in both the input list and a second copy.
@@ -155,10 +169,13 @@ fn type_sequence(ctx: &egui::Context) -> Vec<Seq> {
             .unwrap_or_else(|| i.pointer.primary_down());
         for e in std::mem::take(&mut i.events) {
             match e {
+                // The zoom drag lasts until the primary button goes up.
+                egui::Event::Text(t) if zooming && primary_down && t == " " => {}
                 egui::Event::Text(t) => seq.push(Seq::Text(t)),
                 egui::Event::Ime(egui::ImeEvent::Preedit { text, active_range_chars }) => {
                     seq.push(Seq::Preedit(text, active_range_chars));
                 }
+                egui::Event::Ime(egui::ImeEvent::Commit(t)) if zooming && primary_down && t == " " => seq.push(Seq::MarqueeSpace),
                 egui::Event::Ime(egui::ImeEvent::Commit(t)) => seq.push(Seq::Commit(t)),
                 egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { before_chars, after_chars }) => {
                     seq.push(Seq::DeleteSurrounding(before_chars, after_chars, SurroundingUnit::Chars));
@@ -254,7 +271,7 @@ fn apply_type_event(
             }
             Ok(vec![])
         }
-        Seq::ResetCompleted(_) => Ok(vec![]),
+        Seq::ResetCompleted(_) | Seq::MarqueeSpace => Ok(vec![]),
         // Keys the IME passed through come as text only when nothing is marked. This is an
         // application edit (also a hook IME's reinjected characters): `Other` dominates.
         Seq::Text(t) if !app.session.tool_composing() && !shortcut_mods => {
