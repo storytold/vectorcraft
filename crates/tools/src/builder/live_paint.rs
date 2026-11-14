@@ -456,6 +456,12 @@ impl Tool for LivePaintBucketTool {
         if self.fill_drag.take().is_some() { vec![Action::Commit] } else { vec![] }
     }
 
+    /// The pointer hovers nothing for the tool: its highlight and its swatch preview go.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = LpHover::None;
+        self.at = None;
+    }
+
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut out = lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, (self.width * LP_BUCKET_EDGE_FRACTION) as f32);
         // No chips during a fill drag, or while Alt makes the tool sample with the eyedropper.

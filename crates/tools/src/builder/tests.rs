@@ -1108,6 +1108,21 @@ fn bucket_swatch_preview_follows_the_release_point() {
     assert_eq!(chip_x(&t), Some(75.0));
 }
 
+/// When the pointer leaves the canvas, the Live Paint Bucket's swatch preview and highlight go.
+#[test]
+fn bucket_hover_ended_drops_the_swatch_preview_and_highlight() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    let ov = t.overlays(&cx);
+    assert!(ov.iter().any(|o| matches!(o, Overlay::Swatch { .. })) && ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+    t.hover_ended(&cx);
+    assert!(t.overlays(&cx).is_empty());
+}
+
 #[test]
 fn bucket_options_choose_what_a_click_paints() {
     let (d, gid, ..) = live_group_doc();
