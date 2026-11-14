@@ -153,7 +153,7 @@ pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
-pub use export_as::open as open_export_as;
+pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
@@ -946,6 +946,8 @@ mod tests;
 mod tests_accessibility;
 #[cfg(test)]
 mod tests_export;
+#[cfg(test)]
+mod tests_export_selection;
 #[cfg(test)]
 mod tests_import_pdf;
 #[cfg(test)]

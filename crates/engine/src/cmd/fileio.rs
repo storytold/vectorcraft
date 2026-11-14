@@ -70,7 +70,7 @@ pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, Note, NoteKind, encode,
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{EXPORT_PARAMS, export_crop, isolated};
-pub use export::{export_doc, export_source, unused_option_notes};
+pub use export::{export_doc, export_source, selection_doc, unused_option_notes};
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::is_placeholder;
