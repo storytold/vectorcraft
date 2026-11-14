@@ -781,7 +781,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the first of two
     // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type. A row names the type
     // as the New Brush dialog does (`Art Brush`), and the panel translates these values when it shows them.
-    let kinds: HashMap<&str, &vectorcraft_brush::BrushKind> = library.iter().map(|b| (b.name.as_str(), &b.kind)).collect();
+    let mut kinds: HashMap<&str, &vectorcraft_brush::BrushKind> = HashMap::new();
+    for b in &library {
+        kinds.entry(b.name.as_str()).or_insert(&b.kind);
+    }
     let brush_entries: Vec<Value> =
         brushes.iter().map(|name| json!({ "name": name, "type": kinds.get(name.as_str()).map(|k| k.type_id()) })).collect();
     let brush_rows: Vec<(String, String)> = brushes
