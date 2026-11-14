@@ -7497,9 +7497,6 @@ breakText	Glyphs	Glifos
 @msg	`{KEY}` must be a list	`{KEY}` debe ser una lista
 @msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` acepta como máximo {MAX_PARAGRAPH_INDENTS} entradas (se recibió {_1})
 @msg	`{KEY}` takes no `{other}` beside it	`{KEY}` no acepta `{other}` junto a él
-@msg	`{_1}` can't name a composite font	`{_1}` no puede nombrar una fuente compuesta
-@msg	`{_1}` is the name of an installed font	`{_1}` es el nombre de una fuente instalada
-@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} está compuesto en `{font}`, una fuente compuesta
 @msg	`{base}` is larger than {_1} MB	`{base}` ocupa más de {_1} MB
 @msg	`{base}` is not in the DCS file's folder	`{base}` no está en la carpeta del archivo DCS
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` contiene más de {MAX_EDIT_WORDS} palabras
@@ -7518,20 +7515,13 @@ breakText	Glyphs	Glifos
 @msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}` debe nombrar un objeto unido al trazado de un grupo de Objetos en trazado
 @msg	`{key}` names an object that is hidden or locked	`{key}` nombra un objeto que está oculto o bloqueado
 @msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}` es un archivo independiente, que solo se puede encontrar junto a la ruta del archivo DCS
-@msg	`{name}`: give the kanji part	`{name}`: indica la parte kanji
-@msg	`{name}`: parts must be an object	`{name}`: las partes deben ser un objeto
-@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: clase desconocida `{k}`; las clases son kanji, kana, punctuation, symbols, roman y numerals
-@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: clave desconocida `{k}` en {_1}
-@msg	`{name}`: {_1} must be an object	`{name}`: {_1} debe ser un objeto
 @msg	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
-@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no puede nombrar una fuente compuesta (de 1 a {COMPOSITE_NAME_MAX} caracteres, sin caracteres de control)
 @msg	`{u}` is no Unicode character	`{u}` no es un carácter Unicode
 @msg	`{word}` isn't in the custom dictionary	`{word}` no está en el diccionario personalizado
 @msg	a CMap has too many mappings	un CMap tiene demasiadas asignaciones
 @msg	a \\u escape needs four hexadecimal digits	un escape \\u necesita cuatro dígitos hexadecimales
 @msg	a comma in an XPath expression must separate function arguments	una coma en una expresión XPath debe separar argumentos de función
 @msg	a document holds at most {_1} SVG filters	un documento contiene como máximo {_1} filtros SVG
-@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un documento guarda como máximo {COMPOSITE_FONTS_MAX} fuentes compuestas
 @msg	a document with unsaved changes has no recovery copy	un documento con cambios sin guardar no tiene copia de recuperación
 @msg	a font's data is too large	los datos de una fuente son demasiado grandes
 @msg	a font's subroutines are too large	las subrutinas de una fuente son demasiado grandes
@@ -7579,15 +7569,11 @@ breakText	Glyphs	Glifos
 @msg	character dimensions cannot be represented with the target text transform	las dimensiones de los caracteres no se pueden representar con la transformación del texto de destino
 @msg	continuation must be an array of path chunks	continuation debe ser una lista de fragmentos de trazado
 @msg	continuation requires points	continuation requiere points
-@msg	dataBase64 is not base64	dataBase64 no está en base64
-@msg	each font must be {name, parts}	cada fuente debe ser {name, parts}
-@msg	each font needs a name	cada fuente necesita un nombre
 @msg	each path chunk must contain 1 to 4096 points	cada fragmento de trazado debe contener entre 1 y 4096 puntos
 @msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	cada elección es {{at: [x, y]}} o {{rect: [x0, y0, x1, y1]}} (se recibió {v})
 @msg	each weight must be a number of 0 or more (got {v})	cada peso debe ser un número de 0 o más (se recibió {v})
 @msg	finally table {t} out of range	tabla finally {t} fuera de rango
 @msg	flags cannot be given with a RegExp object	no se pueden indicar indicadores con un objeto RegExp
-@msg	fonts must be a list of composite fonts	fonts debe ser una lista de fuentes compuestas
 @msg	function declaration index out of range	índice de declaración de función fuera de rango
 @msg	give `char`, `text`, `code` or `unicode`	indica `char`, `text`, `code` o `unicode`
 @msg	give `count` or `spacing`, not both	indica `count` o `spacing`, no ambos
@@ -7595,10 +7581,8 @@ breakText	Glyphs	Glifos
 @msg	give `path`, an SVG file, or `svg`, SVG text	indica `path`, un archivo SVG, o `svg`, texto SVG
 @msg	give `xml`, one SVG <filter> element	indica `xml`, un elemento SVG <filter>
 @msg	give exactly one of `path`, `data` and `dataBase64`	indica exactamente uno de `path`, `data` y `dataBase64`
-@msg	give fonts: [{name, parts}…]	indica fonts: [{name, parts}…]
 @msg	give index or indexes, not both	indica index o indexes, no ambos
 @msg	give one <filter> element	indica un elemento <filter>
-@msg	give one of path, data or dataBase64	indica uno de path, data o dataBase64
 @msg	give opacity or blend	indica opacity o blend
 @msg	handler at {_1} expects {_2} values but its range starts with {d}	el controlador en {_1} espera {_2} valores, pero su rango empieza con {d}
 @msg	handler depth too large	profundidad de controlador demasiado grande
@@ -7643,8 +7627,6 @@ breakText	Glyphs	Glifos
 @msg	must be an object with `kind` and `value`	debe ser un objeto con `kind` y `value`
 @msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
 @msg	must have exactly `kind` and `value`	debe tener exactamente `kind` y `value`
-@msg	names must be a list of names	names debe ser una lista de nombres
-@msg	names must be strings	names deben ser cadenas
 @msg	needs a closing quote after the name	necesita unas comillas de cierre después del nombre
 @msg	needs a name	necesita un nombre
 @msg	needs a name of at most 64 bytes	necesita un nombre de como máximo 64 bytes
@@ -7656,9 +7638,6 @@ breakText	Glyphs	Glifos
 @msg	no SVG filter at index {k}	no hay ningún filtro SVG en el índice {k}
 @msg	no arrowheads file here	aquí no hay ningún archivo de puntas de flecha
 @msg	no character has code {code}	ningún carácter tiene el código {code}
-@msg	no composite font	no hay ninguna fuente compuesta
-@msg	no composite font named `{n}`	no hay ninguna fuente compuesta llamada `{n}`
-@msg	no composite fonts to export	no hay fuentes compuestas que exportar
 @msg	no custom arrowhead {name} (see stroke.arrowheads.list)	no existe la punta de flecha personalizada {name} (consulta stroke.arrowheads.list)
 @msg	no file to open	no hay ningún archivo que abrir
 @msg	no instructions	sin instrucciones
@@ -7670,8 +7649,6 @@ breakText	Glyphs	Glifos
 @msg	node {_1} already has the text variable `{_2}`	el nodo {_1} ya tiene la variable de texto `{_2}`
 @msg	not a DCS file	no es un archivo DCS
 @msg	not a RegExp object	no es un objeto RegExp
-@msg	not a composite fonts file: no compositeFonts list	no es un archivo de fuentes compuestas: no hay lista compositeFonts
-@msg	not a composite fonts file: {e}	no es un archivo de fuentes compuestas: {e}
 @msg	not a regular expression	no es una expresión regular
 @msg	not an action set: the text doesn't start with /version and a number	no es un conjunto de acciones: el texto no empieza con /version y un número
 @msg	nothing to repeat	nada que repetir
@@ -7686,7 +7663,6 @@ breakText	Glyphs	Glifos
 @msg	operand too large	operando demasiado grande
 @msg	order is a whole number from 0 to {others}, not `{v}`	order es un número entero entre 0 y {others}, no `{v}`
 @msg	path chunks must share their boundary point	los fragmentos de trazado deben compartir su punto límite
-@msg	path is empty	el trazado está vacío
 @msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false necesita que las mesas de trabajo conserven la ilustración editable cuando useArtboards es false
 @msg	point x must be a number	el punto x debe ser un número
 @msg	point y must be a number	el punto y debe ser un número
@@ -7738,10 +7714,6 @@ breakText	Glyphs	Glifos
 @msg	the document has no SVG filter named {r}	el documento no tiene ningún filtro SVG llamado {r}
 @msg	the document has no color swatches	el documento no tiene muestras de color
 @msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	las muestras del documento contienen {_1} colores; la reducción del documento acepta como máximo 255
-@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	el archivo contiene más de {COMPOSITE_FONTS_MAX} fuentes compuestas
-@msg	the file holds no composite fonts	el archivo no contiene fuentes compuestas
-@msg	the file holds two composite fonts named `{_1}`	el archivo contiene dos fuentes compuestas llamadas `{_1}`
-@msg	the file is larger than 4 MB	el archivo ocupa más de 4 MB
 @msg	the file isn't valid SVG: {e}	el archivo no es un SVG válido: {e}
 @msg	the file names no plate	el archivo no nombra ninguna plancha
 @msg	the function's prototype is not an object	el prototipo de la función no es un objeto
@@ -7787,10 +7759,8 @@ breakText	Glyphs	Glifos
 @msg	toString is not a function	toString no es una función
 @msg	too many arguments	demasiados argumentos
 @msg	too many quantifiers	demasiados cuantificadores
-@msg	two composite fonts are named `{_1}`	dos fuentes compuestas se llaman `{_1}`
 @msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	función OpenType desconocida `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; antepón - para desactivarla; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom y aalt aceptan el número de una alternativa como `tag=N` con N entre 0 y {_1}, como `salt=2`)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	tramado desconocido `{d}` (diffusion, pattern, noise o none)
-@msg	unknown key `{k}`; a font takes name and parts	clave desconocida `{k}`; una fuente acepta name y parts
 @msg	unknown panel `{panel}`	panel desconocido `{panel}`
 @msg	unknown parameter `{key}`	parámetro desconocido `{key}`
 @msg	unknown parameter `{within}settings.{format}`; {why}	parámetro desconocido `{within}settings.{format}`; {why}
@@ -7810,13 +7780,7 @@ breakText	Glyphs	Glifos
 @msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}: el trazado de una punta de flecha personalizada necesita un área que rellenar y como máximo {most} puntos de ancla y {most} subtrazados, cada punto de ancla a no más de {far} unidades de cabeza de su punta
 @msg	{k}: bad custom arrowhead path: {e}	{k}: trazado de punta de flecha personalizada incorrecto: {e}
 @msg	{k}: bad custom arrowhead: {e}	{k}: punta de flecha personalizada incorrecta: {e}
-@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline debe estar entre {_1} y {_2}%
 @msg	{k}: custom must be a name	{k}: custom debe ser un nombre
-@msg	{k}: give a font	{k}: indica una fuente
-@msg	{k}: only kana can be scaled at the center	{k}: solo el kana se puede escalar desde el centro
-@msg	{k}: only kana, roman and numerals can be scaled	{k}: solo se pueden escalar kana, roman y numerals
-@msg	{k}: scale must be {_1} to {_2}%	{k}: scale debe estar entre {_1} y {_2}%
-@msg	{k}: size must be {_1} to {_2}%	{k}: size debe estar entre {_1} y {_2}%
 @msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}: copy solo acepta un archivo DCS cuando sus planchas están dentro de él; vuelve a vincularlo donde estén sus archivos de planchas
 @msg	{path}: larger than {_1} MB	{path}: ocupa más de {_1} MB
 @msg	{shown} is not an XPath 1.0 function	{shown} no es una función de XPath 1.0
@@ -8085,7 +8049,6 @@ breakText	Glyphs	Glifos
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` es un espacio de trabajo de color: elige antes otro con edit.colorSettings
 @msg	`{name}` is built in and stays	`{name}` está integrado y se conserva
 @msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` acepta una pintura de su mismo tipo (color, degradado o motivo)
-@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Mínimo no debe superar a Deseado, ni Deseado a Máximo
 @msg	`{n}` can't be deleted	`{n}` no se puede eliminar
 @msg	`{n}` can't be merged	`{n}` no se puede combinar
 @msg	`{n}` can't be moved	`{n}` no se puede mover
@@ -8836,7 +8799,6 @@ breakText	Glyphs	Glifos
 @msg	select a graph	selecciona un gráfico
 @msg	select a group or layer with visible, unlocked members	selecciona un grupo o una capa con miembros visibles y desbloqueados
 @msg	select a layer	selecciona una capa
-@msg	select a path	selecciona un trazado
 @msg	select a text object	selecciona un objeto de texto
 @msg	select an image (or an Image Trace group)	selecciona una imagen (o un grupo de Calco de imagen)
 @msg	select an image, or pass id	selecciona una imagen o pasa id
