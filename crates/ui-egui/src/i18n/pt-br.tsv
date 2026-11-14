@@ -1216,6 +1216,7 @@ antiAlias	Sharp	Nítido
 	Format	Formato
 	Format Options	Opções de Formato
 	Format Settings	Configurações de Formato
+	Format Settings…	Configurações de Formato…
 	Format:	Formato:
 	Formats:	Formatos:
 	Fractions	Frações
@@ -1499,6 +1500,7 @@ antiAlias	Sharp	Nítido
 	Import Keyboard Shortcuts…	Importar Atalhos de Teclado…
 	Import Data Sets…	Importar Conjuntos de Dados…
 	Import PDF	Importar PDF
+	Import PDF pages as links	Importar páginas do PDF como links
 	Import PDF Presets	Importar Predefinidos de PDF
 	Import Perspective Grid Presets	Importar Predefinidos de Grade de Perspectiva
 	Import Print Presets	Importar Predefinidos de Impressão
@@ -2925,6 +2927,18 @@ digits	Malayalam	Malaiala
 	Smart Guides (View → Smart Guides)	Guias Inteligentes (Exibir → Guias Inteligentes)
 	Smart Guides (⌘U)	Guias Inteligentes (⌘U)
 	Smart Punctuation…	Pontuação Inteligente…
+	Smart Punctuation	Pontuação Inteligente
+	ff, fi, ffi Ligatures	Ligações ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligações ff, fl, ffl
+	Smart Quotes	Aspas Inteligentes
+	Smart Spaces	Espaços Inteligentes
+	En, Em Dashes	Travessões En e Em
+	Ellipses	Reticências
+	Expert Fractions	Frações Especiais
+	Replace In	Substituir Em
+	Selected Text Only	Somente Texto Selecionado
+	Entire Document	Documento Inteiro
+	Report Results	Relatar Resultados
 	Smooth	Suavizar
 	Smooth Tool	Ferramenta Suavizar
 	Snap Curves To Lines	Ajustar Curvas às Linhas
@@ -5217,6 +5231,7 @@ axis	Both	Ambos
 	Corner	Canto
 	Smooth Color	Cor Suave
 	Social Square Post 1080×1080	Post Social Quadrado 1080×1080
+	Sort by Size	Ordenar por Tamanho
 	Sort by Status	Ordenar por Status
 	Source Sans 3	Source Sans 3
 	Specified Distance	Distância Especificada
@@ -9093,6 +9108,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	the RTF file is too large to place as type (at most {_1} MB)	o arquivo RTF é grande demais para ser colocado como texto (no máximo {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	o SVG se expande em mais de {0} imagens SVG aninhadas
 @msg	the SVG expands to more than {0} objects	o SVG se expande em mais de {0} objetos
+@msg	the SVG's styles expand to more than {0} MB	os estilos do SVG se expandem para mais de {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	o arquivo SVG tem mais de {MAX_IMPORT_BYTES} bytes
 @msg	the SVG has no drawable objects	o SVG não tem objetos desenháveis
 @msg	the SVGZ file unpacks to more than {_1} MB	o arquivo SVGZ é descompactado em mais de {_1} MB
@@ -9527,3 +9543,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	turn on at least one side	ative pelo menos um lado
 @msg	with no hem and no grommets there is nothing to mark	sem bainha e sem ilhoses não há nada para marcar
 @msg	{saving} failed: {e}	{saving} falhou: {e}
+	Nest Shapes…	Aninhar formas…
+	Nest Shapes	Aninhar formas
+	Roll	Rolo

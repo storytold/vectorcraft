@@ -441,6 +441,18 @@
 	Title Case	Velká Počáteční Písmena
 	Sentence case	Velké první písmeno věty
 	Smart Punctuation…	Inteligentní interpunkce…
+	Smart Punctuation	Inteligentní interpunkce
+	ff, fi, ffi Ligatures	Ligatury ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatury ff, fl, ffl
+	Smart Quotes	Inteligentní uvozovky
+	Smart Spaces	Inteligentní mezery
+	En, Em Dashes	Krátké a dlouhé pomlčky
+	Ellipses	Výpustky
+	Expert Fractions	Odborné zlomky
+	Replace In	Nahradit v
+	Selected Text Only	Pouze vybraný text
+	Entire Document	Celý dokument
+	Report Results	Zobrazit výsledky
 	Create Outlines	Převést na křivky
 	Optical Margin Alignment	Optické zarovnání okrajů
 	Dynamic Text	Dynamický text
@@ -2293,6 +2305,7 @@ digits	Malayalam	Malajálamské
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	položka {i} v paths potřebuje path a ids (ID objektů, které nemá žádná jiná položka)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder bere path: ve složce tohoto souboru se hledají ostatní chybějící propojení
 	Show Missing	Zobrazit chybějící
+	Sort by Size	Seřadit podle velikosti
 	Sort by Status	Seřadit podle stavu
 	Clear Overrides	Vymazat přepsání
 	Create New {kind} Style	Vytvořit nový styl ({kind})
@@ -2549,6 +2562,7 @@ digits	Malayalam	Malajálamské
 	Export Asset	Exportovat prvek
 	Export to:	Exportovat do:
 	Format Settings	Nastavení formátu
+	Format Settings…	Nastavení formátu…
 	Formats:	Formáty:
 	Full Document	Celý dokument
 	Include Bleed	Zahrnout spadávku
@@ -2649,6 +2663,7 @@ digits	Malayalam	Malajálamské
 	e.g. 1-3, 5	např. 1-3, 5
 	First Page	První stránka
 	Import PDF	Importovat PDF
+	Import PDF pages as links	Importovat stránky PDF jako propojení
 	Last Page	Poslední stránka
 	Next Page	Další stránka
 	of {count}	z {count}
@@ -7642,6 +7657,9 @@ breakText	Glyphs	Glyfy
 	Grommets	Průchodky
 	Grommet Inset	Odstup průchodek od okraje
 	Diameter	Průměr
+	Nest Shapes…	Skládat tvary…
+	Nest Shapes	Skládat tvary
+	Roll	Role
 @msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' a 'arguments' nelze použít u funkcí ve striktním režimu
 @msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Profil podporuje jeden efekt Rotační těleso. Upravte místo toho volby stávajícího efektu.
 @msg	Add Points at Crossings: a path went missing	Přidat body v křížení: jedna cesta se ztratila
@@ -9027,6 +9045,7 @@ breakText	Glyphs	Glyfy
 @msg	the RTF file is too large to place as type (at most {_1} MB)	soubor RTF je příliš velký na umístění jako text (nejvýše {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG se rozvine na více než {0} vnořených obrázků SVG
 @msg	the SVG expands to more than {0} objects	SVG se rozvine na více než {0} objektů
+@msg	the SVG's styles expand to more than {0} MB	styly SVG se rozvinou na více než {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	soubor SVG je větší než {MAX_IMPORT_BYTES} bajtů
 @msg	the SVG has no drawable objects	SVG nemá žádné vykreslitelné objekty
 @msg	the SVGZ file unpacks to more than {_1} MB	soubor SVGZ se rozbalí na více než {_1} MB

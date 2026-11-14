@@ -1457,6 +1457,7 @@
 	Format Options	ફોર્મેટ વિકલ્પો
 	Format Presets	ફોર્મેટ પ્રીસેટ્સ
 	Format Settings	ફોર્મેટ સેટિંગ્સ
+	Format Settings…	ફોર્મેટ સેટિંગ્સ…
 	Format:	ફોર્મેટ:
 	Formats:	ફોર્મેટ્સ:
 	Fractional Widths	અપૂર્ણાંક પહોળાઈ
@@ -1711,6 +1712,7 @@
 	Import Library	લાઇબ્રેરી આયાત કરો
 	Import Matches	આયાત મેળ
 	Import PDF	PDF આયાત કરો
+	Import PDF pages as links	PDF પેજને લિંક તરીકે આયાત કરો
 	Import PDF Presets	PDF આયાત પ્રીસેટ્સ
 	Import Perspective Grid Presets	પર્સ્પેક્ટિવ ગ્રિડ પ્રીસેટ્સ આયાત કરો
 	Import Preferences	પસંદગીઓ આયાત કરો
@@ -3564,6 +3566,18 @@
 	Smart Pen Panel	સ્માર્ટ પેન પેનલ
 	Smart Pen Tool	સ્માર્ટ પેન ટૂલ
 	Smart Punctuation…	સ્માર્ટ વિરામચિહ્નો…
+	Smart Punctuation	સ્માર્ટ વિરામચિહ્નો
+	ff, fi, ffi Ligatures	ff, fi, ffi લિગેચર
+	ff, fl, ffl Ligatures	ff, fl, ffl લિગેચર
+	Smart Quotes	સ્માર્ટ અવતરણચિહ્નો
+	Smart Spaces	સ્માર્ટ જગ્યાઓ
+	En, Em Dashes	En અને Em ડૅશ
+	Ellipses	એલિપ્સિસ
+	Expert Fractions	નિષ્ણાત અપૂર્ણાંકો
+	Replace In	આમાં બદલો
+	Selected Text Only	માત્ર પસંદ કરેલું લખાણ
+	Entire Document	આખો દસ્તાવેજ
+	Report Results	પરિણામોનો અહેવાલ
 	Smooth	સ્મૂધ
 	Smooth Anchors…	એન્કર સ્મૂધ કરો…
 	Smooth Tool	સ્મૂધ ટૂલ

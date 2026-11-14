@@ -83,6 +83,8 @@ pub(super) fn menu_dialog(app: &VectorcraftApp, id: &str) -> Option<(&'static st
         crate::addons::select::COMMAND => (crate::addons::select::KIND, crate::addons::select::fields(app)),
         "artboard.rearrange" => (crate::dialogs::rearrange_artboards::KIND, crate::dialogs::rearrange_artboards::open_fields(app)),
         "artboard.rename" => (crate::dialogs::rename_artboards::KIND, crate::dialogs::rename_artboards::open_fields(app)),
+        // Smart Punctuation opens on the fields it was last confirmed with.
+        "type.smartPunctuation" => (crate::dialogs::smart_punctuation::KIND, crate::dialogs::smart_punctuation::fields(app)),
         _ => return None,
     })
 }
