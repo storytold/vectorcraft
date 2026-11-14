@@ -270,8 +270,8 @@ fn images_declaring_more_than_the_allowance_are_not_decoded() {
     assert!(r.image.is_none(), "kept as it is");
 }
 
-/// A version 2.1 display ICC profile header for colour space `space` (`RGB ` or `GRAY`), `len`
-/// bytes in all, every byte after the header different from its neighbors.
+/// A version 2.1 display ICC profile for colour space `space` (`RGB ` or `GRAY`), `len` bytes in
+/// all, with an empty tag table, every byte after the tag count different from its neighbors.
 fn icc_profile(space: &[u8; 4], len: usize) -> Vec<u8> {
     let mut icc: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
     icc[..4].copy_from_slice(&u32::try_from(len).unwrap().to_be_bytes());
@@ -279,6 +279,7 @@ fn icc_profile(space: &[u8; 4], len: usize) -> Vec<u8> {
     icc[12..16].copy_from_slice(b"mntr");
     icc[16..20].copy_from_slice(space);
     icc[36..40].copy_from_slice(b"acsp");
+    icc[128..132].copy_from_slice(&0u32.to_be_bytes());
     icc
 }
 
@@ -450,6 +451,24 @@ fn tagged_tiffs_keep_their_icc_profile() {
     // A profile of another colour space is left out.
     let spaces = export(&tiff(&colour(), &gray), json!({}));
     assert!(spaces.len() == 1 && spaces[0].space == "DeviceRGB" && spaces[0].icc.is_none(), "RGB in a gray profile: {spaces:?}");
+    // A malformed profile is left out, the image kept as it is, resampled or compressed with JPEG:
+    // one whose header declares another size, one without the `acsp` signature, and one whose tag
+    // table runs past its end.
+    let mut malformed = [rgb.clone(), rgb.clone(), rgb.clone()];
+    malformed[0][..4].copy_from_slice(&601u32.to_be_bytes());
+    malformed[1][36..40].copy_from_slice(b"xxxx");
+    malformed[2][128..132].copy_from_slice(&100u32.to_be_bytes());
+    let compressions =
+        [json!({}), json!({"color": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}), json!({"color": {"compression": "jpeg"}})];
+    for (i, icc) in malformed.iter().enumerate() {
+        for compression in &compressions {
+            let spaces = export(&tiff(&colour(), icc), json!({ "compression": compression }));
+            assert!(
+                spaces.len() == 1 && spaces[0].space == "DeviceRGB" && spaces[0].icc.is_none(),
+                "malformed profile {i}, {compression}: {spaces:?}"
+            );
+        }
+    }
     // Converted pixels are in the destination's colours, not the image's profile.
     for destination in [vectorcraft_color::cms::DISPLAY_P3, vectorcraft_color::cms::GENERIC_CMYK] {
         let spaces = export(&tiff(&colour(), &rgb), json!({"output": {"conversion": "destination", "destination": destination}}));

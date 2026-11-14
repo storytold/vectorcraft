@@ -68,15 +68,15 @@ impl CustomImage for Raw {
     }
 }
 
-/// `icc` when it is a profile of the colour space `space` names: `GRAY` for grey samples, `RGB `
-/// for RGB ones. `None` for other profiles and spaces.
+/// `icc` when it is a well-formed profile ([`valid_icc`]) of the colour space `space` names: `GRAY`
+/// for grey samples, `RGB ` for RGB ones. `None` for other profiles and spaces.
 fn icc_for(icc: Option<Vec<u8>>, space: ImageColorspace) -> Option<Arc<Vec<u8>>> {
     let want = match space {
         ImageColorspace::Luma => *b"GRAY",
         ImageColorspace::Rgb => *b"RGB ",
         ImageColorspace::Cmyk | ImageColorspace::DeviceN => return None,
     };
-    icc.filter(|icc| vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want)).map(Arc::new)
+    icc.filter(|icc| valid_icc(icc, want)).map(Arc::new)
 }
 
 /// The ICC profile image `bytes` carries: a TIFF's tag 34675 (read by the TIFF decoder itself,
@@ -100,7 +100,7 @@ fn from_rgba(rgba: &[u8], width: u32, height: u32, interpolate: bool, pixels: Op
     if px.len() as u64 != width as u64 * height as u64 || px.is_empty() {
         return None;
     }
-    let rgb_icc = pixels.is_none() && icc.as_deref().and_then(vectorcraft_doc::cmyk::icc_color_space) == Some(*b"RGB ");
+    let rgb_icc = pixels.is_none() && icc.as_deref().is_some_and(|icc| valid_icc(icc, *b"RGB "));
     let (color, space) = if neutral(rgba) && !rgb_icc {
         (px.iter().map(|p| p[0]).collect(), ImageColorspace::Luma)
     } else if let Some(cmyk) = pixels.and_then(|p| p.cmyk(rgba)) {
@@ -175,19 +175,20 @@ fn lossless(
 /// it holds is still written.
 pub(crate) const MAX_EMBED_PIXELS: u64 = 1 << 27;
 
-/// The most bytes a CMYK profile carried by an image is written with (16 MiB).
+/// The most bytes an ICC profile carried by an image is written with (16 MiB).
 const MAX_ICC: usize = 16 << 20;
 
 /// The CMYK ICC profile image `blob` carries ([`ImageBlob::cmyk_icc_profile`]), when it is one a
-/// CMYK image can be tagged with: at most [`MAX_ICC`] bytes, the size its header declares, the
-/// `acsp` signature, an input, display, output or colour space profile of CMYK colours, and a tag
-/// table whose tags lie within it. `None` for other images and other profiles.
+/// CMYK image can be tagged with ([`valid_icc`]). `None` for other images and other profiles.
 pub(crate) fn cmyk_icc(blob: &ImageBlob) -> Option<Vec<u8>> {
-    blob.cmyk_icc_profile().filter(|icc| valid_cmyk_icc(icc))
+    blob.cmyk_icc_profile().filter(|icc| valid_icc(icc, *b"CMYK"))
 }
 
-/// Is `icc` a CMYK profile as [`cmyk_icc`] describes?
-fn valid_cmyk_icc(icc: &[u8]) -> bool {
+/// Is `icc` a profile an image of colour space `space` (`GRAY`, `RGB ` or `CMYK`) can be tagged
+/// with: at most [`MAX_ICC`] bytes, the size its header declares, the `acsp` signature, an input,
+/// display, output or colour space profile of `space` colours, and a tag table whose tags lie
+/// within it?
+fn valid_icc(icc: &[u8], space: [u8; 4]) -> bool {
     let be = |at: usize| icc.get(at..at + 4).and_then(|b| b.try_into().ok()).map(u32::from_be_bytes);
     let fits = |at: u32, len: u32| u64::from(at) + u64::from(len) <= icc.len() as u64;
     if icc.len() > MAX_ICC || be(0).and_then(|n| usize::try_from(n).ok()) != Some(icc.len()) {
@@ -195,7 +196,7 @@ fn valid_cmyk_icc(icc: &[u8]) -> bool {
     }
     let class = icc.get(12..16);
     if icc.get(36..40) != Some(b"acsp".as_slice())
-        || icc.get(16..20) != Some(b"CMYK".as_slice())
+        || icc.get(16..20) != Some(space.as_slice())
         || ![b"scnr", b"mntr", b"prtr", b"spac"].iter().any(|c| class == Some(c.as_slice()))
     {
         return false;
@@ -412,8 +413,7 @@ pub(crate) fn recode(
     // Pixels that keep their colours keep the profile they are in; converted ones are in the
     // destination's.
     let want = if kind == Kind::Color { *b"RGB " } else { *b"GRAY" };
-    let icc =
-        (profiles && convert.is_none()).then(|| source_icc(bytes)).flatten().filter(|icc| vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want));
+    let icc = (profiles && convert.is_none()).then(|| source_icc(bytes)).flatten().filter(|icc| valid_icc(icc, want));
     let rgb_icc = icc.is_some() && kind == Kind::Color;
     let mut rgba = resample(img, &rule, sized(&rule, dims, size)).into_rgba8();
     if kind == Kind::Mono {
