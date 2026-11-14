@@ -7122,7 +7122,6 @@ breakText	Glyphs	Glifi
 @msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` deve essere compreso tra 0.01 e 100 pt
 @msg	style must be "pencil" or "brush"	style deve essere "pencil" o "brush"
 @msg	extend end must be "start" or "end"	l’estremità di extend deve essere "start" o "end"
-@msg	connect end must be "start" or "end"	l’estremità di connect deve essere "start" o "end"
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` deve essere un numero intero compreso tra 1 e {MAX_BRIDGES_PER_ISLAND}
 	Weed Box and Lines…	Riquadro e linee di spellicolatura…
 	Weed Box and Lines	Riquadro e linee di spellicolatura
