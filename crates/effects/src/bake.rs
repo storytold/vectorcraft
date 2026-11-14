@@ -124,6 +124,9 @@ thread_local! {
     /// How deep the object [`bake_node`] is baking sits in the tree it returns: a top-level layer
     /// is 1 deep.
     static LEVEL: std::cell::Cell<usize> = const { std::cell::Cell::new(1) };
+    /// Whether [`bake_node`] is baking inside an object the export does not write ([`unwritten`]),
+    /// where no instance is placed.
+    static UNWRITTEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// `f` run for an object one level deeper ([`LEVEL`]) than the one being baked.
@@ -149,6 +152,30 @@ struct Placing {
     /// How deep the document's symbols and patterns draw, for the instances and pattern paints
     /// left in placed art.
     heights: vectorcraft_doc::depth::DrawnHeights,
+    /// The hidden layers and layers that do not print that the export writes.
+    layers: WrittenLayers,
+}
+
+/// The layers an exporter writes besides the shown, printing ones
+/// ([`bake_document_placing_symbols`]). Template layers are never written.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WrittenLayers {
+    /// Hidden layers (written turned off, as PDF layers and DXF write them).
+    pub hidden: bool,
+    /// Layers that do not print.
+    pub non_printing: bool,
+}
+
+/// Does the export leave `n` and everything in it out, while [`bake_document_placing_symbols`]
+/// bakes? A hidden object other than a layer, a template layer, and a hidden layer or a layer
+/// that does not print when the export leaves those out ([`WrittenLayers`]).
+fn unwritten(n: &Node) -> bool {
+    PLACING.with(|p| {
+        p.borrow().as_ref().is_some_and(|p| match n.kind {
+            NodeKind::Layer { template, printable, .. } => template || !(printable || p.layers.non_printing) || !(n.visible || p.layers.hidden),
+            _ => !n.visible,
+        })
+    })
 }
 
 /// Can `baked`, the baked art of a placed instance, take the instance's place [`LEVEL`] deep,
@@ -201,13 +228,14 @@ fn drawn_symbols(d: &Document) -> HashSet<String> {
 }
 
 /// Does `n`'s subtree hold an instance of a symbol that [`bake_document_placing_symbols`] replaces
-/// by its placed art? False outside it.
+/// by its placed art? False outside it, and for objects the export does not write ([`unwritten`]).
 fn holds_placed_symbol(n: &Node) -> bool {
     fn walk(n: &Node, symbols: &HashSet<String>) -> bool {
-        matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbols.contains(symbol))
-            || n.children().is_some_and(|ch| ch.iter().any(|c| walk(c, symbols)))
+        !unwritten(n)
+            && (matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbols.contains(symbol))
+                || n.children().is_some_and(|ch| ch.iter().any(|c| walk(c, symbols))))
     }
-    PLACING.with(|p| p.borrow().as_ref().is_some_and(|p| walk(n, &p.symbols)))
+    !UNWRITTEN.with(|c| c.get()) && PLACING.with(|p| p.borrow().as_ref().is_some_and(|p| walk(n, &p.symbols)))
 }
 
 /// Symbol instance `n`, while [`bake_document_placing_symbols`] bakes and its symbol is one it
@@ -216,14 +244,15 @@ fn holds_placed_symbol(n: &Node) -> bool {
 /// place it, in a group with the instance's id, name, visibility, transparency, opacity mask and
 /// raster effects. The art is placed before its effects are baked, as the canvas draws it, so an
 /// instance that scales its art does not scale what its effects do. `None` for other objects,
-/// for instances nested [`vectorcraft_doc::depth::MAX_DEPTH`] deep in such art, and when the art
+/// for instances the export does not write ([`unwritten`], hidden or inside such an object), for
+/// instances nested [`vectorcraft_doc::depth::MAX_DEPTH`] deep in such art, and when the art
 /// as placed, before its effects are baked, would already take the art placed for the export
 /// past [`Placing::most_nodes`]; those instances stay as they are. [`bake_node`] checks the baked
 /// art with [`placed_fits`].
 fn placed_symbol_art(d: &Document, n: &Node) -> Option<Node> {
     let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return None };
     let (clip, most_nodes) = PLACING.with(|p| p.borrow().as_ref().filter(|p| p.symbols.contains(symbol)).map(|p| (p.clip_slices, p.most_nodes)))?;
-    if INSTANCE_DEPTH.with(|c| c.get()) >= vectorcraft_doc::depth::MAX_DEPTH {
+    if INSTANCE_DEPTH.with(|c| c.get()) >= vectorcraft_doc::depth::MAX_DEPTH || UNWRITTEN.with(|c| c.get()) || unwritten(n) {
         return None;
     }
     let sym = d.symbols.iter().find(|s| s.name == *symbol)?;
@@ -242,6 +271,13 @@ fn placed_symbol_art(d: &Document, n: &Node) -> Option<Node> {
 
 /// `n` with its geometry effects evaluated (`None` = unchanged).
 fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
+    // Inside an object the export leaves out, effects are baked but no instance is placed.
+    if !UNWRITTEN.with(|c| c.get()) && unwritten(n) {
+        UNWRITTEN.with(|c| c.set(true));
+        let out = bake_node(d, n);
+        UNWRITTEN.with(|c| c.set(false));
+        return out;
+    }
     // A cancelled export leaves the rest of the document as it is: the caller drops the result.
     // A ruler guide draws nothing and stays as it is, last in its layer.
     if n.is_ruler_guide() || !(needs_bake(n) || holds_placed_symbol(n)) || vectorcraft_doc::cancel::is_cancelled() {
@@ -848,31 +884,47 @@ pub fn bake_document(doc: &Document) -> Option<Document> {
 /// exporters that write each instance's art in its place (PDF, print, EPS, DXF), rather than
 /// writing each symbol once. `clip_slices`: whether 9-slice cells are clipped
 /// ([`Document::place_symbol_art`]) or not ([`Document::place_symbol_art_unclipped`]), as the
-/// exporter places other instances. The symbols' own art is left as it is.
-pub fn bake_document_placing_symbols(doc: &Document, clip_slices: bool) -> Option<Document> {
-    bake(doc, Some((clip_slices, vectorcraft_doc::MAX_SYMBOL_NODES)))
+/// exporter places other instances. `layers`: the hidden layers and layers that do not print
+/// that the exporter writes. Instances the export does not write (hidden ones, those in hidden
+/// objects, on template layers, and on the layers `layers` leaves out) stay as they are. The
+/// symbols' own art is left as it is.
+pub fn bake_document_placing_symbols(doc: &Document, clip_slices: bool, layers: WrittenLayers) -> Option<Document> {
+    bake(doc, Some((clip_slices, vectorcraft_doc::MAX_SYMBOL_NODES, layers)))
 }
 
 /// Restores what [`bake`] changes in the thread's baking state when it ends.
-struct Restore(Option<Rc<Placing>>, u64, usize);
+struct Restore(Option<Rc<Placing>>, u64, usize, bool);
 
 impl Drop for Restore {
     fn drop(&mut self) {
         PLACING.with(|p| *p.borrow_mut() = self.0.take());
         PLACED_NODES.with(|c| c.set(self.1));
         LEVEL.with(|c| c.set(self.2));
+        UNWRITTEN.with(|c| c.set(self.3));
     }
 }
 
-/// [`bake_document`], or with `placing` [`bake_document_placing_symbols`] with that `clip_slices`
-/// and [`Placing::most_nodes`].
-fn bake(doc: &Document, placing: Option<(bool, u64)>) -> Option<Document> {
+/// [`bake_document`], or with `placing` [`bake_document_placing_symbols`] with that `clip_slices`,
+/// [`Placing::most_nodes`] and [`Placing::layers`].
+fn bake(doc: &Document, placing: Option<(bool, u64, WrittenLayers)>) -> Option<Document> {
     let placed = doc.with_placed_art();
-    let placing = placing.map(|(clip_slices, most_nodes)| (drawn_symbols(&placed), clip_slices, most_nodes)).filter(|p| !p.0.is_empty()).map(
-        |(symbols, clip_slices, most_nodes)| Placing { symbols, clip_slices, most_nodes, heights: vectorcraft_doc::depth::DrawnHeights::of(&placed) },
-    );
+    let placing = placing
+        .map(|(clip_slices, most_nodes, layers)| (drawn_symbols(&placed), clip_slices, most_nodes, layers))
+        .filter(|p| !p.0.is_empty())
+        .map(|(symbols, clip_slices, most_nodes, layers)| Placing {
+            symbols,
+            clip_slices,
+            most_nodes,
+            heights: vectorcraft_doc::depth::DrawnHeights::of(&placed),
+            layers,
+        });
     // A bake inside another one (of art an effect makes) places symbols only when it asks to.
-    let _restore = Restore(PLACING.with(|p| p.replace(placing.map(Rc::new))), PLACED_NODES.with(|c| c.replace(0)), LEVEL.with(|c| c.replace(1)));
+    let _restore = Restore(
+        PLACING.with(|p| p.replace(placing.map(Rc::new))),
+        PLACED_NODES.with(|c| c.replace(0)),
+        LEVEL.with(|c| c.replace(1)),
+        UNWRITTEN.with(|c| c.replace(false)),
+    );
     if !placed.layers.iter().any(|l| needs_bake(l) || holds_placed_symbol(l)) {
         return match placed {
             std::borrow::Cow::Owned(d) => Some(d),

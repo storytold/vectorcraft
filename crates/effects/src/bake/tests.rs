@@ -1100,7 +1100,7 @@ fn placing_symbols_bakes_their_art_where_each_instance_places_it() {
     d.insert(Some(layer), 0, instance(901, "S", Affine::translate((0.0, 100.0)) * Affine::scale(2.0))).unwrap();
     add_symbol(&mut d, "S", moved_square(800));
     assert!(bake_document(&d).is_none(), "nothing in the layers needs baking");
-    let out = bake_document_placing_symbols(&d, true).unwrap();
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
     assert!(matches!(out.node(NodeId(900)).unwrap().kind, NodeKind::Group { .. }));
     assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 40.0, 120.0, 50.0)), "{:?}", bounds(&out, 900));
     assert!(near_rect(bounds(&out, 901), Rect::new(120.0, 180.0, 140.0, 200.0)), "{:?}", bounds(&out, 901));
@@ -1115,7 +1115,7 @@ fn placing_symbols_reaches_the_art_of_nested_instances() {
     let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
     add_symbol(&mut d, "Inner", moved_square(800));
     add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(instance(802, "Inner", Affine::translate((0.0, 100.0))))]));
-    let out = bake_document_placing_symbols(&d, true).unwrap();
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
     assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 140.0, 120.0, 150.0)), "{:?}", bounds(&out, 900));
 }
 
@@ -1130,7 +1130,7 @@ fn placing_a_symbol_that_holds_itself_stops() {
         "Loop",
         Node::group(NodeId(801), vec![Arc::new(moved_square(800)), Arc::new(instance(802, "Loop", Affine::translate((0.0, 1.0))))]),
     );
-    let out = bake_document_placing_symbols(&d, true).unwrap();
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
     let mut lefts = vec![];
     out.node(NodeId(900)).unwrap().walk(&mut |n| lefts.extend(n.path_data().and_then(|p| p.bounds()).map(|b| b.x0)));
     assert!(lefts.len() > 1 && lefts.iter().all(|x| (x - 110.0).abs() < 1e-6), "{lefts:?}");
@@ -1160,7 +1160,7 @@ fn placing_symbols_keeps_dynamic_instances_changes() {
     let mut d = doc_with(inst);
     add_symbol(&mut d, "D", Node::group(NodeId(802), vec![Arc::new(square), Arc::new(sibling)]));
     d.symbols[0].dynamic = true;
-    let out = bake_document_placing_symbols(&d, true).unwrap();
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
     let mut fills = vec![];
     out.node(NodeId(900)).unwrap().walk(&mut |n| {
         if n.path_data().is_some()
@@ -1197,7 +1197,7 @@ fn placing_symbols_keeps_the_instances_stain() {
         art.appearance.effects.push(fx(id, params));
         let mut d = doc_with(inst.clone());
         add_symbol(&mut d, "Mark", art);
-        let out = bake_document_placing_symbols(&d, true).unwrap();
+        let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
         assert!(!is_instance(&out, 900), "{id}: the instance is placed");
         let mut fills = vec![];
         out.node(NodeId(900)).unwrap().walk(&mut |n| {
@@ -1208,6 +1208,9 @@ fn placing_symbols_keeps_the_instances_stain() {
         assert_eq!(fills, [want.to_hex()], "{id}");
     }
 }
+
+/// Every layer written, as DXF writes them (template layers are never written).
+const ALL: WrittenLayers = WrittenLayers { hidden: true, non_printing: true };
 
 fn is_instance(d: &Document, id: u64) -> bool {
     d.node(NodeId(id)).is_some_and(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
@@ -1223,13 +1226,13 @@ fn placing_symbols_counts_the_baked_art() {
     let layer = d.layers[0].id;
     d.insert(Some(layer), 0, instance(901, "S", Affine::translate((0.0, 100.0)))).unwrap();
     add_symbol(&mut d, "S", gradient_copies(800));
-    let all = bake(&d, Some((true, u64::MAX))).unwrap();
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
     let each = all.node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
     assert!(each > 2, "the instance's group, and the copies as objects of their own: {each}");
     assert_eq!(all.node(NodeId(901)).map(|n| n.count_with_masks() as u64), Some(each));
-    let fits = bake(&d, Some((true, 2 * each))).unwrap();
+    let fits = bake(&d, Some((true, 2 * each, ALL))).unwrap();
     assert!(!is_instance(&fits, 900) && !is_instance(&fits, 901));
-    let short = bake(&d, Some((true, 2 * each - 1))).unwrap();
+    let short = bake(&d, Some((true, 2 * each - 1, ALL))).unwrap();
     assert_eq!(usize::from(is_instance(&short, 900)) + usize::from(is_instance(&short, 901)), 1, "one instance stays as it is");
 }
 
@@ -1241,12 +1244,58 @@ fn placing_symbols_counts_nested_art_once() {
     let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
     add_symbol(&mut d, "Inner", gradient_copies(800));
     add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(instance(802, "Inner", Affine::IDENTITY))]));
-    let all = bake(&d, Some((true, u64::MAX))).unwrap();
+    let all = bake(&d, Some((true, u64::MAX, ALL))).unwrap();
     let total = all.node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
-    let exact = bake(&d, Some((true, total))).unwrap();
+    let exact = bake(&d, Some((true, total, ALL))).unwrap();
     assert!(!is_instance(&exact, 900) && !is_instance(&exact, 802), "both are placed within {total}");
-    let short = bake(&d, Some((true, total - 1))).unwrap();
+    let short = bake(&d, Some((true, total - 1, ALL))).unwrap();
     assert!(is_instance(&short, 900), "the outer instance stays as it is");
+}
+
+/// Instances the export does not write are not placed and do not count against the budget: with
+/// room for one instance's baked art, hidden instances, an instance in a hidden group, one on a
+/// template layer, one on a layer that does not print and one on a hidden layer (when the export
+/// leaves those layers out) come first and stay as they are, and the visible instance after them
+/// is placed. An export that writes those layers places their instances first.
+#[test]
+fn placing_symbols_skips_instances_the_export_leaves_out() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    add_symbol(&mut d, "S", gradient_copies(800));
+    let each = bake(&d, Some((true, u64::MAX, ALL))).unwrap().node(NodeId(900)).map_or(0, |n| n.count_with_masks() as u64);
+    let layer = d.layers[0].id;
+    let mut hidden = instance(901, "S", Affine::IDENTITY);
+    hidden.visible = false;
+    let mut group = Node::group(NodeId(902), vec![Arc::new(instance(903, "S", Affine::IDENTITY))]);
+    group.visible = false;
+    for (i, n) in [hidden, group].into_iter().enumerate() {
+        d.insert(Some(layer), i, n).unwrap();
+    }
+    let mut left_out = vec![];
+    for (id, template, printable, visible) in [(910, true, true, true), (920, false, false, true), (930, false, true, false)] {
+        let mut l = Node::layer(NodeId(id), &format!("L{id}"), vectorcraft_doc::LayerColor::Preset(0));
+        if let NodeKind::Layer { template: t, printable: p, .. } = &mut l.kind {
+            *t = template;
+            *p = printable;
+        }
+        l.visible = visible;
+        if let Some(ch) = l.children_mut() {
+            ch.push(Arc::new(instance(id + 1, "S", Affine::IDENTITY)));
+        }
+        left_out.push(Arc::new(l));
+    }
+    d.layers.splice(0..0, left_out);
+    let out = bake(&d, Some((true, each, WrittenLayers::default()))).unwrap();
+    assert!(!is_instance(&out, 900), "the visible instance is placed within {each}");
+    for id in [901, 903, 911, 921, 931] {
+        assert!(is_instance(&out, id), "{id} stays as it is");
+    }
+    // An export that writes the layers that do not print, or the hidden layers, places that
+    // layer's instance first; the template layer's instance is never placed.
+    for (layers, first) in [(WrittenLayers { non_printing: true, hidden: false }, 921), (WrittenLayers { non_printing: false, hidden: true }, 931)] {
+        let out = bake(&d, Some((true, each, layers))).unwrap();
+        assert!(!is_instance(&out, first) && is_instance(&out, 900) && is_instance(&out, 911), "{layers:?}");
+    }
 }
 
 /// `leaf` in `levels` groups, with ids from `id` up.
@@ -1270,7 +1319,7 @@ fn placing_symbols_keeps_the_baked_art_within_the_drawn_depth() {
     add_symbol(&mut d, "E", in_groups(5000, 1, gradient_copies(5100)));
     assert!(!d.too_deep(None));
     assert_eq!(DrawnHeights::of(&d).deepest(&d.layers[0], 1), MAX_DRAWN_DEPTH);
-    let out = bake_document_placing_symbols(&d, true).unwrap();
+    let out = bake_document_placing_symbols(&d, true, ALL).unwrap();
     // E's square becomes a group of copies, a level past the cap: E's instance stays.
     assert!(is_instance(&out, 4100), "E's instance stays as it is");
     assert!(!is_instance(&out, 900) && !is_instance(&out, 3100), "A to D are placed");
@@ -1278,5 +1327,5 @@ fn placing_symbols_keeps_the_baked_art_within_the_drawn_depth() {
     // Without the chain above it, E's art is placed.
     let mut shallow = doc_with(instance(900, "E", Affine::IDENTITY));
     add_symbol(&mut shallow, "E", in_groups(5000, 1, gradient_copies(5100)));
-    assert!(!is_instance(&bake_document_placing_symbols(&shallow, true).unwrap(), 900));
+    assert!(!is_instance(&bake_document_placing_symbols(&shallow, true, ALL).unwrap(), 900));
 }
