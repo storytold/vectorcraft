@@ -5728,6 +5728,15 @@ tool's active artboard in place, and the Distribute buttons then send the Distri
 can then be negative. Align to Selection sends `to: "selection"`. The Distribute buttons need two or more selected
 artboards with Align to Artboard, and three or more with Align to Selection.
 
+Edit › Keyboard Shortcuts and `shortcuts.list` list an undoable command that is not an alias and has no menu path or
+default shortcut, such as a panel menu's Break Link to Symbol (`symbol.breakLink`), when its params doc names no
+required field and it is not one of the commands left out below. A field is optional when each of its names ends with
+`?`, whatever type follows it (`on?: bool`, `ids?: [id…]`), when its name is followed directly by an `=` default
+(`rows=10`), or when it starts with `…`. Such a command is listed in the group named by the first part of its id.
+Commands listed this way include `type.fractionalWidths`, `type.systemLayout`, `object.setPixelAligned`,
+`links.embed`, `links.update`, `object.slice.delete`, `artboard.switchOrientation`, `artboard.distributeSpacing`,
+`appearance.targetContents` and `paint.invert`.
+
 Edit › Keyboard Shortcuts and `shortcuts.list` leave out a command with no default shortcut when a key press cannot
 run it: no item of the menu bar runs it, it opens no dialog when run without params, and it is one of these:
 
@@ -5737,7 +5746,22 @@ run it: no item of the menu bar runs it, it opens no dialog when run without par
 - a command that sets nothing or fails without a param: `transparency.set`, `transparency.setOpacityMask`,
   `stroke.set`, `layer.setProps`, `object.align`, `object.distribute`, `swatch.delete`, `swatch.move`,
   `swatch.spotOptions`, `edit.colors.adjustBalance`, `swatch.library.load`, `graphicStyle.loadLibrary`,
-  `symbol.loadLibrary`, `brush.loadLibrary`, `dataset.import` and `variable.loadLibrary`.
+  `symbol.loadLibrary`, `brush.loadLibrary`, `dataset.import`, `variable.loadLibrary`, `charStyle.load`,
+  `paraStyle.load`, `textStyle.loadAll` and `svgFilter.import`;
+- a command without a menu path that sets nothing, fails or only gives data back without a param:
+  `addon.pathtools.setAnchor`, `addon.shapes.configure`, `appearance.addEffect`, `artboard.align`,
+  `artboard.distribute`, `assets.export`, `assets.export3D`, `assets.settings.set`,
+  `attributes.set`, `brush.move`, `css.export`, `dimension.create`, `document.export`, `document.exportDxf`,
+  `document.exportEps`, `document.exportForWeb`, `document.exportPdf`, `document.save`, `document.setup`,
+  `edit.undoGroup.begin`, `edit.undoGroup.end`, `eyedropper.setOptions`, `file.package`, `library.createGroup`,
+  `links.placementOptions`, `links.unembed`, `livePaint.gapOptions`, `object.blend.createSpine`,
+  `object.blend.setEasing`, `object.intertwine.arrange`, `object.objectsOnPath.options`, `object.puppetWarp.pins`,
+  `object.setBounds`, `object.setLiveShape`, `object.setOverprint`, `object.setProps`, `object.slice.select`,
+  `paint.freeform.setPoint`, `paint.setFill`, `paint.setGradientGeom`, `paint.setStroke`, `perspective.grid.define`,
+  `perspective.grid.set`, `perspective.plane.move`, `print.setup`, `select.color`, `select.globalEditOptions`,
+  `stroke.setAdvanced`, `symbol.options`, `text.setFormat`, `text.setRangeStyle`, `text.setStyle` and `type.ruby`;
+- `symbol.new`, which the Symbols panel's New Symbol button and its New Symbol… menu item run through the Symbol
+  Options dialog.
 
 They list such a command while the user has changed its shortcut (`overridden: true` in `shortcuts.list`), and
 `shortcuts.set` can change or clear it. When every menu bar item that runs a command gives it the same params, a
