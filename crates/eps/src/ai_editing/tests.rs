@@ -7398,16 +7398,19 @@ fn the_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
 }
 
 /// The pieces of a warped image that Preserve Shape Using Transparency cuts with opacity masks that
-/// clip are written as the parts their masks show, and the file reads back drawing as it did.
+/// clip are written as the parts their masks show, in a group without knockout, and the file reads
+/// back drawing as it did.
 #[test]
 fn masked_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
     // GUARDS: each masked piece of a warped image was written with all of the image's samples.
+    // GUARDS: the pieces' knockout group read back with each piece hiding the pieces below it.
     let doc = photo_doc(|d| {
         let photo = speckled_photo(d);
         let NodeKind::Image(im) = &photo.kind else { panic!("not an image") };
         let bend = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 12.0 * ((p.x - 20.0) / 128.0 * std::f64::consts::PI).sin());
         vectorcraft_doc::live::mesh_warp_image(&photo, im, &bend, 4, false, true)
     });
+    assert_eq!(doc.layers[0].children().unwrap()[0].knockout, vectorcraft_doc::Knockout::On);
     let sizes = sample_sizes(&doc);
     assert_eq!(sizes.len(), 32, "{sizes:?}");
     assert_eq!(sizes[0], SPECKLED_WHOLE, "the first piece holds the whole image");
@@ -7420,6 +7423,28 @@ fn masked_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
         8.0,
     );
     assert!((st.bad_pixels as f64) < 0.005 * st.pixels as f64, "{} of {} pixels differ", st.bad_pixels, st.pixels);
+}
+
+/// The masked pieces of a warped image whose pixels are half transparent read back drawing as they
+/// did, except where neighboring pieces overlap: there the image's alpha draws twice.
+#[test]
+fn masked_pieces_of_a_translucent_warped_image_read_back_but_for_their_overlaps() {
+    // GUARDS: the pieces' knockout group read back with each piece hiding the pieces below it
+    // (8,942 of 20,000 pixels differed).
+    let doc = photo_doc(|d| {
+        let px = image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 128]));
+        let photo = image_node(d, ImageBlob::png(png_of(px.into())), (64, 64), Affine::new([2.0, 0.0, 0.0, 2.0, 20.0, 10.0]), None);
+        let NodeKind::Image(im) = &photo.kind else { panic!("not an image") };
+        let bend = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 12.0 * ((p.x - 20.0) / 128.0 * std::f64::consts::PI).sin());
+        vectorcraft_doc::live::mesh_warp_image(&photo, im, &bend, 4, false, true)
+    });
+    let back = read_back(&doc);
+    let st = vectorcraft_testkit::raster::perceptual_diff(
+        &vectorcraft_testkit::raster::render_artboard(&doc),
+        &vectorcraft_testkit::raster::render_artboard(&back),
+        8.0,
+    );
+    assert!((st.bad_pixels as f64) < 0.05 * st.pixels as f64, "{} of {} pixels differ", st.bad_pixels, st.pixels);
 }
 
 /// An image with a live Warp keeps its pixels whole once, and its drawn look's pieces are each the

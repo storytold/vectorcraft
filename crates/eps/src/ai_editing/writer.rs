@@ -648,7 +648,14 @@ impl<'a> Writer<'a> {
         }
         self.effects(n);
         self.state(n.locked, !n.visible);
-        let xy = Xy::of(n);
+        let mut xy = Xy::of(n);
+        if masked_warp_pieces(n) {
+            // The reader gives the pieces no mark, and a knockout group's member then knocks out
+            // what it paints without its opacity mask: each piece would hide the pieces below it.
+            // Without knockout, a partly transparent image draws its alpha twice only where the
+            // pieces overlap.
+            xy.knockout = Knockout::Off;
+        }
         let start = self.body.len();
         match &n.kind {
             NodeKind::Layer { .. } => {}
@@ -1657,6 +1664,16 @@ fn clip_path(n: &Node) -> Option<(PathData, FillRule)> {
         _ => return None,
     };
     path.subpaths.iter().any(|sp| !sp.anchors.is_empty()).then_some((path, rule))
+}
+
+/// Is `n` a knockout group of the pieces of a mesh-warped image cut by opacity masks
+/// ([`vectorcraft_doc::live::mesh_warp_image`] with Preserve Shape Using Transparency)? Each piece
+/// knocks out its triangle ([`Node::knockout_outline`]); read from the data, a piece knocks out all
+/// that its image paints instead.
+fn masked_warp_pieces(n: &Node) -> bool {
+    n.knockout == Knockout::On
+        && matches!(&n.kind, NodeKind::Group { children, clip: false }
+            if !children.is_empty() && children.iter().all(|c| c.extras().warp_piece && c.extras().mask.is_some()))
 }
 
 /// `text`'s lines on `%_` lines, as a part of the data that readers of the printed form skip (an
