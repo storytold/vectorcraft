@@ -533,6 +533,66 @@ fn a_gradient_mixing_a_spot_ink_with_rgb_is_written_without_the_ink() {
 }
 
 #[test]
+fn gradients_name_only_the_spot_inks_of_stops_that_color_a_stretch() {
+    let black = |offset: f32| GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let paper = |offset: f32| GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 0.0));
+    let no_spot_space = |ps: &str| !ps.contains("(Gold Ink) cvn") && !ps.contains("/DeviceN") && !ps.contains("/Separation");
+    for level in [Level::Two, Level::Three] {
+        // Gold Ink out of order: the stops at 0 and 0.8 cover the stretches next to it, so it
+        // colors nothing and has no plate.
+        let d = spot_gradient_doc(vec![black(0.0), black(0.8), spot_stop(0.2, "Gold Ink", GOLD, 1.0), black(0.4), black(1.0)]);
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        assert_eq!(dsc(&ps, "DocumentCustomColors"), None, "{level:?}: {ps}");
+        assert!(no_spot_space(&ps), "{level:?}: {ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{level:?}: {:?}", out.warnings);
+        checked_page(&ps);
+        // Without it, Leaf Ink's tints over paper are a Separation shading.
+        let d = spot_gradient_doc(vec![
+            spot_stop(0.0, "Leaf Ink", LEAF, 1.0),
+            spot_stop(0.8, "Leaf Ink", LEAF, 0.5),
+            spot_stop(0.2, "Gold Ink", GOLD, 1.0),
+            paper(0.4),
+            paper(1.0),
+        ]);
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Leaf Ink)"), "{level:?}: {ps}");
+        assert!(ps.contains("/VCsp0 [/Separation (Leaf Ink) cvn /DeviceCMYK") && !ps.contains("(Gold Ink) cvn"), "{level:?}: {ps}");
+        checked_page(&ps);
+        // An RGB stop out of order colors nothing either, so it keeps no ink out.
+        let d = spot_gradient_doc(vec![
+            spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+            spot_stop(0.8, "Gold Ink", GOLD, 0.5),
+            GradientStop::new(0.2, Color::rgb(0.0, 1.0, 0.0)),
+            paper(0.4),
+            paper(1.0),
+        ]);
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        assert!(ps.contains("/VCsp0 [/Separation (Gold Ink) cvn /DeviceCMYK"), "{level:?}: {ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{level:?}: {:?}", out.warnings);
+        // Gold Ink at a tint of 0 prints no ink.
+        let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 0.0), black(1.0)]);
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert_eq!(dsc(&ps, "DocumentCustomColors"), None, "{level:?}: {ps}");
+        assert!(no_spot_space(&ps), "{level:?}: {ps}");
+    }
+    // Gold Ink at a tint of 0 over a 30% cyan plate (a DeviceN gradient read from a PDF) keeps
+    // its process plate in the same space.
+    let plated = GradientStop { plates: Some([0.3, 0.0, 0.0, 0.0]), ..spot_stop(1.0, "Gold Ink", GOLD, 0.0) };
+    let d = spot_gradient_doc(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), plated]);
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan (Gold Ink) cvn ] /DeviceCMYK") && checked_page(&ps).contains("/C0 [0.3 0] /C1 [0.3 0]"), "{ps}");
+    // EPS leaves stop opacity out, so a clear Gold Ink stop between clear stops is written opaque
+    // and keeps its plate.
+    let clear = |s: GradientStop| GradientStop { opacity: 0.0, ..s };
+    let d = spot_gradient_doc(vec![black(0.0), clear(black(0.2)), clear(spot_stop(0.4, "Gold Ink", GOLD, 1.0)), clear(black(0.6)), black(1.0)]);
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Gold Ink)"), "{ps}");
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Black (Gold Ink) cvn ] /DeviceCMYK"), "{ps}");
+}
+
+#[test]
 fn spot_inks_named_all_or_none_are_written_under_names_of_their_own() {
     let rect = |d: &mut Document, fill: &str, stroke: &str| {
         let solid = |name: &str| Paint::Solid { color: GOLD, swatch: Some(name.into()), tint: 1.0 };
