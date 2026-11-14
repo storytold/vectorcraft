@@ -305,7 +305,7 @@ pub static LANGUAGES: [LangInfo; 28] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
-    // Danish; every `da-*` locale (`da-DK`, `da_DK.UTF-8`…) resolves here.
+    // Danish: the whole interface and the status and error messages; every `da-*` locale (`da-DK`, `da_DK.UTF-8`…) resolves here.
     LangInfo {
         code: "da",
         name: "Dansk",

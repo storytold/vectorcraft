@@ -4034,7 +4034,7 @@ fn translated_messages_keep_the_command_ids_their_english_names() {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl",
+    "nl", "da",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
