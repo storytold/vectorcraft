@@ -1757,3 +1757,88 @@ fn a_sublayers_ruler_guide_in_a_hidden_or_locked_group_stays_hidden_or_locked() 
         assert_eq!(guides, [(NodeId(20), !hidden, locked)], "hidden {hidden}, locked {locked}");
     }
 }
+
+/// Gathering the ruler guides of nested sublayers, and of a sublayer inside nested groups, looks
+/// at each member at every depth once at most, and takes the same guides, in the same order and state, as
+/// a layer's effects keep.
+#[test]
+fn gathering_sublayer_ruler_guides_looks_at_each_member_once() {
+    use std::cell::Cell;
+    use vectorcraft_doc::LayerColor;
+    const CHAIN: u64 = 6;
+    let guide = |id| Arc::new(Node::new(NodeId(id), NodeKind::RulerGuide { vertical: true, pos: id as f64, artboard: None }));
+    let layer = |id, children: Vec<Arc<Node>>| {
+        let mut l = Node::layer(NodeId(id), "Sub", LayerColor::Preset(1));
+        if let Some(ch) = l.children_mut() {
+            *ch = children;
+        }
+        l
+    };
+    // Sublayers nested CHAIN deep, each holding the next before its own art and guide. The second
+    // is hidden and the fourth locked.
+    let first_guide = guide(201);
+    let mut chain = layer(100 + CHAIN, vec![sq(300 + CHAIN, 0.0, Color::BLACK), guide(200 + CHAIN)]);
+    for depth in (1..CHAIN).rev() {
+        let own = if depth == 1 { first_guide.clone() } else { guide(200 + depth) };
+        chain = layer(100 + depth, vec![Arc::new(chain), sq(300 + depth, 0.0, Color::BLACK), own]);
+        (chain.visible, chain.locked) = (depth != 2, depth == 4);
+    }
+    let second_guide = chain.children().and_then(|c| c[0].children()).map(|c| c[2].clone()).unwrap();
+    // A sublayer inside five nested groups, the third of them locked.
+    let mut groups = layer(450, vec![guide(250), sq(350, 0.0, Color::BLACK)]);
+    for depth in (1..=5).rev() {
+        groups = Node::group(NodeId(400 + depth), vec![Arc::new(groups)]);
+        groups.locked = depth == 3;
+    }
+    let free = Arc::new(Node::group(NodeId(500), vec![sq(501, 0.0, Color::BLACK), sq(502, 5.0, Color::BLACK)]));
+    // A sublayer with no guide: the art in its group is not looked at.
+    let quiet = Node::group(NodeId(601), vec![sq(602, 0.0, Color::BLACK), sq(603, 5.0, Color::BLACK)]);
+    let quiet = Arc::new(layer(600, vec![Arc::new(quiet)]));
+    let mut root = layer(10, vec![sq(1, 0.0, Color::rgb(1.0, 0.0, 0.0)), Arc::new(chain), Arc::new(groups), free.clone(), quiet.clone(), guide(20)]);
+    fn members(n: &Node) -> usize {
+        n.children().into_iter().flatten().map(|c| 1 + members(c)).sum()
+    }
+    let expected: Vec<_> = (1..=CHAIN).map(|depth| (NodeId(200 + depth), depth < 2, depth >= 4)).chain([(NodeId(250), true, true)]).collect();
+    let state = |g: &[Arc<Node>]| g.iter().map(|g| (g.id, g.visible, g.locked)).collect::<Vec<_>>();
+
+    let mut m = root.clone();
+    let looked = Cell::new(0_usize);
+    let is_guide = |n: &Node| {
+        looked.set(looked.get() + 1);
+        n.is_ruler_guide()
+    };
+    let mut taken = vec![];
+    take_sublayer_guides(&mut m, &mut taken, &is_guide);
+    assert_eq!(looked.get(), members(&root) - 2, "each member is looked at once, none in the quiet sublayer's group");
+    assert_eq!(state(&taken), expected, "a sublayer's own guides, then its sublayers', each once");
+    assert!(Arc::ptr_eq(&taken[0], &first_guide), "a guide with nothing to change is not copied");
+    assert!(!Arc::ptr_eq(&taken[1], &second_guide), "a guide made hidden is copied");
+    assert!(second_guide.visible, "the guide as it was stays as it was");
+    let ch = m.children().unwrap();
+    assert!(Arc::ptr_eq(&ch[3], &free), "a member with no sublayer guide is not copied");
+    assert!(Arc::ptr_eq(&ch[4], &quiet), "a sublayer with no guide is not copied");
+    assert!(ch[5].is_ruler_guide(), "the layer's own guide stays where it is");
+    let ids = |n: &Node| n.children().into_iter().flatten().map(|c| c.id).collect::<Vec<_>>();
+    assert_eq!(ids(&ch[1]), [NodeId(102), NodeId(301)], "the sublayer's art stays, in order");
+    assert_eq!(ids(&root.children().unwrap()[1]), [NodeId(102), NodeId(301), NodeId(201)], "the source keeps its guides");
+
+    fn found(n: &Node, out: &mut Vec<NodeId>) {
+        for c in n.children().into_iter().flatten() {
+            if c.is_ruler_guide() {
+                out.push(c.id);
+            }
+            found(c, out);
+        }
+    }
+    for (effect, params) in [("pathfinder.add", serde_json::json!({})), ("distort.transform", serde_json::json!({"moveH": 30, "copies": 2}))] {
+        root.appearance.effects = vec![Effect { id: effect.into(), params, visible: true }];
+        let art = evaluate_container(None, &root).unwrap();
+        let ch = art.children().unwrap();
+        let tail = &ch[ch.len() - expected.len() - 1..];
+        assert_eq!(tail[0].id, NodeId(20), "{effect}: the layer's own guide comes first");
+        assert_eq!(state(&tail[1..]), expected, "{effect}: then the sublayers' guides");
+        let mut all = vec![];
+        found(&art, &mut all);
+        assert_eq!(all.len(), expected.len() + 1, "{effect}: each guide once");
+    }
+}

@@ -734,35 +734,93 @@ fn item_art(id: NodeId, item: &AppearanceItem, shapes: &[(PathData, FillRule)], 
     Some(g)
 }
 
-/// Whether a sublayer among the members of `n`, or among its groups' members, holds a ruler guide.
-fn sublayer_guides(n: &Node) -> bool {
-    n.children().is_some_and(|ch| ch.iter().any(|c| c.holds_ruler_guides() || (!c.is_layer() && sublayer_guides(c))))
+/// The members of a container that [`take_held_guides`] visits, by index, each with the same for
+/// its own members. A ruler guide's entry is empty; a container's is not.
+#[derive(Default)]
+struct HeldGuides(Vec<(usize, HeldGuides)>);
+
+/// The members of `n` holding or leading to the ruler guides of sublayers, found by looking at each
+/// member at every depth once: the ruler guides (`is_guide`) of `n` when it is a layer, each
+/// sublayer holding one directly or in its sublayers, and each member of another kind with such a
+/// sublayer among its members or its groups' members. With them, whether `n` is a layer holding a
+/// ruler guide directly or in its sublayers. The other members of a layer holding none are not
+/// looked into, unless the layer is the one whose sublayers are gathered (`top`).
+fn held_guides(n: &Node, top: bool, is_guide: &impl Fn(&Node) -> bool) -> (bool, HeldGuides) {
+    let layer = n.is_layer();
+    let (mut holds, mut held, mut other) = (false, vec![], vec![]);
+    for (i, c) in n.children().into_iter().flatten().enumerate() {
+        if is_guide(c) {
+            if layer {
+                holds = true;
+                held.push((i, HeldGuides::default()));
+            }
+        } else if c.is_layer() {
+            let (sub_holds, inner) = held_guides(c, false, is_guide);
+            if sub_holds {
+                holds = true;
+                held.push((i, inner));
+            }
+        } else {
+            other.push((i, c));
+        }
+    }
+    if !layer || holds || top {
+        for (i, c) in other {
+            let (_, inner) = held_guides(c, false, is_guide);
+            if !inner.0.is_empty() {
+                held.push((i, inner));
+            }
+        }
+        held.sort_unstable_by_key(|(i, _)| *i);
+    }
+    (layer && holds, HeldGuides(held))
+}
+
+/// Move the ruler guides of `n` and of its members that [`held_guides`] found (`held`) to `out`:
+/// those of `n` first, in order, then those of each member in turn. A guide taken from a hidden or
+/// locked container, or from one inside such a container, is hidden or locked itself. Only the
+/// containers in `held` are copied, and only those are visited.
+fn take_held_guides(n: &mut Node, held: HeldGuides, out: &mut Vec<Arc<Node>>, hidden: bool, locked: bool) {
+    let Some(ch) = n.children_mut() else { return };
+    let (mut own, mut deeper) = (vec![], vec![]);
+    for (i, inner) in held.0 {
+        if inner.0.is_empty() {
+            own.push(i);
+            continue;
+        }
+        let Some(c) = ch.get_mut(i) else { continue };
+        let c = Arc::make_mut(c);
+        let (hidden, locked) = (hidden || !c.visible, locked || c.locked);
+        take_held_guides(c, inner, &mut deeper, hidden, locked);
+    }
+    if !own.is_empty() {
+        let mut own = own.into_iter().peekable();
+        for (i, mut c) in std::mem::take(ch).into_iter().enumerate() {
+            if own.next_if_eq(&i).is_none() {
+                ch.push(c);
+                continue;
+            }
+            if hidden || locked {
+                let g = Arc::make_mut(&mut c);
+                g.visible &= !hidden;
+                g.locked |= locked;
+            }
+            out.push(c);
+        }
+    }
+    out.append(&mut deeper);
 }
 
 /// Move the ruler guides of the sublayers among the members of `n`, and among its groups'
-/// members, to `out`, in order. A guide taken from a hidden or locked sublayer, or from one inside
-/// such a sublayer or group, is hidden or locked itself. Only containers holding one are copied.
-fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, hidden: bool, locked: bool) {
-    let Some(ch) = n.children_mut() else { return };
-    for c in ch.iter_mut().filter(|c| c.holds_ruler_guides() || (!c.is_layer() && sublayer_guides(c))) {
-        let c = Arc::make_mut(c);
-        let (hidden, locked) = (hidden || !c.visible, locked || c.locked);
-        if c.is_layer()
-            && let Some(lc) = c.children_mut()
-        {
-            let (taken, art): (Vec<_>, Vec<_>) = std::mem::take(lc).into_iter().partition(|g| g.is_ruler_guide());
-            *lc = art;
-            out.extend(taken.into_iter().map(|mut g| {
-                if hidden || locked {
-                    let g = Arc::make_mut(&mut g);
-                    g.visible &= !hidden;
-                    g.locked |= locked;
-                }
-                g
-            }));
-        }
-        take_sublayer_guides(c, out, hidden, locked);
-    }
+/// members, to `out`, in order: a sublayer's own guides, then those of its members. A guide taken
+/// from a hidden or locked sublayer, or from one inside such a sublayer or group, is hidden or
+/// locked itself. Each member at every depth is looked at once at most (`is_guide`), and only
+/// containers holding one are copied.
+fn take_sublayer_guides(n: &mut Node, out: &mut Vec<Arc<Node>>, is_guide: &impl Fn(&Node) -> bool) {
+    let (_, mut held) = held_guides(n, true, is_guide);
+    // The ruler guides of `n` itself stay where they are.
+    held.0.retain(|(_, inner)| !inner.0.is_empty());
+    take_held_guides(n, held, out, false, false);
 }
 
 /// `n`, a group or layer, as plain art: its Pathfinder effects evaluated, its geometry effects
@@ -790,7 +848,7 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
     // So do its sublayers' guides, which would otherwise go with the art the effects replace or
     // copy: they stay on this layer, hidden and locked as their sublayers were.
     if m.is_layer() && (pathfinder || !fx.is_empty()) {
-        take_sublayer_guides(&mut m, &mut guides, false, false);
+        take_sublayer_guides(&mut m, &mut guides, &Node::is_ruler_guide);
     }
     if pathfinder {
         let hook = |c: &Node| crate::outline_object(doc, c);
