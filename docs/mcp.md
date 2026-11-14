@@ -841,8 +841,18 @@ of the series, the legend swatch included, takes it at the same place on its own
 after the data changes or the graph moves. The graph saves this as `fillUnitBox` and `strokeUnitBox` in its series
 paints. A gradient stored from a path with no width or no height is drawn at the place in the document where it was
 stored. So is a gradient a graph stored without these flags. The graph does not store a stroke's dashes, caps, joins,
-arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
-with the paint they had.
+arrowheads, width profile or brush. On a graph label, given the label or something that holds it,
+these commands, `paint.swap` and `paint.default` store what they change for every label of its kind: the label's object
+rows, as the `appearance.*` commands store them, and the fill, stroke, stroke weight, caps, joins, miter limit, dashes
+and stroke alignment of its characters when all of its characters show them alike. A gradient on the characters is
+stored without its placement (its vector, aspect ratio, focal point and freeform points), and each label fits it to its
+own box when the graph is drawn again, so `paint.setGradientGeom` and the `paint.freeform.*` edits do not store the
+placement they set there. A stroke weight and dashes are stored as the label shows them, also on a label that was
+scaled. When the characters of labels of one kind change differently, the frontmost label sets what the kind keeps. On
+a pie with Legends in Wedges whose legend labels have no fill of their own, the legend labels' fill is stored only when
+every legend label the command reaches ends up with the same fill. Otherwise they are drawn again in black, or white on
+a dark wedge. These commands do not store the colors they give a graph's axis lines, ticks and radar rings, which are
+drawn again with their default paint.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
 it sets for each kind of label it reaches (value axis numbers, category labels, legend labels), and every label of that
