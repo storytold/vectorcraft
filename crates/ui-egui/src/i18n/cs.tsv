@@ -207,6 +207,8 @@
 	Crop Image	Oříznout obraz
 	Image Tools	Nástroje obrazu
 	Remove Background…	Odstranit pozadí…
+	Draw (Pencil)	Kreslit (tužka)
+	Place Image	Umístit obraz
 	Remove Background	Odstranit pozadí
 	Background	Pozadí
 	Edge Color	Barva okraje
@@ -4799,6 +4801,7 @@ imageTrace	Outline	Obrys
 @msg	`select` must be true or false	`select` musí být true nebo false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` a `maxAnchors` musí být celá čísla
 @msg	`{key}` must be a number not below 0	`{key}` musí být číslo nejméně 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` musí být čtyři čísla nejméně 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` musí být [x, y, width, height]: čtyři konečná čísla, šířka a výška nesmí být záporné
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` je větší než `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	zadejte alespoň jeden z parametrů `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -7596,7 +7599,7 @@ breakText	Glyphs	Glyfy
 @msg	`alignOn` must be a string	`alignOn` musí být řetězec
 @msg	`align` is start, center or end	`align` je start, center nebo end
 @msg	`align` must be a string	`align` musí být řetězec
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` musí být pole dvojic [dílčí cesta, kotevní bod]
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` musí být pole dvojic [subpath, anchor]
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` musí uvádět indexy kotevních bodů (0, 1, 2…), ne {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` musí uvádět indexy kotevních bodů (0, 1, 2…), ne {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pro tento dialog {kind} musí být jedna z hodnot: {_1}
@@ -7661,7 +7664,7 @@ breakText	Glyphs	Glyfy
 @msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` musí být od {lo} do {hi} pt
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` musí být 1 až 1000 cest k souborům písem, které našlo poslední hledání text.findFontFiles
 @msg	`focal` and `radius` cannot be used together	`focal` a `radius` nelze použít společně
-@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` musí být pole dvojic [dílčí cesta, kotevní bod]
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` musí být pole dvojic [subpath, anchor]
 @msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` uvádí [{si}, {ai}], což není kotevní bod cesty
 @msg	`folder` must be an absolute folder path	`folder` musí být absolutní cesta ke složce
 @msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` musí být objekt se značkami os a hodnotami, například {"wght"}
@@ -8326,7 +8329,7 @@ breakText	Glyphs	Glyfy
 @msg	instruction {pc} reached with stack depths {seen} and {d}	instrukce {pc} byla dosažena s hloubkami zásobníku {seen} a {d}
 @msg	invalid `color`	neplatné `color`
 @msg	invalid anchor index {v}: expected a non-negative integer	neplatný index kotevního bodu {v}: očekáváno nezáporné celé číslo
-@msg	invalid anchor reference {v}: expected [subpath, anchor]	neplatný odkaz na kotevní bod {v}: očekáváno [dílčí cesta, kotevní bod]
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	neplatný odkaz na kotevní bod {v}: očekáváno [subpath, anchor]
 @msg	invalid angle	neplatný úhel
 @msg	invalid array length	neplatná délka pole
 @msg	invalid brush: {e}	neplatný štětec: {e}
@@ -8435,7 +8438,7 @@ breakText	Glyphs	Glyfy
 @msg	missing `{k}`	chybí `{k}`
 @msg	missing anchor	chybí kotevní bod
 @msg	missing anchors	chybí kotevní body
-@msg	missing anchors [[subpath, anchor]…]	chybí kotevní body [[dílčí cesta, kotevní bod]…]
+@msg	missing anchors [[subpath, anchor]…]	chybí kotevní body [[subpath, anchor]…]
 @msg	missing array `{key}`	chybí pole `{key}`
 @msg	missing case	chybí case
 @msg	missing color	chybí barva
