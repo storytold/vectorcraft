@@ -5673,6 +5673,76 @@ fn formatting_one_label_keeps_that_kind_of_label() {
     assert!(serde_json::to_value(GraphSpec::default()).unwrap().get("labelStyles").is_none());
 }
 
+/// Character and paragraph edits that resize a graph's labels leave the plot where it is when the graph is drawn
+/// again, and a move or scale of the graph made after them is still followed.
+#[test]
+fn restyling_a_graphs_labels_leaves_the_plot_in_place() {
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
+    let redraw = |s: &mut Session, id: NodeId| s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"size": 14})).unwrap();
+    redraw(&mut s, id);
+    assert_eq!(spec(&s, id).rect, rect, "after a size change to every label");
+    let c = text_id(&s, id, "Axes", "Q2");
+    s.execute("text.setFormat", &json!({"ids": [c.0], "leftIndent": 20})).unwrap();
+    redraw(&mut s, id);
+    assert_eq!(spec(&s, id).rect, rect, "after an indent on the category labels");
+    let l = text_id(&s, id, "Legend", "2025");
+    s.execute("text.setStyle", &json!({"ids": [l.0], "size": 4})).unwrap();
+    redraw(&mut s, id);
+    assert_eq!(spec(&s, id).rect, rect, "after a smaller size on the legend labels");
+    // A move and a scale of the whole graph still carry the plot with them.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 40, "dy": -10})).unwrap();
+    redraw(&mut s, id);
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 40.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 - 10.0)).abs() < 1e-6, "{moved:?}");
+    assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
+    s.execute("object.scale", &json!({"sx": 200, "sy": 100, "origin": [moved.x0, moved.y0]})).unwrap();
+    redraw(&mut s, id);
+    let scaled = spec(&s, id).rect;
+    assert!((scaled.width() - 2.0 * rect.width()).abs() < 1e-6 && (scaled.height() - rect.height()).abs() < 1e-6, "{scaled:?}");
+    assert!((scaled.x0 - moved.x0).abs() < 1e-6 && (scaled.y0 - moved.y0).abs() < 1e-6, "{scaled:?}");
+}
+
+/// Moving one label of a graph on its own leaves the plot where it is when the graph is drawn again.
+#[test]
+fn moving_one_label_leaves_the_plot_in_place() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    let l = text_id(&s, id, "Legend", "2025");
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 120, "dy": 60})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    assert_eq!(spec(&s, id).rect, rect);
+}
+
+/// A graph saved before it kept the bounds of its art without type follows a move made since with its old bounds.
+#[test]
+fn a_graph_saved_with_only_its_whole_bounds_still_follows_a_move() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    let mut old = serde_json::to_value(spec(&s, id)).unwrap();
+    old.as_object_mut().unwrap().remove("placedArt");
+    let old: GraphSpec = serde_json::from_value(old).unwrap();
+    assert_eq!(old.placed_art, None);
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().extras_mut().graph = Some(Box::new(old));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 25, "dy": 5})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 25.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 5.0)).abs() < 1e-6, "{moved:?}");
+    assert!(spec(&s, id).placed_art.is_some(), "the next drawing keeps the bounds of the art without type");
+}
+
 /// Each Axes and Legend text after the graph is drawn again, with its object rows (fill or stroke, color, opacity, and
 /// for a stroke its weight) and its object opacity.
 type RowLooks = Vec<(bool, String, f32, f64)>;

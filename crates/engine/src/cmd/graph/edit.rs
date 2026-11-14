@@ -1,6 +1,6 @@
 use super::axis::{MAX_TICK_MARKS, count_given, one_line};
 use super::data::apply_data;
-use super::generate::{children_bounds, generate};
+use super::generate::{art_bounds, children_bounds, generate};
 use super::series::{picked_series, reselect_series};
 use super::{
     Affine, Document, EngineError, GraphKind, GraphSpec, Node, NodeId, Rect, Result, Session, TickLength, Value, ValueAxisSide, bad, f64_req, json,
@@ -18,10 +18,16 @@ fn bound_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Option<f64>>> {
 }
 
 /// Regenerate graph `id` from `spec` (adjusting the plot rect for any move/scale since the last
-/// generation, which is recorded in the spec's `placed` bounds).
+/// generation, which is recorded in the spec's `placed_art` bounds, or `placed` in graphs saved without them).
 pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> Result<()> {
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
-    if let (Some(placed), Some(now)) = (n.extras().graph.as_ref().and_then(|g| g.placed), n.children().and_then(|c| children_bounds(c)))
+    let kept = n.extras().graph.as_deref();
+    let measured = match (kept.and_then(|g| g.placed_art), n.children()) {
+        (Some(placed), Some(c)) => art_bounds(c).map(|now| (placed, now)),
+        (None, Some(c)) => kept.and_then(|g| g.placed).zip(children_bounds(c)),
+        (_, None) => None,
+    };
+    if let Some((placed, now)) = measured
         && placed.width() > 1e-9
         && placed.height() > 1e-9
         && (placed.x0 - now.x0).abs() + (placed.y0 - now.y0).abs() + (placed.x1 - now.x1).abs() + (placed.y1 - now.y1).abs() > 1e-6
@@ -33,6 +39,7 @@ pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> R
     }
     let children = generate(d, &spec);
     spec.placed = children_bounds(&children);
+    spec.placed_art = art_bounds(&children);
     let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
     if let Some(ch) = n.children_mut() {
         *ch = children;

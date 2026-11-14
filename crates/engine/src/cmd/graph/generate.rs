@@ -1022,3 +1022,29 @@ impl<'a> Plot<'a> {
 pub(super) fn children_bounds(children: &[Arc<Node>]) -> Option<Rect> {
     children.iter().filter_map(|c| c.geometric_bounds()).reduce(|a, b| a.union(b))
 }
+
+/// The geometric bounds of `children` leaving out their type: the plot, axes, tick marks and legend swatches without
+/// the labels. None when there is nothing else.
+pub(super) fn art_bounds(children: &[Arc<Node>]) -> Option<Rect> {
+    children.iter().filter_map(|c| art_bounds_of(c).0).reduce(|a, b| a.union(b))
+}
+
+/// The geometric bounds of `n` leaving out the type in it, and whether there was type to leave out. A group without type
+/// gives its own bounds, so a clipping group gives the bounds of its clip.
+fn art_bounds_of(n: &Node) -> (Option<Rect>, bool) {
+    if matches!(n.kind, NodeKind::Text(_)) {
+        return (None, true);
+    }
+    let Some(children) = n.children() else { return (n.geometric_bounds(), false) };
+    let mut bounds: Option<Rect> = None;
+    let mut had_type = false;
+    for c in children {
+        let (b, t) = art_bounds_of(c);
+        had_type |= t;
+        bounds = match (bounds, b) {
+            (Some(a), Some(b)) => Some(a.union(b)),
+            (a, b) => a.or(b),
+        };
+    }
+    if had_type { (bounds, true) } else { (n.geometric_bounds(), false) }
+}

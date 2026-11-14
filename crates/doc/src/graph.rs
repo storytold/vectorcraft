@@ -511,6 +511,11 @@ pub struct GraphSpec {
     /// Bounds of the art when it was last generated (detects moves/scales of the graph group).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placed: Option<Rect>,
+    /// Bounds of the art other than type when it was last generated. Moves and scales of the graph group are measured
+    /// on these when present, so a label edit that resizes its type is not taken for one; graphs saved without them
+    /// are measured on [`Self::placed`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placed_art: Option<Rect>,
 }
 
 fn at_most_one(n: &usize) -> bool {
@@ -635,6 +640,7 @@ impl Default for GraphSpec {
             connect_points: true,
             edge_to_edge: false,
             placed: None,
+            placed_art: None,
         }
     }
 }
