@@ -1305,7 +1305,9 @@ Drive a tool like a mouse:
 
 Edit a gradient with the Gradient tool's annotator (the bar runs along the vector; stop chips sit 10 px under
 it, midpoint diamonds 7 px above): a click on the bar adds a stop, dragging a chip moves it (drag it off the bar to
-delete it, hold Alt to copy it), dragging the end handle changes the vector. The selected stop
+delete it, hold Alt to copy it), dragging the end handle changes the vector. Both ends of a vector drawn on the art,
+the start of one a click applies, and the dragged start and end handles snap as drawn points do; with Shift, the end
+or the handle keeps to 45° steps and snaps along them. The selected stop
 (`gradient.selectStop`) takes Delete and ←/→:
 
 ```json
