@@ -606,9 +606,8 @@ fn reoriented<V: Copy>(points: &[(f64, V)], o: Orient, at: impl Fn(f64) -> V, wr
     out
 }
 
-/// A key's stroke read along its subpath turned as `o` says: its width profile (whose sides swap
-/// when reversed), pen pressure, tilt, bearing and rotation, and on a reversed open path its
-/// arrowheads.
+/// A stroke read along its subpath turned as `o` says: its width profile (whose sides swap when
+/// reversed), pen pressure, tilt, bearing and rotation. Its arrowheads stay as they are.
 fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
     if o.is_identity() {
         return;
@@ -648,15 +647,45 @@ fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
         let out = reoriented(&p.points, o, |f| p.unwrapped_at(f), |v| v + turns, same);
         p.points = out;
     }
-    if o.reversed && !o.closed {
-        std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
-        s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+}
+
+/// `n` with every stroke read along its subpaths turned as `o` says, and on a reversed open path
+/// its arrowheads swapped.
+fn reorient_strokes(n: &mut Node, o: Orient) {
+    if o.is_identity() {
+        return;
+    }
+    for it in n.appearance.items.iter_mut() {
+        if let AppearanceItem::Stroke(s) = it {
+            reorient_stroke(s, o);
+            if o.reversed && !o.closed {
+                std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
+                s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+            }
+        }
     }
 }
 
-/// `n` with every stroke read along its subpaths turned as `o` says.
-fn reorient_strokes(n: &mut Node, o: Orient) {
-    if o.is_identity() {
+/// Turn the strokes of path `n` for Reverse Path Direction, before its subpaths flagged in
+/// `reversed` are reversed with [`SubPath::reverse`] (a closed one then starts at its last
+/// anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing and rotation
+/// then run the new way, so the stroke draws as it did. A stroke reads one profile along every
+/// subpath, so it turns only when all of them turn alike. Arrowheads stay at the path's start and
+/// end.
+pub fn reverse_stroke_records(n: &mut Node, reversed: &[bool]) {
+    let NodeKind::Path { path, .. } = &n.kind else { return };
+    let mut turns = path.subpaths.iter().enumerate().map(|(i, sp)| {
+        let mut o = Orient::of(sp);
+        if reversed.get(i).copied().unwrap_or(false) {
+            if sp.closed {
+                o.start_at(sp, sp.anchors.len().saturating_sub(1));
+            }
+            o.reverse();
+        }
+        o
+    });
+    let Some(o) = turns.next() else { return };
+    if o.is_identity() || !turns.all(|t| t.same_turn(&o)) {
         return;
     }
     for it in n.appearance.items.iter_mut() {
