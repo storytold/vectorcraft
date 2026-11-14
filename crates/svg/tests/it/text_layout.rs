@@ -260,6 +260,40 @@ fn character_direction_is_written_on_its_runs() {
     }
 }
 
+/// A run set Left to Right keeps its Character Direction when its SVG is opened again, on a line
+/// and on a path.
+#[test]
+fn character_direction_reads_back() {
+    use vectorcraft_doc::ParaDirection;
+    let ltr = CharStyle { char_direction: Some(ParaDirection::LeftToRight), ..style(12.0) };
+    let mut on_path = TextObject::point(Point::ZERO, "", style(12.0));
+    on_path.runs = vec![run("Due ", style(12.0)), run("21 10 2026", ltr.clone())];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut path_doc = Document::new(300.0, 200.0);
+    let n = Node::new(path_doc.alloc_id(), NodeKind::Text(Box::new(on_path)));
+    let l = path_doc.layers[0].id;
+    path_doc.insert(Some(l), 0, n).unwrap();
+    let area = area_doc(vec![run("Due ", style(12.0)), run("21 10 2026", ltr), run(" ok", style(12.0))], 280.0, Justify::Left);
+    for (name, d) in [("area", area), ("path", path_doc)] {
+        let svg = export(&d, &ExportOptions::default());
+        let back = vectorcraft_svg::import(&svg).unwrap_or_else(|e| panic!("{name}: {e}\n{svg}"));
+        let mut texts = vec![];
+        back.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                texts.push((**t).clone());
+            }
+        });
+        assert_eq!(texts.len(), 1, "{name}: {svg}");
+        let t = &texts[0];
+        let dir = |part: &str| t.runs.iter().find(|r| r.text.contains(part)).map(|r| r.style.char_direction);
+        assert_eq!(dir("2026"), Some(Some(ParaDirection::LeftToRight)), "{name}: {:?}\n{svg}", t.runs);
+        assert_eq!(dir("Due"), Some(None), "{name}: {:?}", t.runs);
+    }
+}
+
 /// Digits are written as drawn: the style's numeral system, not the digits that were typed (as
 /// All Caps writes capitals).
 #[test]
