@@ -5796,6 +5796,141 @@ fn outlining_a_graphs_labels_leaves_the_plot_in_place() {
     let moved = spec(&s, id).rect;
     assert!((moved.x0 - (rect.x0 + 30.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 15.0)).abs() < 1e-6, "{moved:?}");
     assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
+    // A scale of the graph made before outlining is still followed.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 150, "sy": 50, "origin": [moved.x0, moved.y0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [text_id(&s, id, "Axes", "Q3").0]})).unwrap();
+    s.execute("type.createOutlines", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let scaled = spec(&s, id).rect;
+    assert!((scaled.x0 - moved.x0).abs() < 1e-6 && (scaled.y0 - moved.y0).abs() < 1e-6, "{scaled:?}");
+    assert!((scaled.width() - 1.5 * rect.width()).abs() < 1e-6 && (scaled.height() - 0.5 * rect.height()).abs() < 1e-6, "{scaled:?}");
+}
+
+/// Outline Stroke on a graph's strokes leaves the plot where it is when the graph is drawn again, and a move of the
+/// graph made before it is still followed.
+#[test]
+fn outlining_a_graphs_strokes_leaves_the_plot_in_place() {
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 20, "dy": 10})).unwrap();
+    s.execute("object.path.outlineStroke", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 20.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 10.0)).abs() < 1e-6, "{moved:?}");
+    assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
+}
+
+/// A graph left with only its labels, or with its labels and one vertical line, leaves the plot where it is when it is
+/// drawn again after a label edit.
+#[test]
+fn a_graph_left_with_only_its_labels_leaves_the_plot_in_place() {
+    for keep_a_line in [false, true] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let rect = spec(&s, id).rect;
+        let (mut art, mut line) = (vec![], None);
+        s.doc().unwrap().doc.node(id).unwrap().walk(&mut |n| {
+            if n.children().is_none() && !matches!(n.kind, NodeKind::Text(_)) {
+                let vertical = n.geometric_bounds().is_some_and(|b| b.width() < 1e-9 && b.height() > 1.0);
+                if keep_a_line && vertical && line.is_none() {
+                    line = n.geometric_bounds();
+                } else {
+                    art.push(n.id.0);
+                }
+            }
+        });
+        assert!(!art.is_empty() && line.is_some() == keep_a_line);
+        s.execute("select.set", &json!({"ids": art})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let left = s.doc().unwrap().doc.node(id).unwrap().clone();
+        assert_eq!(vectorcraft_doc::graph::graph_art_without_type(left.children().unwrap()), line, "{:#?}", left.children());
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("text.setStyle", &json!({"size": 20})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+        assert_eq!(spec(&s, id).rect, rect, "keeping a line: {keep_a_line}");
+    }
+}
+
+/// A graph saved without the bounds of its art without type, left with one vertical line, keeps its plot's size when
+/// it is drawn again.
+#[test]
+fn a_graph_saved_with_only_its_whole_bounds_and_left_with_a_line_keeps_its_plot() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    let mut old = spec(&s, id);
+    old.placed_art = None;
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().extras_mut().graph = Some(Box::new(old));
+    let (mut art, mut line) = (vec![], None);
+    s.doc().unwrap().doc.node(id).unwrap().walk(&mut |n| {
+        if n.children().is_none() {
+            let vertical = !matches!(n.kind, NodeKind::Text(_)) && n.geometric_bounds().is_some_and(|b| b.width() < 1e-9 && b.height() > 1.0);
+            if vertical && line.is_none() {
+                line = Some(n.id);
+            } else {
+                art.push(n.id.0);
+            }
+        }
+    });
+    assert!(line.is_some());
+    s.execute("select.set", &json!({"ids": art})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    assert_eq!(spec(&s, id).rect, rect);
+}
+
+/// The bounds a graph measures moves on take a clipping group holding type at the bounds of its clip, so art outside the
+/// clip does not change them; a clipping group whose clip is type is measured on its other art.
+#[test]
+fn a_clipping_group_holding_type_is_measured_on_its_clip() {
+    use std::sync::Arc;
+    use vectorcraft_doc::graph::graph_art_without_type as measure;
+    use vectorcraft_geom::Affine;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let label: Arc<vectorcraft_doc::Node> =
+        group(&n, "Legend").children().unwrap().iter().find(|c| matches!(c.kind, NodeKind::Text(_))).unwrap().clone();
+    let mut paths = vec![];
+    n.walk(&mut |c| {
+        if matches!(c.kind, NodeKind::Path { .. }) {
+            paths.push(c.clone());
+        }
+    });
+    let (clip, art) = (Arc::new(paths[0].clone()), paths[1].clone());
+    let clipped = |dx: f64, first: Arc<vectorcraft_doc::Node>, second: Arc<vectorcraft_doc::Node>| {
+        let mut far = art.clone();
+        far.transform(Affine::translate((dx, 0.0)), false);
+        let mut g = vectorcraft_doc::Node::group(NodeId(999_999), vec![first, second, Arc::new(far)]);
+        if let NodeKind::Group { clip, .. } = &mut g.kind {
+            *clip = true;
+        }
+        measure(&[Arc::new(g)])
+    };
+    assert_eq!(clipped(500.0, clip.clone(), label.clone()), clip.geometric_bounds());
+    assert_eq!(clipped(500.0, clip.clone(), label.clone()), clipped(900.0, clip.clone(), label.clone()));
+    // A clip that is type leaves the other art to measure.
+    assert_ne!(clipped(500.0, label.clone(), clip.clone()), clipped(900.0, label.clone(), clip.clone()));
+    // A clip that is a clipping group holding type in its clipped art is measured on its own clip.
+    let mut inner = vectorcraft_doc::Node::group(NodeId(999_998), vec![clip.clone(), label.clone()]);
+    if let NodeKind::Group { clip, .. } = &mut inner.kind {
+        *clip = true;
+    }
+    let inner = Arc::new(inner);
+    assert_eq!(clipped(500.0, inner.clone(), label.clone()), clip.geometric_bounds());
+    assert_eq!(clipped(500.0, inner.clone(), label.clone()), clipped(900.0, inner.clone(), label.clone()));
+    // A blend holding type is measured whole, as it is drawn.
+    let blend = vectorcraft_doc::Node::new(NodeId(999_997), NodeKind::Blend { children: vec![clip.clone(), label.clone()], spec: Box::default() });
+    assert_eq!(measure(&[Arc::new(blend.clone())]), blend.geometric_bounds());
 }
 
 /// A graph whose kept bounds of its art without type have no width follows a move with the bounds of all of its art.
@@ -7113,9 +7248,17 @@ fn a_graph_opened_from_ai_measures_moves_without_its_labels() {
     assert_eq!((graphs.len(), labels.len()), (1, 1));
     let (id, label) = (graphs[0], labels[0]);
     let before = spec(&s, id);
-    assert!(before.placed_art.is_some());
     s.execute("select.set", &json!({"ids": [label.0]})).unwrap();
+    s.execute("text.setStyle", &json!({"size": 30})).unwrap();
     s.execute("object.move", &json!({"dx": 80, "dy": -40})).unwrap();
     s.execute("graph.setData", &json!({"id": id.0, "csv": ",East\nQ1,8\nQ2,2"})).unwrap();
-    assert_eq!(spec(&s, id).rect, before.rect);
+    let rect = spec(&s, id).rect;
+    assert_eq!(rect, before.rect, "after restyling and moving a label");
+    // A move of the whole opened graph is still followed.
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 15, "dy": 25})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",East\nQ1,8\nQ2,2"})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 15.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 25.0)).abs() < 1e-6, "{moved:?}");
+    assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
 }
