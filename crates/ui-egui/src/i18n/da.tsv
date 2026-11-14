@@ -6560,6 +6560,7 @@ swatch	Bright Violet	Kraftig violet
 	Single Word Justification:	Justering af enkeltord:
 	Full Justify	Lige margener
 	Minimum must not exceed Desired, nor Desired Maximum.	Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum.
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: Minimum må ikke overstige Ønsket, og Ønsket ikke Maksimum
 	Justification	Justering
 	Add filters from the list above	Tilføj filtre fra listen ovenfor
 	Add to Stack	Tilføj til stak
