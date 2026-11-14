@@ -130,7 +130,9 @@ fn guide_row(ui: &mut Ui, view: &View, item: &Row, i: usize, out: &mut Out) {
     let Some(g) = view.ruler_guides.get(i) else { return };
     let selected = view.guides.contains(&i);
     let editable = view.doc.guide_editable(g);
-    if editable && resp.hovered() {
+    if selected {
+        ui.painter().rect_filled(r, 0.0, t.row_selected);
+    } else if editable && resp.hovered() {
         ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.6));
     }
     ui.painter().line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.input_border));

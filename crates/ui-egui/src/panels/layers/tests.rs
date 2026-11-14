@@ -2440,3 +2440,32 @@ fn guide_rows_list_by_index_whatever_the_node_order() {
     let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
     assert_eq!(indexes, [2, 1, 0]);
 }
+
+#[test]
+fn guide_row_highlight_stays_selected_without_hover() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = NodeId(app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    app.session.execute("guide.add", &json!({"vertical": true, "pos": 50})).unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2); // Layer, rectangle; guide has no target circle.
+    let guide = egui::pos2(150.0, (circles[0].y + circles[1].y) / 2.0);
+    let ordinary = egui::pos2(150.0, circles[1].y);
+    let highlighted_at = |app: &mut VectorcraftApp, at: egui::Pos2| {
+        // Clear hover so a hover rectangle cannot satisfy selected-fill proof.
+        let mut out = ctx.run_ui(egui::RawInput { events: vec![egui::Event::PointerGone], ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        let selected = Tokens::get(&ctx).row_selected;
+        out.shapes.iter().any(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.fill == selected && r.rect.contains(at) && r.rect.width() > 200.0))
+    };
+    assert!(!highlighted_at(&mut app, guide), "an unselected guide is not highlighted");
+    click_with(&mut app, &ctx, guide, egui::Modifiers::NONE);
+    assert_eq!(vectorcraft_engine::cmd::guide_indexes(&app.session.active().unwrap().doc, &app.session.active().unwrap().selection.guides), [0]);
+    assert!(highlighted_at(&mut app, guide), "selected guide has the ordinary row fill without hover");
+    click_with(&mut app, &ctx, ordinary, egui::Modifiers::NONE);
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), [rect]);
+    assert!(highlighted_at(&mut app, ordinary), "ordinary row painting remains intact");
+}
