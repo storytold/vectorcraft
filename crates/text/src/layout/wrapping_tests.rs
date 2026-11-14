@@ -745,6 +745,32 @@ fn a_tabbed_line_stepping_back_ends_at_a_final_soft_hyphen_without_a_hyphen() {
     assert_eq!(ended, (len, false));
 }
 
+/// A tabbed line with glyphs stepping back whose last break read comes right before a forced line
+/// break ends after the forced break, so the next line does not start with it and draw empty.
+#[test]
+fn a_tabbed_line_stepping_back_keeps_a_forced_break_after_its_last_break_read() {
+    // The 1,024th space is the 1,024th break past the overflow, and glyph 3075 after it is U+2028.
+    let text = format!("a\ty{}\u{2028}bbb", "bz ".repeat(1024));
+    let specs: Vec<_> = text
+        .char_indices()
+        .map(|(byte, ch)| {
+            let adv = match ch {
+                'y' | 'z' => -1.0,
+                ' ' | '\u{2028}' => 0.0,
+                _ => 1.0,
+            };
+            (byte, ch.len_utf8(), adv, ch)
+        })
+        .collect();
+    let glyphs = synthetic_glyphs(&specs);
+    assert_eq!(glyphs[3075].ch, '\u{2028}');
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 10 || end >= 3075;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 30.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (3076, false));
+}
+
 /// A tab to a default or left stop does not read the text after it, which only right, center and
 /// decimal stops align: the first tab of a long paragraph does not read the paragraph to its end.
 #[test]

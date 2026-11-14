@@ -379,8 +379,9 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
 /// [`MAX_DRAWN_CHECKS_STEPPING_BACK`] when a glyph of the line has a negative advance, the earlier
 /// ones without a hyphen are bisected); hyphenation points are measured the same way. Once such a
 /// line holds a glyph with a negative advance and has been wider than `width` in the order of its
-/// text, it reads at most [`MAX_DRAWN_CHECKS_STEPPING_BACK`] legal breaks further and ends at the
-/// latest of the breaks read that fits as drawn.
+/// text, it reads at most [`MAX_DRAWN_CHECKS_STEPPING_BACK`] legal breaks further, and a forced
+/// line break right after the last of them, and ends at the latest of the breaks read that fits as
+/// drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -538,8 +539,9 @@ pub(super) fn break_line(
                 // breaks past where it first overflowed in the order of its text, and ends at the
                 // latest break read that fits as drawn: each of those breaks is measured one by one.
                 // A soft hyphen ending the text draws no hyphen there, as at the end of the text below.
+                // A break right before a forced line break reads on to it: the line ends there.
                 breaks_past_overflow += usize::from(overflowed && back > 0.0);
-                if breaks_past_overflow >= MAX_DRAWN_CHECKS_STEPPING_BACK {
+                if breaks_past_overflow >= MAX_DRAWN_CHECKS_STEPPING_BACK && g.get(cluster_end).is_none_or(|n| n.ch != '\u{2028}') {
                     return settle(tabbed, checks(back), (cluster_end, hyphenated && cluster_end < g.len()), &breaks);
                 }
             }
