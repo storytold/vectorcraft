@@ -871,7 +871,7 @@ The `appearance.*` commands, `graphicStyle.apply` and `graphicStyle.redefine`, a
 transparency commands given an `item` (or the Appearance panel's active row) store a graph label's object rows for its
 kind of label: the paint, weight, opacity and blend mode of its topmost visible fill and stroke row, their order and
 their place relative to the Characters row, and the label's object opacity and blend mode. They store them even when the
-label already showed them. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
+label already showed them, but an edit of a hidden row that leaves the topmost visible rows as they were stores nothing. `transparency.set` without an `item`, `object.setProps` with an opacity or blend mode, and
 an `appearance.copyFrom` (Eyedropper) pick of transparency store only the label's object opacity and blend mode;
 `appearance.copyFrom` with `append` stores the rows. When the graph is drawn again, every label of that kind gets what
 is stored, with a placed gradient fitted to each label, and the graph saves it as `valuesRows`, `categoriesRows` and
@@ -896,7 +896,8 @@ The other commands store them when given the line itself, and the `appearance.*`
 picks up a fill or stroke attribute or adds rows with `append`; a pick of only the object's transparency stores only the
 object opacity and blend mode. The recolor commands and `paint.swap` store a line's rows when they change them. The
 other commands store them even when the line already showed them, except that rows equal to a kind's default stroke
-(0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
+(0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved, and an edit of a hidden row that
+leaves the topmost visible rows as they were stores nothing. When one command reaches several lines of one kind, the frontmost line in
 paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
 each line fits it when the graph is drawn again. The graph saves the rows as `axisRows` and `ringRows` in its label
 styles. Other stroke options (caps, joins, miter limit, alignment, dashes and arrowheads), rows below the topmost one of

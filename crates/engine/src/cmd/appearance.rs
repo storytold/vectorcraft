@@ -551,6 +551,20 @@ pub(crate) fn check_part_rows(s: &Session, p: &Value, aligned: bool, cmd: &str) 
     Ok(())
 }
 
+/// Whether row `index` of `n` is the topmost visible row of its kind, the row a graph keeps for a label or line.
+fn is_top_shown(n: &Node, index: usize) -> bool {
+    let items = &n.appearance.items;
+    items.get(index).is_some_and(|it| items.iter().rposition(|o| o.is_fill() == it.is_fill() && o.visible()) == Some(index))
+}
+
+/// `ids` without the objects whose topmost visible fill and stroke rows ([`super::graph::label_rows`]) an edit left as
+/// they were (`before`: the document before it), unless `wrote` says the edit wrote one of those rows. An edit of a
+/// hidden row of a graph label or line then leaves what the graph keeps for its kind as it is.
+fn shown_rows_edited(before: &Document, d: &Document, ids: Vec<NodeId>, wrote: impl Fn(NodeId) -> bool) -> Vec<NodeId> {
+    let shown = |doc: &Document, id: NodeId| doc.node(id).map(super::graph::label_rows);
+    ids.into_iter().filter(|id| wrote(*id) || shown(before, *id) != shown(d, *id)).collect()
+}
+
 /// One undo step (`label`) running `f` on each of `ids` with the item a fill (`fill`) or stroke
 /// edit aimed at `item` changes there (`None`: the topmost one; text then edits its characters).
 /// What the edit changes on the topmost visible fill and stroke of graph series marks, and on the
@@ -600,6 +614,8 @@ pub(crate) fn edit_items_then(
         let mut edited = Vec::new();
         // The objects whose rows `f` edited: on type, no row means its characters.
         let mut rows = Vec::new();
+        // The objects where `f` wrote the topmost visible row of its kind.
+        let mut wrote = Vec::new();
         for (id, item) in ids.iter().zip(&per) {
             let Some(item) = item else { continue };
             let Some(n) = d.node_mut(*id) else { continue };
@@ -609,11 +625,14 @@ pub(crate) fn edit_items_then(
             if index.is_some() {
                 rows.push(*id);
             }
+            if index.is_none_or(|i| is_top_shown(n, i)) {
+                wrote.push(*id);
+            }
         }
         let more = after(&before, d, &edited)?;
-        let labels = super::graph::capture_label_rows(d, &rows);
+        let labels = super::graph::capture_label_rows(d, &shown_rows_edited(&before, d, rows, |id| wrote.contains(&id)));
         // A graph line keeps the rows the edit wrote, also when the line already showed them.
-        let lines = super::graph::capture_line_rows(d, &edited);
+        let lines = super::graph::capture_line_rows(d, &shown_rows_edited(&before, d, edited.clone(), |id| wrote.contains(&id)));
         Ok(count_changed(d, &before, &edited) + usize::from(more || labels || lines))
     })?;
     Ok(())
@@ -1125,6 +1144,7 @@ fn set_item(s: &mut Session, p: &Value) -> Result<Value> {
         let mut rows = top_paint_changed(&before, d, &ids);
         rows.extend(painted_rows(d, written));
         let painted = super::graph::capture_series_top_paints(d, &rows);
+        let reached = shown_rows_edited(&before, d, reached, |id| edited.iter().any(|(e, _)| *e == id));
         let labels = super::graph::capture_label_rows(d, &reached);
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
@@ -1178,7 +1198,7 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let kept = super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let painted = super::graph::capture_series_top_paints(d, &top_paint_changed(&before, d, &ids));
-        let labels = super::graph::capture_label_rows(d, &reached);
+        let labels = super::graph::capture_label_rows(d, &shown_rows_edited(&before, d, reached, |_| false));
         Ok(count_changed(d, &before, &ids) + usize::from(kept || painted || labels))
     })?;
     // The rows removed from the active row's object, which need not come first in `ids`.
@@ -1268,8 +1288,10 @@ fn duplicate_item(s: &mut Session, p: &Value) -> Result<Value> {
         }
         super::graph::capture_series_opacity(d, &top_opacity_changed(&before, d, &ids));
         let mut rows = top_paint_changed(&before, d, &ids);
+        let top_copies: Vec<NodeId> = added.iter().map(|(id, _)| *id).collect();
         rows.extend(painted_rows(d, added));
         super::graph::capture_series_top_paints(d, &rows);
+        let reached = shown_rows_edited(&before, d, reached, |id| top_copies.contains(&id));
         super::graph::capture_label_rows(d, &reached);
         Ok(())
     })?;

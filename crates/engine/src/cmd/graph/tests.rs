@@ -6319,6 +6319,36 @@ fn an_aligned_row_edit_given_the_axes_group_keeps_the_rows_of_labels_it_did_not_
     });
 }
 
+/// An edit of a hidden row of an axis line leaves what its kind keeps from another line: the line's visible rows did not
+/// change.
+#[test]
+fn an_edit_of_a_hidden_row_of_an_axis_line_keeps_what_its_kind_keeps() {
+    let cases = [
+        ("appearance.setItem", json!({"color": "#0000ff"})),
+        ("appearance.duplicateItem", json!({})),
+        ("appearance.removeItem", json!({})),
+        ("transparency.set", json!({"opacity": 40})),
+        ("paint.setStroke", json!({"color": "#0000ff"})),
+    ];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        let line = lines[1].id;
+        s.execute("appearance.addStroke", &json!({"ids": [line.0]})).unwrap();
+        let hidden = top_row(&s, line, false);
+        s.execute("appearance.setItem", &json!({"ids": [line.0], "index": hidden, "visible": false})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        let kept = spec(&s, id).label_styles.axis_rows;
+        let mut p = params.clone();
+        p["ids"] = json!([line.0]);
+        p[if cmd.starts_with("appearance.") { "index" } else { "item" }] = json!(hidden);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(spec(&s, id).label_styles.axis_rows, kept, "{cmd}");
+    });
+}
+
 /// An Eyedropper pick of only the object's opacity on an axis line keeps the stroke its kind keeps from another line,
 /// though the line it is given still shows the default stroke.
 #[test]
