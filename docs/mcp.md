@@ -9067,9 +9067,8 @@ the type it changed, how many paragraphs were `converted`, and the characters `i
 Type tool edits, `text.convertListToText` ends its typing first and moves its anchor and caret past the characters
 inserted at or before them, whether the call comes from the menu, MCP or the control channel.
 After Select All in a frame of threaded text, a call without `ids`, `id`, `start` or `end` converts every paragraph of
-the story's frames that are neither locked nor hidden. While the story is selected, its locked and hidden frames are
-not converted, even when `ids` names them, and neither is a paragraph whose text starts in one. When the call converts
-all of its other frames, the whole story stays selected.
+every frame of the story, locked and hidden frames included. `ids` naming a locked or hidden frame converts its
+paragraphs too. When the call converts every frame of the story, the whole story stays selected.
 In threaded type, when the caret's character moved to another frame, the Type tool edits that frame with the caret
 next to the same character, and that frame becomes the selection when it was not selected.
 
@@ -10764,7 +10763,8 @@ glyph of its first character lands where it was drawn.
   they were. Character styles stay; the object takes the top-left piece's place and paint. Returns `{id, joined, lines}`.
 - `addon.cleanup.removeBreaks {kind, ids?}` removes the forced line breaks (`kind: "line"`) or paragraph returns
   (`"paragraph"`) in the characters selected with a Type tool, else in all the text of the selected type. After
-  Select All in a frame of threaded text, it removes them from the text of every frame of the story, as one undo step.
+  Select All in a frame of threaded text, it removes them from the text of every frame of the story, locked and hidden
+  frames included, as one undo step.
   A break between two words becomes a space; merged paragraphs take the first one's paragraph style. The frames of a
   threaded story, selected all together or through Select All, are read as one text, so a break at the end of one
   frame before a word in the next one also becomes a space.

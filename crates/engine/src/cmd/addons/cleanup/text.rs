@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Remove Breaks",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{kind: \"line\"|\"paragraph\", ids?: [id…]} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool (after Select All in a frame of threaded text, in the text of every frame of the story), else in all the text of the selected type, as one undo step; a break between two words becomes a space, the frames of a threaded story selected all together being read as one text → {ids, removed}",
+            "{kind: \"line\"|\"paragraph\", ids?: [id…]} remove the forced line breaks (line) or paragraph returns (paragraph) in the characters selected with a Type tool (after Select All in a frame of threaded text, in the text of every frame of the story, locked and hidden frames included), else in all the text of the selected type, as one undo step; a break between two words becomes a space, the frames of a threaded story selected all together being read as one text → {ids, removed}",
             has_selection,
             remove_breaks
         ),
@@ -796,8 +796,8 @@ fn apply_cuts(t: &mut TextObject, cuts: &[(usize, bool)], brk: char) -> usize {
 }
 
 /// The breaks `brk` in the text of the frames of `story`, read as one text: a break at the end or
-/// start of a frame between words of the frames on either side becomes a space. Each editable frame
-/// comes with its own breaks, at its own bytes.
+/// start of a frame between words of the frames on either side becomes a space. Each frame comes
+/// with its own breaks, at its own bytes, its locked and hidden frames included.
 fn story_cuts(d: &Document, story: &[NodeId], brk: char) -> Vec<(NodeId, Vec<(usize, bool)>)> {
     let texts: Vec<(NodeId, String)> = story.iter().filter_map(|id| Some((*id, text_of(d, *id)?.plain_text()))).collect();
     let joined: String = texts.iter().map(|(_, t)| t.as_str()).collect();
@@ -811,9 +811,7 @@ fn story_cuts(d: &Document, story: &[NodeId], brk: char) -> Vec<(NodeId, Vec<(us
         while let Some((at, space)) = cuts.next_if(|(at, _)| *at < end) {
             own.push((at - start, space));
         }
-        if d.is_editable(id) {
-            out.push((id, own));
-        }
+        out.push((id, own));
         start = end;
     }
     out
