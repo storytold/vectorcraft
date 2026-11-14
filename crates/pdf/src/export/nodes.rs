@@ -336,14 +336,15 @@ impl Exporter<'_> {
                 // instances multiply.
                 // Placing through 9-slice guides needs room for the most objects it can make
                 // (`NineSliceMap::most_placed`), and the objects it makes count.
-                // A dynamic symbol's instance shows its own appearance changes.
+                // A dynamic symbol's instance shows its own appearance changes, and the instance's
+                // fill stains its art, as on the canvas.
                 let doc = self.doc;
                 if let Some(sym) = doc.symbols.iter().find(|x| &x.name == symbol) {
                     let changed;
-                    let art: &Node = if n.extras().symbol_overrides.is_empty() {
+                    let art: &Node = if n.extras().symbol_overrides.is_empty() && vectorcraft_doc::symbol_overrides::stain(n).is_none() {
                         &sym.art
                     } else {
-                        changed = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+                        changed = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n);
                         &changed
                     };
                     let count = art.count() as u64;
