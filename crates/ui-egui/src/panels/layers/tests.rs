@@ -987,6 +987,48 @@ fn guide_rows_are_deleted_with_the_trash_and_delete() {
     assert!(kept(&app));
 }
 
+/// A plain click on another row lets go of the guide a guide row selected, keeping the selected
+/// art, so a guide can be dropped without Ctrl/Cmd-clicking its own row (#7340); a Ctrl/Cmd click
+/// on a row adds to the pick and keeps it.
+#[test]
+fn a_plain_row_click_lets_go_of_the_selected_guide() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let rect = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top down: Layer 1, its guide (no target circle), the rectangle.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    let guide_row = egui::pos2(150.0, (circles[0].y + circles[1].y) / 2.0);
+    let rect_row = egui::pos2(150.0, circles[1].y);
+    let guides = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides)
+    };
+    let art = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.clone();
+    // Guide, then the rectangle's row: the guide is let go and the rectangle's row highlighted.
+    click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
+    assert_eq!(guides(&app), [0]);
+    click_with(&mut app, &ctx, rect_row, egui::Modifiers::NONE);
+    assert!(guides(&app).is_empty(), "a plain row click drops the guide");
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), [rect]);
+    // Art and a guide selected together: a plain row click drops only the guide.
+    run(&mut app, "select.all", json!({}));
+    click_with(&mut app, &ctx, guide_row, egui::Modifiers::SHIFT);
+    assert_eq!((guides(&app), art(&app)), (vec![0], vec![rect]));
+    click_with(&mut app, &ctx, egui::pos2(150.0, circles[0].y), egui::Modifiers::NONE);
+    assert!(guides(&app).is_empty());
+    assert_eq!(art(&app), [rect], "the selected art stays");
+    // A Ctrl/Cmd click on a row adds that row to the highlight and keeps the guide.
+    click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
+    click_with(&mut app, &ctx, rect_row, egui::Modifiers::COMMAND);
+    assert_eq!(guides(&app), [0], "a Ctrl/Cmd row click keeps the guide");
+}
+
 /// The selection squares drawn: (big ones on rows whose object is selected, small ones on rows
 /// holding selected art).
 fn squares(app: &mut VectorcraftApp, ctx: &egui::Context) -> (usize, usize) {
