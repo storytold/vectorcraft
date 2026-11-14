@@ -107,6 +107,9 @@ pub(crate) struct Publishing {
     /// then. Its formats' notes replace the message only while the status bar still shows it and
     /// nothing has set the status since.
     status: (String, u64),
+    /// The status bar's message the latest Copy or Cut with notes left, with
+    /// [`crate::state::UiState::status_sets`] then.
+    notes_status: Option<(String, u64)>,
 }
 
 impl Publishing {
@@ -147,12 +150,18 @@ pub(crate) fn copied_with_notes(cut: bool, n: usize, first: &str) -> String {
 }
 
 /// Show a Copy's (or with `cut`, a Cut's) formats' `notes` in the status bar: the first of them
-/// and how many there are, with the rest for the message's hover. Without notes the status bar
-/// keeps its message.
+/// and how many there are, with the rest for the message's hover. Without notes, the message an
+/// earlier Copy's or Cut's notes left is cleared while nothing has set the status since, and any
+/// other message stays.
 pub(crate) fn show_copy_notes(app: &mut VectorcraftApp, cut: bool, notes: Vec<String>) {
-    let Some(first) = notes.first() else { return };
+    let left = app.clipboard_publishing.notes_status.take();
+    let Some(first) = notes.first() else {
+        crate::io::clear_notes_left(app, left);
+        return;
+    };
     let status = copied_with_notes(cut, notes.len(), first);
     crate::io::show_with_notes(app, status, notes);
+    app.clipboard_publishing.notes_status = Some((app.ui.status.clone(), app.ui.status_sets));
 }
 
 /// Does a flavour of type `mime` load with `clipboard.importImage` ([`import_command`])?
@@ -219,6 +228,8 @@ impl VectorcraftApp {
         // what another app copied before, and what another app copies after still wins (#3226).
         if !self.session.clipboard.has_art() {
             self.clear_system_clipboard();
+            // Guides have no formats, so this Copy or Cut has no notes.
+            show_copy_notes(self, cut, vec![]);
             return;
         }
         if self.services.system_clipboard.is_none() {

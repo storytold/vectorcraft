@@ -322,26 +322,22 @@ impl VectorcraftApp {
     }
 
     /// Image Trace's notes in `reply` (a large image traces more slowly, or was scaled down): the
-    /// first of them and how many there are, with the rest for the message's hover. Without notes,
-    /// the message an earlier trace's notes left is cleared while nothing has set the status since,
-    /// and any other message stays.
+    /// first of them and how many there are, with the rest for the message's hover. A trace that
+    /// made no paths shows its first note as it is. Without notes, the message an earlier trace's
+    /// notes left is cleared while nothing has set the status since, and any other message stays.
     fn show_trace_notes(&mut self, reply: &Value) {
         let notes = io::notes_of(reply);
-        match notes.first() {
-            Some(first) => {
-                let status = crate::trace_runs::traced_with_notes(notes.len(), first);
-                io::show_with_notes(self, status, notes);
-                self.trace_runs.notes_status = Some((self.ui.status.clone(), self.ui.status_sets));
-            }
-            None => {
-                // Only while nothing has set the status since.
-                let left = self.trace_runs.notes_status.take();
-                if left.is_some_and(|(status, sets)| status == self.ui.status && sets == self.ui.status_sets) {
-                    self.status("");
-                    self.ui.status_notes = None;
-                }
-            }
-        }
+        let left = self.trace_runs.notes_status.take();
+        let Some(first) = notes.first() else {
+            io::clear_notes_left(self, left);
+            return;
+        };
+        let status = match reply["paths"].as_u64() {
+            Some(0) => first.clone(),
+            _ => crate::trace_runs::traced_with_notes(notes.len(), first),
+        };
+        io::show_with_notes(self, status, notes);
+        self.trace_runs.notes_status = Some((self.ui.status.clone(), self.ui.status_sets));
     }
 
     fn set_command_warning(&mut self, id: &str, warning: &str) {

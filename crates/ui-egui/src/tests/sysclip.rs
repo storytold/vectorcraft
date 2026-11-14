@@ -379,7 +379,7 @@ fn a_copy_while_the_worker_saves_writes_the_formats_at_once() {
 }
 
 /// A PNG whose header reads but whose pixel data is cut short, which the renderer can't decode.
-fn cut_short_png() -> Vec<u8> {
+pub(super) fn cut_short_png() -> Vec<u8> {
     let mut png = Vec::new();
     image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
@@ -388,7 +388,7 @@ fn cut_short_png() -> Vec<u8> {
 }
 
 /// The PNG's note on an image the renderer can't decode.
-const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
+pub(super) const UNDECODED: &str = "an image couldn't be decoded and is missing from the picture";
 
 /// Copy of an image the renderer can't decode: the PNG leaves it out, and once the formats are
 /// written the status bar says the Copy (or Cut) has 1 note and shows it, made at once or on the
@@ -467,6 +467,30 @@ fn a_copy_note_does_not_replace_a_message_with_the_same_text() {
         background::wait_all(&mut app);
         assert_eq!(written(&board), [TEXT, SVG, PNG], "{then}");
         assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("", &None), "{then}");
+    }
+}
+
+/// A Copy without notes clears the message an earlier Copy's notes left, with its hover notes,
+/// made at once or on the worker. It leaves any other message, one with the same text set since
+/// included.
+#[test]
+fn a_copy_without_notes_clears_an_earlier_copys_notes() {
+    let earlier = format!("Copied with 1 note: {UNDECODED}");
+    for worker in [false, true] {
+        for (then, kept) in [(None, ""), (Some("Ready"), "Ready"), (Some(earlier.as_str()), earlier.as_str())] {
+            let (mut app, _) = if worker { app_with_worker() } else { app() };
+            vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+            run(&mut app, "edit.copy", json!({}));
+            background::wait_all(&mut app);
+            assert_eq!(app.ui.status, earlier, "worker {worker}, {then:?}");
+            if let Some(then) = then {
+                app.status(then);
+                app.ui.status_notes = None;
+            }
+            copy_rect(&mut app);
+            background::wait_all(&mut app);
+            assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (kept, &None), "worker {worker}, {then:?}");
+        }
     }
 }
 
