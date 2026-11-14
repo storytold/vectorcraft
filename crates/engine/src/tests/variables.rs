@@ -2137,8 +2137,9 @@ fn datasets_csv_reads_windows_1252_files() {
 }
 
 /// A CSV that starts with a UTF-16 byte-order mark is read as UTF-16, and
-/// one that isn't valid UTF-16 is refused. A file with NUL bytes and no byte-order mark is refused.
-/// A text value holding NUL imports back from the `csv` that `dataset.export` returns.
+/// one that isn't valid UTF-16 is refused. A file with NUL bytes and no byte-order mark that isn't
+/// UTF-16 is refused. A text value holding NUL imports back from the `csv` that `dataset.export`
+/// returns.
 #[test]
 fn datasets_csv_reads_utf16_files() {
     let mut s = session();
@@ -2160,7 +2161,7 @@ fn datasets_csv_reads_utf16_files() {
     assert!(e.contains("CSV is not UTF-16"), "{e}");
     let e = import(&mut s, &[b"\xff\xfe".as_slice(), "City\nAB,".as_bytes(), b"\x00\xd8"].concat()).unwrap_err().to_string();
     assert!(e.contains("CSV is not UTF-16"), "{e}");
-    let e = import(&mut s, &utf16(b"", "City\nx\n", true)).unwrap_err().to_string();
+    let e = import(&mut s, b"City\nx\0\n").unwrap_err().to_string();
     assert!(e.contains("CSV holds NUL bytes"), "{e}");
     assert_eq!(value(&s, "Data Set 1"), text_value("José"), "a refused file changes nothing");
     s.execute("dataset.set", &json!({"name": "Data Set 1", "values": {"City": "a\u{0}b"}})).unwrap();
@@ -2168,6 +2169,63 @@ fn datasets_csv_reads_utf16_files() {
     s.execute("dataset.delete", &json!({"names": ["Data Set 1"]})).unwrap();
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
     assert_eq!(value(&s, "Data Set 1"), text_value("a\u{0}b"));
+}
+
+/// A CSV in UTF-16 without a byte-order mark, with a NUL byte in at least half of its units, is
+/// read in the byte order that reads a line break: in either order, with characters whose bytes
+/// read as a line break, a quote or NUL, and when its bytes are also valid UTF-8. Files with fewer
+/// NUL bytes, that read a line break in both orders, that aren't valid UTF-16 in it, that hold a
+/// NUL character or that have an odd length are refused.
+#[test]
+fn datasets_csv_reads_utf16_files_without_a_byte_order_mark() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "City", "kind": "text"})).unwrap();
+    let import = |s: &mut Session, bytes: &[u8]| s.execute("dataset.import", &json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}));
+    let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("City")).cloned();
+    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
+    let utf16 = |text: &str, le: bool| -> Vec<u8> { text.encode_utf16().flat_map(|u| if le { u.to_le_bytes() } else { u.to_be_bytes() }).collect() };
+    import(&mut s, &utf16("City\r\nParis\r\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("Paris"));
+    import(&mut s, &utf16("City\nZoë 😀\n", false)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("Zoë 😀"));
+    // U+4E00's low byte is NUL, U+010A holds a `\n` byte and U+2200 a `"` byte; all three files
+    // are valid UTF-8 too.
+    import(&mut s, &utf16("City\n一\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("一"));
+    import(&mut s, &utf16("City\nĊ\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("Ċ"));
+    import(&mut s, &utf16("City\n∀∀∀\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("∀∀∀"));
+    // A file with no line break has no data rows in either byte order.
+    for bytes in [utf16("City", true), utf16("City", false), b"\0aa\0".to_vec()] {
+        let e = import(&mut s, &bytes).unwrap_err().to_string();
+        assert!(e.contains("CSV has a header but no data rows"), "{e}");
+    }
+    import(&mut s, &utf16("City\tName\n一二三丁目\tKai\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("一二三丁目"));
+    // Most units hold their NUL byte where a big-endian file would (U+4E00); the line breaks
+    // give the byte order.
+    import(&mut s, &utf16("City\n一一一一一一一一一一二\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("一一一一一一一一一一二"));
+    // Windows-1252 and UTF-8 text with stray NUL bytes (the first with `\n\0` units), UTF-16 with
+    // fewer than half of its units holding a NUL byte, and, last, two files that read a line break
+    // in both byte orders (U+0D00 reads as `\r` and U+0A00 as `\n` big-endian).
+    let refused: [&[u8]; 9] = [
+        b"Caf\xe9\n\0Lyon\n\0",
+        b"Cit\0\n",
+        b"City\nx\0\n",
+        &utf16("City\n丁丁丁丁丁丁丁丁丁丁\n", true),
+        &utf16("City\na\u{0}\n", true),
+        &[utf16("City\n", true), vec![0x00, 0xD8], utf16("\n", true)].concat(),
+        &[utf16("City\n", false), vec![0xDC, 0x00], utf16("\n", false)].concat(),
+        &utf16("City\n\u{0D00}\u{0D00}\u{0D00}\n", true),
+        &utf16("City\u{0A00}\nParis\n", true),
+    ];
+    for bytes in refused {
+        let e = import(&mut s, bytes).unwrap_err().to_string();
+        assert!(e.contains("CSV holds NUL bytes"), "{bytes:?}: {e}");
+    }
+    assert_eq!(value(&s, "Data Set 1"), text_value("一一一一一一一一一一二"), "a refused file changes nothing");
 }
 
 /// A data set of [`library`]: its name, and each variable's name with its paragraphs.

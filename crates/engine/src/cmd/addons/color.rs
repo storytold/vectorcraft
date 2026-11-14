@@ -43,7 +43,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply as Filter",
             ["Object", "Plug-ins", "Color Effects"],
             None,
-            "{effect: a colour adjustment's effect id (adjust.brightnessContrast, adjust.curves, adjust.hueSaturation, adjust.levels, adjust.shiftToColor, adjust.temperatureTint, addon.color.exposure, addon.color.desaturate, addon.color.duotone or addon.color.invert), params?: {…} (as effect.apply; missing keys take the dialog defaults), fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?: [id…] (default: the selection)} recolour the objects and everything inside them as the live effect would draw them, but in their colours, as edit.colors.invert does (fills, strokes, type, gradient meshes, embedded images and pattern tiles), as one undo step; their effects stay. Duotone links a colour to its one tone's swatch as the live effect does → {changed}",
+            "{effect: a colour adjustment's effect id (adjust.brightnessContrast, adjust.curves, adjust.hueSaturation, adjust.levels, adjust.shiftToColor, adjust.temperatureTint, addon.color.exposure, addon.color.desaturate, addon.color.duotone or addon.color.invert), params?: {…} (as effect.apply; missing keys take the dialog defaults), fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?: [id…] (default: the selection)} recolour the objects and everything inside them as the live effect would draw them, but in their colours, as edit.colors.invert does (fills, strokes, type, gradient meshes, embedded images and pattern tiles), as one undo step (none when nothing changes); their effects stay. Duotone links a colour to its one tone's swatch as the live effect does. On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke (docs/mcp.md) → {changed}",
             has_selection,
             filter
         ),
@@ -52,7 +52,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Ink Fixes",
             ["Object", "Plug-ins", "Color Effects"],
             None,
-            "{scope?: \"selection\" (the selection, or `ids`; by default, the document while nothing is selected) | \"document\" (every layer), inkLimit?: total ink % 1..400 (0 or left out: off), excludePureBlack?: true (black-only and grey colours keep their ink), removeWhiteOverprint?: false (white fills and strokes stop overprinting), overprintBlack?: black % 1..100 (black-only and grey fills and strokes this dark or darker overprint, as edit.colors.overprintBlack; 0 or left out: off), textOnly?: false (Overprint Black on type only), fill?: true, stroke?: true, ids?: [id…]} prepare a CMYK document's inks for print as one undo step: CMYK colours (solid, gradient stops, gradient meshes) with more total ink than inkLimit are scaled down to it (colours of spot swatches and Registration stay), white overprint is removed and black overprint set. Refused in RGB documents (File › Document Color Mode › CMYK Color first) → {changed, inkLimited: paints and meshes scaled, whiteOverprintRemoved: objects, blackOverprinted: objects}",
+            "{scope?: \"selection\" (the selection, or `ids`; by default, the document while nothing is selected) | \"document\" (every layer), inkLimit?: total ink % 1..400 (0 or left out: off), excludePureBlack?: true (black-only and grey colours keep their ink), removeWhiteOverprint?: false (white fills and strokes stop overprinting), overprintBlack?: black % 1..100 (black-only and grey fills and strokes this dark or darker overprint, as edit.colors.overprintBlack; 0 or left out: off), textOnly?: false (Overprint Black on type only), fill?: true, stroke?: true, ids?: [id…]} prepare a CMYK document's inks for print as one undo step: CMYK colours (solid, gradient stops, gradient meshes) with more total ink than inkLimit are scaled down to it (colours of spot swatches and Registration stay), white overprint is removed and black overprint set. Refused in RGB documents (File › Document Color Mode › CMYK Color first). On a path directly in a graph series, the graph also stores a paint the ink limit changes on the topmost visible fill or stroke (docs/mcp.md) → {changed, inkLimited: paints and meshes scaled, whiteOverprintRemoved: objects, blackOverprinted: objects}",
             has_doc,
             print_fixes::run
         ),
@@ -70,7 +70,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Nearest Swatch",
             ["Object", "Plug-ins", "Color Effects"],
             None,
-            "{library?: as addon.color.nearestSwatch (default: \"document\"), fill?: true, stroke?: true, ids?: [id…] (default: the selection)} give each solid colour and gradient stop of the selected objects' fills and strokes (their type's and those of the objects inside them; gradient meshes too) the colour of its nearest swatch in the library, as addon.color.nearestSwatch finds it, as one undo step: a global or spot swatch's colour links to it. A library's swatches the colours take are added to the document's first, as swatch.library.add adds them (a spot colour stays spot); images and patterns keep their colours → {changed: paints changed, swatches: [the document swatches the colours took], added: [swatches added to the document]}",
+            "{library?: as addon.color.nearestSwatch (default: \"document\"), fill?: true, stroke?: true, ids?: [id…] (default: the selection)} give each solid colour and gradient stop of the selected objects' fills and strokes (their type's and those of the objects inside them; gradient meshes too) the colour of its nearest swatch in the library, as addon.color.nearestSwatch finds it, as one undo step (none when nothing changes): a global or spot swatch's colour links to it. A library's swatches the colours take are added to the document's first, as swatch.library.add adds them (a spot colour stays spot); images and patterns keep their colours. On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke (docs/mcp.md) → {changed: paints changed, swatches: [the document swatches the colours took], added: [swatches added to the document]}",
             has_selection,
             nearest::apply
         ),
@@ -79,7 +79,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Fill to Stroke",
             ["Object", "Plug-ins", "Color Effects"],
             None,
-            "{ids?|id?, skipNone?: bool} each target's top stroke takes its own top fill, as it is (a colour in its model, a global or spot colour linked at its tint, a gradient or pattern with its placement, None); a stroke given paint at width 0 gets 1 pt, as Swap Fill and Stroke does. Type: each run's stroke takes its own fill, and while the Type tool has characters selected (no ids), only those. A graph's series marks and labels keep the paint when the graph is drawn again. skipNone: leave alone a target whose fill is None. A target whose stroke already has that paint is left as it is, and when nothing changes no undo step is recorded. The default stroke takes the default fill the same way → {objects}",
+            "{ids?|id?, skipNone?: bool} each target's top stroke takes its own top fill, as it is (a colour in its model, a global or spot colour linked at its tint, a gradient or pattern with its placement, None); a stroke given paint at width 0 gets 1 pt, as Swap Fill and Stroke does. Type: each run's stroke takes its own fill, and while the Type tool has characters selected (no ids), only those. A graph's labels keep the paint when the graph is drawn again. On a path directly in a graph series, the graph also stores the paint and weight of the topmost visible stroke when the command wrote that row (exceptions: docs/mcp.md). skipNone: leave alone a target whose fill is None. A target whose stroke already has that paint is left as it is, and when nothing changes no undo step is recorded. The default stroke takes the default fill the same way → {objects}",
             has_doc,
             |s, p| copy_paint(s, p, true)
         ),
@@ -226,6 +226,8 @@ fn copy_paint(s: &mut Session, p: &Value, to_stroke: bool) -> Result<Value> {
     if !ids.is_empty() {
         let before = s.doc()?.doc.clone();
         super::super::overprint::edit_counted(s, label, |d| {
+            // Each object with the row the paint went to, for the paint a graph stores for its series.
+            let mut written = Vec::new();
             for id in &ids {
                 let Some(node) = d.node_mut(*id) else { continue };
                 if let NodeKind::Text(t) = &mut node.kind {
@@ -239,19 +241,23 @@ fn copy_paint(s: &mut Session, p: &Value, to_stroke: bool) -> Result<Value> {
                 let (from, to) = if to_stroke { (ap.fill_paint(), ap.stroke_paint()) } else { (ap.stroke_paint(), ap.fill_paint()) };
                 // A missing item reads as None: copying None onto it would add an item that
                 // changes nothing.
-                if (skip_none && from.is_none()) || from == to {
+                if skip_none && from.is_none() {
                     continue;
                 }
-                if to_stroke {
-                    restore_unpainted_stroke(ap, None, &from);
-                    ap.set_stroke(from);
-                } else {
-                    ap.set_fill(from);
+                if from != to {
+                    if to_stroke {
+                        restore_unpainted_stroke(ap, None, &from);
+                        ap.set_stroke(from);
+                    } else {
+                        ap.set_fill(from);
+                    }
                 }
+                // A row that already had the paint counts as written with it, as for `paint.setFill`.
+                written.extend(ap.items.iter().rposition(|it| it.is_fill() != to_stroke).map(|at| (*id, at)));
             }
             objects = super::super::appearance::count_changed(d, &before, &ids);
             // The graph keeps the paint its series marks and labels now have.
-            let series = super::super::graph::capture_series_paints(d, &ids, !to_stroke);
+            let series = super::super::appearance::capture_series_paint_writes(&before, d, &ids, &written);
             let labels = super::super::graph::capture_label_styles(d, &ids, &copy_run);
             Ok(objects + usize::from(series || labels))
         })?;

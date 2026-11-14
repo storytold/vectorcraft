@@ -40,6 +40,13 @@ community. The stroke corner names (Bevel Join, Miter Join, Round Join) and the 
 जॉइन. `hindi_rows_use_one_term_for_a_variable_and_for_joining_paths` checks both terms in every
 row.
 
+A sentence keeps no English connecting word such as "or", "must" or "give": write या, होना
+चाहिए and दें. Parameter names, enum values and command IDs stay in English, and a list of
+accepted values such as `(left|right|top|bottom)` keeps the English's spelling and its `|`
+separators. `hindi_rows_keep_no_english_words_in_their_sentences` checks every row outside
+backticks, quotes, braces and brackets, and `hindi_messages_keep_their_lists_of_accepted_values`
+checks every `@msg` row's lists.
+
 ## Terminology
 
 | English | Hindi |
