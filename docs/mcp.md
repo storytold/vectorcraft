@@ -10346,9 +10346,30 @@ or of a plane widget, cancels it and puts the grid back. The Plane Switching Wid
 of the document window (headless: the first artboard's top-left corner); a press on it picks the plane with any tool
 while the grid shows (choosing a perspective tool shows it, and `perspective.grid.show` hides it again with the tool
 still chosen), and the keys 1–4 (`key` with `"1"`…`"4"`) pick the left, horizontal, right and no plane.
-`perspective.widget.options {show?, position?}` (Perspective Grid Options, double-click the tool) hides it or moves
-it to `topLeft`, `topRight`, `bottomLeft` or `bottomRight`, kept with the preferences (`prefs.get`/`prefs.set` key
-`perspectiveWidget`).
+`perspective.widget.options {show?, position?, anchorPoint?, gridlineIntersection?}` (Perspective Grid Options,
+double-click the tool) hides it or moves it to `topLeft`, `topRight`, `bottomLeft` or `bottomRight`, and turns the
+two targets of Automatic Plane Positioning on or off (`anchorPoint`: Anchor Point of Perspective Artwork;
+`gridlineIntersection`: Intersection of Gridlines; both on by default). The options are kept with the preferences
+(`prefs.get`/`prefs.set` key `perspectiveWidget`), and a value that is not `true` or `false` is an error.
+
+Automatic Plane Positioning: `perspective.plane.infer {at?: [x, y], tolerance?, clear?}` moves the active plane
+through the anchor point of shown art in perspective, or the gridline intersection of a plane that shows, within
+`tolerance` points of `at` (6 by default), for now, and hides the other planes. An anchor point within reach wins
+over an intersection. With the Perspective Selection tool, `pointer` `move` with Shift over one does the same,
+within 6 screen pixels; with a button down, Shift constrains the move as before. `perspective.plane.set` then brings
+the plane it makes active through the same point. The plane goes back to its place, and the other planes show
+again, when an object is drawn on it or attached to it (`perspective.draw`, `perspective.attach`, or an object
+brought into perspective by `perspective.move` or `perspective.transform`; a drag keeps the plane held until it is
+committed), when `perspective.plane.matchObject` moves a plane, when the grid hides, when no plane is active, when
+the file is opened again, and with `clear` (Escape with the Perspective Selection tool). `perspective.plane.move`
+moves the held plane from where it is held and leaves it at its new place, and the other planes show again.
+The held point is view state, not an undo step: `perspective.grid.get` reports it as `grid.inferred` (x, y and z
+in the grid's frame). `perspective.grid.set`, `perspective.grid.define` and `perspective.grid.preset` keep it
+unless the grid they make hides, has no active plane, or would put the plane through the point behind the viewer.
+Without params the command reads the state:
+`{active, plane, offset, point?, source?: anchor|gridline}`. With `at`, `source` is absent when nothing was within
+reach, and the grid stays as it was. It is an error when the grid is hidden, when no plane is active, when both
+targets are off, and when `at`, `tolerance` or `clear` is not what the params take.
 
 ## Envelopes
 
