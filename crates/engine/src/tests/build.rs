@@ -4415,6 +4415,41 @@ fn a_trace_run_hands_its_trace_to_the_command() {
     assert!((bb.center().x - 160.0).abs() < 1.5, "traced where the image is now: {bb:?}");
 }
 
+/// A trace made in one document applies only there: in another document with the same image,
+/// object and settings, the run no longer applies, and both trace commands drop the trace handed
+/// in and trace that document's own image, as one undo step.
+#[test]
+fn a_trace_run_applies_only_in_its_own_document() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut direct = session();
+        image_doc(&mut direct);
+        let want = direct.execute(command, &p).unwrap();
+        let mut s = session();
+        let img = image_doc(&mut s);
+        let a = s.active_index().unwrap();
+        let copy = (*s.doc().unwrap().doc).clone();
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        let b = s.add_document(copy, None);
+        assert_ne!(s.documents()[a].uid, s.documents()[b].uid);
+        assert!(!run.current(&s), "{command}: another document");
+        assert!(s.set_active(a));
+        assert!(run.current(&s), "{command}: its own document");
+        assert!(s.set_active(b));
+        traced.hand_in(&mut s);
+        let got = s.execute(run.command(), run.params()).unwrap();
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        assert_eq!(got, want, "{command}");
+        let g = NodeId(got["id"].as_u64().unwrap());
+        assert_eq!(node(&s, g), node(&direct, g), "{command}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: one undo step");
+        assert!(s.set_active(a));
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: the first document is untouched");
+    }
+}
+
 /// A plug-in run that calls Image Trace and then fails leaves a trace handed in for the command in
 /// place, as it leaves the document.
 #[test]
