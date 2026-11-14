@@ -10,7 +10,7 @@ use super::vertical::{
 use super::{
     Affine, BidiInfo, Burasagari, CharStyle, Composer, Ctx, EPS, Flex, Justify, KinsokuShoriType, LeadingModel, LineFit, LineInfo, ListMarker,
     ParaStyle, Params, Point, Punct, Range, SGlyph, SingleWordJustify, TextObject, apply_desired, cap_x_heights, compose, fit_line, hyphen_glyph,
-    is_cjk, is_word_space, kashida, mark_word_ends, no_line_end, no_line_start, style_metrics,
+    is_cjk, is_word_space, kashida, mark_word_ends, style_metrics,
 };
 use crate::justify::is_format_control;
 use crate::shape::{keep_inseparable_pairs, keep_inseparable_sequences, keep_korean_words};
@@ -19,6 +19,13 @@ use crate::shape::{keep_inseparable_pairs, keep_inseparable_sequences, keep_kore
 /// with kinsoku on)?
 fn pushes_in(para: &ParaStyle) -> bool {
     !KinsokuRules::of(para).is_none() && para.kinsoku_type != KinsokuShoriType::PushOutOnly
+}
+
+/// May paragraph `para` push one of glyphs `sg` in onto a line: does it push characters in, and
+/// hold a character its kinsoku rules keep off a line's start or end?
+pub(super) fn may_push_in(para: &ParaStyle, sg: &[SGlyph]) -> bool {
+    let kinsoku = KinsokuRules::of(para);
+    pushes_in(para) && sg.iter().any(|g| kinsoku.cannot_start(g.ch) || kinsoku.cannot_end(g.ch))
 }
 
 /// Paragraphs longer than this (glyphs) are always broken line by line.
@@ -53,11 +60,7 @@ fn compose_para(
     let kinsoku = KinsokuRules::of(para);
     let may_hang = para.burasagari != Burasagari::None && sg.iter().any(|g| hangs(g, kinsoku));
     // So is a paragraph that may push characters kinsoku keeps off a line's ends in onto a line.
-    let kept_off_ends = |c: char| match kinsoku {
-        KinsokuRules::Custom(set) => set.cannot_start(c) || set.cannot_end(c),
-        KinsokuRules::BuiltIn(_) => no_line_start(c) || no_line_end(c),
-    };
-    let may_push_in = pushes_in(para) && sg.iter().any(|g| kept_off_ends(g.ch));
+    let may_push_in = may_push_in(para, sg);
     // A tab's width depends on where it falls in its line, which the composer's fixed glyph widths
     // can't follow: such a paragraph is broken line by line ([`break_line`] measures its tabs).
     // The tab of a list marker is on the first line, with the marker, and has a fixed width.

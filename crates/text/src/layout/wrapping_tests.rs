@@ -1231,6 +1231,28 @@ fn a_custom_set_keeps_its_own_characters_off_line_ends() {
     assert_eq!(ends, [1, 2, 4, 5]);
 }
 
+/// Soft and a set made from it choose the same composer: small kana and the prolonged sound mark,
+/// which Soft lets start a line, do not send a paragraph that pushes in to the single-line
+/// composer with either, while Hard, which keeps them off a line's start, does.
+#[test]
+fn soft_and_a_set_made_from_it_push_in_the_same_characters() {
+    use KinsokuShoriType::{PushInFirst, PushOutOnly};
+    let glyphs = full_width("あゃいーう");
+    let para = |kinsoku: Kinsoku, own: bool, kinsoku_type: KinsokuShoriType| ParaStyle {
+        kinsoku,
+        kinsoku_set: own.then(|| Arc::new(crate::shape::kinsoku_set_from(kinsoku, "From"))),
+        kinsoku_type,
+        ..ParaStyle::default()
+    };
+    assert!(!flow::may_push_in(&para(Kinsoku::Soft, false, PushInFirst), &glyphs), "built-in Soft");
+    assert!(!flow::may_push_in(&para(Kinsoku::Soft, true, PushInFirst), &glyphs), "a set made from Soft");
+    assert!(flow::may_push_in(&para(Kinsoku::Hard, false, PushInFirst), &glyphs), "built-in Hard");
+    assert!(flow::may_push_in(&para(Kinsoku::Hard, true, PushInFirst), &glyphs), "a set made from Hard");
+    assert!(!flow::may_push_in(&para(Kinsoku::Hard, false, PushOutOnly), &glyphs), "Push Out Only");
+    let bracket = full_width("あい」う");
+    assert!(flow::may_push_in(&para(Kinsoku::Soft, false, PushInFirst), &bracket), "Soft keeps 」 off a line's start");
+}
+
 /// With Burasagari, a custom set hangs its own Hanging Punctuation and not the comma and full stop
 /// the built-in sets hang: 、 hangs outside a full line with Hard and with a set that lists it; with
 /// a set that lists only ! it starts the next line, while ! hangs.
