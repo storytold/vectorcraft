@@ -540,6 +540,19 @@ fn detail_moves_each_style_within_its_range() {
     assert!(anchors(100) > anchors(0), "{} vs {}", anchors(100), anchors(0));
 }
 
+/// An image scaled down to fit keeps within the pixel limit whatever its shape, a long thin one
+/// included, and one that fits stays as it is.
+#[test]
+fn an_image_is_scaled_down_within_the_pixel_limit_whatever_its_shape() {
+    for (w, h) in [(64, 1), (1, 64), (64, 2), (40, 30), (8, 8)] {
+        let fitted = offline::fit_within(Raster::from_fn(w, h, |x, y| [x as u8, y as u8, 0, 255]), 16);
+        let n = u64::from(fitted.width) * u64::from(fitted.height);
+        assert!(n <= 16 && fitted.width >= 1 && fitted.height >= 1, "{w} × {h} → {} × {}", fitted.width, fitted.height);
+        assert_eq!(fitted.rgba.len() as u64, n * 4);
+    }
+    assert_eq!(offline::fit_within(Raster::from_fn(4, 4, |_, _| [1, 2, 3, 255]), 16).width, 4, "fits already");
+}
+
 #[test]
 fn generate_and_results_change_nothing_in_the_document() {
     let (mut s, _) = doc_with(&art());

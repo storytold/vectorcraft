@@ -92,13 +92,22 @@ pub fn style_params(id: &str, detail: u8) -> Option<tr::TraceParams> {
 
 /// `img` box-filtered down to at most [`MAX_PIXELS`], aspect kept; `img` itself when it fits.
 fn fit(img: tr::Raster) -> tr::Raster {
+    fit_within(img, MAX_PIXELS)
+}
+
+/// `img` box-filtered down to at most `max` pixels (at least 1), aspect kept as far as a side of
+/// at least one pixel allows; `img` itself when it fits.
+pub(super) fn fit_within(img: tr::Raster, max: u64) -> tr::Raster {
     let (w, h) = (u64::from(img.width), u64::from(img.height));
-    if w * h <= MAX_PIXELS || w == 0 || h == 0 {
+    let max = max.max(1);
+    if w * h <= max || w == 0 || h == 0 {
         return img;
     }
-    let k = (MAX_PIXELS as f64 / (w * h) as f64).sqrt();
-    let nw = ((w as f64 * k).floor() as u32).clamp(1, img.width);
-    let nh = ((h as f64 * k).floor() as u32).clamp(1, img.height);
+    let k = (max as f64 / (w * h) as f64).sqrt();
+    // A side that rounds down to one pixel leaves the other side the whole budget, no more.
+    let nh = ((h as f64 * k).floor() as u64).clamp(1, h.min(max));
+    let nw = ((w as f64 * k).floor() as u64).clamp(1, w.min(max / nh)) as u32;
+    let nh = nh as u32;
     let mut rgba = Vec::with_capacity(nw as usize * nh as usize * 4);
     for y in 0..nh {
         let (y0, y1) = (u64::from(y) * h / u64::from(nh), (u64::from(y + 1) * h / u64::from(nh)).max(u64::from(y) * h / u64::from(nh) + 1));
