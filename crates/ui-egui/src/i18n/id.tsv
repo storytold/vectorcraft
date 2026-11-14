@@ -1636,6 +1636,9 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Font karakter yang dipilih tidak tersedia.
 	No alternates for the selected character.	Tidak ada alternatif untuk karakter yang dipilih.
 	Double-click to replace	Klik ganda untuk mengganti
+	Click to replace	Klik untuk mengganti
+	Show all alternates in the Glyphs panel	Tampilkan semua alternatif di panel Glif
+	Show Character Alternates	Tampilkan alternatif karakter
 	Select one character with the Type tool first.	Pilih satu karakter dengan alat teks terlebih dahulu.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} adalah glif {font}, bukan dari font yang dipakai teks terpilih ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} milik {base} (U+{base_code}) {place}; pilihan Anda adalah {sel} (U+{code}).

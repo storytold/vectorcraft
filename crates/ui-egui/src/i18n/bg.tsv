@@ -889,6 +889,9 @@ font-technology	Variable	Променливи
 	The selected character's font is not available.	Шрифтът на избрания знак не е наличен.
 	No alternates for the selected character.	Няма алтернативи за избрания знак.
 	Double-click to replace	Двойно щракване за замяна
+	Click to replace	Щракване за замяна
+	Show all alternates in the Glyphs panel	Показване на всички алтернативи в панела „Глифи“
+	Show Character Alternates	Показване на алтернативите на знака
 	Select one character with the Type tool first.	Първо изберете един знак с инструмента „Текст“.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} е глиф на {font}, а не на шрифта, с който е зададен избраният текст ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} принадлежи на {base} (U+{base_code}) {place}; избраният от вас знак е {sel} (U+{code}).

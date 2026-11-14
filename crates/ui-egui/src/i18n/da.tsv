@@ -1636,6 +1636,9 @@ digits	Malayalam	Malayalam
 	The selected character's font is not available.	Skrifttypen for det markerede tegn er ikke tilgængelig.
 	No alternates for the selected character.	Ingen alternativer til det markerede tegn.
 	Double-click to replace	Dobbeltklik for at erstatte
+	Click to replace	Klik for at erstatte
+	Show all alternates in the Glyphs panel	Vis alle alternativer i Glyffer-panelet
+	Show Character Alternates	Vis tegnalternativer
 	Select one character with the Type tool first.	Markér først ét tegn med tekstværktøjet.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} er et glyf i {font}, ikke i den skrifttype, den markerede tekst er sat i ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hører til {base} (U+{base_code}) {place}; din markering er {sel} (U+{code}).

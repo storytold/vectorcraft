@@ -1463,6 +1463,9 @@ antiAlias	Sharp	शार्प
 	Double-click to insert	सम्मिलित करने के लिए डबल क्लिक करें
 	Double-click to rename	नाम बदलने के लिए डबल क्लिक करें
 	Double-click to replace	प्रतिस्थापित करने के लिए डबल क्लिक करें
+	Click to replace	प्रतिस्थापित करने के लिए क्लिक करें
+	Show all alternates in the Glyphs panel	ग्लिफ़्स पैनल में सभी ऑप्शन दिखाएँ
+	Show Character Alternates	कैरेक्टर के ऑप्शन दिखाएँ
 	Select one character with the Type tool first.	पहले टाइप टूल से एक कैरेक्टर सिलेक्ट करें।
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} {font} का ग्लिफ़ है, उस फ़ॉन्ट का नहीं जिसमें सिलेक्ट किया टेक्स्ट सेट है ({text_font})।
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} {base} (U+{base_code}) का है, {place}; आपका सिलेक्शन {sel} (U+{code}) है।
@@ -7414,7 +7417,7 @@ antiAlias	Sharp	शार्प
 @msg	no selected slice in the image: select slices, or save all of them	इमेज में कोई सिलेक्टेड स्लाइस नहीं: स्लाइस सिलेक्ट करें, या सभी स्लाइस सेव करें
 @msg	no selection bounds	कोई सिलेक्शन सीमा नहीं
 @msg	no series {i}	कोई श्रृंखला {i}
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	कोई समान ऑब्जेक्ट नहीं पाया (घूर्णित या परिलक्षित प्रतियां मिलान नहीं की जाती हैं); वैश्विक संपादन ऑप्शन्स बदलें और फिर से प्रयास करें
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	कोई समान ऑब्जेक्ट नहीं पाया (परिलक्षित प्रतियां मिलान नहीं की जाती हैं); वैश्विक संपादन ऑप्शन्स बदलें और फिर से प्रयास करें
 @msg	no slice {n} in the image (see slice.list)	इमेज में कोई स्लाइस {n} नहीं है (slice.list देखें)
 @msg	no slice selected	सिलेक्टेड कोई स्लाइस नहीं
 @msg	no source art	कोई स्रोत कला

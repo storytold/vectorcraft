@@ -1642,6 +1642,9 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Czcionka zaznaczonego znaku jest niedostępna.
 	No alternates for the selected character.	Brak alternatyw dla zaznaczonego znaku.
 	Double-click to replace	Kliknij dwukrotnie, aby zastąpić
+	Click to replace	Kliknij, aby zastąpić
+	Show all alternates in the Glyphs panel	Pokaż wszystkie alternatywy w panelu Glify
+	Show Character Alternates	Pokaż alternatywy znaku
 	Select one character with the Type tool first.	Najpierw zaznacz jeden znak narzędziem Tekst.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} to glif czcionki {font}, a nie czcionki zaznaczonego tekstu ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} należy do znaku {base} (U+{base_code}) {place}; Twoje zaznaczenie to {sel} (U+{code}).
@@ -6530,7 +6533,7 @@ axis	Y Axis	Oś Y
 @plural	Result: {n}|Results: {n}	Wynik: {n}|Wyniki: {n}|Wyniki: {n}
 @msg	select one object	zaznacz jeden obiekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Edycja globalna działa na ścieżkach, ścieżkach złożonych, wystąpieniach symboli i ich grupach
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (obrócone i odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nie znaleziono podobnych obiektów (odbite kopie nie są dopasowywane); zmień opcje edycji globalnej i spróbuj ponownie
 @msg	Global Edit is off	Edycja globalna jest wyłączona
 @msg	only an object of the Global Edit other than the one it started from can be left out	z edycji globalnej można wykluczyć tylko obiekt inny niż ten, od którego się zaczęła
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all lub zakres, np. 1, 3-5, a nie {v}
