@@ -9461,3 +9461,20 @@ breakText	Glyphs	Glyfy
 @msg	turn on at least one side	zapněte alespoň jednu stranu
 @msg	with no hem and no grommets there is nothing to mark	bez lemu a bez průchodek není co označit
 @msg	{saving} failed: {e}	{saving} se nezdařilo: {e}
+	Packaging Tools	Nástroje pro obaly
+	Fold Lines	Linie skladu
+	Make Cut Line	Vytvořit linii řezu
+	Make Crease Line	Vytvořit linii bigu
+	Make Partial Cut Line	Vytvořit linii částečného řezu
+	Make Perforation Line	Vytvořit linii perforace
+	Make Fold Line	Vytvořit linii skladu
+	Role Swatches…	Vzorník typů linií…
+	Role Swatches	Vzorník typů linií
+	Role	Typ linie
+	Cut Line	Linie řezu
+	Crease Line	Linie bigu
+	Partial Cut Line	Linie částečného řezu
+	Perforation Line	Linie perforace
+	No objects are selected.	Nejsou vybrány žádné objekty.
+	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
+	Remove Fold Line Role	Odstranit typ linie
