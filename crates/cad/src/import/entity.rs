@@ -7,9 +7,10 @@ use kurbo::{BezPath, PathEl};
 use vectorcraft_doc::Justify;
 use vectorcraft_geom::{Affine, Point, Vec2};
 
+use craft_dxf::model::{self, EntityRecord, Groups, HatchEdge, HatchPath};
+
 use super::curve::{self, Vertex};
-use super::reader::{Groups, Pair, Record, groups, number};
-use crate::aci::aci_rgb;
+use super::reader::{aci_paper, point};
 
 /// How far below the baseline the lowest descender reaches, as a fraction of the cap height.
 const DESCENT: f64 = 0.3;
@@ -24,21 +25,6 @@ const MAX_COORD: f64 = 1e12;
 /// How far fit and aligned text may be squeezed or stretched to span their two points: at width
 /// factor 1, the 1 to 10,000% horizontal scale the Character panel allows.
 const SPAN_SCALE: (f64, f64) = (0.01, 100.0);
-
-/// The colour of index `i` on paper: index 7 (white on a CAD screen) is black.
-pub(crate) fn aci_paper(i: u64) -> [u8; 3] {
-    match u8::try_from(i) {
-        Ok(7) | Err(_) => [0; 3],
-        Ok(i) => aci_rgb(i),
-    }
-}
-
-/// The true colour (group 420, `0xRRGGBB`) of an entity or layer.
-pub(crate) fn true_color(g: &[Pair<'_>]) -> Option<[u8; 3]> {
-    let v = g.int(420)?;
-    let [_, r, gr, b] = u32::try_from(v & 0xFF_FFFF).ok()?.to_be_bytes();
-    Some([r, gr, b])
-}
 
 /// An entity's colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -79,30 +65,30 @@ pub(crate) struct Props {
 }
 
 impl Props {
-    fn read(g: &[Pair<'_>]) -> Self {
-        let color = match (true_color(g), g.int(62)) {
-            (Some(rgb), _) => Col::Rgb(rgb),
-            (None, Some(0)) => Col::ByBlock,
-            (None, None | Some(256..)) => Col::ByLayer,
-            (None, Some(i)) => Col::Rgb(aci_paper(i.unsigned_abs())),
+    fn read(c: &model::Common) -> Self {
+        let color = match c.color {
+            model::Color::Rgb(rgb) => Col::Rgb(rgb),
+            model::Color::ByBlock => Col::ByBlock,
+            model::Color::ByLayer => Col::ByLayer,
+            model::Color::Index(i) => Col::Rgb(aci_paper(i)),
         };
-        let lineweight = match g.int(370) {
-            Some(-2) => Lw::ByBlock,
-            Some(-3) => Lw::Default,
-            Some(v @ 0..=211) => Lw::Hundredths(v as i32),
+        let lineweight = match c.lineweight {
+            model::Lineweight::ByBlock => Lw::ByBlock,
+            model::Lineweight::Default => Lw::Default,
+            model::Lineweight::Hundredths(v @ 0..=211) => Lw::Hundredths(i32::from(v)),
             _ => Lw::ByLayer,
         };
-        let alpha = match g.int(440) {
-            Some(v) if v & 0x0200_0000 != 0 => Alpha::Opacity((v & 0xFF) as f32 / 255.0),
-            Some(v) if v & 0x0100_0000 != 0 => Alpha::ByBlock,
-            _ => Alpha::ByLayer,
+        let alpha = match c.transparency {
+            model::Transparency::Alpha(a) => Alpha::Opacity(f32::from(a) / 255.0),
+            model::Transparency::ByBlock => Alpha::ByBlock,
+            model::Transparency::ByLayer => Alpha::ByLayer,
         };
         Self {
-            layer: g.name(8).unwrap_or("0").to_string(),
+            layer: c.layer.clone(),
             color,
             lineweight,
-            linetype: g.name(6).unwrap_or("BYLAYER").to_uppercase(),
-            ltscale: g.num(48).filter(|v| *v > 0.0).unwrap_or(1.0),
+            linetype: c.linetype.as_deref().unwrap_or("BYLAYER").to_uppercase(),
+            ltscale: c.ltscale,
             alpha,
         }
     }
@@ -209,90 +195,87 @@ impl Converter {
     }
 
     /// The items of `records` (an entity section or a block), in drawing order.
-    pub fn items(&mut self, records: &[Record<'_>]) -> Vec<Item> {
+    pub fn items(&mut self, records: &[EntityRecord<'_>]) -> Vec<Item> {
         let mut out = Vec::new();
-        for group in groups(records) {
-            let Some(head) = group.first() else { continue };
+        for e in records {
+            let m = model::Entity::read(e);
             // Invisible entities.
-            if head.g.int(60) == Some(1) {
+            if !m.common.visible {
                 continue;
             }
-            match self.geom(head, group) {
+            match self.geom(e, &m) {
                 Some(geom) if !in_range(&geom) => self.warn(FAR_AWAY),
-                Some(geom) => out.push(Item { props: Props::read(head.g), geom }),
-                None if is_known(head.kind) => {}
-                None => self.skip(head.kind),
+                Some(geom) => out.push(Item { props: Props::read(&m.common), geom }),
+                None if is_known(e.kind) => {}
+                None => self.skip(e.kind),
             }
         }
         out
     }
 
-    fn geom(&mut self, head: &Record<'_>, group: &[Record<'_>]) -> Option<Geom> {
-        let g = head.g;
+    fn geom(&mut self, e: &EntityRecord<'_>, m: &model::Entity) -> Option<Geom> {
+        let g = e.groups();
         let path = |bp: BezPath| Some(Geom::Path { bp, fill: false, width: 0.0 });
-        match head.kind {
-            "LINE" => {
+        let ocs = ocs(m.common.extrusion);
+        match &m.kind {
+            model::EntityKind::Line { start, end } => {
                 let mut bp = BezPath::new();
-                bp.move_to(g.point(10));
-                bp.line_to(g.point(11));
+                bp.move_to(point(*start));
+                bp.line_to(point(*end));
                 path(bp)
             }
-            "CIRCLE" => path(transformed(curve::arc(g.point(10), g.num(40)?, 0.0, std::f64::consts::TAU)?, ocs(g))),
-            "ARC" => {
-                let (start, end) = (g.num_or(50, 0.0), g.num_or(51, 360.0));
-                let sweep = ccw_sweep(start, end);
-                path(transformed(curve::arc(g.point(10), g.num(40)?, start.to_radians(), sweep.to_radians())?, ocs(g)))
+            model::EntityKind::Circle { center, radius } => path(transformed(curve::arc(point(*center), *radius, 0.0, std::f64::consts::TAU)?, ocs)),
+            model::EntityKind::Arc { center, radius, start_angle, end_angle } => {
+                let sweep = ccw_sweep(*start_angle, *end_angle);
+                path(transformed(curve::arc(point(*center), *radius, start_angle.to_radians(), sweep.to_radians())?, ocs))
             }
-            "ELLIPSE" => path(ellipse(g)?),
-            "LWPOLYLINE" => lwpolyline(g),
-            "POLYLINE" => self.polyline(g, group.get(1..).unwrap_or(&[])),
-            "SPLINE" => path(spline(g)?),
-            "SOLID" | "TRACE" => {
-                let [a, b, c, d] = [g.point(10), g.point(11), g.point(12), g.point_opt(13).unwrap_or(g.point(12))];
+            model::EntityKind::Ellipse { center, major, ratio, start, end } => {
+                path(ellipse(m.common.extrusion, *center, *major, *ratio, *start, *end)?)
+            }
+            model::EntityKind::LwPolyline(p) => lwpolyline(p, ocs),
+            model::EntityKind::Polyline(p) => self.polyline(p, ocs),
+            model::EntityKind::Spline(s) => path(spline(s)?),
+            model::EntityKind::Solid { corners } | model::EntityKind::Trace { corners } => {
+                let [a, b, c, d] = corners.map(point);
                 // The corners zigzag: the outline runs 1, 2, 4, 3.
-                Some(Geom::Path { bp: transformed(polygon(&[a, b, d, c]), ocs(g)), fill: true, width: 0.0 })
+                Some(Geom::Path { bp: transformed(polygon(&[a, b, d, c]), ocs), fill: true, width: 0.0 })
             }
-            "3DFACE" => {
-                let [a, b, c, d] = [g.point(10), g.point(11), g.point(12), g.point_opt(13).unwrap_or(g.point(12))];
-                path(polygon(&[a, b, c, d]))
-            }
-            "HATCH" => self.hatch(g),
-            "TEXT" | "ATTRIB" => text(g, head.kind == "ATTRIB").map(Geom::Text),
-            "MTEXT" => mtext(g).map(Geom::Text),
-            "INSERT" => self.insert(g, group.get(1..).unwrap_or(&[])),
+            model::EntityKind::Face3d { corners, .. } => path(polygon(&corners.map(point))),
+            model::EntityKind::Hatch(h) => self.hatch(h, ocs),
+            model::EntityKind::Text(t) => text(t, &g, false, ocs).map(Geom::Text),
+            model::EntityKind::MText(t) => mtext(t, e.tags).map(Geom::Text),
+            model::EntityKind::Insert(ins) => self.insert(ins, &e.followers, ocs),
             // A dimension draws the anonymous block of its lines, arrows and text.
-            "DIMENSION" => Some(Geom::Insert(InsertItem { block: g.name(2)?.to_uppercase(), cells: vec![Affine::IDENTITY], attribs: vec![] })),
+            model::EntityKind::Dimension(d) => {
+                Some(Geom::Insert(InsertItem { block: d.block.as_ref()?.to_uppercase(), cells: vec![Affine::IDENTITY], attribs: vec![] }))
+            }
             _ => None,
         }
     }
 
-    fn polyline(&mut self, g: &[Pair<'_>], rest: &[Record<'_>]) -> Option<Geom> {
-        let flags = g.int_or(70, 0);
-        if flags & (16 | 64) != 0 {
+    fn polyline(&mut self, p: &model::Polyline, ocs: Affine) -> Option<Geom> {
+        if p.is_mesh() || p.is_polyface() {
             self.warn(MESHES);
             return None;
         }
         // Spline frame control points and polyface faces aren't on the line.
-        let verts: Vec<Vertex> = rest
-            .iter()
-            .filter(|r| r.kind == "VERTEX" && r.g.int_or(70, 0) & (16 | 128) == 0)
-            .map(|r| Vertex { p: r.g.point(10), bulge: r.g.num_or(42, 0.0) })
-            .collect();
-        let bp = curve::polyline(&verts, flags & 1 != 0)?;
+        let verts: Vec<Vertex> =
+            p.vertices.iter().filter(|v| v.flags & (16 | 128) == 0).map(|v| Vertex { p: point(v.location), bulge: v.bulge }).collect();
+        let bp = curve::polyline(&verts, p.closed())?;
         // 3D polylines are in world coordinates; 2D ones in their plane's.
-        let bp = if flags & 8 != 0 { bp } else { transformed(bp, ocs(g)) };
-        Some(Geom::Path { bp, fill: false, width: g.num_or(40, 0.0).max(0.0) })
+        let bp = if p.is_3d() { bp } else { transformed(bp, ocs) };
+        Some(Geom::Path { bp, fill: false, width: p.start_width.max(0.0) })
     }
 
-    fn insert(&mut self, g: &[Pair<'_>], rest: &[Record<'_>]) -> Option<Geom> {
-        let block = g.name(2)?.to_uppercase();
-        let (sx, sy) = (g.num_or(41, 1.0), g.num_or(42, 1.0));
+    fn insert(&mut self, ins: &model::Insert, followers: &[model::Record<'_>], ocs: Affine) -> Option<Geom> {
+        let block = Some(ins.block.trim()).filter(|b| !b.is_empty())?.to_uppercase();
+        let [sx, sy, _] = ins.scale;
         if sx.abs() < 1e-12 || sy.abs() < 1e-12 {
             return None;
         }
-        let place = ocs(g) * Affine::translate(g.point(10).to_vec2()) * Affine::rotate(g.num_or(50, 0.0).to_radians());
-        let (cols, rows) = (g.int_or(70, 1).max(1), g.int_or(71, 1).max(1));
-        let (cs, rs) = (g.num_or(44, 0.0), g.num_or(45, 0.0));
+        let place = ocs * Affine::translate(point(ins.insert).to_vec2()) * Affine::rotate(ins.rotation.to_radians());
+        let (cols, rows) = (ins.columns, ins.rows);
+        let (cs, rs) = (ins.column_spacing, ins.row_spacing);
         let (cols, rows) = if cols.saturating_mul(rows) > MAX_CELLS {
             self.warn(BIG_ARRAY);
             (cols.min(MAX_CELLS), (MAX_CELLS / cols.min(MAX_CELLS)).max(1).min(rows))
@@ -312,27 +295,41 @@ impl Converter {
             .flat_map(|r| (0..cols).map(move |c| (r, c)))
             .map(|(r, c)| place * Affine::translate((c as f64 * cs, r as f64 * rs)) * Affine::scale_non_uniform(sx, sy))
             .collect();
-        let attribs = self.items(rest);
+        let attribs = self.attribs(followers);
         Some(Geom::Insert(InsertItem { block, cells, attribs }))
     }
 
-    fn hatch(&mut self, g: &[Pair<'_>]) -> Option<Geom> {
-        let start = g.iter().position(|p| p.code == 91)?;
-        let count = g.get(start).and_then(|p| number(p.value)).filter(|n| *n >= 0.0)? as usize;
-        let mut c = Cursor { g, i: start + 1 };
+    /// An insert's attributes as text.
+    fn attribs(&mut self, followers: &[model::Record<'_>]) -> Vec<Item> {
+        let mut out = Vec::new();
+        for r in followers {
+            let c = model::Common::read(r.tags);
+            if !c.visible {
+                continue;
+            }
+            let a = model::Attrib::read("ATTRIB", r.tags);
+            match text(&a.text, &r.groups(), true, ocs(c.extrusion)) {
+                Some(t) if !in_range(&Geom::Text(t.clone())) => self.warn(FAR_AWAY),
+                Some(t) => out.push(Item { props: Props::read(&c), geom: Geom::Text(t) }),
+                None => {}
+            }
+        }
+        out
+    }
+
+    fn hatch(&mut self, h: &model::Hatch, ocs: Affine) -> Option<Geom> {
         let mut bp = BezPath::new();
-        for _ in 0..count {
-            let Some(path) = boundary(&mut c) else { break };
+        for l in &h.loops {
+            let Some(path) = boundary(&l.path) else { break };
             bp.extend(path);
         }
         if bp.elements().is_empty() {
             return None;
         }
-        let bp = transformed(bp, ocs(g));
-        let solid = g.int_or(70, 0) == 1;
-        if g.int_or(450, 0) == 1 {
+        let bp = transformed(bp, ocs);
+        if h.gradient.is_some() {
             self.warn(GRADIENT_HATCH);
-        } else if !solid {
+        } else if !h.solid {
             self.warn(PATTERN_HATCH);
             return Some(Geom::Path { bp, fill: false, width: 0.0 });
         }
@@ -401,217 +398,104 @@ fn polygon(pts: &[Point]) -> BezPath {
     bp
 }
 
-/// The extrusion direction (210, 220, 230) of a planar entity, normalised.
-fn extrusion(g: &[Pair<'_>]) -> [f64; 3] {
-    let n = [g.num_or(210, 0.0), g.num_or(220, 0.0), g.num_or(230, 1.0)];
-    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-    if len > 1e-12 && len.is_finite() { n.map(|v| v / len) } else { [0.0, 0.0, 1.0] }
-}
-
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
-}
-
-fn unit(v: [f64; 3]) -> [f64; 3] {
-    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if len > 1e-12 { v.map(|x| x / len) } else { v }
 }
 
 /// A planar entity's coordinate system seen from above: its x and y axes in world space by the
 /// arbitrary axis algorithm (identity for drawings in the world's plane; extruded along −z it
 /// mirrors x).
-fn ocs(g: &[Pair<'_>]) -> Affine {
-    let n = extrusion(g);
-    if n[2] > 1.0 - 1e-12 {
+fn ocs(extrusion: model::Point) -> Affine {
+    let [ax, ay, _] = model::ocs_axes(extrusion);
+    if ax == [1.0, 0.0, 0.0] && ay == [0.0, 1.0, 0.0] {
         return Affine::IDENTITY;
     }
-    let ax = unit(if n[0].abs() < 1.0 / 64.0 && n[1].abs() < 1.0 / 64.0 { cross([0.0, 1.0, 0.0], n) } else { cross([0.0, 0.0, 1.0], n) });
-    let ay = unit(cross(n, ax));
     Affine::new([ax[0], ax[1], ay[0], ay[1], 0.0, 0.0])
 }
 
-fn ellipse(g: &[Pair<'_>]) -> Option<BezPath> {
-    let centre = g.point(10);
-    let major = g.point(11).to_vec2();
-    let ratio = g.num_or(40, 1.0);
+fn ellipse(extrusion: model::Point, centre: model::Point, major: model::Point, ratio: f64, start: f64, end: f64) -> Option<BezPath> {
+    let centre = point(centre);
+    let major = point(major).to_vec2();
     if ratio <= 0.0 || major.hypot() < 1e-12 {
         return None;
     }
     // The minor axis is the major one turned a quarter about the extrusion direction.
-    let n = extrusion(g);
+    let n = model::ocs_axes(extrusion)[2];
     let m = cross(n, [major.x, major.y, 0.0]);
     let minor = Vec2::new(m[0], m[1]) * ratio;
-    let (start, end) = (g.num_or(41, 0.0), g.num_or(42, std::f64::consts::TAU));
     let sweep = ccw_sweep(start.to_degrees(), end.to_degrees()).to_radians();
     curve::ellipse(Affine::new([major.x, major.y, minor.x, minor.y, centre.x, centre.y]), start, sweep)
 }
 
-fn lwpolyline(g: &[Pair<'_>]) -> Option<Geom> {
-    let mut verts: Vec<Vertex> = Vec::new();
-    let (mut widths, mut uniform) = (None, true);
-    for p in g {
-        match p.code {
-            10 => verts.push(Vertex { p: Point::new(number(p.value)?, 0.0), bulge: 0.0 }),
-            20 => verts.last_mut()?.p.y = number(p.value)?,
-            42 => verts.last_mut()?.bulge = number(p.value).unwrap_or(0.0),
-            40 | 41 => {
-                let w = number(p.value).unwrap_or(0.0);
-                uniform &= widths.is_none_or(|x: f64| (x - w).abs() < 1e-12);
-                widths = Some(w);
-            }
-            _ => {}
-        }
-    }
-    let bp = transformed(curve::polyline(&verts, g.int_or(70, 0) & 1 != 0)?, ocs(g));
-    let width = g.num(43).filter(|w| *w > 0.0).or(widths.filter(|_| uniform)).unwrap_or(0.0).max(0.0);
+fn lwpolyline(p: &model::LwPolyline, ocs: Affine) -> Option<Geom> {
+    let verts: Vec<Vertex> = p.vertices.iter().map(|v| Vertex { p: Point::new(v.x, v.y), bulge: v.bulge }).collect();
+    let bp = transformed(curve::polyline(&verts, p.closed)?, ocs);
+    // One width for every vertex is the line's width.
+    let widths: Vec<f64> = p.vertices.iter().flat_map(|v| [v.start_width, v.end_width]).collect();
+    let uniform = widths.first().filter(|w| widths.iter().all(|x| (x - *w).abs() < 1e-12)).copied();
+    let width = Some(p.const_width).filter(|w| *w > 0.0).or(uniform).unwrap_or(0.0).max(0.0);
     Some(Geom::Path { bp, fill: false, width })
 }
 
-/// The points at `code` (x) and `code + 10` (y), in order.
-fn points(g: &[Pair<'_>], code: i32) -> Option<Vec<Point>> {
-    let mut out: Vec<Point> = Vec::new();
-    for p in g {
-        if p.code == code {
-            out.push(Point::new(number(p.value)?, 0.0));
-        } else if p.code == code + 10 {
-            out.last_mut()?.y = number(p.value)?;
-        }
-    }
-    Some(out)
-}
-
-fn spline(g: &[Pair<'_>]) -> Option<BezPath> {
-    let flags = g.int_or(70, 0);
-    let ctrl = points(g, 10)?;
-    let degree = usize::try_from(g.int_or(71, 3)).ok()?;
-    let knots: Vec<f64> = g.iter().filter(|p| p.code == 40).map(|p| number(p.value)).collect::<Option<_>>()?;
-    let weights: Vec<f64> = g.iter().filter(|p| p.code == 41).filter_map(|p| number(p.value)).collect();
-    let weights = (flags & 4 != 0 && weights.len() == ctrl.len()).then_some(weights.as_slice());
-    curve::nurbs(degree, &knots, &ctrl, weights)
+fn spline(s: &model::Spline) -> Option<BezPath> {
+    let ctrl: Vec<Point> = s.control.iter().map(|p| point(*p)).collect();
+    let degree = usize::try_from(s.degree).ok()?;
+    let weights = (s.flags & 4 != 0 && s.weights.len() == ctrl.len()).then_some(s.weights.as_slice());
+    curve::nurbs(degree, &s.knots, &ctrl, weights)
         .map(|mut path| {
-            if flags & 1 != 0 {
+            if s.flags & 1 != 0 {
                 path.close_path();
             }
             path
         })
-        .or_else(|| curve::through(&points(g, 11)?, flags & 1 != 0))
-}
-
-/// Reads a hatch's boundary groups in order.
-struct Cursor<'g, 'a> {
-    g: &'g [Pair<'a>],
-    i: usize,
-}
-
-impl Cursor<'_, '_> {
-    /// The next group's value when it has `code` (consumed).
-    fn opt(&mut self, code: i32) -> Option<&str> {
-        let p = self.g.get(self.i).filter(|p| p.code == code)?;
-        self.i += 1;
-        Some(p.value)
-    }
-    fn num(&mut self, code: i32) -> Option<f64> {
-        self.opt(code).and_then(number)
-    }
-    fn count(&mut self, code: i32) -> Option<usize> {
-        self.num(code).filter(|n| *n >= 0.0 && *n <= 1e7).map(|n| n as usize)
-    }
-    fn point(&mut self, code: i32) -> Option<Point> {
-        Some(Point::new(self.num(code)?, self.num(code + 10)?))
-    }
+        .or_else(|| curve::through(&s.fit.iter().map(|p| point(*p)).collect::<Vec<_>>(), s.flags & 1 != 0))
 }
 
 /// One hatch boundary loop, closed.
-fn boundary(c: &mut Cursor<'_, '_>) -> Option<BezPath> {
-    let flags = c.num(92)? as i64;
-    let mut bp = BezPath::new();
-    if flags & 2 != 0 {
-        let bulges = c.num(72).unwrap_or(0.0) != 0.0;
-        let _closed = c.opt(73);
-        let n = c.count(93)?;
-        let mut verts = Vec::with_capacity(n.min(4096));
-        for _ in 0..n {
-            let p = c.point(10)?;
-            let bulge = if bulges { c.num(42).unwrap_or(0.0) } else { 0.0 };
-            verts.push(Vertex { p, bulge });
+fn boundary(path: &HatchPath) -> Option<BezPath> {
+    let xy = |p: &[f64; 2]| Point::new(p[0], p[1]);
+    match path {
+        HatchPath::Polyline { vertices, .. } => {
+            let verts: Vec<Vertex> = vertices.iter().map(|[x, y, b]| Vertex { p: Point::new(*x, *y), bulge: *b }).collect();
+            curve::polyline(&verts, true)
         }
-        bp = curve::polyline(&verts, true)?;
-    } else {
-        let n = c.count(93)?;
-        for _ in 0..n {
-            let edge = edge(c)?;
-            append(&mut bp, &edge);
-        }
-        if bp.elements().is_empty() {
-            return None;
-        }
-        bp.close_path();
-    }
-    // The boundary objects it was made from.
-    if let Some(n) = c.count(97) {
-        for _ in 0..n {
-            if c.opt(330).is_none() {
-                break;
-            }
-        }
-    }
-    Some(bp)
-}
-
-/// One edge of a hatch boundary.
-fn edge(c: &mut Cursor<'_, '_>) -> Option<BezPath> {
-    match c.num(72)? as i64 {
-        1 => {
+        HatchPath::Edges(edges) => {
             let mut bp = BezPath::new();
-            bp.move_to(c.point(10)?);
-            bp.line_to(c.point(11)?);
+            for e in edges {
+                let seg = match e {
+                    HatchEdge::Line { start, end } => {
+                        let mut bp = BezPath::new();
+                        bp.move_to(xy(start));
+                        bp.line_to(xy(end));
+                        Some(bp)
+                    }
+                    HatchEdge::Arc { center, radius, start_angle, end_angle, ccw } => {
+                        let sweep = ccw_sweep(*start_angle, *end_angle);
+                        // Clockwise arcs have their angles measured clockwise.
+                        let (start, sweep) = if *ccw { (*start_angle, sweep) } else { (-start_angle, -sweep) };
+                        curve::arc(xy(center), *radius, start.to_radians(), sweep.to_radians())
+                    }
+                    HatchEdge::Ellipse { center, major, ratio, start_angle, end_angle, ccw } => {
+                        let (centre, major) = (xy(center), xy(major).to_vec2());
+                        let minor = Vec2::new(-major.y, major.x) * *ratio * if *ccw { 1.0 } else { -1.0 };
+                        let sweep = ccw_sweep(*start_angle, *end_angle).to_radians();
+                        curve::ellipse(Affine::new([major.x, major.y, minor.x, minor.y, centre.x, centre.y]), start_angle.to_radians(), sweep)
+                    }
+                    HatchEdge::Spline { degree, rational, knots, control, weights, fit, .. } => {
+                        let ctrl: Vec<Point> = control.iter().map(xy).collect();
+                        let degree = usize::try_from(*degree).ok()?;
+                        let weights = (*rational && weights.len() == ctrl.len()).then_some(weights.as_slice());
+                        curve::nurbs(degree, knots, &ctrl, weights).or_else(|| curve::through(&fit.iter().map(xy).collect::<Vec<_>>(), false))
+                    }
+                };
+                append(&mut bp, &seg?);
+            }
+            if bp.elements().is_empty() {
+                return None;
+            }
+            bp.close_path();
             Some(bp)
         }
-        2 => {
-            let (centre, r, start, end) = (c.point(10)?, c.num(40)?, c.num(50)?, c.num(51)?);
-            let ccw = c.num(73).unwrap_or(1.0) != 0.0;
-            let sweep = ccw_sweep(start, end);
-            // Clockwise arcs have their angles measured clockwise.
-            let (start, sweep) = if ccw { (start, sweep) } else { (-start, -sweep) };
-            curve::arc(centre, r, start.to_radians(), sweep.to_radians())
-        }
-        3 => {
-            let (centre, major, ratio, start, end) = (c.point(10)?, c.point(11)?.to_vec2(), c.num(40)?, c.num(50)?, c.num(51)?);
-            let ccw = c.num(73).unwrap_or(1.0) != 0.0;
-            let minor = Vec2::new(-major.y, major.x) * ratio * if ccw { 1.0 } else { -1.0 };
-            let sweep = ccw_sweep(start, end).to_radians();
-            curve::ellipse(Affine::new([major.x, major.y, minor.x, minor.y, centre.x, centre.y]), start.to_radians(), sweep)
-        }
-        4 => {
-            let degree = c.count(94)?;
-            let rational = c.num(73).unwrap_or(0.0) != 0.0;
-            let _periodic = c.opt(74);
-            let (nk, nc) = (c.count(95)?, c.count(96)?);
-            let knots: Vec<f64> = (0..nk).map(|_| c.num(40)).collect::<Option<_>>()?;
-            let mut ctrl = Vec::with_capacity(nc.min(4096));
-            let mut weights = Vec::with_capacity(nc.min(4096));
-            for _ in 0..nc {
-                ctrl.push(c.point(10)?);
-                weights.push(c.num(42).unwrap_or(1.0));
-            }
-            // Fit data (DXF 2010 and later): a count, then that many points. Older files have none,
-            // and the 97 that may follow is the boundary's count of source objects (then their
-            // handles), so it is only the fit count when it is 0 or points follow.
-            let fit_count = match (c.g.get(c.i), c.g.get(c.i + 1)) {
-                (Some(count), next) if count.code == 97 => number(count.value) == Some(0.0) || next.is_some_and(|p| p.code == 11),
-                _ => false,
-            };
-            let fit: Vec<Point> = match fit_count.then(|| c.count(97)).flatten() {
-                Some(n) => (0..n).map(|_| c.point(11)).collect::<Option<_>>()?,
-                None => vec![],
-            };
-            // Start and end tangents.
-            for code in [12, 13] {
-                c.point(code);
-            }
-            curve::nurbs(degree, &knots, &ctrl, rational.then_some(weights.as_slice())).or_else(|| curve::through(&fit, false))
-        }
-        _ => None,
     }
 }
 
@@ -643,18 +527,21 @@ fn baseline(v: i64, height: f64) -> f64 {
     }
 }
 
-fn text(g: &[Pair<'_>], attrib: bool) -> Option<TextItem> {
-    if attrib && g.int_or(70, 0) & 1 != 0 {
+/// TEXT, or an ATTRIB's text. The string is read from group 1 as written, so that the caret and
+/// percent codes are turned into text once, by `super::text`.
+fn text(t: &model::Text, g: &Groups<'_>, attrib: bool, ocs: Affine) -> Option<TextItem> {
+    if attrib && g.i_or(70, 0) & 1 != 0 {
         return None;
     }
-    let s = super::text::plain(g.raw(1)?);
+    let s = super::text::plain(&g.s(1)?);
     if s.trim().is_empty() {
         return None;
     }
-    let height = g.num(40).filter(|h| *h > 0.0)?;
-    let (h, v) = (g.int_or(72, 0), g.int_or(if attrib { 74 } else { 73 }, 0));
-    let (p1, p2) = (g.point(10), g.point_opt(11));
-    let mut angle = g.num_or(50, 0.0).to_radians();
+    let height = Some(t.height).filter(|h| *h > 0.0)?;
+    // An ATTRIB's 73 is its field length: its vertical alignment is 74.
+    let (h, v) = (t.halign, if attrib { g.i_or(74, 0) } else { t.valign });
+    let (p1, p2) = (point(t.insert), t.align.map(point));
+    let mut angle = t.rotation.to_radians();
     let mut span = None;
     // Aligned and fit text run from the first point to the second.
     let anchor = match (h, p2) {
@@ -674,33 +561,36 @@ fn text(g: &[Pair<'_>], attrib: bool) -> Option<TextItem> {
         _ => Justify::Left,
     };
     let v = if h == 4 { 2 } else { v };
-    let flags = g.int_or(71, 0);
+    let flags = t.generation;
     let mirror = Affine::scale_non_uniform(if flags & 2 != 0 { -1.0 } else { 1.0 }, if flags & 4 != 0 { -1.0 } else { 1.0 });
-    let xf = ocs(g) * Affine::translate(anchor.to_vec2()) * Affine::rotate(angle) * mirror * Affine::translate((0.0, baseline(v, height)));
+    let xf = ocs * Affine::translate(anchor.to_vec2()) * Affine::rotate(angle) * mirror * Affine::translate((0.0, baseline(v, height)));
     Some(TextItem {
         text: s,
         height,
         xf,
-        width: g.num(41).filter(|w| *w > 0.0).unwrap_or(1.0),
+        width: Some(t.width_factor).filter(|w| *w > 0.0).unwrap_or(1.0),
         justify,
-        style: g.name(7).unwrap_or("STANDARD").to_uppercase(),
+        style: t.style.to_uppercase(),
         family: None,
         leading: None,
         span,
     })
 }
 
-fn mtext(g: &[Pair<'_>]) -> Option<TextItem> {
-    // The text comes in 250-character chunks (3) before the last (1).
-    let raw: String = g.iter().filter(|p| p.code == 3).map(|p| p.value).chain(g.raw(1)).collect();
+/// MTEXT. The contents are read from groups 3 and 1 as written, as for [`text`].
+fn mtext(t: &model::MText, tags: &[craft_dxf::Tag]) -> Option<TextItem> {
+    // The text comes in 250-character chunks (3) before the last (1), up to an embedded object.
+    let (own, _) = model::text::split_embedded(tags);
+    let g = Groups(own);
+    let raw: String = own.iter().filter(|t| t.code == 3).map(craft_dxf::Tag::str).chain(g.s(1)).collect();
     let (s, family) = super::text::mtext(&raw);
     if s.trim().is_empty() {
         return None;
     }
-    let height = g.num(40).filter(|h| *h > 0.0)?;
-    let leading = height * LINE_SPACING * g.num(44).filter(|f| *f > 0.0).unwrap_or(1.0);
+    let height = Some(t.height).filter(|h| *h > 0.0)?;
+    let leading = height * LINE_SPACING * Some(t.line_spacing).filter(|f| *f > 0.0).unwrap_or(1.0);
     let lines = s.lines().count().max(1) as f64;
-    let attach = g.int_or(71, 1).clamp(1, 9) - 1;
+    let attach = i64::from(t.attach) - 1;
     let justify = [Justify::Left, Justify::Center, Justify::Right].get((attach % 3) as usize).copied().unwrap_or_default();
     // The first baseline below the attachment point: under the top, around the middle, above
     // the bottom of the lines.
@@ -710,18 +600,6 @@ fn mtext(g: &[Pair<'_>]) -> Option<TextItem> {
         1 => total / 2.0 - height,
         _ => (lines - 1.0) * leading,
     };
-    let direction = g.point_opt(11).map(|p| p.to_vec2()).filter(|d| d.hypot() > 1e-12);
-    let angle = direction.map_or_else(|| g.num_or(50, 0.0), |d| d.atan2());
-    let xf = Affine::translate(g.point(10).to_vec2()) * Affine::rotate(angle) * Affine::translate((0.0, first));
-    Some(TextItem {
-        text: s,
-        height,
-        xf,
-        width: 1.0,
-        justify,
-        style: g.name(7).unwrap_or("STANDARD").to_uppercase(),
-        family,
-        leading: Some(leading),
-        span: None,
-    })
+    let xf = Affine::translate(point(t.insert).to_vec2()) * Affine::rotate(t.angle()) * Affine::translate((0.0, first));
+    Some(TextItem { text: s, height, xf, width: 1.0, justify, style: t.style.to_uppercase(), family, leading: Some(leading), span: None })
 }
