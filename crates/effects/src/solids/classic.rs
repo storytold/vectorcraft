@@ -192,6 +192,12 @@ fn shaded(c: Color, tone: f64, spec: f64, shade: Option<Color>) -> Color {
     Color::rgb(r, g, b)
 }
 
+/// The width of the stroke [`surface`] draws around `face` with parameters `p`: a wire edge on
+/// Wireframe, else the seam between faces.
+pub(crate) fn stroke_width(face: &Facet, p: &Value) -> f64 {
+    if classic_shading(p).surface == ClassicSurface::Wireframe { WIRE } else { super::seam_width(face) }
+}
+
 /// One solid's faces in paint `paint`, as a group with the paint's opacity and blend mode, one child
 /// for each facet: the edges of the faces on Wireframe, else each face filled in its paint shaded by
 /// its tone and highlight. A gradient with transparent stops is shaded opaque and then masked by
@@ -213,7 +219,7 @@ pub(crate) fn surface(n: &Node, facets: Vec<Facet>, source: &Paint, opacity: f32
             }
             let (tone, spec) = shading.tone(face.normal, &lights);
             // A narrow stroke of the face's own paint closes the hairline seams between faces.
-            let seam = (face.thickness() / 2.0).clamp(0.05, 0.75);
+            let seam = super::seam_width(&face);
             let items = match paint.color() {
                 // Unshaded (No Shading, no shading color, or a face in full light) with no
                 // highlight: the paint itself, its color space and swatch kept.

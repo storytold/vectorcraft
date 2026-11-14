@@ -163,11 +163,41 @@ fn revolve_classic_and_rotate_classic_expand_too() {
 fn later_geometry_effects_reshape_each_face_on_its_own() {
     let n = solid_square(super::super::EXTRUDE, json!({}));
     let fx = [crate::new_effect("path.offsetPath", &json!({"offset": 1.0})).unwrap()];
-    let out = reshaped(vec![square(0.0, 0.0, 10.0), square(10.0, 0.0, 10.0)], &fx, &GeomContext::of(&n));
-    assert_eq!(out.len(), 2, "{out:?}");
-    let (a, b) = (out[0].bounds().unwrap(), out[1].bounds().unwrap());
+    let faces = [square(0.0, 0.0, 10.0), square(10.0, 0.0, 10.0)].map(|path| WireFace { path, stroke: 0.75 });
+    let out = reshaped(faces.into(), &fx, &GeomContext::of(&n));
+    assert_eq!(out.len(), 2);
+    let (a, b) = (out[0].path.bounds().unwrap(), out[1].path.bounds().unwrap());
     assert!((a.x0 + 1.0).abs() < 1e-3 && (a.x1 - 11.0).abs() < 1e-3, "{a:?}");
     assert!((b.x0 - 9.0).abs() < 1e-3 && (b.x1 - 21.0).abs() < 1e-3, "{b:?}");
+}
+
+/// An Outline Stroke after a 3D effect outlines the stroke each face is drawn with (the seam between
+/// faces, or a Classic wire edge), not a plain 1 pt stroke: the wireframe covers the outlined faces
+/// the canvas draws, in the same place.
+#[test]
+fn a_later_outline_stroke_outlines_the_stroke_each_face_is_drawn_with() {
+    let outline = || crate::new_effect("path.outlineStroke", &json!({})).unwrap();
+    let cases = [
+        (super::super::EXTRUDE, json!({})),
+        (super::super::CLASSIC_EXTRUDE, json!({})),
+        (super::super::CLASSIC_EXTRUDE, json!({"surface": "wireframe"})),
+        (super::super::INFLATE, json!({})),
+        (ROTATE, json!({})),
+        (crate::REVOLVE, json!({})),
+        (crate::CLASSIC_REVOLVE, json!({})),
+        (crate::CLASSIC_REVOLVE, json!({"surface": "wireframe"})),
+    ];
+    for (id, params) in cases {
+        let mut n = solid_square(id, params.clone());
+        n.appearance.effects.push(outline());
+        let wire = three_d_wireframe_in(None, &n).unwrap_or_else(|e| panic!("{id} {params}: {e}"));
+        let art = if crate::revolve::is_revolve(id) { crate::revolve_art(&n) } else { super::super::solid_art(&n) }.unwrap();
+        let drawn = crate::group::shape_art(None, &art, None).unwrap();
+        let (w, a) = (bounds(&wire), bounds(&face_paths(&drawn)));
+        for (x, y) in [(w.x0, a.x0), (w.y0, a.y0), (w.x1, a.x1), (w.y1, a.y1)] {
+            assert!((x - y).abs() < 1e-6, "{id} {params}: {w:?} {a:?}");
+        }
+    }
 }
 
 /// A geometry effect after a fill's 3D effect moves that fill's edges, as it moves its drawn surface.
