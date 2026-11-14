@@ -233,7 +233,11 @@ fn maximum_editability_writes_groups_and_an_object_per_layer() {
     assert_eq!(p.records[6].rect, [0, 0, 6, 6]);
     let psd = craft_psd::PsdFile::from_bytes(&file).unwrap();
     let content_layers = psd.layers().iter().filter(|l| matches!(l.section_type(), craft_psd::layer::SectionType::Other)).count();
-    let groups = psd.layers().iter().filter(|l| matches!(l.section_type(), craft_psd::layer::SectionType::OpenFolder | craft_psd::layer::SectionType::ClosedFolder)).count();
+    let groups = psd
+        .layers()
+        .iter()
+        .filter(|l| matches!(l.section_type(), craft_psd::layer::SectionType::OpenFolder | craft_psd::layer::SectionType::ClosedFolder))
+        .count();
     assert_eq!((content_layers, groups), (3, 3));
     assert_eq!(merged(&file), merged(&export(&doc, &opts(PsdOptions::default()))), "the same merged image");
 

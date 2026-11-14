@@ -20,8 +20,7 @@ const XMP: &str = "http://ns.adobe.com/xap/1.0/"; // brand-ok: the XMP namespace
 pub(crate) const XMP_RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/"; // brand-ok: the XMP namespace the files use
 const PDF: &str = "http://ns.adobe.com/pdf/1.3/"; // brand-ok: the XMP namespace the files use
 
-const XMP_NAMESPACES: Canonical<'static> =
-    Canonical::new(&[("rdf", RDF), ("dc", DC), ("xmp", XMP), ("xmpRights", XMP_RIGHTS), ("pdf", PDF)]);
+const XMP_NAMESPACES: Canonical<'static> = Canonical::new(&[("rdf", RDF), ("dc", DC), ("xmp", XMP), ("xmpRights", XMP_RIGHTS), ("pdf", PDF)]);
 
 /// The File Info fields a PDF gives, each `None` when the file gives none (or only blank text).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -146,10 +145,7 @@ fn property(descriptions: &[&El], name: &str) -> Vec<String> {
 fn items(p: &El) -> Vec<String> {
     let array = p.elements().find(|c| matches!(c.name.as_str(), "rdf:Seq" | "rdf:Bag" | "rdf:Alt"));
     let mut values: Vec<(bool, String)> = match array {
-        Some(a) => a
-            .children("rdf:li")
-            .map(|li| (li.attr("xml:lang").is_some_and(|l| l.eq_ignore_ascii_case("x-default")), value_of(li)))
-            .collect(),
+        Some(a) => a.children("rdf:li").map(|li| (li.attr("xml:lang").is_some_and(|l| l.eq_ignore_ascii_case("x-default")), value_of(li))).collect(),
         None => vec![(false, value_of(p))],
     };
     // A stable sort: the `x-default` item first, the others in their order.
