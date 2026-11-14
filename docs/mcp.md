@@ -8612,6 +8612,33 @@ on again.
 {"name":"run_command","arguments":{"command":"type.convertToAreaType","params":{"ids":[42]}}}
 ```
 
+## Smart Punctuation
+
+`type.smartPunctuation` replaces keyboard characters in the selected type, or in every text object with `scope:
+"document"` or nothing selected, in one undo step. Each option is a switch:
+
+- `fiLigatures` (default `false`): ff, fi and ffi become the ligature characters U+FB00, U+FB01 and U+FB03.
+- `flLigatures` (default `false`): ff, fl and ffl become U+FB00, U+FB02 and U+FB04. The longest match is taken first.
+- `quotes` (default `true`): straight quotes become the Document Setup quotes.
+- `spaces` (default `false`): two or more spaces after a period become one.
+- `dashes` (default `true`): `--` becomes an en dash and `---` an em dash.
+- `ellipsis` (default `true`): `...` becomes an ellipsis.
+- `fractions` (default `false`): 1/2, 1/4, 3/4 and the other fractions Unicode encodes as one character (thirds,
+  fifths, sixths, sevenths, eighths, ninths and 1/10) become that character. A fraction with a digit, a slash or a
+  decimal point next to it, as in 1/25, 1/2/26 or 1/2.5, is left as it is, also when a change of style falls inside
+  it. An inline graphic separates the text before it from the text after it, for this option and for `spaces`.
+
+A ligature or a fraction is written only where the run's font has a glyph for it; elsewhere the letters stay. A value
+other than true, false or null is refused. The reply gives the number of text objects changed and how many of each
+replacement were made; with nothing to replace, no undo step is recorded. Type › Smart Punctuation… opens a dialog with
+these options, Replace In (Selected Text Only or Entire Document) and Report Results, which lists the count of each
+chosen replacement after OK. The dialog opens on the options confirmed last.
+
+```json
+{"name":"run_command","arguments":{"command":"type.smartPunctuation","params":{"fiLigatures":true,"spaces":true,"fractions":true}}}
+→ {"changed": 1, "replaced": {"fiLigatures": 2, "flLigatures": 0, "quotes": 1, "spaces": 1, "dashes": 0, "ellipses": 0, "fractions": 2}}
+```
+
 ## Hyphenation options
 
 `text.setFormat` sets the Paragraph panel menu's Hyphenation… options of the selected type (or `ids`, or the
