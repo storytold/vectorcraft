@@ -10803,7 +10803,8 @@ Commands:
 - `addon.pathtools.cornerSet {ids?, anchors?, items?, radius, kind?, every?, minAngle?, maxAngle?}` cuts live corners, the ones Direct Selection's
   corner widgets and the Corners dialog edit, as one undo step. `ids` (default: the selection) are the paths and
   `anchors` the anchor indices of each path's outline with no corners cut; without `anchors`, a path's direct-selected
-  anchors, or all of them. `items: [{id, anchors?}…]` gives each path its own instead. Only anchors where two sides meet
+  anchors, or all of them. `items: [{id, anchors?}…]` gives each path its own instead; a member key other than `id`
+  and `anchors`, or `items` given with `ids`, is an error. Only anchors where two sides meet
   at an angle take a corner: smooth anchors and open ends are skipped, and it is an error if none is left. `radius` is
   0 to 1,000,000 pt, drawn no larger than fits; `kind` is `round`, `invertedRound` or `chamfer` (default: each corner's
   own). `every` (`all`, `odd` or `even`; default `all`) keeps, of those anchors, only the odd- or even-numbered ones,
@@ -10813,7 +10814,7 @@ Commands:
   be more than `maxAngle`, and it is an error, saying so, if no chosen corner is in the range. Object › Plug-ins › Path Precision Tools › Set Corners… (also in the Anchor Inspector's
   Corners section) sets these with Preview. → `{ids, corners}`.
 - `addon.pathtools.cornerRemove {ids?, anchors?, items?}` makes those corners sharp again, as one undo step; a plain path
-  with none left is plain again. → `{ids, corners}`.
+  with none left is plain again. Its `items` take the same keys as `cornerSet`'s. → `{ids, corners}`.
 - `addon.pathtools.slideAnchor {id, subpath?, anchor, t}` moves an anchor along its path, the segments beside it refitted
   so the outline stays (the anchor count and index stay). `t`, -0.98 to 0.98, says where: positive, a curve parameter on
   the segment after the anchor; negative, back from the end of the one before. An anchor at a sharp corner loses it, as

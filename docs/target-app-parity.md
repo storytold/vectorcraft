@@ -2091,6 +2091,9 @@ Corners section in the Anchor Inspector sets the radius and kind, counts the sel
 Set Corners… (in the submenu and the Corners section) sets the radius and kind with Preview, on all the chosen anchors
 or only the odd- or even-numbered ones (`every`, #5546), and only the corners whose angle is in a range
 (`minAngle`/`maxAngle`, #5545).
+`cornerSet` and `cornerRemove` refuse an `items` member key other than `id` and `anchors`, and `items` given with `ids`;
+saved steps still play (`corner_commands_refuse_an_unknown_item_key`, `corner_commands_refuse_items_with_ids`,
+`saved_corner_steps_with_older_item_keys_still_play`).
 Slide Anchor Along Path drags an anchor along its curve, the two segments beside it refitted by the keep-shape kernel
 (Shift: where the tangent is a multiple of 45°). Commands `addon.pathtools.cornerSet`, `cornerRemove` and `slideAnchor`,
 each one undo step; `vectorcraft_pathops::addons::pathtools::slide_anchor`. Tests: `addons::pathtools` in
