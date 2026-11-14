@@ -34,8 +34,12 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
+/// The Offset a wrap object takes, in points.
+pub const TEXT_WRAP_OFFSET_RANGE: std::ops::RangeInclusive<f64> = -1000.0..=1000.0;
+
 fn wrap_param(p: &Value, base: TextWrap) -> TextWrap {
-    TextWrap { offset: f64_or(p, "offset", base.offset).clamp(-1000.0, 1000.0), invert: bool_or(p, "invert", base.invert) }
+    let (lo, hi) = (*TEXT_WRAP_OFFSET_RANGE.start(), *TEXT_WRAP_OFFSET_RANGE.end());
+    TextWrap { offset: f64_or(p, "offset", base.offset).clamp(lo, hi), invert: bool_or(p, "invert", base.invert) }
 }
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
