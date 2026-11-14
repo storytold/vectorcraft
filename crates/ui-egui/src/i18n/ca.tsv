@@ -4096,6 +4096,8 @@ digits	Malayalam	Malaiàlam
 	Action Options…	Opcions de l’acció…
 	Action Options	Opcions de l’acció
 	Playback Options…	Opcions de reproducció…
+	Button Mode	Mode de botons
+	No actions.	No hi ha accions.
 	Insert Stop…	Insereix una aturada…
 	Insert Stop	Insereix una aturada
 	Record Stop	Enregistra una aturada
@@ -4614,6 +4616,7 @@ digits	Malayalam	Malaiàlam
 	VectorCraft Title Bar on Every Desktop	Barra de títol de VectorCraft a tots els escriptoris
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mentre està definida, la variable d’entorn VECTORCRAFT_TITLEBAR determina la barra de títol.
 	System Title Bar takes precedence over this option while it is on.	Mentre està activada, Barra de títol del sistema té prioritat sobre aquesta opció.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Mentre Barra de títol de VectorCraft a tots els escriptoris està desactivada, aquest escriptori dibuixa la barra de títol de la finestra tant si aquesta opció està activada com si no.
 	Tab	Tabulació
 	Tab Stops	Aturades de tabulació
 	Table	Taula

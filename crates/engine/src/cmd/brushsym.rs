@@ -226,7 +226,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Break Link to Symbol",
             [],
             None,
-            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask; a hidden or locked instance's art stays hidden or locked and is not selected → {ids}",
+            "{ids?|id?} expand selected instances into plain art (with their appearance changes to a dynamic symbol), placed through the symbol's 9-slice guides when it has them, with the instance's opacity mask and its own bounding box (square after Reset Bounding Box); a hidden or locked instance's art stays hidden or locked and is not selected → {ids}",
             has_selection,
             symbol_break_link
         ),

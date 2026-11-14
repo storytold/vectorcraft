@@ -253,9 +253,9 @@ pub(super) fn within_input_bound(q: Point) -> bool {
     q.x.is_finite() && q.y.is_finite() && q.x.abs() < MAX_INPUT && q.y.abs() < MAX_INPUT
 }
 
-/// The whole number of 0 or more that `key` holds, read with [`index`].
+/// The whole number of 0 or more that `key` holds, read with [`u64_req`](crate::cmd::u64_req) and [`index`].
 pub(super) fn usize_req(p: &Value, key: &str, cmd: &str) -> Result<usize> {
-    p.get(key).and_then(Value::as_u64).map(index).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
+    crate::cmd::u64_req(p, key, cmd).map(index)
 }
 
 /// The whole number of 0 or more that `key` holds, or `None` when `key` is absent or null. Any other
