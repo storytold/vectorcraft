@@ -489,17 +489,43 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
             })
             .collect()
     };
-    // The painted bounds of every other visible object, by its outermost object in each layer,
-    // and the image's own box.
+    // The painted bounds of every other visible object, and the image's own box. A layer, and a
+    // group that paints nothing of its own, is measured by its members (an opacity mask only hides
+    // them); one that clips, by its members after the clipping path, cut to what it paints.
     let mut obstacles: Vec<Rect> = vec![src];
-    let mut stack: Vec<&Arc<Node>> = st.doc.layers.iter().collect();
-    while let Some(node) = stack.pop() {
+    let mut stack: Vec<(&Arc<Node>, Option<Rect>)> = st.doc.layers.iter().map(|l| (l, None)).collect();
+    while let Some((node, within)) = stack.pop() {
         if !node.visible || node.id == source {
             continue;
         }
-        if node.is_layer() {
-            stack.extend(node.children().into_iter().flatten());
-        } else if let Some(b) = vectorcraft_render::painted_bounds(&st.doc, node) {
+        let cut = |b: Rect| match within {
+            Some(w) => Some(b.intersect(w)).filter(|i| i.width() > 0.0 && i.height() > 0.0),
+            None => Some(b),
+        };
+        let painted = || vectorcraft_render::painted_bounds(&st.doc, node).and_then(cut);
+        let clips = matches!(node.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. });
+        let by_members = node.is_layer()
+            || (matches!(node.kind, NodeKind::Group { .. }) && node.appearance.items.is_empty() && node.appearance.effects.is_empty());
+        if by_members {
+            // A clipping path paints its fills and strokes when they are set (`Node::clip_paint`),
+            // its strokes outside the clip too, whether or not it is shown.
+            if clips && let Some(path) = node.children().into_iter().flatten().next() {
+                let paint = path.clip_paint();
+                for part in [paint.fill, paint.stroke].into_iter().flatten() {
+                    if let Some(b) = vectorcraft_render::painted_bounds(&st.doc, &part).and_then(cut) {
+                        obstacles.push(b);
+                    }
+                }
+            }
+            let within = if clips {
+                // Nothing of a clipping group shows outside what it paints.
+                let Some(shown) = painted() else { continue };
+                Some(shown)
+            } else {
+                within
+            };
+            stack.extend(node.children().into_iter().flatten().skip(usize::from(clips)).map(|c| (c, within)));
+        } else if let Some(b) = painted() {
             obstacles.push(b);
         }
     }

@@ -594,6 +594,44 @@ fn insert_moves_the_row_past_art_in_its_way() {
     assert!(placed.x0 >= bounds(&s, block).x1 + GAP - 2.0, "{placed:?}");
 }
 
+/// In a group with art far to its right, the row goes beside the image: the empty space between
+/// the group's members is not in its way.
+#[test]
+fn insert_goes_beside_the_image_in_a_group_with_art_far_away() {
+    let (mut s, img) = doc_with(&art());
+    let far = s.execute("shape.rectangle", &json!({"x": 900, "y": 150, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [img.0, far]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["flatColor"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["flatColor"]})).unwrap();
+    let (placed, image) = (bounds(&s, r["ids"][0].as_u64().unwrap()), bounds(&s, img.0));
+    assert!(placed.x0 < image.x1 + GAP + 2.0 && placed.x1 < bounds(&s, far).x0, "{placed:?} after {image:?}");
+
+    // The same in a clip group whose clipping path reaches past the far art.
+    let (mut s, img) = doc_with(&art());
+    let far = s.execute("shape.rectangle", &json!({"x": 900, "y": 150, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let mask = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 900, "height": 180})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [img.0, far, mask]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["flatColor"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["flatColor"]})).unwrap();
+    let (placed, image) = (bounds(&s, r["ids"][0].as_u64().unwrap()), bounds(&s, img.0));
+    assert!(placed.x0 < image.x1 + GAP + 2.0 && placed.x1 < bounds(&s, far).x0, "clip group: {placed:?} after {image:?}");
+
+    // A clipping path given a stroke again paints it: the row goes past it.
+    let (mut s, img) = doc_with(&art());
+    let mask = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 900, "height": 180})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [img.0, mask]})).unwrap();
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [mask]})).unwrap();
+    s.execute("paint.setStroke", &json!({"color": "#000000"})).unwrap();
+    assert!(s.doc().unwrap().doc.node(NodeId(mask)).unwrap().clip_paint().stroke.is_some());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["flatColor"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["flatColor"]})).unwrap();
+    let placed = bounds(&s, r["ids"][0].as_u64().unwrap());
+    assert!(placed.x0 >= 1000.0 + GAP, "painted clipping path: {placed:?}");
+}
+
 /// A variation's paths reaching past the image's box keep clear of art there too.
 #[test]
 fn insert_moves_the_row_past_art_that_a_variation_reaches_beyond_the_image_box() {
