@@ -34,6 +34,16 @@ pub struct CharStyle {
     /// before it whose [`Self::kerning`] could space it. Elsewhere it has no effect.
     #[serde(default, rename = "kerningBefore", skip_serializing_if = "crate::skip::is_default")]
     pub kerning_before: f64,
+    /// Insert Aki Left (Character panel, East Asian options): space added before the character in
+    /// reading order, in 1/1000 em as [`Self::tracking`], 0 to 1000. Before is on the left in
+    /// left-to-right type, on the right in right-to-left type and above in vertical type. A
+    /// cluster takes the value of its first character, and full justification leaves it as it is.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, rename = "akiLeft", skip_serializing_if = "crate::skip::is_default")]
+    pub aki_left: f64,
+    /// Insert Aki Right: space added after the character in reading order, as [`Self::aki_left`].
+    #[serde(default, rename = "akiRight", skip_serializing_if = "crate::skip::is_default")]
+    pub aki_right: f64,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.
     #[serde(default, rename = "opticalKerning", skip_serializing_if = "crate::skip::is_default")]
     pub optical_kerning: bool,
@@ -57,7 +67,9 @@ pub struct CharStyle {
     #[serde(default)]
     pub all_caps: bool,
     /// OpenType features that differ from the defaults (OpenType panel), as tags: `"dlig"` turns
-    /// a feature on, `"-liga"` off.
+    /// a feature on, `"-liga"` off, and `"salt=2"` turns a feature with alternates on at the font's
+    /// alternate number 2 (the value the shaper gets; a plain `"salt"` is value 1). Runs that
+    /// differ only in this list are shaped together, each with its own features.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub features: Vec<String>,
     /// Character style (Character Styles panel) these attributes come from; None = Normal.
@@ -133,6 +145,29 @@ pub struct CharStyle {
     /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
     #[serde(default, rename = "standardVerticalRoman", skip_serializing_if = "crate::skip::is_default")]
     pub standard_vertical_roman: bool,
+    /// Warichu (Character panel menu, East Asian options): these characters are set at
+    /// [`Self::warichu_scale`] percent of their size and stacked on [`Self::warichu_lines`] lines
+    /// inside their line, one above the other in horizontal type and side by side in vertical type.
+    /// A stretch of marked characters is one block that takes the settings of its first character
+    /// and stays whole on one line. Type on a path sets them at their own size on the path.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub warichu: bool,
+    /// Warichu Settings › Lines: how many lines a warichu block is stacked on, within
+    /// [`WARICHU_LINES`]. Saved only when not 2.
+    #[serde(default = "two", rename = "warichuLines", skip_serializing_if = "is_two")]
+    pub warichu_lines: u8,
+    /// Warichu Settings › Line Gap, in points from 0 to [`MAX_WARICHU_GAP`]: the space between the
+    /// lines of a warichu block. Saved only when not 0.
+    #[serde(default, rename = "warichuGap", skip_serializing_if = "crate::skip::is_default")]
+    pub warichu_gap: f64,
+    /// Warichu Settings › Scale: the size of warichu characters as a percentage of their size,
+    /// within [`WARICHU_SCALE`]. Saved only when not 50.
+    #[serde(default = "fifty", rename = "warichuScale", skip_serializing_if = "is_fifty")]
+    pub warichu_scale: f64,
+    /// Warichu Settings › Alignment: how the lines of a warichu block line up along the block.
+    #[serde(default, rename = "warichuAlign", skip_serializing_if = "crate::skip::is_default")]
+    pub warichu_align: WarichuAlign,
     /// Digits (Character panel menu, Middle Eastern options): the numeral system the digits of
     /// these characters are drawn in, whatever digits were typed.
     #[serde(default, skip_serializing_if = "crate::skip::is_default")]
@@ -402,6 +437,85 @@ fn hundred() -> f64 {
     100.0
 }
 
+/// The largest Insert Aki Left or Right ([`CharStyle::aki_left`]), in 1/1000 em: one em.
+pub const MAX_AKI: f64 = 1000.0;
+
+/// The number of lines a warichu block may be stacked on ([`CharStyle::warichu_lines`]).
+pub const WARICHU_LINES: std::ops::RangeInclusive<u8> = 1..=6;
+
+/// The largest Warichu Settings Line Gap ([`CharStyle::warichu_gap`]), in points.
+pub const MAX_WARICHU_GAP: f64 = 100.0;
+
+/// The Warichu Settings Scale ([`CharStyle::warichu_scale`]) range, in percent of the size.
+pub const WARICHU_SCALE: std::ops::RangeInclusive<f64> = 10.0..=100.0;
+
+fn two() -> u8 {
+    2
+}
+
+fn is_two(v: &u8) -> bool {
+    *v == 2
+}
+
+fn fifty() -> f64 {
+    50.0
+}
+
+fn is_fifty(v: &f64) -> bool {
+    *v == 50.0
+}
+
+/// How the lines of a warichu block line up along the block ([`CharStyle::warichu_align`]):
+/// each line set flush left (top, in vertical type), centered or flush right (bottom), or spread
+/// to the block's length with the last line set flush left, centered or flush right, or spread as
+/// well. Auto is the default and sets the lines as [`WarichuAlign::JustifyLeft`] does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WarichuAlign {
+    #[default]
+    Auto,
+    Left,
+    Center,
+    Right,
+    JustifyLeft,
+    JustifyCenter,
+    JustifyRight,
+    JustifyAll,
+}
+
+impl WarichuAlign {
+    /// Every alignment, in the order Warichu Settings lists them.
+    pub const ALL: [WarichuAlign; 8] = [
+        WarichuAlign::Auto,
+        WarichuAlign::Left,
+        WarichuAlign::Center,
+        WarichuAlign::Right,
+        WarichuAlign::JustifyLeft,
+        WarichuAlign::JustifyCenter,
+        WarichuAlign::JustifyRight,
+        WarichuAlign::JustifyAll,
+    ];
+
+    /// The name files and commands give this alignment (as it is saved).
+    pub fn id(self) -> &'static str {
+        match self {
+            WarichuAlign::Auto => "auto",
+            WarichuAlign::Left => "left",
+            WarichuAlign::Center => "center",
+            WarichuAlign::Right => "right",
+            WarichuAlign::JustifyLeft => "justifyLeft",
+            WarichuAlign::JustifyCenter => "justifyCenter",
+            WarichuAlign::JustifyRight => "justifyRight",
+            WarichuAlign::JustifyAll => "justifyAll",
+        }
+    }
+
+    /// The alignment [`WarichuAlign::id`] names; `None` for any other name.
+    pub fn from_id(id: &str) -> Option<WarichuAlign> {
+        WarichuAlign::ALL.into_iter().find(|a| a.id() == id)
+    }
+}
+
 pub(super) fn yes() -> bool {
     true
 }
@@ -418,6 +532,8 @@ impl Default for CharStyle {
             tracking: 0.0,
             kerning: None,
             kerning_before: 0.0,
+            aki_left: 0.0,
+            aki_right: 0.0,
             optical_kerning: false,
             baseline_shift: 0.0,
             h_scale: 100.0,
@@ -447,6 +563,11 @@ impl Default for CharStyle {
             tcy_up_down: 0.0,
             tcy_left_right: 0.0,
             standard_vertical_roman: false,
+            warichu: false,
+            warichu_lines: 2,
+            warichu_gap: 0.0,
+            warichu_scale: 50.0,
+            warichu_align: WarichuAlign::Auto,
             small_caps: None,
             digits: Digits::Default,
             font_height_reference: FontHeightReference::EmBox,
@@ -466,7 +587,11 @@ impl CharStyle {
     /// becomes Auto, and a value past [`crate::MAX_COORD`] (a baseline shift past it either way)
     /// becomes the nearer end. A leading of 0, which legacy `.ai` import stores, stays, and a
     /// baseline shift that is not a number becomes 0. The Tate-chu-yoko Up/Down and Left/Right
-    /// offsets are kept as the baseline shift is.
+    /// offsets are kept as the baseline shift is. Insert Aki Left and Right are kept from 0 to
+    /// [`MAX_AKI`], and one that is not a number becomes 0. The Warichu Settings Lines and Scale
+    /// are kept to [`WARICHU_LINES`] and [`WARICHU_SCALE`]; a gap or scale that is not a number becomes its default. The gap is kept to 0 to
+    /// [`crate::MAX_COORD`], as the baseline shift is, since a scaled type object holds it in its
+    /// own units.
     pub fn keep_dimensions_in_range(&mut self) {
         let default = Self::default();
         let within = |v: f64, or: f64| if v > 0.0 { v.min(crate::MAX_COORD) } else { or };
@@ -478,6 +603,13 @@ impl CharStyle {
         self.baseline_shift = shift(self.baseline_shift);
         self.tcy_up_down = shift(self.tcy_up_down);
         self.tcy_left_right = shift(self.tcy_left_right);
+        let aki = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) };
+        self.aki_left = aki(self.aki_left);
+        self.aki_right = aki(self.aki_right);
+        self.warichu_lines = self.warichu_lines.clamp(*WARICHU_LINES.start(), *WARICHU_LINES.end());
+        self.warichu_gap = if self.warichu_gap.is_nan() { default.warichu_gap } else { self.warichu_gap.clamp(0.0, crate::MAX_COORD) };
+        self.warichu_scale =
+            if self.warichu_scale.is_nan() { default.warichu_scale } else { self.warichu_scale.clamp(*WARICHU_SCALE.start(), *WARICHU_SCALE.end()) };
     }
     /// Do the characters draw a stroke (a paint and a positive weight)?
     pub fn has_stroke(&self) -> bool {

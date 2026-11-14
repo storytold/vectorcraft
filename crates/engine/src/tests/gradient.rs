@@ -511,7 +511,7 @@ fn an_outlined_stroke_leaves_dither_behind() {
 
 /// The Gradient panel's Method (Illustrator 30): `method` set and cleared through the gradient
 /// commands, on fills and strokes, kept by the params, swatches and a native save and load;
-/// anything but classic or perceptual is refused without editing.
+/// anything but the four method names is refused without editing.
 #[test]
 fn method_is_a_gradient_option_that_saves_and_loads() {
     use vectorcraft_color::GradientMethod;
@@ -548,7 +548,7 @@ fn method_is_a_gradient_option_that_saves_and_loads() {
     let before = node(&s, id).appearance.clone();
     for bad in [json!("smooth"), json!(1), json!(true)] {
         let e = s.execute("paint.editGradient", &json!({"method": bad})).unwrap_err().to_string();
-        assert!(e.contains("`method` must be classic or perceptual"), "{e}");
+        assert!(e.contains("`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise"), "{e}");
         assert!(s.execute("paint.setFill", &json!({"gradient": {"method": bad}})).is_err());
     }
     assert_eq!(node(&s, id).appearance, before);
@@ -564,6 +564,76 @@ fn method_is_a_gradient_option_that_saves_and_loads() {
     s.execute("paint.setFill", &json!({"gradient": p})).unwrap();
     let back = fill_gradient(&s, id);
     assert!(back.gradient.dither && back.gradient.method == GradientMethod::Perceptual);
+}
+
+/// The hue methods: `method` hue-clockwise and hue-counterclockwise set through the gradient
+/// commands on fills and strokes, as one undo step, kept by the params, a swatch, a saved preset
+/// and a native save and load, and written with or without the hyphen.
+#[test]
+fn the_hue_methods_are_set_saved_and_loaded() {
+    use vectorcraft_color::GradientMethod;
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let stops = json!([{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]);
+    s.execute("paint.setFill", &json!({"gradient": {"stops": stops}})).unwrap();
+    for (name, method, middle) in
+        [("hue-clockwise", GradientMethod::HueClockwise, "#ff00ff"), ("hue-counterclockwise", GradientMethod::HueCounterclockwise, "#00ff00")]
+    {
+        let undo = s.doc().unwrap().history.undo.len();
+        s.execute("paint.editGradient", &json!({"method": name})).unwrap();
+        let g = fill_gradient(&s, id);
+        assert_eq!(g.gradient.method, method);
+        assert_eq!(g.gradient.stops.len(), 2, "{name}: the stops stay as they were");
+        assert_eq!(g.gradient.sample(0.5).0.to_hex(), middle, "{name}: halfway around the wheel");
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{name}: one undo step");
+        // The params carry it, so a swatch, a preset and a copied paint keep it.
+        let p = vectorcraft_tools::params::gradient_params(&g);
+        assert_eq!(p["method"], json!(name));
+        let mut q = gradient_param(&g);
+        q["name"] = json!(format!("Wheel {name}"));
+        s.execute("swatch.new", &q).unwrap();
+        let Some(Paint::Gradient(sw)) = s.doc().unwrap().doc.swatch(&format!("Wheel {name}")).map(|w| w.paint.clone()) else {
+            panic!("a gradient swatch")
+        };
+        assert_eq!(sw.gradient.method, method, "{name}: the swatch");
+        s.execute("gradient.presets.save", &json!({"name": format!("Preset {name}")})).unwrap();
+        s.execute("paint.editGradient", &json!({"method": "classic"})).unwrap();
+        s.execute("gradient.presets.apply", &json!({"name": format!("Preset {name}")})).unwrap();
+        assert_eq!(fill_gradient(&s, id).gradient.method, method, "{name}: the preset");
+        // Saved and opened again.
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+        let Paint::Gradient(saved) = back.node(id).unwrap().appearance.fill_paint() else { panic!("a gradient fill") };
+        assert_eq!(saved.gradient.method, method, "{name}: the native file keeps the method");
+    }
+    // Strokes take it too, and the name reads without the hyphen and in any case.
+    for (name, method) in [("hue-clockwise", GradientMethod::HueClockwise), ("hue-counterclockwise", GradientMethod::HueCounterclockwise)] {
+        for written in [name.replace('-', " "), name.replace('-', "").to_uppercase()] {
+            s.execute("paint.setStroke", &json!({"gradient": {"method": "classic"}})).unwrap();
+            s.execute("paint.editGradient", &json!({"method": written, "stroke": true})).unwrap();
+            let Paint::Gradient(st) = node(&s, id).appearance.stroke_paint() else { panic!("a gradient stroke") };
+            assert_eq!(st.gradient.method, method, "{written}");
+        }
+    }
+    // Reverse gives the same ramp the other way round: the hue method turns with the stops, so
+    // the middle keeps its color, unless the edit names a method too.
+    s.execute("paint.editGradient", &json!({"method": "hue-clockwise", "stroke": false})).unwrap();
+    let before = fill_gradient(&s, id).gradient;
+    s.execute("paint.editGradient", &json!({"reverse": true, "stroke": false})).unwrap();
+    let after = fill_gradient(&s, id).gradient;
+    assert_eq!(after.method, GradientMethod::HueCounterclockwise);
+    assert_eq!((after.stops[0].color.to_hex(), after.stops[1].color.to_hex()), ("#0000ff".to_string(), "#ff0000".to_string()));
+    for t in [0.25, 0.5, 0.75] {
+        assert_eq!(after.sample(t).0.to_hex(), before.sample(1.0 - t).0.to_hex(), "reversed at {t}");
+    }
+    s.execute("paint.editGradient", &json!({"reverse": true, "method": "hue-counterclockwise", "stroke": false})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.method, GradientMethod::HueCounterclockwise, "a method in the edit wins");
+    // Half a name is refused, nothing changed.
+    let before = node(&s, id).appearance.clone();
+    for bad in ["hue", "clockwise", "hue-clock"] {
+        let e = s.execute("paint.editGradient", &json!({"method": bad})).unwrap_err().to_string();
+        assert!(e.contains("`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise"), "{bad}: {e}");
+    }
+    assert_eq!(node(&s, id).appearance, before);
 }
 
 /// A conic gradient through `paint.setFill`, the Gradient panel's edits, transforms, the params
@@ -880,4 +950,135 @@ fn making_a_gradient_diamond_is_one_undo_step() {
     assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(fill_gradient(&s, id), before);
+}
+
+/// `paint.setFill` and `paint.editGradient` take a spread and a count for each kind of gradient
+/// that has ends; the params give them back, the native format keeps them, and a change is one
+/// undo step while an edit that changes nothing records none.
+#[test]
+fn a_gradient_takes_a_spread_and_a_count() {
+    use vectorcraft_color::GradientSpread;
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    for kind in ["linear", "radial", "conic", "diamond"] {
+        s.execute("paint.setFill", &json!({"gradient": {"kind": kind, "spread": "Reflect", "repeats": 4}})).unwrap();
+        let g = fill_gradient(&s, id);
+        assert_eq!((g.gradient.spread, g.gradient.repeats), (GradientSpread::Reflect, 4), "{kind}");
+        let params = vectorcraft_tools::params::gradient_params(&g);
+        assert_eq!((params["spread"].as_str(), params["repeats"].as_u64()), (Some("reflect"), Some(4)), "{kind}");
+        s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+        assert_eq!(fill_gradient(&s, id).gradient.spread, GradientSpread::Pad, "a new gradient pads");
+        s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+        assert_eq!(fill_gradient(&s, id).gradient, g.gradient, "{kind}");
+    }
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("paint.editGradient", &json!({"spread": "repeat", "repeats": 2})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one step");
+    let g = fill_gradient(&s, id);
+    assert_eq!((g.gradient.spread, g.gradient.repeats), (GradientSpread::Repeat, 2));
+    s.execute("paint.editGradient", &json!({"spread": "repeat", "repeats": 2})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "nothing changed: no step");
+    s.execute("paint.editGradient", &json!({"spread": "pad"})).unwrap();
+    assert_eq!(fill_gradient(&s, id).gradient.repeats, 2, "Pad keeps the count for later");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(fill_gradient(&s, id), g);
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let Paint::Gradient(saved) = back.node(id).unwrap().appearance.fill_paint() else { panic!("the gradient is lost") };
+    assert_eq!((saved.gradient.spread, saved.gradient.repeats), (GradientSpread::Repeat, 2));
+    // The params of a gradient that pads give back the count it keeps.
+    s.execute("paint.editGradient", &json!({"spread": "pad"})).unwrap();
+    let params = vectorcraft_tools::params::gradient_params(&fill_gradient(&s, id));
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+    assert_eq!((fill_gradient(&s, id).gradient.spread, fill_gradient(&s, id).gradient.repeats), (GradientSpread::Pad, 2), "{params}");
+}
+
+/// A spread or count a gradient can't take is an error, from every command that sets one, and the
+/// gradient stays as it was: an unknown spread, a count that is not a whole number from 1 to 100,
+/// and a spread other than pad on a freeform gradient.
+#[test]
+fn a_bad_spread_or_count_is_refused() {
+    let mut s = session();
+    let id = rect(&mut s, 100.0, 100.0, 200.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "radial", "spread": "repeat", "repeats": 3}})).unwrap();
+    let before = fill_gradient(&s, id);
+    let steps = s.doc().unwrap().history.undo.len();
+    for bad in [json!({"spread": "mirror"}), json!({"spread": 1}), json!({"spread": true})] {
+        let e = s.execute("paint.editGradient", &bad).unwrap_err().to_string();
+        assert!(e.contains("`spread` must be pad, repeat or reflect"), "{bad}: {e}");
+    }
+    for n in [json!(0), json!(-2), json!(1.5), json!(101), json!(1e9), json!("3"), json!(f64::MAX)] {
+        let e = s.execute("paint.editGradient", &json!({ "repeats": n })).unwrap_err().to_string();
+        assert!(e.contains("`repeats` must be a whole number from 1 to 100"), "{n}: {e}");
+        let e = s.execute("paint.setFill", &json!({"gradient": {"kind": "linear", "repeats": n}})).unwrap_err().to_string();
+        assert!(e.contains("`repeats`"), "{n}: {e}");
+    }
+    let freeform = json!({"kind": "freeform", "spread": "reflect"});
+    let e = s.execute("paint.editGradient", &freeform).unwrap_err().to_string();
+    assert!(e.contains("`spread` applies to linear, radial, conic and diamond gradients"), "{e}");
+    let e = s.execute("paint.setFill", &json!({ "gradient": freeform })).unwrap_err().to_string();
+    assert!(e.contains("`spread` applies to"), "{e}");
+    assert_eq!(fill_gradient(&s, id), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    // Pad on a freeform gradient is allowed (it has nothing to spread), and 100 is the most.
+    s.execute("paint.editGradient", &json!({"repeats": 100})).unwrap();
+    s.execute("paint.editGradient", &json!({"kind": "freeform", "spread": "pad"})).unwrap();
+    // A repeating gradient turned freeform: its params, which carry no spread, set it again.
+    s.execute("paint.editGradient", &json!({"kind": "radial", "spread": "reflect"})).unwrap();
+    s.execute("paint.editGradient", &json!({"kind": "freeform"})).unwrap();
+    let params = vectorcraft_tools::params::gradient_params(&fill_gradient(&s, id));
+    assert!(params.get("spread").is_none(), "{params}");
+    s.execute("paint.setFill", &json!({ "gradient": params })).unwrap();
+}
+
+/// A spread for a selected gradient applies while the gradient used last, the default, is a
+/// freeform one, which keeps no spread.
+#[test]
+fn a_spread_for_a_selected_gradient_leaves_a_freeform_default_alone() {
+    use vectorcraft_color::GradientSpread;
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "freeform"}})).unwrap();
+    s.execute("paint.editGradient", &json!({"ids": [a.0], "spread": "repeat", "repeats": 3})).unwrap();
+    let g = fill_gradient(&s, a);
+    assert_eq!((g.gradient.spread, g.gradient.repeats), (GradientSpread::Repeat, 3));
+}
+
+/// A preset keeps its spread and count: saved from a gradient, applied to another object.
+#[test]
+fn a_gradient_preset_keeps_its_spread() {
+    use vectorcraft_color::GradientSpread;
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "conic", "spread": "reflect", "repeats": 5}})).unwrap();
+    s.execute("gradient.presets.save", &json!({"name": "Fan"})).unwrap();
+    let b = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"gradient": {"kind": "linear"}})).unwrap();
+    s.execute("gradient.presets.apply", &json!({"name": "Fan"})).unwrap();
+    let g = fill_gradient(&s, b);
+    assert_eq!((g.gradient.kind, g.gradient.spread, g.gradient.repeats), (GradientKind::Conic, GradientSpread::Reflect, 5));
+    assert_eq!(fill_gradient(&s, a).gradient.repeats, 5);
+}
+
+/// A gradient set back to Pad keeps its count for later, and still matches a saved preset and a
+/// swatch of the same gradient; while it repeats, the spread tells them apart.
+#[test]
+fn a_padding_gradient_matches_whatever_count_it_keeps() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let ramp = json!({"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]});
+    s.execute("paint.setFill", &json!({ "gradient": ramp })).unwrap();
+    s.execute("gradient.presets.save", &json!({"name": "Plain"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Plain", "paint": {"gradient": ramp}})).unwrap();
+    let unused = |s: &mut Session| s.execute("swatch.unused", &json!({})).unwrap()["names"].as_array().unwrap().contains(&json!("Plain"));
+    assert!(!unused(&mut s));
+    s.execute("paint.editGradient", &json!({"spread": "repeat", "repeats": 5})).unwrap();
+    assert_eq!(s.active_saved_gradient_preset(), None, "a repeating gradient is another ramp");
+    assert!(unused(&mut s), "nothing paints the swatch's gradient");
+    s.execute("paint.editGradient", &json!({"spread": "pad"})).unwrap();
+    assert_eq!(fill_gradient(&s, a).gradient.repeats, 5);
+    assert_eq!(s.active_saved_gradient_preset(), Some("Plain"));
+    assert!(!unused(&mut s), "the gradient paints as the swatch does");
 }

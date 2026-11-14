@@ -97,6 +97,10 @@ pub trait RecoveryStore: Send + Sync {
     fn remove(&self, name: &str) -> std::result::Result<(), String>;
     /// Where the entries are, as the user knows it (a folder, "browser storage").
     fn location(&self) -> String;
+    /// Is [`RecoveryStore::location`] a folder on this computer (default: no)?
+    fn in_folder(&self) -> bool {
+        false
+    }
     /// The areas in the store (default: those with entries).
     fn areas(&self) -> std::result::Result<Vec<String>, String> {
         let names = self.list()?;
@@ -477,6 +481,9 @@ impl RecoveryStore for FolderStore {
     fn location(&self) -> String {
         self.0.to_string_lossy().into_owned()
     }
+    fn in_folder(&self) -> bool {
+        true
+    }
     fn areas(&self) -> std::result::Result<Vec<String>, String> {
         Self::names(&self.0, true)
     }
@@ -569,11 +576,23 @@ pub fn store(s: &Session) -> Option<Arc<dyn RecoveryStore>> {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let folder = Some(s.prefs.recovery_folder.trim()).filter(|f| !f.is_empty()).map(str::to_string).or_else(|| s.recovery.default_folder.clone());
-        folder.map(|f| Arc::new(FolderStore::new(f)) as Arc<dyn RecoveryStore>)
+        folder(s).map(|(f, _)| Arc::new(FolderStore::new(f)) as Arc<dyn RecoveryStore>)
     }
     #[cfg(target_arch = "wasm32")]
     None
+}
+
+/// The folder copies go to now, and whether the `recoveryFolder` preference names it (else it is
+/// the folder the app sets). `None` when they go to a store the host installed (browser storage)
+/// or nowhere.
+pub fn folder(s: &Session) -> Option<(String, bool)> {
+    if s.recovery.store.is_some() || cfg!(target_arch = "wasm32") {
+        return None;
+    }
+    match s.prefs.recovery_folder.trim() {
+        "" => s.recovery.default_folder.clone().map(|f| (f, false)),
+        set => Some((set.to_string(), true)),
+    }
 }
 
 fn has_store(s: &Session) -> std::result::Result<(), String> {
@@ -938,6 +957,21 @@ fn sweep(store: &dyn RecoveryStore, area: &str) {
     }
 }
 
+/// The document's file `path` as a reply names it: under automation read roots, only inside them.
+fn shown_path(path: Option<String>) -> Option<String> {
+    path.filter(|p| crate::file_access::check_read(p).is_ok())
+}
+
+/// Where `store` keeps its copies, as a reply names it: a recovery folder outside the automation
+/// read roots is `null`.
+fn shown_location(store: &dyn RecoveryStore) -> Value {
+    let location = store.location();
+    if store.in_folder() && crate::file_access::check_read(&location).is_err() {
+        return Value::Null;
+    }
+    json!(location)
+}
+
 fn read_meta(store: &dyn RecoveryStore, file: &str) -> Meta {
     store.read(&format!("{file}{META_EXT}")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
@@ -1141,6 +1175,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             folder: None,
             modified: None,
             notes: Vec::new(),
+            lossy_source: None,
         };
         let save = fileio::job_for(s, st, plan)?;
         let meta = Meta {
@@ -1235,7 +1270,7 @@ fn save(s: &mut Session, _: &Value) -> Result<Value> {
     }
     forget_clean(s);
     heartbeat(s);
-    Ok(json!({ "saved": saved, "skipped": skipped, "location": store.location() }))
+    Ok(json!({ "saved": saved, "skipped": skipped, "location": shown_location(store.as_ref()) }))
 }
 
 /// Who an area of the store belongs to.
@@ -1253,15 +1288,16 @@ enum Owner {
 /// dropped) and, with `take` in a store without locks, taken over with a fresh heartbeat, so
 /// another app leaves it alone meanwhile. In a store without locks an area is gone only when
 /// nothing says its app runs: no announcement (or the store can't tell) and no heartbeat for three
-/// intervals but the one this session wrote taking it over.
-fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<Hold>, take: bool) -> Owner {
+/// intervals but the one this session wrote taking it over. `held` names the gone apps' areas the
+/// caller already holds.
+fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<Hold>, take: bool, held: &[&str]) -> Owner {
     if s.recovery.own.as_ref().is_some_and(|o| o.area == area && o.store.location() == store.location()) {
         return Owner::Mine;
     }
     match store.lock(area) {
         Ok(Lock::Held(h)) => {
             // Copies an app left here when it had to leave the area stay its own while it runs.
-            if let Some(who) = keeper(s, store, area) {
+            if let Some(who) = keeper(s, store, area, held) {
                 return who;
             }
             hold.push(h);
@@ -1272,7 +1308,7 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
             if store.announced(area).unwrap_or(false) || beating(store, area, stale_after(s), s.recovery.adopted.get(area).copied()) {
                 return Owner::Running;
             }
-            if let Some(who) = keeper(s, store, area) {
+            if let Some(who) = keeper(s, store, area, held) {
                 return who;
             }
             // Best effort: without it another app might offer the copies too, which loses nothing.
@@ -1288,12 +1324,14 @@ fn owner(s: &mut Session, store: &dyn RecoveryStore, area: &str, hold: &mut Vec<
 /// `<its area>/keeps-<area>` ([`mark_left`]): this session, or another app that is running. `None`:
 /// no app that runs keeps them. An entry counts only in an area this account can lock or tell is
 /// held ([`holder`]), so an entry in a folder of another account, or in one whose lock can't be
-/// checked, keeps nothing. A store that can't be listed now keeps them (a copy kept loses nothing).
-fn keeper(s: &Session, store: &dyn RecoveryStore, area: &str) -> Option<Owner> {
+/// checked, keeps nothing. So does an entry in one of the gone apps' areas the caller holds
+/// (`held`), whose lock this session would otherwise find taken. A store that can't be listed now
+/// keeps them (a copy kept loses nothing).
+fn keeper(s: &Session, store: &dyn RecoveryStore, area: &str, held: &[&str]) -> Option<Owner> {
     let Ok(names) = store.list() else { return Some(Owner::Running) };
     let mark = format!("/{KEEPS}{area}");
     let mut who = None;
-    for k in names.iter().filter_map(|n| n.strip_suffix(mark.as_str())).filter(|k| *k != area) {
+    for k in names.iter().filter_map(|n| n.strip_suffix(mark.as_str())).filter(|k| *k != area && !held.contains(k)) {
         match holder(s, store, k) {
             Owner::Mine => return Some(Owner::Mine),
             Owner::Running => who = Some(Owner::Running),
@@ -1355,13 +1393,13 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let mut rows = vec![];
     for area in store.areas().map_err(EngineError::Other)? {
         let mut hold = vec![];
-        let who = owner(s, store.as_ref(), &area, &mut hold, false);
+        let who = owner(s, store.as_ref(), &area, &mut hold, false, &[]);
         let files: Vec<&String> = copies.iter().filter(|(a, _)| *a == area).map(|(_, f)| f).collect();
         for f in &files {
             let meta = read_meta(store.as_ref(), f);
             let title = if meta.title.is_empty() { f.rsplit('/').next().unwrap_or(f).to_string() } else { meta.title };
             rows.push(json!({
-                "file": f, "title": title, "path": meta.path, "format": meta.format, "saved": meta.saved,
+                "file": f, "title": title, "path": shown_path(meta.path), "format": meta.format, "saved": meta.saved,
                 "open": (who == Owner::Mine && open.contains(f)) || left.contains(f), "running": who == Owner::Running,
             }));
         }
@@ -1370,7 +1408,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
             tidy(store.as_ref(), &area, hold);
         }
     }
-    Ok(json!({ "copies": rows, "location": store.location() }))
+    Ok(json!({ "copies": rows, "location": shown_location(store.as_ref()) }))
 }
 
 /// A gone app's area to act on: its name, the copies to act on, and its lock.
@@ -1395,10 +1433,11 @@ fn targets(s: &mut Session, store: &dyn RecoveryStore, cmd: &str, p: &Value) -> 
     }
     let picked = |c: &str| file.is_none_or(|f| f == c) && !left.iter().any(|l| l == c);
     let areas: BTreeSet<&str> = copies.iter().filter(|(_, c)| picked(c)).map(|(a, _)| a.as_str()).collect();
-    let mut out = vec![];
+    let mut out: Vec<Target> = vec![];
     for area in areas {
         let mut hold = vec![];
-        match (owner(s, store, area, &mut hold, true), file) {
+        let held: Vec<&str> = out.iter().map(|(a, _, _)| a.as_str()).collect();
+        match (owner(s, store, area, &mut hold, true, &held), file) {
             (Owner::Gone, _) => {
                 let files = copies.iter().filter(|(a, c)| a == area && picked(c)).map(|(_, c)| c.clone()).collect();
                 out.push((area.to_string(), files, hold));
@@ -1483,7 +1522,10 @@ fn restore_one(s: &mut Session, store: &Arc<dyn RecoveryStore>, file: &str) -> R
     // The copy stays until the document is saved or closed.
     st.recovery = Some(RecoveryCopy { file: mine.clone(), doc: st.doc.clone() });
     let title = st.title();
-    Ok(super::fileio::merge(json!({ "index": index, "title": title, "file": mine, "path": meta.path, "warnings": warnings }), links.to_json()))
+    Ok(super::fileio::merge(
+        json!({ "index": index, "title": title, "file": mine, "path": shown_path(meta.path), "warnings": warnings }),
+        links.to_json(),
+    ))
 }
 
 fn restore(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1527,7 +1569,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Save Recovery Data",
             [],
             None,
-            "{} write a recovery copy of every modified document changed since its last copy, in this app's own area of the store (the app does this every autosaveInterval minutes while autosaveRecovery is on; documents of more than 20000 objects are skipped while recoveryOffForComplex is on). Images are stored apart, each once while unchanged. A copy goes when its document is saved, reverted or closed → {saved: [{file, title, bytes, imageBytes (images written this time)}], skipped: [{title, reason}], location} (location: the recovery folder, or browser storage on the web)",
+            "{} write a recovery copy of every modified document changed since its last copy, in this app's own area of the store (the app does this every autosaveInterval minutes while autosaveRecovery is on; documents of more than 20000 objects are skipped while recoveryOffForComplex is on). Images are stored apart, each once while unchanged. A copy goes when its document is saved, reverted or closed → {saved: [{file, title, bytes, imageBytes (images written this time)}], skipped: [{title, reason}], location} (location: the recovery folder, or browser storage on the web; null under automation read roots when the folder is outside them)",
             has_store,
             save
         ),
@@ -1536,7 +1578,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Recovery Data",
             [],
             None,
-            "{} the recovery copies in the store → {copies: [{file (\"<area>/<name>\"), title, path (the document's file, if it had one), format, saved (Unix seconds or null), open (the copy of a document open here), running (kept by another VectorCraft that is running)}], location}; copies neither open nor running were left behind by a crash",
+            "{} the recovery copies in the store → {copies: [{file (\"<area>/<name>\"), title, path (the document's file, if it had one), format, saved (Unix seconds or null), open (the copy of a document open here), running (kept by another VectorCraft that is running)}], location}; copies neither open nor running were left behind by a crash; under automation read roots, path is null when the document's file is outside them, and location when the recovery folder is",
             has_store,
             list
         ),
@@ -1545,7 +1587,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Restore Recovered Documents",
             [],
             None,
-            "{file?} open a copy left behind by a crash (default: every one; a running VectorCraft's copies are never taken) as a new document titled \"<name> [Recovered]\": modified, and Save asks where to save it (suggesting its original file) → {restored: [{index, title, file, path, warnings, missingLinks, modifiedLinks, updatedLinks}], failed: [{file, error}] (damaged copies, when restoring every one; a named one fails the command)}. The copy moves to this app's area and stays until the document is saved or closed",
+            "{file?} open a copy left behind by a crash (default: every one; a running VectorCraft's copies are never taken) as a new document titled \"<name> [Recovered]\": modified, and Save asks where to save it (suggesting its original file) → {restored: [{index, title, file, path, warnings, missingLinks, modifiedLinks, updatedLinks}], failed: [{file, error}] (damaged copies, when restoring every one; a named one fails the command)}; under automation read roots, path is null when the original file is outside them. The copy moves to this app's area and stays until the document is saved or closed",
             has_store,
             restore
         ),

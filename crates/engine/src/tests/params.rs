@@ -400,6 +400,43 @@ fn stroke_set_refuses_an_unknown_key() {
     }
 }
 
+/// `object.setLiveShape` names every key it reads, and each of its `items` takes `id` and
+/// `corners` alone: another key, at the top level, in an item or in a batch step, is refused
+/// instead of being ignored.
+#[test]
+fn set_live_shape_refuses_an_unknown_key() {
+    const ID: &str = "object.setLiveShape";
+    assert!(!UNCHECKED.contains(&ID));
+    let e = refusal(ID, json!({"id": 3, "path": [[0, 0], [1, 1]], "radius": 5}));
+    assert!(e.starts_with("unknown parameter `path`; the command takes: ") && e.contains("relativeRadii"), "{e}");
+    let e = refusal(ID, json!({"radiuss": 5}));
+    assert_eq!(e, "unknown parameter `radiuss`; did you mean `radius`?");
+    let e = refusal(ID, json!({"items": [{"id": 3, "corners": [0]}, {"id": 4, "corner": [0]}], "radius": 5}));
+    assert_eq!(e, "unknown parameter `items[1].corner`; did you mean `items[1].corners`?");
+    let e = refusal(ID, json!({"items": [{"id": 3, "radius": 5}]}));
+    assert_eq!(e, "unknown parameter `items[0].radius`; the command takes: items[0].id, items[0].corners");
+    let step = |params| json!({"commands": [{"command": "select.all", "params": {}}, {"command": ID, "params": params}]});
+    for (bad, key) in [(json!({"path": "x"}), "path"), (json!({"items": [{"id": 3, "kind": "chamfer"}]}), "items[0].kind")] {
+        match check_params("command.batch", &step(bad.clone())) {
+            Err(EngineError::BadParams { cmd, msg }) => {
+                assert!(cmd == ID && msg.starts_with(&format!("unknown parameter `{key}`")), "{bad}: {cmd} {msg}")
+            }
+            other => panic!("{bad}: {other:?}"),
+        }
+    }
+    for ok in [
+        json!({"items": [{"id": 3, "corners": [0, 2]}, {"id": 4}], "radius": 5}),
+        json!({"corners": [0], "kind": "chamfer", "radius": 2, "relativeRadii": false}),
+        json!({"id": 3, "radius": 5}),
+        json!({"ids": [3], "sides": 6, "polygonAngle": 15, "polygonRadius": 20, "sideLength": null, "makeSidesEqual": true}),
+        json!({"pieStart": 30, "pieEnd": 90, "invertPie": true}),
+        json!({"items": null}),
+    ] {
+        assert!(check_params(ID, &ok).is_ok(), "{ok}");
+        assert!(check_params("command.batch", &step(ok.clone())).is_ok(), "{ok}");
+    }
+}
+
 /// An object id given as something other than a whole number (`"5"`, `-1`) is refused as such,
 /// naming its key, not as a missing id; an id left out is still a missing one.
 #[test]
@@ -484,6 +521,57 @@ fn a_malformed_object_id_is_not_reported_as_missing() {
     assert_eq!(undo(&s), before);
 }
 
+/// A required number given as something other than a number (`"40"`, `true`, `[]`, `{}`) is refused
+/// as the wrong type, naming its key and showing the value as given, not as a missing number; one left
+/// out or given as null is still a missing number. Neither changes the document or records an undo step.
+#[test]
+fn a_malformed_required_number_is_not_reported_as_missing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let with = |base: &serde_json::Value, key: &str, v: Option<serde_json::Value>| {
+        let mut p = base.clone();
+        let o = p.as_object_mut().unwrap();
+        match v {
+            Some(v) => o.insert(key.into(), v),
+            None => o.remove(key),
+        };
+        p
+    };
+    let cases = [
+        ("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}), "x"),
+        ("edit.colors.saturate", json!({"intensity": 40}), "intensity"),
+        ("object.envelope.setMeshPoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "index"),
+        ("object.envelope.setMeshPoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "x"),
+        ("object.mesh.movePoint", json!({"id": 1, "index": 0, "x": 0, "y": 0}), "y"),
+        ("guide.add", json!({"pos": 40}), "pos"),
+    ];
+    for (cmd, base, key) in &cases {
+        for (v, shown) in [(json!("40"), "\"40\""), (json!(true), "true"), (json!([]), "[]"), (json!({}), "{}")] {
+            let p = with(base, key, Some(v));
+            match s.execute(cmd, &p) {
+                Err(EngineError::BadParams { cmd: c, msg }) => {
+                    assert_eq!((c.as_str(), msg), (*cmd, format!("`{key}` must be a number, not {shown}")), "{p}");
+                }
+                other => panic!("{cmd} {p}: {other:?}"),
+            }
+        }
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            match s.execute(cmd, &p) {
+                Err(EngineError::BadParams { cmd: c, msg }) => assert_eq!((c.as_str(), msg), (*cmd, format!("missing number `{key}`")), "{p}"),
+                other => panic!("{cmd} {p}: {other:?}"),
+            }
+        }
+    }
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // A whole JSON number is a number for a fractional parameter.
+    s.execute("guide.add", &json!({"pos": 40})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+}
+
 /// A command that takes the keys of one that isn't checked yet isn't checked either.
 #[test]
 fn a_reference_to_an_unchecked_command_is_unchecked() {
@@ -547,6 +635,105 @@ fn effect_params_are_the_effects_own() {
     s.execute("effect.setParams", &json!({"index": 0, "params": {"radius": 1e9}, "visible": false})).unwrap();
     // No effect at the index: the command says so, not the check.
     assert!(s.check_params("effect.setParams", &json!({"index": 7, "params": {"blurr": 3}})).is_ok());
+}
+
+/// An effect parameter that only the effect's params description names, with no dialog default,
+/// is held to the type the effect reads: the earlier 3D Perspective and light, Scribble's
+/// `variation` and an Outline Stroke's `width` are numbers, and a Gaussian Blur's `linear` is true
+/// or false. The `style` of Crop Marks is `roman` or `japanese`. Every such key of every effect is
+/// listed, or has a check of its own. A key left out keeps its default.
+#[test]
+fn an_effect_parameter_without_a_default_is_held_to_its_type() {
+    use crate::cmd::params::undefaulted_type;
+    use vectorcraft_render::effects::effect_catalog;
+    // Read by checks of their own: a stored texture or a texture to load, an SVG filter, a Warp's
+    // map and the style of Crop Marks.
+    let own_check = |effect: &str, key: &str| match key {
+        "textureImage" | "name" | "xml" => true,
+        "version" => effect.starts_with("warp."),
+        "style" => effect == "cropMarks",
+        _ => false,
+    };
+    let mut unlisted = vec![];
+    for e in effect_catalog() {
+        for key in doc_keys(e.params).unwrap().keys {
+            if e.defaults.get(key).is_none() && undefaulted_type(e.id, key).is_none() && !own_check(e.id, key) {
+                unlisted.push(format!("{}.{key}", e.id));
+            }
+        }
+    }
+    assert!(unlisted.is_empty(), "parameters without a default or a listed type: {unlisted:?}");
+    let apply = |effect: &str, params| json!({"effect": effect, "params": params});
+    for (effect, params, why) in [
+        ("threeD.revolve", json!({"perspective": true}), "`perspective` must be a number"),
+        ("threeD.extrude", json!({"lightAzimuth": "30"}), "`lightAzimuth` must be a number"),
+        ("threeD.rotate", json!({"lightElevation": null}), "`lightElevation` must be a number"),
+        ("threeD.inflate", json!({"perspective": "50%"}), "`perspective` must be a number"),
+        ("path.outlineStroke", json!({"width": "10 pt"}), "`width` must be a number"),
+        ("stylize.scribble", json!({"variation": false}), "`variation` must be a number"),
+        ("blur.gaussian", json!({"radius": 2, "linear": 1}), "`linear` must be true or false"),
+        ("cropMarks", json!({"style": "bogus"}), "`style` must be roman or japanese"),
+        ("cropMarks", json!({"style": 1}), "`style` must be roman or japanese"),
+        ("cropMarks", json!({"style": null}), "`style` must be roman or japanese"),
+    ] {
+        assert_eq!(refusal("effect.apply", apply(effect, params.clone())), why, "{effect} {params}");
+        assert_eq!(refusal("appearance.addEffect", apply(effect, params.clone())), why, "{effect} {params}");
+    }
+    for (effect, params) in [
+        ("threeD.revolve", json!({"perspective": 40, "lightAzimuth": 30.5, "lightElevation": 0})),
+        ("path.outlineStroke", json!({"width": 10})),
+        ("stylize.scribble", json!({"variation": 2})),
+        ("blur.gaussian", json!({"linear": true})),
+        ("blur.gaussian", json!({})),
+        ("cropMarks", json!({"style": "japanese"})),
+        ("cropMarks", json!({})),
+    ] {
+        assert!(check_params("effect.apply", &apply(effect, params.clone())).is_ok(), "{effect} {params}");
+    }
+}
+
+/// `effect.apply`, `appearance.addEffect` and `effect.setParams` refuse such a parameter of the
+/// wrong type when they run, and so does a step of a `command.batch` whose effect a step before it
+/// added, with the document and its undo history as they were. A saved step still plays with it,
+/// as with a key the effect no longer takes.
+#[test]
+fn effect_commands_refuse_an_undefaulted_parameter_of_the_wrong_type() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.history.undo.len(), st.doc.clone())
+    };
+    let before = state(&s);
+    let apply = |effect: &str, params| json!({"effect": effect, "params": params});
+    for (id, params, why) in [
+        ("effect.apply", apply("path.outlineStroke", json!({"width": "10 pt"})), "`width` must be a number"),
+        ("appearance.addEffect", apply("blur.gaussian", json!({"linear": 1})), "`linear` must be true or false"),
+        ("effect.apply", apply("threeD.revolve", json!({"perspective": "50"})), "`perspective` must be a number"),
+    ] {
+        let e = s.execute(id, &params).unwrap_err().to_string();
+        assert!(e.contains(why), "{id} {params}: {e}");
+        assert_eq!(state(&s), before, "{id} {params}");
+    }
+    let batch = json!({"commands": [
+        {"command": "effect.apply", "params": apply("path.outlineStroke", json!({"width": 3}))},
+        {"command": "effect.setParams", "params": {"index": 0, "params": {"width": "10 pt"}}},
+    ]});
+    let e = s.execute("command.batch", &batch).unwrap_err().to_string();
+    assert!(e.contains("`width` must be a number"), "{e}");
+    assert_eq!(state(&s), before);
+    s.execute("effect.apply", &apply("path.outlineStroke", json!({"width": 3}))).unwrap();
+    let applied = state(&s);
+    for params in [json!({"width": "10 pt"}), json!({"width": null}), json!({"width": true})] {
+        let e = s.execute("effect.setParams", &json!({"index": 0, "params": params.clone()})).unwrap_err().to_string();
+        assert!(e.contains("`width` must be a number"), "{params}: {e}");
+        assert_eq!(state(&s), applied, "{params}");
+    }
+    s.execute("effect.setParams", &json!({"index": 0, "params": {"width": 4}})).unwrap();
+    s.replay("effect.setParams", &json!({"index": 0, "params": {"retired": "x", "width": "10 pt"}})).unwrap();
+    let st = s.doc().unwrap();
+    assert_eq!(st.doc.layers[0].children().unwrap()[0].appearance.effects[0].params["width"], json!("10 pt"));
 }
 
 /// The Transform effect (`distort.transform`) is held to its params description: `effect.apply`

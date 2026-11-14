@@ -450,7 +450,7 @@ fn a_marquee_meets_blends_and_envelopes_by_their_box() {
         envelope,
         NodeKind::Envelope {
             content,
-            kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true }),
+            kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 }),
             fidelity: 100.0,
             editing: false,
             options: Default::default(),
@@ -1192,7 +1192,7 @@ fn objects_at_edit_contents_uses_general_order() {
         d.alloc_id(),
         NodeKind::Envelope {
             content: vec![inner(a), inner(b)],
-            kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true }),
+            kind: Box::new(crate::live::EnvelopeKind::Warp { style: "arc".to_string(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 }),
             fidelity: 100.0,
             editing: true,
             options: Default::default(),

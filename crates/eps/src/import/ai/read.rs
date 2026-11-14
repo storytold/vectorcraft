@@ -78,7 +78,8 @@
 //!
 //! - Graphs (version 7 specification §17): `%_Gs`, the graph's data and settings on `%_` lines,
 //!   its drawn art as ordinary groups, paths and type (each object followed by `%_… Go`), `%_GS`.
-//!   The drawn art is read; the data and settings are left out, with a note.
+//!   The drawn art is read as it is. Its group keeps the data and settings when they read whole
+//!   ([`graph`]); otherwise they are left out, with a note.
 //!
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
@@ -133,6 +134,7 @@ mod art;
 mod containers;
 mod directives;
 mod document;
+mod graph;
 mod masks;
 mod on_path;
 mod ops;
@@ -146,12 +148,13 @@ pub use document::{
     symbols, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
+use graph::Graph;
 pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub(crate) use types::MAX_NODES;
 pub use types::PlacedPage;
-use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
+use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -205,6 +208,10 @@ pub struct Structure {
     pub warped_type: super::envelope::WarpedType,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
+    /// The patterns that paint the text document's characters, placed in the document, by the
+    /// name of the art style that gives each: the styles that are one paint, a pattern this read
+    /// (see `ate::Texts::with_patterns`).
+    pub text_patterns: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
     /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an
@@ -479,6 +486,9 @@ struct Reader<'a> {
     /// a global process colour, so these make swatches only for names no colour operator defines.
     stop_spots: Vec<Named>,
     raster: Option<Raster>,
+    /// The samples of the image being read are on `%_` lines (`%_%%BeginData`): it is the copy of
+    /// a styled object there, as the other objects on those lines are.
+    image_hidden: bool,
     /// The file `XG` names for the image after it (`XF`), until an image is read.
     image_link: Option<String>,
     /// The placed file being read (`%AI5_BeginPlace` … `~`).
@@ -663,7 +673,7 @@ struct Reader<'a> {
     brushes_kept: BrushesKept,
     /// Brush objects that weren't read.
     brushes_unread: usize,
-    /// The graph being read (see [`Reader::graph_record`]).
+    /// The graph being read (see [`graph`]).
     graph: Option<Graph>,
     /// The multi-layer mask being read (`Mb` … `MB`), which goes on past a layer's end.
     multi_mask: Option<masks::MultiMask>,
@@ -732,6 +742,7 @@ impl<'a> Reader<'a> {
             spots: Vec::new(),
             stop_spots: Vec::new(),
             raster: None,
+            image_hidden: false,
             image_link: None,
             place: None,
             foreign_data: None,
@@ -842,7 +853,7 @@ impl<'a> Reader<'a> {
                     self.op(w, hidden)?;
                 }
                 Tok::Comment(c) => self.comment(c, hidden)?,
-                Tok::Data(d) => self.image(d)?,
+                Tok::Data(d) => self.image(d, hidden)?,
                 Tok::Preview(d) => {
                     if let Some(p) = self.place.as_mut() {
                         p.preview = preview_png(d);

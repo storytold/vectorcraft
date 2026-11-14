@@ -351,6 +351,10 @@ fn the_xml_methods_behave_as_specified() {
         "var x = <a xmlns:p='u'><b/></a>; x.b[0].inScopeNamespaces().length === 1 && x.namespaceDeclarations()[0].prefix === 'p' && x.b[0].namespaceDeclarations().length === 0",
     );
     truth("var x = <a xmlns:p='u'/>; x.namespace('p').uri === 'u' && x.namespace('q') === undefined && x.namespace().uri === ''");
+    truth(
+        "var x = <a xmlns:p='u' xmlns:q='v'><b xmlns:p='w' xmlns:q='v'><c/></b></a>; var c = x.b.c[0]; var s = c.inScopeNamespaces(); var d = x.b[0].namespaceDeclarations(); \
+         s.length === 2 && c.namespace('p').uri === 'w' && c.namespace('q').uri === 'v' && c.namespace('z') === undefined && d.length === 1 && d[0].prefix === 'p' && d[0].uri === 'w'",
+    );
     truth("var x = <a/>; x.addNamespace(new Namespace('p', 'u')); x.namespace('p').uri === 'u'");
     truth("var x = <a xmlns:p='u'/>; x.removeNamespace(new Namespace('p', 'u')); x.namespace('p') === undefined");
     truth("var x = <a xmlns:p='u' p:q='1'/>; x.removeNamespace(new Namespace('p', 'u')); x.namespace('p').uri === 'u'");
@@ -1185,6 +1189,251 @@ fn a_limit_during_normalize_does_not_repeat_text() {
     assert!(fuel_stops(setup, "x.normalize()", check) > 0);
 }
 
+/// A realm whose trees may be 100,000 levels deep, with `squeeze`, after `setup` ran with no limit.
+fn deep_realm(setup: &str) -> Realm {
+    let mut r = Realm::with_options(Options { max_depth: 100_000, ..e4x() }, Limits::default());
+    let interp = r.interp();
+    let global = interp.global;
+    assert!(crate::builtins::method(interp, global, "squeeze", squeeze, 1).is_ok());
+    r.run(setup).unwrap();
+    r
+}
+
+/// How `action` ends after `setup` in a [`deep_realm`], asserting that `check` is true after it
+/// with the limits lifted.
+fn squeezed(setup: &str, action: &str, check: &str) -> Result<JsValue, RunErrorKind> {
+    let mut r = deep_realm(setup);
+    let got = r.run(action).map_err(|e| e.kind);
+    r.set_limits(Limits::default());
+    assert_eq!(r.run(check), Ok(JsValue::Bool(true)), "{action}: {got:?}");
+    got
+}
+
+/// The least spare heap, found by bisection, at which `action` ends without the heap limit after
+/// `setup` in a [`deep_realm`].
+fn least_room(setup: &str, action: &str) -> usize {
+    let ends = |spare: usize| match deep_realm(setup).run(&format!("squeeze({spare}); {action}")) {
+        Ok(_) => true,
+        Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Heap) => false,
+        Err(e) => panic!("{action}: {e:?}"),
+    };
+    let (mut lo, mut hi) = (0usize, 1usize << 22);
+    assert!(ends(hi), "{action}");
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if ends(mid) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    lo
+}
+
+/// Scripts that make `x`, an `r` element over 2,000 elements named `d`, nested in the first and
+/// side by side, named `wide_name`, in the second. Both also make `t`, an empty element, and turn
+/// pretty printing off.
+fn deep_and_wide(wide_name: &str) -> (String, String) {
+    let common = "XML.prettyPrinting = false; var t = <t/>; var s = '';";
+    let deep = format!(
+        "{common} for (var i = 0; i < 2000; i++) s += '<d>'; for (var i = 0; i < 2000; i++) s += '</d>'; var x = new XML('<r>' + s + '</r>');"
+    );
+    let wide = format!("{common} for (var i = 0; i < 2000; i++) s += '<{wide_name}/>'; var x = new XML('<r>' + s + '</r>');");
+    (deep, wide)
+}
+
+#[test]
+fn tree_walks_hold_their_stacks_against_the_heap_limit() {
+    // A walk keeps a frame for each open level, so the deep tree needs room for 2,000 frames that
+    // the wide tree, with as many nodes and the same markup length, does not.
+    let mut wrong = Vec::new();
+    for (action, wide_name, frame) in [
+        ("x.copy(); 1", "d", 8),
+        ("x..z.length()", "d", 8),
+        ("x.normalize(); 1", "d", 8),
+        ("t.appendChild(x); 1", "d", 8),
+        ("x.toXMLString().length", "dddd", 32),
+    ] {
+        let (deep, wide) = deep_and_wide(wide_name);
+        let (d, w) = (least_room(&deep, action), least_room(&wide, action));
+        if d < w + 2000 * frame {
+            wrong.push(format!("{action}: deep {d}, wide {w}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+    let (deep, _) = deep_and_wide("d");
+    let same = "var y = x.copy(); var a = x, b = y, n = 0; while (a.d.length()) { a = a.d[0]; b = b.d[0]; n++; if (b.parent().d[0] !== b) break; } \
+                n === 2000 && y.parent() === null && y == x && y.toXMLString() === x.toXMLString()";
+    assert_eq!(squeezed(&deep, same, "true"), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn assignments_hold_the_matches_and_targets_they_collect() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    let wide = "var x = <r/>; for (var i = 0; i < 4000; i++) x.appendChild(<b/>);";
+    let kept = "x.*.length() === 4000 && x.b[3999].parent() === x";
+    assert_eq!(squeezed(wide, "squeeze(4096); x.b = 'v'; 1", kept), heap);
+    let first = "var old = x.b[0]; x.b = 'v'; x.*.length() === 1 && x.b[0] === old && x.b == 'v'";
+    assert_eq!(squeezed(wide, first, "x.b[0].parent() === x"), Ok(JsValue::Bool(true)));
+    // `l` is an empty list 4,000 `.b` steps below `x.a`, which holds two elements, so the
+    // assignment adds nothing.
+    let chain = "var x = <r><a/><a/></r>; var l = x.a; for (var i = 0; i < 4000; i++) l = l.b;";
+    let same = "x.*.length() === 2 && x.a.*.length() === 0";
+    assert_eq!(squeezed(chain, "squeeze(4096); l.c = 'v'; 1", same), heap);
+    assert_eq!(squeezed(chain, "l.c = 'v'; 1", same), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
+fn serializing_charges_the_text_it_flattens() {
+    // `k` is a rope of 32,768 units. Both trees hold the same 65,536 units of text, as a rope in the
+    // first and as flat text in the second.
+    let k = "var k = 'x'; for (var i = 0; i < 15; i++) k += k; XML.prettyPrinting = false;";
+    let rope = format!("{k} var x = <r/>; x.appendChild(k); x.appendChild(k); x.normalize();");
+    let flat = format!("{k} var x = new XML('<r>' + k + k + '</r>');");
+    let action = "x.toXMLString().length";
+    let (r, f) = (least_room(&rope, action), least_room(&flat, action));
+    assert!(r >= f + 100_000, "rope {r}, flat {f}");
+    let attr = format!("{k} var x = <r/>; x.@a = k + k;");
+    let same = "var s = x.toXMLString(); s.length > 65536 && s.indexOf(k + k) > 0 && new XML(s).toXMLString() === s";
+    for setup in [rope, attr] {
+        assert_eq!(squeezed(&setup, same, "true"), Ok(JsValue::Bool(true)), "{setup}");
+    }
+}
+
+/// A script that makes `x`, a `r:r` element over 2,000 nested `r:d` elements in the same
+/// namespace, each of which declares one more prefix: a new one each time, or `q10000` each time.
+fn nested_prefixes(same: bool) -> String {
+    let prefix = if same { "10000" } else { "' + (10000 + i) + '" };
+    format!(
+        "XML.prettyPrinting = false; var s = ''; for (var i = 0; i < 2000; i++) s += '<r:d xmlns:q{prefix}=\"u' + (10000 + i) + '\">'; \
+         for (var i = 0; i < 2000; i++) s += '</r:d>'; var x = new XML('<r:r xmlns:r=\"R\">' + s + '</r:r>');"
+    )
+}
+
+#[test]
+fn serializing_holds_the_prefixes_a_lookup_passes() {
+    // Finding the `r` prefix from the deepest element passes 2,000 prefixes when each level
+    // declares a new one, and one when they all declare `q10000`.
+    let action = "x.toXMLString().length";
+    let (new, same) = (least_room(&nested_prefixes(false), action), least_room(&nested_prefixes(true), action));
+    assert!(new >= same + 2000 * 16, "new {new}, same {same}");
+    let check = "var s = x.toXMLString(); s.indexOf('<r:r xmlns:r=\"R\"><r:d xmlns:q10000=\"u10000\"><r:d xmlns:q10001=\"u10001\">') === 0 && new XML(s).toXMLString() === s";
+    assert_eq!(squeezed(&nested_prefixes(false), check, "true"), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn a_new_prefix_is_the_first_free_ns_number() {
+    let setup = "XML.prettyPrinting = false; var n = new Namespace('urn:z');";
+    for (decls, prefix) in [
+        ("", "ns0"),
+        (" xmlns:ns0=\"a\" xmlns:ns1=\"b\" xmlns:ns3=\"c\" xmlns:ns02=\"d\"", "ns2"),
+        (" xmlns:ns0=\"a\" xmlns:ns1=\"b\" xmlns:nsx=\"c\" xmlns:ns2=\"d\"", "ns3"),
+    ] {
+        truth(&format!(
+            "{setup} var x = <r{decls}/>; x.@n::a = 'v'; var s = x.toXMLString(); \
+             s.indexOf(' {prefix}:a=\"v\"') > 0 && s.indexOf(' xmlns:{prefix}=\"urn:z\"') > 0 && new XML(s).@n::a == 'v'"
+        ));
+    }
+    truth(&format!(
+        "{setup} var s = ''; for (var i = 0; i < 500; i++) s += ' xmlns:ns' + i + '=\"u' + i + '\"'; var x = new XML('<r' + s + '/>'); x.@n::a = 'v'; \
+         x.toXMLString().indexOf(' ns500:a=\"v\"') > 0"
+    ));
+}
+
+/// A script that makes `x`, an `r` element over 4,000 `b` elements, `l`, the list of them, and
+/// `t`, an empty element.
+const MANY_B: &str = "XML.prettyPrinting = false; var x = <r/>; for (var i = 0; i < 4000; i++) x.appendChild(<b/>); var l = x.b; var t = <t/>;";
+
+#[test]
+fn inserting_a_list_holds_its_copy_of_the_items() {
+    // Both actions move the same 4,000 elements under `t`. The first charges the links, 8 bytes
+    // each, before any element leaves `x`, and holds its copy of the list's items, 4 bytes each;
+    // the second moves them one at a time.
+    let list = least_room(MANY_B, "t.prependChild(l); 1");
+    let one_by_one = least_room(MANY_B, "for (var i = 0; i < 4000; i++) t.prependChild(l[i]); 1");
+    assert!(list >= one_by_one + 4000 * (8 + 2), "list {list}, one by one {one_by_one}");
+    let moved = "t.prependChild(l); t.*.length() === 4000 && x.*.length() === 0 && t.b[3999].parent() === t";
+    assert_eq!(squeezed(MANY_B, moved, "true"), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn assigning_a_list_to_a_list_item_holds_its_copy_of_the_items() {
+    // Both actions put the 4,000 elements of `l` under `m`. The first, through the list `m.a`,
+    // also makes a list of them, 8 bytes each, and holds a copy of its items, 4 bytes each.
+    let setup = format!("{MANY_B} var m = <m><a/></m>; var la = m.a;");
+    let through_list = least_room(&setup, "la[0] = l; 1");
+    let direct = least_room(&setup, "m.prependChild(l); 1");
+    assert!(through_list >= direct + 4000 * 10, "through the list {through_list}, direct {direct}");
+    let placed = "la[0] = l; m.*.length() === 4000 && la.length() === 4000 && la[3999] === m.b[3999] && x.*.length() === 0";
+    assert_eq!(squeezed(&setup, placed, "true"), Ok(JsValue::Bool(true)));
+}
+
+#[test]
+fn parsing_holds_its_open_elements_and_attribute_scratch() {
+    // The deep markup leaves 2,000 elements open at once and the wide markup, of the same
+    // length, leaves none. The open elements and their names take 2,048 times 20 bytes, and the
+    // longer names of the wide markup take 2,000 times 6 bytes more.
+    let (deep, wide) = deep_and_wide("dddd");
+    let action = "new XML('<r>' + s + '</r>'); 1";
+    let (d, w) = (least_room(&deep, action), least_room(&wide, action));
+    // Both elements declare 2,001 namespaces and have one attribute. Resolving the prefix of the
+    // attribute in the first reads a copy of the element's namespaces.
+    let decls = "var d = ''; for (var i = 10000; i < 12000; i++) d += ' xmlns:n' + i + '=\"u\"';";
+    let prefixed = least_room(decls, "new XML('<r' + d + ' xmlns:p=\"P\" p:a=\"v\"/>'); 1");
+    let plain = least_room(decls, "new XML('<r' + d + ' xmlns:p=\"P\" pa=\"v\"/>'); 1");
+    assert!(d >= w + 2000 * 8 && prefixed >= plain + 2000 * 32, "deep {d}, wide {w}, prefixed {prefixed}, plain {plain}");
+    truth(&format!(
+        "{decls} var x = new XML('<r' + d + ' xmlns:p=\"P\" p:a=\"v\" b=\"w\"/>'); x.@b == 'w' && x.namespaceDeclarations().length == 2001"
+    ));
+}
+
+#[test]
+fn flattening_a_rope_in_xml_code_is_charged() {
+    let k = "var k = 'x'; for (var i = 0; i < 15; i++) k += k; XML.prettyPrinting = false; var x = <r/>, y = <r/>;";
+    // Each pair holds the same 65,536 units as ropes in the first script and as flat text in the
+    // second: the text of `x` and `y`, an attribute of `x` and `y`, and the string `s2`.
+    let text = (
+        format!("{k} for each (var e in [x, y]) {{ e.appendChild(k); e.appendChild(k); e.normalize(); }}"),
+        format!("{k} x = new XML('<r>' + k + k + '</r>'); y = new XML('<r>' + k + k + '</r>');"),
+    );
+    let attr = (format!("{k} x.@a = k + k; y.@a = k + k;"), format!("{k} x = new XML('<r a=\"' + k + k + '\"/>'); y = new XML(x.toXMLString());"));
+    let o = "var o = { toString: function () { return s2; } };";
+    let string = (format!("{k} var s2 = k + k; {o}"), format!("{k} var s2 = new XML('<r>' + k + k + '</r>').toString(); {o}"));
+    let mut wrong = Vec::new();
+    for ((rope, flat), action) in [
+        (&text, "x == y"),
+        (&attr, "x == y"),
+        (&text, "x.text()[0] == y.text()[0]"),
+        (&text, "x.text()[0] == 'z'"),
+        (&string, "<e/> == s2"),
+        (&text, "x.toString().length"),
+        (&text, "x.text().toString().length"),
+        (&string, "x.@[s2].length()"),
+        (&string, "x.s2::b.length()"),
+        (&string, "x.o::b.length()"),
+        (&string, "default xml namespace = s2; 1"),
+        (&string, "x[s2].length()"),
+        (&string, "x[o].length()"),
+    ] {
+        let (r, f) = (least_room(rope, action), least_room(flat, action));
+        if r < f + 100_000 {
+            wrong.push(format!("{action}: rope {r}, flat {f}"));
+        }
+    }
+    // A name read from a flat string is a copy of its units after `@` for an attribute, and shares
+    // the string for an element.
+    let names = format!("{} var at = new XML('<r>@' + k + k + '</r>').toString();", string.1);
+    let (a, e) = (least_room(&names, "x[at].length()"), least_room(&names, "x[s2].length()"));
+    if a < e + 100_000 {
+        wrong.push(format!("names: attribute {a}, element {e}"));
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+    let same = "x == y && x.text()[0] == y.text()[0] && x.toString() === s && x.text().toString() === s && !(x.text()[0] == 'z')";
+    for setup in [&text.0, &text.1] {
+        assert_eq!(squeezed(&format!("{setup} var s = k + k;"), same, "true"), Ok(JsValue::Bool(true)), "{setup}");
+    }
+}
+
 /// Runs `action` as [`heap_stops`] does, and asserts that every run completes or stops at the heap
 /// limit and that `check` is true after it. Returns how many runs stopped.
 fn heap_stops_only(setup: &str, action: &str, check: &str) -> usize {
@@ -1243,7 +1492,12 @@ fn comparing_xml_values_is_charged_to_the_heap() {
 
 /// Runs `setup` with no limit, then `action` in the same realm, and returns how `action` ended.
 fn after_setup(setup: &str, action: &str) -> Result<JsValue, RunErrorKind> {
-    let mut r = realm();
+    after_setup_with(e4x(), setup, action)
+}
+
+/// [`after_setup`] in a realm with `options`.
+fn after_setup_with(options: Options, setup: &str, action: &str) -> Result<JsValue, RunErrorKind> {
+    let mut r = Realm::with_options(options, Limits::default());
     let interp = r.interp();
     let global = interp.global;
     assert!(crate::builtins::method(interp, global, "squeeze", squeeze, 1).is_ok());
@@ -1265,6 +1519,135 @@ fn namespace_declarations_and_qname_strings_are_charged_to_the_heap() {
     let long = "var s = 'x'; for (var i = 0; i < 12; i++) s += s; var q = new QName('u', s);";
     let action = "squeeze(12000); var t1 = q.toString(); var t2 = q.toString(); 1";
     assert_eq!(after_setup(long, action), heap);
+}
+
+#[test]
+fn namespace_scopes_are_charged_to_the_heap() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    let setup = "var x = <r><b><c/></b></r>; for (var i = 0; i < 2000; i++) x.addNamespace(new Namespace('p' + i, 'u' + i)); \
+                 var b = x.b[0]; b.c[0].setNamespace(new Namespace('u7'));";
+    for (action, ample) in [
+        ("b.namespace('p1999').uri", JsValue::String("u1999".into())),
+        ("b.namespaceDeclarations().length", JsValue::Number(0.0)),
+        ("b.inScopeNamespaces().length", JsValue::Number(2000.0)),
+        ("x.xpath('b[namespace::p1999]').length()", JsValue::Number(1.0)),
+        ("b.xpath('p5:c').length()", JsValue::Number(0.0)),
+        ("b.xpath(\"*[name() = 'p7:c']\").length()", JsValue::Number(1.0)),
+    ] {
+        assert_eq!(after_setup(setup, &format!("squeeze(16384); {action}")), heap, "{action}");
+        assert_eq!(after_setup(setup, action), Ok(ample.clone()), "{action}");
+        // The scope reads the same bindings after the script has left garbage to collect.
+        let churn = format!("squeeze(2000000); for (var i = 0; i < 3000; i++) [i]; {action}");
+        assert_eq!(after_setup(setup, &churn), Ok(ample), "{action}");
+    }
+}
+
+#[test]
+fn namespace_edits_read_attributes_in_place_and_charge_their_walk() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    let wide = "var s = '<r xmlns:q=\"v\"'; for (var i = 0; i < 4000; i++) s += ' a' + i + '=\"v\"'; var x = new XML(s + '/>'); \
+                var n = new Namespace('q', 'v'); var m = new Namespace('s', 'w');";
+    let deep = "var s = '<r xmlns:q=\"v\">'; for (var i = 0; i < 2000; i++) s += '<d>'; for (var i = 0; i < 2000; i++) s += '</d>'; \
+                var x = new XML(s + '</r>'); var n = new Namespace('q', 'v');";
+    let removed = "x.removeNamespace(n); x.namespace('q') === undefined";
+    // An element's attributes are read where they are, so 4,000 of them need no room; the walk of a
+    // deep tree is held against the limit.
+    for (tree, setup, action, ample, squeezed) in [
+        ("wide", wide, "x.addNamespace(m); x.namespace('s').uri", JsValue::String("w".into()), false),
+        ("wide", wide, removed, JsValue::Bool(true), false),
+        ("deep", deep, removed, JsValue::Bool(true), true),
+    ] {
+        let options = Options { max_depth: 1_000_000, ..e4x() };
+        let want = if squeezed { heap.clone() } else { Ok(ample.clone()) };
+        assert_eq!(after_setup_with(options.clone(), setup, &format!("squeeze(4096); {action}")), want, "{tree}: {action}");
+        assert_eq!(after_setup_with(options, setup, action), Ok(ample), "{tree}: {action}");
+    }
+}
+
+#[test]
+fn xml_list_methods_charge_their_copies_to_the_heap() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    let setup = "var x = <r/>; for (var i = 0; i < 4000; i++) x.appendChild(<a/>); var l = x.a;";
+    for (action, ample) in [
+        ("l.child(0).length()", JsValue::Number(0.0)),
+        ("l.comments().length()", JsValue::Number(0.0)),
+        ("l.normalize().length()", JsValue::Number(4000.0)),
+    ] {
+        assert_eq!(after_setup(setup, &format!("squeeze(4096); {action}")), heap, "{action}");
+        assert_eq!(after_setup(setup, action), Ok(ample), "{action}");
+    }
+}
+
+/// The least spare heap, found by bisection, at which `action` ends without the heap limit after
+/// `setup`.
+fn least_spare(setup: &str, action: &str) -> usize {
+    let (mut lo, mut hi) = (0usize, 1usize << 22);
+    assert!(after_setup(setup, &format!("squeeze({hi}); {action}")).is_ok(), "{action}");
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        match after_setup(setup, &format!("squeeze({mid}); {action}")) {
+            Ok(_) => hi = mid,
+            Err(RunErrorKind::Limit(LimitKind::Heap)) => lo = mid + 1,
+            Err(e) => panic!("{action}: {e:?}"),
+        }
+    }
+    lo
+}
+
+#[test]
+fn replace_charges_its_copy_of_the_matches_to_the_heap() {
+    let setup = "var x = <r/>; for (var i = 0; i < 4000; i++) x.appendChild(<a/>);";
+    let action = "x.replace('a', 'z'); x.children().length()";
+    let select = least_spare(setup, "x.a.length()");
+    let replace = least_spare(setup, action);
+    assert!(replace >= select + 4000 * 4, "select {select}, replace {replace}");
+    assert_eq!(after_setup(setup, action), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
+fn xpath_qualified_names_are_charged_to_the_heap() {
+    let setup = "var s = 'a'; for (var i = 0; i < 14; i++) s += s; var x = <r xmlns:p='u'><c/></r>; var c = x.c[0]; \
+                 c.setLocalName(s); c.setNamespace(new Namespace('u'));";
+    let action = "x.xpath('*[string-length(name()) = 16386]').length()";
+    assert_eq!(after_setup(setup, &format!("squeeze(16384); {action}")), Err(RunErrorKind::Limit(LimitKind::Heap)));
+    assert_eq!(after_setup(setup, action), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
+fn xml_methods_charge_the_strings_they_flatten() {
+    let heap = Err(RunErrorKind::Limit(LimitKind::Heap));
+    // `s` and `t` are ropes of 32,768 and 49,152 units; `f` is a flat string that starts with `@`.
+    let setup = "var s = 'a'; for (var i = 0; i < 15; i++) s += s; var t = 'a b'; for (var i = 0; i < 14; i++) t += t; \
+                 var f = '@' + s; isXMLName(f); var x = <r><c/></r>; var c = x.c[0];";
+    let mut wrong = Vec::new();
+    for (action, ample) in [
+        ("x.addNamespace(s); 1", JsValue::Number(1.0)),
+        ("new Namespace(t, 'u').prefix", JsValue::Undefined),
+        ("c.setName(s); 1", JsValue::Number(1.0)),
+        ("isXMLName(s)", JsValue::Bool(true)),
+        ("x.attribute(s).length()", JsValue::Number(0.0)),
+        ("x.attribute(f).length()", JsValue::Number(0.0)),
+        ("x.namespace(s) === undefined", JsValue::Bool(true)),
+        ("x.propertyIsEnumerable(s)", JsValue::Bool(false)),
+        ("c.setLocalName(s); 1", JsValue::Number(1.0)),
+    ] {
+        let squeezed = after_setup(setup, &format!("squeeze(16384); {action}"));
+        if squeezed != heap {
+            wrong.push(format!("{action} with 16384 spare: {squeezed:?}"));
+        }
+        assert_eq!(after_setup(setup, action), Ok(ample), "{action}");
+    }
+    // Parsing a rope needs room for its flat copy on top of what parsing the same flat text needs.
+    let text = "var k = 'x'; for (var i = 0; i < 15; i++) k += k; var s = '<a><!--' + k + '--></a>'; \
+                var g = '<a><!--' + k + '--></a>'; isXMLName(g);";
+    for ctor in ["XML", "XMLList"] {
+        let rope = least_spare(text, &format!("new {ctor}(s); 1"));
+        let flat = least_spare(text, &format!("new {ctor}(g); 1"));
+        if rope < flat + 32768 {
+            wrong.push(format!("new {ctor} needs {rope} spare for a rope and {flat} for flat text"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
 #[test]

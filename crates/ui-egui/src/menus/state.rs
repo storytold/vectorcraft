@@ -41,9 +41,9 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
             crate::panels::character::shared_text_flag(app, |t| t.vertical) == Some(id == "type.orientation.vertical")
         }
         "type.opticalMarginAlignment" => crate::panels::character::shared_text_flag(app, |t| t.optical_margin) == Some(true),
-        // Dynamic Text of the first selected type on a path or area type, which the item turns the
-        // other way.
-        "type.dynamicText" => selected_text(|k| !matches!(k, vectorcraft_engine::doc::TextKind::Point)).is_some_and(|t| t.dynamic_text),
+        // Dynamic Text of the first selected type, which the item turns the other way (point type
+        // counts as off: the item turns it into area type with Block on).
+        "type.dynamicText" => selected_text(|_| true).is_some_and(|t| t.dynamic_text && !matches!(t.kind, vectorcraft_engine::doc::TextKind::Point)),
         "view.outline" => app.outline_view(),
         "view.pixelPreview" => v.pixel_preview,
         "view.trimView" => v.trim_view,
@@ -63,9 +63,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "view.rotate" => app.view().zip(p.get("angle").and_then(Value::as_f64)).is_some_and(|(view, a)| (view.rotation - a).abs() < 1e-9),
         "window.control" => app.ui.control_bar,
         "window.helpBar" => app.ui.help_bar,
-        "window.control.dock" => {
-            p.get("edge").and_then(Value::as_str) == Some(crate::chrome::CONTROL_BAR_EDGES[usize::from(app.ui.control_bar_bottom)])
-        }
+        "window.control.dock" => p.get("edge").and_then(Value::as_str) == Some(crate::chrome::control_bar_placement(&app.ui)),
         "window.control.options" => p
             .get("group")
             .and_then(Value::as_str)
@@ -96,7 +94,7 @@ pub fn checked(app: &VectorcraftApp, id: &str, p: &Value) -> Option<bool> {
         "window.learn" => crate::panels::learn::visible(&app.ui),
         "window.panel" => {
             let panel = p.get("panel").and_then(Value::as_str).unwrap_or("");
-            normalize_panel(panel).is_some_and(|id| crate::panel_docking::showing(&app.ui, id))
+            normalize_panel(panel).is_some_and(|id| crate::panel_docking::visible(&app.ui, id))
         }
         "window.collapseDock" => crate::panel_docking::dock_collapsed(&app.ui),
         "window.workspace" => p.get("name").and_then(Value::as_str) == Some(app.ui.workspace.as_str()),
@@ -225,7 +223,7 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         }
         id if crate::panels::paragraph::ALIGN_COMMANDS.iter().any(|c| c.0 == id) => crate::panels::character::text_style(app).is_some(),
         "type.applyBullets" | "type.applyNumbers" | "type.convertListToText" => crate::panels::character::text_style(app).is_some(),
-        id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command()),
+        id if let Some(b) = crate::panels::align::button(id) => enabled(app, b.command_now(app)),
         "file.reveal" => app.services.reveal.is_some() && app.session.active().is_some_and(|d| d.path.is_some()),
         "file.cancelExport" | "file.exportInBackground" => app.background.jobs.iter().any(|j| j.progress.is_some() && !j.cancelled()),
         "file.cancelOpen" => !app.opening.pending.is_empty(),
@@ -287,8 +285,10 @@ pub fn enabled(app: &VectorcraftApp, id: &str) -> bool {
         "ui.sampleScreenColor" => crate::screen_color::available(app),
         "ui.newBrush" => app.session.active().is_some(),
         "ui.brushOptions" => crate::dialogs::brush_options::available(app),
-        "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" => crate::panels::character::text_style(app).is_some(),
-        "ui.colorBalanceDialog" | "ui.saturateDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
+        "ui.hyphenation" | "ui.justification" | "ui.tateChuYokoSettings" | "ui.warichuSettings" => {
+            crate::panels::character::text_style(app).is_some()
+        }
+        "ui.colorBalanceDialog" | "ui.saturateDialog" | "ui.indexedColorDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),
         "ui.saveSwatchLibrary" => app.session.active().is_some(),
         id if id.starts_with(crate::panels::swatches::USER_SLOT) => crate::panels::swatches::user_library(app, id).is_some(),
         "ui.flattenTransparencyDialog" => app.session.active().is_some_and(|d| !d.selection.is_empty()),

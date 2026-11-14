@@ -672,6 +672,7 @@ impl Savepoint {
         s.pending_paint = self.pending_paint;
         self.choices.put(s);
         s.journal.truncate(self.journal);
+        s.sync_front_profiles();
         exact
     }
 }
@@ -723,7 +724,7 @@ struct Host {
     /// order: the error's mark ([`HostError::Marked`]) is its index.
     eval_failures: RefCell<Vec<(Arc<str>, u32, u32)>>,
     /// The realm's tag for the script ([`Realm::script_tag`]) once the run has started it, and
-    /// [`vectorcraft_js::UNKNOWN_SOURCE`] before.
+    /// [`vectorcraft_js::UNKNOWN_SOURCE`] before or when the script did not compile.
     script_tag: Cell<u32>,
     /// The run's name as its report gives it, which [`Host::name`] shortens for console lines.
     report_name: Arc<str>,
@@ -818,6 +819,57 @@ impl Host {
             match u32::try_from(n + 1).ok().and_then(|n| tag.checked_add(n)).filter(|t| *t != vectorcraft_js::UNKNOWN_SOURCE) {
                 Some(t) => kept.keep(t, map, None),
                 None => break,
+            }
+        }
+    }
+
+    /// The file and line that line `line` of the source with tag `tag` came from, as `$.line` and
+    /// `$.stack` give them: the run's script, a file it included or a file `$.evalFile` gave, in
+    /// this run or in an earlier run of its named engine, with the run's name standing for a script
+    /// given as text. Code that `eval` or `Function` compiled has no map and keeps its own line,
+    /// named `[eval]`; code whose map is gone, such as one the named engine let go to stay within
+    /// [`KEPT_MAP_BYTES`], is at line 0 of `[unknown]`.
+    fn source_place(&self, tag: u32, line: u32) -> (String, u32) {
+        if tag == vectorcraft_js::UNKNOWN_SOURCE {
+            return ("[eval]".to_string(), line);
+        }
+        let named = |map: &include::SourceMap, script: Option<&Arc<str>>| {
+            let (index, file, line, _) = map.locate(line, 1);
+            match script {
+                Some(name) if index == 0 && file.is_empty() => (name.to_string(), line),
+                _ => (file.to_string(), line),
+            }
+        };
+        let script = self.script_tag.get();
+        let placed = match tag.checked_sub(script).filter(|_| script != vectorcraft_js::UNKNOWN_SOURCE) {
+            Some(0) => self.script_map.try_borrow().ok().map(|m| named(&m, Some(&self.report_name))),
+            Some(n) => self.eval_maps.try_borrow().ok().and_then(|maps| maps.get(n as usize - 1).map(|m| named(m, None))),
+            None => {
+                self.kept_maps.as_ref().and_then(|k| k.try_borrow().ok()).and_then(|k| k.get(tag).map(|kept| named(&kept.map, kept.script.as_ref())))
+            }
+        };
+        placed.unwrap_or_else(|| ("[unknown]".to_string(), 0))
+    }
+
+    /// `$.fileName` read by the code at `site`: the file that code is in, by the source map of the
+    /// source it came from (this run's script, a file `$.evalFile` gave, or code an earlier run of
+    /// the named engine compiled), so a function keeps the file it was defined in. Code from a file
+    /// `#include` inserted is in that file. A script given as text has no name, and neither has
+    /// code whose map the named engine no longer keeps. Code that `eval` or `Function` compiled has
+    /// no map, and is given the file being run now.
+    fn file_name_at(&self, site: vectorcraft_js::CallSite) -> String {
+        let name = |m: &include::SourceMap| m.locate(site.line, site.column).1.to_string();
+        let tag = site.source;
+        if tag == vectorcraft_js::UNKNOWN_SOURCE {
+            return self.files.borrow().file_name();
+        }
+        let script = self.script_tag.get();
+        match tag.checked_sub(script).filter(|_| script != vectorcraft_js::UNKNOWN_SOURCE) {
+            Some(0) => name(&self.script_map.borrow()),
+            Some(n) => self.eval_maps.borrow().get(n as usize - 1).map(name).unwrap_or_default(),
+            None => {
+                let kept = self.kept_maps.as_ref().map(|k| k.borrow());
+                kept.as_ref().and_then(|k| k.get(tag)).map(|k| name(&k.map)).unwrap_or_default()
             }
         }
     }
@@ -1254,9 +1306,9 @@ fn each_line(text: &str, mut done: impl FnMut(String, bool)) {
 
 /// The `$` object: `$.write(...values)` writes the values to the Script Console as `String(value)`
 /// gives them, one after another, and `$.writeln(...values)` does the same and ends the line.
-/// `$.evalFile(path[, timeout])` runs a file and gives its last value, `$.fileName` is the file
-/// being run and `$.includePath` the `#includepath` list. Its other members are
-/// [`dollar::members`].
+/// `$.evalFile(path[, timeout])` runs a file and gives its last value, `$.fileName` is the file the
+/// code reading it is in ([`Host::file_name_at`]) and `$.includePath` the `#includepath` list. Its
+/// other members are [`dollar::members`].
 fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcraft_js::Localization>) -> Vec<(String, HostItem)> {
     let writer = |end: bool| {
         let l = link.clone();
@@ -1278,6 +1330,15 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
             Ok(Data::String(text))
         }))
     };
+    let file_name = {
+        let l = link.clone();
+        HostItem::SiteGetter(Rc::new(move |site| {
+            let h = current(&l)?;
+            let text = h.file_name_at(site);
+            h.charge_call(text.len() as u64 + 2)?;
+            Ok(Data::String(text))
+        }))
+    };
     let eval_file = {
         let (l, end, strict) = (link.clone(), link.clone(), link.clone());
         HostItem::Evaluator {
@@ -1294,7 +1355,7 @@ fn dollar_object(link: &Link, info: dollar::RunInfo, localization: &Rc<vectorcra
         ("write".into(), writer(false)),
         ("writeln".into(), writer(true)),
         ("evalFile".into(), eval_file),
-        ("fileName".into(), getter(include::Files::file_name)),
+        ("fileName".into(), file_name),
         ("includePath".into(), getter(include::Files::include_path)),
     ];
     items.extend(dollar::members(link, info, localization));
@@ -1858,6 +1919,13 @@ impl Session {
             Ok(expanded) => {
                 *host.script_map.borrow_mut() = expanded.map;
                 realm.set_strict_writes(expanded.strict == Some(true));
+                if fresh {
+                    let l = link.clone();
+                    realm.set_source_locator(Rc::new(move |tag, line| match current(&l) {
+                        Ok(h) => h.source_place(tag, line),
+                        Err(_) => ("[unknown]".to_string(), 0),
+                    }));
+                }
                 (if fresh { realm.add_script_extensions() } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
@@ -1865,7 +1933,10 @@ impl Session {
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
                         let r = realm.start(&expanded.source);
-                        host.script_tag.set(realm.script_tag());
+                        // Source that does not compile defines no code, so its map is not kept.
+                        if !matches!(&r, Err(e) if e.kind == RunErrorKind::Syntax) {
+                            host.script_tag.set(realm.script_tag());
+                        }
                         r
                     })
                     .map_err(|e| located(&host, &realm, &e))
@@ -2116,6 +2187,27 @@ fn line_to(s: &mut Session, host: &Host, entry: console::Entry, cut: bool) {
     host.console.borrow_mut().push(line, cut);
 }
 
+/// The error of the failed run `report` describes, as its console lines give it; `name` is the
+/// run's name in those lines ([`console::line_name`]).
+fn error_text(name: &str, report: &Value) -> String {
+    let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
+    let message = report["message"].as_str().unwrap_or_default();
+    match report["file"].as_str() {
+        Some(file) if line > 0 => format!("{name}: {file}:{line}:{column}: {message}"),
+        _ if line > 0 => format!("{name}:{line}:{column}: {message}"),
+        _ => format!("{name}: location unavailable: {message}"),
+    }
+}
+
+/// The console lines of the error of the failed run `report` describes, each as the console keeps
+/// it, cut to its limit.
+pub(crate) fn error_lines(report: &Value) -> Vec<String> {
+    let name = console::line_name(report["name"].as_str().unwrap_or_default());
+    let mut lines = vec![];
+    each_line(&error_text(&name, report), |line, _| lines.push(line));
+    lines
+}
+
 /// Ends the console lines of `host`'s run: the line `$.write` left unended, then for a failed run
 /// (`report["ok"]` false) its error as `name:line:column: message`, then an end line and a report
 /// line in the session's console. Adds the run's time, host calls by kind, slowest commands,
@@ -2130,14 +2222,7 @@ fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::
         }
     }
     if report["ok"] == false {
-        let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
-        let message = report["message"].as_str().unwrap_or_default();
-        let text = match report["file"].as_str() {
-            Some(file) if line > 0 => format!("{}: {file}:{line}:{column}: {message}", host.name),
-            _ if line > 0 => format!("{}:{line}:{column}: {message}", host.name),
-            _ => format!("{}: location unavailable: {message}", host.name),
-        };
-        each_line(&text, |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+        each_line(&error_text(&host.name, report), |line, cut| line_to(s, host, console::Entry::Error(line), cut));
     }
     let timing = clock().is_some();
     let ms = millis(host.run_nanos.get());
@@ -2162,8 +2247,8 @@ fn failure_text(report: &Value) -> String {
     let s = |k: &str| report[k].as_str().unwrap_or_default();
     let (line, column) = (report["line"].as_u64().unwrap_or(0), report["column"].as_u64().unwrap_or(0));
     let at = match report["file"].as_str() {
-        Some(file) if line > 0 => format!(" line {line}, column {column} of {file}"),
-        _ if line > 0 => format!(" line {line}, column {column}"),
+        Some(file) if line > 0 => format!(": line {line}, column {column} of {file}"),
+        _ if line > 0 => format!(": line {line}, column {column}"),
         _ => String::new(),
     };
     let written = report["written"].as_array().map_or(0, Vec::len);
@@ -2173,7 +2258,7 @@ fn failure_text(report: &Value) -> String {
     } else {
         String::new()
     };
-    format!("{}:{at}: {} ({}){kept}", s("name"), s("message"), s("kind"))
+    format!("{}{at}: {} ({}){kept}", s("name"), s("message"), s("kind"))
 }
 
 /// A run's slice: the working copy in, the real session lent to the host functions, one measured
@@ -2182,6 +2267,9 @@ fn failure_text(report: &Value) -> String {
 fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result::Result<Progress, RunError>, String> {
     let depth = std::mem::replace(&mut s.depth, 0);
     job.world.swap(s);
+    // The run's front document draws and converts through its own profiles, and the interface's
+    // again after the slice.
+    s.sync_front_profiles();
     s.script_in_run = true;
     let cell = job.host.session.clone();
     std::mem::swap(s, &mut *cell.borrow_mut());
@@ -2204,6 +2292,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     s.script_in_run = false;
     job.world.swap(s);
     s.depth = depth;
+    s.sync_front_profiles();
     r
 }
 

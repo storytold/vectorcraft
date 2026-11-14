@@ -29,10 +29,9 @@ fn finished(s: &mut Session) -> Value {
 
 #[test]
 fn a_found_font_is_copied_without_replacing_a_file_and_its_type_redraws() {
-    let root = vectorcraft_testkit::temp_dir("font-folder");
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(root.join("Downloads/Deep")).unwrap();
-    let root = plain(std::fs::canonicalize(&root).unwrap());
+    let dir = vectorcraft_testkit::TempDir::new("font-folder");
+    std::fs::create_dir_all(dir.join("Downloads/Deep")).unwrap();
+    let root = plain(std::fs::canonicalize(&*dir).unwrap());
     let fonts = root.join("App Fonts");
     vectorcraft_text::set_app_font_dir(fonts.clone());
     assert!(vectorcraft_text::system_font_dirs().contains(&fonts));
@@ -71,6 +70,13 @@ fn a_found_font_is_copied_without_replacing_a_file_and_its_type_redraws() {
     assert!(st.revision > revision && !st.is_dirty());
     assert_eq!(s.execute("text.missingFonts", &json!({})).unwrap()["count"], 0);
 
+    // A caller whose read roots hold the file but not the Fonts folder: the file is kept, and the
+    // reply names the copy by its file name only, without the folder.
+    let downloads = vectorcraft_engine::file_access::AutomationRoots::new(&[&root.join("Downloads")], &[]).unwrap();
+    let r = vectorcraft_engine::file_access::confine(downloads.as_ref(), || s.execute("text.addFontFiles", &json!({"files": [file]}))).unwrap();
+    assert_eq!((&r["folder"], &r["kept"]), (&Value::Null, &json!([{"from": file, "to": "Findme 2.otf"}])), "{r}");
+    assert!(!r.to_string().contains("App Fonts"), "{r}");
+
     // The same file again is kept, not copied a third time.
     let r = s.execute("text.addFontFiles", &json!({"files": [file]})).unwrap();
     assert_eq!((r["copied"].clone(), r["kept"].clone()), (json!([]), json!([{"from": file, "to": fonts.join("Findme 2.otf")}])), "{r}");
@@ -78,5 +84,4 @@ fn a_found_font_is_copied_without_replacing_a_file_and_its_type_redraws() {
     // Only files the last search found are copied.
     let r = s.execute("text.addFontFiles", &json!({"files": [root.join("other.ttf")]}));
     assert!(r.as_ref().is_err_and(|e| e.to_string().contains("the last text.findFontFiles search")), "{r:?}");
-    let _ = std::fs::remove_dir_all(&root);
 }

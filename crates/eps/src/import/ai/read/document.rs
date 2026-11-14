@@ -1165,7 +1165,9 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn finish(mut self) -> Result<Structure, String> {
-        if self.graph.take().is_some() {
+        if self.graph.is_some() {
+            self.graph_plain();
+            self.graph = None;
             self.warn(super::types::GRAPH_UNENDED);
         }
         // Envelopes whose plugin never closed them keep their drawn art.
@@ -1335,6 +1337,17 @@ impl<'a> Reader<'a> {
             doc.limit_depth_noting(&mut warnings);
         }
         warnings.extend(self.names.notes());
+        // The patterns of the styles that are one paint, which the text document's characters
+        // name for their fills and strokes: those that place in the document.
+        let text_patterns = self
+            .styles
+            .iter()
+            .filter_map(|(style, st)| {
+                let Some(crate::import::ai::style::StyleItem::Pattern { name, matrix, controls }) = &st.simple_pattern else { return None };
+                let paint = super::ops::style_pattern(name, *matrix, controls, &self.pattern_tiles, &self.v7_patterns, &self.global_names, to_doc)?;
+                Some((style.clone(), paint))
+            })
+            .collect();
         Ok(Structure {
             doc,
             to_doc,
@@ -1356,8 +1369,10 @@ impl<'a> Reader<'a> {
                 checks: self.envelope_checks,
                 spent: self.envelope_spent,
                 page,
+                alone: None,
             },
             styles_read,
+            text_patterns,
             canvas_scale: self.canvas_scale,
             xml_ids: self.xml_ids,
             bindings,

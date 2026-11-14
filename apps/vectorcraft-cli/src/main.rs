@@ -238,14 +238,17 @@ fn main() -> ExitCode {
 /// A headless session that remembers what the user keeps between runs: the PDF presets saved, the
 /// ICC profiles loaded, the plug-ins installed (#2168, #2174, #2541), the custom dictionary's words (#4936) and the Color Settings (#6335), in the folders
 /// and files next to the preferences that the desktop app uses too, and lists the scripts of the Scripts folder there
-/// (`script.listInstalled`). `VECTORCRAFT_NO_PREFS` and `VECTORCRAFT_CONFIG_DIR` apply as they do there.
+/// (`script.listInstalled`) and starts new documents from the New Document profiles there. `VECTORCRAFT_NO_PREFS` and
+/// `VECTORCRAFT_CONFIG_DIR` apply as they do there.
 fn with_stores(mut h: Headless) -> Headless {
     prefs_dir::attach_scripts_dir(&mut h.session);
+    prefs_dir::attach_new_doc_profiles(&mut h.session);
     prefs_dir::attach_profile_store(&mut h.session);
     prefs_dir::attach_color_settings(&mut h.session);
     prefs_dir::attach_plugin_store(&mut h.session);
     prefs_dir::attach_pdf_preset_store(&mut h.session);
     prefs_dir::attach_custom_dictionary(&mut h.session);
+    prefs_dir::attach_arrowheads(&mut h.session);
     h
 }
 
@@ -415,10 +418,18 @@ fn convert(args: &[String]) -> Result<(), String> {
         // Save as Template writes every artboard, with the .ai options.
         ("file.saveAsTemplate", json!({"path": output, "format": "ait", "outlineText": outline_text, "acknowledgeLoss": replace_lossy}))
     } else {
-        // A conversion keeps hidden layers and objects, written hidden, where the format can (SVG,
-        // PSD).
-        let params = json!({"path": output, "artboard": artboard, "range": range, "outlineText": outline_text, "hiddenLayers": true, "acknowledgeLoss": replace_lossy});
+        let params = json!({"path": output, "artboard": artboard, "range": range, "acknowledgeLoss": replace_lossy});
         let mut params = with_pixel_scale(params, &output, scale, ppi);
+        // An option the format doesn't read comes back in the warnings, so each goes out only
+        // when it was asked for: `outlineText` with --outline-text, and `hiddenLayers` to the
+        // formats that have it (SVG, PSD), where a conversion keeps hidden layers and objects,
+        // written hidden.
+        if outline_text {
+            params["outlineText"] = json!(true);
+        }
+        if vectorcraft_engine::cmd::fileio::writable_format(None, Some(&output)).is_ok_and(|f| f.options.iter().any(|o| o.name == "hiddenLayers")) {
+            params["hiddenLayers"] = json!(true);
+        }
         if let Some(decimals) = decimals {
             params["decimals"] = json!(decimals);
         }

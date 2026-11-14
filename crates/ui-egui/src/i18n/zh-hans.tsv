@@ -575,6 +575,8 @@ antiAlias	Sharp	锐利
 	Convert to Artboards	转换为画板
 	Convert to CMYK	转换为 CMYK
 	Convert to Grayscale	转换为灰度
+	Convert to Indexed Color	转换为索引颜色
+	Convert to Indexed Color…	转换为索引颜色…
 	Convert To Outlines	转换为轮廓
 	Convert To Point Type	转换为点文字
 	Convert to RGB	转换为 RGB
@@ -655,6 +657,10 @@ antiAlias	Sharp	锐利
 	Corner Color	转角颜色
 	Contiguous	连续
 	Each Channel	每个通道
+	Color Mask…	颜色蒙版…
+	Color Mask	颜色蒙版
+	Remove Color Mask	移除颜色蒙版
+	Apply Color Mask	应用颜色蒙版
 	Edit Path	编辑路径
 	Mask	蒙版
 	Crop Marks	裁切标记
@@ -751,6 +757,8 @@ antiAlias	Sharp	锐利
 	Delete Width Point	删除宽度点
 	Delete Workspace	删除工作区
 	Delete {kind} Style	删除{kind}样式
+	Delete the selected items and their artwork?	要删除所选项目及其图稿吗？
+	Delete this layer and its artwork?	要删除此图层及其图稿吗？
 	Delete “{name}”?	要删除“{name}”吗？
 	Depth:	深度：
 	Description	描述
@@ -836,6 +844,17 @@ antiAlias	Sharp	锐利
 	The selected character's font is not available.	所选字符的字体不可用。
 	No alternates for the selected character.	所选字符没有替代字。
 	Double-click to replace	双击以替换
+	Select one character with the Type tool first.	请先用文字工具选择一个字符。
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} 是 {font} 的字形，不是所选文本所用字体（{text_font}）的字形。
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} 属于 {base}（U+{base_code}）{place}；您选择的是 {sel}（U+{code}）。
+	at the start of a word	位于词首
+	in the middle of a word	位于词中
+	at the end of a word	位于词尾
+	standing alone	单独出现时
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} 不是 {sel}（U+{code}）在其单词中所处位置的替代字。
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	双击以改为插入 {base}（U+{code}）：表现形式不会连接，字母会连接。
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	已插入 {base}（U+{code}）以代替表现形式：字体会按位置将其与相邻字符连接。
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	没有任何 OpenType 功能会在此处绘制该字形，因此它会替换该字符的字形，并且可能无法与相邻字符连接。
 	Double-click to insert	双击以插入
 	Double-click to rename	双击以重命名
 	Double-click to target the contents	双击以指定内容
@@ -958,12 +977,14 @@ antiAlias	Sharp	锐利
 	Enable Contextual Task Bar	启用上下文任务栏
 	Enable copying of text, images and other content	启用复制文字、图像与其他内容
 	Enable in-menu font previews	启用菜单内字体预览
+	Show samples on white	在白色背景上显示样本
 	Enable Missing Glyph Protection	启用缺字保护
 	Enable Opacity Mask	启用不透明度蒙版
 	Enable plaintext metadata	启用纯文本元数据
 	Enable Rubber Band for	为这些工具启用橡皮筋预览
 	Enable text access for screen readers	启用屏幕阅读器的文字访问
 	Enable Touch Gestures	启用触控手势
+	Switch Selection and Drawing Modes	切换选择与绘图模式
 	Enable Touch Workspace	启用触控工作区
 	Encoding	编码
 	Encoding:	编码：
@@ -1524,6 +1545,8 @@ file-filter	Templates	模板
 	Objects on Path Tool	路径上的对象工具
 	Attach Objects on Path	附加路径上的对象
 	Expand Objects on Path	扩展路径上的对象
+	Detach	分离
+	Detach Object from Path	将对象从路径分离
 	Release Live Paint	释放实时上色
 	Release Repeat	释放重复
 	Release Slice	释放切片
@@ -1632,6 +1655,7 @@ file-filter	Templates	模板
 	Include Hidden Layers	包含隐藏图层
 	Include Linked Files	包含链接文件
 	Include Metadata	包含元数据
+	Include Variable Data	包含变量数据
 	Include non-printing layers	包含非打印图层
 	Write pages longer than 200 in at full size in points	以实际尺寸（点）写入长于 200 in 的页面
 	Include SVG Code	包含 SVG 代码
@@ -1903,6 +1927,8 @@ file-filter	Templates	模板
 	Metallic Gradients	金属渐变
 	Meters	米
 	Method:	方法：
+	Pad	延伸
+	Repeats	重复次数
 	Millimeters	毫米
 	Minify	压缩
 	Minimal	最少
@@ -1955,6 +1981,7 @@ file-filter	Templates	模板
 	Move Slices	移动切片
 	Move Spine Point	移动脊线点
 	Reshape Spine Segment	整形脊线线段
+	Blend Easing	渐变缓动
 @msg	select a blend or give `id`	请选择一个混合对象，或给出 `id`
 @msg	not a blend	不是混合对象
 @msg	the blend has no spine	混合对象没有脊线
@@ -2059,6 +2086,30 @@ file-filter	Templates	模板
 	Art Brush	艺术画笔
 	Bristle Brush	鬃毛画笔
 	Pattern Brush	图案画笔
+	missing from the Brushes panel	“画笔”面板中没有
+	built in	内置
+	embedding not allowed	不允许嵌入
+	embedding for editing	允许嵌入以供编辑
+	embedding for preview and print	允许嵌入以供预览和打印
+	embedding allowed	允许嵌入
+	{file}; {embedding}	{file}；{embedding}
+	substituted: shown in {family} {style} ({detail})	已替换：以 {family} {style} 显示 ({detail})
+	missing: shown in {family} {style}	缺失：以 {family} {style} 显示
+	missing	缺失
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}，{instances}
+	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
+	{grid}, {instances}	{grid}，{instances}
+	Linear gradient	线性渐变
+	Radial gradient	径向渐变
+	Conic gradient	锥形渐变
+	Diamond gradient	菱形渐变
+	Freeform gradient	自由渐变
+@plural	{n} instance|{n} instances	{n} 个实例
+@plural	{n} row|{n} rows	{n} 行
+@plural	{n} column|{n} columns	{n} 列
 	Select art to make a scatter, art or pattern brush.	选择图稿以创建散布画笔、艺术画笔或图案画笔。
 	Brush Art	画笔图稿
 	New Calligraphic Brush	新建书法画笔
@@ -2153,6 +2204,8 @@ file-filter	Templates	模板
 	Normal Screen Mode	正常屏幕模式
 	Note:	注释：
 	Nothing matches the Show filter.	没有项目符合“显示”筛选条件。
+	Show DCS Transparency Interactions	显示 DCS 透明度交互
+	Transparent, or overlaps transparent objects: check its separations	透明或与透明对象重叠：请检查其分色
 	Nothing to print	没有可打印的内容
 	Nudge	微移
 	Nudge in Perspective	在透视中微移
@@ -2258,6 +2311,10 @@ file-filter	Templates	模板
 	Arch	拱形
 @msg	select point type or type on a path	请选择点文字或路径文字
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	串接文本中的路径文字不能使用动态文本：{frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	开放路径或复合路径上的路径文字无法在顶部或底部居中：{open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	路径没有长度或没有高度时，其路径文字无法居中：{flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	串接文本中的路径文字无法在顶部或底部居中：{frames}
+@msg	select type on a closed path	请选择闭合路径上的路径文字
 	Optimize for fast web view	优化快速 Web 查看
 	Optimized	优化
 	Options	选项
@@ -2502,6 +2559,8 @@ font-script	Japanese	汉字
 	Proof Setup	校样设置
 	Properties	属性
 	Proportional Metrics	比例度量
+	Insert Aki Left	在前方插入空白
+	Insert Aki Right	在后方插入空白
 	Character Direction	字符方向
 	Digits	数字
 	Arabic	阿拉伯数字
@@ -2565,6 +2624,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Rating:	等级：
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
+	Use Monitor Profile for Canvas	画布使用显示器配置文件
+	The canvas is drawn in sRGB.	画布以 sRGB 绘制。
+	Canvas display profile:	画布显示配置文件：
+	The system matches the window to the display's colors.	系统会使窗口匹配显示器的颜色。
+	No usable display profile was found: the canvas is drawn in sRGB.	未找到可用的显示器配置文件：画布以 sRGB 绘制。
 	Rearrange All Artboards	重新排列所有画板
 	Rearrange	重新排列
 	Select All Artboards	选择所有画板
@@ -2767,9 +2831,18 @@ digits	Malayalam	马拉雅拉姆数字
 	Search Preferences	搜索首选项
 	No settings found	未找到设置
 	Reset Profiles	重置配置文件
+	Arrowheads	箭头
+	Edit Arrowheads	编辑箭头
+	Edit Arrowheads…	编辑箭头…
+	Reload Arrowheads	重新载入箭头
 	Reset Rotate View	重置旋转视图
 	Rotate View to Selection	按所选对象旋转视图
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
+	Color Theme Picker	色彩主题拾取器
+	Click or drag across the art to pick its colors; Shift adds more	单击或拖过图稿以拾取其颜色；按住 Shift 可添加更多
+	Prominent Colors	主要颜色
+	Save All Colors	存储所有颜色
+	Save Prominent Colors	存储主要颜色
 	Reset to Default	恢复默认
 	Reset to White, Black	重置为白、黑
 	Reset with Mesh	以网格重置
@@ -2817,6 +2890,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Roman Baseline	罗马基线
 	Roman Hanging Punctuation	西文悬挂标点
 	Korean Line Break Anywhere	韩文任意位置换行
+	Bunri-Kinshi	分离禁止
 	East Asian Composition Settings	东亚排版设置
 	Korean Composition Settings	韩文排版设置
 	Rotate	旋转
@@ -2825,6 +2899,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Rotate View Tool	旋转视图工具
 	Trackpad Gesture to Rotate View	使用触控板手势旋转视图
 	Hold a Tool Shortcut to Use the Tool Temporarily	按住工具快捷键以临时使用该工具
+	Show Bounding Box While Moving and Drawing	移动和绘制时显示定界框
 	Rotate…	旋转…
 	Rotation	旋转
 	Roughen…	粗糙效果…
@@ -3140,6 +3215,7 @@ digits	Malayalam	马拉雅拉姆数字
 	Show Note	显示注解
 	Show Options	显示选项
 	Show Recent Colors	显示最近使用的颜色
+	Toggle RGB Percent	切换 RGB 百分比显示
 	Show Original Path	显示原始路径
 	Open this dialog with these settings next time	下次以这些设置打开此对话框
 	Auto-Simplify	自动简化
@@ -3279,6 +3355,22 @@ digits	Malayalam	马拉雅拉姆数字
 	Split Path	分割路径
 	spot	专色
 	Spot Color	专色
+	Spot Color Objects	使用专色的对象
+	Pattern Objects	使用图案的对象
+	Gradient Objects	使用渐变的对象
+	Font Details	字体详细信息
+	Linked Images	链接的图像
+	Embedded Images	嵌入的图像
+	Compound Paths	复合路径
+	Text Objects	文本对象
+	Placed Documents	置入的文档
+	Symbol Instances	符号实例
+	Gradient Meshes	渐变网格
+	Blends	混合
+	Envelopes	封套
+	Intertwine Groups	交织编组
+	Opacity Masks	不透明度蒙版
+	Objects with Effects	使用效果的对象
 	Spot Colors	专色
 	Spot Colors…	专色…
 	Spread:	扩散：
@@ -3400,6 +3492,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Rename Library Group	重命名库组
 	Delete Library Group	删除库组
 	Move Library Item to Group	将库项目移到组
+	Rename Library Item	重命名库项目
+	Add to Character Styles	添加到字符样式
 	Library	库
 	Rename Library	重命名库
 	Show Library	显示库
@@ -3433,6 +3527,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Tate-chu-yoko	纵中横
 	Tate-chu-yoko Settings…	纵中横设置…
 	Tate-chu-yoko Settings	纵中横设置
+	Warichu	割注
+	Warichu Settings…	割注设置…
+	Warichu Settings	割注设置
+	Lines:	行数：
+	Line Gap:	行间距：
 	Composite Fonts…	复合字体…
 	Composite Fonts	复合字体
 	Export Composite Fonts	导出复合字体
@@ -3589,6 +3688,8 @@ digits	Malayalam	马拉雅拉姆数字
 	Type on a Path	路径文字
 	Type on a Path Options	路径文字选项
 	Type on a Path Options…	路径文字选项…
+	Center on Top	在顶部居中
+	Center on Bottom	在底部居中
 	Type on a Path Tool	路径文字工具
 	Type Orientation	文字方向
 	Type stays text, and every stroke is a line with its lineweight and dashes.	文字维持为文字，每个描边都是带有线宽与虚线的线条。
@@ -3635,6 +3736,8 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 个链接图像已在磁盘上更改。要显示新版本吗？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
 @msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串接文字区域已省略
+@msg	the Line Breaking setting of legacy type was left out	旧格式文字的换行设置已省略
+@msg	the Japanese layout rules of legacy type were left out	旧格式文字的日文排版规则已省略
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	在文字对象内更改书写方向的文字按其第一个字符的方向打开
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串接区域、绕排文字或复合路径中用作蒙版的文字不会剪切
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	文件中没有预览的链接图片在找到其文件之前显示占位符：请在“链接”面板中重新链接
@@ -4149,6 +4252,7 @@ imageTrace	Outline	轮廓
 @msg	the layer to flatten into is hidden	要拼合到的图层已隐藏
 @msg	there are no objects to release	没有可释放的对象
 @msg	no library `{id}`	没有库 `{id}`
+@msg	the library has another item of that kind named `{name}`	库中已有另一个同类项目名为 `{name}`
 @msg	{path}: not a file	{path}：不是文件
 @msg	{path}: {e}	{path}：{e}
 @msg	can't write .{ext} images	无法写入 .{ext} 图像
@@ -4191,6 +4295,7 @@ imageTrace	Outline	轮廓
 @msg	direct-select anchor points to cut at (not the end points of open paths)	请直接选择要在其处切割的锚点 (不能是开放路径的端点)
 @msg	select paths or anchor points	请选择路径或锚点
 @msg	Divide Objects Below: select a path	分割下方对象：请选择一条路径
+@msg	select a path	请选择一条路径
 @msg	Divide Objects Below: select exactly one path	分割下方对象：请只选择一条路径
 @msg	Offset Path: select paths	偏移路径：请选择路径
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	偏移路径：偏移后所选路径不剩任何部分 (内缩量大于形状)
@@ -4210,6 +4315,7 @@ imageTrace	Outline	轮廓
 @msg	select a repeat	请选择一个重复对象
 @msg	select an Intertwine group	请选择一个交织组
 @msg	select an Objects on Path group	请选择一个路径上的对象组
+@msg	choose the object to detach with its Select/Move widget	请用对象的“选择/移动”控件选择要分离的对象
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	复合路径、混合对象、封套、重复对象或交织组中的路径无法附加对象
 @msg	a clipping path can't take objects	剪切路径无法附加对象
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	混合对象、封套、重复对象或交织组中的对象无法附加到路径
@@ -4290,6 +4396,7 @@ imageTrace	Outline	轮廓
 @msg	nothing to distort	没有可扭曲的内容
 @msg	unknown option `{path}.{k}`	未知选项 `{path}.{k}`
 @msg	command `{0}` is not available right now: {1}	命令 `{0}` 当前不可用：{1}
+@msg	command `{id}` is not available right now	命令 `{id}` 当前不可用
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	`{cmd}` 中出现内部错误：{msg} (文档保持原样；请报告此错误)
 @msg	invalid parameters for `{cmd}`: {msg}	`{cmd}` 的参数无效：{msg}
 @msg	no active document	没有活动文档
@@ -4401,6 +4508,7 @@ imageTrace	Outline	轮廓
 @msg	{bpp}-bit bitmaps can't be read	无法读取 {bpp} 位位图
 @msg	not an EMF or WMF file	不是 EMF 或 WMF 文件
 @msg	not an HP-GL file	不是 HP-GL 文件
+@msg	not a PICT file	不是 PICT 文件
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 必须是由 1 到 255 个 #rrggbb 格式颜色组成的数组
 @msg	its layers use {_1}, which aren't read yet	其图层使用了 {_1}，尚不能读取
 @msg	the EMF header is damaged	EMF 文件头已损坏
@@ -4416,6 +4524,7 @@ imageTrace	Outline	轮廓
 @msg	cannot read PDF: {0}	无法读取 PDF：{0}
 @msg	invalid PDF setting: {0}	PDF 设置无效：{0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数：请打开“以实际尺寸（点）写入长于 200 in 的页面”
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：{label} 页面不带 UserUnit，以点为单位写入，遵守上限的应用会将页面裁切为 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持尺寸：文件将以 PDF 1.6 写入
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持在 PDF/A-2 的 14,400 单位页面上限之内：文件将以 PDF 1.6 写入
@@ -4475,6 +4584,8 @@ imageTrace	Outline	轮廓
 @msg	the Smooth slider is not open	平滑滑块未打开
 @msg	the screen color sampler is already open	屏幕取色器已打开
 @msg	this system has no screen color sampler	此系统没有屏幕取色器
+@msg	the screen color sampler did not answer	屏幕取色器没有响应
+@msg	the screen color sampler failed	屏幕取色器出错
 @msg	Corners edits the corners of a path	转角用于编辑路径的转角
 @msg	give corners of the path: anchors where its sides meet at an angle	请给出路径的转角：其各边以一定角度相交处的锚点
 @msg	select one path, or give its `id`	请选择一条路径，或给出其 `id`
@@ -4556,6 +4667,7 @@ imageTrace	Outline	轮廓
 @msg	give only one of onto, below and above	onto、below 和 above 只能给出一个
 @msg	column must be true or a number from 1	column 必须是 true 或从 1 开始的数字
 @msg	unknown panel `{raw}`	未知面板 `{raw}`
+@msg	panels can't be shown in Presentation Mode	演示模式下无法显示面板
 @msg	x and y must both be numbers	x 和 y 都必须是数字
 @msg	Downloaded {what}	已下载 {what}
 @msg	Imported {what}: {_1}	已导入 {what}：{_1}
@@ -4615,6 +4727,10 @@ imageTrace	Outline	轮廓
 @msg	a CMYK image has no transparency to set	CMYK 图像没有可设置的透明度
 @msg	every pixel matches the background: no image would be left	每个像素都与背景匹配：不会留下任何图像
 @msg	an image of {w} × {h} pixels is too large to change	{w} × {h} 像素的图像过大，无法更改
+@msg	select an image with a color mask	请选择一个带颜色蒙版的图像
+@msg	the color mask's settings are out of range	颜色蒙版的设置超出范围
+@msg	a CMYK image can't take a color mask	CMYK 图像不能使用颜色蒙版
+@msg	the mask would hide every pixel	蒙版会隐藏所有像素
 @msg	the document has no artboards	文档没有画板
 @msg	tool (a tool id) is required	需要 tool (工具 id)
 @msg	unknown tool `{t}`	未知工具 `{t}`
@@ -4668,6 +4784,85 @@ imageTrace	Outline	轮廓
 @msg	the script's run is no longer available	脚本运行已不可用
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	失败的命令更改了无法恢复的撤销步骤，因此脚本已停止
 @msg	a recovery copy could not be written, so the script was not run	无法写入恢复副本，因此未运行脚本
+@msg	Script file access denied	脚本文件访问被拒绝
+@msg	Script file exceeds 8 MiB	脚本文件超过 8 MiB
+@msg	Script file is not open	脚本文件未打开
+@msg	Script file cannot be decoded	无法解码脚本文件
+@msg	Script file is not a regular file	脚本文件不是常规文件
+@msg	Script file does not exist	脚本文件不存在
+@msg	Script file could not be read	无法读取脚本文件
+@msg	Script folder has more than 2,048 entries	脚本文件夹的条目超过 2,048 个
+@msg	Script file open mode must be r, w, e or a	脚本文件的打开模式必须是 r、w、e 或 a
+@msg	Script file writing is not available	脚本文件写入不可用
+@msg	Script file dialogs are not available	脚本文件对话框不可用
+@msg	Script files cannot be opened in another application	脚本文件无法在其他应用程序中打开
+@msg	Script file access is unavailable on the web	网页版无法访问脚本文件
+@msg	Script has 256 files open	脚本已打开 256 个文件
+@msg	Script file path exceeds 32,767 characters	脚本文件路径超过 32,767 个字符
+@msg	Script folder mask takes too many steps to match	脚本文件夹掩码匹配所需步骤过多
+@msg	the script opened more file data than one run may open (32 MiB)	脚本打开的文件数据超过了单次运行可打开的上限（32 MiB）
+@msg	File.seek: takes a position and a mode	File.seek：接受一个位置和一个模式
+@msg	vc.run: give a command id, as a string	vc.run：请以字符串形式提供命令 ID
+@msg	vc.run: takes a command id and an object of parameters	vc.run：接受一个命令 ID 和一个参数对象
+@msg	vc.run: the parameters must be an object	vc.run：参数必须是对象
+@msg	vc.run: the result{place} is too large for a script	vc.run：结果{place}对脚本来说过大
+@msg	$.evalFile requires a file path	$.evalFile 需要文件路径
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile：超时必须是 0 或更大的有限毫秒数
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile：接受一个文件路径和一个超时值
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（抛出）
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}：第 {line} 行，第 {column} 列：{e}（抛出）
+@msg	{name}: {e} (thrown)	{name}：{e}（抛出）
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（限制）
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}：第 {line} 行，第 {column} 列：{e}（限制）
+@msg	{name}: {e} (limit)	{name}：{e}（限制）
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（语法错误）
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}：第 {line} 行，第 {column} 列：{e}（语法错误）
+@msg	{name}: {e} (syntax)	{name}：{e}（语法错误）
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（已停止）
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}：第 {line} 行，第 {column} 列：{e}（已停止）
+@msg	{name}: {e} (stopped)	{name}：{e}（已停止）
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}：{file} 第 {line} 行，第 {column} 列：{e}（内部错误）
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}：第 {line} 行，第 {column} 列：{e}（内部错误）
+@msg	{name}: {e} (internal)	{name}：{e}（内部错误）
+@msg	{e} (these files stay written: {paths})	{e}（这些文件保持已写入状态：{paths}）
+@msg	$.{name}: give a name, as a string	$.{name}：请以字符串形式提供名称
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale：请提供 "en" 或 "de_DE" 之类的区域设置，或用 null 表示界面的区域设置
+@msg	$.localize: give true or false	$.localize：请提供 true 或 false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags：只能设置 512（开启本地化）或 0
+@msg	$.flags: give a number	$.flags：请提供一个数字
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding：此处脚本只读写 UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding：请以字符串形式提供编码名称
+@msg	$.memCache: the memory cache size cannot be set	$.memCache：无法设置内存缓存大小
+@msg	$.setenv: give a value, as a string	$.setenv：请以字符串形式提供值
+@msg	$.setenv: only {_1} can be set	$.setenv：只能设置 {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv：值最多包含 {MAX_ENV_BYTES} 个字母、数字和 _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep：请提供 0 到 {MAX_SLEEP_MS} 之间的毫秒数
+@msg	$.sleep: give a number of milliseconds	$.sleep：请提供毫秒数
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep：运行不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中等待；请从脚本自身的代码中调用
+@msg	$.bp: scripts here have no debugger	$.bp：此处脚本没有调试器
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker：脚本目前还不能显示对话框
+@msg	{name}: give a message	{name}：请提供消息
+@msg	{name}: give the text the field starts with	{name}：请提供字段的初始文本
+@msg	{name}: the message is longer than 16 KiB	{name}：消息超过 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}：标题超过 256 字节
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}：字段的初始文本超过 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}：对话框不能在内置函数的回调、getter、转换或 $.evalFile 运行的文件中打开；请从脚本自身的代码中调用
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}：`answers` 中的下一个回答是给 {_1} 的，而不是给 {name} 的
+@msg	{name}: `answers` has no answer left for this dialog	{name}：`answers` 中已没有此对话框的回答
+@msg	vc.document{place} is too large for a script	vc.document{place}对脚本来说过大
+@msg	vc.log: the log of this run is full	vc.log：本次运行的日志已满
+@msg	this function's script run has ended	此函数的脚本运行已结束
+@msg	the script made more host calls than one run may make	脚本进行的主机调用超过了一次运行允许的数量
+@msg	the script passed more data to and from commands than one run may pass	脚本与命令之间传递的数据超过了一次运行允许的数量
+@msg	the script added more objects and data to the documents than one run may add	脚本向文档添加的对象和数据超过了一次运行允许的数量
+@msg	{what}: the object is not a File or a Folder	{what}：该对象既不是 File 也不是 Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}：数量必须是 0 或更大的有限数
+@msg	File.seek: the position must be a finite number	File.seek：位置必须是有限数
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek：模式必须是 0, 1 或 2
+@msg	script file is compiled: {value}	脚本文件已编译：{value}
+@msg	`name` must be the name of a script engine	`name` 必须是脚本引擎的名称
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主脚本引擎在每次运行时都是新的，从不保留，因此无法丢弃
+@msg	there is no script engine named {name}	没有名为 {name} 的脚本引擎
 @msg	Running a script	正在运行脚本
 @msg	Copied the script report	已复制脚本报告
 @msg	Exported {path}	已导出 {path}
@@ -4709,19 +4904,28 @@ imageTrace	Outline	轮廓
 @msg	no user library folder here	此处没有用户库文件夹
 @msg	Couldn't place {name}: the document it was dropped on was closed	无法置入 {name}：将它拖放到的文档已关闭
 @msg	Couldn't place {name}: the document it was placed in was closed	无法置入 {name}：要置入的文档已关闭
+@msg	Couldn't place {name}: the document it was dropped on was reverted	无法置入 {name}：将它拖放到的文档已恢复
+@msg	Couldn't place {name}: the document it was placed in was reverted	无法置入 {name}：要置入的文档已恢复
+@msg	Couldn't paste: the document it was pasted in was reverted	无法粘贴：要粘贴到的文档已恢复
 @msg	no files to place	没有要置入的文件
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文档、PDF 或 PDF 兼容的 .ai 文件
 @msg	paths: give at least one file	paths：请至少给出一个文件
 @msg	replace: the object to replace was changed or deleted	replace：要替换的对象已被更改或删除
+@msg	the document it was prepared for is no longer active	为其准备的文档已不再处于活动状态
 @msg	Couldn't place {name}: {e}	无法置入 {name}：{e}
 @msg	no print service	没有打印服务
 @msg	the print job has no data	打印作业没有数据
 @msg	there are no printer settings to open here	此处没有可打开的打印机设置
 @msg	Couldn't save recovery data: {e}	无法保存恢复数据：{e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	无法保存 {title} 的恢复数据：{e}。副本保存在 {folder}（默认恢复文件夹）；要使用其他文件夹，请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	无法保存 {title} 的恢复数据：{e}。副本保存在 {folder}（在“首选项”中设置的文件夹）；要使用其他文件夹，请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	无法保存恢复数据：{e}。副本保存在 {folder}（默认恢复文件夹）；要使用其他文件夹，请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	无法保存恢复数据：{e}。副本保存在 {folder}（在“首选项”中设置的文件夹）；要使用其他文件夹，请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
 @msg	Saved recovery data for {title}	已保存 {title} 的恢复数据
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已丢弃 {n} 个恢复的文档
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已还原 {n} 个恢复的文档：请保存以保留它们
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	已打开，有 {n} 条注释：{first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已打开，有 {n} 条注释：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已保存 {path}，有 {n} 条注释：{first}
 @msg	Saving recovery data for {_1}	正在保存 {_1} 的恢复数据
 @msg	This shortcut file is in a form VectorCraft can't read.	此快捷键文件的格式 VectorCraft 无法读取。
@@ -4766,12 +4970,14 @@ imageTrace	Outline	轮廓
 @msg	choose the font files to add	请选择要添加的字体文件
 @msg	not a file	不是文件
 @msg	not a font file	不是字体文件
+@msg	the active document changed while the question was open; nothing was deleted	问题打开期间活动文档已更改；未删除任何内容
 @msg	that document is no longer open	该文档已不再打开
 @msg	larger than 256 MB	大于 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	文件总计超过 1 GB：请每次少添加一些
 @msg	every numbered name for it is taken in the Fonts folder	字体文件夹中所有带编号的名称均已被占用
 @msg	every numbered name for {name} is taken in the document's folder	文档所在文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	No linked files to look for	没有要查找的链接文件
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	该链接位于符号、图表设计、图案或不透明度蒙版中，在画布上没有位置
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}
@@ -5107,6 +5313,8 @@ imageTrace	Outline	轮廓
 	Outlined Text	轮廓化的文字
 	All Rasterized Regions	所有栅格化区域
 	Perceptual	可感知
+	Hue Clockwise	色相顺时针
+	Hue Counterclockwise	色相逆时针
 	Relative Colorimetric	相对比色
 	Absolute Colorimetric	绝对比色
 	Simulate	模拟
@@ -5216,6 +5424,10 @@ font-technology	Variable	可变
 	Long	长
 	Stylistic	风格化
 	Mojikumi Set	标点挤压集
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Kinsoku 集
 	Kinsoku Shori Type	Kinsoku 处理方式
 	Push In First	先推入
@@ -5298,6 +5510,10 @@ axis	Both	两者
 	Dock Panel	停放面板
 	Dock to Top	停放到顶部
 	Dock to Bottom	停放到底部
+	Dock to Left	停放到左侧
+	Dock to Right	停放到右侧
+	Dock Toolbar	停放工具栏
+	Float Toolbar	浮动工具栏
 	Control Bar Options	控制栏选项
 	Tool Options	工具选项
 	Object Options	对象选项
@@ -5622,6 +5838,68 @@ lighting	Light	光源
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label}无法从图像生成立体：请先使用“对象 › 图像描摹 › 创建”进行描摹。
 @msg	{label} requires a shape with at least two anchors	{label}需要至少有两个锚点的形状
 @msg	The shape is too complex for a 3D effect	形状过于复杂，无法应用 3D 效果
+@msg	Extrude & Bevel	突出与斜角
+@msg	Revolve	回转
+@msg	Inflate	膨胀
+@msg	Rotate	旋转
+@msg	Extrude & Bevel (Classic)	突出与斜角 (经典)
+@msg	Revolve (Classic)	回转 (经典)
+@msg	Rotate (Classic)	旋转 (经典)
+@msg	This effect	此效果
+@msg	clipping paths	剪切路径
+@msg	other objects	其他对象
+@msg	{label} requires a group holding a shape with at least two anchors	{label}需要一个包含至少有两个锚点的形状的编组
+@msg	Revolve requires a group holding a shape with at least two anchors	回转需要一个包含至少有两个锚点的形状的编组
+@msg	Revolve requires a shape with at least two anchors	回转需要至少有两个锚点的形状
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	编组上的{label}需要路径、复合路径、文字、编组、剪切组、混合和符号实例：请先释放或扩展以下内容：{what}。
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	编组上的{label}最多接受 {MAX_MEMBERS} 个对象
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	编组或图层上的 3D 效果应作用于编组本身，而不是其填色或描边
+@msg	a 3D effect on a group's fill or stroke draws nothing	编组填色或描边上的 3D 效果不绘制任何内容
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	编组填色或描边上的 3D 效果没有可导出的内容
+@msg	The 3D object is too complex to export	3D 对象过于复杂，无法导出
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	该对象没有 3D 效果（突出与斜角、回转、膨胀或旋转）
+@msg	its 3D effect builds no solid	其 3D 效果未生成任何实体
+@msg	bevel must be none or one of {_1}	bevel 必须是 none 或 {_1} 之一
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1}无法从此图稿生成实体：其符号实例、混合和剪切组包含的对象过多
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label}无法从符号“{symbol}”的实例生成实体：该符号的图稿不可用
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}：剪切路径过于复杂，无法用来剪切图稿
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1}最多接受 {MAX_MEMBERS} 个对象
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1}无法从嵌套超过 {MAX_DEPTH} 层的图稿生成实体
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	回转的上色对此表面过于复杂；请减少分段数或简化渐变
+@msg	Revolve edge must be left or right	回转：edge 必须是 left 或 right
+@msg	Revolve cap must be a boolean	回转：cap 必须是布尔值
+@msg	the revolved object has no fill or stroke	回转对象没有填色或描边
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor 必须是 #rrggbb 格式的不透明 RGB 颜色
+@msg	lights must contain one to ten lights	lights 必须包含一到十个光源
+@msg	each light must be an object	每个光源必须是对象
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	未知的光源设置：请使用 color、intensity、rotation、height、softness 或 behind
+@msg	light {key} must be a number from {min} to {max}	光源：{key} 必须是 {min} 到 {max} 之间的数字
+@msg	light color must use opaque #rrggbb	光源的 color 必须是不透明的 #rrggbb
+@msg	light behind must be true or false	光源的 behind 必须是 true 或 false
+@msg	shadow must be true or false	shadow 必须是 true 或 false
+@msg	shadowPosition must be behind or below	shadowPosition 必须是 behind 或 below
+@msg	{key} must be a number from {min} to {max}	{key} 必须是 {min} 到 {max} 之间的数字
+@msg	each of `{GRAPHICS}` must be an object	`{GRAPHICS}` 的每个条目必须是对象
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	`{GRAPHICS}` 的条目接受 symbol、face、x、y、scale 和 rotation，不接受 `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	`{GRAPHICS}` 的每个条目都需要 `symbol`，即符号的名称
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必须是 front 或 back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上
+	Graphics map onto the Plane, Extrude and Revolve object types.	图形映射到平面、突出和回转对象类型上。
+@msg	Revolve maps graphics onto its side: map them onto the front	回转将图形映射到其侧面：请将图形映射到正面
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	图形对此表面过于复杂：请简化符号的图稿或减少分段数
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 个图形
+@msg	A plane has one face: map its graphics onto the front	平面只有一个面：请将其图形映射到正面
+@msg	The graphics are too complex: simplify the symbols' art	图形过于复杂：请简化符号的图稿
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	图形的图稿最多可嵌套 {MAX_LEVELS} 层：请简化符号的图稿
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	图形的图稿最多可嵌套 {MAX_NESTING} 层符号：请简化符号的图稿
+@msg	A graphic's art holds too many objects: simplify the symbol's art	图形的图稿包含过多对象：请简化符号的图稿
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	一个图形最多绘制 {MAX_PIECES} 个填色和描边：请简化符号的图稿
+@msg	`surface` must be one of {_1}	`surface` 必须是 {_1} 之一
+@msg	{label} draws the source art for this object instead of its 3D surface	{label}为此对象绘制源图稿，而不是其 3D 表面
+@msg	{label} draws no faces for this object	{label}没有为此对象绘制任何面
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	线框的边超过 {MAX_WIRE_EDGES} 条
 @msg	The 3D surface is too complex; simplify the shape	3D 表面过于复杂；请简化形状
 	Transform Objects	变换对象
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
@@ -5632,6 +5910,7 @@ lighting	Light	光源
 @msg	unknown parameter `{path}`; it takes: {keys}	未知参数 `{path}`；它接受：{keys}
 @msg	missing `{path}`	缺少 `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` 必须是 {expected}，而不是 {got}
+@msg	`{path}` is nested too deeply	`{path}` 嵌套过深
 	Load EPS into Clipboard	将 EPS 载入剪贴板
 @msg	an image of {w} × {h} pixels is too large to draw	{w} × {h} 像素的图像过大，无法绘制
 @msg	the JPEG XL file is cut short	JPEG XL 文件不完整
@@ -5755,6 +6034,7 @@ lighting	Light	光源
 @msg	no such color	没有此颜色
 @msg	{_1} cannot be used on Windows	{_1} 在 Windows 上不能使用
 @msg	more than one action is named “{_1}”	有多个动作名为“{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	动作“{_1}”设置了文件夹首选项 {_2}；请删除该步骤后再存储动作组
 @msg	no symbol named `{n}`	没有名为 `{n}` 的符号
 	Smudge Stick…	涂抹棒…
 	Smudge Stick	涂抹棒
@@ -5785,6 +6065,9 @@ lighting	Light	光源
 @msg	a mask has more than one art block	蒙版包含多个图稿块
 @msg	mask art ends outside a mask dictionary	蒙版图稿在蒙版字典之外结束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必须是 #rrggbb 格式的颜色
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` 必须是 #rrggbb 格式的颜色或图层颜色名称
+@msg	unknown Live Paint option `{key}`	未知的实时上色选项 `{key}`
+@msg	unknown Shape Builder option `{key}`	未知的形状生成器选项 `{key}`
 @msg	a linked image can't become a gradient mesh: embed it first	链接的图像无法转换为渐变网格：请先嵌入它
 @msg	the image has no usable size or position	图像没有可用的尺寸或位置
 @msg	the image's pixels can't be read	无法读取图像的像素
@@ -5877,6 +6160,7 @@ lighting	Light	光源
 	Ruby…	注音…
 	Ruby	注音
 	Geometric Guides	几何参考线
+	Optical Effects	光学效果
 	Geometric Patterns	几何图案
 	Grit Textures	颗粒纹理
 	Ease In	缓入
@@ -5919,7 +6203,10 @@ axis	Y Axis	Y 轴
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` 适用于渐变填色 (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 适用于渐变填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必须是 true 或 false
-@msg	`method` must be classic or perceptual	`method` 必须是 classic 或 perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` 必须是 classic、perceptual、hue-clockwise 或 hue-counterclockwise
+@msg	`spread` must be pad, repeat or reflect	`spread` 必须是 pad、repeat 或 reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必须是 1 到 {MAX_REPEATS} 之间的整数
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 适用于线性、径向、圆锥和菱形渐变
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	要安装需要大量计算预算的“{name}”吗？
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	每次运行最多可能需要 {minutes} 分钟，并可完成其他插件所允许工作量的 {times} 倍。它在后台运行，可以随时取消。
@@ -5932,6 +6219,139 @@ axis	Y Axis	Y 轴
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	实时效果在绘制文档时运行，因此不能为 `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	导出增效工具始终使用导出的预算：请省略 `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}”需要大量计算预算（每次运行最多 {minutes} 分钟，指令数为通常的 {times} 倍）：需要有人在桌面应用中批准，或在以 --allow-plugin-grants 启动的会话中传入 `allowHeavy: true`
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` 必须是 1-64 个可打印字符
+@msg	`version`, `description` or `author` is too long	`version`、`description` 或 `author` 太长
+@msg	`warnings` must be a list of strings	`warnings` 必须是字符串列表
+@msg	`{k}` must be one of {_1}	`{k}` 必须是 {_1} 之一
+@msg	`{k}` must be {what}	`{k}` 必须是 {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	导出增效工具声明 1 到 {MAX_EXTENSIONS} 个 `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	组外最多 {MAX_UNGROUPED} 个参数：请为其余参数指定 `group`
+@msg	can't encode the input	无法编码输入
+@msg	expected {"dataBase64"}	应为 {"dataBase64"}
+@msg	expected {"objects"}	应为 {"objects"}
+@msg	export `{name}`: {e}	模块导出 `{name}`：{e}
+@msg	extension {e} is listed twice	扩展名 {e} 列出了两次
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	扩展名 {e}：请使用 1-16 个小写字母和数字，不带点
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	无效的 ID {_1}：请使用 1-64 个 A-Z a-z 0-9 . _ - 中的字符
+@msg	invalid parameter name {k}	无效的参数名称 {k}
+@msg	manifest is not UTF-8	清单不是 UTF-8 编码
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	清单太长（上限 {MAX_MANIFEST_BYTES} 字节）
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	清单为 {_1} 字节（上限 {MAX_MANIFEST_BYTES}）
+@msg	module is {_1} bytes (limit {_2})	模块为 {_1} 字节（上限 {_2}）
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	需要批准：它请求 {0}，用户单独安装它时授予这些权限
+@msg	not JSON: {e}	不是 JSON：{e}
+@msg	not a WebAssembly binary (missing \0asm header)	不是 WebAssembly 二进制文件（缺少 \0asm 头）
+@msg	parameter `{k}`: {what}	参数 `{k}`：{what}
+@msg	parameter `{name}`: {what}	参数 `{name}`：{what}
+@msg	plug-in parameters must be a JSON object	增效工具参数必须是 JSON 对象
+@msg	the module must export its linear memory as `memory`	模块必须将其线性内存导出为 `memory`
+@msg	the objects to change are no longer in the document	要更改的对象已不在文档中
+@msg	the runtime panicked	运行时崩溃
+@msg	unexpected host trap	宿主发生意外的 trap
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version 返回了 {v}；此宿主实现的是版本 {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc 返回了 0（内存不足）
+@msg	vc_alloc returned a block outside memory	vc_alloc 返回了内存之外的块
+@msg	vc_run returned error code {packed}	vc_run 返回了错误代码 {packed}
+@msg	{_1} is not a file	{_1} 不是文件
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} 为 {_2} 字节（上限 {_3}）
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} 个对象（上限 {MAX_OBJECTS}）
+@msg	{at}: {msg}	{at}：{msg}
+@msg	{what} points outside memory	{what} 指向内存之外
+@msg	`angle` must be a number	`angle` 必须是数字
+@msg	`aspect` must be from 0.01 to 100	`aspect` 必须在 0.01 到 100 之间
+@msg	`cap` must be "butt", "round" or "square"	`cap` 必须是 "butt"、"round" 或 "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` 必须是 "nonzero" 或 "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` 必须是不超过 {MAX_HELP_URL} 字节的 https:// 地址
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` 必须是 1-{MAX_HELP} 个可打印字符
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` 必须是 1-{MAX_EFFECT_ID} 字节的效果 ID
+@msg	`id` must be the id of an input object	`id` 必须是某个输入对象的 ID
+@msg	`join` must be "miter", "round" or "bevel"	`join` 必须是 "miter"、"round" 或 "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` 和 `group` 必须是 1-{MAX_LABEL} 个可打印字符
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` 必须是 1-{MAX_TEXT}，且默认值不能更长
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` 和 `maxItems` 必须是 0-{MAX_LIST}，`maxItems` 至少为 1，且默认值的项数在此范围内
+@msg	`name` must be a string	`name` 必须是字符串
+@msg	`opacity` must be a number	`opacity` 必须是数字
+@msg	`type` must be "path" or "compound"	`type` 必须是 "path" 或 "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` 必须是 1-{MAX_UNIT} 个可打印字符
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` 必须为 `{other}` 列出 1 到 {MAX_CONDITION_VALUES} 个值
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` 指定了 `{other}`，但它不是在此参数之前声明的参数
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` 最多指定 {MAX_CONDITIONS} 个参数
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` 接受 `{other}` 的值，该参数须为复选框或选项
+@msg	`visible` must be true or false	`visible` 必须是 true 或 false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` 必须是 {_1} 到 {_2} 之间的数字
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` 必须是最多 {MAX_ITEMS} 项的数组
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	颜色默认值必须是颜色对象或 "#3a7bd5" 这样的十六进制字符串
+@msg	a color object or a hex string such as "#3a7bd5"	颜色对象或 "#3a7bd5" 这样的十六进制字符串
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	任意形状渐变最多包含 {MAX_ITEMS} 个点和线
+@msg	a freeform gradient line names a point it doesn't have	任意形状渐变的一条线指定了渐变中没有的点
+@msg	a gradient needs 1-{MAX_ITEMS} stops	渐变需要 1-{MAX_ITEMS} 个色标
+@msg	a list of numbers	数字列表
+@msg	a list of {min_items} to {max_items} numbers	包含 {min_items} 到 {max_items} 个数字的列表
+@msg	a new object needs a `path`	新对象需要 `path`
+@msg	a number	数字
+@msg	a painted live effect returns only `objects`	绘制型实时效果只返回 `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	绘制型实时效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
+@msg	a read-only object was left out	漏掉了一个只读对象
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	漏掉了一个只读对象：请以单独的 {"id"} 或原样返回它
+@msg	a string	字符串
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	描边只有 `paint`、`width`、`join`、`cap` 和 `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	描边必须是 {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} 形式
+@msg	an effect must be {"id", "params"?, "visible"?}	效果必须是 {"id", "params"?, "visible"?} 形式
+@msg	an effect on a fill returns only `fills`	填色上的效果只返回 `fills`
+@msg	an effect on a stroke returns only `strokes`	描边上的效果只返回 `strokes`
+@msg	an object must be a JSON object	对象必须是 JSON 对象
+@msg	bad range	范围无效
+@msg	choices must be 1-64 non-empty, printable strings	选项必须是 1-64 个非空的可打印字符串
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	坐标超出范围（上限 ±{MAX_COORD} pt）
+@msg	default is not one of the options	默认值不是选项之一
+@msg	each piece needs a `path`	每个片段都需要 `path`
+@msg	is listed twice	列出了两次
+@msg	pattern transform out of range	图案变换超出范围
+@msg	read-only field '{field}' changed	只读字段 '{field}' 已更改
+@msg	stops must be in order of `offset`	色标必须按 `offset` 排序
+@msg	the document has no pattern {pattern}	文档中没有图案 {pattern}
+@msg	the document has no swatch {n}	文档中没有色板 {n}
+@msg	the output	输出
+@msg	the path has no anchor points	路径没有锚点
+@msg	too many anchor points (limit {MAX_ANCHORS})	锚点过多（上限 {MAX_ANCHORS}）
+@msg	true or false	true 或 false
+@msg	a number >= {_1}	大于或等于 {_1} 的数字
+@msg	a number > {_1}	大于 {_1} 的数字
+@msg	a number <= {_1}	小于或等于 {_1} 的数字
+@msg	a number < {_1}	小于 {_1} 的数字
+@msg	a number {_1} to {_2}	{_1} 到 {_2} 之间的数字
+@msg	a number >= {_1} and < {_2}	大于或等于 {_1} 且小于 {_2} 的数字
+@msg	a number > {_1} and <= {_2}	大于 {_1} 且小于或等于 {_2} 的数字
+@msg	a number > {_1} and < {_2}	大于 {_1} 且小于 {_2} 的数字
+@msg	a number ({_1})	数字（{_1}）
+@msg	a number >= {_1} ({_2})	大于或等于 {_1} 的数字（{_2}）
+@msg	a number > {_1} ({_2})	大于 {_1} 的数字（{_2}）
+@msg	a number <= {_1} ({_2})	小于或等于 {_1} 的数字（{_2}）
+@msg	a number < {_1} ({_2})	小于 {_1} 的数字（{_2}）
+@msg	a number {_1} to {_2} ({_3})	{_1} 到 {_2} 之间的数字（{_3}）
+@msg	a number >= {_1} and < {_2} ({_3})	大于或等于 {_1} 且小于 {_2} 的数字（{_3}）
+@msg	a number > {_1} and <= {_2} ({_3})	大于 {_1} 且小于或等于 {_2} 的数字（{_3}）
+@msg	a number > {_1} and < {_2} ({_3})	大于 {_1} 且小于 {_2} 的数字（{_3}）
+@msg	an integer	整数
+@msg	an integer >= {_1}	大于或等于 {_1} 的整数
+@msg	an integer <= {_1}	小于或等于 {_1} 的整数
+@msg	an integer {_1} to {_2}	{_1} 到 {_2} 之间的整数
+@msg	one of {_1}	{_1} 之一
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` 必须是 {_1} 之一，而不是 {got}
+@msg	an object id (a non-negative integer)	对象 ID（非负整数）
+@msg	a list of object ids	对象 ID 列表
+@msg	a color (a string, [r, g, b] or an object)	颜色（字符串、[r, g, b] 或对象）
+@msg	[x, y] (two numbers)	[x, y]（两个数字）
+@msg	an object	对象
+@msg	a list	列表
+@msg	unknown key `{k}`; the keys here are {_1}	未知键 `{k}`；此处可用的键：{_1}
+@msg	{_1} is listed twice	{_1} 列出了两次
+@msg	{_1} is not the id of an input object	{_1} 不是输入对象的 ID
+@msg	{_1} is read-only	{_1} 为只读
+@msg	{what} must be from {lo} to {hi}	{what} 必须在 {lo} 到 {hi} 之间
+@msg	a color component	颜色分量
+@msg	a plate	印版
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	要安装需要这些权限的“{name}”吗？
 	ID: {id}	ID：{id}
@@ -6026,14 +6446,33 @@ axis	Y Axis	Y 轴
 	Continue	继续
 	Continue Action	继续动作
 	Delete Action Step	删除动作步骤
+	Move Action Step	移动动作步骤
 	Press Play Current Selection in the Actions panel to go on.	要继续，请按“动作”面板中的“播放当前选择项目”。
 	Stop: {message}	停止：{message}
 @msg	no action is waiting at a stop	没有动作在停止处等待
 @msg	message must be text	message 必须是文本
 @msg	allowContinue must be true or false	allowContinue 必须是 true 或 false
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
+@msg	Batch cannot play an action with a View menu step	批处理无法播放含有视图菜单步骤的动作
 	Insert Menu Item…	插入菜单项…
 	Insert Menu Item	插入菜单项
+	Insert Select Path	插入选择路径
+	Select Path	选择路径
+@msg	select one whole path or compound path	请选择一条完整路径或复合路径
+@msg	select only one path	请只选择一条路径
+@msg	the path is hidden or locked, or cannot be selected here	该路径已隐藏或锁定，或无法在此处选择
+@msg	object {value} is not the stored path: it changed, or the document is another one	对象 {value} 不是存储的路径：它已更改，或这是另一个文档
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` 必须为 "v1:" 加 16 位小写十六进制数字
+	Select Object…	选择对象…
+	Select Object	选择对象
+	Set Selection	设置选区
+	Case Sensitive	区分大小写
+	Whole Word	全字匹配
+	Select Object: {note}	选择对象：{note}
+	Select by Note	按注释选择
+@msg	the note is empty	注释为空
+@msg	the note is longer than 1,024 bytes	注释超过 1,024 字节
+@msg	no object that can be selected has a note matching “{query}”	没有可选对象的注释与“{query}”匹配
 	Menu Item:	菜单项：
 	No menu item matches.	没有匹配的菜单项。
 	Several menu items match. Choose one from the list.	有多个菜单项匹配。请从列表中选择一个。
@@ -6145,6 +6584,11 @@ axis	Y Axis	Y 轴
 	User Brush Library 9	用户画笔库 9
 	User Brush Library 10	用户画笔库 10
 	Art Ribbons	艺术丝带
+	Ink and Wash	水墨淡彩
+	Tapered Ink	渐细墨线
+	Brush Pen	软头笔
+	Soft Wash	柔和淡彩
+	Pooling Wash	积色淡彩
 	Zigzag	锯齿
 	Burst Ray	冲击射线
 	Dash Trail	虚线轨迹
@@ -6169,6 +6613,27 @@ axis	Y Axis	Y 轴
 	Grass Fan	画草扇形笔
 	Pattern Borders	图案边框
 	Scatter Shapes	散布形状
+	Dry Media	干性画材
+	Chalk Grain	粉笔颗粒
+	Graphite Pencil	石墨铅笔
+	Wax Crayon	蜡笔
+	Charcoal Dust	炭粉
+	Notched Ribbon	凹口丝带
+	Double Line	双线
+	Wave	波浪
+	Teardrop	泪滴
+	Striped Ribbon	条纹丝带
+	Fine Nib	细笔尖
+	Broad Nib	宽笔尖
+	Chisel	凿形
+	Round Pen	圆头笔
+	Pressure Pen	压感笔
+	Beads	珠串
+	Dash Dot	点划线
+	Scallops	扇贝边
+	Stars	星形
+	Triangles	三角形
+	Sparkles	闪光
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
@@ -6188,6 +6653,13 @@ axis	Y Axis	Y 轴
 	Area Text	区域文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	按字形边界度量文字
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	对齐像素选项
+	Pixel Snapping Options…	对齐像素选项…
+	Snap to Pixel While Drawing	绘制时对齐像素
+	Snap to Pixel While Moving	移动时对齐像素
+	Snap to Pixel While Scaling	缩放时对齐像素
+	These options take effect when View › Snap to Pixel is on.	这些选项在“视图 › 对齐像素”打开时生效。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项
@@ -6273,6 +6745,8 @@ anchor	Points:	点：
 	Anchor Inspector	锚点检查器
 	Add Points at Crossings	在交叉处添加锚点
 	Split at Crossings	在交叉处分割
+	Trim at Crossings Tool	在交叉处修剪工具
+	Trim at Crossings	在交叉处修剪
 	Extend Path	延长路径
 	Measure & Inspect	测量与检查
 	Set Anchor	设置锚点
@@ -6737,7 +7211,9 @@ breakText	Glyphs	字形
 @msg	“{shown}” opens {_1} files, not `{_2}`	“{shown}” 打开的是 {_1} 文件，不是 `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` 是 `{_2}` 类型的增效工具，不是导入增效工具
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` 是 `{_2}` 类型的增效工具，不是导出增效工具
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer"}"}} 打开文件
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` 是导入增效工具：请用 document.open {{"importer": "{_2}"}} 打开文件
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` 是导出增效工具：请用 document.export {{"format": "{_2}"}} 导出
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` 是实时效果：请用 effect.apply {{"effect": "{_2}"}} 应用
 @msg	the importer returned no objects	导入增效工具未返回任何对象
 @msg	an importer returns `objects` and `warnings`, not `{key}`	导入增效工具返回 `objects` 和 `warnings`，不是 `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	文件超过导入增效工具读取的 {MAX_INPUT_BYTES} 字节
@@ -6809,8 +7285,23 @@ breakText	Glyphs	字形
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	针对基本工具的简短实操教程，按技能分组。选择一项技能即可查看其教程。
 	List Tutorials	列出教程
 	Show Tutorial	显示教程
+	Show Tool Location	显示工具位置
+	Show where this tool is	显示此工具的位置
 @msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
+	View more	查看更多
+	Finish tutorial	完成教程
+	Next Up	下一个
+	You finished the last tutorial in this skill.	你已完成此技能的最后一个教程。
+	Back to skills	返回技能
+	Open Tutorial Sample	打开教程示例
+	Finish Tutorial	完成教程
+	Next Tutorial	下一个教程
+	Back to Skills	返回技能
+@msg	tutorial `{id}` has no practice sample	教程 `{id}` 没有练习示例
+@msg	open the practice sample of `{id}` first (see learn.openSample)	请先打开 `{id}` 的练习示例 (请参阅 learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	请先完成 `{id}` (请参阅 learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最后一个教程
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	刷新延迟的效果
@@ -6829,3 +7320,1828 @@ breakText	Glyphs	字形
 @msg	Some islands could not be joined to the area around the art	部分孤岛无法连接到图稿周围的区域
 @msg	`width` must be from {lo} to {hi} pt	`width` 必须介于 {lo} 到 {hi} pt 之间
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` 必须是 1 到 {MAX_BRIDGES_PER_ISLAND} 之间的整数
+	Weed Box and Lines…	除废框和除废线…
+	Weed Box and Lines	除废框和除废线
+	Margin	边距
+	Box	框
+	Swatch	色板
+	Banner Hems and Grommets…	横幅折边和扣眼…
+	Banner Hems and Grommets	横幅折边和扣眼
+	Hem	折边
+	Grommets	扣眼
+	Grommet Inset	扣眼边距
+	Diameter	直径
+# Status and error messages of commands, scripts, file import and export, and plug-ins.
+@msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	严格模式的函数不能使用 'caller'、'callee' 和 'arguments'
+@msg	Alignment must be one of the choices	对齐方式必须是给出的选项之一
+@msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Boolean.prototype.{name} 的调用对象不是 Boolean 值
+@msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	采样无法按 CMYK 读取的 CMYK 图像已按 RGB 导入
+@msg	Cannot write to the location of “{name}”; choose where to save it	无法写入“{name}”所在的位置；请选择保存位置
+@msg	DCS files can only be placed linked: use File › Place with Link on	DCS 文件只能以链接方式置入：请使用 文件 › 置入 并勾选“链接”
+@msg	Date.prototype method called on a value that is not a Date object	Date.prototype 方法的调用对象不是 Date 对象
+@msg	Error.prototype.toString was called on a value that is not an object	Error.prototype.toString 的调用对象不是对象
+@msg	Function.prototype.toString was called on a value that is not a function	Function.prototype.toString 的调用对象不是函数
+@msg	Import SVG Filter reads SVG files, not SVGZ	导入 SVG 滤镜读取的是 SVG 文件，不是 SVGZ
+@msg	JSON.parse: {why} (at offset {at})	JSON.parse：{why} (位于偏移 {at})
+@msg	JSON.stringify cannot write a structure that contains itself	JSON.stringify 无法写出包含自身的结构
+@msg	Line Gap must be a number	行间距必须是数字
+@msg	Namespace.prototype.toString needs a Namespace	Namespace.prototype.toString 需要一个 Namespace
+@msg	New Document profiles need the preferences folder, which this run doesn't have	新建文档配置文件需要首选项文件夹，而本次运行没有该文件夹
+@msg	Number.prototype.{name} was called on a value that is not a number	Number.prototype.{name} 的调用对象不是数字
+@msg	Object.create's prototype must be an object or null	Object.create 的原型必须是对象或 null
+@msg	Object.{function} was given a value that is not an object	传给 Object.{function} 的值不是对象
+@msg	QName.prototype.toString needs a QName	QName.prototype.toString 需要一个 QName
+@msg	RegExp.prototype.{name} was called on a value that is not a RegExp object	RegExp.prototype.{name} 的调用对象不是 RegExp 对象
+@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	镂空版连接桥：所选图稿过大或过于复杂，无法添加连接桥
+@msg	String.prototype.toString was called on a value that is not a string	String.prototype.toString 的调用对象不是字符串
+@msg	The {name} profile could not be read, so the new document has the default settings: {reason}	无法读取配置文件 {name}，因此新文档使用默认设置：{reason}
+@msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	陷印：距离近到需要陷印的对象超过 {_1} 对，或处于同一水平范围的对象过多；请减少每次陷印的对象
+@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	除废框和除废线：图稿外侧放不下任何除废线，且除废框已关闭
+@msg	\ at end of pattern	模式以 \ 结尾
+@msg	`alignOn` cannot be empty	`alignOn` 不能为空
+@msg	`alignOn` must be a string	`alignOn` 必须是字符串
+@msg	`align` must be a string	`align` 必须是字符串
+@msg	`answer` for this {kind} dialog must be one of: {_1}	此 {kind} 对话框的 `answer` 必须是以下之一：{_1}
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 中的回答超过 {MAX_ANSWERS} 个
+@msg	`answers` is larger than 1 MiB	`answers` 大于 1 MiB
+@msg	`answers` must be a list of answers	`answers` 必须是回答的列表
+@msg	`artboard` must be the index of an artboard of the document	`artboard` 必须是文档中某个画板的索引
+@msg	`artboardsAt` must be [x, y]	`artboardsAt` 必须是 [x, y]
+@msg	`artboards` names an artboard the document does not have	`artboards` 指定了文档中没有的画板
+@msg	`artboards` names an artboard twice	`artboards` 重复指定了同一个画板
+@msg	`at` must be [x, y] (got {at})	`at` 必须是 [x, y] (实际为 {at})
+@msg	`at` must be a point [x, y]	`at` 必须是点 [x, y]
+@msg	`beside` needs `side`	`beside` 需要 `side`
+@msg	`code` must be a whole number	`code` 必须是整数
+@msg	`colorMode` must be one of rgb, cmyk	`colorMode` 必须是 rgb、cmyk 之一
+@msg	`colors` does not apply to the {name} reduction	`colors` 不适用于 {name} 减色方式
+@msg	`colors` must be a whole number from 2 to 256	`colors` 必须是 2 到 256 之间的整数
+@msg	`colors` must be at least 9 for the uniform reduction	使用 uniform 减色方式时，`colors` 至少为 9
+@msg	`colors` must be between 1 and {MAX_THEME_COLORS} (got {n})	`colors` 必须介于 1 到 {MAX_THEME_COLORS} 之间 (实际为 {n})
+@msg	`count` must be a whole number from 0 to {MAX_COUNT}	`count` 必须是 0 到 {MAX_COUNT} 之间的整数
+@msg	`ditherAmount` must be a number from 0 to 100	`ditherAmount` 必须是 0 到 100 之间的数字
+@msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` 必须介于 {lo} 到 {hi} pt 之间
+@msg	`focal` and `radius` cannot be used together	`focal` 和 `radius` 不能同时使用
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` 必须是 [subpath, anchor] 对的数组
+@msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` 指定了 [{si}, {ai}]，它不是该路径的锚点
+@msg	`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)	`glyphAlternate` 只接受 null，用于取消字形选择 (text.setGlyphAlternate 用于设置选择)
+@msg	`group` must be one of {_1}	`group` 必须是 {_1} 之一
+@msg	`group` must be the Objects on Path group of `member` and `target`	`group` 必须是 `member` 和 `target` 所在的“路径上的对象”组
+@msg	`id` is an object id, not {v}	`id` 是对象 ID，不是 {v}
+@msg	`item` needs `index`	`item` 需要 `index`
+@msg	`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)	`kerningBefore` 属于行首字符，不属于字符样式 (由 text.setRangeStyle 设置)
+@msg	`kinsokuType` must be "pushInFirst", "pushOutFirst" or "pushOutOnly"	`kinsokuType` 必须是 "pushInFirst"、"pushOutFirst" 或 "pushOutOnly"
+@msg	`leader` must be a string	`leader` 必须是字符串
+@msg	`max` must be 1 to {MAX_SUGGESTIONS}	`max` 必须为 1 到 {MAX_SUGGESTIONS}
+@msg	`name` must be a name that is not empty	`name` 必须是非空的名称
+@msg	`name` must not be empty	`name` 不能为空
+@msg	`origin` must be [x, y] in points	`origin` 必须是以点为单位的 [x, y]
+@msg	`picks` must be an array (got {v})	`picks` 必须是数组 (实际为 {v})
+@msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` 必须包含 1 到 {MAX_PICKS} 个拾取项 (实际为 {_1})
+@msg	`points` must hold from 2 to 100000 points	`points` 必须包含 2 到 100000 个点
+@msg	`radius` must be 0 or more	`radius` 必须大于或等于 0
+@msg	`rect` must be [x, y, width, height]	`rect` 必须是 [x, y, width, height]
+@msg	`rect` must be [x0, y0, x1, y1] (got {r})	`rect` 必须是 [x0, y0, x1, y1] (实际为 {r})
+@msg	`replace` must be a string	`replace` 必须是字符串
+@msg	`rows` must be lists of numbers or nulls, not {r}	`rows` 必须是由数字或 null 组成的列表，不能是 {r}
+@msg	`scale` must be a number from 0.001 to 1000	`scale` 必须是 0.001 到 1000 之间的数字
+@msg	`scope.{key}` must be a non-empty array	`scope.{key}` 必须是非空数组
+@msg	`scope` must be "document", {artboards} or {layers}	`scope` 必须是 "document"、{artboards} 或 {layers}
+@msg	`side` must be "left", "right", "top" or "bottom"	`side` 必须是 "left"、"right"、"top" 或 "bottom"
+@msg	`side` places the artboard: leave out x, y, width and height	`side` 决定画板的位置：请不要给出 x、y、width 和 height
+@msg	`source` is the only path in series group `target`	`source` 是系列组 `target` 中唯一的路径
+@msg	`spacing` makes more than {MAX_COUNT} lines across the box	`spacing` 会在框内生成超过 {MAX_COUNT} 条线
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` 必须大于 0 且不超过 {MAX_DISTANCE} pt
+@msg	`target` must be an object of the same Objects on Path group as `member`	`target` 必须是与 `member` 同属一个“路径上的对象”组的对象
+@msg	`tolerance` must be from 0 to 100 pt	`tolerance` 必须为 0 到 100 pt
+@msg	`version` must be 0 or {_1}	`version` 必须是 0 或 {_1}
+@msg	`version` must be 0 or {newest}	`version` 必须是 0 或 {newest}
+@msg	`warichuAlign` must be one of {_1}	`warichuAlign` 必须是 {_1} 之一
+@msg	`warichuLines` must be a whole number from {_1} to {_2}	`warichuLines` 必须是 {_1} 到 {_2} 之间的整数
+@msg	`weight` must be from 0.01 to 1000 pt	`weight` 必须为 0.01 到 1000 pt
+@msg	`weights` must be a list of {_1} numbers, one per row (got {v})	`weights` 必须是 {_1} 个数字的列表，每行一个 (实际为 {v})
+@msg	`xml` must be a string	`xml` 必须是字符串
+@msg	`{KEY}` entry {n} gives the paragraph at byte {start} of {_1} other indents than an entry before it	`{KEY}` 的第 {n} 项为 {_1} 中字节 {start} 处的段落指定的缩进与前面某一项不同
+@msg	`{KEY}` entry {n} must be an object	`{KEY}` 的第 {n} 项必须是对象
+@msg	`{KEY}` entry {n} sets neither `leftIndent` nor `firstLineIndent`	`{KEY}` 的第 {n} 项既未设置 `leftIndent`，也未设置 `firstLineIndent`
+@msg	`{KEY}` entry {n}: `id` must be an object id	`{KEY}` 的第 {n} 项：`id` 必须是对象 ID
+@msg	`{KEY}` entry {n}: `start` must be a byte offset	`{KEY}` 的第 {n} 项：`start` 必须是字节偏移
+@msg	`{KEY}` entry {n}: `{k}` must be a number from -{MAX_PARA} to {MAX_PARA} pt	`{KEY}` 的第 {n} 项：`{k}` 必须是 -{MAX_PARA} 到 {MAX_PARA} pt 之间的数字
+@msg	`{KEY}` entry {n}: no paragraph of {_1} starts at byte {start}	`{KEY}` 的第 {n} 项：{_1} 中没有从字节 {start} 开始的段落
+@msg	`{KEY}` entry {n}: unknown key `{k}`	`{KEY}` 的第 {n} 项：未知的键 `{k}`
+@msg	`{KEY}` entry {n}: {_1} is not a type object	`{KEY}` 的第 {n} 项：{_1} 不是文字对象
+@msg	`{KEY}` is empty	`{KEY}` 为空
+@msg	`{KEY}` must be a list	`{KEY}` 必须是列表
+@msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` 最多包含 {MAX_PARAGRAPH_INDENTS} 项 (实际为 {_1})
+@msg	`{KEY}` takes no `{other}` beside it	`{KEY}` 不能与 `{other}` 同时给出
+@msg	`{base}` is larger than {_1} MB	`{base}` 大于 {_1} MB
+@msg	`{base}` is not in the DCS file's folder	`{base}` 不在 DCS 文件所在的文件夹中
+@msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` 中的单词超过 {MAX_EDIT_WORDS} 个
+@msg	`{key}` must be 0 or more	`{key}` 必须大于或等于 0
+@msg	`{key}` must be [x, y] numbers	`{key}` 必须是数字 [x, y]
+@msg	`{key}` must be a list of words	`{key}` 必须是单词的列表
+@msg	`{key}` must be a list, not {v}	`{key}` 必须是列表，不能是 {v}
+@msg	`{key}` must be a number or null, not {v}	`{key}` 必须是数字或 null，不能是 {v}
+@msg	`{key}` must be a whole number of 0 or more	`{key}` 必须是大于或等于 0 的整数
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` 必须为 0 到 {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` 必须为 0.01 到 1000 pt
+@msg	`{key}` must be from {lo} to {hi}, not {v}	`{key}` 必须介于 {lo} 到 {hi} 之间，不能是 {v}
+@msg	`{key}` must be one of auto, always, never	`{key}` 必须是 auto、always、never 之一
+@msg	`{key}` must be one of miter, round, bevel	`{key}` 必须是 miter、round、bevel 之一
+@msg	`{key}` must be one word of at most {_1} characters	`{key}` 必须是一个不超过 {_1} 个字符的单词
+@msg	`{key}` must hold single words of at most {_1} characters	`{key}` 中的每一项必须是不超过 {_1} 个字符的单个单词
+@msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}` 必须指定附着在“路径上的对象”组的路径上的对象
+@msg	`{key}` names an object that is hidden or locked	`{key}` 指定的对象已隐藏或锁定
+@msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}` 是一个单独的文件，只能在 DCS 文件的路径旁找到
+@msg	`{name}`: {_1}: {e}	`{name}`：{_1}：{e}
+@msg	`{u}` is no Unicode character	`{u}` 不是 Unicode 字符
+@msg	`{word}` isn't in the custom dictionary	`{word}` 不在自定义词典中
+@msg	a CMap has too many mappings	某个 CMap 的映射过多
+@msg	a \u escape needs four hexadecimal digits	\u 转义需要四位十六进制数字
+@msg	a comma in an XPath expression must separate function arguments	XPath 表达式中的逗号只能用来分隔函数参数
+@msg	a document holds at most {_1} SVG filters	一个文档最多包含 {_1} 个 SVG 滤镜
+@msg	a document with unsaved changes has no recovery copy	有未保存更改的文档没有恢复副本
+@msg	a font's data is too large	某个字体的数据过大
+@msg	a font's subroutines are too large	某个字体的子程序过大
+@msg	a function declaration without a name	函数声明没有名称
+@msg	a host value has too many entries	宿主值的条目过多
+@msg	a host value is nested too deep	宿主值嵌套过深
+@msg	a namespace declaration uses a reserved prefix or URI	命名空间声明使用了保留的前缀或 URI
+@msg	a namespace qualifier is undefined	命名空间限定符未定义
+@msg	a namespace with an empty URI cannot have a prefix	URI 为空的命名空间不能有前缀
+@msg	a number has no digits	数字中没有数位
+@msg	a number's exponent has no digits	数字的指数部分没有数位
+@msg	a number's fraction has no digits	数字的小数部分没有数位
+@msg	a property descriptor cannot have both a value or writable and a get or set	属性描述符不能同时包含 value 或 writable 以及 get 或 set
+@msg	a property descriptor must be an object	属性描述符必须是对象
+@msg	a property's {name} must be a function or undefined	属性的 {name} 必须是函数或 undefined
+@msg	a stream in it would decode to more than 256 MB, or its decode parameters can't be applied	其中某个数据流解码后会超过 256 MB，或无法应用其解码参数
+@msg	a string holds a control character	字符串中含有控制字符
+@msg	a string holds an escape sequence JSON does not have	字符串中含有 JSON 不支持的转义序列
+@msg	a string is not closed	字符串没有结束
+@msg	an SVG filter is named by its id: give `xml` with `name`	SVG 滤镜以其 id 命名：请同时给出 `xml` 和 `name`
+@msg	an XML element has two attributes with the same name	XML 元素有两个同名的属性
+@msg	an XML value cannot be inserted into itself or its descendants	XML 值不能插入到自身或其后代中
+@msg	an XML value's children cannot be assigned by position	不能按位置为 XML 值的子项赋值
+@msg	an XML value's children cannot be deleted by position	不能按位置删除 XML 值的子项
+@msg	an XMLList converts to XML only when it has one item	XMLList 只有在仅含一项时才能转换为 XML
+@msg	an XPath node test is missing	缺少 XPath 节点测试
+@msg	an XPath operand is missing	缺少 XPath 操作数
+@msg	an XPath operator is missing	缺少 XPath 运算符
+@msg	an XPath predicate or step cannot follow here	此处不能接 XPath 谓词或步
+@msg	an XPath predicate or step follows a value that is not a node-set	XPath 谓词或步接在了不是节点集的值之后
+@msg	an XPath step is missing	缺少 XPath 步
+@msg	an image couldn't be decoded and is missing from the picture	有一个图像无法解码，因此图片中缺少该图像
+@msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	{w} × {h} 像素的图像过大，无法转换 (最多 {_1} 像素)
+@msg	apply was called on a value that is not a function	apply 的调用对象不是函数
+@msg	area type in a thread cannot use Dynamic Text: {frames}	串接中的区域文字不能使用动态文本：{frames}
+@msg	array literal too long	数组字面量过长
+@msg	assignment to a constant binding	对常量绑定赋值
+@msg	at least one row that isn't excluded needs a weight above 0	至少要有一个未被排除的行的权重大于 0
+@msg	bad point {v}: expected [x, y]	点 {v} 无效：应为 [x, y]
+@msg	blend must be a mode name	blend 必须是模式名称
+@msg	both sides of an XPath | must select nodes	XPath 的 | 两侧都必须选择节点
+@msg	canceled	已取消
+@msg	cannot convert the object to a primitive value	无法将对象转换为原始值
+@msg	cannot convert undefined or null to an object	无法将 undefined 或 null 转换为对象
+@msg	character dimensions cannot be represented with the source text transform	无法用源文本的变换表示字符尺寸
+@msg	character dimensions cannot be represented with the target text transform	无法用目标文本的变换表示字符尺寸
+@msg	continuation must be an array of path chunks	continuation 必须是路径分段的数组
+@msg	continuation requires points	continuation 需要 points
+@msg	each path chunk must contain 1 to 4096 points	每个路径分段必须包含 1 到 4096 个点
+@msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	每个拾取项是 {{at: [x, y]}} 或 {{rect: [x0, y0, x1, y1]}} (实际为 {v})
+@msg	each weight must be a number of 0 or more (got {v})	每个权重必须是大于或等于 0 的数字 (实际为 {v})
+@msg	finally table {t} out of range	finally 表 {t} 超出范围
+@msg	flags cannot be given with a RegExp object	不能在给出 RegExp 对象的同时给出 flags
+@msg	function declaration index out of range	函数声明索引超出范围
+@msg	give `char`, `text`, `code` or `unicode`	请给出 `char`、`text`、`code` 或 `unicode`
+@msg	give `count` or `spacing`, not both	请给出 `count` 或 `spacing`，不能两者都给
+@msg	give `name`, an SVG filter's name	请给出 `name`，即 SVG 滤镜的名称
+@msg	give `path`, an SVG file, or `svg`, SVG text	请给出 `path` (SVG 文件) 或 `svg` (SVG 文本)
+@msg	give `xml`, one SVG <filter> element	请给出 `xml`，即一个 SVG <filter> 元素
+@msg	give exactly one of `at`, `rect` and `points`	`at`、`rect` 和 `points` 中必须且只能给出一个
+@msg	give exactly one of `path`, `data` and `dataBase64`	`path`、`data` 和 `dataBase64` 中必须且只能给出一个
+@msg	give index or indexes, not both	请给出 index 或 indexes，不能两者都给
+@msg	give one <filter> element	请给出一个 <filter> 元素
+@msg	give opacity or blend	请给出 opacity 或 blend
+@msg	handler at {_1} expects {_2} values but its range starts with {d}	位于 {_1} 的处理程序需要 {_2} 个值，但其范围开始时有 {d} 个
+@msg	handler depth too large	处理程序深度过大
+@msg	handler range {_1}..{_2} out of range	处理程序范围 {_1}..{_2} 超出范围
+@msg	hiddenLayers must be true or false	hiddenLayers 必须为 true 或 false
+@msg	hvcC	hvcC
+@msg	images in a spot ink whose samples couldn't be read were imported in RGB	采样无法读取的专色油墨图像已按 RGB 导入
+@msg	images past the most pixels one file may hold were left out	超出单个文件像素上限的图像已被略去
+@msg	images too large to read were left out	过大而无法读取的图像已被略去
+@msg	indexes may hold at most {MAX_GUIDE_INDEXES} entries	indexes 最多包含 {MAX_GUIDE_INDEXES} 项
+@msg	indexes must be an array of guide indexes	indexes 必须是参考线索引的数组
+@msg	instruction out of range	指令超出范围
+@msg	instruction {pc} ({op}) pops below the stack	指令 {pc} ({op}) 的出栈超出了栈底
+@msg	instruction {pc} reached with stack depths {seen} and {d}	到达指令 {pc} 时的栈深度分别为 {seen} 和 {d}
+@msg	invalid array length	数组长度无效
+@msg	invalid group	分组无效
+@msg	invalid object id {v}: expected a non-negative integer	对象 ID {v} 无效：应为非负整数
+@msg	invalid regular expression flag '{_1}'	正则表达式标志 '{_1}' 无效
+@msg	invalid regular expression: {m}	正则表达式无效：{m}
+@msg	invalid time value	时间值无效
+@msg	is a confirm's answer, whose `value` must be true or false	是 confirm 的回答，其 `value` 必须为 true 或 false
+@msg	is a prompt's answer, whose `value` must be a string or null	是 prompt 的回答，其 `value` 必须是字符串或 null
+@msg	is an alert's answer, whose `value` must be "ok"	是 alert 的回答，其 `value` 必须是 "ok"
+@msg	is longer than 16 KiB	长度超过 16 KiB
+@msg	it draws its image through a clipping path	它通过剪切路径绘制图像
+@msg	it draws no image	它没有绘制图像
+@msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	它大于 {MAX_DICTIONARY_FILE_BYTES} 字节
+@msg	it isn't a file	它不是文件
+@msg	it names {_1} plates, and at most {MAX_PLATES} are read	它列出了 {_1} 个印版，而最多读取 {MAX_PLATES} 个
+@msg	its art is too long or too detailed for a head	其图稿过长或过于复杂，不能用作箭头
+@msg	its art paints nothing	其图稿没有绘制任何内容
+@msg	its image is too large to read	其图像过大，无法读取
+@msg	its plates are too large: more than {MAX_SAMPLES} pixels together	其印版过大：合计超过 {MAX_SAMPLES} 像素
+@msg	its plates are too large: {_1} plates of {w} × {h} pixels	其印版过大：{_1} 个 {w} × {h} 像素的印版
+@msg	its plates can't be kept together	其印版无法保存在一起
+@msg	its shapes could not be combined into one	其形状无法合并为一个
+@msg	jump to {pc}, past the end	跳转到 {pc}，超出了末尾
+@msg	legacyNameEncoding must be one of {_1}	legacyNameEncoding 必须是 {_1} 之一
+@msg	localize: the first argument must be a localization object or a string	localize：第一个参数必须是本地化对象或字符串
+@msg	missing `picks`	缺少 `picks`
+@msg	missing `word`	缺少 `word`
+@msg	must be an object with `kind` and `value`	必须是包含 `kind` 和 `value` 的对象
+@msg	must have `kind` alert, confirm or prompt	`kind` 必须是 alert、confirm 或 prompt
+@msg	must have exactly `kind` and `value`	必须只包含 `kind` 和 `value`
+@msg	needs a closing quote after the name	名称后需要右引号
+@msg	needs a name	需要名称
+@msg	needs a name of at most 64 bytes	需要不超过 64 字节的名称
+@msg	needs a name of letters, digits and _, or a quoted name	需要由字母、数字和 _ 组成的名称，或带引号的名称
+@msg	needs a name without control characters	需要不含控制字符的名称
+@msg	nesting too deep	嵌套过深
+@msg	no HP-GL format	没有 HP-GL 格式
+@msg	no New Document profile called `{shown}` ({_1})	没有名为 `{shown}` 的新建文档配置文件 ({_1})
+@msg	no SVG filter at index {k}	索引 {k} 处没有 SVG 滤镜
+@msg	no arrowheads file here	这里没有箭头文件
+@msg	no character has code {code}	没有代码为 {code} 的字符
+@msg	no custom arrowhead {name} (see stroke.arrowheads.list)	没有自定义箭头 {name} (参见 stroke.arrowheads.list)
+@msg	no file to open	没有要打开的文件
+@msg	no instructions	没有指令
+@msg	no layer to rename	没有要重命名的图层
+@msg	no random numbers ({e})	无法获取随机数 ({e})
+@msg	no selected or given object has a visible 3D effect	所选或指定的对象都没有可见的 3D 效果
+@msg	no such artboard {v}	没有画板 {v}
+@msg	no symbol named `{_1}`	没有名为 `{_1}` 的符号
+@msg	node {_1} already has the text variable `{_2}`	节点 {_1} 已有文本变量 `{_2}`
+@msg	not a DCS file	不是 DCS 文件
+@msg	not a RegExp object	不是 RegExp 对象
+@msg	not a regular expression	不是正则表达式
+@msg	not an action set: the text doesn't start with /version and a number	不是动作组：文本不是以 /version 和一个数字开头
+@msg	nothing to repeat	没有可重复的内容
+@msg	numbers out of order in {_1} quantifier	量词 {_1} 中的数字顺序颠倒
+@msg	object {_1} needs a 3D effect	对象 {_1} 需要有 3D 效果
+@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	对象 {_1}：空心的突出与斜角没有端面：请打开“端点”后再贴图
+@msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	对象 {_1}：深度为 0 时对象只有一个面：请将图形贴到正面
+@msg	object {_1}: {_2}	对象 {_1}：{_2}
+@msg	object {_1}: {e}	对象 {_1}：{e}
+@msg	object {_1}: {name} at index {index} has no lighting presets; set its lights with effect.setParams	对象 {_1}：索引 {index} 处的 {name} 没有照明预设；请用 effect.setParams 设置其光源
+@msg	opacity must be a number	opacity 必须是数字
+@msg	operand too large	操作数过大
+@msg	order is a whole number from 0 to {others}, not `{v}`	order 是 0 到 {others} 之间的整数，不能是 `{v}`
+@msg	path chunks must share their boundary point	相邻的路径分段必须共用边界点
+@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false 在 useArtboards 为 false 时需要用画板来保留可编辑的图稿
+@msg	point x must be a number	点的 x 必须是数字
+@msg	point y must be a number	点的 y 必须是数字
+@msg	points must be [x,y] pairs	points 必须是 [x,y] 对
+@msg	points must be finite canvas points	points 必须是画布上的有限坐标点
+@msg	range out of order in character class	字符类中的范围顺序颠倒
+@msg	reduce of an empty array with no initial value	对空数组调用 reduce 且没有初始值
+@msg	regular expression flag '{_1}' given twice	正则表达式标志 '{_1}' 给出了两次
+@msg	sampled text would exceed the canvas (coordinates out of range)	取样的文本会超出画布 (坐标超出范围)
+@msg	select an SVG filter	请选择一个 SVG 滤镜
+@msg	select an object with a 3D effect	请选择带有 3D 效果的对象
+@msg	select an object with a 3D effect, or give its id in ids	请选择带有 3D 效果的对象，或在 ids 中给出其 ID
+@msg	select one layer, group or object to rename	请选择一个要重命名的图层、编组或对象
+@msg	select the art to weed	请选择要除废的图稿
+@msg	select the banner, or mark every artboard	请选择横幅，或为每个画板添加标记
+@msg	select type on a path or area type	请选择路径文字或区域文字
+@msg	side is left or right, not `{v}`	side 是 left 或 right，不能是 `{v}`
+@msg	source text transform is collapsed or unrepresentable	源文本的变换已塌缩或无法表示
+@msg	table must be true or false	table 必须为 true 或 false
+@msg	takes one name	只接受一个名称
+@msg	target text transform is collapsed or unrepresentable	目标文本的变换已塌缩或无法表示
+@msg	that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer	这样生成的片段 (最多 100000 个) 或虚线步数过多：请简化虚线图案或加长虚线
+@msg	the Layers panel is not shown	“图层”面板未显示
+@msg	the Layers panel's search, filter or Show Layers Only hides its row	“图层”面板的搜索、筛选或“仅显示图层”隐藏了它所在的行
+@msg	the Objects on Path group is hidden or locked	“路径上的对象”组已隐藏或锁定
+@msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	SVG 文件大于 {MAX_IMPORT_BYTES} 字节
+@msg	the XML operation needs an XML or XMLList value	此 XML 操作需要 XML 或 XMLList 值
+@msg	the XPath expression does not evaluate to a node-set	XPath 表达式的求值结果不是节点集
+@msg	the XPath expression ends early	XPath 表达式提前结束
+@msg	the XPath expression has an unmatched )	XPath 表达式中有不匹配的 )
+@msg	the XPath expression has an unmatched ]	XPath 表达式中有不匹配的 ]
+@msg	the XPath expression has an unmatched closing bracket	XPath 表达式中有不匹配的右括号
+@msg	the XPath expression selects a namespace node, which is not an XML value	XPath 表达式选中了命名空间节点，它不是 XML 值
+@msg	the XPath expression selects the root node, which is not an XML value	XPath 表达式选中了根节点，它不是 XML 值
+@msg	the XPath function {name} needs a node-set	XPath 函数 {name} 需要节点集
+@msg	the XPath function {name} takes the wrong number of arguments	XPath 函数 {name} 的参数个数不正确
+@msg	the XPath name functions need a node-set	XPath 的名称函数需要节点集
+@msg	the XPath prefix {shown} is not bound to a namespace	XPath 前缀 {shown} 未绑定到命名空间
+@msg	the XPath variable ${shown} is not bound	XPath 变量 ${shown} 未绑定
+@msg	the argument list is not an object	参数列表不是对象
+@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	图稿过大，无法完整写入 EPS：256 MB 之后的 PostScript 内容已被略去
+@msg	the banner has no width or height	横幅没有宽度或高度
+@msg	the bitmaps hold more pixels than one file may	位图的像素数超过了单个文件的上限
+@msg	the code runs past its last instruction	代码运行到了最后一条指令之后
+@msg	the curve tolerance must be from 0.01 to 10 points	曲线容差必须为 0.01 到 10 点
+@msg	the custom dictionary couldn't be saved to {_1}: {e}	无法将自定义词典保存到 {_1}：{e}
+@msg	the custom dictionary {_1} can't be read ({why}), so it is left as it is	无法读取自定义词典 {_1} ({why})，因此保持原样
+@msg	the document already has an SVG filter named {name}	文档中已有名为 {name} 的 SVG 滤镜
+@msg	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it	文档中已有另一个名为 {name} 的 SVG 滤镜：请使用 svgFilter.apply，或使用带 `replace` 的 svgFilter.define 来编辑它
+@msg	the document has no SVG filter named {name}	文档中没有名为 {name} 的 SVG 滤镜
+@msg	the document has no SVG filter named {r}	文档中没有名为 {r} 的 SVG 滤镜
+@msg	the document has no color swatches	文档中没有颜色色板
+@msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	文档的色板含有 {_1} 种颜色；document 减色方式最多使用 255 种
+@msg	the file isn't valid SVG: {e}	文件不是有效的 SVG：{e}
+@msg	the file names no plate	文件没有列出任何印版
+@msg	the function's prototype is not an object	函数的原型不是对象
+@msg	the grommet inset is too large for the banner	扣眼边距对横幅而言过大
+@msg	the guide is hidden or locked	参考线已隐藏或锁定
+@msg	the hem is too deep for the banner	折边对横幅而言过深
+@msg	the library's file is outside the read roots	库文件位于可读取的根目录之外
+@msg	the line is too long, or the paths it passes too many, to check	线条过长，或它经过的路径过多，无法检查
+@msg	the method needs an XML value	此方法需要 XML 值
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	该上色不是自由渐变 (请用 paint.editGradient {kind} 应用一个)
+@msg	the parameters or body do not form one function	参数或函数体不能构成一个函数
+@msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	粘贴的 SVG 滤镜 {name} 与文档中同名滤镜的绘制结果不同，且没有可用的空闲名称
+@msg	the paths are too many or too tangled to find where they cross	路径过多或过于交错，无法找出它们的交叉位置
+@msg	the pen table holds more than 255 pens	笔表中的笔超过 255 支
+@msg	the plates can't be kept	无法保留这些印版
+@msg	the position table does not match the instructions	位置表与指令不匹配
+@msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	提示文本的长度超过 {MAX_PROMPT_BYTES} 字节
+@msg	the radix must be between 2 and 36	基数必须介于 2 到 36 之间
+@msg	the rectangle or line reaches too many paths to check	矩形或线条涉及的路径过多，无法检查
+@msg	the right side of 'in' is not an object	'in' 的右侧不是对象
+@msg	the right side of 'instanceof' is not a function	'instanceof' 的右侧不是函数
+@msg	the selected art is nested more than {MAX_DEPTH} levels deep	所选图稿的嵌套超过 {MAX_DEPTH} 层
+@msg	the selected art is too large to measure	所选图稿过大，无法测量
+@msg	the selection has no outlines to weed around	所选对象没有可供除废的轮廓
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	此间距会生成超过 {MAX_GROMMETS} 个扣眼
+@msg	the value bind was called on is not a function	调用 bind 的值不是函数
+@msg	the value is not a constructor	该值不是构造函数
+@msg	the value is not a function	该值不是函数
+@msg	the value is not a valid XML name	该值不是有效的 XML 名称
+@msg	the value is not an XML attribute name	该值不是 XML 属性名称
+@msg	the value is not an XML name	该值不是 XML 名称
+@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	除废线与图稿轮廓的交叉次数过多，无法测量；请减少除废线
+@msg	the weeding lines pass too close to too many outline segments to measure; use fewer lines or a smaller gap	除废线离过多的轮廓线段太近，无法测量；请减少除废线或缩小间隙
+@msg	the weeding lines would be more than {max_pieces} pieces	除废线会超过 {max_pieces} 段
+@msg	the {_1} plate lies outside the file	{_1} 印版位于文件之外
+@msg	there is no banner to mark	没有可添加标记的横幅
+@msg	this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that	这是二进制 DXF 文件，无法读取：请在 CAD 应用中将其另存为 ASCII DXF 后再打开
+@msg	this warp's points can't be edited: use Reset with Mesh first	此变形的点无法编辑：请先使用“以网格重置”
+@msg	toExponential() digits must be between 0 and 20	toExponential() 的位数必须介于 0 到 20 之间
+@msg	toFixed() digits must be between 0 and 20	toFixed() 的位数必须介于 0 到 20 之间
+@msg	toISOString is not a function	toISOString 不是函数
+@msg	toPrecision() argument must be between 1 and 21	toPrecision() 的参数必须介于 1 到 21 之间
+@msg	toSource: a getter cannot be written as source	toSource：getter 无法写成源代码
+@msg	toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source	toSource：除元素外还有其他属性、含不可枚举属性或使用其他原型的数组无法写成源代码
+@msg	toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source	toSource：含不可枚举属性或原型不是 Object.prototype 的对象无法写成源代码
+@msg	toSource: the source is too long	toSource：源代码过长
+@msg	toSource: the value contains itself	toSource：该值包含自身
+@msg	toSource: the value has too many entries	toSource：该值的条目过多
+@msg	toSource: the value is nested too deep	toSource：该值嵌套过深
+@msg	toString is not a function	toString 不是函数
+@msg	too many arguments	参数过多
+@msg	too many quantifiers	量词过多
+@msg	turn on at least one side	请至少打开一条边
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	未知的 OpenType 特性 `{t}` (liga、calt、dlig、smcp、frac、onum、tnum、ordn、swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom、aalt；加前缀 - 表示关闭；swsh、ss01–ss20、salt、titl、pnum、lnum、sups、subs、numr、dnom 和 aalt 可用 `tag=N` 指定替代字形的编号，N 为 0 到 {_1}，例如 `salt=2`)
+@msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
+@msg	unknown panel `{panel}`	未知的面板 `{panel}`
+@msg	unknown parameter `{key}`	未知的参数 `{key}`
+@msg	unknown parameter `{within}settings.{format}`; {why}	未知的参数 `{within}settings.{format}`；{why}
+@msg	unknown parameter `{within}{key}`; {why}	未知的参数 `{within}{key}`；{why}
+@msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	未知的减色方式 `{reduction}` (selective、perceptual、adaptive、web、gray、blackWhite、uniform 或 document)
+@msg	unmatched ')'	不匹配的 ')'
+@msg	unterminated character class	字符类没有结束
+@msg	unterminated group	分组没有结束
+@msg	with no hem and no grommets there is nothing to mark	没有折边也没有扣眼，因此没有可标记的内容
+@msg	wordGap and lineGap need area type in the selection	wordGap 和 lineGap 需要所选对象中有区域文字
+@msg	xpath needs its variables as an object	xpath 的变量必须以对象形式给出
+@msg	xpath needs the expression as a string	xpath 的表达式必须以字符串形式给出
+@msg	{GRANT_NOT_REMOVED}, and its settings and cache can't be moved back from {_1} to {_2}: {e}	{GRANT_NOT_REMOVED}，而且其设置和缓存无法从 {_1} 移回 {_2}：{e}
+@msg	{_1} is not a folder: {e}	{_1} 不是文件夹：{e}
+@msg	{_1}: {_2} and {_3} are in the way	{_1}：被 {_2} 和 {_3} 挡住
+@msg	{code}: {0}	{code}：{0}
+@msg	{dir}: {e}	{dir}：{e}
+@msg	{file} names more than one linked JavaScript file	{file} 指定了多个链接的 JavaScript 文件
+@msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}：自定义箭头的路径需要有可填充的面积，最多 {most} 个锚点和 {most} 条子路径，且每个锚点距箭头尖端不超过 {far} 个箭头单位
+@msg	{k}: bad custom arrowhead path: {e}	{k}：自定义箭头路径无效：{e}
+@msg	{k}: bad custom arrowhead: {e}	{k}：自定义箭头无效：{e}
+@msg	{k}: custom must be a name	{k}：custom 必须是名称
+@msg	{name} must be a number	{name} 必须是数字
+@msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}：只有印版包含在文件内时才能复制 DCS 文件；请在其印版文件所在的位置重新链接它
+@msg	{path}: larger than {_1} MB	{path}：大于 {_1} MB
+@msg	{saving} failed: {e}	{saving} 失败：{e}
+@msg	{shown} is not an XPath 1.0 function	{shown} 不是 XPath 1.0 函数
+@msg	{v} names no layer or sublayer	{v} 不对应任何图层或子图层
+@msg	{what} is not a function	{what} 不是函数
+@msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what} 在一张纸上会打印超过 {MAX_COPIES_PER_SHEET} 份：请将其放大
+@msg	{what} {i} out of range	{what} {i} 超出范围
+@msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	一个轮廓只支持一个回转效果。请改为编辑现有效果的选项。
+@msg	Add Points at Crossings: a path went missing	在交叉处添加锚点：有一条路径丢失
+@msg	CSS options: {e}	CSS 选项：{e}
+@msg	CSV has a header but no data rows	CSV 有标题行，但没有数据行
+@msg	CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark	CSV 中含有 NUL 字节：请将其保存为 UTF-8，或带字节顺序标记的 UTF-16
+@msg	CSV is empty	CSV 为空
+@msg	CSV is larger than {MAX_CSV_BYTES} bytes	CSV 大于 {MAX_CSV_BYTES} 字节
+@msg	CSV is not UTF-16	CSV 不是 UTF-16
+@msg	CSV is not UTF-8	CSV 不是 UTF-8
+@msg	CSV would be larger than {MAX_CSV_BYTES} bytes	CSV 会大于 {MAX_CSV_BYTES} 字节
+@msg	Choose original artwork, not a dimension's generated paths	请选择原始图稿，不要选择尺寸标注生成的路径
+@msg	Contour: select paths or shapes	轮廓：请选择路径或形状
+@msg	Contour: the Offset Path effect is not available	轮廓：偏移路径效果不可用
+@msg	Create needs fills, strokes or both	创建时需要填色、描边或两者
+@msg	DXF options: {e}	DXF 选项：{e}
+@msg	DXF scale must be a positive number up to {_1}, not {scale}	DXF 缩放比例必须是不超过 {_1} 的正数，不能是 {scale}
+@msg	DXF {field} `{s}`: {allowed}	DXF {field} `{s}`：{allowed}
+@msg	Dimension is locked or hidden	尺寸标注已锁定或隐藏
+@msg	Dimension mode does not match its source	尺寸标注的模式与其来源不匹配
+@msg	Draw Inside needs exactly one selected path, compound path or text	内部绘图需要恰好选中一条路径、一条复合路径或一个文本
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	保存 EPS 会写入全部图稿：要只导出所选对象的 EPS，请使用 document.export
+@msg	EPS flattener: {e}	EPS 拼合器：{e}
+@msg	EPS options: {e}	EPS 选项：{e}
+@msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`：{allowed}
+@msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	导出为屏幕所用格式可写出 png、png8、jpg、webp、gif、tiff、bmp、tga、psd、svg、svgz、pdf、eps、ai 或 vectorcraft
+@msg	Flare click coordinates must be finite numbers	光晕的单击坐标必须是有限的数字
+@msg	HTML Text applies to object slices of type only	HTML 文本只适用于文字对象的切片
+@msg	Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)	对象识别方式为 XML ID：名称必须是有效的 XML ID (以字母、下划线或冒号开头；不含空格)
+@msg	Image Trace failed: internal error: its thread stopped (please report this bug)	图像描摹失败：内部错误：其线程已停止 (请报告此错误)
+@msg	Image Trace failed: {e}	图像描摹失败：{e}
+@msg	Image Trace finished, but its document was closed	图像描摹已完成，但其文档已关闭
+@msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	图像描摹已完成，但图像或其设置在此期间发生了更改：请重新描摹
+@msg	Invalid dimension offset	尺寸标注的偏移无效
+@msg	Invalid point	点无效
+@msg	Join: a subpath went missing	连接：有一条子路径丢失
+@msg	Lock Workspace is not available in VectorCraft	VectorCraft 不提供锁定工作区
+@msg	Move Panel to New Window is not available: floating panels stay in the main window	无法将面板移到新窗口：浮动面板只能留在主窗口中
+@msg	Offset Path: the path is too complex to offset	偏移路径：路径过于复杂，无法偏移
+@msg	Offset Path: {e}	偏移路径：{e}
+@msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	PDF 内容不完整或超出读取器的限制；未导入任何文档
+@msg	PDF flattener: {e}	PDF 拼合器：{e}
+@msg	PDF options: {e}	PDF 选项：{e}
+@msg	Recolor Artwork is no longer open	重新着色图稿已不再打开
+@msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	SVG 不是 UTF-8、UTF-16 或 ISO 8859-1
+@msg	Save writes one artboard: name one, or export several with document.export	保存只写入一个画板：请指定一个画板，或用 document.export 导出多个
+@msg	Select a dimension first	请先选择一个尺寸标注
+@msg	Select dimensions to update	请选择要更新的尺寸标注
+@msg	Select only dimensions	请只选择尺寸标注
+@msg	Select two or more objects, or a group	请选择两个或更多对象，或一个编组
+@msg	Shaper needs 1–64 source paths	Shaper 需要 1–64 条源路径
+@msg	Switch x/y is for scatter graphs	切换 x/y 用于散点图
+@msg	Text options: {e}	文本选项：{e}
+@msg	`align` is start, center or end	`align` 为 start、center 或 end
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` 必须是 [subpath, anchor] 对的数组
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` 必须列出锚点索引 (0, 1, 2…)，不能是 {k}
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` 必须列出锚点索引 (0, 1, 2…)，不能是 {v}
+@msg	`artboards` must be a list of artboard indices	`artboards` 必须是画板索引的列表
+@msg	`asset` is the asset id (see assets.list)	`asset` 是资源 ID (参见 assets.list)
+@msg	`at` must be a byte offset	`at` 必须是字节偏移
+@msg	`autoLeading` must be a number	`autoLeading` 必须是数字
+@msg	`background` must be "", "matte" or #rrggbb	`background` 必须是 ""、"matte" 或 #rrggbb
+@msg	`burasagari` must be "none", "standard" or "forced"	`burasagari` 必须是 "none"、"standard" 或 "forced"
+@msg	`center` must be [x, y]	`center` 必须是 [x, y]
+@msg	`charAlign` must be "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" or "icfBottom"	`charAlign` 必须是 "romanBaseline"、"emBoxTop"、"emBoxCenter"、"emBoxBottom"、"icfTop" 或 "icfBottom"
+@msg	`charDirection` must be "default", "leftToRight" or "rightToLeft"	`charDirection` 必须是 "default"、"leftToRight" 或 "rightToLeft"
+@msg	`clearStroke` requires `stroke: false`, `ids: []` and no `stop`	`clearStroke` 要求 `stroke: false`、`ids: []`，且不给出 `stop`
+@msg	`clear` must be a list of type object ids, not {v}	`clear` 必须是文字对象 ID 的列表，不能是 {v}
+@msg	`clear` must list type objects; {_1} is not one	`clear` 必须列出文字对象；{_1} 不是文字对象
+@msg	`clear` must not list `id`	`clear` 不能列出 `id`
+@msg	`color` needs a `rule` to make the theme from	`color` 需要用于生成主题的 `rule`
+@msg	`colors` is empty	`colors` 为空
+@msg	`columnType` is vertical, uniform, repeating or sliding	`columnType` 为 vertical、uniform、repeating 或 sliding
+@msg	`columns` must be a whole number 1..50	`columns` 必须是 1..50 的整数
+@msg	`commands` must not be empty	`commands` 不能为空
+@msg	`contents` goes with `to`	`contents` 要与 `to` 一起给出
+@msg	`corners` must be sharp, round or square, not `{other}`	`corners` 必须是 sharp、round 或 square，不能是 `{other}`
+@msg	`corners` must list anchor indices (0, 1, 2…), not {v}	`corners` 必须列出锚点索引 (0, 1, 2…)，不能是 {v}
+@msg	`count` must be a whole number from 1 to 100	`count` 必须是 1 到 100 之间的整数
+@msg	`dataBase64` is larger than the module limit	`dataBase64` 超过了模块大小上限
+@msg	`dataBase64` is not valid base64	`dataBase64` 不是有效的 base64
+@msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` 不能与 `ids`、`reverse` 或 `append` 同时使用
+@msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` 和 `childLimit` 用于截取摘要：请传入 `summary: true`
+@msg	`design` is a design name, or null for plain columns	`design` 是设计名称，或用 null 表示普通柱形
+@msg	`design` is a design name, or null for the default marker	`design` 是设计名称，或用 null 表示默认标记
+@msg	`destinationFolder` is required when destination is `folder`	destination 为 `folder` 时必须给出 `destinationFolder`
+@msg	`destination` must be `none`, `saveAndClose` or `folder`	`destination` 必须是 `none`、`saveAndClose` 或 `folder`
+@msg	`diameter` must be from 0.1 to 2500 pt	`diameter` 必须为 0.1 到 2500 pt
+@msg	`digits` must be one of {_1}	`digits` 必须是 {_1} 之一
+@msg	`dimImages` is a percentage or false	`dimImages` 是百分比或 false
+@msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction` 必须是 "auto"、"leftToRight" 或 "rightToLeft"
+@msg	`each` is the value one design stands for, more than 0	`each` 是一个设计所代表的数值，须大于 0
+@msg	`end` must be "start" or "end"	`end` 必须是 "start" 或 "end"
+@msg	`ends` applies to joining exactly two paths	`ends` 只适用于恰好连接两条路径的情况
+@msg	`event` must be one of {_1}	`event` 必须是 {_1} 之一
+@msg	`every` must be "all", "odd" or "even", not {v}	`every` 必须是 "all"、"odd" 或 "even"，不能是 {v}
+@msg	`expand` must be true or false	`expand` 必须为 true 或 false
+@msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` 必须是上次 text.findFontFiles 搜索找到的 1 到 1000 个字体文件路径
+@msg	`folder` must be an absolute folder path	`folder` 必须是文件夹的绝对路径
+@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` 必须是由轴标签和值组成的对象，例如 {"wght"}
+@msg	`format` must be a string	`format` 必须是字符串
+@msg	`format` must be one of {_1}	`format` 必须是 {_1} 之一
+@msg	`fractions` is chop or scale	`fractions` 为 chop 或 scale
+@msg	`from` and `to` must differ	`from` 和 `to` 必须不同
+@msg	`from` has an empty frame	`from` 的文本框为空
+@msg	`from` must be a non-negative integer	`from` 必须是非负整数
+@msg	`from` must be area type or type on a path	`from` 必须是区域文字或路径文字
+@msg	`gid` must be a glyph id, not {v}	`gid` 必须是字形 ID，不能是 {v}
+@msg	`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)	`glyphAlternate` 属于单个字符，不属于字符样式 (由 text.setGlyphAlternate 设置)
+@msg	`guide` must be a guide index (guide.list)	`guide` 必须是参考线索引 (guide.list)
+@msg	`hAlign` must be default, left, center or right	`hAlign` 必须是 default、left、center 或 right
+@msg	`id` must be a node id	`id` 必须是节点 ID
+@msg	`id` must be an object id, not {v}	`id` 必须是对象 ID，不能是 {v}
+@msg	`ids` must name Objects on Path groups or objects in them	`ids` 必须指定“路径上的对象”组或其中的对象
+@msg	`ids` takes at most {MAX_INSPECT_IDS} ids	`ids` 最多接受 {MAX_INSPECT_IDS} 个 ID
+@msg	`imageMap` must be none, rectangle or polygon	`imageMap` 必须是 none、rectangle 或 polygon
+@msg	`includeArtboardFill` must be true or false	`includeArtboardFill` 必须为 true 或 false
+@msg	`includeSubdirs` must be true or false	`includeSubdirs` 必须为 true 或 false
+@msg	`index` must be a point index	`index` 必须是点索引
+@msg	`index` must be a whole number or null	`index` 必须是整数或 null
+@msg	`indices` must be a non-empty array of item indices	`indices` 必须是项目索引的非空数组
+@msg	`items` is a list of {kind, item}	`items` 是 {kind, item} 的列表
+@msg	`items` is empty	`items` 为空
+@msg	`items` must be a list of {id, points}	`items` 必须是 {id, points} 的列表
+@msg	`items` must be a list of {{id, anchors?}}, not {v}	`items` 必须是 {{id, anchors?}} 的列表，不能是 {v}
+@msg	`items` must be an array of {id, anchors}	`items` 必须是 {id, anchors} 的数组
+@msg	`items` must be an array of {{id, corners?}}, not {v}	`items` 必须是 {{id, corners?}} 的数组，不能是 {v}
+@msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida` 必须是 "none"、"short"、"medium"、"long" 或 "stylistic"
+@msg	`kind` is one of {_1}	`kind` 为 {_1} 之一
+@msg	`kind` must be "round", "invertedRound" or "chamfer", not {v}	`kind` 必须是 "round"、"invertedRound" 或 "chamfer"，不能是 {v}
+@msg	`kind` must be `text`, `visibility`, `image` or `graph`	`kind` 必须是 `text`、`visibility`、`image` 或 `graph`
+@msg	`kind` must be a string	`kind` 必须是字符串
+@msg	`kind` must be image, noImage or htmlText	`kind` 必须是 image、noImage 或 htmlText
+@msg	`kinsoku` must be "none", "hard" or "soft"	`kinsoku` 必须是 "none"、"hard" 或 "soft"
+@msg	`label` must be a non-empty name of at most 200 characters	`label` 必须是不超过 200 个字符的非空名称
+@msg	`language` must be a language name or tag, such as "Turkish" or "tr"	`language` 必须是语言名称或标签，例如 "Turkish" 或 "tr"
+@msg	`leadingModel` must be "romanBaseline" or "emBoxTop"	`leadingModel` 必须是 "romanBaseline" 或 "emBoxTop"
+@msg	`leading` must be from 0.1 to 5000, or null for Auto	`leading` 必须为 0.1 到 5000，或用 null 表示自动
+@msg	`length` must be a number of at most 1000000 pt either way	`length` 必须是数字，正负方向均不超过 1000000 pt
+@msg	`line` must be true or false	`line` 必须为 true 或 false
+@msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle` ({min_angle}°) 不能大于 `maxAngle` ({max_angle}°)
+@msg	`mode` must be "handles", "straight" or "smooth"	`mode` 必须是 "handles"、"straight" 或 "smooth"
+@msg	`mode` must be "straight", "bezier" or "arc"	`mode` 必须是 "straight"、"bezier" 或 "arc"
+@msg	`mode` must be one of {_1}	`mode` 必须是 {_1} 之一
+@msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` 必须是 "none"、"yakumonoHankaku"、"gyomatsuYakumonoHankaku"、"gyomatsuYakumonoZenkaku"、"yakumonoZenkaku" 或 "lineEndHalf"
+@msg	`names` is a list of preset names	`names` 是预设名称的列表
+@msg	`names` lists preset names	`names` 用于列出预设名称
+@msg	`names` must be a list of names	`names` 必须是名称的列表
+@msg	`names` must be a list of swatch names	`names` 必须是色板名称的列表
+@msg	`names` must be an array of style names	`names` 必须是样式名称的数组
+@msg	`new` is a design name, or true	`new` 是设计名称，或 true
+@msg	`path` must be a folder	`path` 必须是文件夹
+@msg	`path` must be a path object	`path` 必须是路径对象
+@msg	`pivot` must be a whole number from 0 to 8	`pivot` 必须是 0 到 8 之间的整数
+@msg	`points` must be a list of [x, y] points	`points` 必须是 [x, y] 点的列表
+@msg	`points` must be a list of point indexes	`points` 必须是点索引的列表
+@msg	`points` must be an array of point indices	`points` 必须是点索引的数组
+@msg	`points` must be point indexes	`points` 必须是点索引
+@msg	`port` must be "in" or "out"	`port` 必须是 "in" 或 "out"
+@msg	`position` is above or below	`position` 为 above 或 below
+@msg	`preset` must be a string	`preset` 必须是字符串
+@msg	`ratio` must be from 0.1 to 0.5	`ratio` 必须为 0.1 到 0.5
+@msg	`rect` must be [x, y, width, height] with a positive size	`rect` 必须是尺寸为正的 [x, y, width, height]
+@msg	`relation` must be overlap, inside or outside	`relation` 必须是 overlap、inside 或 outside
+@msg	`reversed` must be true or false	`reversed` 必须为 true 或 false
+@msg	`rotate` must be a finite number	`rotate` 必须是有限的数字
+@msg	`rule` must be nonZero or evenOdd	`rule` 必须是 nonZero 或 evenOdd
+@msg	`scale` must be a number in (0, 100]	`scale` 必须是 (0, 100] 范围内的数字
+@msg	`scope` must be "selection" or "document", not {other}	`scope` 必须是 "selection" 或 "document"，不能是 {other}
+@msg	`script` must be a string	`script` 必须是字符串
+@msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` 是系列索引的非空列表
+@msg	`seriesIndexes` needs a `type` or a `valueAxis`	`seriesIndexes` 需要 `type` 或 `valueAxis`
+@msg	`shift` must be a number of points	`shift` 必须是以点为单位的数字
+@msg	`showCenter` must be true or false	`showCenter` 必须为 true 或 false
+@msg	`singleWordJustification` must be "fullJustify", "alignLeft", "alignCenter" or "alignRight"	`singleWordJustification` 必须是 "fullJustify"、"alignLeft"、"alignCenter" 或 "alignRight"
+@msg	`size` is a percentage of the base text's size, 1 to 100	`size` 是相对于基础文本大小的百分比，取值 1 到 100
+@msg	`source` and `target` are the same object	`source` 和 `target` 是同一个对象
+@msg	`source` must be `folder` or `datasets`	`source` 必须是 `folder` 或 `datasets`
+@msg	`spacing` must be a number	`spacing` 必须是数字
+@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` 必须是以点为单位且大于或等于 0 的数字，或 "auto"
+@msg	`start` must be a finite number	`start` 必须是有限的数字
+@msg	`starts` must be an array of anchor indices (or nulls)	`starts` 必须是锚点索引 (或 null) 的数组
+@msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` 必须是 linked、embedded、missing 或 modified，或由它们组成的列表
+@msg	`stop` must be a stop index	`stop` 必须是色标索引
+@msg	`story` styles the whole story: give no `start` or `end`	`story` 为整篇文章设置样式：请不要给出 `start` 或 `end`
+@msg	`story` takes the whole story: give no `start` or `end`	`story` 针对整篇文章：请不要给出 `start` 或 `end`
+@msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` 适用于描边 (stroke: true)
+@msg	`style` must be roman or japanese	`style` 必须是 roman 或 japanese
+@msg	`subpaths` must be two integer indices	`subpaths` 必须是两个整数索引
+@msg	`symbol` must be a symbol name	`symbol` 必须是符号名称
+@msg	`target` must be "object" or "contents", not {v}	`target` 必须是 "object" 或 "contents"，不能是 {v}
+@msg	`tint` applies to global and spot colours	`tint` 适用于全局色和专色
+@msg	`tint` goes with a global or spot `swatch`	`tint` 要与全局色或专色的 `swatch` 一起给出
+@msg	`tint` must be a number (%)	`tint` 必须是数字 (%)
+@msg	`tint` needs a global or spot colour	`tint` 需要全局色或专色
+@msg	`to` is already threaded	`to` 已被串接
+@msg	`to` is the design's new name	`to` 是设计的新名称
+@msg	`to` must be [x, y]	`to` 必须是 [x, y]
+@msg	`to` must be a closed path, area type or type on a path other than `from`	`to` 必须是 `from` 以外的闭合路径、区域文字或路径文字
+@msg	`to` must be a whole number	`to` 必须是整数
+@msg	`to` takes the rows of one object's stack, not aligned rows	`to` 接受的是单个对象堆栈中的行，不是对齐的行
+@msg	`useLab` must be true or false	`useLab` 必须为 true 或 false
+@msg	`vAlign` must be default, top, middle, baseline or bottom	`vAlign` 必须是 default、top、middle、baseline 或 bottom
+@msg	`values` must be a list	`values` 必须是列表
+@msg	`values` must be an object	`values` 必须是对象
+@msg	`values` must name hex, rgb, cmyk, lab or gray	`values` 必须指定 hex、rgb、cmyk、lab 或 gray
+@msg	`values` names a kind twice	`values` 重复指定了同一种类型
+@msg	`{_1}` can't be edited or removed	`{_1}` 不能编辑或移除
+@msg	`{_1}` is built in and always listed	`{_1}` 是内置项，始终会列出
+@msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` 不是上次 text.findFontFiles 搜索找到的字体文件
+@msg	`{_1}` would be overwritten by the package: choose a different folder or name	打包会覆盖 `{_1}`：请选择其他文件夹或名称
+@msg	`{file}` has no art to place	`{file}` 中没有可置入的图稿
+@msg	`{file}` is over {_1} MB	`{file}` 超过 {_1} MB
+@msg	`{f}` belongs to a VectorCraft that is running	`{f}` 属于正在运行的 VectorCraft
+@msg	`{f}` is the copy of a document open now	`{f}` 是当前已打开文档的副本
+@msg	`{id}` is no writable format (see document.formats)	`{id}` 不是可写入的格式 (参见 document.formats)
+@msg	`{id}` isn't a loaded library	`{id}` 不是已载入的库
+@msg	`{key}` has no colours	`{key}` 中没有颜色
+@msg	`{key}` is a design name	`{key}` 是设计名称
+@msg	`{key}` is a design name or a list of them	`{key}` 是一个设计名称或设计名称的列表
+@msg	`{key}` is longer than {MAX_NAME} characters	`{key}` 超过 {MAX_NAME} 个字符
+@msg	`{key}` is out of range	`{key}` 超出范围
+@msg	`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent	`{key}` 必须是以百分比表示的 [min, desired, max] 或 {{min?, desired?, max?}}
+@msg	`{key}` must be a non-negative integer	`{key}` 必须是非负整数
+@msg	`{key}` must be a number {_1}..{_2}	`{key}` 必须是 {_1}..{_2} 的数字
+@msg	`{key}` must be a whole number of at least 0, not {n}	`{key}` 必须是不小于 0 的整数，不能是 {n}
+@msg	`{key}` must be an appearance item index (paint order) or null	`{key}` 必须是外观项索引 (绘制顺序) 或 null
+@msg	`{key}` must be an array of asset ids (see assets.list)	`{key}` 必须是资源 ID 的数组 (参见 assets.list)
+@msg	`{key}` must be from 0 to 180 degrees, not {a}	`{key}` 必须为 0 到 180 度，不能是 {a}
+@msg	`{key}` must be from {_1} to {shift_max}	`{key}` 必须介于 {_1} 到 {shift_max} 之间
+@msg	`{key}`: not a colour: {v}	`{key}`：不是颜色：{v}
+@msg	`{k}.family` is required	必须给出 `{k}.family`
+@msg	`{k}` is a number 0..1	`{k}` 是 0..1 的数字
+@msg	`{k}` is true or false	`{k}` 为 true 或 false
+@msg	`{k}` isn't an export setting: {_1}	`{k}` 不是导出设置：{_1}
+@msg	`{k}` must be a byte offset	`{k}` 必须是字节偏移
+@msg	`{k}` must be a number	`{k}` 必须是数字
+@msg	`{k}` must be a number of points	`{k}` 必须是以点为单位的数字
+@msg	`{k}` must be a string	`{k}` 必须是字符串
+@msg	`{k}` must be a whole number	`{k}` 必须是整数
+@msg	`{k}` must be from {lo} to {hi} for {key}	对于 {key}，`{k}` 必须介于 {lo} 到 {hi} 之间
+@msg	`{k}` must be {what}, not {v}	`{k}` 必须是 {what}，不能是 {v}
+@msg	`{l}` isn't a global or spot colour	`{l}` 不是全局色或专色
+@msg	`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText	`{m}` 不是位图：请使用 clipboard.importSvg、importPdf 或 importText
+@msg	`{name}` can't be deleted	`{name}` 不能删除
+@msg	`{name}` can't be duplicated	`{name}` 不能复制
+@msg	`{name}` can't be edited	`{name}` 不能编辑
+@msg	`{name}` can't be edited this way	`{name}` 不能以这种方式编辑
+@msg	`{name}` can't be renamed	`{name}` 不能重命名
+@msg	`{name}` can't name a folder	`{name}` 不能用作文件夹名称
+@msg	`{name}` has no art to place	`{name}` 中没有可置入的图稿
+@msg	`{name}` has no text to place	`{name}` 中没有可置入的文本
+@msg	`{name}` in the Word document is not UTF-8 or UTF-16 text	Word 文档中的 `{name}` 不是 UTF-8 或 UTF-16 文本
+@msg	`{name}` in the Word document is not well-formed XML: {e}	Word 文档中的 `{name}` 不是格式正确的 XML：{e}
+@msg	`{name}` in the Word document nests elements more than {MAX_NESTING} deep	Word 文档中的 `{name}` 的元素嵌套超过 {MAX_NESTING} 层
+@msg	`{name}` is a built-in preset and is read-only: save it under another name	`{name}` 是内置预设，为只读：请用其他名称保存
+@msg	`{name}` is a built-in preset: save under another name	`{name}` 是内置预设：请用其他名称保存
+@msg	`{name}` is a built-in profile and stays	`{name}` 是内置配置文件，会保留
+@msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` 是 `{base}` 的色调：请编辑 `{base}` (色调色板只能改名)
+@msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` 是工作空间：请先用 edit.colorSettings 选择另一个
+@msg	`{name}` is built in and stays	`{name}` 是内置项，会保留
+@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` 只接受同类的上色 (颜色、渐变或图案)
+@msg	`{n}` can't be deleted	`{n}` 不能删除
+@msg	`{n}` can't be merged	`{n}` 不能合并
+@msg	`{n}` can't be moved	`{n}` 不能移动
+@msg	`{n}` is not a colour swatch	`{n}` 不是颜色色板
+@msg	`{n}` isn't a solid colour	`{n}` 不是纯色
+@msg	`{n}`: colour groups hold solid colours only	`{n}`：颜色组只能包含纯色
+@msg	`{other}` doesn't trace an image	`{other}` 不能描摹图像
+@msg	`{s}`: the step's references copy in more than {_1} MB of values	`{s}`：该步骤的引用会复制超过 {_1} MB 的值
+@msg	`{tag}` is not an axis tag: a tag is four characters, such as "wght"	`{tag}` 不是轴标签：标签为四个字符，例如 "wght"
+@msg	`{to}` is empty or already used	`{to}` 为空或已被使用
+@msg	`{what}` is longer than {MAX_TEXT} bytes	`{what}` 的长度超过 {MAX_TEXT} 字节
+@msg	`{what}` must be text	`{what}` 必须是文本
+@msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	一个 DXF 图形只有一个原点：要让每个画板各成一个图形，请传入 useArtboards: true
+@msg	a PDF presets file with over {_1} presets	PDF 预设文件中的预设超过 {_1} 个
+@msg	a batch preview cannot switch documents	批处理预览不能切换文档
+@msg	a brush named `{nn}` exists	已存在名为 `{nn}` 的画笔
+@msg	a container of the listed objects is gone	所列对象的某个容器已不存在
+@msg	a content stream can't be read	有一个内容流无法读取
+@msg	a content stream isn't a stream	有一个内容流不是数据流
+@msg	a design holds at most {_1} objects	一个设计最多包含 {_1} 个对象
+@msg	a design needs a name	设计需要名称
+@msg	a dictionary grew too large	有一个字典变得过大
+@msg	a document keeps at most {_1} graph designs	一个文档最多保留 {_1} 个图表设计
+@msg	a document keeps at most {_1} saved selections	一个文档最多保留 {_1} 个已保存的选区
+@msg	a document keeps at most {_1} views	一个文档最多保留 {_1} 个视图
+@msg	a document links at most {MAX_SVG_SCRIPTS} JavaScript files	一个文档最多链接 {MAX_SVG_SCRIPTS} 个 JavaScript 文件
+@msg	a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes	某个 feConvolveMatrix 滤镜的 order 为 {x}×{y}，会使 usvg 计算卷积核大小的乘法溢出
+@msg	a gradient preset is already called {n}	已有名为 {n} 的渐变预设
+@msg	a graph has at most {_1} series, so it transposes with at most that many categories	一个图表最多有 {_1} 个系列，因此转置时类别数不能超过这个数量
+@msg	a layer can't be merged into its own sublayer	图层不能合并到自己的子图层中
+@msg	a layer's form box isn't an array	某个图层的表单外框不是数组
+@msg	a layer's form can't be read	某个图层的表单无法读取
+@msg	a layer's form has no box	某个图层的表单没有外框
+@msg	a layer's form has no dictionary	某个图层的表单没有字典
+@msg	a legend draws at most {MAX_CHIPS} swatches	一个图例最多绘制 {MAX_CHIPS} 个色板
+@msg	a name names one asset: give multiple: false, or one object	一个名称只对应一个资源：请给出 multiple: false，或只给出一个对象
+@msg	a page can't be read	有一个页面无法读取
+@msg	a page object is used by something else	有一个页面对象已被其他内容使用
+@msg	a page thumbnail must be RGB pixels, 1 to {THUMBNAIL_SIZE} a side (got {w} × {h})	页面缩略图必须是 RGB 像素，每边 1 到 {THUMBNAIL_SIZE} 像素 (实际为 {w} × {h})
+@msg	a pattern layer doesn't end what it starts	某个图案图层没有结束它开始的内容
+@msg	a pattern layer's colors hold something else	某个图案图层的颜色中含有其他内容
+@msg	a pattern named `{n}` exists	已存在名为 `{n}` 的图案
+@msg	a plug-in with id {_1} is already installed	已安装 ID 为 {_1} 的增效工具
+@msg	a preset named `{n}` exists	已存在名为 `{n}` 的预设
+@msg	a print presets file with over {_1} presets	打印预设文件中的预设超过 {_1} 个
+@msg	a profile is already called {n}	已有名为 {n} 的配置文件
+@msg	a row can't go into itself	行不能放入其自身
+@msg	a series goes on the left or the right value axis	系列只能放在左侧或右侧的数值轴上
+@msg	a start must be an anchor index ≥ 0 or null	起点必须是 ≥ 0 的锚点索引或 null
+@msg	a style named `{name}` already exists	已存在名为 `{name}` 的样式
+@msg	a style named `{to}` already exists	已存在名为 `{to}` 的样式
+@msg	a swatch needs a colour, gradient or pattern	色板需要颜色、渐变或图案
+@msg	a symbol named `{n}` already exists	已存在名为 `{n}` 的符号
+@msg	a theme has 1 to {THEME_SIZE} colours	一个主题有 1 到 {THEME_SIZE} 种颜色
+@msg	a theme is already called {name} (replace: "{name}" overwrites it)	已有名为 {name} 的主题 (replace: "{name}" 会覆盖它)
+@msg	a toolbar name has at most {MAX_NAME} characters	工具栏名称最多 {MAX_NAME} 个字符
+@msg	a view named `{_1}` exists	已存在名为 `{_1}` 的视图
+@msg	a view named `{name}` exists	已存在名为 `{name}` 的视图
+@msg	a workspace keeps at most {MAX} toolbars	一个工作区最多保留 {MAX} 个工具栏
+@msg	a {_1} series can't go in a {_2} graph	{_1} 系列不能放入 {_2} 图表
+@msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}："pdf" (兼容 PDF，默认值) 或 "7" (旧版 .ai，版本 7)
+@msg	already editing an opacity mask	已在编辑不透明度蒙版
+@msg	already editing another object's opacity mask	已在编辑另一个对象的不透明度蒙版
+@msg	already in pattern editing mode	已处于图案编辑模式
+@msg	an artboard is listed twice	有一个画板被列出了两次
+@msg	an empty artboard has no width or height to scale to	空画板没有可供缩放的宽度或高度
+@msg	an image is too large for DXF and was left out	有一个图像对 DXF 而言过大，已被略去
+@msg	an image of {_1} MB, at most {_2} MB	图像为 {_1} MB，最多允许 {_2} MB
+@msg	an image of {declared_w} × {declared_h} pixels is too large to draw	{declared_w} × {declared_h} 像素的图像过大，无法绘制
+@msg	an image of {width} × {height} pixels is too large to draw	{width} × {height} 像素的图像过大，无法绘制
+@msg	an index must be a whole number	索引必须是整数
+@msg	an inline graphic has no glyphs	有一个随文图形没有字形
+@msg	an invisible text form can't be read	有一个不可见文本表单无法读取
+@msg	an object is missing	缺少一个对象
+@msg	an object's header is missing	缺少某个对象的头部
+@msg	an overprinting form can't be read	有一个叠印表单无法读取
+@msg	an unread object has no readable bounds	有一个未读取的对象没有可读取的边界
+@msg	an unread object holds a frame of threaded type	有一个未读取的对象包含串接文字的文本框
+@msg	an unread object is missing from its layer	有一个未读取的对象不在其图层中
+@msg	anchor `smooth` must be true or false	锚点的 `smooth` 必须为 true 或 false
+@msg	anchor `{key}` must be [x, y]	锚点的 `{key}` 必须是 [x, y]
+@msg	anchor `{key}` must be a number	锚点的 `{key}` 必须是数字
+@msg	angle and roundness must be finite	angle 和 roundness 必须是有限值
+@msg	angles must be a list as long as pins (degrees or null)	angles 必须是与 pins 等长的列表 (度数或 null)
+@msg	appearance must be flat|center|edge	appearance 必须是 flat|center|edge
+@msg	apply is "fill" or "stroke", not `{other}`	apply 为 "fill" 或 "stroke"，不能是 `{other}`
+@msg	area must be a closed polygon of 3 to 100000 [x, y] points	area 必须是由 3 到 100000 个 [x, y] 点组成的闭合多边形
+@msg	area type needs a path that encloses an area	区域文字需要一条围出区域的路径
+@msg	area type {_1} is named twice	区域文字 {_1} 被指定了两次
+@msg	arrowAlign must be extend|tip, got {o}	arrowAlign 必须是 extend|tip，实际为 {o}
+@msg	arrowScale must be [start, end]	arrowScale 必须是 [start, end]
+@msg	artboard is a 0-based index	artboard 是从 0 开始的索引
+@msg	artboard must be a 0-based index	artboard 必须是从 0 开始的索引
+@msg	artboard {i} doesn't print	画板 {i} 不打印
+@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout 必须是 {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout.columns must be 1 or more	artboardLayout.columns 必须大于或等于 1
+@msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout 必须是 gridByRow、gridByColumn、row 或 column
+@msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft 必须为 true 或 false
+@msg	artboardLayout.spacing must be 0–{MAX_SPACING} pt	artboardLayout.spacing 必须为 0–{MAX_SPACING} pt
+@msg	artboards must be a non-empty list	artboards 必须是非空列表
+@msg	artboards must be a number	artboards 必须是数字
+@msg	asset `{_1}` has no art to export	资源 `{_1}` 中没有可导出的图稿
+@msg	at most {MAX_KEYWORDS} keywords	最多 {MAX_KEYWORDS} 个关键字
+@msg	at most {MAX_MATCHES} matches are kept	最多保留 {MAX_MATCHES} 个匹配项
+@msg	at most {MAX_POINTS} points	最多 {MAX_POINTS} 个点
+@msg	at most {MAX_QUEUE} files	最多 {MAX_QUEUE} 个文件
+@msg	at must be [x, y]	at 必须是 [x, y]
+@msg	at/rect lie outside the canvas	at/rect 位于画布之外
+@msg	attribute must be size|leading|tracking|kerning|baselineShift	attribute 必须是 size|leading|tracking|kerning|baselineShift
+@msg	attrs must be an object	attrs 必须是对象
+@msg	automation path rejected: the folder's name isn't valid text	自动化路径被拒绝：文件夹名称不是有效的文本
+@msg	automation path rejected: {_1} isn't valid text	自动化路径被拒绝：{_1} 不是有效的文本
+@msg	automation path rejected: {why}: {path}	自动化路径被拒绝：{why}：{path}
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`	axis 必须是 "vertical"、"horizontal" 或以度为单位的角度，不能是 `{given}`
+@msg	backgroundContents must be transparent or white	backgroundContents 必须是 transparent 或 white
+@msg	bad AES key	AES 密钥无效
+@msg	bad `runs`: {e}	`runs` 无效：{e}
+@msg	bad arrowScale	arrowScale 无效
+@msg	bad base64	base64 无效
+@msg	bad color {c}	颜色 {c} 无效
+@msg	bad colour	颜色无效
+@msg	bad colour in `colors`	`colors` 中有无效的颜色
+@msg	bad colour {v}	颜色 {v} 无效
+@msg	bad colour {v} in groupColors	groupColors 中的颜色 {v} 无效
+@msg	bad cross-reference entry	交叉引用条目无效
+@msg	bad cross-reference table	交叉引用表无效
+@msg	bad current colour {v}	当前颜色 {v} 无效
+@msg	bad dataBase64	dataBase64 无效
+@msg	bad edit	编辑无效
+@msg	bad fill {v}	填色 {v} 无效
+@msg	bad fit: {e}	适合方式无效：{e}
+@msg	bad model {other} (keep, new or document)	模型 {other} 无效 (keep、new 或 document)
+@msg	bad new colour {v}	新颜色 {v} 无效
+@msg	bad object	对象无效
+@msg	bad object number	对象编号无效
+@msg	bad offset	偏移无效
+@msg	bad path data: {e}	路径数据无效：{e}
+@msg	bad point {v}: expected [x, y] or [x, y, pressure]	点 {v} 无效：应为 [x, y] 或 [x, y, pressure]
+@msg	bad reference	引用无效
+@msg	bad trailer size	尾部的大小无效
+@msg	bad {k} colour	{k} 颜色无效
+@msg	batches cannot nest	批处理不能嵌套
+@msg	bind something to a variable first	请先将某个对象绑定到变量
+@msg	bleed must be 0–{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}	bleed 必须为 0–{MAX_BLEED} pt：一个数字、[top, bottom, left, right] 或 {{top, bottom, left, right}}
+@msg	brush must be a name or null	brush 必须是名称或 null
+@msg	by must be a number	by 必须是数字
+@msg	can't add page thumbnails: {why}	无法添加页面缩略图：{why}
+@msg	can't add the editing data for other apps: {why}	无法添加供其他应用使用的编辑数据：{why}
+@msg	can't edit the written PDF: {why}	无法编辑已写出的 PDF：{why}
+@msg	can't encrypt the PDF: {why}	无法加密 PDF：{why}
+@msg	can't linearise the PDF: {why}	无法线性化 PDF：{why}
+@msg	can't open `{_1}`: {_2}	无法打开 `{_1}`：{_2}
+@msg	can't open `{_1}`: {e}	无法打开 `{_1}`：{e}
+@msg	can't open `{name}`: not a format VectorCraft reads (see document.formats)	无法打开 `{name}`：不是 VectorCraft 可读取的格式 (参见 document.formats)
+@msg	can't place `{name}`: not a format VectorCraft reads (see document.formats)	无法置入 `{name}`：不是 VectorCraft 可读取的格式 (参见 document.formats)
+@msg	can't read back the written PDF: {e}	无法读回已写出的 PDF：{e}
+@msg	can't read this Word document: {why}	无法读取此 Word 文档：{why}
+@msg	can't write .{e} images: use .png, .jpg, .gif, .webp, .tif or .bmp	无法写出 .{e} 图像：请使用 .png、.jpg、.gif、.webp、.tif 或 .bmp
+@msg	can't write PDF layers, overprint or invisible text: {why}	无法写出 PDF 图层、叠印或不可见文本：{why}
+@msg	can't write the file's copyright: {why}	无法写入文件的版权信息：{why}
+@msg	can't write the file's modification date: {why}	无法写入文件的修改日期：{why}
+@msg	can't write the pages' user units: {why}	无法写入页面的用户单位：{why}
+@msg	cannot distort a zero-size or non-finite bounding box	无法扭曲大小为零或非有限的定界框
+@msg	cannot move an object into itself	不能将对象移入其自身
+@msg	case must be upper|lower|title|sentence	case 必须是 upper|lower|title|sentence
+@msg	category `{c}`: one of {_1}	类别 `{c}`：应为 {_1} 之一
+@msg	center must be [x, y]	center 必须是 [x, y]
+@msg	choose at least one artboard	请至少选择一个画板
+@msg	choose at least one status	请至少选择一种状态
+@msg	clip must be true or false	clip 必须为 true 或 false
+@msg	clippingMask must be true or false	clippingMask 必须为 true 或 false
+@msg	closed must be a boolean	closed 必须是布尔值
+@msg	collapsed must be true or false	collapsed 必须为 true 或 false
+@msg	color.profile: no RGB or CMYK profile is called “{profile}”	color.profile：没有名为“{profile}”的 RGB 或 CMYK 配置文件
+@msg	colorMode must be rgb or cmyk, not `{m}`	colorMode 必须是 rgb 或 cmyk，不能是 `{m}`
+@msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel 必须是 {own} (文档的模式)、grayscale 或 bitmap
+@msg	colour groups can't go into colour groups	颜色组不能放入颜色组
+@msg	colour, mode and spot apply to solid-colour swatches only	colour、mode 和 spot 只适用于纯色色板
+@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	第 {column} 列：`{cell}` 是图表数据文件的 `%` 列，不会读取
+@msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	第 {column} 列：`{cell}` 指定了 `{name}`，而它是 {_1} 变量
+@msg	column {column}: `{cell}` names no variable	第 {column} 列：`{cell}` 没有对应的变量
+@msg	column {column}: the variable name is longer than {MAX_NAME} characters	第 {column} 列：变量名称超过 {MAX_NAME} 个字符
+@msg	column: true floats the whole column and takes no onto, above or below	column: true 会使整列浮动，不能再给出 onto、above 或 below
+@msg	command must be a shape.* command	command 必须是 shape.* 命令
+@msg	commands[{i}]: missing `command`	commands[{i}]：缺少 `command`
+@msg	composer must be "singleLine" or "everyLine"	composer 必须是 "singleLine" 或 "everyLine"
+@msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	复合形状接受路径、复合路径、编组、复合形状、文字、混合和封套
+@msg	compound {_1} must contain exactly one open path to join	复合对象 {_1} 必须恰好包含一条要连接的开放路径
+@msg	connect needs a path other than the one extended	connect 需要一条不同于被延伸路径的路径
+@msg	connect needs id	connect 需要 id
+@msg	connect path has no open end	connect 的路径没有开放的端点
+@msg	copy needs path: the file to copy into the document's folder	copy 需要 path：即要复制到文档所在文件夹的文件
+@msg	copy takes images only: relink placed documents where their files are	copy 只接受图像：置入的文档请在其文件所在位置重新链接
+@msg	copying a file isn't available on the web	网页版无法复制文件
+@msg	copyrightStatus must be unknown, copyrighted or publicDomain	copyrightStatus 必须是 unknown、copyrighted 或 publicDomain
+@msg	copyrightUrl must be a URL (no spaces, at most 2048 characters)	copyrightUrl 必须是 URL (不含空格，最多 2048 个字符)
+@msg	corners must be 4 [x, y] points (TL, TR, BR, BL)	corners 必须是 4 个 [x, y] 点 (TL, TR, BR, BL)
+@msg	counterPer `{c}`: item or file	counterPer `{c}`：应为 item 或 file
+@msg	crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"	crop `{_1}`：只有 PDF 页面才有 art、trim、bleed 和 media 框；请使用 "crop" 或 "bounding"
+@msg	crop rectangle doesn't overlap the image	裁剪矩形与图像不重叠
+@msg	cross-reference and object streams aren't supported	不支持交叉引用流和对象流
+@msg	damaged compressed data: {e}	压缩数据已损坏：{e}
+@msg	dash lengths must be numbers, got {v}	虚线长度必须是数字，实际为 {v}
+@msg	dash must be a list of lengths or null, got {v}	dash 必须是长度的列表或 null，实际为 {v}
+@msg	data key `{k}`: letters, digits, -, _ and . (not name or vc-…)	数据键 `{k}`：只能使用字母、数字、-、_ 和 . (不能是 name 或 vc-…)
+@msg	data must be an object of key: value, not {v}	data 必须是 key: value 形式的对象，不能是 {v}
+@msg	data set `{name}` holds a value for `{var}`, which the library doesn't declare	数据集 `{name}` 含有 `{var}` 的值，而库中没有声明该变量
+@msg	data set `{name}` holds two values for `{var}`	数据集 `{name}` 含有 `{var}` 的两个值
+@msg	data set `{name}` is declared twice	数据集 `{name}` 被声明了两次
+@msg	data takes at most {MAX_DATA} keys at once	data 一次最多接受 {MAX_DATA} 个键
+@msg	dataset `{name}` already exists	数据集 `{name}` 已存在
+@msg	dataset `{to}` already exists	数据集 `{to}` 已存在
+@msg	date `{d}`: YYYY-MM-DD	日期 `{d}`：应为 YYYY-MM-DD
+@msg	decoded data is too large	解码后的数据过大
+@msg	define a variable first	请先定义一个变量
+@msg	detect must be true or false	detect 必须为 true 或 false
+@msg	direct-select anchor points of a path	请直接选择路径的锚点
+@msg	distance must be > 0	distance 必须 > 0
+@msg	dx and dy give the arrow's direction	dx 和 dy 给出箭头的方向
+@msg	dx and dy must be numbers	dx 和 dy 必须是数字
+@msg	dxf fitTo must be [width, height], positive	dxf 的 fitTo 必须是正数 [width, height]
+@msg	dxf must be an object of DXF import options	dxf 必须是 DXF 导入选项的对象
+@msg	dxf scale must be a positive number up to {_1}, not {s}	dxf 的 scale 必须是不超过 {_1} 的正数，不能是 {s}
+@msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf 的 unit `{u}`：应为 mm、cm、in 或 pt 之类的单位
+@msg	dxf: {e}	dxf：{e}
+@msg	each format is an object {format, scale?, suffix?}	每个格式都是对象 {format, scale?, suffix?}
+@msg	each item needs an id	每一项都需要 id
+@msg	each match needs `kind`	每个匹配项都需要 `kind`
+@msg	each match needs a `name`	每个匹配项都需要 `name`
+@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	`fonts` 的每一项为 {family, style?}；共 1 到 1000 项
+@msg	each of `items` is {kind, item}	`items` 的每一项为 {kind, item}
+@msg	each of `items` is {{id, corners?}} with an object id, not {it}	`items` 的每一项为带对象 ID 的 {{id, corners?}}，不能是 {it}
+@msg	each row needs `from`	每一行都需要 `from`
+@msg	each stop needs a position	每个色标都需要位置
+@msg	each subpath needs an anchors array	每条子路径都需要 anchors 数组
+@msg	easingType must be easeIn, easeOut, easeInOut or easeOutIn	easingType 必须是 easeIn、easeOut、easeInOut 或 easeOutIn
+@msg	editingData must be true or false	editingData 必须为 true 或 false
+@msg	editingData must be true, false or "always"	editingData 必须为 true、false 或 "always"
+@msg	edits overlap	编辑范围相互重叠
+@msg	effects of objects whose appearances differ can't be moved together	外观不同的对象的效果不能一起移动
+@msg	empty header in column {_1}	第 {_1} 列的标题为空
+@msg	encoding `{_1}`: utf8 or utf16	编码 `{_1}`：应为 utf8 或 utf16
+@msg	ends must be two of "first" and "last"	ends 必须是两个取自 "first" 和 "last" 的值
+@msg	every numbered name for the result is taken	可用于结果的带编号名称都已被占用
+@msg	expanded SVG styles exceed the import size limit	展开后的 SVG 样式超出了导入大小上限
+@msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	导出预设文件大于 {MAX_PRESET_FILE_BYTES} 字节
+@msg	exportText must be editable or appearance	exportText 必须是 editable 或 appearance
+@msg	exportType must be movieClip or graphic, not `{s}`	exportType 必须是 movieClip 或 graphic，不能是 `{s}`
+@msg	extend needs id	extend 需要 id
+@msg	featureChanges lists at most {MAX_FEATURE_CHANGES} tags	featureChanges 最多列出 {MAX_FEATURE_CHANGES} 个标签
+@msg	featureChanges must be a list of tags	featureChanges 必须是标签的列表
+@msg	features must be a list of tags	features 必须是标签的列表
+@msg	fidelity must be 0..100	fidelity 必须为 0..100
+@msg	files must be {name, dataBase64}	files 必须是 {name, dataBase64}
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit 必须是 none|autoHeight|shrinkText|block，实际为 {id}
+@msg	flattener: {e}	拼合器：{e}
+@msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`：应为 high、medium、low 或已保存的预设 (参见 flattener.presets.list)
+@msg	flipProfile must be along|across, got {o}	flipProfile 必须是 along|across，实际为 {o}
+@msg	folders `{f}`: none, rows, format, item or itemFormat	folders `{f}`：应为 none、rows、format、item 或 itemFormat
+@msg	folders deeper than {MAX_BATCH_DEPTH} levels	文件夹层级超过 {MAX_BATCH_DEPTH} 层
+@msg	folders deeper than {MAX_DEPTH} levels	文件夹层级超过 {MAX_DEPTH} 层
+@msg	font family `{family}` is not available	字体系列 `{family}` 不可用
+@msg	font family `{tf}` is not available	字体系列 `{tf}` 不可用
+@msg	format `{f}`: pdf or postscript	格式 `{f}`：应为 pdf 或 postscript
+@msg	format `{f}`: text or json	格式 `{f}`：应为 text 或 json
+@msg	format is `{format}`	格式为 `{format}`
+@msg	formats must be an array of rows, not {v}	formats 必须是行的数组，不能是 {v}
+@msg	frequency must be between 1 and 300 lines per inch	frequency 必须介于每英寸 1 到 300 线之间
+@msg	from and to must be finite	from 和 to 必须是有限值
+@msg	from must be [x0, y0, x1, y1]	from 必须是 [x0, y0, x1, y1]
+@msg	give `before` or `after`, not both	请给出 `before` 或 `after`，不能两者都给
+@msg	give `colors`, or `color` and `rule`	请给出 `colors`，或 `color` 和 `rule`
+@msg	give `event`, such as onclick	请给出 `event`，例如 onclick
+@msg	give `file`, the JavaScript file's path or URL	请给出 `file`，即 JavaScript 文件的路径或 URL
+@msg	give `fill` and/or `stroke`	请给出 `fill` 和/或 `stroke`
+@msg	give `fill`, `stroke` or both	请给出 `fill`、`stroke` 或两者
+@msg	give `folder`	请给出 `folder`
+@msg	give `fonts`, or open a document	请给出 `fonts`，或打开一个文档
+@msg	give `from` or `indices`, not both	请给出 `from` 或 `indices`，不能两者都给
+@msg	give `id` (no text is being edited)	请给出 `id` (当前没有正在编辑的文本)
+@msg	give `id` and `anchors`, or `items`, not both	请给出 `id` 和 `anchors`，或给出 `items`，不能两者都给
+@msg	give `id` or `guide`, not both	请给出 `id` 或 `guide`，不能两者都给
+@msg	give `length` or `to`	请给出 `length` 或 `to`
+@msg	give `matches`: [{kind, name, target}]	请给出 `matches`: [{kind, name, target}]
+@msg	give `name` (or edit a pattern)	请给出 `name` (或编辑一个图案)
+@msg	give `name` or `names`	请给出 `name` 或 `names`
+@msg	give `path` (a .wasm file) or `dataBase64` (the module)	请给出 `path` (.wasm 文件) 或 `dataBase64` (模块)
+@msg	give `path`, `data` or `dataBase64`	请给出 `path`、`data` 或 `dataBase64`
+@msg	give `path`, `data`, `dataBase64` or `csv`	请给出 `path`、`data`、`dataBase64` 或 `csv`
+@msg	give `path`, `xml` or `dataBase64`	请给出 `path`、`xml` 或 `dataBase64`
+@msg	give `script`, the JavaScript the event runs ("" removes the event)	请给出 `script`，即事件要运行的 JavaScript ("" 会移除该事件)
+@msg	give `text` (the reading) or `remove`	请给出 `text` (读音) 或 `remove`
+@msg	give `x` and `y` (and a `tolerance` of 0 or more)	请给出 `x` 和 `y` (以及大于或等于 0 的 `tolerance`)
+@msg	give a mode or r/g/b, c/m/y/k, gray or tint adjustments	请给出模式，或 r/g/b、c/m/y/k、gray 或 tint 的调整值
+@msg	give a name, or paint the active proxy with a saved preset	请给出名称，或用已保存的预设为当前代理上色
+@msg	give a name, or select a stroke with a saved profile	请给出名称，或选择使用已保存配置文件的描边
+@msg	give a pattern name or select an object painted with a pattern	请给出图案名称，或选择用图案上色的对象
+@msg	give at least one of clip, invert, disabled, linked	请至少给出 clip、invert、disabled、linked 之一
+@msg	give color, none, swatch or gradient	请给出 color、none、swatch 或 gradient
+@msg	give dataBase64	请给出 dataBase64
+@msg	give either at (a click) or area (a path drawn around the overlaps)	请给出 at (一次单击) 或 area (围绕重叠处绘制的路径)
+@msg	give formats or a preset, not both	请给出 formats 或一个预设，不能两者都给
+@msg	give newName or delete	请给出 newName 或 delete
+@msg	give offset or by	请给出 offset 或 by
+@msg	give one of `to`, `rect` or `at`	请给出 `to`、`rect` 或 `at` 之一
+@msg	give one of assets, layers, selection or fullDocument	请给出 assets、layers、selection 或 fullDocument 之一
+@msg	give only one of onto, above, below, icon and a column place	onto、above、below、icon 和列位置中只能给出一个
+@msg	give origin: [x, y], or reset: true	请给出 origin: [x, y]，或 reset: true
+@msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	请给出 overprintFill、overprintStroke、showCenter、imageMap、url 或 note
+@msg	give path (a file) or folder	请给出 path (文件) 或 folder
+@msg	give path, or name and dataBase64	请给出 path，或 name 和 dataBase64
+@msg	give paths or files	请给出 paths 或 files
+@msg	give rows, rowHeight, columns or columnWidth	请给出 rows、rowHeight、columns 或 columnWidth
+@msg	give svg, or dataBase64 of an SVG or SVGZ file	请给出 svg，或 SVG/SVGZ 文件的 dataBase64
+@msg	give text	请给出 text
+@msg	give the asset a name	请为资源命名
+@msg	give the preset a `name`	请为预设给出 `name`
+@msg	give the preset a name	请为预设命名
+@msg	give the preset a name (1–64 characters)	请为预设命名 (1–64 个字符)
+@msg	give the settings to change, e.g. {"formats"}]}	请给出要更改的设置，例如 {"formats"}]}
+@msg	give the style a name	请为样式命名
+@msg	give two or more style `names`	请在 `names` 中给出两个或更多样式
+@msg	give two or more swatches	请给出两个或更多色板
+@msg	give x, y, or a handle's length or angle	请给出 x、y，或手柄的长度或角度
+@msg	give {key, value} or {values}	请给出 {key, value} 或 {values}
+@msg	global must be true or false	global 必须为 true 或 false
+@msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	按该字符的样式 (例如全部大写、小型大写或某种数字系统)，{ch} 不会绘制为字形 {_1}
+@msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	在 {_1} {_2} 中，字形 {g} 不是 {ch} 的替代字形
+@msg	gradient must be "objects" or "mesh"	gradient 必须是 "objects" 或 "mesh"
+@msg	grays must be "profile" or "black", not `{g}`	grays 必须是 "profile" 或 "black"，不能是 `{g}`
+@msg	gridColors must be a preset name or two colours	gridColors 必须是预设名称或两种颜色
+@msg	gridSize must be small, medium or large	gridSize 必须是 small、medium 或 large
+@msg	guide {g} is not selected	参考线 {g} 未被选中
+@msg	handle must be 0..3	handle 必须为 0..3
+@msg	hiddenObjects {v}: "layer" (the default), "omit" or "visible"	hiddenObjects {v}：应为 "layer" (默认值)、"omit" 或 "visible"
+@msg	highlight a layer to merge into	请高亮显示要合并到的图层
+@msg	highlight two or more rows in one layer or group	请在同一图层或编组中高亮显示两行或更多行
+@msg	highlight two or more rows to merge	请高亮显示两行或更多行以合并
+@msg	icon docks a panel in the icon column: use window.panel.dock	icon 会将面板停放在图标列中：请使用 window.panel.dock
+@msg	id must be a dimension id	id 必须是尺寸标注 ID
+@msg	image has no bounds	图像没有边界
+@msg	image {_1} is linked already	图像 {_1} 已是链接图像
+@msg	imageMap `{m}`: none, client or server	imageMap `{m}`：应为 none、client 或 server
+@msg	index out of range	索引超出范围
+@msg	instances must be 1..1000	instances 必须为 1..1000
+@msg	invalid `color`	`color` 无效
+@msg	invalid anchor index {v}: expected a non-negative integer	锚点索引 {v} 无效：应为非负整数
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	锚点引用 {v} 无效：应为 [subpath, anchor]
+@msg	invalid angle	角度无效
+@msg	invalid brush: {e}	画笔无效：{e}
+@msg	invalid color	颜色无效
+@msg	invalid colour {c}	颜色 {c} 无效
+@msg	invalid delta	增量无效
+@msg	invalid point	点无效
+@msg	invalid size	大小无效
+@msg	invalid t	t 无效
+@msg	invalid tolerance	容差无效
+@msg	its artboards all lie beyond the canvas (more than {_1} pt from the origin)	其画板全部位于画布之外 (距原点超过 {_1} pt)
+@msg	its clipping masks are nested too deeply	其剪切蒙版嵌套过深
+@msg	its metadata has no description	其元数据没有说明
+@msg	its metadata has no direct length	其元数据没有直接给出的长度
+@msg	join two different paths	请连接两条不同的路径
+@msg	justify must be auto|left|center|right|justifyAll	justify 必须是 auto|left|center|right|justifyAll
+@msg	kbps must be a positive number, not {kbps}	kbps 必须是正数，不能是 {kbps}
+@msg	keywords must be a list of words or a comma-separated string	keywords 必须是单词的列表或以逗号分隔的字符串
+@msg	keywords must be at most {MAX_KEYWORD} characters, without control characters	keywords 的每一项最多 {MAX_KEYWORD} 个字符，且不含控制字符
+@msg	kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)	kind 必须是 1、2 或 3，或者给出预设的 `name` (参见 perspective.presets.list)
+@msg	kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle	kind 必须是 graphic、fillColor、strokeColor、fillGradient、strokeGradient、fillPattern、strokePattern、charStyle 或 paraStyle
+@msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout 必须是 "on"、"off"、"neutral" 或布尔值，不能是 {v}
+@msg	layer `{name}` has no art to export	图层 `{name}` 中没有可导出的图稿
+@msg	layer must name a layer or sublayer	layer 必须指定一个图层或子图层
+@msg	layers can't be intertwined: select the objects in them	图层不能交织：请选择图层中的对象
+@msg	layers go only at the top level or in layers, objects in layers and groups	图层只能位于顶层或图层内，对象只能位于图层和编组内
+@msg	layers must be true or false	layers 必须为 true 或 false
+@msg	layout must be gridByRow, gridByColumn, row or column	layout 必须是 gridByRow、gridByColumn、row 或 column
+@msg	leading must be a number or "auto"	leading 必须是数字或 "auto"
+@msg	left/right must be non-negative widths	left/right 必须是非负的宽度
+@msg	level `{t}`: 2 or 3	level `{t}`：应为 2 或 3
+@msg	line {line}: more than {MAX_CSV_COLS} columns	第 {line} 行：超过 {MAX_CSV_COLS} 列
+@msg	line {line}: unclosed quote	第 {line} 行：引号未闭合
+@msg	line {line}: value for `{var}` must match its variable kind	第 {line} 行：`{var}` 的值必须与其变量类型相符
+@msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`：应为 lf 或 crlf
+@msg	loading profiles from disk isn't available in the browser	浏览器中无法从磁盘载入配置文件
+@msg	margin: a {m} pt margin leaves no imageable area on the paper	margin：{m} pt 的边距使纸张上没有可成像区域
+@msg	matrix must be finite and invertible, depth finite	matrix 必须是有限且可逆的，depth 必须是有限值
+@msg	matte: {e}	matte：{e}
+@msg	member is for order front, forward, backward or back	member 用于 order 为 front、forward、backward 或 back 的情况
+@msg	missing `artboards`	缺少 `artboards`
+@msg	missing `at` [x, y]	缺少 `at` [x, y]
+@msg	missing `attrs`	缺少 `attrs`
+@msg	missing `color` or `opacity`	缺少 `color` 或 `opacity`
+@msg	missing `colors`	缺少 `colors`
+@msg	missing `commands`	缺少 `commands`
+@msg	missing `destinationFolder`	缺少 `destinationFolder`
+@msg	missing `effect` id	缺少 `effect` ID
+@msg	missing `family`	缺少 `family`
+@msg	missing `find`	缺少 `find`
+@msg	missing `gid` (a glyph id, or null for the default glyph)	缺少 `gid` (字形 ID，或用 null 表示默认字形)
+@msg	missing `group`	缺少 `group`
+@msg	missing `id`	缺少 `id`
+@msg	missing `id`: give one, or select one type object	缺少 `id`：请给出一个，或选择一个文字对象
+@msg	missing `index` (a point index, or null to clear)	缺少 `index` (点索引，或用 null 清除)
+@msg	missing `index` (a stop index, or null to clear)	缺少 `index` (色标索引，或用 null 清除)
+@msg	missing `index` (an item index or null)	缺少 `index` (项目索引或 null)
+@msg	missing `item`	缺少 `item`
+@msg	missing `library`	缺少 `library`
+@msg	missing `library` (see graphicStyle.libraries)	缺少 `library` (参见 graphicStyle.libraries)
+@msg	missing `library` (see swatch.library.list)	缺少 `library` (参见 swatch.library.list)
+@msg	missing `map` (rows [{from, to}] or {current})	缺少 `map` (行 [{from, to}] 或 {current})
+@msg	missing `matrix` [a,b,c,d,e,f]	缺少 `matrix` [a,b,c,d,e,f]
+@msg	missing `name` (see gradient.presets.list)	缺少 `name` (参见 gradient.presets.list)
+@msg	missing `offset` (a distance in points)	缺少 `offset` (以点为单位的距离)
+@msg	missing `path`	缺少 `path`
+@msg	missing `path` (a path object id)	缺少 `path` (路径对象 ID)
+@msg	missing `rule`	缺少 `rule`
+@msg	missing `source` id	缺少 `source` ID
+@msg	missing `start` (the byte offset of a character)	缺少 `start` (字符的字节偏移)
+@msg	missing `status`: linked, embedded, missing or modified	缺少 `status`：应为 linked、embedded、missing 或 modified
+@msg	missing `target` id	缺少 `target` ID
+@msg	missing `text`	缺少 `text`
+@msg	missing `to`	缺少 `to`
+@msg	missing `to` (an index)	缺少 `to` (索引)
+@msg	missing `to`: a non-negative integer	缺少 `to`：应为非负整数
+@msg	missing `type`	缺少 `type`
+@msg	missing `value`	缺少 `value`
+@msg	missing `{key}`	缺少 `{key}`
+@msg	missing `{k}`	缺少 `{k}`
+@msg	missing anchor	缺少锚点
+@msg	missing anchors	缺少锚点
+@msg	missing anchors [[subpath, anchor]…]	缺少锚点 [[subpath, anchor]…]
+@msg	missing array `{key}`	缺少数组 `{key}`
+@msg	missing case	缺少 case
+@msg	missing color	缺少颜色
+@msg	missing commands	缺少命令
+@msg	missing destination folder	缺少目标文件夹
+@msg	missing from	缺少 from
+@msg	missing group	缺少 group
+@msg	missing id or ids	缺少 id 或 ids
+@msg	missing ids	缺少 ids
+@msg	missing indexes	缺少 indexes
+@msg	missing matrix [a,b,c,d,e,f]	缺少 matrix [a,b,c,d,e,f]
+@msg	missing name	缺少名称
+@msg	missing op	缺少 op
+@msg	missing or invalid `color`	`color` 缺失或无效
+@msg	missing or unknown `tool`	`tool` 缺失或未知
+@msg	missing point	缺少点
+@msg	missing point [x,y]	缺少点 [x,y]
+@msg	missing point `{key}` ([x, y])	缺少点 `{key}` ([x, y])
+@msg	missing points	缺少点
+@msg	missing points [[x,y]…]	缺少点 [[x,y]…]
+@msg	missing segment	缺少线段
+@msg	missing stops	缺少色标
+@msg	missing subpaths	缺少子路径
+@msg	missing target	缺少目标
+@msg	missing to	缺少 to
+@msg	missing x, y	缺少 x、y
+@msg	mode is set, add or toggle, not `{other}`	mode 为 set、add 或 toggle，不能是 `{other}`
+@msg	mode must be "cmyk" or "rgb"	mode 必须是 "cmyk" 或 "rgb"
+@msg	mode must be area|onPath, got {o}	mode 必须是 area|onPath，实际为 {o}
+@msg	more than 10000 linked files: package dependencies in smaller parts	链接文件超过 10000 个：请分成较小的部分打包依赖项
+@msg	more than 256 commands	命令超过 256 条
+@msg	more than {MAX_BATCH_FILES} data sets	数据集超过 {MAX_BATCH_FILES} 个
+@msg	more than {MAX_BATCH_FILES} files	文件超过 {MAX_BATCH_FILES} 个
+@msg	more than {MAX_CSV_ROWS} data rows	数据行超过 {MAX_CSV_ROWS} 行
+@msg	more than {MAX_FILES} images	图像超过 {MAX_FILES} 个
+@msg	more than {MAX_IMPORT} presets	预设超过 {MAX_IMPORT} 个
+@msg	moved must be [[x,y]…]	moved 必须是 [[x,y]…]
+@msg	name (a toolbar's name) is required	必须给出 name (工具栏名称)
+@msg	name (a toolbar's name) must be a string	name (工具栏名称) 必须是字符串
+@msg	name must be a toolbar's name	name 必须是工具栏的名称
+@msg	names is empty	names 为空
+@msg	names must be an array of symbol names	names 必须是符号名称的数组
+@msg	need `anchor` or `segment` + `t`	需要 `anchor`，或 `segment` + `t`
+@msg	need at least one anchor	至少需要一个锚点
+@msg	need at least one point	至少需要一个点
+@msg	need at least two points	至少需要两个点
+@msg	needs points	需要点
+@msg	nineSlice must be true or false	nineSlice 必须为 true 或 false
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides 必须是 [left, top, right, bottom]，每个值为 -16..16，且 left + right < 1、top + bottom < 1
+@msg	no PDF preset named `{n}`	没有名为 `{n}` 的 PDF 预设
+@msg	no action set is current	当前没有动作组
+@msg	no active data set	没有活动的数据集
+@msg	no appearance item {index}	没有外观项 {index}
+@msg	no artboard {_1}	没有画板 {_1}
+@msg	no artboard {artboard} (0-based; the document has {_1})	没有画板 {artboard} (从 0 开始计数；文档有 {_1} 个)
+@msg	no asset {id}	没有资源 {id}
+@msg	no asset {id} (see assets.list)	没有资源 {id} (参见 assets.list)
+@msg	no assets to export	没有可导出的资源
+@msg	no assets yet: collect art for export first (assets.add)	还没有资源：请先收集要导出的图稿 (assets.add)
+@msg	no brush named `{n}`	没有名为 `{n}` 的画笔
+@msg	no character at byte {start}	字节 {start} 处没有字符
+@msg	no colour	没有颜色
+@msg	no colour group `{group}`	没有颜色组 `{group}`
+@msg	no colour group `{name}`	没有颜色组 `{name}`
+@msg	no data sets	没有数据集
+@msg	no dataset named `{from}`	没有名为 `{from}` 的数据集
+@msg	no dataset named `{name}`	没有名为 `{name}` 的数据集
+@msg	no datasets	没有数据集
+@msg	no design named `{name}`	没有名为 `{name}` 的设计
+@msg	no design named `{n}`	没有名为 `{n}` 的设计
+@msg	no design named `{old}`	没有名为 `{old}` 的设计
+@msg	no encoder for {_1} yet	还没有 {_1} 的编码器
+@msg	no export preset `{name}` (see document.exportPresets.list)	没有导出预设 `{name}` (参见 document.exportPresets.list)
+@msg	no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder	没有文件夹：请传入 `path`，或设置 首选项 › 增效工具 & 暂存盘 › 附加增效工具文件夹
+@msg	no fonts to look for: they are all available	没有需要查找的字体：字体全部可用
+@msg	no formats to export	没有要导出的格式
+@msg	no gradient preset `{name}` (see gradient.presets.list)	没有渐变预设 `{name}` (参见 gradient.presets.list)
+@msg	no graphic style `{n}` in `{_1}`	`{_1}` 中没有图形样式 `{n}`
+@msg	no graphic style library `{key}` (see graphicStyle.libraries)	没有图形样式库 `{key}` (参见 graphicStyle.libraries)
+@msg	no guide selected	没有选中参考线
+@msg	no guide selected (or give an index)	没有选中参考线 (或给出索引)
+@msg	no guide {i}	没有参考线 {i}
+@msg	no images in the folder	文件夹中没有图像
+@msg	no item at index {_1}	索引 {_1} 处没有项目
+@msg	no item at index {from}	索引 {from} 处没有项目
+@msg	no item at one of the indices {idx}	索引 {idx} 中有一处没有项目
+@msg	no layer	没有图层
+@msg	no layer {id} (see layer.list)	没有图层 {id} (参见 layer.list)
+@msg	no layers to export	没有可导出的图层
+@msg	no library `{key}`	没有库 `{key}`
+@msg	no metafile format	没有图元文件格式
+@msg	no object {_1}	没有对象 {_1}
+@msg	no objects	没有对象
+@msg	no parent layer	没有父图层
+@msg	no perspective grid preset named `{b}` (see perspective.presets.list)	没有名为 `{b}` 的透视网格预设 (参见 perspective.presets.list)
+@msg	no perspective grid preset named `{n}`	没有名为 `{n}` 的透视网格预设
+@msg	no point selected (give `index`)	没有选中点 (请给出 `index`)
+@msg	no preset called `{from}` (see file.newPresets)	没有名为 `{from}` 的预设 (参见 file.newPresets)
+@msg	no preset called `{name}` (see file.newPresets)	没有名为 `{name}` 的预设 (参见 file.newPresets)
+@msg	no preset named `{n}`	没有名为 `{n}` 的预设
+@msg	no print preset named `{b}` (see print.presets.list)	没有名为 `{b}` 的打印预设 (参见 print.presets.list)
+@msg	no print preset named `{name}` (presets: {_1})	没有名为 `{name}` 的打印预设 (现有预设：{_1})
+@msg	no print preset named `{n}`	没有名为 `{n}` 的打印预设
+@msg	no profile named `{name}`	没有名为 `{name}` 的配置文件
+@msg	no readable files in the folder	文件夹中没有可读取的文件
+@msg	no recovery copy `{f}` (see file.recovery.list)	没有恢复副本 `{f}` (参见 file.recovery.list)
+@msg	no rows	没有行
+@msg	no saved PDF preset named `{name}`	没有名为 `{name}` 的已保存 PDF 预设
+@msg	no saved export preset `{name}`	没有已保存的导出预设 `{name}`
+@msg	no saved gradient preset called {name}	没有名为 {name} 的已保存渐变预设
+@msg	no saved gradient presets	没有已保存的渐变预设
+@msg	no saved preset called `{name}`	没有名为 `{name}` 的已保存预设
+@msg	no saved presets to export (name [Default] in `names` to export it)	没有可导出的已保存预设 (要导出 [Default]，请在 `names` 中指定它)
+@msg	no saved presets to export (name built-in ones in `names`)	没有可导出的已保存预设 (内置预设请在 `names` 中指定)
+@msg	no saved print preset named `{name}`	没有名为 `{name}` 的已保存打印预设
+@msg	no saved profile called {name}	没有名为 {name} 的已保存配置文件
+@msg	no saved selection `{name}`	没有已保存的选区 `{name}`
+@msg	no saved theme called {name} (see colorTheme.list)	没有名为 {name} 的已保存主题 (参见 colorTheme.list)
+@msg	no saved views	没有已保存的视图
+@msg	no series {i}	没有系列 {i}
+@msg	no slice {n} in the image (see slice.list)	图像中没有切片 {n} (参见 slice.list)
+@msg	no source art	没有源图稿
+@msg	no stop {i} (the gradient has {n})	没有色标 {i} (渐变有 {n} 个)
+@msg	no style `{name}`	没有样式 `{name}`
+@msg	no such assets (see assets.list)	没有这些资源 (参见 assets.list)
+@msg	no such frame anchor, or the frame would reach past the canvas	没有此文本框锚点，或文本框会超出画布
+@msg	no such objects	没有这些对象
+@msg	no such path anchor, or the path would reach past the canvas	没有此路径锚点，或路径会超出画布
+@msg	no such rows	没有这些行
+@msg	no swatch `{keep}`	没有色板 `{keep}`
+@msg	no swatch `{n}`	没有色板 `{n}`
+@msg	no swatch `{n}` (swatches and colour groups move separately)	没有色板 `{n}` (色板和颜色组要分别移动)
+@msg	no swatch library `{key}` (see swatch.library.list)	没有色板库 `{key}` (参见 swatch.library.list)
+@msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	没有色板库 `{key}` (参见 swatch.library.list；"document" 表示文档的色板)
+@msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	没有色板库 `{key}` (参见 swatch.library.list；"{DOCUMENT_SWATCHES}" 表示文档的色板)
+@msg	no swatch named `{n}`	没有名为 `{n}` 的色板
+@msg	no swatch or colour group `{n}`	没有色板或颜色组 `{n}`
+@msg	no swatch or colour group `{n}` in `{_1}`	`{_1}` 中没有色板或颜色组 `{n}`
+@msg	no symbol named `{name}`	没有名为 `{name}` 的符号
+@msg	no text objects selected	没有选中文本对象
+@msg	no toolbar named `{_1}`	没有名为 `{_1}` 的工具栏
+@msg	no toolbar named `{name}`	没有名为 `{name}` 的工具栏
+@msg	no tracing preset `{preset}` (see imageTrace.presets)	没有描摹预设 `{preset}` (参见 imageTrace.presets)
+@msg	no user library folder here (save with a path, or without one to get the data)	这里没有用户库文件夹 (请指定路径保存，或不指定路径以取得数据)
+@msg	no variable named `{from}`	没有名为 `{from}` 的变量
+@msg	no variable named `{name}`	没有名为 `{name}` 的变量
+@msg	no variable named `{var}`	没有名为 `{var}` 的变量
+@msg	no variable named `{v}`	没有名为 `{v}` 的变量
+@msg	no view named `{name}`	没有名为 `{name}` 的视图
+@msg	node {_1} is not a graph	节点 {_1} 不是图表
+@msg	node {_1} is not an image	节点 {_1} 不是图像
+@msg	node {_1} is not type	节点 {_1} 不是文字
+@msg	not a PDF presets file (format `{_1}`)	不是 PDF 预设文件 (格式为 `{_1}`)
+@msg	not a PDF presets file: {e}	不是 PDF 预设文件：{e}
+@msg	not a Word document: its WordDocument stream doesn't start with a file information block	不是 Word 文档：其 WordDocument 流不是以文件信息块开头
+@msg	not a Word document: its compound file has no WordDocument stream	不是 Word 文档：其复合文件中没有 WordDocument 流
+@msg	not a Word document: its main part is not a WordprocessingML document	不是 Word 文档：其主部件不是 WordprocessingML 文档
+@msg	not a Word document: its package has no main document part	不是 Word 文档：其包中没有主文档部件
+@msg	not a closed path	不是闭合路径
+@msg	not a flattener presets file (format `{_1}`)	不是拼合器预设文件 (格式为 `{_1}`)
+@msg	not a flattener presets file: {e}	不是拼合器预设文件：{e}
+@msg	not a layer or group	不是图层或编组
+@msg	not a library file: {e}	不是库文件：{e}
+@msg	not a mesh envelope point	不是网格封套的点
+@msg	not a perspective grid presets file (format `{_1}`)	不是透视网格预设文件 (格式为 `{_1}`)
+@msg	not a perspective grid presets file: {e}	不是透视网格预设文件：{e}
+@msg	not a print presets file (format `{_1}`)	不是打印预设文件 (格式为 `{_1}`)
+@msg	not a print presets file: {e}	不是打印预设文件：{e}
+@msg	not a stored or deflated central record	不是以存储或 deflate 方式保存的中央记录
+@msg	not a valid SVGZ file: {e}	不是有效的 SVGZ 文件：{e}
+@msg	not an RTF file: it doesn't start with {\rtf	不是 RTF 文件：它不是以 {\rtf 开头
+@msg	not an image VectorCraft reads (see document.formats)	不是 VectorCraft 可读取的图像 (参见 document.formats)
+@msg	not area type (text in a frame) outside perspective	不是透视之外的区域文字 (文本框中的文本)
+@msg	not editing an opacity mask	当前没有在编辑不透明度蒙版
+@msg	not type on a path outside perspective	不是透视之外的路径文字
+@msg	nothing prints	没有可打印的内容
+@msg	nothing to bind	没有可绑定的内容
+@msg	nothing to change	没有可更改的内容
+@msg	nothing to change: give dx, dy, hScale, vScale or rotation	没有可更改的内容：请给出 dx、dy、hScale、vScale 或 rotation
+@msg	nothing to crop	没有可裁剪的内容
+@msg	nothing to export	没有可导出的内容
+@msg	nothing to export: the document has no visible art	没有可导出的内容：文档中没有可见的图稿
+@msg	nothing to mark	没有可标记的内容
+@msg	nothing to print: every artboard picked is blank	没有可打印的内容：所选的画板都是空白的
+@msg	nothing to print: the document has no art that prints	没有可打印的内容：文档中没有会打印的图稿
+@msg	object is not a path	对象不是路径
+@msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	对象的透明度不能取样到高亮显示的字符上；请在吸管选项中停用“透明度”，或选择整个对象
+@msg	object {_1} can't be set as point type	对象 {_1} 不能设为点文字
+@msg	object {_1} has lost its file's contents: relink it	对象 {_1} 已丢失其文件的内容：请重新链接
+@msg	object {_1} has no path	对象 {_1} 没有路径
+@msg	object {_1} has no size	对象 {_1} 没有大小
+@msg	object {_1} is hidden or locked, or on a locked artboard	对象 {_1} 已隐藏或锁定，或位于已锁定的画板上
+@msg	object {_1} is not a placed document	对象 {_1} 不是置入的文档
+@msg	object {_1} is not an Intertwine group	对象 {_1} 不是交织组
+@msg	object {_1} is not an image	对象 {_1} 不是图像
+@msg	object {_1} is not an image or a linked file	对象 {_1} 不是图像或链接文件
+@msg	object {_1} is not an image or a placed document	对象 {_1} 不是图像或置入的文档
+@msg	object {_1} is not in this Intertwine group	对象 {_1} 不在此交织组中
+@msg	object {_1} needs a 3D effect at index {index}	对象 {_1} 在索引 {index} 处需要有 3D 效果
+@msg	object {id} has anchors 0–{_1} for `corners`, not {past}	对象 {id} 可用于 `corners` 的锚点为 0–{_1}，没有 {past}
+@msg	object {id} has {n} anchors, so no anchor {past}	对象 {id} 有 {n} 个锚点，因此没有锚点 {past}
+@msg	objects must be none, move or copy	objects 必须是 none、move 或 copy
+@msg	objects were left out	有对象被略去
+@msg	offset out of range	偏移超出范围
+@msg	on must be true or false	on 必须为 true 或 false
+@msg	only groups, layers, type and images have a Contents (Characters) row	只有编组、图层、文字和图像才有“内容 (字符)”行
+@msg	only interior mesh lines can be deleted	只能删除内部的网格线
+@msg	only solid colours can be added (not gradients or patterns)	只能添加纯色 (不能添加渐变或图案)
+@msg	only solid-colour swatches can be spot colours	只有纯色色板才能设为专色
+@msg	only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first	只能读取此 Affinity 文件的嵌入预览：请使用 文件 › 打开 查看预览及其警告，或先从 Affinity 导出 SVG 或 PDF
+@msg	only this Affinity file's embedded preview could be read; use File › Open to see it with its warning	只能读取此 Affinity 文件的嵌入预览；请使用 文件 › 打开 查看预览及其警告
+@msg	onto, above, below, icon and a column place belong to window.panel.float and window.panel.dock	onto、above、below、icon 和列位置属于 window.panel.float 和 window.panel.dock
+@msg	onto, above, below, icon and a column place take no anchor, side, zone or before	onto、above、below、icon 和列位置不能与 anchor、side、zone 或 before 同时给出
+@msg	onto, above, below, icon and a column place take no x, y, width or height	onto、above、below、icon 和列位置不能与 x、y、width 或 height 同时给出
+@msg	open a document to look for its linked files	请打开一个文档以查找其链接文件
+@msg	options must be an object (see file.formatOptions)	options 必须是对象 (参见 file.formatOptions)
+@msg	order must be leftToRight or rightToLeft	order 必须是 leftToRight 或 rightToLeft
+@msg	orientation must be portrait or landscape, not `{o}`	orientation 必须是 portrait 或 landscape，不能是 `{o}`
+@msg	outlineText {v}: true or false	outlineText {v}：应为 true 或 false
+@msg	output intent profile: {e}	输出意图配置文件：{e}
+@msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination：没有名为“{name}”的 RGB 或 CMYK 配置文件
+@msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination：{_1} 文件为 CMYK，而“{name}”是 RGB 配置文件
+@msg	output.destination: {e}	output.destination：{e}
+@msg	output.inks: no ink is set to print	output.inks：没有设为打印的油墨
+@msg	output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile	output.outputIntent：没有名为“{name}”的配置文件，而 {std} 输出意图需要嵌入其配置文件
+@msg	output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)	output.outputIntent：没有名为“{name}”的配置文件：{std} 输出意图需要嵌入配置文件，或指定已注册的印刷条件 (outputConditionId 和 registry)
+@msg	output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile	output.outputIntent：{std} 文件以 CMYK 印刷，而“{name}”是 RGB 配置文件
+@msg	output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent	output.outputIntent：“{name}”是灰度配置文件，不能用作 {std} 输出意图
+@msg	overlap: {o} pt is half a tile or more	overlap：{o} pt 已达到或超过拼贴的一半
+@msg	overlapping Shaper paths must be in the same layer or group	重叠的 Shaper 路径必须位于同一图层或编组中
+@msg	overlapping edits	编辑范围相互重叠
+@msg	page art conflicts with image data for {key}	页面图稿与 {key} 的图像数据冲突
+@msg	page art conflicts with pattern {name}	页面图稿与图案 {name} 冲突
+@msg	page art conflicts with swatch {name}	页面图稿与色板 {name} 冲突
+@msg	page art is missing image data for {key}	页面图稿缺少 {key} 的图像数据
+@msg	page art is missing pattern {name}	页面图稿缺少图案 {name}
+@msg	page art is missing swatch {name}	页面图稿缺少色板 {name}
+@msg	page must be a whole number from 1	page 必须是从 1 开始的整数
+@msg	page thumbnail: {e}	页面缩略图：{e}
+@msg	page {page} of the PDF has no objects	PDF 的第 {page} 页没有对象
+@msg	page {page}: `{file}` has {n} {artboards}	第 {page} 页：`{file}` 有 {n} {artboards}
+@msg	page {page}: `{name}` has {n} {pages}	第 {page} 页：`{name}` 有 {n} {pages}
+@msg	pages must be a range such as "2-3" or a page number, not {v}	pages 必须是 "2-3" 这样的范围或一个页码，不能是 {v}
+@msg	pages: {e}	pages：{e}
+@msg	panel position must be finite	面板位置必须是有限值
+@msg	parameters must be an object	参数必须是对象
+@msg	params must be an object	params 必须是对象
+@msg	passwords can have up to {MAX_PASSWORD} bytes	密码最多 {MAX_PASSWORD} 字节
+@msg	path has no open end	路径没有开放的端点
+@msg	paths must be strings	paths 必须是字符串
+@msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false 需要用全部画板来保留可编辑的图稿
+@msg	pdfs `{m}`: single or multiple	pdfs `{m}`：应为 single 或 multiple
+@msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom 为 "artwork" 或 "swatches"，不能是 {v}
+@msg	pins and moved must be non-empty lists of the same length	pins 和 moved 必须是长度相同的非空列表
+@msg	pins must be [[x,y]…]	pins 必须是 [[x,y]…]
+@msg	pins must be finite	pins 必须是有限值
+@msg	place is above, below or inside, not `{other}`	place 为 above、below 或 inside，不能是 `{other}`
+@msg	plane must be left|right|ground	plane 必须是 left|right|ground
+@msg	plane must be left|right|ground|none	plane 必须是 left|right|ground|none
+@msg	point is outside the mesh	点位于网格之外
+@msg	points must be [t, left, right] with non-negative widths	points 必须是宽度非负的 [t, left, right]
+@msg	points must be a non-empty [[x,y,pressure?]…] list	points 必须是非空的 [[x,y,pressure?]…] 列表
+@msg	points must be a non-empty list of finite [x,y]	points 必须是由有限 [x,y] 组成的非空列表
+@msg	points must be an array or null	points 必须是数组或 null
+@msg	points must be finite	points 必须是有限值
+@msg	points must be finite [x,y] pairs	points 必须是有限的 [x,y] 对
+@msg	points must contain 1–4096 coordinates	points 必须包含 1–4096 个坐标
+@msg	position must be normal, superscript or subscript	position 必须是 normal、superscript 或 subscript
+@msg	position must be topLeft, topRight, bottomLeft or bottomRight	position 必须是 topLeft、topRight、bottomLeft 或 bottomRight
+@msg	positions must be between 0 and 100000 pt	positions 必须介于 0 到 100000 pt 之间
+@msg	ppi must be a positive number, not {ppi}	ppi 必须是正数，不能是 {ppi}
+@msg	ppi must be between 1 and 2400	ppi 必须介于 1 到 2400 之间
+@msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` 不是 transforms|bounds|fileDimensions|fit|fill
+@msg	preserveShape must be clippingMask|transparency	preserveShape 必须是 clippingMask|transparency
+@msg	preset `{id}`: mobile or density	preset `{id}`：应为 mobile 或 density
+@msg	preset must be standard, diffuse, topLeft or right	preset 必须是 standard、diffuse、topLeft 或 right
+@msg	preset must be the name of a print preset	preset 必须是打印预设的名称
+@msg	previewMode must be default, pixel or overprint	previewMode 必须是 default、pixel 或 overprint
+@msg	print settings: {e}	打印设置：{e}
+@msg	procedures nest too deeply	过程嵌套过深
+@msg	procedures nested too deeply	过程嵌套得过深
+@msg	quotes must be {double?, single?}	quotes 必须是 {double?, single?}
+@msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	quotes.{k} 必须是一个左引号和一个右引号，例如 "“”"
+@msg	rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)	rasterEffectsPpi 必须为 1–2400 (72 为屏幕，150 为中，300 为高)
+@msg	rating must be a whole number from 0 to {MAX_RATING}	rating 必须是 0 到 {MAX_RATING} 之间的整数
+@msg	rect and {k} contradict each other: give the area or the artboards	rect 与 {k} 相互矛盾：请只给出区域或画板
+@msg	rect applies to raster formats, not {_1}	rect 适用于栅格格式，不适用于 {_1}
+@msg	rect is [x, y, width, height] in points	rect 是以点为单位的 [x, y, width, height]
+@msg	rect must be [x, y, width, height]	rect 必须是 [x, y, width, height]
+@msg	rect must be [x, y, width, height] with a positive width and height	rect 必须是宽度和高度为正的 [x, y, width, height]
+@msg	rect needs finite numbers and a positive width and height	rect 需要有限的数字以及为正的宽度和高度
+@msg	redraw needs id	redraw 需要 id
+@msg	redraw within must be a finite distance of 0 or more	redraw 的 within 必须是大于或等于 0 的有限距离
+@msg	registration must be 0..8	registration 必须为 0..8
+@msg	release a layer or a group	请释放一个图层或编组
+@msg	replace keeps the replaced object's place and transform: drop template, at and rect	replace 会保留被替换对象的位置和变换：请去掉 template、at 和 rect
+@msg	replace: select the one object to replace	replace：请选择要替换的那一个对象
+@msg	resolution must be a number or screen|medium|high	resolution 必须是数字或 screen|medium|high
+@msg	resolution must be between 1 and 2400 ppi	resolution 必须介于 1 到 2400 ppi 之间
+@msg	rotation must be a number of degrees	rotation 必须是以度为单位的数字
+@msg	rotation must be finite	rotation 必须是有限值
+@msg	rows and cols must be 1..50	rows 和 cols 必须为 1..50
+@msg	rows and columns must be 1..500	rows 和 columns 必须为 1..500
+@msg	rows of objects whose appearances differ can't be reordered together	外观不同的对象的行不能一起重新排序
+@msg	save the document first: Package collects a saved document	请先保存文档：打包只收集已保存的文档
+@msg	save the document first: copy puts the file in its folder	请先保存文档：copy 会把文件放到文档所在的文件夹中
+@msg	savedPreset: {e}	savedPreset：{e}
+@msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	scale `{s}`：应为 2x 这样的倍数、宽度 (100w)、高度 (100h) 或分辨率 (72ppi)
+@msg	scale must be a number above 0, at most 64	scale 必须是大于 0 且不超过 64 的数字
+@msg	scale must be non-zero	scale 不能为零
+@msg	scope must be selection or all (got {other})	scope 必须是 selection 或 all (实际为 {other})
+@msg	scribble is too long	涂抹线过长
+@msg	segment does not exist	线段不存在
+@msg	select a Shaper group	请选择一个 Shaper 组
+@msg	select a blend to set easing or color shift	请选择一个混合对象以设置缓动或颜色偏移
+@msg	select a compound shape	请选择一个复合形状
+@msg	select a graph	请选择一个图表
+@msg	select a group or layer with visible, unlocked members	请选择含有可见且未锁定成员的编组或图层
+@msg	select a layer	请选择一个图层
+@msg	select a text object	请选择一个文本对象
+@msg	select an image (or an Image Trace group)	请选择一个图像 (或图像描摹组)
+@msg	select an image, or pass id	请选择一个图像，或传入 id
+@msg	select an object (or pass `id`)	请选择一个对象 (或传入 `id`)
+@msg	select an object with a freeform gradient	请选择带有自由渐变的对象
+@msg	select an object with an opacity mask	请选择带有不透明度蒙版的对象
+@msg	select area type	请选择区域文字
+@msg	select area type (text in a frame)	请选择区域文字 (文本框中的文本)
+@msg	select area type and closed paths (at least one area type object)	请选择区域文字和闭合路径 (至少一个区域文字对象)
+@msg	select area type whose first line can fit its frame	请选择首行能放入其文本框的区域文字
+@msg	select artwork to add its colours	请选择图稿以添加其颜色
+@msg	select artwork to make a group of its colours	请选择图稿以用其颜色创建颜色组
+@msg	select artwork to recolour, or give a colour `group`	请选择要重新着色的图稿，或给出颜色 `group`
+@msg	select exactly two path ends to join	请恰好选择两个要连接的路径端点
+@msg	select members of a compound shape	请选择复合形状的成员
+@msg	select objects or give ids	请选择对象或给出 ids
+@msg	select objects to align to the guide	请选择要与参考线对齐的对象
+@msg	select one Intertwine group	请选择一个交织组
+@msg	select one image or pass id	请选择一个图像或传入 id
+@msg	select paths	请选择路径
+@msg	select paths or compound paths	请选择路径或复合路径
+@msg	select rows or objects to collect	请选择要收集的行或对象
+@msg	select something to export	请选择要导出的内容
+@msg	select something to export (or turn off selectedOnly)	请选择要导出的内容 (或关闭 selectedOnly)
+@msg	select text to redefine the style from	请选择用来重新定义样式的文本
+@msg	select the art and, on top of it, the mask object	请选择图稿以及位于其上方的蒙版对象
+@msg	select the art for the design	请选择用于设计的图稿
+@msg	select the art for the pattern tile	请选择用于图案拼贴的图稿
+@msg	select the art to add first	请先选择要添加的图稿
+@msg	select the art to collect (or give its ids)	请选择要收集的图稿 (或给出其 ids)
+@msg	select the content and a path on top	请选择内容以及位于其上方的一条路径
+@msg	select the images to relink, or pass ids	请选择要重新链接的图像，或传入 ids
+@msg	select the images, or pass ids	请选择图像，或传入 ids
+@msg	select the linked images or placed documents, or pass ids	请选择链接的图像或置入的文档，或传入 ids
+@msg	select the object to copy from	请选择要从中复制的对象
+@msg	select the objects (or give their ids)	请选择对象 (或给出其 ids)
+@msg	select the objects to attach to the path	请选择要附着到路径上的对象
+@msg	select the objects to bind	请选择要绑定的对象
+@msg	select two or more objects to intertwine	请选择两个或更多要交织的对象
+@msg	select two or more slices to combine	请选择两个或更多要组合的切片
+@msg	select type on a path	请选择路径文字
+@msg	selection `{m}`: one or each	selection `{m}`：应为 one 或 each
+@msg	settings is an object of document.exportForScreens params	settings 是由 document.exportForScreens 的参数组成的对象
+@msg	settings must be an object	settings 必须是对象
+@msg	show `{show}`: all, missing, modified or embedded	show `{show}`：应为 all、missing、modified 或 embedded
+@msg	show must be true or false	show 必须为 true 或 false
+@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size 必须是 "small"、"medium"、"large"，或大于 0 且不超过 {_1} 的点数
+@msg	size must be positive	size 必须为正数
+@msg	sizeMode is "fixed" or "pressure", not `{other}`	sizeMode 为 "fixed" 或 "pressure"，不能是 `{other}`
+@msg	sizeMode is "fixed" or "pressure", not {other}	sizeMode 为 "fixed" 或 "pressure"，不能是 {other}
+@msg	sizeVariation must be 0 or more	sizeVariation 必须大于或等于 0
+@msg	smallCaps must be true or false	smallCaps 必须为 true 或 false
+@msg	sort `{x}`: name, kind or status	sort `{x}`：应为 name、kind 或 status
+@msg	source paths are too large for Shaper	源路径对 Shaper 而言过大
+@msg	spot, mode and group apply to solid colours only	spot、mode 和 group 只适用于纯色
+@msg	status `{s}`: linked, embedded, missing or modified	status `{s}`：应为 linked、embedded、missing 或 modified
+@msg	steps must be 1..1000	steps 必须为 1..1000
+@msg	steps must be 1..{MAX_STEPS}	steps 必须为 1..{MAX_STEPS}
+@msg	stop {i}: `plates` must be four numbers from 0 to 1 (C, M, Y, K)	色标 {i}：`plates` 必须是四个 0 到 1 之间的数字 (C, M, Y, K)
+@msg	stopped before the archive was finished	在归档完成之前已停止
+@msg	strokeMode must be within|along|across, got {m}	strokeMode 必须是 within|along|across，实际为 {m}
+@msg	strokeOptions must be an object of stroke.set options	strokeOptions 必须是由 stroke.set 的选项组成的对象
+@msg	strokeWidth must be a positive number of pixels	strokeWidth 必须是以像素为单位的正数
+@msg	subpath {si} is not an open subpath	子路径 {si} 不是开放的子路径
+@msg	subpaths required when joining the same path	连接同一条路径时必须给出 subpaths
+@msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict 必须是 "merge" 或 "add"，不能是 {v}
+@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text 必须是 {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}
+@msg	text transform is collapsed or unrepresentable	文本的变换已塌缩或无法表示
+@msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces 必须是 2 到 100 之间的整数
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`：请使用 "{_1}" 或 "{_2}"
+@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage：请给出图像文件的 {path} 或 {name, dataBase64}，或 effect.list 所给出的纹理
+@msg	textureImage: {e}	textureImage：{e}
+@msg	that makes more than {MAX_PIECES} slices	这样会生成超过 {MAX_PIECES} 个切片
+@msg	that object is not in the overlap	该对象不在重叠处
+@msg	the Affinity document has no page with a size	Affinity 文档中没有带尺寸的页面
+@msg	the CMYK image couldn't be written	无法写出 CMYK 图像
+@msg	the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected	PDF 安全性设置保存时未包含密码：请重新给出 openPassword 或 permissionsPassword，或给出不含 passwordRequired 的 security 以便不加保护地导出
+@msg	the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)	RTF 文件的段落或格式变化过多，无法作为文字置入 (最多 {MAX_PARAGRAPHS} 个段落和 {MAX_RUNS} 个文本段)
+@msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 文件过大，无法作为文字置入 (最多 {_1} MB)
+@msg	the SVG expands to more than {0} nested SVG images	SVG 展开后的嵌套 SVG 图像超过 {0} 个
+@msg	the SVG expands to more than {0} objects	SVG 展开后的对象超过 {0} 个
+@msg	the SVG has no drawable objects	SVG 中没有可绘制的对象
+@msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 文件解压后超过 {_1} MB
+@msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文档的属性页超过 {MAX_PAGES} 页，过多而无法置入
+@msg	the Word document has more than {MAX_RUNS} runs of character or paragraph properties, too many to place	Word 文档的字符或段落属性段超过 {MAX_RUNS} 个，过多而无法置入
+@msg	the Word document has more than {_1} MB of formatting properties, too many to place	Word 文档的格式属性超过 {_1} MB，过多而无法置入
+@msg	the Word document has too much text or formatting to place as type (at most {MAX_PARAGRAPHS} paragraphs, {MAX_RUNS} runs and {_1} MB of text)	Word 文档的文本或格式过多，无法作为文字置入 (最多 {MAX_PARAGRAPHS} 个段落、{MAX_RUNS} 个文本段和 {_1} MB 文本)
+@msg	the Word document has too much text to place as type (at most {_1} MB)	Word 文档的文本过多，无法作为文字置入 (最多 {_1} MB)
+@msg	the Word document is encrypted or protected with a password; save it without one to place it	Word 文档已加密或受密码保护；请去掉密码保存后再置入
+@msg	the Word document is too large to place (its {name} stream holds more than {_1} MB)	Word 文档过大，无法置入 (其 {name} 流超过 {_1} MB)
+@msg	the Word document was last saved with fast save, which VectorCraft doesn't read; save it again with fast save turned off	Word 文档上次是以快速保存方式保存的，VectorCraft 无法读取；请关闭快速保存后重新保存
+@msg	the Word document was saved by Word 6.0 or Word 95, which VectorCraft doesn't read; save it as a Word 97-2003 document	Word 文档是由 Word 6.0 或 Word 95 保存的，VectorCraft 无法读取；请将其另存为 Word 97-2003 文档
+@msg	the Word document's text is made of more than {MAX_PIECES} pieces, too many to place	Word 文档的文本由超过 {MAX_PIECES} 个片段组成，过多而无法置入
+@msg	the action set ids are not a list	动作组 ID 不是列表
+@msg	the active paint is not a gradient	当前上色不是渐变
+@msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	画板在画布上放不下：请减少画板、缩小间距或减小尺寸
+@msg	the character's size can't be measured	无法测量该字符的大小
+@msg	the compound shape is too complex to expand	复合形状过于复杂，无法扩展
+@msg	the container of the listed objects is gone	所列对象的容器已不存在
+@msg	the copy `{user_id}` can't be read as a library	副本 `{user_id}` 无法作为库读取
+@msg	the copy would leave the canvas	副本会超出画布
+@msg	the cut cannot be made on this art: {e}	无法在此图稿上进行切割：{e}
+@msg	the data isn't an EMF or WMF picture	该数据不是 EMF 或 WMF 图片
+@msg	the data isn't an EPS or PostScript picture	该数据不是 EPS 或 PostScript 图片
+@msg	the deferred paste is no longer available	延迟粘贴的内容已不可用
+@msg	the design is too big to draw at every data point of this graph	设计过大，无法在此图表的每个数据点上绘制
+@msg	the design is too big to draw in every column of this graph	设计过大，无法在此图表的每个柱形中绘制
+@msg	the dialog it was opened over is no longer open	它所依附的对话框已不再打开
+@msg	the dictionary stack overflowed	字典栈溢出
+@msg	the editing data's hash has no place	编辑数据的哈希值没有存放位置
+@msg	the entities the document declares expand to too much text	文档声明的实体展开后的文本过多
+@msg	the envelope's content has no bounds	封套的内容没有边界
+@msg	the envelope's mesh is malformed	封套的网格格式不正确
+@msg	the file holds no `variableSets` element	文件中没有 `variableSets` 元素
+@msg	the file is larger than {_1} MB	文件大于 {_1} MB
+@msg	the file is too large	文件过大
+@msg	the file was updated or encrypted already	文件已被更新或加密
+@msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	行首字符前面没有可供调整字偶距的字符：它只能上下移动 (dy)
+@msg	the font {_1} is not available	字体 {_1} 不可用
+@msg	the format has no file extension	该格式没有文件扩展名
+@msg	the graphic can't be read: {e}	无法读取该图形：{e}
+@msg	the graphic is empty	该图形为空
+@msg	the graphic's data is damaged	该图形的数据已损坏
+@msg	the graphic's document has no artboard	该图形的文档没有画板
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` 的标题 `{cell}` 读回时会被当作变量 `{other}`：请重命名其中一个
+@msg	the image `{path}` isn't followed: {r}	未跟随图像 `{path}`：{r}
+@msg	the image has no embedded pixels	该图像没有嵌入的像素
+@msg	the image is empty	图像为空
+@msg	the image is fully transparent	图像完全透明
+@msg	the image is not on an artboard; pass rect	图像不在画板上；请传入 rect
+@msg	the image's pixels are missing	图像的像素缺失
+@msg	the image's pixels aren't in the document	图像的像素不在文档中
+@msg	the image's pixels can't be read: {e}	无法读取图像的像素：{e}
+@msg	the image's transparency doesn't fit it	图像的透明度数据与图像不相符
+@msg	the job would print more than {MAX_PAGES} pages	此作业会打印超过 {MAX_PAGES} 页
+@msg	the job would print more than {_1} pages	此作业会打印超过 {_1} 页
+@msg	the layers hold no art to mask	这些图层中没有可添加蒙版的图稿
+@msg	the layout moved	布局已移动
+@msg	the library has a group `{name}` already	库中已有组 `{name}`
+@msg	the library has no group `{name}`	库中没有组 `{name}`
+@msg	the library has no item `{item}`	库中没有项目 `{item}`
+@msg	the library has no item `{other}`	库中没有项目 `{other}`
+@msg	the library holds {MAX_GROUPS} groups already	库中已有 {MAX_GROUPS} 个组
+@msg	the library holds {MAX_ITEMS} items of this kind already	库中已有 {MAX_ITEMS} 个此类项目
+@msg	the name is empty	名称为空
+@msg	the object has no fill, stroke or effect	该对象没有填色、描边或效果
+@msg	the object has no graphic style (pass `name`)	该对象没有图形样式 (请传入 `name`)
+@msg	the objects don't match the plan	对象与计划不相符
+@msg	the open and permissions passwords must differ	打开密码和权限密码必须不同
+@msg	the operand stack overflowed	操作数栈溢出
+@msg	the page has no area	该页面没有面积
+@msg	the page's type in an unread object's box isn't in its page art	页面中位于某个未读取对象框内的文字不在其页面图稿中
+@msg	the paint behind the proxy is not a gradient	代理对应的上色不是渐变
+@msg	the parent must be a layer or sublayer	父项必须是图层或子图层
+@msg	the path can't be extended	该路径无法延伸
+@msg	the path can't be inside one of the objects to attach	路径不能位于要附着的某个对象内部
+@msg	the path has no segments to measure	该路径没有可测量的线段
+@msg	the path is empty	路径为空
+@msg	the path is too short to shorten that much	路径太短，无法缩短这么多
+@msg	the picture has no objects	图片中没有对象
+@msg	the program runs too long	程序运行时间过长
+@msg	the program uses too much memory	程序占用的内存过多
+@msg	the rectangle must have a width and a height	矩形必须有宽度和高度
+@msg	the rectangle needs a size and must lie on the canvas	矩形需要有大小，且必须位于画布上
+@msg	the selected art has no width	所选图稿没有宽度
+@msg	the selection draws nothing	所选对象没有绘制任何内容
+@msg	the selection has no area	所选对象没有面积
+@msg	the selection has no art to export	所选对象中没有可导出的图稿
+@msg	the selection has no bounds	所选对象没有边界
+@msg	the selection has no graphic style	所选对象没有图形样式
+@msg	the slice would leave the canvas	切片会超出画布
+@msg	the spot colour couldn't be added	无法添加该专色
+@msg	the subpath has no ends to extend (it is closed or a single point)	该子路径没有可延伸的端点 (它是闭合的或只有一个点)
+@msg	the symbols are nested too deeply to expand their instances	符号嵌套过深，无法扩展其实例
+@msg	the text file is too large to place as type (at most {_1} MB)	文本文件过大，无法作为文字置入 (最多 {_1} MB)
+@msg	the text is empty	文本为空
+@msg	the text is over {_1} MB	文本超过 {_1} MB
+@msg	the top object must be a path	最上方的对象必须是路径
+@msg	the trace was cancelled	描摹已取消
+@msg	the trailer has no size	尾部没有大小
+@msg	the type object is flattened to nothing	文字对象拼合后没有任何内容
+@msg	the value of axis `{tag}` must be a number or null	轴 `{tag}` 的值必须是数字或 null
+@msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	变量库声明的数据集超过 {MAX_LIBRARY_DATASETS} 个
+@msg	the variable library declares more than {MAX_LIBRARY_ENTITIES} entities	变量库声明的实体超过 {MAX_LIBRARY_ENTITIES} 个
+@msg	the variable library declares more than {MAX_LIBRARY_VARIABLES} variables	变量库声明的变量超过 {MAX_LIBRARY_VARIABLES} 个
+@msg	the variable library declares no variables	变量库没有声明任何变量
+@msg	the variable library is larger than {MAX_LIBRARY_BYTES} bytes	变量库大于 {MAX_LIBRARY_BYTES} 字节
+@msg	the variable library is not UTF-8	变量库不是 UTF-8
+@msg	the variable library is not well-formed XML: {e}	变量库不是格式正确的 XML：{e}
+@msg	the variable library nests elements more than {MAX_LIBRARY_NESTING} deep	变量库的元素嵌套超过 {MAX_LIBRARY_NESTING} 层
+@msg	the variable library's document type declaration holds something other than entities of plain text	变量库的文档类型声明中含有纯文本实体以外的内容
+@msg	the variable library's entities expand to more than {MAX_LIBRARY_BYTES} bytes	变量库的实体展开后超过 {MAX_LIBRARY_BYTES} 字节
+@msg	the window has no dock	该窗口没有停放区
+@msg	the written PDF has no catalog	已写出的 PDF 没有目录
+@msg	the written PDF has no cross-reference table	已写出的 PDF 没有交叉引用表
+@msg	the written PDF's metadata can't be edited	无法编辑已写出的 PDF 的元数据
+@msg	there are no colour swatches to draw	没有可绘制的颜色色板
+@msg	there is already a design named `{name}`	已有名为 `{name}` 的设计
+@msg	there is already a design named `{to}`	已有名为 `{to}` 的设计
+@msg	there is already a toolbar named `{name}`	已有名为 `{name}` 的工具栏
+@msg	there is already a toolbar named `{to}`	已有名为 `{to}` 的工具栏
+@msg	there is no library: create one first	没有库：请先创建一个
+@msg	these paths are too degenerate for Shaper	这些路径过于退化，Shaper 无法处理
+@msg	thumbnail: no page {v} (the {what} has {count})	thumbnail：没有第 {v} 页 ({what} 有 {count} 页)
+@msg	tileRange of {what}: {e}	{what} 的 tileRange：{e}
+@msg	title can't be empty	title 不能为空
+@msg	to (the new name) is required	必须给出 to (新名称)
+@msg	to must be fill or stroke	to 必须是 fill 或 stroke
+@msg	to must be smooth or corner	to 必须是 smooth 或 corner
+@msg	too large for a zip archive: package to a folder	对 zip 归档而言过大：请打包到文件夹
+@msg	too many Shaper edits	Shaper 编辑过多
+@msg	too many `points` (at most 100000)	`points` 过多 (最多 100000 个)
+@msg	too many characters: at most {MAX_CHARS}	字符过多：最多 {MAX_CHARS} 个
+@msg	too many dots for this size: lower the frequency	此尺寸下的网点过多：请降低频率
+@msg	too many filters over one file	单个文件上的滤镜过多
+@msg	too many overlapping paths for Shaper	重叠的路径过多，Shaper 无法处理
+@msg	too many saved clips	已保存的剪切过多
+@msg	too many saved graphics states	已保存的图形状态过多
+@msg	toolbar (a toolbar's name) must be a string	toolbar (工具栏名称) 必须是字符串
+@msg	toolbar name can't be empty	工具栏名称不能为空
+@msg	transparentImages {v}: "flatten" (the default) or "omit"	transparentImages {v}：应为 "flatten" (默认值) 或 "omit"
+@msg	two saved selections would be named `{_1}`	会有两个已保存的选区都名为 `{_1}`
+@msg	type dimension cannot be represented with this text transform	无法用此文本变换表示文字尺寸
+@msg	type dimension must be finite	文字尺寸必须是有限值
+@msg	unexpected resources	出现了意外的资源
+@msg	unknown CMYK profile `{name}`	未知的 CMYK 配置文件 `{name}`
+@msg	unknown File Info field `{k}`	未知的文件信息字段 `{k}`
+@msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	featureChanges 中有未知的 OpenType 特性 `{t}` (应为 `features` 接受的标签)
+@msg	unknown PDF preset `{name}` (presets: {_1})	未知的 PDF 预设 `{name}` (现有预设：{_1})
+@msg	unknown Warp style	未知的变形样式
+@msg	unknown alignToPath `{a}`	未知的 alignToPath `{a}`
+@msg	unknown arrowhead {v}	未知的箭头 {v}
+@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	未知的 artboardLayout 键 `{k}` (layout、columns、spacing、rightToLeft)
+@msg	unknown attribute `{attribute}`	未知的属性 `{attribute}`
+@msg	unknown attribute `{k}`	未知的属性 `{k}`
+@msg	unknown axis `{other}` (vertical|horizontal|free)	未知的轴 `{other}` (vertical|horizontal|free)
+@msg	unknown blend mode `{b}`	未知的混合模式 `{b}`
+@msg	unknown blend mode {b}	未知的混合模式 {b}
+@msg	unknown brush type `{o}`	未知的画笔类型 `{o}`
+@msg	unknown category `{c}`	未知的类别 `{c}`
+@msg	unknown category `{c}` ({_1})	未知的类别 `{c}` ({_1})
+@msg	unknown character `{c}`	未知的字符 `{c}`
+@msg	unknown character style number field	未知的字符样式数值字段
+@msg	unknown effect `{e}`	未知的效果 `{e}`
+@msg	unknown end {e}	未知的端点 {e}
+@msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	未知的 flattenerPreset `{name}` (应为 High Resolution、Medium Resolution、Low Resolution 或已保存的预设：参见 flattener.presets.list)
+@msg	unknown format `{f}` (vcswatches, gpl, ase or css)	未知的格式 `{f}` (vcswatches、gpl、ase 或 css)
+@msg	unknown from {f}	未知的 from {f}
+@msg	unknown graph type `{t}`	未知的图表类型 `{t}`
+@msg	unknown grid colours `{name}` (one of {_1})	未知的网格颜色 `{name}` (应为 {_1} 之一)
+@msg	unknown gridType `{t}`	未知的 gridType `{t}`
+@msg	unknown highlight `{v}`	未知的 highlight `{v}`
+@msg	unknown intent `{i}`	未知的意图 `{i}`
+@msg	unknown issue kind {id}	未知的问题类型 {id}
+@msg	unknown issue kind {v}	未知的问题类型 {v}
+@msg	unknown knockout state {k}	未知的挖空状态 {k}
+@msg	unknown language `{language}` (one of {_1})	未知的语言 `{language}` (应为 {_1} 之一)
+@msg	unknown language `{l}` (one of {_1})	未知的语言 `{l}` (应为 {_1} 之一)
+@msg	unknown method `{m}` ({_1})	未知的方法 `{m}` ({_1})
+@msg	unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)	未知的模式 `{other}` (gray、rgb、hsb、lab、cmyk 或 web)
+@msg	unknown mode `{other}` (mono|cmyk)	未知的模式 `{other}` (mono|cmyk)
+@msg	unknown mode `{other}` (rgb|cmyk|gray|global)	未知的模式 `{other}` (rgb|cmyk|gray|global)
+@msg	unknown mode `{other}` (set, add, subtract)	未知的模式 `{other}` (set、add、subtract)
+@msg	unknown mode `{o}`	未知的模式 `{o}`
+@msg	unknown mode {m}	未知的模式 {m}
+@msg	unknown model `{other}`	未知的模型 `{other}`
+@msg	unknown model `{other}` (keep, new or document)	未知的模型 `{other}` (keep、new 或 document)
+@msg	unknown op {o}	未知的 op {o}
+@msg	unknown order `{o}`: toggle, front, forward, backward or back	未知的 order `{o}`：应为 toggle、front、forward、backward 或 back
+@msg	unknown overprints `{v}` (preserve, simulate or discard)	未知的 overprints `{v}` (preserve、simulate 或 discard)
+@msg	unknown panel	未知的面板
+@msg	unknown pieLegend `{v}` (none, standard or wedges)	未知的 pieLegend `{v}` (none、standard 或 wedges)
+@msg	unknown piePosition `{v}` (even, ratio or stacked)	未知的 piePosition `{v}` (even、ratio 或 stacked)
+@msg	unknown pieSort `{v}` (none, all or first)	未知的 pieSort `{v}` (none、all 或 first)
+@msg	unknown plate `{n}`	未知的印版 `{n}`
+@msg	unknown preference `{k}`	未知的首选项 `{k}`
+@msg	unknown profile {id} (see stroke.widthProfile.list)	未知的配置文件 {id} (参见 stroke.widthProfile.list)
+@msg	unknown proof target `{t}`	未知的校样目标 `{t}`
+@msg	unknown quotes key `{k}` (double, single)	未知的 quotes 键 `{k}` (double、single)
+@msg	unknown resolution `{v}`	未知的分辨率 `{v}`
+@msg	unknown rule `{rule}` ({_1})	未知的规则 `{rule}` ({_1})
+@msg	unknown rule `{r}` (see color.harmony)	未知的规则 `{r}` (参见 color.harmony)
+@msg	unknown setting `{k}`	未知的设置 `{k}`
+@msg	unknown shape `{v}` (circle|ellipse|square|diamond|line)	未知的形状 `{v}` (circle|ellipse|square|diamond|line)
+@msg	unknown spacing `{o}` (smooth|steps|distance)	未知的间距 `{o}` (smooth|steps|distance)
+@msg	unknown tileType `{t}` ({_1})	未知的 tileType `{t}` ({_1})
+@msg	unknown units	未知的单位
+@msg	unknown units `{u}`	未知的单位 `{u}`
+@msg	unknown value axis `{v}` (left, right or both)	未知的数值轴 `{v}` (left、right 或 both)
+@msg	unknown variation `{v}` (tintsShades|warmCool|vividMuted)	未知的变化 `{v}` (tintsShades|warmCool|vividMuted)
+@msg	unknown warp style `{s}`	未知的变形样式 `{s}`
+@msg	unknown {key} `{v}` (none, short or full)	未知的 {key} `{v}` (none、short 或 full)
+@msg	unknown {key} profile `{n}`	未知的 {key} 配置文件 `{n}`
+@msg	unknown {k} key `{key}` (size, position)	未知的 {k} 键 `{key}` (size、position)
+@msg	unreadable object	对象无法读取
+@msg	unsafe destination file name	目标文件名不安全
+@msg	use paths or compound paths	请使用路径或复合路径
+@msg	useArtboards must be true or false, not {v}	useArtboards 必须为 true 或 false，不能是 {v}
+@msg	value for `{var}` must match its variable kind	`{var}` 的值必须与其变量类型相符
+@msg	variable `{_1}` is already defined	变量 `{_1}` 已定义
+@msg	variable `{name}` has no `trait`	变量 `{name}` 没有 `trait`
+@msg	variable `{name}` is already defined	变量 `{name}` 已定义
+@msg	variable `{name}` is declared twice	变量 `{name}` 被声明了两次
+@msg	variable `{to}` already exists	变量 `{to}` 已存在
+@msg	view is required	必须给出 view
+@msg	view must be one of {_1}	view 必须是 {_1} 之一
+@msg	warpStyle can only edit an applied Warp effect	warpStyle 只能编辑已应用的变形效果
+@msg	width and height must be more than 0 and at most {limit}	width 和 height 必须大于 0 且不超过 {limit}
+@msg	width factors must be finite	宽度系数必须是有限值
+@msg	width must be positive	width 必须为正数
+@msg	width out of range	宽度超出范围
+@msg	width/height must be > 0	width/height 必须 > 0
+@msg	x and y must be finite numbers	x 和 y 必须是有限的数字
+@msg	x and y must be given together	x 和 y 必须一起给出
+@msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone 需要 anchor：请用 anchor 停放在某个面板旁，或用 side (Start 或 End) 停放到新的停放列中
+@msg	zoom must be positive	zoom 必须为正数
+@msg	{C}: no effect at index {list}	{C}：索引 {list} 处没有效果
+@msg	{DEFAULT_PRESET} is protected and stays	{DEFAULT_PRESET} 受保护，会保留
+@msg	{DEFAULT_PRESET} is protected: save the settings under another name	{DEFAULT_PRESET} 受保护：请用其他名称保存这些设置
+@msg	{LABEL} produced an empty result	{LABEL} 得到了空结果
+@msg	{_1} MB of document, at most {_2} MB	文档为 {_1} MB，最多允许 {_2} MB
+@msg	{_1} MB of images, at most {_2} MB	图像共 {_1} MB，最多允许 {_2} MB
+@msg	{_1} bytes of RGBA data for a {width} × {height} image	{width} × {height} 的图像却有 {_1} 字节的 RGBA 数据
+@msg	{_1} can't be read, or changed since it was read: relink or update it first	{_1} 无法读取，或在读取后已被更改：请先重新链接或更新它
+@msg	{_1} can't go into {into}	{_1} 不能放入 {into}
+@msg	{_1} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing	{_1} 不能将打印限制为低分辨率：请选择 PDF 1.4 或更高版本，或允许高分辨率打印
+@msg	{_1} files can't be opened yet	目前还无法打开 {_1} 文件
+@msg	{_1} files can't be password-protected: remove the passwords or choose no standard	{_1} 文件不能用密码保护：请移除密码或不选择标准
+@msg	{_1} files can't be {_2}	{_1} 文件不能 {_2}
+@msg	{_1} files can't carry editing data: turn off preserveEditing	{_1} 文件不能包含编辑数据：请关闭 preserveEditing
+@msg	{_1} files can't have PDF layers: turn off createLayers	{_1} 文件不能包含 PDF 图层：请关闭 createLayers
+@msg	{_1} files need a creation date, and this platform has no clock to give one	{_1} 文件需要创建日期，而此平台没有可提供日期的时钟
+@msg	{_1} isn't a path	{_1} 不是路径
+@msg	{_1} options: {e}	{_1} 选项：{e}
+@msg	{_1} paints nothing to rasterize	{_1} 没有绘制任何可栅格化的内容
+@msg	{_1} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)	{_1} 的密码最多 {MAX_LEGACY_PASSWORD} 个 ASCII 字符 (PDF 1.7 及更高版本可使用任意字符)
+@msg	{_1} with linked images or an image map writes several files: use document.export	带有链接图像或图像映射的 {_1} 会写出多个文件：请使用 document.export
+@msg	{_1} writes one file per artboard here: use document.export, or name one artboard	{_1} 在这里会为每个画板写出一个文件：请使用 document.export，或指定一个画板
+@msg	{_1} × {_2} pixels is too large for {_3} (at most {max} pixels a side): lower the scale	{_1} × {_2} 像素对 {_3} 而言过大 (每边最多 {max} 像素)：请降低缩放比例
+@msg	{_1}: belongs to another account	{_1}：属于其他帐户
+@msg	{_1}: not a folder of its own	{_1}：不是独立的文件夹
+@msg	{_1}: not a plain file	{_1}：不是普通文件
+@msg	{dest}: {e}	{dest}：{e}
+@msg	{doc} has no folder	{doc} 没有所在的文件夹
+@msg	{file} isn't linked	{file} 不是链接文件
+@msg	{folder} is not a package folder	{folder} 不是打包文件夹
+@msg	{folder}: more than {max} files and folders	{folder}：文件和文件夹超过 {max} 个
+@msg	{folder}: {e}	{folder}：{e}
+@msg	{g} is not a Live Paint group	{g} 不是实时上色组
+@msg	{id} is not a slice	{id} 不是切片
+@msg	{key} must be 0–{MAX_ADD_AROUND} pt	{key} 必须为 0–{MAX_ADD_AROUND} pt
+@msg	{key} must be [x,y]	{key} 必须是 [x,y]
+@msg	{key} must be a percentage {min}..100	{key} 必须是 {min}..100 的百分比
+@msg	{key} must be a positive number, not {n}	{key} 必须是正数，不能是 {n}
+@msg	{key} must be a positive number, not {v}	{key} 必须是正数，不能是 {v}
+@msg	{key} must be one of {_1}	{key} 必须是 {_1} 之一
+@msg	{key} must be {_1}, got {s}	{key} 必须是 {_1}，实际为 {s}
+@msg	{key} must name a floating panel	{key} 必须指定一个浮动面板
+@msg	{key} must name a panel in another group	{key} 必须指定另一个组中的面板
+@msg	{key} must name a panel that shows	{key} 必须指定一个已显示的面板
+@msg	{key} must name a registered panel	{key} 必须指定一个已注册的面板
+@msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} 文件不支持透明度，而该文件会包含 {what}：请先拼合 (object.flattenTransparency)
+@msg	{kind} images can't be opened (see document.formats)	无法打开 {kind} 图像 (参见 document.formats)
+@msg	{k} `{v}` is not one of the choices	{k} `{v}` 不在可选项之中
+@msg	{k} has control characters{_1}	{k} 含有控制字符{_1}
+@msg	{k} is too long (at most {MAX_TEXT} characters)	{k} 过长 (最多 {MAX_TEXT} 个字符)
+@msg	{k} must be > 0	{k} 必须 > 0
+@msg	{k} must be a number (pt) or a length such as "210 mm"	{k} 必须是数字 (pt) 或 "210 mm" 这样的长度
+@msg	{k} must be a number from {min} to {max}	{k} 必须是 {min} 到 {max} 之间的数字
+@msg	{k} must be a number or "auto"	{k} 必须是数字或 "auto"
+@msg	{k} must be a string	{k} 必须是字符串
+@msg	{k} must be text	{k} 必须是文本
+@msg	{k} must be true or false	{k} 必须为 true 或 false
+@msg	{k} must be {{size?, position?}}	{k} 必须是 {{size?, position?}}
+@msg	{k}: can't read `{s}` as a length	{k}：无法将 `{s}` 读作长度
+@msg	{label} must be a number at most {max}	{label} 必须是不超过 {max} 的数字
+@msg	{label} must be a number from -1296 to 1296	{label} 必须是 -1296 到 1296 之间的数字
+@msg	{label} must be a number from 1 to 10000	{label} 必须是 1 到 10000 之间的数字
+@msg	{name} `{s}`: {ids}	{name} `{s}`：{ids}
+@msg	{name} is built in and can't be deleted	{name} 是内置项，不能删除
+@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} 必须为 {lo}–{hi}{unit} (实际为 {v})
+@msg	{name}: CRC or size mismatch	{name}：CRC 或大小不匹配
+@msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}：只能读取此 Affinity 文件的嵌入预览；请使用 文件 › 打开 查看预览及其警告，或在置入前先从 Affinity 导出 SVG 或 PDF
+@msg	{name}: {e}	{name}：{e}
+@msg	{native}; its embedded preview can't be read either ({e})	{native}；其嵌入的预览也无法读取 ({e})
+@msg	{std} files are CMYK, and the file would have colours in {_1}	{std} 文件为 CMYK，而该文件会包含 {_1} 颜色
+@msg	{std} files embed their fonts, and the file would have one that isn't	{std} 文件需要嵌入字体，而该文件会有一个未嵌入的字体
+@msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	{target} 是读取此文档时所用的文件，读取时略去了一些内容 ({what})：覆盖该文件会永久丢失这些内容。请改为写入另一个文件，或传入 acknowledgeLoss: true 以仍然替换它
+@msg	{ty} brushes need selected art (or params.{k})	{ty} 画笔需要选中的图稿 (或 params.{k})
+@msg	{v} is not an asset id	{v} 不是资源 ID
+@msg	{what} can't be intertwined	{what} 不能交织
+@msg	{what} doesn't fit the paper with its bleed and marks	{what} 连同出血和标记在纸张上放不下
+@msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 会打印成超过 {MAX_TILES} 个拼贴：请将其缩小

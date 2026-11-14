@@ -21,9 +21,6 @@ VCdict begin
 end
 ";
 
-/// Longest line of encoded data (DSC readers take up to 255 characters).
-const LINE: usize = 76;
-
 /// `v` as PostScript writes it: at most four decimals, no trailing zeros (0 when not finite).
 pub(crate) fn num(v: f64) -> String {
     let mut s = String::new();
@@ -33,11 +30,24 @@ pub(crate) fn num(v: f64) -> String {
 
 /// Append [`num`]`(v)` to `s`.
 pub(crate) fn push_num(s: &mut String, v: f64) {
-    // Beyond ~1.8e304 the scaling overflows; such values have no fractional digits to round.
+    push_num_places(s, v, 4);
+}
+
+/// The value [`num`]`(v)` stands for, as a reader parses it back.
+pub(crate) fn written(v: f64) -> f64 {
+    num(v).parse().unwrap_or(0.0)
+}
+
+/// Append `v` to `s` with at most `places` decimals (up to 9), no trailing zeros (0 when not
+/// finite).
+pub(crate) fn push_num_places(s: &mut String, v: f64, places: u32) {
+    let places = places.min(9);
+    let scale = 10f64.powi(places as i32);
+    // Past where the scaling overflows, values have no fractional digits to round.
     let v = if !v.is_finite() {
         0.0
-    } else if (v * 10_000.0).is_finite() {
-        (v * 10_000.0).round() / 10_000.0
+    } else if (v * scale).is_finite() {
+        (v * scale).round() / scale
     } else {
         v
     };
@@ -46,7 +56,7 @@ pub(crate) fn push_num(s: &mut String, v: f64) {
         return;
     }
     let start = s.len();
-    let _ = write!(s, "{v:.4}");
+    let _ = write!(s, "{v:.*}", places as usize);
     let keep = s[start..].trim_end_matches('0').trim_end_matches('.').len();
     s.truncate(start + keep);
 }
@@ -167,54 +177,7 @@ pub(crate) fn clip_op(rule: FillRule) -> &'static str {
 
 /// `bytes` in ASCII85 with its `~>` end, in lines of about [`LINE`] characters, none starting
 /// with `%` (DSC readers would take it for a comment).
-pub(crate) fn ascii85(bytes: &[u8]) -> String {
-    let mut raw = String::with_capacity(bytes.len() * 5 / 4 + 8);
-    let (chunks, rest) = bytes.as_chunks::<4>();
-    for c in chunks {
-        let v = u32::from_be_bytes(*c);
-        if v == 0 {
-            raw.push('z');
-        } else {
-            push85(&mut raw, v, 5);
-        }
-    }
-    if !rest.is_empty() {
-        let mut c = [0u8; 4];
-        for (d, s) in c.iter_mut().zip(rest) {
-            *d = *s;
-        }
-        push85(&mut raw, u32::from_be_bytes(c), rest.len() + 1);
-    }
-    raw.push_str("~>");
-    let mut out = String::with_capacity(raw.len() + raw.len() / LINE + 2);
-    if raw.starts_with('%') {
-        // Whitespace is ignored by readers, and keeps the first line from starting with `%`.
-        out.push(' ');
-    }
-    let mut col = 0;
-    for ch in raw.chars() {
-        if col >= LINE && ch != '%' {
-            out.push('\n');
-            col = 0;
-        }
-        out.push(ch);
-        col += 1;
-    }
-    out.push('\n');
-    out
-}
-
-/// The first `n` base-85 digits of `v`.
-fn push85(s: &mut String, mut v: u32, n: usize) {
-    let mut d = [0u8; 5];
-    for slot in d.iter_mut().rev() {
-        *slot = (v % 85) as u8 + b'!';
-        v /= 85;
-    }
-    for b in d.iter().take(n) {
-        s.push(char::from(*b));
-    }
-}
+pub(crate) use craft_eps::ascii85::encode as ascii85;
 
 /// Most bytes [`ascii85_decode`] makes: what one filter or data section may hold.
 pub(crate) const MAX_ASCII85: usize = 1 << 28;
@@ -228,47 +191,7 @@ pub(crate) fn ascii85_decode(text: &str) -> Option<Vec<u8>> {
 /// [`ascii85_decode`] of at most `max` bytes: `z` is four bytes for one, so the length of the
 /// text doesn't bound what it becomes (#1715).
 pub(crate) fn ascii85_decode_within(text: &str, max: usize) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity((text.len() / 5 * 4).min(max));
-    let mut group = [0u8; 5];
-    let mut n = 0;
-    let mut chars = text.bytes().filter(|b| !b.is_ascii_whitespace()).peekable();
-    while let Some(b) = chars.next() {
-        if out.len() > max {
-            return None;
-        }
-        match b {
-            b'~' => {
-                if chars.next() != Some(b'>') {
-                    return None;
-                }
-                if n == 1 {
-                    return None;
-                }
-                if n > 1 {
-                    let padded: Vec<u8> = group.iter().take(n).copied().chain(std::iter::repeat(b'u')).take(5).collect();
-                    let v = value85(&padded)?;
-                    out.extend(v.to_be_bytes().iter().take(n - 1));
-                }
-                return (out.len() <= max).then_some(out);
-            }
-            b'z' if n == 0 => out.extend([0; 4]),
-            b'!'..=b'u' => {
-                *group.get_mut(n)? = b;
-                n += 1;
-                if n == 5 {
-                    out.extend(value85(&group)?.to_be_bytes());
-                    n = 0;
-                }
-            }
-            _ => return None,
-        }
-    }
-    None
-}
-
-/// The value of five base-85 digits; `None` past `u32::MAX`.
-fn value85(digits: &[u8]) -> Option<u32> {
-    digits.iter().try_fold(0u32, |acc, d| acc.checked_mul(85)?.checked_add(u32::from(d.checked_sub(b'!')?)))
+    craft_eps::ascii85::decode(text.as_bytes(), max)
 }
 
 /// Run-length encoding (PackBits: what PostScript's `RunLengthDecode` reads), shared with TIFF.
@@ -291,7 +214,7 @@ pub(crate) fn inflate(data: &[u8], max: u64) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ascii85, ascii85_decode, num};
+    use super::{ascii85, ascii85_decode, num, push_num_places};
 
     #[test]
     fn ascii85_first_line_never_starts_with_percent() {
@@ -307,5 +230,19 @@ mod tests {
             let s = num(v);
             assert!(!s.is_empty() && s.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '.'), "{v}: got {s:?}");
         }
+    }
+
+    #[test]
+    fn numbers_keep_the_decimals_asked_for() {
+        let places = |v: f64, n: u32| {
+            let mut s = String::new();
+            push_num_places(&mut s, v, n);
+            s
+        };
+        assert_eq!(num(0.123_456_78), "0.1235");
+        assert_eq!(places(0.123_456_78, 7), "0.1234568");
+        assert_eq!(places(f64::from(0.4f32), 7), "0.4");
+        assert_eq!(places(2.5, 7), "2.5");
+        assert_eq!(places(f64::NAN, 7), "0");
     }
 }

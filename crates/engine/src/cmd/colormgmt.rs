@@ -5,7 +5,11 @@
 //! Colour settings and the proof view are process-wide (`vectorcraft_color::cms::active`,
 //! `vectorcraft_render::proof::view`). A document's assigned profiles are stored in
 //! `Document::color_profiles` (files before format v3: `Document.unknown["colorProfiles"]`) and
-//! become active when assigned.
+//! take the place of the working spaces in the active settings while the document is in front
+//! ([`use_front_profiles`]): when they are assigned, when the working settings change, and when the
+//! document comes to the front or its assignment comes back (an open, a switch, a close, a revert,
+//! an undo or a rollback, [`Session::sync_front_profiles`]); the working spaces stay as Edit → Color
+//! Settings set them.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -59,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Assign Profile…",
             ["Edit"],
             None,
-            "{rgb?: profile|null, cmyk?: profile|null} tag the document with profiles (colour numbers are kept) → {rgb, cmyk}",
+            "{rgb?: profile|null, cmyk?: profile|null} tag the document with profiles (color numbers are kept; null: the working space). Colors then show and convert through the profiles assigned; the working spaces stay as edit.colorSettings set them → {rgb, cmyk}",
             has_doc,
             assign_profile
         ),
@@ -86,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gamut Warning",
             [],
             None,
-            "{ids?|id?, colors?: [color] (#rrggbbaa and #rgba are refused)} colours that can't be printed in the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
+            "{ids?|id?, colors?: [color] (#rrggbbaa and #rgba are refused)} colors that can't be printed in the document's assigned CMYK profile, else the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
             has_doc,
             gamut_check
         ),
@@ -176,9 +180,19 @@ fn touch_all(s: &mut Session) {
     }
 }
 
+/// Make the active settings the working settings with the profiles the front document is assigned
+/// in place of the working spaces (none, or no document open: the working spaces). The open
+/// documents redraw when the active settings change.
+pub(crate) fn use_front_profiles(s: &mut Session) {
+    let (rgb, cmyk) = s.active().map(|d| doc_profiles(&d.doc)).unwrap_or_default();
+    if cms::use_document_profiles(rgb.as_deref(), cmyk.as_deref()) {
+        touch_all(s);
+    }
+}
+
 fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.colorSettings";
-    let mut st = cms::active_settings();
+    let mut st = cms::working_settings();
     let before = st.clone();
     if let Some(v) = text_param(p, "rgb", C)? {
         st.rgb = cms::canonical_name(v).to_string();
@@ -194,6 +208,7 @@ fn color_settings(s: &mut Session, p: &Value) -> Result<Value> {
         cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
         // Saved for the next start when the app attached a settings file (#6335).
         s.store_color_settings(&st);
+        use_front_profiles(s);
         touch_all(s);
     }
     Ok(settings_json(&st))
@@ -208,10 +223,18 @@ fn load_profile(s: &mut Session, p: &Value) -> Result<Value> {
     let info = cms::register_icc(&bytes, None).map_err(|e| bad(C, e.to_string()))?;
     // The bytes are kept, not the path: the file may move or go away.
     let remembered = s.store_profile(&info.name, &bytes);
-    // A new file of a working space: the active settings still hold the old one.
-    let working = cms::active_settings();
-    if working.rgb == info.name || working.cmyk == info.name {
+    // A new file of a working space or of an assigned profile in use: the active settings still
+    // hold the old one. A profile the front document is assigned, loaded after it was removed, is
+    // in use again.
+    let (working, active) = (cms::working_settings(), cms::active_settings());
+    let (rgb, cmyk) = s.active().map(|d| doc_profiles(&d.doc)).unwrap_or_default();
+    let front = [rgb, cmyk].iter().any(|n| n.as_deref() == Some(info.name.as_str()));
+    if front || [&working.rgb, &working.cmyk, &active.rgb, &active.cmyk].contains(&&info.name) {
         cms::set_active(&working).map_err(|e| bad(C, e.to_string()))?;
+        use_front_profiles(s);
+        touch_all(s);
+    } else if proof_targets(&info.name) {
+        // A new file of the CMYK profile View → Proof Setup targets: redraw.
         touch_all(s);
     }
     Ok(json!({"name": info.name, "kind": info.kind, "remembered": remembered}))
@@ -225,16 +248,30 @@ fn remove_profile(s: &mut Session, p: &Value) -> Result<Value> {
     if info.builtin {
         return Err(bad(C, format!("`{name}` is a built-in profile and stays")));
     }
-    let working = cms::active_settings();
+    let working = cms::working_settings();
     if working.rgb == name || working.cmyk == name {
         return Err(bad(C, format!("`{name}` is a working space: choose another with edit.colorSettings first")));
     }
+    let active = cms::active_settings();
     if !cms::unregister_icc(&info.name) {
         return Err(bad(C, format!("no profile named `{name}`")));
     }
     s.unstore_profile(&info.name);
-    touch_all(s);
+    // An assigned profile in use: the working space takes its place, as for any document assigned
+    // a profile that is not available.
+    if active.rgb == name || active.cmyk == name {
+        use_front_profiles(s);
+    }
+    // The CMYK profile View → Proof Setup targets: redraw.
+    if proof_targets(&info.name) {
+        touch_all(s);
+    }
     Ok(json!({"removed": info.name}))
+}
+
+/// Whether View → Proof Setup targets the CMYK profile `name`.
+fn proof_targets(name: &str) -> bool {
+    matches!(proof::view().setup.target, ProofTarget::Cmyk(t) if t == name)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -273,15 +310,9 @@ fn assign_profile(s: &mut Session, p: &Value) -> Result<Value> {
             d.color_profiles = profiles;
             Ok(())
         })?;
-        let mut st = cms::active_settings();
-        if let Some(r) = &rgb {
-            st.rgb = r.clone();
-        }
-        if let Some(c) = &cmyk {
-            st.cmyk = c.clone();
-        }
-        cms::set_active(&st).map_err(|e| bad(C, e.to_string()))?;
-        touch_all(s);
+        // The document draws through its profiles now, and a Document Color Mode later in the same
+        // batch converts through them. The working spaces stay as they are.
+        use_front_profiles(s);
     }
     Ok(json!({"rgb": rgb, "cmyk": cmyk}))
 }
@@ -368,7 +399,9 @@ pub(crate) fn commit_new_art_colors(s: &mut Session) -> Result<()> {
     Ok(())
 }
 
-fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaults) -> Result<()> {
+/// Record new-art paints `before` and the session's current ones with the step just made (or the
+/// interaction or undo group in progress), so Undo puts `before` back and Redo the current ones.
+pub(super) fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaults) -> Result<()> {
     let after = s.paint.clone();
     if before != after || s.batch_stash.is_some() || s.doc()?.undo_group.is_some() {
         let st = s.doc_mut()?;
@@ -393,7 +426,9 @@ fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaul
     Ok(())
 }
 
-fn new_art_colors_before(s: &Session) -> Result<vectorcraft_tools::PaintDefaults> {
+/// The new-art paints an undo step that starts now puts back: those at the start of the undo group
+/// or interaction in progress, else the session's current ones.
+pub(super) fn new_art_colors_before(s: &Session) -> Result<vectorcraft_tools::PaintDefaults> {
     let st = s.doc()?;
     Ok(st.undo_group.as_ref().map(|g| &g.paint).or_else(|| st.interaction.as_ref().map(|it| &it.paint)).cloned().unwrap_or_else(|| s.paint.clone()))
 }
@@ -631,6 +666,11 @@ fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color
         map_paint_colors(&mut st.fill, f);
         map_paint_colors(&mut st.stroke, f);
     }
+    for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows].into_iter().flatten() {
+        for paint in [&mut r.paint.fill, &mut r.paint.stroke].into_iter().flatten() {
+            map_paint_colors(paint, f);
+        }
+    }
 }
 
 /// `f` applied to solid, gradient-stop and freeform-control colors, with any swatch link.
@@ -760,17 +800,33 @@ fn proof_setup(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(on) = on_param(p, "proof", C)? {
         v.proof_colors = on;
     }
-    proof::set_view(v.clone());
-    touch_all(s);
+    store_view(s, v.clone());
     Ok(view_json(&v))
+}
+
+/// Make `v` the proof view and redraw every document. When `v` equals the current view, the view
+/// and the revisions stay as they are; Separations Preview's visible plates are compared as a set.
+fn store_view(s: &mut Session, v: proof::ProofView) {
+    let shown = |v: &proof::ProofView| proof::ProofView {
+        separations: v.separations.as_ref().map(|vis| {
+            let mut vis = vis.clone();
+            vis.sort();
+            vis.dedup();
+            vis
+        }),
+        ..v.clone()
+    };
+    if shown(&v) != shown(&proof::view()) {
+        proof::set_view(v);
+        touch_all(s);
+    }
 }
 
 fn toggle_view(s: &mut Session, p: &Value, cmd: &str, f: impl FnOnce(&mut proof::ProofView, Option<bool>)) -> Result<Value> {
     let on = on_param(p, "on", cmd)?;
     let mut v = proof::view();
     f(&mut v, on);
-    proof::set_view(v.clone());
-    touch_all(s);
+    store_view(s, v.clone());
     Ok(view_json(&v))
 }
 
@@ -802,7 +858,15 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
     match p.get("plates") {
         None | Some(Value::Null) => {}
         Some(Value::Array(a)) if a.iter().all(Value::is_string) => {
-            v.separations = Some(a.iter().filter_map(Value::as_str).map(check).collect::<Result<Vec<_>>>()?);
+            let mut vis: Vec<String> = Vec::new();
+            for n in a.iter().filter_map(Value::as_str) {
+                let n = check(n)?;
+                // A plate named twice is shown once.
+                if !vis.contains(&n) {
+                    vis.push(n);
+                }
+            }
+            v.separations = Some(vis);
         }
         Some(_) => {
             let key = "plates";
@@ -821,8 +885,7 @@ fn separations(s: &mut Session, p: &Value) -> Result<Value> {
             vis.push(n);
         }
     }
-    proof::set_view(v);
-    touch_all(s);
+    store_view(s, v);
     Ok(plates_json(s))
 }
 

@@ -2137,8 +2137,9 @@ fn datasets_csv_reads_windows_1252_files() {
 }
 
 /// A CSV that starts with a UTF-16 byte-order mark is read as UTF-16, and
-/// one that isn't valid UTF-16 is refused. A file with NUL bytes and no byte-order mark is refused.
-/// A text value holding NUL imports back from the `csv` that `dataset.export` returns.
+/// one that isn't valid UTF-16 is refused. A file with NUL bytes and no byte-order mark that isn't
+/// UTF-16 is refused. A text value holding NUL imports back from the `csv` that `dataset.export`
+/// returns.
 #[test]
 fn datasets_csv_reads_utf16_files() {
     let mut s = session();
@@ -2160,7 +2161,7 @@ fn datasets_csv_reads_utf16_files() {
     assert!(e.contains("CSV is not UTF-16"), "{e}");
     let e = import(&mut s, &[b"\xff\xfe".as_slice(), "City\nAB,".as_bytes(), b"\x00\xd8"].concat()).unwrap_err().to_string();
     assert!(e.contains("CSV is not UTF-16"), "{e}");
-    let e = import(&mut s, &utf16(b"", "City\nx\n", true)).unwrap_err().to_string();
+    let e = import(&mut s, b"City\nx\0\n").unwrap_err().to_string();
     assert!(e.contains("CSV holds NUL bytes"), "{e}");
     assert_eq!(value(&s, "Data Set 1"), text_value("José"), "a refused file changes nothing");
     s.execute("dataset.set", &json!({"name": "Data Set 1", "values": {"City": "a\u{0}b"}})).unwrap();
@@ -2168,6 +2169,63 @@ fn datasets_csv_reads_utf16_files() {
     s.execute("dataset.delete", &json!({"names": ["Data Set 1"]})).unwrap();
     s.execute("dataset.import", &json!({"csv": csv})).unwrap();
     assert_eq!(value(&s, "Data Set 1"), text_value("a\u{0}b"));
+}
+
+/// A CSV in UTF-16 without a byte-order mark, with a NUL byte in at least half of its units, is
+/// read in the byte order that reads a line break: in either order, with characters whose bytes
+/// read as a line break, a quote or NUL, and when its bytes are also valid UTF-8. Files with fewer
+/// NUL bytes, that read a line break in both orders, that aren't valid UTF-16 in it, that hold a
+/// NUL character or that have an odd length are refused.
+#[test]
+fn datasets_csv_reads_utf16_files_without_a_byte_order_mark() {
+    let mut s = session();
+    s.execute("variable.define", &json!({"name": "City", "kind": "text"})).unwrap();
+    let import = |s: &mut Session, bytes: &[u8]| s.execute("dataset.import", &json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}));
+    let value = |s: &Session, name: &str| s.doc().unwrap().doc.variables.dataset(name).and_then(|d| d.values.get("City")).cloned();
+    let text_value = |v: &str| Some(vectorcraft_doc::DataValue::Text(v.into()));
+    let utf16 = |text: &str, le: bool| -> Vec<u8> { text.encode_utf16().flat_map(|u| if le { u.to_le_bytes() } else { u.to_be_bytes() }).collect() };
+    import(&mut s, &utf16("City\r\nParis\r\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("Paris"));
+    import(&mut s, &utf16("City\nZoë 😀\n", false)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("Zoë 😀"));
+    // U+4E00's low byte is NUL, U+010A holds a `\n` byte and U+2200 a `"` byte; all three files
+    // are valid UTF-8 too.
+    import(&mut s, &utf16("City\n一\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("一"));
+    import(&mut s, &utf16("City\nĊ\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("Ċ"));
+    import(&mut s, &utf16("City\n∀∀∀\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("∀∀∀"));
+    // A file with no line break has no data rows in either byte order.
+    for bytes in [utf16("City", true), utf16("City", false), b"\0aa\0".to_vec()] {
+        let e = import(&mut s, &bytes).unwrap_err().to_string();
+        assert!(e.contains("CSV has a header but no data rows"), "{e}");
+    }
+    import(&mut s, &utf16("City\tName\n一二三丁目\tKai\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("一二三丁目"));
+    // Most units hold their NUL byte where a big-endian file would (U+4E00); the line breaks
+    // give the byte order.
+    import(&mut s, &utf16("City\n一一一一一一一一一一二\n", true)).unwrap();
+    assert_eq!(value(&s, "Data Set 1"), text_value("一一一一一一一一一一二"));
+    // Windows-1252 and UTF-8 text with stray NUL bytes (the first with `\n\0` units), UTF-16 with
+    // fewer than half of its units holding a NUL byte, and, last, two files that read a line break
+    // in both byte orders (U+0D00 reads as `\r` and U+0A00 as `\n` big-endian).
+    let refused: [&[u8]; 9] = [
+        b"Caf\xe9\n\0Lyon\n\0",
+        b"Cit\0\n",
+        b"City\nx\0\n",
+        &utf16("City\n丁丁丁丁丁丁丁丁丁丁\n", true),
+        &utf16("City\na\u{0}\n", true),
+        &[utf16("City\n", true), vec![0x00, 0xD8], utf16("\n", true)].concat(),
+        &[utf16("City\n", false), vec![0xDC, 0x00], utf16("\n", false)].concat(),
+        &utf16("City\n\u{0D00}\u{0D00}\u{0D00}\n", true),
+        &utf16("City\u{0A00}\nParis\n", true),
+    ];
+    for bytes in refused {
+        let e = import(&mut s, bytes).unwrap_err().to_string();
+        assert!(e.contains("CSV holds NUL bytes"), "{bytes:?}: {e}");
+    }
+    assert_eq!(value(&s, "Data Set 1"), text_value("一一一一一一一一一一二"), "a refused file changes nothing");
 }
 
 /// A data set of [`library`]: its name, and each variable's name with its paragraphs.
@@ -2915,4 +2973,192 @@ fn applying_a_graph_row_again_records_no_undo_step() {
     assert_eq!((v["applied"].as_u64(), super::history(&s)), (Some(1), before));
     s.execute("dataset.select", &json!({"name": "B"})).unwrap();
     assert_eq!(super::history(&s), (before.0 + 1, 0, true));
+}
+
+/// The document's SVG with the options `svg` → (its text, the export's warnings).
+fn svg_export(s: &mut Session, svg: Value) -> (String, Vec<Value>) {
+    let r = s.execute("document.export", &json!({"format": "svg", "svg": svg})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    (String::from_utf8(bytes).unwrap(), r["warnings"].as_array().cloned().unwrap_or_default())
+}
+
+/// A new session with `svg` opened as `name` → (the session, the open's warnings).
+fn svg_opened(svg: &str, name: &str) -> (Session, Vec<Value>) {
+    let mut o = Session::new();
+    let r = o.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    let warnings = r["warnings"].as_array().cloned().unwrap_or_default();
+    (o, warnings)
+}
+
+/// Include Variable Data writes the text variables, the data sets' text values and each text
+/// variable's bound type object into the SVG, and opening the SVG reads them back: the type
+/// objects are bound again, so a data set changes them. Variables of other kinds are left out with
+/// a warning. Unnamed objects get ids with Minimal ids, minified files, unique ids and style
+/// entities alike, and Load Variable Library reads the same file.
+#[test]
+fn an_svg_with_variable_data_opens_with_its_variables_data_sets_and_bindings() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let u = text(&mut s, "9.99");
+    // A fill of its appearance writes the type in a group with the fill's path.
+    s.execute("appearance.addFill", &json!({"ids": [u.0]})).unwrap();
+    let r = rect(&mut s);
+    for (name, kind) in [("Name", "text"), ("Shown", "visibility"), ("Price", "text")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Price", "ids": [u.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Shown", "ids": [r.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A & <B>", "values": {"Name": "Bob", "Price": "1.00\nper pound & tax\r", "Shown": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Second", "values": {"Name": ""}})).unwrap();
+    let before = s.doc().unwrap().doc.variables.clone();
+    let text_only: Vec<vectorcraft_doc::DataSet> = before
+        .datasets
+        .iter()
+        .map(|d| {
+            let mut d = d.clone();
+            d.values.retain(|k, _| k != "Shown");
+            d
+        })
+        .collect();
+
+    for opts in [
+        json!({"variableData": true}),
+        json!({"variableData": true, "objectIds": "minimal", "minify": true}),
+        json!({"variableData": true, "objectIds": "unique"}),
+        json!({"variableData": true, "styling": "entities", "encoding": "latin1"}),
+    ] {
+        let (svg, warnings) = svg_export(&mut s, opts.clone());
+        assert!(warnings.contains(&json!("Variables that aren't text variables were left out of the SVG's variable data")), "{opts}: {warnings:?}");
+        assert_eq!(svg.matches("docRef=\"id('").count(), 2, "{opts}: {svg}");
+        assert_eq!(s.doc().unwrap().doc.variables, before, "{opts}: exporting changes nothing");
+
+        let (mut o, warnings) = svg_opened(&svg, "vars.svg");
+        assert!(warnings.is_empty(), "{opts}: {warnings:?}");
+        let vars = o.doc().unwrap().doc.variables.clone();
+        assert_eq!(vars.variables.iter().map(|v| (v.name.as_str(), v.kind.label())).collect::<Vec<_>>(), [("Name", "text"), ("Price", "text")]);
+        assert_eq!(vars.datasets, text_only, "{opts}");
+        assert_eq!(vars.active_dataset, None);
+        let bound = |name: &str| {
+            let ids = vars.objects_of(name);
+            assert_eq!(ids.len(), 1, "{opts}: {name}");
+            ids[0]
+        };
+        let (name, price) = (bound("Name"), bound("Price"));
+        assert_eq!((plain(&o, name), plain(&o, price)), ("Alice".into(), "9.99".into()), "{opts}: the art stays as the file draws it");
+        let v = o.execute("dataset.select", &json!({"name": "A & <B>"})).unwrap();
+        assert_eq!(v["applied"], json!(2), "{opts}: {v}");
+        assert_eq!(plain(&o, name), "Bob");
+
+        let mut lib = session();
+        lib.execute("variable.loadLibrary", &json!({"xml": svg})).unwrap();
+        assert_eq!(lib.doc().unwrap().doc.variables.datasets, text_only, "{opts}");
+    }
+}
+
+/// Without Include Variable Data the SVG holds no variable data, and a document without variables
+/// writes none with it on. Outlined type is written unbound, characters XML can't hold are left
+/// out of the values, and variable data past the 8 MiB or 2,000,000-node cap is left out, each
+/// with a warning; past 256 text variables or 1,000 data sets the rest are left out with a
+/// warning. Look-alike text in comments and other markup is skipped when the file opens. A file
+/// whose variable data can't be read opens its art with a warning, and so does one whose
+/// namespace entities would grow the library past its cap.
+#[test]
+fn an_svg_without_readable_variable_data_opens_its_art() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let (plain_svg, _) = svg_export(&mut s, json!({}));
+    assert!(!plain_svg.contains("variableSets"));
+    let (none, _) = svg_export(&mut s, json!({"variableData": true}));
+    assert!(!none.contains("variableSets"), "no variables, no variable data");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    let (off, _) = svg_export(&mut s, json!({}));
+    assert!(!off.contains("variableSets"), "off by default");
+    // Outlined type opens as art: the variable is written unbound, and the values lose the
+    // characters XML can't hold, each with a warning.
+    s.execute("dataset.new", &json!({"name": "Row", "values": {"Name": "a\u{b}b\u{1}c"}})).unwrap();
+    let (outlined, warnings) = svg_export(&mut s, json!({"variableData": true, "outlineText": true}));
+    assert!(outlined.contains("<variable varName=\"Name\"") && !outlined.contains("docRef"), "{outlined}");
+    for w in [
+        "Type written as outlines opens as art: its text variables were written unbound in the SVG's variable data",
+        "Characters XML can't hold were left out of data set values in the SVG's variable data",
+    ] {
+        assert!(warnings.contains(&json!(w)), "{warnings:?}");
+    }
+    let (o, _) = svg_opened(&outlined, "outlined.svg");
+    let vars = &o.doc().unwrap().doc.variables;
+    assert!(vars.bindings.is_empty() && vars.variables.len() == 1, "{vars:?}");
+    assert_eq!(vars.datasets[0].values["Name"], vectorcraft_doc::DataValue::Text("a bc".into()));
+    // Variable data larger than Load Variable Library reads is left out with a warning.
+    s.execute("dataset.new", &json!({"name": "Huge", "values": {"Name": "x".repeat(8 << 20)}})).unwrap();
+    let (huge, warnings) = svg_export(&mut s, json!({"variableData": true}));
+    assert!(!huge.contains("variableSets"));
+    assert!(warnings.contains(&json!("The variable data is larger than 8 MiB, which Load Variable Library reads, and was left out of the SVG")));
+
+    let head = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">";
+    let art = "<rect x=\"1\" y=\"1\" width=\"5\" height=\"5\"/></svg>";
+    let untraited = format!("{head}<variableSets><variableSet><variables><variable varName=\"A\"/></variables></variableSet></variableSets>{art}");
+    let refs = "&ns_big;".repeat(40_000);
+    let big = "x".repeat(250);
+    let growing = format!(
+        "<!DOCTYPE svg [<!ENTITY ns_big \"{big}\">]>{head}<variableSets><variableSet><variables><variable varName=\"A\" trait=\"textcontent\" category=\"{refs}\"/></variables></variableSet></variableSets>{art}"
+    );
+    // Variable data under 8 MiB with more XML nodes than Load Variable Library reads (a million
+    // one-character paragraphs, minified) is left out with a warning.
+    let mut lines = session();
+    lines.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    lines.execute("dataset.new", &json!({"name": "Row", "values": {"Name": "a\n".repeat(1_000_000)}})).unwrap();
+    let (dense, warnings) = svg_export(&mut lines, json!({"variableData": true, "minify": true}));
+    assert!(!dense.contains("variableSets"));
+    assert!(
+        warnings.contains(&json!(
+            "The variable data holds more than 2,000,000 XML nodes, which Load Variable Library reads, and was left out of the SVG"
+        )),
+        "{warnings:?}"
+    );
+
+    // More text variables and data sets than Load Variable Library reads: the first 256 and the
+    // first 1,000 are written, each with a warning, and the file opens with them.
+    let mut many = session();
+    {
+        let vars = &mut std::sync::Arc::make_mut(&mut many.doc_mut().unwrap().doc).variables;
+        vars.variables = (0..300).map(|i| vectorcraft_doc::Variable { name: format!("V{i}"), kind: vectorcraft_doc::VariableKind::Text }).collect();
+        vars.datasets = (0..1_100)
+            .map(|i| vectorcraft_doc::DataSet {
+                name: format!("D{i}"),
+                values: [("V0".to_string(), vectorcraft_doc::DataValue::Text(format!("{i}")))].into_iter().collect(),
+            })
+            .collect();
+    }
+    let (capped, warnings) = svg_export(&mut many, json!({"variableData": true}));
+    for w in [
+        "Text variables past the first 256, which Load Variable Library reads, were left out of the SVG's variable data",
+        "Data sets past the first 1,000, which Load Variable Library reads, were left out of the SVG's variable data",
+    ] {
+        assert!(warnings.contains(&json!(w)), "{warnings:?}");
+    }
+    let (o, warnings) = svg_opened(&capped, "many.svg");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let vars = &o.doc().unwrap().doc.variables;
+    assert_eq!((vars.variables.len(), vars.datasets.len()), (256, 1_000));
+    assert_eq!(vars.datasets[999].values["V0"], vectorcraft_doc::DataValue::Text("999".into()));
+
+    // Text that only looks like variable data, in a comment, a CDATA section, a processing
+    // instruction or the document type declaration, is skipped for the element itself.
+    let library = "<variableSets><variableSet><variables><variable varName=\"A\" trait=\"textcontent\"/></variables></variableSet></variableSets>";
+    let decoys = format!(
+        "<!DOCTYPE svg [<!-- > <variableSets> -->]>{head}<!-- a > <variableSets> --><metadata><![CDATA[ a > <variableSets> ]]></metadata><?pi a > <variableSets> ?>{library}<!-- </variableSets> -->{art}"
+    );
+    let (o, warnings) = svg_opened(&decoys, "decoys.svg");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(o.doc().unwrap().doc.variables.variables.len(), 1);
+
+    for (svg, why) in [(untraited, "variable `A` has no `trait`"), (growing, "entities expand to more than")] {
+        let (o, warnings) = svg_opened(&svg, "broken.svg");
+        assert!(warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("variable data wasn't read") && w.contains(why))), "{warnings:?}");
+        let d = &o.doc().unwrap().doc;
+        assert!(d.variables.variables.is_empty());
+        assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
+    }
 }

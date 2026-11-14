@@ -34,6 +34,7 @@ pub mod credits;
 pub mod cursors;
 mod custom_toolbars;
 pub mod dialogs;
+pub mod display_profile;
 pub mod doc_windows;
 pub mod dock;
 mod edit_toolbar;
@@ -91,8 +92,8 @@ pub mod workspaces;
 mod document_drag;
 #[cfg(test)]
 use tests::{
-    background as tests_background, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors, svg as tests_svg,
-    synthetic as tests_synthetic, sysclip as tests_sysclip,
+    background as tests_background, folder as tests_folder, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors,
+    svg as tests_svg, synthetic as tests_synthetic, sysclip as tests_sysclip,
 };
 #[cfg(test)]
 mod tests;
@@ -108,7 +109,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse, Ticket as ControlTicket};
 pub use state::{UiState, View};
-pub use sysclip::{ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
+pub use sysclip::{CLIPBOARD_PROBE_STOP_WAIT, ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
 
 mod app;
 mod caches;
@@ -116,14 +117,14 @@ mod clock;
 mod services;
 
 pub use app::MAX_RECENT_FONTS;
-pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
+pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PlacedKey, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
 pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
-    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, PickedInbox, ReadFn, RevealFn, Services,
-    WriteFn,
+    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, PickedInbox, ReadFn, RevealFn, SaveStreamFn,
+    SaveWriteFn, Services, WriteFn,
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
@@ -138,12 +139,16 @@ pub struct VectorcraftApp {
     pub(crate) view_uids: Vec<u64>,
     /// The thread that checks the system clipboard for `system_paste` instead
     /// ([`Services::clipboard_probe`]). It is declared before `services` so that it is dropped
-    /// first: on X11 the last clipboard handle alive hands what the app copied to the clipboard
-    /// manager, and that must be the app's own handle in `services`, dropped on the UI thread
-    /// before the process exits.
+    /// first, waiting up to [`CLIPBOARD_PROBE_STOP_WAIT`] for its thread to let go of its handle: on
+    /// X11 the last clipboard handle alive hands what the app copied to the clipboard manager, and
+    /// that should be the app's own handle in `services`, dropped on the UI thread before the
+    /// process exits.
     clipboard_probe: Option<clipboard_probe::Probe>,
     pub services: Services,
     pub canvas: CanvasCache,
+    /// The main window's display profile, which the canvas is drawn through
+    /// ([`display_profile`]); the desktop app reports what it reads into it.
+    pub display_profile: display_profile::DisplayProfile,
     pub perf: Perf,
     /// Docking state that lives for the session only.
     pub(crate) dock_rt: panel_docking::Runtime,
@@ -197,6 +202,10 @@ pub struct VectorcraftApp {
     frame_rate: frame_rate::FrameRate,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
     pub canvas_rect: Option<egui::Rect>,
+    /// The UI zoom (egui's zoom factor, set by Preferences › User Interface › UI Scaling) of the
+    /// frame that laid out [`Self::canvas_rect`]; 1.0 before the first one. [`Self::canvas_xf`]
+    /// maps the document to that rect with it.
+    pub(crate) canvas_ui_zoom: f32,
     /// An unfinished control-channel Rotate View gesture, kept only for this app instance.
     pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// Hover position in document coordinates.
@@ -218,6 +227,10 @@ pub struct VectorcraftApp {
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// Where the caption buttons go on the app bar while [`Self::custom_titlebar`] is on: the
+    /// desktop's window-button layout on Linux and the BSDs where the desktop leaves the frame to the
+    /// app, all three at the right otherwise.
+    pub caption_layout: titlebar::CaptionLayout,
     /// The window has the desktop's own title bar: the OS or the window manager draws its frame,
     /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
     /// without a window of their own.

@@ -4,7 +4,9 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject,
+};
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
@@ -39,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -138,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", …] OpenType, featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -672,12 +674,38 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             }
             placed.extend(ruby.map(|(_, r)| r));
             let mut children = placed;
+            // The whole outline the object's own fills and strokes paint: every glyph, ruby glyph
+            // and bar, as the canvas paints them.
+            let mut all = kurbo::BezPath::new();
+            for g in lay.glyphs.iter().chain(&lay.ruby) {
+                all.extend(g.outline.iter());
+            }
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
+                all.extend(bar.iter());
                 let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
                 let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
                 node.appearance = st.appearance().into();
                 children.push(Arc::new(node));
+            }
+            // The object's own fills and strokes (not its characters') paint the whole outline:
+            // those below the Characters row under the characters, the others over them, with
+            // their unplaced gradients fixed to the layout's bounds in the document.
+            let all = PathData::from_bezpath(&all).transformed(t.xf);
+            if !n.appearance.items.is_empty() && !all.is_empty() {
+                let (below, above) = n.appearance.split_contents();
+                let tb = t.xf.transform_rect_bbox(lay.bounds);
+                let mut whole = |items: &[AppearanceItem]| {
+                    let mut ap = Appearance { items: items.to_vec(), ..Default::default() };
+                    ap.pin_gradients(tb);
+                    Arc::new(Node::path(d.alloc_id(), all.clone(), ap))
+                };
+                if !below.is_empty() {
+                    children.insert(0, whole(below));
+                }
+                if !above.is_empty() {
+                    children.push(whole(above));
+                }
             }
             let (par, idx, _) = d.position(tid).ok_or(EngineError::NoNode(tid))?;
             d.remove(tid)?;
@@ -713,6 +741,20 @@ pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Node
         return Err(bad(cmd, "no text objects selected"));
     }
     Ok(t)
+}
+
+/// The type sizes a command takes, in points.
+pub(crate) const TYPE_SIZES: (f64, f64) = (0.1, 1296.0);
+
+/// A type size `size` that a command was given: an error naming the range when it is outside
+/// [`TYPE_SIZES`].
+pub(crate) fn given_type_size(size: f64, cmd: &str) -> Result<f64> {
+    let (lo, hi) = TYPE_SIZES;
+    if !(lo..=hi).contains(&size) {
+        let key = "size";
+        return Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}")));
+    }
+    Ok(size)
 }
 
 /// Clamp in the units shown to the user, then compensate the text's affine. Clamping
@@ -820,10 +862,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setStyle";
     let font = text_param(p, "font", C)?.map(str::to_string);
     let style = text_param(p, "style", C)?.map(str::to_string);
-    let size = length_given(p, "size", C)?;
-    if size.is_some_and(|v| v <= 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let size = length_given(p, "size", C)?.map(|v| given_type_size(v, C)).transpose()?;
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
@@ -1214,8 +1253,8 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|(id, t)| merged(&t.area, t.dynamic_text).map(|o| (id, o)))
         .collect::<Result<_>>()?;
     // Dynamic Text's Block is refused for threaded frames, as `type.dynamicText` refuses it.
-    let frames: Vec<String> =
-        planned.iter().filter(|(id, (_, block))| *block && !super::threads::story_of(d, *id).is_empty()).map(|(id, _)| id.0.to_string()).collect();
+    let threads = super::threads::ThreadIndex::of(d);
+    let frames: Vec<String> = planned.iter().filter(|(id, (_, block))| *block && threads.threaded(*id)).map(|(id, _)| id.0.to_string()).collect();
     if !frames.is_empty() {
         let frames = frames.join(", ");
         return Err(bad(C, format!("area type in a thread cannot use Dynamic Text: {frames}")));
@@ -1365,6 +1404,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(test)]
 mod area_tests;
 mod block;
+pub(crate) use block::needed_room;
 #[cfg(test)]
 mod block_tests;
 

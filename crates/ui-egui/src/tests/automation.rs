@@ -10,6 +10,7 @@ use vectorcraft_engine::file_access::AutomationRoots;
 
 use crate::background::SharedWriteFn;
 use crate::control::ControlRequest;
+use crate::state::Dialog;
 use crate::{Services, VectorcraftApp};
 
 /// A folder holding `in` (the read root, with `a.svg`), `out` (the write root) and `outside`
@@ -128,6 +129,45 @@ fn control_saves_leave_out_the_documents_file_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// In one session with a library loaded from outside the read root: the library keeps its file-name
+/// id, a reply that names its path shows the file name, a save without a path leaves out the
+/// document's file, and a save or export to a path the client gave in the write root keeps that path
+/// in `path` and `files`, also in a `command.batch` step's result. A refused path outside the write root is still shown by its file name.
+#[test]
+fn control_saves_keep_the_given_path_beside_a_hidden_library() {
+    let (mut app, tx, base) = confined("save-and-library");
+    let library = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{library}");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let own = s(base.join("out/doc.vectorcraft"));
+    app.run("file.saveAs", json!({"path": own})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let r = request(&mut app, &tx, "app.save", json!({}));
+    assert!(r["result"].get("path").is_none() && !r.to_string().contains(&s(base.join("out"))), "{r}");
+    let r = request(&mut app, &tx, "app.save", json!({"path": own}));
+    assert_eq!(r["result"]["path"], json!(own), "{r}");
+    let split = s(base.join("out/split.vectorcraft"));
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.save", "params": {"path": split, "separateArtboards": true}}));
+    assert_eq!(r["result"]["path"], json!(split), "{r}");
+    assert_eq!(r["result"]["files"][0], json!(split), "{r}");
+    let batched = s(base.join("out/batched.vectorcraft"));
+    let steps = json!({"commands": [{"command": "document.save", "params": {"path": batched}}]});
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "command.batch", "params": steps}));
+    assert_eq!(r["result"]["results"][0]["path"], json!(batched), "{r}");
+    let svg = s(base.join("out/a.svg"));
+    let r = request(&mut app, &tx, "app.export", json!({"path": svg, "wait": true}));
+    assert_eq!(r["result"]["path"], json!(svg), "{r}");
+    app.ui.status = format!("from {library}");
+    let r = request(&mut app, &tx, "test.status", json!({}));
+    assert_eq!(r["result"], "from b.svg", "{r}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    let refused = s(base.join("outside/c.vectorcraft"));
+    let r = request(&mut app, &tx, "app.save", json!({"path": refused, "wait": true}));
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("outside the write root") && !e.contains(&refused)), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// With Background Save and Background Export on, `app.save` and `app.export` with `wait: true`
 /// (MCP's `save_file` in the app) reply with the write root's refusal, and write a file inside it
 /// before they reply. Without `wait` the refusal reaches only the status bar.
@@ -199,6 +239,81 @@ fn control_export_refuses_an_option_no_format_takes() {
     }
     let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "path": s(path.clone()), "wait": true}));
     assert_eq!(r["ok"], true, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `app.export`, and `file.exportAs` run as a command, write no SVG of a document that links a
+/// JavaScript file outside the read root, and the error names no file or folder; the person at the
+/// keyboard exports it with the link as stored.
+#[test]
+fn control_svg_export_refuses_a_linked_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("svg-script");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let script = s(base.join("outside/menu.js"));
+    app.run("svgInteractivity.addFile", json!({"file": script})).unwrap();
+    let path = s(base.join("out/a.svg"));
+    for (method, params) in [
+        ("app.export", json!({"path": path, "format": "svg", "wait": true})),
+        ("app.export", json!({"path": s(base.join("out/a.svgz")), "wait": true})),
+        ("app.export", json!({"format": "svg"})),
+        ("engine.execute", json!({"command": "file.exportAs", "params": {"path": path, "format": "svg"}})),
+    ] {
+        let r = request(&mut app, &tx, method, params.clone());
+        let e = r["error"].as_str().unwrap_or_default();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{method} {params}: {r}");
+        assert!(!e.contains("menu.js") && !e.contains(&s(base.clone())), "{method} {params}: {r}");
+    }
+    assert_eq!(std::fs::read_dir(base.join("out")).unwrap().count(), 0, "nothing written");
+    // The person at the keyboard isn't confined.
+    app.run("file.exportAs", json!({"path": path, "format": "svg"})).unwrap();
+    let svg = std::fs::read_to_string(&path).unwrap();
+    assert!(svg.contains(&format!("<script xlink:href=\"{script}\"/>")), "{svg}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `app.export` with a path writes the file when given an option only another format reads, and
+/// its warnings name that option, as `document.export`'s do without a path. `file.exportAs` run
+/// as a command does the same; an export that automation did not ask for gets no such note.
+#[test]
+fn control_export_notes_an_option_the_format_does_not_read() {
+    let (mut app, tx, base) = confined("export-unused");
+    let r = request(&mut app, &tx, "app.open", json!({"path": s(base.join("in/a.svg"))}));
+    assert_eq!(r["ok"], true, "{r}");
+    let note = json!("`quality` was not used: PDF files don't read it");
+    let path = base.join("out/a.pdf");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80, "path": s(path.clone()), "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(path.is_file() && r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    let r = request(&mut app, &tx, "app.export", json!({"format": "jpg", "quality": 80, "path": s(base.join("out/a.jpg")), "wait": true}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| !w.iter().any(|w| w.to_string().contains("was not used"))), "{r}");
+    let params = json!({"format": "pdf", "quality": 80, "path": s(base.join("out/b.pdf"))});
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "file.exportAs", "params": params}));
+    assert!(r["result"]["warnings"].as_array().is_some_and(|w| w.contains(&note)), "{r}");
+    assert!(app.ui.status.contains("`quality` was not used"), "{}", app.ui.status);
+    let r = crate::io::export(&mut app, Some("pdf"), Some(s(base.join("out/c.pdf"))), &json!({"quality": 80})).unwrap();
+    assert!(r["warnings"].as_array().is_some_and(|w| !w.contains(&note)), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A Background Export replies before the file is written: its reply names the options the format
+/// does not read at once, as a background save's does, and has no `warnings` when there are none.
+#[test]
+fn control_background_export_notes_an_option_the_format_does_not_read() {
+    let shared: SharedWriteFn = std::sync::Arc::new(|p: &str, b: &[u8]| vectorcraft_format::write_atomic(Path::new(p), b).map_err(|e| e.to_string()));
+    let (mut app, tx, base) = confined_with("export-unused-background", Some(shared));
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    let r = request(&mut app, &tx, "app.export", json!({"format": "pdf", "quality": 80, "path": s(base.join("out/a.pdf"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    assert_eq!(r["result"]["warnings"], json!(["`quality` was not used: PDF files don't read it"]), "{r}");
+    crate::background::wait_all(&mut app);
+    let r = request(&mut app, &tx, "app.export", json!({"format": "jpg", "quality": 80, "path": s(base.join("out/a.jpg"))}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    assert!(r["result"].get("warnings").is_none(), "{r}");
+    crate::background::wait_all(&mut app);
+    assert!(base.join("out/a.pdf").is_file() && base.join("out/a.jpg").is_file());
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -446,6 +561,446 @@ fn ui_inspect_leaves_out_paths_outside_the_read_root() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect` checks a folder preference as it is written: the read root's path with a space before
+/// it is a relative path, outside the root, and is left out.
+#[test]
+fn ui_inspect_checks_a_folder_preference_as_written() {
+    let (mut app, tx, base) = confined("inspect-folder-space");
+    let inside = s(base.join("in"));
+    app.ui.engine_prefs = json!({"fontsFolder": inside, "templatesFolder": format!(" {inside}")});
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let prefs = r["result"]["ui"]["engine_prefs"].as_object().unwrap();
+    assert_eq!(prefs.get("fontsFolder").and_then(Value::as_str), Some(inside.as_str()), "{r}");
+    assert!(!prefs.contains_key("templatesFolder"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` names the file selected in JavaScript Files by its file name alone when it is
+/// outside the read root, and keeps one inside it; the person sees the whole path.
+#[test]
+fn ui_inspect_hides_a_selected_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-javascript-files");
+    let (inside, outside) = (s(base.join("in/menu.js")), s(base.join("outside/menu.js")));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    for f in [&inside, &outside] {
+        app.run("svgInteractivity.addFile", json!({ "file": f })).unwrap();
+    }
+    let kind = crate::dialogs::javascript_files::KIND;
+    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": outside})));
+    let selected = |v: &Value| v["ui"]["dialog"]["fields"]["selected"].clone();
+    assert_eq!(selected(&crate::control::inspect(&app, &egui::Context::default())), json!(outside), "the person's");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(selected(&r["result"]), "menu.js", "{r}");
+    assert!(!r.to_string().contains(&json!(outside).to_string().trim_matches('"').to_string()), "{r}");
+    app.ui.dialog = Some(Dialog::new(kind, json!({"file": "", "selected": inside})));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(selected(&r["result"]), json!(inside), "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("selected")), Some(inside), "the dialog is not changed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` checks a folder preference as the app uses it, trimmed, as well: with the working
+/// folder as the read root, a path outside it with a space before it reads as a name in the working
+/// folder, and is still left out, because the app trims it and uses the path outside.
+#[test]
+fn ui_inspect_checks_a_folder_preference_as_trimmed() {
+    let (_, _, base) = confined("inspect-folder-trimmed");
+    let cwd = std::env::current_dir().unwrap();
+    let roots = AutomationRoots::new(&[&cwd], &[&base.join("out")]).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Services::default()).with_control(rx).with_automation_roots(roots);
+    let outside = s(base.join("outside"));
+    // Without its drive, the path starts with a separator: trimmed, it is absolute on any platform.
+    let rooted = match outside.as_bytes() {
+        [drive, b':', ..] if drive.is_ascii_alphabetic() => &outside[2..],
+        _ => outside.as_str(),
+    };
+    let spaced = format!(" {rooted}");
+    app.ui.engine_prefs = json!({"fontsFolder": spaced, "pluginsFolder": ""});
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let prefs = r["result"]["ui"]["engine_prefs"].as_object().unwrap();
+    assert_eq!(prefs.get("pluginsFolder").and_then(Value::as_str), Some(""), "{r}");
+    assert!(!prefs.contains_key("fontsFolder"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` hides a hidden library's id and path in every string it holds: status text, the
+/// command palette query and a script's report show the id and file name shown, and the path appears
+/// nowhere in the reply.
+#[test]
+fn ui_inspect_hides_a_hidden_library_path_in_every_string() {
+    let (mut app, tx, base) = confined("inspect-status-id");
+    let path = s(base.join("outside/b.svg"));
+    let theirs = format!("loaded/{path}");
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.status = format!("Loaded {path} (3 swatches), kept {path}.bak");
+    app.ui.palette_query = format!("\"{theirs}\"");
+    let source = format!("vc.log({})", json!(format!("read {path}.")));
+    app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_pump().is_some() {
+            break;
+        }
+    }
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    assert_eq!(r["result"]["ui"]["status"], "Loaded b.svg (3 swatches), kept b.svg.bak", "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], "\"loaded/b.svg\"", "{r}");
+    assert_eq!(r["result"]["scriptReport"]["log"], json!(["read b.svg."]), "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// The reply to a request that names a hidden library by the id `ui.inspect` shows hides that
+/// library's id wherever the reply holds it, also between spaces and brackets and where a character
+/// that continues a path follows it.
+#[test]
+fn a_reply_hides_a_library_the_request_named_by_its_shown_id_everywhere() {
+    let (mut app, tx, base) = confined("named-hidden-reply");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs.clone();
+    app.ui.status = format!("Not added ( {theirs} ); kept {theirs}_old");
+    let r = request(&mut app, &tx, "ui.inspect", json!({"library": "loaded/b.svg"}));
+    assert_eq!(r["result"]["ui"]["status"], "Not added ( loaded/b.svg ); kept loaded/b.svg_old", "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error to a request that names a hidden library by the id `ui.inspect` shows names it by that id,
+/// and its path appears nowhere in the reply.
+#[test]
+fn an_error_for_a_hidden_library_named_by_its_shown_id_shows_that_id() {
+    let (mut app, tx, base) = confined("named-hidden-error");
+    app.ui.color_guide_limit = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.colorGuideLimit", "params": {"library": "loaded/b.svg"}}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("loaded/b.svg")), "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps a path outside the read root under any path
+/// param (`diffPath`, `file`, a name ending in `Files`), and an absolute path or a `file:` URL outside
+/// it (the scheme in any case) under any other param or in any list. A `file:` URL inside it stays.
+#[test]
+fn ui_inspect_leaves_out_recorded_paths_under_any_key() {
+    let (mut app, tx, base) = confined("inspect-action-keys");
+    let (a, b) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")));
+    let to_url = |p: &str| if p.starts_with('/') { format!("file://{p}") } else { format!("file:///{}", p.replace('\\', "/")) };
+    let (url, url_in) = (to_url(&b), to_url(&a));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["document.compare", {"diffPath": b, "target": a}],
+            ["file.open", {"file": b}],
+            ["type.fonts", {"fontFiles": [a, b, url_in]}],
+            ["x.y", {"target": b, "url": url, "upper": url.replacen("file:", "FILE:", 1), "other": "keep"}],
+            ["x.z", {"list": [b, "keep"]}],
+            ["x.w", {"share": "file://other-host/share/b.svg", "other": "keep"}],
+            ["x.v", {"file": url_in}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([
+        ["document.compare", {"target": a}],
+        ["file.open", {}],
+        ["type.fonts", {"fontFiles": [a, url_in]}],
+        ["x.y", {"other": "keep"}],
+        ["x.z", {"list": ["keep"]}],
+        ["x.w", {"other": "keep"}],
+        ["x.v", {"file": url_in}],
+    ]);
+    assert_eq!(steps, &want, "{r}");
+    let outside = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` hides a library loaded from outside the read root in the steps of a recorded action
+/// (its `library` and `panel` params) and in the action's name, also when nothing else names it.
+#[test]
+fn ui_inspect_hides_a_hidden_library_in_recorded_steps() {
+    let (mut app, tx, base) = confined("inspect-action-steps");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": theirs, "steps": [
+            ["swatch.library.add", {"library": theirs}],
+            ["window.panel", {"panel": format!("library:swatches:{theirs}")}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let action = &r["result"]["ui"]["action_sets"][0]["actions"][0];
+    assert_eq!(action["name"], "loaded/b.svg", "{r}");
+    assert_eq!(
+        action["steps"],
+        json!([["swatch.library.add", {"library": "loaded/b.svg"}], ["window.panel", {"panel": "library:swatches:loaded/b.svg"}]]),
+        "{r}"
+    );
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps the file paths (`path`, `folder`, a name ending
+/// in `Folder`, `paths`) outside the read root, also in a batch step's commands, and keeps the ones
+/// inside it.
+#[test]
+fn ui_inspect_leaves_out_recorded_paths_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-action-paths");
+    let (a, b) = (s(base.join("in/a.svg")), s(base.join("outside/b.svg")));
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["file.open", {"path": a}],
+            ["file.open", {"path": b}],
+            ["file.place", {"paths": [a, b]}],
+            ["batch.run", {"folder": s(base.join("outside"))}],
+            ["action.batch", {"destinationFolder": s(base.join("outside"))}],
+            ["command.batch", {"commands": [{"command": "file.open", "params": {"path": b}}]}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([
+        ["file.open", {"path": a}],
+        ["file.open", {}],
+        ["file.place", {"paths": [a]}],
+        ["batch.run", {}],
+        ["action.batch", {}],
+        ["command.batch", {"commands": [{"command": "file.open", "params": {}}]}],
+    ]);
+    assert_eq!(steps, &want, "{r}");
+    assert_eq!(app.ui.action_sets[0].actions[0].steps.len(), 6, "the UI state is not changed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` hides a library loaded from outside the read root whose id holds a path written with
+/// either separator, also one saved on another platform.
+#[test]
+fn ui_inspect_hides_a_library_path_with_either_separator() {
+    let (mut app, tx, base) = confined("inspect-separators");
+    app.ui.color_guide_limit = r"loaded/C:\Users\someone\b.svg".to_string();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{r}");
+    app.ui.color_guide_limit = "loaded//home/someone/c.svg".to_string();
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/c.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A hidden library does not take the id of a library loaded without a path under the same file
+/// name: it shows as `loaded/<file name> (2)`, and a request that names the other library reaches it.
+#[test]
+fn ui_inspect_keeps_a_hidden_library_off_a_loaded_librarys_id() {
+    let (mut app, tx, base) = confined("inspect-loaded-id");
+    let svg = std::fs::read_to_string(base.join("in/a.svg")).unwrap();
+    let loaded = app.session.execute("swatch.library.load", &json!({"data": svg, "name": "b.svg"})).unwrap();
+    assert_eq!(loaded["library"], "loaded/b.svg");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    app.ui.color_guide_limit = theirs;
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.svg (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Hidden libraries with the same file name that are shown for the first time in the same reply are
+/// numbered in the order of their paths, as the library commands number them.
+#[test]
+fn hidden_libraries_are_numbered_in_the_order_of_their_paths() {
+    let (mut app, tx, base) = confined("hidden-load-order");
+    let gpl = "GIMP Palette\nName: p\n0 0 0 Black\n";
+    for dir in ["z", "a"] {
+        std::fs::create_dir_all(base.join("outside").join(dir)).unwrap();
+        let path = base.join("outside").join(dir).join("b.gpl");
+        std::fs::write(&path, gpl).unwrap();
+        app.session.execute("swatch.library.load", &json!({"path": s(path)})).unwrap();
+    }
+    app.ui.color_guide_limit = format!("loaded/{}", s(base.join("outside").join("z").join("b.gpl")));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.gpl (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A hidden library keeps the id a reply showed for it when another library with the same file name is
+/// loaded later.
+#[test]
+fn a_hidden_library_keeps_its_id_when_another_with_its_name_loads() {
+    let (mut app, tx, base) = confined("hidden-stable-id");
+    let first = format!("loaded/{}", s(base.join("outside").join("a").join("b.gpl")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": first})).unwrap();
+    app.ui.library_panels = vec![panel];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/b.gpl", "{r}");
+    std::fs::create_dir_all(base.join("outside").join("z")).unwrap();
+    let path = base.join("outside").join("z").join("b.gpl");
+    std::fs::write(&path, "GIMP Palette\nName: p\n0 0 0 Black\n").unwrap();
+    app.session.execute("swatch.library.load", &json!({"path": s(path.clone())})).unwrap();
+    app.ui.color_guide_limit = format!("loaded/{}", s(path));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/b.gpl", "{r}");
+    assert_eq!(r["result"]["ui"]["color_guide_limit"], "loaded/b.gpl (2)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error from a panic hides a hidden library's path, also when the request stopped referring to
+/// the library before it panicked.
+#[test]
+fn a_panic_reply_hides_a_library_hidden_before_the_request() {
+    let (mut app, tx, base) = confined("panic-hidden");
+    let path = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("Loaded {path}");
+    let r = request(&mut app, &tx, "test.panic", json!({"forget": true}));
+    assert_eq!(r["error"], "internal error: failed on Loaded b.svg (please report this bug)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An error shows a path outside the read root that the request sent by its file name, whether or not
+/// a hidden library was loaded from that path, so that it reads the same either way. A path the
+/// request sends does not show the app's own text that holds it, in an error or a result, and a result
+/// shows that path by its file name as an error does.
+#[test]
+fn an_error_hides_a_sent_path_whether_or_not_a_library_was_loaded_from_it() {
+    let (mut app, tx, base) = confined("client-echo");
+    let path = s(base.join("outside/b.svg"));
+    // Another hidden library with the same file name comes first, so this one shows as `b.svg (2)`.
+    let first = format!("loaded/{}", s(base.join("outside/a/b.svg")));
+    let panel: crate::panels::library_panel::LibraryPanel = serde_json::from_value(json!({"kind": "swatches", "id": first})).unwrap();
+    app.ui.library_panels = vec![panel];
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("Loaded {path}");
+    let unloaded = [(s(base.join("outside/y/b.svg")), "b.svg"), (s(base.join("outside/c.svg")), "c.svg")];
+    for (sent, name) in [(path.clone(), "b.svg")].into_iter().chain(unloaded) {
+        let r = request(&mut app, &tx, "app.open", json!({"path": sent}));
+        assert!(r["error"].as_str().is_some_and(|e| e.ends_with(&format!(": {name}"))), "{r}");
+    }
+    let r = request(&mut app, &tx, "test.status", json!({"guess": path}));
+    assert_eq!(r["result"], "Loaded b.svg", "{r}");
+    let r = request(&mut app, &tx, "test.panic", json!({"guess": path}));
+    assert_eq!(r["error"], "internal error: failed on Loaded b.svg (please report this bug)", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A screenshot's reply, sent after its request was handled, hides a hidden library's path, and in an
+/// error the path outside the read root that the request sent.
+#[test]
+fn a_screenshot_reply_hides_paths_like_any_reply() {
+    let (mut app, _tx, base) = confined("deferred-reply");
+    let path = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    let sent = s(base.join("outside/shot.png"));
+    let roots = AutomationRoots::new(&[&base.join("in")], &[&base.join("out")]).unwrap();
+    let mut done = json!({"ok": true, "result": {"note": format!("from {path}")}});
+    let mut failed = json!({"ok": false, "error": format!("could not write {sent}")});
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        crate::control::hide_in_deferred_reply(&app, &mut done, &json!({"path": sent}));
+        crate::control::hide_in_deferred_reply(&app, &mut failed, &json!({"path": sent}));
+    });
+    assert_eq!(done["result"]["note"], "from b.svg", "{done}");
+    assert_eq!(failed["error"], "could not write shot.png", "{failed}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A reply whose only trace of a hidden library's path is a `file:` URL with every separator escaped
+/// shows the file name alone.
+#[test]
+fn a_reply_hides_a_path_with_escaped_separators() {
+    let (mut app, tx, base) = confined("escaped-separators");
+    let path = s(base.join("outside/b.svg"));
+    app.ui.color_guide_limit = format!("loaded/{path}");
+    app.ui.status = format!("from file:{}", path.replace('/', "%2F").replace('\\', "%5C"));
+    let r = request(&mut app, &tx, "test.status", json!({}));
+    assert_eq!(r["result"], "from b.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded action's steps a path that starts with `./` or `../`, `~` and
+/// a path under `~` outside the read root under any param, as a key too, and in any list. A URL and
+/// other text with a separator stay.
+#[test]
+fn ui_inspect_leaves_out_relative_paths_in_recorded_steps() {
+    let (mut app, tx, base) = confined("inspect-relative");
+    let set: crate::panels::actions::ActionSet = serde_json::from_value(json!({
+        "name": "set",
+        "actions": [{"name": "files", "steps": [
+            ["x.y", {"target": "~/b.svg", "rel": "../outside/b.svg", "home": "~", "text": "a/b", "url": "https://example.com/a"}],
+            ["x.z", {"list": [".\\b.svg", "a/b"], "../k": 1}],
+        ]}],
+    }))
+    .unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let steps = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let want = json!([["x.y", {"text": "a/b", "url": "https://example.com/a"}], ["x.z", {"list": ["a/b"]}]]);
+    assert_eq!(steps, &want, "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` leaves out of a recorded `prefs.set` step the value of a folder preference outside the
+/// read root, given as `{key, value}` or in `values`, also in a batch step's commands at any depth: a
+/// bare name or a subfolder (in the working folder, outside the root), a path with spaces around it and
+/// a `file:` URL. A folder inside the root, an empty value, a scratch disk choice, other preferences and
+/// another command's params stay, and the UI state is not changed.
+#[test]
+fn ui_inspect_leaves_out_folder_preferences_in_recorded_prefs_steps() {
+    let (mut app, tx, base) = confined("inspect-prefs-steps");
+    let (inside, outside) = (s(base.join("in")), s(base.join("outside")));
+    let url = if outside.starts_with('/') { format!("file://{outside}") } else { format!("file:///{}", outside.replace('\\', "/")) };
+    let folders = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+    let mut steps: Vec<Value> = folders.iter().map(|k| json!(["prefs.set", {"key": k, "value": "scratch"}])).collect();
+    steps.push(json!(["prefs.set", {"values": folders.iter().map(|k| (k.to_string(), json!("tmp/scratch"))).collect::<serde_json::Map<_, _>>()}]));
+    steps.push(json!(["prefs.set", {"values": {
+        "scratchPrimary": format!(" {outside} "), "fontsFolder": url, "pluginsFolder": format!(" {url}"), "recoveryFolder": "Startup",
+        "templatesFolder": inside, "scratchSecondary": " None ", "uiAccent": "green",
+    }}]));
+    steps.push(json!(["prefs.set", {"key": "scratchPrimary", "value": "Startup"}]));
+    steps.push(json!(["prefs.set", {"key": "recoveryFolder", "value": ""}]));
+    steps.push(json!(["prefs.set", {"key": "fontsFolder", "value": inside}]));
+    let batch = |commands: Value| json!({"commands": commands});
+    let inner = batch(json!([{"command": "prefs.set", "params": {"values": {"scratchSecondary": "tmp/scratch", "uiAccent": "red"}}}]));
+    steps.push(json!([
+        "command.batch",
+        batch(json!([
+            {"command": "prefs.set", "params": {"key": "scratchPrimary", "value": "scratch"}},
+            {"command": "command.batch", "params": inner},
+        ]))
+    ]));
+    steps.push(json!(["x.y", {"key": "scratchPrimary", "value": "scratch"}]));
+    let set: crate::panels::actions::ActionSet =
+        serde_json::from_value(json!({"name": "set", "actions": [{"name": "prefs", "steps": steps}]})).unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let mut want: Vec<Value> = folders.iter().map(|k| json!(["prefs.set", {"key": k}])).collect();
+    want.push(json!(["prefs.set", {"values": {}}]));
+    want.push(json!(["prefs.set", {"values": {"templatesFolder": inside, "scratchSecondary": " None ", "uiAccent": "green"}}]));
+    want.push(json!(["prefs.set", {"key": "scratchPrimary", "value": "Startup"}]));
+    want.push(json!(["prefs.set", {"key": "recoveryFolder", "value": ""}]));
+    want.push(json!(["prefs.set", {"key": "fontsFolder", "value": inside}]));
+    let inner = batch(json!([{"command": "prefs.set", "params": {"values": {"uiAccent": "red"}}}]));
+    want.push(json!([
+        "command.batch",
+        batch(json!([
+            {"command": "prefs.set", "params": {"key": "scratchPrimary"}},
+            {"command": "command.batch", "params": inner},
+        ]))
+    ]));
+    want.push(json!(["x.y", {"key": "scratchPrimary", "value": "scratch"}]));
+    assert_eq!(shown, &json!(want), "{r}");
+    assert!(!r.to_string().contains("tmp/scratch") && !r.to_string().contains(&outside.replace('\\', "\\\\")), "{r}");
+    assert_eq!(app.ui.action_sets[0].actions[0].steps[0].1, json!({"key": "fontsFolder", "value": "scratch"}), "the UI state is not changed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Two libraries loaded from outside the read root under the same file name, only the second of them
 /// in a library panel: `ui.inspect` and `swatch.library.list` show the second under the same id, and
 /// that id finds it.
@@ -469,6 +1024,43 @@ fn ui_inspect_and_library_commands_show_a_hidden_library_under_one_id() {
     assert_eq!(loaded, [&json!("loaded/Kit.gpl"), &json!("loaded/Kit.gpl (2)")], "{r}");
     let r = request(&mut app, &tx, "engine.execute", json!({"command": "swatch.library.get", "params": {"library": "loaded/Kit.gpl (2)"}}));
     assert_eq!(r["result"]["swatches"].as_array().map(Vec::len), Some(2), "the second library: {r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A library panel command given a hidden library's shown id opens the library and answers with
+/// that id, not the library's path.
+#[test]
+fn a_library_panel_command_answers_with_a_hidden_librarys_shown_id() {
+    let (mut app, tx, base) = confined("panel-shown-id");
+    let path = base.join("outside/x/Kit.gpl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "GIMP Palette\nName: Kit\n0 0 0 Black\n").unwrap();
+    app.session.execute("swatch.library.load", &json!({"path": s(path.clone())})).unwrap();
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "window.swatchLibrary", "params": {"library": "loaded/Kit.gpl"}}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r.to_string().contains("loaded/Kit.gpl") && !r.to_string().contains("outside"), "{r}");
+    assert_eq!(app.ui.library_panels.last().map(|p| p.id.clone()), Some(format!("loaded/{}", s(path))), "the app's own id");
+    // The panel id it answers with names the panel in the panel commands.
+    let panel = r["result"]["panel"].clone();
+    assert_eq!(panel, "library:swatches:loaded/Kit.gpl", "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.libraryPanel", "params": {"panel": panel, "view": "largeList"}}));
+    assert_eq!((&r["ok"], &r["result"]["panel"]), (&json!(true), &panel), "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "window.panel.move", "params": {"panel": "swatches", "anchor": panel, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "window.panel.close", "params": {"panel": panel}}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains("outside"), "{r}");
+    // Closed, the panel isn't found, and the error names it by the id given.
+    let r = request(&mut app, &tx, "engine.execute", json!({"command": "ui.libraryPanel", "params": {"panel": panel, "view": "largeList"}}));
+    assert_eq!(r["ok"], false, "{r}");
     assert!(!r.to_string().contains("outside"), "{r}");
     let _ = std::fs::remove_dir_all(base);
 }
@@ -564,6 +1156,147 @@ fn ui_inspect_keeps_text_that_only_looks_like_a_library_id() {
     assert_eq!(r["result"]["scriptReport"]["log"], json!([text]), "{r}");
     assert_eq!(r["result"]["ui"]["palette_query"], json!(query), "{r}");
     assert_eq!(r["result"]["ui"]["library_panels"][0]["id"], "loaded/d.svg", "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect`'s `scriptReport` names a file the person's script wrote outside the read root, and
+/// the included file a failed run stopped in (also in its error line), by its file name; the person
+/// sees the paths.
+#[test]
+fn ui_inspect_script_report_leaves_out_files_outside_the_read_root() {
+    let (mut app, tx, base) = confined("inspect-script-report");
+    let (kept, hidden) = (s(base.join("in/kept.svg")), s(base.join("outside/hidden.svg")));
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let source = format!(
+        "vc.run('document.export', {{path: {kept}, format: 'svg'}}); vc.run('document.export', {{path: {hidden}, format: 'svg'}});",
+        kept = json!(kept),
+        hidden = json!(hidden)
+    );
+    let finish = |app: &mut VectorcraftApp, params: Value| {
+        app.session.execute("script.run", &params).unwrap();
+        for _ in 0..10_000 {
+            if app.session.script_pump().is_some() {
+                break;
+            }
+        }
+    };
+    finish(&mut app, json!({"source": source, "name": "t.js"}));
+    let ctx = egui::Context::default();
+    let outside = json!(s(base.join("outside"))).to_string();
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["scriptReport"]["written"], json!([kept, hidden]), "{person}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["written"], json!([kept, "hidden.svg"]), "{r}");
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    assert_eq!(app.session.script_report().unwrap()["written"], json!([kept, hidden]), "the report is not changed");
+
+    // A run that fails in a file it includes.
+    std::fs::write(base.join("outside/run.jsx"), "#include \"bad.jsxinc\"\n").unwrap();
+    std::fs::write(base.join("outside/bad.jsxinc"), "\nthrow new Error('stopped here');\n").unwrap();
+    finish(&mut app, json!({"path": s(base.join("outside/run.jsx"))}));
+    let person = crate::control::inspect(&app, &ctx);
+    assert_eq!(person["scriptReport"]["file"], json!(s(base.join("outside/bad.jsxinc"))), "{person}");
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    assert_eq!(r["result"]["scriptReport"]["file"], "bad.jsxinc", "{r}");
+    assert!(r["result"]["scriptReport"]["console"].to_string().contains("bad.jsxinc:2:"), "{r}");
+    assert!(!r.to_string().contains(outside.trim_matches('"')), "no path outside the root: {r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `ui.inspect` rewrites a hidden library's id only where a string is that whole id: a readable
+/// library's id that begins with it stays, and a script's report line and a command palette query
+/// that end with it show the id shown.
+#[test]
+fn ui_inspect_rewrites_only_whole_hidden_library_ids() {
+    let (mut app, tx, base) = confined("inspect-whole-id");
+    let hidden = format!("loaded/{}", s(base.join("i")));
+    let readable = format!("loaded/{}", s(base.join("in/a.svg")));
+    assert!(readable.starts_with(&hidden));
+    let panel = |id: &str| -> crate::panels::library_panel::LibraryPanel { serde_json::from_value(json!({"kind": "swatches", "id": id})).unwrap() };
+    app.ui.library_panels = vec![panel(&hidden), panel(&readable)];
+    app.ui.palette_query = format!("library:swatches:{hidden}");
+    let text = format!("found {hidden}");
+    let source = format!("vc.log({})", json!(text));
+    app.session.execute("script.run", &json!({"source": source, "name": "t.js"})).unwrap();
+    for _ in 0..10_000 {
+        if app.session.script_pump().is_some() {
+            break;
+        }
+    }
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let ids: Vec<_> = r["result"]["ui"]["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
+    assert_eq!(ids, [json!("loaded/i"), json!(readable)], "{r}");
+    assert_eq!(r["result"]["scriptReport"]["log"], json!(["found loaded/i"]), "{r}");
+    assert_eq!(r["result"]["ui"]["palette_query"], "library:swatches:loaded/i", "{r}");
+    // A request that names the hidden library by the id shown keeps the readable id too.
+    let r = request(&mut app, &tx, "ui.inspect", json!({"library": "loaded/i"}));
+    let ids: Vec<_> = r["result"]["ui"]["library_panels"].as_array().unwrap().iter().map(|p| p["id"].clone()).collect();
+    assert_eq!(ids, [json!("loaded/i"), json!(readable)], "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A client can name a hidden library by the id `ui.inspect` shows: `ui.set {panel}` with that panel id
+/// reopens the closed panel of the library, and the reply does not show its path.
+#[test]
+fn ui_set_reopens_a_hidden_librarys_panel_by_its_shown_id() {
+    let (mut app, tx, base) = confined("set-hidden-panel");
+    let theirs = format!("loaded/{}", s(base.join("outside/b.svg")));
+    let real = format!("library:swatches:{theirs}");
+    app.ui.docking_hidden.insert(real.clone(), hidden_place());
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = "library:swatches:loaded/b.svg";
+    assert!(r["result"]["ui"]["docking_hidden"].as_object().unwrap().contains_key(shown), "{r}");
+    let r = request(&mut app, &tx, "ui.set", json!({"panel": shown}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!app.ui.docking_hidden.contains_key(&real), "the closed panel is reopened: {r}");
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    assert!(layout.contains(&real) && !layout.contains(&shown.to_string()), "no second panel: {layout:?}");
+    let hidden = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // A docking command takes the shown id as its destination too.
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "window.panel.move", "params": {"panel": "layers", "anchor": shown, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // So does `ui.dock`'s move, whose destination is `target`.
+    let r = request(
+        &mut app,
+        &tx,
+        "engine.execute",
+        json!({"command": "ui.dock", "params": {"operation": "move", "panel": "properties", "target": shown, "zone": "tab"}}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    let layout = crate::panel_docking::layout_of(&app.ui);
+    assert!(layout.contains(&real) && !layout.contains(&shown.to_string()), "no second panel: {layout:?}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    // An error that quotes the panel shows the id the client gave, and other text is not rewritten.
+    let r = request(&mut app, &tx, "ui.set", json!({"panel": "library:bogus:loaded/b.svg"}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
+    let r = request(&mut app, &tx, "ui.set", json!({"status": "loaded/b.svg"}));
+    assert_eq!((r["ok"].as_bool(), app.ui.status.as_str()), (Some(true), "loaded/b.svg"), "{r}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A shortcut for showing the panel of a library outside the read root, saved and in an open Keyboard
+/// Shortcuts dialog, is keyed by the panel id shown, also when nothing else refers to the library.
+#[test]
+fn ui_inspect_hides_a_library_panels_path_in_shortcut_overrides() {
+    let (mut app, tx, base) = confined("shortcut-hidden-panel");
+    let real = format!("panel:library:swatches:loaded/{}", s(base.join("outside/b.svg")));
+    crate::keymap::set_override(&mut app.ui.shortcut_overrides, &real, "Cmd+Alt+Shift+F7");
+    app.ui.dialog = Some(crate::state::Dialog::new("shortcuts", json!({"overrides": { real.clone(): "Cmd+Alt+Shift+F8" }})));
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = "panel:library:swatches:loaded/b.svg";
+    let ui = &r["result"]["ui"];
+    assert_eq!(ui["shortcut_overrides"][shown], "Cmd+Alt+Shift+F7", "{r}");
+    assert_eq!(ui["dialog"]["fields"]["overrides"][shown], "Cmd+Alt+Shift+F8", "{r}");
+    let hidden = json!(s(base.join("outside"))).to_string();
+    assert!(!r.to_string().contains(hidden.trim_matches('"')), "no path outside the root: {r}");
     let _ = std::fs::remove_dir_all(base);
 }
 
@@ -679,12 +1412,12 @@ fn automation_cannot_approve_a_plugin_install() {
     assert!(app.ui.dialog.is_some(), "the refused answer leaves it open");
     assert!(vectorcraft_plugins::registry::get(id).is_none());
 
-    // What the dialog installs isn't in its fields.
+    // What the dialog installs isn't in its fields, and its `__` fields can't be set.
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__params", "value": {"dataBase64": "AAAA"}}));
-    assert!(r.get("error").is_none(), "{r}");
+    refused(&r, "cannot set protected field `__params`");
     // What MCP's `answer_dialog` sends: `ui.dialog.set {fields}`, then `ui.dialog.confirm`.
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"fields": [{"field": "__params", "value": {"dataBase64": "AAAA"}}]}));
-    assert!(r.get("error").is_none(), "{r}");
+    refused(&r, "cannot set protected field `__params`");
     let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
     refused(&r, ASKED);
     assert!(app.ui.dialog.is_some() && vectorcraft_plugins::registry::get(id).is_none());
@@ -710,6 +1443,231 @@ fn automation_cannot_approve_a_plugin_install() {
     crate::dialogs::confirm(&mut app).unwrap();
     assert_eq!(vectorcraft_plugins::registry::granted(id).map(|g| g.hash), Some(vectorcraft_plugins::permissions::sha256_hex(&bytes)));
     app.run("plugin.remove", json!({"id": id})).unwrap();
+}
+
+/// An app with a control channel and a new document.
+fn controlled() -> (VectorcraftApp, std::sync::mpsc::Sender<ControlRequest>) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_control(rx);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    (app, tx)
+}
+
+/// The fields of the open dialog.
+fn dialog_fields(app: &VectorcraftApp) -> Option<serde_json::Map<String, Value>> {
+    app.ui.dialog.as_ref().map(|d| d.fields.clone())
+}
+
+/// The objects on the document's first layer.
+fn objects(app: &VectorcraftApp) -> usize {
+    app.session.doc().unwrap().doc.layers[0].children().map_or(0, |c| c.len())
+}
+
+/// The left edge and width of the first object on the document's first layer.
+fn first_object(app: &VectorcraftApp) -> (f64, f64) {
+    let b = app.session.doc().unwrap().doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
+    (b.x0, b.width())
+}
+
+/// Each of `sets` sent as `ui.dialog.set` is refused with the protected-field error of the
+/// `kind` dialog, sets no field, and runs nothing.
+fn refused_sets(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest>, kind: &str, sets: &[Value]) {
+    for set in sets {
+        let before = dialog_fields(app);
+        let r = request(app, tx, "ui.dialog.set", set.clone());
+        let says = format!("the `{kind}` dialog cannot set protected field `__");
+        assert!(r["error"].as_str().is_some_and(|e| e.starts_with(&says)), "{set}: {r}");
+        assert_eq!(dialog_fields(app), before, "{set}: no field changes and the dialog stays open");
+        assert_eq!(objects(app), 0, "{set}: nothing ran");
+    }
+}
+
+/// A confirmation a person opened runs the command it was opened with: `ui.dialog.set` can't
+/// change its `__command` or `__params`, alone or in a list with other fields and `action:
+/// "confirm"`, and OK then runs the command it asked about.
+#[test]
+fn dialog_set_cannot_redirect_person_opened_confirm() {
+    let (mut app, tx) = controlled();
+    let rect = json!({"x": 10, "y": 10, "width": 20, "height": 20});
+    crate::dialogs::confirm::ask(&mut app, "Add a rectangle?", "", "shape.rectangle", rect);
+    let other = json!({"x": 0, "y": 0, "width": 90, "height": 90});
+    refused_sets(
+        &mut app,
+        &tx,
+        crate::dialogs::confirm::KIND,
+        &[
+            json!({"field": "__command", "value": "file.close"}),
+            json!({"field": "__params", "value": other}),
+            json!({"fields": [{"field": "detail", "value": "Sure?"}, {"field": "__command", "value": "file.close"}], "action": "confirm"}),
+            json!({"fields": [{"field": "__params", "value": other}, {"field": "detail", "value": "Sure?"}], "action": "confirm"}),
+        ],
+    );
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"fields": [{"field": "detail", "value": "Sure?"}], "action": "confirm"}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.ui.dialog.is_none() && objects(&app) == 1, "OK ran the command it asked about");
+    assert_eq!(first_object(&app), (10.0, 20.0));
+}
+
+/// The generic parameter dialog runs its command with its fixed parameters: `ui.dialog.set` can
+/// change the parameters it shows, not `__command`, `__params` or `__label`.
+#[test]
+fn dialog_set_cannot_redirect_parameter_dialog() {
+    let (mut app, tx) = controlled();
+    let fields = json!({"__command": "shape.rectangle", "__label": "Rectangle", "__params": {"x": 10, "y": 10}, "width": 20, "height": 20});
+    app.ui.dialog = Some(Dialog::new("command", fields));
+    refused_sets(
+        &mut app,
+        &tx,
+        "command",
+        &[
+            json!({"field": "__command", "value": "file.close"}),
+            json!({"field": "__params", "value": {"x": 500, "y": 500}}),
+            json!({"field": "__label", "value": "Close"}),
+            json!({"fields": [{"field": "width", "value": 30}, {"field": "__command", "value": "file.close"}], "action": "confirm"}),
+        ],
+    );
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "width", "value": 30, "action": "confirm"}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.ui.dialog.is_none() && objects(&app) == 1, "OK ran the dialog's command");
+    assert_eq!(first_object(&app), (10.0, 30.0), "with its fixed x and the width set");
+}
+
+/// A plug-in command's dialog runs that command of that plug-in: `ui.dialog.set` can't change its
+/// `__command` or `__plugin`.
+#[test]
+fn dialog_set_cannot_redirect_plugin_command() {
+    let (mut app, tx) = controlled();
+    let fields = json!({"__plugin": "test.ui.redirect", "__command": "plugin.test.ui.redirect.a", "__label": "A", "amount": 1});
+    app.ui.dialog = Some(Dialog::new(crate::dialogs::plugin::KIND, fields));
+    refused_sets(
+        &mut app,
+        &tx,
+        crate::dialogs::plugin::KIND,
+        &[
+            json!({"field": "__command", "value": "plugin.test.ui.redirect.b"}),
+            json!({"field": "__plugin", "value": "test.ui.other"}),
+            json!({"fields": [{"field": "amount", "value": 2}, {"field": "__command", "value": ""}], "action": "confirm"}),
+        ],
+    );
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "amount", "value": 2}));
+    assert_eq!(r["ok"], true, "{r}");
+}
+
+/// A `__` field the dialog does not hold is refused as a protected field too, and so is a control
+/// of another kind of dialog; the error for an unknown field lists the dialog's own controls only.
+#[test]
+fn dialog_set_rejects_unknown_hidden_field() {
+    let (mut app, tx) = controlled();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 20})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    for field in ["__anything", "__section", "__ratio", "__constrainApplied"] {
+        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": field, "value": true}));
+        assert_eq!(r["error"], format!("the `transformEach` dialog cannot set protected field `{field}`"), "{r}");
+        assert!(!dialog_fields(&app).unwrap().contains_key("__anything"));
+    }
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "nosuch", "value": true}));
+    let error = r["error"].as_str().unwrap_or_default();
+    assert!(error.contains("has no field `nosuch`") && error.contains("__constrain"), "{r}");
+    assert!(!error.contains("__ratio") && !error.contains("__section"), "{r}");
+
+    // Artboard Options' Fit, size preset and reference point flags are set by their buttons
+    // together with the size and position they record.
+    app.ui.dialog = Some(Dialog::new("artboardOptions", json!({"width": 60, "height": 20})));
+    for (field, value) in [("__fit", json!(true)), ("__sizeChoice", json!({"landscape": true})), ("__refx", json!(2)), ("__refy", json!(2))] {
+        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": field, "value": value}));
+        assert_eq!(r["error"], format!("the `artboardOptions` dialog cannot set protected field `{field}`"), "{r}");
+        assert!(!dialog_fields(&app).unwrap().contains_key(field));
+    }
+    // Scribble's Settings menu sets the preset's parameters along with its name.
+    app.ui.dialog = Some(Dialog::new("effect", json!({"__effect": "scribble", "angle": 30})));
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__scribbleSetting", "value": "sharp"}));
+    assert_eq!(r["error"], "the `effect` dialog cannot set protected field `__scribbleSetting`", "{r}");
+}
+
+/// The dialog controls held under a `__` name are still set: Transform Each's link, the Save PDF
+/// section and its All artboards checkbox, and the Preferences search.
+#[test]
+fn dialog_set_allows_hidden_controls() {
+    let (mut app, tx) = controlled();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 60, "height": 20})).unwrap();
+    app.run("select.all", json!({})).unwrap();
+    crate::menus::invoke(&mut app, "object.transformEach", json!({}));
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__constrain", "value": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.ui.dialog.as_ref().is_some_and(|d| d.bool("__constrain")));
+    app.ui.dialog = None;
+
+    app.run("ui.savePdfDialog", json!({})).unwrap();
+    let set = json!({"fields": [{"field": "__section", "value": "Security"}, {"field": "__allArtboards", "value": false}]});
+    let r = request(&mut app, &tx, "ui.dialog.set", set);
+    assert_eq!(r["ok"], true, "{r}");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.str("__section"), d.bool("__allArtboards")), ("Security".to_string(), false));
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__save", "value": "file.saveCopy"}));
+    assert_eq!(r["error"], "the `savePdf` dialog cannot set protected field `__save`", "{r}");
+    app.ui.dialog = None;
+
+    // The raster options dialogs share the Resolution menu's Other, PSD Options included.
+    for kind in ["pngOptions", "tiffOptions", "psdOptions"] {
+        app.ui.dialog = Some(Dialog::new(kind, json!({"ppi": 72})));
+        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__otherPpi", "value": true}));
+        assert_eq!(r["ok"], true, "{kind}: {r}");
+    }
+    app.ui.dialog = None;
+
+    // A style section's reset flag alone would keep the section's values: scripts run the Reset
+    // Panel commands, which clear them. Which of the two styles a new style is stays fixed.
+    for (kind, para, flag) in [
+        ("charStyleOptions", false, "__resetColor"),
+        ("paraStyleOptions", true, "__resetHyphenation"),
+        ("newTextStyle", false, "__resetColor"),
+        ("newTextStyle", true, "__resetHyphenation"),
+    ] {
+        app.ui.dialog = Some(Dialog::new(kind, json!({"name": "A", "__para": para})));
+        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": flag, "value": true}));
+        assert_eq!(r["error"], format!("the `{kind}` dialog cannot set protected field `{flag}`"), "{r}");
+        assert!(!app.ui.dialog.as_ref().is_some_and(|d| d.bool(flag)), "{kind}");
+    }
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__para", "value": false}));
+    assert_eq!(r["error"], "the `newTextStyle` dialog cannot set protected field `__para`", "{r}");
+    app.ui.dialog = None;
+
+    crate::prefs_dialog::open(&mut app, None);
+    let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__search", "value": "grid"}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.str("__search")), Some("grid".to_string()));
+}
+
+/// Save PDF's and Print's OK save a preset while Save Preset… asks for its name: `ui.dialog.set`
+/// can't add `__savePresetAs` to turn OK into saving a preset, alone or with `action: "confirm"`,
+/// and can type the name once Save Preset… has added the field.
+#[test]
+fn dialog_set_cannot_open_save_preset() {
+    let (mut app, tx) = controlled();
+    let saved = |app: &VectorcraftApp| (app.session.prefs.pdf_presets.len(), app.session.prefs.print_presets.len());
+    for (open, kind) in [("ui.savePdfDialog", "savePdf"), ("file.print", "print")] {
+        app.run(open, json!({})).unwrap();
+        let presets = saved(&app);
+        for set in [
+            json!({"field": "__savePresetAs", "value": "Proofs"}),
+            json!({"fields": [{"field": "__savePresetAs", "value": "Proofs"}], "action": "confirm"}),
+        ] {
+            let before = dialog_fields(&app);
+            let r = request(&mut app, &tx, "ui.dialog.set", set.clone());
+            assert_eq!(r["error"], format!("the `{kind}` dialog cannot set protected field `__savePresetAs`"), "{set}: {r}");
+            assert_eq!(dialog_fields(&app), before, "{set}: no field changes and the dialog stays open");
+        }
+        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "nosuch", "value": true}));
+        assert!(!r["error"].as_str().unwrap_or_default().contains("__savePresetAs"), "{kind}: {r}");
+        assert_eq!(saved(&app), presets, "{kind}: no preset saved");
+        // Save Preset… adds the field; the name can then be typed and OK saves the preset.
+        app.ui.dialog.as_mut().unwrap().fields.insert("__savePresetAs".into(), json!(""));
+        let r = request(&mut app, &tx, "ui.dialog.set", json!({"field": "__savePresetAs", "value": "Proofs", "action": "confirm"}));
+        assert_eq!(r["result"]["result"]["name"], "Proofs", "{kind}: {r}");
+        app.ui.dialog = None;
+    }
+    assert_eq!(saved(&app), (1, 1));
 }
 
 /// The refusal of an OK on an install question automation asked.
@@ -955,7 +1913,8 @@ fn automation_cannot_approve_replacing_a_plugin() {
     assert_eq!(r, json!({"pending": crate::dialogs::plugin::INSTALL_KIND}));
     let evil = vectorcraft_format::base64_encode(&plain(r#"{"objects":[{"name":"x"}]}"#));
     let r = request(&mut app, &tx, "ui.dialog.set", json!({"fields": [{"field": "__params", "value": {"dataBase64": evil, "replace": true}}]}));
-    assert!(r.get("error").is_none(), "{r}");
+    let protected = format!("the `{}` dialog cannot set protected field `__params`", crate::dialogs::plugin::INSTALL_KIND);
+    assert_eq!(r["error"], protected, "{r}");
     super::plugins::show_approval(&mut app);
     let r = request(&mut app, &tx, "ui.dialog.confirm", json!({}));
     assert!(r["error"].as_str().is_some_and(|e| e.contains("Only the person at the keyboard")), "{r}");

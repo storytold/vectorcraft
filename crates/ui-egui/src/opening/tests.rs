@@ -56,13 +56,9 @@ fn install_importer(app: &mut VectorcraftApp, src: &str) {
 }
 
 /// A file for the importers below, in a folder of its own.
-fn importer_file(tag: &str) -> (std::path::PathBuf, String) {
-    let dir = std::env::temp_dir().join(format!("vc-ui-opening-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let file = dir.join("a.tob");
-    std::fs::write(&file, "not json").unwrap();
-    let file = file.to_string_lossy().into_owned();
+fn importer_file(tag: &str) -> (crate::tests_folder::Folder, String) {
+    let dir = crate::tests_folder::Folder::new(&format!("ui-opening-{tag}"));
+    let file = dir.file("a.tob", b"not json");
     (dir, file)
 }
 
@@ -73,7 +69,7 @@ fn importer_file(tag: &str) -> (std::path::PathBuf, String) {
 fn open_with_runs_the_importer_off_the_ui_thread() {
     use vectorcraft_plugins::wat::{self as tpl, Given};
     let rect = r#"{"objects":[{"type":"path","path":{"subpaths":[{"closed":true,"anchors":[{"p":[10,20]},{"p":[110,20]},{"p":[110,70]},{"p":[10,70]}]}]}}]}"#;
-    let (dir, file) = importer_file("with");
+    let (_dir, file) = importer_file("with");
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
     let params = r#"{"density":{"type":"number","min":0,"max":10,"default":4}}"#;
@@ -97,14 +93,13 @@ fn open_with_runs_the_importer_off_the_ui_thread() {
     assert!(app.ui.dialog.is_some(), "the failure is reported in a dialog");
     assert!(app.ui.recent_files.is_empty());
     app.run("plugin.remove", json!({"id": "test.opening.with"})).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Cancel stops an importer that never returns, on the thread reading the file.
 #[test]
 fn cancel_stops_a_running_importer() {
     use vectorcraft_plugins::wat as tpl;
-    let (dir, file) = importer_file("cancel");
+    let (_dir, file) = importer_file("cancel");
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
     install_importer(&mut app, &tpl::module(&tpl::importer("test.opening.spins", r#"["tob"]"#, "{}"), "(loop $l (br $l)) (i64.const 0)", "", 1));
@@ -115,7 +110,6 @@ fn cancel_stops_a_running_importer() {
     assert!(r.as_ref().err().is_some_and(|e| e.contains("cancelled")), "{:?}", r.err());
     assert!(app.session.documents().is_empty());
     app.run("plugin.remove", json!({"id": "test.opening.spins"})).unwrap();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// #1694: a file that finishes opening while a dialog is up waits for it to close, so the
@@ -289,8 +283,7 @@ fn a_file_read_off_the_ui_thread_opens_as_one_read_at_once() {
 #[test]
 fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
     use image::ImageFormat::{Bmp, Jpeg, Png, Tiff};
-    let dir = std::env::temp_dir().join(format!("vc-opening-links-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::tests_folder::Folder::new("opening-links");
     let (before, after) = (dir.join("before"), dir.join("after"));
     std::fs::create_dir_all(&before).unwrap();
     let file = |folder: &std::path::Path, name: &str| folder.join(name).to_string_lossy().into_owned();
@@ -336,7 +329,6 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
         assert!(st.history.undo.is_empty() && !st.is_dirty(), "{update}");
         assert_eq!(asked(&app), question, "{update}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A file opened under automation roots is installed under them too: the open keeps the scope it
@@ -344,7 +336,7 @@ fn a_file_read_off_the_ui_thread_has_its_links_and_type_as_one_read_at_once() {
 #[test]
 fn a_file_opened_under_automation_roots_finishes_under_them() {
     use vectorcraft_engine::file_access;
-    let dir = scope_dir();
+    let dir = crate::tests_folder::Folder::new("opening-scope");
     let roots = file_access::AutomationRoots::new(&[dir.as_path()], &[]).unwrap();
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     file_access::confine(roots.as_ref(), || {
@@ -353,12 +345,6 @@ fn a_file_opened_under_automation_roots_finishes_under_them() {
     .unwrap();
     let scope = app.opening.pending[0].scope.clone();
     assert!(scope.run(file_access::current).is_some(), "the roots go with the open");
-}
-
-fn scope_dir() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-scope-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
 }
 
 /// A file asked for again while it is still being read is not read a second time (#3455).
@@ -378,9 +364,7 @@ fn a_file_asked_for_again_while_it_is_read_opens_once() {
 /// the dialog acts on its own document (#5369).
 #[test]
 fn a_queued_reopen_that_asks_holds_back_files_ready_to_open() {
-    let dir = std::env::temp_dir().join(format!("vectorcraft-opening-queued-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::tests_folder::Folder::new("opening-queued");
     let mut app = VectorcraftApp::new(Session::new(), Services::default());
     app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
     let (doc, other) = (dir.join("doc.vectorcraft"), dir.join("other.vectorcraft"));
@@ -407,7 +391,6 @@ fn a_queued_reopen_that_asks_holds_back_files_ready_to_open() {
     assert_eq!(app.session.doc().unwrap().path.as_deref(), Some(&*doc), "the dialog's document stays active");
     assert_eq!(app.opening.activate.first().map(|(p, _)| p), Some(&other), "the later activation waits");
     assert_eq!(app.opening.pending.len(), 1, "the other file waits");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// Of two files read off the UI thread and ready in the same frame, the first that opens and asks

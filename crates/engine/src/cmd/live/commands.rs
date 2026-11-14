@@ -1,6 +1,6 @@
 use super::blend::{
     blend_create_spine, blend_expand, blend_info, blend_make, blend_options, blend_release, blend_replace_spine, blend_reverse_spine,
-    blend_reverse_stack, spine_add_anchor, spine_convert_anchor, spine_move_anchor, spine_remove_anchor, spine_reshape_segment,
+    blend_reverse_stack, blend_set_easing, spine_add_anchor, spine_convert_anchor, spine_move_anchor, spine_remove_anchor, spine_reshape_segment,
 };
 use super::common::{has_blend, has_envelope, has_mesh};
 use super::envelope::{
@@ -48,6 +48,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{mode?: auto|always|never} the Blend panel's Create Spine: whether new blends get a spine (auto and always: the straight lines between the key centers, as before; never: no spine to show, edit, reverse or release, and no easing, until Replace Spine gives one); with no `mode`, reads it; blends already made keep theirs (a tool setting kept with the preferences, not an undo step) → {mode}",
             always,
             blend_create_spine
+        ),
+        cmd!(
+            "object.blend.setEasing",
+            "Blend Easing",
+            [],
+            None,
+            "{id? (default: the first selected blend), easingType?: easeIn|easeOut|easeInOut|easeOutIn, ramp?: pct (0..100), colorShift?: pct (-100..100)} set one blend's easing and color shift, as the blend widgets on the canvas do; omitted ones keep their value. easingType and ramp need a blend whose steps follow a spine (a replaced or edited spine, or Align to Path); a blend made without a spine takes them once Replace Spine has given it one; out of range, a hidden or locked blend and a blend with no spine are errors. A value that changes nothing records no undo step → {id, easingType, ramp, colorShift, changed}",
+            has_doc,
+            blend_set_easing
         ),
         cmd!(
             "object.blend.expand",
@@ -145,7 +154,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Warp…",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+Shift+W"),
-            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical, horizontalDistortion?: as h, verticalDistortion?: as v} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected; type maps from its glyph outline bounds) → {id}",
+            "{ids?, style?: arc|arcLower|arcUpper|arch|bulge|shellLower|shellUpper|flag|wave|fish|rise|fisheye|inflate|squeeze|twist (arc), bend?: % -100..100 (50), h?: horizontal distortion % -100..100 (0), v?: vertical distortion % (0), horizontal?: bool (true) | orientation?: horizontal|vertical, horizontalDistortion?: as h, verticalDistortion?: as v, version?: 0|1 (1: each style bends the bounds as one Bézier patch; 0: VectorCraft's earlier map)} envelope the selected objects with a warp (Envelope Options from object.envelope.options with nothing selected; type maps from its glyph outline bounds) → {id}",
             has_selection,
             env_make_warp
         ),
@@ -163,7 +172,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make with Top Object",
             ["Object", "Envelope Distort"],
             Some("Cmd+Alt+C"),
-            "{ids?} the topmost selected path becomes the envelope of the others: its outline splits into four sides at its corners, and each piece of a side takes a share of the content in proportion to its control polygon's length (type maps from its glyph outline bounds) → {id}",
+            "{ids?} the topmost selected path becomes the envelope of the others: its outline splits into four sides at its corners, and each piece of a side takes a share of the content in proportion to its control polygon's length, and a side whose pieces are all one curve split at anchors follows that curve's parameter (type maps from its glyph outline bounds) → {id}",
             has_multi,
             env_make_top
         ),
@@ -172,7 +181,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset with Warp…",
             ["Object", "Envelope Distort"],
             None,
-            "{style?, bend?, h?, v?, horizontal? | orientation? (as makeWithWarp; unset: the envelope's current warp, else arc 50 %), horizontalDistortion?: as h, verticalDistortion?: as v} make the selected envelopes warp envelopes, keeping their content",
+            "{style?, bend?, h?, v?, horizontal? | orientation? (as makeWithWarp; unset: the envelope's current warp, else arc 50 %), horizontalDistortion?: as h, verticalDistortion?: as v, version?: as makeWithWarp (unset: a warp envelope's own, else 1)} make the selected envelopes warp envelopes, keeping their content",
             has_envelope,
             env_reset_warp
         ),
@@ -190,7 +199,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Info",
             [],
             None,
-            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
+            "{} the selected envelope's settings, or with none selected the defaults new envelopes get → {id: n|null, type: warp|mesh|topObject, style, bend, h, v, horizontal, version (a warp's map: 1, each style as one Bézier patch; 0, the earlier map), rows, cols, fidelity, antiAlias, preserveShape: clippingMask|transparency, distortAppearance, distortLinearGradients, distortPatternFills, boundsMargin?: [top, bottom, left, right] (shares of the content's height and width, reported only when not zero: with distortAppearance, how far the box the content maps from reaches past its geometric bounds), editing}",
             has_doc,
             env_info
         ),
@@ -208,7 +217,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Envelope Options…",
             ["Object", "Envelope Distort"],
             None,
-            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
+            "{fidelity?: 0..100, antiAlias?: bool, preserveShape?: clippingMask|transparency, distortAppearance?: bool, distortLinearGradients?: bool, distortPatternFills?: bool (the last two work with distortAppearance; on an envelope with boundsMargin, distortAppearance also switches the content between the box with the margins and its geometric box), style?, bend?, h?, v?, horizontal? (warp envelopes), horizontalDistortion?: as h, verticalDistortion?: as v, orientation?: horizontal|vertical, version?: 0|1 (warp envelopes' map, as makeWithWarp)} set the selected envelopes' options; with no envelope selected, the options new envelopes get (see object.envelope.info)",
             has_doc,
             env_options
         ),
@@ -235,7 +244,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Envelope Mesh Point",
             [],
             None,
-            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a mesh envelope (its handles follow), or with `handle` place that handle end at (x, y); object.mesh.movePoint, addLine and deletePoint edit mesh envelopes too",
+            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a mesh or warp envelope (its handles follow), or with `handle` place that handle end at (x, y); a warp's points are those of its grid (4×4 patches, or 8×8 or 16×16 where 4×4 draws more than 0.1% of its diagonal away from the warp), and its first edit makes it a mesh envelope on that grid in the same undo step (a warp no such grid follows is refused: Reset with Mesh first); object.mesh.movePoint, movePoints, addLine and deletePoint edit mesh and warp envelopes too",
             has_doc,
             env_set_mesh_point
         ),
@@ -254,7 +263,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Mesh Point Color",
             [],
             None,
-            "{id, index | points: [index…] | items: [{id, index | points}…], color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing)",
+            "{id, index | points: [index…] | items: [{id, index | points}…], color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1} colour and/or opacity of gradient mesh points (one undo step; an index out of range changes nothing, and so does a call that changes no point, with no undo step)",
             has_doc,
             mesh_set_color
         ),
@@ -263,7 +272,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Mesh Point",
             [],
             None,
-            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a gradient mesh or mesh envelope (its handles follow), or with `handle` place that handle end at (x, y)",
+            "{id, index, x, y, handle?: 0 right|1 left|2 down|3 up} move a point of a gradient mesh or a mesh or warp envelope (its handles follow; a warp becomes a mesh envelope, see object.envelope.setMeshPoint), or with `handle` place that handle end at (x, y)",
             has_doc,
             mesh_move_point
         ),
@@ -272,7 +281,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Mesh Points",
             [],
             None,
-            "{id, points: [index…] | items: [{id, index | points}…], dx, dy} move points of gradient meshes or mesh envelopes by (dx, dy), their handles with them (one undo step; an index out of range changes nothing)",
+            "{id, points: [index…] | items: [{id, index | points}…], dx, dy} move points of gradient meshes or mesh or warp envelopes by (dx, dy), their handles with them (warps become mesh envelopes, see object.envelope.setMeshPoint; one undo step; an index out of range changes nothing, and so does a call that moves no point, with no undo step)",
             has_doc,
             mesh_move_points
         ),
@@ -281,7 +290,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Mesh Line",
             [],
             None,
-            "{id, x, y, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y) to a gradient mesh (new point in `color`) or a mesh envelope; a point outside within `tolerance` of the edge adds them through the nearest point of the edge → {index}",
+            "{id, x, y, color? (#rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), tolerance?: pt (0)} add a row and a column through (x, y), inside or on the edge, to a gradient mesh (new point in `color`) or a mesh or warp envelope (a warp becomes a mesh envelope, see object.envelope.setMeshPoint); a point outside within `tolerance` of the edge adds them through the nearest point of the edge; at a point that is already a mesh point it adds no line, and records no undo step unless `color` changes a gradient mesh's point (an envelope's points have no color) → {index}",
             has_doc,
             mesh_add_line
         ),
@@ -290,7 +299,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Mesh Point",
             [],
             None,
-            "{id, index} delete the mesh lines through a point of a gradient mesh or mesh envelope",
+            "{id, index} delete the mesh lines through a point of a gradient mesh or a mesh or warp envelope (a warp becomes a mesh envelope, see object.envelope.setMeshPoint)",
             has_doc,
             mesh_delete_point
         ),

@@ -4,11 +4,13 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, Node, NodeId, NodeKind};
 use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve};
 
-use crate::solids::{Profile, Scope, is_container, members, object_profile, profile, reshape_members, resolve_for, solid_paints, union_bounds};
+use crate::solids::{
+    Profile, Scope, is_container, members, object_profile, past_effect, profile, reshape_members, resolve_for, solid_paints, union_bounds,
+};
 use crate::util::{flag, num, text};
 use crate::{GeomContext, apply_geometry_with, is_geometry, merged_params};
 
@@ -25,11 +27,20 @@ pub fn is_revolve(id: &str) -> bool {
 /// Most bytes the copies of the object's paint in the faces may take together. Each face and the
 /// seam stroke around it gets a copy of the paint, so a gradient of many stops times tens of
 /// thousands of faces took gigabytes; past this the source path is drawn.
-const MAX_PAINT_COPIES: usize = 256 << 20;
+pub(crate) const MAX_PAINT_COPIES: usize = 256 << 20;
+
+/// The bytes of an object's paint copies so far: those of its surfaces' faces, and those of the parts
+/// of its graphics, each within [`MAX_PAINT_COPIES`] of its own. Graphics past their budget are left
+/// out without taking room the surfaces need.
+#[derive(Default)]
+struct Copies {
+    surfaces: usize,
+    graphics: usize,
+}
 
 /// The most face and box tests a group's transparent members' faces take together to rejoin their
 /// members' last runs; past them each starts a run of its own.
-const MAX_OVERLAP_TESTS: usize = 1 << 22;
+pub(crate) const MAX_OVERLAP_TESTS: usize = 1 << 22;
 
 /// The width of the stroke around each face that covers the seams between faces.
 const SEAM_WIDTH: f64 = 0.75;
@@ -94,13 +105,18 @@ pub fn revolve_options(p: &Value) -> Revolve {
         smooth_shading: true,
         cap_ends: flag(p, "cap", true),
         curve_samples: None,
+        map_surface: false,
     }
 }
 
 /// The options Revolve (`id` [`REVOLVE`]) or Revolve (Classic) ([`CLASSIC_REVOLVE`]) with
-/// parameters `p` sweeps its surface with.
+/// parameters `p` sweeps its surface with. A Revolve with graphics lays out its side for them.
 fn options_of(id: &str, p: &Value) -> Revolve {
-    if id == CLASSIC_REVOLVE { classic::options(p) } else { revolve_options(p) }
+    if id == CLASSIC_REVOLVE {
+        classic::options(p)
+    } else {
+        Revolve { map_surface: id == REVOLVE && !crate::solids::mapped_graphics(p).is_empty(), ..revolve_options(p) }
+    }
 }
 
 /// The options effect `fx`, a Revolve or a Revolve (Classic), sweeps its surface with.
@@ -138,6 +154,17 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
         let options = shared_options(&shapes, options_of(id, p))?;
         let mut copies = 0;
         shapes.iter().try_for_each(|s| check_surface(&s.path, b, options, surface_item(&s.items), &mut copies))?;
+        // Without graphics, or without the document they draw from, no member is measured for them.
+        if let Some(doc) = doc.filter(|_| id == REVOLVE && !crate::solids::mapped_graphics(p).is_empty()) {
+            match graphics_member(&shapes, b, options).and_then(|k| shapes.get(k)) {
+                Some(s) => check_graphics(Some(doc), id, &s.path, b, options, p, &mut 0)?,
+                // With no member to carry them, the graphics' art must still fit its limits.
+                None => {
+                    crate::solids::graphics::validate_symbols(doc, p)?;
+                    crate::solids::graphics::validate_surface_symbols(doc, p)?;
+                }
+            }
+        }
         let casting = shapes.iter().filter(|s| surface_item(&s.items).is_some_and(|i| paint_of(i).1 * s.opacity > 0.0));
         return check_shadow(p, casting.map(|s| &s.path), b, options);
     }
@@ -149,7 +176,42 @@ pub(crate) fn validate_in(doc: Option<&Document>, n: &Node, id: &str, p: &Value)
     let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
     let paints = solid_paints(n);
     check_surface(&path, b, options_of(id, p), surface_item(&paints), &mut 0)?;
+    check_graphics(doc, id, &path, b, options_of(id, p), p, &mut 0)?;
     check_shadow(p, [&path], b, options_of(id, p))
+}
+
+/// An error when the graphics in Revolve (`id`) parameters `p`, with the symbols of `doc`, are past
+/// their limits on the surface of `path` about the axis of `b`: their art, or the parts they draw
+/// on its faces ([`crate::solids::graphics::surface_parts`]), whose paint copies count after
+/// `copies`, the bytes of the copies of the object's graphics so far ([`Copies`]). The parts'
+/// copies are added to `copies` when they fit, as drawing adds them. Without `doc` nothing is
+/// drawn, and nothing is checked.
+fn check_graphics(doc: Option<&Document>, id: &str, path: &PathData, b: Rect, options: Revolve, p: &Value, copies: &mut usize) -> Result<(), String> {
+    let graphics = crate::solids::mapped_graphics(p);
+    let Some(doc) = doc.filter(|_| id == REVOLVE && !graphics.is_empty()) else { return Ok(()) };
+    crate::solids::graphics::validate_symbols(doc, p)?;
+    crate::solids::graphics::validate_surface_symbols(doc, p)?;
+    let faces = vectorcraft_three_d::revolve(path, b, options)?;
+    let mut used = *copies;
+    match crate::solids::graphics::surface_parts(Some(doc), NodeId(0), &graphics, &faces, &|_, c| Paint::solid(c), &mut used) {
+        Some(_) => {
+            *copies = used;
+            Ok(())
+        }
+        None => Err("The graphics are too complex for this surface: simplify the symbols' art or reduce Segments".into()),
+    }
+}
+
+/// The member of a group whose side takes the group's graphics: the first with the longest
+/// profile among those with a fill or stroke.
+fn graphics_member(shapes: &[Profile], b: Rect, options: Revolve) -> Option<usize> {
+    shapes
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| surface_item(&s.items).is_some())
+        .filter_map(|(k, s)| vectorcraft_three_d::revolve_surface_size(&s.path, b, options).map(|(_, h)| (k, h)))
+        .fold(None, |best: Option<(usize, f64)>, (k, h)| if best.is_some_and(|(_, top)| top >= h) { best } else { Some((k, h)) })
+        .map(|(k, _)| k)
 }
 
 /// With the shadow of Revolve parameters `p` on, an error when the surfaces of `paths` it is cast
@@ -166,16 +228,17 @@ fn check_shadow<'a>(p: &Value, paths: impl IntoIterator<Item = &'a PathData>, b:
 /// appearance item `target` of `n` ([`validate_item_of`]).
 #[cfg(test)]
 pub(crate) fn validate_item_revolve(n: &Node, p: &Value, target: usize, index: usize) -> Result<(), String> {
-    validate_item_of(n, REVOLVE, p, target, index)
+    validate_item_of(None, n, REVOLVE, p, target, index)
 }
 
 /// [`validate_revolve`] for a Revolve or Revolve (Classic), `id`, with parameters `p` at index
 /// `index` of the effects of appearance item `target` of `n`. The surfaces of every fill and stroke
 /// that carries one, `target`'s included, share one budget of paint copies, as in [`art`]. A visible
-/// object-level Revolve draws in place of those surfaces.
-pub(crate) fn validate_item_of(n: &Node, id: &str, p: &Value, target: usize, index: usize) -> Result<(), String> {
+/// object-level Revolve draws in place of those surfaces. With `doc`, `target`'s graphics must fit
+/// its surface ([`check_graphics`]).
+pub(crate) fn validate_item_of(doc: Option<&Document>, n: &Node, id: &str, p: &Value, target: usize, index: usize) -> Result<(), String> {
     if is_container(n) || visible(&n.appearance.effects) || target >= n.appearance.items.len() {
-        return validate_in(None, n, id, p);
+        return validate_in(doc, n, id, p);
     }
     validate_params_of(id, p)?;
     const EMPTY: &str = "Revolve requires a shape with at least two anchors";
@@ -185,7 +248,7 @@ pub(crate) fn validate_item_of(n: &Node, id: &str, p: &Value, target: usize, ind
     }
     let ctx = GeomContext::of(n);
     let path = geometry(&path, &n.appearance.effects, &ctx);
-    let mut copies = 0;
+    let (mut copies, mut graphic_copies) = (0, 0);
     for (i, item) in n.appearance.items.iter().enumerate() {
         let effects = item.effects();
         let at = if i == target { Some(index) } else { effects.iter().position(|e| e.visible && is_revolve(&e.id)) };
@@ -198,6 +261,12 @@ pub(crate) fn validate_item_of(n: &Node, id: &str, p: &Value, target: usize, ind
         let path = geometry(&path, at.and_then(|at| effects.get(..at)).unwrap_or(effects), &ctx.item(item));
         let b = path.bounds().ok_or(EMPTY)?;
         check_surface(&path, b, options, crate::paints(item).then_some(item), &mut copies)?;
+        // The graphics of every item add their paints' copies to the graphics' budget, as they
+        // are drawn; only the edited item's graphics are refused here.
+        let graphics = check_graphics(doc, kind, &path, b, options, &params, &mut graphic_copies);
+        if i == target {
+            graphics?;
+        }
         check_shadow(&params, [&path], b, options)?;
     }
     Ok(())
@@ -232,7 +301,7 @@ fn shared_options(shapes: &[Profile], options: Revolve) -> Result<Revolve, Strin
 }
 
 /// The item whose paint an object's surface takes: its top fill, else its top stroke.
-fn surface_item(items: &[AppearanceItem]) -> Option<&AppearanceItem> {
+pub(crate) fn surface_item(items: &[AppearanceItem]) -> Option<&AppearanceItem> {
     items.iter().rev().find(|i| matches!(i, AppearanceItem::Fill(_))).or_else(|| items.last())
 }
 
@@ -253,6 +322,7 @@ pub(crate) fn validate_revolve_params(p: &Value) -> Result<(), String> {
 /// only its own parameters, each in its range.
 pub(crate) fn validate_params_of(id: &str, p: &Value) -> Result<(), String> {
     validate_revolve_params(p)?;
+    crate::solids::graphics::validate(id, p)?;
     if id == CLASSIC_REVOLVE {
         classic::validate(p)?;
     }
@@ -301,10 +371,13 @@ fn group_shadow(id: NodeId, fx: &Effect, shapes: &[Profile], b: Rect, options: R
 }
 
 /// One object's surface of revolution about the axis of `b`, and each face's depth. `copies` counts
-/// the bytes of the paint copies of every surface of the object. Revolve (Classic) draws every face
-/// with its classic surface, as Extrude & Bevel (Classic) does.
+/// the bytes of the paint copies of every surface and graphic of the object. Revolve (Classic) draws every face
+/// with its classic surface, as Extrude & Bevel (Classic) does. Revolve's graphics, with the
+/// symbols of `doc`, are drawn on the faces of the side ([`crate::solids::graphics::surface_parts`]):
+/// a face with a part of a graphic is a group of the face and that part.
 #[allow(clippy::too_many_arguments)]
 fn surface(
+    doc: Option<&Document>,
     n: &Node,
     path: &PathData,
     b: Rect,
@@ -314,14 +387,14 @@ fn surface(
     opacity: f32,
     blend: vectorcraft_doc::color::BlendMode,
     expand: bool,
-    copies: &mut usize,
+    copies: &mut Copies,
 ) -> Option<(Vec<f64>, Node)> {
     // A loaded file or a profile edited past the limits keeps drawing its source path instead
     // of crashing the frame. Commands validate the same evaluator and report its errors.
     if fx.id == CLASSIC_REVOLVE {
         let facets = vectorcraft_three_d::revolve_facets(path, b, options).ok()?;
-        *copies = copies.saturating_add(paint_copies(facets.len(), &paint));
-        if *copies > MAX_PAINT_COPIES {
+        copies.surfaces = copies.surfaces.saturating_add(paint_copies(facets.len(), &paint));
+        if copies.surfaces > MAX_PAINT_COPIES {
             return None;
         }
         let depths = facets.iter().map(|f| f.depth).collect();
@@ -330,14 +403,33 @@ fn surface(
     }
     let colored = options.light_color != [1.0; 3] || options.lights.is_some();
     let faces = vectorcraft_three_d::revolve(path, b, options).ok()?;
-    *copies = copies.saturating_add(paint_copies(faces.len(), &paint));
-    if *copies > MAX_PAINT_COPIES {
+    copies.surfaces = copies.surfaces.saturating_add(paint_copies(faces.len(), &paint));
+    if copies.surfaces > MAX_PAINT_COPIES {
         return None;
     }
+    let graphics = crate::solids::mapped_graphics(&merged_params(&fx.id, &fx.params));
+    let shade = |face: &vectorcraft_three_d::Face, c: Color| graphic_paint(face, c, colored);
+    // Graphics past the limits are left out, and the surface draws without them and their paints'
+    // copies.
+    let mut used = copies.graphics;
+    let mut parts = if graphics.is_empty() {
+        vec![]
+    } else {
+        match crate::solids::graphics::surface_parts(doc, n.id, &graphics, &faces, &shade, &mut used) {
+            Some(parts) => {
+                copies.graphics = used;
+                parts
+            }
+            None => vec![],
+        }
+    };
+    let drawn = parts.iter().any(|p| !p.is_empty());
     // Visibility is an expansion option, never a change to live geometry or export baking.
     // Keep all faces for paints whose coverage we cannot prove opaque. A bounded visibility
-    // failure also retains the complete surface rather than losing any of the user's art.
+    // failure also retains the complete surface rather than losing any of the user's art. With
+    // graphics drawn, every face stays, each with its part of the graphics.
     let visible = (expand
+        && !drawn
         && flag(&fx.params, "expandVisibleOnly", true)
         && paint.color().is_some()
         && opacity == 1.0
@@ -402,17 +494,26 @@ fn surface(
                 .into_iter()
                 .flat_map(|item| {
                     let AppearanceItem::Fill(fill) = &item else { return vec![item] };
-                    let mut edge = StrokeLayer::new(fill.paint.clone(), SEAM_WIDTH);
-                    // Acute face corners must stay within the overlap width. Miter joins
-                    // amplify this seam stroke into visible spikes along the silhouette.
-                    edge.join = LineJoin::Round;
+                    // Acute face corners must stay within the overlap width: meets() counts on a
+                    // stroked seam reaching no more than half its width; faces drawn as clipped
+                    // groups are measured by their box.
+                    let mut edge = crate::lighting::seam_stroke(fill.paint.clone(), SEAM_WIDTH);
                     edge.opacity = fill.opacity;
                     vec![item, AppearanceItem::Stroke(edge)]
                 })
                 .collect();
             Arc::new(Node::path(n.id, face.path, Appearance { items, ..Default::default() }))
         })
-        .collect();
+        .collect::<Vec<_>>();
+    let children = if drawn {
+        children
+            .into_iter()
+            .zip(parts.iter_mut().map(std::mem::take).chain(std::iter::repeat_with(Vec::new)))
+            .map(|(face, part)| if part.is_empty() { face } else { Arc::new(Node::group(n.id, std::iter::once(face).chain(part).collect())) })
+            .collect()
+    } else {
+        children
+    };
     let mut group = Node::group(n.id, children);
     group.opacity = opacity;
     group.blend = blend;
@@ -420,11 +521,33 @@ fn surface(
 }
 
 /// A surface of one object about the bounds of `path`, built with options derived from `fx`.
-/// `copies` is the count [`surface`] adds to.
-fn object_surface(n: &Node, path: &PathData, fx: &Effect, item: &AppearanceItem, expand: bool, copies: &mut usize) -> Option<Node> {
+/// `copies` is the count [`surface`] adds to; its graphics take the symbols of `doc`.
+fn object_surface(
+    doc: Option<&Document>,
+    n: &Node,
+    path: &PathData,
+    fx: &Effect,
+    item: &AppearanceItem,
+    expand: bool,
+    copies: &mut Copies,
+) -> Option<Node> {
     let b = path.bounds()?;
     let (paint, opacity, blend) = paint_of(item);
-    surface(n, path, b, fx_options(fx), fx, paint, opacity, blend, expand, copies).map(|(_, art)| art)
+    surface(doc, n, path, b, fx_options(fx), fx, paint, opacity, blend, expand, copies).map(|(_, art)| art)
+}
+
+/// The paint of a graphic's solid color `c` on `face`, shaded as the face shades a solid fill of
+/// that color: across the face with its smooth shading, under colored lights (`colored`) with
+/// their color.
+fn graphic_paint(face: &vectorcraft_three_d::Face, c: Color, colored: bool) -> Paint {
+    if colored {
+        return face
+            .light_gradient
+            .map_or_else(|| Paint::solid(crate::lighting::shade(c, face.illumination)), |g| crate::lighting::smooth_paint(g, c));
+    }
+    let [r, g, b] = c.to_rgb();
+    let color = |s: f64| Color::rgb(r * s as f32, g * s as f32, b * s as f32);
+    face.gradient.map_or_else(|| Paint::solid(color(face.brightness)), |g| shading_paint(g, color, |_| 1.0))
 }
 
 fn shading_paint(g: vectorcraft_three_d::ShadeGradient, color: impl Fn(f64) -> Color, opacity: impl Fn(f64) -> f32) -> Paint {
@@ -507,6 +630,60 @@ pub(crate) fn revolve_meshes(n: &Node, total: &mut usize, limit: usize) -> Resul
     Ok(out)
 }
 
+/// The outline of every face [`revolve_art`] draws for `n`'s Revolve or Revolve (Classic) (its symbol
+/// instances, blends and clipping groups already resolved), in document coordinates: with the
+/// effect on the object, the surface in its top visible fill (else its stroke); with it on fills and strokes, one surface for each of
+/// them, reshaped by the geometry effects after each one's Revolve; on a group or layer, one for
+/// each member, about one shared axis. The swatches and patterns named by a live-effect plug-in
+/// after a fill's or stroke's Revolve are looked up in `doc`.
+pub(crate) fn revolve_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec<PathData>, String> {
+    let faces = |path: &PathData, b: Rect, options: Revolve| -> Result<Vec<PathData>, String> {
+        Ok(vectorcraft_three_d::revolve(path, b, options)?.iter().map(vectorcraft_three_d::Face::path).collect())
+    };
+    if is_container(n) {
+        let index = n
+            .appearance
+            .effects
+            .iter()
+            .position(|e| e.visible && is_revolve(&e.id))
+            .ok_or("a 3D effect on a group's fill or stroke draws nothing")?;
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let mut shapes = members(n, "Revolve")?;
+        reshape_members(n, n.appearance.effects.get(..index).unwrap_or_default(), &mut shapes);
+        let b = union_bounds(&shapes).ok_or("Revolve requires a group holding a shape with at least two anchors")?;
+        let options = shared_options(&shapes, fx_options(fx))?;
+        let mut out = vec![];
+        for s in shapes.iter().filter(|s| surface_item(&s.items).is_some()) {
+            out.extend(faces(&s.path, b, options)?);
+        }
+        return Ok(out);
+    }
+    let (path, _) = object_profile(n, "Revolve")?;
+    let ctx = GeomContext::of(n);
+    if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
+        let Some(fx) = n.appearance.effects.get(index) else { return Ok(vec![]) };
+        let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
+        if surface_item(&solid_paints(n)).is_none() {
+            return Err("the revolved object has no fill or stroke".into());
+        }
+        let b = path.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
+        return faces(&path, b, fx_options(fx));
+    }
+    let path = geometry(&path, &n.appearance.effects, &ctx);
+    let mut out = vec![];
+    for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
+        if let Some(index) = item.effects().iter().position(|e| e.visible && is_revolve(&e.id))
+            && let Some(fx) = item.effects().get(index)
+        {
+            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+            let b = p.bounds().ok_or("Revolve requires a shape with at least two anchors")?;
+            let surface = faces(&p, b, fx_options(fx))?;
+            out.extend(crate::solids::wireframe::reshaped(surface, item.effects().get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..ctx }));
+        }
+    }
+    Ok(out)
+}
+
 /// [`revolve_meshes`] of group or layer `n`: one mesh for each member, about one shared axis.
 fn group_meshes(n: &Node, total: &mut usize, limit: usize) -> Result<Vec<crate::SolidMesh>, String> {
     let index = n
@@ -536,12 +713,12 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     }
     let n = &*resolve_for(doc, n, "Revolve", false).ok()?;
     if is_container(n) {
-        return group_art(n, expand);
+        return group_art(doc, n, expand);
     }
-    let (path, _) = profile(n)?;
+    let (path, rule) = profile(n)?;
     let ctx = GeomContext::of(n);
     let mut children = vec![];
-    let mut copies = 0;
+    let mut copies = Copies::default();
     let mut remaining = n.appearance.effects.clone();
     if let Some(index) = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id)) {
         let fx = n.appearance.effects.get(index)?;
@@ -550,7 +727,7 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         let paints = solid_paints(n);
         let item = surface_item(&paints)?;
         let expand = expand && !n.appearance.effects.iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-        let surface = object_surface(n, &path, fx, item, expand, &mut copies)?;
+        let surface = object_surface(doc, n, &path, fx, item, expand, &mut copies)?;
         if let Some(b) = path.bounds()
             && let Some(shadow) = shadow_of(n.id, fx, &path, item, b, fx_options(fx)).ok()?
         {
@@ -558,25 +735,25 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
         }
         children.push(Arc::new(surface));
         // Later geometry acts on the projected art as a whole through container evaluation.
-        remaining = n
-            .appearance
-            .effects
-            .iter()
-            .enumerate()
-            .filter(|(i, e)| !is_revolve(&e.id) && (!is_geometry(&e.id) || *i > index))
-            .map(|(_, e)| e.clone())
-            .collect();
+        remaining = past_effect(&n.appearance.effects, index);
+        remaining.retain(|e| !is_revolve(&e.id));
     } else {
         let path = geometry(&path, &n.appearance.effects, &ctx);
-        remaining.retain(|e| !is_geometry(&e.id));
+        remaining = crate::without_geometry(&remaining);
+        // The object's Transform effects, applied to the path above, transform the items' raster
+        // effects too. Each copy keeps its item beside it, which plug-in effects are told they sit
+        // on.
+        let originals: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| crate::paints(i)).collect();
+        let mut items: Vec<AppearanceItem> = originals.iter().map(|i| (*i).clone()).collect();
+        crate::raster::follow_paints(&mut items, &n.appearance.effects);
         // Every item's shadow goes behind every item's art.
         let mut shadows = vec![];
-        for item in n.appearance.items.iter().filter(|i| crate::paints(i)) {
+        for (original, item) in originals.into_iter().zip(&items) {
             if let Some(index) = item.effects().iter().position(|e| e.visible && is_revolve(&e.id)) {
                 let fx = item.effects().get(index)?;
-                let p = geometry(&path, item.effects().get(..index)?, &ctx.item(item));
+                let p = geometry(&path, item.effects().get(..index)?, &ctx.item(original));
                 let expand = expand && !item.effects().iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-                let mut art = object_surface(n, &p, fx, item, expand, &mut copies)?;
+                let mut art = object_surface(doc, n, &p, fx, item, expand, &mut copies)?;
                 art.appearance.effects = item.effects().iter().skip(index + 1).filter(|e| !is_revolve(&e.id)).cloned().collect();
                 if let Some(b) = p.bounds()
                     && let Some(mut shadow) = shadow_of(n.id, fx, &p, item, b, fx_options(fx)).ok()?
@@ -586,7 +763,8 @@ fn art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
                 }
                 children.push(Arc::new(art));
             } else {
-                children.push(Arc::new(Node::path(n.id, path.clone(), Appearance { items: vec![item.clone()], ..Default::default() })));
+                let flat = Appearance { items: vec![item.clone()], ..Default::default() };
+                children.push(Arc::new(crate::group::shape_node(n.id, path.clone(), rule, flat)));
             }
         }
         children.splice(0..0, shadows);
@@ -628,14 +806,14 @@ pub(crate) fn scoped<'a>(id: NodeId, surfaces: Vec<(&'a [Scope], Arc<Node>)>, le
 /// What a face can paint, to tell whether two faces overlap: the convex hull of the points and
 /// control points of its outline, which holds the outline, and the hull's box grown by half the
 /// seam stroke.
-struct Coverage {
-    bounds: Rect,
+pub(crate) struct Coverage {
+    pub(crate) bounds: Rect,
     hull: Vec<Point>,
 }
 
 impl Coverage {
     /// `None` for a face with no outline and no box.
-    fn of(face: &Node) -> Option<Coverage> {
+    pub(crate) fn of(face: &Node) -> Option<Coverage> {
         let points: Vec<Point> = match face.path_data() {
             Some(path) => path
                 .to_bezpath()
@@ -663,7 +841,7 @@ impl Coverage {
     /// Do the two faces' hulls, each grown by half the seam stroke, overlap? A test of the
     /// separating axes of their edges and of the page's axes: `true` whenever they overlap, and
     /// sometimes near a corner when they don't.
-    fn meets(&self, other: &Coverage) -> bool {
+    pub(crate) fn meets(&self, other: &Coverage) -> bool {
         fn normals(hull: &[Point]) -> impl Iterator<Item = Vec2> + '_ {
             (0..hull.len()).filter_map(|i| {
                 let (a, b) = (hull.get(i)?, hull.get((i + 1) % hull.len())?);
@@ -710,14 +888,14 @@ fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
 }
 
 /// Do boxes `a` and `b` overlap with some area?
-fn overlaps(a: Rect, b: Rect) -> bool {
+pub(crate) fn overlaps(a: Rect, b: Rect) -> bool {
     a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
 }
 
 /// [`art`] of group or layer `n`: every member swept about one axis on the bounds of all of them,
 /// each in its own paint. Every member's faces are drawn in one back-to-front order. `None` when
 /// the effect is only on the group's own fills or strokes or when its members can't be revolved.
-fn group_art(n: &Node, expand: bool) -> Option<Node> {
+fn group_art(doc: Option<&Document>, n: &Node, expand: bool) -> Option<Node> {
     let index = n.appearance.effects.iter().position(|e| e.visible && is_revolve(&e.id))?;
     let fx = n.appearance.effects.get(index)?;
     let mut shapes = members(n, "").ok()?;
@@ -725,17 +903,22 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
     let b = union_bounds(&shapes)?;
     let options = shared_options(&shapes, fx_options(fx)).ok()?;
     let expand = expand && !n.appearance.effects.iter().skip(index + 1).any(|e| e.visible && is_geometry(&e.id));
-    let mut copies = 0;
+    let mut copies = Copies::default();
     let mut surfaces = vec![];
     let mut opaque = true;
-    for s in &shapes {
+    // The graphics go once, on the side of the member with the longest profile. Without graphics
+    // no member is measured for them.
+    let mapped = fx.id == REVOLVE && !crate::solids::mapped_graphics(&merged_params(&fx.id, &fx.params)).is_empty();
+    let longest = if mapped { graphics_member(&shapes, b, options) } else { None };
+    for (k, s) in shapes.iter().enumerate() {
         let Some(item) = surface_item(&s.items) else { continue };
         // The opacity and blending of the member and the groups it is in apply through its scopes.
         let (paint, opacity, blend) = paint_of(item);
         opaque &= opacity >= 1.0 && blend == Default::default() && s.scopes.is_empty();
         // A member with transparency of its own keeps every face, as a transparent object does.
         let expand = expand && s.scopes.is_empty();
-        let (depths, art) = surface(n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies)?;
+        let doc = doc.filter(|_| longest == Some(k));
+        let (depths, art) = surface(doc, n, &s.path, b, options, fx, paint, opacity, blend, expand, &mut copies)?;
         surfaces.push((depths, art, s.scopes.as_slice()));
     }
     if surfaces.is_empty() {
@@ -835,8 +1018,7 @@ fn group_art(n: &Node, expand: bool) -> Option<Node> {
     // One shadow for every member's surface, behind them all.
     let mut children = children;
     children.splice(0..0, group_shadow(n.id, fx, &shapes, b, options).ok()?);
-    let remaining =
-        n.appearance.effects.iter().enumerate().filter(|(i, e)| *i != index && (!is_geometry(&e.id) || *i > index)).map(|(_, e)| e.clone()).collect();
+    let remaining = past_effect(&n.appearance.effects, index);
     let mut art = n.clone();
     art.kind = NodeKind::Group { children, clip: false };
     art.appearance = Appearance { effects: remaining, ..Default::default() }.into();
@@ -967,6 +1149,52 @@ mod tests {
         let surface = &a.children().unwrap()[0];
         assert_eq!(surface.opacity, 0.4);
         assert!(surface.children().unwrap().iter().all(|c| c.opacity == 1.0 && !has_revolve(c)));
+    }
+    #[test]
+    fn a_fill_without_the_revolve_keeps_the_even_odd_hole() {
+        use vectorcraft_geom::FillRule;
+        use vectorcraft_geom::hit::fill_contains;
+        // Two nested squares drawn in the same direction: only the even-odd rule leaves a hole.
+        let [outer, inner] = [(100.0, 200.0), (130.0, 170.0)].map(|(lo, hi)| {
+            let mut b = BezPath::new();
+            b.move_to((lo, lo));
+            b.line_to((hi, lo));
+            b.line_to((hi, hi));
+            b.line_to((lo, hi));
+            b.close_path();
+            PathData::from_bezpath(&b)
+        });
+        let flat = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.1, 0.3, 0.9))));
+        for id in [REVOLVE, CLASSIC_REVOLVE] {
+            let mut top = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.8, 0.2, 0.1))));
+            top.effects_mut().push(crate::new_effect(id, &json!({})).unwrap());
+            let appearance = Appearance { items: vec![flat.clone(), top], ..Default::default() };
+            let members = vec![
+                Arc::new(Node::path(NodeId(2), outer.clone(), Appearance::default())),
+                Arc::new(Node::path(NodeId(3), inner.clone(), Appearance::default())),
+            ];
+            let mut compound = Node::new(NodeId(1), NodeKind::Compound { children: members, rule: FillRule::EvenOdd });
+            compound.appearance = appearance.clone().into();
+            let both = PathData::new(outer.subpaths.iter().chain(&inner.subpaths).cloned().collect());
+            let path = crate::group::shape_node(NodeId(1), both, FillRule::EvenOdd, appearance);
+            for (n, shape) in [(compound, "compound path"), (path, "path")] {
+                for (art, how) in [(revolve_art(&n), "live"), (expand_revolve_art(&n), "expanded")] {
+                    let what = format!("{id} on the top fill of a {shape}, {how}");
+                    let art = art.unwrap_or_else(|| panic!("{what}"));
+                    let children = art.children().unwrap();
+                    let plain: Vec<usize> = (0..children.len())
+                        .filter(|&i| children[i].appearance.items == [flat.clone()] && children[i].path_data().is_some())
+                        .collect();
+                    let [index] = plain[..] else { panic!("{what}: one flat child, got {plain:?}") };
+                    let NodeKind::Path { path, rule, .. } = &children[index].kind else { panic!("{what}: a path") };
+                    assert_eq!(*rule, FillRule::EvenOdd, "{what}");
+                    let bez = path.to_bezpath();
+                    assert!(fill_contains(&bez, *rule, Point::new(110.0, 150.0)), "{what}: the ring is filled");
+                    assert!(!fill_contains(&bez, *rule, Point::new(150.0, 150.0)), "{what}: the hole stays open");
+                    assert!(index + 1 < children.len(), "{what}: the revolved art is drawn above");
+                }
+            }
+        }
     }
     #[test]
     fn export_bakes_faces_with_unique_ids_and_no_revolve_effects() {
@@ -1249,7 +1477,7 @@ mod tests {
         group.appearance = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).into();
         for id in [REVOLVE, crate::EXTRUDE] {
             assert!(crate::validate_three_d(&group, id, &json!({})).is_ok(), "{id} on the group itself");
-            let refused = crate::validate_three_d_at(&group, id, &json!({}), Some((0, 0))).unwrap_err();
+            let refused = crate::validate_three_d_at(&group, id, &json!({}), (Some(0), 0)).unwrap_err();
             assert!(refused.contains("on the group itself"), "{id}: {refused}");
         }
     }
@@ -1415,3 +1643,7 @@ mod tests {
         assert_eq!(expand_revolve_art(&sample), revolve_art(&sample));
     }
 }
+
+#[cfg(test)]
+#[path = "revolve/tests_graphics.rs"]
+mod tests_graphics;

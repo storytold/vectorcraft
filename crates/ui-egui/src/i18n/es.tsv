@@ -629,6 +629,8 @@ font-technology	Variable	Variables
 	Convert to Artboards	Convertir en mesas de trabajo
 	Convert to CMYK	Convertir a CMYK
 	Convert to Grayscale	Convertir a escala de grises
+	Convert to Indexed Color	Convertir a color indexado
+	Convert to Indexed Color…	Convertir a color indexado…
 	Convert To Outlines	Convertir en contornos
 	Convert To Point Type	Convertir en texto de punto
 	Convert to RGB	Convertir a RGB
@@ -710,6 +712,10 @@ font-technology	Variable	Variables
 	Corner Color	Color de las esquinas
 	Contiguous	Contiguo
 	Each Channel	Cada canal
+	Color Mask…	Máscara de color…
+	Color Mask	Máscara de color
+	Remove Color Mask	Quitar máscara de color
+	Apply Color Mask	Aplicar máscara de color
 	Edit Path	Editar trazado
 	Mask	Máscara
 	Crop Marks	Marcas de corte
@@ -808,6 +814,8 @@ font-technology	Variable	Variables
 	Delete Width Point	Eliminar punto de anchura
 	Delete Workspace	Eliminar espacio de trabajo
 	Delete {kind} Style	Eliminar estilo de {kind}
+	Delete the selected items and their artwork?	¿Eliminar los elementos seleccionados y su ilustración?
+	Delete this layer and its artwork?	¿Eliminar esta capa y su ilustración?
 	Delete “{name}”?	¿Eliminar “{name}”?
 	Depth:	Profundidad:
 	Description	Descripción
@@ -894,6 +902,17 @@ font-technology	Variable	Variables
 	The selected character's font is not available.	La fuente del carácter seleccionado no está disponible.
 	No alternates for the selected character.	No hay alternativas para el carácter seleccionado.
 	Double-click to replace	Doble clic para reemplazar
+	Select one character with the Type tool first.	Primero selecciona un carácter con la herramienta Texto.
+	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} es un glifo de {font}, no de la fuente del texto seleccionado ({text_font}).
+	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertenece a {base} (U+{base_code}) {place}; tu selección es {sel} (U+{code}).
+	at the start of a word	al principio de una palabra
+	in the middle of a word	en medio de una palabra
+	at the end of a word	al final de una palabra
+	standing alone	cuando está solo
+	{glyph} is not an alternate of {sel} (U+{code}) as it stands in its word.	{glyph} no es una alternativa de {sel} (U+{code}) tal como está en su palabra.
+	Double-click to insert {base} (U+{code}) instead: a presentation form does not join, the letter does.	Doble clic para insertar {base} (U+{code}) en su lugar: una forma de presentación no se une, la letra sí.
+	Inserted {base} (U+{code}) instead of a presentation form: the font joins it to its neighbors by position.	Se insertó {base} (U+{code}) en lugar de una forma de presentación: la fuente la une a sus vecinas según la posición.
+	No OpenType feature draws this glyph here, so it replaces the character's glyph and may not join its neighbors.	Ninguna función OpenType dibuja este glifo aquí, así que sustituye el glifo del carácter y puede que no se una a los caracteres vecinos.
 	Double-click to insert	Doble clic para insertar
 	Double-click to rename	Doble clic para cambiar el nombre
 	Double-click to target the contents	Doble clic para seleccionar el contenido como destino
@@ -1017,12 +1036,14 @@ font-technology	Variable	Variables
 	Enable Contextual Task Bar	Activar barra de tareas contextual
 	Enable copying of text, images and other content	Permitir copiar texto, imágenes y otro contenido
 	Enable in-menu font previews	Activar vista previa de fuentes en el menú
+	Show samples on white	Mostrar muestras sobre blanco
 	Enable Missing Glyph Protection	Activar protección de glifos ausentes
 	Enable Opacity Mask	Activar máscara de opacidad
 	Enable plaintext metadata	Activar metadatos en texto sin formato
 	Enable Rubber Band for	Activar banda elástica para
 	Enable text access for screen readers	Permitir el acceso al texto para lectores de pantalla
 	Enable Touch Gestures	Activar gestos táctiles
+	Switch Selection and Drawing Modes	Cambiar entre modos de selección y dibujo
 	Enable Touch Workspace	Activar espacio de trabajo táctil
 	Encoding	Codificación
 	Encoding:	Codificación:
@@ -1573,6 +1594,8 @@ font-technology	Variable	Variables
 	Objects on Path Tool	Herramienta Objetos en trazado
 	Attach Objects on Path	Adjuntar objetos al trazado
 	Expand Objects on Path	Expandir objetos en trazado
+	Detach	Separar
+	Detach Object from Path	Separar objeto del trazado
 	Release Live Paint	Soltar pintura interactiva
 	Release Repeat	Soltar repetición
 	Release Slice	Soltar sector
@@ -1678,6 +1701,7 @@ font-technology	Variable	Variables
 	Include Hidden Layers	Incluir capas ocultas
 	Include Linked Files	Incluir archivos vinculados
 	Include Metadata	Incluir metadatos
+	Include Variable Data	Incluir datos de variables
 	Include non-printing layers	Incluir capas no imprimibles
 	Write pages longer than 200 in at full size in points	Escribir las páginas de más de 200 in a tamaño real, en puntos
 	Include SVG Code	Incluir código SVG
@@ -1994,6 +2018,8 @@ font-technology	Variable	Variables
 	Metallic Gradients	Degradados metálicos
 	Meters	Metros
 	Method:	Método:
+	Pad	Prolongar
+	Repeats	Repeticiones
 	Millimeters	Milímetros
 	Minify	Minificar
 	Minimal	Mínimo
@@ -2023,6 +2049,10 @@ font-technology	Variable	Variables
 	Long	Larga
 	Stylistic	Estilística
 	Mojikumi Set	Conjunto de mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Conjunto de kinsoku
 	Kinsoku Shori Type	Tipo de kinsoku shori
 	Push In First	Primero hacia dentro
@@ -2061,6 +2091,7 @@ font-technology	Variable	Variables
 	Move Slices	Mover sectores
 	Move Spine Point	Mover punto del eje
 	Reshape Spine Segment	Remodelar segmento del eje
+	Blend Easing	Suavizado de fusión
 	Move Brush	Mover pincel
 	Move Swatch	Mover muestra
 	Move Up	Subir
@@ -2160,6 +2191,30 @@ font-technology	Variable	Variables
 	Art Brush	Pincel de arte
 	Bristle Brush	Pincel de cerdas
 	Pattern Brush	Pincel de motivo
+	missing from the Brushes panel	falta en el panel Pinceles
+	built in	integrada
+	embedding not allowed	incrustación no permitida
+	embedding for editing	incrustación para edición
+	embedding for preview and print	incrustación para vista previa e impresión
+	embedding allowed	incrustación permitida
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	sustituida: se muestra con {family} {style} ({detail})
+	missing: shown in {family} {style}	falta: se muestra con {family} {style}
+	missing	falta
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Degradado lineal
+	Radial gradient	Degradado radial
+	Conic gradient	Degradado cónico
+	Diamond gradient	Degradado de rombo
+	Freeform gradient	Degradado libre
+@plural	{n} instance|{n} instances	{n} instancia|{n} instancias
+@plural	{n} row|{n} rows	{n} fila|{n} filas
+@plural	{n} column|{n} columns	{n} columna|{n} columnas
 	Select art to make a scatter, art or pattern brush.	Selecciona una ilustración para crear un pincel de dispersión, de arte o de motivo.
 	Brush Art	Ilustración del pincel
 	New Calligraphic Brush	Nuevo pincel caligráfico
@@ -2256,6 +2311,8 @@ font-technology	Variable	Variables
 	Normal Screen Mode	Modo de pantalla normal
 	Note:	Nota:
 	Nothing matches the Show filter.	Nada coincide con el filtro Mostrar.
+	Show DCS Transparency Interactions	Mostrar interacciones de transparencia DCS
+	Transparent, or overlaps transparent objects: check its separations	Transparente o superpuesto a objetos transparentes: compruebe sus separaciones
 	Nothing to print	No hay nada para imprimir
 	Nudge	Desplazar
 	Nudge in Perspective	Desplazar en perspectiva
@@ -2360,6 +2417,10 @@ font-technology	Variable	Variables
 	Arch	Bóveda
 @msg	select point type or type on a path	seleccione texto de punto o texto en trazado
 @msg	type on a path in a thread cannot use Dynamic Text: {frames}	el texto en trazado de un texto enlazado no puede usar texto dinámico: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	el texto en un trazado abierto o compuesto no se puede centrar arriba o abajo: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	el texto en un trazado sin longitud o sin altura no se puede centrar: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	el texto en trazado de un texto enlazado no se puede centrar arriba o abajo: {frames}
+@msg	select type on a closed path	seleccione texto en un trazado cerrado
 	Optimize for fast web view	Optimizar para vista web rápida
 	Optimized	Optimizado
 	Options	Opciones
@@ -2601,6 +2662,8 @@ font-technology	Variable	Variables
 	Proof Setup	Ajuste de prueba
 	Properties	Propiedades
 	Proportional Metrics	Métrica proporcional
+	Insert Aki Left	Insertar aki a la izquierda
+	Insert Aki Right	Insertar aki a la derecha
 	Character Direction	Dirección de caracteres
 	Digits	Dígitos
 	Arabic	Árabes
@@ -2663,6 +2726,11 @@ digits	Malayalam	Malayálam
 	Rating:	Clasificación:
 	Real World:	Mundo real:
 	Real-time Drawing and Editing	Dibujo y edición en tiempo real
+	Use Monitor Profile for Canvas	Usar perfil del monitor para el lienzo
+	The canvas is drawn in sRGB.	El lienzo se dibuja en sRGB.
+	Canvas display profile:	Perfil de pantalla del lienzo:
+	The system matches the window to the display's colors.	El sistema ajusta la ventana a los colores de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No se encontró ningún perfil de pantalla utilizable: el lienzo se dibuja en sRGB.
 	Rearrange All Artboards	Reorganizar todas las mesas de trabajo
 	Rearrange	Reorganizar
 	Select All Artboards	Seleccionar todas las mesas de trabajo
@@ -2867,9 +2935,18 @@ digits	Malayalam	Malayálam
 	Search Preferences	Buscar en preferencias
 	No settings found	No se encontraron ajustes
 	Reset Profiles	Restablecer perfiles
+	Arrowheads	Puntas de flecha
+	Edit Arrowheads	Editar puntas de flecha
+	Edit Arrowheads…	Editar puntas de flecha…
+	Reload Arrowheads	Volver a cargar puntas de flecha
 	Reset Rotate View	Restablecer rotación de vista
 	Rotate View to Selection	Rotar vista según la selección
 	Reset the rows to the artwork's colors	Restablecer las filas a los colores de la ilustración
+	Color Theme Picker	Selector de tema de color
+	Click or drag across the art to pick its colors; Shift adds more	Haga clic o arrastre sobre la ilustración para tomar sus colores; Mayús añade más
+	Prominent Colors	Colores destacados
+	Save All Colors	Guardar todos los colores
+	Save Prominent Colors	Guardar colores destacados
 	Reset to Default	Restablecer valores predeterminados
 	Reset to White, Black	Restablecer a blanco, negro
 	Reset with Mesh	Restablecer con malla
@@ -2918,6 +2995,7 @@ digits	Malayalam	Malayálam
 	Roman Baseline	Línea de base latina
 	Roman Hanging Punctuation	Puntuación colgante romana
 	Korean Line Break Anywhere	Salto de línea coreano en cualquier lugar
+	Bunri-Kinshi	Bunri-Kinshi
 	East Asian Composition Settings	Ajustes de composición de Asia oriental
 	Korean Composition Settings	Ajustes de composición coreana
 	Rotate	Rotar
@@ -2926,6 +3004,7 @@ digits	Malayalam	Malayálam
 	Rotate View Tool	Herramienta Rotar vista
 	Trackpad Gesture to Rotate View	Rotar vista con un gesto del trackpad
 	Hold a Tool Shortcut to Use the Tool Temporarily	Mantener pulsado el atajo de una herramienta para usarla temporalmente
+	Show Bounding Box While Moving and Drawing	Mostrar cuadro delimitador al mover y dibujar
 	Rotate…	Rotar…
 	Rotation	Rotación
 	Roughen…	Hacer áspero…
@@ -3275,6 +3354,7 @@ digits	Malayalam	Malayálam
 	Show Note	Mostrar nota
 	Show Options	Mostrar opciones
 	Show Recent Colors	Mostrar colores recientes
+	Toggle RGB Percent	Alternar RGB en porcentaje
 	Show Original Path	Mostrar trazado original
 	Open this dialog with these settings next time	Abrir este cuadro de diálogo con estos ajustes la próxima vez
 	Auto-Simplify	Simplificar automáticamente
@@ -3414,6 +3494,22 @@ digits	Malayalam	Malayálam
 	Split Path	Dividir trazado
 	spot	plana
 	Spot Color	Tinta plana
+	Spot Color Objects	Objetos con tintas planas
+	Pattern Objects	Objetos con motivos
+	Gradient Objects	Objetos con degradados
+	Font Details	Detalles de fuentes
+	Linked Images	Imágenes vinculadas
+	Embedded Images	Imágenes incrustadas
+	Compound Paths	Trazados compuestos
+	Text Objects	Objetos de texto
+	Placed Documents	Documentos colocados
+	Symbol Instances	Instancias de símbolo
+	Gradient Meshes	Mallas de degradado
+	Blends	Fusiones
+	Envelopes	Envolventes
+	Intertwine Groups	Grupos entrelazados
+	Opacity Masks	Máscaras de opacidad
+	Objects with Effects	Objetos con efectos
 	Spot Colors	Tintas planas
 	Spot Colors…	Tintas planas…
 	Spread:	Extensión:
@@ -3535,6 +3631,8 @@ digits	Malayalam	Malayálam
 	Rename Library Group	Cambiar nombre del grupo de biblioteca
 	Delete Library Group	Eliminar grupo de biblioteca
 	Move Library Item to Group	Mover elemento de la biblioteca al grupo
+	Rename Library Item	Cambiar nombre del elemento de la biblioteca
+	Add to Character Styles	Agregar a estilos de carácter
 	Library	Biblioteca
 	Rename Library	Cambiar nombre de la biblioteca
 	Show Library	Mostrar biblioteca
@@ -3568,6 +3666,11 @@ digits	Malayalam	Malayálam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ajustes de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ajustes de Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Ajustes de Warichu…
+	Warichu Settings	Ajustes de Warichu
+	Lines:	Líneas:
+	Line Gap:	Separación entre líneas:
 	Composite Fonts…	Fuentes compuestas…
 	Composite Fonts	Fuentes compuestas
 	Export Composite Fonts	Exportar fuentes compuestas
@@ -3723,6 +3826,8 @@ digits	Malayalam	Malayálam
 	Type on a Path	Texto en trazado
 	Type on a Path Options	Opciones de texto en trazado
 	Type on a Path Options…	Opciones de texto en trazado…
+	Center on Top	Centrar arriba
+	Center on Bottom	Centrar abajo
 	Type on a Path Tool	Herramienta Texto en trazado
 	Type Orientation	Orientación del texto
 	Type stays text, and every stroke is a line with its lineweight and dashes.	El texto sigue siendo texto, y cada trazo es una línea con su grosor y guiones.
@@ -4100,6 +4205,10 @@ axis	Both	Ambos
 	Dock Panel	Anclar panel
 	Dock to Top	Anclar arriba
 	Dock to Bottom	Anclar abajo
+	Dock to Left	Anclar a la izquierda
+	Dock to Right	Anclar a la derecha
+	Dock Toolbar	Anclar barra de herramientas
+	Float Toolbar	Hacer flotar la barra de herramientas
 	Control Bar Options	Opciones de la barra de control
 	Tool Options	Opciones de herramienta
 	Object Options	Opciones de objeto
@@ -4117,6 +4226,7 @@ axis	Both	Ambos
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	no hay ninguna biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	la biblioteca ya tiene otro elemento de ese tipo llamado `{name}`
 @msg	select some type first	selecciona primero algún texto
 @msg	kerning must be a number, "auto", or "optical"	kerning debe ser un número, «auto» u «optical»
 @msg	the selection has no gradient fill	la selección no tiene un degradado de relleno
@@ -4180,6 +4290,85 @@ axis	Both	Ambos
 @msg	the script's run is no longer available	la ejecución del script ya no está disponible
 @msg	a failed command changed undo steps that could not be put back, so the script was stopped	un comando fallido cambió pasos de deshacer que no se pudieron restaurar, así que el script se detuvo
 @msg	a recovery copy could not be written, so the script was not run	no se pudo escribir una copia de recuperación, así que el script no se ejecutó
+@msg	Script file access denied	Acceso denegado al archivo de script
+@msg	Script file exceeds 8 MiB	El archivo de script supera los 8 MiB
+@msg	Script file is not open	El archivo de script no está abierto
+@msg	Script file cannot be decoded	No se puede descodificar el archivo de script
+@msg	Script file is not a regular file	El archivo de script no es un archivo normal
+@msg	Script file does not exist	El archivo de script no existe
+@msg	Script file could not be read	No se pudo leer el archivo de script
+@msg	Script folder has more than 2,048 entries	La carpeta de script tiene más de 2048 entradas
+@msg	Script file open mode must be r, w, e or a	El modo de apertura del archivo de script debe ser r, w, e o a
+@msg	Script file writing is not available	La escritura de archivos de script no está disponible
+@msg	Script file dialogs are not available	Los cuadros de diálogo de archivos de script no están disponibles
+@msg	Script files cannot be opened in another application	Los archivos de script no se pueden abrir en otra aplicación
+@msg	Script file access is unavailable on the web	El acceso a archivos de script no está disponible en la web
+@msg	Script has 256 files open	El script tiene 256 archivos abiertos
+@msg	Script file path exceeds 32,767 characters	La ruta del archivo de script supera los 32 767 caracteres
+@msg	Script folder mask takes too many steps to match	La máscara de carpeta de script requiere demasiados pasos para coincidir
+@msg	the script opened more file data than one run may open (32 MiB)	el script abrió más datos de archivo de los que puede abrir una ejecución (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: recibe una posición y un modo
+@msg	vc.run: give a command id, as a string	vc.run: indique un id de comando, como cadena
+@msg	vc.run: takes a command id and an object of parameters	vc.run: recibe un id de comando y un objeto de parámetros
+@msg	vc.run: the parameters must be an object	vc.run: los parámetros deben ser un objeto
+@msg	vc.run: the result{place} is too large for a script	vc.run: el resultado{place} es demasiado grande para un script
+@msg	$.evalFile requires a file path	$.evalFile requiere una ruta de archivo
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: el tiempo de espera debe ser un número finito de milisegundos, 0 o más
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: recibe una ruta de archivo y un tiempo de espera
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: línea {line}, columna {column} de {file}: {e} (lanzado)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: línea {line}, columna {column}: {e} (lanzado)
+@msg	{name}: {e} (thrown)	{name}: {e} (lanzado)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: línea {line}, columna {column} de {file}: {e} (límite)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: línea {line}, columna {column}: {e} (límite)
+@msg	{name}: {e} (limit)	{name}: {e} (límite)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: línea {line}, columna {column} de {file}: {e} (error de sintaxis)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: línea {line}, columna {column}: {e} (error de sintaxis)
+@msg	{name}: {e} (syntax)	{name}: {e} (error de sintaxis)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: línea {line}, columna {column} de {file}: {e} (detenido)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: línea {line}, columna {column}: {e} (detenido)
+@msg	{name}: {e} (stopped)	{name}: {e} (detenido)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: línea {line}, columna {column} de {file}: {e} (error interno)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: línea {line}, columna {column}: {e} (error interno)
+@msg	{name}: {e} (internal)	{name}: {e} (error interno)
+@msg	{e} (these files stay written: {paths})	{e} (estos archivos quedan escritos: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: indique un nombre, como cadena
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: indique una configuración regional como "en" o "de_DE", o null para la de la interfaz
+@msg	$.localize: give true or false	$.localize: indique true o false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: solo se puede establecer 512, que activa la localización, o 0
+@msg	$.flags: give a number	$.flags: indique un número
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: aquí los scripts solo leen y escriben UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: indique el nombre de una codificación, como cadena
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: no se puede establecer el tamaño de la caché de memoria
+@msg	$.setenv: give a value, as a string	$.setenv: indique un valor, como cadena
+@msg	$.setenv: only {_1} can be set	$.setenv: solo se pueden establecer {_1}
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: un valor tiene como máximo {MAX_ENV_BYTES} letras, dígitos y _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: indique un número de milisegundos de 0 a {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: indique un número de milisegundos
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: una ejecución no puede esperar dentro de una devolución de llamada de una función integrada, un getter, una conversión o un archivo que ejecuta $.evalFile; llámelo desde el propio código del script
+@msg	$.bp: scripts here have no debugger	$.bp: aquí los scripts no tienen depurador
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: los scripts aún no pueden mostrar un cuadro de diálogo
+@msg	{name}: give a message	{name}: indique un mensaje
+@msg	{name}: give the text the field starts with	{name}: indique el texto con el que empieza el campo
+@msg	{name}: the message is longer than 16 KiB	{name}: el mensaje ocupa más de 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: el título ocupa más de 256 bytes
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: el texto con el que empieza el campo ocupa más de 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: un cuadro de diálogo no puede abrirse dentro de una devolución de llamada de una función integrada, un getter, una conversión o un archivo que ejecuta $.evalFile; llámelo desde el propio código del script
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la siguiente respuesta de `answers` es para {_1}, no para {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: a `answers` no le quedan respuestas para este cuadro de diálogo
+@msg	vc.document{place} is too large for a script	vc.document{place} es demasiado grande para un script
+@msg	vc.log: the log of this run is full	vc.log: el registro de esta ejecución está lleno
+@msg	this function's script run has ended	la ejecución del script de esta función ha terminado
+@msg	the script made more host calls than one run may make	el script hizo más llamadas al anfitrión de las que puede hacer una ejecución
+@msg	the script passed more data to and from commands than one run may pass	el script pasó más datos a los comandos y desde ellos de los que puede pasar una ejecución
+@msg	the script added more objects and data to the documents than one run may add	el script añadió a los documentos más objetos y datos de los que puede añadir una ejecución
+@msg	{what}: the object is not a File or a Folder	{what}: el objeto no es un File ni un Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: la cantidad debe ser un número finito, 0 o más
+@msg	File.seek: the position must be a finite number	File.seek: la posición debe ser un número finito
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: el modo debe ser 0, 1 o 2
+@msg	script file is compiled: {value}	el archivo de script está compilado: {value}
+@msg	`name` must be the name of a script engine	`name` debe ser el nombre de un motor de scripts
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	el motor de scripts principal es nuevo en cada ejecución y nunca se conserva, por lo que no se puede descartar
+@msg	there is no script engine named {name}	no hay ningún motor de scripts llamado {name}
 @msg	Running a script	Ejecutando un script
 @msg	Copied the script report	Se copió el informe del script
 @msg	Corners edits the corners of a path	Esquinas edita las esquinas de un trazado
@@ -4187,8 +4376,15 @@ axis	Both	Ambos
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	No se pudo colocar {name}: se cerró el documento en el que se soltó
 @msg	Couldn't place {name}: the document it was placed in was closed	No se pudo colocar {name}: se cerró el documento en el que se estaba colocando
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No se pudo colocar {name}: se revirtió el documento en el que se soltó
+@msg	Couldn't place {name}: the document it was placed in was reverted	No se pudo colocar {name}: se revirtió el documento en el que se estaba colocando
+@msg	Couldn't paste: the document it was pasted in was reverted	No se pudo pegar: se revirtió el documento en el que se estaba pegando
 @msg	Couldn't read {name}: {e}	No se pudo leer {name}: {e}
 @msg	Couldn't save recovery data: {e}	No se pudieron guardar los datos de recuperación: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No se pudieron guardar los datos de recuperación de {title}: {e}. Las copias se guardan en {folder}, la carpeta de recuperación predeterminada; para usar otra carpeta, configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No se pudieron guardar los datos de recuperación de {title}: {e}. Las copias se guardan en {folder}, la carpeta definida en Preferencias; para usar otra carpeta, configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No se pudieron guardar los datos de recuperación: {e}. Las copias se guardan en {folder}, la carpeta de recuperación predeterminada; para usar otra carpeta, configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No se pudieron guardar los datos de recuperación: {e}. Las copias se guardan en {folder}, la carpeta definida en Preferencias; para usar otra carpeta, configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
 @msg	Create Outlines: select text objects	Crear contornos: selecciona objetos de texto
 @msg	Create from Guides: the document has no artboard	Crear a partir de guías: el documento no tiene mesa de trabajo
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Crear a partir de guías: las guías forman más de {MAX_PIECES} sectores
@@ -4198,6 +4394,7 @@ axis	Both	Ambos
 @msg	Plug-ins can't be loaded from {path}: {e}	No se pueden cargar plugins desde {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecciona con Selección directa los puntos de ancla en los que cortar (no los puntos finales de trazados abiertos)
 @msg	Divide Objects Below: select a path	Dividir objetos inferiores: selecciona un trazado
+@msg	select a path	selecciona un trazado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
 @msg	Downloaded {what}	Se descargó {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandir apariencia: la selección tiene una apariencia básica
@@ -4274,6 +4471,9 @@ axis	Both	Ambos
 @msg	`{keep}` is not a side of this axis	`{keep}` no es un lado de este eje
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` debe ser `auto` o un código de idioma como `en` o `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` debe ser un color #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` debe ser un color #rrggbb o el nombre de un color de capa
+@msg	unknown Live Paint option `{key}`	opción de pintura interactiva desconocida `{key}`
+@msg	unknown Shape Builder option `{key}`	opción del generador de formas desconocida `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` debe ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` debe ser un número
 @msg	`{key}` must be a number, not {v}	`{key}` debe ser un número, no {v}
@@ -4372,6 +4572,8 @@ axis	Both	Ambos
 @msg	the Smooth slider is not open	el regulador de Suavizar no está abierto
 @msg	the screen color sampler is already open	el muestreador de color de la pantalla ya está abierto
 @msg	this system has no screen color sampler	este sistema no tiene muestreador de color de la pantalla
+@msg	the screen color sampler did not answer	el muestreador de color de la pantalla no respondió
+@msg	the screen color sampler failed	el muestreador de color de la pantalla falló
 @msg	bad colour `{hex}` (#rrggbb)	color no válido `{hex}` (#rrggbb)
 @msg	bad page tree	árbol de páginas no válido
 @msg	bad shortcut	atajo no válido
@@ -4401,6 +4603,7 @@ axis	Both	Ambos
 @msg	colorTable.{what}: `{h}` is not a colour such as "#ff8800"	colorTable.{what}: `{h}` no es un color como "#ff8800"
 @msg	colorTable.{what}: at most {MAX_TABLE} colours	colorTable.{what}: como máximo {MAX_TABLE} colores
 @msg	command `{0}` is not available right now: {1}	el comando `{0}` no está disponible ahora: {1}
+@msg	command `{id}` is not available right now	el comando `{id}` no está disponible ahora
 @msg	compound paths can only contain paths	los trazados compuestos solo pueden contener trazados
 @msg	compressed (RLE) bitmaps can't be read yet	todavía no se pueden leer mapas de bits comprimidos (RLE)
 @msg	damaged	dañado
@@ -4430,6 +4633,7 @@ axis	Both	Ambos
 @msg	internal error: {msg} (please report this bug)	error interno: {msg} (por favor, informa de este error)
 @msg	invalid PDF setting: {0}	ajuste de PDF no válido: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): se escribe con un UserUnit de {unit}, así que las aplicaciones que ignoran UserUnit la muestran ese número de veces más pequeña
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): se escribe con un UserUnit de {unit}, así que las aplicaciones que ignoran UserUnit la muestran ese número de veces más pequeña: activa «Escribir las páginas de más de 200 in a tamaño real, en puntos»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): las páginas {label} se escriben sin UserUnit, en puntos, y las aplicaciones que respetan el límite recortan la página a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 no tiene UserUnit, que una página de más de 14.400 pt (200 in) necesita para conservar su tamaño: el archivo se escribe como PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 no tiene UserUnit, que una página de más de 14.400 pt (200 in) necesita para no superar el límite de página de PDF/A-2, de 14.400 unidades: el archivo se escribe como PDF 1.6
@@ -4582,6 +4786,7 @@ axis	Both	Ambos
 @msg	not a valid plug-in module: {0}	no es un módulo de plugin válido: {0}
 @msg	not an EMF or WMF file	no es un archivo EMF ni WMF
 @msg	not an HP-GL file	no es un archivo HP-GL
+@msg	not a PICT file	no es un archivo PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` debe ser una lista de 1 a 255 colores #rrggbb
 @msg	not found	no se encontró
 @msg	not in pattern editing mode	no está en el modo de edición de motivos
@@ -4612,6 +4817,7 @@ axis	Both	Ambos
 @msg	paths contain invalid coordinates	los trazados contienen coordenadas no válidas
 @msg	paths: give at least one file	paths: indica al menos un archivo
 @msg	replace: the object to replace was changed or deleted	replace: se modificó o eliminó el objeto que se iba a reemplazar
+@msg	the document it was prepared for is no longer active	el documento para el que se preparó ya no está activo
 @msg	pattern missing	falta el motivo
 @msg	patterns nested too deeply are filled with mid-grey	los motivos anidados a demasiada profundidad se rellenan de gris medio
 @msg	percent must be above 0 and at most 6400, not {p}	percent debe ser mayor que 0 y como máximo 6400, no {p}
@@ -4647,6 +4853,7 @@ axis	Both	Ambos
 @msg	select a repeat	selecciona una repetición
 @msg	select an Intertwine group	selecciona un grupo entrelazado
 @msg	select an Objects on Path group	selecciona un grupo de objetos en trazado
+@msg	choose the object to detach with its Select/Move widget	elige el objeto que quieres separar con su control Seleccionar/Mover
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un trazado dentro de un trazado compuesto, una fusión, una envolvente, una repetición o un grupo entrelazado no puede recibir objetos
 @msg	a clipping path can't take objects	un trazado de recorte no puede recibir objetos
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	los objetos dentro de una fusión, una envolvente, una repetición o un grupo entrelazado no se pueden adjuntar a un trazado
@@ -4670,6 +4877,10 @@ axis	Both	Ambos
 @msg	a CMYK image has no transparency to set	una imagen CMYK no tiene transparencia que establecer
 @msg	every pixel matches the background: no image would be left	todos los píxeles coinciden con el fondo: no quedaría ninguna imagen
 @msg	an image of {w} × {h} pixels is too large to change	una imagen de {w} × {h} píxeles es demasiado grande para cambiarla
+@msg	select an image with a color mask	selecciona una imagen con una máscara de color
+@msg	the color mask's settings are out of range	los ajustes de la máscara de color están fuera de rango
+@msg	a CMYK image can't take a color mask	una imagen CMYK no puede tener una máscara de color
+@msg	the mask would hide every pixel	la máscara ocultaría todos los píxeles
 @msg	select an object in perspective	selecciona un objeto en perspectiva
 @msg	select artwork (or a colour group) to recolor	selecciona la ilustración (o un grupo de colores) que quieres volver a colorear
 @msg	Recolor completed; {locked} and {hidden} were left unchanged	Recoloreado completado; sin cambios: {locked} y {hidden}
@@ -4781,6 +4992,7 @@ axis	Both	Ambos
 @msg	unknown option `{path}.{k}`	opción desconocida `{path}.{k}`
 @msg	unknown overprints `{o}` (preserve, simulate or discard)	sobreimpresiones desconocidas `{o}` (preserve, simulate o discard)
 @msg	unknown panel `{raw}`	panel desconocido `{raw}`
+@msg	panels can't be shown in Presentation Mode	los paneles no se pueden mostrar en el modo de presentación
 @msg	unknown preference `{key}`	preferencia desconocida `{key}`
 @msg	Preferences imported.	Preferencias importadas.
 @msg	not a preferences file: {e}	no es un archivo de preferencias: {e}
@@ -4862,6 +5074,7 @@ axis	Both	Ambos
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Se descartó {n} documento recuperado|Se descartaron {n} documentos recuperados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Se restauró {n} documento recuperado: guárdalo para conservarlo|Se restauraron {n} documentos recuperados: guárdalos para conservarlos
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Se abrió con {n} nota: {first}|Se abrió con {n} notas: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Se abrió con {n} nota: {first}|{notice}. Se abrió con {n} notas: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Se guardó {path} con {n} nota: {first}|Se guardó {path} con {n} notas: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Se incrustó {n} imagen; faltan {missing}: vuelve a vincularlas primero|Se incrustaron {n} imágenes; faltan {missing}: vuelve a vincularlas primero
 @msgplural	Embedded {n} image|Embedded {n} images	Se incrustó {n} imagen|Se incrustaron {n} imágenes
@@ -4941,6 +5154,8 @@ axis	Both	Ambos
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	una imagen incrustada de {_1} × {_2} píxeles se redujo a {_3} × {_4} píxeles para conservar las capas
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	las imágenes vinculadas muestran la vista previa de baja resolución guardada en el archivo hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
 @msg	linked type areas past VectorCraft's limits were left out	se omitieron las áreas de texto enlazadas que superan los límites de VectorCraft
+@msg	the Line Breaking setting of legacy type was left out	se omitió el ajuste de salto de línea del texto en formato antiguo
+@msg	the Japanese layout rules of legacy type were left out	se omitieron las reglas de composición japonesa del texto en formato antiguo
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	el texto que cambia de dirección de escritura dentro de un objeto de texto se abre en la dirección de su primer carácter
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el texto usado como máscara en áreas enlazadas, texto ceñido o un trazado compuesto no recorta
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	las imágenes vinculadas sin vista previa en el archivo muestran un marcador de posición hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
@@ -4959,12 +5174,14 @@ axis	Both	Ambos
 @msg	choose the font files to add	elige los archivos de fuentes que quieres agregar
 @msg	not a file	no es un archivo
 @msg	not a font file	no es un archivo de fuente
+@msg	the active document changed while the question was open; nothing was deleted	el documento activo cambió mientras la pregunta estaba abierta; no se eliminó nada
 @msg	that document is no longer open	ese documento ya no está abierto
 @msg	larger than 256 MB	mayor de 256 MB
 @msg	the files come to more than 1 GB: add fewer at a time	los archivos suman más de 1 GB: agrega menos a la vez
 @msg	every numbered name for it is taken in the Fonts folder	todos los nombres numerados para él ya existen en la carpeta Fonts
 @msg	every numbered name for {name} is taken in the document's folder	todos los nombres numerados para {name} ya existen en la carpeta del documento
 @msg	No linked files to look for	No hay archivos vinculados que buscar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	El vínculo está dentro de un símbolo, un diseño de gráfico, un motivo o una máscara de opacidad y no tiene lugar en el lienzo
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios
@@ -5463,6 +5680,8 @@ effect	Regular	Regular
 	High Contrast 3	Alto contraste 3
 	Pentagram	Pentagrama
 	Perceptual	Perceptual
+	Hue Clockwise	Tono en sentido horario
+	Hue Counterclockwise	Tono en sentido antihorario
 	Relative Colorimetric	Colorimétrico relativo
 	Absolute Colorimetric	Colorimétrico absoluto
 	Exact	Exacto
@@ -5690,6 +5909,68 @@ mark-style	Japanese	Japonesas
 @msg	{label} can't build a solid from an image: trace it first with Object › Image Trace › Make.	{label} no puede crear un sólido a partir de una imagen: cálquela primero con Objeto › Calco de imagen › Crear.
 @msg	{label} requires a shape with at least two anchors	{label} requiere una forma con al menos dos puntos de ancla
 @msg	The shape is too complex for a 3D effect	La forma es demasiado compleja para un efecto 3D
+@msg	Extrude & Bevel	Extrusión y biselado
+@msg	Revolve	Revolución
+@msg	Inflate	Inflar
+@msg	Rotate	Rotar
+@msg	Extrude & Bevel (Classic)	Extrusión y biselado (clásico)
+@msg	Revolve (Classic)	Revolución (clásico)
+@msg	Rotate (Classic)	Rotar (clásico)
+@msg	This effect	Este efecto
+@msg	clipping paths	trazados de recorte
+@msg	other objects	otros objetos
+@msg	{label} requires a group holding a shape with at least two anchors	{label} requiere un grupo que contenga una forma con al menos dos puntos de ancla
+@msg	Revolve requires a group holding a shape with at least two anchors	Revolución requiere un grupo que contenga una forma con al menos dos puntos de ancla
+@msg	Revolve requires a shape with at least two anchors	Revolución requiere una forma con al menos dos puntos de ancla
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} en un grupo necesita trazados, trazados compuestos, texto, grupos, grupos de recorte, fusiones e instancias de símbolo: primero libere o expanda estos elementos: {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} en un grupo admite como máximo {MAX_MEMBERS} objetos
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	Un efecto 3D en un grupo o una capa se aplica al propio grupo, no a su relleno ni a su trazo
+@msg	a 3D effect on a group's fill or stroke draws nothing	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecto 3D en el relleno o el trazo de un grupo no dibuja nada que exportar
+@msg	The 3D object is too complex to export	El objeto 3D es demasiado complejo para exportarlo
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	el objeto no tiene ningún efecto 3D (Extrusión y biselado, Revolución, Inflar o Rotar)
+@msg	its 3D effect builds no solid	su efecto 3D no construye ningún sólido
+@msg	bevel must be none or one of {_1}	bevel debe ser none o uno de estos: {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no puede construir sólidos a partir de esta ilustración: sus instancias de símbolo, fusiones y grupos de recorte contienen demasiados objetos
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} no puede construir un sólido a partir de la instancia del símbolo «{symbol}»: la ilustración del símbolo no está disponible
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: el trazado de recorte es demasiado complejo para recortar la ilustración
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} admite como máximo {MAX_MEMBERS} objetos
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} no puede construir sólidos a partir de una ilustración anidada en más de {MAX_DEPTH} niveles
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	La pintura de Revolución es demasiado compleja para esta superficie; reduzca Segmentos o simplifique el degradado
+@msg	Revolve edge must be left or right	Revolución: edge debe ser left o right
+@msg	Revolve cap must be a boolean	Revolución: cap debe ser un valor booleano
+@msg	the revolved object has no fill or stroke	el objeto de revolución no tiene relleno ni trazo
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor debe ser un color RGB opaco con el formato #rrggbb
+@msg	lights must contain one to ten lights	lights debe contener de una a diez luces
+@msg	each light must be an object	cada luz debe ser un objeto
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	ajuste de luz desconocido: use color, intensity, rotation, height, softness o behind
+@msg	light {key} must be a number from {min} to {max}	luz: {key} debe ser un número de {min} a {max}
+@msg	light color must use opaque #rrggbb	color de una luz debe ser un #rrggbb opaco
+@msg	light behind must be true or false	behind de una luz debe ser true o false
+@msg	shadow must be true or false	shadow debe ser true o false
+@msg	shadowPosition must be behind or below	shadowPosition debe ser behind o below
+@msg	{key} must be a number from {min} to {max}	{key} debe ser un número de {min} a {max}
+@msg	each of `{GRAPHICS}` must be an object	cada elemento de `{GRAPHICS}` debe ser un objeto
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	los elementos de `{GRAPHICS}` admiten symbol, face, x, y, scale y rotation, no `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	cada elemento de `{GRAPHICS}` necesita `symbol`, el nombre de un símbolo
+@msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` debe ser front o back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` debe ser un número de {lo} a {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` debe ser una matriz
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Los gráficos se asignan a los tipos de objeto Plano, Extrusión y Revolución
+	Graphics map onto the Plane, Extrude and Revolve object types.	Los gráficos se asignan a los tipos de objeto Plano, Extrusión y Revolución.
+@msg	Revolve maps graphics onto its side: map them onto the front	Revolución asigna los gráficos a su lateral: asígnelos a la cara frontal
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Los gráficos son demasiado complejos para esta superficie: simplifique la ilustración de los símbolos o reduzca Segmentos
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admite como máximo {MAX_GRAPHICS} gráficos
+@msg	A plane has one face: map its graphics onto the front	Un plano tiene una sola cara: asigne sus gráficos a la cara frontal
+@msg	The graphics are too complex: simplify the symbols' art	Los gráficos son demasiado complejos: simplifique la ilustración de los símbolos
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	La ilustración de un gráfico puede anidarse como máximo en {MAX_LEVELS} niveles: simplifique la ilustración del símbolo
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	La ilustración de un gráfico puede anidar símbolos como máximo en {MAX_NESTING} niveles: simplifique la ilustración del símbolo
+@msg	A graphic's art holds too many objects: simplify the symbol's art	La ilustración de un gráfico contiene demasiados objetos: simplifique la ilustración del símbolo
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Un gráfico dibuja como máximo {MAX_PIECES} rellenos y trazos: simplifique la ilustración del símbolo
+@msg	`surface` must be one of {_1}	`surface` debe ser uno de estos: {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} dibuja la ilustración de origen de este objeto en lugar de su superficie 3D
+@msg	{label} draws no faces for this object	{label} no dibuja ninguna cara para este objeto
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	la estructura alámbrica tiene más de {MAX_WIRE_EDGES} aristas
 @msg	The 3D surface is too complex; simplify the shape	La superficie 3D es demasiado compleja; simplifique la forma
 	Transform Objects	Transformar objetos
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parámetro desconocido `{key}`; ¿quiso decir `{near}`?
@@ -5700,6 +5981,7 @@ mark-style	Japanese	Japonesas
 @msg	unknown parameter `{path}`; it takes: {keys}	parámetro desconocido `{path}`; acepta: {keys}
 @msg	missing `{path}`	falta `{path}`
 @msg	`{path}` must be {expected}, not {got}	`{path}` debe ser {expected}, no {got}
+@msg	`{path}` is nested too deeply	`{path}` está anidado a demasiada profundidad
 	Load EPS into Clipboard	Cargar EPS en el portapapeles
 @msg	an image of {w} × {h} pixels is too large to draw	una imagen de {w} × {h} píxeles es demasiado grande para dibujarse
 @msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: no es una imagen PNG, JPEG, WebP, TIFF ni BMP
@@ -5864,6 +6146,7 @@ mark-style	Japanese	Japonesas
 @msg	no such color	no existe ese color
 @msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
 @msg	more than one action is named “{_1}”	más de una acción se llama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	la acción “{_1}” establece la preferencia de carpeta {_2}; elimine ese paso para guardar el conjunto
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
 	Smudge Stick…	Difuminar con barra…
 	Smudge Stick	Difuminar con barra
@@ -5982,6 +6265,7 @@ mark-style	Japanese	Japonesas
 	Ruby…	Ruby…
 	Ruby	Ruby
 	Geometric Guides	Guías geométricas
+	Optical Effects	Efectos ópticos
 	Geometric Patterns	Motivos geométricos
 	Grit Textures	Texturas granuladas
 	Ease In	Entrada suave
@@ -6023,7 +6307,10 @@ axis	Y Axis	Eje Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se aplica a rellenos de degradado (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a rellenos de degradado (paint.setFill)
 @msg	`dither` must be true or false	`dither` debe ser true o false
-@msg	`method` must be classic or perceptual	`method` debe ser classic o perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` debe ser classic, perceptual, hue-clockwise o hue-counterclockwise
+@msg	`spread` must be pad, repeat or reflect	`spread` debe ser pad, repeat o reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` debe ser un número entero de 1 a {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a los degradados lineales, radiales, cónicos y de rombo
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	¿Instalar “{name}”, que pide un presupuesto de cálculo grande?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Cada ejecución puede tardar hasta {minutes} minutos y hacer {times} veces el trabajo que se permite a otros plugins. Se ejecuta en segundo plano y se puede cancelar.
@@ -6036,6 +6323,139 @@ axis	Y Axis	Eje Y
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	un efecto interactivo se ejecuta mientras se dibuja el documento, así que no puede ser `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	un plugin de exportación siempre recibe el presupuesto de una exportación: omite `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	“{_1}” pide un presupuesto de cálculo grande (cada ejecución hasta {minutes} minutos y {times} veces las instrucciones habituales): una persona debe aprobarlo en la aplicación de escritorio, o pasa `allowHeavy: true` en una sesión iniciada con --allow-plugin-grants
+# Plug-in host messages: manifests, modules, runs and plug-in output
+@msg	`name` must be 1-64 printable characters	`name` debe tener 1-64 caracteres imprimibles
+@msg	`version`, `description` or `author` is too long	`version`, `description` o `author` es demasiado largo
+@msg	`warnings` must be a list of strings	`warnings` debe ser una lista de cadenas
+@msg	`{k}` must be one of {_1}	`{k}` debe ser uno de estos: {_1}
+@msg	`{k}` must be {what}	`{k}` debe ser {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un plugin de exportación declara de 1 a {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	como máximo {MAX_UNGROUPED} parámetros fuera de grupos: asigna un `group` a los demás
+@msg	can't encode the input	no se puede codificar la entrada
+@msg	expected {"dataBase64"}	se esperaba {"dataBase64"}
+@msg	expected {"objects"}	se esperaba {"objects"}
+@msg	export `{name}`: {e}	exportación del módulo `{name}`: {e}
+@msg	extension {e} is listed twice	la extensión {e} aparece dos veces
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensión {e}: usa 1-16 letras minúsculas y dígitos, sin el punto
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ID no válido {_1}: usa 1-64 caracteres de A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	nombre de parámetro no válido {k}
+@msg	manifest is not UTF-8	el manifiesto no está en UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	el manifiesto es demasiado largo (límite {MAX_MANIFEST_BYTES} bytes)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	el manifiesto ocupa {_1} bytes (límite {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	el módulo ocupa {_1} bytes (límite {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	requiere aprobación: pide {0}, que el usuario concede al instalarlo por separado
+@msg	not JSON: {e}	no es JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	no es un binario WebAssembly (falta el encabezado \0asm)
+@msg	parameter `{k}`: {what}	parámetro `{k}`: {what}
+@msg	parameter `{name}`: {what}	parámetro `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	los parámetros del plugin deben ser un objeto JSON
+@msg	the module must export its linear memory as `memory`	el módulo debe exportar su memoria lineal como `memory`
+@msg	the objects to change are no longer in the document	los objetos que se iban a cambiar ya no están en el documento
+@msg	the runtime panicked	el entorno de ejecución falló
+@msg	unexpected host trap	error inesperado (trap) del host
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version devolvió {v}; este host implementa la versión {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc devolvió 0 (sin memoria)
+@msg	vc_alloc returned a block outside memory	vc_alloc devolvió un bloque fuera de la memoria
+@msg	vc_run returned error code {packed}	vc_run devolvió el código de error {packed}
+@msg	{_1} is not a file	{_1} no es un archivo
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} ocupa {_2} bytes (límite {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objetos (límite {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} apunta fuera de la memoria
+@msg	`angle` must be a number	`angle` debe ser un número
+@msg	`aspect` must be from 0.01 to 100	`aspect` debe estar entre 0.01 y 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` debe ser "butt", "round" o "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` debe ser "nonzero" o "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` debe ser una dirección https:// de {MAX_HELP_URL} bytes como máximo
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` debe tener 1-{MAX_HELP} caracteres imprimibles
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` debe ser un id de efecto de 1-{MAX_EFFECT_ID} bytes
+@msg	`id` must be the id of an input object	`id` debe ser el id de un objeto de entrada
+@msg	`join` must be "miter", "round" or "bevel"	`join` debe ser "miter", "round" o "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` y `group` deben tener 1-{MAX_LABEL} caracteres imprimibles
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` debe ser 1-{MAX_TEXT} y el valor predeterminado no puede ser más largo
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` y `maxItems` deben ser 0-{MAX_LIST}, `maxItems` al menos 1, y el valor predeterminado debe tener esa cantidad
+@msg	`name` must be a string	`name` debe ser una cadena
+@msg	`opacity` must be a number	`opacity` debe ser un número
+@msg	`type` must be "path" or "compound"	`type` debe ser "path" o "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` debe tener 1-{MAX_UNIT} caracteres imprimibles
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` debe indicar de 1 a {MAX_CONDITION_VALUES} valores para `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` nombra `{other}`, que no es un parámetro declarado antes de este
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` nombra como máximo {MAX_CONDITIONS} parámetros
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` toma los valores de `{other}`, de una casilla de verificación o una opción
+@msg	`visible` must be true or false	`visible` debe ser true o false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` debe ser un número de {_1} a {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` debe ser una lista de {MAX_ITEMS} entradas como máximo
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	un color predeterminado debe ser un objeto de color o una cadena hexadecimal como "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	un objeto de color o una cadena hexadecimal como "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	un degradado de forma libre contiene como máximo {MAX_ITEMS} puntos y líneas
+@msg	a freeform gradient line names a point it doesn't have	una línea del degradado de forma libre nombra un punto que el degradado no tiene
+@msg	a gradient needs 1-{MAX_ITEMS} stops	un degradado necesita 1-{MAX_ITEMS} paradas
+@msg	a list of numbers	una lista de números
+@msg	a list of {min_items} to {max_items} numbers	una lista de {min_items} a {max_items} números
+@msg	a new object needs a `path`	un objeto nuevo necesita un `path`
+@msg	a number	un número
+@msg	a painted live effect returns only `objects`	un efecto dinámico de pintura solo devuelve `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una pieza de un efecto dinámico de pintura solo tiene `path`, `fillRule`, `fills` y `strokes`
+@msg	a read-only object was left out	se omitió un objeto de solo lectura
+@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {"id"} solo o tal como se recibió
+@msg	a string	una cadena
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un trazo solo tiene `paint`, `width`, `join`, `cap` y `miterLimit`
+@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un trazo debe ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
+@msg	an effect must be {"id", "params"?, "visible"?}	un efecto debe ser {"id", "params"?, "visible"?}
+@msg	an effect on a fill returns only `fills`	un efecto en un relleno solo devuelve `fills`
+@msg	an effect on a stroke returns only `strokes`	un efecto en un trazo solo devuelve `strokes`
+@msg	an object must be a JSON object	un objeto debe ser un objeto JSON
+@msg	bad range	rango no válido
+@msg	choices must be 1-64 non-empty, printable strings	las opciones deben ser 1-64 cadenas imprimibles no vacías
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	coordenada fuera de rango (límite ±{MAX_COORD} pt)
+@msg	default is not one of the options	el valor predeterminado no es una de las opciones
+@msg	each piece needs a `path`	cada pieza necesita un `path`
+@msg	is listed twice	aparece dos veces
+@msg	pattern transform out of range	transformación del motivo fuera de rango
+@msg	read-only field '{field}' changed	cambió el campo de solo lectura '{field}'
+@msg	stops must be in order of `offset`	las paradas deben estar en orden de `offset`
+@msg	the document has no pattern {pattern}	el documento no tiene el motivo {pattern}
+@msg	the document has no swatch {n}	el documento no tiene la muestra {n}
+@msg	the output	la salida
+@msg	the path has no anchor points	el trazado no tiene puntos de ancla
+@msg	too many anchor points (limit {MAX_ANCHORS})	demasiados puntos de ancla (límite {MAX_ANCHORS})
+@msg	true or false	true o false
+@msg	a number >= {_1}	un número >= {_1}
+@msg	a number > {_1}	un número > {_1}
+@msg	a number <= {_1}	un número <= {_1}
+@msg	a number < {_1}	un número < {_1}
+@msg	a number {_1} to {_2}	un número de {_1} a {_2}
+@msg	a number >= {_1} and < {_2}	un número >= {_1} y < {_2}
+@msg	a number > {_1} and <= {_2}	un número > {_1} y <= {_2}
+@msg	a number > {_1} and < {_2}	un número > {_1} y < {_2}
+@msg	a number ({_1})	un número ({_1})
+@msg	a number >= {_1} ({_2})	un número >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	un número > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	un número <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	un número < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	un número de {_1} a {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	un número >= {_1} y < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	un número > {_1} y <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	un número > {_1} y < {_2} ({_3})
+@msg	an integer	un entero
+@msg	an integer >= {_1}	un entero >= {_1}
+@msg	an integer <= {_1}	un entero <= {_1}
+@msg	an integer {_1} to {_2}	un entero de {_1} a {_2}
+@msg	one of {_1}	uno de {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` debe ser uno de {_1}, no {got}
+@msg	an object id (a non-negative integer)	un id. de objeto (un entero no negativo)
+@msg	a list of object ids	una lista de id. de objeto
+@msg	a color (a string, [r, g, b] or an object)	un color (una cadena, [r, g, b] o un objeto)
+@msg	[x, y] (two numbers)	[x, y] (dos números)
+@msg	an object	un objeto
+@msg	a list	una lista
+@msg	unknown key `{k}`; the keys here are {_1}	clave desconocida `{k}`; las claves aquí son {_1}
+@msg	{_1} is listed twice	{_1} aparece dos veces
+@msg	{_1} is not the id of an input object	{_1} no es el id de un objeto de entrada
+@msg	{_1} is read-only	{_1} es de solo lectura
+@msg	{what} must be from {lo} to {hi}	{what} debe estar entre {lo} y {hi}
+@msg	a color component	un componente de color
+@msg	a plate	una plancha
 # Plug-in permissions (Install Plug-in…, plugin.install grant)
 	Install “{name}”, which asks for these permissions?	¿Instalar “{name}”, que pide estos permisos?
 	ID: {id}	ID: {id}
@@ -6130,14 +6550,33 @@ axis	Y Axis	Eje Y
 	Continue	Continuar
 	Continue Action	Continuar acción
 	Delete Action Step	Eliminar paso de la acción
+	Move Action Step	Mover paso de la acción
 	Press Play Current Selection in the Actions panel to go on.	Para continuar, pulse Reproducir la selección actual en el panel Acciones.
 	Stop: {message}	Parada: {message}
 @msg	no action is waiting at a stop	ninguna acción está esperando en una parada
 @msg	message must be text	message debe ser texto
 @msg	allowContinue must be true or false	allowContinue debe ser true o false
 @msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
+@msg	Batch cannot play an action with a View menu step	Lote no puede reproducir una acción con un paso del menú Ver
 	Insert Menu Item…	Insertar elemento de menú…
 	Insert Menu Item	Insertar elemento de menú
+	Insert Select Path	Insertar selección de trazado
+	Select Path	Seleccionar trazado
+@msg	select one whole path or compound path	selecciona un trazado completo o un trazado compuesto
+@msg	select only one path	selecciona solo un trazado
+@msg	the path is hidden or locked, or cannot be selected here	el trazado está oculto o bloqueado, o no se puede seleccionar aquí
+@msg	object {value} is not the stored path: it changed, or the document is another one	el objeto {value} no es el trazado guardado: ha cambiado o el documento es otro
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` debe ser "v1:" y 16 dígitos hexadecimales en minúscula
+	Select Object…	Seleccionar objeto…
+	Select Object	Seleccionar objeto
+	Set Selection	Definir selección
+	Case Sensitive	Distinguir mayúsculas y minúsculas
+	Whole Word	Palabra completa
+	Select Object: {note}	Seleccionar objeto: {note}
+	Select by Note	Seleccionar por nota
+@msg	the note is empty	la nota está vacía
+@msg	the note is longer than 1,024 bytes	la nota ocupa más de 1024 bytes
+@msg	no object that can be selected has a note matching “{query}”	ningún objeto que se pueda seleccionar tiene una nota que coincida con “{query}”
 	Menu Item:	Elemento de menú:
 	No menu item matches.	Ningún elemento de menú coincide.
 	Several menu items match. Choose one from the list.	Coinciden varios elementos de menú. Elija uno de la lista.
@@ -6249,6 +6688,11 @@ axis	Y Axis	Eje Y
 	User Brush Library 9	Biblioteca de pinceles del usuario 9
 	User Brush Library 10	Biblioteca de pinceles del usuario 10
 	Art Ribbons	Cintas de ilustración
+	Ink and Wash	Tinta y aguada
+	Tapered Ink	Tinta afilada
+	Brush Pen	Rotulador de pincel
+	Soft Wash	Aguada suave
+	Pooling Wash	Aguada con borde
 	Zigzag	Zigzag
 	Burst Ray	Rayo de impacto
 	Dash Trail	Estela discontinua
@@ -6273,6 +6717,27 @@ axis	Y Axis	Eje Y
 	Grass Fan	Abanico de hierba
 	Pattern Borders	Bordes de motivo
 	Scatter Shapes	Formas de dispersión
+	Dry Media	Técnicas secas
+	Chalk Grain	Grano de tiza
+	Graphite Pencil	Lápiz de grafito
+	Wax Crayon	Cera de colores
+	Charcoal Dust	Polvo de carboncillo
+	Notched Ribbon	Cinta dentada
+	Double Line	Línea doble
+	Wave	Onda
+	Teardrop	Lágrima
+	Striped Ribbon	Cinta a rayas
+	Fine Nib	Plumilla fina
+	Broad Nib	Plumilla ancha
+	Chisel	Cincel
+	Round Pen	Pluma redonda
+	Pressure Pen	Pluma de presión
+	Beads	Cuentas
+	Dash Dot	Raya y punto
+	Scallops	Festones
+	Stars	Estrellas
+	Triangles	Triángulos
+	Sparkles	Destellos
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
@@ -6292,6 +6757,13 @@ axis	Y Axis	Eje Y
 	Area Text	Texto de área
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Medir el texto por los límites del glifo
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opciones de ajuste a píxel
+	Pixel Snapping Options…	Opciones de ajuste a píxel…
+	Snap to Pixel While Drawing	Ajustar a píxel al dibujar
+	Snap to Pixel While Moving	Ajustar a píxel al mover
+	Snap to Pixel While Scaling	Ajustar a píxel al escalar
+	These options take effect when View › Snap to Pixel is on.	Estas opciones se aplican cuando Ver › Ajustar a píxel está activado.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar opciones de ajuste a glifo
 	Hide Snap to Glyph Options	Ocultar opciones de ajuste a glifo
@@ -6377,6 +6849,8 @@ anchor	Points:	Puntos:
 	Anchor Inspector	Inspector de puntos de ancla
 	Add Points at Crossings	Agregar puntos en los cruces
 	Split at Crossings	Dividir en los cruces
+	Trim at Crossings Tool	Herramienta Recortar en los cruces
+	Trim at Crossings	Recortar en los cruces
 	Extend Path	Prolongar trazado
 	Measure & Inspect	Medir e inspeccionar
 	Set Anchor	Definir punto de ancla
@@ -6839,7 +7313,9 @@ breakText	Glyphs	Glifos
 @msg	“{shown}” opens {_1} files, not `{_2}`	«{shown}» abre archivos {_1}, no `{_2}`
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` es un plugin de tipo `{_2}`, no un plugin de importación
 @msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` es un plugin de tipo `{_2}`, no un plugin de exportación
-@msg	`{_1}` is an importer: open a file with document.open {{"importer"}"}}	`{_1}` es un plugin de importación: abra un archivo con document.open {{"importer"}"}}
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` es un plugin de importación: abra un archivo con document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` es un plugin de exportación: exporte con document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` es un efecto interactivo: aplíquelo con effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	el plugin de importación no devolvió ningún objeto
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un plugin de importación devuelve `objects` y `warnings`, no `{key}`
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el archivo supera los {MAX_INPUT_BYTES} bytes que lee un plugin de importación
@@ -6914,8 +7390,23 @@ breakText	Glyphs	Glifos
 	Short hands-on tutorials for the essential tools, grouped by skill. Choose a skill to see its tutorials.	Tutoriales prácticos breves sobre las herramientas esenciales, agrupados por habilidad. Elige una habilidad para ver sus tutoriales.
 	List Tutorials	Enumerar tutoriales
 	Show Tutorial	Mostrar tutorial
+	Show Tool Location	Mostrar ubicación de la herramienta
+	Show where this tool is	Mostrar dónde está esta herramienta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (consulta learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconocido `{id}` (consulta learn.list)
+	View more	Ver más
+	Finish tutorial	Terminar tutorial
+	Next Up	A continuación
+	You finished the last tutorial in this skill.	Has terminado el último tutorial de esta habilidad.
+	Back to skills	Volver a las habilidades
+	Open Tutorial Sample	Abrir muestra del tutorial
+	Finish Tutorial	Terminar tutorial
+	Next Tutorial	Tutorial siguiente
+	Back to Skills	Volver a las habilidades
+@msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no tiene muestra de práctica
+@msg	open the practice sample of `{id}` first (see learn.openSample)	abre primero la muestra de práctica de `{id}` (consulta learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	termina primero `{id}` (consulta learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` es el último tutorial de su habilidad
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualizar efectos aplazados
@@ -6934,3 +7425,14 @@ breakText	Glyphs	Glifos
 @msg	Some islands could not be joined to the area around the art	Algunas islas no se pudieron unir al área que rodea la ilustración
 @msg	`width` must be from {lo} to {hi} pt	`width` debe estar entre {lo} y {hi} pt
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` debe ser un número entero entre 1 y {MAX_BRIDGES_PER_ISLAND}
+	Weed Box and Lines…	Caja y líneas de pelado…
+	Weed Box and Lines	Caja y líneas de pelado
+	Margin	Margen
+	Box	Caja
+	Swatch	Muestra
+	Banner Hems and Grommets…	Dobladillos y ojales de pancarta…
+	Banner Hems and Grommets	Dobladillos y ojales de pancarta
+	Hem	Dobladillo
+	Grommets	Ojales
+	Grommet Inset	Distancia de los ojales al borde
+	Diameter	Diámetro

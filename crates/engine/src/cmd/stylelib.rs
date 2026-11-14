@@ -161,11 +161,13 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graphicStyle.addFromLibrary";
     let (info, lib) = library_param(s, p, C)?;
     let (apply, add) = (switch_or(p, "apply", false, C)?, switch_or(p, "add", false, C)?);
-    if p.get("ids").is_some_and(|v| !v.is_null()) {
+    let ids_given = p.get("ids").is_some_and(|v| !v.is_null());
+    if ids_given {
         checked_ids_param(s, p, "ids", C)?;
-    } else if apply {
-        // A selection that can't take a style is refused before any style is added.
-        super::appearance::appearance_targets(s, &json!({}))?;
+    }
+    if apply {
+        // Objects that can't take a style are refused before any style is added.
+        super::appearance::edit_targets(s, &if ids_given { json!({"ids": p["ids"]}) } else { json!({}) })?;
     }
     let mut names = names_param(p, C)?;
     names.extend(text_param(p, "name", C)?.map(str::to_string));

@@ -45,10 +45,10 @@ pub use drag::{
 };
 #[cfg(test)]
 use dropdowns::combo_button_id;
-pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field, combo_named, field_focused_in, popover_is_open};
+pub(crate) use dropdowns::{combo, combo_menu, combo_menu_field_named, combo_named, field_focused_in, popover_is_open};
 pub use dropdowns::{
-    dropdown, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style, menu_room, menu_scroll,
-    panel_scroll, popover, set_menu_floor, strip_scroll,
+    dropdown, dropdown_icon_names, dropdown_named, dropdown_names, dropdown_names_named, dropdown_with, dropdown_with_named, list_scroll_style,
+    menu_room, menu_scroll, panel_scroll, popover, set_menu_floor, strip_scroll,
 };
 #[cfg(test)]
 pub(crate) use dropdowns::{menu_floor, menu_room_either};
@@ -56,18 +56,18 @@ pub use labels::{dim_label, dim_name, divider, field_label, label_row, link_labe
 pub(crate) use labels::{label_field, take_previous_label, text_width};
 pub(crate) use numeric::{ANY, round_to, set_bare_numbers_are_points, typed_unit};
 pub use numeric::{
-    SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_within, num_field_within_empty, opt_field,
-    opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped, size_field, size_field_named, slider,
-    spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning, spin_length_within, spin_plain,
-    spin_plain_named, spin_range,
+    SpinPick, mixed_field, mixed_field_named, num_field, num_field_live, num_field_named, num_field_refusing, num_field_within,
+    num_field_within_empty, opt_field, opt_field_named, plain_field_live, range_field, range_field_live, range_field_named, range_field_stepped,
+    size_field, size_field_named, slider, spin_field, spin_field_auto, spin_field_auto_named, spin_field_named, spin_field_stops_named, spin_kerning,
+    spin_length_within, spin_plain, spin_plain_named, spin_range,
 };
 #[cfg(test)]
 use numeric::{decimal_point, field_number, share_of, spinner_step, step_through, step_to_multiple, within_a_millionth};
 pub(crate) use panel_chrome::{PANEL_FOOTER, panel_footer, panel_footer_bottom, panel_footer_space, panel_list_height};
 pub use panel_chrome::{bottom_bar, layout_button, list_box, orientation_button, tab_bar};
 pub(crate) use text::{
-    arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, disarm_field_focus, enter_modifiers, focus_field, own_field_shift_enter,
-    reject_dialog_commit, set_dialog_open, take_dialog_focus,
+    arm_field_focus, dialog_focus_flag, dialog_reject_commit_flag, dialog_reject_pass, disarm_field_focus, enter_modifiers, focus_field,
+    own_field_shift_enter, reject_dialog_commit, set_dialog_open, take_dialog_focus,
 };
 pub use text::{
     exact_text_field, exact_text_field_named, plain_field, plain_field_named, search_field, text_field, text_field_named, text_presets,
@@ -757,6 +757,39 @@ mod gradient_chip_tests {
         for (i, j) in [(2, 0), (0, 2), (1, 1), (3, 3)] {
             assert!(at(&chip, i, j).abs_diff(128) <= 2, "({i}, {j}): {chip:?}");
         }
+    }
+
+    /// A gradient that repeats or reflects as many times as a chip has cells (8 on a 24-point chip)
+    /// still shows its runs: the grid gets more cells than runs, so its points do not all sample
+    /// the same place in a run.
+    #[test]
+    fn a_chip_repeated_once_a_cell_is_not_one_color() {
+        for spread in [vectorcraft_color::GradientSpread::Repeat, vectorcraft_color::GradientSpread::Reflect] {
+            let mut gp = paint(GradientKind::Linear, 0.0);
+            gp.gradient.spread = spread;
+            gp.gradient.repeats = 8;
+            let (cols, rows) = chips::chip_grid(&gp.gradient, 24.0, 24.0);
+            assert!(cols > 8 && rows > 8, "{spread:?}: {cols} x {rows}");
+            let chip = gradient_chip_colors(&gp, 24.0, 24.0, cols, rows);
+            let row: std::collections::HashSet<Color32> = chip.iter().take(cols + 1).copied().collect();
+            assert!(row.len() > 2, "{spread:?}: {row:?}");
+        }
+        // A gradient that pads keeps a cell about every 3 points.
+        assert_eq!(chips::chip_grid(&Gradient::default(), 24.0, 24.0), (8, 8));
+        // Many runs give a small chip at most a cell a point.
+        let mut many = paint(GradientKind::Linear, 0.0).gradient;
+        many.spread = vectorcraft_color::GradientSpread::Repeat;
+        many.repeats = 100;
+        assert_eq!(chips::chip_grid(&many, 24.0, 12.0), (24, 12));
+        assert_eq!(chips::chip_grid(&many, 400.0, 400.0), (128, 128));
+        // A count that matches a chip's points still shows its runs.
+        let mut gp = paint(GradientKind::Linear, 0.0);
+        gp.gradient.spread = vectorcraft_color::GradientSpread::Repeat;
+        gp.gradient.repeats = 23;
+        let (cols, rows) = chips::chip_grid(&gp.gradient, 23.0, 23.0);
+        let chip = gradient_chip_colors(&gp, 23.0, 23.0, cols, rows);
+        let row: std::collections::HashSet<Color32> = chip.iter().take(cols + 1).copied().collect();
+        assert!(row.len() > 2, "{cols}: {row:?}");
     }
 
     #[test]

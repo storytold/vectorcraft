@@ -7,7 +7,8 @@ use vectorcraft_doc::{AreaFit, CharStyle, Document, Justify, LockedArtboards, No
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::object::choice;
-use super::typecmd::{area_text, block_gaps, refresh_bounds};
+use super::threads::ThreadIndex;
+use super::typecmd::{area_text, block_gaps, needed_room, refresh_bounds};
 use super::{
     CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, number_or,
     switch_or, targets, text_param,
@@ -61,11 +62,29 @@ pub fn specs() -> Vec<CommandSpec> {
             path_options
         ),
         cmd!(
+            "type.pathCenter.top",
+            "Center on Top",
+            ["Type", "Type on a Path"],
+            None,
+            "{ids?|id?} slide the selected type on a closed path along it so that the middle of the span between its start and end brackets lands on the path's topmost point as the object is drawn (after its transform, so a rotated, scaled or skewed path is measured as it appears; on a level stretch such as a rectangle's top edge, its middle; with several separate topmost points, the middle of the shortest part of the path that holds them all), keeping the span's length (a full turn stays a full turn), and set the first paragraph's alignment to Center unless it is Center or Justify Center, so the type is centered there. Point type and area type in the selection are left as they are. Type on an open or compound path, type in a thread, and type on a path with no length or no height are refused with an error that names them, and nothing changes. When every object is already centered there, nothing changes and no undo step is recorded → {ids, start, end} (the first object's brackets)",
+            has_closed_path_type,
+            path_center_top
+        ),
+        cmd!(
+            "type.pathCenter.bottom",
+            "Center on Bottom",
+            ["Type", "Type on a Path"],
+            None,
+            "{ids?|id?} as type.pathCenter.top, on the path's bottommost point as drawn. The type is not flipped: on the bottom of a path that runs clockwise it reads upside down until Type on a Path Options › Flip turns it → {ids, start, end} (the first object's brackets)",
+            has_closed_path_type,
+            path_center_bottom
+        ),
+        cmd!(
             "type.dynamicText",
             "Dynamic Text",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool, wordGap?: % of a word space 0..1000 (100), lineGap?: pt -1296..1296 (0)} turn Dynamic Text on or off for the selected type on a path and area type (on omitted: the opposite of the first object's setting, or on when a gap is given). On type on a path, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. On area type it is Block: each line as typed (each paragraph, and each forced line break in one; lines are not broken again) is set to the frame's width, less the inset, the gutters and the paragraph's indents, by changing its font size only: its first character's size, in steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it, with baseline shifts following. Every character's leading is its size plus lineGap, and the layout sets every paragraph with wordGap as its Desired word spacing, its Minimum or Maximum moving out to wordGap when wordGap lies outside it (the paragraphs keep their own Justification… values, which apply again when Block is off; the gaps are area type's, and are kept while Block is off; a gap with no area type in the selection is an error). The sizes are written into the characters and fitted again after every edit to the text or the frame, in the same undo step; at a size limit a line can be narrower than the frame or wrap. An empty line keeps its size. Block replaces Auto Size and Shrink Text to Fit (Area Type Options › Block is the same setting). Off, the text keeps the sizes it was drawn at. Point type in the selection is left as it is; a selection holding type in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When nothing changes, no undo step is recorded → {on, ids, fitScale (the first object's factor; 1 when off and for area type), wordGap?, lineGap? (the first area type's; left out without area type)}",
+            "{ids?|id?, on?: bool, wordGap?: % of a word space 0..1000 (100), lineGap?: pt -1296..1296 (0)} turn Dynamic Text on or off for the selected type on a path and area type, or turn it on for point type (on omitted: the opposite of the first object's setting, point type counting as off, or on when a gap is given). On type on a path, the layout scales the text by one factor (every character's size, leading and baseline shift; Type on a Path Options › Spacing stays) so that it fills the span between its start and end brackets, larger or smaller, and fits it again after every edit to the text, the path or the brackets; the first character's size moves in steps of 0.1 pt within 0.1 to 1,296 pt, and at 0.1 pt text that still runs past the end bracket overflows. The stored sizes keep their proportions. On area type it is Block: each line as typed (each paragraph, and each forced line break in one; lines are not broken again) is set to the frame's width, less the inset, the gutters and the paragraph's indents, by changing its font size only: its first character's size, in steps of 0.1 pt within 0.1 to 1,296 pt, the line's other characters keeping their proportions to it, with baseline shifts following. Every character's leading is its size plus lineGap, and the layout sets every paragraph with wordGap as its Desired word spacing, its Minimum or Maximum moving out to wordGap when wordGap lies outside it (the paragraphs keep their own Justification… values, which apply again when Block is off; the gaps are area type's, and are kept while Block is off; a gap with no area type in the selection, and no point type it turns into area type, is an error). The sizes are written into the characters and fitted again after every edit to the text or the frame, in the same undo step; at a size limit a line can be narrower than the frame or wrap. An empty line keeps its size. Block replaces Auto Size and Shrink Text to Fit (Area Type Options › Block is the same setting). Off, the text keeps the sizes it was drawn at. Turning it on turns point type into area type with Block on, with the default Area Type Options but the gaps (options kept from an earlier frame do not carry over): the frame is as wide (along the lines) as the widest line as typed with its paragraph's indents, so that line keeps its size and sits where it was (by its own alignment), the other lines are set to that width (when negative indents take more than that line's width, the frame is as wide as the line, and Block makes it larger), and the frame then grows in depth (down, or to the left for vertical type) to hold every fitted line, around any Text Wrap objects above it; the gaps apply to it as to area type. Point type with no line to fit (empty, or only spaces and breaks) is left as it is, and so is point type when it is turned off; a selection holding type in a thread is refused (threading type turns Dynamic Text off, keeping its drawn sizes). When nothing changes, no undo step is recorded → {on, ids, fitScale (the first object's factor; 1 when off and for area type), wordGap?, lineGap? (the first area type's; left out without area type)}",
             has_dynamic_type,
             dynamic_text
         ),
@@ -328,13 +347,7 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
             // A little slack on the right so the text doesn't rewrap.
             let top = lay.lines.first().map(|l| l.baseline - l.ascent).unwrap_or(b.y0).min(b.y0);
             let slack = size * 0.5 + trailing;
-            // Slack goes where the alignment leaves room, so the text doesn't move or rewrap.
-            let (sl, sr) = match t.para_at(0).justify {
-                Justify::Center | Justify::JustifyCenter => (slack * 0.5, slack * 0.5),
-                Justify::Right | Justify::JustifyRight => (slack, 0.0),
-                Justify::Auto if lay.lines.first().is_some_and(|l| l.rtl) => (slack, 0.0),
-                _ => (0.0, slack),
-            };
+            let (sl, sr) = slack_sides(t.para_at(0).justify, lay.lines.first().is_some_and(|l| l.rtl), slack);
             let frame = lay.line_xf.transform_rect_bbox(Rect::new(b.x0 - sl, top, b.x1 + sr, b.y1.max(top + 1.0)));
             t.kind = TextKind::Area { frame: shapes::rectangle(frame) };
             refresh_bounds(t);
@@ -342,6 +355,107 @@ fn to_area(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// How `slack` added to point type's lines in a frame is shared before and after them: where the
+/// alignment leaves room, so the text doesn't move or rewrap.
+fn slack_sides(justify: Justify, rtl: bool, slack: f64) -> (f64, f64) {
+    match justify {
+        Justify::Center | Justify::JustifyCenter => (slack * 0.5, slack * 0.5),
+        Justify::Right | Justify::JustifyRight => (slack, 0.0),
+        Justify::Auto if rtl => (slack, 0.0),
+        _ => (0.0, slack),
+    }
+}
+
+/// Point type `t` turned into area type with Dynamic Text's Block on, with the default Area Type
+/// Options but its gaps: the frame takes the room along the lines that keeps the widest line as
+/// typed at its size ([`needed_room`]), placed so that line stays where it is by its own
+/// alignment, and after the fit it takes the depth that holds every line, so nothing overflows.
+/// Lines run in line space (for vertical type, down the page), and the frame is mapped to the
+/// type's own space by the layout's `line_xf`. `wrap` is the Text Wrap shapes the new area type
+/// takes, in the type's own space, which the fit and the depth follow. When negative indents take
+/// more than the widest line's width, the frame is as wide as that line and placed so that the
+/// line keeps its aligned point. None when no line has a
+/// width (empty text, or only spaces and breaks), which Block leaves at its size.
+fn point_to_block(t: &TextObject, wrap: &[vectorcraft_doc::WrapShape]) -> Option<TextObject> {
+    let db = vectorcraft_text::FontDb::global();
+    // Options point type kept from a frame it had before (columns, inset, alignment, first
+    // baseline) do not carry over to the new frame.
+    let mut t = t.clone();
+    let (word_gap, line_gap) = (t.area.word_gap, t.area.line_gap);
+    t.area = vectorcraft_doc::AreaOptions { word_gap, line_gap, ..Default::default() };
+    t.wrap = wrap.to_vec();
+    let t = &t;
+    // The room is measured as Block sets the lines in a frame, with the word gap.
+    let as_block = TextObject { dynamic_text: true, kind: TextKind::Area { frame: shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)) }, ..t.clone() };
+    let (room, widest, para_index) = needed_room(&as_block)?;
+    let lay = vectorcraft_text::layout(db, t);
+    let first = lay.lines.first()?;
+    let line = lay.lines.iter().find(|l| l.start == widest)?;
+    // Across, the widest line as it is aligned, with its paragraph's indents, which the frame holds.
+    let para = t.para_at(para_index);
+    let starts = widest == 0 || t.plain_text().as_bytes().get(widest - 1) == Some(&b'\n');
+    let start_indent = para.laid_out_left_indent() + if starts { para.first_line_indent } else { 0.0 };
+    // A horizontal right-to-left list paragraph has its indents mirrored, as the layout sets them.
+    let mirror = line.rtl && !t.vertical && para.list.is_some();
+    let (left, right) = if mirror { (para.right_indent, start_indent) } else { (start_indent, para.right_indent) };
+    let (lo, hi) = (line.x0 - left, line.x1 - line.trailing + right);
+    let top = lay.lines.iter().map(|l| l.baseline - l.ascent).fold(first.baseline - first.ascent, f64::min);
+    let bottom = lay.lines.iter().map(|l| l.baseline + l.descent).fold(top, f64::max);
+    if ![lo, hi, top, bottom, room].iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    // Negative indents can take more than the line's width (hi below lo); the frame is then wider
+    // than the line with its indents, and the same split of the difference keeps the line's
+    // aligned point (its start, center or end) where it was when Block makes the line fill it.
+    let (sl, _) = slack_sides(para.justify, line.rtl, room - (hi - lo));
+    let frame = |depth: f64| lay.line_xf.transform_rect_bbox(Rect::new(lo - sl, top, lo - sl + room, top + depth.max(1.0)));
+    let start = frame(bottom - top);
+    let mut out = t.clone();
+    out.kind = TextKind::Area { frame: shapes::rectangle(start) };
+    out.dynamic_text = true;
+    refresh_bounds(&mut out);
+    // The lines fitted in one cell from the frame's top deep enough for all of them (every line at
+    // the largest size Block sets), around any wrap shapes, give the depth the frame takes.
+    let mut probe = out.clone();
+    let points = t.style_scale().map_or(1.0, |s| s.points).max(1e-12);
+    let deep = (bottom - top) + (lay.lines.len() as f64 + 1.0) * 3.0 * (1296.0 + out.area.line_gap.abs()) / points;
+    // Wrap shapes push lines on past them (an inverted one holds them inside it), so the cell also
+    // reaches as far again as the farthest one reaches past the frame's top.
+    let inv = lay.line_xf.inverse();
+    let deep = deep
+        + wrap
+            .iter()
+            .filter_map(|w| w.path.bounds().map(|r| inv.transform_rect_bbox(r)).map(|r| (r.y1 - top).max(0.0) + 2.0 * w.wrap.offset.abs()))
+            .filter(|d| d.is_finite())
+            .fold(0.0, f64::max);
+    probe.kind = TextKind::Area { frame: shapes::rectangle(frame(deep)) };
+    if !wrap.is_empty() {
+        refresh_bounds(&mut probe);
+    }
+    let laid = vectorcraft_text::layout(db, &probe);
+    if laid.overflow {
+        return Some(out);
+    }
+    let mut grown = start;
+    for l in &laid.lines {
+        for y in [l.baseline - l.ascent, l.baseline + l.descent] {
+            grown = grown.union_pt(laid.line_xf * vectorcraft_geom::Point::new(l.x0, y));
+        }
+    }
+    // Only the depth grows (for vertical type, the columns run on to the left), with a hundredth
+    // of a point to spare.
+    if t.vertical {
+        (grown.y0, grown.y1, grown.x0) = (start.y0, start.y1, grown.x0 - 0.01);
+    } else {
+        (grown.x0, grown.x1, grown.y1) = (start.x0, start.x1, grown.y1 + 0.01);
+    }
+    if grown.is_finite() && grown != start {
+        out.kind = TextKind::Area { frame: shapes::rectangle(grown) };
+        refresh_bounds(&mut out);
+    }
+    Some(out)
 }
 
 /// (run, byte within the run) for a byte offset into the plain text.
@@ -428,6 +542,136 @@ fn to_point(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     Ok(ids_json(&ids))
+}
+
+/// Whether type on a path `t` runs along one closed path (no open or compound path).
+fn on_one_closed_path(t: &TextObject) -> bool {
+    matches!(&t.kind, TextKind::OnPath { path, .. } if path.subpaths.len() == 1 && path.is_closed())
+}
+
+/// Why `type.pathCenter.top` and `.bottom` refuse type on a path `ids`: those on an open or
+/// compound path, then those in a thread; None when they take every one.
+fn path_center_refusal(d: &Document, ids: &[NodeId]) -> Option<String> {
+    let open = ids.iter().filter(|id| !path_text(d.node(**id)).is_some_and(on_one_closed_path)).map(|id| id.0.to_string()).collect::<Vec<_>>();
+    if !open.is_empty() {
+        let open = open.join(", ");
+        return Some(format!("type on an open or compound path cannot be centered on its top or bottom: {open}"));
+    }
+    let frames = threaded_ids(&ThreadIndex::of(d), ids);
+    (!frames.is_empty()).then(|| format!("type on a path in a thread cannot be centered on its top or bottom: {frames}"))
+}
+
+/// `type.pathCenter.top` and `.bottom` are enabled for a selection holding type on a path, all of
+/// it on one closed path and none of it in a thread.
+fn has_closed_path_type(s: &Session) -> std::result::Result<(), String> {
+    has_selection(s)?;
+    let st = s.active().ok_or("no document open")?;
+    let d = &st.doc;
+    let selected: Vec<NodeId> = st.selection.objects.to_vec();
+    let paths: Vec<NodeId> = text_ids(d, &selected).into_iter().filter(|id| path_text(d.node(*id)).is_some()).collect();
+    if paths.is_empty() {
+        return Err("select type on a closed path".into());
+    }
+    path_center_refusal(d, &paths).map_or(Ok(()), Err)
+}
+
+/// The brackets that center type on a path `t` on its path's topmost point (`bottom`: its
+/// bottommost) as `t.xf` draws it, its span keeping its length; None for a path with no length or
+/// no height.
+fn centered_brackets(t: &TextObject, bottom: bool) -> Option<(f64, Option<f64>)> {
+    let TextKind::OnPath { path, end, .. } = &t.kind else { return None };
+    let (from, to) = t.kind.path_span()?;
+    let arc = vectorcraft_geom::ArcPath::new(path);
+    if arc.is_empty() {
+        return None;
+    }
+    let flip = if bottom { Affine::FLIP_Y } else { Affine::IDENTITY };
+    let middle = arc.topmost(flip * t.xf)? / arc.len();
+    let run = to - from;
+    let start = (middle - run * 0.5).rem_euclid(1.0).clamp(0.0, 1.0);
+    // Without an end bracket the type runs once round; a full turn's end stays on its start.
+    let end = end.map(|_| if run >= 1.0 - 1e-12 { start } else { (start + run).rem_euclid(1.0).clamp(0.0, 1.0) });
+    Some((start, end))
+}
+
+/// Whether brackets `a` and `b`, fractions of a closed path's length, are at one place within
+/// rounding (0 and 1 are one place).
+fn same_bracket(a: f64, b: f64) -> bool {
+    let d = (a - b).rem_euclid(1.0);
+    d.min(1.0 - d) <= 1e-9
+}
+
+fn path_center_top(s: &mut Session, p: &Value) -> Result<Value> {
+    path_center(s, p, false)
+}
+
+fn path_center_bottom(s: &mut Session, p: &Value) -> Result<Value> {
+    path_center(s, p, true)
+}
+
+/// Type › Type on a Path › Center on Top and Center on Bottom: slide the selected type on closed
+/// paths along them so the middle of each span lands on the path's top (`bottom`: its bottom) as
+/// drawn, and center the first paragraph, in one undo step; none when nothing changes.
+fn path_center(s: &mut Session, p: &Value, bottom: bool) -> Result<Value> {
+    let c = if bottom { "type.pathCenter.bottom" } else { "type.pathCenter.top" };
+    let centered = |j: Justify| matches!(j, Justify::Center | Justify::JustifyCenter);
+    // Each object the command changes, with its new brackets when they move and whether its first
+    // paragraph is set to Center.
+    let (ids, changes) = {
+        let d = &s.doc()?.doc;
+        let ids: Vec<NodeId> = texts(s, p, c)?.into_iter().filter(|i| path_text(d.node(*i)).is_some()).collect();
+        if ids.is_empty() {
+            return Err(bad(c, "select type on a closed path"));
+        }
+        if let Some(why) = path_center_refusal(d, &ids) {
+            return Err(bad(c, why));
+        }
+        let (mut changes, mut flat) = (vec![], vec![]);
+        for id in &ids {
+            let Some(t) = path_text(d.node(*id)) else { continue };
+            let TextKind::OnPath { start, end, .. } = &t.kind else { continue };
+            let Some((to_start, to_end)) = centered_brackets(t, bottom) else {
+                flat.push(id.0.to_string());
+                continue;
+            };
+            let stays = same_bracket(*start, to_start)
+                && match (end, to_end) {
+                    (None, None) => true,
+                    (Some(a), Some(b)) => same_bracket(*a, b),
+                    _ => false,
+                };
+            let align = !centered(t.para_at(0).justify);
+            if !stays || align {
+                changes.push((*id, (!stays).then_some((to_start, to_end)), align));
+            }
+        }
+        if !flat.is_empty() {
+            let flat = flat.join(", ");
+            return Err(bad(c, format!("type on a path with no length or no height cannot be centered: {flat}")));
+        }
+        (ids, changes)
+    };
+    if !changes.is_empty() {
+        s.edit(if bottom { "Center on Bottom" } else { "Center on Top" }, |d, _| {
+            for (id, brackets, align) in &changes {
+                let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+                if let (Some(b), TextKind::OnPath { start, end, .. }) = (brackets, &mut t.kind) {
+                    (*start, *end) = *b;
+                }
+                if *align {
+                    t.edit_paras(Some(0..1), |para| para.justify = Justify::Center);
+                }
+                refresh_bounds(t);
+            }
+            Ok(())
+        })?;
+    }
+    let d = &s.doc()?.doc;
+    let (start, end) = ids.first().and_then(|id| path_text(d.node(*id))).map_or((0.0, None), |t| match &t.kind {
+        TextKind::OnPath { start, end, .. } => (*start, *end),
+        _ => (0.0, None),
+    });
+    Ok(json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "start": start, "end": end}))
 }
 
 /// The options `type.pathOptions` sets; with none of them given it queries.
@@ -540,24 +784,28 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     options(s)
 }
 
-/// Whether type `id` is a frame of a thread.
-fn threaded(d: &Document, id: NodeId) -> bool {
-    !super::threads::story_of(d, id).is_empty()
-}
-
 /// Type on a path or area type: the type Dynamic Text works on.
 fn dynamic_type(n: Option<&Node>) -> Option<&TextObject> {
     path_text(n).or_else(|| area_text(n))
 }
 
-/// `type.dynamicText` is enabled for a selection holding type on a path or area type, none of it
-/// in a thread.
+/// Type `type.dynamicText` takes: type on a path, area type, and point type, which it turns into
+/// area type with Block on.
+fn dynamic_target(n: Option<&Node>) -> Option<&TextObject> {
+    match n.map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) if matches!(t.kind, TextKind::Point) => Some(t),
+        _ => dynamic_type(n),
+    }
+}
+
+/// `type.dynamicText` is enabled for a selection holding type on a path, area type or point type,
+/// none of it in a thread.
 fn has_dynamic_type(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
     let st = s.active().ok_or("no document open")?;
     let d = &st.doc;
     let selected: Vec<NodeId> = st.selection.objects.to_vec();
-    let types: Vec<NodeId> = text_ids(d, &selected).into_iter().filter(|id| dynamic_type(d.node(*id)).is_some()).collect();
+    let types: Vec<NodeId> = text_ids(d, &selected).into_iter().filter(|id| dynamic_target(d.node(*id)).is_some()).collect();
     if types.is_empty() {
         return Err("select type on a path or area type".into());
     }
@@ -568,46 +816,61 @@ fn has_dynamic_type(s: &Session) -> std::result::Result<(), String> {
 /// path first; None when none is.
 fn threaded_refusal(d: &Document, ids: &[NodeId]) -> Option<String> {
     let (paths, areas): (Vec<NodeId>, Vec<NodeId>) = ids.iter().copied().partition(|id| path_text(d.node(*id)).is_some());
-    let frames = threaded_ids(d, &paths);
+    let threads = ThreadIndex::of(d);
+    let frames = threaded_ids(&threads, &paths);
     if !frames.is_empty() {
         return Some(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
     }
-    let frames = threaded_ids(d, &areas);
+    let frames = threaded_ids(&threads, &areas);
     (!frames.is_empty()).then(|| format!("area type in a thread cannot use Dynamic Text: {frames}"))
 }
 
-/// The ids among `ids` of frames of threads, as a list for a message; empty when there are none.
-fn threaded_ids(d: &Document, ids: &[NodeId]) -> String {
-    ids.iter().filter(|id| threaded(d, **id)).map(|id| id.0.to_string()).collect::<Vec<_>>().join(", ")
+/// The ids among `ids` of frames of `threads`, as a list for a message; empty when there are none.
+fn threaded_ids(threads: &ThreadIndex, ids: &[NodeId]) -> String {
+    ids.iter().filter(|id| threads.threaded(**id)).map(|id| id.0.to_string()).collect::<Vec<_>>().join(", ")
 }
 
 /// Type › Dynamic Text: set `on` (without it, the opposite of the first object's setting, or on
 /// when a gap is given) on the selected type on a path and area type (Block, with its gaps), in
-/// one undo step, and none when nothing changes. Turning it off keeps the sizes the text was drawn
-/// at ([`bake_dynamic_text`]).
+/// one undo step, and none when nothing changes. Turning it on also turns the selected point type
+/// into area type with Block on ([`point_to_block`]). Turning it off keeps the sizes the text was
+/// drawn at ([`bake_dynamic_text`]).
 fn dynamic_text(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.dynamicText";
     let (word_gap, line_gap) = block_gaps(p, C)?;
-    let (ids, on, planned) = {
+    let (ids, on, planned, converted) = {
         let d = &s.doc()?.doc;
-        let ids: Vec<NodeId> = texts(s, p, C)?.into_iter().filter(|i| dynamic_type(d.node(*i)).is_some()).collect();
+        let ids: Vec<NodeId> = texts(s, p, C)?.into_iter().filter(|i| dynamic_target(d.node(*i)).is_some()).collect();
         let first = *ids.first().ok_or_else(|| bad(C, "select type on a path or area type"))?;
         if let Some(why) = threaded_refusal(d, &ids) {
             return Err(bad(C, why));
         }
         let gap_given = word_gap.is_some() || line_gap.is_some();
-        if gap_given && !ids.iter().any(|id| area_text(d.node(*id)).is_some()) {
+        let on = switch_or(p, "on", gap_given || !dynamic_type(d.node(first)).is_some_and(|t| t.dynamic_text), C)?;
+        // Point type with a line to fit, which turning it on makes area type.
+        let converts = |id: &NodeId| on && dynamic_target(d.node(*id)).is_some_and(|t| matches!(t.kind, TextKind::Point) && needed_room(t).is_some());
+        if gap_given && !ids.iter().any(|id| area_text(d.node(*id)).is_some() || converts(id)) {
             return Err(bad(C, "wordGap and lineGap need area type in the selection"));
         }
-        let on = switch_or(p, "on", gap_given || !dynamic_type(d.node(first)).is_some_and(|t| t.dynamic_text), C)?;
         // Each object as the command leaves it, and only those it changes.
         let mut planned: Vec<(NodeId, TextObject)> = vec![];
+        // The point type that becomes area type, with the gaps applied, by id.
+        let mut converted: Vec<(NodeId, TextObject)> = vec![];
         for id in &ids {
-            let Some(t) = dynamic_type(d.node(*id)) else { continue };
+            let Some(t) = dynamic_target(d.node(*id)) else { continue };
             let mut after = t.clone();
-            if matches!(t.kind, TextKind::Area { .. }) {
+            if matches!(t.kind, TextKind::Area { .. } | TextKind::Point) {
                 after.area.word_gap = word_gap.unwrap_or(t.area.word_gap);
                 after.area.line_gap = line_gap.unwrap_or(t.area.line_gap);
+            }
+            if matches!(t.kind, TextKind::Point) {
+                // Point type has no Dynamic Text of its own: on, it becomes area type with Block
+                // on; off, or with no line to fit, it stays as it is.
+                if let Some(block) = on.then(|| point_to_block(&after, &[])).flatten() {
+                    planned.push((*id, block));
+                    converted.push((*id, after));
+                }
+                continue;
             }
             match (on, t.dynamic_text) {
                 (true, true) => refresh_bounds(&mut after),
@@ -628,13 +891,26 @@ fn dynamic_text(s: &mut Session, p: &Value) -> Result<Value> {
                 planned.push((*id, after));
             }
         }
-        (ids, on, planned)
+        (ids, on, planned, converted)
     };
     if !planned.is_empty() {
         s.edit("Dynamic Text", |d, _| {
             for (id, after) in &planned {
                 if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
                     **t = after.clone();
+                }
+            }
+            if converted.is_empty() {
+                return Ok(());
+            }
+            // The new area type takes the Text Wrap shapes above it; one that has any is fitted
+            // again around them, with the depth that holds every line.
+            for id in vectorcraft_doc::text::resolve_wrap(None, d) {
+                let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { continue };
+                let block = converted.iter().find(|(c, _)| *c == id).and_then(|(_, src)| point_to_block(src, &t.wrap));
+                match block {
+                    Some(block) => **t = block,
+                    None => refresh_bounds(t),
                 }
             }
             Ok(())
@@ -690,7 +966,7 @@ fn has_preset_type(s: &Session) -> std::result::Result<(), String> {
     if ids.is_empty() {
         return Err("select point type or type on a path".into());
     }
-    let frames = threaded_ids(d, &ids);
+    let frames = threaded_ids(&ThreadIndex::of(d), &ids);
     if !frames.is_empty() {
         return Err(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
     }
@@ -829,7 +1105,7 @@ fn dynamic_text_preset(s: &mut Session, p: &Value) -> Result<Value> {
         if ids.is_empty() {
             return Err(bad(C, "select point type or type on a path"));
         }
-        let frames = threaded_ids(d, &ids);
+        let frames = threaded_ids(&ThreadIndex::of(d), &ids);
         if !frames.is_empty() {
             return Err(bad(C, format!("type on a path in a thread cannot use Dynamic Text: {frames}")));
         }

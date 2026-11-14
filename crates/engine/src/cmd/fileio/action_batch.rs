@@ -1429,6 +1429,42 @@ mod tests {
         assert_eq!(written.len(), 2, "{written:?}");
     }
 
+    /// A Data Sets batch whose Save step has no path saves the document's own file. When that file is
+    /// outside the client's read and write roots, each row's error keeps the write root and names the
+    /// file by its file name, with Stop on Error on and off. A source folder the client gives stays
+    /// whole in the error.
+    #[test]
+    fn dataset_batch_step_error_hides_document_path() {
+        use crate::file_access::{AutomationRoots, confine};
+
+        let base = tmp("roots-error");
+        let (inside, outside) = (base.join("in"), base.join("kept-out"));
+        for f in [&inside, &outside] {
+            std::fs::create_dir_all(f).unwrap();
+        }
+        let mut s = with_data_sets(&["Alpha", "Beta"]);
+        let own = outside.join("doc.vectorcraft").to_string_lossy().into_owned();
+        s.execute("document.save", &json!({"path": own})).unwrap();
+        let roots = AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+        let root = crate::cmd::findfiles::plain(std::fs::canonicalize(&inside).unwrap()).display().to_string();
+        let hidden = outside.to_string_lossy().into_owned();
+        for (stop, rows) in [(true, 1), (false, 2)] {
+            let p = json!({"source": "datasets", "stopOnError": stop, "commands": [{"command": "document.save", "params": {}}]});
+            let r = confine(roots.as_ref(), || s.execute("action.batch", &p)).unwrap();
+            assert_eq!((r["failed"].as_u64(), r["processed"].as_array().map(Vec::len)), (Some(rows), Some(rows as usize)), "{r}");
+            for row in r["processed"].as_array().unwrap() {
+                let e = row["error"].as_str().unwrap_or_default();
+                let want = format!("batch step 0 (`document.save`) failed: automation path rejected: outside the write root {root}: doc.vectorcraft");
+                assert_eq!(e, want, "{r}");
+            }
+            assert!(!r.to_string().contains(&hidden), "{r}");
+        }
+        let p = json!({"source": "folder", "folder": hidden, "commands": [{"command": "object.unlockAll", "params": {}}]});
+        let e = confine(roots.as_ref(), || s.execute("action.batch", &p)).unwrap_err().to_string();
+        assert!(e.contains(&hidden), "{e}");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
     /// The names of the files in `dir`, sorted.
     fn file_names(dir: &std::path::Path) -> Vec<String> {
         let mut names: Vec<String> =

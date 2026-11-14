@@ -962,6 +962,44 @@ fn scroll_sideways_with_cmd_wheel_dims_with_zoom_with_mouse_wheel() {
     }
 }
 
+/// Type › Show samples on white: its checkbox is dimmed while Enable in-menu font previews is
+/// unchecked in the dialog, and a click on it then leaves the setting as it was.
+#[test]
+fn show_samples_on_white_dims_without_in_menu_font_previews() {
+    fn label(s: &egui::Shape, text: &str) -> Option<(egui::Color32, egui::Rect)> {
+        match s {
+            egui::Shape::Text(t) if t.galley.text() == text => t.galley.job.sections.first().map(|s| (s.format.color, t.visual_bounding_rect())),
+            egui::Shape::Vec(v) => v.iter().find_map(|s| label(s, text)),
+            _ => None,
+        }
+    }
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let mut a = app();
+    let mut frame = |d: &mut Dialog, events: Vec<egui::Event>| {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 1400.0))),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| category_fields(ui, &mut a, d, "Type"));
+        out.textures_delta.clear();
+        out.shapes.iter().find_map(|c| label(&c.shape, "Show samples on white"))
+    };
+    let t = Tokens::get(&ctx);
+    for (preview, color, what) in [(true, t.text, "enabled while previews are on"), (false, t.text_disabled, "dimmed while they are off")] {
+        let mut d = Dialog::new("preferences", json!({"fontPreview": preview, "fontSamplesOnWhite": false}));
+        let (shown, at) = frame(&mut d, vec![]).unwrap_or_else(|| panic!("no label ({what})"));
+        assert_eq!(shown, color, "{what}");
+        let press =
+            |pressed| egui::Event::PointerButton { pos: at.center(), button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        frame(&mut d, vec![egui::Event::PointerMoved(at.center()), press(true)]);
+        frame(&mut d, vec![press(false)]);
+        // A click turns it on while it is enabled, and leaves it off while it is dimmed.
+        assert_eq!(d.fields["fontSamplesOnWhite"], json!(preview), "after a click, {what}");
+    }
+}
+
 /// 0.5.0 saved `powerSaving` for everyone (its default): it reads as Automatic, while the
 /// choices this version offers are kept (#502).
 #[test]

@@ -236,7 +236,7 @@ impl ShapeTool {
         self.selection = if let Some((handle, bx)) = self.over_handle(cx, ev.pos) {
             let is_area = |id: &vectorcraft_doc::NodeId| cx.doc.node(*id).is_some_and(is_area_type);
             let areas = cx.selection.objects.iter().any(is_area);
-            Some(SelectionDrag::Scale { handle, bx, areas, snap: Box::new(PointSnap::new(cx, || Targets::for_scale(cx))), last: None })
+            Some(SelectionDrag::Scale { handle, bx, areas, snap: Box::new(PointSnap::scaling(cx, || Targets::for_scale(cx))), last: None })
         } else {
             match hit_center(cx, ev.pos, cx.point_tol()) {
                 Some((_, hold)) => Some(SelectionDrag::Move { start: ev.pos, hold, began: false, snap: Box::new(MoveSnap::new(cx)) }),
@@ -667,6 +667,15 @@ impl Tool for ShapeTool {
     /// bounds, as for the Selection tool.
     fn resizing(&self) -> bool {
         matches!(self.selection, Some(SelectionDrag::Scale { .. }))
+    }
+    /// A move of the selection by its center point, as the Selection tool's move.
+    fn moving(&self) -> bool {
+        matches!(self.selection, Some(SelectionDrag::Move { began: true, .. }))
+    }
+    /// Drawing a shape with a tool that shows the selection's bounding box. The Line Segment tool
+    /// shows no box, so it reports none.
+    fn drawing_boxed(&self) -> bool {
+        shows_shape_widgets(self.id) && self.began
     }
     /// Adjusting a widget (the canvas hides the bounding box meanwhile, as for the Selection tool).
     fn transforming(&self) -> bool {

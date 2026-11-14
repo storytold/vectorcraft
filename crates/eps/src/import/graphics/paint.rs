@@ -5,6 +5,19 @@ use super::{
     PsError, REGISTRATION, Rc, Rect, Res, SHADING_SAMPLES, Shared, UNKNOWN_FUNCTIONS, UNKNOWN_SHADINGS, Vec2, clamp_between, ps_err,
 };
 
+#[cfg(test)]
+thread_local! {
+    /// How many patterns the lookups of tiling patterns on this thread compared with the pattern
+    /// they looked for.
+    static TILINGS_COMPARED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`TILINGS_COMPARED`] of this thread.
+#[cfg(test)]
+pub(crate) fn tilings_compared() -> u64 {
+    TILINGS_COMPARED.get()
+}
+
 impl Interp<'_> {
     // ---------- colour ----------
 
@@ -212,7 +225,13 @@ impl Interp<'_> {
         let proc = get("PaintProc").ok_or(PsError::Ps("undefined", "PaintProc".into()))?;
         let key = proc.items().cloned().ok_or(PsError::Ps("typecheck", "PaintProc".into()))?;
         let hash = tiling_hash(&key, tile, under.as_ref());
-        let made = self.out.tilings.get(&hash).and_then(|list| list.iter().find(|(p, t, u, _)| p.same(&key) && *t == tile && *u == under));
+        let made = self.out.tilings.get(&hash).and_then(|list| {
+            list.iter().find(|(p, t, u, _)| {
+                #[cfg(test)]
+                TILINGS_COMPARED.set(TILINGS_COMPARED.get().saturating_add(1));
+                p.same(&key) && *t == tile && *u == under
+            })
+        });
         if let Some((.., name)) = made {
             return Ok(Paint::Pattern { pattern: name.clone(), xf });
         }

@@ -92,6 +92,112 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
 }
 
+/// Opened for a page of the art's bounds (Export As with Use Artboards off), the dialog has no
+/// Artboards section, and OK writes one page of the art's bounds with its options, a saved preset
+/// and View PDF after Saving included.
+#[test]
+fn a_page_of_the_arts_bounds_has_no_artboards_section_and_takes_the_options() {
+    let (mut app, written, opened) = app();
+    app.run("pdf.preset.save", json!({"name": "Mine", "compatibility": "1.5"})).unwrap();
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    theme::install_fonts(&ctx);
+    let has_range = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| super::super::show(app, ui.ctx()));
+        out.textures_delta.clear();
+        let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+        nodes.iter().any(|(_, n)| n.label() == Some("Range:") && n.role() == egui::accesskit::Role::RadioButton)
+    };
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/artboards.pdf"})).unwrap();
+    has_range(&mut app);
+    assert!(has_range(&mut app), "the artboards' dialog has the section");
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/art.pdf", "preset": "Mine", "useArtboards": false})).unwrap();
+    assert!(app.ui.dialog.as_ref().unwrap().bool(ART_BOUNDS));
+    has_range(&mut app);
+    assert!(!has_range(&mut app), "no artboards to choose");
+    set_field(&mut app, "viewAfterSaving", json!(true));
+    let r = super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none(), "closes after saving");
+    assert_eq!(r["path"], "/tmp/art.pdf");
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert!(w[0].1.starts_with(b"%PDF-1.5"), "the saved preset reaches the writer");
+    let pdf = vectorcraft_pdf::import(&w[0].1).unwrap();
+    assert_eq!(pdf.artboards.len(), 1);
+    let size = pdf.artboards[0].rect.size();
+    assert!((50.0..52.0).contains(&size.width) && (40.0..42.0).contains(&size.height), "the rectangle's bounds with its stroke: {size:?}");
+    assert_eq!(opened.borrow().len(), 1, "View PDF after Saving opens the file");
+    assert!(opened.borrow()[0].0.ends_with("/tmp/art.pdf"));
+}
+
+/// `useArtboards` other than true, false or null is refused, as `document.exportPdf` refuses it,
+/// and no dialog opens.
+#[test]
+fn a_use_artboards_that_is_not_true_or_false_is_refused() {
+    let (mut app, _, _) = app();
+    for bad in [json!("false"), json!(0), json!({})] {
+        let e = app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "useArtboards": bad})).unwrap_err();
+        assert!(e.contains("useArtboards must be true or false"), "{bad}: {e}");
+        assert!(app.ui.dialog.is_none(), "{bad}: no dialog opens");
+    }
+    for ok in [json!(true), json!(null)] {
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/x.pdf", "useArtboards": ok})).unwrap();
+        assert!(!app.ui.dialog.take().unwrap().bool(ART_BOUNDS), "{ok}: the artboards' dialog");
+    }
+}
+
+/// With Background Export on, a page of the art's bounds is written in the background, as Export
+/// As writes its other formats.
+#[test]
+fn a_page_of_the_arts_bounds_is_written_in_the_background() {
+    let written = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, Vec<u8>)>::new()));
+    let w = written.clone();
+    let services = Services {
+        write_shared: Some(std::sync::Arc::new(move |p: &str, b: &[u8]| {
+            w.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    app.session.prefs.background_export = true;
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/bg.pdf", "useArtboards": false})).unwrap();
+    let r = super::super::confirm(&mut app).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    assert!(app.ui.dialog.is_none());
+    crate::background::wait_all(&mut app);
+    let w = written.lock().unwrap();
+    assert_eq!(w.len(), 1);
+    assert_eq!(w[0].0, "/tmp/bg.pdf");
+    assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 1);
+}
+
+/// A document without a title of its own, saved to a file, is titled after that file in the PDF,
+/// and viewers show the file name, with or without Use Artboards; one with its own title shows
+/// that title.
+#[test]
+fn a_page_of_the_arts_bounds_shows_the_title_only_when_it_is_the_documents_own() {
+    let (mut app, written, _) = app();
+    app.session.doc_mut().unwrap().path = Some("/docs/Poster.vectorcraft".into());
+    for artboards in [true, false] {
+        app.run("ui.savePdfDialog", json!({"path": "/tmp/t.pdf", "useArtboards": artboards, "compression": {"compressText": false}})).unwrap();
+        super::super::confirm(&mut app).unwrap();
+    }
+    std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc).title = "Spring Sale".into();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/t.pdf", "useArtboards": false, "compression": {"compressText": false}})).unwrap();
+    super::super::confirm(&mut app).unwrap();
+    let w = written.borrow();
+    assert_eq!(w.len(), 3);
+    let texts: Vec<String> = w.iter().map(|(_, b)| String::from_utf8_lossy(b).into_owned()).collect();
+    for (pdf, artboards) in texts[..2].iter().zip([true, false]) {
+        assert!(pdf.contains("/Title(Poster)"), "useArtboards {artboards}");
+        assert!(!pdf.contains("/DisplayDocTitle true"), "useArtboards {artboards}");
+    }
+    assert!(texts[2].contains("/Title(Spring Sale)") && texts[2].contains("/DisplayDocTitle true"));
+}
+
 #[test]
 fn warnings_reach_the_status_and_errors_keep_the_dialog_open() {
     let (mut app, written, opened) = app();
@@ -138,25 +244,33 @@ fn summary_warnings_are_translated() {
 }
 
 /// The warnings and the error for a page longer than 14,400 pt are translated: a PDF 1.5 file
-/// written as PDF 1.6, a page with a `UserUnit`, a PDF/X-4 page in points, a refused PDF/X-1a
-/// file and a page too narrow for the `UserUnit` its long side needs.
+/// written as PDF 1.6, a page with a `UserUnit` with the option that writes it in points, a
+/// PDF/X-4 page in points, a refused PDF/X-1a file and a page too narrow for the `UserUnit` its
+/// long side needs.
 #[test]
 fn long_page_notes_are_translated() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 56_692.91, "height": 2_834.65})).unwrap();
     let mut notes: Vec<String> = vec![];
-    for p in [json!({"compatibility": "1.5"}), json!({"preset": "PDF/X-4:2010"})] {
+    for p in [json!({"compatibility": "1.5", "longPagesInPoints": false}), json!({"preset": "PDF/X-4:2010"})] {
         let r = s.execute("document.exportPdf", &p).unwrap();
         let warnings = r["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str());
         notes.extend(warnings.filter(|w| w.contains("14,400 pt")).map(str::to_string));
     }
     notes.push(s.execute("document.exportPdf", &json!({"preset": "PDF/X-1a:2001"})).unwrap_err().to_string());
     s.execute("file.new", &json!({"width": 85_040, "height": 17})).unwrap();
-    let r = s.execute("document.exportPdf", &json!({})).unwrap();
+    let r = s.execute("document.exportPdf", &json!({"longPagesInPoints": false})).unwrap();
     let warnings = r["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str());
     notes.extend(warnings.filter(|w| w.contains("too long and narrow")).map(str::to_string));
     assert_eq!(notes.len(), 5, "{notes:?}");
-    let english = ["has no UserUnit, which", "apps that ignore UserUnit", "apps that keep to the limit", "real numbers up to", "too long and narrow"];
+    let english = [
+        "has no UserUnit, which",
+        "apps that ignore UserUnit",
+        "apps that keep to the limit",
+        "real numbers up to",
+        "too long and narrow",
+        "turn on",
+    ];
     for code in ["de", "fr", "ja", "zh-hans"] {
         let lang = crate::i18n::Lang::from_code(code).unwrap();
         for note in &notes {

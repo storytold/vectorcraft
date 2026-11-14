@@ -78,7 +78,8 @@ pub(super) const ISOLATION_BUTTON: &str = "cb-isolation";
 /// less, the menu is left out so those controls still fit the narrowest window.
 const ARTBOARD_SNAPPING_WIDTH: f32 = 900.0;
 
-/// The Control bar's snapping quick access; every change uses its existing command.
+/// The Control bar's snapping quick access; every change uses its existing command, and Pixel
+/// Snapping Options… opens the dialog of `view.snapToPixel.options`.
 fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.menu_button(tl!("Snapping"), |ui| {
         for (label, cmd, on) in [
@@ -91,6 +92,10 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             if widgets::check(ui, label, on, true) {
                 crate::menus::invoke(app, cmd, json!({}));
             }
+        }
+        if ui.button(tl!("Pixel Snapping Options…")).clicked() {
+            ui.close();
+            crate::menus::invoke(app, "view.snapToPixel.options", json!({}));
         }
         ui.separator();
         for (key, label, on) in [
@@ -202,7 +207,7 @@ fn buttons_width(ui: &Ui, n: usize) -> f32 {
 /// The separator that ends a group of the Control bar's controls, as [`group_end_width`] measures it.
 fn group_end(ui: &mut Ui) {
     ui.add_space(GROUP_GAP);
-    separator(ui);
+    boundary(ui, separator);
 }
 
 fn group_end_width(ui: &Ui) -> f32 {
@@ -216,6 +221,66 @@ fn separator(ui: &mut Ui) {
 
 fn separator_width(ui: &Ui) -> f32 {
     SEPARATOR + ui.spacing().item_spacing.x
+}
+
+/// A separator between two groups of the Control bar's controls, drawn in the bar's row `ui`: the
+/// pass that drew it, the range of the paint list that holds it (between two empty shapes), the
+/// row's next widget id just after it, and whether it reaches the end of the row, leaving no room
+/// for a control after it.
+#[derive(Clone, Copy)]
+struct Boundary {
+    pass: u64,
+    shapes: (usize, usize),
+    after: egui::Id,
+    at_end: bool,
+}
+
+/// The key of the row `ui`'s last [`Boundary`].
+fn boundary_key(ui: &Ui) -> egui::Id {
+    ui.unique_id().with("cb-group-boundary")
+}
+
+/// A separator between two groups of the Control bar's controls, drawn with `draw`. It stays only
+/// while a control follows it in the row: [`erase_trailing`] erases it at the end of the row when no
+/// control does or none has room, and the next separator erases it when no control comes between
+/// them. The separator keeps its room either way.
+fn boundary(ui: &mut Ui, draw: impl FnOnce(&mut Ui)) {
+    erase_trailing(ui);
+    let start = ui.painter().add(egui::Shape::Noop);
+    draw(ui);
+    let end = ui.painter().add(egui::Shape::Noop);
+    let at_end = ui.cursor().min.x >= ui.max_rect().right();
+    let b = Boundary { pass: ui.ctx().cumulative_pass_nr(), shapes: (start.0, end.0), after: ui.next_auto_id(), at_end };
+    let key = boundary_key(ui);
+    ui.data_mut(|d| d.insert_temp(key, b));
+}
+
+/// The separator that ends a group of the Control bar's controls, drawn as `ui.separator()` draws
+/// one, and left out when no control follows it ([`boundary`]).
+pub(crate) fn group_separator(ui: &mut Ui) {
+    boundary(ui, |ui| {
+        ui.separator();
+    });
+}
+
+/// Erases the row `ui`'s last group separator when no control was drawn after it in this pass, or
+/// none had room in the row. The end of the Control bar's controls row calls it too.
+fn erase_trailing(ui: &mut Ui) {
+    let key = boundary_key(ui);
+    let Some(b) = ui.data_mut(|d| {
+        let b = d.get_temp::<Boundary>(key);
+        d.remove::<Boundary>(key);
+        b
+    }) else {
+        return;
+    };
+    if b.pass != ui.ctx().cumulative_pass_nr() || (b.after != ui.next_auto_id() && !b.at_end) {
+        return;
+    }
+    let painter = ui.painter();
+    for i in b.shapes.0 + 1..b.shapes.1 {
+        painter.set(egui::layers::ShapeIdx(i), egui::Shape::Noop);
+    }
 }
 
 /// The room the controls at the end of the Control bar need: the Transform link, or Document Setup
@@ -276,15 +341,45 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
             }
         }
         if transform {
-            separator(ui);
+            boundary(ui, separator);
         }
     }
     transform
 }
 
-/// The edges of the window the Control bar docks to (`window.control.dock {edge}`): the top, then
-/// the bottom.
-pub const CONTROL_BAR_EDGES: [&str; 2] = ["top", "bottom"];
+/// Draws the Control bar's Align group after the artboard controls, with the Artboard tool in use:
+/// the Align buttons, the Align To menu and, while they can space the selected artboards
+/// ([`crate::panels::align::artboards_distribute`]), the Distribute buttons. They align and
+/// distribute the selected artboards
+/// ([`crate::panels::align::run_button`]). Each shows only while the bar has room for it, and none
+/// while the panel menu has the group off.
+fn artboard_align_group(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if !group_on(app, "alignDistribute") || app.session.active().is_none() || ui.available_width() < separator_width(ui) + buttons_width(ui, 7) {
+        return;
+    }
+    boundary(ui, separator);
+    crate::panels::align::align_buttons(app, ui, BUTTON);
+    if ui.available_width() >= crate::panels::align::align_to_menu_width(BUTTON) + ui.spacing().item_spacing.x {
+        crate::panels::align::align_to_menu(app, ui, BUTTON);
+        if crate::panels::align::artboards_distribute(app) && ui.available_width() >= GROUP_GAP + buttons_width(ui, 6) {
+            ui.add_space(GROUP_GAP);
+            crate::panels::align::distribute_buttons(app, ui, BUTTON);
+        }
+    }
+}
+
+/// The places the Control bar goes to (`window.control.dock {edge}`): docked to the top or the
+/// bottom of the window, or floating over it.
+pub const CONTROL_BAR_EDGES: [&str; 3] = ["top", "bottom", "float"];
+
+/// Where `window.control.dock {edge: "float"}` floats the Control bar the first time: its top-left
+/// corner in window points.
+pub const CONTROL_BAR_FLOAT_AT: [f32; 2] = [60.0, 80.0];
+
+/// The entry of [`CONTROL_BAR_EDGES`] the Control bar is at in `ui`.
+pub fn control_bar_placement(ui: &crate::state::UiState) -> &'static str {
+    CONTROL_BAR_EDGES[if ui.control_bar_floating { 2 } else { usize::from(ui.control_bar_bottom) }]
+}
 
 /// The groups of the Control bar's options that its panel menu turns on or off
 /// (`window.control.options {group, visible?}`), by id, in the menu's order. Every group is on
@@ -349,6 +444,76 @@ const MENU_BUTTON: f32 = 16.0;
 /// The height of the band drawn along the edge of the window that a gripper drag docks the bar to.
 const DOCK_BAND: f32 = 4.0;
 
+/// The Control bar's height, docked or floating.
+const HEIGHT: f32 = 34.0;
+
+/// The Control bar's inner margin left and right, around its gripper and its panel menu button.
+const MARGIN: f32 = 10.0;
+
+/// The width the floating Control bar takes in a window wide enough for it.
+const FLOAT_WIDTH: f32 = 800.0;
+
+/// How near the edge the bar docks to a gripper drag is released for the bar to dock there; a
+/// release farther from both edges floats the bar.
+const DOCK_ZONE: f32 = 24.0;
+
+/// The key of a gripper drag in progress: where the pointer holds the bar from its top-left
+/// corner, and the gripper's widget id.
+fn move_id() -> egui::Id {
+    egui::Id::unique("control_bar_gripper_move")
+}
+
+/// Is the Control bar's gripper being dragged, the frame that releases it included? An Escape then
+/// cancels the drag, and nothing else. A drag left over from a bar hidden while the button was held
+/// ends with the button.
+pub fn control_bar_moving(ctx: &egui::Context) -> bool {
+    let Some((_, gripper)) = ctx.data(|d| d.get_temp::<(egui::Vec2, egui::Id)>(move_id())) else { return false };
+    ctx.input(|i| i.pointer.primary_down()) || ctx.drag_stopped_id() == Some(gripper)
+}
+
+/// Where a gripper release puts the Control bar.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Release {
+    /// Docked to the bottom (true) or the top (false).
+    Edge(bool),
+    /// Floating, its top-left corner here.
+    Float(egui::Pos2),
+}
+
+/// The width of the floating Control bar in a window whose room below the menu bar is `room`.
+fn float_width(room: egui::Rect) -> f32 {
+    FLOAT_WIDTH.min(room.width()).max(2.0 * MARGIN + MENU_BUTTON + 6.0)
+}
+
+/// The floating Control bar's rect for its saved corner `pos`, kept inside `room`, the window below
+/// the menu bar, so its gripper and panel menu stay in reach.
+fn float_rect(pos: Option<[f32; 2]>, room: egui::Rect) -> egui::Rect {
+    let size = vec2(float_width(room), HEIGHT);
+    egui::Rect::from_min_size(crate::tools_float::clamp(pos.unwrap_or(CONTROL_BAR_FLOAT_AT), size, room), size)
+}
+
+/// Where a gripper drag released at `at` puts the bar, held at `grab` from its top-left corner:
+/// within [`DOCK_ZONE`] of the top or the bottom of `room` (the window below the menu bar) docked
+/// there, farther from both floating under the pointer. In a window too short for the two zones
+/// and a floating bar between them, it docks at the nearer edge. A release outside `window` puts
+/// it nowhere, and the bar stays where it was.
+fn release_at(at: egui::Pos2, grab: egui::Vec2, room: egui::Rect, window: egui::Rect) -> Option<Release> {
+    if !window.contains(at) || !at.x.is_finite() || !at.y.is_finite() {
+        return None;
+    }
+    if room.height() < 2.0 * DOCK_ZONE + HEIGHT {
+        return Some(Release::Edge(at.y > room.center().y));
+    }
+    Some(if at.y < room.top() + DOCK_ZONE {
+        Release::Edge(false)
+    } else if at.y > room.bottom() - DOCK_ZONE {
+        Release::Edge(true)
+    } else {
+        let corner = at - grab;
+        Release::Float(float_rect(Some([corner.x, corner.y]), room).min)
+    })
+}
+
 /// Docks the Control bar to `edge` of [`CONTROL_BAR_EDGES`], through its command.
 fn dock(app: &mut VectorcraftApp, edge: &str) {
     crate::menus::invoke(app, "window.control.dock", json!({ "edge": edge }));
@@ -356,7 +521,8 @@ fn dock(app: &mut VectorcraftApp, edge: &str) {
 
 /// The Control bar's panel menu: an item for each group of [`CONTROL_BAR_GROUPS`], checked while
 /// the group is on, which turns it on or off; then Dock to Top and Dock to Bottom, the edge the bar
-/// is docked to checked. In a window too short for every item, the list scrolls.
+/// is docked to checked, and neither while it floats. In a window too short for every item, the
+/// list scrolls.
 fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     let resp = crate::panels::menu_button(ui, "control", rect);
     egui::Popup::menu(&resp).show(|ui| {
@@ -369,7 +535,7 @@ fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
             }
             ui.separator();
             for (i, label) in [tl!("Dock to Top"), tl!("Dock to Bottom")].into_iter().enumerate() {
-                if widgets::menu_item(ui, label, true, usize::from(app.ui.control_bar_bottom) == i) {
+                if widgets::menu_item(ui, label, true, control_bar_placement(&app.ui) == CONTROL_BAR_EDGES[i]) {
                     dock(app, CONTROL_BAR_EDGES[i]);
                 }
             }
@@ -378,7 +544,7 @@ fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
 }
 
 /// The Control bar's Fill and Stroke group: the fill and stroke chips, the Stroke link, the weight
-/// and the width profile, and the separator after them.
+/// and the width profile, and the separator after them while a control follows ([`group_separator`]).
 fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
     let shown_stroke = crate::panels::current_stroke(app);
     let mixed = crate::panels::stroke_mixed(app, ui.ctx());
@@ -393,12 +559,12 @@ fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.run("stroke.set", json!({"profile": id})).ok();
     }
     ui.add_space(4.0);
-    ui.separator();
+    group_separator(ui);
 }
 
 /// The Control bar's Opacity group (its link and field, showing `opacity`) and, with something
 /// `selected`, its Graphic Style group (Style, Recolor Artwork and Global Edit Options), each while
-/// the panel menu has it on, and the separator after them.
+/// the panel menu has it on, and the separator after them while a control follows.
 fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity: f32, selected: bool) {
     let (opacity_on, style_on) = (group_on(app, "opacity"), group_on(app, "graphicStyle") && selected);
     if opacity_on {
@@ -428,173 +594,234 @@ fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity:
         global_edit_options(app, ui);
     }
     if opacity_on || style_on {
-        ui.separator();
+        group_separator(ui);
     }
 }
 
-/// The Control bar's gripper. Dragging it shows a band along the top or the bottom edge of the
-/// window, whichever the pointer is nearer, and docks the bar there on release.
-fn gripper(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens) {
+/// The Control bar's gripper, at the left end of the bar `bar`. Dragging it shows where a release
+/// puts the bar ([`release_at`] in `dock_room`, the window below the menu bar): a band along the
+/// edge it docks to, or the outline of the bar floating under the pointer. The bar stays where it is
+/// until the release. Escape, or the window losing the focus, cancels the drag, and a release
+/// outside the window leaves the bar where it was.
+fn gripper(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, dock_room: egui::Rect) {
     let (g, resp) = ui.allocate_exact_size(vec2(6.0, 20.0), Sense::drag());
     for i in 0..5 {
         ui.painter().circle_filled(g.center_top() + vec2(0.0, 2.0 + i as f32 * 4.0), 0.9, t.text_disabled);
     }
     let resp = resp.on_hover_cursor(egui::CursorIcon::Grab);
-    if !resp.dragged() && !resp.drag_stopped() {
+    let ctx = ui.ctx().clone();
+    if resp.drag_started()
+        && let Some(press) = ctx.input(|i| i.pointer.press_origin())
+    {
+        ctx.data_mut(|d| d.insert_temp(move_id(), (press - bar.min, resp.id)));
+    }
+    let Some((grab, _)) = ctx.data(|d| d.get_temp::<(egui::Vec2, egui::Id)>(move_id())) else { return };
+    let canceled = ctx.input(|i| i.key_pressed(egui::Key::Escape) || !i.focused);
+    if canceled || !(resp.dragged() || resp.drag_stopped()) {
+        ctx.data_mut(|d| d.remove::<(egui::Vec2, egui::Id)>(move_id()));
         return;
     }
-    let Some(pos) = resp.interact_pointer_pos().or_else(|| ui.ctx().pointer_latest_pos()) else { return };
-    let window = ui.ctx().content_rect();
-    let bottom = pos.y > window.center().y;
+    let window = ctx.content_rect();
+    let target = ctx.input(|i| i.pointer.latest_pos()).and_then(|at| release_at(at, grab, dock_room, window));
     if resp.drag_stopped() {
-        if bottom != app.ui.control_bar_bottom {
-            dock(app, CONTROL_BAR_EDGES[usize::from(bottom)]);
+        ctx.data_mut(|d| d.remove::<(egui::Vec2, egui::Id)>(move_id()));
+        match target {
+            Some(Release::Edge(bottom)) if app.ui.control_bar_floating || bottom != app.ui.control_bar_bottom => {
+                dock(app, CONTROL_BAR_EDGES[usize::from(bottom)]);
+            }
+            Some(Release::Float(at)) => {
+                app.ui.control_bar_float_pos = Some([at.x, at.y]);
+                if !app.ui.control_bar_floating {
+                    dock(app, CONTROL_BAR_EDGES[2]);
+                }
+            }
+            _ => {}
         }
         return;
     }
-    ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-    let band = if bottom {
-        egui::Rect::from_min_max(egui::pos2(window.left(), window.bottom() - DOCK_BAND), window.max)
-    } else {
-        egui::Rect::from_min_max(window.min, egui::pos2(window.right(), window.top() + DOCK_BAND))
-    };
-    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("control_bar_dock_band"));
-    ui.ctx().layer_painter(layer).rect_filled(band, 0.0, t.accent);
+    ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("control_bar_dock_band")));
+    match target {
+        Some(Release::Edge(bottom)) => {
+            let band = if bottom {
+                egui::Rect::from_min_max(egui::pos2(dock_room.left(), dock_room.bottom() - DOCK_BAND), dock_room.max)
+            } else {
+                egui::Rect::from_min_max(dock_room.min, egui::pos2(dock_room.right(), dock_room.top() + DOCK_BAND))
+            };
+            painter.rect_filled(band, 0.0, t.accent);
+        }
+        Some(Release::Float(at)) => {
+            let outline = egui::Rect::from_min_size(at, vec2(float_width(dock_room), HEIGHT));
+            painter.rect_stroke(outline, 0.0, Stroke::new(2.0, t.accent), egui::StrokeKind::Inside);
+        }
+        None => {}
+    }
 }
 
 /// The Control bar (Window → Control), context-sensitive like Illustrator's, docked to the top or
-/// the bottom of the window.
+/// the bottom of the window, or floating over the window below the menu bar, where it takes no room
+/// from the canvas. A floating bar is [`FLOAT_WIDTH`] wide, or as wide as the window when that is
+/// narrower, and is kept inside the window when the window shrinks.
 pub fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
+    // The window below the menu bar: where the bar docks at the top, and where it floats.
+    let dock_room = ui.available_rect_before_wrap();
+    let frame = egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0, t.border));
+    if app.ui.control_bar_floating {
+        let bar = float_rect(app.ui.control_bar_float_pos, dock_room);
+        let ctx = ui.ctx().clone();
+        let area = egui::Area::new(egui::Id::unique("control_bar_floating")).order(egui::Order::Middle).fixed_pos(bar.min).constrain(false);
+        area.show(&ctx, |ui| {
+            frame.show(ui, |ui| {
+                // Inside the frame's margins and its 1-point border.
+                ui.set_width(bar.width() - 2.0 * MARGIN - 2.0);
+                ui.set_height(HEIGHT - 2.0);
+                contents(app, ui, &t, bar, dock_room, true);
+            });
+        });
+        return;
+    }
     let bottom = app.ui.control_bar_bottom;
     let panel = if bottom { egui::Panel::bottom("control_bar") } else { egui::Panel::top("control_bar") };
-    let bar = panel
-        .exact_size(34.0)
-        .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(10, 0)).stroke(Stroke::new(1.0, t.border)))
-        .show(ui, |ui| {
-            // The panel menu button takes the right end, and the controls trim to the room left of it:
-            // they are laid out in that room, so every room check below leaves the button's width.
-            let full = ui.max_rect();
-            let menu = egui::Rect::from_center_size(egui::pos2(full.right() - MENU_BUTTON / 2.0, full.center().y), vec2(MENU_BUTTON, MENU_BUTTON));
-            let room = egui::Rect::from_min_max(full.min, egui::pos2(menu.left() - ui.spacing().item_spacing.x, full.bottom()));
-            let layout = egui::Layout::left_to_right(egui::Align::Center);
-            let controls = ui.scope_builder(egui::UiBuilder::new().max_rect(room).layout(layout), |ui| {
-                gripper(app, ui, &t);
-                if app.session.active().is_none() {
-                    ui.label(egui::RichText::new(tl!("No Document")).color(t.text_dim));
-                    return;
-                }
-                // The Artboard tool's controls fill the narrowest window, so they keep it to themselves there.
-                if group_on(app, "snapping") && (app.session.tool_id() != "artboard" || ui.available_width() >= ARTBOARD_SNAPPING_WIDTH) {
-                    snapping_menu(app, ui);
-                }
-                let Some(st) = app.session.active() else { return };
-                let sel = st.selection.objects.clone();
-                let units = app.session.general_unit();
-                let first = sel.first().and_then(|id| st.doc.node(*id));
-                let anchors = anchor_controls(app);
-                let label = match first {
-                    _ if app.session.tool_id() == "artboard" => tl!("Artboard"),
-                    Some(_) if sel.len() == 1 && anchors != AnchorControls::None => {
-                        tl!("Anchor Point")
-                    }
-                    Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if sel.len() == 1 => {
-                        if im.link.is_some() {
-                            tl!("Linked File")
-                        } else {
-                            tl!("Embedded")
-                        }
-                    }
-                    Some(n) if sel.len() == 1 && crate::panels::image_trace::is_trace(n) => {
-                        tl!("Image Tracing")
-                    }
-                    _ => tl!(crate::panels::appearance::object_label(app)),
-                };
-                let has_first = first.is_some();
-                ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
-                // With the Artboard tool in use, the bar shows the active artboard's controls in place
-                // of the object controls.
-                let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
-                if crate::panels::artboards::control_bar(app, ui, artboard_options, transform) {
-                    return;
-                }
-                if anchors != AnchorControls::None && group_on(app, "anchors") {
-                    anchor_buttons(app, ui, anchors);
-                }
-                let object_options = group_on(app, "objectOptions");
-                if object_options {
-                    isolation_button(app, ui);
-                }
-                ui.add_space(6.0);
-                // An image or an Image Trace object shows its own controls in place of Fill and Stroke,
-                // and leaves Fill and Stroke out while the Image Options group is off too.
-                let image = if group_on(app, "imageOptions") {
-                    crate::place::control_bar_details(app, ui) || crate::panels::image_trace::control_bar(app, ui)
-                } else {
-                    crate::place::selected_image_info(app).is_some() || crate::panels::image_trace::selected_trace(app).is_some()
-                };
-                if group_on(app, "toolOptions") {
-                    crate::toolbar::control_bar_options(app, ui);
-                }
-                if object_options {
-                    crate::dialogs::envelope::control_bar(app, ui);
-                    crate::panels::symbols::control_bar(app, ui);
-                }
-                let opacity = if has_first { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
-                if !image && group_on(app, "fillStroke") {
-                    fill_and_stroke(app, ui);
-                }
-                opacity_and_style(app, ui, &t, opacity, !sel.is_empty());
-                if group_on(app, "character") {
-                    crate::panels::character::control_bar(app, ui);
-                }
-                if !groups_before_transform(app, ui, sel.len()) {
-                    return;
-                }
-                // The Transform link opens the whole Transform panel (reference point, rotate,
-                // shear, options) in a popover; X/Y/W/H follow inline while the bar has room.
-                crate::panels::transform::link(app, ui);
-                // The bounding box, rotated with rotated objects: its centre and its own sides.
-                if let Some(b) = app.selection_box()
-                    && ui.available_width() >= inline_transform_width(ui, &t)
-                {
-                    let c = b.center();
-                    let origin = app.ruler_origin();
-                    let link = crate::panels::transform::proportional(app, ui);
-                    let copy = crate::panels::transform::alt_enter_copies(app, ui);
-                    let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
-                    // The W/H link sits between W and H, but is made after H so Tab goes from W
-                    // straight to H and finds the link after it.
-                    let mut link_room = None;
-                    for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
-                        if k == "height" {
-                            link_room = Some(crate::panels::transform::constrain_link_room(ui));
-                        }
-                        widgets::field_label(ui, inline_label(&t, lbl));
-                        let (id, shown) = (("cb", k), Some(v - offset));
-                        let set = if matches!(k, "width" | "height") {
-                            widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
-                        } else {
-                            widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
-                        };
-                        if let Some(nv) = set {
-                            app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
-                        }
-                    }
-                    if let Some(room) = link_room {
-                        let id = ui.scope_id().with("cb-constrain-link");
-                        crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
-                    }
-                }
-            });
-            // Controls that keep their size can still run into the button's room in a narrow window;
-            // the button is left out then.
-            if controls.response.rect.right() <= menu.left() {
-                panel_menu(app, ui, menu);
-            }
-        });
+    let bar = panel.exact_size(HEIGHT).frame(frame).show(ui, |ui| {
+        // Out to the frame's 1-point border.
+        let outer = ui.max_rect().expand2(vec2(MARGIN + 1.0, 1.0));
+        contents(app, ui, &t, outer, dock_room, false);
+    });
     // Docked at the bottom, the bar is a bottom bar that menus stop above.
     if bottom {
         widgets::set_menu_floor(ui.ctx(), bar.response.rect.top());
+    }
+}
+
+/// The Control bar's gripper, controls and panel menu, in the bar `bar`. A `floating` bar clips its
+/// controls to the room left of the panel menu button, and always shows the button.
+fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, dock_room: egui::Rect, floating: bool) {
+    // The panel menu button takes the right end, and the controls trim to the room left of it:
+    // they are laid out in that room, so every room check below leaves the button's width.
+    let full = ui.max_rect();
+    let menu = egui::Rect::from_center_size(egui::pos2(full.right() - MENU_BUTTON / 2.0, full.center().y), vec2(MENU_BUTTON, MENU_BUTTON));
+    let room = egui::Rect::from_min_max(full.min, egui::pos2(menu.left() - ui.spacing().item_spacing.x, full.bottom()));
+    let layout = egui::Layout::left_to_right(egui::Align::Center);
+    let controls = ui.scope_builder(egui::UiBuilder::new().max_rect(room).layout(layout), |ui| {
+        if floating {
+            ui.set_clip_rect(room.intersect(ui.clip_rect()));
+        }
+        gripper(app, ui, t, bar, dock_room);
+        if app.session.active().is_none() {
+            ui.label(egui::RichText::new(tl!("No Document")).color(t.text_dim));
+            return;
+        }
+        // The Artboard tool's controls fill the narrowest window, so they keep it to themselves there.
+        if group_on(app, "snapping") && (app.session.tool_id() != "artboard" || ui.available_width() >= ARTBOARD_SNAPPING_WIDTH) {
+            snapping_menu(app, ui);
+        }
+        let Some(st) = app.session.active() else { return };
+        let sel = st.selection.objects.clone();
+        let units = app.session.general_unit();
+        let first = sel.first().and_then(|id| st.doc.node(*id));
+        let anchors = anchor_controls(app);
+        let label = match first {
+            _ if app.session.tool_id() == "artboard" => tl!("Artboard"),
+            Some(_) if sel.len() == 1 && anchors != AnchorControls::None => {
+                tl!("Anchor Point")
+            }
+            Some(vectorcraft_doc::Node { kind: NodeKind::Image(im), .. }) if sel.len() == 1 => {
+                if im.link.is_some() {
+                    tl!("Linked File")
+                } else {
+                    tl!("Embedded")
+                }
+            }
+            Some(n) if sel.len() == 1 && crate::panels::image_trace::is_trace(n) => {
+                tl!("Image Tracing")
+            }
+            _ => tl!(crate::panels::appearance::object_label(app)),
+        };
+        let has_first = first.is_some();
+        ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
+        // With the Artboard tool in use, the bar shows the active artboard's controls in place
+        // of the object controls.
+        let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
+        if crate::panels::artboards::control_bar(app, ui, artboard_options, transform) {
+            artboard_align_group(app, ui);
+            erase_trailing(ui);
+            return;
+        }
+        if anchors != AnchorControls::None && group_on(app, "anchors") {
+            anchor_buttons(app, ui, anchors);
+        }
+        let object_options = group_on(app, "objectOptions");
+        if object_options {
+            isolation_button(app, ui);
+        }
+        ui.add_space(6.0);
+        // An image or an Image Trace object shows its own controls in place of Fill and Stroke,
+        // and leaves Fill and Stroke out while the Image Options group is off too.
+        let image = if group_on(app, "imageOptions") {
+            crate::place::control_bar_details(app, ui) || crate::panels::image_trace::control_bar(app, ui)
+        } else {
+            crate::place::selected_image_info(app).is_some() || crate::panels::image_trace::selected_trace(app).is_some()
+        };
+        if group_on(app, "toolOptions") {
+            crate::toolbar::control_bar_options(app, ui);
+        }
+        if object_options {
+            crate::dialogs::envelope::control_bar(app, ui);
+            crate::panels::symbols::control_bar(app, ui);
+        }
+        let opacity = if has_first { crate::panels::current_transparency(app).map_or(1.0, |t| t.0) } else { 1.0 };
+        if !image && group_on(app, "fillStroke") {
+            fill_and_stroke(app, ui);
+        }
+        opacity_and_style(app, ui, t, opacity, !sel.is_empty());
+        if group_on(app, "character") {
+            crate::panels::character::control_bar(app, ui);
+        }
+        if !groups_before_transform(app, ui, sel.len()) {
+            erase_trailing(ui);
+            return;
+        }
+        // The Transform link opens the whole Transform panel (reference point, rotate,
+        // shear, options) in a popover; X/Y/W/H follow inline while the bar has room.
+        crate::panels::transform::link(app, ui);
+        // The bounding box, rotated with rotated objects: its centre and its own sides.
+        if let Some(b) = app.selection_box()
+            && ui.available_width() >= inline_transform_width(ui, t)
+        {
+            let c = b.center();
+            let origin = app.ruler_origin();
+            let link = crate::panels::transform::proportional(app, ui);
+            let copy = crate::panels::transform::alt_enter_copies(app, ui);
+            let values = [(c.x, origin.x), (c.y, origin.y), (b.rect.width(), 0.0), (b.rect.height(), 0.0)];
+            // The W/H link sits between W and H, but is made after H so Tab goes from W
+            // straight to H and finds the link after it.
+            let mut link_room = None;
+            for ((k, lbl), (v, offset)) in INLINE_FIELDS.into_iter().zip(values) {
+                if k == "height" {
+                    link_room = Some(crate::panels::transform::constrain_link_room(ui));
+                }
+                widgets::field_label(ui, inline_label(t, lbl));
+                let (id, shown) = (("cb", k), Some(v - offset));
+                let set = if matches!(k, "width" | "height") {
+                    widgets::size_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
+                } else {
+                    widgets::num_field(ui, id, shown, units, INLINE_FIELD_WIDTH)
+                };
+                if let Some(nv) = set {
+                    app.run("object.setBounds", json!({k: nv + offset, "reference": 4, "proportional": link, "copy": copy})).ok();
+                }
+            }
+            if let Some(room) = link_room {
+                let id = ui.scope_id().with("cb-constrain-link");
+                crate::panels::transform::constrain_link_at(app, ui, ui.interact(room, id, Sense::click()));
+            }
+        }
+        erase_trailing(ui);
+    });
+    // Controls that keep their size can still run into the button's room in a narrow window;
+    // the button is left out then. A floating bar clips them, so its button always shows.
+    if floating || controls.response.rect.right() <= menu.left() {
+        panel_menu(app, ui, menu);
     }
 }

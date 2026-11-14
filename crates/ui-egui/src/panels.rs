@@ -123,7 +123,8 @@ fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, widt
         for (k, label) in rectangle_corners() {
             dim_label(ui, label);
             if let Some(v) = crate::widgets::num_field_named(ui, (id, "corner", k), Some(label), Some(lc.radius(k)), unit, width) {
-                app.run("object.setLiveShape", json!({"radius": v, "corners": [k]})).ok();
+                // A negative radius typed in rounds nothing: the command takes 0 or more.
+                app.run("object.setLiveShape", json!({"radius": v.max(0.0), "corners": [k]})).ok();
             }
             ui.end_row();
         }
@@ -133,7 +134,7 @@ fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, widt
 /// [`corner_radius_row`]'s field, `width` wide.
 pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: impl std::hash::Hash + std::fmt::Debug, width: f32) {
     if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), app.session.general_unit(), width) {
-        app.run("object.setLiveShape", json!({"radius": r})).ok();
+        app.run("object.setLiveShape", json!({"radius": r.max(0.0)})).ok();
     }
 }
 
@@ -521,6 +522,34 @@ pub(crate) fn rows_take_delete(ctx: &egui::Context) -> bool {
     has_row_keys(ctx, layers::ROW_KEYS) || has_row_keys(ctx, appearance::ROW_KEYS)
 }
 
+/// How near a scrolled list's top or bottom edge a drag scrolls it ([`scroll_at_edges`]).
+const DRAG_SCROLL_EDGE: f32 = 28.0;
+
+/// The speed of that scrolling in points per second: at the band's inner side, and added to it at
+/// the list's edge.
+const DRAG_SCROLL_SPEED: (f32, f32) = (60.0, 280.0);
+
+/// While something is dragged near the top or bottom edge of a scrolled list (`ui`: its contents),
+/// scroll that way, faster nearer the edge, and draw the next frame so a pointer held still keeps
+/// it scrolling. The pointer must be over the list's width. Each frame scrolls by the time it
+/// took (a stalled frame counts a tenth of a second at most), so the speed is the same at every
+/// frame rate.
+pub(crate) fn scroll_at_edges(ui: &mut Ui) {
+    let Some(pos) = ui.ctx().pointer_hover_pos() else { return };
+    let view = ui.clip_rect();
+    if !view.x_range().contains(pos.x) {
+        return;
+    }
+    let (slow, more) = DRAG_SCROLL_SPEED;
+    let speed = |depth: f32| if (0.0..DRAG_SCROLL_EDGE).contains(&depth) { slow + more * (1.0 - depth / DRAG_SCROLL_EDGE) } else { 0.0 };
+    let per_second = speed(pos.y - view.top()) - speed(view.bottom() - pos.y);
+    if per_second != 0.0 {
+        let dt = ui.input(|i| i.stable_dt).min(0.1);
+        ui.scroll_with_delta_animation(vec2(0.0, per_second * dt), egui::style::ScrollAnimation::none());
+        ui.ctx().request_repaint();
+    }
+}
+
 /// [`crate::i18n::label_or_name`] in the UI language.
 pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
     crate::i18n::label_or_name(crate::i18n::current(), s, built_in)
@@ -528,7 +557,8 @@ pub(crate) fn label_or_name(s: &str, built_in: bool) -> &str {
 
 /// "Recent Colors" header + rows of chips (the Session's recent colours, which every paint
 /// command feeds), wrapped onto as many rows as the panel's width needs; returns the one clicked,
-/// for the caller to apply.
+/// for the caller to apply. A chip drags its color as a solid paint, which the Swatches panel
+/// makes a swatch of.
 pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Color> {
     let t = Tokens::get(ui.ctx());
     crate::widgets::subheader(ui, tl!("Recent Colors"));
@@ -543,7 +573,8 @@ pub(crate) fn recent_colors_row(app: &VectorcraftApp, ui: &mut Ui) -> Option<Col
     for (i, c) in colors.iter().enumerate() {
         let (row, col) = (i / per_row, i % per_row);
         let cell = Rect::from_min_size(r.min + vec2(3.0 + col as f32 * 19.0, 3.0 + row as f32 * 19.0), vec2(16.0, 16.0));
-        let resp = ui.interact(cell, ui.scope_id().with(("recent", i)), Sense::click());
+        let resp = ui.interact(cell, ui.scope_id().with(("recent", i)), Sense::click_and_drag());
+        crate::widgets::drag_source(ui, &resp, || crate::widgets::PanelDrag::paint(Paint::solid(*c)));
         crate::widgets::swatch_tile(ui, cell, &Paint::solid(*c), false, resp.hovered());
         if resp.on_hover_text(c.to_hex()).clicked() {
             chosen = Some(*c);

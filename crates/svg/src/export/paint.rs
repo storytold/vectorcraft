@@ -42,6 +42,8 @@ impl Writer<'_> {
         art.walk(&mut |n| {
             let NodeKind::Image(im) = &n.kind else { return };
             let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
+            let shown = self.doc.shown_image(n, im);
+            let im = &*shown;
             if self.doc.image_blob(im).is_none_or(|blob| blob.gray_source().is_none()) {
                 return;
             }
@@ -176,12 +178,14 @@ impl Writer<'_> {
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
         art.walk(&mut |c| {
             if let NodeKind::Image(im) = &c.kind {
+                let shown = self.doc.shown_image(c, im);
+                let im = &*shown;
                 if matches!(c.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
                     && self.doc.image_blob(im).is_none_or(|b| b.gray_source().is_some())
                 {
                     return;
                 }
-                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, (**im).clone())).0 += 1;
+                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, im.clone())).0 += 1;
             }
         });
         let mut repeated: Vec<_> = seen.into_iter().filter(|(k, (n, _))| *n > 1 && !self.shared_images.contains_key(k)).collect();
@@ -273,7 +277,15 @@ impl Writer<'_> {
             // Object fills and strokes are four linear gradients or images (see `raster_paint`).
             self.warn("diamond gradients on characters are written as radial gradients");
         }
+        // A gradient that repeats or reflects: one run of its stops over its period, and
+        // `spreadMethod` to carry it on past both ends.
+        let spread = g.gradient.is_spread();
         let mut geom = g.resolve(bounds);
+        if spread {
+            // A conic is written as a linear gradient along its vector: its runs lie along it.
+            let written = if g.gradient.kind == GradientKind::Conic { GradientKind::Linear } else { g.gradient.kind };
+            geom = geom.period(written, g.gradient.repeat_count());
+        }
         geom.transform(self.xf, g.gradient.kind);
         if g.gradient.kind != GradientKind::Radial {
             // Only a radial gradient has a focal point (a plug-in's or a file's other kinds can
@@ -303,6 +315,11 @@ impl Writer<'_> {
                 "linear-gradient",
                 format!(" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"", self.num(s.x), self.num(s.y), self.num(e.x), self.num(e.y)),
             ),
+        };
+        let attrs = match g.gradient.spread {
+            _ if !spread => attrs,
+            vectorcraft_color::GradientSpread::Reflect => format!("{attrs} spreadMethod=\"reflect\""),
+            _ => format!("{attrs} spreadMethod=\"repeat\""),
         };
         let stops: Vec<String> = g
             .gradient
@@ -512,9 +529,9 @@ impl Writer<'_> {
             self.warn(if freeform {
                 "freeform gradients are written as images clipped to their shapes"
             } else if conic {
-                "conic gradients with translucent stops, dither or the Perceptual method are written as images clipped to their shapes"
+                "conic gradients with translucent stops, dither or a method other than Classic are written as images clipped to their shapes"
             } else if g.gradient.kind == GradientKind::Diamond {
-                "diamond gradients with translucent stops, dither, the Perceptual method or no extent are written as images clipped to their shapes"
+                "diamond gradients with translucent stops, dither, a method other than Classic or no extent are written as images clipped to their shapes"
             } else {
                 "linear and radial gradients drawn as pixels are written as images clipped to their shapes"
             });
@@ -558,10 +575,10 @@ impl Writer<'_> {
                     }
                 }
                 None => {
-                    let sample = g.gradient.sampler();
-                    for (pts, t) in g.resolve(bounds).conic_wedges(cover, CONIC_WEDGES, true) {
+                    let (sample, spread) = (g.gradient.sampler(), g.gradient.spreader());
+                    for (pts, t) in g.resolve(bounds).conic_wedges(cover, g.gradient.conic_wedge_count(CONIC_WEDGES), true) {
                         let d = self.path_d(&PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true)), self.xf);
-                        self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(t as f32).0.to_hex()));
+                        self.line(&format!("<path d=\"{d}\" fill=\"{}\"/>", sample(spread(t) as f32).0.to_hex()));
                     }
                 }
             },

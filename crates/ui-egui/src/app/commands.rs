@@ -150,6 +150,7 @@ impl VectorcraftApp {
         io::remember_active_artboard(self);
         let artboards = self.artboard_tool_state();
         if let Some(r) = menus::run_ui_command(self, id, &params) {
+            self.ui.recording_base = None;
             self.follow_artboard_tool(artboards);
             return r;
         }
@@ -221,6 +222,12 @@ impl VectorcraftApp {
         if fileio::SaveMode::of(id).is_some() {
             io::remember_view(self);
         }
+        // While an action records, a command that the recording would keep as a step runs only
+        // when the step fits in the action.
+        if let Err(e) = panels::actions::before_recorded_command(self, id, &params) {
+            self.ui.status = e.clone();
+            return Err(e);
+        }
         // A command that changes the edited text is an application edit (undo, a panel or menu
         // edit, a control request). Capture the bounded committed context around it so `Other`
         // dominates the frame even if an IME receipt follows. Selection/view commands that leave
@@ -230,6 +237,7 @@ impl VectorcraftApp {
         let ime_before = crate::ime::stamp(&mut self.session, ime_view);
         let cursor_settings = (self.session.caps_lock, self.session.prefs.use_precise_cursors);
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
+        let r = panels::actions::after_recorded_command(self, r);
         if r.is_ok() && cursor_settings != (self.session.caps_lock, self.session.prefs.use_precise_cursors) {
             self.canvas.hover_cursor = None;
         }
@@ -405,6 +413,10 @@ impl VectorcraftApp {
         self.pen_end.forget_tool();
         self.held_tool.clear();
         self.activate_tool(id, true);
+        let now = self.session.tool_id();
+        if crate::touch::is_drawing_tool(now) {
+            self.ui.touch_drawing_tool = Some(now.to_string());
+        }
     }
 
     /// Go back to tool `id` after a tool that stood in for it (the pen's eraser end, [`stylus`]):

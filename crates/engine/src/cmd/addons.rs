@@ -14,7 +14,7 @@ mod select;
 mod shapes;
 mod typetools;
 
-pub(crate) use image::DecodedImages;
+pub(crate) use image::{DecodedImages, refresh_color_masks};
 
 use super::CommandSpec;
 

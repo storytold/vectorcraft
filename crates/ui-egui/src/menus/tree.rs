@@ -121,6 +121,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Blend Vertically", "edit.colors.blendVertically"),
                         c("Convert to CMYK", "edit.colors.toCMYK"),
                         c("Convert to Grayscale", "edit.colors.toGrayscale"),
+                        c("Convert to Indexed Color…", "ui.indexedColorDialog"),
                         c("Convert to RGB", "edit.colors.toRGB"),
                         c("Invert Colors", "edit.colors.invert"),
                         cp(
@@ -396,7 +397,13 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     PATH_EFFECTS
                         .iter()
                         .map(|&(label, effect)| cp(label, "type.pathOptions", json!({ "effect": effect })))
-                        .chain([Sep, c("Type on a Path Options…", "type.pathOptions")])
+                        .chain([
+                            Sep,
+                            c("Center on Top", "type.pathCenter.top"),
+                            c("Center on Bottom", "type.pathCenter.bottom"),
+                            Sep,
+                            c("Type on a Path Options…", "type.pathOptions"),
+                        ])
                         .collect(),
                 ),
                 c("Dynamic Text", "type.dynamicText"),

@@ -17,6 +17,35 @@ fn basic_ops() {
 }
 
 #[test]
+fn remove_all_does_what_removing_each_does() {
+    let mut s = Selection::default();
+    for i in 1..=6 {
+        s.add(NodeId(i));
+    }
+    for i in [2, 4, 5] {
+        s.anchors.insert(NodeId(i), BTreeSet::from([(0, 1)]));
+        s.segments.insert(NodeId(i), BTreeSet::from([(0, 0)]));
+    }
+    s.key = Some(NodeId(4));
+    s.target = Some(NodeId(3));
+    s.slices = vec![NodeId(9)];
+    s.guides = vec![NodeId(10)];
+    s.on_path_member = Some(NodeId(11));
+    let mut one_by_one = s.clone();
+    for id in [NodeId(4), NodeId(1), NodeId(4), NodeId(7)] {
+        one_by_one.remove(id);
+    }
+    let mut all = s.clone();
+    all.remove_all([NodeId(4), NodeId(1), NodeId(4), NodeId(7)]);
+    assert_eq!(all, one_by_one);
+    assert_eq!(all.objects, [NodeId(2), NodeId(3), NodeId(5), NodeId(6)]);
+    // Removing nothing leaves the selection as it was.
+    let mut none = s.clone();
+    none.remove_all([]);
+    assert_eq!(none, s);
+}
+
+#[test]
 fn guides_are_selected_on_their_own() {
     let mut s = Selection::default();
     s.add(NodeId(1));
@@ -177,6 +206,49 @@ fn selection_changes_clear_the_target() {
     s.target = Some(NodeId(1));
     s.set([NodeId(3)]);
     assert_eq!(s.target, None);
+}
+
+#[test]
+fn a_chosen_object_on_a_path_needs_its_group_selected_alone() {
+    use vectorcraft_geom::{Point, Rect, shapes};
+    let mut d = Document::new(200.0, 200.0);
+    let l = d.layers[0].id;
+    let (line, a, b, g, other) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let line = Node::path(line, shapes::line(Point::new(0.0, 100.0), Point::new(200.0, 100.0)), Default::default());
+    let a = Node::path(a, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Default::default());
+    let b = Node::path(b, shapes::rectangle(Rect::new(20.0, 0.0, 30.0, 10.0)), Default::default());
+    let rec = crate::objects_on_path::ObjectsOnPath::new(line.id, &[&a, &b], crate::objects_on_path::CENTER, 0.0);
+    let (line_id, a_id) = (line.id, a.id);
+    let mut group = Node::new(g, NodeKind::Group { children: vec![Arc::new(line), Arc::new(a), Arc::new(b)], clip: false });
+    group.extras_mut().objects_on_path = Some(Box::new(rec));
+    d.insert(Some(l), 0, group).unwrap();
+    d.insert(Some(l), 1, Node::path(other, shapes::rectangle(Rect::new(150.0, 0.0, 160.0, 10.0)), Default::default())).unwrap();
+    let mut s = Selection::default();
+    s.set_on_path_member(g, a_id);
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], Some(a_id)));
+    s.add(other);
+    assert_eq!(s.on_path_member, None, "another object joins the selection");
+    s.set_on_path_member(g, a_id);
+    s.set([g]);
+    assert_eq!(s.on_path_member, None, "a new selection");
+    // The path is not one of the objects, nor is an object outside the group.
+    for m in [line_id, other] {
+        s.set_on_path_member(g, m);
+        s.prune(&d);
+        assert_eq!(s.on_path_member, None, "{m:?}");
+    }
+    // A locked object is not chosen.
+    s.set_on_path_member(g, a_id);
+    d.node_mut(a_id).unwrap().locked = true;
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], None), "locked");
+    d.node_mut(a_id).unwrap().locked = false;
+    // Once the group is a plain group, no object of it is chosen.
+    s.set_on_path_member(g, a_id);
+    d.node_mut(g).unwrap().extras_mut().objects_on_path = None;
+    s.prune(&d);
+    assert_eq!((s.objects.as_slice(), s.on_path_member), (&[g][..], None));
 }
 
 #[test]

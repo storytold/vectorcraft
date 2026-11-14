@@ -69,15 +69,25 @@ impl Exporter<'_> {
             }
             return;
         }
-        // The PDF writer has no knockout groups: each element is drawn through a soft mask of
-        // where the elements above it don't paint (the same look for Normal blending). The masks
-        // nest, so element i sits inside the masks of elements i+1…n: open them outermost first.
-        self.warn("knockout groups are written as soft-masked groups (same look, but not editable as knockout groups)");
         let elements: Vec<_> = Node::knockout_elements(children)
             .into_iter()
             .map(|c| (c, self.measure(c)))
             .filter(|(_, m)| m.bounds.is_some_and(|b| rects_overlap(b.inflate(1.0, 1.0), page)))
             .collect();
+        if !elements.is_empty() && elements.iter().all(|(c, _)| c.knockout_outline().is_some()) {
+            let pieces: Vec<&Node> = elements.iter().map(|(c, _)| &***c).collect();
+            if vectorcraft_effects::warp_pieces_translucent(self.doc, &pieces) {
+                return self.warp_pieces(s, &elements, page);
+            }
+            for (c, m) in &elements {
+                self.measured_node(s, c, page, false, Some(m));
+            }
+            return;
+        }
+        // The PDF writer has no knockout groups: each element is drawn through a soft mask of
+        // where the elements above it don't paint (the same look for Normal blending). The masks
+        // nest, so element i sits inside the masks of elements i+1…n: open them outermost first.
+        self.warn("knockout groups are written as soft-masked groups (same look, but not editable as knockout groups)");
         let Some(((first, measured), rest)) = elements.split_first() else { return };
         for (c, m) in rest.iter().rev() {
             let mask = self.knockout_mask(s, c, page, m);
@@ -87,6 +97,17 @@ impl Exporter<'_> {
         for (c, m) in rest {
             s.pop();
             self.measured_node(s, c, page, false, Some(m));
+        }
+    }
+
+    /// [`Self::measured_children`] of a plain group or layer. When they are the pieces of a
+    /// mesh-warped image, every piece, on the page or not, takes part in the one size its pixels
+    /// are resampled for ([`Self::warp_image_size`]).
+    fn group_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured]) {
+        let outer = self.warp_image_size(children).map(|w| self.warp_size.replace(w));
+        self.measured_children(s, children, page, measured);
+        if let Some(outer) = outer {
+            self.warp_size = outer;
         }
     }
 
@@ -101,6 +122,48 @@ impl Exporter<'_> {
             s.opacity = 1.0;
             s
         };
+        self.shapes_mask(s, &[(&shape, Some(measured))], page)
+    }
+
+    /// The pieces of a partly transparent mesh-warped image (`elements`, each with its box) as the
+    /// elements of a knockout group ([`vectorcraft_effects::warp_pieces_translucent`]). Each piece
+    /// is drawn through one soft mask of where the pieces above it that reach its box don't cover
+    /// ([`vectorcraft_effects::knockout_silhouette`]): only neighbors overlap, so each mask holds a
+    /// few triangles and no mask nests in another. A piece above that overlaps it only over opaque
+    /// pixels ([`vectorcraft_effects::WarpSeams`]) is left out of its mask.
+    fn warp_pieces(&mut self, s: &mut Surface, elements: &[(&std::sync::Arc<Node>, Measured)], page: Rect) {
+        // Each piece's triangle and its box: a piece paints inside its triangle only.
+        let silhouette = |c: &Node| {
+            let b = c.knockout_outline()?.geometric_bounds()?;
+            Some((vectorcraft_effects::knockout_silhouette(c, vectorcraft_doc::color::Color::WHITE)?, b))
+        };
+        let silhouettes: Vec<Option<(Node, Rect)>> = elements.iter().map(|(c, _)| silhouette(c)).collect();
+        let pieces: Vec<&Node> = elements.iter().map(|(c, _)| &***c).collect();
+        let seams = vectorcraft_effects::WarpSeams::new(self.doc, &pieces);
+        for (i, (c, measured)) in elements.iter().enumerate() {
+            let Some((_, reach)) = &silhouettes[i] else { continue };
+            let reach = reach.inflate(1.0, 1.0);
+            let shapes: Vec<(&Node, Option<&Measured>)> = silhouettes
+                .iter()
+                .enumerate()
+                .skip(i + 1)
+                .filter_map(|(j, s)| s.as_ref().filter(|(_, b)| rects_overlap(*b, reach) && seams.shows_through(i, j)))
+                .map(|(n, _)| (n, None))
+                .collect();
+            if shapes.is_empty() {
+                self.measured_node(s, c, page, false, Some(measured));
+                continue;
+            }
+            let mask = self.shapes_mask(s, &shapes, page);
+            s.push_mask(mask);
+            self.measured_node(s, c, page, false, Some(measured));
+            s.pop();
+        }
+    }
+
+    /// A luminosity mask that is 1 − the coverage of `shapes` (each with its box when measured):
+    /// white, then black through an alpha mask of the shapes drawn one over another.
+    fn shapes_mask(&mut self, s: &mut Surface, shapes: &[(&Node, Option<&Measured>)], page: Rect) -> krilla::mask::Mask {
         let transform = s.group_transform();
         let mut sb = s.stream_builder();
         let mut ms = Surface::stream(sb.surface());
@@ -112,7 +175,9 @@ impl Exporter<'_> {
             let mut als = Surface::stream(ab.surface());
             als.push_transform(&transform);
             let overprint = std::mem::take(&mut self.overprint);
-            self.measured_node(&mut als, &shape, page, false, Some(measured));
+            for (shape, measured) in shapes {
+                self.measured_node(&mut als, shape, page, false, *measured);
+            }
             self.overprint = overprint;
             als.pop();
             als.finish();
@@ -214,7 +279,7 @@ impl Exporter<'_> {
         }
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
-                self.measured_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()));
+                self.group_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()));
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // The region every output clips to; nothing to clip by hides the clipped art. The
@@ -249,8 +314,9 @@ impl Exporter<'_> {
                 self.shape(s, n, &bp, *rule, page);
             }
             NodeKind::Text(t) => self.text(s, n, t, page),
-            NodeKind::Image(im) => match n.extras().colorize.as_deref() {
-                Some(p @ Paint::Solid { .. }) if self.doc.image_blob(im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
+            NodeKind::Image(im) => match (n.extras().colorize.as_deref(), self.doc.shown_image(n, im)) {
+                (Some(p @ Paint::Solid { .. }), im) if self.doc.image_blob(&im).is_none_or(vectorcraft_doc::ImageBlob::takes_colorize) => {
+                    let im = &*im;
                     if writable(s, im.xf, Rect::new(0.0, 0.0, im.width.max(1).into(), im.height.max(1).into())) {
                         if let Some(colorized) = self.colorized_image(im, p, !n.extras().pixelated) {
                             self.image(s, im, Some(colorized), n.extras().pixelated);
@@ -263,7 +329,7 @@ impl Exporter<'_> {
                         self.warn(super::exporter::UNWRITABLE_IMAGE);
                     }
                 }
-                _ => self.image(s, im, alpha, n.extras().pixelated),
+                (_, im) => self.image(s, &im, alpha, n.extras().pixelated),
             },
             NodeKind::SymbolInstance { symbol, xf } => {
                 // Within the objects a frame may draw of symbol instances, as on screen: nested
@@ -434,8 +500,9 @@ impl Exporter<'_> {
     /// [`Self::area`] draws as art: a pattern swatch or a gradient drawn as pixels
     /// ([`vectorcraft_color::GradientPaint::draws_as_pixels`]), but not a Perceptual one of spot
     /// inks ([`Self::perceptual_spot`]), a conic gradient that can't be a sweep shading (in
-    /// PDF/A, or with more than [`super::paint::MAX_SWEEP_STOPS`] stops), or a diamond gradient
-    /// (four linear gradients, [`Self::diamond`])?
+    /// PDF/A, or with more than [`super::paint::MAX_SWEEP_STOPS`] stops), a diamond gradient
+    /// (four linear gradients, [`Self::diamond`]), or a linear or radial gradient that repeats or
+    /// reflects (its stops repeated over the area, [`Self::padded`])?
     pub(super) fn area_paint(&self, p: &Paint, fill: bool) -> bool {
         match p {
             Paint::Pattern { pattern, .. } => self.doc.pattern(pattern).is_some(),
@@ -444,6 +511,7 @@ impl Exporter<'_> {
                 (g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill))
                     || (g.gradient.kind == GradientKind::Conic && sweep_unwritable())
                     || g.gradient.kind == GradientKind::Diamond
+                    || (g.gradient.is_spread() && matches!(g.gradient.kind, GradientKind::Linear | GradientKind::Radial))
             }
             _ => false,
         }
@@ -452,7 +520,8 @@ impl Exporter<'_> {
     /// Paint the area `clip` (filled by `rule`; bounds `area`) with `p` at `transparency` (opacity,
     /// blend mode) when it is an [area paint](Self::area_paint) of a fill (`fill`) or a stroke: a
     /// pattern's [tiling pattern](Self::tiling) (else its tile instances covering it), a diamond
-    /// gradient's four linear gradients, or an image of a gradient drawn as pixels, placed on
+    /// gradient's four linear gradients, a repeating or reflecting linear or radial gradient's
+    /// stops repeated over `area`, or an image of a gradient drawn as pixels, placed on
     /// `bounds` (the painted object's box, as on the canvas), clipped to it. False (nothing drawn)
     /// for other paints.
     #[allow(clippy::too_many_arguments)]
@@ -504,7 +573,9 @@ impl Exporter<'_> {
                 }
                 Paint::Gradient(g) => {
                     let pixels = g.draws_as_pixels(fill) && !self.perceptual_spot(g, fill);
-                    if pixels || g.gradient.kind != GradientKind::Diamond || !self.diamond(s, g, bounds, area) {
+                    // A linear or radial gradient that repeats or reflects is drawn by `padded`.
+                    let drawn = !pixels && self.padded(s, g, bounds, area);
+                    if !drawn && (pixels || g.gradient.kind != GradientKind::Diamond || !self.diamond(s, g, bounds, area)) {
                         self.field_image(s, g, bounds, area, fill);
                     }
                 }

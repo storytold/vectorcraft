@@ -109,6 +109,33 @@ fn only_a_radial_keeps_a_focal_point_through_a_plug_in() {
     }
 }
 
+/// A gradient stop's process plates handed back out of range are clamped to 0..1, each in its
+/// place, in a fill and in a stroke (a JSON number too large for `f32` is infinite); plates in range
+/// and a stop without plates are kept.
+#[test]
+fn gradient_stop_plates_are_clamped_through_a_plug_in() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let (mut d, ids, _) = doc();
+    let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(0.5, Color::gray(0.5)), GradientStop::new(1.0, Color::BLACK)];
+    let mut p = serde_json::to_value(Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))).unwrap();
+    p["gradient"]["stops"][0]["plates"] = json!([-0.5, 1.5, -1e300, 1e300]);
+    p["gradient"]["stops"][1]["plates"] = json!([0.25, 2.0, 0.75, -3.0]);
+    let out = json!({"objects": [{"id": ids[0].0, "fills": [p.clone()], "strokes": [{"paint": p}]}]});
+    apply_output(&mut d, &ids, decode_json(out).unwrap(), None, &keep).unwrap();
+    let ap = &d.node(ids[0]).unwrap().appearance;
+    for (what, paint) in [("fill", ap.fill_paint()), ("stroke", ap.stroke_paint())] {
+        let Paint::Gradient(g) = paint else { panic!("a gradient {what}") };
+        let plates: Vec<_> = g.gradient.stops.iter().map(|s| s.plates).collect();
+        assert_eq!(plates, [Some([0.0, 1.0, 0.0, 1.0]), Some([0.25, 1.0, 0.75, 0.0]), None], "{what}");
+    }
+}
+
+/// A plate that is not a number is 0; infinities go to the nearest end of 0..1.
+#[test]
+fn plates_that_are_not_finite_are_in_range() {
+    assert_eq!([f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.5].map(plate), [0.0, 1.0, 0.0, 0.5]);
+}
+
 /// A path handed back as it was stays the live shape it was (a rectangle keeps its corner
 /// widgets); a path that changed is a plain path.
 #[test]

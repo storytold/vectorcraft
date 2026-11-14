@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, ImageObject, LinkInfo, NodeKind};
+use vectorcraft_doc::{Document, ImageObject, LinkInfo, NodeKind, StoredRoot};
 use vectorcraft_geom::Rect;
 
 use crate::*;
@@ -446,8 +446,8 @@ fn links_outside_the_layers_find_their_files_after_the_folder_moves() {
 }
 
 /// With Update Links: Automatically, a file in a symbol and in the layers that changed and moved
-/// with the document is read again for the layers' image and for the symbol's, and both links take
-/// its new path, size and hash.
+/// with the document is read again for the layers' image and for the symbol's, both are listed by
+/// their ids, and both links take its new path, size and hash.
 #[test]
 fn a_symbols_link_to_a_moved_and_modified_file_takes_its_new_path() {
     let a = Folder::new("nested-modified-a");
@@ -458,13 +458,14 @@ fn a_symbols_link_to_a_moved_and_modified_file_takes_its_new_path() {
     s.execute("prefs.set", &json!({"key": "updateLinks", "value": "automatically"})).unwrap();
     let id = place(&mut s, &pic);
     s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let in_symbol = stored_image_in(&s, StoredRoot::Symbol(0));
     let id = place(&mut s, &pic);
     save(&mut s, &a.file("poster.vectorcraft"));
     write(&pic, &png(30, 30, BLUE));
     std::fs::remove_dir_all(&b.0).unwrap();
     std::fs::rename(&a.0, &b.0).unwrap();
     let r = open(&mut s, &b.file("poster.vectorcraft"));
-    assert_eq!((r["modifiedLinks"].clone(), r["updatedLinks"][0]["ids"].clone()), (json!([]), json!([id.0])), "{r}");
+    assert_eq!((r["modifiedLinks"].clone(), r["updatedLinks"][0]["ids"].clone()), (json!([]), json!([id.0, in_symbol.0])), "{r}");
     let moved = PathBuf::from(b.file("art/photo.png"));
     let blue = png(30, 30, BLUE);
     let mut images = vec![];
@@ -521,7 +522,8 @@ fn a_symbols_link_without_a_relative_path_follows_the_moved_file() {
 
 /// Update Links reads a changed file again for the images inside symbols, patterns and opacity
 /// masks too: those showing the same content as an image in the layers, and those no object in the
-/// layers shows. Each takes the file's place as its own Placement Options say, in one undo step.
+/// layers shows. Each takes the file's place as its own Placement Options say, in one undo step,
+/// and the reply lists each by its id.
 #[test]
 fn update_links_reads_files_again_inside_symbols_patterns_and_masks() {
     let dir = Folder::new("nested-update");
@@ -533,11 +535,13 @@ fn update_links_reads_files_again_inside_symbols_patterns_and_masks() {
     let id = place(&mut s, &photo);
     s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
     s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    let in_symbol = stored_image_in(&s, StoredRoot::Symbol(0));
     let id = place(&mut s, &photo);
     // logo.png only in a pattern and in an opacity mask.
     let p = place(&mut s, &logo);
     s.execute("object.pattern.make", &json!({"ids": [p.0], "edit": false})).unwrap();
     s.execute("edit.clear", &json!({"ids": [p.0]})).unwrap();
+    let p = stored_image_in(&s, StoredRoot::Pattern { pattern: 0, art: 0 });
     let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
     let mask = place(&mut s, &logo);
     s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
@@ -546,7 +550,8 @@ fn update_links_reads_files_again_inside_symbols_patterns_and_masks() {
     write(&photo, &blue);
     write(&logo, &green);
     let u = s.execute("links.update", &json!({})).unwrap();
-    assert_eq!(u, json!({"updated": [id.0], "missing": []}));
+    // By file: photo.png in the layers and the symbol, then logo.png in the mask and the pattern.
+    assert_eq!(u, json!({"updated": [id.0, in_symbol.0, mask.0, p.0], "missing": []}));
     // (name, size, hash, pixel size) of each image, which shows its file's pixels.
     let images = |s: &Session| {
         let d = &s.doc().unwrap().doc;
@@ -574,6 +579,229 @@ fn update_links_reads_files_again_inside_symbols_patterns_and_masks() {
     assert!(clipped, "{:?}", s.doc().unwrap().doc.symbols[0].art);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(images(&s).iter().all(|(_, _, _, size)| *size == (20, 10)), "{:?}", images(&s));
+}
+
+/// The files only art outside the layers shows: one in a symbol, a graph design, a pattern and an
+/// opacity mask each, no object in the layers linked to any of them.
+const NESTED: [&str; 4] = ["symbol.png", "design.png", "pattern.png", "mask.png"];
+
+/// A document whose only links are [`NESTED`]'s files in `dir`.
+fn nested_links(dir: &Folder) -> Session {
+    for (i, name) in (0u8..).zip(NESTED) {
+        write(&dir.file(name), &png(20, 10, [20 + 50 * i, 90, 160]));
+    }
+    let mut s = session();
+    let id = place(&mut s, &dir.file("symbol.png"));
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [id.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [s.doc().unwrap().selection.objects[0].0]})).unwrap();
+    let id = place(&mut s, &dir.file("design.png"));
+    s.execute("graph.design", &json!({"new": "Bar"})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let id = place(&mut s, &dir.file("pattern.png"));
+    s.execute("object.pattern.make", &json!({"ids": [id.0], "edit": false})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let masked = super::rect(&mut s, 10.0, 10.0, 60.0, 60.0);
+    let mask = place(&mut s, &dir.file("mask.png"));
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [masked.0, mask.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    s
+}
+
+/// The id of the `links.list` row of file `name`.
+fn row_id(s: &mut Session, name: &str) -> u64 {
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == name).unwrap_or_else(|| panic!("{name} in {list}"));
+    row["id"].as_u64().unwrap()
+}
+
+/// The link of stored object `id`.
+fn stored_link(s: &Session, id: u64) -> Option<LinkInfo> {
+    match &s.doc().unwrap().doc.stored_node(NodeId(id)).unwrap().0.kind {
+        NodeKind::Image(im) => im.link.clone(),
+        k => panic!("not an image: {k:?}"),
+    }
+}
+
+/// The id of the first image stored in the art of `root`.
+fn stored_image_in(s: &Session, root: StoredRoot) -> NodeId {
+    let mut found = None;
+    s.doc().unwrap().doc.visit_stored(|n, place| {
+        if found.is_none() && place.root == root && matches!(n.kind, NodeKind::Image(_)) {
+            found = Some(n.id);
+        }
+    });
+    found.unwrap_or_else(|| panic!("no image in {root:?}"))
+}
+
+/// Images in symbols, graph designs, patterns and opacity masks are listed and checked with ids of
+/// their own, one row each with what holds it, and the missing filter counts them.
+#[test]
+fn links_outside_the_layers_are_listed_and_checked_with_ids() {
+    let dir = Folder::new("nested-ids");
+    let mut s = nested_links(&dir);
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let rows = list["links"].as_array().unwrap();
+    let owners: Vec<(&str, &str)> = rows.iter().map(|r| (r["name"].as_str().unwrap(), r["owner"]["kind"].as_str().unwrap_or("-"))).collect();
+    assert_eq!(owners, [("mask.png", "layers"), ("symbol.png", "symbol"), ("design.png", "graphDesign"), ("pattern.png", "pattern")], "{list}");
+    assert_eq!(rows[1]["owner"]["name"], "Mark");
+    let masked = s.doc().unwrap().doc.layers[0].children().unwrap().iter().find(|n| n.extras().mask.is_some()).unwrap().id;
+    assert_eq!(rows[0]["owner"]["maskOf"], json!(masked.0));
+    let ids: std::collections::BTreeSet<u64> = rows.iter().map(|r| r["id"].as_u64().unwrap()).collect();
+    assert_eq!(ids.len(), 4, "{list}");
+    assert!(rows.iter().all(|r| r["status"] == "ok" && r["linked"] == true), "{list}");
+    let check = s.execute("links.check", &json!({})).unwrap();
+    let checked: Vec<(&str, &Value)> = check["links"].as_array().unwrap().iter().map(|l| (l["name"].as_str().unwrap(), &l["ids"])).collect();
+    assert_eq!(checked.len(), 4, "{check}");
+    for (name, ids) in checked {
+        assert_eq!(*ids, json!([row_id(&mut s, name)]), "{check}");
+    }
+    std::fs::remove_file(dir.file("design.png")).unwrap();
+    let check = s.execute("links.check", &json!({})).unwrap();
+    assert_eq!((check["missing"].as_u64(), check["modified"].as_u64()), (Some(1), Some(0)), "{check}");
+    let design = row_id(&mut s, "design.png");
+    let missing = s.execute("links.list", &json!({"show": "missing"})).unwrap();
+    assert_eq!((missing["missing"].as_u64(), &missing["links"][0]["id"]), (Some(1), &json!(design)), "{missing}");
+    let one = s.execute("links.check", &json!({"ids": [design]})).unwrap();
+    assert_eq!(one["links"][0]["status"], "missing", "{one}");
+}
+
+/// Every links command takes the id of an image outside the layers and acts on that object: Link
+/// Info, Go To (which clears the selection and names the symbol), Placement Options, Relink, Update and
+/// Embed.
+#[test]
+fn links_commands_act_on_images_outside_the_layers_by_id() {
+    let dir = Folder::new("nested-act");
+    let mut s = nested_links(&dir);
+    let symbol = row_id(&mut s, "symbol.png");
+    let info = s.execute("links.info", &json!({"id": symbol})).unwrap();
+    assert_eq!((info["fileName"].as_str(), info["status"].as_str(), info["id"].as_u64()), (Some("symbol.png"), Some("ok"), Some(symbol)), "{info}");
+    let other = super::rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    let go = s.execute("links.goTo", &json!({"id": symbol})).unwrap();
+    assert_eq!(
+        (go["onCanvas"].clone(), go["owner"]["kind"].clone(), go["owner"]["name"].clone()),
+        (json!(false), json!("symbol"), json!("Mark")),
+        "{go}"
+    );
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "nothing on the canvas is selected");
+    s.execute("links.placementOptions", &json!({"ids": [symbol], "preserve": "fit"})).unwrap();
+    let placement = s.execute("links.placementOptions", &json!({"ids": [symbol]})).unwrap();
+    assert_eq!(placement["placement"]["preserve"], "fit");
+    // Relink: the symbol's image shows the new file.
+    let other = dir.file("other.png");
+    write(&other, &png(40, 20, BLUE));
+    let r = s.execute("links.relink", &json!({"ids": [symbol], "path": other})).unwrap();
+    assert_eq!(r["relinked"], json!([symbol]), "{r}");
+    assert_eq!(stored_link(&s, symbol).unwrap().path, other);
+    // Update: a changed pattern file is read again for the pattern's image.
+    let pattern = row_id(&mut s, "pattern.png");
+    let changed = png(30, 30, RED);
+    write(&dir.file("pattern.png"), &changed);
+    let r = s.execute("links.update", &json!({"ids": [pattern]})).unwrap();
+    assert_eq!(r["updated"], json!([pattern]), "{r}");
+    assert_eq!(stored_link(&s, pattern).unwrap().size, Some(changed.len() as u64));
+    // Embed: the design's image keeps its pixels and no longer links.
+    let design = row_id(&mut s, "design.png");
+    let r = s.execute("links.embed", &json!({"ids": [design]})).unwrap();
+    assert_eq!(r["embedded"], json!([design]), "{r}");
+    assert!(stored_link(&s, design).is_none());
+    let row = s.execute("links.list", &json!({"show": "embedded"})).unwrap();
+    assert_eq!(row["links"][0]["id"], json!(design), "{row}");
+    // Relink All Instances takes the other stored objects linked to the same file.
+    let mask = row_id(&mut s, "mask.png");
+    let r = s.execute("links.relink", &json!({"ids": [symbol], "path": dir.file("mask.png"), "scope": "all"})).unwrap();
+    assert_eq!(r["relinked"], json!([symbol]), "{r}");
+    let r = s.execute("links.relink", &json!({"ids": [mask], "path": other, "scope": "all"})).unwrap();
+    let mut relinked: Vec<u64> = r["relinked"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    relinked.sort();
+    let mut both = vec![symbol, mask];
+    both.sort();
+    assert_eq!(relinked, both, "{r}");
+}
+
+/// Opening a document reports missing and modified files that only art outside the layers shows,
+/// by their objects' ids, and those ids stay the same after the document is saved and opened again.
+#[test]
+fn open_reports_links_outside_the_layers_by_id() {
+    let dir = Folder::new("nested-open");
+    let mut s = nested_links(&dir);
+    let path = dir.file("poster.vectorcraft");
+    save(&mut s, &path);
+    let ids: Vec<u64> = NESTED.iter().map(|name| row_id(&mut s, name)).collect();
+    std::fs::remove_file(dir.file("symbol.png")).unwrap();
+    write(&dir.file("pattern.png"), &png(30, 30, RED));
+    let r = open(&mut s, &path);
+    let names = |k: &str| r[k].as_array().unwrap().iter().map(|l| (l["name"].as_str().unwrap().to_string(), l["ids"].clone())).collect::<Vec<_>>();
+    assert_eq!(names("missingLinks"), [("symbol.png".to_string(), json!([ids[0]]))], "{r}");
+    assert_eq!(names("modifiedLinks"), [("pattern.png".to_string(), json!([ids[2]]))], "{r}");
+    let again: Vec<u64> = NESTED.iter().map(|name| row_id(&mut s, name)).collect();
+    assert_eq!(again, ids, "the ids are saved");
+}
+
+/// A document whose symbol and mask art repeat the ids of objects in the layers (or have none)
+/// opens with ids of their own there, the layer tree's kept; the links commands then tell them apart.
+#[test]
+fn nested_objects_that_repeat_ids_open_with_ids_of_their_own() {
+    let dir = Folder::new("nested-repeat");
+    let mut s = nested_links(&dir);
+    let layer_image = place(&mut s, &dir.file("symbol.png"));
+    let path = dir.file("poster.vectorcraft");
+    save(&mut s, &path);
+    // The symbol's image takes the id of the image in the layers, the mask's image none.
+    let mut saved: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    saved["document"]["symbols"][0]["art"]["id"] = json!(layer_image.0);
+    let layer = &mut saved["document"]["layers"][0]["kind"]["children"];
+    let masked = layer.as_array_mut().unwrap().iter_mut().find(|n| n.get("mask").is_some() || n["extras"].get("mask").is_some()).unwrap();
+    let mask = if masked.get("mask").is_some() { &mut masked["mask"] } else { &mut masked["extras"]["mask"] };
+    mask["art"]["id"] = json!(0);
+    std::fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
+    open(&mut s, &path);
+    let list = s.execute("links.list", &json!({})).unwrap();
+    let ids: Vec<u64> = list["links"].as_array().unwrap().iter().map(|r| r["id"].as_u64().unwrap()).collect();
+    let unique: std::collections::BTreeSet<u64> = ids.iter().copied().collect();
+    assert_eq!((ids.len(), unique.len()), (5, 5), "{list}");
+    assert!(!ids.contains(&0), "{list}");
+    assert_eq!(list["links"][0]["id"], json!(layer_image.0), "the layer tree keeps its ids: {list}");
+    let symbol = list["links"].as_array().unwrap().iter().find(|r| r["owner"]["kind"] == "symbol").unwrap()["id"].as_u64().unwrap();
+    s.execute("links.embed", &json!({"ids": [symbol]})).unwrap();
+    assert!(stored_link(&s, symbol).is_none());
+    assert!(image(&s, layer_image).link.is_some(), "the image in the layers stays linked");
+}
+
+/// An image that Placement Options clip, alone in a group the user made, goes into a new clip group
+/// inside that group when its file grows, in the layers and in a symbol's art; the user's group
+/// stays a plain group.
+#[test]
+fn placement_options_clip_an_image_alone_in_a_group_inside_that_group() {
+    let dir = Folder::new("clip-in-group");
+    let photo = dir.file("photo.png");
+    write(&photo, &png(20, 10, RED));
+    let mut s = session();
+    let mut groups = vec![];
+    for _ in 0..2 {
+        let id = place(&mut s, &photo);
+        s.execute("links.placementOptions", &json!({"ids": [id.0], "preserve": "fill", "clip": true})).unwrap();
+        let g = NodeId(s.execute("object.group", &json!({"ids": [id.0]})).unwrap()["id"].as_u64().unwrap());
+        groups.push((g, id));
+    }
+    let (in_symbol, _) = groups[1];
+    s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+    write(&photo, &png(60, 20, BLUE));
+    s.execute("links.update", &json!({})).unwrap();
+    // A plain group holding just a clip group of a clipping path and an image.
+    let plain_of_clip = |n: &vectorcraft_doc::Node| match &n.kind {
+        NodeKind::Group { children, clip: false } => matches!(&children[..], [c] if matches!(&c.kind,
+            NodeKind::Group { children, clip: true } if matches!(&children[..], [p, im]
+                if matches!(p.kind, NodeKind::Path { clipping: true, .. }) && matches!(im.kind, NodeKind::Image(_))))),
+        _ => false,
+    };
+    let d = &s.doc().unwrap().doc;
+    let (g, id) = groups[0];
+    assert!(plain_of_clip(d.node(g).unwrap()), "{:?}", d.node(g));
+    assert_ne!(d.parent_of(id), Some(g), "the image is in a new clip group");
+    let mut found = false;
+    d.symbols[0].art.walk(&mut |n| found |= plain_of_clip(n));
+    assert!(found, "{:?}", d.symbols[0].art);
 }
 
 #[test]
@@ -726,6 +954,56 @@ fn relink_each_with_copy_copies_nothing_when_a_file_cant_be_read() {
     assert!(s.execute("links.relink", &json!({"scope": "each", "paths": paths, "copy": true})).is_err());
     assert!(!Path::new(&dir.file("doc/x.png")).exists(), "no copy is left behind");
     assert_eq!(link_path(&s, a), one);
+}
+
+/// With copy, for a client whose read roots don't hold the document's folder: the reply names the
+/// copy by its file name, and a copy refused there keeps the write root and names the folder and
+/// the file by their names.
+#[test]
+fn relink_with_copy_names_the_documents_folder_by_its_name_outside_the_read_roots() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let dir = Folder::new("relink-copy-roots");
+    let one = dir.file("doc/one.png");
+    write(&one, &png(60, 30, RED));
+    let mut s = session();
+    let a = place(&mut s, &one);
+    save(&mut s, &dir.file("doc/poster.vectorcraft"));
+    let x = dir.file("new/x.png");
+    write(&x, &png(60, 30, BLUE));
+    let (new, doc) = (Path::new(&x).parent().unwrap().to_path_buf(), Path::new(&one).parent().unwrap().to_path_buf());
+    let hidden = doc.to_string_lossy().into_owned();
+    let p = json!({"ids": [a.0], "path": x, "copy": true});
+
+    let writes_there = AutomationRoots::new(&[new.as_path()], &[doc.as_path()]).unwrap();
+    let r = confine(writes_there.as_ref(), || s.execute("links.relink", &p)).unwrap();
+    assert_eq!(r["copied"], json!([{"from": x, "to": "x.png"}]), "{r}");
+    assert!(!r.to_string().contains(&hidden), "{r}");
+    std::fs::remove_file(dir.file("doc/x.png")).unwrap();
+
+    let elsewhere = AutomationRoots::new(&[new.as_path()], &[new.as_path()]).unwrap();
+    let root = crate::cmd::findfiles::plain(std::fs::canonicalize(&new).unwrap()).display().to_string();
+    let e = confine(elsewhere.as_ref(), || s.execute("links.relink", &p)).unwrap_err().to_string();
+    assert_eq!(e, format!("doc: automation path rejected: outside the write root {root}: x.png"));
+    assert!(!Path::new(&dir.file("doc/x.png")).exists());
+}
+
+/// With copy, for a document whose path has no folder: outside the read roots the error does not
+/// name the path, and without roots it names it whole.
+#[test]
+fn relink_with_copy_names_a_document_path_without_a_folder_as_the_request_may_see_it() {
+    use crate::file_access::{AutomationRoots, confine};
+
+    let dir = Folder::new("relink-copy-no-folder");
+    let mut s = session();
+    s.doc_mut().unwrap().path = Some("/".into());
+    let p = json!({"path": dir.file("x.png"), "copy": true});
+    let roots = AutomationRoots::new(&[dir.0.as_path()], &[dir.0.as_path()]).unwrap();
+    let e = confine(roots.as_ref(), || s.execute("links.relink", &p)).unwrap_err().to_string();
+    assert_eq!(e, "invalid parameters for `links.relink`: a file or folder outside the read roots has no folder");
+    let whole = s.execute("links.relink", &p).unwrap_err().to_string();
+    let doc = crate::cmd::fileio::absolute_path("/");
+    assert_eq!(whole, format!("invalid parameters for `links.relink`: {doc} has no folder"));
 }
 
 /// A scope or paths that doesn't fit is refused, and nothing is relinked.

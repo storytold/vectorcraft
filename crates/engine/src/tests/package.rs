@@ -515,7 +515,7 @@ fn the_document_info_report_has_every_category() {
         "OBJECTS",
         "GRAPHIC STYLES",
         "BRUSHES",
-        "SPOT COLORS",
+        "SPOT COLOR OBJECTS",
         "PATTERN OBJECTS",
         "GRADIENT OBJECTS",
         "SYMBOLS",
@@ -534,6 +534,16 @@ fn the_document_info_report_has_every_category() {
     let i = run(&mut s, "document.info", json!({"category": "linkedImages"}));
     assert_eq!((i["sections"].as_array().unwrap().len(), i["sections"][0]["id"].as_str()), (1, Some("linkedImages")));
     assert_eq!(i["sections"][0]["rows"].as_array().unwrap().len(), 2);
+    // `imageObjects` lists the linked images in the rows' order with the files they show, and the
+    // embedded one with no file.
+    let linked: Vec<Value> = i["imageObjects"].as_array().unwrap().iter().filter(|o| o["linked"] == true).cloned().collect();
+    for (o, r) in linked.iter().zip(i["sections"][0]["rows"].as_array().unwrap()) {
+        let shown = format!("{} × {} px — {}", o["width"], o["height"], o["file"].as_str().unwrap());
+        assert_eq!((&o["name"], shown.as_str()), (&r[0], r[1].as_str().unwrap()));
+    }
+    assert_eq!(linked.len(), 2);
+    let embedded: Vec<&Value> = i["imageObjects"].as_array().unwrap().iter().filter(|o| o["linked"] == false).collect();
+    assert_eq!((embedded.len(), &embedded[0]["file"], &embedded[0]["width"]), (1, &Value::Null, &json!(600)));
     let all = run(&mut s, "document.info", json!({}));
     assert_eq!(all["sections"].as_array().unwrap().len(), 13);
     let i = run(&mut s, "document.info", json!({"category": "brushes"}));

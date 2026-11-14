@@ -487,20 +487,22 @@ fn hold_back_key(app: &VectorcraftApp, ctx: &egui::Context, key: Key) {
     ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Key { key: k, pressed: true, .. } if *k == key)));
 }
 
-/// The key of the mark that the Escape held down ended a ruler-origin drag or a floating Tools move.
+/// The key of the mark that the Escape held down ended a ruler-origin drag, a floating Tools move
+/// or a Control bar gripper drag.
 fn escape_ended_gesture_id() -> egui::Id {
     egui::Id::unique("escape-ended-gesture")
 }
 
-/// Does this frame's Escape end a ruler-origin drag or a floating Tools move? The repeats of an
-/// Escape that ended one do too, up to the frame that releases Escape or presses it again.
+/// Does this frame's Escape end a ruler-origin drag, a floating Tools move or a Control bar gripper
+/// drag? The repeats of an Escape that ended one do too, up to the frame that releases Escape or
+/// presses it again.
 fn escape_ended_gesture(ctx: &egui::Context) -> bool {
     let (down, pressed, repeated) = ctx.input(|i| {
         let escape =
             |repeat: bool| i.events.iter().any(|e| matches!(e, egui::Event::Key { key: Key::Escape, pressed: true, repeat: r, .. } if *r == repeat));
         (i.key_down(Key::Escape), escape(false), escape(true))
     });
-    if crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx) {
+    if crate::canvas::ruler_origin_dragging(ctx) || crate::tools_float::escape_cancelled_move(ctx) || crate::chrome::control_bar_moving(ctx) {
         if down {
             ctx.data_mut(|d| d.insert_temp(escape_ended_gesture_id(), true));
         }
@@ -623,8 +625,10 @@ fn dialog_or_palette_open(app: &VectorcraftApp) -> bool {
 
 /// Route Alt+arrows to spacing controls when text objects are selected.
 fn alt_type_arrows(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
-    let m = ctx.input(|i| i.modifiers);
-    if !m.alt {
+    let keys = [(Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right), (Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down)];
+    // The modifiers held when each arrow went down, as `nudge_and_clear` reads them.
+    let pressed = keys.map(|(key, tool_key)| (key, tool_key, ctx.input(|i| press_modifiers(i, key))));
+    if !pressed.iter().any(|(.., m)| m.alt) {
         return false;
     }
     let orientation = app.session.active().and_then(|st| {
@@ -642,9 +646,8 @@ fn alt_type_arrows(app: &mut VectorcraftApp, ctx: &egui::Context) -> bool {
     let Some(vertical) = orientation else {
         return false;
     };
-    let keys = [(Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right), (Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down)];
-    for (key, tool_key) in keys {
-        if ctx.input_mut(|i| i.consume_key(m, key)) {
+    for (key, tool_key, m) in pressed {
+        if m.alt && ctx.input_mut(|i| i.consume_key(m, key)) {
             if let Some((attribute, by)) = vectorcraft_tools::text::step_key(tool_key, m.shift, false, vertical) {
                 let by = if m.command { by * 5.0 } else { by };
                 let _ = app.run("type.step", json!({"attribute": attribute, "by": by}));
@@ -683,13 +686,27 @@ fn type_tool_input(app: &mut VectorcraftApp, ctx: &egui::Context, composing: boo
     settings_on_a_mac(app, ctx, mac(ctx));
 }
 
+/// The modifiers held when `key` last went down in this frame, which can differ from the frame's
+/// at its end; the frame's when the key did not go down.
+fn press_modifiers(i: &egui::InputState, key: Key) -> Modifiers {
+    i.events
+        .iter()
+        .rev()
+        .find_map(|e| match e {
+            egui::Event::Key { key: k, pressed: true, modifiers, .. } if *k == key => Some(*modifiers),
+            _ => None,
+        })
+        .unwrap_or(i.modifiers)
+}
+
 /// Apply arrow-key movement and clear selected art when no text editor owns input, unless a Layers
 /// or Appearance row has Delete/Backspace (`rows_keys`).
 fn nudge_and_clear(app: &mut VectorcraftApp, ctx: &egui::Context, rows_keys: bool) {
     // Arrow nudges (Shift = ×10, Alt = copy).
     let arrows = [(Key::ArrowLeft, -1.0, 0.0), (Key::ArrowRight, 1.0, 0.0), (Key::ArrowUp, 0.0, -1.0), (Key::ArrowDown, 0.0, 1.0)];
     for (k, dx, dy) in arrows {
-        let m = ctx.input(|i| i.modifiers);
+        // The modifiers held when the key went down, as `claimed_tool_keys` reads them.
+        let m = ctx.input(|i| press_modifiers(i, k));
         if ctx.input_mut(|i| i.consume_key(m, k)) && app.session.active().is_some_and(|d| d.selection.has_objects_or_guides()) {
             let _ = app.run("object.nudge", json!({"dx": dx, "dy": dy, "big": m.shift, "copy": m.alt}));
         }
@@ -787,8 +804,20 @@ fn busy_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewInfo)
     // The arrows while dragging: a polygon's sides, a grid's rows (↑/↓) and columns (←/→)…
     let arrows = [(Key::ArrowUp, ToolKey::Up), (Key::ArrowDown, ToolKey::Down), (Key::ArrowLeft, ToolKey::Left), (Key::ArrowRight, ToolKey::Right)];
     for (k, tk) in arrows {
+        // The press's Shift and Alt (the consume below takes those presses too) go to a tool that
+        // claims the arrow (Shift steps a blend widget by ten); other tools get the plain arrow.
+        let pressed = ctx.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Key { key, pressed: true, modifiers, .. } if *key == k && !(modifiers.command || modifiers.ctrl) => Some(*modifiers),
+                _ => None,
+            })
+        });
         if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k)) {
-            let _ = app.session.tool_key(tk, Mods::default(), view);
+            let mods = match pressed {
+                Some(m) if app.session.tool_claims_key(tk, view) => crate::canvas::mods(m, false),
+                _ => Mods::default(),
+            };
+            let _ = app.session.tool_key(tk, mods, view);
         }
     }
     // Digits (5 while dragging with the Perspective Selection tool), once per press.
@@ -864,8 +893,13 @@ fn claimed_tool_keys(app: &mut VectorcraftApp, ctx: &egui::Context, view: ViewIn
         // The Smart Pen Tool's Tab while it draws a path (the key otherwise hides the panels).
         (Key::Tab, ToolKey::Tab),
     ] {
-        if !rows_take(k) && ctx.input(|i| i.key_pressed(k)) && app.session.tool_claims_key(tk, view) && ctx.input_mut(|i| i.consume_key(m, k)) {
-            let r = app.session.tool_key(tk, crate::canvas::mods(m, false), view);
+        let pm = ctx.input(|i| press_modifiers(i, k));
+        if !rows_take(k)
+            && ctx.input(|i| i.key_pressed(k))
+            && app.session.tool_claims_key_with(tk, crate::canvas::mods(pm, false), view)
+            && ctx.input_mut(|i| i.consume_key(pm, k))
+        {
+            let r = app.session.tool_key(tk, crate::canvas::mods(pm, false), view);
             // Keyboard actions can change the Artboard tool's active board too. Keep the
             // navigator aligned with its valid survivor, as pointer dispatch does.
             if r.is_ok()
@@ -985,9 +1019,10 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, accept: impl FnMut(&H
 }
 
 /// What a shortcut without params runs when its command's menu bar item gives params
-/// ([`crate::shortcut_editor::menu_target`]): what a click on that item runs.
-fn menu_target(c: &CommandRef) -> Option<(String, serde_json::Value)> {
-    c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target(&c.id)).flatten()
+/// ([`crate::shortcut_editor::menu_target_now`]): what a click on that item runs, or while the item
+/// is dimmed, why the command can't run.
+fn menu_target(app: &VectorcraftApp, c: &CommandRef) -> Option<Result<(String, serde_json::Value), String>> {
+    c.params.as_object().is_none_or(serde_json::Map::is_empty).then(|| crate::shortcut_editor::menu_target_now(app, &c.id)).flatten()
 }
 
 /// Params used when a shortcut invokes its command. The named panel function keys retain their
@@ -1030,8 +1065,11 @@ fn run_hit(app: &mut VectorcraftApp, ctx: &egui::Context, c: &CommandRef) {
         // every artboard instead of the art.
         crate::panels::artboards::select_all(app);
     } else {
-        let (id, p) = menu_target(c).unwrap_or_else(|| (c.id.clone(), shortcut_params(c)));
-        crate::menus::invoke(app, &id, p);
+        match menu_target(app, c) {
+            Some(Ok((id, p))) => crate::menus::invoke(app, &id, p),
+            Some(Err(why)) => app.status(why),
+            None => crate::menus::invoke(app, &c.id, shortcut_params(c)),
+        }
     }
 }
 

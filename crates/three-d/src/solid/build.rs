@@ -6,8 +6,8 @@ use super::rings::{
     solid_rings_traced,
 };
 use super::{
-    Bevel, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, Point, Rect, Revolve, V3, View, eye_distance,
-    perspective_scale,
+    Bevel, DepthPlane, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View,
+    eye_distance, perspective_scale,
 };
 use crate::shadow::Projection;
 
@@ -48,6 +48,11 @@ impl Camera {
     }
     pub(super) fn brightness(&self, n: V3) -> f64 {
         crate::brightness(&self.view, n, self.light)
+    }
+    /// The document point the view's center projects to, and the eye's distance in front of it
+    /// (`None` without perspective).
+    pub(super) fn center_and_eye(&self) -> (Point, Option<f64>) {
+        (self.origin, self.eye)
     }
     /// The rotation and projection this camera draws with, for a shadow cast from its faces.
     pub(super) fn projection(&self) -> Projection {
@@ -124,6 +129,14 @@ impl Builder<'_> {
         } else {
             (V3(-n.0, -n.1, -n.2), false)
         };
+        // A face whose corners lie off one plane (a piece of a twisted wall bent into a saddle) has
+        // no plane to measure its depth on. Nor has a face with a corner at or past the eye: the
+        // projection holds that corner just in front of the eye, so the drawing no longer matches
+        // the plane's projection there.
+        let offset = n.dot(centre);
+        let held = self.camera.eye.is_some_and(|e| contours.iter().flatten().any(|v| e - v.2 < e * 1e-3));
+        let flat = !held && contours.iter().flatten().all(|v| (n.dot(*v) - offset).abs() <= 1e-3);
+        let plane = flat.then_some(DepthPlane { normal: [n.0, n.1, n.2], offset, center: self.camera.origin, eye: self.camera.eye });
         #[cfg(test)]
         let view = contours.clone();
         let contours: Vec<Vec<Point>> = contours.iter().map(|c| c.iter().map(|v| self.camera.project(*v)).collect()).collect();
@@ -150,6 +163,8 @@ impl Builder<'_> {
             outline: None,
             side: false,
             away: behind,
+            end: None,
+            plane,
             #[cfg(test)]
             view,
         });
@@ -255,6 +270,17 @@ impl Builder<'_> {
         }
     }
 
+    /// Mark the facet that [`Builder::face`] added, when it added one after `before` facets, as the
+    /// planar end `end` of the solid.
+    pub(super) fn end(&mut self, before: usize, end: PlanarFace) {
+        if self.mesh.is_some() || self.facets.len() <= before {
+            return;
+        }
+        if let Some(f) = self.facets.last_mut() {
+            f.end = Some(end);
+        }
+    }
+
     /// How many faces the builder holds: facets, or faces kept for a mesh.
     pub(super) fn len(&self) -> usize {
         self.mesh.as_ref().map_or(self.facets.len(), Vec::len)
@@ -300,6 +326,10 @@ impl Placing {
             self.at_centre.1 + self.x.1 * dx + self.y.1 * dy,
             self.at_centre.2 + self.x.2 * dx + self.y.2 * dy,
         )
+    }
+    /// The map as `(x, y, c)`: an art point `p` goes to `x · p.x + y · p.y + c` in view space.
+    pub(super) fn frame(&self) -> (V3, V3, V3) {
+        (self.x, self.y, self.place(Point::ZERO))
     }
 }
 
@@ -484,8 +514,9 @@ fn steps(o: &Extrude) -> Vec<Step> {
     } else {
         out.push(Step { inset: 0.0, t: 0.0, face: 1.0 });
     }
-    // Twist and taper bend the walls: cut them into slices.
-    let slices = if o.twist != 0.0 || o.taper != 1.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
+    // A twist bends the walls: cut them into slices. A taper alone keeps each wall flat (its edge
+    // only scales toward the center as it goes back), so it needs none.
+    let slices = if o.twist != 0.0 { ((o.twist.abs() / 6.0).ceil() as usize).clamp(8, 64) } else { 1 };
     let back_height = if bevel.is_some_and(|b| b.both_sides) { height } else { 0.0 };
     let (t0, t1) = (height / d, 1.0 - back_height / d);
     for k in 0..=slices {
@@ -598,11 +629,12 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     if o.cap {
         // A cap turned toward the viewer covers the walls it overlaps, even those nearer than its
         // center: twisted walls, and the walls of a fill inside the solid of its stroke.
-        let caps = [(steps.first(), along.first(), 1.0), (steps.last(), along.last(), -1.0)];
-        for (s, along, n) in caps {
+        let caps = [(steps.first(), along.first(), 1.0, PlanarFace::Front), (steps.last(), along.last(), -1.0, PlanarFace::Back)];
+        for (s, along, n, end) in caps {
             let Some(s) = s else { continue };
             let before = b.len();
             b.face(rings.iter().map(|r| ring_at(r, s)).collect(), camera.rotate(V3(0.0, 0.0, n)), Order::Last)?;
+            b.end(before, end);
             if let Some(along) = along {
                 let traced: Vec<&Ring> = traced.iter().collect();
                 b.outline(before, |c| outline::face(&traced, c, along, &mut budget));
@@ -630,6 +662,7 @@ pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: V
     let up = camera.rotate(V3(0.0, 0.0, 1.0));
     let n = if camera.facing(V3::default(), up) < 0.0 { V3(-up.0, -up.1, -up.2) } else { up };
     b.face(contours, n, Order::Last)?;
+    b.end(0, PlanarFace::Front);
     let m = Placing::new(&camera, bounds.center(), Turn::new(bounds, 0.0, 1.0, 0.0), 0.0);
     let at = |span: &Span, t: f64| camera.project(m.place(span.curve.eval(t)));
     let map = |p: Point| camera.project(m.place(p));

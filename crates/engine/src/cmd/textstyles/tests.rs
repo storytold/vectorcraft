@@ -309,12 +309,12 @@ fn character_style_color_and_features_reach_text_and_follow_swatch_edits() {
     // The command takes the color of the link at the tint, whatever color is sent.
     tinted["tint"] = json!(0.4);
     let attrs = json!({"fill": brand, "stroke": tinted, "stroke_width": 2.0, "overprint_fill": true, "overprint_stroke": false,
-        "features": ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]});
+        "features": ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01", "salt=2"]});
     s.execute("charStyle.new", &json!({"name": "Ink", "attrs": attrs})).unwrap();
     s.execute("charStyle.apply", &json!({"name": "Ink", "id": id})).unwrap();
     let want_stroke = s.doc().unwrap().doc.tint_paint("Brand", 0.4).unwrap();
     assert_eq!(run_paints(&s, id), (brand, want_stroke.clone(), 2.0, true, false));
-    assert_eq!(runs(&s, id)[0].style.features, ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01"]);
+    assert_eq!(runs(&s, id)[0].style.features, ["dlig", "-liga", "tnum", "lnum", "-onum", "-pnum", "ss02", "-ss01", "salt=2"]);
     let def = |s: &Session| s.doc().unwrap().doc.char_styles.iter().find(|d| d.name == "Ink").unwrap().attrs.clone();
     assert_eq!(def(&s)["stroke"], serde_json::to_value(&want_stroke).unwrap());
     let saved = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
@@ -355,6 +355,8 @@ fn character_style_color_and_features_are_checked() {
         (json!({"stroke_width": 5.0e6}), "`stroke_width` must be from 0 to 4000000"),
         (json!({"features": ["dlig", "zzzz"]}), "unknown OpenType feature `zzzz`"),
         (json!({"features": ["--liga"]}), "unknown OpenType feature `--liga`"),
+        (json!({"features": ["salt=x"]}), "unknown OpenType feature `salt=x`"),
+        (json!({"features": ["-salt=2"]}), "unknown OpenType feature `-salt=2`"),
         (json!({"features": many}), "features lists at most 256 tags"),
         (json!({"fill": {"type": "solid"}}), "missing field"),
     ] {
@@ -393,6 +395,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"baseline_shift": 1296.1}),
         json!({"tcyUpDown": 1296.1}),
         json!({"tcyLeftRight": -1296.1}),
+        json!({"akiLeft": -0.1}),
+        json!({"akiRight": 1000.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -414,7 +418,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "size": 1296.0, "leading": 5000.0,
             "h_scale": 1.0, "v_scale": 10000.0,
             "baseline_shift": -1296.0,
-            "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0
+            "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
+            "akiLeft": 0.0, "akiRight": 1000.0
         }}),
     )
     .unwrap();
@@ -819,8 +824,8 @@ fn load_all_styles_loads_both_kinds_in_one_step() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
-/// A loaded character style whose size, scale, leading, shift or stroke width is out of the range
-/// `charStyle.new` takes is skipped.
+/// A loaded character style whose size, scale, leading, shift, warichu Line Gap or stroke width is
+/// out of the range `charStyle.new` takes is skipped.
 #[test]
 fn loaded_styles_out_of_range_are_skipped() {
     let (mut s, _) = session_with_text("Title");
@@ -829,11 +834,12 @@ fn loaded_styles_out_of_range_are_skipped() {
         ("Flat", json!({"h_scale": 0.5})),
         ("Shifted", json!({"baseline_shift": 5000.0})),
         ("Thick", json!({"stroke_width": -2.0})),
+        ("Gapped", json!({"warichuGap": 500.0})),
         ("Fine", json!({"size": 12.0, "h_scale": 50.0})),
     ];
     let data = styles_file(&file, &[]);
     let r = s.execute("charStyle.load", &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
-    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": ["Huge", "Flat", "Shifted", "Thick"]}));
+    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": ["Huge", "Flat", "Shifted", "Thick", "Gapped"]}));
     assert_eq!(listed(&mut s, "charStyle"), [NORMAL_CHAR, "Fine"]);
 }
 

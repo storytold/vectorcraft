@@ -67,6 +67,21 @@ pub fn num_field_within(
     unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], false, "")
 }
 
+/// [`num_field_within`] that refuses a value typed outside `bounds` (points), as it refuses text
+/// that doesn't read: the field flashes, keeps its value and holds the dialog open. ↑/↓, the wheel
+/// and a scrub still stop at the ends.
+pub fn num_field_refusing(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    unit_field_from(ui, id, label, None, value, unit, width, false, bounds, &[], false, None, "", true)
+}
+
 /// [`num_field_within`] whose empty value reads `empty` (Transform Each's Absolute scales read
 /// "Mixed" when the selected objects differ): typing replaces it, as it replaces the value shown.
 pub fn num_field_within_empty(
@@ -122,11 +137,12 @@ fn unit_field(
     live: bool,
     empty: &str,
 ) -> Option<f64> {
-    unit_field_from(ui, id, label, name, value, unit, width, share_of_value, bounds, stops, live, None, empty)
+    unit_field_from(ui, id, label, name, value, unit, width, share_of_value, bounds, stops, live, None, empty, false)
 }
 
 /// [`unit_field`] whose blank field (`value` is `None`) steps from `blank_from` (points) with
-/// ↑/↓ and the wheel instead of doing nothing.
+/// ↑/↓ and the wheel instead of doing nothing. With `refuse_outside`, a value typed outside
+/// `bounds` is refused as text that doesn't read is, rather than kept at the nearer end.
 #[allow(clippy::too_many_arguments)]
 fn unit_field_from(
     ui: &mut Ui,
@@ -142,6 +158,7 @@ fn unit_field_from(
     live: bool,
     blank_from: Option<f64>,
     empty: &str,
+    refuse_outside: bool,
 ) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_else(|| empty.to_string());
@@ -163,7 +180,11 @@ fn unit_field_from(
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
     if commit {
-        match read(&buf).or_else(|| if share_of_value { share_of(&buf, value?) } else { None }) {
+        let typed_value = read(&buf).or_else(|| if share_of_value { share_of(&buf, value?) } else { None });
+        // A refused value is one outside `bounds` that the field doesn't show as an end: the end
+        // shown in the field's unit ("352.7778 mm" for 1000 pt) reads back as that end.
+        let typed_value = typed_value.filter(|&v| !refuse_outside || bounds.contains(&v) || unit.format(within(v, &bounds)) == unit.format(v));
+        match typed_value {
             Some(v) => {
                 let clamped = within(v, &bounds);
                 let formatted = unit.format(clamped);
@@ -302,13 +323,29 @@ fn step_value(
     }
     // Wheel turns in notches: a line each, or `line` points of a trackpad or a fine wheel; what is
     // left of a notch carries over to the next turn.
-    let (line, notch_id) = (ui.ctx().options(|o| o.input_options.line_scroll_speed), resp.id.with("wheel"));
+    let (options, notch_id) = (ui.ctx().options(|o| o.input_options), resp.id.with("wheel"));
+    let line = options.line_scroll_speed;
     let mut notches: f32 = if wheel { ui.data(|d| d.get_temp(notch_id)).unwrap_or(0.0) } else { 0.0 };
+    let tail_key = wheel_tail_id(ui.ctx().viewport_id());
+    let mut tail: WheelTail = if wheel { ui.data(|d| d.get_temp(tail_key)).unwrap_or_default() } else { WheelTail::default() };
+    let pass = ui.ctx().cumulative_pass_nr();
+    let stored: Option<(u64, Vec<(Event, egui::Vec2)>)> = if wheel { ui.data(|d| d.get_temp(wheel_turns_id(tail_key))) } else { None };
+    let mut measured = stored.filter(|(at, _)| *at == pass).map(|(_, turns)| turns);
+    let mut turns = Vec::new();
+    let mut took = egui::Vec2::ZERO;
     // Each press and each turn of whole notches in the order they came: its modifiers and size from
     // [`STEPS`], and how many steps up (down when negative).
     let mut steps: Vec<(egui::Modifiers, f64, f64)> = Vec::new();
     let mut taken = taken;
     ui.input_mut(|i| {
+        let (page, dt) = (i.viewport_rect().height(), i.stable_dt);
+        // In a pass [`WheelTailPlugin`] did not run in (it is added in this one), the field
+        // measures the pass's turns itself.
+        turns = match measured.take() {
+            Some(turns) => turns,
+            None if wheel => wheel_turns(&mut tail, &i.events, &options, page, i.time),
+            None => Vec::new(),
+        };
         i.events.retain(|e| {
             // Each taken event is matched once by its value, so wheel events that other code adds
             // or removes before the field runs do not shift which events the field takes.
@@ -318,7 +355,15 @@ fn step_value(
             let n = match e {
                 Event::Key { key: Key::ArrowUp, pressed: true, .. } if focused => 1.0,
                 Event::Key { key: Key::ArrowDown, pressed: true, .. } if focused => -1.0,
-                Event::MouseWheel { unit, delta, .. } if mine => {
+                Event::MouseWheel { unit, delta, phase, .. } if mine => {
+                    if *phase == egui::TouchPhase::Move {
+                        // Each turn of the pass was measured in the order egui read them; a turn
+                        // other code added after that falls back on the touch state.
+                        took += match turns.iter().position(|(t, _)| t == e) {
+                            Some(at) => turns.remove(at).1,
+                            None => unsmoothed_points(&options, page, tail.touch, *unit, *delta, *modifiers),
+                        };
+                    }
                     // Shift may turn the wheel sideways (the Mac does).
                     let d = if modifiers.shift { delta.x + delta.y } else { delta.y };
                     notches += match unit {
@@ -340,9 +385,16 @@ fn step_value(
             // The rest of a turn egui spreads over the next frames scrolls nothing either.
             i.smooth_scroll_delta = egui::Vec2::ZERO;
         }
+        // What egui has not let out of the turns taken here yet stays out of scrolling after the
+        // pointer leaves the field ([`WheelTailPlugin`]).
+        tail.owed += took - tail_release(took, dt);
     });
     if wheel {
-        ui.data_mut(|d| d.insert_temp(notch_id, notches));
+        ui.data_mut(|d| {
+            d.insert_temp(notch_id, notches);
+            d.insert_temp(tail_key, tail);
+            d.insert_temp(wheel_turns_id(tail_key), (pass, turns));
+        });
     }
     if steps.is_empty() {
         return None;
@@ -442,6 +494,9 @@ fn number_wheel_turns(ui: &Ui, resp: &Response) -> (Vec<egui::Event>, bool) {
         Some((state.walk, state.before.clone()))
     });
     let walked = fresh.map(|(walk, before)| {
+        if ctx.with_plugin(|_: &mut WheelTailPlugin| ()).is_none() {
+            ctx.add_plugin(WheelTailPlugin);
+        }
         let (events, now) = ui.input(|i| (i.events.clone(), i.time));
         walk_wheel(ctx, walk, &events, &before, now, pass)
     });
@@ -555,6 +610,137 @@ fn walk_wheel(
         taken.clear();
     }
     (walk, taken)
+}
+
+/// The wheel turns that number fields took in one viewport and egui has not let out yet (points),
+/// whether a trackpad touch is running there, and the time and source of the last wheel event.
+#[derive(Clone, Copy, Default)]
+struct WheelTail {
+    owed: egui::Vec2,
+    touch: bool,
+    last: f64,
+    trackpad: bool,
+}
+
+impl WheelTail {
+    /// Ends a touch that egui ends at `time` because no wheel event came for a while (its
+    /// `WheelState::is_scroll_action_over`): 1 s for a trackpad, 0.15 s for any other source.
+    fn expire_touch(&mut self, time: f64) {
+        let timeout = if self.trackpad { 1.0 } else { 0.150 };
+        if self.touch && timeout < time - self.last {
+            self.touch = false;
+        }
+    }
+}
+
+fn wheel_tail_id(viewport: egui::ViewportId) -> egui::Id {
+    egui::Id::unique("number-field-wheel-tail").with(viewport)
+}
+
+/// Where the wheel turns of a pass are kept with their [`unsmoothed_points`] and the pass number,
+/// from [`wheel_turns`].
+fn wheel_turns_id(tail: egui::Id) -> egui::Id {
+    tail.with("turns")
+}
+
+/// Reads the wheel events of a pass at `time` in order, as egui does, into `tail`'s touch state
+/// (a start begins a touch; an end or cancel ends it and drops what is owed; a touch with no event
+/// for a while ends), and returns each turn with its [`unsmoothed_points`] at that point.
+fn wheel_turns(tail: &mut WheelTail, events: &[egui::Event], options: &egui::InputOptions, page: f32, time: f64) -> Vec<(egui::Event, egui::Vec2)> {
+    let mut turns = Vec::new();
+    for event in events {
+        if let egui::Event::MouseWheel { unit, delta, phase, modifiers, source } = event {
+            tail.expire_touch(time);
+            tail.last = time;
+            tail.trackpad = *source == egui::MouseWheelSource::Trackpad;
+            match phase {
+                egui::TouchPhase::Start => tail.touch = true,
+                egui::TouchPhase::End | egui::TouchPhase::Cancel => {
+                    tail.touch = false;
+                    tail.owed = egui::Vec2::ZERO;
+                    // egui drops what the pass's earlier turns left as well.
+                    turns.iter_mut().for_each(|(_, points)| *points = egui::Vec2::ZERO);
+                }
+                egui::TouchPhase::Move => turns.push((event.clone(), unsmoothed_points(options, page, tail.touch, *unit, *delta, *modifiers))),
+            }
+        }
+    }
+    tail.expire_touch(time);
+    turns
+}
+
+/// The points of wheel turn `delta` in `unit` that egui spreads over the next passes instead of
+/// scrolling at once (its `WheelState::on_wheel_event`): a turn sideways with the horizontal
+/// scroll modifier, up and down with the vertical one, and nothing for a zoom turn, a touch or a
+/// turn under 8 points. `page` is the viewport's height. `modifiers` are the turn's own: egui keeps a
+/// touch's modifiers only inside the touch, where nothing is spread out.
+fn unsmoothed_points(
+    options: &egui::InputOptions,
+    page: f32,
+    touch: bool,
+    unit: egui::MouseWheelUnit,
+    delta: egui::Vec2,
+    modifiers: egui::Modifiers,
+) -> egui::Vec2 {
+    let mut d = match unit {
+        egui::MouseWheelUnit::Point => delta,
+        egui::MouseWheelUnit::Line => options.line_scroll_speed * delta,
+        egui::MouseWheelUnit::Page => page * delta,
+    };
+    let (sideways, upright) = (modifiers.matches_any(options.horizontal_scroll_modifier), modifiers.matches_any(options.vertical_scroll_modifier));
+    if sideways && !upright {
+        d = egui::vec2(d.x + d.y, 0.0);
+    }
+    if upright && !sideways {
+        d = egui::vec2(0.0, d.x + d.y);
+    }
+    let smooth = touch || unit == egui::MouseWheelUnit::Point && d.length() < 8.0;
+    if smooth || modifiers.matches_any(options.zoom_modifier) { egui::Vec2::ZERO } else { d }
+}
+
+/// What egui lets out in a pass `dt` seconds long of `owed` points of wheel input it has not let
+/// out yet (its `WheelState::after_events`): all of an axis under a point, otherwise the share that
+/// lets out 90% in 0.1 s.
+fn tail_release(owed: egui::Vec2, dt: f32) -> egui::Vec2 {
+    let t = egui::emath::exponential_smooth_factor(0.90, 0.1, dt.min(0.1));
+    let axis = |v: f32| if v.abs() < 1.0 { v } else { t * v };
+    egui::vec2(axis(owed.x), axis(owed.y))
+}
+
+/// Takes out of each pass's scrolling what egui lets out of the wheel turns number fields took
+/// ([`WheelTail`]), before any panel scrolls, so the rest of a turn a field took scrolls nothing
+/// after the pointer leaves the field. A turn's end or cancel drops what is left. It also measures
+/// each wheel turn of the pass with the touch state egui had at that turn, for [`step_value`].
+#[derive(Default)]
+struct WheelTailPlugin;
+
+impl egui::Plugin for WheelTailPlugin {
+    fn debug_name(&self) -> &'static str {
+        "number field wheel tail"
+    }
+
+    fn on_begin_pass(&mut self, ui: &mut Ui) {
+        let key = wheel_tail_id(ui.ctx().viewport_id());
+        let (options, pass) = (ui.ctx().options(|o| o.input_options), ui.ctx().cumulative_pass_nr());
+        let mut tail = ui.data(|d| d.get_temp::<WheelTail>(key)).unwrap_or_default();
+        let mut turns = Vec::new();
+        ui.input_mut(|i| {
+            turns = wheel_turns(&mut tail, &i.events, &options, i.viewport_rect().height(), i.time);
+            if tail.owed == egui::Vec2::ZERO {
+                return;
+            }
+            let release = tail_release(tail.owed, i.stable_dt);
+            tail.owed -= release;
+            // A zoom turn takes what egui lets out, so nothing of it reaches scrolling.
+            if i.smooth_scroll_delta != egui::Vec2::ZERO || i.zoom_delta() == 1.0 {
+                i.smooth_scroll_delta -= release;
+            }
+        });
+        ui.data_mut(|d| {
+            d.insert_temp(key, tail);
+            d.insert_temp(wheel_turns_id(key), (pass, turns));
+        });
+    }
 }
 
 /// A [`num_field`] for a width or height (Transform panel, Properties panel, Control bar): Ctrl/Cmd+Enter
@@ -852,7 +1038,7 @@ pub fn spin_field_stops_named(
     let stops = if value.is_none() { &BLANK_WEIGHT_STOPS[..] } else { presets };
     let fmt = |v: f64| unit.format(v);
     spin_generic(ui, label, value, Some(blank_from), None, None, None, width, step, min, presets, stops, &fmt, &mut |ui, fw, label| {
-        unit_field_from(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, stops, false, Some(blank_from), "")
+        unit_field_from(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, stops, false, Some(blank_from), "", false)
     })
     .and_then(SpinPick::value)
 }

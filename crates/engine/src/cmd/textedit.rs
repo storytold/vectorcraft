@@ -40,7 +40,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt, leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\" (the space after each character), kerningBefore?: 1/1000 em -1000..10000 (the space before a character that starts a line by itself: the first character of the text, of a paragraph or after a forced line break; no effect elsewhere; 0 by default), baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), fill?: colour|\"none\", stroke?: colour|\"none\" (#rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", …], featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; on a vertical path a positive Up/Down moves it toward the path's start and a positive Left/Right to the path's left; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{id? (default: the one selected type object), start?: byte, end?: byte (default: all text), story?: bool = false (all the text of every frame of the threaded story `id` is a frame of, in one undo step; no `start` or `end`), font?, style?, size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?, kerning?: 1/1000 em|\"auto\"|\"optical\" (the space after each character), kerningBefore?: 1/1000 em -1000..10000 (the space before a character that starts a line by itself: the first character of the text, of a paragraph or after a forced line break; no effect elsewhere; 0 by default), baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), fill?: colour|\"none\", stroke?: colour|\"none\" (#rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt, strokeOptions?: {weight?, cap?, join?, miterLimit?, align?, dash?, dashOffset?, alignDashes?} (as stroke.set: the character stroke), underline?, strikethrough?, allCaps?: bool, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), features?: [\"dlig\", \"-liga\", \"salt=2\", …] (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; the range is shaped with its word, so a letter's alternate keeps it joined to its neighbours), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\", proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings: in vertical type a block of tate-chu-yoko characters moves up by a positive Up/Down and down by a negative one, right by a positive Left/Right and left by a negative one, as one piece with the values of its first character; on a vertical path a positive Up/Down moves it toward the path's start and a positive Left/Right to the path's left; 0 by default; automatic digit blocks and horizontal type do not move; neither turns tateChuYoko on), warichu?: bool (Character panel menu › Warichu, with Show East Asian Options: the characters are set at warichuScale percent of their size and stacked on warichuLines lines inside their line, one above the other in horizontal type and side by side in vertical type, the first line above or to the right; a stretch of them is one block with the settings of its first character that stays whole on one line and may run past its end; type on a path sets them at their own size), warichuLines?: 1..6 (default 2), warichuGap?: pt 0..100 (the space between the lines, default 0), warichuScale?: % 10..100 (default 50), warichuAlign?: \"auto\"|\"left\"|\"center\"|\"right\"|\"justifyLeft\"|\"justifyCenter\"|\"justifyRight\"|\"justifyAll\" (Warichu Settings: how the lines line up along the block, which is as long as its longest line; the justify values spread every line but the last, which is set left, centered or right, or spread with justifyAll; auto, the default, sets them as justifyLeft; left and right are top and bottom in vertical type; none of them turns warichu on), akiLeft?, akiRight?: 1/1000 em 0..1000 (Character panel › Insert Aki Left and Right, with Show East Asian Options: space before and after each character in reading order, on its left and right in left-to-right type, on its right and left in right-to-left type, above and below it in vertical type; a ligature or a letter with its marks takes the values of its first character; line wrapping counts it, alignment keeps it at a line's ends and justification does not stretch or narrow it; 0 by default; a value that is not a number or is outside the range is refused, naming the key), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, with Show East Asian Options: in vertical type those half-width characters, such as Latin letters and digits, stand upright one below the other instead of being rotated; spaces and tate-chu-yoko blocks are not changed; kept on the characters and ignored in horizontal type; off by default), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference: the height of the font that size measures, the em box by default; with a font that has no such height, or one outside 0.1 to 2 em, the em box), language?: name|tag (Character panel › Language: one of Document Setup's languages by name or BCP 47 tag, case-insensitive, such as \"Turkish\" or \"tr\"; the characters are shaped in it, so the font uses that language's forms (OpenType `locl`); saved as the tag, English: USA, the default, as none; new type takes the document's language), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font: the setting of each variation axis named, in the axis's units and clamped to its range; null: back to the style's own setting; other axes keep theirs; tags the font has no axis for are left out; a font or style change clears them; text.fontList {family, style} lists the axes), glyphAlternate?: null (takes away the glyph choice text.setGlyphAlternate made on the characters, in the same undo step as the other attributes; any other value is refused)} style a character range (size/leading/baselineShift are document points and hScale includes the object transform; runs are split at the range ends) → {id, runs, warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_range_style
         ),
@@ -58,7 +58,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Glyphs",
             [],
             None,
-            "{id, start: byte (a character of it), gid: glyph id|null} draw that one character with another glyph of its font as one undo step, what a double-click in the Glyphs panel's Show › Alternates for Current Selection does: gid is one of the glyphs text.glyphAlternates lists for it; its own default glyph, or null, puts the default glyph back. The text keeps the character, and its other attributes do not change. The choice is saved with the character's style and names the face it was made in (PostScript name and version): set in another font or version, or after the font goes missing, the character takes its default glyph; typed characters take their default glyphs. Choosing the glyph the character already draws is not an edit. An error when the character's font is not available, the glyph is not one of its alternates, or the character's style does not draw it (All Caps, Small Caps, another numeral system) → {id, start, end (the character's bytes), gid (the glyph drawn)}",
+            "{id, start: byte (a character of it), gid: glyph id|null} draw that one character with another glyph of its font as one undo step, what a double-click in the Glyphs panel's Show › Alternates for Current Selection does: gid is one of the glyphs text.glyphAlternates lists for it, a glyph no character maps and no feature reaches whose name is not another letter's (`a.salt` for a), its own default glyph, or null, puts the default glyph back. The text keeps the character, and its other attributes do not change. The choice is saved with the character's style and names the face it was made in (PostScript name and version): set in another font or version, or after the font goes missing, the character takes its default glyph; typed characters take their default glyphs. Choosing the glyph the character already draws is not an edit. An error when the character's font is not available, the glyph is not one of those, or the character's style does not draw it (All Caps, Small Caps, another numeral system) → {id, start, end (the character's bytes), gid (the glyph drawn)}",
             has_doc,
             set_glyph_alternate
         ),
@@ -85,7 +85,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area / Path Type",
             [],
             None,
-            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?, font?, style?, color?, keepModel? (as text.create), fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (area: as text.areaOptions; default autoHeight when the autoSizeAreaType preference is on), placeholder?: bool (placeholder text instead, as text.create), justify?, leadingModel?, charAlign? (as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id, bounds: {x, y, width, height} (as text.create), overflow?: [id] (the text doesn't fit; left out when it fits)}",
+            "{path: id, mode: \"area\"|\"onPath\", text?: \"\", vertical?: bool = false, at?: [x, y] (on-path start: nearest point), size?: pt 0.1..1296 (outside it: an error), font?, style?, color?, keepModel? (as text.create), fit?: none|autoHeight|shrinkText|block, fitMinPercent?, wordGap?, lineGap? (area: as text.areaOptions; default autoHeight when the autoSizeAreaType preference is on), placeholder?: bool (placeholder text instead, as text.create), justify?, leadingModel?, charAlign? (as text.create)} turn a path into an area-type frame or a type-on-a-path baseline (the path's paint is dropped) → {id, bounds: {x, y, width, height} (as text.create), overflow?: [id] (the text doesn't fit; left out when it fits)}",
             has_doc,
             create_in_path
         ),
@@ -459,6 +459,15 @@ pub(crate) struct CharChange {
     /// Tate-chu-yoko Settings › Up/Down and Left/Right, in points.
     tcy_up_down: Option<f64>,
     tcy_left_right: Option<f64>,
+    warichu: Option<bool>,
+    /// Warichu Settings › Lines, Line Gap (points), Scale (percent) and Alignment.
+    warichu_lines: Option<u8>,
+    warichu_gap: Option<f64>,
+    warichu_scale: Option<f64>,
+    warichu_align: Option<vectorcraft_doc::WarichuAlign>,
+    /// Insert Aki Left and Right, in 1/1000 em.
+    aki_left: Option<f64>,
+    aki_right: Option<f64>,
     standard_vertical_roman: Option<bool>,
     no_break: Option<bool>,
     digits: Option<vectorcraft_doc::Digits>,
@@ -466,6 +475,8 @@ pub(crate) struct CharChange {
     language: Option<Option<String>>,
     font_axes: Option<AxisChange>,
     font_height_reference: Option<vectorcraft_doc::FontHeightReference>,
+    /// Take away the glyph choice ([`CharStyle::glyph_alternate`]) of the characters (`glyphAlternate: null`).
+    clear_glyph_alternate: bool,
 }
 
 /// `charDirection: "default"|"leftToRight"|"rightToLeft"` → the Character Direction to set (`None`
@@ -487,6 +498,50 @@ pub(crate) fn tcy_offset_param(p: &Value, key: &str, cmd: &str) -> Result<Option
     let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
     let v = v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
     let (lo, hi) = (-1296.0, 1296.0);
+    if (lo..=hi).contains(&v) { Ok(Some(v)) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }
+}
+
+/// `warichuLines` (Warichu Settings › Lines): a whole number within
+/// [`vectorcraft_doc::text::WARICHU_LINES`]. Any other value is an error.
+pub(crate) fn warichu_lines_param(p: &Value, cmd: &str) -> Result<Option<u8>> {
+    let Some(v) = p.get("warichuLines").filter(|v| !v.is_null()) else { return Ok(None) };
+    let range = vectorcraft_doc::text::WARICHU_LINES;
+    let error = || bad(cmd, format!("`warichuLines` must be a whole number from {} to {}", range.start(), range.end()));
+    let n = v.as_u64().and_then(|n| u8::try_from(n).ok()).filter(|n| range.contains(n)).ok_or_else(error)?;
+    Ok(Some(n))
+}
+
+/// `warichuGap` (Warichu Settings › Line Gap, points from 0 to
+/// [`vectorcraft_doc::text::MAX_WARICHU_GAP`]) or `warichuScale` (Warichu Settings › Scale, percent
+/// within [`vectorcraft_doc::text::WARICHU_SCALE`]). Any other value is an error.
+pub(crate) fn warichu_number_param(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
+    let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
+    let v = v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
+    let (lo, hi) = match key {
+        "warichuScale" => (*vectorcraft_doc::text::WARICHU_SCALE.start(), *vectorcraft_doc::text::WARICHU_SCALE.end()),
+        _ => (0.0, vectorcraft_doc::text::MAX_WARICHU_GAP),
+    };
+    if (lo..=hi).contains(&v) { Ok(Some(v)) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }
+}
+
+/// `warichuAlign: "auto"|"left"|"center"|"right"|"justifyLeft"|"justifyCenter"|"justifyRight"|"justifyAll"`
+/// ([`vectorcraft_doc::WarichuAlign::id`]) → the Warichu Settings Alignment.
+pub(crate) fn warichu_align_param(p: &Value, cmd: &str) -> Result<Option<vectorcraft_doc::WarichuAlign>> {
+    use vectorcraft_doc::WarichuAlign;
+    let Some(v) = p.get("warichuAlign").filter(|v| !v.is_null()) else { return Ok(None) };
+    let Some(a) = v.as_str().and_then(WarichuAlign::from_id) else {
+        let ids: Vec<String> = WarichuAlign::ALL.iter().map(|a| format!("\"{}\"", a.id())).collect();
+        return Err(bad(cmd, format!("`warichuAlign` must be one of {}", ids.join(", "))));
+    };
+    Ok(Some(a))
+}
+
+/// `akiLeft` or `akiRight` (Insert Aki Left and Right): a number of thousandths of an em from 0 to
+/// [`vectorcraft_doc::text::MAX_AKI`]. Any other value is an error.
+pub(crate) fn aki_param(p: &Value, key: &str, cmd: &str) -> Result<Option<f64>> {
+    let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
+    let v = v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(cmd, format!("`{key}` must be a number")))?;
+    let (lo, hi) = (0.0, vectorcraft_doc::text::MAX_AKI);
     if (lo..=hi).contains(&v) { Ok(Some(v)) } else { Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}"))) }
 }
 
@@ -567,7 +622,8 @@ pub(crate) fn change_font_axes(st: &mut CharStyle, change: &AxisChange) {
     }
 }
 
-/// `features: ["dlig", "-liga", …]` → the canonical tag list (differences from the defaults).
+/// `features: ["dlig", "-liga", "salt=2", …]` → the canonical tag list (differences from the
+/// defaults; `salt=1` is written `salt`, `salt=0` and `-salt` leave it out).
 pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>> {
     let Some(v) = p.get("features").filter(|v| !v.is_null()) else { return Ok(None) };
     let not_tags = || bad(cmd, "features must be a list of tags");
@@ -576,7 +632,8 @@ pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>
         return Err(bad(
             cmd,
             format!(
-                "unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; prefix - to turn off)"
+                "unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {}, as `salt=2`)",
+                vectorcraft_text::MAX_FEATURE_VALUE
             ),
         ));
     }
@@ -586,9 +643,9 @@ pub(crate) fn features_param(p: &Value, cmd: &str) -> Result<Option<Vec<String>>
 /// The most entries a `featureChanges` list may have.
 const MAX_FEATURE_CHANGES: usize = 256;
 
-/// A feature tag without its `-` or `+` prefix.
+/// A feature tag without its `-` or `+` prefix and its `=N` value.
 fn feature_name(tag: &str) -> &str {
-    tag.strip_prefix(['-', '+']).unwrap_or(tag)
+    vectorcraft_text::OtFeatures::tag_name(tag)
 }
 
 /// `featureChanges: ["tnum", "-onum", …]` → the features to turn on (or, with `-`, off) on top of
@@ -696,7 +753,17 @@ impl CharChange {
         check_numbers(p, &["size", "tracking", "kerningBefore", "baselineShift", "hScale", "vScale", "rotation", "strokeWidth"], cmd)?;
         check_switches(
             p,
-            &["underline", "strikethrough", "allCaps", "proportionalMetrics", "tateChuYoko", "standardVerticalRoman", "noBreak", "kashidas"],
+            &[
+                "underline",
+                "strikethrough",
+                "allCaps",
+                "proportionalMetrics",
+                "tateChuYoko",
+                "warichu",
+                "standardVerticalRoman",
+                "noBreak",
+                "kashidas",
+            ],
             cmd,
         )?;
         let num = |k: &str| p.get(k).and_then(Value::as_f64);
@@ -713,7 +780,7 @@ impl CharChange {
         let c = Self {
             font: text_param(p, "font", cmd)?.map(str::to_string),
             style: text_param(p, "style", cmd)?.map(str::to_string),
-            size: num("size"),
+            size: num("size").map(|v| super::typecmd::given_type_size(v, cmd)).transpose()?,
             leading: auto_or_num(p, "leading", cmd)?,
             tracking: num("tracking"),
             kerning: match p.get("kerning") {
@@ -750,16 +817,27 @@ impl CharChange {
             tate_chu_yoko: flag("tateChuYoko"),
             tcy_up_down: tcy_offset_param(p, "tcyUpDown", cmd)?,
             tcy_left_right: tcy_offset_param(p, "tcyLeftRight", cmd)?,
+            warichu: flag("warichu"),
+            warichu_lines: warichu_lines_param(p, cmd)?,
+            warichu_gap: warichu_number_param(p, "warichuGap", cmd)?,
+            warichu_scale: warichu_number_param(p, "warichuScale", cmd)?,
+            warichu_align: warichu_align_param(p, cmd)?,
+            aki_left: aki_param(p, "akiLeft", cmd)?,
+            aki_right: aki_param(p, "akiRight", cmd)?,
             standard_vertical_roman: flag("standardVerticalRoman"),
             no_break: flag("noBreak"),
             digits: digits_param(p, cmd)?,
             language: language_param(p, cmd)?,
             font_axes: font_axes_param(p, cmd)?,
             font_height_reference: font_height_reference_param(p, cmd)?,
+            clear_glyph_alternate: match p.get("glyphAlternate") {
+                None => false,
+                Some(Value::Null) => true,
+                Some(_) => {
+                    return Err(bad(cmd, "`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)"));
+                }
+            },
         };
-        if c.size.is_some_and(|v| v <= 0.0) {
-            return Err(bad(cmd, "size must be positive"));
-        }
         Ok(c)
     }
 
@@ -803,12 +881,20 @@ impl CharChange {
             && self.tate_chu_yoko.is_none()
             && self.tcy_up_down.is_none()
             && self.tcy_left_right.is_none()
+            && self.warichu.is_none()
+            && self.warichu_lines.is_none()
+            && self.warichu_gap.is_none()
+            && self.warichu_scale.is_none()
+            && self.warichu_align.is_none()
+            && self.aki_left.is_none()
+            && self.aki_right.is_none()
             && self.standard_vertical_roman.is_none()
             && self.no_break.is_none()
             && self.digits.is_none()
             && self.language.is_none()
             && self.font_axes.is_none()
             && self.font_height_reference.is_none()
+            && !self.clear_glyph_alternate
     }
 
     pub(crate) fn localize(&mut self, t: &TextObject, cmd: &str) -> Result<()> {
@@ -818,6 +904,7 @@ impl CharChange {
         self.baseline_shift = self.baseline_shift.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
         self.tcy_up_down = self.tcy_up_down.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
         self.tcy_left_right = self.tcy_left_right.map(|v| local_type_value(t, v, (-1296.0, 1296.0), false, cmd)).transpose()?;
+        self.warichu_gap = self.warichu_gap.map(|v| local_type_value(t, v, (0.0, vectorcraft_doc::text::MAX_WARICHU_GAP), false, cmd)).transpose()?;
         self.h_scale = self.h_scale.map(|v| local_type_value(t, v, (1.0, 10000.0), true, cmd)).transpose()?;
         self.stroke_scale = Some(vectorcraft_doc::Scaling::factor(t.xf).filter(|k| k.is_finite() && *k > 1e-12).unwrap_or(1.0));
         Ok(())
@@ -867,6 +954,27 @@ impl CharChange {
         }
         if let Some(v) = self.tcy_left_right {
             st.tcy_left_right = v;
+        }
+        if let Some(v) = self.warichu {
+            st.warichu = v;
+        }
+        if let Some(v) = self.warichu_lines {
+            st.warichu_lines = v;
+        }
+        if let Some(v) = self.warichu_gap {
+            st.warichu_gap = v;
+        }
+        if let Some(v) = self.warichu_scale {
+            st.warichu_scale = v;
+        }
+        if let Some(v) = self.warichu_align {
+            st.warichu_align = v;
+        }
+        if let Some(v) = self.aki_left {
+            st.aki_left = v;
+        }
+        if let Some(v) = self.aki_right {
+            st.aki_right = v;
         }
         if let Some(v) = self.standard_vertical_roman {
             st.standard_vertical_roman = v;
@@ -950,6 +1058,9 @@ impl CharChange {
         }
         if let Some(v) = &self.language {
             st.language.clone_from(v);
+        }
+        if self.clear_glyph_alternate {
+            st.glyph_alternate = None;
         }
     }
 }
@@ -1269,7 +1380,9 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let t = text_ref(s, id)?;
     let (ch, bytes, face) = glyph_target(&t, p, C)?;
-    let default = face.glyph_for(ch);
+    let db = vectorcraft_text::FontDb::global();
+    let context = std::cell::OnceCell::new();
+    let contextual = || context.get_or_init(|| vectorcraft_text::alternates_in_context(db, &t, bytes.start));
     let holder = t
         .runs
         .iter()
@@ -1290,6 +1403,16 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     let mut probe = t.clone();
     edit::style_range(&mut probe.runs, bytes.start, bytes.end, |st| st.glyph_alternate = None);
     let probe_lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe);
+    // Choices belong to the supplying face, including fallback for a missing grapheme. When the
+    // character overflows, the contextual probe finds that face in an unconstrained frame.
+    let face = probe_lay
+        .glyphs
+        .iter()
+        .find(|g| g.byte <= bytes.start && bytes.start < g.byte.saturating_add(g.len))
+        .and_then(|g| db.face_by_id(g.font_id))
+        .or_else(|| contextual().as_ref().and_then(|f| db.face_by_id(f.font_id)))
+        .unwrap_or(face);
+    let default = face.glyph_for(ch);
     let unchosen = holder
         .as_ref()
         .filter(|_| !styled)
@@ -1297,7 +1420,14 @@ fn set_glyph_alternate(s: &mut Session, p: &Value) -> Result<Value> {
     let substituted = unchosen.is_some_and(|g| g != default);
     let choice = match gid.filter(|g| *g != default || substituted) {
         None => None,
-        Some(g) if g == default || face.alternates(ch).iter().any(|a| a.gid == g) => Some(face.choice(ch, g)),
+        Some(g)
+            if g == default
+                || face.alternates(ch).iter().any(|a| a.gid == g)
+                || face.is_unlisted_alternate(ch, g)
+                || contextual().as_ref().is_some_and(|f| f.font_id == face.id() && f.alternates.iter().any(|a| a.gid == g)) =>
+        {
+            Some(face.choice(ch, g))
+        }
         Some(g) => return Err(bad(C, format!("glyph {g} is not an alternate of {ch} in {} {}", face.family, face.style))),
     };
     // Without a choice, the glyph drawn in whatever face draws the character, as
@@ -1610,7 +1740,7 @@ fn create_in_path(s: &mut Session, p: &Value) -> Result<Value> {
     check_numbers(p, &["size"], C)?;
     check_switches(p, &["vertical", "placeholder"], C)?;
     super::color_param(p, "color", C)?;
-    let style = super::create::new_type_style(s, p);
+    let style = super::create::new_type_style(s, p, C)?;
     let text = str_param(p, "text").unwrap_or("").to_string();
     let start = match point_param(p, "at") {
         Some(at) if on_path => vectorcraft_geom::ArcPath::new(path).fraction_at(at).unwrap_or(0.0),
