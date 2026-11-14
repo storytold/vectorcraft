@@ -447,8 +447,8 @@ impl VectorcraftApp {
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
     /// own and a picture or text is placed in the middle of the view. A library, a presets file, a
-    /// plug-in, a shortcut set, a script or a file only an importer plug-in reads opens wherever it
-    /// is dropped, as File → Open opens it ([`io::opens_as`], [`fileio::opens_with_importer`]).
+    /// plug-in, a shortcut set, a script, a font file or a file only an importer plug-in reads opens
+    /// wherever it is dropped, as File → Open opens it ([`io::opens_as`], [`fileio::opens_with_importer`]).
     pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
         let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
         let at = match pos {

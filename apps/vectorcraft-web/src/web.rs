@@ -349,7 +349,7 @@ fn notice(lines: &[&str]) {
 
 /// Wraps the app to read dropped files asynchronously (browsers can't read them synchronously)
 /// and feed them through the inboxes: placed where they were dropped on the canvas, else opened
-/// (libraries, presets, plug-ins and shortcut sets open wherever they are dropped).
+/// (libraries, presets, plug-ins, shortcut sets and font files open wherever they are dropped).
 /// When the graphics are lost it hands the app to a new runner on a new canvas.
 struct WebShell {
     /// `None` once handed on.

@@ -1,7 +1,8 @@
 //! The fonts a document uses that aren't available (`text.missingFonts`), the files that provide
 //! them in a folder the user picks (`text.findFontFiles`, searched on separate threads:
-//! [`super::findfiles`]), and copying the files the user chooses into VectorCraft's own Fonts
-//! folder, which the font scan reads (`text.addFontFiles`).
+//! [`super::findfiles`]), copying the files the user chooses into VectorCraft's own Fonts
+//! folder, which the font scan reads (`text.addFontFiles`), and adding font files given as bytes
+//! to the session, which is how the web build gets fonts it doesn't bundle (`text.addFonts`).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -41,20 +42,24 @@ const MAX_PATH: usize = 4096;
 /// The most files one `text.addFontFiles` copies: as many as a search keeps.
 const MAX_ADD_FILES: usize = 1_000;
 /// The largest font file a search reads and `text.addFontFiles` copies, and the most bytes one
-/// `text.addFontFiles` copies.
-pub(crate) const MAX_FONT_FILE: u64 = 256 << 20;
+/// `text.addFontFiles` copies and one `text.addFonts` adds.
+pub const MAX_FONT_FILE: u64 = 256 << 20;
 #[cfg(not(target_arch = "wasm32"))]
 const MAX_ADD_BYTES: u64 = 1 << 30;
-/// The extensions of the font files `text.addFontFiles` copies (in any case), besides suitcase
-/// fonts.
-#[cfg(not(target_arch = "wasm32"))]
-const FONT_EXTENSIONS: &[&str] = &["ttf", "otf", "ttc", "otc", "woff", "woff2"];
+/// The extensions of font files (lower case; any case matches): those `text.addFontFiles` copies,
+/// besides suitcase fonts, and those File › Open and a drop add to the session (`text.addFonts`).
+pub const EXTS: &[&str] = &["ttf", "otf", "ttc", "otc", "woff", "woff2"];
+/// The most font files one `text.addFonts` adds.
+const MAX_SESSION_FONTS: usize = 100;
 /// Why a file wasn't copied.
 const NOT_A_FILE: &str = "not a file";
-#[cfg(not(target_arch = "wasm32"))]
+/// Why a file wasn't copied or added.
 const NOT_A_FONT: &str = "not a font file";
-#[cfg(not(target_arch = "wasm32"))]
-const TOO_LARGE: &str = "larger than 256 MB";
+/// Why a web font wasn't added: its tables are compressed, and nothing here unpacks them yet.
+const WEB_FONT: &str = "a WOFF or WOFF2 web font, which can't be added yet: add its .ttf or .otf file";
+/// Why a font file over [`MAX_FONT_FILE`] is refused (also by File › Open and a drop, before the
+/// bytes are encoded for `text.addFonts`).
+pub const TOO_LARGE: &str = "larger than 256 MB";
 #[cfg(not(target_arch = "wasm32"))]
 const TOO_MUCH: &str = "the files come to more than 1 GB: add fewer at a time";
 #[cfg(not(target_arch = "wasm32"))]
@@ -85,9 +90,18 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Font Files",
             [],
             None,
-            "{files: [paths the last text.findFontFiles search found] (1 to 1000)} copy the font files into VectorCraft's own Fonts folder (next to the preferences; the desktop app and vectorcraft-cli read it), never replacing a file there: the names Name.otf, Name 2.otf … Name 99.otf are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is kept; then scan the fonts again, as text.rescanFonts does, and type set in them redraws. Only regular .ttf, .otf, .ttc, .otc, .woff and .woff2 files and suitcase fonts (with their resource fork) are copied, at most 256 MB a file and 1 GB in all; any other file is skipped. Add only fonts you own or are licensed to install. With automation read roots, folder is null when the Fonts folder is outside them, and a to or file path outside them is given as its file name; none on the web → {folder, copied: [{from, to}], kept: [{from, to}], skipped: [{file, reason}], families?, faces?}",
+            "{files: [paths the last text.findFontFiles search found] (1 to 1000)} copy the font files into VectorCraft's own Fonts folder (next to the preferences; the desktop app and vectorcraft-cli read it), never replacing a file there: the names Name.otf, Name 2.otf … Name 99.otf are tried in turn until one is free, which gets the copy, or is a file with the same contents, which is kept; then scan the fonts again, as text.rescanFonts does, and type set in them redraws. Only regular .ttf, .otf, .ttc, .otc, .woff and .woff2 files and suitcase fonts (with their resource fork) are copied, at most 256 MB a file and 1 GB in all; any other file is skipped. Add only fonts you own or are licensed to install. With automation read roots, folder is null when the Fonts folder is outside them, and a to or file path outside them is given as its file name; none on the web (see text.addFonts) → {folder, copied: [{from, to}], kept: [{from, to}], skipped: [{file, reason}], families?, faces?}",
             always,
             add
+        ),
+        cmd!(
+            query "text.addFonts",
+            "Add Fonts",
+            [],
+            None,
+            "{fonts: [{dataBase64: a TrueType or OpenType font file or collection (.ttf, .otf, .ttc, .otc), name?: its file name}] (1 to 100, at most 256 MB in all)} add the fonts to this session, all at once, without copying them anywhere: text.fontList lists their families, text.fonts finds them, and type set in them redraws, as after text.rescanFonts, without editing the documents. They last until the app quits; on the web this is how the page gives the app fonts it doesn't bundle (window.vectorcraft.addFonts, File › Open and a dropped font file run this command). A face already loaded (the same family, style and version) is kept; a file that holds no TrueType or OpenType font, such as a WOFF or WOFF2 web font, is skipped. Add only fonts you own or are licensed to use → {added: [{family, style}] (the faces added), kept: [{family, style}] (faces the session had already), skipped: [{index (in fonts), name?, reason}], families (the families listed now)}",
+            always,
+            add_to_session
         ),
     ]
 }
@@ -372,6 +386,74 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// `text.addFonts`: the font files `fonts` gives (`dataBase64`, `name`) join the session's font
+/// database at once ([`FontDb::add_font_files`]), and type set in them redraws, as Refresh Font List
+/// redraws it. A malformed parameter refuses the call before anything is added; a file that holds
+/// no font is skipped and says why.
+fn add_to_session(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.addFonts";
+    let fonts = p
+        .get("fonts")
+        .and_then(Value::as_array)
+        .filter(|a| (1..=MAX_SESSION_FONTS).contains(&a.len()))
+        .ok_or_else(|| bad(C, "`fonts` must be 1 to 100 font files, each {dataBase64, name?}"))?;
+    let mut given = Vec::with_capacity(fonts.len());
+    let mut total: u64 = 0;
+    for (i, f) in fonts.iter().enumerate() {
+        let data = f
+            .get("dataBase64")
+            .and_then(Value::as_str)
+            .ok_or_else(|| bad(C, format!("`fonts[{i}].dataBase64` must be the font file's bytes in base64")))?;
+        let name = match f.get("name") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(n)) if n.len() <= MAX_PATH => Some(n.as_str()),
+            Some(_) => return Err(bad(C, format!("`fonts[{i}].name` must be a file name of at most 4096 bytes"))),
+        };
+        // Counted before anything is decoded: base64 is a third larger than the bytes.
+        total = total.saturating_add(vectorcraft_format::base64_decoded_len(data));
+        if total > MAX_FONT_FILE {
+            return Err(bad(C, "the fonts come to more than 256 MB: add fewer at a time"));
+        }
+        given.push((name, data));
+    }
+    let mut decoded = Vec::with_capacity(given.len());
+    for (i, (name, data)) in given.into_iter().enumerate() {
+        let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(C, format!("`fonts[{i}].dataBase64` is not valid base64")))?;
+        decoded.push((name, bytes));
+    }
+    let (mut files, mut held, mut skipped) = (Vec::new(), Vec::new(), Vec::new());
+    for (i, (name, bytes)) in decoded.into_iter().enumerate() {
+        let faces = FontDb::faces_in(&bytes);
+        if faces.is_empty() {
+            let reason = if bytes.starts_with(b"wOFF") || bytes.starts_with(b"wOF2") { WEB_FONT } else { NOT_A_FONT };
+            let mut row = json!({ "index": i, "reason": reason });
+            if let Some(name) = name {
+                row["name"] = json!(name);
+            }
+            skipped.push(row);
+            continue;
+        }
+        held.extend(faces);
+        files.push(bytes);
+    }
+    let db = FontDb::global();
+    let added = db.add_font_files(files);
+    let mut kept: Vec<&(String, String)> = Vec::new();
+    for face in &held {
+        if !added.contains(face) && !kept.contains(&face) {
+            kept.push(face);
+        }
+    }
+    if !added.is_empty() {
+        super::fonts::fonts_changed(s);
+    }
+    let row = |(family, style): &(String, String)| json!({ "family": family, "style": style });
+    Ok(json!({
+        "added": added.iter().map(row).collect::<Vec<_>>(), "kept": kept.into_iter().map(row).collect::<Vec<_>>(),
+        "skipped": skipped, "families": db.menu_family_list().len(),
+    }))
+}
+
 /// Copy `files` into `dir`, never replacing a file there ([`super::fileio::copy_new`]): the names
 /// `Name.otf`, `Name 2.otf` up to `Name 99.otf` are tried in turn until one is free, which gets
 /// the copy, or is a file with the same contents, which is kept. At most [`MAX_FONT_FILE`] bytes a
@@ -404,7 +486,7 @@ fn copy_one(from: &Path, dir: &Path, total: &mut u64) -> std::result::Result<sup
     if !meta.is_file() || from.file_name().is_none() {
         return Err(NOT_A_FILE.into());
     }
-    let font = from.extension().and_then(|e| e.to_str()).is_some_and(|e| FONT_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)));
+    let font = from.extension().and_then(|e| e.to_str()).is_some_and(|e| EXTS.iter().any(|x| e.eq_ignore_ascii_case(x)));
     // A suitcase font's fonts are in its resource fork, which is copied with it, whatever its name.
     let fork = match (vectorcraft_text::is_suitcase(from), font) {
         (true, _) => Some(read_fork(from)?),

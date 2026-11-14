@@ -2208,8 +2208,8 @@ returns `{stopped}`. `notifications/cancelled` stops a run only while the `tools
 for it, as in a headless server; use `script.stop` for a run the app started. A script cannot run commands that
 change anything outside the documents: `script.*` except `script.check`, `plugin.*`, `prefs.*`, `actionSet.*`,
 `shortcutSet.*`, `help.*`, `print.*`, `library.*`, `importMatches.*`, `edit.undoGroup.*`, `file.recovery.*`,
-`stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.findFontFiles`,
-`text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
+`stroke.widthProfile.*`, saving, importing or deleting a preset, `text.addFontFiles`, `text.addFonts`,
+`text.findFontFiles`, `text.rescanFonts`, `links.findFiles`, `file.place.queue`, `color.loadProfile`, `color.removeProfile`, `file.print`,
 `view.proofSetup`, `view.proofColors`, `view.overprintPreview` and `view.separationsPreview`. It also cannot run
 `edit.clearHistory`: a run keeps each document's undo steps from before it and adds one. Calling one of these throws
 an error. With Data Recovery off for complex documents, a run in the web build does not start while a complex document
@@ -9819,7 +9819,7 @@ art that can't be decoded is sampled as blank (no dots, or full dots with `inver
 
 ## Fonts
 
-Type can use the bundled fonts, fonts added to the session and the fonts installed on the system (none on the web):
+Type can use the bundled fonts, fonts added to the session (`text.addFonts`, below) and the fonts installed on the system (none on the web):
 the system's and the user's font folders (Windows: `Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, plus fonts
 registered outside them, such as fonts installed as shortcuts, and in the desktop app and `vectorcraft-cli` (MCP
 included) the fonts in DirectWrite's system font collection, such as those Adobe Fonts activates while Creative Cloud runs; macOS: `/System/Library/Fonts`, `/Library/Fonts`,
@@ -9852,6 +9852,24 @@ itself when its window comes to the front and a font folder changed meanwhile.
 {"name":"run_command","arguments":{"command":"text.fontList","params":{}}}
 {"name":"run_command","arguments":{"command":"text.fontList","params":{"family":"Source Serif 4"}}}
 {"name":"run_command","arguments":{"command":"text.rescanFonts","params":{}}}
+```
+
+`text.addFonts {fonts: [{dataBase64, name?}]}` adds font files given as their bytes to the session, all at once,
+without copying them anywhere: TrueType and OpenType fonts and collections (`.ttf`, `.otf`, `.ttc`, `.otc`), 1 to 100
+files and at most 256 MB in all. `text.fontList` then lists their families, `text.fonts` finds them (`exact`) and
+type set in them redraws, as after `text.rescanFonts`, without editing the documents. They last until the app quits,
+and nothing is saved, journaled or undone. On the web, where no fonts are installed and there is no Fonts folder,
+this is how a page gives the app the fonts its documents use: `window.vectorcraft.addFonts` runs it
+([control protocol](control-protocol.md#in-the-browser-windowvectorcraft)), and so do File › Open and a drop of a
+`.ttf`, `.otf`, `.ttc` or `.otc` file there and in the desktop app, the status bar naming the faces added. The
+result is `{added: [{family, style}], kept: [{family, style}], skipped: [{index, name?, reason}], families}`:
+`kept` lists the faces the session had already (the same family, style and version), and `skipped` the files that
+hold no TrueType or OpenType font, such as a WOFF or WOFF2 web font, which isn't read yet. A malformed call (no
+files, more than 100, bytes that aren't base64, more than 256 MB) is refused before anything is added. Add only
+fonts you own or are licensed to use.
+
+```json
+{"name":"run_command","arguments":{"command":"text.addFonts","params":{"fonts":[{"name":"Example-Regular.otf","dataBase64":"T1RUTwAL…"}]}}}
 ```
 
 `text.missingFonts` lists the fonts that the active document's type uses, in its layers, its symbols and its pattern

@@ -1,3 +1,4 @@
+use vectorcraft_engine::cmd::fontfiles::{MAX_FONT_FILE, TOO_LARGE};
 use vectorcraft_engine::cmd::plugin::InstallApproval;
 use vectorcraft_plugins::permissions;
 
@@ -10,9 +11,10 @@ const TEMPLATE_EXTS: &[&str] = &["vctemplate", "ait", "vectorcraft", "drawcraft"
 /// Open bytes of any readable format as a new document (templates open untitled); swatch and
 /// graphic style library files open in the library panel, Libraries panel files are added to it,
 /// flattener, PDF, print, perspective grid and export presets files are imported, a shortcut set another
-/// app saved (`.kys`) opens Import Shortcut Set, and a script written for the reference app
-/// (`.jsx`, `.jsxinc`, `.jsxbin`) shows its check (Check Script…). → `document.open`'s result for
-/// a document opened now (its `warnings` say what didn't come in as it was), else null.
+/// app saved (`.kys`) opens Import Shortcut Set, a script written for the reference app
+/// (`.jsx`, `.jsxinc`, `.jsxbin`) shows its check (Check Script…), and a font file is added to the
+/// session ([`add_font`]). → `document.open`'s result for a document opened now (its `warnings` say
+/// what didn't come in as it was), else null.
 pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>) -> Result<Value, String> {
     open_bytes_with(app, name, bytes, path, &Value::Null)
 }
@@ -27,6 +29,9 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
     }
     if opens == Some(OpensAs::ShortcutSet) {
         return dialogs::shortcut_import::open(app, name, bytes).map(|_| Value::Null);
+    }
+    if opens == Some(OpensAs::Font) {
+        return add_font(app, name, bytes).map(|_| Value::Null);
     }
     if opens == Some(OpensAs::Script) {
         let p = match path {
@@ -63,7 +68,7 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
 }
 
 /// The kinds of file File → Open installs, imports, checks, shows in the library panel or the
-/// Libraries panel, or reviews in Import Shortcut Set ([`opens_as`]).
+/// Libraries panel, reviews in Import Shortcut Set, or adds to the session ([`opens_as`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum OpensAs {
     /// A WebAssembly plug-in: installed.
@@ -81,6 +86,8 @@ pub enum OpensAs {
     SwatchLibrary,
     /// A graphic style library: opened in the library panel.
     StyleLibrary,
+    /// A font file: added to the session (`text.addFonts`).
+    Font,
 }
 
 /// What the status bar calls the presets of an export presets file.
@@ -96,9 +103,9 @@ pub(crate) fn import_presets(app: &mut VectorcraftApp, import: &str, what: &str,
 }
 
 /// The kind of file named `name` (by its extension) that File → Open installs, imports, checks,
-/// shows in the library panel or the Libraries panel, or reviews in Import Shortcut Set
-/// ([`open_bytes`]), else `None`. A drop opens these files the same way, wherever they are dropped
-/// ([`VectorcraftApp::drop_target`]).
+/// shows in the library panel or the Libraries panel, reviews in Import Shortcut Set, or adds to
+/// the session ([`open_bytes`]), else `None`. A drop opens these files the same way, wherever they
+/// are dropped ([`VectorcraftApp::drop_target`]).
 pub fn opens_as(name: &str) -> Option<OpensAs> {
     let ext = fileio::extension(name);
     let presets = [
@@ -123,9 +130,47 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
         Some(OpensAs::SwatchLibrary)
     } else if ext == vectorcraft_doc::style_libs::STYLES_EXT {
         Some(OpensAs::StyleLibrary)
+    } else if vectorcraft_engine::cmd::fontfiles::EXTS.contains(&ext.as_str()) {
+        Some(OpensAs::Font)
     } else {
         None
     }
+}
+
+/// A font file opened or dropped (`name`, its `bytes`): added to the session as `text.addFonts`
+/// adds it, so type set in it redraws; the status bar names the faces added → the command's result.
+/// A file that adds no face, being no font or a web font, is an error saying why; one whose faces
+/// the session has already says so.
+fn add_font(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Result<Value, String> {
+    // Refused before it is encoded: base64 of a huge file would take the memory before the command's
+    // own size check could refuse it.
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_FONT_FILE {
+        return Err(TOO_LARGE.to_string());
+    }
+    let font = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)});
+    let r = app.run("text.addFonts", json!({ "fonts": [font] }))?;
+    let (added, kept) = (face_names(&r["added"]), face_names(&r["kept"]));
+    if !added.is_empty() {
+        let faces = added.join(", ");
+        app.status(crate::i18n::msg_n(added.len() as u64, "Added the font {faces}", "Added {n} fonts: {faces}", &[("faces", &faces)]));
+    } else if !kept.is_empty() {
+        let faces = kept.join(", ");
+        app.status(crate::i18n::msg_n(
+            kept.len() as u64,
+            "The font {faces} is loaded already",
+            "These {n} fonts are loaded already: {faces}",
+            &[("faces", &faces)],
+        ));
+    } else {
+        return Err(r["skipped"][0]["reason"].as_str().unwrap_or("not a font file").to_string());
+    }
+    Ok(r)
+}
+
+/// "Family Style" for each `{family, style}` in `faces`.
+fn face_names(faces: &Value) -> Vec<String> {
+    let name = |f: &Value| format!("{} {}", f["family"].as_str().unwrap_or_default(), f["style"].as_str().unwrap_or_default());
+    faces.as_array().into_iter().flatten().map(name).collect()
 }
 
 /// Open a document through the engine loader with the `document.open` options in `p` →
