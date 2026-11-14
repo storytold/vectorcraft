@@ -18,7 +18,7 @@ pub(crate) fn store_grid(d: &mut Document, g: &PerspectiveGrid) {
 
 /// Whether `d` holds `g` as [`store_grid`] writes it (with `attached` cleared): then storing `g`
 /// leaves `d` as it is.
-fn grid_kept(d: &Document, g: &PerspectiveGrid) -> bool {
+pub(crate) fn grid_kept(d: &Document, g: &PerspectiveGrid) -> bool {
     let mut g = g.clone();
     g.attached.clear();
     serde_json::to_value(&g).is_ok_and(|v| d.unknown.get(persp::DOC_KEY) == Some(&v))

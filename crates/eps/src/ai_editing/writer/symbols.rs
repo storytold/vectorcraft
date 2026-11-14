@@ -233,6 +233,7 @@ impl Writer<'_> {
         if !self.take_objects(1) {
             self.defining_symbols.pop();
             self.keep_since(before);
+            (self.in_look, self.drawn) = (in_look, drawn);
             return false;
         }
         // The art is written in the symbol's space, from the state `0 A` and `0 Xw` set, from the
@@ -245,7 +246,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas, self.instance_space),
             self.state.replace((false, false)),
             self.gs.replace(Xy::OPAQUE),
-            self.clip.take(),
+            (self.clip.take(), std::mem::take(&mut self.shown)),
             (self.block_start, self.block_end),
             (std::mem::replace(&mut self.in_symbol, true), std::mem::take(&mut self.hidden)),
             self.root_entries.take(),
@@ -302,7 +303,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas, self.instance_space),
             self.state,
             self.gs,
-            self.clip,
+            (self.clip, self.shown),
             (self.block_start, self.block_end),
             (self.in_symbol, self.hidden),
             self.root_entries,

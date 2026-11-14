@@ -24,6 +24,10 @@ fn pushes_in(para: &ParaStyle) -> bool {
 /// Paragraphs longer than this (glyphs) are always broken line by line.
 const MAX_COMPOSE_GLYPHS: usize = 200_000;
 
+/// The widths tried, halving the difference each time, for the longest break of a line placed again
+/// at its own metrics in more room than it was broken in ([`place_flow_line`]).
+const REFIT_STEPS: usize = 24;
+
 /// Whether every line of area type in `regions` is as wide however tall it is and wherever it is set:
 /// rectangular cells without text wrap.
 fn constant_width(regions: Option<&[Region]>) -> bool {
@@ -415,25 +419,31 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     let word = word_width(sg, *i, line_end, para.kinsoku);
     // A composed line in a frame whose lines are not all as wide is placed at its own tallest
     // metrics, as the composer placed it (`shaped::Shaped`): its room is the room across its height.
-    let est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+    let composed_line = composed.as_ref().and_then(|lines| lines.get(*para_line)).is_some_and(|&(end, _)| end > *i);
+    let mut est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
         Some(&(end, _)) if end > *i && !constant_width(pen.regions) => sg.get(*i..end).and_then(Metrics::max).unwrap_or(est),
         _ => est,
     };
+    // A line broken here in such a frame is placed again when it turns out taller than it was
+    // placed: its room is the room across its own height.
+    let refit = !composed_line && pen.regions.is_some() && !constant_width(pen.regions);
     // Place, break, then settle the baseline on the line's real metrics (moving on to the
     // next row/column if it no longer fits).
     loop {
+        let before = refit.then(|| pen.clone());
         let first_in_region = pen.prev.is_none();
-        let Some((mut baseline, x0, x1, same_baseline)) = pen.place(est, ind_l, ind_r, word) else {
+        let Some((mut baseline, mut x0, mut x1, same_baseline)) = pen.place(est, ind_l, ind_r, word) else {
             cx.out.overflow = cx.text.len() > if *i < n { sg[*i].byte } else { pr.start };
             return None;
         };
-        let width = x1 - x0 - ind_l - ind_r;
         let hyphenate = (para.hyphenate && (*hyphen_limit == 0 || *hyphen_run < *hyphen_limit)).then_some((&para.hyphenation, *zone));
-        let (end, hyph, pushed_in) = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+        let glyphs: &[SGlyph] = sg;
+        // The line broken in room `width` wide: its end, whether it ends with a hyphen, and whether
+        // it pushed characters in.
+        let break_in = |width: f64| match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
             Some(&(end, hyph)) if end > *i => (end, hyph, false),
             _ if *i < n => {
                 let start = *i;
-                let glyphs: &[SGlyph] = sg;
                 // A horizontal line with right-to-left text is drawn in another order than its
                 // text's, and its tabs take their stops in the order they are drawn: whether the line
                 // ending before glyph `end` fits is measured as it is drawn ([`drawn_width`]).
@@ -478,8 +488,56 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
             }
             _ => (n, false, false),
         };
-        let m = Metrics::max(&sg[*i..end]).unwrap_or(*pm);
-        baseline += if same_baseline || (pen.regions.is_none() && first_in_region) {
+        let (mut end, mut hyph, mut pushed_in) = break_in(x1 - x0 - ind_l - ind_r);
+        let metrics = |end: usize| glyphs.get(*i..end).and_then(Metrics::max).unwrap_or(*pm);
+        let m = metrics(end);
+        // The baseline moves from where `est` placed it to where the line's metrics set it, unless
+        // the line was placed at metrics of its own (below).
+        let mut settle = true;
+        if let Some(before) = before
+            && m != est
+        {
+            if m.union(est) != est {
+                // Taller than it was placed: place it again at metrics that hold both, and break it
+                // again in the room there.
+                *pen = before;
+                est = est.union(m);
+                continue;
+            }
+            // Broken again in the room of a taller line, it no longer holds what made that line
+            // taller. It goes where its own metrics place it when the room there holds the room it
+            // was broken in, and otherwise stays where it was placed, inside the room measured.
+            settle = false;
+            let mut own = before;
+            if let Some((b, a, z, _)) = own.place(m, ind_l, ind_r, word)
+                && a <= x0 + EPS
+                && z >= x1 - EPS
+            {
+                // The room there may hold more of the line, up to what would make it taller than
+                // `m`: the longest break that does not is between the two widths (a line breaks no
+                // earlier in more room).
+                let (mut lo, mut hi) = (x1 - x0 - ind_l - ind_r, z - a - ind_l - ind_r);
+                let wider = break_in(hi);
+                if metrics(wider.0).union(m) == m {
+                    (end, hyph, pushed_in) = wider;
+                } else {
+                    for _ in 0..REFIT_STEPS {
+                        let mid = (lo + hi) / 2.0;
+                        let line = break_in(mid);
+                        if metrics(line.0).union(m) == m {
+                            (end, hyph, pushed_in) = line;
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                }
+                *pen = own;
+                (baseline, x0, x1) = (b, a, z);
+            }
+        }
+        let m = metrics(end);
+        baseline += if !settle || same_baseline || (pen.regions.is_none() && first_in_region) {
             0.0
         } else if pen.model == LeadingModel::EmBoxTop {
             // The em box top is fixed (the frame's top, or the line above's): the baseline
@@ -544,6 +602,9 @@ struct LineJustification {
     fit: LineFit,
     start_x: f64,
     after: Vec<Option<usize>>,
+    /// The warichu glyphs drawn inside a block already started, by offset from the line's first
+    /// glyph ([`blocks_begun`]).
+    begun: Vec<bool>,
     kashidas: Vec<(usize, f64)>,
     /// Right-aligned area type: the line's last tab, which takes the text after it to the right
     /// edge (the text before it sits at its stops, from the left edge).
@@ -805,14 +866,14 @@ fn visible_after(index: usize, glyph: usize, after: &[Option<usize>], sg: &[SGly
     next
 }
 
-// The glyph after which a gap between drawn glyphs opens, and the visible glyph that follows it:
-// not a held glyph, and never a zero-width format control on either side.
-fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &'a [SGlyph]) -> Option<(&'a SGlyph, &'a SGlyph)> {
+// The glyph after which a gap between drawn glyphs opens, and the visible glyph that follows it
+// with its index: not a held glyph, and never a zero-width format control on either side.
+fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &'a [SGlyph]) -> Option<(&'a SGlyph, &'a SGlyph, usize)> {
     if held.contains(&glyph) {
         return None;
     }
     let a = sg.get(glyph).filter(|a| !is_format_control(a.ch))?;
-    visible_after(index, glyph, after, sg).and_then(|next| sg.get(next)).map(|b| (a, b))
+    visible_after(index, glyph, after, sg).and_then(|next| sg.get(next).map(|b| (a, b, next)))
 }
 
 // Are `a` and `b` glyphs of the same warichu block? Right to left, the bidi order can draw a
@@ -821,18 +882,61 @@ fn same_warichu_block(a: &SGlyph, b: &SGlyph) -> bool {
     a.wari.zip(b.wari).is_some_and(|(first, second)| first.start == second.start)
 }
 
+// Is glyph `next` drawn inside a block the line has already started: a tate-chu-yoko glyph after
+// its block's first, or a warichu glyph drawn after another glyph of its block (`begun`, by offset
+// from the line's first glyph, from [`blocks_begun`])? A warichu block starts at the first of its
+// glyphs drawn on the line, which right to left is not the block's first glyph.
+fn continues_drawn_block(next: usize, index: usize, begun: &[bool], sg: &[SGlyph]) -> bool {
+    let Some(b) = sg.get(next) else { return false };
+    match (b.wari, next.checked_sub(index).and_then(|k| begun.get(k))) {
+        (Some(_), Some(&begun)) => begun,
+        _ => b.continues_block(),
+    }
+}
+
+// The warichu glyphs of `line` drawn after another glyph of their block, by offset from the line's
+// first glyph. A block the bidi order interleaves with another keeps its start.
+fn blocks_begun(line: &LineGeometry, sg: &[SGlyph]) -> Vec<bool> {
+    let len = line.body.saturating_sub(line.index);
+    // Each glyph's block, as the offset of the block's first glyph: a block's glyphs are neighbors
+    // in `sg`, and a block stays on one line.
+    let mut first: Vec<usize> = Vec::with_capacity(len);
+    for k in 0..len {
+        let pair = k.checked_sub(1).and_then(|p| sg.get(line.index + p)).zip(sg.get(line.index + k));
+        let block = match first.last() {
+            Some(&f) if pair.is_some_and(|(a, b)| same_warichu_block(a, b)) => f,
+            _ => k,
+        };
+        first.push(block);
+    }
+    let mut started = vec![false; len];
+    let mut begun = vec![false; len];
+    for &j in &line.drawn {
+        let Some(k) = j.checked_sub(line.index).filter(|_| sg.get(j).is_some_and(|g| g.wari.is_some())) else { continue };
+        let Some(&f) = first.get(k) else { continue };
+        if let (Some(seen), Some(slot)) = (started.get(f).copied(), begun.get_mut(k)) {
+            *slot = seen;
+        }
+        if let Some(seen) = started.get_mut(f) {
+            *seen = true;
+        }
+    }
+    begun
+}
+
 // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
 // gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko or warichu block or a
-// shaped cluster.
-pub(super) fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
-    gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b)| {
+// shaped cluster. `begun` holds the warichu glyphs drawn inside a block already started
+// ([`blocks_begun`]).
+pub(super) fn is_cjk_gap(glyph: usize, held: &[usize], (after, begun): (&[Option<usize>], &[bool]), index: usize, sg: &[SGlyph]) -> bool {
+    gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b, next)| {
         a.byte != b.byte
             && !a.is_space()
             && !b.is_space()
-            && !b.continues_block()
             && !same_warichu_block(a, b)
             && a.ch != '\t'
             && (is_cjk(a.ch) || is_cjk(b.ch))
+            && !continues_drawn_block(next, index, begun, sg)
     }) && !in_pair(glyph, index, after, sg)
 }
 
@@ -861,13 +965,20 @@ fn in_pair(glyph: usize, index: usize, after: &[Option<usize>], sg: &[SGlyph]) -
 // its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell) or a
 // warichu block (set as one piece), a shaped cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
 // together, or an inseparable pair. On a line that ends in a drawn hyphen, the gap before the
-// hyphen counts too: it follows the line's last visible glyph.
-pub(super) fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
+// hyphen counts too: it follows the line's last visible glyph. `begun` is as for [`is_cjk_gap`].
+pub(super) fn is_letter_gap(
+    glyph: usize,
+    held: &[usize],
+    (after, begun): (&[Option<usize>], &[bool]),
+    index: usize,
+    sg: &[SGlyph],
+    hyphen: bool,
+) -> bool {
     if held.contains(&glyph) || sg.get(glyph).is_none_or(|a| is_format_control(a.ch)) || in_pair(glyph, index, after, sg) {
         return false;
     }
     match gap_pair(glyph, held, after, index, sg) {
-        Some((a, b)) => a.byte != b.byte && !b.continues_block() && !same_warichu_block(a, b),
+        Some((a, b, next)) => a.byte != b.byte && !same_warichu_block(a, b) && !continues_drawn_block(next, index, begun, sg),
         None => hyphen,
     }
 }
@@ -974,7 +1085,8 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             *slot = Some(b);
         }
     }
-    let cjk_gaps = (line.index..line.body).filter(|&j| free(j) && is_cjk_gap(j, held, &after, line.index, sg)).count();
+    let begun = blocks_begun(line, sg);
+    let cjk_gaps = (line.index..line.body).filter(|&j| free(j) && is_cjk_gap(j, held, (&after, &begun), line.index, sg)).count();
     // Single Word Justification: a justified line holding one word (no word space) is
     // spread between its letters (Full Justify) or aligned. A tab separates two words.
     let single_word = justify && fixed.is_empty() && spaces == 0 && cjk_gaps == 0;
@@ -1013,7 +1125,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
     let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
     if pushed_in {
         let ems: f64 = (line.index..line.body)
-            .filter(|&j| free(j) && is_cjk_gap(j, held, &after, line.index, sg) && may_squeeze(&sg[j]))
+            .filter(|&j| free(j) && is_cjk_gap(j, held, (&after, &begun), line.index, sg) && may_squeeze(&sg[j]))
             .map(|j| squeeze_em(&sg[j], cx.vertical))
             .sum();
         if ems > EPS {
@@ -1044,7 +1156,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             let used: f64 = flex.iter().map(|f| fit.letter(f) + fit.glyph(f)).sum();
             let rest = room - width - used;
             let hyphen = line.hyphen.is_some();
-            let gaps = (line.index..line.body).filter(|&j| free(j) && is_letter_gap(j, held, &after, line.index, sg, hyphen)).count();
+            let gaps = (line.index..line.body).filter(|&j| free(j) && is_letter_gap(j, held, (&after, &begun), line.index, sg, hyphen)).count();
             if gaps > 0 && rest > EPS {
                 per_gap = rest / gaps as f64;
             }
@@ -1076,7 +1188,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             _ => line.ax1 + line.opt_r - width,
         }
     };
-    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab, trailing, fixed }
+    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, begun, kashidas, last_tab, trailing, fixed }
 }
 
 /// The advance and leader of tab `glyph_index` of `line`, drawn at `order_index` of
@@ -1203,10 +1315,10 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 advance += justification.fit.letter(&flex) + justification.fit.glyph(&flex);
                 scale = justification.fit.glyph_scale(&flex);
                 if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
-                    if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
+                    if is_cjk_gap(glyph_index, &line.held, (&justification.after, &justification.begun), index, sg) {
                         advance += justification.per_cjk + squeeze_after(glyph, justification.squeeze, cx.vertical);
                     }
-                } else if is_letter_gap(glyph_index, &line.held, &justification.after, index, sg, line.hyphen.is_some()) {
+                } else if is_letter_gap(glyph_index, &line.held, (&justification.after, &justification.begun), index, sg, line.hyphen.is_some()) {
                     advance += justification.per_gap;
                 }
             }
