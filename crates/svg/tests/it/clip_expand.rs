@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use serde_json::json;
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
-use vectorcraft_doc::{Appearance, Document, Effect, Knockout, Node, NodeKind};
-use vectorcraft_geom::{FillRule, Rect, shapes};
+use vectorcraft_doc::{Appearance, CharStyle, Document, Effect, Knockout, Node, NodeKind, TextObject};
+use vectorcraft_geom::{FillRule, Point, Rect, shapes};
 use vectorcraft_svg::{ExportOptions, export, export_full};
 
 fn fill(r: u8, g: u8, b: u8) -> Appearance {
@@ -217,4 +217,21 @@ fn an_off_clip_group_inside_a_knockout_parent_composites_normally() {
     assert!(!expanded.contains("<clipPath"), "{expanded}");
     let diff = max_channel_diff(&render(&expanded), &render(&kept));
     assert!(diff <= 1, "the Off clip group's children composite normally inside a knockout parent: {diff}");
+}
+
+#[test]
+fn a_text_clip_with_decorations_keeps_its_clip_path() {
+    // `clip_outline` trims type to its glyph outlines, so an underline bar would paint outside
+    // the region once the mask is written as geometry.
+    let style = CharStyle { underline: true, ..CharStyle::default() };
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let clip = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 50.0), "Clip", style))));
+    let art = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), fill(255, 0, 0));
+    let group = Node::new(d.alloc_id(), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(art)], clip: true });
+    d.insert(Some(layer), usize::MAX, group).expect("insert");
+
+    let out = export_full(&d, &ExportOptions { expand_clips: true, ..Default::default() }, None);
+    assert!(out.svg.contains("<clipPath"), "{}", out.svg);
+    assert!(out.warnings.iter().any(|w| w.contains("Expand Clipping Masks")), "{:?}", out.warnings);
 }

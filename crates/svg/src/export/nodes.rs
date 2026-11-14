@@ -275,6 +275,13 @@ fn paints_beyond_geometry(n: &Node) -> bool {
         .any(|i| i.effects().iter().any(|e| e.visible) || pixel_gradient(i.paint(), i.is_fill()).is_some())
 }
 
+/// Whether `n` paints type decorations (underline or strikethrough bars), which a text clipping
+/// path's region ([`vectorcraft_effects::clip_outline`]) leaves out: it follows the glyph outlines.
+fn paints_text_decorations(n: &Node) -> bool {
+    let NodeKind::Text(t) = &n.kind else { return false };
+    t.runs.iter().any(|r| r.style.underline || r.style.strikethrough)
+}
+
 /// A gradient fitted to the object's box (`geom: None`) refits to the box of the intersection,
 /// stretching its stops over the part the clip keeps. Pin it to the box it was fitted to before
 /// the geometry changes, so the visible part keeps its colours.
@@ -954,6 +961,12 @@ impl Writer<'_> {
         // The clipping path's fill is inside the `<clipPath>`; an effect on it would paint past
         // the shape written here.
         if paint.fill.as_ref().is_some_and(paints_beyond_geometry) {
+            self.warn(EXPAND_CLIPS_KEPT);
+            return false;
+        }
+        // `clip_outline` trims type to its glyph outlines; an underline or strikethrough bar
+        // would paint outside the region once the `<clipPath>` is gone.
+        if paint.fill.as_ref().is_some_and(paints_text_decorations) {
             self.warn(EXPAND_CLIPS_KEPT);
             return false;
         }
