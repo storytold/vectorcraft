@@ -7219,6 +7219,7 @@ antiAlias	Sharp	शार्प
 @msg	more than 10000 linked files: package dependencies in smaller parts	10000 से अधिक लिंक्ड फ़ाइलें: पैकेज निर्भरता छोटे भागों में
 @msg	more than 256 commands	256 से अधिक कमांड
 @msg	more than one action is named “{_1}”	एक से अधिक कार्रवाई का नाम "{_1}" रखा गया है।
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	कार्रवाई "{_1}" फ़ोल्डर प्राथमिकता {_2} सेट करती है; सेट सेव करने के लिए वह चरण हटाएँ
 @msg	Move Panel to New Window is not available: floating panels stay in the main window	नई विंडो में पैनल को स्थानांतरित करना उपलब्ध नहीं है: अस्थायी पैनल मुख्य विंडो में रहते हैं
 @msg	move requires a destination panel	move के लिए गंतव्य पैनल चाहिए
 @msg	move requires an existing destination panel	move के लिए मौजूदा गंतव्य पैनल चाहिए

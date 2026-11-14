@@ -6348,6 +6348,7 @@ swatch	Bright Violet	Felviolet
 @msg	no such color	kleur bestaat niet
 @msg	{_1} cannot be used on Windows	{_1} kan niet worden gebruikt in Windows
 @msg	more than one action is named “{_1}”	meer dan één actie heet „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	de actie „{_1}” stelt de mapvoorkeur {_2} in; verwijder die stap om de set op te slaan
 @msg	no symbol named `{n}`	geen symbool met de naam `{n}`
 	Remove Color Profile…	Kleurprofiel verwijderen…
 	Color wheel	Kleurenwiel

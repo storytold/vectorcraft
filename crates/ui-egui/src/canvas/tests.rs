@@ -680,9 +680,17 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
         frame(app, &ctx, events);
         app.canvas.hover_cursor.map(|(_, _, cursor)| cursor)
     };
+    // The cursor swatch preview's chips go and come back with Alt too.
+    let chips = |app: &mut VectorcraftApp| {
+        let view = app.view_info();
+        app.session.overlays(view).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Swatch { .. })).count()
+    };
     assert_eq!(shown(&mut app, vec![Event::PointerMoved(at)]), Some(Cursor::LivePaintBucket));
+    assert!(chips(&mut app) > 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::ALT)]), Some(Cursor::Eyedropper));
+    assert_eq!(chips(&mut app), 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE)]), Some(Cursor::LivePaintBucket));
+    assert!(chips(&mut app) > 0);
 }
 
 /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the

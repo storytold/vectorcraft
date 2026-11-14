@@ -6157,6 +6157,7 @@ theme	Appearance	Utseende
 @msg	no such color	färgen finns inte
 @msg	{_1} cannot be used on Windows	{_1} kan inte användas i Windows
 @msg	more than one action is named “{_1}”	fler än en åtgärd heter ”{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	åtgärden ”{_1}” anger mappinställningen {_2}; ta bort det steget för att spara uppsättningen
 @msg	no symbol named `{n}`	ingen symbol med namnet `{n}`
 	Angular	Vinkelmått
 	Away from the Line	Bort från linjen
