@@ -241,6 +241,25 @@ pub(crate) fn key_guide(s: &Session) -> Option<usize> {
     st.selection.key_guide.and_then(|k| crate::cmd::guide_indexes(&st.doc, &[k]).first().copied())
 }
 
+/// Runs the unit test `path` (`tests::newdoc::...`) again in a child process of the test binary
+/// → whether this is that child. For a test that changes process-wide state the tests running
+/// beside it read, such as the active color settings.
+pub(crate) fn in_own_process(path: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+    if std::env::var_os(CHILD).is_some() {
+        return true;
+    }
+    let output =
+        std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", path, "--nocapture"]).env(CHILD, "1").output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{path} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
+}
+
 #[test]
 fn create_and_undo_redo() {
     let mut s = session();
