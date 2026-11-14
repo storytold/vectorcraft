@@ -2108,3 +2108,17 @@ fn colr_glyphs_of_outlined_type_are_vector_art() {
     assert!(rasters(&text).is_empty(), "no images: {text}");
     assert!(text.contains("1 0 0 Xa"), "the red layer: {text}");
 }
+
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it.
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut doc = Document::new(200.0, 100.0);
+    let art = shape(&mut doc, shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), red(), Paint::None);
+    doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    let mut n = Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((50.0, 30.0)) });
+    n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, n).unwrap();
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    assert!(text.contains("0 0 1 Xa") && !text.contains("1 0 0 Xa"), "{text}");
+}
