@@ -6020,6 +6020,19 @@ imageTrace	Outline	Körvonal
 	Transform Objects	Objektumok transzformálása
 @msg	unknown parameter `{key}`; did you mean `{near}`?	ismeretlen paraméter: `{key}`; erre gondolt: `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	ismeretlen paraméter: `{key}`; a parancsnak nincs paramétere
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	ismeretlen paraméter: `{key}`; a(z) `{object}` ezeket fogadja el: {keys}
+@msg	unknown parameter `{key}`; {why_not}	ismeretlen paraméter: `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	egyik formátum sem fogadja el (lásd: document.formats)
+@msg	no save format takes it (see file.formatOptions)	egyik mentési formátum sem fogadja el (lásd: file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	a PDF nem fogadja el (lásd: document.formats)
+@msg	EPS doesn't take it (see document.formats)	az EPS nem fogadja el (lásd: document.formats)
+@msg	DXF doesn't take it (see document.formats)	a DXF nem fogadja el (lásd: document.formats)
+@msg	{name} must be {range} (got {v})	a(z) {name} értéke {range} lehet (kapott érték: {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Az először kipróbált grafikus processzor nem tudta megjeleníteni az ablakot, ezért a VectorCraft újraindult ezen: {summary} (Beállítások › Teljesítmény › Grafikus processzor › Automatikus: azt használja, amelyik a kijelzőt hajtja)
+@msg	Sent “{title}” to {to}	“{title}” elküldve ide: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” elküldve ide: {to}. A nyomtatási sor válasza: {note}
+@msg	the default printer	alapértelmezett nyomtató
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	raszteres effektusok a(z) {object} objektumon: kért felbontás {requested} ppi, elért felbontás {achieved} ppi a 64 millió képpontos korlát miatt
 @msg	unknown parameter `{key}`; the command takes: {keys}	ismeretlen paraméter: `{key}`; a parancs ezeket fogadja el: {keys}
 @msg	the params must be an object, not {got}	a paramétereknek objektumnak kell lenniük, nem ez: {got}
 @msg	unknown parameter `{path}`; the object takes no keys	ismeretlen paraméter: `{path}`; az objektum nem fogad el kulcsokat

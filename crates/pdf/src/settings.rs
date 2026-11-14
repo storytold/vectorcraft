@@ -447,9 +447,14 @@ impl Default for SecuritySettings {
     }
 }
 
-/// `v` lies in `lo..=hi` (and is a number).
+/// `v` lies in `lo..=hi` (and is a number). The error names the range with its unit as one value
+/// (`72–2400 ppi`), so a catalog can match the message and translate it.
 pub(crate) fn within(name: &str, v: f64, lo: f64, hi: f64, unit: &str) -> Result<(), PdfError> {
-    if (lo..=hi).contains(&v) { Ok(()) } else { Err(PdfError::BadSetting(format!("{name} must be {lo}–{hi}{unit} (got {v})"))) }
+    if (lo..=hi).contains(&v) {
+        return Ok(());
+    }
+    let range = format!("{lo}–{hi}{unit}");
+    Err(PdfError::BadSetting(format!("{name} must be {range} (got {v})")))
 }
 
 impl PdfSettings {

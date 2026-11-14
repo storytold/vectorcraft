@@ -5877,6 +5877,19 @@ mark-style	Japanese	Japońskie
 	Transform Objects	Przekształć obiekty
 @msg	unknown parameter `{key}`; did you mean `{near}`?	nieznany parametr `{key}`; czy chodziło o `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	nieznany parametr `{key}`; polecenie nie przyjmuje parametrów
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	nieznany parametr `{key}`; `{object}` przyjmuje: {keys}
+@msg	unknown parameter `{key}`; {why_not}	nieznany parametr `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	żaden format go nie przyjmuje (zobacz document.formats)
+@msg	no save format takes it (see file.formatOptions)	żaden format zapisu go nie przyjmuje (zobacz file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF go nie przyjmuje (zobacz document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS go nie przyjmuje (zobacz document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF go nie przyjmuje (zobacz document.formats)
+@msg	{name} must be {range} (got {v})	{name} musi wynosić {range} (podano {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Pierwszy wypróbowany procesor graficzny nie mógł wyświetlić okna, więc VectorCraft uruchomił się ponownie na {summary} (Ustawienia › Wydajność › Procesor graficzny › Automatycznie używa tego, który obsługuje ekran)
+@msg	Sent “{title}” to {to}	Wysłano “{title}” do: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Wysłano “{title}” do: {to}. Odpowiedź kolejki wydruku: {note}
+@msg	the default printer	drukarka domyślna
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efekty rastrowe na obiekcie {object}: żądano {requested} ppi, uzyskano {achieved} ppi z powodu limitu 64 milionów pikseli
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}
 @msg	the params must be an object, not {got}	parametry muszą być obiektem, a nie {got}
 @msg	unknown parameter `{path}`; the object takes no keys	nieznany parametr `{path}`; obiekt nie przyjmuje kluczy
@@ -7738,8 +7751,6 @@ breakText	Glyphs	Glify
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	nieznane rozpraszanie `{d}` (diffusion, pattern, noise lub none)
 @msg	unknown panel `{panel}`	nieznany panel `{panel}`
 @msg	unknown parameter `{key}`	nieznany parametr `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	nieznany parametr `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	nieznany parametr `{within}{key}`; {why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	nieznana redukcja `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform lub document)
 @msg	unmatched ')'	niesparowany znak ')'
 @msg	unterminated character class	niezakończona klasa znaków
@@ -9152,7 +9163,6 @@ breakText	Glyphs	Glify
 @msg	{label} must be a number from 1 to 10000	{label} musi być liczbą od 1 do 10000
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} jest wbudowane i nie można go usunąć
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} musi wynosić {lo}–{hi}{unit} (podano {v})
 @msg	{name}: CRC or size mismatch	{name}: niezgodność CRC lub rozmiaru
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: udało się odczytać tylko osadzony podgląd tego pliku Affinity; użyj polecenia Plik › Otwórz, aby zobaczyć go wraz z ostrzeżeniem, albo przed umieszczeniem wyeksportuj SVG lub PDF z programu Affinity
 @msg	{name}: {e}	{name}: {e}

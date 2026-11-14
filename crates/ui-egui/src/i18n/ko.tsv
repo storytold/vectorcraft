@@ -5614,6 +5614,19 @@ lighting	Light	광원
 	Transform Objects	개체 변형
 @msg	unknown parameter `{key}`; did you mean `{near}`?	알 수 없는 매개변수 `{key}`: `{near}`을(를) 의미하셨습니까?
 @msg	unknown parameter `{key}`; the command takes no parameters	알 수 없는 매개변수 `{key}`: 이 명령에는 매개변수가 없습니다
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	알 수 없는 매개변수 `{key}`: `{object}`이(가) 받는 키: {keys}
+@msg	unknown parameter `{key}`; {why_not}	알 수 없는 매개변수 `{key}`: {why_not}
+@msg	no format takes it (see document.formats)	이 옵션을 받는 형식이 없습니다(document.formats 참조)
+@msg	no save format takes it (see file.formatOptions)	이 옵션을 받는 저장 형식이 없습니다(file.formatOptions 참조)
+@msg	PDF doesn't take it (see document.formats)	PDF는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	EPS doesn't take it (see document.formats)	EPS는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	DXF doesn't take it (see document.formats)	DXF는 이 옵션을 받지 않습니다(document.formats 참조)
+@msg	{name} must be {range} (got {v})	{name}은(는) {range}이어야 합니다({v} 입력됨)
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	처음 시도한 그래픽 프로세서가 창을 표시하지 못해 {summary}에서 VectorCraft를 다시 시작했습니다(설정 › 성능 › 그래픽 프로세서 › 자동은 디스플레이를 구동하는 프로세서를 사용합니다)
+@msg	Sent “{title}” to {to}	“{title}”을(를) {to}(으)로 보냈습니다
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}”을(를) {to}(으)로 보냈습니다. 인쇄 대기열 응답: {note}
+@msg	the default printer	기본 프린터
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	개체 {object}의 래스터 효과: {requested} ppi를 요청했지만 6,400만 픽셀 한도 때문에 {achieved} ppi가 되었습니다
 @msg	unknown parameter `{key}`; the command takes: {keys}	알 수 없는 매개변수 `{key}`: 이 명령이 받는 매개변수: {keys}
 @msg	the params must be an object, not {got}	매개변수는 객체여야 합니다({got} 사용 불가)
 @msg	unknown parameter `{path}`; the object takes no keys	알 수 없는 매개변수 `{path}`: 이 객체는 키를 받지 않습니다

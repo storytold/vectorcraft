@@ -6037,6 +6037,19 @@ mark-style	Japanese	Japonské
 	Transform Objects	Transformovat objekty
 @msg	unknown parameter `{key}`; did you mean `{near}`?	neznámý parametr `{key}`; mysleli jste `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	neznámý parametr `{key}`; příkaz nemá žádné parametry
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	neznámý parametr `{key}`; `{object}` přijímá: {keys}
+@msg	unknown parameter `{key}`; {why_not}	neznámý parametr `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	žádný formát jej nepřijímá (viz document.formats)
+@msg	no save format takes it (see file.formatOptions)	žádný formát pro ukládání jej nepřijímá (viz file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF jej nepřijímá (viz document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS jej nepřijímá (viz document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF jej nepřijímá (viz document.formats)
+@msg	{name} must be {range} (got {v})	{name} musí být {range} (zadáno {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Grafický procesor zkoušený jako první nedokázal zobrazit okno, proto se VectorCraft znovu spustil na {summary} (Nastavení › Výkon › Grafický procesor › Automaticky použije ten, který obsluhuje váš displej)
+@msg	Sent “{title}” to {to}	“{title}” odesláno do {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” odesláno do {to}. Odpověď tiskové fronty: {note}
+@msg	the default printer	výchozí tiskárny
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rastrové efekty na objektu {object}: požadováno {requested} ppi, dosaženo {achieved} ppi kvůli limitu 64 milionů pixelů
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}
 @msg	the params must be an object, not {got}	parametry musí být objekt, nikoli {got}
 @msg	unknown parameter `{path}`; the object takes no keys	neznámý parametr `{path}`; objekt nepřijímá žádné klíče

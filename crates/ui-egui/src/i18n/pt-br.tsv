@@ -4760,6 +4760,19 @@ axis	Both	Ambos
 	Transform Objects	Transformar objetos
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parâmetro desconhecido `{key}`; você quis dizer `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parâmetro desconhecido `{key}`; o comando não tem parâmetros
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	parâmetro desconhecido `{key}`; `{object}` aceita: {keys}
+@msg	unknown parameter `{key}`; {why_not}	parâmetro desconhecido `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	nenhum formato o aceita (consulte document.formats)
+@msg	no save format takes it (see file.formatOptions)	nenhum formato de salvamento o aceita (consulte file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF não o aceita (consulte document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS não o aceita (consulte document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF não o aceita (consulte document.formats)
+@msg	{name} must be {range} (got {v})	{name} deve ser {range} (recebido {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	O processador gráfico tentado primeiro não conseguiu exibir a janela, então o VectorCraft reiniciou em {summary} (Configurações › Desempenho › Processador Gráfico › Automático usa o que controla sua tela)
+@msg	Sent “{title}” to {to}	“{title}” enviado para {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” enviado para {to}. Resposta da fila de impressão: {note}
+@msg	the default printer	a impressora padrão
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efeitos de rasterização no objeto {object}: solicitados {requested} ppi, obtidos {achieved} ppi devido ao limite de 64 milhões de pixels
 @msg	unknown parameter `{key}`; the command takes: {keys}	parâmetro desconhecido `{key}`; o comando aceita: {keys}
 @msg	the params must be an object, not {got}	os parâmetros devem ser um objeto, não {got}
 @msg	unknown parameter `{path}`; the object takes no keys	parâmetro desconhecido `{path}`; o objeto não aceita chaves
@@ -9218,8 +9231,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	unknown panel	painel desconhecido
 @msg	unknown panel `{panel}`	painel desconhecido `{panel}`
 @msg	unknown parameter `{key}`	parâmetro desconhecido `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	parâmetro desconhecido `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	parâmetro desconhecido `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	pieLegend desconhecido `{v}` (none, standard ou wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	piePosition desconhecido `{v}` (even, ratio ou stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	pieSort desconhecido `{v}` (none, all ou first)
@@ -9347,7 +9358,6 @@ swatch	Yellow Green	Verde-amarelado
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} é integrado e não pode ser excluído
 @msg	{name} must be a number	{name} deve ser um número
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} deve ser {lo}–{hi}{unit} (recebido {v})
 @msg	{name}: CRC or size mismatch	{name}: CRC ou tamanho não confere
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: só foi possível ler a prévia incorporada deste arquivo do Affinity; use Arquivo › Abrir para vê-la com o aviso, ou exporte SVG ou PDF pelo Affinity antes de colocar
 @msg	{name}: {e}	{name}: {e}

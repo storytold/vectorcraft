@@ -5918,6 +5918,19 @@ mark-style	Japanese	Japanilainen
 	Transform Objects	Muunna objekteja
 @msg	unknown parameter `{key}`; did you mean `{near}`?	tuntematon parametri `{key}`; tarkoititko `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	tuntematon parametri `{key}`; komento ei ota parametreja
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	tuntematon parametri `{key}`; kohteen `{object}` avaimet: {keys}
+@msg	unknown parameter `{key}`; {why_not}	tuntematon parametri `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	mikään muoto ei käytä sitä (katso document.formats)
+@msg	no save format takes it (see file.formatOptions)	mikään tallennusmuoto ei käytä sitä (katso file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF ei käytä sitä (katso document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS ei käytä sitä (katso document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF ei käytä sitä (katso document.formats)
+@msg	{name} must be {range} (got {v})	arvon {name} on oltava {range} (saatiin {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Ensin kokeiltu grafiikkasuoritin ei pystynyt näyttämään ikkunaa, joten VectorCraft käynnistyi uudelleen: {summary} (Asetukset › Suorituskyky › Grafiikkasuoritin › Automaattinen käyttää näyttöäsi ohjaavaa suoritinta)
+@msg	Sent “{title}” to {to}	“{title}” lähetettiin kohteeseen {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” lähetettiin kohteeseen {to}. Tulostusjonon vastaus: {note}
+@msg	the default printer	oletustulostin
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rasteritehosteet objektissa {object}: pyydettiin {requested} ppi, saatiin {achieved} ppi 64 miljoonan pikselin rajan vuoksi
 @msg	unknown parameter `{key}`; the command takes: {keys}	tuntematon parametri `{key}`; komennon parametrit: {keys}
 @msg	the params must be an object, not {got}	parametrien on oltava objekti, ei {got}
 @msg	unknown parameter `{path}`; the object takes no keys	tuntematon parametri `{path}`; objekti ei ota avaimia

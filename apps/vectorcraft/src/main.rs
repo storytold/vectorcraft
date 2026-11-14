@@ -547,14 +547,15 @@ fn main() -> std::process::ExitCode {
                     created.created(&cc.egui_ctx);
                     if !gpu::skipped().is_empty() {
                         // A processor chosen in Settings can be the one that can't show the window.
-                        let hint = if chosen_gpu {
-                            " (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)"
+                        if chosen_gpu {
+                            app.status(format!(
+                                "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)"
+                            ));
                         } else {
-                            ""
-                        };
-                        app.status(format!(
-                            "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}{hint}"
-                        ));
+                            app.status(format!(
+                                "The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary}"
+                            ));
+                        }
                     } else if let Some(crash) = &crash {
                         app.status(match crash {
                             gpu::Crash::Adapter { name, .. } => format!(

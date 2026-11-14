@@ -5272,6 +5272,19 @@ lighting	Light	Işık
 	Transform Objects	Nesneleri Dönüştür
 @msg	unknown parameter `{key}`; did you mean `{near}`?	bilinmeyen parametre `{key}`; `{near}` mi demek istediniz?
 @msg	unknown parameter `{key}`; the command takes no parameters	bilinmeyen parametre `{key}`; komut hiçbir parametre almaz
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	bilinmeyen parametre `{key}`; `{object}` şunları alır: {keys}
+@msg	unknown parameter `{key}`; {why_not}	bilinmeyen parametre `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	hiçbir biçim bunu almaz (bkz. document.formats)
+@msg	no save format takes it (see file.formatOptions)	hiçbir kaydetme biçimi bunu almaz (bkz. file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF bunu almaz (bkz. document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS bunu almaz (bkz. document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF bunu almaz (bkz. document.formats)
+@msg	{name} must be {range} (got {v})	{name} {range} olmalıdır ({v} verildi)
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	İlk önce denenen grafik işlemcisi pencereyi gösteremedi, bu yüzden VectorCraft {summary} üzerinde yeniden başladı (Ayarlar › Performans › Grafik İşlemcisi › Otomatik, ekranınızı süren işlemciyi kullanır)
+@msg	Sent “{title}” to {to}	“{title}” şuraya gönderildi: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” şuraya gönderildi: {to}. Yazdırma kuyruğunun yanıtı: {note}
+@msg	the default printer	varsayılan yazıcı
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	{object} nesnesindeki raster efektleri: {requested} ppi istendi, 64 milyon piksel sınırı nedeniyle {achieved} ppi elde edildi
 @msg	unknown parameter `{key}`; the command takes: {keys}	bilinmeyen parametre `{key}`; komut şunları alır: {keys}
 @msg	the params must be an object, not {got}	parametreler bir nesne olmalıdır, {got} değil
 @msg	unknown parameter `{path}`; the object takes no keys	bilinmeyen parametre `{path}`; nesne anahtar almaz

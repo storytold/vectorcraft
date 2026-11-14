@@ -5396,6 +5396,19 @@ mark-style	Japanese	Jepang
 	Transform Objects	Transformasikan objek
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parameter `{key}` tidak dikenal; apakah maksud Anda `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parameter `{key}` tidak dikenal; perintah tidak menerima parameter
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	parameter `{key}` tidak dikenal; `{object}` menerima: {keys}
+@msg	unknown parameter `{key}`; {why_not}	parameter `{key}` tidak dikenal; {why_not}
+@msg	no format takes it (see document.formats)	tidak ada format yang menerimanya (lihat document.formats)
+@msg	no save format takes it (see file.formatOptions)	tidak ada format penyimpanan yang menerimanya (lihat file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF tidak menerimanya (lihat document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS tidak menerimanya (lihat document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF tidak menerimanya (lihat document.formats)
+@msg	{name} must be {range} (got {v})	{name} harus {range} (diperoleh {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Prosesor grafis yang dicoba pertama kali tidak dapat menampilkan jendela, jadi VectorCraft memulai ulang dengan {summary} (Pengaturan › Kinerja › Prosesor grafis › Otomatis menggunakan prosesor yang menjalankan layar Anda)
+@msg	Sent “{title}” to {to}	“{title}” dikirim ke {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” dikirim ke {to}. Balasan antrean cetak: {note}
+@msg	the default printer	printer bawaan
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efek raster pada objek {object}: diminta {requested} ppi, tercapai {achieved} ppi karena batas 64 juta piksel
 @msg	unknown parameter `{key}`; the command takes: {keys}	parameter `{key}` tidak dikenal; perintah menerima: {keys}
 	Load EPS into Clipboard	Muat EPS ke papan klip
 @msg	an image of {w} × {h} pixels is too large to draw	gambar {w} × {h} piksel terlalu besar untuk digambar

@@ -5742,6 +5742,19 @@ lighting	Light	光源
 	Transform Objects	變形物件
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知的參數 `{key}`；您是指 `{near}` 嗎？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知的參數 `{key}`；此指令沒有參數
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	未知的參數 `{key}`；`{object}` 接受：{keys}
+@msg	unknown parameter `{key}`; {why_not}	未知的參數 `{key}`；{why_not}
+@msg	no format takes it (see document.formats)	沒有格式接受它 (請參閱 document.formats)
+@msg	no save format takes it (see file.formatOptions)	沒有儲存格式接受它 (請參閱 file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF 不接受它 (請參閱 document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS 不接受它 (請參閱 document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF 不接受它 (請參閱 document.formats)
+@msg	{name} must be {range} (got {v})	{name} 必須為 {range} (收到 {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	最先嘗試的圖形處理器無法顯示視窗，因此 VectorCraft 已改在 {summary} 上重新啟動 (設定 › 效能 › 圖形處理器 › 自動 會使用驅動顯示器的處理器)
+@msg	Sent “{title}” to {to}	已將 “{title}” 傳送至 {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	已將 “{title}” 傳送至 {to}。列印佇列的回覆：{note}
+@msg	the default printer	預設印表機
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	物件 {object} 上的點陣效果：要求 {requested} ppi，受 6400 萬像素上限限制，實際為 {achieved} ppi
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知的參數 `{key}`；此指令接受：{keys}
 @msg	the params must be an object, not {got}	參數必須是物件，而不是 {got}
 @msg	unknown parameter `{path}`; the object takes no keys	未知的參數 `{path}`；此物件不接受任何鍵

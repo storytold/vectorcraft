@@ -5605,6 +5605,19 @@ lighting	Light	Lumière
 	Transform Objects	Transformer les objets
 @msg	unknown parameter `{key}`; did you mean `{near}`?	paramètre inconnu `{key}` ; vouliez-vous dire `{near}` ?
 @msg	unknown parameter `{key}`; the command takes no parameters	paramètre inconnu `{key}` ; la commande n’a aucun paramètre
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	paramètre inconnu `{key}` ; `{object}` accepte : {keys}
+@msg	unknown parameter `{key}`; {why_not}	paramètre inconnu `{key}` ; {why_not}
+@msg	no format takes it (see document.formats)	aucun format ne l’accepte (voir document.formats)
+@msg	no save format takes it (see file.formatOptions)	aucun format d’enregistrement ne l’accepte (voir file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF ne l’accepte pas (voir document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS ne l’accepte pas (voir document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF ne l’accepte pas (voir document.formats)
+@msg	{name} must be {range} (got {v})	{name} doit valoir {range} (reçu : {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Le processeur graphique essayé en premier n’a pas pu afficher la fenêtre : VectorCraft a redémarré sur {summary} (Réglages › Performances › Processeur graphique › Automatique utilise celui qui pilote votre écran)
+@msg	Sent “{title}” to {to}	“{title}” envoyé vers {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” envoyé vers {to}. Réponse de la file d’impression : {note}
+@msg	the default printer	l’imprimante par défaut
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	effets de pixellisation sur l’objet {object} : {requested} ppi demandés, {achieved} ppi obtenus en raison de la limite de 64 millions de pixels
 @msg	unknown parameter `{key}`; the command takes: {keys}	paramètre inconnu `{key}` ; la commande accepte : {keys}
 @msg	the params must be an object, not {got}	les paramètres doivent être un objet, pas {got}
 @msg	unknown parameter `{path}`; the object takes no keys	paramètre inconnu `{path}` ; l’objet n’accepte aucune clé

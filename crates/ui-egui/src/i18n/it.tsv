@@ -5653,6 +5653,19 @@ lighting	Light	Luce
 	Transform Objects	Trasforma oggetti
 @msg	unknown parameter `{key}`; did you mean `{near}`?	parametro sconosciuto `{key}`; forse intendevate `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	parametro sconosciuto `{key}`; il comando non ha parametri
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	parametro sconosciuto `{key}`; `{object}` accetta: {keys}
+@msg	unknown parameter `{key}`; {why_not}	parametro sconosciuto `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	nessun formato lo accetta (vedere document.formats)
+@msg	no save format takes it (see file.formatOptions)	nessun formato di salvataggio lo accetta (vedere file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF non lo accetta (vedere document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS non lo accetta (vedere document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF non lo accetta (vedere document.formats)
+@msg	{name} must be {range} (got {v})	{name} deve essere {range} (ricevuto {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Il processore grafico provato per primo non è riuscito a mostrare la finestra, quindi VectorCraft è stato riavviato con {summary} (Impostazioni › Prestazioni › Processore grafico › Automatico usa quello che gestisce lo schermo)
+@msg	Sent “{title}” to {to}	“{title}” inviato a: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” inviato a: {to}. Risposta della coda di stampa: {note}
+@msg	the default printer	stampante predefinita
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	effetti raster sull'oggetto {object}: richiesti {requested} ppi, ottenuti {achieved} ppi a causa del limite di 64 milioni di pixel
 @msg	unknown parameter `{key}`; the command takes: {keys}	parametro sconosciuto `{key}`; il comando accetta: {keys}
 @msg	the params must be an object, not {got}	i parametri devono essere un oggetto, non {got}
 @msg	unknown parameter `{path}`; the object takes no keys	parametro sconosciuto `{path}`; l'oggetto non accetta chiavi
@@ -7497,7 +7510,6 @@ breakText	Glyphs	Glifi
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	dithering sconosciuto `{d}` (diffusion, pattern, noise o none)
 @msg	unknown panel `{panel}`	pannello sconosciuto `{panel}`
 @msg	unknown parameter `{key}`	parametro sconosciuto `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	parametro sconosciuto `{within}settings.{format}`; {why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	riduzione sconosciuta `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform o document)
 @msg	unmatched ')'	')' senza corrispondenza
 @msg	unterminated character class	classe di caratteri non terminata

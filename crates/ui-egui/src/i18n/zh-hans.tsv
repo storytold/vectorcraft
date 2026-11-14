@@ -5908,6 +5908,19 @@ lighting	Light	光源
 	Transform Objects	变换对象
 @msg	unknown parameter `{key}`; did you mean `{near}`?	未知参数 `{key}`；您是否想输入 `{near}`？
 @msg	unknown parameter `{key}`; the command takes no parameters	未知参数 `{key}`；该命令没有参数
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	未知参数 `{key}`；`{object}` 接受：{keys}
+@msg	unknown parameter `{key}`; {why_not}	未知参数 `{key}`；{why_not}
+@msg	no format takes it (see document.formats)	没有格式接受它 (参见 document.formats)
+@msg	no save format takes it (see file.formatOptions)	没有存储格式接受它 (参见 file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF 不接受它 (参见 document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS 不接受它 (参见 document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF 不接受它 (参见 document.formats)
+@msg	{name} must be {range} (got {v})	{name} 必须为 {range} (实际为 {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	首先尝试的图形处理器无法显示窗口，因此 VectorCraft 已在 {summary} 上重新启动 (设置 › 性能 › 图形处理器 › 自动 会使用驱动显示器的处理器)
+@msg	Sent “{title}” to {to}	已将 “{title}” 发送到 {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	已将 “{title}” 发送到 {to}。打印队列的回复：{note}
+@msg	the default printer	默认打印机
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	对象 {object} 上的栅格效果：请求 {requested} ppi，受 6400 万像素上限限制，实际为 {achieved} ppi
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}
 @msg	the params must be an object, not {got}	参数必须是对象，而不是 {got}
 @msg	unknown parameter `{path}`; the object takes no keys	未知参数 `{path}`；该对象不接受任何键
@@ -7719,8 +7732,6 @@ breakText	Glyphs	字形
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	未知的仿色 `{d}` (diffusion、pattern、noise 或 none)
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的参数 `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	未知的参数 `{within}settings.{format}`；{why}
-@msg	unknown parameter `{within}{key}`; {why}	未知的参数 `{within}{key}`；{why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	未知的减色方式 `{reduction}` (selective、perceptual、adaptive、web、gray、blackWhite、uniform 或 document)
 @msg	unmatched ')'	不匹配的 ')'
 @msg	unterminated character class	字符类没有结束
@@ -9138,7 +9149,6 @@ breakText	Glyphs	字形
 @msg	{label} must be a number from 1 to 10000	{label} 必须是 1 到 10000 之间的数字
 @msg	{name} `{s}`: {ids}	{name} `{s}`：{ids}
 @msg	{name} is built in and can't be deleted	{name} 是内置项，不能删除
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} 必须为 {lo}–{hi}{unit} (实际为 {v})
 @msg	{name}: CRC or size mismatch	{name}：CRC 或大小不匹配
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}：只能读取此 Affinity 文件的嵌入预览；请使用 文件 › 打开 查看预览及其警告，或在置入前先从 Affinity 导出 SVG 或 PDF
 @msg	{name}: {e}	{name}：{e}

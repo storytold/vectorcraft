@@ -5319,6 +5319,19 @@ font-technology	Variable	ცვლადი
 	Transform Objects	ობიექტების გარდაქმნა
 @msg	unknown parameter `{key}`; did you mean `{near}`?	უცნობი პარამეტრი `{key}`; იქნებ `{near}` იგულისხმეთ?
 @msg	unknown parameter `{key}`; the command takes no parameters	უცნობი პარამეტრი `{key}`; ბრძანება პარამეტრებს არ იღებს
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	უცნობი პარამეტრი `{key}`; `{object}` იღებს: {keys}
+@msg	unknown parameter `{key}`; {why_not}	უცნობი პარამეტრი `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	არცერთი ფორმატი არ იღებს მას (იხილეთ document.formats)
+@msg	no save format takes it (see file.formatOptions)	არცერთი შენახვის ფორმატი არ იღებს მას (იხილეთ file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF არ იღებს მას (იხილეთ document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS არ იღებს მას (იხილეთ document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF არ იღებს მას (იხილეთ document.formats)
+@msg	{name} must be {range} (got {v})	{name} უნდა იყოს {range} (მიღებულია {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	პირველად ნაცდმა გრაფიკულმა პროცესორმა ფანჯარა ვერ აჩვენა, ამიტომ VectorCraft ხელახლა გაეშვა: {summary} (პარამეტრები › წარმადობა › გრაფიკული პროცესორი › ავტომატური იყენებს იმას, რომელიც თქვენს ეკრანს მართავს)
+@msg	Sent “{title}” to {to}	“{title}” გაგზავნილია: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” გაგზავნილია: {to}. ბეჭდვის რიგის პასუხი: {note}
+@msg	the default printer	ნაგულისხმევი პრინტერი
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	რასტრული ეფექტები ობიექტზე {object}: მოთხოვნილია {requested} ppi, მიღწეულია {achieved} ppi 64 მილიონი პიქსელის ლიმიტის გამო
 @msg	unknown parameter `{key}`; the command takes: {keys}	უცნობი პარამეტრი `{key}`; ბრძანება იღებს: {keys}
 @msg	the params must be an object, not {got}	პარამეტრები უნდა იყოს ობიექტი და არა {got}
 @msg	unknown parameter `{path}`; the object takes no keys	უცნობი პარამეტრი `{path}`; ობიექტი გასაღებებს არ იღებს

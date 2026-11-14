@@ -5504,6 +5504,18 @@ lighting	Light	Ljus
 	Transform Objects	Transformera objekt
 @msg	unknown parameter `{key}`; did you mean `{near}`?	okänd parameter `{key}`; menade du `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	okänd parameter `{key}`; kommandot tar inga parametrar
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	okänd parameter `{key}`; `{object}` tar: {keys}
+@msg	unknown parameter `{key}`; {why_not}	okänd parameter `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	inget format tar den (se document.formats)
+@msg	no save format takes it (see file.formatOptions)	inget sparformat tar den (se file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF tar den inte (se document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS tar den inte (se document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF tar den inte (se document.formats)
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Grafikprocessorn som prövades först kunde inte visa fönstret, så VectorCraft startade om med {summary} (Inställningar › Prestanda › Grafikprocessor › Automatisk använder den som driver din skärm)
+@msg	Sent “{title}” to {to}	Skickade “{title}” till {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Skickade “{title}” till {to}. Svar från utskriftskön: {note}
+@msg	the default printer	standardskrivaren
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rastereffekter på objekt {object}: begärde {requested} ppi, uppnådde {achieved} ppi på grund av gränsen på 64 miljoner pixlar
 @msg	unknown parameter `{key}`; the command takes: {keys}	okänd parameter `{key}`; kommandot tar: {keys}
 @msg	the params must be an object, not {got}	parametrarna måste vara ett objekt, inte {got}
 @msg	unknown parameter `{path}`; the object takes no keys	okänd parameter `{path}`; objektet tar inga nycklar
@@ -7467,7 +7479,7 @@ digits	Hindi	Hindi
 @msg	{LABEL} produced an empty result	{LABEL} gav ett tomt resultat
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} är inbyggd och kan inte tas bort
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} måste vara {lo}–{hi}{unit} (fick {v})
+@msg	{name} must be {range} (got {v})	{name} måste vara {range} (fick {v})
 @msg	{name}: {e}	{name}: {e}
 @msg	{name}: CRC or size mismatch	{name}: CRC eller storlek stämmer inte
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: endast den inbäddade förhandsgranskningen i den här Affinity-filen kunde läsas; använd Arkiv › Öppna för att se den med dess varning, eller exportera SVG eller PDF från Affinity innan du placerar den

@@ -5396,6 +5396,19 @@ digits	Malayalam	Μαλαγιάλαμ
 	Transform Objects	Μετασχηματισμός αντικειμένων
 @msg	unknown parameter `{key}`; did you mean `{near}`?	άγνωστη παράμετρος `{key}`· μήπως εννοείτε `{near}`;
 @msg	unknown parameter `{key}`; the command takes no parameters	άγνωστη παράμετρος `{key}`· η εντολή δεν δέχεται παραμέτρους
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	άγνωστη παράμετρος `{key}`· το `{object}` δέχεται: {keys}
+@msg	unknown parameter `{key}`; {why_not}	άγνωστη παράμετρος `{key}`· {why_not}
+@msg	no format takes it (see document.formats)	καμία μορφή δεν τη δέχεται (δείτε document.formats)
+@msg	no save format takes it (see file.formatOptions)	καμία μορφή αποθήκευσης δεν τη δέχεται (δείτε file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	το PDF δεν τη δέχεται (δείτε document.formats)
+@msg	EPS doesn't take it (see document.formats)	το EPS δεν τη δέχεται (δείτε document.formats)
+@msg	DXF doesn't take it (see document.formats)	το DXF δεν τη δέχεται (δείτε document.formats)
+@msg	{name} must be {range} (got {v})	το {name} πρέπει να είναι {range} (δόθηκε {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Ο αρχικός επεξεργαστής γραφικών δεν μπόρεσε να εμφανίσει το παράθυρο και το VectorCraft επανεκκίνησε στον {summary} (Ρυθμίσεις › Επιδόσεις › Επεξεργαστής γραφικών › Αυτόματο: χρησιμοποιεί αυτόν που οδηγεί την οθόνη σας)
+@msg	Sent “{title}” to {to}	Το “{title}” στάλθηκε: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Το “{title}” στάλθηκε: {to}. Απάντηση της ουράς εκτύπωσης: {note}
+@msg	the default printer	προεπιλεγμένος εκτυπωτής
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	εφέ ράστερ στο αντικείμενο {object}: ζητήθηκαν {requested} ppi, επιτεύχθηκαν {achieved} ppi λόγω του ορίου των 64 εκατομμυρίων pixel
 @msg	unknown parameter `{key}`; the command takes: {keys}	άγνωστη παράμετρος `{key}`· η εντολή δέχεται: {keys}
 @msg	the params must be an object, not {got}	οι παράμετροι πρέπει να είναι αντικείμενο, όχι {got}
 @msg	unknown parameter `{path}`; the object takes no keys	άγνωστη παράμετρος `{path}`· το αντικείμενο δεν δέχεται κλειδιά

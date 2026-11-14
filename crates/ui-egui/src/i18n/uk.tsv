@@ -5633,6 +5633,19 @@ lighting	Light	Світло
 	Transform Objects	Трансформувати об’єкти
 @msg	unknown parameter `{key}`; did you mean `{near}`?	невідомий параметр `{key}`; можливо, ви мали на увазі `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	невідомий параметр `{key}`; команда не має параметрів
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	невідомий параметр `{key}`; `{object}` приймає: {keys}
+@msg	unknown parameter `{key}`; {why_not}	невідомий параметр `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	жоден формат його не приймає (див. document.formats)
+@msg	no save format takes it (see file.formatOptions)	жоден формат збереження його не приймає (див. file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF його не приймає (див. document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS його не приймає (див. document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF його не приймає (див. document.formats)
+@msg	{name} must be {range} (got {v})	{name} має бути {range} (отримано {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Графічний процесор, обраний першим, не зміг показати вікно, тому VectorCraft запустився знову на {summary} (Налаштування › Продуктивність › Графічний процесор › Автоматично використовує той, до якого під’єднано дисплей)
+@msg	Sent “{title}” to {to}	“{title}” відправлено: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” відправлено: {to}. Відповідь черги друку: {note}
+@msg	the default printer	принтер за замовчуванням
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растрові ефекти об’єкта {object}: запитано {requested} ppi, отримано {achieved} ppi через обмеження у 64 мільйони пікселів
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}
 @msg	the params must be an object, not {got}	параметри мають бути об'єктом, а не {got}
 @msg	unknown parameter `{path}`; the object takes no keys	невідомий параметр `{path}`; об'єкт не приймає ключів
@@ -8747,8 +8760,6 @@ breakText	Glyphs	Гліфи
 @msg	unknown panel	невідома панель
 @msg	unknown panel `{panel}`	невідома панель `{panel}`
 @msg	unknown parameter `{key}`	невідомий параметр `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	невідомий параметр `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	невідомий параметр `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	невідомий pieLegend `{v}` (none, standard або wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	невідомий piePosition `{v}` (even, ratio або stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	невідомий pieSort `{v}` (none, all або first)
@@ -8875,7 +8886,6 @@ breakText	Glyphs	Гліфи
 @msg	{label} must be a number from 1 to 10000	{label} має бути числом від 1 до 10000
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} є вбудованим, його не можна видалити
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} має бути {lo}–{hi}{unit} (отримано {v})
 @msg	{name}: CRC or size mismatch	{name}: невідповідність CRC або розміру
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: вдалося прочитати лише вбудований попередній перегляд цього файлу Affinity; скористайтеся командою Файл › Відкрити, щоб побачити його з попередженням, або перед розміщенням експортуйте SVG чи PDF з Affinity
 @msg	{name}: {e}	{name}: {e}

@@ -5638,6 +5638,19 @@ lighting	Light	Свет
 	Transform Objects	Трансформировать объекты
 @msg	unknown parameter `{key}`; did you mean `{near}`?	неизвестный параметр `{key}`; возможно, имелся в виду `{near}`?
 @msg	unknown parameter `{key}`; the command takes no parameters	неизвестный параметр `{key}`; у команды нет параметров
+@msg	unknown parameter `{key}`; `{object}` takes: {keys}	неизвестный параметр `{key}`; `{object}` принимает: {keys}
+@msg	unknown parameter `{key}`; {why_not}	неизвестный параметр `{key}`; {why_not}
+@msg	no format takes it (see document.formats)	ни один формат его не принимает (см. document.formats)
+@msg	no save format takes it (see file.formatOptions)	ни один формат сохранения его не принимает (см. file.formatOptions)
+@msg	PDF doesn't take it (see document.formats)	PDF его не принимает (см. document.formats)
+@msg	EPS doesn't take it (see document.formats)	EPS его не принимает (см. document.formats)
+@msg	DXF doesn't take it (see document.formats)	DXF его не принимает (см. document.formats)
+@msg	{name} must be {range} (got {v})	{name} должен быть {range} (получено {v})
+@msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Графический процессор, выбранный первым, не смог показать окно, поэтому VectorCraft запустился снова на {summary} (Настройки › Производительность › Графический процессор › Автоматически использует тот, к которому подключён дисплей)
+@msg	Sent “{title}” to {to}	“{title}” отправлено: {to}
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” отправлено: {to}. Ответ очереди печати: {note}
+@msg	the default printer	принтер по умолчанию
+@msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растровые эффекты объекта {object}: запрошено {requested} ppi, получено {achieved} ppi из-за ограничения в 64 миллиона пикселей
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}
 @msg	the params must be an object, not {got}	параметры должны быть объектом, а не {got}
 @msg	unknown parameter `{path}`; the object takes no keys	неизвестный параметр `{path}`; объект не принимает ключей
