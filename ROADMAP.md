@@ -18,7 +18,7 @@ gate: all six core workflows (path drawing and editing, paint and style, type, l
 production, file exchange) work end to end on macOS with save and reopen, and only the last is partial, without
 blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
-> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face. Scores and estimates unchanged.
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
 
 ## Headline numbers
 

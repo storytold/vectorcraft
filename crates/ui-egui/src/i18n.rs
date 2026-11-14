@@ -111,7 +111,8 @@ pub static LANGUAGES: [LangInfo; 29] = [
     },
     // Gujarati: menus and dialogs, with partial status/error message coverage and loanwords
     // transliterated into Gujarati script; zero/one singular plurals. Gujarati text is drawn with an installed system font
-    // (Gujarati Sangam MN, Nirmala UI, Shruti) or a craft-fonts face tagged `Gujr`; every `gu-*` locale resolves here.
+    // (Gujarati Sangam MN, Nirmala UI, Shruti) or a craft-fonts face tagged `Gujr`. Web selection
+    // requires a bundled Gujarati interface face; otherwise `gu-*` locales use the fallback.
     LangInfo {
         code: "gu",
         name: "ગુજરાતી",
@@ -366,6 +367,19 @@ pub static LANGUAGES: [LangInfo; 29] = [
 ];
 
 impl LangInfo {
+    fn available(&self) -> bool {
+        self.available_with_fonts(
+            cfg!(target_arch = "wasm32"),
+            cfg!(feature = "interface-fonts") && vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Gujr")),
+        )
+    }
+
+    fn available_with_fonts(&self, web: bool, gujarati_font: bool) -> bool {
+        // Browsers cannot use the native installed-font fallback. Do not offer a language
+        // whose text would be missing-glyph boxes, including when restoring a preference.
+        self.code != "gu" || !web || gujarati_font
+    }
+
     fn catalog(&self) -> &Catalog {
         self.catalog.get_or_init(|| Catalog::parse(self.source))
     }
@@ -398,7 +412,7 @@ impl Lang {
 
     /// A language by its exact code.
     pub fn from_code(code: &str) -> Option<Lang> {
-        LANGUAGES.iter().find(|l| l.code.eq_ignore_ascii_case(code)).map(Lang)
+        LANGUAGES.iter().find(|l| l.code.eq_ignore_ascii_case(code) && l.available()).map(Lang)
     }
 
     /// Resolve the `interfaceLanguage` preference: a language code, or `auto` (and anything
@@ -407,12 +421,12 @@ impl Lang {
         Lang::from_code(pref).unwrap_or_else(system_lang)
     }
 
-    /// Every registered language.
+    /// Every language available in this build.
     pub fn all() -> impl Iterator<Item = Lang> {
-        LANGUAGES.iter().map(Lang)
+        LANGUAGES.iter().filter(|l| l.available()).map(Lang)
     }
 
-    /// Every registered language in the order a picker lists them: English first (the source
+    /// Every available language in the order a picker lists them: English first (the source
     /// language and the fallback), then the rest by their own name with accents folded, so
     /// Čeština sits under C rather than after Z. Names in other scripts follow the Latin ones in
     /// code point order: Greek, Cyrillic, Arabic, then the CJK languages.

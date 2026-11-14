@@ -5,9 +5,12 @@ const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registere
 
 #[test]
 fn gujarati_resolves_locales_and_takes_the_singular_for_zero_and_one() {
-    let gu = Lang::from_code("gu").expect("gu registered");
+    // The catalog is present even when this web build cannot display it.
+    let gu = Lang(LANGUAGES.iter().find(|l| l.code == "gu").expect("gu registered"));
+    let selectable = gu.0.available().then_some(gu);
+    assert_eq!(Lang::from_code("gu"), selectable);
     for tag in ["gu", "gu-IN", "gu_IN.UTF-8", "GU-in", "gu-Gujr-IN"] {
-        assert_eq!(lang_from_tag(tag), Some(gu), "{tag}");
+        assert_eq!(lang_from_tag(tag), selectable, "{tag}");
     }
     assert_eq!(gu.name(), "ગુજરાતી");
     assert_eq!([0, 1, 2, 21].map(gu.0.plural), [0, 0, 1, 1]);
@@ -218,6 +221,17 @@ fn tags_map_to_languages() {
     }
     assert_eq!(lang_from_tag(""), None);
     assert_eq!(lang_from_tag("_"), None);
+}
+
+#[test]
+fn gujarati_web_selection_requires_a_bundled_interface_font() {
+    let gu = LANGUAGES.iter().find(|l| l.code == "gu").expect("Gujarati catalog");
+    assert!(gu.available_with_fonts(false, false), "native installed-font fallback");
+    assert!(!gu.available_with_fonts(true, false), "web must not offer missing glyphs");
+    assert!(gu.available_with_fonts(true, true));
+    assert!(LANGUAGES[0].available_with_fonts(true, false), "English fallback");
+    assert_eq!(Lang::from_code("gu").is_some(), gu.available());
+    assert_eq!(Lang::for_picker().iter().any(|l| l.code() == "gu"), gu.available());
 }
 
 /// The Bosnian, Georgian, Ukrainian, Hungarian, Korean, Vietnamese, Swedish and Catalan tags of

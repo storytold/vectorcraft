@@ -22,7 +22,7 @@ English) in-app help, and the docs are English.
 (`bflatastic`), with community contributors adding or correcting (German by `dwetscher`, Japanese and Traditional
 Chinese by `imachus`). Georgian and the original Gujarati catalog are recorded as reviewed by native speakers; new Gujarati additions still need proofreading.
 
-> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face. Scores and estimates unchanged.
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
 
 ## The twelve key languages
 

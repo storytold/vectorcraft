@@ -12,7 +12,7 @@
 
 > **PDF import status (2026-11-14, #6957):** Outlined Indic glyphs retain their full stroke properties; translucent glyphs stay separate, and a soft mask attaches to each glyph separately. Scores and estimates unchanged.
 
-> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face. Scores and estimates unchanged.
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 retain their contributor review; 387 additions are drafts awaiting native proofreading. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
 
 ## Feature submission evidence
 
