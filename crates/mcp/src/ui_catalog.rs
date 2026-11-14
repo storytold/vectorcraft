@@ -768,7 +768,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.arrange.tile",
         "Tile",
         "",
-        "{} show every open document and each further view of one (window.newWindow) at once, edge to edge in the document area, one pane each in a grid (columns: the square root of the number of panes, rounded up), each fitted to its pane; the current window's pane takes the tools, a click in another pane makes its window the current one; the tabs stay; windows floating come back under the tabs first; with fewer than two windows open the view stays as it is; returns {tiled, panes}",
+        "{layout?: grid|vertical|horizontal|2up|3up|4up|6up} show the open documents and each further view of one (window.newWindow) at once, edge to edge in the document area, one pane each, each fitted to its pane: `grid` (the default) in a grid (columns: the square root of the number of panes, rounded up), `vertical` side by side in one row (Tile All Vertically), `horizontal` stacked in one column (Tile All Horizontally), `2up`, `3up`, `4up` and `6up` at most that many panes (2up and 3up side by side, 4up two by two, 6up three by two) with the other windows under their tabs: the first windows in tab order, the current window in the last pane when it is not among them; the current window's pane takes the tools, a click in another pane makes its window the current one; the tabs stay; windows floating come back under the tabs first; with fewer than two windows open the view and the layout stay as they are; any other `layout` is an error; returns {tiled, panes, layout}",
     ),
     (
         "window.arrange.floatInWindow",

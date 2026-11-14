@@ -85,7 +85,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // The right-side group fills the space after the menus from the right; when it runs
             // short, Discord goes first (it is also under Help), then Explore tutorials (also
             // Window › Learn), then the search icon (the palette stays under its shortcut), then
-            // the workspace switcher narrows.
+            // Arrange Documents (also Window › Arrange), then the workspace switcher narrows.
             let full = ui.max_rect();
             let right_edge = if captions_right > 0.0 { full.right() - captions_right - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
@@ -105,13 +105,16 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             let ws = ui.painter().layout_no_wrap(ws_name, egui::FontId::proportional(12.0), t.text);
             let ws_w = (ws.size().x + 36.0).clamp(112.0, 190.0);
             let gap = ui.spacing().item_spacing.x;
-            // The search icon, as in PhotoCraft: shown while a minimal switcher fits beside it.
+            // Arrange Documents, beside the switcher, then the search icon, as in PhotoCraft: each
+            // shown while a minimal switcher fits beside it.
             let icon = 28.0;
-            let search = switcher && room >= 64.0 + 8.0 + gap + icon;
-            let ws_w = ws_w.min(room - 8.0 - gap - if search { icon } else { 0.0 }).max(64.0);
+            let arrange = switcher && room >= 64.0 + 8.0 + gap + icon;
+            let search = arrange && room >= 64.0 + 8.0 + 2.0 * (gap + icon);
+            let icons = f32::from(u8::from(arrange) + u8::from(search));
+            let ws_w = ws_w.min(room - 8.0 - icons * (gap + icon)).max(64.0);
             // Explore tutorials, beside the search icon, opens the Learn panel.
-            let learn = search && room >= ws_w + 8.0 + 2.0 * (gap + icon);
-            let discord = learn && room >= ws_w + 8.0 + 2.0 * (gap + icon) + 10.0 + gap + crate::community::discord_width(ui, false);
+            let learn = search && room >= ws_w + 8.0 + 3.0 * (gap + icon);
+            let discord = learn && room >= ws_w + 8.0 + 3.0 * (gap + icon) + 10.0 + gap + crate::community::discord_width(ui, false);
             let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)));
             let ui = &mut rui;
             // Workspace switcher: shows the current workspace, opens Window → Workspace.
@@ -129,6 +132,11 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
                     app.run("help.safeMode", json!({})).ok();
                 }
                 ui.add_space(8.0);
+            }
+            // Arrange Documents: Consolidate All Windows and the Tile layouts.
+            if arrange {
+                let resp = widgets::icon_button(ui, "layout-grid", tl!("Arrange Documents"), app.ui.tiled, icon);
+                egui::Popup::menu(&resp).show(|ui| arrange_documents_popup(app, ui));
             }
             // Search → command palette (its shortcut opens it too).
             if search {
@@ -165,6 +173,33 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     });
     if custom {
         titlebar::caption_buttons(app, ui, bar.response.rect);
+    }
+}
+
+/// The Arrange Documents menu ([`menus::arrange_documents_items`]): each item as the Window menu
+/// shows it, grayed out while its command can't run, the Tile layout the panes show checked.
+fn arrange_documents_popup(app: &mut VectorcraftApp, ui: &mut Ui) {
+    ui.set_min_width(200.0);
+    let mut clicked = None;
+    for it in menus::arrange_documents_items() {
+        match it {
+            menus::Item::Sep => {
+                ui.separator();
+            }
+            menus::Item::Cmd(label, id, p) => {
+                let Some((enabled, checked)) = menus::shown_state(app, id, &p) else { continue };
+                let label = crate::i18n::t_id(id, label);
+                let text = if checked == Some(true) { format!("✓  {label}") } else { format!("     {label}") };
+                if ui.add_enabled(enabled, egui::Button::new(text).min_size(vec2(200.0, 0.0))).clicked() {
+                    clicked = Some((id, if p.is_null() { json!({}) } else { p }));
+                    ui.close();
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some((id, p)) = clicked {
+        menus::invoke(app, id, p);
     }
 }
 

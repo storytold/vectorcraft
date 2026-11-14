@@ -718,6 +718,13 @@ digits	Malayalam	말라얄람어
 	Previous Document	이전 문서
 	Cascade	계단식 배열
 	Tile	바둑판식 배열
+	Tile All Vertically	모두 세로로 바둑판식 배열
+	Tile All Horizontally	모두 가로로 바둑판식 배열
+	2-Up Layout	2분할 레이아웃
+	3-Up Layout	3분할 레이아웃
+	4-Up Layout	4분할 레이아웃
+	6-Up Layout	6분할 레이아웃
+	Arrange Documents	문서 정렬
 	Float in Window	창에 플로팅
 	Float All in Windows	모두 창에 플로팅
 	Consolidate All Windows	모든 창 통합

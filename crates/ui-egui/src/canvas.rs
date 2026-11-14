@@ -63,7 +63,7 @@ use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
 #[cfg(test)]
 use overlays::selected_anchor;
 use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
-pub use panes::Panes;
+pub use panes::{Layout as TileLayout, Panes};
 pub(crate) use panes::{consolidate, pane, tile, tiled_area};
 use raster::{changed_pixels, pixel_region, upload};
 pub(crate) use raster::{color_image, color_image_owned, render_job};

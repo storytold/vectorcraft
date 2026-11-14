@@ -80,6 +80,7 @@ pub(crate) use run::{normalize_panel, opt_bool, opt_index, opt_number};
 use slots::RECENT_FONT_IDS;
 pub use state::{checked, enabled, plugin_revision, shortcut_of, shown_state};
 pub(crate) use submenus::PATH_EFFECTS;
+pub(crate) use tree::arrange_documents_items;
 pub use tree::{menu_tree, menu_tree_named};
 pub use ui_commands::UI_COMMANDS;
 

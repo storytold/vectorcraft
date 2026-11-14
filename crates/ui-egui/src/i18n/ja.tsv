@@ -725,6 +725,13 @@ digits	Malayalam	マラヤーラム数字
 	Previous Document	前のドキュメント
 	Cascade	重ねて表示
 	Tile	並べて表示
+	Tile All Vertically	すべてを左右に並べて表示
+	Tile All Horizontally	すべてを上下に並べて表示
+	2-Up Layout	2 分割レイアウト
+	3-Up Layout	3 分割レイアウト
+	4-Up Layout	4 分割レイアウト
+	6-Up Layout	6 分割レイアウト
+	Arrange Documents	ドキュメントの配置
 	Float in Window	ウィンドウを分離
 	Float All in Windows	すべてをウィンドウに分離
 	Consolidate All Windows	すべてのウィンドウを統合

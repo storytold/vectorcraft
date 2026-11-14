@@ -4420,6 +4420,13 @@ mark-style	Japanese	Japán
 	TIFF (8-bit Color)	TIFF (8 bites színes)
 	TIFF (Black & White)	TIFF (fekete-fehér)
 	Tile	Mozaikelrendezés
+	Tile All Vertically	Összes mozaikelrendezése függőlegesen
+	Tile All Horizontally	Összes mozaikelrendezése vízszintesen
+	2-Up Layout	2-es elrendezés
+	3-Up Layout	3-as elrendezés
+	4-Up Layout	4-es elrendezés
+	6-Up Layout	6-os elrendezés
+	Arrange Documents	Dokumentumok elrendezése
 	Tile Edge Color	Csempeszél színe
 	Tile Edge Color…	Csempeszél színe…
 	Tile Full Pages	Teljes oldalak csempézése

@@ -259,7 +259,7 @@ fn tile_brings_floating_documents_back_into_the_grid() {
     frame(&mut app, &ctx, vec![]);
     let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(w, _)| w.0).collect();
     assert_eq!(docs, [0, 1], "a floating document leaves the grid; the tabbed ones share it");
-    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 3}));
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 3, "layout": "grid"}));
     frame(&mut app, &ctx, vec![]);
     let docs: Vec<usize> = app.canvas.panes.last.iter().map(|(w, _)| w.0).collect();
     assert_eq!(docs, [0, 1, 2]);
@@ -844,7 +844,7 @@ fn arrange_treats_each_view_as_a_window() {
     assert!(!enabled(&app, "window.arrange.tile") && !enabled(&app, "window.arrange.cascade"), "one window");
     app.run("window.newWindow", json!({})).unwrap();
     assert!(enabled(&app, "window.arrange.tile") && enabled(&app, "window.arrange.cascade"), "two views of one document");
-    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 2}));
+    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 2, "layout": "grid"}));
     app.run("window.arrange.cascade", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     let uid = app.session.documents()[0].uid;

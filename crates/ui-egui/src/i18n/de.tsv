@@ -3686,6 +3686,13 @@ effect	Points	Punkte
 	Thumbnail View	Miniaturansicht
 	Thumbnails:	Miniaturen:
 	Tile	Nebeneinander
+	Tile All Vertically	Alle vertikal nebeneinander
+	Tile All Horizontally	Alle horizontal nebeneinander
+	2-Up Layout	Layout mit 2
+	3-Up Layout	Layout mit 3
+	4-Up Layout	Layout mit 4
+	6-Up Layout	Layout mit 6
+	Arrange Documents	Dokumente anordnen
 	Tile Edge Color	Farbe der Kachelkante
 	Tile Edge Color…	Farbe der Kachelkante…
 	Tile Full Pages	Ganze Seiten aufteilen

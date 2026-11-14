@@ -631,16 +631,16 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
         ("Window", {
             let mut window_items = vec![
                 c("New Window", "window.newWindow"),
-                sub(
-                    "Arrange",
-                    vec![
-                        c("Cascade", "window.arrange.cascade"),
-                        c("Tile", "window.arrange.tile"),
+                sub("Arrange", {
+                    let mut arrange = vec![c("Cascade", "window.arrange.cascade")];
+                    arrange.extend(tile_items());
+                    arrange.extend([
                         c("Float in Window", "window.arrange.floatInWindow"),
                         c("Float All in Windows", "window.arrange.floatAllInWindows"),
                         c("Consolidate All Windows", "window.arrange.consolidateAllWindows"),
-                    ],
-                ),
+                    ]);
+                    arrange
+                }),
                 sub("Workspace", crate::workspaces::menu_items()),
                 Sep,
                 c("Control", "window.control"),
@@ -753,6 +753,27 @@ pub(super) fn transform_items() -> Vec<Item> {
         Sep,
         c("Reset Bounding Box", "object.resetBoundingBox"),
     ]
+}
+
+/// Window → Arrange's Tile layouts, one `window.arrange.tile` `layout` each (also under the
+/// application bar's Arrange Documents button).
+fn tile_items() -> Vec<Item> {
+    vec![
+        c("Tile", "window.arrange.tile"),
+        cp("Tile All Vertically", "window.arrange.tile", json!({"layout": "vertical"})),
+        cp("Tile All Horizontally", "window.arrange.tile", json!({"layout": "horizontal"})),
+        cp("2-Up Layout", "window.arrange.tile", json!({"layout": "2up"})),
+        cp("3-Up Layout", "window.arrange.tile", json!({"layout": "3up"})),
+        cp("4-Up Layout", "window.arrange.tile", json!({"layout": "4up"})),
+        cp("6-Up Layout", "window.arrange.tile", json!({"layout": "6up"})),
+    ]
+}
+
+/// The application bar's Arrange Documents menu: Consolidate All Windows, then the Tile layouts.
+pub(crate) fn arrange_documents_items() -> Vec<Item> {
+    let mut items = vec![c("Consolidate All Windows", "window.arrange.consolidateAllWindows"), Sep];
+    items.extend(tile_items());
+    items
 }
 
 /// Object → Arrange (also in the canvas context menu).

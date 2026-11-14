@@ -598,6 +598,10 @@ pub struct UiState {
     /// Consolidate All Windows. Not saved: the reference app does not save windows with a document.
     #[serde(skip)]
     pub tiled: bool,
+    /// How Tile lays the panes out: in a grid, side by side, stacked, or 2-up to 6-up. Not saved,
+    /// as `tiled` is not.
+    #[serde(skip)]
+    pub tile_layout: crate::canvas::TileLayout,
     /// Window › Arrange › Float in Window, Float All in Windows and Cascade: the documents in
     /// floating windows of their own, out of the tab strip, until Consolidate All Windows. Not
     /// saved, as `tiled` is not.
@@ -1176,6 +1180,7 @@ impl Default for UiState {
             palette_query: String::new(),
             screen_mode: 0,
             tiled: false,
+            tile_layout: crate::canvas::TileLayout::Grid,
             floating: Vec::new(),
             tab_document: None,
             draw_mode: 0,

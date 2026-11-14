@@ -2171,6 +2171,13 @@ font-technology	Variable	Μεταβλητές
 	Templates	Πρότυπα
 	Threshold	Κατώφλι
 	Tile	Παράθεση
+	Tile All Vertically	Παράθεση όλων κατακόρυφα
+	Tile All Horizontally	Παράθεση όλων οριζόντια
+	2-Up Layout	Διάταξη ανά 2
+	3-Up Layout	Διάταξη ανά 3
+	4-Up Layout	Διάταξη ανά 4
+	6-Up Layout	Διάταξη ανά 6
+	Arrange Documents	Διάταξη εγγράφων
 	Tint	Χρωματική απόχρωση
 	Fill Tint	Χρωματική απόχρωση γεμίσματος
 	Stroke Tint	Χρωματική απόχρωση περιγράμματος

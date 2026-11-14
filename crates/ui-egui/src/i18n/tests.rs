@@ -421,6 +421,17 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// Window › Arrange's Tile layouts and the application bar's Arrange Documents button.
+#[test]
+fn tile_layout_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in ["Tile All Vertically", "Tile All Horizontally", "2-Up Layout", "3-Up Layout", "4-Up Layout", "6-Up Layout", "Arrange Documents"]
+        {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// Preference choices and the marquee's E hint share the same translated labels.
 #[test]
 fn marquee_selection_labels_are_in_complete_catalogs() {

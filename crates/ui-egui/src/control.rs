@@ -273,11 +273,12 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // The display profile the canvas is drawn through, or why none (Preferences ›
         // Performance › Use Monitor Profile for Canvas).
         "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
-        // Window › Arrange › Tile (not saved, so not in `ui`) and the panes the last frame drew:
-        // each one's document index, view number (Window › New Window) and rect. Canvas
-        // coordinates map to the current window's pane, inside its rulers and scroll bars
+        // Window › Arrange › Tile and its layout (not saved, so not in `ui`) and the panes the
+        // last frame drew: each one's document index, view number (Window › New Window) and rect.
+        // Canvas coordinates map to the current window's pane, inside its rulers and scroll bars
         // (`canvasRect`).
         "tiled": app.ui.tiled,
+        "tileLayout": app.ui.tile_layout.name(),
         "panes": app.canvas.panes.last.iter().map(|(w, c)| json!({
             "document": w.0,
             "view": w.1,

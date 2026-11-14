@@ -693,6 +693,13 @@
 	Previous Document	Edellinen asiakirja
 	Cascade	Porrasta
 	Tile	Vierekkäin
+	Tile All Vertically	Kaikki vierekkäin pystysuunnassa
+	Tile All Horizontally	Kaikki vierekkäin vaakasuunnassa
+	2-Up Layout	2 ikkunan asettelu
+	3-Up Layout	3 ikkunan asettelu
+	4-Up Layout	4 ikkunan asettelu
+	6-Up Layout	6 ikkunan asettelu
+	Arrange Documents	Järjestä asiakirjat
 	Float in Window	Kelluta ikkunassa
 	Float All in Windows	Kelluta kaikki ikkunoissa
 	Consolidate All Windows	Yhdistä kaikki ikkunat

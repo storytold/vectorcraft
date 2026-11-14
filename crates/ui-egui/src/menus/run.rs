@@ -671,7 +671,7 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         },
         "window.newWindow" => crate::doc_windows::new_window(app),
         "window.arrange.cascade" => crate::doc_windows::cascade(app),
-        "window.arrange.tile" => crate::canvas::tile(app),
+        "window.arrange.tile" => crate::canvas::tile(app, p),
         "window.arrange.floatInWindow" => crate::doc_windows::float_in_window(app, p),
         "window.arrange.floatAllInWindows" => crate::doc_windows::float_all(app),
         "window.arrange.consolidateAllWindows" if p.get("index").is_some_and(|i| !i.is_null()) => crate::doc_windows::dock(app, p),

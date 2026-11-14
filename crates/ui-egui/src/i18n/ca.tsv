@@ -4740,6 +4740,13 @@ digits	Malayalam	Malaiàlam
 	TIFF (8-bit Color)	TIFF (color de 8 bits)
 	TIFF (Black & White)	TIFF (blanc i negre)
 	Tile	Mosaic
+	Tile All Vertically	Mosaic vertical de tot
+	Tile All Horizontally	Mosaic horitzontal de tot
+	2-Up Layout	Disposició de 2
+	3-Up Layout	Disposició de 3
+	4-Up Layout	Disposició de 4
+	6-Up Layout	Disposició de 6
+	Arrange Documents	Organitza els documents
 	Tile Edge Color	Color de la vora del mosaic
 	Tile Edge Color…	Color de la vora del mosaic…
 	Tile Full Pages	Mosaic de pàgines senceres
