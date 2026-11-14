@@ -369,12 +369,13 @@ impl DocState {
     /// menu asks on every frame it is open, and measuring builds the solids of 3D effects, so the
     /// answer is kept for this version of the document and those artboards, and a change of the
     /// selection or the view keeps it. It is measured again when what the measure reads outside the
-    /// document changes: the installed plug-ins, whose effects draw art, and the installed fonts,
-    /// which set the bounds of all type.
+    /// document changes: the installed plug-ins, whose effects draw art, and the installed fonts and
+    /// the hyphenation exceptions, which set the bounds of all type.
     pub fn any_art_to_fit(&self, indices: &[usize]) -> bool {
-        self.any_art_to_fit_with(indices, (vectorcraft_plugins::registry::revision(), vectorcraft_text::FontDb::global().generation()))
+        self.any_art_to_fit_with(indices, (vectorcraft_plugins::registry::revision(), vectorcraft_text::layout_inputs()))
     }
-    /// [`Self::any_art_to_fit`], with `outside` the generations of the plug-ins and the fonts.
+    /// [`Self::any_art_to_fit`], with `outside` the generations of the plug-ins and the layout inputs
+    /// ([`vectorcraft_text::layout_inputs`]).
     pub(crate) fn any_art_to_fit_with(&self, indices: &[usize], outside: (u64, u64)) -> bool {
         // Measuring runs renderer and plug-in code; should it ever ask again while measuring, it
         // is measured without being kept rather than borrowed twice.

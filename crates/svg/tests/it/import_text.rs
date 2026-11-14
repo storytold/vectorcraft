@@ -391,6 +391,11 @@ fn rtl_point_text_start_and_end_use_directional_edges() {
         (r#"<text x="200" y="60" direction="rtl" font-size="20"><tspan direction="ltr">Wave</tspan></text>"#, 0.0),
         (r#"<text x="200" y="60" text-anchor="start" font-size="20">Wave</text>"#, 0.0),
         (r#"<text x="200" y="60" direction="ltr" text-anchor="end" font-size="20">Wave</text>"#, 1.0),
+        // With `unicode-bidi: plaintext`, the direction of the chunk's first strong character.
+        (r#"<text x="200" y="60" unicode-bidi="plaintext" font-size="20">&#x5D0;&#x5D1;&#x5D2;</text>"#, 1.0),
+        (r#"<text x="200" y="60" unicode-bidi="plaintext" text-anchor="end" font-size="20">12 &#x5D0;&#x5D1;</text>"#, 0.0),
+        (r#"<text x="200" y="60" direction="rtl" unicode-bidi="plaintext" font-size="20">Wave</text>"#, 0.0),
+        (r#"<text x="200" y="60" direction="rtl" unicode-bidi="plaintext" text-anchor="end" font-size="20">12</text>"#, 1.0),
     ] {
         let d = open(body);
         let (left, right) = line_edges(only_text(&d))[0];
@@ -462,6 +467,169 @@ fn rtl_lines_use_each_chunk_first_character_direction_and_anchor() {
     assert!(close(e[1].0, 200.0, 1e-6), "a left-to-right start line starts at 200: {e:?}");
     assert!(close(e[2].0, 200.0, 1e-6), "a right-to-left end line starts at 200: {e:?}");
     assert!(close((e[3].0 + e[3].1) / 2.0, 200.0, 1e-6), "a middle line is centered on 200: {e:?}");
+}
+
+/// The Character Direction of the run holding `part`.
+fn char_direction_of(t: &TextObject, part: &str) -> Option<vectorcraft_doc::ParaDirection> {
+    t.runs.iter().find(|r| r.text.contains(part)).unwrap_or_else(|| panic!("no run holds {part:?}: {:?}", t.runs)).style.char_direction
+}
+
+/// SVG 1.1 §10.7.4: a `<tspan>` whose `unicode-bidi` is `embed` or `bidi-override` opens a bidi
+/// embedding in its `direction`; with `normal`, its `direction` leaves the ordering alone. The
+/// embedding becomes the Character Direction of its characters, and the `<text>` keeps its own
+/// paragraph direction. https://www.w3.org/TR/SVG11/text.html#RelationshipWithBi-directionality
+#[test]
+fn a_tspan_bidi_embedding_becomes_its_character_direction() {
+    use vectorcraft_doc::ParaDirection::{LeftToRight as Ltr, RightToLeft as Rtl};
+    let read = |body: &str| {
+        let (d, w) = import_with_report(&svg(body)).unwrap_or_else(|e| panic!("{e}"));
+        (only_text(&d).clone(), w)
+    };
+    // (outer direction, inner direction, unicode-bidi, the inner run's Character Direction, a warning)
+    for (outer, inner, bidi, want, warns) in [
+        ("ltr", "rtl", "embed", Some(Rtl), false),
+        ("rtl", "ltr", "embed", Some(Ltr), false),
+        ("ltr", "rtl", "bidi-override", Some(Rtl), true),
+        ("rtl", "ltr", "bidi-override", Some(Ltr), true),
+        ("ltr", "rtl", "normal", None, false),
+        ("rtl", "ltr", "normal", None, false),
+        ("ltr", "rtl", "EMBED", Some(Rtl), false),
+        ("ltr", "rtl", "sideways", None, false),
+    ] {
+        let (t, w) = read(&format!(
+            r#"<text x="20" y="40" font-size="20" direction="{outer}">ab <tspan direction="{inner}" unicode-bidi="{bidi}">1 2</tspan> cd</text>"#
+        ));
+        let case = format!("{outer} text, {inner} {bidi} tspan");
+        assert_eq!(t.plain_text(), "ab 1 2 cd", "{case}: the characters stay in logical order");
+        assert_eq!(char_direction_of(&t, "1 2"), want, "{case}: {:?}", t.runs);
+        assert_eq!(char_direction_of(&t, "ab"), None, "{case}");
+        assert_eq!(t.para_at(0).direction == Some(Rtl), outer == "rtl", "{case}: the paragraph keeps the text's direction");
+        assert_eq!(w.iter().any(|w| w.contains("bidi-override") && w.contains("not supported")), warns, "{case}: {w:?}");
+        if !warns {
+            assert!(w.is_empty(), "{case}: {w:?}");
+        }
+    }
+    // In left-to-right text, digits in a right-to-left embedding are drawn right to left.
+    let order = |bidi: &str| {
+        let (t, _) = read(&format!(r#"<text x="20" y="40" font-size="20">ab <tspan direction="rtl" unicode-bidi="{bidi}">1 2</tspan></text>"#));
+        let lay = layout(FontDb::global(), &t);
+        let x = |byte: usize| lay.glyphs.iter().find(|g| g.byte == byte).map(|g| g.origin.x).unwrap_or_else(|| panic!("no glyph at {byte}"));
+        x(3) < x(5)
+    };
+    assert!(!order("embed"), "an embedding draws 2 before 1");
+    assert!(order("normal"), "without one, 1 comes first");
+}
+
+/// `unicode-bidi` is not inherited: a `<tspan>` without one stays in its parent's embedding, and
+/// `inherit` takes the parent's value. CSS rules and `style` set it as they set any property.
+#[test]
+fn unicode_bidi_is_not_inherited_and_reads_from_the_cascade() {
+    use vectorcraft_doc::ParaDirection::{LeftToRight as Ltr, RightToLeft as Rtl};
+    let read = |body: &str| {
+        let (d, w) = import_with_report(&svg(body)).unwrap_or_else(|e| panic!("{e}"));
+        (only_text(&d).clone(), w)
+    };
+    // An inner `<tspan>` with only a `direction` stays in the outer embedding.
+    let (t, w) = read(r#"<text y="40">ab <tspan direction="rtl" unicode-bidi="embed">12 <tspan direction="ltr">34</tspan></tspan> cd</text>"#);
+    assert_eq!((char_direction_of(&t, "12"), char_direction_of(&t, "34"), char_direction_of(&t, "cd")), (Some(Rtl), Some(Rtl), None), "{:?}", t.runs);
+    assert!(w.is_empty(), "{w:?}");
+    // `inherit` opens an embedding of its own, inside the outer one: kept one level deep, with a warning.
+    let (t, w) = read(
+        r#"<text y="40">ab <tspan direction="rtl" unicode-bidi="embed">12 <tspan direction="ltr" unicode-bidi="inherit">34</tspan></tspan></text>"#,
+    );
+    assert_eq!((char_direction_of(&t, "12"), char_direction_of(&t, "34")), (Some(Rtl), Some(Ltr)), "{:?}", t.runs);
+    assert!(w.len() == 1 && w[0].contains("inside another"), "{w:?}");
+    // A `unicode-bidi` on the `<text>` or a group is not passed on to the `<tspan>`.
+    let (t, _) = read(r#"<g unicode-bidi="embed"><text y="40" unicode-bidi="embed">ab <tspan direction="rtl">12</tspan></text></g>"#);
+    assert!(t.runs.iter().all(|r| r.style.char_direction.is_none()), "{:?}", t.runs);
+    // From a CSS rule and from `style`; `direction` inherits from the `<text>`.
+    for body in [
+        r#"<style>.e{unicode-bidi:embed}</style><text y="40" direction="rtl">ab <tspan class="e">12</tspan></text>"#,
+        r#"<text y="40" direction="rtl">ab <tspan style="unicode-bidi: embed">12</tspan></text>"#,
+    ] {
+        let (t, w) = read(body);
+        assert_eq!(char_direction_of(&t, "12"), Some(Rtl), "{body}: {:?}", t.runs);
+        assert_eq!(char_direction_of(&t, "ab"), None, "{body}: {:?}", t.runs);
+        assert!(w.is_empty(), "{body}: {w:?}");
+    }
+    // On a path and in a link too.
+    let (t, _) = read(
+        r##"<defs><path id="p" d="M20 100 H380"/></defs><text><textPath href="#p">ab <tspan direction="ltr" unicode-bidi="embed">12</tspan> <a href="https://example.com/"><tspan direction="rtl" unicode-bidi="embed">34</tspan></a></textPath></text>"##,
+    );
+    assert!(matches!(t.kind, TextKind::OnPath { .. }));
+    assert_eq!((char_direction_of(&t, "12"), char_direction_of(&t, "34")), (Some(Ltr), Some(Rtl)), "{:?}", t.runs);
+}
+
+/// The text model holds embeddings only: isolates and overrides become embeddings in their
+/// `direction`, and `plaintext` one in the direction of its first strong character, each with a
+/// warning once a text (CSS Writing Modes 3 §2.2,
+/// https://www.w3.org/TR/css-writing-modes-3/#unicode-bidi).
+#[test]
+fn unicode_bidi_values_the_text_model_cannot_hold_are_reported() {
+    use vectorcraft_doc::ParaDirection::{LeftToRight as Ltr, RightToLeft as Rtl};
+    for (bidi, dir, text, want, says) in [
+        ("isolate", "rtl", "12", Some(Rtl), "isolation is not supported"),
+        ("isolate-override", "rtl", "12", Some(Rtl), "isolation and override are not supported"),
+        ("plaintext", "ltr", "\u{5D0}\u{5D1}", Some(Rtl), "first strong character"),
+        ("plaintext", "rtl", "12 ab", Some(Ltr), "first strong character"),
+    ] {
+        let body = format!(
+            r#"<text id="t" y="40">ab <tspan direction="{dir}" unicode-bidi="{bidi}">{text}</tspan> <tspan direction="{dir}" unicode-bidi="{bidi}">{text}</tspan></text>"#
+        );
+        let (d, w) = import_with_report(&svg(&body)).unwrap_or_else(|e| panic!("{e}"));
+        let t = only_text(&d);
+        assert_eq!(char_direction_of(t, text), want, "{bidi}: {:?}", t.runs);
+        assert!(w.len() == 1 && w[0].starts_with("text 't': ") && w[0].contains(&format!("\"{bidi}\"")) && w[0].contains(says), "{bidi}: {w:?}");
+    }
+    // `plaintext` looks for the first strong character among the characters imported, however far in.
+    let far = format!("{}\u{5D0}\u{5D1}", "1 ".repeat(1500));
+    for (body, part, want) in [
+        (r#"<tspan display="none">&#x5D0;&#x5D1;</tspan>ab"#.to_string(), "ab", Ltr),
+        (format!("<tspan>{far}</tspan>"), "\u{5D0}", Rtl),
+        (format!("<tspan>\n</tspan>12 <tspan>{far}</tspan>"), "\u{5D0}", Rtl),
+    ] {
+        let (d, _) =
+            import_with_report(&svg(&format!(r#"<text y="40">x <tspan direction="ltr" unicode-bidi="plaintext">{body}</tspan></text>"#))).unwrap();
+        let t = only_text(&d);
+        assert_eq!(char_direction_of(t, part), Some(want), "{body}: {:?}", t.runs);
+    }
+    // `plaintext` on the `<text>`: each paragraph runs in the direction of its first strong character.
+    for (body, want) in [
+        ("<text y=\"40\" unicode-bidi=\"plaintext\">12 \u{5D0}\u{5D1} cd</text>", vec![Some(Rtl)]),
+        (r#"<text y="40" direction="rtl" unicode-bidi="plaintext">12 ab</text>"#, vec![Some(Ltr)]),
+        (
+            "<text unicode-bidi=\"plaintext\"><tspan x=\"10\" y=\"20\">ab</tspan><tspan x=\"10\" dy=\"40\">\u{5D0}\u{5D1} cd</tspan></text>",
+            vec![Some(Ltr), Some(Rtl)],
+        ),
+        // A paragraph without a strong character runs left to right.
+        (
+            "<text unicode-bidi=\"plaintext\"><tspan x=\"10\" y=\"20\">\u{5D0}\u{5D1}</tspan><tspan x=\"10\" dy=\"40\">1-2</tspan></text>",
+            vec![Some(Rtl), Some(Ltr)],
+        ),
+    ] {
+        let (d, w) = import_with_report(&svg(body)).unwrap();
+        let t = only_text(&d);
+        let got: Vec<_> = (0..t.paragraph_styles().len()).map(|i| t.para_at(i).direction).collect();
+        assert_eq!(got, want, "{body}");
+        assert!(w.is_empty(), "{body}: {w:?}");
+    }
+    // Absolutely placed characters sit on their x in the direction of their own paragraph.
+    let (d, _) = import_with_report(&svg(
+        r#"<text unicode-bidi="plaintext" font-size="20"><tspan x="200" y="40">&#x5D0;&#x5D1;</tspan><tspan x="100" y="80">ab &#x5D0;&#x5D1; cd</tspan><tspan x="300">ef</tspan></text>"#,
+    ))
+    .unwrap();
+    let t = only_text(&d);
+    assert_eq!((t.para_at(0).direction, t.para_at(1).direction), (Some(Rtl), Some(Ltr)));
+    let lay = layout(FontDb::global(), t);
+    for (byte, x) in [(5, 100.0), (15, 300.0)] {
+        let g = lay.glyphs.iter().find(|g| g.byte == byte).unwrap_or_else(|| panic!("no glyph at {byte}"));
+        let left = (t.xf * g.origin).x;
+        assert!(close(left, x, 0.05), "the character at {byte} starts at {left}, not {x}");
+    }
+    // An override on the `<text>` keeps its paragraph direction.
+    let (d, w) = import_with_report(&svg(r#"<text y="40" direction="rtl" unicode-bidi="bidi-override">ab</text>"#)).unwrap();
+    assert_eq!(only_text(&d).para_at(0).direction, Some(Rtl));
+    assert!(w.len() == 1 && w[0].contains("override on the text"), "{w:?}");
 }
 
 /// A line starts at its own x, also when it is anchored as the line before it is and when another
