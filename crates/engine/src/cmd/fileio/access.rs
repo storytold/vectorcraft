@@ -217,6 +217,31 @@ pub(crate) fn create_dir(path: &str) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))
 }
 
+/// Make folder `path` when there is none there yet → `false` when something is already at `path`
+/// (its parent must exist). Made in one step, so two exports never share a folder.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn create_new_dir(path: &str) -> Result<bool> {
+    may_write(path)?;
+    match std::fs::create_dir(path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(e) => Err(EngineError::Other(format!("{path}: {e}"))),
+    }
+}
+
+/// Remove the file or empty folder at `path` that the request being served made itself, undoing
+/// an export that failed part way. Best effort: what can't be removed stays, and a folder that is
+/// not empty is never removed, so nothing else is lost.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn remove_made(path: &str) {
+    if may_write(path).is_err() {
+        return;
+    }
+    // Ignored: what is left of a failed export is only clutter, and the export's own error is
+    // the one to report.
+    let _ = std::fs::remove_file(path).or_else(|_| std::fs::remove_dir(path));
+}
+
 /// Write `bytes` to a new file at `path`. A file already at `path` is an error and is never
 /// replaced. When the write fails part way, the file it started is removed.
 #[cfg(not(target_arch = "wasm32"))]
@@ -535,6 +560,15 @@ pub fn write_file_with(path: &str, _: &mut dyn FnMut(&mut dyn std::io::Write) ->
 pub(crate) fn create_dir(path: &str) -> Result<()> {
     Err(no_fs(path))
 }
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn create_new_dir(path: &str) -> Result<bool> {
+    Err(no_fs(path))
+}
+
+/// Nothing to remove: the web build makes no files.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn remove_made(_: &str) {}
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn write_new_file(path: &str, _: &[u8]) -> Result<()> {

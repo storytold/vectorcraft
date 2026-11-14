@@ -153,3 +153,45 @@ fn save_for_office_and_export_selection_say_when_an_image_could_not_be_decoded()
     assert_eq!(app.ui.status, format!("Saved /x/cut.png {NOTE}"));
     assert_eq!(written.borrow().len(), 3, "the files are still written");
 }
+
+#[test]
+fn export_for_icon_composer_writes_a_file_per_layer_into_a_new_folder() {
+    let (mut app, _) = app(2);
+    let item = crate::menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("document.exportForIconComposer")).unwrap();
+    assert_eq!((item.path.join(" › "), item.label.as_str(), item.enabled), ("File › Export".into(), "Export for Icon Composer…", true));
+    app.run("document.exportForIconComposer", json!({})).unwrap();
+    assert_eq!(kind(&app), Some(icon_composer::KIND));
+    frame(&mut app);
+    set(&mut app, "format", json!("png"));
+    set(&mut app, "__boards", json!("range"));
+    frame(&mut app);
+    // A range must be typed, and a folder chosen.
+    assert!(confirm(&mut app).is_err());
+    set(&mut app, "range", json!("1"));
+    set(&mut app, "folder", json!(""));
+    assert!(confirm(&mut app).is_err());
+    /// Removes the export folder when the test ends, failing or not.
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    // Made here, never one already there, so the cleanup removes only this test's files.
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let dir = (0..1000)
+        .map(|i| std::env::temp_dir().join(format!("vc-ui-iconcomposer-{}-{nanos}-{i}", std::process::id())))
+        .find(|d| std::fs::create_dir(d).is_ok())
+        .map(Cleanup)
+        .unwrap();
+    set(&mut app, "folder", json!(dir.0.to_string_lossy()));
+    let r = confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    let files = r["files"].as_array().unwrap();
+    assert_eq!(files.len(), 1, "{r}");
+    let file = files[0].as_str().unwrap();
+    assert!(file.ends_with("/Artboard 1/1.layer 1.png"), "{file}");
+    let img = image::open(file).unwrap().to_rgba8();
+    assert_eq!(img.dimensions(), (60, 40), "the artboard's size");
+    assert!(app.ui.status.starts_with("Exported 1 file to "), "{}", app.ui.status);
+}

@@ -967,6 +967,9 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         // Save for Office Documents…: its dialog; with options, pick the file (or write `path`).
         "document.exportForOffice" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::office_export::open(app),
         "document.exportForOffice" => io::save_command_output(app, id, "png", p.clone()).map(|path| json!({ "path": path })),
+        // Export for Icon Composer…: its dialog; with params, the export (the web downloads a ZIP).
+        "document.exportForIconComposer" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::icon_composer::open(app),
+        "document.exportForIconComposer" => io::export_for_icon_composer(app, p.clone()),
         "ui.dxfOptionsDialog" if app.session.active().is_none() => Err("no document".into()),
         "ui.dxfOptionsDialog" => {
             crate::dialogs::dxf_options::open(app, p);
