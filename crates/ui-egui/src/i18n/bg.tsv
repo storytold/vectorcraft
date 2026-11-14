@@ -1287,6 +1287,7 @@ font-technology	Variable	Променливи
 	Format	Формат
 	Format Options	Опции за формат
 	Format Settings	Настройки на формата
+	Format Settings…	Настройки на формата…
 	Format:	Формат:
 	Formats:	Формати:
 	Fractional Widths	Дробни ширини
@@ -1633,6 +1634,7 @@ font-technology	Variable	Променливи
 	Images:	Изображения:
 	Import Keyboard Shortcuts…	Импортиране на клавишни комбинации…
 	Import PDF	Импортиране на PDF
+	Import PDF pages as links	Импортиране на страниците на PDF като връзки
 	Import PDF Presets	Импортиране на PDF предварителни настройки
 	Import Perspective Grid Presets	Импортиране на предварителни настройки за перспективна мрежа
 	Import Print Presets	Импортиране на предварителни настройки за печат
@@ -3351,6 +3353,18 @@ digits	Malayalam	Малаялам
 	Smart Guides (View → Smart Guides)	Интелигентни водачи (Изглед → Интелигентни водачи)
 	Smart Guides (⌘U)	Интелигентни водачи (⌘U)
 	Smart Punctuation…	Интелигентна пунктуация…
+	Smart Punctuation	Интелигентна пунктуация
+	ff, fi, ffi Ligatures	Лигатури ff, fi, ffi
+	ff, fl, ffl Ligatures	Лигатури ff, fl, ffl
+	Smart Quotes	Интелигентни кавички
+	Smart Spaces	Интелигентни интервали
+	En, Em Dashes	Средни и дълги тирета
+	Ellipses	Многоточия
+	Expert Fractions	Експертни дроби
+	Replace In	Замяна в
+	Selected Text Only	Само избрания текст
+	Entire Document	Целия документ
+	Report Results	Отчет за резултатите
 	Smooth	Гладък
 	Corner	Ъгъл
 	Relative	Относителен
@@ -3381,6 +3395,7 @@ digits	Malayalam	Малаялам
 	Solid	Плътен
 	Sort by Kind	Сортиране по вид
 	Sort by Name	Сортиране по име
+	Sort by Size	Сортиране по размер
 	Sort by Status	Сортиране по състояние
 	Source code on GitHub	Изходен код в GitHub
 	Source Sans 3	Source Sans 3
@@ -6899,3 +6914,6 @@ breakText	Glyphs	Глифи
 	Grommets	Капси
 	Grommet Inset	Отстъп на капсите от ръба
 	Diameter	Диаметър
+	Nest Shapes…	Подреждане на форми…
+	Nest Shapes	Подреждане на форми
+	Roll	Ролка
