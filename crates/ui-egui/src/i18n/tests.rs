@@ -2029,6 +2029,42 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
     }
 }
 
+/// `file.info`'s refusal of a value with control characters is two whole messages, one for the
+/// fields that take line breaks and one for the fields that don't, and each is translated in every
+/// complete-message language with the field's key kept as written.
+#[test]
+fn file_info_control_character_refusals_translate_in_every_complete_catalog() {
+    use serde_json::json;
+    let literals = message_literals_in(&["engine"]);
+    for key in ["{k} has control characters", "{k} has control characters or line breaks"] {
+        assert!(literals.contains(key), "the message scan doesn't find {key:?}");
+    }
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let refusals = [
+        (json!({"description": "a\u{7}b"}), "description", "has control characters"),
+        (json!({"copyrightNotice": "a\u{7}b"}), "copyrightNotice", "has control characters"),
+        (json!({"title": "a\nb"}), "title", "has control characters or line breaks"),
+        (json!({"author": "a\nb"}), "author", "has control characters or line breaks"),
+        (json!({"authorTitle": "a\rb"}), "authorTitle", "has control characters or line breaks"),
+        (json!({"copyrightUrl": "a\u{7}b"}), "copyrightUrl", "has control characters or line breaks"),
+        (json!({"keywords": ["ok", "a\tb"]}), "keywords", "has control characters or line breaks"),
+    ];
+    for (params, field, rule) in refusals {
+        let error = s.execute("file.info", &params).unwrap_err().to_string();
+        assert_eq!(error, format!("invalid parameters for `file.info`: {field} {rule}"));
+        for code in COMPLETE_MESSAGES {
+            let shown = message(Lang::from_code(code).expect("registered"), &error);
+            // Whole runs of Latin letters, so that Spanish's "control" is not read as English and
+            // Korean's `description에` still shows the key.
+            let words: Vec<&str> = shown.split(|c: char| !c.is_ascii_alphabetic()).collect();
+            let english = ["has", "characters", "or", "line", "breaks"];
+            assert!(words.iter().all(|w| !english.contains(w)), "{code}: {shown}");
+            assert!(words.contains(&field), "{code}: {shown}");
+        }
+    }
+}
+
 #[test]
 fn package_status_message_templates_parse() {
     let c = Catalog::parse(concat!(

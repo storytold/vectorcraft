@@ -9320,7 +9320,8 @@ swatch	Yellow Green	Verde-amarelado
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	os arquivos {kind} não têm transparência, e o arquivo teria {what}: achate-a primeiro (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	as imagens {kind} não podem ser abertas (veja document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` não é uma das opções
-@msg	{k} has control characters{_1}	{k} tem caracteres de controle{_1}
+@msg	{k} has control characters	{k} tem caracteres de controle
+@msg	{k} has control characters or line breaks	{k} tem caracteres de controle ou quebras de linha
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} é longo demais (no máximo {MAX_TEXT} caracteres)
 @msg	{k} must be > 0	{k} deve ser > 0
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} deve ser um número (pt) ou um comprimento como "210 mm"

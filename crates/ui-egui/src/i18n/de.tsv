@@ -8844,7 +8844,8 @@ breakText	Glyphs	Glyphen
 @msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind}-Dateien haben keine Transparenz, und die Datei hätte {what}: Reduzieren Sie sie zuerst (object.flattenTransparency)
 @msg	{kind} images can't be opened (see document.formats)	{kind}-Bilder können nicht geöffnet werden (siehe document.formats)
 @msg	{k} `{v}` is not one of the choices	{k} `{v}` ist keine der Auswahlmöglichkeiten
-@msg	{k} has control characters{_1}	{k} enthält Steuerzeichen{_1}
+@msg	{k} has control characters	{k} enthält Steuerzeichen
+@msg	{k} has control characters or line breaks	{k} enthält Steuerzeichen oder Zeilenumbrüche
 @msg	{k} is too long (at most {MAX_TEXT} characters)	{k} ist zu lang (höchstens {MAX_TEXT} Zeichen)
 @msg	{k} must be > 0	{k} muss > 0 sein
 @msg	{k} must be a number (pt) or a length such as "210 mm"	{k} muss eine Zahl (pt) oder eine Länge wie „210 mm“ sein

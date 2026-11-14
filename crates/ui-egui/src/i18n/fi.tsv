@@ -6012,6 +6012,8 @@ mark-style	Japanese	Japanilainen
 	Save Variable Library…	Tallenna muuttujakirjasto…
 @msg	a variable library holds text variables, and the document has none	muuttujakirjasto sisältää tekstimuuttujia, eikä asiakirjassa ole yhtään
 @msg	variable `{name}` can't be saved in a variable library: rename it to start with a letter or `_`, without spaces or symbols other than `-`, `_` and `.`	muuttujaa `{name}` ei voi tallentaa muuttujakirjastoon: nimeä se uudelleen niin, että se alkaa kirjaimella tai merkillä `_` eikä sisällä välilyöntejä tai muita symboleja kuin `-`, `_` ja `.`
+@msg	{k} has control characters	{k} sisältää ohjausmerkkejä
+@msg	{k} has control characters or line breaks	{k} sisältää ohjausmerkkejä tai rivinvaihtoja
 @msg	data set `{name}` holds a control character, which a variable library can't hold	tietojoukko `{name}` sisältää ohjausmerkin, jota muuttujakirjasto ei voi sisältää
 @msg	data set `{name}` starts or ends with white space, which a variable library can't hold	tietojoukko `{name}` alkaa tai päättyy tyhjeeseen, jota muuttujakirjasto ei voi sisältää
 	Filter	Suodata
