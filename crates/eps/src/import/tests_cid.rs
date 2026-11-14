@@ -136,6 +136,31 @@ fn codes_map_by_their_codespace_with_notdef_fallbacks() {
     width("<01>", 30.0);
 }
 
+/// `cshow` over a CMap runs its procedure once for each code, whatever its length, with the
+/// code's last byte and its width (PLRM 3rd ed., `cshow`).
+#[test]
+fn cshow_runs_once_for_each_cmap_code() {
+    let fonts = String::from_utf8(cid_font(true)).unwrap() + CMAP;
+    let check = |cond: &str| check(&format!("{fonts} /TestFont 50 selectfont {cond}"));
+    check("[ {pop pop} <418001> cshow ] dup length 2 eq exch aload pop 1 eq exch 65 eq and and");
+    check("0 {pop exch pop add} <418001> cshow 55 sub abs 0.01 lt");
+    check(
+        "{pop pop pop currentfont /CIDFontName get /seen exch def rootfont /FontName get /root exch def} <41> cshow seen /TestCID eq root /TestFont eq and",
+    );
+    // With the CIDFont current, the byte the procedure was given shows the glyph of its code's
+    // CID: <8001>'s last byte draws CID 2, not code 01's CID 1. Another string is an error.
+    let shown = "{pop pop ( ) dup 0 4 -1 roll put show} <418001> cshow";
+    check(&format!("gsave nulldevice 10 20 moveto {shown} currentpoint grestore pop 65 sub abs 0.01 lt"));
+    check("gsave nulldevice 10 20 moveto {{pop pop pop (B) show} <41> cshow} stopped grestore");
+    let r = import(&program(true, &format!("/TestFont 50 selectfont 10 20 moveto {shown}"))).unwrap();
+    let want = import(&program(true, "/TestFont 50 selectfont 10 20 moveto <418001> show")).unwrap();
+    let (p, q) = (paths(&r), paths(&want));
+    assert_eq!(p.len(), 2, "{p:?}");
+    for (a, b) in p.iter().zip(&q) {
+        assert!((a.x0 - b.x0).abs() < 0.01 && (a.width() - b.width()).abs() < 0.01 && (a.height() - b.height()).abs() < 0.01, "{p:?} {q:?}");
+    }
+}
+
 /// `usecmap` brings in another CMap's ranges and mappings; the CMap's own come after them.
 #[test]
 fn usecmap_takes_the_parents_mappings() {
@@ -375,6 +400,30 @@ fn cmaps_map_codes_to_base_fonts_codes_and_glyph_names() {
         })
         .collect();
     assert_eq!(text, "ABC");
+    // A `cshow` procedure that shows the byte it was given, in the base font current while it
+    // runs, shows the character the code maps to, as `show` does.
+    let body = format!(
+        "{plain}{BF_CMAP}/BF /TestBF-H [/Plain42 /Helvetica] composefont 20 scalefont setfont 10 20 moveto \
+         {{pop pop ( ) dup 0 4 -1 roll put show}} <001000110012> cshow"
+    );
+    let r = super::tests::read(&body);
+    let text: String = all(&r.document)
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Text(t) => Some(t.plain_text()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(text, "ABC");
+    let body = format!(
+        "{plain}{BF_CMAP}/BF /TestBF-H [/Plain42 /Helvetica] composefont 50 scalefont setfont 10 20 moveto \
+         {{pop pop ( ) dup 0 4 -1 roll put show}} <000100020003> cshow"
+    );
+    let q = paths(&super::tests::read(&body));
+    assert_eq!(q.len(), 3, "{q:?}");
+    for (a, b) in p.iter().zip(&q) {
+        assert!((a.x0 - b.x0).abs() < 0.01 && (a.width() - b.width()).abs() < 0.01, "{p:?} {q:?}");
+    }
 }
 
 /// A CID-keyed font over a predefined Unicode CMap the file doesn't define, its CIDFont only

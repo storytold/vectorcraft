@@ -70,6 +70,8 @@ pub(super) struct CidChar {
     /// The base-font code or glyph name a `bfchar` or `bfrange` mapping gives it, instead of a
     /// CID.
     pub base: Option<Base>,
+    /// The last byte of its code.
+    pub last: u8,
 }
 
 impl CMap {
@@ -136,6 +138,7 @@ impl CMap {
             };
             let n = n.clamp(1, rest.len());
             let c = code(rest.get(..n).unwrap_or_default());
+            let last = rest.get(..n).and_then(<[u8]>::last).copied().unwrap_or(0);
             let find = |maps: &[(usize, u32, u32, u32, usize)], work: &mut u64| {
                 let at = maps.iter().position(|m| m.0 == n && (m.1..=m.2).contains(&c));
                 *work += at.map_or(maps.len(), |k| k + 1) as u64;
@@ -146,12 +149,12 @@ impl CMap {
             work += at.map_or(self.bases.len(), |k| k + 1) as u64;
             let base = at.and_then(|k| self.bases.get(k)).and_then(|m| Some((m.4, base_of(&m.3, c - m.1)?)));
             out.push(match (matched.is_some(), find(&self.cids, &mut work), base) {
-                (true, Some((font, cid, _)), _) => CidChar { font, cid, notdef, base: None },
-                (true, None, Some((font, base))) => CidChar { font, cid: 0, notdef: None, base: Some(base) },
+                (true, Some((font, cid, _)), _) => CidChar { font, cid, notdef, base: None, last },
+                (true, None, Some((font, base))) => CidChar { font, cid: 0, notdef: None, base: Some(base), last },
                 // No character mapping: the notdef mapping's CID, else font 0's CID 0.
                 _ => match find(&self.notdefs, &mut work) {
-                    Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None, base: None },
-                    _ => CidChar { font: 0, cid: 0, notdef: None, base: None },
+                    Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None, base: None, last },
+                    _ => CidChar { font: 0, cid: 0, notdef: None, base: None, last },
                 },
             });
             i += n;
