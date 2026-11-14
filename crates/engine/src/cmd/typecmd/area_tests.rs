@@ -199,8 +199,11 @@ fn optical_margin_alignment_is_set_per_object_and_saved_only_when_on() {
     assert!(left(&s) < inside - 5.0, "{} {inside}", left(&s));
     assert_eq!(serde_json::to_value(text(&s)).unwrap()["opticalMarginAlignment"], true);
     // `on` sets it; without `on` it toggles.
+    // Setting the value the type already has: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
     assert_eq!(s.execute("type.opticalMarginAlignment", &json!({"on": true})).unwrap()["on"], true);
     assert!(text(&s).optical_margin);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
     assert_eq!(s.execute("type.opticalMarginAlignment", &json!({})).unwrap()["on"], false);
     assert!(!text(&s).optical_margin);
     assert_eq!(left(&s), inside);
@@ -247,6 +250,10 @@ fn system_layout_sets_the_document_and_every_text_object() {
     assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
     assert_eq!(serde_json::to_value(setup(&s)).unwrap()["systemLayout"], true);
     assert_eq!(serde_json::to_value(text(&s, id)).unwrap()["systemLayout"], true);
+    // Setting the value the document and its type already have: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("type.systemLayout", &json!({"on": true})).unwrap()["on"], true);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
     // New type inherits the document's setting.
     let made = s.execute("text.create", &json!({"x": 10, "y": 120, "text": "Z"})).unwrap()["id"].as_u64().unwrap();
     assert!(text(&s, made).system_layout);
@@ -305,6 +312,10 @@ fn fractional_widths_is_set_per_object_and_saved_only_when_off() {
     assert!(text(&s).fractional_widths);
     assert_eq!(s.execute("type.fractionalWidths", &json!({"on": false})).unwrap()["on"], false);
     assert!(!text(&s).fractional_widths);
+    // Setting the value the type already has: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("type.fractionalWidths", &json!({"on": false})).unwrap()["on"], false);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
     // One undo step.
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(text(&s).fractional_widths);
@@ -2277,8 +2288,17 @@ fn vertical_point_type_keeps_its_anchor_on_the_column_centre_line() {
     let tall = bounds(&s);
     assert!(tall.height() > tall.width(), "{tall:?}");
     assert!((tall.center().x - 100.0).abs() < 6.0, "the anchor stays on the column's centre line: {tall:?}");
+    // Vertical type set vertical again: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    s.execute("type.orientation.vertical", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
+    assert_eq!(bounds(&s), tall);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(bounds(&s), wide);
+    // Horizontal type set horizontal: no undo step either.
+    let n = s.doc().unwrap().history.undo.len();
+    s.execute("type.orientation.horizontal", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
 }
 
 #[test]

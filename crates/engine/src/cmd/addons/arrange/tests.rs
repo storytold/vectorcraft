@@ -394,6 +394,25 @@ fn randomize_opacity_takes_ids_and_leaves_the_rest() {
 }
 
 #[test]
+fn randomize_opacity_records_no_undo_step_when_no_opacity_changes() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    let b = rect(&mut s, 10.0, 0.0, 5.0, 5.0);
+    select(&mut s, &[a, b]);
+    let n = steps(&s);
+    // Every object already has the one opacity the range allows.
+    let r = s.execute("addon.arrange.randomizeOpacity", &json!({"min": 100, "max": 100})).unwrap();
+    assert_eq!(r["count"], json!(2));
+    assert_eq!(steps(&s), n);
+    assert_eq!((opacity(&s, a), opacity(&s, b)), (1.0, 1.0));
+    s.execute("addon.arrange.randomizeOpacity", &json!({"min": 40, "max": 40})).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    s.execute("addon.arrange.randomizeOpacity", &json!({"min": 40, "max": 40})).unwrap();
+    assert_eq!(steps(&s), n + 1, "the same opacities again");
+    assert_eq!((opacity(&s, a), opacity(&s, b)), (0.4, 0.4));
+}
+
+#[test]
 fn randomize_opacity_refuses_bad_params() {
     let mut s = session();
     let a = rect(&mut s, 0.0, 0.0, 20.0, 10.0);
