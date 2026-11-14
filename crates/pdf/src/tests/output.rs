@@ -161,6 +161,36 @@ fn spot_alternates_and_device_n_gradient_inks_are_written_as_the_document_holds_
     assert!(text.contains("/C0[0 0 0.75]/C1[0.75 0.04 0]"), "the stops' C75, K4 and 75% Gold are written as they are");
 }
 
+#[test]
+fn blend_steps_between_spot_gradients_with_process_plates_print_both_inks() {
+    let stop = |offset: f32, tint: f32, plates: Option<[f32; 4]>| {
+        let mut s = GradientStop::new(offset, Color::cmyk(0.0, 0.2, 0.8, 0.1).tinted(tint));
+        s.swatch = Some("Gold".into());
+        s.tint = tint;
+        s.plates = plates;
+        s
+    };
+    let gradient = |tint: f32, plates: Option<[f32; 4]>| {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![stop(0.0, tint, plates), stop(1.0, tint, plates)]))))
+    };
+    let step_pdf = |a: &Paint, b: &Paint| {
+        let mut d = doc(ColorMode::Cmyk, &[]);
+        d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+        let step = vectorcraft_doc::blend::lerp_paint(a, b, 0.5);
+        let l = d.layers[0].id;
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 30.0)), Appearance::basic(step, Paint::None, 0.0));
+        d.insert(Some(l), 0, n).unwrap();
+        String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned()
+    };
+    // The middle step prints 60% Gold over 30% Cyan, in one DeviceN shading of both inks.
+    let text = step_pdf(&gradient(0.2, Some([0.2, 0.0, 0.0, 0.0])), &gradient(1.0, Some([0.4, 0.0, 0.0, 0.0])));
+    assert!(text.contains("[/DeviceN[/Cyan/Gold]"), "{text}");
+    assert!(text.contains("/C0[0.3 0.6]/C1[0.3 0.6]"), "{text}");
+    // Without plates the step is a Separation shading of Gold alone.
+    let text = step_pdf(&gradient(0.2, None), &gradient(1.0, None));
+    assert!(!text.contains("/DeviceN") && text.contains("[/Separation/Gold/"), "{text}");
+}
+
 /// A spot swatch's Separation space with alternate C0 M20 Y80 K10 under `colorant` (a PDF name).
 fn gold_separation(colorant: &str) -> String {
     format!("[/Separation{colorant}/DeviceCMYK<</FunctionType 2/Domain[0 1]/Range[0 1 0 1 0 1 0 1]/C0[0 0 0 0]/C1[0 0.2 0.8 0.1]/N 1>>]")
