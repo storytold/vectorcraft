@@ -291,9 +291,16 @@ pub(super) fn draws_as(draft: &BrushDraft, settings: &PathBrush, bending: &HashM
                 && d.modes() == c.modes()
         }
         (DraftKind::Art { settings: Some(d), art: name, .. }, PathBrush::Art(s)) => {
-            drawn(d).iter().zip(drawn(s)).all(|(a, b)| close(*a, b))
-                && art_options(s).is_some()
-                && bending.get(name).is_some_and(|length| opens_live(d, *length) && opens_live(s, *length))
+            let (dd, ds) = (drawn(d), drawn(s));
+            art_options(s).is_some()
+                && bending.get(name).is_some_and(|length| {
+                    // The guides match as lengths and as fractions of the art's length, so they differ
+                    // neither on short art nor near the ends of long art.
+                    dd.iter().zip(ds).all(|(a, b)| close(*a, b))
+                        && [11, 12].iter().all(|&i| close(dd[i] / length, ds[i] / length))
+                        && opens_live(d, *length)
+                        && opens_live(s, *length)
+                })
         }
         _ => false,
     }

@@ -10650,6 +10650,10 @@ fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
     // The brush's guides leave art between them, and the path's, close to them, leave none.
     let (def, style) = ribbon_with(&[(10, "1"), (11, "20"), (12, "19.99")]);
     cases.push(("path guides close to the brush's that leave no art between them", def, style.replace("19.99 /", "20 /")));
+    // On art 0.01 long, a guide at 0.0035 is 35% of the way along it, and the brush's at 0.003 is 30%.
+    let (def, style) = ribbon_with(&[(10, "1"), (11, "0.003"), (12, "0.002")]);
+    let short = format!("%AI8_BeginBrushPattern\n(Ribbon art)\n0 A\n0 g\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 0.01, 4.0));
+    cases.push(("path guides elsewhere on short art", def.replace(&lopsided_art("Ribbon art"), &short), style.replace("0.003 /", "0.0035 /")));
     let mut wrong = vec![];
     for (why, def, style) in cases {
         let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
