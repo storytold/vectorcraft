@@ -184,6 +184,26 @@ fn rgb_cmyk_converts_each_gradient_stop() {
     }
 }
 
+/// Each point of a freeform gradient converts on its own, as gradient stops do.
+#[test]
+fn rgb_cmyk_converts_each_freeform_point() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let id = rect(&mut s, 10.0, 10.0, 50.0, 50.0, json!("#000000"));
+    let stops = json!([{"offset": 0, "color": Color::rgb(0.912_345, 0.1, 0.2)}, {"offset": 1, "color": Color::rgb(0.3, 0.4, 0.654_321)}]);
+    let points = json!([{"at": [20, 20], "color": Color::rgb(0.2, 0.876_543, 0.3)}, {"at": [50, 50], "color": Color::rgb(0.6, 0.111_111, 0.9)}]);
+    let gradient = json!({"kind": "freeform", "stops": stops, "freeform": {"points": points}});
+    s.execute("paint.setFill", &json!({"ids": [id.0], "gradient": gradient})).unwrap();
+    let points = |s: &Session| match fill_of(s, id) {
+        Paint::Gradient(g) => g.freeform.map(|f| f.points.iter().map(|p| p.color).collect::<Vec<_>>()).unwrap_or_default(),
+        p => panic!("not a gradient: {p:?}"),
+    };
+    let old = points(&s);
+    assert!(!old.is_empty(), "the freeform fill has points");
+    s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+    assert_eq!(points(&s), old.into_iter().map(to_cmyk).collect::<Vec<_>>());
+}
+
 /// A pattern's tile art converts, and the art filled with the pattern keeps it.
 #[test]
 fn rgb_cmyk_converts_a_pattern_tile() {
