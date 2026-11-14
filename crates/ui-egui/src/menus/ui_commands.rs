@@ -785,6 +785,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
     ),
     ("tool.select", "Select Tool", "", "{tool: id} (see tools)"),
     (
+        "tool.switchSelectionTools",
+        "Switch Selection Tools",
+        "",
+        "{} choose Direct Selection while Selection is active, otherwise choose Selection; this is a persistent explicit tool choice, as selecting the tool from the toolbar, and can be assigned a key in Keyboard Shortcuts with no default key. Normal tool deactivation finishes pending work; returns the actual active {tool}",
+    ),
+    (
         "tool.setOption",
         "Tool Option",
         "",
