@@ -30,7 +30,7 @@ use crate::group::{has_own_paint, paints};
 use crate::reshape::{as_art, dressed, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
-    has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
+    has_instance_row_raster, has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
 };
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
@@ -59,6 +59,7 @@ pub fn needs_bake(n: &Node) -> bool {
         || has_geometry(&n.appearance.effects)
         || n.projection().is_some()
         || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)))
+        || has_instance_row_raster(n)
         || n.children().is_some_and(|ch| ch.iter().any(|c| needs_bake(c)))
 }
 
@@ -266,9 +267,11 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     }
     // Type, images, symbol instances and live objects: reshaped through their outlines, and so are
     // type whose own fills or strokes have geometry effects and images whose own fills or strokes
-    // paint a shape ([`has_item_geometry`]). Type that Transform effects only move and copy stays
-    // type, moved to each place.
-    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n)) {
+    // paint a shape ([`has_item_geometry`]), and symbol instances whose active fill or stroke has a
+    // raster effect, which the fills and strokes of their art then carry
+    // ([`has_instance_row_raster`]). Type that Transform effects only move and copy stays type,
+    // moved to each place.
+    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n) || has_instance_row_raster(n)) {
         if let Some(m) = moved_type_group(n) {
             return Some(bake_pieces(d, m));
         }

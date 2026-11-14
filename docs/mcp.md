@@ -835,9 +835,13 @@ them sets what the graph stores. While Global Edit is on, a path directly in a s
 match (a graph's paths are matches only while the graph is isolated) has what changed on it stored for its series: the
 paint, weight, opacity and blend mode of the topmost visible fill and stroke, and the object's opacity and blend mode.
 `addon.arrange.randomizeOpacity` and `addon.arrange.sort` with `apply: "opacity"` store the object opacity, with the
-blend mode, of the frontmost path of a series whose opacity they change. A gradient is stored with its placement, and
-every path of the series takes that placement when the graph is drawn again. The graph does not store a stroke's
-dashes, caps, joins, arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
+blend mode, of the frontmost path of a series whose opacity they change. A gradient is stored with its placement relative
+to the box of the path it was stored from (a stroke's box is the path's bounds grown by half the weight), and every path
+of the series, the legend swatch included, takes it at the same place on its own box when the graph is drawn again, also
+after the data changes or the graph moves. The graph saves this as `fillUnitBox` and `strokeUnitBox` in its series
+paints. A gradient stored from a path with no width or no height is drawn at the place in the document where it was
+stored. So is a gradient a graph stored without these flags. The graph does not store a stroke's dashes, caps, joins,
+arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
 with the paint they had.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
@@ -1800,6 +1804,13 @@ commands fail and change nothing, and `appearance.removeItem` removes nothing. A
 the item last. A text `start` or `end` is past the end of the text. `object.slice.divide` refuses such a `rows` or
 `columns`, `recolor.reduce` keeps each color in its own row for such a `colors`, and `layer.setProps` refuses such a
 `color`. `object.setBounds` reads a `reference` past 8 as 8, as `object.transformEach` does.
+An index or place given as a value that is not a whole number of 0 or more, such as `"3"`, `2.5`, `-1` or `true`, is
+refused with `` `anchor` must be a whole number ``, naming the key: `anchor` of `path.setHandle`, `path.moveAnchor` and
+`text.setPathHandle`, `segment` of `path.insertAnchor`, `to` of `artboard.reorder`, `library.moveGroup` and
+`graphicStyle.move`, `subpath` of `path.appendAnchor`, `path.close` and `path.reverse`, and `artboard` of
+`document.rulerOrigin`, `document.setRulerOrigin` and `document.resetRulerOrigin`. A required one left out or null is
+reported as missing (`missing anchor`). Left out or null, `subpath` takes the command's default and `artboard` is 0.
+Nothing changes and no undo step is recorded.
 The blend, envelope and gradient mesh commands refuse a string or another value that is not a number with the same
 message, as in `` `steps` must be a number, not "8" ``, and change nothing: `steps`, `distance` and `value` in
 `object.blend.make` and `object.blend.options`; `bend`, `h`, `v`, `horizontalDistortion` and `verticalDistortion` in
@@ -4804,7 +4815,10 @@ type, with the image under it. A group's or layer's own fills and strokes become
 members are expanded too. A symbol instance whose topmost fill or topmost stroke is visible, has an opacity above 0
 and has a geometry effect becomes a group of its art: that fill's effects reshape the filled shapes of the art and that
 stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them (VectorCraft's own
-rule); the instance's other fills and strokes are dropped. The result is `{ids}`; when an image in the art can't be decoded, the images made from
+rule); the instance's other fills and strokes are dropped. A raster effect on that fill or stroke draws on the filled
+or stroked shapes of the art, and expanding makes it an image as for other objects; with no geometry effect, the
+instance stays an instance over a shadow or glow image, and a blur, feather or inner glow replaces it with the image.
+The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the
 [Expand objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html) help
