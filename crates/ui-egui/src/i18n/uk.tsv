@@ -699,6 +699,8 @@ font-technology	Variable	Варіативні
 	Crop Image	Обрізати зображення
 	Image Tools	Інструменти зображення
 	Remove Background…	Видалити фон…
+	Draw (Pencil)	Малювати (Олівець)
+	Place Image	Помістити зображення
 	Remove Background	Видалити фон
 	Background	Фон
 	Edge Color	Колір краю
@@ -2698,6 +2700,7 @@ mark-style	Japanese	Японський
 	Proportional Metrics	Пропорційні метрики
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
+	Tsume	Цуме
 	Character Direction	Напрямок символів
 	Digits	Цифри
 	Arabic	Арабські
@@ -4525,6 +4528,7 @@ axis	Both	Обидві
 @msg	`select` must be true or false	`select` має бути true або false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` і `maxAnchors` мають бути цілими числами
 @msg	`{key}` must be a number not below 0	`{key}` має бути числом, не меншим за 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` має бути чотирма числами, не меншими за 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` має бути [x, y, width, height]: чотири скінченні числа, ширина й висота невід’ємні
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` більше за `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	укажіть принаймні один із параметрів `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -5359,6 +5363,7 @@ axis	Both	Обидві
 	VectorCraft Title Bar on Every Desktop	Рядок заголовка VectorCraft на будь-якій стільниці
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Поки змінну середовища VECTORCRAFT_TITLEBAR задано, рядок заголовка вибирає вона.
 	System Title Bar takes precedence over this option while it is on.	Поки ввімкнено «Системний рядок заголовка», він має пріоритет над цим параметром.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Поки «Рядок заголовка VectorCraft на будь-якій стільниці» вимкнено, ця стільниця малює рядок заголовка вікна незалежно від того, чи ввімкнено цей параметр.
 	Value Axis	Вісь значень
 	On Left Side	Ліворуч
 	On Right Side	Праворуч
@@ -5995,8 +6000,8 @@ axis	Y Axis	Вісь Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	модуль експорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	поза групами може бути не більше {MAX_UNGROUPED} параметрів: задайте решті `group`
 @msg	can't encode the input	не вдається закодувати вхідні дані
-@msg	expected {"dataBase64"}	очікувалося {"dataBase64"}
-@msg	expected {"objects"}	очікувалося {"objects"}
+@msg	expected {{"dataBase64": "…"}}	очікувалося {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	очікувалося {{"objects": [...]}}
 @msg	export `{name}`: {e}	експорт модуля `{name}`: {e}
 @msg	extension {e} is listed twice	розширення {e} вказано двічі
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	розширення {e}: використовуйте 1-16 малих літер і цифр, без крапки
@@ -6060,11 +6065,11 @@ axis	Y Axis	Вісь Y
 @msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
 @msg	a read-only object was left out	пропущено об’єкт лише для читання
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {"id"} або в тому вигляді, у якому його передано
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
 @msg	a string	рядок
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	обведення має лише `paint`, `width`, `join`, `cap` і `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	обведення має мати вигляд {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ефект має мати вигляд {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обведення має мати вигляд {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ефект має мати вигляд {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ефект на заливці повертає лише `fills`
 @msg	an effect on a stroke returns only `strokes`	ефект на обведенні повертає лише `strokes`
 @msg	an object must be a JSON object	об’єкт має бути об’єктом JSON
@@ -6206,6 +6211,8 @@ axis	Y Axis	Вісь Y
 	Action Options…	Параметри дії…
 	Action Options	Параметри дії
 	Playback Options…	Параметри відтворення…
+	Button Mode	Режим кнопок
+	No actions.	Нема дій.
 	Insert Stop…	Вставити зупинку…
 	Insert Stop	Вставити зупинку
 	Record Stop	Записати зупинку
