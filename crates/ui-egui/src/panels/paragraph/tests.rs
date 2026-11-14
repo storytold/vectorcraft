@@ -678,6 +678,50 @@ fn convert_to_text_keeps_the_caret_by_its_character_in_threaded_type() {
     assert_eq!(super::super::character::text_editing(&app).map(|(id, _, _)| id), Some(NodeId(a)));
 }
 
+/// With the Selection tool, Convert to Text takes the same story as Apply Numbers: the numbers
+/// of every frame of the selected story, its locked and hidden frames included, become characters
+/// of the text in one undo step, and other type keeps its list.
+#[test]
+fn selection_tool_convert_to_text_takes_every_frame_of_the_story() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+    let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("text.setFormat", json!({"ids": [other], "list": "bullet"})).unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let frame = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (t.plain_text(), (0..t.paragraph_count()).map(|i| t.para_at(i).list.is_some()).collect::<Vec<_>>()),
+        _ => panic!("not text"),
+    };
+    let undo_steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    app.run("type.applyNumbers", json!({})).unwrap();
+    for id in [a, b, c] {
+        let (_, lists) = frame(&app, id);
+        assert!(!lists.is_empty() && lists.iter().all(|l| *l), "Apply Numbers numbers frame {id}");
+    }
+    let before = frame(&app, c);
+
+    let steps = undo_steps(&app);
+    app.run("type.convertListToText", json!({})).unwrap();
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in [a, b, c] {
+        let (plain, lists) = frame(&app, id);
+        assert!(lists.iter().all(|l| !*l), "frame {id} leaves the list");
+        assert!(plain.contains(".\tThe quick"), "frame {id} holds its numbers as text: {plain:?}");
+    }
+    assert_eq!(frame(&app, other), ("Other".to_string(), vec![true]), "other type keeps its list");
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(frame(&app, c), before, "undo restores the hidden frame");
+}
+
 /// Reset Panel turns Hyphenate and Roman Hanging Punctuation off and sets the Hyphenation and
 /// Justification options back to their defaults in every paragraph it acts on, so the paragraphs
 /// save neither.

@@ -61,6 +61,7 @@ pub mod range;
 pub mod rastersettings;
 mod reach;
 pub mod recolor;
+pub mod resample;
 pub mod selection;
 pub mod separated;
 pub mod setup;
