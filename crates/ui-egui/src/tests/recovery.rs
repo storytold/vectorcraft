@@ -414,6 +414,88 @@ fn a_copy_that_fails_in_a_host_store_names_the_document() {
     }
 }
 
+/// Services that write recovery copies on the background worker.
+fn on_the_worker() -> Services {
+    Services { write_shared: Some(Arc::new(|_: &str, _: &[u8]| Ok(()))), ..Default::default() }
+}
+
+/// A copy that finishes after a newer message (a restore's, with its notes) was shown is still
+/// written, and the newer message and its notes stay in the status bar.
+#[test]
+fn a_copy_that_finishes_later_keeps_a_newer_status_and_its_notes() {
+    let store = Arc::new(MemoryStore::default());
+    let mut app = app_with(&store, on_the_worker());
+    recovery::tick(&mut app, 0.0);
+    assert_eq!(recovery::tick(&mut app, 120.0), 1);
+    assert_eq!(app.background.jobs.len(), 1, "on the worker");
+    let newer = "Restored 2 documents with 2 notes: one".to_string();
+    crate::io::show_with_notes(&mut app, newer.clone(), vec!["one".into(), "two".into()]);
+    background::wait_all(&mut app);
+    assert_eq!(copies(&store), 1);
+    assert!(app.session.doc().unwrap().recovery.is_some());
+    assert_eq!(app.ui.status, newer);
+    assert_eq!(app.ui.status_notes, Some((newer, vec!["one".into(), "two".into()])));
+}
+
+/// Of two copies started in one round, the first one to finish leaves the second one's
+/// "Saving…" line, and the second one reports.
+#[test]
+fn a_copy_that_finishes_leaves_the_line_of_a_copy_started_after_it() {
+    let store = Arc::new(MemoryStore::default());
+    let mut app = app_with(&store, on_the_worker());
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    recovery::tick(&mut app, 0.0);
+    assert_eq!(recovery::tick(&mut app, 120.0), 2);
+    let second = app.ui.status.clone();
+    let Some(title) = second.strip_prefix("Saving recovery data for ").and_then(|s| s.strip_suffix('…')) else {
+        panic!("{second}");
+    };
+    let title = title.to_string();
+    background::wait_until(&mut app, |app| app.background.jobs.len() == 1);
+    assert_eq!(app.ui.status, second);
+    background::wait_all(&mut app);
+    assert_eq!(copies(&store), 2);
+    assert_eq!(app.ui.status, format!("Saved recovery data for {title}"));
+}
+
+/// A copy that fails after a newer message was shown leaves that message in the status bar, in a
+/// store the host installed and in a recovery folder; the folder is still recorded.
+#[test]
+fn a_copy_that_fails_later_keeps_a_newer_status() {
+    let store: Arc<dyn RecoveryStore> = Arc::new(Refusing(MemoryStore::default()));
+    let mut app = VectorcraftApp::new(Session::new(), Services { recovery_store: Some(store), ..on_the_worker() });
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 20})).unwrap();
+    app.session.prefs.autosave_interval = 2;
+    recovery::tick(&mut app, 0.0);
+    assert_eq!(recovery::tick(&mut app, 120.0), 1);
+    app.status("Newer");
+    background::wait_all(&mut app);
+    assert_eq!(app.ui.status, "Newer");
+
+    let dir = scratch("later");
+    let folder = dir.join("recovery");
+    let shown = folder.to_string_lossy().into_owned();
+    let mut app = app_in_folder(&shown, on_the_worker());
+    assert_eq!(recovery::tick(&mut app, 120.0), 1);
+    background::wait_all(&mut app);
+    // A folder with a file in it takes the copy's place, so the next copy can't be written.
+    let name = app.session.doc().unwrap().recovery.as_ref().unwrap().file.clone();
+    let copy = folder.join(format!("{name}.vectorcraft"));
+    std::fs::remove_file(&copy).unwrap();
+    std::fs::create_dir(&copy).unwrap();
+    std::fs::write(copy.join("in-the-way"), b"").unwrap();
+    app.run("shape.ellipse", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap();
+    assert_eq!(recovery::tick(&mut app, 240.0), 1);
+    app.status("Newer");
+    background::wait_all(&mut app);
+    assert_eq!(app.ui.status, "Newer");
+    assert_eq!(app.recovery.named, std::slice::from_ref(&shown));
+    drop(app);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Issue #367: a tab whose timers were paused (in the background) long enough for another tab to
 /// take it for gone and discard its copy writes the copy again on its first heartbeat after it
 /// resumes, even with the timer off (the copy was written by hand).
