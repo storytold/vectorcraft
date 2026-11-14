@@ -999,6 +999,8 @@ struct Mapped {
     cid: Option<(u32, Option<u32>)>,
     outer: Affine,
     vertical: bool,
+    /// The value of the character's code in the shown string (what `kshow` gives its procedure).
+    value: u32,
 }
 
 /// Type in a CIDFont only named, over a predefined CMap ([`Interp::named_cid_type`]): its codes
@@ -1097,7 +1099,8 @@ impl Interp<'_> {
             if let Some(Obj::Dict(d)) = index.and_then(|i| fonts.get(i as usize))
                 && font_type(&d.borrow()) != Some(0.0)
             {
-                out.push(Mapped { font: d.clone(), pick, code, name: None, cid: None, outer, vertical: false });
+                let value = u32::from(pick) * 256 + u32::from(code);
+                out.push(Mapped { font: d.clone(), pick, code, name: None, cid: None, outer, vertical: false, value });
             }
         }
         Ok(Some(out))
@@ -1124,21 +1127,28 @@ impl Interp<'_> {
             .filter_map(|c| match (fonts.get(c.font), c.base) {
                 // A base font's code, or its glyph name (at the code its encoding gives it, if any).
                 (Some(Obj::Dict(d)), Some(Base::Code(code))) => {
-                    Some(Mapped { font: d.clone(), pick: 0, code, name: None, cid: None, outer, vertical })
+                    Some(Mapped { font: d.clone(), pick: 0, code, name: None, cid: None, outer, vertical, value: c.value })
                 }
                 (Some(Obj::Dict(d)), Some(Base::Name(name))) => {
                     let code = encoded(&d.borrow(), &name);
                     let name = code.is_none().then_some(name);
-                    Some(Mapped { font: d.clone(), pick: 0, code: code.unwrap_or(0), name, cid: None, outer, vertical })
+                    Some(Mapped { font: d.clone(), pick: 0, code: code.unwrap_or(0), name, cid: None, outer, vertical, value: c.value })
                 }
                 // A code without a mapping in a base font (not a CIDFont): its code 0, the
                 // `.notdef` glyph CID 0 stands for in a CIDFont.
                 (Some(Obj::Dict(d)), None) if !d.borrow().contains_key(&Key::name("CIDFontType")) => {
-                    Some(Mapped { font: d.clone(), pick: 0, code: 0, name: None, cid: None, outer, vertical })
+                    Some(Mapped { font: d.clone(), pick: 0, code: 0, name: None, cid: None, outer, vertical, value: c.value })
                 }
-                (Some(Obj::Dict(d)), None) => {
-                    Some(Mapped { font: d.clone(), pick: 0, code: (c.cid & 0xff) as u8, name: None, cid: Some((c.cid, c.notdef)), outer, vertical })
-                }
+                (Some(Obj::Dict(d)), None) => Some(Mapped {
+                    font: d.clone(),
+                    pick: 0,
+                    code: (c.cid & 0xff) as u8,
+                    name: None,
+                    cid: Some((c.cid, c.notdef)),
+                    outer,
+                    vertical,
+                    value: c.value,
+                }),
                 _ => None,
             })
             .collect())
@@ -1346,6 +1356,12 @@ impl Interp<'_> {
     fn show_composite(&mut self, glyphs: &[Mapped], spacing: &Spacing) -> Res {
         let start = self.out.drawn.len();
         let mut text = String::new();
+        let kern: Vec<u32> = match spacing {
+            Spacing::Kern(_) => glyphs.iter().map(|g| g.value).collect(),
+            _ => Vec::new(),
+        };
+        // Where in the objects drawn each run of `kshow`'s procedure put its art.
+        let mut kerned = Vec::new();
         for (i, g) in glyphs.iter().enumerate() {
             let at = self.user_point()?;
             let w = self.composite_glyph(g, at, Draw::Fill)?;
@@ -1353,6 +1369,12 @@ impl Interp<'_> {
             // times 256 plus its code (PLRM 3rd ed., `widthshow` in chapter 8).
             let d = spacing.advance(i, i64::from(g.pick) * 256 + i64::from(g.code), w);
             self.g.cur = Some(self.xf() * (at + d));
+            // `kshow`'s procedure runs between each two characters with the values of their codes.
+            let before = self.out.drawn.len();
+            self.kern(spacing, &kern, i, at + d)?;
+            if self.out.drawn.len() > before {
+                kerned.push(before..self.out.drawn.len());
+            }
             // A CID stands for no character (its code is only the CID's low byte).
             let c = if g.cid.is_some() { '\u{2022}' } else { g.name.as_deref().map_or_else(|| code_char(&g.font.borrow(), g.code), glyph_char) };
             if c != '\u{2022}' {
@@ -1364,7 +1386,13 @@ impl Interp<'_> {
         {
             text = name.to_string();
         }
+        // What `kshow`'s procedure draws goes after the type, outside its group.
+        let mut art = Vec::new();
+        for run in kerned.into_iter().rev() {
+            art.splice(0..0, self.out.drawn.drain(run));
+        }
         self.group_glyphs(start, &text);
+        self.out.drawn.extend(art);
         Ok(())
     }
 

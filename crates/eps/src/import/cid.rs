@@ -70,6 +70,8 @@ pub(super) struct CidChar {
     /// The base-font code or glyph name a `bfchar` or `bfrange` mapping gives it, instead of a
     /// CID.
     pub base: Option<Base>,
+    /// The value of its code (`<8001>` is 32769).
+    pub value: u32,
 }
 
 impl CMap {
@@ -146,12 +148,12 @@ impl CMap {
             work += at.map_or(self.bases.len(), |k| k + 1) as u64;
             let base = at.and_then(|k| self.bases.get(k)).and_then(|m| Some((m.4, base_of(&m.3, c - m.1)?)));
             out.push(match (matched.is_some(), find(&self.cids, &mut work), base) {
-                (true, Some((font, cid, _)), _) => CidChar { font, cid, notdef, base: None },
-                (true, None, Some((font, base))) => CidChar { font, cid: 0, notdef: None, base: Some(base) },
+                (true, Some((font, cid, _)), _) => CidChar { font, cid, notdef, base: None, value: c },
+                (true, None, Some((font, base))) => CidChar { font, cid: 0, notdef: None, base: Some(base), value: c },
                 // No character mapping: the notdef mapping's CID, else font 0's CID 0.
                 _ => match find(&self.notdefs, &mut work) {
-                    Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None, base: None },
-                    _ => CidChar { font: 0, cid: 0, notdef: None, base: None },
+                    Some((font, _, base)) if matched.is_some() => CidChar { font, cid: base, notdef: None, base: None, value: c },
+                    _ => CidChar { font: 0, cid: 0, notdef: None, base: None, value: c },
                 },
             });
             i += n;
