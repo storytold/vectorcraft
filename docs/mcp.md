@@ -622,9 +622,13 @@ RGB fields in percent, as a double-click right of an RGB field does, and `false`
 and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
-shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel}`, and both settings are kept with
-the preferences.
+shows the wheel again. `"opacity": true` checks Show Opacity, as the panel menu does: a row under the wheel or the
+box with a slider and a percent field sets the opacity of the fill or stroke row (`paint.setFill {opacity}`), the
+selected gradient stop or the selected freeform point (the first stop or point when none is selected), and `false`
+hides the row. The row is gray with nothing selected, for an object selected in a symbol instance, and when the fill
+or stroke row it would set is on type characters or missing. Keys left out keep their values.
+Params that are not an object, another key or a value off the list return an error and change nothing. The command
+returns `{view, channel, opacity}`, and the settings are kept with the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop
@@ -756,7 +760,12 @@ Cmd+Alt+/ runs `appearance.addStroke` (`press_key {key: "/", mods: {cmd: true, a
 `item` to edit one of them; `run_command appearance.setActiveItem {"index": n}` makes that row the target of later
 calls that omit `item` (as clicking the row in the Appearance panel does) until the selection changes; the proxy of
 its kind (`paint.proxies`) and the Gradient tool's annotator then show that row.
-`inspect_document` reports it as `paint.appearanceItem`. Live effects take the same `item` to apply to one fill or
+`inspect_document` reports it as `paint.appearanceItem`. `paint.setFill` and `paint.setStroke` also take `opacity`
+(0 to 100, a percentage as in `transparency.set`), which sets the opacity of the fill or stroke row they paint, with
+or without a new paint, as one undo step. An opacity that no target takes is an error and also leaves the paint
+undone. `paint.proxies` answers it as `fillOpacity` and `strokeOpacity`, from the first selected object that has
+that row. It answers null with nothing selected, for an object selected in a symbol instance, and when only type
+characters (which have no opacity of their own) or objects without that row are selected. Live effects take the same `item` to apply to one fill or
 stroke instead of the whole object: `run_command effect.apply {"effect": "path.offsetPath", "item": 0}`, and
 `effect.remove`, `effect.setParams` (`visible` toggles one) and `effect.duplicate` address that item's effects;
 `apply_effect` uses the active item. `effect.list` reports each object's item effects under `applied[].items`.

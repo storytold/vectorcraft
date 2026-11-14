@@ -333,6 +333,25 @@ fn an_item_opacity_on_a_series_mark_survives_regeneration() {
     assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), None));
 }
 
+/// `paint.setFill {opacity}` and `paint.setStroke {opacity}` on one series mark are kept by the graph as the transparency
+/// commands' item opacity is: every path of that series has them after the graph is drawn again.
+#[test]
+fn a_paint_opacity_on_a_series_mark_survives_regeneration() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = graph(&mut s, "column");
+    let bar = series(s.doc().unwrap().doc.node(id).unwrap(), 0).children().unwrap()[0].id;
+    s.execute("paint.setFill", &json!({"ids": [bar.0], "opacity": 40})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [bar.0], "color": "#ff0000", "opacity": 60})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), Some(0.6)));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let marks = series(&n, 0).children().unwrap().to_vec();
+    let opacities: Vec<(f32, f32)> = marks.iter().map(|m| (m.appearance.fill().unwrap().opacity, m.appearance.stroke().unwrap().opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == (0.4, 0.6)), "{opacities:?}");
+}
+
 /// Clear Appearance and Reduce to Basic Appearance on a series mark take its fill and stroke opacity away, and the
 /// graph keeps none, so the series stays opaque when it is drawn again.
 #[test]

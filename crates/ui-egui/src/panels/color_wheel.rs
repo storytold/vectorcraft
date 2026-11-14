@@ -11,6 +11,13 @@
 //! channel strip at its right, for the channel picked under Box Channel (Hue, Saturation,
 //! Brightness, Red, Green or Blue). The field shows the other two components on the Color
 //! Picker's axes. The view and the channel are kept with the preferences (`ui.colorWheel`).
+//!
+//! The panel menu's Show Opacity adds a row under the wheel or the box that sets the opacity of
+//! what the panel edits: the fill or stroke item (`paint.setFill {opacity}`), the selected
+//! gradient stop or the selected freeform point (the first stop or point when none is selected,
+//! as for a color pick). The row is gray with nothing selected, for an object selected in a symbol
+//! instance, and when the fill or stroke item it would set is on type characters or missing. The
+//! setting is kept with the preferences (`ui.colorWheel`).
 
 use egui::{Ui, UiBuilder, vec2};
 use serde::{Deserialize, Serialize};
@@ -20,7 +27,7 @@ use vectorcraft_color::{Color, Paint, hsb_to_rgb, rgb_to_hsb};
 use vectorcraft_doc::{ColorMode, NodeId};
 
 use super::color::{Target, apply, wheel_target};
-use super::{pstate, set_pstate};
+use super::{live_run, pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::dialogs::color_picker::Channel;
 use crate::widgets::{self, FieldAxis, Live, SliderValue, menu_item};
@@ -32,6 +39,8 @@ const MAX_WHEEL: f32 = 200.0;
 const STRIP: f32 = 22.0;
 /// The space between the box's field and its channel strip.
 const STRIP_GAP: f32 = 6.0;
+/// The width of the opacity row's percent field.
+const OPACITY_FIELD: f32 = 46.0;
 
 /// What the panel shows right of the proxy: the wheel, or the box (a color field and a channel
 /// strip).
@@ -67,6 +76,9 @@ pub struct Settings {
     pub view: View,
     #[serde(serialize_with = "serialize_channel", deserialize_with = "deserialize_channel")]
     pub channel: Channel,
+    /// Show Opacity: the opacity row under the wheel or the box.
+    #[serde(deserialize_with = "deserialize_flag")]
+    pub opacity: bool,
 }
 
 fn deserialize_view<'de, D: serde::Deserializer<'de>>(d: D) -> Result<View, D::Error> {
@@ -83,6 +95,11 @@ fn deserialize_channel<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Channel
     Ok(v.as_str().and_then(Channel::parse).unwrap_or_default())
 }
 
+fn deserialize_flag<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let v = <Value as Deserialize>::deserialize(d)?;
+    Ok(v.as_bool().unwrap_or_default())
+}
+
 /// Serde reader for the saved settings ([`crate::UiState::color_wheel`]): a value that is not an
 /// object reads as the defaults, so it doesn't lose the rest of the preferences.
 pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Settings, D::Error> {
@@ -90,11 +107,11 @@ pub fn deserialize_settings<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Se
     Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
-/// `ui.colorWheel {view?, channel?}`: show the wheel or the box, and pick the box's channel. Keys
-/// left out keep their values; params that are not an object, another key or a value off the list
-/// are an error and change nothing. → the settings.
+/// `ui.colorWheel {view?, channel?, opacity?}`: show the wheel or the box, pick the box's channel,
+/// and check or uncheck Show Opacity. Keys left out keep their values; params that are not an
+/// object, another key or a value off the list are an error and change nothing. → the settings.
 pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    const KEYS: [&str; 2] = ["view", "channel"];
+    const KEYS: [&str; 3] = ["view", "channel", "opacity"];
     match p {
         Value::Null => {}
         Value::Object(o) => {
@@ -113,11 +130,15 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
         None | Some(Value::Null) => {}
         Some(v) => set.channel = v.as_str().and_then(Channel::parse).ok_or("`channel` must be hue, saturation, brightness, red, green or blue")?,
     }
+    match p.get("opacity") {
+        None | Some(Value::Null) => {}
+        Some(v) => set.opacity = v.as_bool().ok_or("`opacity` must be true or false")?,
+    }
     app.ui.color_wheel = set;
     Ok(json!(app.ui.color_wheel))
 }
 
-/// The panel menu: Wheel View and Box View, and Box Channel while the box shows.
+/// The panel menu: Wheel View and Box View, Box Channel while the box shows, and Show Opacity.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -134,6 +155,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
+    ui.separator();
+    if menu_item(ui, tl!("Show Opacity"), true, set.opacity) {
+        command(app, &json!({ "opacity": !set.opacity })).ok();
+    }
 }
 
 /// The display values of HSB `hsb` in `ch`'s space, from 0 to 1: hue, saturation and brightness,
@@ -203,6 +228,80 @@ fn show_box(ui: &mut Ui, ch: Channel, hsb: [f32; 3], marked: bool, size: f32) ->
         }
     });
     pick
+}
+
+/// The opacity (0 to 1) the row shows for `tgt` and whether the row can set it: the selected
+/// gradient stop's or freeform point's (the first when none is selected, as [`wheel_target`]
+/// picks it), else that of the fill or stroke item
+/// ([`vectorcraft_engine::Session::proxy_opacity`]), which nothing selected and type characters
+/// do not have. A stop or point of a gradient on type characters belongs to the gradient, so the
+/// row sets it. With nothing selected the stop or point belongs to the defaults for new art, which
+/// the row leaves alone, and an object selected in a symbol instance has no opacity the row can set.
+fn shown_opacity(app: &VectorcraftApp, tgt: &Target) -> (f32, bool) {
+    let stroke = !app.session.fill_active;
+    let selected = app.session.active().is_some_and(|d| !d.selection.is_empty() && d.selection.symbol_part.is_none());
+    let point = |index: usize| match super::active_paint(app) {
+        Paint::Gradient(g) => super::gradient::shown_points(&g).points.get(index).map(|p| p.opacity),
+        _ => None,
+    };
+    let found = match tgt {
+        _ if !selected => None,
+        Target::Stop { paint: Paint::Gradient(g), index, .. } => g.gradient.stops.get(*index).map(|s| s.opacity),
+        Target::Point { index, .. } => point(*index),
+        _ => app.session.proxy_opacity(stroke),
+    };
+    (found.unwrap_or(1.0), found.is_some())
+}
+
+/// Set the opacity (0 to 1) of what the row edits for `tgt`: a stop through the Gradient panel's
+/// edit, a freeform point through `paint.freeform.setPoint`, else the fill or stroke item through
+/// `paint.setFill` or `paint.setStroke`. A drag previews and commits as one undo step.
+fn apply_opacity(app: &mut VectorcraftApp, tgt: &Target, o: f32, phase: Live) {
+    let o = o.clamp(0.0, 1.0);
+    match tgt {
+        Target::Stop { paint: Paint::Gradient(g), index, .. } => {
+            let mut stops = g.gradient.stops.clone();
+            if let Some(s) = stops.get_mut(*index) {
+                s.opacity = o;
+            }
+            super::gradient::set_stops_keeping_models(app, &stops, None, phase);
+        }
+        Target::Point { index, .. } => {
+            let p = json!({"index": index, "opacity": o, "stroke": !app.session.fill_active});
+            live_run(app, "Opacity", "paint.freeform.setPoint", p, phase);
+        }
+        _ => {
+            let cmd = super::proxy_cmd(app, false);
+            live_run(app, "Opacity", cmd, json!({"opacity": f64::from(o) * 100.0}), phase);
+        }
+    }
+}
+
+/// The Show Opacity row: the Transparency panel's icon, a slider whose track shows `color` from
+/// clear to solid, and a percent field. Gray when [`shown_opacity`] finds nothing to set.
+fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, tgt: &Target, color: &Color) {
+    let (o, live) = shown_opacity(app, tgt);
+    let percent = f64::from(o) * 100.0;
+    let mut edit: Option<(f32, Live)> = None;
+    ui.add_enabled_ui(live, |ui| {
+        ui.horizontal(|ui| {
+            let t = crate::theme::Tokens::get(ui.ctx());
+            crate::icons::icon(ui, "dc-transparency", 16.0, if live { t.icon } else { t.text_disabled }).on_hover_text(tl!("Opacity"));
+            let width = (ui.available_width() - OPACITY_FIELD - ui.spacing().item_spacing.x).max(40.0);
+            let shown = SliderValue::field(percent, 0.0..=100.0, "%", 0);
+            match widgets::opacity_slider(ui, "color-wheel-opacity", tl!("Opacity"), Some(shown), o, width, super::c32(color)) {
+                (Some(v), phase, _) => edit = Some((v, phase)),
+                (None, _, Some(v)) => edit = Some(((v / 100.0) as f32, Live::Released)),
+                _ => {}
+            }
+            if let Some(v) = widgets::plain_field_named(ui, "color-wheel-opacity-field", Some(tl!("Opacity")), percent, "%", 0, OPACITY_FIELD) {
+                edit = Some(((v.clamp(0.0, 100.0) / 100.0) as f32, Live::Released));
+            }
+        });
+    });
+    if let Some((v, phase)) = edit.filter(|_| live) {
+        apply_opacity(app, tgt, v, phase);
+    }
 }
 
 /// Panel state: the HSB picked last, its [`Owner`] and the display sRGB of the color it stored.
@@ -344,6 +443,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             pick = Some(([hsb[0], x, 1.0 - y], field_phase));
         }
     });
+    if app.ui.color_wheel.opacity {
+        let shown = color.unwrap_or(app.session.last_solid);
+        opacity_row(app, ui, &tgt, &shown);
+    }
     let Some((hsb, phase)) = pick else { return };
     let behind = super::alt_held(ui);
     let cmyk_doc = app.session.active().is_some_and(|d| d.doc.color_mode == ColorMode::Cmyk);

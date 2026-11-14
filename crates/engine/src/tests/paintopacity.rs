@@ -1,0 +1,293 @@
+//! `opacity` on `paint.setFill` and `paint.setStroke`: the opacity of the fill or stroke item the
+//! paint goes to, and `fillOpacity` and `strokeOpacity` on `paint.proxies`.
+
+use serde_json::{Value, json};
+use vectorcraft_color::{Color, Paint};
+use vectorcraft_doc::{Node, NodeKind};
+use vectorcraft_tools::{PointerEvent, PointerKind};
+
+use crate::tooling::ViewInfo;
+use crate::*;
+
+fn session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s
+}
+
+fn rect(s: &mut Session, x: f64) -> NodeId {
+    let r = s.execute("shape.rectangle", &json!({"x": x, "y": 10, "width": 100, "height": 50})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+fn text(s: &mut Session) -> NodeId {
+    let r = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "Hi"})).unwrap();
+    NodeId(r["id"].as_u64().unwrap())
+}
+
+fn node(s: &Session, id: NodeId) -> Node {
+    s.doc().unwrap().doc.node(id).unwrap().clone()
+}
+
+fn select(s: &mut Session, ids: &[NodeId]) {
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+}
+
+fn fill_opacity(s: &Session, id: NodeId) -> f32 {
+    node(s, id).appearance.fill().unwrap().opacity
+}
+
+fn undo_labels(s: &Session) -> Vec<String> {
+    s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect()
+}
+
+fn proxies(s: &mut Session) -> Value {
+    s.execute("paint.proxies", &json!({})).unwrap()
+}
+
+/// `paint.setFill {opacity}` alone sets the opacity of the selected object's top fill item, as one
+/// undo step named Opacity, and leaves its paint, its stroke and the object's own opacity as they
+/// were; `paint.setStroke {opacity}` does the same for the top stroke, and `paint.proxies` answers
+/// both.
+#[test]
+fn opacity_alone_sets_the_fill_or_stroke_item() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    let before = node(&s, id);
+    let undo = undo_labels(&s).len();
+    s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    let n = node(&s, id);
+    assert!((fill_opacity(&s, id) - 0.4).abs() < 1e-6);
+    assert_eq!(n.appearance.fill_paint(), before.appearance.fill_paint());
+    assert_eq!(n.appearance.stroke().unwrap().opacity, 1.0);
+    assert_eq!(n.opacity, 1.0);
+    let labels = undo_labels(&s);
+    assert_eq!((labels.len(), labels.last().map(String::as_str)), (undo + 1, Some("Opacity")));
+    assert_eq!(proxies(&mut s)["fillOpacity"], 40.0);
+    assert_eq!(proxies(&mut s)["strokeOpacity"], 100.0);
+    // The defaults for new art keep their paint.
+    assert_eq!(s.paint.fill, Paint::solid(Color::WHITE));
+
+    s.execute("paint.setStroke", &json!({"opacity": 25})).unwrap();
+    assert!((node(&s, id).appearance.stroke().unwrap().opacity - 0.25).abs() < 1e-6);
+    assert!((fill_opacity(&s, id) - 0.4).abs() < 1e-6);
+    assert_eq!(proxies(&mut s)["strokeOpacity"], 25.0);
+}
+
+/// A selected group stands for its contents: every member's fill takes the opacity, as one undo step.
+#[test]
+fn a_group_sets_every_member_in_one_step() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    select(&mut s, &[a, b]);
+    s.execute("object.group", &json!({})).unwrap();
+    let undo = undo_labels(&s).len();
+    s.execute("paint.setFill", &json!({"opacity": 60})).unwrap();
+    assert!((fill_opacity(&s, a) - 0.6).abs() < 1e-6 && (fill_opacity(&s, b) - 0.6).abs() < 1e-6);
+    assert_eq!(undo_labels(&s).len(), undo + 1);
+}
+
+/// A group with a fill of its own: without an active Appearance row, `paint.proxies` answers the
+/// opacity of the contents' fills, which `paint.setFill {opacity}` sets, not the group's own fill.
+#[test]
+fn a_group_with_its_own_fill_answers_for_its_contents() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    select(&mut s, &[a, b]);
+    s.execute("object.group", &json!({})).unwrap();
+    let g = s.doc().unwrap().selection.subjects()[0];
+    select(&mut s, &[g]);
+    s.execute("appearance.addFill", &json!({})).unwrap();
+    let own = node(&s, g).appearance.items.iter().position(|it| it.is_fill()).unwrap();
+    s.execute("paint.setFill", &json!({"item": own, "opacity": 30})).unwrap();
+    select(&mut s, &[g]);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 100.0);
+    s.execute("paint.setFill", &json!({"opacity": 60})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 60.0);
+    assert!((node(&s, g).appearance.items[own].opacity() - 0.3).abs() < 1e-6, "the group's own fill keeps its opacity");
+}
+
+/// With the Appearance panel's lower fill row active, that row takes the opacity and the top fill
+/// keeps its own.
+#[test]
+fn the_active_appearance_row_takes_the_opacity() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    s.execute("appearance.addFill", &json!({})).unwrap(); // [Fill, Stroke, Fill]
+    s.execute("appearance.setActiveItem", &json!({"index": 0})).unwrap();
+    s.execute("paint.setFill", &json!({"opacity": 30})).unwrap();
+    let ap = node(&s, id).appearance;
+    assert!((ap.items[0].opacity() - 0.3).abs() < 1e-6);
+    assert_eq!(ap.items[2].opacity(), 1.0);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 30.0);
+}
+
+/// A color and an opacity change together in one undo step, and the same call again records no
+/// step.
+#[test]
+fn color_and_opacity_are_one_step_and_a_repeat_records_none() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    let undo = undo_labels(&s).len();
+    let p = json!({"color": "#ff0000", "opacity": 50});
+    s.execute("paint.setFill", &p).unwrap();
+    assert_eq!(node(&s, id).appearance.fill_paint(), Paint::solid(Color::rgb8(255, 0, 0)));
+    assert!((fill_opacity(&s, id) - 0.5).abs() < 1e-6);
+    assert_eq!(undo_labels(&s).len(), undo + 1);
+    assert_eq!(undo_labels(&s).last().map(String::as_str), Some("Fill Color"));
+    s.execute("paint.setFill", &p).unwrap();
+    s.execute("paint.setFill", &json!({"opacity": 50})).unwrap();
+    assert_eq!(undo_labels(&s).len(), undo + 1);
+}
+
+/// Bad values, nothing selected, and characters selected with the Type tool answer errors and leave
+/// the document and the defaults for new art as they were.
+#[test]
+fn errors_leave_the_document_and_defaults_alone() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    for bad in [json!(101), json!(-1), json!("50"), json!(true)] {
+        let e = s.execute("paint.setFill", &json!({"opacity": bad})).unwrap_err();
+        assert!(e.to_string().contains("`opacity` must be a number from 0 to 100"), "{bad}: {e}");
+    }
+    let e = s.execute("paint.setFill", &json!({})).unwrap_err();
+    assert!(e.to_string().contains("give color, none, swatch, gradient or opacity"), "{e}");
+    s.execute("select.none", &json!({})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    for p in [json!({"opacity": 40}), json!({"color": "#ff0000", "opacity": 40})] {
+        let e = s.execute("paint.setFill", &p).unwrap_err();
+        assert!(e.to_string().contains("select objects or give ids"), "{p}: {e}");
+    }
+    assert_eq!(s.paint.fill, Paint::solid(Color::WHITE));
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+
+    // Characters selected with the Type tool.
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 50.0, 250.0), v).unwrap();
+    }
+    s.tool_text("Sample", v).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 3}));
+    let doc = s.doc().unwrap().doc.clone();
+    for p in [json!({"opacity": 40}), json!({"color": "#ff0000", "opacity": 40})] {
+        let e = s.execute("paint.setFill", &p).unwrap_err();
+        assert!(e.to_string().contains("type characters have no opacity of their own"), "{p}: {e}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+}
+
+/// A type object whose characters take the paint is left alone beside a rectangle that takes the
+/// opacity, with no error; alone, it answers the characters error.
+#[test]
+fn type_beside_other_art_is_left_alone() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0);
+    let t = text(&mut s);
+    let runs = |s: &Session| match &node(s, t).kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("not type"),
+    };
+    let before = (node(&s, t), runs(&s));
+    select(&mut s, &[r, t]);
+    s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    assert!((fill_opacity(&s, r) - 0.4).abs() < 1e-6);
+    assert_eq!((node(&s, t), runs(&s)), before);
+    select(&mut s, &[t]);
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+    let e = s.execute("paint.setFill", &json!({"opacity": 40})).unwrap_err();
+    assert!(e.to_string().contains("type characters have no opacity of their own"), "{e}");
+    assert_eq!((node(&s, t), runs(&s)), before);
+}
+
+/// A color with an opacity on type alone answers the characters error and takes the color back too.
+#[test]
+fn type_alone_takes_back_the_paint_given_with_an_opacity() {
+    let mut s = session();
+    let t = text(&mut s);
+    select(&mut s, &[t]);
+    let doc = s.doc().unwrap().doc.clone();
+    let undo = undo_labels(&s).len();
+    let e = s.execute("paint.setFill", &json!({"color": "#ff0000", "opacity": 40})).unwrap_err();
+    assert!(e.to_string().contains("type characters have no opacity of their own"), "{e}");
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+    assert_eq!(undo_labels(&s).len(), undo);
+    assert_eq!(s.paint.fill, Paint::solid(Color::WHITE), "the defaults keep their paint");
+}
+
+/// An opacity that no target takes (the only selected object has no fill item) is an error, with or
+/// without a paint, and leaves the document as it was; `paint.proxies` answers null for it, and
+/// beside an object with a fill item it answers that object's opacity.
+#[test]
+fn an_opacity_no_target_takes_is_an_error() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    select(&mut s, &[a]);
+    s.execute("appearance.removeItem", &json!({"index": 0})).unwrap();
+    assert!(node(&s, a).appearance.fill().is_none());
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+    let doc = s.doc().unwrap().doc.clone();
+    let e = s.execute("paint.setFill", &json!({"opacity": 40})).unwrap_err();
+    assert!(e.to_string().contains("no target has that fill or stroke to take the opacity"), "{e}");
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+    // A paint given with the opacity creates the fill, which takes the opacity.
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "opacity": 40})).unwrap();
+    assert!((fill_opacity(&s, a) - 0.4).abs() < 1e-6);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+
+    select(&mut s, &[b]);
+    s.execute("paint.setFill", &json!({"opacity": 70})).unwrap();
+    select(&mut s, &[a, b]);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 70.0, "the first selected object with a fill item answers");
+    s.execute("paint.setFill", &json!({"opacity": 20})).unwrap();
+    assert!((fill_opacity(&s, b) - 0.2).abs() < 1e-6);
+    assert!(node(&s, a).appearance.fill().is_none());
+}
+
+/// An object selected in a dynamic symbol instance has no opacity of its own: `opacity` is an error
+/// that leaves the document alone, and `paint.proxies` answers null.
+#[test]
+fn an_object_in_a_symbol_instance_refuses_an_opacity() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    let inst = s.execute("symbol.new", &json!({"name": "One", "ids": [id.0], "type": "dynamic"})).unwrap()["id"].clone();
+    s.execute("symbol.instance.selectPart", &json!({"id": inst, "path": []})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    for p in [json!({"opacity": 40}), json!({"color": "#ff0000", "opacity": 40})] {
+        let e = s.execute("paint.setFill", &p).unwrap_err();
+        assert!(e.to_string().contains("an object selected in a symbol instance has no fill or stroke opacity of its own"), "{p}: {e}");
+    }
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+}
+
+/// A gradient mesh point picked with the Mesh tool takes a fill opacity itself, and the proxy shows
+/// it; the object's fill item and the other points stay as they were.
+#[test]
+fn a_picked_mesh_point_takes_the_fill_opacity() {
+    let mut s = session();
+    let m = rect(&mut s, 10.0);
+    select(&mut s, &[m]);
+    s.execute("object.mesh.create", &json!({"rows": 2, "cols": 2})).unwrap();
+    select(&mut s, &[m]);
+    let v = ViewInfo::default();
+    let NodeKind::Mesh(g) = &node(&s, m).kind else { panic!("not a mesh") };
+    let q = g.points[4].p;
+    s.select_tool("mesh", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, q.x, q.y), v).unwrap();
+    }
+    s.execute("paint.setFill", &json!({"opacity": 30})).unwrap();
+    let NodeKind::Mesh(g) = &node(&s, m).kind else { panic!("not a mesh") };
+    let o: Vec<f32> = g.points.iter().map(|p| p.opacity).collect();
+    assert!((o[4] - 0.3).abs() < 1e-6, "{o:?}");
+    assert!(o.iter().enumerate().all(|(i, a)| i == 4 || *a == 1.0), "{o:?}");
+    assert_eq!(proxies(&mut s)["fillOpacity"], 30.0);
+}

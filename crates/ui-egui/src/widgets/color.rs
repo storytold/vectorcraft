@@ -145,6 +145,38 @@ pub fn color_slider_stepped(
     (picked, phase, stepped.filter(|_| picked.is_none()))
 }
 
+/// [`color_slider_stepped`] for an opacity: its track shows `color` from clear at 0 to solid at 1
+/// over a checkerboard of 4 pt cells.
+pub fn opacity_slider(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    width: f32,
+    color: Color32,
+) -> (Option<f32>, Live, Option<f64>) {
+    let id = id_with(ui.scope_id(), id);
+    // The checkerboard and the ramp go under the rail's thumb and border, which the rail draws.
+    let under = ui.painter().add(egui::Shape::Noop);
+    let (resp, picked, phase) = color_rail(ui, id, name, shown.clone(), value, width, &|_| Color32::TRANSPARENT);
+    let bar = rail_bar(resp.rect, width);
+    let mut shapes = super::chips::checkerboard_shapes(bar, 4.0);
+    let [r, g, b, _] = color.to_srgba_unmultiplied();
+    let mut ramp = egui::Mesh::default();
+    let clear = Color32::from_rgba_unmultiplied(r, g, b, 0);
+    let solid = Color32::from_rgb(r, g, b);
+    for (p, c) in [(bar.left_top(), clear), (bar.right_top(), solid), (bar.right_bottom(), solid), (bar.left_bottom(), clear)] {
+        ramp.colored_vertex(p, c);
+    }
+    ramp.add_triangle(0, 1, 2);
+    ramp.add_triangle(0, 2, 3);
+    shapes.push(egui::Shape::mesh(ramp));
+    ui.painter().set(under, egui::Shape::Vec(shapes));
+    let stepped = slider_keys(ui, &resp, shown);
+    (picked, phase, stepped.filter(|_| picked.is_none()))
+}
+
 /// A control that its caller draws and reads the pointer on (`resp`, from a click-and-drag
 /// [`Ui::interact`]), which screen readers get as a slider named `name` (already translated) with
 /// `shown`, and which takes the focus, the keys and the screen readers' actions as the rail of
@@ -278,7 +310,7 @@ fn color_rail(
 ) -> (Response, Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
-    let bar = Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(width - 8.0, 7.0));
+    let bar = rail_bar(rect, width);
     let resp = ui.interact(rect, id, Sense::click_and_drag());
     gradient_strip(ui, bar, (bar.width() / 2.0).ceil().max(2.0) as usize, false, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
@@ -294,6 +326,11 @@ fn color_rail(
         None => (None, Live::Idle),
     };
     (resp, picked, phase)
+}
+
+/// The bar of a rail `width` wide in `rect`, above its thumb.
+fn rail_bar(rect: Rect, width: f32) -> Rect {
+    Rect::from_min_size(pos2(rect.left() + 4.0, rect.top() + 4.0), vec2(width - 8.0, 7.0))
 }
 
 /// The pointer of a click or drag on `resp` and its phase (dragging, or released on click/drop).

@@ -265,9 +265,10 @@ My Themes tab lists the saved themes; every action runs a command (`colorTheme.s
 Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a saturation and brightness square. A
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
-point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?}` shows the wheel or the box (a
-color field with a channel strip at its right) and picks the box's channel; it returns the settings, and `ui.inspect`
-reports them as `ui.color_wheel`.
+point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, opacity?}` shows the wheel or
+the box (a color field with a channel strip at its right), picks the box's channel and checks or unchecks Show Opacity
+(an opacity row under the wheel or the box); it returns the settings, and `ui.inspect` reports them as
+`ui.color_wheel`.
 
 Edit Colors dialogs: `ui.colorBalanceDialog` opens Adjust Colors (`colorBalance`: fields `mode` `gray`/`rgb`/`cmyk`/
 `global`, the channels `r` `g` `b` / `c` `m` `y` `k` / `gray` / `tint` (global mode) from −100 to 100, `convert`, `fill`, `stroke`,
