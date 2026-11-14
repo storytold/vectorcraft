@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Live Paint"],
             Some("Cmd+Alt+X"),
-            "{ids?|id?} build a Live Paint group from the selected paths (paths, compound paths and groups of them; type, images and other objects are refused, nothing changes); each covered face starts with the fill rows that draw (shown, with paint and an opacity above 0) of its front-most covering source that has one and an opacity above 0, and each edge with the stroke rows that draw (also a weight above 0) of its source, in order with their settings and with that source's opacity and blending mode (on a path cut into several edges, dashes go on along the path, arrowheads stay at its own ends, and a width profile or brush stays only on an edge that runs the whole path); a face or edge given no such row has one unpainted row; with a Live Paint group among them, add the others to it as livePaint.merge does; a Live Paint group alone has nothing to add, so it is selected and nothing changes (no undo step) → {id, faces, edges}",
+            "{ids?|id?} build a Live Paint group from the selected paths (paths, compound paths and groups of them; type, images and other objects are refused, nothing changes); each covered face starts with the fill rows that draw (shown, with paint and an opacity above 0) of its front-most covering source that has one and an opacity above 0, and each edge with the stroke rows that draw (also a weight above 0) of its source, in order with their settings and with that source's opacity and blending mode (on a path cut into several edges, dashes go on along the path with the lengths set, without the fit of dashes aligned to corners and path ends, arrowheads stay at its own ends, and a width profile or brush stays only on an edge that runs the whole path); a face or edge given no such row has one unpainted row; with a Live Paint group among them, add the others to it as livePaint.merge does; a Live Paint group alone has nothing to add, so it is selected and nothing changes (no undo step) → {id, faces, edges}",
             has_selection_or_ids,
             lp_make
         ),
@@ -576,7 +576,9 @@ impl Track {
 /// ends at its end (an open subpath), and whether it runs the whole subpath. The middle of the
 /// edge's first segment places it, and its ends are taken where they lie that far along the source,
 /// so a path that passes a point twice is told apart. An edge that runs against the direction of its
-/// source is reversed first. `None` when the edge is not a single piece found on the source.
+/// source is reversed first, and a closed edge is started at the anchor where its source starts
+/// (one with no anchor there does not count as running the whole subpath). `None` when the edge is
+/// not a single piece found on the source.
 fn edge_run(tracks: &[Track], edge: &mut PathData) -> Option<(f64, bool, bool, bool)> {
     use kurbo::{ParamCurve, ParamCurveArclen};
     let [sp] = edge.subpaths.as_slice() else { return None };
@@ -621,13 +623,26 @@ fn edge_run(tracks: &[Track], edge: &mut PathData) -> Option<(f64, bool, bool, b
     let open = !track.closed;
     let starts = open && from <= ON_SOURCE;
     let ends = open && to >= track.len() - ON_SOURCE;
-    let whole = if open { starts && ends } else { edge_closed };
-    Some((from, starts, ends, whole))
+    if open {
+        return Some((from, starts, ends, starts && ends));
+    }
+    // A closed edge runs the whole closed subpath, from the anchor the planar map starts it at.
+    // Start it at the anchor where the source starts, so settings that follow the path begin there.
+    let start = track.segs.first().map(|s| s.start())?;
+    let moved = edge_closed
+        && edge.subpaths.first_mut().is_some_and(|sp| match sp.anchors.iter().position(|a| a.p.distance(start) <= ON_SOURCE) {
+            Some(k) => {
+                sp.anchors.rotate_left(k);
+                true
+            }
+            None => false,
+        });
+    Some((if moved { 0.0 } else { from }, false, false, moved))
 }
 
 /// Fit stroke row `row` of a source path to an edge cut from it, which runs as [`edge_run`] says
-/// (`None`: not known): its dashes go on from where the edge starts along the source, its
-/// arrowheads stay only at the source's own ends, and its width profile and brush, which spread
+/// (`None`: not known): its dashes go on from where the edge starts along the source, with the
+/// lengths set and without the fit of dashes aligned to corners and path ends, its arrowheads stay only at the source's own ends, and its width profile and brush, which spread
 /// over the whole path, stay only on an edge that runs the whole path.
 fn fit_to_edge(row: &mut AppearanceItem, run: Option<(f64, bool, bool, bool)>) {
     let AppearanceItem::Stroke(s) = row else { return };

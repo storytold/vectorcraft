@@ -2753,6 +2753,41 @@ fn live_paint_make_fits_dashes_and_arrowheads_to_each_edge() {
     assert_eq!(edges, vec![rows]);
 }
 
+/// The edge Make builds from a closed path that nothing cuts starts at the anchor the path starts
+/// at and runs the way the path does, whichever anchor that is, so its dashes and brush lie where
+/// they do on the path, and it keeps the path's stroke row as it is.
+#[test]
+fn live_paint_make_starts_a_closed_edge_where_its_path_starts() {
+    use vectorcraft_doc::Dash;
+    let corners = [(50.0, 0.0), (100.0, 50.0), (50.0, 100.0), (0.0, 50.0)];
+    for clockwise in [true, false] {
+        for start in 0..4 {
+            let mut s = session();
+            let mut pts: Vec<(f64, f64)> = (0..4).map(|k| corners[(k + start) % 4]).collect();
+            if !clockwise {
+                pts.reverse();
+            }
+            let anchors: Vec<_> = pts.iter().map(|(x, y)| json!({"x": x, "y": y})).collect();
+            let z = NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap());
+            let row = stroke_row(Paint::solid(Color::BLACK), 2.0, |st| {
+                st.dash = Some(Dash { pattern: vec![10.0, 5.0], offset: 2.0, align_corners: false });
+                st.brush = Some("Charcoal".into());
+            });
+            let rows = set_rows(&mut s, z, vec![row]);
+            s.execute("select.set", &json!({"ids": [z.0]})).unwrap();
+            let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+            let gn = node(&s, g);
+            let edges = vectorcraft_tools::builder::edges(&gn);
+            let [e] = edges.as_slice() else { panic!("one edge, got {}", edges.len()) };
+            let sp = e.path_data().unwrap().subpaths.first().unwrap().clone();
+            let at: Vec<(f64, f64)> = sp.anchors.iter().map(|a| ((a.p.x * 1e3).round() / 1e3, (a.p.y * 1e3).round() / 1e3)).collect();
+            assert!(sp.closed);
+            assert_eq!(at, pts, "clockwise {clockwise}, start {start}");
+            assert_eq!(e.appearance.items, rows, "clockwise {clockwise}, start {start}");
+        }
+    }
+}
+
 /// When Make cuts a stroke whose only setting that depends on direction is a gradient along or
 /// across it, each edge runs the way its source path does, so the gradient keeps its direction.
 #[test]
