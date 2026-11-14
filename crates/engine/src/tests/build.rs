@@ -3046,6 +3046,41 @@ fn live_paint_bucket_double_click_floods_across_unstroked_edges() {
     assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), green, white]);
 }
 
+/// An edge that draws no stroke (fully transparent, or with its stroke hidden) lets a flood across
+/// although it stores a stroke paint, and an edge scope compares the stroke paint each edge draws
+/// with.
+#[test]
+fn live_paint_bucket_scopes_follow_the_stroke_an_edge_draws() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0]);
+    let black = Paint::solid(Color::rgb(0.0, 0.0, 0.0));
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 151.0, 51.0));
+    paint_parts(&mut s, &all, &black, &[]);
+    let clear = edges_in(&s, g, Rect::new(50.0, 0.0, 50.0, 50.0));
+    let hidden = edges_in(&s, g, Rect::new(100.0, 0.0, 100.0, 50.0));
+    assert!(!clear.is_empty() && !hidden.is_empty());
+    s.edit("t", |d, _| {
+        for id in &clear {
+            d.node_mut(*id).unwrap().opacity = 0.0;
+        }
+        for id in &hidden {
+            d.node_mut(*id).unwrap().appearance.stroke_mut().unwrap().visible = false;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 25], "color": "#00ff00", "scope": "connected"})).unwrap();
+    assert_eq!(r["count"], 3, "the flood crosses both middle edges");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let stroke = |s: &mut Session, at: [f64; 2]| {
+        let r = s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": at, "color": "#00ff00", "width": 3, "scope": "samePaint"})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+        r["count"].clone()
+    };
+    assert_eq!(stroke(&mut s, [25.0, 0.0]), json!(all.len() - clear.len() - hidden.len()), "the edges that draw black");
+    assert_eq!(stroke(&mut s, [50.0, 25.0]), json!(clear.len() + hidden.len()), "the edges that draw no stroke");
+}
+
 /// With Cmd held, the Live Paint Bucket's presses go to the selection tool Cmd lends, and the
 /// double-click and triple-click that follow them paint nothing.
 #[test]

@@ -399,243 +399,6 @@ fn match_param(p: &Value, c: &str, allowed: bool, scopes: &str) -> Result<Option
     serde_json::from_value::<Paint>(v.clone()).map(Some).map_err(|_| bad(c, "match must be a paint as the document stores it"))
 }
 
-/// The greatest distance (pt) between two points that the Live Paint Bucket takes as one point:
-/// where edges meet, and where a face's outline runs along an edge.
-const LP_JOIN_TOL: f64 = 1e-4;
-
-/// The cell [`LP_JOIN_TOL`] wide that holds `p`, for finding the points near it; two points within
-/// [`LP_JOIN_TOL`] of each other lie in the same or neighboring cells. The cast saturates, so a
-/// coordinate too large or not finite does not overflow.
-fn lp_cell(p: Point) -> (i64, i64) {
-    ((p.x / LP_JOIN_TOL).round() as i64, (p.y / LP_JOIN_TOL).round() as i64)
-}
-
-/// Whether `edge` draws no stroke: its stroke paint is none or its weight is 0.
-fn unstroked(edge: &Node) -> bool {
-    edge.appearance.stroke_paint().is_none() || edge.appearance.stroke_width() <= 0.0
-}
-
-/// The segments of `pd`.
-fn lp_segments(pd: &PathData) -> Vec<kurbo::CubicBez> {
-    pd.subpaths.iter().flat_map(|sp| (0..sp.segment_count()).map(|i| sp.segment(i))).collect()
-}
-
-/// The faces of Live Paint group `group` that a flood from face `start` reaches: `start`, and each
-/// face that shares with a face already reached an edge that is hidden or draws no stroke
-/// ([`unstroked`]). Hidden faces are not reached and do not pass the flood on. A face runs along an
-/// edge segment over the part of it between the points nearest the ends of one of the face's
-/// outline segments, when that part's points at a quarter, half and three quarters of its
-/// parameter range lie within [`LP_JOIN_TOL`] of the outline segment; one outline segment can run
-/// along several edge segments. Two faces share the edge where those parts overlap
-/// along more than [`LP_JOIN_TOL`], so two faces that a Gap Detection gap parts on the same side of
-/// an edge, whose parts only touch, do not.
-fn flood_faces(group: &Node, start: NodeId) -> Vec<NodeId> {
-    use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveExtrema, ParamCurveNearest};
-    // Each edge segment, and whether a flood crosses it.
-    let edges: Vec<(kurbo::CubicBez, bool)> = b::edges(group)
-        .into_iter()
-        .flat_map(|e| {
-            let cross = !e.visible || unstroked(e);
-            e.path_data().map(lp_segments).unwrap_or_default().into_iter().map(move |s| (s, cross))
-        })
-        .collect();
-    let mut mids: std::collections::HashMap<(i64, i64), Vec<(Point, usize)>> = std::collections::HashMap::new();
-    for (k, (s, _)) in edges.iter().enumerate() {
-        let m = s.eval(0.5);
-        mids.entry(lp_cell(m)).or_default().push((m, k));
-    }
-    // The faces along each edge segment a flood crosses, each with the part of the segment it runs
-    // along (from and to, in the segment's own parameter). A face outline segment is usually an
-    // edge segment, with the same ends; one that is not (a piece of an edge segment where a Gap
-    // Detection line meets it, the line itself, or a run along several edge segments where the
-    // face has no corner at the points that split them) is measured against the edge segments
-    // near it.
-    let mut along: std::collections::HashMap<usize, Vec<(NodeId, f64, f64)>> = std::collections::HashMap::new();
-    let mut pieces: Vec<(kurbo::CubicBez, NodeId)> = vec![];
-    let near = |p: Point, q: Point| (p - q).hypot() <= LP_JOIN_TOL;
-    for f in b::faces(group).into_iter().filter(|f| f.visible) {
-        for piece in f.path_data().map(lp_segments).unwrap_or_default() {
-            let m = piece.eval(0.5);
-            let (x, y) = lp_cell(m);
-            let same = (-1..=1)
-                .flat_map(|dx| (-1..=1).map(move |dy| (x.saturating_add(dx), y.saturating_add(dy))))
-                .flat_map(|c| mids.get(&c).map(Vec::as_slice).unwrap_or_default())
-                .find(|&&(q, k)| {
-                    near(q, m)
-                        && edges
-                            .get(k)
-                            .is_some_and(|(s, _)| (near(s.p0, piece.p0) && near(s.p3, piece.p3)) || (near(s.p0, piece.p3) && near(s.p3, piece.p0)))
-                });
-            match same {
-                Some(&(_, k)) => {
-                    if edges.get(k).is_some_and(|e| e.1) {
-                        along.entry(k).or_default().push((f.id, 0.0, 1.0));
-                    }
-                }
-                None => pieces.push((piece, f.id)),
-            }
-        }
-    }
-    if !pieces.is_empty() {
-        let grid = LpEdgeGrid::new(&edges);
-        for (piece, id) in pieces {
-            for k in grid.near_rect(piece.bounding_box()) {
-                let Some((s, true)) = edges.get(k) else { continue };
-                let (a, c) = (s.nearest(piece.p0, 1e-9).t, s.nearest(piece.p3, 1e-9).t);
-                let (from, to) = (a.min(c), a.max(c));
-                // The part of the edge segment between the piece's ends runs along the piece.
-                let on_piece =
-                    [0.25, 0.5, 0.75].iter().all(|u| piece.nearest(s.eval(from + (to - from) * u), 1e-9).distance_sq.sqrt() <= LP_JOIN_TOL);
-                if from < to && on_piece {
-                    along.entry(k).or_default().push((id, from, to));
-                }
-            }
-        }
-    }
-    let mut next: std::collections::HashMap<NodeId, Vec<NodeId>> = std::collections::HashMap::new();
-    for (k, faces) in &along {
-        let Some((s, _)) = edges.get(*k) else { continue };
-        for (i, &(a, a0, a1)) in faces.iter().enumerate() {
-            for &(c, c0, c1) in faces.iter().skip(i + 1) {
-                let (from, to) = (a0.max(c0), a1.min(c1));
-                if a != c && from < to && s.subsegment(from..to).arclen(1e-6) > LP_JOIN_TOL {
-                    next.entry(a).or_default().push(c);
-                    next.entry(c).or_default().push(a);
-                }
-            }
-        }
-    }
-    let mut reached = vec![start];
-    let mut seen = std::collections::HashSet::from([start]);
-    let mut i = 0;
-    while let Some(&f) = reached.get(i) {
-        i += 1;
-        for &n in next.get(&f).map(Vec::as_slice).unwrap_or_default() {
-            if seen.insert(n) {
-                reached.push(n);
-            }
-        }
-    }
-    reached
-}
-
-/// Most grid cells one edge segment is listed in by [`LpEdgeGrid`]; a longer one is tried for
-/// every point.
-const LP_GRID_SPAN: i64 = 1024;
-
-/// The farthest cell from the grid's origin, on each axis, that [`LpEdgeGrid`] numbers a point in.
-const LP_GRID_LIMIT: f64 = 1_048_576.0;
-
-/// The edge segments a flood crosses, by the cells of a square grid (about one cell per segment)
-/// that their bounds, widened by [`LP_JOIN_TOL`], cover.
-struct LpEdgeGrid {
-    origin: Point,
-    cell: f64,
-    /// Segment indices by cell.
-    cells: std::collections::HashMap<(i64, i64), Vec<usize>>,
-    /// Segments whose bounds cover more than [`LP_GRID_SPAN`] cells, near every point.
-    wide: Vec<usize>,
-}
-
-impl LpEdgeGrid {
-    /// The grid of the segments of `edges` that a flood crosses (those marked true).
-    fn new(edges: &[(kurbo::CubicBez, bool)]) -> Self {
-        use kurbo::ParamCurveExtrema;
-        let boxes: Vec<(usize, Rect)> =
-            edges.iter().enumerate().filter(|(_, e)| e.1).map(|(k, (s, _))| (k, s.bounding_box().inflate(LP_JOIN_TOL, LP_JOIN_TOL))).collect();
-        let all = boxes.iter().map(|b| b.1).reduce(|a, c| a.union(c)).unwrap_or_default();
-        let side = (boxes.len() as f64).sqrt().ceil().max(1.0);
-        let cell = all.width().max(all.height()) / side;
-        let cell = if cell.is_finite() && cell > LP_JOIN_TOL { cell } else { LP_JOIN_TOL };
-        let mut grid = Self { origin: all.origin(), cell, cells: std::collections::HashMap::new(), wide: vec![] };
-        for (k, b) in boxes {
-            let ((x0, y0), (x1, y1)) = (grid.cell_of(Point::new(b.x0, b.y0)), grid.cell_of(Point::new(b.x1, b.y1)));
-            if (x1 - x0 + 1).saturating_mul(y1 - y0 + 1) > LP_GRID_SPAN {
-                grid.wide.push(k);
-                continue;
-            }
-            for x in x0..=x1 {
-                for y in y0..=y1 {
-                    grid.cells.entry((x, y)).or_default().push(k);
-                }
-            }
-        }
-        grid
-    }
-
-    /// The cell `p` is in, counted from the origin (at most [`LP_GRID_LIMIT`] cells away on each
-    /// axis).
-    fn cell_of(&self, p: Point) -> (i64, i64) {
-        let at = |v: f64, o: f64| ((v - o) / self.cell).floor().clamp(-LP_GRID_LIMIT, LP_GRID_LIMIT) as i64;
-        (at(p.x, self.origin.x), at(p.y, self.origin.y))
-    }
-
-    /// The segments whose widened bounds may meet `r`, each once.
-    fn near_rect(&self, r: Rect) -> Vec<usize> {
-        let ((x0, y0), (x1, y1)) = (self.cell_of(Point::new(r.x0, r.y0)), self.cell_of(Point::new(r.x1, r.y1)));
-        let mut out = self.wide.clone();
-        if (x1 - x0 + 1).saturating_mul(y1 - y0 + 1) > self.cells.len() as i64 {
-            // More cells than the grid fills: walk the filled ones.
-            for (&(x, y), ks) in &self.cells {
-                if (x0..=x1).contains(&x) && (y0..=y1).contains(&y) {
-                    out.extend_from_slice(ks);
-                }
-            }
-        } else {
-            for x in x0..=x1 {
-                for y in y0..=y1 {
-                    out.extend(self.cells.get(&(x, y)).into_iter().flatten());
-                }
-            }
-        }
-        out.sort_unstable();
-        out.dedup();
-        out
-    }
-}
-
-/// The edges of Live Paint group `group` that are not hidden and are joined to edge `start` through
-/// edges with stroke paint `paint`: `start`, and each edge with that stroke paint that has a
-/// segment end within [`LP_JOIN_TOL`] of a segment end of an edge already reached.
-fn connected_edges(group: &Node, start: NodeId, paint: &Paint) -> Vec<NodeId> {
-    let edges: Vec<&Arc<Node>> =
-        b::edges(group).into_iter().filter(|e| e.visible && (e.id == start || e.appearance.stroke_paint() == *paint)).collect();
-    let ends: Vec<Vec<Point>> = edges
-        .iter()
-        .map(|e| {
-            e.path_data()
-                .map(|pd| pd.subpaths.iter().flat_map(|sp| (0..sp.segment_count()).map(|i| sp.segment(i)).flat_map(|c| [c.p0, c.p3])).collect())
-                .unwrap_or_default()
-        })
-        .collect();
-    let mut at: std::collections::HashMap<(i64, i64), Vec<(Point, usize)>> = std::collections::HashMap::new();
-    for (i, pts) in ends.iter().enumerate() {
-        for &p in pts {
-            at.entry(lp_cell(p)).or_default().push((p, i));
-        }
-    }
-    let Some(first) = edges.iter().position(|e| e.id == start) else { return vec![] };
-    let mut reached = vec![first];
-    let mut seen = std::collections::HashSet::from([first]);
-    let mut k = 0;
-    while let Some(&i) = reached.get(k) {
-        k += 1;
-        for &p in ends.get(i).map(Vec::as_slice).unwrap_or_default() {
-            let (x, y) = lp_cell(p);
-            for dx in -1..=1 {
-                for dy in -1..=1 {
-                    for &(q, j) in at.get(&(x.saturating_add(dx), y.saturating_add(dy))).map(Vec::as_slice).unwrap_or_default() {
-                        if (q - p).hypot() <= LP_JOIN_TOL && seen.insert(j) {
-                            reached.push(j);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    reached.into_iter().filter_map(|i| edges.get(i).map(|e| e.id)).collect()
-}
-
 pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "livePaint.fill";
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
@@ -690,7 +453,7 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
         if scope != LpScope::One {
             let n = d.node(gid).ok_or(EngineError::NoNode(gid))?;
             if scope == LpScope::Connected {
-                targets.extend(flood_faces(n, fid));
+                targets.extend(b::flood_faces(n, fid));
             } else {
                 let like = match &like {
                     Some(m) => m.clone(),
@@ -798,12 +561,12 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
         let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad(C, format!("{g} is not a Live Paint group")))?;
         let start = b::visible_edge_near(n, pt, tol).ok_or_else(|| EngineError::Other("no Live Paint edge near that point".into()))?;
         let eid = start.id;
-        let like = like.unwrap_or_else(|| start.appearance.stroke_paint());
+        let like = like.unwrap_or_else(|| b::lp_stroke_paint(start));
         let targets = match scope {
             LpScope::One => vec![eid],
-            LpScope::Connected => connected_edges(n, eid, &like),
+            LpScope::Connected => b::connected_edges(n, eid, &like),
             LpScope::SamePaint => std::iter::once(eid)
-                .chain(b::edges(n).into_iter().filter(|e| e.visible && e.id != eid && e.appearance.stroke_paint() == like).map(|e| e.id))
+                .chain(b::edges(n).into_iter().filter(|e| e.visible && e.id != eid && b::lp_stroke_paint(e) == like).map(|e| e.id))
                 .collect(),
         };
         let count = targets.len();

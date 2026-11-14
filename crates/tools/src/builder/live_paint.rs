@@ -331,7 +331,7 @@ impl LivePaintBucketTool {
 
     /// Note a press at `at` that paints face or edge (`edge`) `n`.
     fn note_part(&mut self, n: &Node, edge: bool, at: Point) {
-        let before = if edge { n.appearance.stroke_paint() } else { n.appearance.fill_paint() };
+        let before = if edge { lp_stroke_paint(n) } else { n.appearance.fill_paint() };
         self.note_press(Some(LpPress { part: Some(n.id), at, before }));
     }
 
@@ -366,7 +366,7 @@ impl LivePaintBucketTool {
             && let Some((g, Some(e))) = lp_part_at(cx.doc, p, cx.tol(4.0), true, &|id| lp_visible(cx, id))
         {
             let mut v = json!({ "group": g.0, "point": point, "tolerance": cx.tol(4.0), "scope": scope });
-            if let Ok(like) = serde_json::to_value(self.before(cx, e.id, clicks, e.appearance.stroke_paint())) {
+            if let Ok(like) = serde_json::to_value(self.before(cx, e.id, clicks, lp_stroke_paint(e))) {
                 v["match"] = like;
             }
             return vec![Action::Exec("livePaint.strokeEdge".into(), v)];

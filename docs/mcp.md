@@ -3680,11 +3680,14 @@ already walks Image Trace. Short agent entry points:
   `scope: "samePaint"`; Alt held runs nothing, and so does Cmd/Ctrl (`mods.cmd`), whose presses go to the selection
   tool Cmd lends. With Space held (`mods.space`, the view tools), a press, a
   double-click or a triple-click runs nothing, and a move outlines no face or edge. On a face, `connected` fills the face and every face reached from it
-  across edges that draw no stroke (hidden, stroke paint none, or weight 0); a stroked edge, a hidden face, a gap
+  across edges that draw no stroke (an edge that is hidden or fully transparent, or whose strokes are each hidden,
+  without paint, 0 pt wide or fully transparent); a stroked edge, a hidden face, a gap
   that Gap Detection closes and the group's outside stop it. `samePaint` fills every face
   of the group, joined to it or not, whose fill is the `match` paint. On an edge, `connected` paints the edge and the
-  edges joined to it end to end whose stroke paint is `match`, and `samePaint` paints every edge of the group with
-  that stroke paint; the stroke's weight is not compared. Each click of a double-click or triple-click runs as it
+  edges joined to it end to end that draw with the stroke paint `match`, and `samePaint` paints every edge of the
+  group that draws with that stroke paint; the stroke's weight is not compared. An edge draws with the paint of its
+  topmost stroke that is shown, with paint, above 0 pt and not fully transparent, and with none when the edge is fully
+  transparent or has no such stroke. Each click of a double-click or triple-click runs as it
   arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
   two clicks or the triple-click's three that painted it, so the clicks before the last do not change what it matches;
   a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. These rules
@@ -3693,7 +3696,7 @@ already walks Image Trace. Short agent entry points:
   `livePaint.fill {scope}` and `livePaint.strokeEdge {scope}` take `scope` as `"one"` (the default), `"connected"` or
   `"samePaint"`; any other value is an error and changes nothing. `match` is a paint in the model JSON that
   `document.node {id}` writes for an appearance's paints (`{"type": "none"}` for none), taken only with a scope that compares paints, and
-  defaults to the face's fill or the edge's stroke paint. `livePaint.fill` refuses a `scope` other than `"one"` with
+  defaults to the face's fill or the stroke paint the edge draws with. `livePaint.fill` refuses a `scope` other than `"one"` with
   `points`. Both replies add `count`, the number of faces or edges the click reaches, including those that already had the
   paint.
   With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which

@@ -130,7 +130,7 @@ fn lp_cells_around(p: Point) -> impl Iterator<Item = (i64, i64)> {
 /// The stroke paint Live Paint edge `edge` draws with: the paint of its topmost stroke that is shown
 /// with a paint, a weight above 0 and an opacity above 0, or [`Paint::None`] when the edge is fully
 /// transparent or has no such stroke.
-pub(super) fn lp_stroke_paint(edge: &Node) -> Paint {
+pub fn lp_stroke_paint(edge: &Node) -> Paint {
     if edge.opacity <= 0.0 {
         return Paint::None;
     }
