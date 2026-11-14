@@ -3,7 +3,7 @@ use vectorcraft_geom::kurbo::ParamCurveDeriv;
 use super::outline::{self, Along, Budget, CURVE_TOLERANCE};
 use super::rings::{
     CURVE_PIECES, MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, curve_pieces, inset, left, signed_area,
-    solid_rings_traced,
+    solid_rings_traced, square_corners,
 };
 use super::{
     Bevel, DepthPlane, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve, V3, View,
@@ -458,10 +458,15 @@ pub(super) fn check_bounds(b: Rect) -> Result<(), String> {
 }
 
 /// The art's outward direction at edge `i` of `ring` (before rotation), tilted towards the face
-/// it borders by `z` (+1 front, -1 back, 0 a side wall).
+/// it borders by `z` (+1 front, -1 back, 0 a side wall). An edge of no length (a corner cut
+/// square, see [`square_corners`]) faces out between the edges on either side of it.
 pub(super) fn outward(ring: &[Point], i: usize, z: f64) -> V3 {
     let n = ring.len();
-    let (lx, ly) = left(ring[i], ring[(i + 1) % n]);
+    let (mut lx, mut ly) = left(ring[i], ring[(i + 1) % n]);
+    if lx == 0.0 && ly == 0.0 && n > 2 {
+        let (a, b) = (left(ring[(i + n - 1) % n], ring[i]), left(ring[(i + 1) % n], ring[(i + 2) % n]));
+        (lx, ly) = (a.0 + b.0, a.1 + b.1);
+    }
     V3(-lx, -ly, z)
 }
 
@@ -607,7 +612,10 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let size = bounds.width().max(bounds.height());
     let most = curve_pieces(path, size, bands, caps)?;
-    let traced = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?;
+    // Every inset of one extrusion goes the same way: into the shape for a bevel inside, out of it
+    // for one outside. The corners that way opens are cut square past the miter limit.
+    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
+    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?.iter().map(|r| square_corners(r, side)).collect();
     let rings: Vec<&[Point]> = traced.iter().map(|r| r.points.as_slice()).collect();
     let edges = rings.iter().map(|r| r.len()).fold(0usize, usize::saturating_add);
     if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {

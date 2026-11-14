@@ -1651,6 +1651,97 @@ fn smoothing_a_whole_closed_path_smooths_a_bump_at_its_start() {
     assert!(start <= far + 0.5, "the bump at the start stays {start} pt high, the far one {far} pt");
 }
 
+/// Checks that the closed path `p` starts at its point nearest `old`, within `reach` of it: its first
+/// anchor is no farther from `old` than any other point along the path, and its outline starts there.
+fn assert_starts_nearest(p: &PathData, old: Point, reach: f64) {
+    let sp = &p.subpaths[0];
+    assert!(sp.closed, "the path stays closed");
+    let first = sp.anchors[0].p;
+    let nearest = smooth_test_samples(p).iter().map(|q| q.distance(old)).fold(f64::INFINITY, f64::min);
+    let d = first.distance(old);
+    assert!(d <= nearest + 1e-6 && d <= reach, "the path starts {d} pt from its old start, its nearest point is {nearest} pt away: {sp:?}");
+    let mut bp = kurbo::BezPath::new();
+    sp.to_bezpath_into(&mut bp);
+    assert_eq!(bp.elements().first(), Some(&kurbo::PathEl::MoveTo(first)));
+}
+
+/// A drag over a closed path's first anchor and the anchors either side of it smooths the bump there,
+/// and the path starts at the point of the smoothed path nearest the old first anchor. The anchors out
+/// of reach keep their places, and undo brings the path back.
+#[test]
+fn smoothing_over_a_closed_paths_first_anchor_keeps_its_start() {
+    let mut s = session();
+    let (c, r) = (Point::new(300.0, 300.0), 100.0);
+    let at = |deg: f64, rr: f64| c + rr * kurbo::Vec2::from_angle(deg.to_radians());
+    let anchors: Vec<_> = (0..12)
+        .map(|i| {
+            let q = at(30.0 * f64::from(i), if i == 0 { r + 8.0 } else { r });
+            json!({"x": q.x, "y": q.y})
+        })
+        .collect();
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let before = path(&s, id);
+    let old = before.subpaths[0].anchors[0].p;
+    // Along the circle from -40° to 40°, over anchors 11, 0 and 1.
+    let drag: Vec<Point> = (-20..=20).map(|k| at(2.0 * f64::from(k), r)).collect();
+    smooth_pass(&mut s, &drag);
+    let after = path(&s, id);
+    assert_ne!(after, before, "the bump is smoothed");
+    assert_starts_nearest(&after, old, 12.0);
+    let kept = &after.subpaths[0].anchors;
+    for a in &before.subpaths[0].anchors[2..=10] {
+        assert!(kept.iter().any(|k| k.p == a.p), "{:?} is out of reach and stays: {kept:?}", a.p);
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, id), before);
+}
+
+/// A drag over the whole of a closed path with a spike that turns back on itself, which the refit
+/// keeps as a corner, leaves the path starting at its point nearest the old first anchor.
+#[test]
+fn smoothing_a_whole_closed_path_with_a_spike_keeps_its_start() {
+    let mut s = session();
+    let mut seed = 5u64;
+    let (c, r) = (Point::new(300.0, 300.0), 80.0);
+    let at = |a: f64, rr: f64| c + rr * kurbo::Vec2::from_angle(a);
+    use std::f64::consts::{PI, TAU};
+    let mut pts: Vec<Point> = (0..64).map(|i| at(f64::from(i) / 64.0 * TAU, r + 2.5 * smooth_noise(&mut seed))).collect();
+    // Out from the anchor at 180° to a tip 40 pt beyond the circle and back.
+    pts.splice(33..33, [at(PI, r + 40.0), at(PI + 0.002, r)]);
+    let anchors: Vec<_> = pts.iter().map(|q| json!({"x": q.x, "y": q.y})).collect();
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let before = path(&s, id);
+    let mut drag: Vec<Point> = (0..=128).map(|i| at(f64::from(i) / 128.0 * TAU, r)).collect();
+    drag.splice(65..65, (0..=16).chain((0..=16).rev()).map(|k| at(PI, r + 2.5 * f64::from(k))));
+    smooth_pass(&mut s, &drag);
+    let after = path(&s, id);
+    assert_ne!(after, before, "the path is smoothed");
+    assert_starts_nearest(&after, pts[0], 12.0);
+}
+
+/// A drag that reaches a closed path but not its first anchor leaves that anchor first, where it was.
+#[test]
+fn smoothing_a_closed_path_away_from_its_first_anchor_keeps_it_first() {
+    let mut s = session();
+    let (c, r) = (Point::new(300.0, 300.0), 100.0);
+    let at = |deg: f64, rr: f64| c + rr * kurbo::Vec2::from_angle(deg.to_radians());
+    let anchors: Vec<_> = (0..12)
+        .map(|i| {
+            let q = at(30.0 * f64::from(i), if i == 6 { r + 8.0 } else { r });
+            json!({"x": q.x, "y": q.y})
+        })
+        .collect();
+    let id = smooth_test_path(&mut s, &anchors, true);
+    let before = path(&s, id);
+    // Along the circle from 140° to 220°, over anchors 5, 6 and 7.
+    let drag: Vec<Point> = (70..=110).map(|k| at(2.0 * f64::from(k), r)).collect();
+    smooth_pass(&mut s, &drag);
+    let after = path(&s, id);
+    assert_ne!(after, before, "the bump is smoothed");
+    assert!(after.subpaths[0].closed);
+    assert_eq!(after.subpaths[0].anchors[0], before.subpaths[0].anchors[0]);
+}
+
 /// A straight line along y = 200 from x = 100 to 400, one anchor every 5 pt, whose second and
 /// second-to-last anchors are 1.5 pt off the line: its first and last segments leave and arrive at
 /// 16.7° to it.
