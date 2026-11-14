@@ -1097,6 +1097,38 @@ fn a_flat_inflate_solved_as_taken_matches_one_solved_first() {
     }
 }
 
+/// With no volume, a shape with too many anchors or contours for the solid is refused before it
+/// is kept for later, with the error that solving every puff first gives it.
+#[test]
+fn a_flat_inflate_refuses_a_shape_past_the_point_limit_as_one_solved_first() {
+    use super::inflate::might_fit;
+    let many = MAX_SOLID_POINTS * 3 + 10;
+    let anchors: Vec<Point> = (0..many).map(|i| Point::new((i % 200) as f64, (i / 200) as f64 / 10.0)).collect();
+    let long = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&anchors, true)]);
+    let mut nan = anchors.clone();
+    if let Some(last) = nan.last_mut() {
+        *last = Point::new(f64::NAN, 0.0);
+    }
+    let invalid = PathData::new(vec![vectorcraft_geom::SubPath::polyline(&nan, true)]);
+    let dots = PathData::new((0..=MAX_SOLID_POINTS).map(|i| vectorcraft_geom::SubPath::polyline(&[Point::new(i as f64, 0.0)], false)).collect());
+    let square = shape(&square(0.0, 0.0, 100.0)).0;
+    assert!(might_fit(&square) && !might_fit(&long) && !might_fit(&invalid) && !might_fit(&dots));
+    let paths = [square, long, invalid, dots];
+    let shapes: Vec<(&PathData, FillRule)> = paths.iter().map(|p| (p, FillRule::EvenOdd)).collect();
+    let b = Rect::new(-10.0, -10.0, 250.0, 250.0);
+    let o = Inflate { volume: 0.0, ..Inflate::default() };
+    let solids = |first: bool| {
+        SOLVE_FIRST.with(|s| s.set(first));
+        let out: Vec<Result<build::Built, String>> = inflate_faces(&shapes, b, o, front(), build::Keep::Facets).collect();
+        SOLVE_FIRST.with(|s| s.set(false));
+        out
+    };
+    let (taken, first) = (solids(false), solids(true));
+    assert!(taken[0].as_ref().is_ok_and(|(f, ..)| !f.is_empty()));
+    assert!(taken[1..].iter().all(Result::is_err), "{:?}", taken[1..].iter().map(|r| r.as_ref().err()).collect::<Vec<_>>());
+    assert_eq!(format!("{taken:?}"), format!("{first:?}"));
+}
+
 /// #1724: under the nonzero rule a contour inside another that runs the same way cuts no hole
 /// (the middle is filled, as the art is drawn); one running the other way does, and so does
 /// either under the even-odd rule.

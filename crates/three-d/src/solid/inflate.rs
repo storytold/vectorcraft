@@ -21,14 +21,35 @@ struct Puff {
     height: f64,
 }
 
+/// The pieces each curve of `path` is sampled in for Inflate's solid ([`curve_pieces`]); an error
+/// when its outline does not fit the solid's limits.
+fn outline_pieces(path: &PathData, bounds: Rect, o: &Inflate) -> Result<u32, String> {
+    // The sides take one face for each edge of the outline in each slice; the grid's faces are
+    // counted as they are built.
+    curve_pieces(path, bounds.width().max(bounds.height()), if o.depth > 0.0 { slices(o) } else { 0 }, 0)
+}
+
+/// Whether `path` has few enough anchors that [`curve_pieces`] might take it: fewer than
+/// [`MAX_SOLID_POINTS`] contours, and at most three times as many anchors (a contour of one anchor
+/// adds one, and every other takes at most two anchors for each segment it adds). Counts the
+/// contours' anchors without reading them.
+pub(super) fn might_fit(path: &PathData) -> bool {
+    let mut anchors = 0usize;
+    for (contours, sp) in path.subpaths.iter().enumerate() {
+        anchors = anchors.saturating_add(sp.anchors.len());
+        if contours >= MAX_SOLID_POINTS || anchors > MAX_SOLID_POINTS.saturating_mul(3) {
+            return false;
+        }
+    }
+    true
+}
+
 /// The rings of `path` and its membrane on the grid of `bounds`; `None` for a shape with no area.
 fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Option<Puff>, String> {
     #[cfg(test)]
     PUFFED.with(|n| n.set(n.get() + 1));
-    // The sides take one face for each edge of the outline in each slice; the grid's faces are
-    // counted as they are built.
     let size = bounds.width().max(bounds.height());
-    let most = curve_pieces(path, size, if o.depth > 0.0 { slices(o) } else { 0 }, 0)?;
+    let most = outline_pieces(path, bounds, o)?;
     let rings = solid_rings(path, rule, size, MAX_SOLID_POINTS, most)?;
     if rings.is_empty() {
         return Ok(None);
@@ -88,7 +109,18 @@ pub(crate) fn inflate_faces(shapes: &[(&PathData, FillRule)], bounds: Rect, opti
     #[cfg(test)]
     let later = later && !SOLVE_FIRST.with(std::cell::Cell::get);
     if later {
-        let shapes: Vec<(PathData, FillRule)> = shapes.iter().map(|(path, rule)| ((*path).clone(), *rule)).collect();
+        // A shape is copied to be solved later only when its anchors are few enough for the
+        // solid's point limit; a larger one is refused now, with the error its puff gives.
+        let shapes: Vec<Result<(PathData, FillRule), String>> = shapes
+            .iter()
+            .map(|(path, rule)| {
+                check_bounds(bounds)?;
+                if !might_fit(path) {
+                    outline_pieces(path, bounds, &o)?;
+                }
+                Ok(((*path).clone(), *rule))
+            })
+            .collect();
         return Solids { pending: Pending::Later(shapes.into_iter()), bounds, o, view, reach: 0.0, keep };
     }
     let puffs: Vec<Result<Option<Puff>, String>> =
@@ -98,10 +130,11 @@ pub(crate) fn inflate_faces(shapes: &[(&PathData, FillRule)], bounds: Rect, opti
 }
 
 /// The shapes' puffs still to take: every one solved when the shapes were laid out, or each
-/// shape's path and fill rule, its puff solved when its solid is taken.
+/// shape's path and fill rule (or the error its bounds or outline already gives), its puff solved
+/// when its solid is taken.
 enum Pending {
     Solved(std::vec::IntoIter<Result<Option<Puff>, String>>),
-    Later(std::vec::IntoIter<(PathData, FillRule)>),
+    Later(std::vec::IntoIter<Result<(PathData, FillRule), String>>),
 }
 
 /// The solids of [`inflate_faces`], one result for each shape in order, each built as it is taken.
@@ -135,10 +168,7 @@ impl Iterator for Solids {
     fn next(&mut self) -> Option<Self::Item> {
         let p = match &mut self.pending {
             Pending::Solved(puffs) => puffs.next()?,
-            Pending::Later(shapes) => {
-                let (path, rule) = shapes.next()?;
-                check_bounds(self.bounds).and_then(|()| puff(&path, rule, self.bounds, &self.o))
-            }
+            Pending::Later(shapes) => shapes.next()?.and_then(|(path, rule)| puff(&path, rule, self.bounds, &self.o)),
         };
         Some(match p {
             Ok(Some(p)) => inflated(p, self.bounds, self.o, self.view, self.reach, self.keep),
