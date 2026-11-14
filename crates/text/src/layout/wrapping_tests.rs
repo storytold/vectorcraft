@@ -862,7 +862,8 @@ fn a_further_span_is_measured_across_the_height_of_its_line() {
         wrap: vectorcraft_doc::TextWrap { offset: 0.0, invert: false },
     };
     let small = breaking::Metrics { asc: 10.0, desc: 3.0, lead: 14.0, cap: 7.0, xh: 5.0, top: 10.0 };
-    let tall = breaking::Metrics { asc: 30.0, desc: 9.0, lead: 42.0, cap: 21.0, xh: 15.0, top: 30.0 };
+    // The tall line is set at the small line's leading, so it may share the small line's baseline.
+    let tall = breaking::Metrics { asc: 30.0, desc: 9.0, lead: 14.0, cap: 21.0, xh: 15.0, top: 30.0 };
     // An object down the middle of the frame splits every line in two, and `above` lies right of
     // it over y 20 to 40. A small line after a baseline of 50 is set at 64, over y 54 to 67, clear
     // of `above`; a tall line in the span right of it on that baseline covers y 34 to 73.
@@ -877,6 +878,7 @@ fn a_further_span_is_measured_across_the_height_of_its_line() {
             fb: FirstBaseline::Ascent,
             fb_min: 0.0,
             queued: vec![],
+            above: Default::default(),
             model: LeadingModel::RomanBaseline,
             next_top: None,
             no_room_for: f64::INFINITY,
@@ -897,15 +899,70 @@ fn a_further_span_is_measured_across_the_height_of_its_line() {
     assert!(near(right, (64.0, 220.0, 300.0, true)), "{right:?}");
     // That part is 80 wide: a tall line that starts with a wider word goes on the next baseline.
     let (_, right) = set(Rect::new(300.0, 20.0, 400.0, 40.0), 100.0);
-    assert!(near(right, (106.0, 0.0, 180.0, false)), "{right:?}");
+    assert!(near(right, (78.0, 0.0, 180.0, false)), "{right:?}");
     // `above` covers the whole span: the tall line goes on the next baseline, left of the object.
     let (left, right) = set(Rect::new(220.0, 20.0, 400.0, 40.0), 0.0);
     assert!(near(left, (64.0, 0.0, 180.0, false)), "{left:?}");
-    assert!(near(right, (106.0, 0.0, 180.0, false)), "{right:?}");
+    assert!(near(right, (78.0, 0.0, 180.0, false)), "{right:?}");
     // `above` lies below the tall line: the span is as wide for it as for the small line, and it
     // takes the span whatever its first word, as a further span always did.
     let (_, right) = set(Rect::new(300.0, 300.0, 400.0, 320.0), 200.0);
     assert!(near(right, (64.0, 220.0, 400.0, true)), "{right:?}");
+}
+
+/// A further span goes only to a line whose own leading sets it no higher than the span's
+/// baseline: a taller line leaves the span empty and goes on the next baseline, so its ascent does
+/// not reach into the line above the band. In a cell's first band, a taller line leaves a span
+/// whose baseline is above its own first baseline in the cell.
+#[test]
+fn a_further_span_is_left_to_a_line_its_leading_sets_there() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let frame = Rect::new(0.0, 0.0, 400.0, 400.0).to_path(0.1);
+    let wraps = [vectorcraft_doc::WrapShape {
+        path: PathData::from_bezpath(&Rect::new(180.0, 0.0, 220.0, 400.0).to_path(0.1)),
+        wrap: vectorcraft_doc::TextWrap { offset: 0.0, invert: false },
+    }];
+    let regions = region::Region::cells(&frame, &LayoutOptions::default(), &wraps);
+    let small = breaking::Metrics { asc: 10.0, desc: 3.0, lead: 14.0, cap: 7.0, xh: 5.0, top: 10.0 };
+    let tall = breaking::Metrics { asc: 30.0, desc: 9.0, lead: 42.0, cap: 21.0, xh: 15.0, top: 30.0 };
+    let set = |prev: Option<f64>, model: LeadingModel, next: breaking::Metrics| {
+        let mut pen = breaking::Pen {
+            regions: Some(&regions),
+            ri: 0,
+            prev,
+            pending: 0.0,
+            fb: FirstBaseline::Ascent,
+            fb_min: 0.0,
+            queued: vec![],
+            above: Default::default(),
+            model,
+            next_top: prev.map(|b| b - small.top + small.lead),
+            no_room_for: f64::INFINITY,
+            steps_left: Rc::new(Cell::new(breaking::MAX_TOTAL_STEPS)),
+            search: Default::default(),
+        };
+        let left = pen.place(small, 0.0, 0.0, 0.0);
+        let at = left.map_or(f64::NAN, |l| l.0);
+        pen.settled(at, small);
+        let ok = pen.clears_above(at, next);
+        (left, pen.place(next, 0.0, 0.0, 0.0), ok)
+    };
+    let near = |got: Option<(f64, f64, f64, bool)>, want: (f64, f64, f64, bool)| {
+        got.is_some_and(|g| (g.0 - want.0).abs() < 0.01 && (g.1 - want.1).abs() < 0.01 && (g.2 - want.2).abs() < 0.01 && g.3 == want.3)
+    };
+    // The next baseline for the tall line after the small one at 64, and after the small one at 10.
+    for (model, after_64, after_10) in [(LeadingModel::RomanBaseline, 106.0, 52.0), (LeadingModel::EmBoxTop, 98.0, 44.0)] {
+        // After a line at 50, the small line is set at 64. A small line takes the span right of the
+        // object on that baseline; a tall line, which its leading sets lower, goes on the next one.
+        let (left, right, ok) = set(Some(50.0), model, small);
+        assert!(near(left, (64.0, 0.0, 180.0, false)) && near(right, (64.0, 220.0, 400.0, true)) && ok, "{model:?}: {left:?} {right:?}");
+        let (_, right, ok) = set(Some(50.0), model, tall);
+        assert!(near(right, (after_64, 0.0, 180.0, false)) && !ok, "{model:?}: {right:?}");
+        // The cell's first band: the small line at 10, the tall line on the next baseline.
+        let (left, right, ok) = set(None, model, tall);
+        assert!(near(left, (10.0, 0.0, 180.0, false)) && near(right, (after_10, 0.0, 180.0, false)) && !ok, "{model:?}: {left:?} {right:?}");
+    }
 }
 
 /// The every-line composer's searches for the paragraphs of one frame share one budget: each takes
@@ -941,6 +998,7 @@ fn shaped_composition_searches_share_the_frame_budget() {
         fb: FirstBaseline::Ascent,
         fb_min: 0.0,
         queued: vec![],
+        above: Default::default(),
         model: LeadingModel::default(),
         next_top: None,
         no_room_for: f64::INFINITY,

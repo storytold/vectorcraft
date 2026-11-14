@@ -173,6 +173,7 @@ pub(super) fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, reg
         fb: cx.opts.first_baseline,
         fb_min: cx.opts.first_baseline_min,
         queued: vec![],
+        above: Default::default(),
         model: t.para_at(0).leading_model,
         next_top: None,
         no_room_for: f64::INFINITY,
@@ -479,6 +480,11 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
             _ => (n, false, false),
         };
         let m = Metrics::max(&sg[*i..end]).unwrap_or(*pm);
+        if same_baseline && !pen.clears_above(baseline, m) {
+            // A glyph taller than the first one sets the line lower than the span's baseline: the
+            // span is left empty, and the line goes in the next span or on the next baseline.
+            continue;
+        }
         baseline += if same_baseline || (pen.regions.is_none() && first_in_region) {
             0.0
         } else if pen.model == LeadingModel::EmBoxTop {

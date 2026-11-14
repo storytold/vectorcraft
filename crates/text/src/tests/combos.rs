@@ -440,6 +440,36 @@ fn composer_x_mixed_sizes_around_text_wrap() {
 }
 
 #[test]
+fn composer_x_taller_line_in_a_further_span() {
+    // A wrap object down the middle of the frame splits every line in two. The 36 pt word falls in
+    // the span right of it on the second baseline, after a 12 pt line left of it: the line that
+    // holds it is set as far below the line above it as its own leading sets it, and its ascent
+    // stays clear of that line, with either composer.
+    let w = x_width();
+    let object = Rect::new(w, -10.0, w + 40.0, 310.0);
+    for composer in [Composer::SingleLine, Composer::EveryLine] {
+        let mut runs = vec![run(&format!("{RAG} Then draw a card for each creature destroyed this way. "), sans(12.0))];
+        runs.extend(with_x(sans(36.0)));
+        let mut t = area(runs, Rect::new(0.0, 0.0, 2.0 * w + 40.0, 300.0));
+        t.wrap = vec![vectorcraft_doc::WrapShape { path: PathData::from_bezpath(&object.to_path(0.1)), wrap: Default::default() }];
+        t.para.composer = composer;
+        let l = layout(db(), &t);
+        assert!(!l.overflow, "{composer:?}: {:?}", l.lines);
+        let tall: Vec<_> = l.lines.iter().filter(|line| line.ascent > 30.0).collect();
+        assert_eq!(tall.len(), 1, "{composer:?}: {:?}", l.lines);
+        for line in tall {
+            for above in l.lines.iter().filter(|a| a.baseline < line.baseline - 0.01) {
+                let beside = above.avail.0 < line.avail.1 && line.avail.0 < above.avail.1;
+                assert!(
+                    !beside || line.baseline - line.ascent >= above.baseline + above.descent - 0.01,
+                    "{composer:?}: {line:?} reaches into {above:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn composer_x_mixed_sizes_in_a_frame_that_widens() {
     // A frame as wide as "Destroy all" down to 20 pt and as wide as the first line of
     // `composer_x_mixed_sizes_in_a_stepped_frame` below. The second line is too long for the narrow

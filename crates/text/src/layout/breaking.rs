@@ -53,6 +53,15 @@ impl Metrics {
     }
 }
 
+/// What a line band was placed below: the baseline of the line above it and the em box top that
+/// line left for the next one (both `None` for a cell's first band), and the space pending between.
+#[derive(Clone, Copy, Default)]
+pub(super) struct Above {
+    pub(super) prev: Option<f64>,
+    pub(super) next_top: Option<f64>,
+    pub(super) pending: f64,
+}
+
 /// Where the next line goes: the region being filled and the previous baseline in it.
 #[derive(Clone)]
 pub(super) struct Pen<'r> {
@@ -64,6 +73,8 @@ pub(super) struct Pen<'r> {
     pub(super) fb_min: f64,
     /// Further spans at the current baseline (text wrapping on both sides of an object).
     pub(super) queued: Vec<(f64, f64, f64)>,
+    /// What the line band at the current baseline was placed below (see [`Above`]).
+    pub(super) above: Above,
     /// Leading measured from em box top to em box top: where the next line's em box top goes.
     pub(super) model: LeadingModel,
     pub(super) next_top: Option<f64>,
@@ -108,16 +119,21 @@ impl Pen<'_> {
     /// [`Pen::place`], skipping lines of a non-rectangular frame narrower than `min`.
     fn place_at_least(&mut self, est: Metrics, ind_l: f64, ind_r: f64, min: f64) -> Option<(f64, f64, f64, bool)> {
         let Some(regions) = self.regions else {
-            let b = self.prev.map_or(0.0, |b| self.next_baseline(b, est));
+            let b = self.prev.map_or(0.0, |b| self.next_baseline(b, self.next_top, self.pending, est));
             return Some((b, f64::NEG_INFINITY, f64::INFINITY, false));
         };
         // A further span was measured across the height of the line set before it on its baseline.
         // This line gets the part of it that is free across its own height: a taller line can
         // reach a wrap object the line before it stayed clear of. A span with no such part is
-        // left empty, and so is a part the line's height made narrower than `min`.
+        // left empty, and so is a part the line's height made narrower than `min`. A span on a
+        // baseline nearer the line above the band than this line's own leading sets it is left
+        // empty too: a taller line would reach into that line.
         while !self.queued.is_empty() {
             let (b, x0, x1) = self.queued.remove(0);
             let Some(r) = regions.get(self.ri) else { return Some((b, x0, x1, true)) };
+            if b + EPS < self.band_baseline(r, est) {
+                continue;
+            }
             let mut free = r.spans(b - est.asc, b + est.desc).into_iter().filter_map(|(s, e)| {
                 let (s, e) = (s.max(x0), e.min(x1));
                 let room = e - s - ind_l - ind_r;
@@ -132,11 +148,8 @@ impl Pen<'_> {
         }
         loop {
             let r = regions.get(self.ri)?;
-            let mut baseline = match self.prev {
-                None if self.model == LeadingModel::EmBoxTop => r.top() + r.shift + est.top.max(self.fb_min),
-                None => r.top() + r.shift + est.first_baseline(self.fb, self.fb_min),
-                Some(b) => self.next_baseline(b, est) + r.gap,
-            };
+            self.above = Above { prev: self.prev, next_top: self.next_top, pending: self.pending };
+            let mut baseline = self.band_baseline(r, est);
             // The baseline moves down the cell a lead at a time, or a `MAX_STEPS`th of the cell's
             // height when that is more, in at most `MAX_STEPS` steps.
             let step = est.lead.max(1.0).max(r.cell.height() / MAX_STEPS as f64);
@@ -188,12 +201,29 @@ impl Pen<'_> {
     pub(super) fn bottom(&self) -> f64 {
         self.regions.and_then(|r| r.get(self.ri)).map_or(f64::INFINITY, |r| r.bottom())
     }
-    /// The baseline of the line after the one at `prev`, for a line of metrics `est`.
-    fn next_baseline(&self, prev: f64, est: Metrics) -> f64 {
-        match (self.model, self.next_top) {
-            (LeadingModel::EmBoxTop, Some(top)) => top + est.top + self.pending,
-            _ => prev + est.lead + self.pending,
+    /// The baseline of the line after the one at `prev`, which left the next em box top at
+    /// `next_top`, for a line of metrics `est` with `pending` space between them.
+    fn next_baseline(&self, prev: f64, next_top: Option<f64>, pending: f64, est: Metrics) -> f64 {
+        match (self.model, next_top) {
+            (LeadingModel::EmBoxTop, Some(top)) => top + est.top + pending,
+            _ => prev + est.lead + pending,
         }
+    }
+    /// The highest baseline in cell `r` for a line of metrics `est` in the current line band: as
+    /// far below the line above the band ([`Pen::above`]) as its own leading sets it, or at the
+    /// cell's first baseline.
+    fn band_baseline(&self, r: &Region, est: Metrics) -> f64 {
+        let Above { prev, next_top, pending } = self.above;
+        match prev {
+            None if self.model == LeadingModel::EmBoxTop => r.top() + r.shift + est.top.max(self.fb_min),
+            None => r.top() + r.shift + est.first_baseline(self.fb, self.fb_min),
+            Some(b) => self.next_baseline(b, next_top, pending, est) + r.gap,
+        }
+    }
+    /// A line of metrics `m` set in a further span at baseline `b` is no nearer the line above
+    /// the band than its own leading sets it.
+    pub(super) fn clears_above(&self, b: f64, m: Metrics) -> bool {
+        self.regions.and_then(|r| r.get(self.ri)).is_none_or(|r| b + EPS >= self.band_baseline(r, m))
     }
     /// A line was set at `baseline` with metrics `m`: where the next one goes from.
     pub(super) fn settled(&mut self, baseline: f64, m: Metrics) {
@@ -953,6 +983,7 @@ fn a_pen_out_of_baseline_steps_finds_no_room() {
         fb: FirstBaseline::Ascent,
         fb_min: 0.0,
         queued: vec![],
+        above: Default::default(),
         model: LeadingModel::default(),
         next_top: None,
         no_room_for: f64::INFINITY,
