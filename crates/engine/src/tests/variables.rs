@@ -2479,6 +2479,8 @@ fn malformed_variable_libraries_are_refused() {
     );
     let cases = [
         ("not well-formed XML", "<variableSets><variableSet>".to_string()),
+        ("not well-formed XML", ok.replace("<p>x</p>", "<p>A&missing;B</p>")),
+        ("not well-formed XML", ok.replace("</variableSets>", "")),
         ("no `variableSets` element", "<svg><variables/></svg>".to_string()),
         ("declares no variables", "<variableSets><variableSet><variables/></variableSet></variableSets>".to_string()),
         ("is declared twice", library(&[("Name", "textcontent"), ("Name", "textcontent")], &[])),

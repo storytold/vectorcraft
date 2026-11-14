@@ -144,9 +144,18 @@ fn unpack(mut src: &[u8], out: &mut Vec<u8>) {
     }
 }
 
-/// The composite as a reader sees it.
+/// The stored composite: RGB stays white-matted, with its original alpha.
 fn merged(f: &[u8]) -> Vec<u8> {
-    craft_psd::PsdFile::from_bytes(f).expect("a PSD a reader takes").composite_rgba8().expect("composite").data
+    let psd = craft_psd::PsdFile::from_bytes(f).expect("a PSD a reader takes");
+    if psd.header.color_mode != craft_psd::ColorMode::Rgb {
+        return psd.composite_rgba8().expect("composite").data;
+    }
+    assert_eq!(psd.header.depth, 8);
+    let samples = psd.decode_merged().expect("stored composite planes");
+    let count = psd.header.width as usize * psd.header.height as usize;
+    (0..count)
+        .flat_map(|i| [samples[i], samples[count + i], samples[2 * count + i], if psd.merged_has_alpha() { samples[3 * count + i] } else { 255 }])
+        .collect()
 }
 
 fn pixel(px: &[u8], width: usize, x: usize, y: usize) -> [u8; 4] {

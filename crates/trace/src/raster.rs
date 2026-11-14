@@ -28,6 +28,63 @@ pub const MAX_PIXELS: u64 = 64 << 20;
 /// to [`MAX_PIXELS`] (192 megapixels: 768 MB decoded); larger images are refused.
 pub const MAX_SOURCE_PIXELS: u64 = 192 << 20;
 
+/// Header facts for tracing, without reserving a PNG's full decoded pixel buffer.
+/// The shared allocation probe runs before the decoder's plausibility checks so the caller's
+/// size refusal wins even for a large header-only file. The streaming reader still checks the
+/// PNG structure and plausibility, and reports the expanded layout (including tRNS alpha).
+pub(crate) fn trace_header(bytes: &[u8], max_pixels: u64, max_alloc: u64) -> Result<Option<craft_image_codecs::RasterInspection>, TraceError> {
+    use craft_image_codecs::{ChannelLayout, Format, Limits, PngDecodeRows, RasterColorType, RasterInspection};
+    let decode_err = |e: craft_image_codecs::CodecError| TraceError::Decode(e.to_string());
+    if craft_image_codecs::detect(bytes) != Some(Format::Png) {
+        return craft_image_codecs::inspect_raster(bytes).map_err(decode_err);
+    }
+    let (width, height) = craft_image_codecs::probe_allocation_size(bytes).map_err(decode_err)?;
+    if u64::from(width) * u64::from(height) > max_pixels {
+        return Err(TraceError::TooLarge { width, height, max: max_pixels >> 20 });
+    }
+    // The allocation probe validates the IHDR prefix. For explicit alpha layouts, its
+    // sample width also gives a lower bound on decoded bytes before plausibility checks.
+    // Preserve the alpha caller's TooLarge refusal for header-only RGBA16/GrayA images;
+    // the shared reader still validates CRCs, transparency expansion, and all other layouts.
+    let alpha_bytes_per_pixel = match bytes.get(24..26) {
+        Some([8, 4]) => 2,
+        Some([16, 4]) | Some([8, 6]) => 4,
+        Some([16, 6]) => 8,
+        _ => 0,
+    };
+    if (u64::from(width) * u64::from(height)).saturating_mul(alpha_bytes_per_pixel) > max_alloc {
+        return Err(TraceError::TooLarge { width, height, max: max_pixels >> 20 });
+    }
+    let limits = Limits { max_pixels, max_alloc, ..Limits::default() };
+    let rows = PngDecodeRows::new_streaming(bytes, &limits).map_err(decode_err)?;
+    let h = rows.header();
+    let color_type = match h.layout {
+        ChannelLayout::Gray => RasterColorType::Gray,
+        ChannelLayout::GrayA => RasterColorType::GrayAlpha,
+        ChannelLayout::Rgb => RasterColorType::Rgb,
+        ChannelLayout::Rgba => RasterColorType::Rgba,
+        _ => RasterColorType::Other,
+    };
+    Ok(Some(RasterInspection {
+        width: h.width,
+        height: h.height,
+        channels: h.layout.channels() as u8,
+        bits_per_sample: (h.sample.bytes() * 8) as u8,
+        color_type,
+        palette: None,
+        transparent_index: None,
+    }))
+}
+
+/// Reuse an already-normalized RGBA8 decode instead of allocating a second full pixel buffer.
+fn into_rgba8(img: craft_image_codecs::Image) -> Vec<u8> {
+    if img.layout() == craft_image_codecs::ChannelLayout::Rgba && img.sample_type() == craft_image_codecs::SampleType::U8 {
+        img.into_data()
+    } else {
+        img.to_rgba8()
+    }
+}
+
 /// The largest size with `w : h`'s aspect of at most `max` pixels (each side at least 1).
 pub(crate) fn fit_size(w: u32, h: u32, max: u64) -> (u32, u32) {
     let pixels = u64::from(w) * u64::from(h);
@@ -158,7 +215,7 @@ impl Raster {
     }
     /// Decode PNG / JPEG / WebP / GIF bytes (at most [`MAX_PIXELS`], checked before decoding).
     pub fn decode(bytes: &[u8]) -> Result<Self, TraceError> {
-        if let Some(info) = craft_image_codecs::inspect_raster(bytes).map_err(|e| TraceError::Decode(e.to_string()))? {
+        if let Some(info) = trace_header(bytes, MAX_PIXELS, craft_image_codecs::Limits::default().max_alloc)? {
             if info.width == 0 || info.height == 0 {
                 return Err(TraceError::Empty);
             }
@@ -169,22 +226,23 @@ impl Raster {
             return Err(TraceError::TooLarge { width: 0, height: 0, max: MAX_PIXELS >> 20 });
         }
         let opts = craft_image_codecs::DecodeOptions {
+            // Match rendering and trace placement: coordinates refer to stored pixels.
+            keep_orientation: true,
             limits: craft_image_codecs::Limits { max_pixels: MAX_PIXELS, ..craft_image_codecs::Limits::default() },
-            ..craft_image_codecs::DecodeOptions::default()
         };
         let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| TraceError::Decode(e.to_string()))?;
         let (w, h) = (img.width(), img.height());
         if w == 0 || h == 0 {
             return Err(TraceError::Empty);
         }
-        Ok(Self { width: w, height: h, rgba: img.to_rgba8() })
+        Ok(Self { width: w, height: h, rgba: into_rgba8(img) })
     }
     /// Decode as [`Raster::decode`], but an image of more than [`MAX_PIXELS`] (up to
     /// [`MAX_SOURCE_PIXELS`]) is scaled down, aspect kept, to the largest size within
     /// [`MAX_PIXELS`] instead of being refused: a 300 ppi scan of a poster traces at slightly
     /// less than its own resolution. The caller maps the result back with `width` / `height`.
     pub fn decode_to_fit(bytes: &[u8]) -> Result<Self, TraceError> {
-        if let Some(info) = craft_image_codecs::inspect_raster(bytes).map_err(|e| TraceError::Decode(e.to_string()))? {
+        if let Some(info) = trace_header(bytes, MAX_SOURCE_PIXELS, if cfg!(target_arch = "wasm32") { 512 << 20 } else { MAX_SOURCE_PIXELS * 4 })? {
             if info.width == 0 || info.height == 0 {
                 return Err(TraceError::Empty);
             }
@@ -204,19 +262,20 @@ impl Raster {
         // Decoded within the allocation the source limit needs; the web keeps file import's 512 MB.
         // A deeper image (16 bits a channel) that needs more fails with a decode error.
         let opts = craft_image_codecs::DecodeOptions {
+            // Match rendering and trace placement: coordinates refer to stored pixels.
+            keep_orientation: true,
             limits: craft_image_codecs::Limits {
                 max_pixels: MAX_SOURCE_PIXELS,
                 max_alloc: if cfg!(target_arch = "wasm32") { 512 << 20 } else { MAX_SOURCE_PIXELS * 4 },
                 ..craft_image_codecs::Limits::default()
             },
-            ..craft_image_codecs::DecodeOptions::default()
         };
         let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| TraceError::Decode(e.to_string()))?;
         let (w, h) = (img.width(), img.height());
         if w == 0 || h == 0 {
             return Err(TraceError::Empty);
         }
-        let rgba = img.to_rgba8();
+        let rgba = into_rgba8(img);
         if u64::from(w) * u64::from(h) <= MAX_PIXELS {
             return Ok(Self { width: w, height: h, rgba });
         }

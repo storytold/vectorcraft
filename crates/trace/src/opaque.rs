@@ -3,7 +3,7 @@
 
 use vectorcraft_geom::{Affine, PathData};
 
-use crate::raster::{MAX_PIXELS, fit_size, gif_first_frame_pixels};
+use crate::raster::{MAX_PIXELS, fit_size, gif_first_frame_pixels, trace_header};
 use crate::{Mode, Raster, TraceError, TraceParams, trace_within};
 
 /// The most pixels [`opaque_outline`] traces: a larger image is reduced to this many first,
@@ -24,9 +24,9 @@ pub const ALPHA_MAX_DECODE_BYTES: u64 = 256 << 20;
 /// than [`MAX_PIXELS`] (64 megapixels), or whose samples take more than [`ALPHA_MAX_DECODE_BYTES`],
 /// gives [`TraceError::TooLarge`] before it is decoded.
 pub fn decode_alpha(bytes: &[u8]) -> Result<Option<(u32, u32, Vec<u8>)>, TraceError> {
-    use craft_image_codecs::{ChannelLayout, DecodeOptions, Limits, RasterColorType, SampleType, decode_with, inspect_raster};
+    use craft_image_codecs::{ChannelLayout, DecodeOptions, Limits, RasterColorType, SampleType, decode_with};
     let decode_err = |e: craft_image_codecs::CodecError| TraceError::Decode(e.to_string());
-    if let Some(info) = inspect_raster(bytes).map_err(decode_err)? {
+    if let Some(info) = trace_header(bytes, MAX_PIXELS, ALPHA_MAX_DECODE_BYTES)? {
         if info.width == 0 || info.height == 0 {
             return Err(TraceError::Empty);
         }
@@ -49,10 +49,8 @@ pub fn decode_alpha(bytes: &[u8]) -> Result<Option<(u32, u32, Vec<u8>)>, TraceEr
     } else if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
         return Err(TraceError::TooLarge { width: 0, height: 0, max: MAX_PIXELS >> 20 });
     }
-    let opts = DecodeOptions {
-        limits: Limits { max_pixels: MAX_PIXELS, max_alloc: ALPHA_MAX_DECODE_BYTES, ..Limits::default() },
-        ..DecodeOptions::default()
-    };
+    let opts =
+        DecodeOptions { keep_orientation: true, limits: Limits { max_pixels: MAX_PIXELS, max_alloc: ALPHA_MAX_DECODE_BYTES, ..Limits::default() } };
     let img = decode_with(bytes, &opts).map_err(decode_err)?;
     let (w, h) = (img.width(), img.height());
     if w == 0 || h == 0 {

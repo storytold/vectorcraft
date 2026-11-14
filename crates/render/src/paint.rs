@@ -330,52 +330,65 @@ fn reduced_pixmap(bytes: &[u8], r: &Reduction) -> Result<vello_cpu::Pixmap, Unde
 
 /// `bytes` read and shrunk as [`reduced_pixmap`] says.
 fn shrunk(bytes: &[u8], r: &Reduction) -> Option<vello_cpu::Pixmap> {
+    shrunk_with_png_limits(bytes, r, &craft_image_codecs::Limits::default())
+}
+
+fn shrunk_with_png_limits(bytes: &[u8], r: &Reduction, png_limits: &craft_image_codecs::Limits) -> Option<vello_cpu::Pixmap> {
     let mut shrink = Shrink::new(r.size, r.to);
     if r.rows {
-        use craft_image_codecs::{ChannelLayout, CodecError, Format, Limits, PngDecodeRows, SampleType};
-        let mut dec = PngDecodeRows::new_streaming(bytes, &Limits::default()).ok()?;
+        use craft_image_codecs::{ChannelLayout, CodecError, Format, PngDecodeRows, SampleType};
+        let mut dec = PngDecodeRows::new_streaming(bytes, png_limits).ok()?;
         if !dec.streamable() {
             return None;
         }
         let hdr = dec.header();
-        dec.step_stream::<CodecError>(1, &mut || true, &mut |_y, row| {
-            match (hdr.layout, hdr.sample) {
-                (ChannelLayout::Gray, SampleType::U8) => shrink.row(row.iter().map(|&g| [g, g, g, 255])),
-                (ChannelLayout::GrayA, SampleType::U8) => shrink.row(row.as_chunks::<2>().0.iter().map(|&[g, a]| [g, g, g, a])),
-                (ChannelLayout::Rgb, SampleType::U8) => shrink.row(row.as_chunks::<3>().0.iter().map(|&[r, g, b]| [r, g, b, 255])),
-                (ChannelLayout::Rgba, SampleType::U8) => shrink.row(row.as_chunks::<4>().0.iter().copied()),
-                (ChannelLayout::Gray, SampleType::U16) => shrink.row(row.as_chunks::<2>().0.iter().map(|&g| {
-                    let v = (u16::from_ne_bytes(g) >> 8) as u8;
-                    [v, v, v, 255]
-                })),
-                (ChannelLayout::GrayA, SampleType::U16) => shrink.row(row.as_chunks::<4>().0.iter().map(|&[g0, g1, a0, a1]| {
-                    let g = (u16::from_ne_bytes([g0, g1]) >> 8) as u8;
-                    let a = (u16::from_ne_bytes([a0, a1]) >> 8) as u8;
-                    [g, g, g, a]
-                })),
-                (ChannelLayout::Rgb, SampleType::U16) => shrink.row(row.as_chunks::<6>().0.iter().map(|&[r0, r1, g0, g1, b0, b1]| {
-                    [
-                        (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
-                        (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
-                        (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
-                        255,
-                    ]
-                })),
-                (ChannelLayout::Rgba, SampleType::U16) => shrink.row(row.as_chunks::<8>().0.iter().map(|&[r0, r1, g0, g1, b0, b1, a0, a1]| {
-                    [
-                        (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
-                        (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
-                        (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
-                        (u16::from_ne_bytes([a0, a1]) >> 8) as u8,
-                    ]
-                })),
-                _ => {
-                    return Err(CodecError::Unsupported { format: Format::Png, reason: "unsupported PNG channel layout".into() });
-                }
-            }
-            Ok(())
-        })
-        .ok()??;
+        // Yield after each row and stop once all pixels have arrived. The pinned decoder's
+        // first tail batch only locates a text chunk; later batches inflate/retain its value.
+        // Never run those batches: the renderer needs pixels, not ancillary text. Its underlying
+        // PNG reader also ignores text chunks before IDAT, so neither location retains text.
+        for _ in 0..hdr.height {
+            let _extras = dec
+                .step_stream::<CodecError>(1, &mut || false, &mut |_y, row| {
+                    match (hdr.layout, hdr.sample) {
+                        (ChannelLayout::Gray, SampleType::U8) => shrink.row(row.iter().map(|&g| [g, g, g, 255])),
+                        (ChannelLayout::GrayA, SampleType::U8) => shrink.row(row.as_chunks::<2>().0.iter().map(|&[g, a]| [g, g, g, a])),
+                        (ChannelLayout::Rgb, SampleType::U8) => shrink.row(row.as_chunks::<3>().0.iter().map(|&[r, g, b]| [r, g, b, 255])),
+                        (ChannelLayout::Rgba, SampleType::U8) => shrink.row(row.as_chunks::<4>().0.iter().copied()),
+                        (ChannelLayout::Gray, SampleType::U16) => shrink.row(row.as_chunks::<2>().0.iter().map(|&g| {
+                            let v = (u16::from_ne_bytes(g) >> 8) as u8;
+                            [v, v, v, 255]
+                        })),
+                        (ChannelLayout::GrayA, SampleType::U16) => shrink.row(row.as_chunks::<4>().0.iter().map(|&[g0, g1, a0, a1]| {
+                            let g = (u16::from_ne_bytes([g0, g1]) >> 8) as u8;
+                            let a = (u16::from_ne_bytes([a0, a1]) >> 8) as u8;
+                            [g, g, g, a]
+                        })),
+                        (ChannelLayout::Rgb, SampleType::U16) => shrink.row(row.as_chunks::<6>().0.iter().map(|&[r0, r1, g0, g1, b0, b1]| {
+                            [
+                                (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
+                                (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
+                                (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
+                                255,
+                            ]
+                        })),
+                        (ChannelLayout::Rgba, SampleType::U16) => {
+                            shrink.row(row.as_chunks::<8>().0.iter().map(|&[r0, r1, g0, g1, b0, b1, a0, a1]| {
+                                [
+                                    (u16::from_ne_bytes([r0, r1]) >> 8) as u8,
+                                    (u16::from_ne_bytes([g0, g1]) >> 8) as u8,
+                                    (u16::from_ne_bytes([b0, b1]) >> 8) as u8,
+                                    (u16::from_ne_bytes([a0, a1]) >> 8) as u8,
+                                ]
+                            }))
+                        }
+                        _ => {
+                            return Err(CodecError::Unsupported { format: Format::Png, reason: "unsupported PNG channel layout".into() });
+                        }
+                    }
+                    Ok(())
+                })
+                .ok()?;
+        }
     } else {
         let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
         let mut limits = image::Limits::default();
@@ -614,6 +627,33 @@ mod tests {
         assert_eq!(room_for(MAX_DECODE_ALLOC + 1, 2 * MAX_DECODE_ALLOC), Err(Undecoded::Unreadable));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC + 1), Err(Undecoded::NoRoom));
         assert_eq!(room_for(MAX_DECODE_ALLOC, MAX_DECODE_ALLOC), Ok(()));
+    }
+
+    #[test]
+    fn streaming_reduction_does_not_retain_text_after_pixels() {
+        let mut bytes = Vec::new();
+        striped(8).write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+        let mut chunk = b"tEXtComment\0".to_vec();
+        chunk.extend(std::iter::repeat_n(b'x', 1 << 20));
+        // PNG's IEEE CRC over type and payload, kept local to this fixture.
+        let mut crc = u32::MAX;
+        for &byte in &chunk {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                crc = (crc >> 1) ^ (0xedb88320 & 0u32.wrapping_sub(crc & 1));
+            }
+        }
+        let mut tail = ((chunk.len() - 4) as u32).to_be_bytes().to_vec();
+        tail.extend(chunk);
+        tail.extend((!crc).to_be_bytes());
+        bytes.splice(bytes.len() - 12..bytes.len() - 12, tail);
+        let limits = craft_image_codecs::Limits { max_alloc: 1 << 19, ..Default::default() };
+        let mut full = craft_image_codecs::PngDecodeRows::new_streaming(&bytes, &limits).unwrap();
+        assert!(full.step_stream::<craft_image_codecs::CodecError>(1, &mut || true, &mut |_, _| Ok(())).is_err());
+        // The renderer stops after the pixels instead of retaining ancillary text.
+        let reduced = shrunk_with_png_limits(&bytes, &Reduction { size: (8, 1), to: (4, 1), rows: true, scratch: 0 }, &limits).unwrap();
+        assert_eq!((reduced.width(), reduced.height()), (4, 1));
+        assert!(red_at_its_coverage(&reduced));
     }
 
     /// Opaque red beside clear black, every other column of a `w` × 1 image.

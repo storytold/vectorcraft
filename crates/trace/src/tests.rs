@@ -3974,3 +3974,73 @@ fn a_gif_frame_larger_than_its_screen_is_refused_before_decoding() {
     assert!(matches!(Raster::decode(&gif), Err(TraceError::TooLarge { .. })), "{:?}", Raster::decode(&gif).err());
     assert!(matches!(Raster::decode_to_fit(&gif), Err(TraceError::TooLarge { .. })));
 }
+
+// Synthetic PNG chunks for transparency/orientation regression fixtures.
+fn png_test_chunk(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
+    let mut out = (data.len() as u32).to_be_bytes().to_vec();
+    out.extend(kind);
+    out.extend(data);
+    let mut crc = !0u32;
+    for &b in &out[4..] {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 { 0xedb8_8320 ^ (crc >> 1) } else { crc >> 1 };
+        }
+    }
+    out.extend((!crc).to_be_bytes());
+    out
+}
+
+#[test]
+fn alpha_decode_keeps_rgb_and_grayscale_png_transparency_keys() {
+    use craft_image_codecs::{ChannelLayout, Format, Image};
+    for (layout, samples, key) in
+        [(ChannelLayout::Rgb, vec![10, 20, 30, 40, 50, 60], vec![0, 10, 0, 20, 0, 30]), (ChannelLayout::Gray, vec![10, 40], vec![0, 10])]
+    {
+        let image = Image::from_u8(2, 1, layout, samples).unwrap();
+        let mut png = craft_image_codecs::encode(&image, Format::Png, &Default::default()).unwrap();
+        // A transparency key precedes IDAT, immediately after the IHDR chunk.
+        png.splice(33..33, png_test_chunk(b"tRNS", &key));
+        assert_eq!(decode_alpha(&png).unwrap(), Some((2, 1, vec![0, 255])));
+    }
+}
+
+#[test]
+fn trace_and_alpha_keep_stored_pixels_with_exif_orientation() {
+    use craft_image_codecs::{ChannelLayout, Format, Image};
+    // Little-endian TIFF IFD containing Orientation=6 (90 degrees clockwise).
+    let exif = [b'I', b'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
+    let raster = Raster::from_fn(3, 2, |x, y| [x as u8 * 60, y as u8 * 90, 17, (x + 3 * y) as u8 * 40]);
+    let mut png = raster.encode_png();
+    png.splice(33..33, png_test_chunk(b"eXIf", &exif));
+    for actual in [Raster::decode(&png).unwrap(), Raster::decode_to_fit(&png).unwrap()] {
+        assert_eq!((actual.width, actual.height), (3, 2));
+        assert_eq!(actual.rgba, raster.rgba);
+    }
+    assert_eq!(decode_alpha(&png).unwrap(), Some((3, 2, raster.rgba.as_chunks::<4>().0.iter().map(|p| p[3]).collect())));
+
+    let image =
+        Image::from_u8(3, 2, ChannelLayout::Rgb, raster.rgba.as_chunks::<4>().0.iter().flat_map(|p| p[..3].iter().copied()).collect()).unwrap();
+    let mut jpeg = craft_image_codecs::encode(&image, Format::Jpeg, &Default::default()).unwrap();
+    let expected = Raster::decode(&jpeg).unwrap();
+    let mut app1 = vec![0xff, 0xe1];
+    app1.extend(((exif.len() + 8) as u16).to_be_bytes());
+    app1.extend(b"Exif\0\0");
+    app1.extend(exif);
+    jpeg.splice(2..2, app1);
+    for actual in [Raster::decode(&jpeg).unwrap(), Raster::decode_to_fit(&jpeg).unwrap()] {
+        assert_eq!((actual.width, actual.height), (3, 2));
+        assert_eq!(actual.rgba, expected.rgba);
+    }
+}
+
+#[test]
+fn alpha_rejects_oversized_png_before_decoding() {
+    assert!(matches!(decode_alpha(&png_header(30_000, 30_000)), Err(TraceError::TooLarge { .. })));
+    assert!(matches!(decode_alpha(&png_header(64, 64)), Err(TraceError::Decode(_))));
+    let mut deep = png_header(7000, 6000);
+    deep[24] = 16;
+    let ihdr = png_test_chunk(b"IHDR", &deep[16..29]);
+    deep.splice(8..33, ihdr);
+    assert!(matches!(decode_alpha(&deep), Err(TraceError::TooLarge { .. })));
+}

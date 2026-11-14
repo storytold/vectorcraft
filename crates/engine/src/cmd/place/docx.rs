@@ -165,7 +165,8 @@ fn parse(xml: &str, name: &str, cmd: &str) -> Result<El> {
         doctype: Doctype::Reject,
         limits: Limits { max_depth: MAX_NESTING, max_nodes: MAX_NODES as usize, ..Limits::DEFAULT },
         ..Options::default()
-    };
+    }
+    .strict();
     opts.parse(xml.as_bytes()).map_err(|e| match e {
         craft_xml::Error::TooDeep(_) => bad(cmd, format!("`{name}` in the Word document nests elements more than {MAX_NESTING} deep")),
         _ => bad(cmd, format!("`{name}` in the Word document is not well-formed XML: {e}")),

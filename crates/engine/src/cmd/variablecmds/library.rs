@@ -202,7 +202,8 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
         names: craft_xml::Names::Local,
         limits: craft_xml::Limits { max_depth: MAX_LIBRARY_NESTING, max_nodes: MAX_LIBRARY_NODES as usize, ..craft_xml::Limits::DEFAULT },
         ..craft_xml::Options::default()
-    };
+    }
+    .strict();
     let doc = opts.parse(xml.as_bytes()).map_err(|e| match e {
         craft_xml::Error::TooDeep(_) => bad(cmd, format!("the variable library nests elements more than {MAX_LIBRARY_NESTING} deep")),
         _ => bad(cmd, format!("the variable library is not well-formed XML: {e}")),

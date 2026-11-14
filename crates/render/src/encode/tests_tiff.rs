@@ -172,6 +172,11 @@ fn packbits_and_bilevel_images_decode() {
     let dec = craft_image_codecs::decode_as(craft_image_codecs::Format::Tiff, &file).unwrap();
     assert_eq!(dec.width(), 10);
     assert_eq!(dec.height(), 3);
+    assert_eq!(
+        dec.data(),
+        [0, 255, 0, 255, 0, 255, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
+        "WhiteIsZero samples are inverted and row padding is ignored"
+    );
     // A buffer that doesn't match the size is refused, not written.
     let short = Image { data: &rows[..5], ..image };
     assert!(t::write(&short, &Layout { byte_order: ByteOrder::Little, compression: Compression::None, ppi: 72.0, icc: None }).is_err());
