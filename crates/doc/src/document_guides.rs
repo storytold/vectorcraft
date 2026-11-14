@@ -1,6 +1,7 @@
 use super::document_ext::free_id;
 use super::guides::Guide;
 use super::limits::MAX_NEXT_ID;
+use super::node::{held_guides, map_held, strip_held};
 use super::{Affine, Arc, Document, Node, NodeId, NodeKind, PatternDef, Point, Rect, Selection, SymbolBoxes, Vec2, artboard_holds};
 use std::collections::{BTreeMap, HashSet};
 
@@ -272,8 +273,8 @@ impl Document {
             return;
         }
         for l in &mut self.layers {
-            if let Some(held) = picked_in_layers(l, &Node::is_ruler_guide) {
-                drop_picked(l, held);
+            if let Some(held) = held_guides(l, &Node::is_ruler_guide) {
+                strip_held(Arc::make_mut(l), held);
             }
         }
         self.saved_guides.extend(guides);
@@ -347,14 +348,14 @@ impl Document {
     /// saved guide whose layer is gone opens. Returns the removed node, without the guides.
     pub fn remove_edit_layer(&mut self, id: NodeId) -> Result<Arc<Node>, crate::DocError> {
         let mut layer = self.remove(id)?;
-        let Some(held) = picked_in_layers(&layer, &Node::is_ruler_guide) else { return Ok(layer) };
+        let Some(held) = held_guides(&layer, &Node::is_ruler_guide) else { return Ok(layer) };
         let mut guides = vec![];
         layer.walk(&mut |c| {
             if c.is_ruler_guide() {
                 guides.push(Arc::new(c.clone()));
             }
         });
-        drop_picked(&mut layer, held);
+        strip_held(Arc::make_mut(&mut layer), held);
         let home = self.default_layer().unwrap_or_else(|| self.add_layer(None));
         self.children_mut(Some(home))?.extend(guides);
         Ok(layer)
@@ -418,8 +419,8 @@ impl Document {
         }
         let pick = |n: &Node| n.is_ruler_guide() && gone.contains(&n.id);
         for l in &mut self.layers {
-            if let Some(held) = picked_in_layers(l, &pick) {
-                drop_picked(l, held);
+            if let Some(held) = held_guides(l, &pick) {
+                strip_held(Arc::make_mut(l), held);
             }
         }
         sel.guides.retain(|id| !gone.contains(id));
@@ -434,8 +435,8 @@ impl Document {
     fn edit_artboard_guides(&mut self, id: u32, f: &mut impl FnMut(bool, &mut f64)) {
         let pick = |n: &Node| matches!(n.kind, NodeKind::RulerGuide { artboard: Some(a), .. } if a == id);
         for l in &mut self.layers {
-            if let Some(held) = picked_in_layers(l, &pick) {
-                edit_picked(l, held, f);
+            if let Some(held) = held_guides(l, &pick) {
+                map_held(Arc::make_mut(l), held, f);
             }
         }
     }
@@ -566,57 +567,6 @@ impl Picked {
     /// `self`, or `None` when nothing was picked.
     fn some(self) -> Option<Self> {
         (!self.is_empty()).then_some(self)
-    }
-}
-
-/// The children of `n`, if it is a layer, that `pick` picks (with nothing inside), and its
-/// sublayers holding one (with what they hold), or `None` when it holds none. `pick` looks at
-/// each child of the layers once.
-fn picked_in_layers(n: &Node, pick: &impl Fn(&Node) -> bool) -> Option<Picked> {
-    if !n.is_layer() {
-        return None;
-    }
-    let children = n
-        .children()
-        .into_iter()
-        .flatten()
-        .enumerate()
-        .filter_map(|(i, c)| if pick(c) { Some((i, Picked::default())) } else { picked_in_layers(c, pick).map(|p| (i, p)) })
-        .collect();
-    Picked { children, mask: None }.some()
-}
-
-/// Remove the children of `layer` and of its sublayers that [`picked_in_layers`] picked (`held`).
-/// Only the layers holding one are copied, and only those are visited.
-fn drop_picked(layer: &mut Arc<Node>, held: Picked) {
-    let Some(ch) = Arc::make_mut(layer).children_mut() else { return };
-    let mut held = held.children.into_iter().peekable();
-    let mut next = 0;
-    ch.retain_mut(|c| {
-        let at = next;
-        next += 1;
-        let Some((_, inner)) = held.next_if(|(i, _)| *i == at) else { return true };
-        // A sublayer holds something; a child picked itself has nothing inside.
-        if inner.is_empty() {
-            return false;
-        }
-        drop_picked(c, inner);
-        true
-    });
-}
-
-/// Change with `f` (whether it is vertical, its position) the line of each ruler guide of `layer`
-/// and of its sublayers that [`picked_in_layers`] picked (`held`), in the order they lie in. Only
-/// the layers holding one, and the guides, are copied, and only those layers are visited.
-fn edit_picked(layer: &mut Arc<Node>, held: Picked, f: &mut impl FnMut(bool, &mut f64)) {
-    let Some(ch) = Arc::make_mut(layer).children_mut() else { return };
-    for (i, inner) in held.children {
-        let Some(c) = ch.get_mut(i) else { continue };
-        if !inner.is_empty() {
-            edit_picked(c, inner, f);
-        } else if let NodeKind::RulerGuide { vertical, pos, .. } = &mut Arc::make_mut(c).kind {
-            f(*vertical, pos);
-        }
     }
 }
 
@@ -872,9 +822,9 @@ mod tests {
             looked.set(looked.get() + 1);
             on_artboard_7(n)
         };
-        let held = picked_in_layers(&d.layers[0], &pick).unwrap();
+        let held = held_guides(&d.layers[0], &pick).unwrap();
         assert_eq!(looked.get(), NESTED_CHILDREN, "each child of the layers is looked at once");
-        drop_picked(&mut d.layers[0], held);
+        strip_held(Arc::make_mut(&mut d.layers[0]), held);
         assert_eq!(looked.get(), NESTED_CHILDREN, "removing looks at nothing again");
         assert!(d.layers[0].children().is_some_and(|c| Arc::ptr_eq(&c[1], &still)), "a sublayer with nothing to remove is not copied");
 
@@ -932,10 +882,10 @@ mod tests {
             looked.set(looked.get() + 1);
             on_artboard_7(n)
         };
-        let held = picked_in_layers(&d.layers[0], &pick).unwrap();
+        let held = held_guides(&d.layers[0], &pick).unwrap();
         assert_eq!(looked.get(), NESTED_CHILDREN, "each child of the layers is looked at once");
         let mut seen = vec![];
-        edit_picked(&mut d.layers[0], held, &mut |vertical, pos: &mut f64| {
+        map_held(Arc::make_mut(&mut d.layers[0]), held, &mut |vertical, pos: &mut f64| {
             seen.push((vertical, *pos));
             *pos += 9.0;
         });

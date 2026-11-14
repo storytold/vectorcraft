@@ -823,11 +823,11 @@ impl Node {
 /// The ruler guides a layer holds: its children that are one, by index in order (each with
 /// nothing inside), and its sublayers holding one (with what they hold).
 #[derive(Debug, Default)]
-pub(super) struct HeldGuides(Vec<(usize, HeldGuides)>);
+pub(crate) struct HeldGuides(Vec<(usize, HeldGuides)>);
 
 /// The ruler guides, by `is_guide`, that `n` holds if it is a layer, or `None` when it holds
 /// none. `is_guide` looks at each child of `n` and of its sublayers once.
-pub(super) fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option<HeldGuides> {
+pub(crate) fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option<HeldGuides> {
     if !n.is_layer() {
         return None;
     }
@@ -843,7 +843,7 @@ pub(super) fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option
 
 /// Remove the ruler guides of `layer` and of its sublayers that [`held_guides`] found (`held`).
 /// Only the sublayers holding one are copied, and only those are visited.
-pub(super) fn strip_held(layer: &mut Node, held: HeldGuides) {
+pub(crate) fn strip_held(layer: &mut Node, held: HeldGuides) {
     let Some(ch) = layer.children_mut() else { return };
     let mut held = held.0.into_iter().peekable();
     let mut next = 0;
@@ -863,7 +863,7 @@ pub(super) fn strip_held(layer: &mut Node, held: HeldGuides) {
 /// Call `f` (whether it is vertical, its position) on each ruler guide of `layer` and of its
 /// sublayers that [`held_guides`] found (`held`), in the order they lie in. Only the sublayers
 /// holding one, and the guides, are copied, and only those sublayers are visited.
-pub(super) fn map_held(layer: &mut Node, held: HeldGuides, f: &mut impl FnMut(bool, &mut f64)) {
+pub(crate) fn map_held(layer: &mut Node, held: HeldGuides, f: &mut impl FnMut(bool, &mut f64)) {
     let Some(ch) = layer.children_mut() else { return };
     for (i, inner) in held.0 {
         let Some(c) = ch.get_mut(i) else { continue };
