@@ -9165,8 +9165,6 @@ breakText	Glyphs	Glifák
 @msg	unknown panel	ismeretlen panel
 @msg	unknown panel `{panel}`	ismeretlen panel: `{panel}`
 @msg	unknown parameter `{key}`	ismeretlen paraméter: `{key}`
-@msg	unknown parameter `{within}settings.{format}`; {why}	ismeretlen paraméter: `{within}settings.{format}`; {why}
-@msg	unknown parameter `{within}{key}`; {why}	ismeretlen paraméter: `{within}{key}`; {why}
 @msg	unknown pieLegend `{v}` (none, standard or wedges)	ismeretlen pieLegend: `{v}` (none, standard vagy wedges)
 @msg	unknown piePosition `{v}` (even, ratio or stacked)	ismeretlen piePosition: `{v}` (even, ratio vagy stacked)
 @msg	unknown pieSort `{v}` (none, all or first)	ismeretlen pieSort: `{v}` (none, all vagy first)
@@ -9294,7 +9292,6 @@ breakText	Glyphs	Glifák
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name}: beépített elem, nem törölhető
 @msg	{name} must be a number	{name}: szám kell
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name}: {lo}–{hi}{unit} kell (kapott érték: {v})
 @msg	{name}: CRC or size mismatch	{name}: a CRC vagy a méret nem egyezik
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: ennek az Affinity-fájlnak csak a beágyazott előnézete volt olvasható; a Fájl › Megnyitás paranccsal megnézheted a figyelmeztetésével együtt, vagy az elhelyezés előtt exportálj SVG-t vagy PDF-et az Affinityből
 @msg	{name}: {e}	{name}: {e}

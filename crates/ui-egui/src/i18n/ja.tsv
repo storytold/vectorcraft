@@ -6732,8 +6732,6 @@ axis	Y Axis	Y 軸
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	`{d}` は不明なディザの指定です (diffusion、pattern、noise、none のいずれか)
 @msg	unknown panel `{panel}`	`{panel}` は不明なパネルです
 @msg	unknown parameter `{key}`	`{key}` は不明なパラメーターです
-@msg	unknown parameter `{within}settings.{format}`; {why}	`{within}settings.{format}` は不明なパラメーターです。{why}
-@msg	unknown parameter `{within}{key}`; {why}	`{within}{key}` は不明なパラメーターです。{why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	`{reduction}` は不明な減色の指定です (selective、perceptual、adaptive、web、gray、blackWhite、uniform、document のいずれか)
 @msg	unmatched ')'	対応していない ')' があります
 @msg	unterminated character class	文字クラスが閉じられていません
@@ -8150,7 +8148,6 @@ axis	Y Axis	Y 軸
 @msg	{label} must be a number from 1 to 10000	{label} には 1 から 10000 までの数値を指定してください
 @msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
 @msg	{name} is built in and can't be deleted	{name} は組み込みのため、削除できません
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} には {lo}–{hi}{unit} を指定してください (指定値: {v})
 @msg	{name}: CRC or size mismatch	{name}: CRC またはサイズが一致しません
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: この Affinity ファイルは埋め込みプレビューしか読み込めませんでした。「ファイル › 開く」で警告とともに表示するか、配置する前に Affinity から SVG または PDF を書き出してください
 @msg	{name}: {e}	{name}: {e}

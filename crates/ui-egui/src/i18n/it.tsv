@@ -9077,9 +9077,7 @@ breakText	Glyphs	Glifi
 @msg	the spacing makes more than {MAX_GROMMETS} grommets	la spaziatura produce più di {MAX_GROMMETS} occhielli
 @msg	there is no banner to mark	non c'è nessuno striscione da contrassegnare
 @msg	turn on at least one side	attiva almeno un lato
-@msg	unknown parameter `{within}{key}`; {why}	parametro sconosciuto `{within}{key}`; {why}
 @msg	with no hem and no grommets there is nothing to mark	senza orlo e senza occhielli non c'è nulla da contrassegnare
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} deve essere {lo}–{hi}{unit} (ricevuto {v})
 @msg	{saving} failed: {e}	{saving} non riuscito: {e}
 	Banner Hems and Grommets…	Orli e occhielli per striscioni…
 	Banner Hems and Grommets	Orli e occhielli per striscioni
