@@ -658,6 +658,47 @@ fn images_are_written_in_the_form_the_specification_shows() {
     assert!(rgb.iter().zip([247.0, 148.0, 29.0]).all(|(c, want)| (c * 255.0 - want).abs() < 0.1), "{rgb:?}");
 }
 
+/// The pieces of an image cut into a raster mesh warp (as Object › Expand leaves a Warp on an
+/// image) are written as the image whole once, then each as the part of it that its triangle shows,
+/// and the file draws as the document does ([`write`] runs it).
+#[test]
+fn the_pieces_of_a_warped_image_are_written_as_the_parts_they_show() {
+    // GUARDS: each of a warped image's 200 pieces was written with all of the image's samples.
+    let mut doc = Document::new(200.0, 160.0);
+    let mut png = vec![];
+    image::RgbaImage::from_fn(64, 64, |x, y| image::Rgba([(x * 4) as u8, (y * 4) as u8, ((x * 7 + y * 13) % 256) as u8, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let blob = ImageBlob::new("image/png", png);
+    let key = blob.content_key();
+    doc.images.insert(key.clone(), blob);
+    let im = ImageObject {
+        key,
+        width: 64,
+        height: 64,
+        xf: Affine::new([2.0, 0.0, 0.0, 2.0, 20.0, 10.0]),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let photo = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(im.clone())));
+    let bend = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x, p.y + 12.0 * ((p.x - 20.0) / 128.0 * std::f64::consts::PI).sin());
+    let warped = vectorcraft_doc::live::mesh_warp_image(&photo, &im, &bend, 10, false, false);
+    let layer = doc.layers[0].id;
+    doc.insert(Some(layer), usize::MAX, warped).unwrap();
+    let text = String::from_utf8(write(&doc).bytes).unwrap();
+    let images = rasters(&text);
+    assert_eq!(images.len(), 200);
+    let digits = |lines: &Vec<&str>| {
+        lines.iter().filter_map(|l| l.strip_prefix('%')).filter(|l| l.bytes().all(|b| b.is_ascii_hexdigit())).map(str::len).sum::<usize>()
+    };
+    let whole = 64 * 64 * 3 * 2;
+    assert_eq!(digits(&images[0]), whole, "the first piece holds the whole image");
+    // Each piece holds its cell (two triangles share one) and 2 pixels more around it.
+    let total: usize = images.iter().map(digits).sum();
+    assert!(total < 10 * whole, "{total} digits of samples for an image of {whole}");
+}
+
 /// An image whose data is empty is left out with the note for empty or too large images, and an
 /// image whose data can't be decoded is left out with the decode note.
 #[test]

@@ -808,11 +808,11 @@ fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     let created = date_param(p, "created", C)?;
     let st = s.doc()?;
     // The row as the panel lists it now: keeping an edit in progress below changes the rows.
-    let chosen = match p.get("index") {
-        None | Some(Value::Null) => None,
-        Some(v) => {
-            let state = v.as_u64().and_then(|row| st.history.state(&st.doc, index(row)));
-            Some(state.ok_or_else(|| bad(C, format!("no history state {v}")))?.clone())
+    let chosen = match super::index_opt(p, "index", C)? {
+        None => None,
+        Some(row) => {
+            let v = &p["index"];
+            Some(st.history.state(&st.doc, row).ok_or_else(|| bad(C, format!("no history state {v}")))?.clone())
         }
     };
     settle_interaction(s)?;
@@ -1276,23 +1276,28 @@ pub(crate) fn place_clip(s: &mut Session, clip: &Clipboard, center: vectorcraft_
 /// The artboards Paste in Place, in Front or in Back puts a copy on, in artboard order: `artboard`
 /// (the active one, #693), else `artboards`, else, while the Artboard tool is chosen with several
 /// artboards selected, those (noted in the journal as `artboards`, so a replay pastes on the same
-/// ones); `None` when none is named. A named index that is not an artboard of the document, a
-/// repeated one or an empty list is an error.
+/// ones); `None` when none is named. A named value that is not a whole number (null included), a
+/// named index that is not an artboard of the document, a repeated one or an empty list is an
+/// error; every value is checked for its form before any is checked against the artboards.
 fn paste_targets(s: &mut Session, p: &Value, cmd: &str) -> Result<Option<Vec<usize>>> {
     let n = s.doc()?.doc.artboards.len();
-    let one = |v: &Value| v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|i| *i < n);
-    let single = match p.get("artboard") {
-        Some(v) => Some(one(v).ok_or_else(|| bad(cmd, "`artboard` must be the index of an artboard of the document"))?),
-        None => None,
-    };
-    let listed = match p.get("artboards") {
+    let single = p.get("artboard").map(|v| v.as_u64().map(index).ok_or_else(|| bad(cmd, "`artboard` must be a whole number"))).transpose()?;
+    let entries = match p.get("artboards") {
         Some(v) => {
             let list = v.as_array().filter(|a| !a.is_empty()).ok_or_else(|| bad(cmd, "`artboards` must be a list of artboard indices"))?;
-            let mut all = list
-                .iter()
-                .map(one)
-                .collect::<Option<Vec<usize>>>()
-                .ok_or_else(|| bad(cmd, "`artboards` names an artboard the document does not have"))?;
+            let all = list.iter().map(|i| i.as_u64().map(index)).collect::<Option<Vec<usize>>>();
+            Some(all.ok_or_else(|| bad(cmd, "`artboards` must contain whole numbers"))?)
+        }
+        None => None,
+    };
+    if single.is_some_and(|i| i >= n) {
+        return Err(bad(cmd, "`artboard` must be the index of an artboard of the document"));
+    }
+    let listed = match entries {
+        Some(mut all) => {
+            if all.iter().any(|i| *i >= n) {
+                return Err(bad(cmd, "`artboards` names an artboard the document does not have"));
+            }
             all.sort_unstable();
             if all.windows(2).any(|w| w[0] == w[1]) {
                 return Err(bad(cmd, "`artboards` names an artboard twice"));
