@@ -260,7 +260,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "type.convertListToText",
         "Convert to Text",
         "",
-        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs (or of those the Type tool's selection touches) become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
+        "{} Type › Bullets and Numbering › Convert to Text: the bullets and numbers of the selected type's list paragraphs, in every frame of a threaded story (or of those the Type tool's selection touches), become characters of the text, followed by a tab, and the lists are turned off (text.convertListToText); the Type tool's anchor and caret move past the characters inserted at or before them, into the frame the caret's character moved to in threaded type",
     ),
     (
         "align.horizontalLeft",
@@ -666,7 +666,13 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "learn.list",
         "List Tutorials",
         "",
-        "{} the Learn panel's skills in the order its Skills tab lists them: {skills: [{id, title, tutorials: [{id, title, steps: number of steps}]}]}",
+        "{} the Learn panel's skills in the order its Skills tab lists them, with the progress its rings, counts and check marks show: {skills: [{id, title, done: number of its tutorials finished, total: number of its tutorials, tutorials: [{id, title, steps: number of steps, finished: bool, completedSteps: [zero-based indexes of the steps marked done, every step once finished]}]}]}",
+    ),
+    (
+        "learn.tab",
+        "Show Learn Tab",
+        "",
+        "{tab: forYou|skills} show the Learn panel on its For you or Skills tab, as the tab buttons do; the Skills tab keeps the skill and tutorial it had open; a missing, non-string or unknown tab is an error and changes nothing; returns {tab, skill, tutorial}, with null for no skill or no tutorial open",
     ),
     (
         "learn.skills",
@@ -675,10 +681,22 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} show the Learn panel on its Skills tab with the list of skills, with no skill and no tutorial open, as Back to skills after a skill's last tutorial and the Quick skill guide card do; returns what learn.list returns",
     ),
     (
+        "learn.skill",
+        "Show Skill",
+        "",
+        "{skill: id (see learn.list)} show the Learn panel on its Skills tab with that skill's tutorials, as choosing the skill's row does; a missing, non-string or unknown id is an error and changes nothing; returns the skill as learn.list lists it: {id, title, done, total, tutorials: [{id, title, steps, finished, completedSteps}]}",
+    ),
+    (
         "learn.show",
         "Show Tutorial",
         "",
         "{tutorial: id (see learn.list)} show the Learn panel on its Skills tab with that tutorial's numbered steps, as choosing its skill and then the tutorial does; a missing, non-string or unknown id is an error and changes nothing; returns {skill, tutorial, title, steps: [text]}",
+    ),
+    (
+        "learn.back",
+        "Back One Level",
+        "",
+        "{} show the Learn panel and go up one level on its Skills tab, as its Back button does: from a tutorial's steps to its skill's tutorials, and from a skill's tutorials to the list of skills; on the list of skills or the For you tab the view stays as it is; returns {tab, skill, tutorial}, as learn.tab does",
     ),
     (
         "learn.locateTool",
@@ -693,16 +711,28 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{tutorial: id (see learn.list)} open that tutorial's practice sample as a new untitled document, which becomes the active one, and move the Learn view to the tutorial, as its View more button does; each call opens another copy and open documents stay as they are; a missing, non-string or unknown id is an error and changes nothing; returns {tutorial, index, title} of the new document",
     ),
     (
+        "learn.markStep",
+        "Mark Tutorial Step",
+        "",
+        "{tutorial: id (see learn.list), step: zero-based step number, complete?: bool} mark a step of a tutorial whose sample learn.openSample opened as done (true, omitted or null) or not done (false), as the check box before the step does; marking does not finish the tutorial; a missing, non-string or unknown id, a missing step or one the tutorial does not have, a complete that is not true or false, a tutorial whose sample was not opened, or a finished tutorial is an error and changes nothing; the preferences keep the marks; returns {tutorial, step, complete}",
+    ),
+    (
         "learn.finish",
         "Finish Tutorial",
         "",
-        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, as its Finish tutorial button does; finishing it again keeps one entry; a missing, non-string or unknown id, or a tutorial whose sample was not opened, is an error and changes nothing; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
+        "{tutorial: id (see learn.list)} mark a tutorial whose sample learn.openSample opened as finished, with all its steps done, as its Finish tutorial button does; finishing it again keeps one entry, and needs no sample after a restart; a missing, non-string or unknown id, or a tutorial not finished whose sample was not opened, is an error and changes nothing; the preferences keep the tutorials finished; returns {tutorial, finished: true, next: id of the next tutorial in its skill, or null after the skill's last one}",
     ),
     (
         "learn.next",
         "Next Tutorial",
         "",
         "{tutorial: id (see learn.list)} show the Learn panel on the tutorial after a finished one in the same skill, as its Next Up button does, without opening a sample; a missing, non-string or unknown id, a tutorial not finished, or a skill's last tutorial is an error and changes nothing; returns {skill, tutorial, title} of the next tutorial",
+    ),
+    (
+        "learn.resetProgress",
+        "Reset Learn Progress",
+        "",
+        "{} clear the Learn panel's progress, every tutorial finished and every step marked done, as Reset progress under the list of skills does; open documents, opened practice samples and the Learn view stay as they are; returns what learn.list returns",
     ),
     ("window.brightness", "UI Brightness", "", "{brightness: dark|mediumDark|mediumLight|light}"),
     (

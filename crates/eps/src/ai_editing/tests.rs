@@ -1187,6 +1187,28 @@ fn a_symbol_definition_is_written_only_with_room_for_its_instance() {
     }
 }
 
+/// A symbol definition without room for its group, asked for by an instance in art drawn for an
+/// object (a stained instance's art), is left out and leaves the writing of that art as it was.
+#[test]
+fn a_symbol_definition_without_room_in_drawn_art_is_left_out() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let dot = square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), Color::gray(0.5));
+    doc.symbols.push(Symbol { dynamic: false, name: "Dot".into(), art: Arc::new(dot) });
+    let inner = instance(&mut doc, "Dot", Affine::IDENTITY);
+    doc.symbols.push(Symbol { dynamic: false, name: "Badge".into(), art: Arc::new(inner) });
+    let mut stained = instance(&mut doc, "Badge", Affine::translate((50.0, 10.0)));
+    stained.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    doc.insert(Some(layer), usize::MAX, stained).unwrap();
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    for max in 0..read {
+        let out = export_within(&doc, &opts(), max).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "room for {max} of {read}");
+        let objects = crate::import::objects_read(&out.program).unwrap();
+        assert!(objects <= max, "{objects} objects read with room for {max}");
+    }
+}
+
 /// The writer's limit is the reader's, which its warning names.
 #[test]
 fn the_object_limit_is_the_readers() {
@@ -4473,8 +4495,8 @@ fn type_the_data_cant_hold_is_written_as_its_outlines() {
     rings.subpaths.extend(shapes::rectangle(Rect::new(120.0, 30.0, 170.0, 70.0)).subpaths);
     holed.kind = vectorcraft_doc::TextKind::Area { frame: rings };
     holed.xf = Affine::IDENTITY;
-    // A carriage return in the characters: a story ends its paragraphs with it. Area type that
-    // flows around a wrap object: the wrap object's settings aren't written.
+    // A carriage return in the characters: a story ends its paragraphs with it. Area type with
+    // wrap shapes and no wrap object: the text document doesn't hold the shapes.
     let returned = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "A\rB", style(10.0, Color::BLACK));
     let mut wrapped = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Wrapped round", style(10.0, Color::BLACK));
     wrapped.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 60.0)) };
@@ -10562,15 +10584,106 @@ fn text_wrap_options_of_type_and_envelopes_are_read_back() {
     same_wraps(&wraps(top), &[(Some("Bent".into()), 2.5, true)]);
 }
 
+/// Type written as its outlines wraps area type below it by its bounds, as it did before saving,
+/// not by its glyphs: its text wrap options go on an unpainted rectangle of its bounds, the last
+/// member of the outlines' group, which keeps the type's name and has no options of its own.
+/// Mirrored point type with a positive offset, a negative offset with Invert Wrap, hidden and
+/// locked, type of only white space, and no room for the rectangle within the object limit.
+#[test]
+fn type_written_as_outlines_keeps_wrapping_by_its_bounds() {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    type Region = Vec<([f64; 4], f64, bool)>;
+    // The wrap shapes of the area type, in its own space: each one's bounds and options.
+    let region = |doc: &Document| -> Region {
+        let mut doc = doc.clone();
+        vectorcraft_doc::text::resolve_wrap(None, &mut doc);
+        let top = doc.layers[0].children().unwrap();
+        let Some(NodeKind::Text(t)) = top.iter().map(|n| &n.kind).find(|k| matches!(k, NodeKind::Text(t) if matches!(t.kind, TextKind::Area { .. })))
+        else {
+            panic!("no area type");
+        };
+        t.wrap
+            .iter()
+            .map(|s| {
+                let b = s.path.bounds().unwrap_or_default();
+                ([b.x0, b.y0, b.x1, b.y1], s.wrap.offset, s.wrap.invert)
+            })
+            .collect()
+    };
+    let make = |text: &str, offset: f64, invert: bool, visible: bool, locked: bool| {
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let mut body = TextObject::point(vectorcraft_geom::Point::ZERO, "", style(10.0, Color::BLACK));
+        body.runs = vec![TextRun::new("one two three four five six seven eight nine ten eleven twelve", style(10.0, Color::BLACK))];
+        body.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 290.0, 190.0)) };
+        body.xf = Affine::IDENTITY;
+        let body = named(text_node(&mut doc, body), "Body");
+        let mut label = TextObject::point(vectorcraft_geom::Point::ZERO, text, style(60.0, Color::BLACK));
+        // Mirrored, so written as its outlines.
+        label.xf = Affine::new([-1.0, 0.0, 0.0, 1.0, 150.0, 120.0]);
+        let mut label = wrapped(named(text_node(&mut doc, label), "Label"), offset, invert);
+        (label.visible, label.locked) = (visible, locked);
+        for n in [body, label] {
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        doc
+    };
+    for (text, offset, invert, visible, locked) in
+        [("Ill", 4.5, false, true, false), ("Ill", -2.0, true, true, false), ("Ill", 3.0, false, false, true), ("   ", 3.0, false, true, false)]
+    {
+        let doc = make(text, offset, invert, visible, locked);
+        let bounds = doc.layers[0].children().unwrap()[1].geometric_bounds();
+        let text_out = program(&doc);
+        let back = read_back(&doc);
+        let (before, after) = (region(&doc), region(&back));
+        let same = before.len() == after.len()
+            && before
+                .iter()
+                .zip(&after)
+                .all(|(b, a)| b.0.iter().zip(a.0).all(|(x, y)| (x - y).abs() < 1e-3) && (b.1 - a.1).abs() < 1e-6 && b.2 == a.2);
+        assert!(same, "{text:?}\n{before:?}\n{after:?}\n{text_out}");
+        let top = back.layers[0].children().unwrap();
+        let group = &top[1];
+        assert!(matches!(group.kind, NodeKind::Group { clip: false, .. }), "{text_out}");
+        assert_eq!((group.name.as_deref(), group.extras().wrap, group.visible, group.locked), (Some("Label"), None, visible, locked));
+        if let Some(want) = bounds {
+            assert_eq!(text_out.matches("(AI11TextWrapOffset)").count(), 1, "{text_out}");
+            same_wraps(&wraps(top), &[(None, offset, invert)]);
+            let last = group.children().unwrap().last().unwrap();
+            assert!(matches!(last.kind, NodeKind::Path { guide: false, .. }) && last.appearance.items.is_empty(), "{text_out}");
+            assert_eq!((last.visible, last.locked), (visible, locked));
+            let b = last.geometric_bounds().unwrap();
+            assert!([b.x0 - want.x0, b.y0 - want.y0, b.x1 - want.x1, b.y1 - want.y1].iter().all(|d| d.abs() < 1e-3), "{b:?} {want:?}");
+        } else {
+            assert!(wraps(top).is_empty(), "{text_out}");
+        }
+    }
+    // The rectangle counts toward the object limit. Without room for it, the type's wrap options
+    // are left out with the limit's warning, and the glyphs do not take them.
+    let doc = make("Ill", 4.5, false, true, false);
+    let read = crate::import::objects_read(&export_ai_editing(&doc, &opts()).unwrap().program).unwrap();
+    let all = export_within(&doc, &opts(), read).unwrap();
+    assert!(!all.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", all.warnings);
+    let out = export_within(&doc, &opts(), read - 1).unwrap();
+    assert!(out.warnings.iter().any(|w| w == writer::OBJECT_LIMIT), "{:?}", out.warnings);
+    let text_out = String::from_utf8_lossy(&out.program).replace("\r\n", "\n");
+    assert!(!text_out.contains("(AI11TextWrapOffset)"), "{text_out}");
+    let (back, _) = crate::ai_alone(&out.program).unwrap();
+    let top = back.layers[0].children().unwrap();
+    assert!(wraps(top).is_empty(), "{text_out}");
+    assert_eq!(top[1].name.as_deref(), Some("Label"), "{text_out}");
+}
+
 /// A clipping path inside art cut to a clipping object is written as its fills and its strokes,
-/// two objects: its text wrap options are written once, whether it has both or only strokes.
+/// two objects: its text wrap options are written once, whether it has both or only strokes, and
+/// with its strokes when the region outside leaves nothing of its fills.
 #[test]
 fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
-    for fill in [solid(Color::gray(0.5)), Paint::None] {
+    for (fill, left, width) in [(solid(Color::gray(0.5)), 20.0, 2.0), (Paint::None, 20.0, 2.0), (solid(Color::gray(0.5)), 101.0, 4.0)] {
         let mut doc = Document::new(200.0, 100.0);
         let layer = doc.layers[0].id;
-        let mut cutter = clipping(&mut doc, shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)));
-        cutter.appearance = Appearance::basic(fill, solid(Color::BLACK), 2.0).into();
+        let mut cutter = clipping(&mut doc, shapes::rectangle(Rect::new(left, 20.0, left + 60.0, 80.0)));
+        cutter.appearance = Appearance::basic(fill, solid(Color::BLACK), width).into();
         let cutter = wrapped(cutter, 5.0, true);
         let member = square(&mut doc, Rect::new(30.0, 30.0, 120.0, 60.0), Color::rgb(1.0, 0.0, 0.0));
         let inner = group(&mut doc, vec![cutter, member], true);

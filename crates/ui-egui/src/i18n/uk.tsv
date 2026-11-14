@@ -906,6 +906,9 @@ font-technology	Variable	Варіативні
 	The selected character's font is not available.	Шрифт виділеного символу недоступний.
 	No alternates for the selected character.	Виділений символ не має альтернатив.
 	Double-click to replace	Двічі клацніть для заміни
+	Click to replace	Клацніть для заміни
+	Show all alternates in the Glyphs panel	Показати всі альтернативи на панелі «Гліфи»
+	Show Character Alternates	Показувати альтернативи символу
 	Select one character with the Type tool first.	Спершу виділіть один символ інструментом «Текст».
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — гліф шрифту {font}, а не шрифту виділеного тексту ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} належить символу {base} (U+{base_code}) {place}; виділено символ {sel} (U+{code}).
@@ -6280,7 +6283,7 @@ axis	Y Axis	Вісь Y
 @plural	Result: {n}|Results: {n}	Результат: {n}|Результати: {n}|Результати: {n}
 @msg	select one object	виберіть один об’єкт
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальне редагування працює з контурами, складеними контурами, екземплярами символів та їхніми групами
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (повернуті чи віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	схожих об’єктів не знайдено (віддзеркалені копії не враховуються); змініть параметри глобального редагування та спробуйте ще раз
 @msg	Global Edit is off	Глобальне редагування вимкнено
 @msg	only an object of the Global Edit other than the one it started from can be left out	виключити з глобального редагування можна лише об’єкт, відмінний від того, з якого воно почалося
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all або діапазон, наприклад 1, 3-5, а не {v}
@@ -7077,11 +7080,20 @@ breakText	Glyphs	Гліфи
 	Open Tutorial Sample	Відкрити приклад уроку
 	Finish Tutorial	Завершити урок
 	Next Tutorial	Наступний урок
+	Show Learn Tab	Показати вкладку панелі «Навчання»
+	Show Skill	Показати навичку
+	Back One Level	На рівень назад
 	Back to Skills	Назад до навичок
 @msg	tutorial `{id}` has no practice sample	урок `{id}` не має навчального прикладу
 @msg	open the practice sample of `{id}` first (see learn.openSample)	спочатку відкрийте навчальний приклад уроку `{id}` (див. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	спочатку завершіть `{id}` (див. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` є останнім уроком своєї навички
+	Reset progress	Скинути прогрес
+	Mark Tutorial Step	Позначити крок уроку
+	Reset Learn Progress	Скинути прогрес навчання
+@msg	missing `step` (see learn.show)	відсутній `step` (див. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` має бути номером кроку від 0 до {last}
+@msg	`{id}` is finished (see learn.resetProgress)	урок `{id}` завершено (див. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Оновити відкладені ефекти

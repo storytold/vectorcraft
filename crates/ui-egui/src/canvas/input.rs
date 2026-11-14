@@ -373,7 +373,7 @@ fn drag_held(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Pos2) 
             }
         }
         Drag::ZoomBox { start } => {
-            let start = zoom_marquee_start(ui, start, before, p, space);
+            let start = zoom_marquee_start(ui, start, before, p);
             ui.data_mut(|dd| dd.insert_temp(drag_id(), Drag::ZoomBox { start }));
             marquee(ui.painter(), egui::Rect::from_two_pos(start, p));
         }
@@ -480,7 +480,7 @@ fn drag_released(app: &mut VectorcraftApp, ui: &Ui, f: &Pointing, d: Drag, p: Po
     let ui_zoom = app.canvas_ui_zoom;
     match d {
         Drag::ZoomBox { start } => {
-            let start = zoom_marquee_start(ui, start, before, p, space);
+            let start = zoom_marquee_start(ui, start, before, p);
             ui.data_mut(|dd| dd.remove::<bool>(zoom_space_free_id()));
             let r = egui::Rect::from_two_pos(start, p);
             if let Some(vm) = app.view_mut() {
@@ -612,22 +612,25 @@ fn zoom_space_free_id() -> egui::Id {
 /// sizes the marquee until it is let go. A marquee with no size yet is sized by the movement, so
 /// Space pressed before the pointer moves does not keep it at the press point. The frame's pointer
 /// moves and Space presses and releases are taken in the order they came, so each move follows the
-/// Space state it came with.
-fn zoom_marquee_start(ui: &Ui, start: Pos2, before: Option<Pos2>, p: Pos2, space: bool) -> Pos2 {
+/// Space state it came with. The Space key counts as held whatever the modifiers, so a marquee that
+/// Cmd+Space started while the Type tool edits text follows the same rules once Cmd is let go.
+fn zoom_marquee_start(ui: &Ui, start: Pos2, before: Option<Pos2>, p: Pos2) -> Pos2 {
     enum Step {
         Space(bool),
         Move(Pos2),
     }
     let id = zoom_space_free_id();
-    let steps: Vec<Step> = ui.input(|i| {
-        i.events
+    let (steps, space): (Vec<Step>, bool) = ui.input(|i| {
+        let steps = i
+            .events
             .iter()
             .filter_map(|e| match e {
                 egui::Event::Key { key: egui::Key::Space, pressed, repeat: false, .. } => Some(Step::Space(*pressed)),
                 egui::Event::PointerMoved(q) => Some(Step::Move(*q)),
                 _ => None,
             })
-            .collect()
+            .collect();
+        (steps, i.key_down(egui::Key::Space))
     });
     // Space as it was when the frame began: the opposite of its first press or release, else as it is now.
     let mut held = steps.iter().find_map(|s| if let Step::Space(down) = s { Some(!down) } else { None }).unwrap_or(space);

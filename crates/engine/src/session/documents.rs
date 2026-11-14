@@ -415,14 +415,16 @@ impl Session {
 
     /// Measure the type not measured yet in open document `index`, which is in the back, in its own
     /// composite fonts, lent for the measuring, so its type has the bounds it will have when the
-    /// document comes to the front. The front document stays the one whose composite fonts are
-    /// registered. The names of the document's composite fonts its type was measured in are kept,
-    /// so its coming to the front does not measure that type again.
+    /// document comes to the front: type naming a composite font the document does not define is
+    /// measured as in a missing font, also when the front document defines one of that name, and
+    /// also when the document defines none. The front document stays the one whose composite fonts
+    /// are registered. The names of the document's composite fonts its type was measured in are
+    /// kept, so its coming to the front does not measure that type again.
     fn measure_back_document(&mut self, index: usize) {
         let Some(st) = self.docs.get(index) else { return };
         let fonts = st.doc.composite_fonts.clone();
         let db = vectorcraft_text::FontDb::global();
-        let lent = db.lend_composite_fonts(&fonts);
+        let lent = db.lend_document_composite_fonts(&fonts);
         // A name another loan holds with a different definition is not lent: type set in it is
         // measured again when the document comes to the front.
         let own: HashSet<String> =
