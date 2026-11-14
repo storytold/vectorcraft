@@ -233,6 +233,7 @@ impl Writer<'_> {
         if !self.take_objects(1) {
             self.defining_symbols.pop();
             self.keep_since(before);
+            (self.in_look, self.drawn) = (in_look, drawn);
             return false;
         }
         // The art is written in the symbol's space, from the state `0 A` and `0 Xw` set, from the
