@@ -149,7 +149,7 @@ fn webp(b: &[u8]) -> Option<(f64, f64)> {
     let mut at = 12;
     while at + 8 <= b.len() {
         let len = le32(b, at + 4)? as usize;
-        let data = b.get(at + 8..at + 8 + len)?;
+        let data = slice(b, at + 8, len)?;
         if &b[at..at + 4] == b"EXIF" {
             return tiff(data.strip_prefix(b"Exif\0\0").unwrap_or(data));
         }
@@ -239,5 +239,49 @@ mod tests {
         assert_eq!((img.width(), img.height()), (4, 3));
         // Every PNG ends with this IEND chunk CRC.
         assert_eq!(crc32(&[b"IEND"]), 0xAE42_6082);
+    }
+
+    /// RIFF chunk `ty` holding `data`, padded to an even length.
+    fn riff_chunk(ty: &[u8; 4], len: u32, data: &[u8]) -> Vec<u8> {
+        let mut out = [ty.as_slice(), &len.to_le_bytes(), data].concat();
+        if data.len() % 2 == 1 {
+            out.push(0);
+        }
+        out
+    }
+
+    fn webp_of(chunks: &[Vec<u8>]) -> Vec<u8> {
+        let body = chunks.concat();
+        let size = u32::try_from(body.len() + 4).unwrap();
+        [b"RIFF".as_slice(), &size.to_le_bytes(), b"WEBP", &body].concat()
+    }
+
+    /// A WebP's EXIF chunk is found past an odd-length chunk and its padding byte, and a chunk whose
+    /// length runs past the end of the file (up to `u32::MAX`, more than a 32-bit `usize` can add to
+    /// an offset) gives no resolution.
+    #[test]
+    fn a_webp_reads_its_exif_and_rejects_a_chunk_past_the_end() {
+        // Little-endian TIFF: two IFD0 entries, XResolution 300/1 at offset 38 and ResolutionUnit inch.
+        let mut tiff = b"II*\0".to_vec();
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        tiff.extend_from_slice(&2u16.to_le_bytes());
+        for (tag, ty, value) in [(282u16, 5u16, 38u32), (296, 3, 2)] {
+            tiff.extend_from_slice(&tag.to_le_bytes());
+            tiff.extend_from_slice(&ty.to_le_bytes());
+            tiff.extend_from_slice(&1u32.to_le_bytes());
+            tiff.extend_from_slice(&value.to_le_bytes());
+        }
+        tiff.extend_from_slice(&0u32.to_le_bytes());
+        tiff.extend_from_slice(&300u32.to_le_bytes());
+        tiff.extend_from_slice(&1u32.to_le_bytes());
+        let exif = [b"Exif\0\0".as_slice(), &tiff].concat();
+        let exif_len = u32::try_from(exif.len()).unwrap();
+        let ok = webp_of(&[riff_chunk(b"VP8X", 3, &[0, 0, 0]), riff_chunk(b"EXIF", exif_len, &exif)]);
+        assert_eq!(resolution(&ok), Some((300.0, 300.0)));
+
+        for len in [u32::MAX, u32::MAX - 7, 1_000] {
+            let bad = webp_of(&[riff_chunk(b"VP8X", len, &[0; 10])]);
+            assert_eq!(resolution(&bad), None, "chunk length {len}");
+        }
     }
 }
