@@ -7995,7 +7995,12 @@ moving the art moves the crop, and deleting it removes it from its asset (an ass
 format row of the document's export settings, the ones Export for Screens remembers (`document.exportSettings`); any
 `formats`, `preset`, `settings`, `prefix` or `subfolders` given win for that export. `assets.settings.set` changes
 those shared settings (not an undo step); its `subfolders: true` sets Export for Screens' Folders to a folder per row,
-and `subfolders: false` sets a folder per row back to All in One Folder. `document.exportForScreens {assets: [id…]}` does the same with its own params
+and `subfolders: false` sets a folder per row (without `exportPreset`, also a folder per format or item) back to All
+in One Folder. Its `openLocation: true|false`
+is Open Location after Export, kept in `document.exportSettings` (not in presets). The panel menu's Create Sub-folders and
+Open Location after Export run these two (sub-folders sort the pictures; `assets.export3D` writes mesh files in the
+folder itself), and its Format Settings… opens Export for Screens on the first row's format
+settings. `document.exportForScreens {assets: [id…]}` does the same with its own params
 (the dialog's Assets tab). An asset's crop, and the crop of `export` with `selection: true`, is the bounds the
 renderer measures for what the art draws, its effects included.
 
