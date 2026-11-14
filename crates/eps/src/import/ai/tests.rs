@@ -7296,7 +7296,11 @@ fn twist_is_read_on_curves_compound_paths_and_groups_with_nothing_stroked_up_to_
         ("a twisted group", read(&twist(90.0, None), &distort_group()), 2),
         ("a group with a hidden member", read(&twist(45.0, None), &hidden_member), 2),
         ("a curve twisted a quarter turn back", read(&twist(-90.0, BLUE_FILL), &curved), 0),
-        ("a straight compound path with a guide, as before", read(&twist(45.0, BLUE_FILL), &with_guide(&rect_path(20.0, 20.0, 60.0, 50.0))), 2),
+        (
+            "a straight compound path with a guide inside it, as before",
+            read(&twist(45.0, BLUE_FILL), &with_guide(&rect_path(0.0, 0.0, 60.0, 50.0))),
+            2,
+        ),
     ] {
         assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
         let a = art(&r.doc);
@@ -7355,6 +7359,48 @@ fn twist_is_read_on_straight_paths_and_compound_paths_up_to_half_a_turn() {
         ("a square twisted two turns", read(720.0, &square)),
         ("a square twisted ten turns", read(3600.0, &square)),
         ("a straight compound path twisted a full turn", read(360.0, &frame)),
+    ] {
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert!(a[0].appearance.effects.is_empty(), "{what}: the drawn look: {a:#?}");
+        assert!(r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+    }
+}
+
+#[test]
+fn twist_on_a_straight_compound_path_keeps_the_drawn_look_where_a_guide_reaches_past_its_other_members() {
+    // GUARDS: a straight compound path whose guide members reach past its other members was read
+    // with a live Twist measured from bounds that take in those guides, which draws differently from
+    // the art saved with it.
+    // The object, `hidden` painted with its style, under its drawn look.
+    let object = |hidden: &str| {
+        format!("0 Ae\nu\n{RED}{}f\nU\n%_Bb\n%_{}0 BB\n1 (Bent) XW\n", rect_path(16.0, 16.0, 64.0, 54.0), hidden.replace('\n', "\n%_"))
+    };
+    // A compound path of a square and the guide from `from` to `to`.
+    let with_guide = |from: (f64, f64), to: (f64, f64)| {
+        object(&format!("*u\n{}f\n{} {} m\n{} {} L\n(N) *\n*U\n", rect_path(20.0, 20.0, 60.0, 50.0), from.0, from.1, to.0, to.1))
+    };
+    let twist = |angle: f64| distort_styles("Adobe Twirl", &format!("{angle} /Real (angle) ,\n"), BLUE_FILL);
+    let read = |angle: f64, art_: &str| read_ok(&format!("{}{}", twist(angle), layer(art_)));
+    for (what, r) in [
+        ("a guide inside the square", read(45.0, &with_guide((25.0, 25.0), (35.0, 35.0)))),
+        ("a guide on the square's corners", read(180.0, &with_guide((20.0, 20.0), (60.0, 50.0)))),
+        ("a guide inside the square, half a turn back", read(-180.0, &with_guide((30.0, 40.0), (50.0, 30.0)))),
+        ("a guide outside the square, not turned", read(0.0, &with_guide((5.0, 0.0), (15.0, 10.0)))),
+    ] {
+        assert!(!r.warnings.iter().any(|w| w.contains("drawn look")), "{what}: {:?}", r.warnings);
+        let a = art(&r.doc);
+        assert_eq!(a.len(), 1, "{what}: {a:#?}");
+        assert_eq!(a[0].children().map_or(0, |c| c.len()), 2, "{what}: the object, not its look: {a:#?}");
+        let [e] = a[0].appearance.effects.as_slice() else { panic!("{what}: {:?}", a[0].appearance) };
+        assert_eq!(e.id, "distort.twist", "{what}");
+    }
+    for (what, r) in [
+        ("a guide outside the square", read(45.0, &with_guide((5.0, 0.0), (15.0, 10.0)))),
+        ("a guide reaching past the square's right side", read(45.0, &with_guide((30.0, 30.0), (70.0, 40.0)))),
+        ("a guide reaching past the square's top, half a turn", read(180.0, &with_guide((30.0, 30.0), (40.0, 51.0)))),
+        ("a guide around the square, a quarter turn back", read(-90.0, &with_guide((0.0, 0.0), (80.0, 70.0)))),
+        ("a compound path of guides only", read(45.0, &object("*u\n25 25 m\n35 35 L\n(N) *\n40 25 m\n50 35 L\n(N) *\n*U\n"))),
     ] {
         let a = art(&r.doc);
         assert_eq!(a.len(), 1, "{what}: {a:#?}");
@@ -8786,7 +8832,8 @@ fn other_guide_paths_stay_guide_paths() {
         guide_line(0.0, 30.0, 200.0, 30.0, "S"),
         guide_line(-7885.0, -7796.0, 8498.0, 8587.0, "N"),
         format!("u\n{}U\n", guide_line(-7885.0, 40.0, 8498.0, 40.0, "N")),
-        format!("1 Xw\n{}0 Xw\n", guide_line(-7885.0, 40.0, 8498.0, 40.0, "N")),
+        format!("1 Xw\n{}0 Xw\n", guide_line(20.0, 40.0, 80.0, 40.0, "N")),
+        format!("1 A\n{}0 A\n", guide_line(-7885.0, 40.0, 8498.0, 40.0, "S")),
         "-7885 40 m\n306 40 L\n8498 40 L\n(N) *\n".to_string(),
     ];
     for body in cases {
@@ -8794,6 +8841,35 @@ fn other_guide_paths_stay_guide_paths() {
         assert!(doc.ruler_guides().is_empty(), "{body}");
         assert_eq!(art(&doc).len(), 1, "{body}");
     }
+}
+
+/// A hidden (`1 Xw`), locked (`1 A`) or named ruler guide path is a ruler guide that keeps its own
+/// visibility, lock and name, across the canvas or an artboard, on a shown layer.
+#[test]
+fn hidden_locked_and_named_guide_paths_are_ruler_guides() {
+    let body = format!(
+        "1 Xw\n{}0 Xw\n1 A\n{}0 A\n{}%_/ArtDictionary :\n%_(Mark) /String (AIArtName) ,\n%_;\n%_\n1 Xw\n{}0 Xw\n",
+        guide_line(-7885.0, 40.0, 8498.0, 40.0, "N"),
+        guide_line(25.0, 8587.0, 25.0, -7796.0, "N"),
+        guide_line(-7885.0, 90.0, 8498.0, 90.0, "N"),
+        guide_line(0.0, 30.0, 200.0, 30.0, "N"),
+    );
+    let doc = read(canvas_stream(&layer(&body)).as_bytes()).unwrap().doc;
+    let top = &doc.layers[0];
+    assert!(top.visible);
+    let kids = top.children().unwrap();
+    assert_eq!(kids.len(), 4);
+    assert!(kids.iter().all(|c| c.is_ruler_guide()), "no guide path is left");
+    let got: Vec<_> = doc.ruler_guides().into_iter().map(|g| (g.vertical, g.pos, g.artboard, g.layer, g.hidden, g.locked, g.name)).collect();
+    let want = [
+        (false, 60.0, None, Some(top.id), true, false, None),
+        (true, 25.0, None, Some(top.id), false, true, None),
+        (false, 10.0, None, Some(top.id), false, false, Some("Mark".to_string())),
+        (false, 70.0, Some(1), Some(top.id), true, false, None),
+    ];
+    assert_eq!(got, want);
+    // The nodes themselves carry the state, so the Layers rows show it.
+    assert_eq!(kids.iter().map(|k| (k.visible, k.locked)).collect::<Vec<_>>(), [(false, false), (true, true), (true, false), (false, false)]);
 }
 
 /// The layer whose `Lb` has `ops` as its options (the first one in the file).
@@ -9721,7 +9797,7 @@ fn a_pattern_brushs_five_slots_are_kept() {
 fn an_older_art_brush_comes_in_with_its_art() {
     const OLD_RIBBON: &str = "1 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0";
     let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", OLD_RIBBON).unwrap();
-    assert!(matches!(d.kind, brush::DraftKind::Art { ref art, plain: false, .. } if art == "Ribbon art"), "{d:?}");
+    assert!(matches!(d.kind, brush::DraftKind::Art { ref art, settings: None, .. } if art == "Ribbon art"), "{d:?}");
     let brush::DraftKind::Art { ref brush, .. } = d.kind else { panic!("art") };
     assert_eq!(brush.colorization, vectorcraft_brush::ArtBrush::default().colorization, "the default colorization");
     // A count of numbers neither form has isn't read.
@@ -9731,8 +9807,8 @@ fn an_older_art_brush_comes_in_with_its_art() {
     assert_eq!(brush::parse_tool_object(brush::Tool::Scatter, "Spray", "1 /Dot art/ 0 1 /  1 0 1 0 1 0 0 0"), Err(brush::BrushError::Values));
     // 8 numbers are the older form whatever the first number says: read with the defaults.
     let d = brush::parse_tool_object(brush::Tool::Art, "Ribbon", "0 / Ribbon art/ / / / / 0 1 /  1 0 1 0 1 0 0 0").unwrap();
-    let brush::DraftKind::Art { ref brush, ref art, plain } = d.kind else { panic!("art") };
-    assert_eq!((art.as_str(), plain, brush.colorization), ("Ribbon art", false, vectorcraft_brush::ArtBrush::default().colorization));
+    let brush::DraftKind::Art { ref brush, ref art, settings } = d.kind else { panic!("art") };
+    assert_eq!((art.as_str(), settings, brush.colorization), ("Ribbon art", None, vectorcraft_brush::ArtBrush::default().colorization));
     let objects = [plugin_object(ART_BRUSH, "Ribbon", OLD_RIBBON), plugin_object(ART_BRUSH, "Bare", "1 / / / / / / 0 1 /  1 0 1 0 1 0 0 0")].concat();
     let r = read_ok(&format!("{}{objects}{}", brush_art("Ribbon art", 4.0), layer("")));
     let lib = vectorcraft_brush::library(&r.doc);
@@ -10395,9 +10471,109 @@ fn an_art_brush_bends_only_paths_in_solid_fills() {
     assert!(wrong.is_empty(), "{wrong:?}");
 }
 
+/// The entries of an Art brush's filter that hold its settings, in the order of its object's numbers 2
+/// to 15, with how each is written.
+const ART_KEYS: [(&str, &str); 14] = [
+    ("Colorization", "Int"),
+    ("Scaling", "Real"),
+    ("Spacing", "Real"),
+    ("Adjustment", "Int"),
+    ("Counterclockwise", "Int"),
+    ("UpsideDown", "Int"),
+    ("Proportional", "Bool"),
+    ("MinScaling", "Real"),
+    ("MaxScaling", "Real"),
+    ("ScaleYDependsOn", "Int"),
+    ("Segmented", "Bool"),
+    ("StartSegmentLength", "Real"),
+    ("EndSegmentLength", "Real"),
+    ("FoldAdjustment", "Bool"),
+];
+
+/// The Art brush `Ribbon` (its art 40 long: [`lopsided_art`]) whose settings, numbers 2 to 15 of its
+/// object, are those of [`RIBBON`] with `changes` (index in the 14, value), and the style `Inked` that
+/// gives a path the same settings.
+fn ribbon_with(changes: &[(usize, &str)]) -> (String, String) {
+    let mut settings = ["1", "1", "0", "1", "0", "0", "0", "1", "1", "0", "0", "0", "0", "1"];
+    for (i, v) in changes {
+        settings[*i] = v;
+    }
+    let brush = format!("2 / Ribbon art/ / / / / 0 0/ 5 0 0 0 /  1 {}", settings.join(" "));
+    let entries: Vec<(&str, &str, &str)> = ART_KEYS.iter().zip(settings).map(|((key, kind), value)| (*key, value, *kind)).collect();
+    (format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", &brush)), art_style("Ribbon", 1.0, &entries, ""))
+}
+
+/// A path with an Art brush whose settings are its own comes in brushed, the brush with those
+/// settings: None, another width (the lowest and highest widths aren't drawn while the width is
+/// fixed), flipped along or across, and Stretch Between Guides, whose guides come in as fractions of
+/// the art as it runs along the path (measured before it is flipped along it, so a flip along swaps
+/// them). Lengths without Stretch Between Guides aren't guides. A brush that scales its art
+/// proportionately comes into the panel with that option, and its path keeps its drawn look.
+#[test]
+fn an_art_brush_with_options_comes_in_brushed_with_them() {
+    use vectorcraft_brush::{ArtBrush, ArtScale, Colorization};
+    let check_file = |why: &str, (def, style): (String, String), want: &dyn Fn(&ArtBrush) -> bool| {
+        let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
+        let a = art(&r.doc);
+        assert!(matches!(a[0].kind, NodeKind::Path { .. }), "{why}: the path, not its look: {a:#?}");
+        assert_eq!(a[0].appearance.stroke().and_then(|s| s.brush.as_deref()), Some("Ribbon"), "{why}");
+        let lib = vectorcraft_brush::library(&r.doc);
+        let vectorcraft_brush::BrushKind::Art(brush) = brush_named(&lib, "Ribbon") else { panic!("{why}: art") };
+        assert!(want(brush), "{why}: {brush:?}");
+        r
+    };
+    let check = |why: &str, changes: &[(usize, &str)], want: &dyn Fn(&ArtBrush) -> bool| check_file(why, ribbon_with(changes), want);
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+    // Settings that don't draw may differ between the brush and the path: the lowest and highest
+    // width while the width is fixed, and lengths without Stretch Between Guides.
+    let (def, style) = ribbon_with(&[(1, "2"), (7, "2"), (8, "2")]);
+    let style = style.replace("2 /Real (MinScaling) ,\n", "").replace("2 /Real (MaxScaling) ,\n", "");
+    check_file("the path leaves out the widths the pen would give", (def, style), &|b| b.width == 200.0);
+    let (def, _) = ribbon_with(&[]);
+    let (_, style) = ribbon_with(&[(11, "5"), (12, "10")]);
+    check_file("lengths on the path alone", (def, style), &|b| b.scale == ArtScale::Stretch);
+    check("its art's colors", &[(0, "0")], &|b| b.colorization == Colorization::None);
+    check("twice as wide", &[(1, "2"), (7, "2"), (8, "2")], &|b| b.width == 200.0);
+    check("half as wide, the pen's widths left", &[(1, "0.5")], &|b| b.width == 50.0 && b.width_mode.is_none());
+    let along = check("flipped along", &[(4, "1")], &|b| b.flip_along && !b.flip_across);
+    let across = check("flipped across", &[(5, "1")], &|b| b.flip_across && !b.flip_along);
+    let (def, style) = ribbon_with(&[(6, "1")]);
+    let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));
+    assert!(matches!(art(&r.doc)[0].kind, NodeKind::Group { .. }), "proportional: the drawn look");
+    let lib = vectorcraft_brush::library(&r.doc);
+    let vectorcraft_brush::BrushKind::Art(brush) = brush_named(&lib, "Ribbon") else { panic!("proportional: art") };
+    assert_eq!(brush.scale, ArtScale::Proportional);
+    check(
+        "between guides",
+        &[(10, "1"), (11, "5"), (12, "10")],
+        &|b| matches!(b.scale, ArtScale::BetweenGuides { start, end } if near(start, 5.0 / 40.0) && near(end, 30.0 / 40.0)),
+    );
+    check("between guides, flipped along", &[(10, "1"), (11, "5"), (12, "10"), (4, "1")], &|b| {
+        b.flip_along && matches!(b.scale, ArtScale::BetweenGuides { start, end } if near(start, 10.0 / 40.0) && near(end, 35.0 / 40.0))
+    });
+    check("lengths without guides", &[(11, "5"), (12, "10")], &|b| b.scale == ArtScale::Stretch);
+    // Along a straight line, y down: unflipped, the wide block is above the line and the narrow one
+    // below it, at the start.
+    let line = kurbo::BezPath::from_vec(vec![kurbo::PathEl::MoveTo(Point::new(0.0, 0.0)), kurbo::PathEl::LineTo(Point::new(100.0, 0.0))]);
+    let filled = |r: &Structure, x: f64, y: f64| {
+        let lib = vectorcraft_brush::library(&r.doc);
+        let st = art(&r.doc)[0].appearance.stroke().cloned().unwrap();
+        let ribbon = lib.iter().find(|b| b.name == "Ribbon").unwrap();
+        let pieces = vectorcraft_brush::stroke_pieces(&r.doc, ribbon, &line, &st);
+        pieces.iter().any(|n| {
+            let mut hit = false;
+            n.walk(&mut |c| hit |= c.path_data().is_some_and(|p| kurbo::Shape::winding(&p.to_bezpath(), Point::new(x, y)) != 0));
+            hit
+        })
+    };
+    // At weight 1 the art is 8 across: each block is 4 across, on its side of the line.
+    assert!(filled(&across, 50.0, 2.0) && filled(&across, 10.0, -2.0) && !filled(&across, 50.0, -2.0), "across: the wide block below");
+    assert!(filled(&along, 50.0, -2.0) && filled(&along, 90.0, 2.0) && !filled(&along, 10.0, 2.0), "along: the narrow block at the end");
+}
+
 /// An Art brushed path keeps its drawn look when the brush wouldn't draw it the way the file does:
-/// its settings aren't those of art that stretches along the path at the brush's own width and
-/// color, the brush's own aren't, its art isn't read, or the brush isn't one the panel keeps.
+/// its settings differ from the brush's, the brush's are ones VectorCraft doesn't draw as the file
+/// does, its art isn't read, or the brush isn't one the panel keeps.
 #[test]
 fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
     let good = format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", RIBBON));
@@ -10440,21 +10616,7 @@ fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
             ),
             plain_style.clone(),
         ),
-        (
-            "a width other than the brush's 100%",
-            format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", wide)),
-            art_style(
-                "Ribbon",
-                1.0,
-                &STRETCHED.map(|e| if matches!(e.0, "Scaling" | "MinScaling" | "MaxScaling") { (e.0, "2", e.2) } else { e }),
-                "",
-            ),
-        ),
-        (
-            "a brush that keeps its art's colors",
-            format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", own_colors)),
-            art_style("Ribbon", 1.0, &STRETCHED.map(|e| if e.0 == "Colorization" { (e.0, "0", e.2) } else { e }), ""),
-        ),
+        ("a brush that keeps its art's colors, the path in Tints", format!("{}{}", lopsided_art("Ribbon art"), plugin_object(ART_BRUSH, "Ribbon", own_colors)), plain_style.clone()),
         ("an entry that isn't read", good.clone(), art_style("Ribbon", 1.0, &STRETCHED, "1 /Int (SomeOtherSetting) ,\n")),
         (
             "an effect on the path",
@@ -10467,17 +10629,16 @@ fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
         ("proportional", good.clone(), style_with("Proportional", "1")),
         ("between guides", good.clone(), style_with("Segmented", "1")),
         ("its own width", good.clone(), style_with("Scaling", "2")),
-        ("a width that varies", good.clone(), style_with("MaxScaling", "2")),
         ("a width on the pen", good.clone(), style_with("ScaleYDependsOn", "2")),
         ("spacing", good.clone(), style_with("Spacing", "1")),
-        ("flipped", good.clone(), style_with("UpsideDown", "1")),
+        ("a spacing close to the brush's 0", good.clone(), style_with("Spacing", "0.0005")),
+        ("flipped",good.clone(), style_with("UpsideDown", "1")),
         ("flipped the other way", good.clone(), style_with("Counterclockwise", "1")),
         ("another adjustment", good.clone(), style_with("Adjustment", "2")),
         ("no fold adjustment", good.clone(), style_with("FoldAdjustment", "0")),
         ("its own colorization", good.clone(), style_with("Colorization", "0")),
         ("tints and shades", good.clone(), style_with("Colorization", "2")),
         ("hue shift", good.clone(), style_with("Colorization", "3")),
-        ("start of a guide", good.clone(), art_style("Ribbon", 1.0, &STRETCHED, "5 /Real (StartSegmentLength) ,\n")),
         ("variable width", good.clone(), art_style("Ribbon", 1.0, &STRETCHED, "2 /Int (BSWidthSource) ,\n")),
         (
             "width arrays",
@@ -10494,6 +10655,35 @@ fn an_art_brushed_path_the_brush_cant_draw_keeps_its_drawn_look() {
         ("art not read", plugin_object(ART_BRUSH, "Ribbon", RIBBON), plain_style.clone()),
         ("no such brush", good.clone(), art_style("Other", 1.0, &STRETCHED, "")),
     ];
+    // The brush's own settings, which the path shares, but VectorCraft doesn't draw as the file does.
+    let own = [
+        ("both brush and path: tints and shades", &[(0, "2")][..]),
+        ("both: hue shift", &[(0, "3")]),
+        ("both: spacing", &[(2, "1")]),
+        ("both: another adjustment", &[(3, "2")]),
+        ("both: no fold adjustment", &[(13, "0")]),
+        ("both: a width on the pen", &[(9, "1"), (7, "0.5"), (8, "2")]),
+        ("both: a width past the range", &[(1, "20"), (7, "20"), (8, "20")]),
+        ("both: a flip of another value", &[(4, "2")]),
+        ("both: proportional", &[(6, "1")]),
+        ("both: proportional and between guides", &[(6, "1"), (10, "1"), (11, "5"), (12, "10")]),
+        ("both: guides that leave no art between them", &[(10, "1"), (11, "30"), (12, "10")]),
+        ("both: a guide past the start", &[(10, "1"), (11, "-5"), (12, "10")]),
+    ];
+    let mut cases: Vec<(&str, String, String)> = cases
+        .into_iter()
+        .chain(own.iter().map(|(why, changes)| {
+            let (def, style) = ribbon_with(changes);
+            (*why, def, style)
+        }))
+        .collect();
+    // The brush's guides leave art between them, and the path's, close to them, leave none.
+    let (def, style) = ribbon_with(&[(10, "1"), (11, "20"), (12, "19.99")]);
+    cases.push(("path guides close to the brush's that leave no art between them", def, style.replace("19.99 /", "20 /")));
+    // On art 0.01 long, a guide at 0.0035 is 35% of the way along it, and the brush's at 0.003 is 30%.
+    let (def, style) = ribbon_with(&[(10, "1"), (11, "0.003"), (12, "0.002")]);
+    let short = format!("%AI8_BeginBrushPattern\n(Ribbon art)\n0 A\n0 g\n{}f\n%AI8_EndBrushPattern\n", rect_path(0.0, 0.0, 0.01, 4.0));
+    cases.push(("path guides elsewhere on short art", def.replace(&lopsided_art("Ribbon art"), &short), style.replace("0.003 /", "0.0035 /")));
     let mut wrong = vec![];
     for (why, def, style) in cases {
         let r = read_ok(&format!("{def}{style}{}", layer(&brushed_path())));

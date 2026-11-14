@@ -992,8 +992,8 @@ struct StylePaints<'a> {
     brushes: &'a [super::super::brush::BrushDraft],
     /// Which of [`Self::brushes`] are kept as brushes ([`super::super::brush::kept`]).
     kept: &'a [bool],
-    /// The art an Art brush draws as the file does ([`super::super::brush::bending_art`]).
-    bending: &'a HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length ([`super::super::brush::bending_art`]).
+    bending: &'a HashMap<String, f64>,
     space: Affine,
 }
 
@@ -1076,6 +1076,15 @@ fn no_guides(n: &Node, depth: usize) -> bool {
     depth <= MAX_DEPTH && !n.is_guide() && n.children().into_iter().flatten().all(|c| no_guides(c, depth + 1))
 }
 
+/// Is `n` a compound path with a guide member whose bounds reach past the bounds of its members that
+/// aren't guides, or with guide members only? Any other object counts as no.
+fn guides_reach_past(n: &Node) -> bool {
+    let NodeKind::Compound { children, .. } = &n.kind else { return false };
+    let bounds =
+        |guides: bool| children.iter().filter(|c| c.is_guide() == guides).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds()));
+    bounds(true).is_some_and(|g| bounds(false).is_none_or(|o| o.union(g) != o))
+}
+
 /// The largest Twist angle, in degrees either way, read as a live effect on an object that isn't a
 /// path or compound path with straight segments: VectorCraft's own limit. An object with a larger
 /// Twist keeps the file's drawn look.
@@ -1089,7 +1098,8 @@ const MAX_STRAIGHT_TWIST: f64 = 180.0;
 /// Is `object` one that style `st`, whose effect moves the outline, is read on? It and everything
 /// in it [`moves_alike`], and the style paints no gradient. Twist is read only when nothing is
 /// stroked and its angle is a number: up to [`MAX_STRAIGHT_TWIST`] degrees either way on a path or
-/// compound path with straight segments, or up to [`MAX_TWIST`] degrees either way on another object
+/// compound path with straight segments (only at 0° when its guide members reach past its other
+/// members, see [`guides_reach_past`]), or up to [`MAX_TWIST`] degrees either way on another object
 /// with no guide in it. Transform that scales, turns or reflects is read only when nothing is stroked
 /// (its reference point lies on the bounds without strokes).
 fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
@@ -1102,7 +1112,12 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
         && st.effects.iter().all(|e| match e.id.as_str() {
             "distort.twist" => {
                 let within = |limit: f64| e.params["angle"].as_f64().is_some_and(|a| a.abs() <= limit);
-                !stroked && if straight(object) { within(MAX_STRAIGHT_TWIST) } else { no_guides(object, 0) && within(MAX_TWIST) }
+                !stroked
+                    && if straight(object) {
+                        within(MAX_STRAIGHT_TWIST) && (e.params["angle"].as_f64() == Some(0.0) || !guides_reach_past(object))
+                    } else {
+                        no_guides(object, 0) && within(MAX_TWIST)
+                    }
             }
             "distort.transform" => {
                 let p = &e.params;
@@ -1126,7 +1141,8 @@ fn image_warps(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
 
 /// Does image `object` with `appearance` (its style's Warp) draw as `look`, its drawn look, compared
 /// over all that the warp draws ([`crate::import::ai::envelope::warped_alike`]) on `layer`, a layer
-/// id no other node has? Both are drawn shown, opaque and in the Normal mode. Unless the look is on
+/// id no other node has? Both are drawn shown, opaque and in the Normal mode; a hidden look is drawn
+/// with every object in it shown, as the hidden object's look holds them. Unless the look is on
 /// `%_` lines itself (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
 #[allow(clippy::too_many_arguments)]
 fn image_warp_alike(
@@ -1146,10 +1162,22 @@ fn image_warp_alike(
     if !hidden {
         strip(&mut plain, hidden_ids);
     }
+    if !plain.visible {
+        show_members(&mut plain);
+    }
     for n in [&mut live, &mut plain] {
         (n.visible, n.opacity, n.blend) = (true, 1.0, BlendMode::Normal);
     }
     crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
+}
+
+/// Show every object in container `n`, at any depth.
+fn show_members(n: &mut Node) {
+    for c in n.children_mut().into_iter().flatten() {
+        let c = Arc::make_mut(c);
+        c.visible = true;
+        show_members(c);
+    }
 }
 
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.
@@ -1242,7 +1270,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                     if !super::super::brush::draws_as(draft, settings, paints.bending) {
                         return None;
                     }
-                    let art = matches!(settings, super::super::brush::PathBrush::Art);
+                    let art = matches!(settings, super::super::brush::PathBrush::Art(_));
                     let on_a_path = matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
                     if !on_a_path && (art || !slot) {
                         return None;
@@ -1542,7 +1570,7 @@ mod tests {
         let st = &styles["Inked"];
         let brushes = [parse_tool_object(Tool::Calligraphic, "N", "1 4 8 30 50 -150 210 2 5 6 0").unwrap()];
         let (gradients, patterns, names, v7_patterns, bending) =
-            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashMap::new());
         let paints = StylePaints {
             gradients: &gradients,
             patterns: &patterns,
@@ -1588,7 +1616,7 @@ mod tests {
         // GUARDS: an image with a Warp in its art style came in as its drawn look.
         let warp = ("Adobe Deform", "1 /Int (DeformStyle) ,\n0.4 /Real (DeformValue) ,\n"); // brand-ok: the filter's name in the files
         let (gradients, patterns, names, v7_patterns, bending) =
-            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashMap::new());
         let paints = StylePaints {
             gradients: &gradients,
             patterns: &patterns,

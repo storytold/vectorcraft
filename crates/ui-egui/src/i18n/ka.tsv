@@ -166,6 +166,8 @@
 	Crop Image	გამოსახულების ჩამოჭრა
 	Image Tools	გამოსახულების ხელსაწყოები
 	Remove Background…	ფონის მოშორება…
+	Draw (Pencil)	ხატვა (ფანქარი)
+	Place Image	გამოსახულების განთავსება
 	Remove Background	ფონის მოშორება
 	Background	ფონი
 	Edge Color	კიდის ფერი
@@ -890,6 +892,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	სანამ გარემოს ცვლადი VECTORCRAFT_TITLEBAR დაყენებულია, სათაურის ზოლს ის ირჩევს.
 	System Title Bar takes precedence over this option while it is on.	სანამ სისტემის სათაურის ზოლი ჩართულია, მას ამ პარამეტრზე უპირატესობა აქვს.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	სანამ VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე გამორთულია, ეს სამუშაო მაგიდა ფანჯრის სათაურის ზოლს ხატავს, ეს პარამეტრი ჩართულია თუ გამორთული.
 	Exit	გასვლა
 	Distort	დეფორმაცია
 	Diffuse Glow…	გაბნეული ნათება…
@@ -4185,6 +4188,7 @@ font-technology	Variable	ცვლადი
 @msg	`select` must be true or false	`select` უნდა იყოს true ან false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` და `maxAnchors` უნდა იყოს მთელი რიცხვები
 @msg	`{key}` must be a number not below 0	`{key}` უნდა იყოს რიცხვი, არანაკლებ 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` უნდა იყოს ოთხი რიცხვი, თითოეული არანაკლებ 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` უნდა იყოს [x, y, width, height]: ოთხი სასრული რიცხვი, სიგანე და სიმაღლე არ უნდა იყოს უარყოფითი
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` მეტია, ვიდრე `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	მიუთითეთ ერთი მაინც: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -6570,6 +6574,8 @@ axis	Y Axis	Y ღერძი
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
 	Playback Options…	შესრულების პარამეტრები…
+	Button Mode	ღილაკების რეჟიმი
+	No actions.	მოქმედებები არ არის.
 	Insert Stop…	გაჩერების ჩასმა…
 	Insert Stop	გაჩერების ჩასმა
 	Record Stop	გაჩერების ჩაწერა
