@@ -1307,6 +1307,9 @@ antiAlias	Sharp	Nítid
 	The selected character's font is not available.	El tipus de lletra del caràcter seleccionat no està disponible.
 	No alternates for the selected character.	No hi ha alternatives per al caràcter seleccionat.
 	Double-click to replace	Feu doble clic per substituir
+	Click to replace	Feu clic per substituir
+	Show all alternates in the Glyphs panel	Mostra totes les alternatives al tauler Glifs
+	Show Character Alternates	Mostra les alternatives del caràcter
 	Select one character with the Type tool first.	Selecciona primer un caràcter amb l’eina de text.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} és un glif de {font}, no del tipus de lletra amb què està escrit el text seleccionat ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pertany a {base} (U+{base_code}) {place}; la teva selecció és {sel} (U+{code}).
@@ -1794,6 +1797,7 @@ digits	Malayalam	Malaiàlam
 	Format	Format
 	Format Options	Opcions de format
 	Format Settings	Configuració de format
+	Format Settings…	Configuració de format…
 	Format:	Format:
 	Formats:	Formats:
 	Fractional Widths	Amplades fraccionàries
@@ -5908,7 +5912,7 @@ digits	Malayalam	Malaiàlam
 @msg	no segment {segment} on line {line}	no hi ha el segment {segment} a la línia {line}
 @msg	no selected slice in the image: select slices, or save all of them	no hi ha cap tall seleccionat a la imatge: seleccioneu talls o deseu-los tots
 @msg	no selection bounds	no hi ha límits de selecció
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	no s’ha trobat cap objecte similar (les còpies girades o reflexades no coincideixen); canvieu les opcions d’edició global i torneu-ho a provar
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	no s’ha trobat cap objecte similar (les còpies reflexades no coincideixen); canvieu les opcions d’edició global i torneu-ho a provar
 @msg	Global Edit is off	L’edició global no està activa
 @msg	only an object of the Global Edit other than the one it started from can be left out	només es pot excloure un objecte de l’edició global que no sigui aquell amb què va començar
 @msg	no slice selected	no hi ha cap tall seleccionat
@@ -7490,6 +7494,9 @@ breakText	Glyphs	Glifs
 	Open Tutorial Sample	Obre la mostra del tutorial
 	Finish Tutorial	Acaba el tutorial
 	Next Tutorial	Tutorial següent
+	Show Learn Tab	Mostra una pestanya d'Aprèn
+	Show Skill	Mostra l'habilitat
+	Back One Level	Torna un nivell enrere
 	Back to Skills	Torna a les habilitats
 @msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no té cap mostra de pràctica
 @msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)
@@ -7530,6 +7537,9 @@ breakText	Glyphs	Glifs
 	Grommets	Ullets
 	Grommet Inset	Distància dels ullets a la vora
 	Diameter	Diàmetre
+	Nest Shapes…	Encaixa les formes…
+	Nest Shapes	Encaixa les formes
+	Roll	Rotlle
 # Status and error messages of image export, color profiles and libraries, 3D effects, path operations and scripts.
 @msg	3D effects require finite coordinates within 100 million points	Els efectes 3D requereixen coordenades finites dins de 100 milions de punts
 @msg	3D effects require one to ten lights	Els efectes 3D requereixen d’un a deu llums

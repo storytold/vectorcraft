@@ -91,8 +91,9 @@ struct Placed<'r> {
 
 /// What a line's placement depends on: its first glyph, whether it is the paragraph's first line,
 /// the pen's cell, baselines, pending space, narrowest word without room and further spans, the
-/// span of the line above and whether the line is past the frame's end.
-type Key = (usize, bool, usize, Option<u64>, Option<u64>, u64, u64, Vec<[u64; 3]>, Option<u64>, bool);
+/// span of the line above, whether the line is past the frame's end, and what the further spans'
+/// band was placed below.
+type Key = (usize, bool, usize, Option<u64>, Option<u64>, u64, u64, Vec<[u64; 3]>, Option<u64>, bool, (Option<u64>, Option<u64>, u64));
 
 fn key(pos: usize, first: bool, pen: &Pen<'_>, span: Option<f64>, past: bool) -> Key {
     (
@@ -106,6 +107,7 @@ fn key(pos: usize, first: bool, pen: &Pen<'_>, span: Option<f64>, past: bool) ->
         pen.queued.iter().map(|&(b, x0, x1)| [b.to_bits(), x0.to_bits(), x1.to_bits()]).collect(),
         span.map(f64::to_bits),
         past,
+        (pen.above.prev.map(f64::to_bits), pen.above.next_top.map(f64::to_bits), pen.above.pending.to_bits()),
     )
 }
 
