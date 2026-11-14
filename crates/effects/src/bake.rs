@@ -26,20 +26,20 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Vec2};
 
 use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
-use crate::reshape::{as_art, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
+use crate::reshape::{as_art, clipping_text_outline, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
-    has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
+    has_instance_row_raster, has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, reshape,
 };
 
-fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
+pub(crate) fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
     match item {
         AppearanceItem::Fill(f) => &f.effects,
         AppearanceItem::Stroke(s) => &s.effects,
     }
 }
 
-fn clear_item_effects(item: &mut AppearanceItem) {
+pub(crate) fn clear_item_effects(item: &mut AppearanceItem) {
     match item {
         AppearanceItem::Fill(f) => f.effects = crate::raster::without_geometry(&f.effects),
         AppearanceItem::Stroke(s) => s.effects = crate::raster::without_geometry(&s.effects),
@@ -58,6 +58,7 @@ pub fn needs_bake(n: &Node) -> bool {
         || has_geometry(&n.appearance.effects)
         || n.projection().is_some()
         || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)))
+        || has_instance_row_raster(n)
         || n.children().is_some_and(|ch| ch.iter().any(|c| needs_bake(c)))
 }
 
@@ -73,7 +74,7 @@ fn geometry(n: &Node) -> Option<(PathData, FillRule)> {
 
 /// `path` with the geometry effects of `effects` applied, and how gradients follow them
 /// ([`crate::Carry`]).
-fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext) -> (PathData, crate::Carry) {
+pub(crate) fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext) -> (PathData, crate::Carry) {
     if !has_geometry(effects) || path.is_empty() {
         return (path.clone(), crate::Carry::default());
     }
@@ -85,7 +86,7 @@ fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext
 /// context of) applied, and `carried` (`item` as the object's effects left it) with its gradient
 /// moved along with them and the Transform effects the geometry pass left out hidden
 /// ([`crate::Carry::hide_skipped`]).
-fn apply_item(item: &AppearanceItem, carried: &AppearanceItem, g: &PathData, ctx: &GeomContext) -> (PathData, AppearanceItem) {
+pub(crate) fn apply_item(item: &AppearanceItem, carried: &AppearanceItem, g: &PathData, ctx: &GeomContext) -> (PathData, AppearanceItem) {
     let (ig, carry) = apply(item_effects(item), g, &ctx.item(item));
     let mut ap = Appearance { items: vec![carried.clone()], ..Default::default() };
     if carry.moves(&ap) {
@@ -142,15 +143,19 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     }
     // Type, images, symbol instances and live objects: reshaped through their outlines, and so are
     // type whose own fills or strokes have geometry effects and images whose own fills or strokes
-    // paint a shape ([`has_item_geometry`]). Type that Transform effects only move and copy stays
-    // type, moved to each place.
-    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n)) {
+    // paint a shape ([`has_item_geometry`]), and symbol instances whose active fill or stroke has a
+    // raster effect, which the fills and strokes of their art then carry
+    // ([`has_instance_row_raster`]). Type that Transform effects only move and copy stays type,
+    // moved to each place.
+    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n) || has_instance_row_raster(n)) {
         if let Some(m) = moved_type_group(n) {
             return Some(bake_pieces(d, m));
         }
+        // A symbol instance's art as the canvas draws it: with its own appearance changes, stained
+        // by its fill.
         let symbol = match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
-                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n))
+                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::instance_art(&s.art, n))
             }
             _ => None,
         };
@@ -197,7 +202,22 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
             return bake_leaf(d, n);
         }
         let mut m = n.clone();
-        let baked: Vec<Arc<Node>> = ch.iter().map(|c| bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone())).collect();
+        // A clipping path takes the geometry effects in it as the canvas clips by it, those of a
+        // compound path's paths before the compound path's own ([`crate::clip::with_clip_effects_applied`]);
+        // the pieces it is made of then get ids of their own.
+        let clip = usize::from(n.clips());
+        let baked: Vec<Arc<Node>> = ch
+            .iter()
+            .enumerate()
+            .map(|(i, c)| match (i < clip).then(|| crate::clip::with_clip_effects_applied(c)).flatten() {
+                Some(a) => {
+                    let mut a = bake_node(d, &a).unwrap_or(a);
+                    fresh_ids(d, &mut a, &mut std::collections::HashSet::new());
+                    Arc::new(a)
+                }
+                None => bake_node(d, c).map(Arc::new).unwrap_or_else(|| c.clone()),
+            })
+            .collect();
         if let Some(ch) = m.children_mut() {
             *ch = baked;
         }
@@ -402,7 +422,7 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
                         last => Some(Node::group(c.id, copies.into_iter().chain(last).map(Arc::new).collect())),
                     }
                 }
-                None if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
+                None if clipping => clipping_text_outline(c),
                 None => as_art(Some(d), c, None),
             };
             if let Some(o) = art {
@@ -464,7 +484,7 @@ fn piece(d: &mut Document, n: &Node, path: PathData, rule: FillRule, item: Appea
 
 /// `n`'s geometry with its object-level geometry effects applied, its fill rule, the context of
 /// its effects, and `n` without those effects, its gradients moved along with them.
-fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
+pub(crate) fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     let (base, rule) = geometry(n)?;
     let ctx = GeomContext::of(n);
     let mut m = n.clone();

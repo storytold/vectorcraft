@@ -153,7 +153,7 @@ pub use color_picker::open as open_color_picker;
 pub use document_setup::open as open_document_setup;
 pub use effect::open as open_effect_dialog;
 pub(crate) use effect::{FILM_GRAIN_FIELDS, PAINT_DAUB_BRUSH_TYPE_LABELS, SHADES, shown_choices};
-pub use export_as::open as open_export_as;
+pub use export_as::{export_selection, open as open_export_as};
 pub(crate) use export_for_screens::drop_unread_screen_settings;
 pub use export_for_screens::open as open_export_for_screens;
 pub(crate) use export_for_screens::{
@@ -719,7 +719,8 @@ pub fn confirm(app: &mut VectorcraftApp) -> DialogResult {
 /// After a dialog closes, and each frame: a Missing Fonts dialog that another dialog replaced waits
 /// for its turn again, the search a Missing Fonts or Find Linked Files dialog started stops once
 /// that dialog is gone, and with no dialog open the choice about a stopped plug-in that another
-/// dialog replaced opens again, else the next document's Missing Fonts dialog (one dialog at a
+/// dialog replaced opens again, else the questions about the next restored document's linked files
+/// ([`crate::recovery::ask_next`]), else the next document's Missing Fonts dialog (one dialog at a
 /// time).
 pub(crate) fn settle(app: &mut VectorcraftApp) {
     crate::placing::settle_swatch_paste(app);
@@ -727,6 +728,7 @@ pub(crate) fn settle(app: &mut VectorcraftApp) {
     missing_fonts::stop_when_closed(app);
     find_links::stop_when_closed(app);
     safe_mode::reopen(app);
+    crate::recovery::ask_next(app);
     missing_fonts::open_next(app);
 }
 
@@ -783,6 +785,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         return window(app, ctx);
     }
     let mut ok = false;
+    let mut ok_clicked = false;
     let mut ok_enabled = true;
     let mut cancel = false;
     let mut reset = false;
@@ -843,7 +846,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
             if let Some(label) = spec.ok.map(|ok| spec.ok_label.map_or(ok, |f| f(app)))
                 && widgets::primary_button_enabled(ui, label, ok_enabled).clicked()
             {
-                ok = true;
+                ok_clicked = true;
             }
             ui.add_space(8.0);
             // While Alt (Option) is held, Cancel reads Reset on a dialog that has one.
@@ -878,6 +881,20 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
         });
     });
     let rejected = ctx.data_mut(|d| d.remove_temp::<bool>(widgets::dialog_reject_commit_flag())).unwrap_or(false);
+    // A field that refused its text when the press on OK took its focus keeps the dialog open, as
+    // Enter does. Only a pointer click has such a press; the keyboard and screen readers press OK
+    // in one frame.
+    let press = egui::Id::unique("dialog-press-pass");
+    let (pressed, released) = ctx.input(|i| (i.pointer.any_pressed(), i.pointer.any_released()));
+    if pressed {
+        let pass = ctx.cumulative_pass_nr();
+        ctx.data_mut(|m| m.insert_temp(press, pass));
+    }
+    let (pressed_at, refused_at) = ctx.data(|m| (m.get_temp::<u64>(press), m.get_temp::<u64>(widgets::dialog_reject_pass())));
+    let refused_during_click = released && matches!((refused_at, pressed_at), (Some(r), Some(p)) if r >= p);
+    if ok_clicked && !rejected && !refused_during_click {
+        ok = true;
+    }
     if spec.ok.is_some() && ok_enabled && !after_panel && !rejected && crate::shortcuts::pressed_anew(ctx, egui::Key::Enter) {
         ok = true;
     }
@@ -929,6 +946,8 @@ mod tests;
 mod tests_accessibility;
 #[cfg(test)]
 mod tests_export;
+#[cfg(test)]
+mod tests_export_selection;
 #[cfg(test)]
 mod tests_import_pdf;
 #[cfg(test)]

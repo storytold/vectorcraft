@@ -705,6 +705,8 @@ font-technology	Variable	Variables
 	Crop Image	Recortar imagen
 	Image Tools	Herramientas de imagen
 	Remove Background…	Quitar fondo…
+	Draw (Pencil)	Dibujar (Lápiz)
+	Place Image	Colocar imagen
 	Remove Background	Quitar fondo
 	Background	Fondo
 	Edge Color	Color del borde
@@ -2664,6 +2666,7 @@ font-technology	Variable	Variables
 	Proportional Metrics	Métrica proporcional
 	Insert Aki Left	Insertar aki a la izquierda
 	Insert Aki Right	Insertar aki a la derecha
+	Tsume	Tsume
 	Character Direction	Dirección de caracteres
 	Digits	Dígitos
 	Arabic	Árabes
@@ -4394,6 +4397,7 @@ axis	Both	Ambos
 @msg	Plug-ins can't be loaded from {path}: {e}	No se pueden cargar plugins desde {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecciona con Selección directa los puntos de ancla en los que cortar (no los puntos finales de trazados abiertos)
 @msg	Divide Objects Below: select a path	Dividir objetos inferiores: selecciona un trazado
+@msg	select a path	selecciona un trazado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
 @msg	Downloaded {what}	Se descargó {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandir apariencia: la selección tiene una apariencia básica
@@ -4488,6 +4492,7 @@ axis	Both	Ambos
 @msg	`select` must be true or false	`select` debe ser true o false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` y `maxAnchors` deben ser números enteros
 @msg	`{key}` must be a number not below 0	`{key}` debe ser un número no inferior a 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` debe ser cuatro números no inferiores a 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` debe ser [x, y, width, height]: cuatro números finitos, con anchura y altura no negativas
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` es mayor que `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	indica al menos uno de `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4740,6 +4745,7 @@ axis	Both	Ambos
 @msg	no action set to save	no hay ningún conjunto de acciones que guardar
 @msg	the action set file can't be read in full	el archivo de conjunto de acciones no se puede leer completo
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Se cargó “{name}”: se omitió {n} paso|Se cargó “{name}”: se omitieron {n} pasos
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Se cargó “{name}”: {n} paso tiene un comando desconocido y se conservó: “{action}”, paso {step}, `{command}`|Se cargó “{name}”: {n} pasos tienen comandos desconocidos y se conservaron; el primero: “{action}”, paso {step}, `{command}`
 @msg	not an action set file	no es un archivo de conjunto de acciones
 @msg	the action set file is larger than 8 MiB	el archivo de conjunto de acciones supera los 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referencia superaría los {MAX_BYTES} bytes
@@ -4981,6 +4987,7 @@ axis	Both	Ambos
 @msg	tool shortcuts must be a single key (optionally with Shift)	los atajos de herramientas deben ser una sola tecla (opcionalmente con Shift)
 @msg	truncated	truncado
 @msg	unknown command `{0}`	comando desconocido `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	el paso {step} de “{action}” ejecuta el comando desconocido `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	comando desconocido `{0}`; ¿quiso decir `{1}`?
 @msg	unknown effect `{id}`	efecto desconocido `{id}`
 @msg	unknown format	formato desconocido
@@ -5153,6 +5160,8 @@ axis	Both	Ambos
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	una imagen incrustada de {_1} × {_2} píxeles se redujo a {_3} × {_4} píxeles para conservar las capas
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	las imágenes vinculadas muestran la vista previa de baja resolución guardada en el archivo hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
 @msg	linked type areas past VectorCraft's limits were left out	se omitieron las áreas de texto enlazadas que superan los límites de VectorCraft
+@msg	the Line Breaking setting of legacy type was left out	se omitió el ajuste de salto de línea del texto en formato antiguo
+@msg	the Japanese layout rules of legacy type were left out	se omitieron las reglas de composición japonesa del texto en formato antiguo
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	el texto que cambia de dirección de escritura dentro de un objeto de texto se abre en la dirección de su primer carácter
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el texto usado como máscara en áreas enlazadas, texto ceñido o un trazado compuesto no recorta
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	las imágenes vinculadas sin vista previa en el archivo muestran un marcador de posición hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
@@ -5320,6 +5329,7 @@ axis	Both	Ambos
 	VectorCraft Title Bar on Every Desktop	Barra de título de VectorCraft en todos los escritorios
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mientras está definida, la variable de entorno VECTORCRAFT_TITLEBAR elige la barra de título.
 	System Title Bar takes precedence over this option while it is on.	Mientras está activada, Barra de título del sistema tiene prioridad sobre esta opción.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Mientras Barra de título de VectorCraft en todos los escritorios está desactivada, este escritorio dibuja la barra de título de la ventana tanto si esta opción está activada como si no.
 	Value Axis	Eje de valores
 	On Left Side	En el lado izquierdo
 	On Right Side	En el lado derecho
@@ -6143,6 +6153,7 @@ mark-style	Japanese	Japonesas
 @msg	no such color	no existe ese color
 @msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
 @msg	more than one action is named “{_1}”	más de una acción se llama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	la acción “{_1}” establece la preferencia de carpeta {_2}; elimine ese paso para guardar el conjunto
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
 	Smudge Stick…	Difuminar con barra…
 	Smudge Stick	Difuminar con barra
@@ -6328,8 +6339,8 @@ axis	Y Axis	Eje Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un plugin de exportación declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	como máximo {MAX_UNGROUPED} parámetros fuera de grupos: asigna un `group` a los demás
 @msg	can't encode the input	no se puede codificar la entrada
-@msg	expected {"dataBase64"}	se esperaba {"dataBase64"}
-@msg	expected {"objects"}	se esperaba {"objects"}
+@msg	expected {{"dataBase64": "…"}}	se esperaba {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	se esperaba {{"objects": [...]}}
 @msg	export `{name}`: {e}	exportación del módulo `{name}`: {e}
 @msg	extension {e} is listed twice	la extensión {e} aparece dos veces
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensión {e}: usa 1-16 letras minúsculas y dígitos, sin el punto
@@ -6393,11 +6404,11 @@ axis	Y Axis	Eje Y
 @msg	a painted live effect returns only `objects`	un efecto dinámico de pintura solo devuelve `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una pieza de un efecto dinámico de pintura solo tiene `path`, `fillRule`, `fills` y `strokes`
 @msg	a read-only object was left out	se omitió un objeto de solo lectura
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {"id"} solo o tal como se recibió
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {{"id": …}} solo o tal como se recibió
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un trazo solo tiene `paint`, `width`, `join`, `cap` y `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un trazo debe ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	un efecto debe ser {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un trazo debe ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	un efecto debe ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecto en un relleno solo devuelve `fills`
 @msg	an effect on a stroke returns only `strokes`	un efecto en un trazo solo devuelve `strokes`
 @msg	an object must be a JSON object	un objeto debe ser un objeto JSON
@@ -6539,6 +6550,8 @@ axis	Y Axis	Eje Y
 	Action Options…	Opciones de acción…
 	Action Options	Opciones de acción
 	Playback Options…	Opciones de reproducción…
+	Button Mode	Modo de botones
+	No actions.	No hay acciones.
 	Insert Stop…	Insertar parada…
 	Insert Stop	Insertar parada
 	Record Stop	Grabar parada

@@ -5,7 +5,7 @@ use super::lookup::{
 use super::map::{HIGHLIGHT_RED, sorted_roots};
 use super::{
     Action, Arc, BezPath, CLICK_TOL_PX, Cursor, Document, EDGE_NAME, FACE_NAME, FillRule, Mods, Node, NodeId, Overlay, Point, PointerEvent,
-    PointerKind, Rect, Tool, ToolContext, ToolKey, Value, json, json_ids, path_contains,
+    PointerKind, Rect, Tool, ToolContext, ToolKey, Value, color_swatches, json, json_ids, path_contains, pick_swatch, plain, swatch_chips,
 };
 
 // ---------- Live Paint Bucket ----------
@@ -173,6 +173,14 @@ enum LpPaint {
 /// click paints nothing. With Highlight off, the face or edge under the pointer is not
 /// highlighted. The cursor is a filled bucket where a click fills a face, a brush where it paints
 /// an edge and an empty bucket where it paints nothing; with Alt it is the Eyedropper.
+///
+/// The Left and Right arrow keys without Shift, Alt or Cmd/Ctrl set the active paint (the fill,
+/// or the stroke when the Stroke proxy is in front) to the color swatch before or after it in the
+/// Swatches panel, wrapping around; from a color that is no swatch, Right picks the first swatch
+/// and Left the last. The selected art keeps its paint. With `cursorSwatchPreview` (on), the
+/// active paint shows as a chip above the pointer between the swatches before and after it,
+/// except during a fill drag or with Alt held; a solid color that is no swatch shows alone, and a
+/// paint that is not a solid color shows no chip.
 pub struct LivePaintBucketTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
@@ -185,6 +193,11 @@ pub struct LivePaintBucketTool {
     highlight: bool,
     color: [u8; 3],
     width: f64,
+    /// Cursor Swatch Preview.
+    preview: bool,
+    /// The index in [`color_swatches`] of the swatch the arrow keys picked last for the fill and for
+    /// the stroke.
+    picked: [Option<usize>; 2],
 }
 
 /// Maximum points in one Live Paint fill path chunk.
@@ -202,11 +215,24 @@ impl Default for LivePaintBucketTool {
             highlight: true,
             color: HIGHLIGHT_RED,
             width: LP_BUCKET_WIDTH,
+            preview: true,
+            picked: [None; 2],
         }
     }
 }
 
 impl LivePaintBucketTool {
+    /// The active paint the arrow keys step and the preview shows: the fill, or the stroke when the
+    /// Stroke proxy is in front.
+    fn active_paint<'a>(cx: &'a ToolContext) -> &'a vectorcraft_color::Paint {
+        if cx.fill_active { &cx.paint.fill } else { &cx.paint.stroke }
+    }
+
+    /// The slot of [`Self::picked`] for the active paint.
+    fn picked_slot(cx: &ToolContext) -> usize {
+        usize::from(!cx.fill_active)
+    }
+
     fn begin_fill(&mut self, params: Value, p: Point) -> Vec<Action> {
         self.fill_drag = Some((params.clone(), vec![vec![p]]));
         vec![Action::Begin("Live Paint Bucket".into()), Action::Preview("livePaint.fill".into(), params)]
@@ -379,6 +405,8 @@ impl Tool for LivePaintBucketTool {
             }
             PointerKind::Drag => self.drag_fill(p),
             PointerKind::Up => {
+                // The swatch preview shows again at the release point.
+                self.at = Some((p, ev.mods.shift, ev.mods.alt));
                 let mut acts = self.drag_fill(p);
                 if self.fill_drag.take().is_some() {
                     acts.push(Action::Commit);
@@ -389,24 +417,63 @@ impl Tool for LivePaintBucketTool {
         }
     }
 
-    fn key(&mut self, _cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
-        if key == ToolKey::Escape && self.fill_drag.take().is_some() { vec![Action::Cancel] } else { vec![] }
+    /// Escape during a fill drag cancels it. Left and Right pick the color swatch before or after
+    /// the active paint, while no drag is on.
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape {
+            return if self.fill_drag.take().is_some() { vec![Action::Cancel] } else { vec![] };
+        }
+        if !self.claims_key_with(cx, key, mods) {
+            return vec![];
+        }
+        let slot = Self::picked_slot(cx);
+        let Some((i, name)) = pick_swatch(cx.doc, Self::active_paint(cx), self.picked[slot], key == ToolKey::Right) else {
+            return vec![];
+        };
+        self.picked[slot] = Some(i);
+        // The active paint only (no `ids`): the selected art keeps its own.
+        let cmd = if cx.fill_active { "paint.setFill" } else { "paint.setStroke" };
+        vec![Action::Exec(cmd.into(), json!({ "swatch": name, "ids": [] }))]
     }
 
     fn busy(&self) -> bool {
         self.fill_drag.is_some()
     }
 
-    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
-        key == ToolKey::Escape && self.busy()
+    fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
+        match key {
+            ToolKey::Escape => self.busy(),
+            ToolKey::Left | ToolKey::Right => !self.busy() && !color_swatches(cx.doc).is_empty(),
+            _ => false,
+        }
+    }
+
+    /// The arrows pick swatches only without modifiers; Shift, Alt and Cmd/Ctrl arrows keep their
+    /// shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, mods: Mods) -> bool {
+        self.claims_key(cx, key) && (key == ToolKey::Escape || plain(mods))
     }
 
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         if self.fill_drag.take().is_some() { vec![Action::Commit] } else { vec![] }
     }
 
-    fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
-        lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, (self.width * LP_BUCKET_EDGE_FRACTION) as f32)
+    /// The pointer hovers nothing for the tool: its highlight and its swatch preview go.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = LpHover::None;
+        self.at = None;
+    }
+
+    fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        let mut out = lp_overlays(&self.hover, &self.cache, self.color, self.width as f32, (self.width * LP_BUCKET_EDGE_FRACTION) as f32);
+        // No chips during a fill drag, or while Alt makes the tool sample with the eyedropper.
+        if self.preview
+            && !self.busy()
+            && let Some((at, _, false)) = self.at
+        {
+            out.extend(swatch_chips(cx, at, Self::active_paint(cx), self.picked[Self::picked_slot(cx)], true));
+        }
+        out
     }
 
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
@@ -418,6 +485,7 @@ impl Tool for LivePaintBucketTool {
         json!({
             "paintFills": self.fills,
             "paintStrokes": self.strokes,
+            "cursorSwatchPreview": self.preview,
             "highlight": self.highlight,
             "color": format!("#{r:02x}{g:02x}{b:02x}"),
             "width": self.width,
@@ -428,6 +496,7 @@ impl Tool for LivePaintBucketTool {
         match key {
             "paintFills" => self.fills = v.as_bool().unwrap_or(self.fills),
             "paintStrokes" => self.strokes = v.as_bool().unwrap_or(self.strokes),
+            "cursorSwatchPreview" => self.preview = v.as_bool().unwrap_or(self.preview),
             "highlight" => self.highlight = v.as_bool().unwrap_or(self.highlight),
             "color" => self.color = lp_color(v).unwrap_or(self.color),
             "width" => {
@@ -630,7 +699,7 @@ pub(super) fn lp_rgb_color(v: &Value) -> bool {
 /// value it cannot read.
 pub fn check_live_paint_options(tool: &str, values: &serde_json::Map<String, Value>) -> Result<(), String> {
     let switches: &[&str] = match tool {
-        "livePaintBucket" => &["paintFills", "paintStrokes", "highlight"],
+        "livePaintBucket" => &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight"],
         "livePaintSelection" => &["selectFills", "selectStrokes"],
         _ => return Ok(()),
     };
@@ -725,6 +794,11 @@ impl Tool for LivePaintSelectionTool {
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         self.drag = None;
         vec![]
+    }
+
+    /// The pointer hovers nothing for the tool: its highlight goes.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = LpHover::None;
     }
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {

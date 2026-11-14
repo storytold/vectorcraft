@@ -533,6 +533,66 @@ fn a_gradient_mixing_a_spot_ink_with_rgb_is_written_without_the_ink() {
 }
 
 #[test]
+fn gradients_name_only_the_spot_inks_of_stops_that_color_a_stretch() {
+    let black = |offset: f32| GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    let paper = |offset: f32| GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 0.0));
+    let no_spot_space = |ps: &str| !ps.contains("(Gold Ink) cvn") && !ps.contains("/DeviceN") && !ps.contains("/Separation");
+    for level in [Level::Two, Level::Three] {
+        // Gold Ink out of order: the stops at 0 and 0.8 cover the stretches next to it, so it
+        // colors nothing and has no plate.
+        let d = spot_gradient_doc(vec![black(0.0), black(0.8), spot_stop(0.2, "Gold Ink", GOLD, 1.0), black(0.4), black(1.0)]);
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        assert_eq!(dsc(&ps, "DocumentCustomColors"), None, "{level:?}: {ps}");
+        assert!(no_spot_space(&ps), "{level:?}: {ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{level:?}: {:?}", out.warnings);
+        checked_page(&ps);
+        // Without it, Leaf Ink's tints over paper are a Separation shading.
+        let d = spot_gradient_doc(vec![
+            spot_stop(0.0, "Leaf Ink", LEAF, 1.0),
+            spot_stop(0.8, "Leaf Ink", LEAF, 0.5),
+            spot_stop(0.2, "Gold Ink", GOLD, 1.0),
+            paper(0.4),
+            paper(1.0),
+        ]);
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Leaf Ink)"), "{level:?}: {ps}");
+        assert!(ps.contains("/VCsp0 [/Separation (Leaf Ink) cvn /DeviceCMYK") && !ps.contains("(Gold Ink) cvn"), "{level:?}: {ps}");
+        checked_page(&ps);
+        // An RGB stop out of order colors nothing either, so it keeps no ink out.
+        let d = spot_gradient_doc(vec![
+            spot_stop(0.0, "Gold Ink", GOLD, 1.0),
+            spot_stop(0.8, "Gold Ink", GOLD, 0.5),
+            GradientStop::new(0.2, Color::rgb(0.0, 1.0, 0.0)),
+            paper(0.4),
+            paper(1.0),
+        ]);
+        let out = export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap();
+        let ps = text(&out);
+        assert!(ps.contains("/VCsp0 [/Separation (Gold Ink) cvn /DeviceCMYK"), "{level:?}: {ps}");
+        assert!(!out.warnings.iter().any(|w| w.contains("spot")), "{level:?}: {:?}", out.warnings);
+        // Gold Ink at a tint of 0 prints no ink.
+        let d = spot_gradient_doc(vec![spot_stop(0.0, "Gold Ink", GOLD, 0.0), black(1.0)]);
+        let ps = text(&export(&d, &EpsOptions { level, ..opts(&d) }, None, None).unwrap());
+        assert_eq!(dsc(&ps, "DocumentCustomColors"), None, "{level:?}: {ps}");
+        assert!(no_spot_space(&ps), "{level:?}: {ps}");
+    }
+    // Gold Ink at a tint of 0 over a 30% cyan plate (a DeviceN gradient read from a PDF) keeps
+    // its process plate in the same space.
+    let plated = GradientStop { plates: Some([0.3, 0.0, 0.0, 0.0]), ..spot_stop(1.0, "Gold Ink", GOLD, 0.0) };
+    let d = spot_gradient_doc(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), plated]);
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Cyan (Gold Ink) cvn ] /DeviceCMYK") && checked_page(&ps).contains("/C0 [0.3 0] /C1 [0.3 0]"), "{ps}");
+    // EPS leaves stop opacity out, so a clear Gold Ink stop between clear stops is written opaque
+    // and keeps its plate.
+    let clear = |s: GradientStop| GradientStop { opacity: 0.0, ..s };
+    let d = spot_gradient_doc(vec![black(0.0), clear(black(0.2)), clear(spot_stop(0.4, "Gold Ink", GOLD, 1.0)), clear(black(0.6)), black(1.0)]);
+    let ps = text(&export(&d, &opts(&d), None, None).unwrap());
+    assert_eq!(dsc(&ps, "DocumentCustomColors").as_deref(), Some("(Gold Ink)"), "{ps}");
+    assert!(ps.contains("/VCdn0 [/DeviceN [/Black (Gold Ink) cvn ] /DeviceCMYK"), "{ps}");
+}
+
+#[test]
 fn spot_inks_named_all_or_none_are_written_under_names_of_their_own() {
     let rect = |d: &mut Document, fill: &str, stroke: &str| {
         let solid = |name: &str| Paint::Solid { color: GOLD, swatch: Some(name.into()), tint: 1.0 };
@@ -1264,6 +1324,104 @@ fn the_page_limit_counts_a_repeated_images_samples_once() {
     assert!(page.body.len() + page.setup.len() <= inline + 1000 + 400, "{}", page.body.len());
 }
 
+/// A freeform gradient of `points` (x, y and color).
+fn freeform(points: &[(f64, f64, Color)]) -> Paint {
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(Freeform { points: points.iter().map(|&(x, y, c)| FreeformPoint::new(Point::new(x, y), c)).collect(), ..Default::default() });
+    Paint::Gradient(Box::new(g))
+}
+
+/// A square at (`x`, `y`) of side `side`, filled with a freeform gradient of `a` and `b` at a
+/// fifth and four fifths of its width.
+fn freeform_square(d: &mut Document, x: f64, y: f64, side: f64, a: Color, b: Color) -> Node {
+    let mid = y + side / 2.0;
+    let paint = freeform(&[(x + side / 5.0, mid, a), (x + side * 0.8, mid, b)]);
+    path(d, shapes::rectangle(Rect::new(x, y, x + side, y + side)), paint, Paint::None, 0.0)
+}
+
+/// A freeform gradient on a shape and on a moved copy of it is sampled the same for both: its
+/// image's samples are written once, at both levels, in RGB and in CMYK.
+#[test]
+fn a_freeform_gradients_image_drawn_twice_writes_its_samples_once() {
+    let rgb = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let cmyk = (Color::cmyk(1.0, 0.0, 0.0, 0.0), Color::cmyk(0.0, 0.0, 0.0, 1.0));
+    for (a, b) in [rgb, cmyk] {
+        let single = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, a, b)]);
+        let twice = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, a, b), freeform_square(d, 64.0, 64.0, 64.0, a, b)]);
+        for level in Level::ALL {
+            let one = export(&single, &EpsOptions { level, ..opts(&single) }, None, None).unwrap();
+            let one_ps = text(&one);
+            assert!(!one_ps.contains("VCim"), "a field drawn once is written where it is drawn: {one_ps}");
+            let out = export(&twice, &EpsOptions { level, ..opts(&twice) }, None, None).unwrap();
+            let ps = text(&out);
+            checked_page(&ps);
+            assert_eq!(reuses(&ps, 0, level), 2, "{ps}");
+            assert!(!ps.contains("VCim1"), "{ps}");
+            let body = &ps[ps.find("%%EndSetup").unwrap()..];
+            assert!(!body.contains("currentfile") && !body.contains("~>"), "no samples in the page: {ps}");
+            assert_eq!(reused_samples(&ps, level), inline_samples(&one_ps, level), "{level:?}");
+            assert_eq!(out.warnings, one.warnings);
+        }
+    }
+}
+
+/// Fields sampled differently are each written where they are drawn: different gradients, and one
+/// gradient on shapes of different sizes.
+#[test]
+fn freeform_gradients_sampled_differently_dont_share_an_image() {
+    let (red, blue, green) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0));
+    let colors = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, green)]);
+    let sizes = doc_with(|d| {
+        let paint = freeform(&[(20.0, 50.0, red), (80.0, 50.0, blue)]);
+        vec![
+            path(d, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), paint.clone(), Paint::None, 0.0),
+            path(d, shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 100.0)), paint, Paint::None, 0.0),
+        ]
+    });
+    for d in [colors, sizes] {
+        for level in Level::ALL {
+            let ps = page_of(&d, &EpsOptions { level, ..opts(&d) });
+            assert!(!ps.contains("VCim"), "{ps}");
+            assert_eq!(ps.matches("} exec\n").count(), 2, "{ps}");
+        }
+    }
+}
+
+/// A field's second placement that passes the page limit is left out, and the first is written
+/// where it is drawn. A field taken back with the shape that passed the limit leaves nothing in the
+/// setup.
+#[test]
+fn a_field_taken_back_at_the_page_limit_leaves_no_image_behind() {
+    let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+    let single = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+    let o = opts(&single);
+    let inline = crate::scene::Scene::new(&single, &o).run().body;
+    let twice = doc_with(|d| vec![freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]);
+    let page = crate::scene::Scene::new(&twice, &o).with_max_body(inline.len() + 50).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert!(page.body.starts_with(&inline), "{}", page.body);
+    assert_eq!(page.body.matches("} exec\n").count(), 1, "{}", page.body);
+    assert!(!page.setup.contains("VCim"), "{}", page.setup);
+    // A many-sided shape whose stroke passes the limit after its fill's field was placed.
+    let big = |d: &mut Document, stroke: Paint| {
+        let paint = freeform(&[(60.0, 100.0, Color::rgb(0.0, 1.0, 0.0)), (140.0, 100.0, red)]);
+        path(d, shapes::polygon(Point::new(100.0, 100.0), 90.0, 2000, 0.0), paint, stroke, 1.0)
+    };
+    let filled = doc_with(|d| vec![big(d, Paint::None)]);
+    let stroked = doc_with(|d| vec![big(d, Paint::solid(Color::rgb(0.0, 0.0, 0.0)))]);
+    let fill = crate::scene::Scene::new(&filled, &o).run().body.len();
+    let both = crate::scene::Scene::new(&stroked, &o).run().body.len();
+    assert!(both > fill + 20_000, "{fill} {both}");
+    let d = doc_with(|d| {
+        let s = big(d, Paint::solid(Color::rgb(0.0, 0.0, 0.0)));
+        vec![s, freeform_square(d, 0.0, 0.0, 64.0, red, blue), freeform_square(d, 0.0, 0.0, 64.0, red, blue)]
+    });
+    let page = crate::scene::Scene::new(&d, &o).with_max_body(fill + (both - fill) / 2).run();
+    assert!(page.warnings.iter().any(|w| w.contains("too large")), "{:?}", page.warnings);
+    assert_eq!(reuses(&page.body, 0, Level::Three), 2, "{}", page.body);
+    assert!(page.setup.contains("/VCim0 VCsrc") && !page.setup.contains("VCim1"), "{}", page.setup);
+}
+
 #[test]
 fn run_length_and_ascii85_round_trip() {
     let cycle: Vec<u8> = (0..=255u8).cycle().take(1000).collect();
@@ -1388,6 +1546,20 @@ fn an_instance_whose_art_reaches_the_region_is_written() {
     d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let page = page_of(&d, &opts(&d));
     assert!(page.contains("1 0 0 rg"), "{page}");
+}
+
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it.
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut d = doc_with(|d| {
+        let mut n = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((50.0, 50.0)) });
+        n.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+        vec![n]
+    });
+    let art = path(&mut d, shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    let page = page_of(&d, &opts(&d));
+    assert!(page.contains("0 0 1 rg") && !page.contains("1 0 0 rg"), "{page}");
 }
 
 #[test]

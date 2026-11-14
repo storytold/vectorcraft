@@ -194,6 +194,8 @@
 	Crop Image	Beskær billede
 	Image Tools	Billedværktøjer
 	Remove Background…	Fjern baggrund…
+	Draw (Pencil)	Tegn (blyant)
+	Place Image	Placér billede
 	Remove Background	Fjern baggrund
 	Background	Baggrund
 	Edge Color	Kantfarve
@@ -924,6 +926,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCrafts titellinje på alle skriveborde
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljøvariablen VECTORCRAFT_TITLEBAR vælger titellinjen, så længe den er angivet.
 	System Title Bar takes precedence over this option while it is on.	Systemtitellinje har forrang for denne indstilling, så længe den er slået til.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Så længe VectorCrafts titellinje på alle skriveborde er slået fra, tegner dette skrivebord vinduets titellinje, uanset om denne indstilling er slået til eller fra.
 	Exit	Afslut
 	Distort	Forvræng
 	Diffuse Glow…	Diffus glød…
@@ -1506,6 +1509,7 @@ lighting	Light	Lys
 	Proportional Metrics	Proportionale metrikker
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
+	Tsume	Tsume
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
@@ -4795,11 +4799,11 @@ imageTrace	Outline	Kontur
 @msg	unknown effect `{id}`	ukendt effekt `{id}`
 @msg	unknown format	ukendt format
 @msg	unknown format `{f}` (Save writes {_1})	ukendt format `{f}` (Gem skriver {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (punkter, linjer)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ukendt gradienttype `{k}` (lineær, radial, konisk, diamant, freeform)
+@msg	unknown freeform mode `{m}` (points, lines)	ukendt freeform-tilstand `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	ukendt gradienttype `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	ukendt fremhævning `{h}`
 @msg	unknown option `{path}.{k}`	ukendt indstilling `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (bevar, simulér eller forkast)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	ukendt overprint `{o}` (preserve, simulate eller discard)
 @msg	unknown panel `{raw}`	ukendt panel `{raw}`
 @msg	unknown preference `{key}`	ukendt præference `{key}`
 @msg	Preferences imported.	Præferencerne er importeret.
@@ -4817,10 +4821,10 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be an object	`{key}` skal være et objekt
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` køres alene, ikke som et trin i en batch
 @msg	unknown preset (one of {_1})	ukendt forudindstilling (én af {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ukendt forudindstilling `{name}` (høj, mellem, lav eller en gemt: se flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	ukendt forudindstilling `{name}` (high, medium, low eller en gemt: se flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	ukendt forudindstilling `{name}` (se flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	ukendt forudindstilling `{name}` (se webExport.presets.list)
-@msg	unknown side `{other}` (left|right|top|bottom)	ukendt side `{other}` (venstre|højre|top|bund)
+@msg	unknown side `{other}` (left|right|top|bottom)	ukendt side `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	ukendt værktøj `{tool}`
 @msg	unknown tool `{t}`	ukendt værktøj `{t}`
 @msg	unknown tool or command `{key}`	ukendt værktøj eller kommando `{key}`
@@ -4946,6 +4950,8 @@ imageTrace	Outline	Kontur
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	et indlejret billede på {_1} × {_2} pixel blev formindsket til {_3} × {_4} pixel for at bevare lagene
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkede billeder viser den gemte forhåndsvisning i lav opløsning, indtil deres filer findes: link dem igen i Links-panelet
 @msg	linked type areas past VectorCraft's limits were left out	sammenkædede tekstområder ud over VectorCrafts grænser blev udeladt
+@msg	the Line Breaking setting of legacy type was left out	indstillingen for linjeskift i tekst i det gamle format blev udeladt
+@msg	the Japanese layout rules of legacy type were left out	de japanske layoutregler for tekst i det gamle format blev udeladt
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst, der skifter skriveretning inde i et tekstobjekt, åbnes i retningen for sit første tegn
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst brugt som maske i sammenkædede områder, ombrudt tekst eller en sammensat kurve beskærer ikke
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	linkede billeder uden forhåndsvisning i filen viser en pladsholder, indtil deres filer findes: link dem igen i Links-panelet
@@ -5769,6 +5775,7 @@ swatch	Bright Violet	Kraftig violet
 @msg	no such color	ingen sådan farve
 @msg	{_1} cannot be used on Windows	{_1} kan ikke bruges i Windows
 @msg	more than one action is named “{_1}”	mere end én handling hedder »{_1}«
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	handlingen »{_1}« angiver mappeindstillingen {_2}; slet det trin for at gemme sættet
 @msg	no symbol named `{n}`	intet symbol med navnet `{n}`
 	Remove Color Profile…	Fjern farveprofil…
 	Color wheel	Farvehjul
@@ -6070,6 +6077,8 @@ axis	Y Axis	Y-akse
 	Action Options…	Indstillinger for handling…
 	Action Options	Indstillinger for handling
 	Playback Options…	Afspilningsindstillinger…
+	Button Mode	Knaptilstand
+	No actions.	Ingen handlinger.
 	Insert Stop…	Indsæt stop…
 	Insert Stop	Indsæt stop
 	Record Stop	Optag stop

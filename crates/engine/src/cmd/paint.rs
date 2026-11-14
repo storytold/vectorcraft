@@ -39,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swap Fill and Stroke",
             [],
             Some("Shift+X"),
-            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight (exceptions: docs/mcp.md)",
+            "{ids?|id?} swap the fill and stroke of the selection (type too) and of the defaults. On a path directly in a graph series, the graph also stores the swapped paints and the stroke weight, and on a graph label the swapped paints of its characters for every label of its kind (exceptions: docs/mcp.md)",
             has_doc,
             swap
         ),
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Default Fill and Stroke",
             [],
             Some("D"),
-            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (exceptions: docs/mcp.md)",
+            "{ids?|id?} white fill and 1 pt black stroke for the selection and the defaults; type gets black fill and no stroke. On a path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke, and on a graph label the black fill and no stroke of its characters for every label of its kind (exceptions: docs/mcp.md)",
             has_doc,
             default_paint
         ),
@@ -96,7 +96,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Invert",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, invert the default. On a path directly in a graph series, the graph also stores the new color of the topmost visible fill or stroke (docs/mcp.md) → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} invert the active proxy's colours of the selection (or ids; groups recolour their contents) keeping each colour's model, as edit.colors.invert does; the Appearance panel's active fill/stroke item (appearance.setActiveItem) is inverted instead when it is of that kind and no ids are given; with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's solid color changes for this instance only, and a gradient or pattern, or type whose characters differ in color, is refused; with nothing selected, invert the default. On a path directly in a graph series, the graph also stores the new color of the topmost visible fill or stroke, and on a graph label the new color of its characters and rows for every label of its kind (docs/mcp.md); no undo step when no color changes → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.invert", "Invert", &super::colorcmds::invert)
         ),
@@ -105,7 +105,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Complement",
             [],
             None,
-            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; honours the Appearance panel's active item and a selected object of a dynamic symbol instance as paint.invert does; with nothing selected, the default → {changed}",
+            "{stroke?: bool (default: the active proxy), ids?|id?, item?: appearance item index|null, target?: \"object\"|\"contents\"} replace the active proxy's colours by their complements ((highest + lowest) − each component, over RGB or CMY; grey unchanged) keeping each colour's model; honours the Appearance panel's active item and a selected object of a dynamic symbol instance as paint.invert does; with nothing selected, the default; no undo step when no color changes → {changed}",
             has_doc,
             |s, p| proxy_recolor(s, p, "paint.complement", "Complement", &|c: Color| c.complement_keep_model())
         ),
@@ -925,7 +925,8 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
             }
             // The swap writes the paint of the topmost fill and stroke, not their opacity.
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (false, false), true, false);
-            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept))
+            let labels = super::graph::capture_label_changes(&before, d, &ids, false);
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
         })?;
     }
     if s.paint.stroke.is_none() && !s.paint.fill.is_none() && s.paint.stroke_width == 0.0 {
@@ -954,7 +955,8 @@ fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             let kept = super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, false);
-            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept))
+            let labels = super::graph::capture_label_changes(&before, d, &ids, false);
+            Ok(super::appearance::count_changed(d, &before, &ids) + usize::from(kept || labels))
         })?;
     }
     super::newart::reset(s);

@@ -166,6 +166,8 @@
 	Crop Image	გამოსახულების ჩამოჭრა
 	Image Tools	გამოსახულების ხელსაწყოები
 	Remove Background…	ფონის მოშორება…
+	Draw (Pencil)	ხატვა (ფანქარი)
+	Place Image	გამოსახულების განთავსება
 	Remove Background	ფონის მოშორება
 	Background	ფონი
 	Edge Color	კიდის ფერი
@@ -890,6 +892,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	სანამ გარემოს ცვლადი VECTORCRAFT_TITLEBAR დაყენებულია, სათაურის ზოლს ის ირჩევს.
 	System Title Bar takes precedence over this option while it is on.	სანამ სისტემის სათაურის ზოლი ჩართულია, მას ამ პარამეტრზე უპირატესობა აქვს.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	სანამ VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე გამორთულია, ეს სამუშაო მაგიდა ფანჯრის სათაურის ზოლს ხატავს, ეს პარამეტრი ჩართულია თუ გამორთული.
 	Exit	გასვლა
 	Distort	დეფორმაცია
 	Diffuse Glow…	გაბნეული ნათება…
@@ -1443,6 +1446,7 @@ lighting	Light	სინათლე
 	Proportional Metrics	პროპორციული მეტრიკა
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
+	Tsume	ცუმე
 	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
@@ -4098,6 +4102,7 @@ font-technology	Variable	ცვლადი
 @msg	Plug-ins can't be loaded from {path}: {e}	პლაგინების ჩატვირთვა ვერ ხერხდება აქედან: {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	პირდაპირი მონიშვნით მონიშნეთ საყრდენი წერტილები, სადაც გაიჭრება (არა ღია ტრაექტორიების ბოლო წერტილები)
 @msg	Divide Objects Below: select a path	ქვედა ობიექტების დაყოფა: მონიშნეთ ტრაექტორია
+@msg	select a path	მონიშნეთ ტრაექტორია
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
@@ -4184,6 +4189,7 @@ font-technology	Variable	ცვლადი
 @msg	`select` must be true or false	`select` უნდა იყოს true ან false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` და `maxAnchors` უნდა იყოს მთელი რიცხვები
 @msg	`{key}` must be a number not below 0	`{key}` უნდა იყოს რიცხვი, არანაკლებ 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` უნდა იყოს ოთხი რიცხვი, თითოეული არანაკლებ 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` უნდა იყოს [x, y, width, height]: ოთხი სასრული რიცხვი, სიგანე და სიმაღლე არ უნდა იყოს უარყოფითი
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` მეტია, ვიდრე `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	მიუთითეთ ერთი მაინც: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4419,6 +4425,7 @@ font-technology	Variable	ცვლადი
 @msg	no action set to save	შესანახი მოქმედებების ნაკრები არ არის
 @msg	the action set file can't be read in full	მოქმედებების ნაკრების ფაილის სრულად წაკითხვა შეუძლებელია
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: ცნობარი {MAX_BYTES} ბაიტზე დიდი იქნებოდა
@@ -4638,6 +4645,7 @@ font-technology	Variable	ცვლადი
 @msg	tool shortcuts must be a single key (optionally with Shift)	ხელსაწყოს მალსახმობი ერთი კლავიში უნდა იყოს (სურვილისამებრ Shift-ით)
 @msg	truncated	შეკვეცილია
 @msg	unknown command `{0}`	უცნობი ბრძანება `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	„{action}“, ნაბიჯი {step}: უცნობი ბრძანება `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	უცნობი ბრძანება `{0}`; იქნებ `{1}` იგულისხმეთ?
 @msg	unknown effect `{id}`	უცნობი ეფექტი `{id}`
 @msg	unknown format	უცნობი ფორმატი
@@ -5185,6 +5193,8 @@ font-technology	Variable	ცვლადი
 	Stacked	დასტად
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები ფაილში შენახულ დაბალი გარჩევადობის მინიატურას აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft-ის ლიმიტების მიღმა დაკავშირებული ტექსტის არეები გამოტოვებულია
+@msg	the Line Breaking setting of legacy type was left out	ძველი ფორმატის ტექსტის სტრიქონის გადატანის პარამეტრი გამოტოვებულია
+@msg	the Japanese layout rules of legacy type were left out	ძველი ფორმატის ტექსტის იაპონური განლაგების წესები გამოტოვებულია
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	ტექსტი, რომელიც ტექსტური ობიექტის შიგნით ცვლის წერის მიმართულებას, იხსნება მისი პირველი სიმბოლოს მიმართულებით
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	დაკავშირებულ არეებში, გარსშემოვლებულ ტექსტში ან შედგენილ ტრაექტორიაში ნიღბად გამოყენებული ტექსტი არ ჭრის
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები, რომელთა მინიატურაც ფაილში არ არის, ადგილის შემნახველს აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
@@ -5924,6 +5934,7 @@ imageTrace	Outline	კონტური
 @msg	no such color	ასეთი ფერი არ არის
 @msg	{_1} cannot be used on Windows	{_1} ვერ გამოიყენება Windows-ში
 @msg	more than one action is named “{_1}”	„{_1}“ ერთზე მეტი მოქმედების სახელია
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	მოქმედება „{_1}“ აყენებს საქაღალდის პარამეტრს {_2}; ნაკრების შესანახად წაშალეთ ეს ნაბიჯი
 @msg	no symbol named `{n}`	სიმბოლო სახელით `{n}` არ არის
 @msg	no saved selection recalled	შენახული მონიშვნა გამოძახებული არ არის
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft-ის ბოლო გაშვება ფანჯრის გამოჩენამდე შეწყდა (გრაფიკული პროცესორი: {name}), ამიტომ VectorCraft გაეშვა: {summary}. ამ გრაფიკული პროცესორის ხელახლა საცდელად შეცვალეთ პარამეტრები › წარმადობა › გრაფიკული პროცესორი ან გაუშვით WGPU_BACKEND ცვლადის მითითებით
@@ -6336,8 +6347,8 @@ axis	Y Axis	Y ღერძი
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ექსპორტის პლაგინი აცხადებს 1-დან {MAX_EXTENSIONS}-მდე `extensions`-ს
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	ჯგუფების გარეთ მაქსიმუმ {MAX_UNGROUPED} პარამეტრია დასაშვები: დანარჩენებს მიეცით `group`
 @msg	can't encode the input	შეყვანის კოდირება ვერ ხერხდება
-@msg	expected {"dataBase64"}	მოსალოდნელი იყო {"dataBase64"}
-@msg	expected {"objects"}	მოსალოდნელი იყო {"objects"}
+@msg	expected {{"dataBase64": "…"}}	მოსალოდნელი იყო {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	მოსალოდნელი იყო {{"objects": [...]}}
 @msg	export `{name}`: {e}	მოდულის ექსპორტი `{name}`: {e}
 @msg	extension {e} is listed twice	გაფართოება {e} ორჯერაა მითითებული
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	გაფართოება {e}: გამოიყენეთ 1-16 პატარა ასო და ციფრი, წერტილის გარეშე
@@ -6401,11 +6412,11 @@ axis	Y Axis	Y ღერძი
 @msg	a painted live effect returns only `objects`	მხატვრული ცოცხალი ეფექტი აბრუნებს მხოლოდ `objects`-ს
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	მხატვრული ცოცხალი ეფექტის ნაწილს აქვს მხოლოდ `path`, `fillRule`, `fills` და `strokes`
 @msg	a read-only object was left out	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {"id"}-ის სახით ან ისე, როგორც მიიღეთ
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {{"id": …}}-ის სახით ან ისე, როგორც მიიღეთ
 @msg	a string	სტრიქონი
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	კონტურს აქვს მხოლოდ `paint`, `width`, `join`, `cap` და `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	კონტური უნდა იყოს {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ეფექტი უნდა იყოს {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	კონტური უნდა იყოს {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ეფექტი უნდა იყოს {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	შევსების ეფექტი აბრუნებს მხოლოდ `fills`-ს
 @msg	an effect on a stroke returns only `strokes`	კონტურის ეფექტი აბრუნებს მხოლოდ `strokes`-ს
 @msg	an object must be a JSON object	ობიექტი უნდა იყოს JSON ობიექტი
@@ -6547,6 +6558,8 @@ axis	Y Axis	Y ღერძი
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
 	Playback Options…	შესრულების პარამეტრები…
+	Button Mode	ღილაკების რეჟიმი
+	No actions.	მოქმედებები არ არის.
 	Insert Stop…	გაჩერების ჩასმა…
 	Insert Stop	გაჩერების ჩასმა
 	Record Stop	გაჩერების ჩაწერა
@@ -7349,7 +7362,7 @@ font-script	Japanese	იაპონური
 	Japanese Envelope #3	იაპონური კონვერტი #3
 	Japanese Envelope #4	იაპონური კონვერტი #4
 @msg	image '{key}' has no pixels and was left out	გამოსახულებას '{key}' პიქსელები არ აქვს და გამოტოვდა
-@msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
+@msg	not an RTF file: it doesn't start with {{\\rtf	RTF ფაილი არ არის: არ იწყება {{\\rtf-ით
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	ტექსტის ხელსაწყოები
 	Text Tweaker…	ტექსტის მორგება…

@@ -141,6 +141,50 @@ fn art_brush_proportional_keeps_aspect() {
     assert!(near(bounds(&out).height(), 8.0, 1e-6));
 }
 
+/// Scale Proportionately art is scaled across by the stroke weight and the Width, as Stretch art
+/// is, on top of the scale the path length gives it.
+#[test]
+fn art_brush_proportional_grows_with_weight() {
+    let brush = |width: f64, overlap: bool| {
+        let mut b = art_brush(rect_art(100.0, 4.0), ArtScale::Proportional);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.overlap) = (width, overlap);
+        }
+        b
+    };
+    let draw = |b: &Brush, bp: &BezPath, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, bp, st);
+    // 3 pt stroke → 3× wider than at 1 pt (8 pt); the length still follows the path.
+    let b = bounds(&draw(&brush(100.0, false), &line(0.0, 0.0, 200.0, 0.0), &stroke(3.0)));
+    assert!(near(b.height(), 24.0, 1e-6) && near(b.x0, 0.0, 1e-6) && near(b.x1, 200.0, 1e-6), "{b:?}");
+    // The Width (50 %) applies on top of the stroke weight.
+    let b = bounds(&draw(&brush(50.0, false), &line(0.0, 0.0, 200.0, 0.0), &stroke(3.0)));
+    assert!(near(b.height(), 12.0, 1e-6), "{b:?}");
+    // A path twice as long at twice the weight (as Scale Strokes & Effects at 200 % leaves it):
+    // 2× from the length and 2× from the weight.
+    let b = bounds(&draw(&brush(100.0, false), &line(0.0, 0.0, 400.0, 0.0), &stroke(2.0)));
+    assert!(near(b.height(), 32.0, 1e-6), "{b:?}");
+    // With Overlap, each run between corners is scaled by its own length and by the weight: the
+    // 100 pt run 4 pt × 3 across, the 50 pt run 2 pt × 3.
+    let mut bent = BezPath::new();
+    bent.move_to((0.0, 0.0));
+    bent.line_to((100.0, 0.0));
+    bent.line_to((100.0, 50.0));
+    let out = draw(&brush(100.0, true), &bent, &stroke(3.0));
+    assert_eq!(out.len(), 2);
+    let (r0, r1) = (out[0].geometric_bounds().unwrap(), out[1].geometric_bounds().unwrap());
+    assert!(near(r0.height(), 12.0, 1e-6) && near(r1.width(), 6.0, 1e-6), "{r0:?} {r1:?}");
+    // A width that follows the pen: 50 % at the lightest pressure, 300 % at the heaviest, times
+    // the 2 pt weight (4 pt art on a 100 pt path: 4 pt across at 100 %, 1 pt either side).
+    let mut pen = brush(50.0, false);
+    if let BrushKind::Art(a) = &mut pen.kind {
+        (a.width_mode, a.width_max) = (Some(Variation::Pressure), Some(300.0));
+    }
+    let ramp = StrokeLayer { width: 2.0, ..pressed(vec![(0.0, 0.0), (1.0, 1.0)]) };
+    let out = draw(&pen, &line(0.0, 0.0, 100.0, 0.0), &ramp);
+    assert!(near(half_width(&out, 0.0, 1.0), 2.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 12.0, 0.2), "{}", half_width(&out, 99.0, 100.0));
+}
+
 #[test]
 fn art_brush_between_guides_keeps_ends() {
     // Head (last 20 % of a 100 pt art) keeps its 20 pt length on a 300 pt path.
@@ -1037,6 +1081,26 @@ fn pressed(points: Vec<(f64, f64)>) -> StrokeLayer {
     StrokeLayer { pressure: Some(vectorcraft_doc::PressureProfile { points }), ..stroke(1.0) }
 }
 
+/// A nib that follows the pen is sampled between the vertices of the flattened path too. Along a
+/// curve those samples sit on the curve, and the outline keeps its distance from it.
+#[test]
+fn pen_driven_nib_outline_follows_the_curve_between_vertices() {
+    // The top half of a circle of radius 50; a round nib 20 pt across, the same at any pressure.
+    let (r, half) = (50.0, 10.0);
+    let c = Point::new(r, r);
+    let ring = shapes::ellipse(Rect::new(0.0, 0.0, 2.0 * r, 2.0 * r)).to_bezpath();
+    let half_circle: BezPath = ring.elements().iter().take(3).copied().collect();
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &pressure_calli(20.0, 0.0), &half_circle, &pressed(vec![(0.0, 0.5), (1.0, 0.5)]));
+    let mut pts = vec![];
+    for n in &out {
+        all_points(n, &mut pts);
+    }
+    // Away from the round caps at the two ends, every outline point is `half` from the curve.
+    let middle = pts.iter().filter(|p| ((p.y - c.y).atan2(p.x - c.x).abs() - std::f64::consts::FRAC_PI_2).abs() <= 1.2);
+    let worst = middle.map(|p| ((p.distance(c) - (r + half)).abs()).min((p.distance(c) - (r - half)).abs())).fold(0.0, f64::max);
+    assert!(worst < 0.05, "an outline point strays {worst:.4} pt from the nib's reach");
+}
+
 /// #852: with Size on Pressure the nib goes from size − variation at the lightest pressure to
 /// size + variation at the heaviest, along the stroke where the pen pressed.
 #[test]
@@ -1684,6 +1748,35 @@ fn an_ordinary_stroke_is_unaffected_by_the_budget() {
     let out = stroke_pieces(&Document::new(1.0, 1.0), &brush, &sq, &stroke(1.0));
     assert_eq!(out.len(), 40, "ten tiles on each of the four sides, as before the budget");
     assert!(anchors(&out) < 2_000_000);
+}
+
+/// A straight-sided art brush on a smooth curve draws smooth edges: they do not turn at the smooth
+/// anchors the fit puts along them.
+#[test]
+fn art_brush_edges_stay_smooth_along_a_curve() {
+    for &(r, w, h, sw) in &[(100.0, 100.0, 10.0, 1.0), (300.0, 100.0, 10.0, 2.0), (30.0, 100.0, 10.0, 1.0), (2000.0, 100.0, 10.0, 1.0)] {
+        // The top half of a circle, as one open path of two curves.
+        let ring = shapes::ellipse(Rect::new(0.0, 0.0, 2.0 * r, 2.0 * r)).to_bezpath();
+        let half_circle: BezPath = ring.elements().iter().take(3).copied().collect();
+        let out = stroke_pieces(&Document::new(1.0, 1.0), &art_brush(rect_art(w, h), ArtScale::Stretch), &half_circle, &stroke(sw));
+        let NodeKind::Path { path, .. } = &out[0].kind else { panic!("an art brush on a path draws a path") };
+
+        // The turn at each smooth anchor of the edges: the angle between the incoming and the
+        // outgoing direction. Real corners (the ends of the art) turn by far more than 60°.
+        let mut kink = 0.0f64;
+        for sp in &path.subpaths {
+            for (k, a) in sp.anchors.iter().enumerate().skip(1).take(sp.anchors.len().saturating_sub(2)) {
+                let h_in = if a.h_in != a.p { a.h_in } else { sp.anchors[k - 1].p };
+                let h_out = if a.h_out != a.p { a.h_out } else { sp.anchors[k + 1].p };
+                let (u, v) = (a.p - h_in, h_out - a.p);
+                if u.hypot() < 1e-9 || v.hypot() < 1e-9 || u.dot(v) < 0.5 * u.hypot() * v.hypot() {
+                    continue;
+                }
+                kink = kink.max(u.cross(v).atan2(u.dot(v)).abs().to_degrees());
+            }
+        }
+        assert!(kink < 0.5, "r={r} art={w}x{h} weight {sw}: an edge turns by {kink:.3}° at a smooth anchor");
+    }
 }
 
 /// Anchors under `n`, and how many of them keep a handle (so the segment is a curve).

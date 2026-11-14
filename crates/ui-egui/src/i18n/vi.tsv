@@ -806,6 +806,8 @@ font-technology	Variable	Biến thiên
 	Crop Image	Cắt xén ảnh
 	Image Tools	Công cụ hình ảnh
 	Remove Background…	Xóa nền…
+	Draw (Pencil)	Vẽ (Bút chì)
+	Place Image	Đặt hình ảnh
 	Remove Background	Xóa nền
 	Background	Nền
 	Edge Color	Màu cạnh
@@ -3011,6 +3013,7 @@ mark-style	Japanese	Kiểu Nhật
 	Proportional Metrics	Số liệu theo tỷ lệ
 	Insert Aki Left	Chèn aki bên trái
 	Insert Aki Right	Chèn aki bên phải
+	Tsume	Tsume
 	Proportional Lining	Số tỷ lệ đứng
 	Position:	Vị trí:
 	Default Position	Vị trí mặc định
@@ -4036,6 +4039,7 @@ mark-style	Japanese	Kiểu Nhật
 	VectorCraft Title Bar on Every Desktop	Thanh tiêu đề VectorCraft trên mọi màn hình nền
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Khi biến môi trường VECTORCRAFT_TITLEBAR được đặt, biến này chọn thanh tiêu đề.
 	System Title Bar takes precedence over this option while it is on.	Khi Thanh tiêu đề hệ thống được bật, tùy chọn đó được ưu tiên hơn tùy chọn này.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Khi Thanh tiêu đề VectorCraft trên mọi màn hình nền đang tắt, màn hình nền này vẽ thanh tiêu đề của cửa sổ dù tùy chọn này bật hay tắt.
 	Tab	Tab
 	Tab Stops	Vị trí tab
 	Table	Bảng
@@ -4573,6 +4577,7 @@ theme	Appearance	Giao diện
 @msg	`select` must be true or false	`select` phải là true hoặc false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` và `maxAnchors` phải là số nguyên
 @msg	`{key}` must be a number not below 0	`{key}` phải là một số không nhỏ hơn 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` phải là bốn số không nhỏ hơn 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` phải là [x, y, width, height]: bốn số hữu hạn, chiều rộng và chiều cao không âm
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` lớn hơn `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	hãy cung cấp ít nhất một trong `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4866,6 +4871,7 @@ theme	Appearance	Giao diện
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Đã loại bỏ {n} tài liệu đã phục hồi
 @msg	divide into 1 to {MAX_PIECES} slices	chia thành 1 đến {MAX_PIECES} lát cắt
 @msg	Divide Objects Below: select a path	Chia đối tượng bên dưới: hãy chọn một đường dẫn
+@msg	select a path	hãy chọn một đường dẫn
 @msg	Divide Objects Below: select exactly one path	Chia đối tượng bên dưới: chọn đúng một đường dẫn
 @msg	docking action contains an unknown panel or an excessive split path	hành động neo chứa bảng không xác định hoặc đường dẫn tách quá dài
 @msg	Downloaded {what}	Đã tải xuống {what}
@@ -4976,6 +4982,8 @@ theme	Appearance	Giao diện
 @msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	dòng {line}: giá trị của `{var}` dài hơn {MAX_GRAPH_CSV} byte
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	ảnh liên kết hiển thị bản xem trước độ phân giải thấp đã lưu trong tệp cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
 @msg	linked type areas past VectorCraft's limits were left out	các vùng chữ liên kết vượt quá giới hạn của VectorCraft đã bị bỏ qua
+@msg	the Line Breaking setting of legacy type was left out	thiết lập ngắt dòng của chữ định dạng cũ đã bị bỏ qua
+@msg	the Japanese layout rules of legacy type were left out	các quy tắc dàn trang tiếng Nhật của chữ định dạng cũ đã bị bỏ qua
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	chữ đổi hướng viết bên trong một đối tượng văn bản sẽ mở theo hướng của ký tự đầu tiên
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	chữ dùng làm mặt nạ trong các vùng liên kết, chữ bao quanh hoặc đường dẫn phức không cắt xén
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ảnh liên kết không có bản xem trước trong tệp hiển thị ô giữ chỗ cho đến khi tìm thấy tệp gốc: liên kết lại trong bảng Liên kết
@@ -5086,6 +5094,7 @@ theme	Appearance	Giao diện
 @msg	no action set to save	không có bộ hành động nào để lưu
 @msg	the action set file can't be read in full	không thể đọc hết tệp bộ hành động
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Đã tải “{name}”: bỏ qua {n} bước
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Đã tải “{name}”: giữ lại {n} bước có lệnh không xác định; bước đầu tiên: “{action}”, bước {step}, `{command}`
 @msg	not an action set file	không phải tệp bộ hành động
 @msg	the action set file is larger than 8 MiB	tệp bộ hành động lớn hơn 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: tài liệu tham khảo sẽ lớn hơn {MAX_BYTES} byte
@@ -5527,6 +5536,7 @@ theme	Appearance	Giao diện
 @msg	truncated	bị cắt ngắn
 @msg	Unembedded to {_1}	Đã bỏ nhúng vào {_1}
 @msg	unknown command `{0}`	lệnh không xác định `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	bước {step} của “{action}” chạy lệnh không xác định `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	lệnh không xác định `{0}`; ý bạn là `{1}`?
 @msg	unknown effect `{id}`	hiệu ứng không xác định `{id}`
 @msg	unknown format	định dạng không xác định
@@ -5802,6 +5812,7 @@ theme	Appearance	Giao diện
 @msg	no such color	không có màu như vậy
 @msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
 @msg	more than one action is named “{_1}”	có nhiều hành động tên là “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	hành động “{_1}” đặt tùy chọn thư mục {_2}; hãy xóa bước đó để lưu bộ
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
 	Smudge Stick…	Bút chì xóa mờ…
 	Smudge Stick	Bút chì xóa mờ
@@ -5992,8 +6003,8 @@ axis	Y Axis	Trục Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	plug-in xuất khai báo từ 1 đến {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	tối đa {MAX_UNGROUPED} tham số nằm ngoài nhóm: hãy đặt `group` cho các tham số còn lại
 @msg	can't encode the input	không thể mã hóa dữ liệu đầu vào
-@msg	expected {"dataBase64"}	cần có {"dataBase64"}
-@msg	expected {"objects"}	cần có {"objects"}
+@msg	expected {{"dataBase64": "…"}}	cần có {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	cần có {{"objects": [...]}}
 @msg	export `{name}`: {e}	export `{name}` của mô-đun: {e}
 @msg	extension {e} is listed twice	phần mở rộng {e} được liệt kê hai lần
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	phần mở rộng {e}: dùng 1-16 chữ thường và chữ số, không có dấu chấm
@@ -6057,11 +6068,11 @@ axis	Y Axis	Trục Y
 @msg	a painted live effect returns only `objects`	hiệu ứng động kiểu tô chỉ trả về `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills` và `strokes`
 @msg	a read-only object was left out	một đối tượng chỉ đọc đã bị bỏ sót
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {"id"} hoặc như khi được nhận
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {{"id": …}} hoặc như khi được nhận
 @msg	a string	một chuỗi
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	nét chỉ có `paint`, `width`, `join`, `cap` và `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	nét phải có dạng {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	hiệu ứng phải có dạng {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	nét phải có dạng {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	hiệu ứng phải có dạng {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	hiệu ứng trên phần tô chỉ trả về `fills`
 @msg	an effect on a stroke returns only `strokes`	hiệu ứng trên nét chỉ trả về `strokes`
 @msg	an object must be a JSON object	đối tượng phải là một đối tượng JSON
@@ -6203,6 +6214,8 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Playback Options…	Tùy chọn phát lại…
+	Button Mode	Chế độ nút
+	No actions.	Không có hành động.
 	Insert Stop…	Chèn điểm dừng…
 	Insert Stop	Chèn điểm dừng
 	Record Stop	Ghi điểm dừng

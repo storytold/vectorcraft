@@ -8,7 +8,8 @@
 //!   next layers: a clipping group in each layer, read by [`masks`].
 //! - Ruler guides: a straight `(N) *` guide path, directly on a layer, that runs across the whole
 //!   canvas (16,383 points around the template box's centre) or from edge to edge of one artboard
-//!   is a ruler guide on that layer ([`Document::guides`]); other guide paths stay paths.
+//!   is a ruler guide on that layer ([`Document::guides`]), shown or hidden, with the path's name,
+//!   lock and visibility; other guide paths stay paths.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end. A wraparound group `*w` …
 //!   `*W` (version 7 specification §15.4.2) is a group whose objects other than its type wrap
@@ -78,7 +79,8 @@
 //!
 //! - Graphs (version 7 specification §17): `%_Gs`, the graph's data and settings on `%_` lines,
 //!   its drawn art as ordinary groups, paths and type (each object followed by `%_… Go`), `%_GS`.
-//!   The drawn art is read; the data and settings are left out, with a note.
+//!   The drawn art is read as it is. Its group keeps the data and settings when they read whole
+//!   ([`graph`]); otherwise they are left out, with a note.
 //!
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
@@ -133,6 +135,7 @@ mod art;
 mod containers;
 mod directives;
 mod document;
+mod graph;
 mod masks;
 mod on_path;
 mod ops;
@@ -146,12 +149,13 @@ pub use document::{
     symbols, variables,
 };
 pub(crate) use document::{slot_frame, slot_of};
+use graph::Graph;
 pub(crate) use ops::{read_art_style, read_style_list, style_moves_with};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub(crate) use types::MAX_NODES;
 pub use types::PlacedPage;
-use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
+use types::{BLEND_BUDGET, BrushArtColors, FLIP, Frame, GState, Kind, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
 pub(super) use types::{blend_mode, blend_name};
@@ -434,8 +438,8 @@ struct BrushesKept {
     read: (usize, usize),
     /// Which of [`Reader::brush_drafts`] are kept as brushes.
     kept: Vec<bool>,
-    /// The art an Art brush draws as the file does.
-    bending: HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length.
+    bending: HashMap<String, f64>,
 }
 
 struct Reader<'a> {
@@ -595,6 +599,10 @@ struct Reader<'a> {
     compound_groups: HashSet<NodeId>,
     /// Groups of a text object and its look (see [`Self::style_marker`]), which aren't a look.
     text_looks: HashSet<NodeId>,
+    /// Objects followed by samples of the pen (`(…) Xt n XD`), which aren't read: such an object
+    /// whose style has a Calligraphic brush that varies with the pen keeps its drawn look (see
+    /// [`Self::style_marker`]).
+    pen_samples: HashSet<NodeId>,
     /// The gradient mesh being read (`/Mesh X!` … `/End X!`), and whether it started on a `%_` line.
     mesh: Option<(super::mesh::MeshReader, bool)>,
     /// The art styles (`%AI9_BeginArtStyles`), by name.
@@ -670,7 +678,7 @@ struct Reader<'a> {
     brushes_kept: BrushesKept,
     /// Brush objects that weren't read.
     brushes_unread: usize,
-    /// The graph being read (see [`Reader::graph_record`]).
+    /// The graph being read (see [`graph`]).
     graph: Option<Graph>,
     /// The multi-layer mask being read (`Mb` … `MB`), which goes on past a layer's end.
     multi_mask: Option<masks::MultiMask>,
@@ -787,6 +795,7 @@ impl<'a> Reader<'a> {
             ruler_guides: HashMap::new(),
             compound_groups: HashSet::new(),
             text_looks: HashSet::new(),
+            pen_samples: HashSet::new(),
             group_ended: false,
             mesh_ended: false,
             layer_state: None,

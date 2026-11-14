@@ -680,9 +680,17 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
         frame(app, &ctx, events);
         app.canvas.hover_cursor.map(|(_, _, cursor)| cursor)
     };
+    // The cursor swatch preview's chips go and come back with Alt too.
+    let chips = |app: &mut VectorcraftApp| {
+        let view = app.view_info();
+        app.session.overlays(view).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Swatch { .. })).count()
+    };
     assert_eq!(shown(&mut app, vec![Event::PointerMoved(at)]), Some(Cursor::LivePaintBucket));
+    assert!(chips(&mut app) > 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::ALT)]), Some(Cursor::Eyedropper));
+    assert_eq!(chips(&mut app), 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE)]), Some(Cursor::LivePaintBucket));
+    assert!(chips(&mut app) > 0);
 }
 
 /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the
@@ -10325,7 +10333,7 @@ fn task_bar_labels(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String
 /// With the Artboard tool, the Contextual Task Bar sits under the selected artboards and offers
 /// Resize, Duplicate, Rearrange All (with two or more artboards) and Export instead of the
 /// selected objects' actions. With the Selection tool it offers the objects' actions again, and
-/// with nothing selected it doesn't show.
+/// with nothing in the document the blank canvas actions.
 #[test]
 fn the_task_bar_offers_the_artboard_tools_actions() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -10333,7 +10341,7 @@ fn the_task_bar_offers_the_artboard_tools_actions() {
     app.select_tool("selection");
     let ctx = egui::Context::default();
     let names = |app: &mut VectorcraftApp| task_bar_labels(app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
-    assert!(names(&mut app).is_empty() && task_bar_rect(&ctx).is_none(), "nothing selected: no bar");
+    assert_eq!(names(&mut app), ["Draw (Pencil)", "Place Image"], "a blank canvas");
 
     app.select_tool("artboard");
     crate::panels::artboards::select(&mut app, 1);
@@ -10439,9 +10447,34 @@ fn the_artboard_tools_task_bar_buttons_act_on_the_selected_artboards() {
     assert_eq!(boards(&app), before, "one undo step");
 }
 
+/// The names and places of the buttons the Contextual Task Bar draws, from the accessibility tree
+/// (`ctx` has it enabled): an icon-only button is named by its hover text.
+fn task_bar_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String, egui::Rect)> {
+    frame(app, ctx, vec![]);
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+    out.textures_delta.clear();
+    let Some(bar) = task_bar_rect(ctx) else { return vec![] };
+    let Some(update) = out.platform_output.accesskit_update.as_ref() else { return vec![] };
+    let mut v: Vec<(String, egui::Rect)> = update
+        .nodes
+        .iter()
+        .filter(|(_, n)| n.role() == egui::accesskit::Role::Button)
+        .filter_map(|(_, n)| {
+            let b = n.bounds()?;
+            let r = egui::Rect::from_min_max(Pos2::new(b.x0 as f32, b.y0 as f32), Pos2::new(b.x1 as f32, b.y1 as f32));
+            let label = n.label()?;
+            bar.contains(r.center()).then(|| (label.to_string(), r))
+        })
+        .collect();
+    v.sort_by(|a, b| a.1.left().total_cmp(&b.1.left()));
+    v
+}
+
 /// With anchors direct-selected, the Contextual Task Bar offers Remove Anchor Points, Connect,
-/// Cut Path, Corner and Smooth. Smooth and Corner convert the selected anchor, Cut Path opens
-/// the path there and Connect closes it again, as the Control bar's anchor buttons do.
+/// Cut Path and the two convert buttons, which show their icons alone. Converting to smooth and to
+/// corner changes the selected anchor, Cut Path opens the path there and Connect closes it again,
+/// as the Control bar's anchor buttons do.
 #[test]
 fn the_task_bar_connects_cuts_and_converts_direct_selected_anchors() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -10450,10 +10483,21 @@ fn the_task_bar_connects_cuts_and_converts_direct_selected_anchors() {
     app.select_tool("directSelection");
     app.run("select.anchors", json!({"id": id, "anchors": [[0, 1]]})).unwrap();
     let ctx = egui::Context::default();
+    ctx.enable_accesskit();
     let names = |app: &mut VectorcraftApp| task_bar_labels(app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
-    assert_eq!(names(&mut app), ["Remove Anchor Points", "Connect", "Cut Path", "Corner", "Smooth", "Duplicate"]);
+    assert_eq!(names(&mut app), ["Remove Anchor Points", "Connect", "Cut Path", "Duplicate"]);
+    let buttons = task_bar_buttons(&mut app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    let expected = [
+        "Remove Anchor Points",
+        "Connect",
+        "Cut Path",
+        "Convert Selected Anchor Points to Corner",
+        "Convert Selected Anchor Points to Smooth",
+        "Duplicate",
+    ];
+    assert_eq!(buttons[..expected.len()], expected, "{buttons:?}");
     let press = |app: &mut VectorcraftApp, label: &str| {
-        let labels = task_bar_labels(app, &ctx);
+        let labels = task_bar_buttons(app, &ctx);
         let at = labels.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label} in {labels:?}")).1.center();
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
@@ -10463,11 +10507,11 @@ fn the_task_bar_connects_cuts_and_converts_direct_selected_anchors() {
     let subpath =
         |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().path_data().unwrap().subpaths[0].clone();
     let last_undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.last().unwrap().label.clone();
-    press(&mut app, "Smooth");
+    press(&mut app, "Convert Selected Anchor Points to Smooth");
     let a = subpath(&app).anchors[1];
     assert!(a.has_in() && a.has_out(), "smooth: {a:?}");
     assert_eq!(last_undo(&app), "Convert Anchor Points");
-    press(&mut app, "Corner");
+    press(&mut app, "Convert Selected Anchor Points to Corner");
     let a = subpath(&app).anchors[1];
     assert!(!a.has_in() && !a.has_out(), "corner: {a:?}");
     press(&mut app, "Cut Path");

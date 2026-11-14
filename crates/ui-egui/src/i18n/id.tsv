@@ -194,6 +194,8 @@
 	Crop Image	Pangkas gambar
 	Image Tools	Alat Gambar
 	Remove Background…	Hapus latar belakang…
+	Draw (Pencil)	Menggambar (pensil)
+	Place Image	Tempatkan gambar
 	Remove Background	Hapus latar belakang
 	Background	Latar belakang
 	Edge Color	Warna tepi
@@ -924,6 +926,7 @@
 	VectorCraft Title Bar on Every Desktop	Bilah judul VectorCraft di setiap desktop
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Selama ditetapkan, variabel lingkungan VECTORCRAFT_TITLEBAR memilih bilah judul.
 	System Title Bar takes precedence over this option while it is on.	Selama aktif, Bilah judul sistem lebih diutamakan daripada opsi ini.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Selama Bilah judul VectorCraft di setiap desktop nonaktif, desktop ini menggambar bilah judul jendela, baik opsi ini aktif maupun tidak.
 	Exit	Keluar
 	Distort	Distorsi
 	Diffuse Glow…	Pendar difusi…
@@ -1506,6 +1509,7 @@ lighting	Light	Cahaya
 	Proportional Metrics	Metrik proporsional
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
+	Tsume	Tsume
 	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
@@ -4795,11 +4799,11 @@ imageTrace	Outline	Kontur
 @msg	unknown effect `{id}`	efek `{id}` tidak dikenal
 @msg	unknown format	format tidak dikenal
 @msg	unknown format `{f}` (Save writes {_1})	format `{f}` tidak dikenal (Simpan menulis {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	mode bentuk bebas `{m}` tidak dikenal (titik, garis)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, kerucut, wajik, bentuk bebas)
+@msg	unknown freeform mode `{m}` (points, lines)	mode bentuk bebas `{m}` tidak dikenal (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	jenis gradien `{k}` tidak dikenal (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	sorotan `{h}` tidak dikenal
 @msg	unknown option `{path}.{k}`	opsi `{path}.{k}` tidak dikenal
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (pertahankan, simulasikan, atau buang)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	overprint `{o}` tidak dikenal (preserve, simulate, atau discard)
 @msg	unknown panel `{raw}`	panel `{raw}` tidak dikenal
 @msg	unknown preference `{key}`	preferensi `{key}` tidak dikenal
 @msg	Preferences imported.	Preferensi diimpor.
@@ -4817,10 +4821,10 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be an object	`{key}` harus berupa objek
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` dijalankan sendiri, bukan sebagai langkah batch
 @msg	unknown preset (one of {_1})	preset tidak dikenal (salah satu dari {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset `{name}` tidak dikenal (tinggi, sedang, rendah, atau yang tersimpan: lihat flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	preset `{name}` tidak dikenal (high, medium, low, atau yang tersimpan: lihat flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	preset `{name}` tidak dikenal (lihat flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	preset `{name}` tidak dikenal (lihat webExport.presets.list)
-@msg	unknown side `{other}` (left|right|top|bottom)	sisi `{other}` tidak dikenal (kiri|kanan|atas|bawah)
+@msg	unknown side `{other}` (left|right|top|bottom)	sisi `{other}` tidak dikenal (left|right|top|bottom)
 @msg	unknown tool `{tool}`	alat `{tool}` tidak dikenal
 @msg	unknown tool `{t}`	alat `{t}` tidak dikenal
 @msg	unknown tool or command `{key}`	alat atau perintah `{key}` tidak dikenal
@@ -4946,6 +4950,8 @@ imageTrace	Outline	Kontur
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	gambar tersemat berukuran {_1} × {_2} piksel diperkecil menjadi {_3} × {_4} piksel agar lapisannya tetap terjaga
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gambar tertaut menampilkan pratinjau resolusi rendah yang tersimpan dalam berkas sampai berkasnya ditemukan: tautkan ulang di panel Tautan
 @msg	linked type areas past VectorCraft's limits were left out	area teks tertaut di luar batas VectorCraft dihilangkan
+@msg	the Line Breaking setting of legacy type was left out	pengaturan pemisah baris teks format lama dihilangkan
+@msg	the Japanese layout rules of legacy type were left out	aturan tata letak Jepang teks format lama dihilangkan
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	teks yang mengubah arah penulisan di dalam objek teks dibuka dengan arah karakter pertamanya
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	teks yang digunakan sebagai masker di area tertaut, teks terbungkus, atau jalur majemuk tidak memotong
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gambar tertaut tanpa pratinjau dalam berkas menampilkan penanda tempat sampai berkasnya ditemukan: tautkan ulang di panel Tautan
@@ -5769,6 +5775,7 @@ swatch	Bright Violet	Violet cerah
 @msg	no such color	tidak ada warna seperti itu
 @msg	{_1} cannot be used on Windows	{_1} tidak dapat digunakan di Windows
 @msg	more than one action is named “{_1}”	lebih dari satu tindakan bernama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	tindakan “{_1}” mengatur preferensi folder {_2}; hapus langkah itu untuk menyimpan set
 @msg	no symbol named `{n}`	tidak ada simbol bernama `{n}`
 	Remove Color Profile…	Hapus profil warna…
 	Color wheel	Roda warna
@@ -6070,6 +6077,8 @@ axis	Y Axis	Sumbu Y
 	Action Options…	Opsi tindakan…
 	Action Options	Opsi tindakan
 	Playback Options…	Opsi pemutaran…
+	Button Mode	Mode tombol
+	No actions.	Tidak ada aksi.
 	Insert Stop…	Sisipkan henti…
 	Insert Stop	Sisipkan henti
 	Record Stop	Rekam henti

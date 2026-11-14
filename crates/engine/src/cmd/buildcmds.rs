@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Live Paint"],
             Some("Cmd+Alt+X"),
-            "{ids?|id?} build a Live Paint group from the selected paths (paths, compound paths and groups of them; type, images and other objects are refused, nothing changes); each covered face starts with its front-most covering source's fill; with a Live Paint group among them, add the others to it as livePaint.merge does → {id, faces, edges}",
+            "{ids?|id?} build a Live Paint group from the selected paths (paths, compound paths and groups of them; type, images and other objects are refused, nothing changes); each covered face starts with its front-most covering source's fill; with a Live Paint group among them, add the others to it as livePaint.merge does; a Live Paint group alone has nothing to add, so it is selected and nothing changes (no undo step) → {id, faces, edges}",
             has_selection_or_ids,
             lp_make
         ),
@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Merge",
             ["Object", "Live Paint"],
             None,
-            "{ids?|id?} add the other selected paths (compound paths, groups of paths and Live Paint groups too; type, images and other objects are refused, nothing changes) to the bottom-most Live Paint group, keeping its id, its paint and its own properties (name, lock, visibility, transparency, appearance, opacity mask, graphic style link) → {id, faces, edges}",
+            "{ids?|id?} add the other selected paths (compound paths, groups of paths and Live Paint groups too; type, images and other objects are refused, nothing changes) to the bottom-most Live Paint group, keeping its id, its paint and its own properties (name, lock, visibility, transparency, appearance, opacity mask, graphic style link); a Live Paint group alone has nothing to add, so it is selected and nothing changes (no undo step) → {id, faces, edges}",
             has_multi_or_ids,
             lp_merge
         ),
@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand",
             ["Object", "Live Paint"],
             None,
-            "{id?, ids?: [id…] (instead of id)} turn Live Paint groups into plain groups of their painted faces and edges → {ids}",
+            "{id?, ids?: [id…] (instead of id)} turn Live Paint groups into plain groups of the faces and edges that draw, with all their fill and stroke rows: a shown face or edge with an opacity above 0 and a shown fill or stroke row that has paint and an opacity above 0 (a stroke also a weight above 0), whichever row is on top → {ids}",
             has_selection_or_ids,
             lp_expand
         ),
@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gap Options",
             [],
             None,
-            "{id?, ids?: [id…] (instead of id; default: the selected Live Paint groups), detect?: bool (Gap Detection: paint stops at gaps up to size wide), size?: \"small\" (3 pt) | \"medium\" (6 pt) | \"large\" (12 pt) | pt (custom, over 0 up to 72) (Paint Stops At), color?: #rrggbb or a layer color's name such as \"Red\" (Gap Preview Color; a hex color with an alpha part, #rrggbbaa or #rgba, is an error), closeGaps?: bool (add an unpainted path across each gap up to size wide to the group's paths)} set the Gap Options of Live Paint groups (what is not given stays as it was; a group starts with detect false, small and Red) and make their faces again, keeping their paint → {ids, faces, gaps: [[x0,y0,x1,y1]…] (the gaps up to size wide that no path closes, from a loose end of a path to where it closes to; detect closes them for paint), closed (paths added)}",
+            "{id?, ids?: [id…] (instead of id; default: the selected Live Paint groups), detect?: bool (Gap Detection: paint stops at gaps up to size wide), size?: \"small\" (3 pt) | \"medium\" (6 pt) | \"large\" (12 pt) | pt (custom, over 0 up to 72) (Paint Stops At), color?: #rrggbb or a layer color's name such as \"Red\" (Gap Preview Color; a hex color with an alpha part, #rrggbbaa or #rgba, is an error), closeGaps?: bool (add an unpainted path across each gap up to size wide to the group's paths)} set the Gap Options of Live Paint groups (what is not given stays as it was; a group starts with detect false, small and Red) and make their faces again, keeping their paint; when every group already has the options and closeGaps finds no gap, nothing changes (no undo step) → {ids, faces, gaps: [[x0,y0,x1,y1]…] (the gaps up to size wide that no path closes, from a loose end of a path to where it closes to; detect closes them for paint), closed (paths added)}",
             has_selection_or_ids,
             lp_gap_options
         ),
@@ -117,7 +117,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Live Paint Bucket",
             [],
             None,
-            "{group?: id | ids?|id?: [id…] (paths to make live first, as livePaint.make does), point: [x,y], points?: [[x,y]…] (a drag polyline starting at point; 1 to 4096 finite canvas points; fills every crossed face of the same group), continuation?: [[[x,y]…]…] (further path chunks of 1 to 4096 finite canvas points each; each starts at the preceding chunk's last point; requires points), color?|swatch?|gradient?|none? (default: current fill; a color in #rrggbbaa or #rgba is refused), tint?: 0..100, keepModel?: bool (both as paint.setFill)} fill the face containing point, skipping hidden faces → {group, face}",
+            "{group?: id | ids?|id?: [id…] (paths to make live first, as livePaint.make does), point: [x,y], points?: [[x,y]…] (a drag polyline starting at point; 1 to 4096 finite canvas points; fills every crossed face of the same group), continuation?: [[[x,y]…]…] (further path chunks of 1 to 4096 finite canvas points each; each starts at the preceding chunk's last point; requires points), color?|swatch?|gradient?|none? (default: current fill; a color in #rrggbbaa or #rgba is refused), tint?: 0..100, keepModel?: bool (both as paint.setFill)} fill the face containing point, skipping hidden faces; when every face it reaches already has the paint, nothing changes (no undo step, and the recent colors stay as they are) → {group, face}",
             has_doc,
             lp_fill
         ),
@@ -126,7 +126,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Live Paint Bucket (Stroke)",
             [],
             None,
-            "{group: id, point: [x,y], color?|swatch?|none? (default: current stroke), width?: pt (default: current weight), tolerance?: pt (4), tint?: 0..100, keepModel?: bool (both as paint.setFill)} paint the edge nearest point → {group, edge}",
+            "{group: id, point: [x,y], color?|swatch?|none? (default: current stroke), width?: pt (default: current weight), tolerance?: pt (4), tint?: 0..100, keepModel?: bool (both as paint.setFill)} paint the edge nearest point; when it already has the paint and the width, nothing changes (no undo step, and the recent colors stay as they are) → {group, edge}",
             has_doc,
             lp_stroke_edge
         ),

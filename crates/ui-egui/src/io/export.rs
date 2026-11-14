@@ -8,6 +8,33 @@ use super::{EngineError, Progress, Value, VectorcraftApp, Writer, background, ca
 /// The status once an export was cancelled.
 pub const EXPORT_CANCELLED: &str = "Export cancelled";
 
+/// The param that makes an [`export`] write the selection alone, cropped to it, as
+/// `document.exportSelection` writes it (`file.exportAs {path, exportSelection: true}`): set by
+/// the options dialogs that Export Selection opens.
+pub(crate) const EXPORT_SELECTION: &str = "exportSelection";
+
+/// `params` without [`EXPORT_SELECTION`], and whether it asked for the selection. A selection
+/// export writes one page, the selection's crop, so the artboard choices are left out too.
+fn take_selection(params: &Value) -> Result<(bool, Value), String> {
+    let mut p = params.clone();
+    let Some(o) = p.as_object_mut() else { return Ok((false, p)) };
+    match o.remove(EXPORT_SELECTION) {
+        None | Some(Value::Null | Value::Bool(false)) => return Ok((false, p)),
+        Some(Value::Bool(true)) => {}
+        Some(v) => return Err(format!("{EXPORT_SELECTION} must be true or false, not {v}")),
+    }
+    let strip = |o: &mut serde_json::Map<String, Value>| {
+        for k in fileio::ARTBOARD_PARAMS.iter().chain(&["useArtboards", "selectedOnly"]) {
+            o.remove(*k);
+        }
+    };
+    strip(o);
+    if let Some(svg) = o.get_mut("svg").and_then(Value::as_object_mut) {
+        strip(svg);
+    }
+    Ok((true, p))
+}
+
 /// File → Cancel Export (the progress dialog's Cancel): every export running in the background
 /// stops and writes nothing more → `{cancelled: n}`.
 pub fn cancel_exports(app: &mut VectorcraftApp) -> Value {
@@ -29,11 +56,16 @@ pub fn hide_exports(app: &mut VectorcraftApp) -> Value {
 /// options…): every file it writes (one per artboard, linked images) goes next to `path`. The
 /// document keeps its path. → `{path, warnings, files?}` (`files`: every file when there are
 /// several). When automation asked for the export, `warnings` also name each option the written
-/// format doesn't read, as `document.export`'s do.
+/// format doesn't read, as `document.export`'s do. With [`EXPORT_SELECTION`] the file holds the
+/// selection alone, cropped to it, as `document.exportSelection` writes it. With Appearance of
+/// Black › Printing / Exporting set to rich black, RGB files draw a CMYK black as RGB black, as in
+/// `document.export`.
 pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<String>, params: &Value) -> Result<Value, String> {
     // Options given as anything but an object are none: the path and format still reach the
     // encoder (an exporter plug-in is told the file it writes).
     let params = &if params.is_object() { params.clone() } else { json!({}) };
+    let (selection, params) = take_selection(params)?;
+    let params = &params;
     let f = fileio::writable_format(format, path.as_deref())?;
     // A Shape Builder merge still being computed for a click is exported with the document.
     let r = app.session.finish_tool_edit();
@@ -41,9 +73,14 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // A `.ai` file names the view's active artboard.
     remember_active_artboard(app);
     let st = app.session.active().ok_or("no document")?;
-    let doc = match fileio::export_doc(st, f, params).map_err(|e| e.to_string())? {
-        std::borrow::Cow::Borrowed(_) => st.doc.clone(),
-        std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
+    fileio::check_linked_scripts("file.exportAs", f.id, st).map_err(|e| e.to_string())?;
+    let doc = if selection {
+        std::sync::Arc::new(fileio::selection_doc(st, "document.exportSelection", f.id == "txt").map_err(|e| e.to_string())?.0)
+    } else {
+        match fileio::export_doc(st, f, params).map_err(|e| e.to_string())? {
+            std::borrow::Cow::Borrowed(_) => st.doc.clone(),
+            std::borrow::Cow::Owned(d) => std::sync::Arc::new(d),
+        }
     };
     // A PDF shows its title in the viewer's title bar only when it is the document's own, not the
     // file name it was titled after, as `document.export` writes it.
@@ -54,6 +91,9 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     let mut again = params.clone();
     if let Some(o) = again.as_object_mut() {
         o.insert("format".into(), json!(f.id));
+        if selection {
+            o.insert(EXPORT_SELECTION.into(), json!(true));
+        }
     }
     if let Some(r) = ask_before_losing(app, &path, "file.exportAs", &again) {
         return Ok(r);
@@ -65,7 +105,8 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     };
     // An export that automation asked for, also through a save panel it opened, names the options
     // the file doesn't read, as `document.export` does. A person's export gets no such notes.
-    let unused = if app.automation_asked() { fileio::unused_option_notes("document.export", f, params) } else { Vec::new() };
+    let cmd = if selection { "document.exportSelection" } else { "document.export" };
+    let unused = if app.automation_asked() { fileio::unused_option_notes(cmd, f, params) } else { Vec::new() };
     let noted = unused.clone();
     // Background Export: encoded and written from this snapshot while editing goes on. The
     // encoder is told the file it writes (an exporter plug-in gets its name and extension).
@@ -74,9 +115,13 @@ pub fn export(app: &mut VectorcraftApp, format: Option<&str>, path: Option<Strin
     // automation asked for the export, also through a save panel it opened (checked now: a
     // background export ends after the request).
     let view = params.get("viewAfterSaving").and_then(Value::as_bool).unwrap_or(false) && !app.automation_asked();
+    let rich_black = app.session.prefs.black_output == "rich";
     let (mut params, target) = (params.clone(), path.clone());
     if let Some(o) = params.as_object_mut() {
         o.insert("path".into(), json!(path));
+        if rich_black {
+            o.insert("richBlack".into(), json!(true));
+        }
         if f.id == "pdf" {
             o.insert("_displayDocTitle".into(), json!(own_title));
         }
@@ -187,6 +232,12 @@ fn take_output(v: &mut Value) -> Result<Vec<u8>, String> {
         _ => None,
     };
     bytes.ok_or_else(|| "no data".into())
+}
+
+/// The file an Export Selection writes, picked in a save panel (the web: the suggested name): a
+/// typed extension of any format is kept, and names the format.
+pub(crate) fn selection_path(app: &mut VectorcraftApp) -> Result<String, String> {
+    target_path_keeping(app, None, "png", |_| true)
 }
 
 /// Run an engine command that returns `{dataBase64}` without its `path` and write the bytes to

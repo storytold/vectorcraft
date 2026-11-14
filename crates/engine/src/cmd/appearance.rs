@@ -36,7 +36,7 @@ use super::paint::paint_from;
 use super::{AppearanceAttrs, EyedropperAttrs, FillAttrs, StrokeAttrs};
 use super::{
     CommandSpec, NodeId, Result, Session, bad, check_numbers, check_switches, cmd, has_doc, has_selection, ids_param, index, leaf_targets,
-    object_param, ok, paint_targets, str_param, switch_or, targets,
+    object_param, ok, paint_targets, str_param, switch_or, targets, u64_req,
 };
 use crate::EngineError;
 
@@ -419,6 +419,27 @@ pub(crate) fn appearance_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> 
     if targets_contents(p)? { leaf_targets(s, &roots) } else { Ok(roots) }
 }
 
+/// The refusal of an appearance edit whose targets are all the art of graph designs drawn in graph series.
+const DESIGN_ART: &str = "the art of a graph design in a graph series is drawn again from the design: edit the design to change it";
+
+/// The [`appearance_targets`] whose rows and effects a command edits: the art of graph designs drawn in graph series
+/// ([`super::graph::is_design_art`]) is left out, as the graph draws it again from the design. A command whose targets
+/// are all such art is refused.
+pub(crate) fn edit_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
+    let ids = appearance_targets(s, p)?;
+    without_design_art(&s.doc()?.doc, ids, "appearance")
+}
+
+/// `ids` without the art of graph designs drawn in graph series; `cmd` is refused when `ids` held nothing else.
+pub(crate) fn without_design_art(d: &Document, mut ids: Vec<NodeId>, cmd: &str) -> Result<Vec<NodeId>> {
+    let given = ids.len();
+    ids.retain(|id| !super::graph::is_design_art(d, *id));
+    if given > 0 && ids.is_empty() {
+        return Err(bad(cmd, DESIGN_ART));
+    }
+    Ok(ids)
+}
+
 /// `ids` with each graph series group that has no fill or stroke row of its own replaced by the paths directly inside
 /// it ([`super::graph::series_group_marks`]). A series group with rows, as a document saved earlier can hold, stays:
 /// the Appearance panel lists those rows and edits them by index.
@@ -453,17 +474,17 @@ pub(crate) fn look_holder<'a>(d: &'a Document, n: &'a Node) -> &'a Node {
     look_holders(d, n.id).last().and_then(|id| d.node(*id)).unwrap_or(n)
 }
 
-/// Objects whose fill and stroke rows a command edits: the [`appearance_targets`], with a graph series group standing
-/// for the paths directly inside it ([`rowless_series_marks`]), so the graph can store the edit.
+/// Objects whose fill and stroke rows a command edits: the [`edit_targets`], with a graph series group standing for the
+/// paths directly inside it ([`rowless_series_marks`]), so the graph can store the edit.
 pub(crate) fn row_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    let ids = appearance_targets(s, p)?;
+    let ids = edit_targets(s, p)?;
     Ok(rowless_series_marks(&s.doc()?.doc, &ids))
 }
 
 /// Objects whose whole appearance a command edits: the [`row_targets`], then each graph series group they stand for,
 /// which can hold effects and a graphic style link of its own.
 pub(crate) fn whole_targets(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
-    let own = appearance_targets(s, p)?;
+    let own = edit_targets(s, p)?;
     let mut ids = rowless_series_marks(&s.doc()?.doc, &own);
     let groups = stood_for(&own, &ids);
     ids.extend(groups);
@@ -508,9 +529,11 @@ fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
 
 /// One undo step (`label`) running `f` on each of `ids` with the item a fill (`fill`) or stroke
 /// edit aimed at `item` changes there (`None`: the topmost one; text then edits its characters).
-/// What the edit changes on the topmost visible fill and stroke of graph series marks is stored on
-/// their graphs in the same step ([`capture_series_changes`]). Nothing targeted is not an edit, and
-/// when `f` leaves every target as it was, the document and its undo history stay as they are.
+/// What the edit changes on the topmost visible fill and stroke of graph series marks, and on the
+/// rows and characters of graph labels, is stored on their graphs in the same step
+/// ([`capture_series_changes`], [`super::graph::capture_label_changes`]). Nothing targeted is not
+/// an edit, and when `f` leaves every target as it was, the document and its undo history stay as
+/// they are.
 pub(crate) fn edit_items(
     s: &mut Session,
     ids: &[NodeId],
@@ -520,7 +543,12 @@ pub(crate) fn edit_items(
     fill: bool,
     f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
 ) -> Result<()> {
-    edit_items_then(s, ids, item, cmd, label, fill, f, |before, d, edited| Ok(capture_series_changes(before, d, edited)))
+    edit_items_then(s, ids, item, cmd, label, fill, f, |before, d, edited| {
+        let series = capture_series_changes(before, d, edited);
+        // The rows `f` edited are kept by `edit_items_then`.
+        let labels = super::graph::capture_label_changes(before, d, edited, false);
+        Ok(series || labels)
+    })
 }
 
 /// [`edit_items`], then `after` on the document as it was before the edit, the edited document and
@@ -583,9 +611,9 @@ pub(crate) fn edits_stroke(s: &Session, p: &Value, item: ItemTarget, default: bo
     Ok(ids.get(item.anchor(s, &ids)).and_then(|id| d.node(*id)?.appearance.items.get(index)).map_or(default, |it| !it.is_fill()))
 }
 
-/// The whole number of 0 or more that `key` holds, read with [`index`].
+/// The whole number of 0 or more that `key` holds, read with [`u64_req`] and [`index`].
 pub(crate) fn index_param(p: &Value, key: &str, cmd: &str) -> Result<usize> {
-    p.get(key).and_then(Value::as_u64).map(index).ok_or_else(|| bad(cmd, format!("missing integer `{key}`")))
+    u64_req(p, key, cmd).map(index)
 }
 
 fn set_active_item(s: &mut Session, p: &Value) -> Result<Value> {
@@ -869,6 +897,11 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "`source` and `target` are the same object"));
     }
     let copy = switch_or(p, "copy", false, C)?;
+    // The art of a graph design in a series is read as a source, but neither takes an appearance nor gives one up.
+    without_design_art(&s.doc()?.doc, vec![target], C)?;
+    if !copy {
+        without_design_art(&s.doc()?.doc, vec![source], C)?;
+    }
     // A graph series group stands for the paths directly inside it: as the source, the topmost of them is read and a
     // move clears them all; as the target, each of them other than a source takes the appearance.
     let sources = look_holders(&s.doc()?.doc, source);
@@ -1245,7 +1278,7 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
     let aligned = aligned(p, C)?;
     if p.get("from").and_then(Value::as_str) == Some("contents") {
         // A graph series group's own Contents row, not its paths, which have none.
-        let ids = appearance_targets(s, p)?;
+        let ids = edit_targets(s, p)?;
         if ids.is_empty() {
             return Err(bad(C, "select objects or give ids"));
         }
@@ -1447,6 +1480,7 @@ fn copy_from(s: &mut Session, p: &Value) -> Result<Value> {
         (Some(clicked), leaf_targets(s, &selected)?)
     };
     targets.retain(|id| Some(*id) != source);
+    let mut targets = without_design_art(&s.doc()?.doc, targets, C)?;
     let node = match source {
         Some(id) => Arc::new(s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?.clone()),
         None => s.eyedropper_sample.clone().ok_or_else(|| bad(C, "select the object to copy from"))?,

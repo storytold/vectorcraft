@@ -214,6 +214,8 @@
 	Crop Image	Rajaa kuva
 	Image Tools	Kuvatyökalut
 	Remove Background…	Poista tausta…
+	Draw (Pencil)	Piirrä (lyijykynä)
+	Place Image	Sijoita kuva
 	Remove Background	Poista tausta
 	Background	Tausta
 	Edge Color	Reunan väri
@@ -985,6 +987,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Ympäristömuuttuja VECTORCRAFT_TITLEBAR valitsee otsikkorivin niin kauan kuin se on asetettu.
 	System Title Bar takes precedence over this option while it is on.	Järjestelmän otsikkorivi ohittaa tämän asetuksen niin kauan kuin se on käytössä.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Niin kauan kuin VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä ei ole käytössä, tämä työpöytäympäristö piirtää ikkunan otsikkorivin, oli tämä asetus käytössä tai ei.
 	Exit	Lopeta
 	Distort	Vääristä
 	Diffuse Glow…	Hajautettu hehku…
@@ -1573,6 +1576,7 @@ lighting	Light	Valo
 	Proportional Metrics	Suhteelliset metriikat
 	Insert Aki Left	Lisää aki vasemmalle
 	Insert Aki Right	Lisää aki oikealle
+	Tsume	Tsume
 	Character Direction	Merkkien suunta
 	Digits	Numerot
 	Arabic	Arabia
@@ -4618,6 +4622,7 @@ imageTrace	Outline	Ääriviiva
 @msg	Plug-ins can't be loaded from {path}: {e}	Laajennuksia ei voi ladata kansiosta {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	valitse suoravalinnalla ankkuripisteet, joista leikataan (ei avoimien polkujen päätepisteitä)
 @msg	Divide Objects Below: select a path	Jaa alla olevat objektit: valitse polku
+@msg	select a path	valitse polku
 @msg	Divide Objects Below: select exactly one path	Jaa alla olevat objektit: valitse tasan yksi polku
 @msg	Downloaded {what}	Ladattiin {what}
 @msg	Expand Appearance: the selection has a basic appearance	Laajenna ulkoasu: valinnalla on perusulkoasu
@@ -4711,6 +4716,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`select` must be true or false	`select` on oltava true tai false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` ja `maxAnchors` on oltava kokonaislukuja
 @msg	`{key}` must be a number not below 0	`{key}` on oltava luku, joka on vähintään 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` on oltava neljä lukua, jotka ovat vähintään 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` on oltava [x, y, width, height]: neljä äärellistä lukua, joista leveys ja korkeus eivät ole negatiivisia
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` on suurempi kuin `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	anna vähintään yksi parametreista `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4955,6 +4961,7 @@ imageTrace	Outline	Ääriviiva
 @msg	no action set to save	ei tallennettavaa toimintosarjaa
 @msg	the action set file can't be read in full	toimintosarjatiedostoa ei voi lukea kokonaan
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Ladattiin ”{name}”: jätettiin pois {n} vaihe|Ladattiin ”{name}”: jätettiin pois {n} vaihetta
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Ladattiin ”{name}”: {n} vaiheella on tuntematon komento, ja se säilytettiin: ”{action}”, vaihe {step}, `{command}`|Ladattiin ”{name}”: {n} vaiheella on tuntemattomia komentoja, ja ne säilytettiin; ensimmäinen: ”{action}”, vaihe {step}, `{command}`
 @msg	not an action set file	ei ole toimintosarjatiedosto
 @msg	the action set file is larger than 8 MiB	toimintosarjatiedosto on suurempi kuin 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: viite olisi suurempi kuin {MAX_BYTES} tavua
@@ -5188,6 +5195,7 @@ imageTrace	Outline	Ääriviiva
 @msg	tool shortcuts must be a single key (optionally with Shift)	työkalujen pikanäppäinten on oltava yksittäinen näppäin (valinnaisesti Vaihto-näppäimen kanssa)
 @msg	truncated	katkaistu
 @msg	unknown command `{0}`	tuntematon komento `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	toiminnon ”{action}” vaihe {step} suorittaa tuntemattoman komennon `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	tuntematon komento `{0}`; tarkoititko `{1}`?
 @msg	unknown effect `{id}`	tuntematon tehoste `{id}`
 @msg	unknown format	tuntematon muoto
@@ -5360,6 +5368,8 @@ imageTrace	Outline	Ääriviiva
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	upotettu {_1} × {_2} kuvapisteen kuva pienennettiin kokoon {_3} × {_4} kuvapistettä, jotta tasot säilyvät
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	linkitetyt kuvat näyttävät tiedostoon tallennetun matalan tarkkuuden esikatselun, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraftin rajat ylittävät linkitetyt tekstialueet jätettiin pois
+@msg	the Line Breaking setting of legacy type was left out	vanhan muodon tekstin rivinvaihtoasetus jätettiin pois
+@msg	the Japanese layout rules of legacy type were left out	vanhan muodon tekstin japanilaiset asettelusäännöt jätettiin pois
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekstiobjektin sisällä kirjoitussuuntaa vaihtava teksti avautuu ensimmäisen merkkinsä suuntaan
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	maskina käytetty teksti linkitetyissä alueissa, rivitetyssä tekstissä tai yhdistelmäpolussa ei rajaa
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	linkitetyt kuvat, joilla ei ole esikatselua tiedostossa, näkyvät paikkamerkkinä, kunnes niiden tiedostot löytyvät: linkitä ne uudelleen Linkit-paneelissa
@@ -6163,6 +6173,7 @@ mark-style	Japanese	Japanilainen
 @msg	no such color	väriä ei ole
 @msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
 @msg	more than one action is named “{_1}”	useamman kuin yhden toiminnon nimi on ”{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	toiminto ”{_1}” asettaa kansioasetuksen {_2}; poista tämä vaihe, jotta voit tallentaa sarjan
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
 	Smudge Stick…	Sumennuskynä…
 	Smudge Stick	Sumennuskynä
@@ -6415,8 +6426,8 @@ axis	Y Axis	Y-akseli
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	vientilaajennus ilmoittaa 1–{MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	ryhmien ulkopuolella saa olla enintään {MAX_UNGROUPED} parametria: anna muille `group`
 @msg	can't encode the input	syötettä ei voi koodata
-@msg	expected {"dataBase64"}	odotettiin {"dataBase64"}
-@msg	expected {"objects"}	odotettiin {"objects"}
+@msg	expected {{"dataBase64": "…"}}	odotettiin {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	odotettiin {{"objects": [...]}}
 @msg	export `{name}`: {e}	moduulin vienti `{name}`: {e}
 @msg	extension {e} is listed twice	tunniste {e} on luettelossa kahdesti
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	tunniste {e}: käytä 1-16 pientä kirjainta ja numeroa ilman pistettä
@@ -6480,11 +6491,11 @@ axis	Y Axis	Y-akseli
 @msg	a painted live effect returns only `objects`	maalaava live-tehoste palauttaa vain kentän `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	maalaavan live-tehosteen osalla on vain `path`, `fillRule`, `fills` ja `strokes`
 @msg	a read-only object was left out	vain luku -objekti jätettiin pois
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {"id"}-muotona tai sellaisena kuin se annettiin
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {{"id": …}}-muotona tai sellaisena kuin se annettiin
 @msg	a string	merkkijono
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	viivalla on vain `paint`, `width`, `join`, `cap` ja `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	viivan on oltava muotoa {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	tehosteen on oltava muotoa {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	viivan on oltava muotoa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	tehosteen on oltava muotoa {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	täytön tehoste palauttaa vain kentän `fills`
 @msg	an effect on a stroke returns only `strokes`	viivan tehoste palauttaa vain kentän `strokes`
 @msg	an object must be a JSON object	objektin on oltava JSON-objekti
@@ -6626,6 +6637,8 @@ axis	Y Axis	Y-akseli
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
 	Playback Options…	Toistoasetukset…
+	Button Mode	Painiketila
+	No actions.	Ei toimintoja.
 	Insert Stop…	Lisää pysäytys…
 	Insert Stop	Lisää pysäytys
 	Record Stop	Nauhoita pysäytys
