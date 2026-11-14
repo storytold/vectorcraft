@@ -84,17 +84,33 @@ pub(super) fn lp_make(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
-/// The appearance of face or edge `n` for the part Merge makes again in its place, another path:
-/// gradients fitted to `n`'s outline keep that fit, and the strokes' pen pressure, tilt, bearing
-/// and rotation stay behind.
-fn carried_appearance(n: &Node) -> Appearance {
-    let mut app = (*n.appearance).clone().without_pressure();
-    if app.has_unplaced_gradient()
-        && let Some(bounds) = n.geometric_bounds()
-    {
-        app.pin_gradients(bounds);
+/// What Merge carries from a face or edge to the part it makes again in its place, another path:
+/// the appearance, visibility, opacity and blending mode. Gradients fitted to the old outline keep
+/// that fit, and the strokes' pen pressure, tilt, bearing and rotation stay behind.
+struct Carried {
+    appearance: Appearance,
+    visible: bool,
+    opacity: f32,
+    blend: vectorcraft_color::BlendMode,
+}
+
+impl Carried {
+    fn of(n: &Node) -> Self {
+        let mut appearance = (*n.appearance).clone().without_pressure();
+        if appearance.has_unplaced_gradient()
+            && let Some(bounds) = n.geometric_bounds()
+        {
+            appearance.pin_gradients(bounds);
+        }
+        Self { appearance, visible: n.visible, opacity: n.opacity, blend: n.blend }
     }
-    app
+
+    fn onto(self, n: &mut Node) {
+        n.appearance = self.appearance.into();
+        n.visible = self.visible;
+        n.opacity = self.opacity;
+        n.blend = self.blend;
+    }
 }
 
 /// Add the other `roots` (back → front) to the first Live Paint group among them, which keeps its
@@ -108,16 +124,16 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         .ok_or_else(|| EngineError::Other("Live Paint Merge: select a Live Paint group and the paths to add".into()))?;
     check_live_paint_takes(d, roots)?;
     let old = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
-    // Paint to carry over: (point inside face, appearance) for faces that draw, and (point on
-    // edge, appearance) for every edge.
-    let keep_faces: Vec<(Point, Appearance)> =
-        b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, carried_appearance(f)))).collect();
-    let keep_edges: Vec<(Point, Appearance)> = b::edges(&old)
+    // Paint to carry over: (point inside face, paint) for faces that draw, and (point on edge,
+    // paint) for every edge.
+    let keep_faces: Vec<(Point, Carried)> =
+        b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, Carried::of(f)))).collect();
+    let keep_edges: Vec<(Point, Carried)> = b::edges(&old)
         .iter()
         .filter_map(|e| {
             let pd = e.path_data()?;
             let sp = pd.subpaths.first().filter(|sp| sp.segment_count() > 0)?;
-            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), carried_appearance(e)))
+            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), Carried::of(e)))
         })
         .collect();
     let mut sources = source_nodes(&old);
@@ -137,20 +153,20 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         *ch = children;
     }
     g.extras_mut().live_paint_gaps = stored_gap_options(options);
-    for (pt, app) in keep_faces {
+    for (pt, carried) in keep_faces {
         if let Some(fid) = face_at(&g, pt).map(|f| f.id)
             && let Some(ch) = g.children_mut()
             && let Some(f) = ch.iter_mut().find(|c| c.id == fid)
         {
-            Arc::make_mut(f).appearance = app.into();
+            carried.onto(Arc::make_mut(f));
         }
     }
-    for (pt, app) in keep_edges {
+    for (pt, carried) in keep_edges {
         if let Some(eid) = edge_near(&g, pt, 0.5).map(|e| e.id)
             && let Some(ch) = g.children_mut()
             && let Some(e) = ch.iter_mut().find(|c| c.id == eid)
         {
-            Arc::make_mut(e).appearance = app.into();
+            carried.onto(Arc::make_mut(e));
         }
     }
     let mut merged = Beside::replacing(d, roots);

@@ -3489,9 +3489,9 @@ already walks Image Trace. Short agent entry points:
   `livePaint.expand` keeps each face and edge that draws, with all its fill and stroke rows: it is shown, its opacity
   is above 0, and a fill or stroke row is shown, has paint and an opacity above 0 (a stroke also a weight above 0),
   whichever row is on top. A painted lower row under an unpainted top row keeps the part; a part whose only painted
-  row is hidden is removed. `livePaint.merge` copies the fill and stroke rows of each face that draws by this rule, and
-  of each edge, to the rebuilt parts, with their gradients kept at their fit on the old outline and without the
-  strokes' pen pressure, tilt, bearing and rotation.
+  row is hidden is removed. `livePaint.merge` copies the fill and stroke rows, visibility, opacity and blending mode of
+  each face that draws by this rule, and of each edge, to the rebuilt parts, with their gradients kept at their fit on
+  the old outline and without the strokes' pen pressure, tilt, bearing and rotation.
   With `detect: true`, paint stops at the gaps that run
   from a loose end of a path to the nearest path, up to `size` wide (`small` 3 pt, `medium` 6 pt, `large` 12 pt, or a
   number of points up to 72); `closeGaps: true` adds an unpainted path across each of them. `color` (the Gap Preview

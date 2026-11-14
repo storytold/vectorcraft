@@ -3105,6 +3105,34 @@ fn live_paint_merge_keeps_the_fit_of_carried_gradients() {
     assert_eq!(geom(&new_edge.appearance.items), Some(unplaced.resolve(edge_box)), "the stroke keeps its fit");
 }
 
+/// Merge carries a face's or edge's visibility, opacity and blending mode to the rebuilt part with
+/// its appearance: a half-transparent face drawn by a stroke alone stays half transparent, and a
+/// hidden edge stays hidden.
+#[test]
+fn live_paint_merge_keeps_the_visibility_opacity_and_blending_of_carried_parts() {
+    use vectorcraft_color::BlendMode;
+    use vectorcraft_doc::StrokeLayer;
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let stroke = || AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 2.0));
+    let mut s = session();
+    let g = live(&mut s);
+    let face = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![stroke()], 0.5);
+    let edge = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke()], 1.0);
+    s.edit("t", |d, _| {
+        d.node_mut(face).unwrap().blend = BlendMode::Multiply;
+        d.node_mut(edge).unwrap().visible = false;
+        Ok(())
+    })
+    .unwrap();
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    let f = face_at(&n, Point::new(25.0, 50.0)).unwrap();
+    assert_eq!((f.appearance.items.clone(), f.opacity, f.blend, f.visible), (vec![stroke()], 0.5, BlendMode::Multiply, true));
+    let e = edge_near(&n, Point::new(0.0, 50.0), 0.5).unwrap();
+    assert_eq!((e.appearance.items.clone(), e.visible), (vec![stroke()], false), "the hidden edge stays hidden");
+}
+
 fn live_group_only(s: &mut Session) -> NodeId {
     let r = s.execute("livePaint.make", &json!({})).unwrap();
     NodeId(r["id"].as_u64().unwrap())
