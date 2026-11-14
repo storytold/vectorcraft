@@ -7582,9 +7582,10 @@ fn a_linked_object_past_the_object_limit_warns_that_its_link_is_left_out() {
 }
 
 /// A link to a graphic style with Twist is kept where the reader reads Twist: on a curve, a curved
-/// compound path or a group with nothing stroked up to a quarter turn, and on a path with straight
-/// segments at any angle. A stroked curve, a group with a stroked member or a guide, or a curve,
-/// compound path or group twisted further, is written without the link and warns.
+/// compound path or a group with nothing stroked up to a quarter turn, and on a path or compound path
+/// with straight segments up to half a turn. A stroked curve, a group with a stroked member or a
+/// guide, a straight compound path with a guide member that reaches past its other members, or an
+/// object twisted further, is written without the link and warns.
 #[test]
 fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
     // A document with the object `make` builds from its appearance, `ap` with Twist at `angle`,
@@ -7619,6 +7620,17 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
         n.appearance = ap.into();
         n
     };
+    // A compound path of a square and a guide, a rectangle with corners `a` and `b`.
+    let guided = |a: (f64, f64), b: (f64, f64)| {
+        move |doc: &mut Document, ap: Appearance| {
+            let outer = Node::path(doc.alloc_id(), square(), Appearance::default());
+            let path = shapes::rectangle(Rect::new(a.0, a.1, b.0, b.1));
+            let guide = Node::new(doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true });
+            let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(guide)], rule: FillRule::NonZero });
+            n.appearance = ap.into();
+            n
+        }
+    };
     // A group of a filled square and `second`.
     let group = |second: fn(&mut Document) -> Node| {
         move |doc: &mut Document, ap: Appearance| {
@@ -7649,6 +7661,8 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
         ("a square twisted three quarters of a turn back", twisted(-270.0, filled(), path(square())), false),
         ("a straight compound path twisted half a turn", twisted(180.0, filled(), frame), true),
         ("a straight compound path twisted a full turn", twisted(360.0, filled(), frame), false),
+        ("a straight compound path with a guide inside it", twisted(45.0, filled(), guided((30.0, 20.0), (70.0, 50.0))), true),
+        ("a straight compound path with a guide reaching past it", twisted(45.0, filled(), guided((30.0, 20.0), (120.0, 50.0))), false),
         ("a curve twisted past a quarter turn", twisted(120.0, filled(), path(oval())), false),
         ("a stroked curve", twisted(45.0, Appearance::basic(black_fill(), red.clone(), 2.0), path(oval())), false),
         ("a curved compound path", twisted(-60.0, filled(), ring), true),
