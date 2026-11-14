@@ -908,7 +908,7 @@ fn knockout_masks(mut search: BrushSearch, elements: &[(&Node, Measured)]) -> Re
                 // The mask draws a copy of the element without its own opacity mask, unless the
                 // mask defines its knockout shape.
                 if *checked[j].get_or_insert_with(|| search.node(over_node, over_node.knockout_shape, 0)) {
-                    return Err(KNOCKOUT_BRUSHES);
+                    return Err(if search.exhausted { KNOCKOUT_SHAPES } else { KNOCKOUT_BRUSHES });
                 }
                 objects = objects.checked_add(counts[j]).filter(|&o| o <= MAX_KNOCKOUT_MASK_OBJECTS).ok_or(KNOCKOUT_SHAPES)?;
                 above.push(j);
@@ -919,11 +919,13 @@ fn knockout_masks(mut search: BrushSearch, elements: &[(&Node, Measured)]) -> Re
     Ok(out)
 }
 
-/// The art a [`BrushSearch`] looks through once: a symbol's or a pattern's, by name.
+/// The art a [`BrushSearch`] looks through once: a symbol's or a pattern's, by name, or a
+/// symbol's with one instance's appearance changes, by the symbol's name and the changes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum SharedArt {
     Symbol,
     Pattern,
+    Dynamic,
 }
 
 /// A search for the brushed strokes drawing an object draws, whose brush art can hold many more
@@ -933,24 +935,52 @@ struct BrushSearch<'a> {
     /// The brushes the export draws strokes with ([`Exporter::brush_art`]); a stroke whose brush
     /// is not among them is drawn as a plain stroke.
     brushes: &'a [vectorcraft_brush::Brush],
-    /// The answer for each symbol's and pattern's art once found: false while it is being looked
-    /// through, so that art that uses itself ends the search.
+    /// The answer for each symbol's and pattern's art, and each symbol's art with an instance's
+    /// appearance changes, once found: false while it is being looked through, so that art that
+    /// uses itself ends the search.
     seen: HashMap<(SharedArt, String), bool>,
+    /// The objects the search may still visit or copy: [`MAX_KNOCKOUT_MASK_OBJECTS`] at the start.
+    left: usize,
+    /// Whether the search stopped because [`Self::left`] ran out; it then answers true.
+    exhausted: bool,
 }
 
 impl<'a> BrushSearch<'a> {
     fn new(doc: &'a Document, brushes: &'a [vectorcraft_brush::Brush]) -> Self {
-        Self { doc, brushes, seen: HashMap::new() }
+        Self { doc, brushes, seen: HashMap::new(), left: MAX_KNOCKOUT_MASK_OBJECTS, exhausted: false }
+    }
+
+    /// Takes `n` objects from [`Self::left`]; false, and the search exhausted, when fewer are left.
+    fn spend(&mut self, n: usize) -> bool {
+        match self.left.checked_sub(n) {
+            Some(left) if !self.exhausted => {
+                self.left = left;
+                true
+            }
+            _ => {
+                (self.left, self.exhausted) = (0, true);
+                false
+            }
+        }
+    }
+
+    /// Takes the objects of `n` (its members and opacity-mask art included) from [`Self::left`],
+    /// counting no further than what is left; false when they don't fit.
+    fn spend_tree(&mut self, n: &Node) -> bool {
+        self.spend(1)
+            && n.extras().mask.as_deref().is_none_or(|m| self.spend_tree(&m.art))
+            && n.children().into_iter().flatten().all(|c| self.spend_tree(c))
     }
 
     /// Whether drawing `n` draws a brushed stroke: on `n` or its visible members (a compound
     /// path's members are drawn with its own paint), in the art of the opacity masks that are on
     /// (`n`'s own when `own_mask`), of symbol instances and inline graphics, of live objects as
-    /// evaluated, and of the patterns that fills, strokes and type paint with. `depth` counts the objects and the mask, symbol
-    /// and pattern art above `n`: past [`vectorcraft_doc::depth::MAX_DRAWN_DEPTH`] the search
-    /// stops and counts as a brush.
+    /// evaluated, and of the patterns that fills, strokes and type paint with. `depth` counts the
+    /// objects and the mask, symbol and pattern art above `n`: past
+    /// [`vectorcraft_doc::depth::MAX_DRAWN_DEPTH`] the search stops and counts as a brush, and so
+    /// it does when the objects it may visit or copy ([`Self::left`]) run out.
     fn node(&mut self, n: &Node, own_mask: bool, depth: usize) -> bool {
-        if depth > vectorcraft_doc::depth::MAX_DRAWN_DEPTH {
+        if depth > vectorcraft_doc::depth::MAX_DRAWN_DEPTH || !self.spend(1) {
             return true;
         }
         let depth = depth + 1;
@@ -976,10 +1006,15 @@ impl<'a> BrushSearch<'a> {
         }
         match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
-                // A dynamic symbol's instance draws its art with its own appearance changes.
-                match self.doc.symbols.iter().find(|s| &s.name == symbol) {
+                // A dynamic symbol's instance draws its art with its own appearance changes: the
+                // art is copied once for each set of changes, counted before it is copied.
+                let doc = self.doc;
+                match doc.symbols.iter().find(|s| &s.name == symbol) {
                     Some(s) if !n.extras().symbol_overrides.is_empty() => {
-                        self.node(&vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n), true, depth)
+                        let key = format!("{symbol}\u{0}{:?}", n.extras().symbol_overrides);
+                        self.shared(SharedArt::Dynamic, &key, |search| {
+                            !search.spend_tree(&s.art) || search.node(&vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n), true, depth)
+                        })
                     }
                     _ => self.symbol(symbol, depth),
                 }
@@ -996,8 +1031,10 @@ impl<'a> BrushSearch<'a> {
             | NodeKind::Repeat(_)
             | NodeKind::PlacedDocument(_)
             | NodeKind::Intertwine { .. } => {
+                // Each live object is reached once in the art searched (shared art is searched
+                // once); its evaluated art is counted before it is searched.
                 let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
-                g.children().into_iter().flatten().filter(|c| c.visible).any(|c| self.node(c, true, depth))
+                !self.spend_tree(&g) || g.children().into_iter().flatten().filter(|c| c.visible).any(|c| self.node(c, true, depth))
             }
             _ => n.children().into_iter().flatten().filter(|c| c.visible).any(|c| self.node(c, true, depth)),
         }
@@ -1088,9 +1125,9 @@ mod tests {
 
     use super::*;
 
-    /// An instance of a dynamic symbol whose art holds an instance of the same symbol with its own
-    /// appearance changes ends the search for brushed strokes at the drawn depth limit, where it
-    /// counts as a brush, instead of recursing until the stack runs out.
+    /// An instance of a dynamic symbol whose art holds an instance of the same symbol with the same
+    /// appearance changes ends the search for brushed strokes where the art comes round again,
+    /// after a few objects, instead of recursing until the stack runs out.
     #[test]
     fn a_dynamic_symbol_holding_itself_ends_the_brush_search() {
         let mut d = Document::new(200.0, 200.0);
@@ -1102,7 +1139,43 @@ mod tests {
         let square = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
         let art = Node::group(NodeId(0), vec![Arc::new(square), Arc::new(instance())]);
         d.symbols.push(Symbol { dynamic: true, name: "Loop".into(), art: Arc::new(art) });
-        assert!(BrushSearch::new(&d, &[]).node(&instance(), true, 0));
+        let mut search = BrushSearch::new(&d, &[]);
+        assert!(!search.node(&instance(), true, 0));
+        assert!(!search.exhausted);
+        assert!(MAX_KNOCKOUT_MASK_OBJECTS - search.left < 10, "{} objects", MAX_KNOCKOUT_MASK_OBJECTS - search.left);
+    }
+
+    /// A group of 1,000 instances of a dynamic symbol whose art holds 100 squares, each instance
+    /// with appearance changes of its own: copying and looking through every instance's art would
+    /// take about 203,000 objects, and the search stops when [`MAX_KNOCKOUT_MASK_OBJECTS`] are
+    /// used, counting as a brush. With the same changes on every instance, the art is copied
+    /// once.
+    #[test]
+    fn the_brush_search_stops_within_its_object_limit() {
+        let mut d = Document::new(200.0, 200.0);
+        let square =
+            Arc::new(Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::basic(Paint::None, Paint::None, 0.0)));
+        d.symbols.push(Symbol { dynamic: true, name: "Dots".into(), art: Arc::new(Node::group(NodeId(0), vec![square; 100])) });
+        let group = |distinct: bool| {
+            let instances = (0..1000u32)
+                .map(|i| {
+                    let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Dots".into(), xf: Affine::IDENTITY });
+                    let path = if distinct { vec![0, i] } else { vec![0] };
+                    n.extras_mut().symbol_overrides = vec![SymbolOverride { path, opacity: Some(0.5), ..Default::default() }];
+                    Arc::new(n)
+                })
+                .collect();
+            Node::group(NodeId(0), instances)
+        };
+        let mut search = BrushSearch::new(&d, &[]);
+        assert!(search.node(&group(true), true, 0));
+        assert!(search.exhausted);
+        assert_eq!(search.left, 0);
+        let mut search = BrushSearch::new(&d, &[]);
+        assert!(!search.node(&group(false), true, 0));
+        assert!(!search.exhausted);
+        // The group, the 1,000 instances, and one copy of the art counted and looked through.
+        assert_eq!(MAX_KNOCKOUT_MASK_OBJECTS - search.left, 1 + 1000 + 101 + 101);
     }
 
     /// A placed file read as one square with a 3 pt brushed stroke.
