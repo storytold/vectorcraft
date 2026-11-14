@@ -698,6 +698,7 @@
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna
+	Show Out-of-Gamut Colors	Tampilkan warna di luar gamut
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -1584,7 +1585,6 @@ digits	Malayalam	Malayalam
 	Create New Swatch…	Buat swatch baru…
 	Name 40%	Nama 40%
 	Out of Gamut Warning	Peringatan di luar gamut
-	Show Out-of-Gamut Colors	Tampilkan warna di luar gamut
 	Out of Web Color Warning	Peringatan di luar warna web
 	Web Safe RGB	RGB aman web
 	{warning}: click to correct to the closest color ({hex})	{warning}: klik untuk mengoreksi ke warna terdekat ({hex})

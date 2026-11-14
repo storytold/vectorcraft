@@ -768,6 +768,7 @@ digits	Malayalam	マラヤーラム数字
 	Box Channel	ボックスのチャンネル
 	Color box	カラーボックス
 	Color Wheel Options	カラーホイールオプション
+	Show Out-of-Gamut Colors	色域外のカラーを表示
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー
@@ -3946,7 +3947,6 @@ file-filter	Templates	テンプレート
 	Offset X	X 軸オフセット
 	Other Libraries	その他のライブラリ
 	Out of Gamut Warning	色域外警告
-	Show Out-of-Gamut Colors	色域外のカラーを表示
 	Out of Web Color Warning	Web カラー外警告
 	Output	出力
 	Output Black	出力ブラック

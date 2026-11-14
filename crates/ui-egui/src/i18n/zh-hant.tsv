@@ -540,6 +540,7 @@ font-technology	Variable	可變
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
+	Show Out-of-Gamut Colors	顯示超出色域的顏色
 	Color Type:	顏色類型：
 	Color:	顏色：
 	Colorize	上色
@@ -3558,7 +3559,6 @@ file-filter	Templates	範本
 	Other Library…	其他資料庫…
 	Other Script…	其他指令碼…
 	Out of Gamut Warning	超出色域警告
-	Show Out-of-Gamut Colors	顯示超出色域的顏色
 	Out of Web Color Warning	非網頁安全色警告
 	Out Tangent Handles	外切線控制把手
 	Outer Glow…	外光暈…

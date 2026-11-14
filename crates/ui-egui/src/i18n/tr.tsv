@@ -558,6 +558,7 @@ font-technology	Variable	Değişken
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
+	Show Out-of-Gamut Colors	Gamut Dışı Renkleri Göster
 	Color Type:	Renk Türü:
 	Color:	Renk:
 	Colorize	Renklendir
@@ -2234,7 +2235,6 @@ shape	Open	Açık
 	Other Library…	Diğer Kütüphane…
 	Other Script…	Diğer Komut Dosyası…
 	Out of Gamut Warning	Gamut Dışı Uyarısı
-	Show Out-of-Gamut Colors	Gamut Dışı Renkleri Göster
 	Out of Web Color Warning	Web Dışı Renk Uyarısı
 	Out Tangent Handles	Dışarıya Teğet Tutamaçlar
 	Outer Glow…	Dış Parıltı…

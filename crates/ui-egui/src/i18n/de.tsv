@@ -555,6 +555,7 @@ font-technology	Variable	Variabel
 	Box Channel	Kanal des Quadrats
 	Color box	Farbquadrat
 	Color Wheel Options	Optionen für den Farbkreis
+	Show Out-of-Gamut Colors	Farben außerhalb des Farbumfangs einblenden
 	Color Type:	Farbart:
 	Color:	Farbe:
 	Colorize	Einfärben
@@ -2411,7 +2412,6 @@ file-filter	Templates	Vorlagen
 	Other Library…	Andere Bibliothek…
 	Other Script…	Anderes Skript…
 	Out of Gamut Warning	Warnung: außerhalb des Farbumfangs
-	Show Out-of-Gamut Colors	Farben außerhalb des Farbumfangs einblenden
 	Out of Web Color Warning	Warnung: keine Webfarbe
 	Out Tangent Handles	Ausgehende Tangentengriffe
 	Outer Glow…	Schein nach außen…

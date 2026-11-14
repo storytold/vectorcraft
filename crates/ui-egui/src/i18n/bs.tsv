@@ -740,6 +740,7 @@
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
+	Show Out-of-Gamut Colors	Prikaži boje izvan gamuta
 	CSS Properties	CSS svojstva
 	Document Info	Informacije o dokumentu
 	Flattener Preview	Pregled spljoštavanja
@@ -1649,7 +1650,6 @@ digits	Malayalam	Malajalam
 	Create New Swatch…	Kreiraj novi uzorak boje…
 	Name 40%	Naziv 40%
 	Out of Gamut Warning	Upozorenje o izlasku iz gamuta
-	Show Out-of-Gamut Colors	Prikaži boje izvan gamuta
 	Out of Web Color Warning	Upozorenje o boji izvan weba
 	Web Safe RGB	Sigurni web RGB
 	{warning}: click to correct to the closest color ({hex})	{warning}: kliknite za ispravku na najbližu boju ({hex})

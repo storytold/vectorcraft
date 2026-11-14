@@ -664,6 +664,7 @@ font-technology	Variable	Biến thiên
 	Box Channel	Kênh của hộp
 	Color box	Hộp màu
 	Color Wheel Options	Tùy chọn bánh xe màu
+	Show Out-of-Gamut Colors	Hiện màu ngoài dải màu
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu
@@ -2743,7 +2744,6 @@ digits	Hindi	Hindi
 	Other Library…	Thư viện khác…
 	Other Script…	Script khác…
 	Out of Gamut Warning	Cảnh báo ngoài dải màu
-	Show Out-of-Gamut Colors	Hiện màu ngoài dải màu
 	Out of Web Color Warning	Cảnh báo ngoài màu web
 	Out Tangent Handles	Tay nắm tiếp tuyến ra
 	Outer Corner Tile	Ô góc ngoài

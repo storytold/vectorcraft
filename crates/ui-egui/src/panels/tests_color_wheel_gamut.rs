@@ -107,11 +107,18 @@ fn the_cache_computes_once_per_key() {
 fn the_grid_is_computed_again_after_a_profile_is_loaded() {
     let mut h = harness(app("#3366cc", "box", true));
     let Some((before, _)) = drawn(&h) else { panic!("the box drew no grid") };
+    /// Unregisters the profile when dropped, also after a failed assertion.
+    struct Unregister(&'static str);
+    impl Drop for Unregister {
+        fn drop(&mut self) {
+            cms::unregister_icc(self.0);
+        }
+    }
     let name = "Color Wheel Gamut Reload CMYK";
     let bytes = cms::icc_bytes(cms::GENERIC_CMYK).unwrap();
+    let _unregister = Unregister(name);
     cms::register_icc(&bytes, Some(name.into())).unwrap();
     h.run_steps(2);
-    cms::unregister_icc(name);
     let Some((after, _)) = drawn(&h) else { panic!("the box drew no grid") };
     assert_eq!((after.0, after.1, &after.2), (before.0, before.1, &before.2));
     assert!(after.3 > before.3, "the key follows the loaded profiles: {} then {}", before.3, after.3);

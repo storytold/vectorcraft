@@ -577,6 +577,7 @@ font-technology	Variable	Variables
 	Box Channel	Canal del cuadro
 	Color box	Cuadro de color
 	Color Wheel Options	Opciones de la rueda de color
+	Show Out-of-Gamut Colors	Mostrar colores fuera de gama
 	Color Type:	Tipo de color:
 	Color:	Color:
 	Colorize	Colorear
@@ -2449,7 +2450,6 @@ font-technology	Variable	Variables
 	Other Library…	Otra biblioteca…
 	Other Script…	Otro script…
 	Out of Gamut Warning	Aviso de fuera de gama
-	Show Out-of-Gamut Colors	Mostrar colores fuera de gama
 	Out of Web Color Warning	Aviso de color no apto para web
 	Out Tangent Handles	Manejadores de tangente de salida
 	Outer Glow…	Resplandor exterior…

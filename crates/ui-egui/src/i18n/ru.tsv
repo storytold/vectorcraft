@@ -575,6 +575,7 @@ font-technology	Variable	Вариативные
 	Box Channel	Канал квадрата
 	Color box	Цветовой квадрат
 	Color Wheel Options	Параметры цветового круга
+	Show Out-of-Gamut Colors	Показать цвета вне цветового охвата
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать
@@ -2474,7 +2475,6 @@ file-filter	Templates	Шаблоны
 	Other Library…	Другая библиотека…
 	Other Script…	Другая письменность…
 	Out of Gamut Warning	Предупреждение о выходе из цветового охвата
-	Show Out-of-Gamut Colors	Показать цвета вне цветового охвата
 	Out of Web Color Warning	Предупреждение о цвете, не поддерживаемом web
 	Out Tangent Handles	Маркеры исходящей касательной
 	Outer Glow…	Внешнее свечение…

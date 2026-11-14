@@ -753,6 +753,7 @@ font-technology	Variable	Változó
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
+	Show Out-of-Gamut Colors	Színtartományon kívüli színek megjelenítése
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés
@@ -2923,7 +2924,6 @@ file-filter	Templates	Sablonok
 	Other Library…	Másik könyvtár…
 	Other Script…	Másik szkript…
 	Out of Gamut Warning	Színtartományon kívüli szín figyelmeztetés
-	Show Out-of-Gamut Colors	Színtartományon kívüli színek megjelenítése
 	Out of Web Color Warning	Nem webbiztos szín figyelmeztetés
 	Out Tangent Handles	Kimenő érintőfogantyúk
 	Outer Corner Tile	Külső sarokcsempe

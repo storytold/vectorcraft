@@ -169,9 +169,9 @@ pub(crate) const GAMUT_CELLS: usize = 16;
 pub(crate) type GamutGrid = [u16; GAMUT_CELLS];
 
 /// The out-of-gamut cells of the box of channel `ch` at strip value `z` through `cms`, each tested
-/// at its center by the out-of-gamut warning's test ([`Cms::out_of_gamut`]) on the color a pick
-/// there stores in the working RGB space. The wheel's square is the box of [`Channel::Hue`] at the
-/// ring's hue.
+/// at its center by the out-of-gamut warning's test ([`Cms::out_of_gamut`]) on the working-RGB color
+/// of a pick there, before [`stored`] converts it to CMYK or Lab. The wheel's square is the box of
+/// [`Channel::Hue`] at the ring's hue.
 pub(crate) fn gamut_grid(cms: &Cms, ch: Channel, z: f32) -> GamutGrid {
     let n = GAMUT_CELLS as f32;
     let mut grid = [0; GAMUT_CELLS];

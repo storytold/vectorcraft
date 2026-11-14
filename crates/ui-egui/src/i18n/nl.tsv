@@ -1216,6 +1216,7 @@
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
+	Show Out-of-Gamut Colors	Kleuren buiten gamut tonen
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld
@@ -2102,7 +2103,6 @@ digits	Malayalam	Malayalam
 	Create New Swatch…	Nieuw staal maken…
 	Name 40%	Naam 40%
 	Out of Gamut Warning	Waarschuwing buiten gamut
-	Show Out-of-Gamut Colors	Kleuren buiten gamut tonen
 	Out of Web Color Warning	Waarschuwing buiten webkleur
 	Web Safe RGB	Websafe RGB
 	{warning}: click to correct to the closest color ({hex})	{warning}: klik om te corrigeren naar de dichtstbijzijnde kleur ({hex})

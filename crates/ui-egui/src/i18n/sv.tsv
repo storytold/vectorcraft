@@ -564,6 +564,7 @@ font-technology	Variable	Variabla
 	Box Channel	Rutans kanal
 	Color box	Färgruta
 	Color Wheel Options	Alternativ för färghjulet
+	Show Out-of-Gamut Colors	Visa färger utanför färgomfånget
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg
@@ -2388,7 +2389,6 @@ font-technology	Variable	Variabla
 	Other Library…	Annat bibliotek…
 	Other Script…	Annat skript…
 	Out of Gamut Warning	Färgomfångsvarning
-	Show Out-of-Gamut Colors	Visa färger utanför färgomfånget
 	Out of Web Color Warning	Varning för färg utanför webbfärger
 	Out Tangent Handles	Utgående tangenthandtag
 	Outer Glow…	Yttre glöd…

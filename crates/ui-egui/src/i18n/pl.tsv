@@ -702,6 +702,7 @@
 	Box Channel	Kanał kwadratu
 	Color box	Kwadrat koloru
 	Color Wheel Options	Opcje koła kolorów
+	Show Out-of-Gamut Colors	Pokaż kolory poza gamutem
 	CSS Properties	Właściwości CSS
 	Document Info	Informacje o dokumencie
 	Flattener Preview	Podgląd spłaszczania
@@ -1590,7 +1591,6 @@ digits	Malayalam	Malajalam
 	Create New Swatch…	Utwórz nową próbkę…
 	Name 40%	Nazwa 40%
 	Out of Gamut Warning	Ostrzeżenie: poza gamutem
-	Show Out-of-Gamut Colors	Pokaż kolory poza gamutem
 	Out of Web Color Warning	Ostrzeżenie: poza kolorami WWW
 	Web Safe RGB	RGB bezpieczne dla WWW
 	{warning}: click to correct to the closest color ({hex})	{warning}: kliknij, aby poprawić na najbliższy kolor ({hex})

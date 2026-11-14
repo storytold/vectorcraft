@@ -537,6 +537,7 @@ font-technology	Variable	Μεταβλητές
 	Box Channel	Κανάλι τετραγώνου
 	Color box	Τετράγωνο χρώματος
 	Color Wheel Options	Επιλογές χρωματικού τροχού
+	Show Out-of-Gamut Colors	Εμφάνιση χρωμάτων εκτός χρωματικής γκάμας
 	Color Type:	Τύπος χρώματος:
 	Color:	Χρώμα:
 	Colorize	Χρωματισμός
@@ -3273,7 +3274,6 @@ theme	Appearance	Εμφάνιση
 	Other Library…	Άλλη βιβλιοθήκη…
 	Other Script…	Άλλο σενάριο…
 	Out of Gamut Warning	Προειδοποίηση εκτός χρωματικής γκάμας
-	Show Out-of-Gamut Colors	Εμφάνιση χρωμάτων εκτός χρωματικής γκάμας
 	Out of Web Color Warning	Προειδοποίηση εκτός χρωμάτων ιστού
 	Out Tangent Handles	Λαβές εξερχόμενης εφαπτομένης
 	Outline Others	Περιγράμματα άλλων

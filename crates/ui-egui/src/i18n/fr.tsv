@@ -578,6 +578,7 @@ font-technology	Variable	Variables
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
+	Show Out-of-Gamut Colors	Afficher les couleurs hors gamme
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser
@@ -2441,7 +2442,6 @@ font-technology	Variable	Variables
 	Other Library…	Autre bibliothèque…
 	Other Script…	Autre script…
 	Out of Gamut Warning	Avertissement hors gamme
-	Show Out-of-Gamut Colors	Afficher les couleurs hors gamme
 	Out of Web Color Warning	Avertissement de couleur non Web
 	Out Tangent Handles	Poignées de tangente sortantes
 	Outer Glow…	Lueur externe…
