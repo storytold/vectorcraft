@@ -8,7 +8,9 @@
 //! (`…settings as file.new`), or, naming none, any key (the options of the format an export picks). Objects inside a value aren't
 //! described key by key, so only the top level is checked, except in the options of an export, a
 //! save or Export for Screens: those are checked against the options of the formats the command
-//! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]).
+//! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]); and in the
+//! objects of an array whose keys `MEMBER_KEYS` lists, such as the `items` of
+//! `object.setLiveShape` and `addon.pathtools.cornerSet`.
 //!
 //! [`Session::execute`] answers a key the description doesn't name with a parameter error
 //! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
@@ -254,6 +256,22 @@ pub fn check_keys(id: &str, doc: &'static str, params: &Value) -> Result<()> {
     }
 }
 
+/// Parameters a command takes instead of one another: (command, key, other key). Giving both,
+/// neither null, is a parameter error ([`check_exclusive_keys`]).
+const EXCLUSIVE_KEYS: &[(&str, &str, &str)] = &[("addon.pathtools.cornerSet", "items", "ids"), ("addon.pathtools.cornerRemove", "items", "ids")];
+
+/// `params` of command `id` give at most one of each pair in [`EXCLUSIVE_KEYS`], or the parameter
+/// error naming the pair.
+fn check_exclusive_keys(id: &str, params: &Value) -> Result<()> {
+    let given = |key: &str| params.get(key).filter(|v| !v.is_null());
+    for (_, key, other) in EXCLUSIVE_KEYS.iter().filter(|(c, ..)| *c == id) {
+        if given(key).is_some() && given(other).is_some() {
+            return Err(bad(id, format!("give `{key}` or `{other}`, not both")));
+        }
+    }
+    Ok(())
+}
+
 /// The parameter error of command `id` for `key`, which isn't one of `keys`: with the nearest of
 /// them, or all of them.
 pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError {
@@ -267,6 +285,45 @@ pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError 
             None => format!("unknown parameter `{key}`; the command takes: {}", keys.join(", ")),
         },
     )
+}
+
+/// Commands whose params hold an array of objects with keys of their own: the command, the key of
+/// the array and the keys each of its objects takes.
+const MEMBER_KEYS: &[(&str, &str, &[&str])] = &[
+    ("object.setLiveShape", "items", &["id", "corners"]),
+    ("addon.pathtools.cornerSet", "items", &["id", "anchors"]),
+    ("addon.pathtools.cornerRemove", "items", &["id", "anchors"]),
+];
+
+/// Each object in the arrays [`MEMBER_KEYS`] names for command `id` has only the keys it lists, or
+/// the parameter error naming the first other one with its place (`items[0].corner`), and the
+/// nearest accepted key or the accepted ones. A member that isn't an object is the command's to
+/// report.
+fn check_member_keys(id: &str, params: &Value) -> Result<()> {
+    for (_, list, keys) in MEMBER_KEYS.iter().filter(|(c, ..)| *c == id) {
+        let Some(members) = params.get(*list).and_then(Value::as_array) else { continue };
+        for (i, member) in members.iter().enumerate() {
+            let Value::Object(given) = member else { continue };
+            let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) else { continue };
+            let at = |k: &str| format!("{list}[{i}].{k}");
+            let near = nearest(key, keys);
+            let key = at(&shown_key(key));
+            return Err(bad(
+                id,
+                match near {
+                    Some(near) => {
+                        let near = at(near);
+                        format!("unknown parameter `{key}`; did you mean `{near}`?")
+                    }
+                    None => {
+                        let keys = keys.iter().map(|k| at(k)).collect::<Vec<_>>().join(", ");
+                        format!("unknown parameter `{key}`; the command takes: {keys}")
+                    }
+                },
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
@@ -526,7 +583,6 @@ pub const UNCHECKED: &[&str] = &[
     "object.rasterize",
     "object.repeat.options",
     "object.setBounds",
-    "object.setLiveShape",
     "object.setOverprint",
     "object.setProps",
     "object.slice.divide",
@@ -812,9 +868,9 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
     check_option_keys(id, "", given, &keys, why_not, &trees)
 }
 
-/// [`check_keys`] for an engine command, the steps of a `command.batch` or an `action.batch` included,
-/// [`check_effect_params`] for the effect `effect.apply` adds and [`check_export_options`] for an
-/// export. A command the engine doesn't have passes: running it reports that.
+/// [`check_keys`], [`check_exclusive_keys`] and [`check_member_keys`] for an engine command, the steps of a `command.batch` or an
+/// `action.batch` included, [`check_effect_params`] for the effect `effect.apply` adds and
+/// [`check_export_options`] for an export. A command the engine doesn't have passes: running it reports that.
 pub fn check_params(id: &str, params: &Value) -> Result<()> {
     check_params_in(id, params, false)
 }
@@ -833,6 +889,8 @@ fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
         return Ok(());
     }
     check_keys(id, spec.params, params)?;
+    check_exclusive_keys(id, params)?;
+    check_member_keys(id, params)?;
     if in_batch {
         crate::schemas::check(spec, params, false)?;
     }

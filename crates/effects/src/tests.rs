@@ -8,6 +8,7 @@ mod imageoutline;
 mod painted;
 mod rasterfollow;
 mod scale;
+mod solidcontext;
 mod transformfx;
 
 fn fx(id: &str, params: Value) -> Effect {
