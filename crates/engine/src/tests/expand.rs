@@ -545,6 +545,122 @@ fn a_compound_clipping_path_in_the_art_keeps_its_shape() {
     assert_eq!(seen, (true, true));
 }
 
+/// A Drop Shadow 20 pt to the right on row `row` of instance `id`, solid black with no blur.
+fn shadow_row(s: &mut Session, id: NodeId, row: usize) {
+    let params = json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal"});
+    run(s, "effect.apply", json!({"ids": [id.0], "item": row, "effect": "stylize.dropShadow", "params": params}));
+}
+
+/// Is `p` dark: a shadow, not the white page or the red fill?
+fn dark(p: [u8; 4]) -> bool {
+    p[..3].iter().all(|c| *c < 100)
+}
+
+/// A raster effect on a symbol instance's fill draws on the filled shapes of its art: the shadow
+/// falls right of the square, the bounds take it in, a hidden fill draws none, and Expand
+/// Appearance keeps the look in one undo step.
+#[test]
+fn a_symbol_instance_fill_shadow_shadows_its_filled_art() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    assert!(near(render(&s).pixel(160, 100), WHITE));
+    shadow_row(&mut s, id, row);
+    let before = render(&s);
+    assert!(dark(before.pixel(165, 100)), "the fill's shadow falls right of the square: {:?}", before.pixel(165, 100));
+    assert!(near(before.pixel(100, 100), RED), "the art draws over its shadow: {:?}", before.pixel(100, 100));
+    let doc = s.doc().unwrap().doc.clone();
+    let b = vectorcraft_render::painted_bounds(&doc, doc.node(id).unwrap()).expect("the instance has bounds");
+    assert!(b.x1 >= 169.0, "the bounds take in the shadow: {b:?}");
+    // A view that shows only the shadow, right of the square: the instance is still drawn.
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let right = vectorcraft_render::Renderer::new().render(&doc, 200, 200, vectorcraft_geom::Affine::translate((-155.0, 0.0)), &opts);
+    assert!(dark(right.pixel(10, 100)), "the shadow past the square's box is drawn: {:?}", right.pixel(10, 100));
+
+    assert!(expandable(&s), "the fill's shadow can be expanded");
+    run(&mut s, "effect.expandAppearance", json!({}));
+    let ch = node(&s, id).children().cloned().expect("the instance becomes a group");
+    assert!(matches!(ch[0].kind, NodeKind::Image(_)), "the shadow is an image under the art: {}", ch[0].kind_label());
+    assert!(matches!(ch[1].kind, NodeKind::SymbolInstance { .. }), "the art stays an instance: {}", ch[1].kind_label());
+    no_effects_left(&ch[1]);
+    let after = render(&s);
+    assert!(differing(&before, &after, 24) < 400, "expanding changed {} pixels", differing(&before, &after, 24));
+    run(&mut s, "edit.undo", json!({}));
+    let n = node(&s, id);
+    assert!(matches!(n.kind, NodeKind::SymbolInstance { .. }), "one undo gives the instance back");
+    assert!(n.appearance.items[row].effects().iter().any(|e| e.id == "stylize.dropShadow"));
+
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "visible": false}));
+    assert!(near(render(&s).pixel(165, 100), WHITE), "a hidden fill draws no shadow");
+}
+
+/// A raster effect on a symbol instance's stroke draws on the stroked shapes of its art only: the
+/// stroke's shadow falls right of the stroke, and none falls where only the fill would cast one.
+#[test]
+fn a_symbol_instance_stroke_shadow_shadows_only_its_stroked_art() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", false);
+    shadow_row(&mut s, id, row);
+    let r = render(&s);
+    assert!(dark(r.pixel(170, 100)), "the stroke's shadow falls right of the stroke: {:?}", r.pixel(170, 100));
+    assert!(near(r.pixel(160, 100), WHITE), "the fill casts no shadow: {:?}", r.pixel(160, 100));
+}
+
+/// Geometry and raster effects on one fill of an instance: the shadow falls from the grown fill.
+#[test]
+fn a_symbol_instance_fill_shadow_follows_the_fill_offset_before_it() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    offset_row(&mut s, id, row, 10.0);
+    shadow_row(&mut s, id, row);
+    let r = render(&s);
+    assert!(near(r.pixel(44, 100), RED), "the fill grows by the offset: {:?}", r.pixel(44, 100));
+    assert!(dark(r.pixel(175, 100)), "the shadow falls from the grown fill: {:?}", r.pixel(175, 100));
+}
+
+/// An instance inside a symbol's art passes the outer instance's fill shadow on to its own art.
+#[test]
+fn a_nested_symbol_instance_takes_the_outer_fill_shadow() {
+    let mut s = session();
+    square(&mut s);
+    run(&mut s, "symbol.new", json!({"name": "Inner"}));
+    let id = NodeId(run(&mut s, "symbol.new", json!({"name": "Outer"}))["id"].as_u64().unwrap());
+    run(&mut s, "appearance.addFill", json!({"ids": [id.0]}));
+    let row = node(&s, id).appearance.items.len() - 1;
+    run(&mut s, "appearance.setItem", json!({"ids": [id.0], "index": row, "none": true}));
+    shadow_row(&mut s, id, row);
+    assert!(dark(render(&s).pixel(165, 100)), "the inner art casts the shadow: {:?}", render(&s).pixel(165, 100));
+}
+
+/// Export draws a symbol instance's fill shadow on the filled shapes of its art: baking leaves the
+/// shadow on the art's fill, not its stroke, and PDF export makes an image of it.
+#[test]
+fn export_draws_a_symbol_instance_fill_shadow() {
+    let mut s = session();
+    let (id, row) = instance_with_row(&mut s, "Square", true);
+    shadow_row(&mut s, id, row);
+    let doc = s.doc().unwrap().doc.clone();
+    let baked = vectorcraft_render::effects::bake_document(&doc).expect("the instance is baked");
+    let n = baked.node(id).expect("the baked art keeps the instance's id").clone();
+    assert!(!matches!(n.kind, NodeKind::SymbolInstance { .. }));
+    let shadowed = |i: &vectorcraft_doc::AppearanceItem| i.effects().iter().any(|e| e.id == "stylize.dropShadow");
+    let (mut fills, mut strokes) = (0, 0);
+    n.walk(&mut |part| {
+        fills += part.appearance.items.iter().filter(|i| i.is_fill() && shadowed(i)).count();
+        strokes += part.appearance.items.iter().filter(|i| !i.is_fill() && shadowed(i)).count();
+    });
+    assert_eq!((fills, strokes), (1, 0), "the art's fill carries the shadow");
+
+    let flat = crate::flatten_raster_effects(&doc).expect("the shadow becomes an image");
+    let mut image = None;
+    flat.node(id).expect("the flattened art keeps the instance's id").walk(&mut |part| {
+        if matches!(part.kind, NodeKind::Image(_)) {
+            image = part.geometric_bounds();
+        }
+    });
+    let image = image.expect("the shadow is an image");
+    assert!(image.x1 >= 165.0, "the image holds the shadow right of the square: {image:?}");
+}
+
 #[test]
 fn two_fills_and_an_offset_stroke_become_three_paths_that_look_the_same() {
     let mut s = session();
