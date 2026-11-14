@@ -166,10 +166,16 @@ fn clipped_copy(n: &Node, region: &PathData, region_rule: FillRule, depth: usize
     if live || !n.appearance.effects.is_empty() || !matches!(n.knockout, vectorcraft_doc::Knockout::Neutral) {
         return None;
     }
+    // A paint that carries an effect, or one written as a raster image behind an internal
+    // `<clipPath>`, can't be trimmed as geometry: it paints past the shape the intersection makes.
+    if paints_beyond_geometry(n) {
+        return None;
+    }
     // Hidden art is left out anyway: there is nothing to clip.
     if !n.visible {
         return Some(std::sync::Arc::new(n.clone()));
     }
+    let bounds = n.geometric_bounds();
     let mut out = n.clone();
     match &n.kind {
         NodeKind::Path { path, rule, guide, .. } => {
@@ -179,7 +185,16 @@ fn clipped_copy(n: &Node, region: &PathData, region_rule: FillRule, depth: usize
             if paints_a_stroke(n) {
                 return None;
             }
-            let inter = vectorcraft_pathops::boolean(path, *rule, region, region_rule, vectorcraft_pathops::BoolOp::Intersect);
+            let inter = vectorcraft_pathops::try_boolean(
+                path,
+                *rule,
+                region,
+                region_rule,
+                vectorcraft_pathops::BoolOp::Intersect,
+                vectorcraft_pathops::DEFAULT_PRECISION,
+            )
+            .ok()?;
+            pin_gradients(&mut out, bounds);
             if let NodeKind::Path { path, rule, live, .. } = &mut out.kind {
                 *path = inter;
                 *rule = FillRule::NonZero;
@@ -200,7 +215,16 @@ fn clipped_copy(n: &Node, region: &PathData, region_rule: FillRule, depth: usize
             if all.is_empty() {
                 return Some(std::sync::Arc::new(out));
             }
-            let inter = vectorcraft_pathops::boolean(&all, *rule, region, region_rule, vectorcraft_pathops::BoolOp::Intersect);
+            let inter = vectorcraft_pathops::try_boolean(
+                &all,
+                *rule,
+                region,
+                region_rule,
+                vectorcraft_pathops::BoolOp::Intersect,
+                vectorcraft_pathops::DEFAULT_PRECISION,
+            )
+            .ok()?;
+            pin_gradients(&mut out, bounds);
             out.kind = NodeKind::Path { path: inter, rule: FillRule::NonZero, live: None, clipping: false, guide: false };
             Some(std::sync::Arc::new(out))
         }
@@ -215,6 +239,31 @@ fn clipped_copy(n: &Node, region: &PathData, region_rule: FillRule, depth: usize
             Some(std::sync::Arc::new(out))
         }
         _ => None,
+    }
+}
+
+/// Whether `n` paints something the intersection can't reproduce: a visible paint with an effect
+/// (a blur paints outside the trimmed shape) or a paint the writer draws as a raster image behind
+/// an internal `<clipPath>` (a reader that ignores clip paths shows the image's box instead).
+fn paints_beyond_geometry(n: &Node) -> bool {
+    n.appearance
+        .items
+        .iter()
+        .filter(|i| i.visible() && !i.paint().is_none())
+        .any(|i| i.effects().iter().any(|e| e.visible) || pixel_gradient(i.paint(), i.is_fill()).is_some())
+}
+
+/// A gradient fitted to the object's box (`geom: None`) refits to the box of the intersection,
+/// stretching its stops over the part the clip keeps. Pin it to the box it was fitted to before
+/// the geometry changes, so the visible part keeps its colours.
+fn pin_gradients(n: &mut Node, bounds: Option<Rect>) {
+    let Some(bounds) = bounds else { return };
+    for item in &mut n.appearance.items {
+        if item.visible()
+            && let Paint::Gradient(g) = item.paint_mut()
+        {
+            g.pin(bounds);
+        }
     }
 }
 
@@ -728,6 +777,19 @@ impl Writer<'_> {
     /// [`Self::node_body`] writes them. False when a child can't be expanded (a stroke, type, an
     /// image, an effect, a nested clip), leaving the caller to write the `<clipPath>`.
     fn expand_clip_group(&mut self, n: &Node, clip: &Node, rest: &[std::sync::Arc<Node>]) -> bool {
+        // A knockout group masks each child by the ones above it; written directly they would
+        // show through each other.
+        if n.knocks_out(self.knockout) {
+            self.warn(EXPAND_CLIPS_KEPT);
+            return false;
+        }
+        let paint = clip.clip_paint();
+        // The clipping path's fill is inside the `<clipPath>`; an effect on it would paint past
+        // the shape written here.
+        if paint.fill.as_ref().is_some_and(paints_beyond_geometry) {
+            self.warn(EXPAND_CLIPS_KEPT);
+            return false;
+        }
         let Some((region, region_rule)) = vectorcraft_effects::clip_outline(clip) else { return false };
         let region = PathData::from_bezpath(&region);
         let mut children = Vec::with_capacity(rest.len());
@@ -742,7 +804,6 @@ impl Writer<'_> {
         }
         let id = self.id_attr(n);
         let a = self.attrs(&self.group_props(n));
-        let paint = clip.clip_paint();
         self.line(&format!("<g{id}{a}>"));
         self.depth += 1;
         if let Some(fill) = &paint.fill {
