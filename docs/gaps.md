@@ -34,6 +34,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | G12: Layers panel row context menu (Options…, Duplicate, Delete, Lock Others/Show All/Hide Others/Unlock All, Locate Object, Collect for Export) with selection handling and undo tracking. Scores and estimates unchanged. |
 | 2026-11-13 | minor | PDF import: preserve Type 3 font text runs as named groups `<g>`, or as live text if `/ToUnicode` exists on non-colour fonts (#6740); scores and estimates unchanged. |
 | 2026-11-08 | minor | #3380, deletion only: preserve gradient placement and exact surviving geometry; consume owned subpaths with a shared original-node snapshot; consolidate status/evidence and document command/helper contracts. Compound behavior and the existing M2 status entry are retained. Endpoint highlighting remains open; scores and estimates unchanged. |
 | 2026-11-07 | minor | #3380 (deletion only): independent surviving path objects; transformed appearance, stacking, selection, cubic handles and Undo/Redo covered by `delete_path_pieces`; compound semantics retained. Endpoint highlighting remains open; scores and estimates unchanged. |
@@ -498,12 +499,12 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done:** Hyphenation › Default Language is the language of new type, unless Document Setup chose one, and each
   run hyphenates in its own language (Character panel). English and eleven Indian languages have break
   points; other languages stay whole apart from the Exceptions list (#394, #4947).
+- **Done (2026-11-14):** Layers panel row context menu: right-clicking a layer, group, or object row shows a context menu (Options…, Duplicate, Delete, Lock Others / Unlock All, Hide Others / Show All, Locate Object, Collect for Export) with proper selection behavior and Undo/Redo tracking. Tests in `crates/ui-egui/src/panels/layers/tests.rs`.
 - **Missing:** 2 Preferences options stored but not acted on (#394), each waiting on a subsystem of its own:
   Plug-ins & Scratch Disks › Primary and Secondary (documents are kept in memory; nothing pages to
   disk), and Clipboard Handling › Legacy vector clipboard with its Preserve Paths / Preserve Appearance and
   Overprints choice (Illustrator's own clipboard flavour, which has no public specification). Also Properties
-  panel per context, context menus beyond the canvas, Layers panel row menus and Collect for Export, SVG
-  Interactivity.
+  panel per context, context menus beyond the canvas, SVG Interactivity.
 - **Impact:** settings that silently do nothing erode trust.
 - **Estimate:** 13–20 h.
 

@@ -390,12 +390,14 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
             out.actions.push(("ui.layerOptions".into(), json!({"ids": [n.id.0]})));
         }
     }
-    // Row menu: Collect for Export on this row (or every highlighted row when this is one of them).
+    // Row menu: context actions on this row (or every highlighted row when this is one of them).
     let collect_ids: Vec<u64> = if view.rows.contains(&n.id) { view.rows.iter().map(|id| id.0).collect() } else { vec![n.id.0] };
+    // Right-clicking an unselected row selects it; a highlighted row keeps multiselection.
+    if resp.secondary_clicked() && !view.rows.contains(&n.id) {
+        out.actions.push(("layer.setCurrent".into(), json!({"id": n.id.0})));
+    }
     resp.context_menu(|ui| {
-        collect_for_export_menu(ui, true, |multiple| {
-            out.actions.push(("assets.add".into(), json!({ "ids": collect_ids.clone(), "multiple": multiple })));
-        });
+        row_context_menu(ui, view, n, &collect_ids, out);
     });
     // Dragging rows: the highlighted rows when this is one of them, else this row. Only the primary
     // button drags; the secondary button opens the row menu, and a drag with it moves nothing.
@@ -412,6 +414,87 @@ pub(super) fn row(ui: &mut Ui, view: &View, item: &Row, out: &mut Out) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     drop_target(ui, view, n, r, x - 16.0, open, &resp, out);
+}
+
+/// The right-click context menu of row `n`.
+fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out: &mut Out) {
+    let is_multi = collect_ids.len() > 1;
+    // "Layer Options…" / "Options for Selection…" / "Options…"
+    let options_label = if is_multi {
+        "Options for Selection…"
+    } else if n.is_layer() {
+        "Layer Options…"
+    } else {
+        "Options…"
+    };
+    if widgets::menu_item(ui, options_label, true, false) {
+        out.actions.push(("ui.layerOptions".into(), json!({ "ids": collect_ids })));
+        ui.close();
+    }
+    // "Duplicate "<name>"" or "Duplicate Selection"
+    let display = {
+        let raw = painted_name(n, &n.display_name(), crate::i18n::current());
+        if raw.chars().count() > 20 {
+            let truncated: String = raw.chars().take(20).collect();
+            format!("{truncated}…")
+        } else {
+            raw
+        }
+    };
+    let dup_label = if is_multi { tl!("Duplicate Selection").to_string() } else { format!("{} \"{display}\"", tl!("Duplicate")) };
+    if widgets::menu_item_name(ui, &dup_label, true, false) {
+        out.actions.push(("layer.duplicate".into(), json!({ "ids": collect_ids })));
+        ui.close();
+    }
+    // "Delete "<name>"" or "Delete Selection"
+    let del_label = if is_multi { tl!("Delete Selection").to_string() } else { format!("{} \"{display}\"", tl!("Delete")) };
+    if widgets::menu_item_name(ui, &del_label, true, false) {
+        out.actions.push(("layer.delete".into(), json!({ "ids": collect_ids })));
+        ui.close();
+    }
+    ui.separator();
+    // Lock Others / Unlock All Layers
+    {
+        let (lock_cmd, lock_params) = others_action(view.doc, n, false);
+        let lock_label = if lock_cmd == "layer.lockOthers" { "Lock Others" } else { "Unlock All Layers" };
+        let own = view.doc.layer_of(n.id);
+        let lock_enabled = if lock_cmd == "layer.lockOthers" {
+            view.doc.layers.iter().any(|l| Some(l.id) != own && !l.locked)
+        } else {
+            view.doc.layers.iter().any(|l| l.locked)
+        };
+        if widgets::menu_item(ui, lock_label, lock_enabled, false) {
+            out.actions.push((lock_cmd, lock_params));
+            ui.close();
+        }
+    }
+    // Hide Others / Show All Layers
+    {
+        let (hide_cmd, hide_params) = others_action(view.doc, n, true);
+        let hide_label = if hide_cmd == "layer.hideOthers" { "Hide Others" } else { "Show All Layers" };
+        let own = view.doc.layer_of(n.id);
+        let hide_enabled = if hide_cmd == "layer.hideOthers" {
+            view.doc.layers.iter().any(|l| Some(l.id) != own && l.visible)
+        } else {
+            view.doc.layers.iter().any(|l| !l.visible)
+        };
+        if widgets::menu_item(ui, hide_label, hide_enabled, false) {
+            out.actions.push((hide_cmd, hide_params));
+            ui.close();
+        }
+    }
+    ui.separator();
+    // Locate Object
+    if widgets::menu_item(ui, "Locate Object", true, false) {
+        out.actions.push(("layer.locate".into(), json!({ "id": n.id.0 })));
+        ui.close();
+    }
+    ui.separator();
+    // Collect for Export
+    let ids: Vec<u64> = collect_ids.to_vec();
+    collect_for_export_menu(ui, true, move |multiple| {
+        out.actions.push(("assets.add".into(), json!({ "ids": ids.clone(), "multiple": multiple })));
+    });
 }
 
 /// Alt-clicking row `n`'s eye (`eye`) or lock: Hide Others or Lock Others, every top-level layer

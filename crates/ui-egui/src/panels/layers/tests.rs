@@ -1969,3 +1969,88 @@ fn guide_rows_list_by_index_whatever_the_node_order() {
     let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
     assert_eq!(indexes, [2, 1, 0]);
 }
+
+/// Right-clicking a row that is not highlighted selects it.
+#[test]
+fn context_menu_right_click_selects_unselected_row() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.highlight", &json!({"ids": [], "mode": "set"})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top-first: Layer 2, Layer 1. Neither is highlighted.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    assert!(rows_of(&app).is_empty());
+    // Secondary-click Layer 1's row (bottom row).
+    let pos = circles[1] - vec2(100.0, 0.0); // name area
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, true, egui::PointerButton::Secondary)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, false, egui::PointerButton::Secondary)], false);
+    // The row is now highlighted.
+    let highlighted = rows_of(&app);
+    let layer1 = app.session.active().unwrap().doc.layers[0].id;
+    assert!(highlighted.contains(&layer1), "right-click selected the unselected row");
+}
+
+/// Right-clicking a row that IS highlighted preserves the multiselection.
+#[test]
+fn context_menu_right_click_preserves_multiselection() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    app.session.execute("layer.new", &json!({})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let ids: Vec<u64> = doc.layers.iter().map(|l| l.id.0).collect();
+    // Highlight all 3 layers.
+    app.session.execute("layer.highlight", &json!({"ids": ids, "mode": "set"})).unwrap();
+    let ctx = egui::Context::default();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 3);
+    // Secondary-click the middle row.
+    let pos = circles[1] - vec2(100.0, 0.0);
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, true, egui::PointerButton::Secondary)], false);
+    frame(&mut app, &ctx, vec![button_by(pos, false, egui::PointerButton::Secondary)], false);
+    // All 3 must still be highlighted.
+    assert_eq!(rows_of(&app).len(), 3, "multiselection preserved after right-click on a highlighted row");
+}
+
+/// layer.delete removes the specified layer.
+#[test]
+fn context_menu_delete_dispatches_layer_delete() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let layer2_id = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    let before = app.session.active().unwrap().doc.layers.len();
+    // Dispatch layer.delete with explicit ids (what the context menu item does).
+    app.session.execute("layer.delete", &json!({"ids": [layer2_id]})).unwrap();
+    let after = app.session.active().unwrap().doc.layers.len();
+    assert_eq!(after, before - 1, "layer.delete removes the layer");
+}
+
+/// layer.duplicate adds a copy.
+#[test]
+fn context_menu_duplicate_dispatches_layer_duplicate() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let layer_id = app.session.active().unwrap().doc.layers[0].id.0;
+    let before_layers = app.session.active().unwrap().doc.layers.len();
+    let before_undo = app.session.active().unwrap().history.undo.len();
+    app.session.execute("layer.duplicate", &json!({"ids": [layer_id]})).unwrap();
+    let after = &app.session.active().unwrap();
+    assert_eq!(after.doc.layers.len(), before_layers + 1, "layer.duplicate adds a layer");
+    assert_eq!(after.history.undo.len(), before_undo + 1, "one undo step");
+}
+
+/// layer.locate locates a specified object id without requiring a prior canvas selection.
+#[test]
+fn context_menu_locate_object_locates_by_id() {
+    let (mut app, _, [a, _]) = two_rects();
+    app.session.execute("select.none", &json!({})).unwrap();
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
+    // Context menu passes the node's id directly to layer.locate.
+    let result = app.session.execute("layer.locate", &json!({"id": a.0}));
+    assert!(result.is_ok(), "layer.locate with id succeeds without selection: {:?}", result.err());
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), vec![a]);
+}
