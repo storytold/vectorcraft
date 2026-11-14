@@ -670,6 +670,16 @@ font-technology	Variable	Variabla
 	Create New Swatch…	Skapa ny färgruta…
 	Create New {kind} Style	Skapa ny stil ({kind})
 	Create Object Mosaic…	Skapa objektmosaik…
+	Create Object Mosaic	Skapa objektmosaik
+	Current Size:	Aktuell storlek:
+	New Size:	Ny storlek:
+	Tile Spacing:	Avstånd mellan plattor:
+	Number of Tiles:	Antal plattor:
+	Constrain Ratio:	Begränsa förhållande:
+	Result:	Resultat:
+	Resize Using Percentages	Ändra storlek med procent
+	Delete Raster	Ta bort rasterbild
+	Use Ratio	Använd förhållande
 	Create Outlines	Skapa konturbanor
 	Create Path	Skapa bana
 	Create PDF layers from layers and sublayers	Skapa PDF-lager från lager och underlager

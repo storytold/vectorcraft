@@ -183,6 +183,16 @@
 	Rasterize…	რასტრირება…
 	Create Gradient Mesh…	გრადიენტული ბადის შექმნა…
 	Create Object Mosaic…	ობიექტების მოზაიკის შექმნა…
+	Create Object Mosaic	ობიექტების მოზაიკის შექმნა
+	Current Size:	მიმდინარე ზომა:
+	New Size:	ახალი ზომა:
+	Tile Spacing:	ფილებს შორის ინტერვალი:
+	Number of Tiles:	ფილების რაოდენობა:
+	Constrain Ratio:	პროპორციის შეზღუდვა:
+	Result:	შედეგი:
+	Resize Using Percentages	ზომის შეცვლა პროცენტებით
+	Delete Raster	რასტრული გამოსახულების წაშლა
+	Use Ratio	პროპორციის გამოყენება
 	Vector Halftone…	ვექტორული ნახევარტონი…
 	Create Trim Marks	ჭრის ნიშნების შექმნა
 	Flatten Transparency…	გამჭვირვალობის გაბრტყელება…

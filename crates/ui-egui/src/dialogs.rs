@@ -78,6 +78,7 @@ pub mod new_color_group;
 mod new_document;
 pub mod new_swatch;
 pub mod new_text_style;
+pub mod object_mosaic;
 pub mod objects_on_path_options;
 pub mod office_export;
 pub mod package;
@@ -428,6 +429,7 @@ registry! {
     ScriptClose: [script_run::CLOSE_KIND] => script_run::CLOSE_SPEC,
     ScriptNotice: [script_run::NOTICE_KIND] => script_run::NOTICE_SPEC,
     VectorHalftone: [halftone::KIND] => halftone::SPEC,
+    ObjectMosaic: [object_mosaic::KIND] => object_mosaic::SPEC,
     SimplifySlider: [simplify_slider::KIND] => simplify_slider::SPEC,
     SmoothSlider: [smooth_slider::KIND] => smooth_slider::SPEC,
     PerspectiveGrid: [perspective_grid::KIND] => perspective_grid::SPEC,
@@ -592,6 +594,11 @@ pub fn set_field(d: &mut Dialog, field: String, value: Value) {
     }
     if d.kind == "preferences" {
         crate::prefs_dialog::note_set(d, &field, &value);
+    }
+    // Create Object Mosaic's Resize Using Percentages shows the new size the other way, as its checkbox does.
+    if d.kind == object_mosaic::KIND && field == "percentages" {
+        object_mosaic::set_percentages(d, &value);
+        return;
     }
     let dxf = (d.kind == dxf_options::KIND).then(|| field.clone());
     d.fields.insert(field, value);

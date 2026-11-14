@@ -885,6 +885,9 @@ pub(crate) use buildcmds::TracePresetChanges;
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
 
+/// The tile counts Create Object Mosaic would use (the dialog's Use Ratio button sets them).
+pub use menucmds::mosaic_counts;
+
 /// The gaps View › Show Live Paint Gaps shows on a Live Paint group.
 pub use buildcmds::live_paint_gaps;
 

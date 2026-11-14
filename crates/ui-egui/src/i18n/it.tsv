@@ -683,6 +683,16 @@ font-technology	Variable	Variabili
 	Create New Swatch…	Crea nuovo campione…
 	Create New {kind} Style	Crea nuovo stile {kind}
 	Create Object Mosaic…	Crea mosaico di oggetti…
+	Create Object Mosaic	Crea mosaico di oggetti
+	Current Size:	Dimensione attuale:
+	New Size:	Nuova dimensione:
+	Tile Spacing:	Spaziatura tessere:
+	Number of Tiles:	Numero di tessere:
+	Constrain Ratio:	Vincola proporzioni:
+	Result:	Risultato:
+	Resize Using Percentages	Ridimensiona in percentuale
+	Delete Raster	Elimina immagine raster
+	Use Ratio	Usa proporzioni
 	Create Outlines	Crea contorni
 	Create Path	Crea tracciato
 	Create PDF layers from layers and sublayers	Crea livelli PDF dai livelli e sottolivelli

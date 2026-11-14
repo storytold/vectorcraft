@@ -1117,6 +1117,15 @@ antiAlias	Sharp	शार्प
 	Create New Swatch…	नया स्वॉच बनाएँ…
 	Create Object Mosaic	ऑब्जेक्ट मोज़ेक बनाएँ
 	Create Object Mosaic…	ऑब्जेक्ट मोज़ेक बनाएँ…
+	Current Size:	वर्तमान साइज़:
+	New Size:	नया साइज़:
+	Tile Spacing:	टाइल स्पेसिंग:
+	Number of Tiles:	टाइलों की संख्या:
+	Constrain Ratio:	अनुपात सीमित करें:
+	Result:	परिणाम:
+	Resize Using Percentages	प्रतिशत से साइज़ बदलें
+	Delete Raster	रास्टर इमेज हटाएँ
+	Use Ratio	अनुपात इस्तेमाल करें
 	Create Outlines	आउटलाइन बनाएँ
 	Create Path	पाथ बनाएँ
 	Create PDF layers from layers and sublayers	लेयर्स और सबलेयरों से PDF लेयरें बनाएं

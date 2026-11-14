@@ -1128,8 +1128,8 @@ fn a_hex_code_pasted_into_the_hex_field_replaces_its_digits() {
     }
 }
 
-/// #1000: a count typed in Object › Create Object Mosaic… reaches the command (a whole number typed
-/// in a command's dialog is an integer), so the mosaic has that many columns, not the 10 × 10 grid.
+/// #1000: a count set in Object › Create Object Mosaic… reaches the command, so the mosaic has that
+/// many columns, not the 10 × 10 grid; Enter confirms the dialog.
 #[test]
 fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
     let mut app = app();
@@ -1145,9 +1145,9 @@ fn object_mosaic_makes_the_grid_typed_in_its_dialog() {
     let entry = crate::menus::menu_entries(&app).into_iter().find(|e| e.label == "Create Object Mosaic…").expect("menu item");
     let (cmd, params) = crate::menus::click_target(&entry.label, entry.command.as_deref().unwrap(), &entry.params);
     crate::menus::invoke(&mut app, &cmd, params);
-    // Its first field, Columns, is focused: type 3 over it and press Enter.
     frame(&mut app, vec![]);
-    frame(&mut app, vec![egui::Event::Text("3".into())]);
+    app.ui.dialog.as_mut().expect("the mosaic dialog").fields.insert("columns".into(), json!(3.0));
+    frame(&mut app, vec![]);
     let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
     frame(&mut app, vec![enter]);
     assert!(app.ui.dialog.is_none());

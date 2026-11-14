@@ -881,6 +881,16 @@ font-technology	Variable	Változó
 	Create New Swatch…	Új színminta létrehozása…
 	Create New {kind} Style	Új stílus létrehozása: {kind}
 	Create Object Mosaic…	Objektummozaik létrehozása…
+	Create Object Mosaic	Objektummozaik létrehozása
+	Current Size:	Jelenlegi méret:
+	New Size:	Új méret:
+	Tile Spacing:	Csempék térköze:
+	Number of Tiles:	Csempék száma:
+	Constrain Ratio:	Arány rögzítése:
+	Result:	Eredmény:
+	Resize Using Percentages	Átméretezés százalékban
+	Delete Raster	Raszterkép törlése
+	Use Ratio	Arány használata
 	Create Outlines	Átalakítás útvonallá
 	Create Path	Útvonal létrehozása
 	Create PDF layers from layers and sublayers	PDF-rétegek létrehozása a rétegekből és alrétegekből

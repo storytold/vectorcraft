@@ -4035,6 +4035,114 @@ fn object_mosaic_refuses_a_boolean_given_as_text() {
     assert_eq!((r["tiles"].clone(), images(&s)), (json!(2), 1));
 }
 
+/// The size of the mosaic a call makes from the 100 × 50 pt image selected in `s`, with its column and row counts.
+fn mosaic_size(s: &mut Session, p: serde_json::Value) -> (f64, f64, serde_json::Value, serde_json::Value) {
+    let image = s.doc().unwrap().selection.objects.clone();
+    let r = s.execute("object.createObjectMosaic", &p).unwrap();
+    let b = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().geometric_bounds().unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    ((b.width() * 1e6).round() / 1e6, (b.height() * 1e6).round() / 1e6, r["columns"].clone(), r["rows"].clone())
+}
+
+/// Resize Using Percentages reads the new width and height as percentages of the image's size; Constrain Ratio keeps
+/// the image's proportions, the named side leading; Use Ratio makes the tiles square from the count on the
+/// constrained side (columns by default), and the call answers the counts it used.
+#[test]
+fn object_mosaic_resizes_by_percentages_constrains_the_ratio_and_squares_the_tiles() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 2, "rows": 1})), (100.0, 50.0, json!(2), json!(1)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 50, "height": 200, "percentages": true})), (50.0, 100.0, json!(10), json!(10)));
+    // A side left out is 100% of the image's.
+    assert_eq!(mosaic_size(&mut s, json!({"width": 150, "percentages": true})).0, 150.0);
+    assert_eq!(mosaic_size(&mut s, json!({"width": 200, "height": 10, "constrain": "width"})), (200.0, 100.0, json!(10), json!(10)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 10, "height": 25, "constrain": "height"})), (50.0, 25.0, json!(10), json!(10)));
+    assert_eq!(mosaic_size(&mut s, json!({"width": 50, "constrain": "width", "percentages": true})), (50.0, 25.0, json!(10), json!(10)));
+    // Square tiles: 10 columns of 10 pt over 50 pt are 5 rows; 4 rows of 12.5 pt over 100 pt are 8 columns.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 10, "rows": 3, "useRatio": true})), (100.0, 50.0, json!(10), json!(5)));
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 3, "rows": 4, "useRatio": true, "constrain": "height"})), (100.0, 50.0, json!(8), json!(4)));
+    // A side named for Use Ratio is kept without Constrain Ratio: the size stays as given.
+    assert_eq!(mosaic_size(&mut s, json!({"rows": 4, "height": 100, "useRatio": "height"})), (100.0, 100.0, json!(4), json!(4)));
+    // On a new size: 30 columns over 300 × 50 pt are 5 rows.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 30, "width": 300, "useRatio": true})), (300.0, 50.0, json!(30), json!(5)));
+    // The count is kept within 1..1000.
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 1, "width": 1, "height": 5000, "useRatio": true})).3, json!(1000));
+    assert_eq!(mosaic_size(&mut s, json!({"columns": 1, "width": 5000, "height": 1, "useRatio": true})).3, json!(1));
+    // A size under 0.1 pt grows in proportion while Constrain Ratio keeps it.
+    let (w, h, ..) = mosaic_size(&mut s, json!({"width": 0.1, "constrain": "width"}));
+    assert!((w - 0.2).abs() < 1e-6 && (h - 0.1).abs() < 1e-6, "{w} × {h}");
+}
+
+/// Use Ratio squares the tiles as drawn: with 4 pt between columns, 10 columns of 10 pt cells draw 6 pt wide, so the
+/// rows are 6 pt plus their own 4 pt apart (5 rows down 50 pt); on an image turned 90°, the tiles are measured along
+/// its own axes.
+#[test]
+fn object_mosaic_use_ratio_takes_spacing_and_turned_images_into_account() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("paint.setStroke", &json!({"none": true})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    let image = s.doc().unwrap().selection.objects.clone();
+    let counts = |s: &Session, p: serde_json::Value| crate::cmd::mosaic_counts(s, &p).unwrap();
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true, "spacingX": 4, "spacingY": 4})), (10, 5));
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true, "spacingX": 4})), (10, 8));
+    assert_eq!(counts(&s, json!({"columns": 10, "rows": 7})), (10, 7), "without Use Ratio the counts are kept");
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 10, "useRatio": true, "spacingX": 4})).unwrap();
+    let g = s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().clone();
+    let t = g.children().unwrap()[0].geometric_bounds().unwrap();
+    assert!((t.width() - 6.0).abs() < 1e-6 && (t.height() - 6.25).abs() < 1e-6, "{t:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    // Turned 90°, the image's 100 pt side runs down the page; 10 columns along it are still 5 rows across its 50.
+    s.execute("object.rotate", &json!({"angle": 90})).unwrap();
+    assert_eq!(counts(&s, json!({"columns": 10, "useRatio": true})), (10, 5));
+}
+
+#[test]
+fn object_mosaic_square_count_is_the_nearest_whole_count() {
+    use crate::cmd::menucmds::mosaic_square_count;
+    assert_eq!(mosaic_square_count(10, 100.0, 50.0, 0.0, 0.0), 5);
+    assert_eq!(mosaic_square_count(3, 100.0, 50.0, 0.0, 0.0), 2);
+    assert_eq!(mosaic_square_count(0, 100.0, 50.0, 0.0, 0.0), 1);
+    assert_eq!(mosaic_square_count(10, 0.0, 50.0, 0.0, 0.0), 1);
+    assert_eq!(mosaic_square_count(1000, 1.0, 1000.0, 0.0, 0.0), 1000);
+    // Spacing wider than a cell leaves 10% of it, on either side.
+    assert_eq!(mosaic_square_count(10, 100.0, 50.0, 50.0, 0.0), 50);
+    // 10 columns of 1 pt tiles (9 pt gaps) over 100 pt; rows 100 pt apart are capped too, so 10 rows draw 1 pt.
+    assert_eq!(mosaic_square_count(10, 100.0, 100.0, 9.0, 100.0), 10);
+    // 15 pt tiles over 50 pt: 3 rows draw 16.7 pt and 4 rows 12.5 pt, so 3.
+    assert_eq!(mosaic_square_count(1, 15.0, 50.0, 0.0, 0.0), 3);
+}
+
+/// A Constrain Ratio side that is not "width" or "height", a new size of 0 or less, and Use Ratio or Resize Using
+/// Percentages given as text are errors naming the key; no mosaic is made.
+#[test]
+fn object_mosaic_refuses_a_bad_ratio_side_size_or_switch() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = undo(&s);
+    for (p, msg) in [
+        (json!({"constrain": "both"}), "`constrain` must be one of \"width\", \"height\" or null"),
+        (json!({"constrain": 1}), "`constrain` must be one of \"width\", \"height\" or null"),
+        (json!({"width": 0}), "`width` must be between 0.1 and 1000000 (got 0)"),
+        (json!({"height": -5, "percentages": true}), "`height` must be between 0.1 and 1000000 (got -5)"),
+        (json!({"width": 2e6, "percentages": true}), "`width` must be between 0.1 and 1000000 (got 2000000)"),
+        (json!({"useRatio": "true"}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
+        (json!({"useRatio": 1}), "`useRatio` must be one of \"width\", \"height\", true, false or null"),
+        (json!({"percentages": 1}), "`percentages` must be true or false"),
+    ] {
+        let r = s.execute("object.createObjectMosaic", &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg: m, .. }) if m == msg), "{p}: {r:?}");
+        assert_eq!(undo(&s), before, "{p}");
+    }
+    let r = s.execute("object.createObjectMosaic", &json!({"constrain": null, "useRatio": null, "percentages": null})).unwrap();
+    assert_eq!(r["tiles"], json!(100));
+}
+
 #[test]
 fn snap_to_pixel_rounds_drawing_and_moves() {
     let mut s = session();

@@ -642,6 +642,16 @@ font-technology	Variable	Μεταβλητές
 	Create New Swatch…	Δημιουργία νέου δείγματος χρώματος…
 	Create New {kind} Style	Δημιουργία νέου στυλ {kind}
 	Create Object Mosaic…	Δημιουργία μωσαϊκού αντικειμένων…
+	Create Object Mosaic	Δημιουργία μωσαϊκού αντικειμένων
+	Current Size:	Τρέχον μέγεθος:
+	New Size:	Νέο μέγεθος:
+	Tile Spacing:	Απόσταση πλακιδίων:
+	Number of Tiles:	Αριθμός πλακιδίων:
+	Constrain Ratio:	Περιορισμός αναλογίας:
+	Result:	Αποτέλεσμα:
+	Resize Using Percentages	Αλλαγή μεγέθους με ποσοστά
+	Delete Raster	Διαγραφή εικόνας εικονοστοιχείων
+	Use Ratio	Χρήση αναλογίας
 	Create Outlines	Δημιουργία περιγραμμάτων
 	Create Path	Δημιουργία διαδρομής
 	Create PDF layers from layers and sublayers	Δημιουργία επιπέδων PDF από επίπεδα και υποεπίπεδα

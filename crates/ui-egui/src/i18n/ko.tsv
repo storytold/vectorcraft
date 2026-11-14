@@ -254,6 +254,16 @@ digits	Malayalam	말라얄람어
 	Rasterize…	래스터화…
 	Create Gradient Mesh…	그레이디언트 메시 만들기…
 	Create Object Mosaic…	개체 모자이크 만들기…
+	Create Object Mosaic	개체 모자이크 만들기
+	Current Size:	현재 크기:
+	New Size:	새 크기:
+	Tile Spacing:	타일 간격:
+	Number of Tiles:	타일 수:
+	Constrain Ratio:	비율 제한:
+	Result:	결과:
+	Resize Using Percentages	백분율로 크기 조정
+	Delete Raster	래스터 이미지 삭제
+	Use Ratio	비율 사용
 	Vector Halftone…	벡터 하프톤…
 	Create Trim Marks	트림 마크 만들기
 	Flatten Transparency…	투명도 병합…

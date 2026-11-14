@@ -661,6 +661,16 @@ font-technology	Variable	Variabel
 	Create New Swatch…	Neues Farbfeld erstellen…
 	Create New {kind} Style	Neues {kind}format erstellen
 	Create Object Mosaic…	Objektmosaik erstellen…
+	Create Object Mosaic	Objektmosaik erstellen
+	Current Size:	Aktuelle Größe:
+	New Size:	Neue Größe:
+	Tile Spacing:	Kachelabstand:
+	Number of Tiles:	Anzahl der Kacheln:
+	Constrain Ratio:	Proportionen beschränken:
+	Result:	Ergebnis:
+	Resize Using Percentages	Größe in Prozent ändern
+	Delete Raster	Pixelbild löschen
+	Use Ratio	Verhältnis verwenden
 	Create Outlines	In Pfade umwandeln
 	Create Path	Pfad erstellen
 	Create PDF layers from layers and sublayers	PDF-Ebenen aus Ebenen und Unterebenen erstellen

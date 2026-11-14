@@ -628,6 +628,16 @@ antiAlias	Sharp	锐利
 	Create New Swatch…	新建色板…
 	Create New {kind} Style	创建新的{kind}样式
 	Create Object Mosaic…	创建对象马赛克…
+	Create Object Mosaic	创建对象马赛克
+	Current Size:	当前尺寸：
+	New Size:	新尺寸：
+	Tile Spacing:	拼贴间距：
+	Number of Tiles:	拼贴数量：
+	Constrain Ratio:	约束比例：
+	Result:	结果：
+	Resize Using Percentages	使用百分比调整大小
+	Delete Raster	删除栅格图像
+	Use Ratio	使用比例
 	Create Outlines	创建轮廓
 	Create Path	创建路径
 	Create PDF layers from layers and sublayers	从图层和子图层创建 PDF 图层

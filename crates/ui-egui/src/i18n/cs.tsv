@@ -225,6 +225,16 @@
 	Rasterize…	Rastrovat…
 	Create Gradient Mesh…	Vytvořit přechodovou síť…
 	Create Object Mosaic…	Vytvořit mozaiku objektů…
+	Create Object Mosaic	Vytvořit mozaiku objektů
+	Current Size:	Aktuální velikost:
+	New Size:	Nová velikost:
+	Tile Spacing:	Rozestupy dlaždic:
+	Number of Tiles:	Počet dlaždic:
+	Constrain Ratio:	Zachovat poměr:
+	Result:	Výsledek:
+	Resize Using Percentages	Změnit velikost v procentech
+	Delete Raster	Odstranit rastrový obraz
+	Use Ratio	Použít poměr
 	Vector Halftone…	Vektorový polotón…
 	Create Trim Marks	Vytvořit značky ořezu
 	Flatten Transparency…	Sloučit průhlednost…

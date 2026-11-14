@@ -702,6 +702,10 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             app.select_tool(vectorcraft_tools::cropimage::ID);
             Ok(json!({"tool": app.session.tool_id()}))
         }
+        // Create Object Mosaic… has a dialog of its own, opened on the selected image.
+        "ui.paramDialog" if s("command").as_deref() == Some(crate::dialogs::object_mosaic::COMMAND) => {
+            crate::dialogs::object_mosaic::open(app, p.get("params").unwrap_or(&Value::Null))
+        }
         "ui.paramDialog" => {
             let cmd = s("command").unwrap_or_default();
             let mut fields = p.get("params").and_then(Value::as_object).cloned().unwrap_or_default();

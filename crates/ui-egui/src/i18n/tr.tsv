@@ -662,6 +662,16 @@ font-technology	Variable	Değişken
 	Create New Swatch…	Yeni Renk Örneği Oluştur…
 	Create New {kind} Style	Yeni {kind} Stili Oluşturun
 	Create Object Mosaic…	Nesne Mozaiği Oluştur…
+	Create Object Mosaic	Nesne Mozaiği Oluştur
+	Current Size:	Geçerli Boyut:
+	New Size:	Yeni Boyut:
+	Tile Spacing:	Döşeme Aralığı:
+	Number of Tiles:	Döşeme Sayısı:
+	Constrain Ratio:	Oranı Sınırla:
+	Result:	Sonuç:
+	Resize Using Percentages	Yüzdelerle Yeniden Boyutlandır
+	Delete Raster	Raster Görüntüyü Sil
+	Use Ratio	Oranı Kullan
 	Create Outlines	Anahatlar Oluştur
 	Create Path	Yol Oluştur
 	Create PDF layers from layers and sublayers	Katmanlardan ve alt katmanlardan PDF katmanları oluşturun

@@ -261,6 +261,16 @@ digits	Malayalam	マラヤーラム数字
 	Rasterize…	ラスタライズ…
 	Create Gradient Mesh…	グラデーションメッシュを作成…
 	Create Object Mosaic…	モザイクオブジェクトを作成…
+	Create Object Mosaic	モザイクオブジェクトを作成
+	Current Size:	現在のサイズ:
+	New Size:	新しいサイズ:
+	Tile Spacing:	タイルの間隔:
+	Number of Tiles:	タイル数:
+	Constrain Ratio:	比率を固定:
+	Result:	結果:
+	Resize Using Percentages	パーセントでサイズを変更
+	Delete Raster	ラスター画像を削除
+	Use Ratio	比率を使用
 	Vector Halftone…	ベクターハーフトーン…
 	Create Trim Marks	トリムマークを作成
 	Flatten Transparency…	透明部分を分割・統合…

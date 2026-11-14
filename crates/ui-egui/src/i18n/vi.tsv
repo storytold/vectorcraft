@@ -782,6 +782,16 @@ font-technology	Variable	Biến thiên
 	Create New Swatch…	Tạo mẫu màu mới…
 	Create New {kind} Style	Tạo kiểu {kind} mới
 	Create Object Mosaic…	Tạo khảm đối tượng…
+	Create Object Mosaic	Tạo khảm đối tượng
+	Current Size:	Kích thước hiện tại:
+	New Size:	Kích thước mới:
+	Tile Spacing:	Khoảng cách ô:
+	Number of Tiles:	Số ô:
+	Constrain Ratio:	Ràng buộc tỷ lệ:
+	Result:	Kết quả:
+	Resize Using Percentages	Đổi kích thước theo phần trăm
+	Delete Raster	Xóa ảnh raster
+	Use Ratio	Dùng tỷ lệ
 	Create Outlines	Tạo đường bao
 	Create Path	Tạo đường dẫn
 	Create PDF layers from layers and sublayers	Tạo lớp PDF từ các lớp và lớp con

@@ -646,6 +646,16 @@ font-technology	Variable	可變
 	Create New Swatch…	建立新色票…
 	Create New {kind} Style	建立新的{kind}樣式
 	Create Object Mosaic…	建立物件馬賽克…
+	Create Object Mosaic	建立物件馬賽克
+	Current Size:	目前大小：
+	New Size:	新大小：
+	Tile Spacing:	拼貼間距：
+	Number of Tiles:	拼貼數量：
+	Constrain Ratio:	限制比例：
+	Result:	結果：
+	Resize Using Percentages	使用百分比調整大小
+	Delete Raster	刪除點陣圖
+	Use Ratio	使用比例
 	Create Outlines	建立外框
 	Create Path	建立路徑
 	Create PDF layers from layers and sublayers	從圖層和子圖層建立 PDF 圖層

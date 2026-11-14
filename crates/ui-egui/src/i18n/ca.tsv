@@ -979,6 +979,16 @@ antiAlias	Sharp	Nítid
 	Create New Swatch…	Crea una mostra nova…
 	Create New {kind} Style	Crea un estil de {kind} nou
 	Create Object Mosaic…	Crea un mosaic d’objectes…
+	Create Object Mosaic	Crea un mosaic d’objectes
+	Current Size:	Mida actual:
+	New Size:	Mida nova:
+	Tile Spacing:	Espaiat de les tessel·les:
+	Number of Tiles:	Nombre de tessel·les:
+	Constrain Ratio:	Restringeix la proporció:
+	Result:	Resultat:
+	Resize Using Percentages	Canvia la mida amb percentatges
+	Delete Raster	Suprimeix la imatge ràster
+	Use Ratio	Usa la proporció
 	Create Outlines	Crea contorns
 	Create Path	Crea un traçat
 	Create PDF layers from layers and sublayers	Crea capes de PDF a partir de capes i subcapes

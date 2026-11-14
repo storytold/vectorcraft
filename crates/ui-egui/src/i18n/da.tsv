@@ -212,6 +212,16 @@
 	Rasterize…	Rasterisér…
 	Create Gradient Mesh…	Opret gradientnet…
 	Create Object Mosaic…	Opret objektmosaik…
+	Create Object Mosaic	Opret objektmosaik
+	Current Size:	Aktuel størrelse:
+	New Size:	Ny størrelse:
+	Tile Spacing:	Mellemrum mellem fliser:
+	Number of Tiles:	Antal fliser:
+	Constrain Ratio:	Begræns forhold:
+	Result:	Resultat:
+	Resize Using Percentages	Tilpas størrelse med procenter
+	Delete Raster	Slet rasterbillede
+	Use Ratio	Brug forhold
 	Vector Halftone…	Vektorhalvtone…
 	Create Trim Marks	Opret beskæringsmærker
 	Flatten Transparency…	Udjævn gennemsigtighed…

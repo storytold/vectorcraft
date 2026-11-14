@@ -232,6 +232,16 @@
 	Rasterize…	Rasteroi…
 	Create Gradient Mesh…	Luo liukuväriverkko…
 	Create Object Mosaic…	Luo objektimosaiikki…
+	Create Object Mosaic	Luo objektimosaiikki
+	Current Size:	Nykyinen koko:
+	New Size:	Uusi koko:
+	Tile Spacing:	Laattojen välistys:
+	Number of Tiles:	Laattojen määrä:
+	Constrain Ratio:	Rajoita suhdetta:
+	Result:	Tulos:
+	Resize Using Percentages	Muuta kokoa prosentteina
+	Delete Raster	Poista rasterikuva
+	Use Ratio	Käytä suhdetta
 	Vector Halftone…	Vektorirasterointi…
 	Create Trim Marks	Luo leikkuumerkit
 	Flatten Transparency…	Litistä läpinäkyvyys…

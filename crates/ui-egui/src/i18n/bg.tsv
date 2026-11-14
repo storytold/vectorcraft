@@ -668,6 +668,16 @@ font-technology	Variable	Променливи
 	Create New Swatch…	Създаване на нов образец…
 	Create New {kind} Style	Създаване на нов стил за {kind}
 	Create Object Mosaic…	Създаване на обектова мозайка…
+	Create Object Mosaic	Създаване на обектова мозайка
+	Current Size:	Текущ размер:
+	New Size:	Нов размер:
+	Tile Spacing:	Разстояние между плочките:
+	Number of Tiles:	Брой плочки:
+	Constrain Ratio:	Ограничаване на съотношението:
+	Result:	Резултат:
+	Resize Using Percentages	Преоразмеряване с проценти
+	Delete Raster	Изтриване на растерното изображение
+	Use Ratio	Използване на съотношението
 	Create Outlines	Създаване на контур
 	Create Path	Създаване на път
 	Create PDF layers from layers and sublayers	Създаване на PDF слоеве от слоеве и подслоеве

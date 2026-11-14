@@ -681,6 +681,16 @@ font-technology	Variable	Вариативные
 	Create New Swatch…	Создать новый образец…
 	Create New {kind} Style	Создать новый стиль {kind}
 	Create Object Mosaic…	Создать мозаику объектов…
+	Create Object Mosaic	Создать мозаику объектов
+	Current Size:	Текущий размер:
+	New Size:	Новый размер:
+	Tile Spacing:	Интервал между плитками:
+	Number of Tiles:	Количество плиток:
+	Constrain Ratio:	Сохранять пропорции:
+	Result:	Результат:
+	Resize Using Percentages	Изменить размер в процентах
+	Delete Raster	Удалить растровое изображение
+	Use Ratio	Использовать пропорции
 	Create Outlines	Создать контуры
 	Create Path	Создать контур
 	Create PDF layers from layers and sublayers	Создавать слои PDF из слоёв и подслоёв

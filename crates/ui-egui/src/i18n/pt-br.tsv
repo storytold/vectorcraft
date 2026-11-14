@@ -608,6 +608,16 @@ antiAlias	Sharp	Nítido
 	Create New Swatch…	Criar Nova Amostra…
 	Create New {kind} Style	Criar Novo Estilo de {kind}
 	Create Object Mosaic…	Criar Mosaico de Objetos…
+	Create Object Mosaic	Criar Mosaico de Objetos
+	Current Size:	Tamanho atual:
+	New Size:	Novo tamanho:
+	Tile Spacing:	Espaçamento dos ladrilhos:
+	Number of Tiles:	Número de ladrilhos:
+	Constrain Ratio:	Restringir proporção:
+	Result:	Resultado:
+	Resize Using Percentages	Redimensionar usando porcentagens
+	Delete Raster	Excluir imagem rasterizada
+	Use Ratio	Usar proporção
 	Create Outlines	Criar Contornos
 	Create PDF layers from layers and sublayers	Criar camadas de PDF a partir das camadas e subcamadas
 	Create PDF-Compatible File	Criar Arquivo Compatível com PDF
