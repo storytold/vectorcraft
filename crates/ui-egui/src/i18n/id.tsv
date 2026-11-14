@@ -194,6 +194,8 @@
 	Crop Image	Pangkas gambar
 	Image Tools	Alat Gambar
 	Remove Background…	Hapus latar belakang…
+	Draw (Pencil)	Menggambar (pensil)
+	Place Image	Tempatkan gambar
 	Remove Background	Hapus latar belakang
 	Background	Latar belakang
 	Edge Color	Warna tepi
@@ -1507,6 +1509,7 @@ lighting	Light	Cahaya
 	Proportional Metrics	Metrik proporsional
 	Insert Aki Left	Sisipkan aki kiri
 	Insert Aki Right	Sisipkan aki kanan
+	Tsume	Tsume
 	Character Direction	Arah karakter
 	Digits	Digit
 	Arabic	Arab
