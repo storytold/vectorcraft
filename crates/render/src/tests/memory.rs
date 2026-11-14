@@ -320,13 +320,13 @@ fn kept_glyphs(r: &mut Renderer, d: &Document) -> Vec<Option<Arc<TextGeom>>> {
         .collect()
 }
 
-/// `f`'s result from a run during which the fonts did not change: other tests add fonts, and the
-/// renderer lays all type out again when the fonts change.
+/// `f`'s result from a run during which the fonts and the hyphenation exceptions did not change:
+/// other tests change them, and the renderer lays all type out again when they change.
 fn fonts_unchanged<T>(mut f: impl FnMut() -> T) -> T {
     loop {
-        let fonts = vectorcraft_text::FontDb::global().generation();
+        let inputs = vectorcraft_text::layout_inputs();
         let t = f();
-        if vectorcraft_text::FontDb::global().generation() == fonts {
+        if vectorcraft_text::layout_inputs() == inputs {
             return t;
         }
     }
