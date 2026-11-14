@@ -2710,6 +2710,7 @@ mark-style	Japanese	Giapponese
 	Proportional Metrics	Metrica proporzionale
 	Insert Aki Left	Inserisci aki a sinistra
 	Insert Aki Right	Inserisci aki a destra
+	Tsume	Tsume
 	Character Direction	Direzione caratteri
 	Digits	Cifre
 	Arabic	Arabe
@@ -6021,8 +6022,8 @@ axis	Y Axis	Asse Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un plug-in di esportazione dichiara da 1 a {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	al massimo {MAX_UNGROUPED} parametri fuori dai gruppi: assegna agli altri un `group`
 @msg	can't encode the input	impossibile codificare l’input
-@msg	expected {"dataBase64"}	previsto {"dataBase64"}
-@msg	expected {"objects"}	previsto {"objects"}
+@msg	expected {{"dataBase64": "…"}}	previsto {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	previsto {{"objects": [...]}}
 @msg	export `{name}`: {e}	esportazione del modulo `{name}`: {e}
 @msg	extension {e} is listed twice	l’estensione {e} è elencata due volte
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	estensione {e}: usa 1-16 lettere minuscole e cifre, senza il punto
@@ -6086,11 +6087,11 @@ axis	Y Axis	Asse Y
 @msg	a painted live effect returns only `objects`	un effetto dinamico di pittura restituisce solo `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	un pezzo di un effetto dinamico di pittura ha solo `path`, `fillRule`, `fills` e `strokes`
 @msg	a read-only object was left out	è stato omesso un oggetto di sola lettura
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	è stato omesso un oggetto di sola lettura: restituiscilo come {"id"} da solo o così come è stato fornito
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	è stato omesso un oggetto di sola lettura: restituiscilo come {{"id": …}} da solo o così come è stato fornito
 @msg	a string	una stringa
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	una traccia ha solo `paint`, `width`, `join`, `cap` e `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	una traccia deve essere {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	un effetto deve essere {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	una traccia deve essere {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	un effetto deve essere {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un effetto su un riempimento restituisce solo `fills`
 @msg	an effect on a stroke returns only `strokes`	un effetto su una traccia restituisce solo `strokes`
 @msg	an object must be a JSON object	un oggetto deve essere un oggetto JSON

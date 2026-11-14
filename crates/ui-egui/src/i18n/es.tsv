@@ -2668,6 +2668,7 @@ font-technology	Variable	Variables
 	Proportional Metrics	Métrica proporcional
 	Insert Aki Left	Insertar aki a la izquierda
 	Insert Aki Right	Insertar aki a la derecha
+	Tsume	Tsume
 	Character Direction	Dirección de caracteres
 	Digits	Dígitos
 	Arabic	Árabes
@@ -6338,8 +6339,8 @@ axis	Y Axis	Eje Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un plugin de exportación declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	como máximo {MAX_UNGROUPED} parámetros fuera de grupos: asigna un `group` a los demás
 @msg	can't encode the input	no se puede codificar la entrada
-@msg	expected {"dataBase64"}	se esperaba {"dataBase64"}
-@msg	expected {"objects"}	se esperaba {"objects"}
+@msg	expected {{"dataBase64": "…"}}	se esperaba {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	se esperaba {{"objects": [...]}}
 @msg	export `{name}`: {e}	exportación del módulo `{name}`: {e}
 @msg	extension {e} is listed twice	la extensión {e} aparece dos veces
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensión {e}: usa 1-16 letras minúsculas y dígitos, sin el punto
@@ -6403,11 +6404,11 @@ axis	Y Axis	Eje Y
 @msg	a painted live effect returns only `objects`	un efecto dinámico de pintura solo devuelve `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una pieza de un efecto dinámico de pintura solo tiene `path`, `fillRule`, `fills` y `strokes`
 @msg	a read-only object was left out	se omitió un objeto de solo lectura
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {"id"} solo o tal como se recibió
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {{"id": …}} solo o tal como se recibió
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un trazo solo tiene `paint`, `width`, `join`, `cap` y `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un trazo debe ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	un efecto debe ser {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un trazo debe ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	un efecto debe ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecto en un relleno solo devuelve `fills`
 @msg	an effect on a stroke returns only `strokes`	un efecto en un trazo solo devuelve `strokes`
 @msg	an object must be a JSON object	un objeto debe ser un objeto JSON
