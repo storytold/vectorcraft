@@ -2715,6 +2715,36 @@ fn live_paint_bucket_double_click_floods_across_hidden_edges_and_past_gaps() {
     assert_eq!(fill(&mut s, g, [125.0, 50.0]), 1, "the gap parts the two faces along the bottom");
 }
 
+/// The flood crosses an edge into each face along it when a face's outline runs along the edge in
+/// one segment and the edge is split where another line meets it.
+#[test]
+fn live_paint_bucket_double_click_floods_along_edges_split_at_a_junction() {
+    // A square with a line across its middle, and a line from the top at x = 30 that crosses it and
+    // stops 20 pt below. The bottom face's outline runs along the middle line in one segment, from
+    // x = 0 to 100; the middle line's edges are split at x = 30.
+    let mut s = session();
+    let mut ids = vec![rect(&mut s, 0.0, 0.0, 100.0, 100.0).0];
+    for anchors in [json!([{"x": 0, "y": 50}, {"x": 100, "y": 50}]), json!([{"x": 30, "y": 0}, {"x": 30, "y": 70}])] {
+        ids.push(s.execute("path.create", &json!({ "anchors": anchors })).unwrap()["id"].as_u64().unwrap());
+    }
+    s.execute("select.set", &json!({"ids": ids})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let [left, right, bottom] = faces_at(&s, g, &[(15.0, 25.0), (65.0, 25.0), (65.0, 75.0)])[..] else { panic!("three faces") };
+    assert!(left != right && right != bottom && left != bottom);
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 101.0, 101.0));
+    paint_parts(&mut s, &all, &Paint::None, &[]);
+    let down = edges_in(&s, g, Rect::new(30.0, 0.0, 30.0, 70.0));
+    assert!(!down.is_empty() && down.len() < all.len());
+    paint_parts(&mut s, &down, &Paint::solid(Color::rgb(0.0, 0.0, 0.0)), &[]);
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let r = s.execute("livePaint.fill", &json!({"group": g.0, "point": [65, 75], "color": "#00ff00", "scope": "connected"})).unwrap();
+    assert_eq!(r["count"], 3, "from the bottom face to both faces above the line");
+    assert_eq!([left, right, bottom].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), green.clone()]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let r = s.execute("livePaint.fill", &json!({"group": g.0, "point": [15, 25], "color": "#00ff00", "scope": "connected"})).unwrap();
+    assert_eq!(r["count"], 3, "from the upper left face down to the bottom face and up again");
+}
+
 /// A triple-click on a face fills every face of the group with that face's fill, joined to it or
 /// not. Through the tool, the fill compared is the face's fill before the first click.
 #[test]

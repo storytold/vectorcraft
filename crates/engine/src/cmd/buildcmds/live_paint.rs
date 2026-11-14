@@ -330,12 +330,13 @@ fn lp_segments(pd: &PathData) -> Vec<kurbo::CubicBez> {
 /// The faces of Live Paint group `group` that a flood from face `start` reaches: `start`, and each
 /// face that shares with a face already reached an edge that is hidden or draws no stroke
 /// ([`unstroked`]). Hidden faces are not reached and do not pass the flood on. A face runs along an
-/// edge where a segment of its outline has its middle within [`LP_JOIN_TOL`] of one of the edge's
-/// segments, over the part of that segment between its outline segment's ends; two faces share the
-/// edge where those parts overlap along more than [`LP_JOIN_TOL`], so two faces that a Gap
-/// Detection gap parts on the same side of an edge, whose parts only touch, do not.
+/// edge segment over the part of it between the points nearest the ends of one of the face's
+/// outline segments, when that part lies within [`LP_JOIN_TOL`] of the outline segment; one outline
+/// segment can run along several edge segments. Two faces share the edge where those parts overlap
+/// along more than [`LP_JOIN_TOL`], so two faces that a Gap Detection gap parts on the same side of
+/// an edge, whose parts only touch, do not.
 fn flood_faces(group: &Node, start: NodeId) -> Vec<NodeId> {
-    use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
+    use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveExtrema, ParamCurveNearest};
     // Each edge segment, and whether a flood crosses it.
     let edges: Vec<(kurbo::CubicBez, bool)> = b::edges(group)
         .into_iter()
@@ -351,16 +352,13 @@ fn flood_faces(group: &Node, start: NodeId) -> Vec<NodeId> {
     }
     // The faces along each edge segment a flood crosses, each with the part of the segment it runs
     // along (from and to, in the segment's own parameter). A face outline segment is usually an
-    // edge segment, with the same middle; one that is not (a piece of an edge segment where a Gap
-    // Detection line meets it, or the line itself) is measured against the edge segments near it.
+    // edge segment, with the same ends; one that is not (a piece of an edge segment where a Gap
+    // Detection line meets it, the line itself, or a run along several edge segments where the
+    // face has no corner at the points that split them) is measured against the edge segments
+    // near it.
     let mut along: std::collections::HashMap<usize, Vec<(NodeId, f64, f64)>> = std::collections::HashMap::new();
-    let mut add = |k: usize, id: NodeId, piece: &kurbo::CubicBez| {
-        if let Some((s, true)) = edges.get(k) {
-            let (a, c) = (s.nearest(piece.p0, 1e-9).t, s.nearest(piece.p3, 1e-9).t);
-            along.entry(k).or_default().push((id, a.min(c), a.max(c)));
-        }
-    };
     let mut pieces: Vec<(kurbo::CubicBez, NodeId)> = vec![];
+    let near = |p: Point, q: Point| (p - q).hypot() <= LP_JOIN_TOL;
     for f in b::faces(group).into_iter().filter(|f| f.visible) {
         for piece in f.path_data().map(lp_segments).unwrap_or_default() {
             let m = piece.eval(0.5);
@@ -368,9 +366,18 @@ fn flood_faces(group: &Node, start: NodeId) -> Vec<NodeId> {
             let same = (-1..=1)
                 .flat_map(|dx| (-1..=1).map(move |dy| (x.saturating_add(dx), y.saturating_add(dy))))
                 .flat_map(|c| mids.get(&c).map(Vec::as_slice).unwrap_or_default())
-                .find(|(q, _)| (*q - m).hypot() <= LP_JOIN_TOL);
+                .find(|&&(q, k)| {
+                    near(q, m)
+                        && edges
+                            .get(k)
+                            .is_some_and(|(s, _)| (near(s.p0, piece.p0) && near(s.p3, piece.p3)) || (near(s.p0, piece.p3) && near(s.p3, piece.p0)))
+                });
             match same {
-                Some(&(_, k)) => add(k, f.id, &piece),
+                Some(&(_, k)) => {
+                    if edges.get(k).is_some_and(|e| e.1) {
+                        along.entry(k).or_default().push((f.id, 0.0, 1.0));
+                    }
+                }
                 None => pieces.push((piece, f.id)),
             }
         }
@@ -378,10 +385,15 @@ fn flood_faces(group: &Node, start: NodeId) -> Vec<NodeId> {
     if !pieces.is_empty() {
         let grid = LpEdgeGrid::new(&edges);
         for (piece, id) in pieces {
-            let m = piece.eval(0.5);
-            for k in grid.near(m) {
-                if edges.get(k).is_some_and(|(s, cross)| *cross && s.nearest(m, 1e-9).distance_sq.sqrt() <= LP_JOIN_TOL) {
-                    add(k, id, &piece);
+            for k in grid.near_rect(piece.bounding_box()) {
+                let Some((s, true)) = edges.get(k) else { continue };
+                let (a, c) = (s.nearest(piece.p0, 1e-9).t, s.nearest(piece.p3, 1e-9).t);
+                let (from, to) = (a.min(c), a.max(c));
+                // The part of the edge segment between the piece's ends runs along the piece.
+                let on_piece =
+                    [0.25, 0.5, 0.75].iter().all(|u| piece.nearest(s.eval(from + (to - from) * u), 1e-9).distance_sq.sqrt() <= LP_JOIN_TOL);
+                if from < to && on_piece {
+                    along.entry(k).or_default().push((id, from, to));
                 }
             }
         }
@@ -464,9 +476,27 @@ impl LpEdgeGrid {
         (at(p.x, self.origin.x), at(p.y, self.origin.y))
     }
 
-    /// The segments whose widened bounds may hold `p`.
-    fn near(&self, p: Point) -> impl Iterator<Item = usize> + '_ {
-        self.wide.iter().chain(self.cells.get(&self.cell_of(p)).into_iter().flatten()).copied()
+    /// The segments whose widened bounds may meet `r`, each once.
+    fn near_rect(&self, r: Rect) -> Vec<usize> {
+        let ((x0, y0), (x1, y1)) = (self.cell_of(Point::new(r.x0, r.y0)), self.cell_of(Point::new(r.x1, r.y1)));
+        let mut out = self.wide.clone();
+        if (x1 - x0 + 1).saturating_mul(y1 - y0 + 1) > self.cells.len() as i64 {
+            // More cells than the grid fills: walk the filled ones.
+            for (&(x, y), ks) in &self.cells {
+                if (x0..=x1).contains(&x) && (y0..=y1).contains(&y) {
+                    out.extend_from_slice(ks);
+                }
+            }
+        } else {
+            for x in x0..=x1 {
+                for y in y0..=y1 {
+                    out.extend(self.cells.get(&(x, y)).into_iter().flatten());
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
     }
 }
 

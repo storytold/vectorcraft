@@ -1159,6 +1159,44 @@ fn bucket_double_and_triple_click_widen_what_a_click_paints() {
     assert!(t.pointer(&cx, &ev(PointerKind::DoubleClick, 400.0, 400.0)).is_empty());
 }
 
+/// A triple-click whose first click makes the Live Paint group matches the fill of the face the
+/// group makes there: an open path in front, whose outline bounds no face, does not give it.
+#[test]
+fn bucket_triple_click_on_a_made_group_skips_open_paths() {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_geom::{PathData, SubPath};
+    let (red, blue) = (Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let back = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(red.clone());
+    d.insert(Some(l), 0, Node::path(back, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), look)).unwrap();
+    // An open U around (75, 25), filled blue.
+    let u = [Point::new(60.0, 5.0), Point::new(60.0, 45.0), Point::new(90.0, 45.0), Point::new(90.0, 5.0)];
+    let front = d.alloc_id();
+    let mut look = Appearance::default_art();
+    look.set_fill(blue);
+    d.insert(Some(l), 1, Node::path(front, PathData::single(SubPath::polyline(&u, false)), look)).unwrap();
+    let mut s = Selection::default();
+    s.set([back, front]);
+    let p = paint();
+    let (made, ..) = live_group_doc();
+    let none = Selection::default();
+    let (cx, later) = (cx(&d, &s, &p), cx(&made, &none, &p));
+    let mut t = LivePaintBucketTool::default();
+    t.pointer(&cx, &ev(PointerKind::Down, 75.0, 25.0));
+    t.pointer(&cx, &ev(PointerKind::Up, 75.0, 25.0));
+    for _ in 0..2 {
+        t.pointer(&later, &ev(PointerKind::Down, 75.0, 25.0));
+        t.pointer(&later, &ev(PointerKind::Up, 75.0, 25.0));
+    }
+    let acts = t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let [Action::Exec(id, v)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(id, "livePaint.fill");
+    assert_eq!(v["match"], serde_json::to_value(&red).unwrap());
+}
+
 #[test]
 fn bucket_options_choose_what_a_click_paints() {
     let (d, gid, ..) = live_group_doc();

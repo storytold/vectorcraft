@@ -207,17 +207,19 @@ struct LpPress {
 }
 
 /// The fill of the face under `p` in the Live Paint group that `roots` make: the fill of the
-/// front-most of their paths whose outline holds `p`, else none.
+/// front-most of their paths whose closed subpaths hold `p`, else none. Open subpaths bound no face.
 fn made_face_fill(doc: &Document, roots: &[NodeId], p: Point) -> Paint {
     let mut leaves = vec![];
     for n in roots.iter().filter_map(|id| doc.node(*id)) {
         leaf_shapes(n, &mut leaves);
     }
-    leaves
-        .iter()
-        .rev()
-        .find(|l| node_outline(l).is_some_and(|(path, rule)| !path.is_empty() && path_contains(&path, rule, p)))
-        .map_or(Paint::None, |l| l.appearance.fill_paint())
+    let holds = |l: &Node| {
+        node_outline(l).is_some_and(|(path, rule)| {
+            let closed = vectorcraft_geom::PathData::new(path.subpaths.into_iter().filter(|sp| sp.closed && sp.anchors.len() >= 2).collect());
+            !closed.is_empty() && path_contains(&closed, rule, p)
+        })
+    };
+    leaves.iter().rev().find(|l| holds(l)).map_or(Paint::None, |l| l.appearance.fill_paint())
 }
 
 /// How many presses the Live Paint Bucket keeps: the three of a triple-click.
