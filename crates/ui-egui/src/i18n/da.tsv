@@ -394,8 +394,8 @@
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	en eksportør angiver 1 til {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	højst {MAX_UNGROUPED} parametre uden for grupper: giv de andre en `group`
 @msg	can't encode the input	kan ikke kode inputtet
-@msg	expected {"dataBase64"}	forventet: {"dataBase64"}
-@msg	expected {"objects"}	forventet: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	forventet: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	forventet: {{"objects": [...]}}
 @msg	export `{name}`: {e}	eksport `{name}`: {e}
 @msg	extension {e} is listed twice	filtypenavnet {e} er angivet to gange
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	filtypenavn {e}: brug 1-16 små bogstaver og cifre uden punktum
@@ -459,11 +459,11 @@
 @msg	a painted live effect returns only `objects`	en malet live-effekt returnerer kun `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	et stykke fra en malet live-effekt har kun `path`, `fillRule`, `fills` og `strokes`
 @msg	a read-only object was left out	et skrivebeskyttet objekt blev udeladt
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	et skrivebeskyttet objekt blev udeladt: returnér det, som {"id"} alene eller som det blev givet
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	et skrivebeskyttet objekt blev udeladt: returnér det, som {{"id": …}} alene eller som det blev givet
 @msg	a string	en streng
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en streg har kun `paint`, `width`, `join`, `cap` og `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	en streg skal være {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	en effekt skal være {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	en streg skal være {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	en effekt skal være {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	en effekt på en udfyldning returnerer kun `fills`
 @msg	an effect on a stroke returns only `strokes`	en effekt på en streg returnerer kun `strokes`
 @msg	an object must be a JSON object	et objekt skal være et JSON-objekt
