@@ -9874,7 +9874,7 @@ fn an_envelope_is_written_in_the_order_the_reader_reads_it() {
 /// Envelopes the reader would open in another shape, or not at all, are written as their distorted
 /// art with a warning, and open as that art: an envelope of type, one in a turned frame, a warp drawn
 /// without its style's net, a mesh the reader would lay out the other way round, a top object
-/// whose sides don't pair up, a Fidelity that isn't a whole number and bounds margins kept with
+/// with a side of more segments than the grid has columns, a Fidelity that isn't a whole number and bounds margins kept with
 /// Distort Appearance off. Other live objects keep their own warning.
 #[test]
 fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
@@ -9911,15 +9911,10 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
             **kind = EnvelopeKind::Mesh { rows: 2, cols: 3, points: transpose(points, 3, 2), handles: vec![] };
         }
     });
-    let mut uneven = kurbo::BezPath::new();
-    uneven.move_to((30.0, 10.0));
-    for p in [(100.0, 0.0), (170.0, 10.0), (170.0, 90.0), (30.0, 90.0)] {
-        uneven.line_to(p);
-    }
-    uneven.close_path();
-    let lopsided = change(&|k| {
+    // A top side of 51 segments: more grid columns than the reader reads.
+    let crowded = change(&|k| {
         if let NodeKind::Envelope { kind, .. } = k {
-            **kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven), corners: None };
+            **kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven_top_object(51)), corners: None };
         }
     });
     let fractional = change(&|k| {
@@ -9938,7 +9933,7 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
         ("turned", turned),
         ("old warp", old_warp),
         ("sideways mesh", sideways),
-        ("lopsided top object", lopsided),
+        ("top object past the grid's limit", crowded),
         ("fractional fidelity", fractional),
         ("margin kept", margin_kept),
     ];
@@ -9957,6 +9952,112 @@ fn envelopes_the_reader_cannot_open_live_are_written_as_their_art() {
 /// `points`, a grid of `rows + 1` rows of `cols + 1` points, as `cols + 1` rows of `rows + 1`.
 fn transpose(points: Vec<kurbo::Point>, rows: usize, cols: usize) -> Vec<kurbo::Point> {
     (0..=cols).flat_map(|c| (0..=rows).map(move |r| (r, c))).map(|(r, c)| points[r * (cols + 1) + c]).collect()
+}
+
+/// A top object over (30, 10)-(170, 90) whose top side is `top` straight segments, falling and
+/// rising by 10 pt between its anchors, and whose other sides are one straight segment each.
+fn uneven_top_object(top: usize) -> kurbo::BezPath {
+    let mut path = kurbo::BezPath::new();
+    path.move_to((30.0, 10.0));
+    for k in 1..top {
+        path.line_to((30.0 + 140.0 * k as f64 / top as f64, if k % 2 == 1 { 20.0 } else { 10.0 }));
+    }
+    for p in [(170.0, 10.0), (170.0, 90.0), (30.0, 90.0)] {
+        path.line_to(p);
+    }
+    path.close_path();
+    path
+}
+
+/// Do the patches of top objects `a` and `b` lie within 0.001 pt of each other at every place of a
+/// 32 × 32 grid?
+fn same_top_object_patch(a: &vectorcraft_doc::live::EnvelopeKind, b: &vectorcraft_doc::live::EnvelopeKind) -> bool {
+    use vectorcraft_doc::live::{Coons, EnvelopeKind};
+    let (EnvelopeKind::TopObject { path, corners }, EnvelopeKind::TopObject { path: p, corners: c }) = (a, b) else { return false };
+    let (Some(a), Some(b)) = (Coons::from_top_object(path, *corners), Coons::from_top_object(p, *c)) else { return false };
+    let at = |i: u32| f64::from(i) / 32.0;
+    (0..=32).all(|j| (0..=32).all(|i| a.eval(at(i), at(j)).distance(b.eval(at(i), at(j))) < 1e-3))
+}
+
+/// A top object whose top and bottom sides have different numbers of segments is written live, its
+/// side with fewer segments split into as many as the side across from it has, with Edit Contents off
+/// and on: two straight segments over one straight one, three over one, and two over one curve.
+/// VectorCraft's reader opens it as a top object with its corners on the same four points, the same
+/// patch, contents, Fidelity, Edit Contents and Envelope Options, and saved again it opens the same.
+#[test]
+fn a_top_object_with_uneven_sides_is_read_back_live() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut curved = kurbo::BezPath::new();
+    curved.move_to((30.0, 10.0));
+    curved.line_to((100.0, 0.0));
+    curved.line_to((170.0, 10.0));
+    curved.line_to((170.0, 90.0));
+    curved.curve_to((130.0, 105.0), (70.0, 105.0), (30.0, 90.0));
+    curved.close_path();
+    let shapes = [("two over one", uneven_top_object(2), 6), ("three over one", uneven_top_object(3), 8), ("two over a curve", curved, 6)];
+    for (name, path, anchors) in shapes {
+        let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+        for editing in [false, true] {
+            let what = format!("{name}, editing {editing}");
+            let doc = envelope_doc(kind.clone(), 50.0, editing, EnvelopeOptions::NEW);
+            let text = program(&doc);
+            assert!(text.contains("AIDeformOptionsKey") && text.contains("%_3 /Int (AIDeformStyle) ,\n"), "{what}: {text}");
+            let (back, warnings, notes) = envelope_back(&doc);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}: {warnings:?}");
+            assert!(!notes.iter().any(|w| w == crate::import::ENVELOPE_DRAWN), "{what}: {notes:?}");
+            let NodeKind::Envelope { content, kind: got, fidelity, editing: e, options, frame } = &back.kind else { panic!("{what}: {back:#?}") };
+            assert_eq!((*fidelity, *e, *options, **frame), (50.0, editing, EnvelopeOptions::NEW, Affine::IDENTITY), "{what}");
+            let EnvelopeKind::TopObject { path: outline, corners: Some(corners) } = &**got else { panic!("{what}: {got:?}") };
+            let sp = &outline.subpaths[0];
+            assert_eq!(sp.anchors.len(), anchors, "{what}: {outline:?}");
+            let points = corners.map(|i| sp.anchors[i as usize].p);
+            let want = [(30.0, 10.0), (170.0, 10.0), (170.0, 90.0), (30.0, 90.0)].map(kurbo::Point::from);
+            assert!(points.iter().zip(want).all(|(a, b)| a.distance(b) < 1e-6), "{what}: {points:?}");
+            assert!(same_top_object_patch(&kind, got), "{what}: {got:?}");
+            let colors: Vec<Option<Color>> = content.iter().map(|c| c.appearance.fill_paint().color()).collect();
+            assert_eq!(colors, [Some(Color::rgb(1.0, 0.0, 0.0)), Some(Color::rgb(0.0, 0.0, 1.0))], "{what}");
+            let mut again = Document::new(200.0, 100.0);
+            let layer = again.layers[0].id;
+            again.insert(Some(layer), usize::MAX, back.clone()).unwrap();
+            let (twice, warnings, notes) = envelope_back(&again);
+            assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{what}, saved again: {warnings:?}");
+            let NodeKind::Envelope { kind: twice, .. } = &twice.kind else { panic!("{what}, saved again: {twice:#?} {notes:?}") };
+            assert!(same_top_object_patch(&kind, twice), "{what}, saved again: {twice:?}");
+        }
+    }
+}
+
+/// A top object with a top side of 50 segments over a bottom side of one is written live with a grid
+/// of 50 columns, the most the reader reads.
+#[test]
+fn a_top_object_split_to_the_grids_limit_is_read_back_live() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&uneven_top_object(50)), corners: None };
+    let doc = envelope_doc(kind.clone(), 50.0, false, EnvelopeOptions::NEW);
+    let text = program(&doc);
+    assert!(text.contains("[50 1] /Size X#"), "{text}");
+    let (back, warnings, notes) = envelope_back(&doc);
+    assert!(!warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    let NodeKind::Envelope { kind: got, .. } = &back.kind else { panic!("{back:#?} {notes:?}") };
+    assert!(same_top_object_patch(&kind, got), "{got:?}");
+}
+
+/// A top object whose side with fewer segments would share out the content another way once split
+/// (two curves that aren't one curve, under three segments) is written as its art, with a warning.
+#[test]
+fn a_top_object_whose_split_side_would_map_another_way_is_written_as_its_art() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeOptions};
+    let mut path = uneven_top_object(3);
+    path.truncate(5);
+    path.curve_to((150.0, 110.0), (120.0, 110.0), (100.0, 90.0));
+    path.curve_to((80.0, 95.0), (40.0, 80.0), (30.0, 90.0));
+    path.close_path();
+    let kind = EnvelopeKind::TopObject { path: PathData::from_bezpath(&path), corners: None };
+    let doc = envelope_doc(kind, 50.0, false, EnvelopeOptions::NEW);
+    assert!(!program(&doc).contains("AIDeformOptionsKey"));
+    let (back, warnings, _) = envelope_back(&doc);
+    assert!(warnings.iter().any(|w| w == writer::ENVELOPES), "{warnings:?}");
+    assert!(matches!(back.kind, NodeKind::Group { .. }), "{back:#?}");
 }
 
 /// An envelope with its contents in an opacity mask's art is written as its art there, and an

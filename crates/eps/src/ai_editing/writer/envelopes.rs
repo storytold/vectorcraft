@@ -8,13 +8,14 @@
 //! contents in an `X=` … `X+` block (while they are edited, the grid) as `AIDeformArtKey`, and the
 //! kind (`AIDeformStyle`: 1 a warp, 2 a mesh, 3 a top object); then the distorted art on plain
 //! lines, and the plugin's `XP` after it. A top object's outline is the edge of the grid written
-//! for it, one grid edge to each segment of its sides. An envelope the reader would open in another
-//! shape is written as its distorted art.
+//! for it, one grid edge to each segment of its sides, a side with fewer segments than the side
+//! across from it split into more. An envelope the reader would open in another shape is written as
+//! its distorted art.
 
 use std::fmt::Write;
 use std::sync::Arc;
 
-use kurbo::{Point, Vec2};
+use kurbo::{CubicBez, ParamCurve, Point, Vec2};
 use vectorcraft_doc::live::{
     Coons, EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, MeshPoint, PreserveShape, WARP_NET, envelope_content_boxes,
     envelope_grid, envelope_stroke_margin, warp_grid,
@@ -173,11 +174,44 @@ fn reads_as_written(rows: usize, cols: usize, pts: &[GridPoint]) -> bool {
     envelope_upright(&mesh).is_some_and(|(r, c, read)| (r as usize, c as usize) == (rows, cols) && read == pts)
 }
 
+/// `pieces`, one side of a top object, split into `n` pieces: each piece is split into equal spans
+/// of its curve parameter, the extra pieces going one at a time to the piece with the longest
+/// control polygon for each of its spans. `None` where `n` is fewer pieces than it has, more than
+/// [`MAX_GRID`], or a split leaves a piece of no length.
+fn split_to(pieces: &[CubicBez], n: usize) -> Option<Vec<CubicBez>> {
+    if n < pieces.len() || n > MAX_GRID {
+        return None;
+    }
+    if n == pieces.len() {
+        return Some(pieces.to_vec());
+    }
+    let polygon = |c: &CubicBez| c.p0.distance(c.p1) + c.p1.distance(c.p2) + c.p2.distance(c.p3);
+    let lengths: Vec<f64> = pieces.iter().map(polygon).collect();
+    let mut parts = vec![1usize; pieces.len()];
+    for _ in pieces.len()..n {
+        let most = (0..pieces.len()).max_by(|a, b| (lengths[*a] / parts[*a] as f64).total_cmp(&(lengths[*b] / parts[*b] as f64)))?;
+        parts[most] += 1;
+    }
+    let mut out = Vec::with_capacity(n);
+    for (c, p) in pieces.iter().zip(parts) {
+        for j in 0..p {
+            let piece = c.subsegment(j as f64 / p as f64..(j + 1) as f64 / p as f64);
+            if [piece.p1, piece.p2, piece.p3].iter().all(|q| q.distance(piece.p0) <= 1e-9) {
+                return None;
+            }
+            out.push(piece);
+        }
+    }
+    Some(out)
+}
+
 /// The grid a top object with outline `path` and corners `corners` is written with: its edge runs
-/// through the outline's anchors clockwise from the top left corner, one grid edge to a segment, so
-/// the top and bottom sides need as many segments as each other, as do the left and right sides;
-/// the points inside blend the sides. `None` where that grid's edge, read back as the top object's
-/// outline, doesn't give the same patch ([`Coons::from_top_object`]) at every place checked.
+/// through the outline's anchors clockwise from the top left corner, one grid edge to a segment,
+/// the points inside blending the sides. The top and bottom sides need as many grid edges as each
+/// other, as do the left and right sides, so where one side of a pair has fewer segments than the
+/// other, its segments are split ([`split_to`]) without changing its shape. `None` where that
+/// grid's edge, read back as the top object's outline, doesn't give the same patch
+/// ([`Coons::from_top_object`]) at every place checked.
 fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize, usize, Vec<GridPoint>)> {
     let coons = Coons::from_top_object(path, corners)?;
     // The outline, as the patch takes it: the largest subpath.
@@ -214,10 +248,35 @@ fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize,
         }
     };
     let gap = |k: usize| (at[(k + 1) % 4] + count - at[k]) % count;
-    let (cols, rows) = (gap(0), gap(1));
-    if gap(2) != cols || gap(3) != rows || cols > MAX_GRID || rows > MAX_GRID {
+    if (0..4).any(|k| gap(k) > MAX_GRID) {
         return None;
     }
+    // Each side's segments from its corner on, a straight one as a cubic with its handles a third of
+    // the way along, which the patch spreads evenly along, as it does a straight segment.
+    let side = |k: usize| -> Vec<CubicBez> {
+        (0..gap(k))
+            .map(|j| {
+                let i = (at[k] + j) % count;
+                let seg = sp.segment(i);
+                if sp.segment_is_line(i) {
+                    CubicBez::new(seg.p0, seg.p0.lerp(seg.p3, 1.0 / 3.0), seg.p0.lerp(seg.p3, 2.0 / 3.0), seg.p3)
+                } else {
+                    seg
+                }
+            })
+            .collect()
+    };
+    let mut sides = [side(0), side(1), side(2), side(3)];
+    // Opposite sides take as many segments as each other: the one with fewer has some split.
+    for k in 0..2 {
+        let n = sides[k].len().max(sides[k + 2].len());
+        for s in [k, k + 2] {
+            sides[s] = split_to(&sides[s], n)?;
+        }
+    }
+    let (cols, rows) = (sides[0].len(), sides[1].len());
+    let edge: Vec<CubicBez> = sides.concat();
+    let total = edge.len();
     let width = cols + 1;
     let mut pts: Vec<GridPoint> = vec![(Point::ZERO, [Vec2::ZERO; 4]); (rows + 1) * width];
     // Where the `k`th anchor from the top left corner goes, and the slots of the handles of the
@@ -233,20 +292,15 @@ fn top_object_grid(path: &PathData, corners: Option<[u32; 4]>) -> Option<(usize,
             (rows - (k - 2 * cols - rows), 0, H_UP, H_DOWN)
         }
     };
-    for k in 0..count {
-        let i = (at[0] + k) % count;
-        let seg = sp.segment(i);
-        // A straight segment's patch spreads evenly along it, as a cubic's with its handles a third
-        // of the way does.
-        let (p1, p2) = if sp.segment_is_line(i) { (seg.p0.lerp(seg.p3, 1.0 / 3.0), seg.p0.lerp(seg.p3, 2.0 / 3.0)) } else { (seg.p1, seg.p2) };
+    for (k, seg) in edge.iter().enumerate() {
         let (r, c, out, into) = place(k);
-        let (nr, nc, _, _) = place((k + 1) % count);
+        let (nr, nc, _, _) = place((k + 1) % total);
         if let Some(q) = pts.get_mut(r * width + c) {
             q.0 = seg.p0;
-            q.1[out] = p1 - seg.p0;
+            q.1[out] = seg.p1 - seg.p0;
         }
         if let Some(q) = pts.get_mut(nr * width + nc) {
-            q.1[into] = p2 - seg.p3;
+            q.1[into] = seg.p2 - seg.p3;
         }
     }
     // The points inside, blended from the sides.
