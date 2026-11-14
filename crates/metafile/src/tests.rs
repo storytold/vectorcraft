@@ -399,6 +399,22 @@ fn an_instance_whose_art_reaches_the_artboard_is_written() {
     assert!(k.contains(&39), "a brush fills the art: {k:?}");
 }
 
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it,
+/// in EMF (clipped) and in WMF (unclipped).
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut inst = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((30.0, 30.0)) });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+    let mut d = doc_with(100.0, 100.0, vec![inst]);
+    let art = path(shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), red(), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    for clips in [true, false] {
+        let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, clips).run();
+        let colors: Vec<[u8; 3]> = fills(&ops).into_iter().map(|(_, rgb)| rgb).collect();
+        assert_eq!(colors, [[0, 0, 255]], "clips: {clips}");
+    }
+}
+
 /// A pattern `name` repeating `art` every point.
 fn point_tiles(name: &str, art: Node) -> PatternDef {
     let mut def = PatternDef::new(name, vec![Arc::new(art)]);
