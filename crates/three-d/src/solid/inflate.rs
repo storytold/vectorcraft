@@ -23,6 +23,8 @@ struct Puff {
 
 /// The rings of `path` and its membrane on the grid of `bounds`; `None` for a shape with no area.
 fn puff(path: &PathData, rule: FillRule, bounds: Rect, o: &Inflate) -> Result<Option<Puff>, String> {
+    #[cfg(test)]
+    PUFFED.with(|n| n.set(n.get() + 1));
     // The sides take one face for each edge of the outline in each slice; the grid's faces are
     // counted as they are built.
     let size = bounds.width().max(bounds.height());
@@ -66,7 +68,7 @@ pub fn inflate_together(shapes: &[(&PathData, FillRule)], bounds: Rect, options:
 }
 
 /// [`inflate_together`], each solid built only as the iterator reaches it: a caller that stops early
-/// builds none of the solids after.
+/// builds none of the solids after (and with no volume, solves none of their puffs).
 pub fn inflate_each(
     shapes: &[(&PathData, FillRule)],
     bounds: Rect,
@@ -77,28 +79,89 @@ pub fn inflate_each(
 }
 
 /// [`inflate_together`], or with `mesh` each solid's faces before projection instead of its facets.
-/// Every shape's membrane is solved at once (the eye depends on the highest puff); each solid is
-/// built as the iterator reaches it.
-pub(crate) fn inflate_faces(
-    shapes: &[(&PathData, FillRule)],
-    bounds: Rect,
-    options: Inflate,
-    view: View,
-    mesh: bool,
-) -> impl Iterator<Item = Result<Built, String>> + use<> {
+/// Every shape's membrane is solved at once (the eye depends on the highest puff), except with no
+/// volume: nothing puffs then, and each shape's membrane is solved when its solid is taken. Each
+/// solid is built as the iterator reaches it.
+pub(crate) fn inflate_faces(shapes: &[(&PathData, FillRule)], bounds: Rect, options: Inflate, view: View, mesh: bool) -> Solids {
     let o = options.sanitized();
+    let later = o.volume == 0.0;
+    #[cfg(test)]
+    let later = later && !SOLVE_FIRST.with(std::cell::Cell::get);
+    if later {
+        let shapes: Vec<(PathData, FillRule)> = shapes.iter().map(|(path, rule)| ((*path).clone(), *rule)).collect();
+        return Solids { pending: Pending::Later(shapes.into_iter()), bounds, o, view, reach: 0.0, mesh };
+    }
     let puffs: Vec<Result<Option<Puff>, String>> =
         shapes.iter().map(|(path, rule)| check_bounds(bounds).and_then(|()| puff(path, *rule, bounds, &o))).collect();
     let reach = puffs.iter().flatten().flatten().map(|p| p.height).fold(0.0, f64::max);
-    puffs.into_iter().map(move |p| match p {
-        Ok(Some(p)) => inflated(p, bounds, o, view, reach, mesh),
-        Ok(None) => Ok((vec![], vec![], None)),
-        Err(e) => Err(e),
-    })
+    Solids { pending: Pending::Solved(puffs.into_iter()), bounds, o, view, reach, mesh }
+}
+
+/// The shapes' puffs still to take: every one solved when the shapes were laid out, or each
+/// shape's path and fill rule, its puff solved when its solid is taken.
+enum Pending {
+    Solved(std::vec::IntoIter<Result<Option<Puff>, String>>),
+    Later(std::vec::IntoIter<(PathData, FillRule)>),
+}
+
+/// The solids of [`inflate_faces`], one result for each shape in order, each built as it is taken.
+pub(crate) struct Solids {
+    pending: Pending,
+    bounds: Rect,
+    o: Inflate,
+    view: View,
+    /// The highest puff of the shapes drawn together.
+    reach: f64,
+    mesh: bool,
+}
+
+impl Solids {
+    /// Pass over the next shape without building its solid, or solving its puff if that waits.
+    pub(crate) fn pass(&mut self) {
+        match &mut self.pending {
+            Pending::Solved(puffs) => {
+                puffs.next();
+            }
+            Pending::Later(shapes) => {
+                shapes.next();
+            }
+        }
+    }
+}
+
+impl Iterator for Solids {
+    type Item = Result<Built, String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let p = match &mut self.pending {
+            Pending::Solved(puffs) => puffs.next()?,
+            Pending::Later(shapes) => {
+                let (path, rule) = shapes.next()?;
+                check_bounds(self.bounds).and_then(|()| puff(&path, rule, self.bounds, &self.o))
+            }
+        };
+        Some(match p {
+            Ok(Some(p)) => inflated(p, self.bounds, self.o, self.view, self.reach, self.mesh),
+            Ok(None) => Ok((vec![], vec![], None)),
+            Err(e) => Err(e),
+        })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match &self.pending {
+            Pending::Solved(puffs) => puffs.size_hint(),
+            Pending::Later(shapes) => shapes.size_hint(),
+        }
+    }
 }
 
 #[cfg(test)]
 thread_local! {
+    /// How many puffs this thread has solved, for the tests.
+    pub(crate) static PUFFED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Solve every shape's puff before the first solid is taken even with no volume, as with
+    /// volume, for the tests that compare the two.
+    pub(crate) static SOLVE_FIRST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// How many inflated solids this thread has built, for the tests.
     pub(crate) static INFLATED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// The grid work of the last solid this thread inflated in full, for the tests.

@@ -169,6 +169,10 @@ The rest is our reading:
   once their faces pass it no later solid is built: the object draws its source art, and applying or editing the
   effect, Export 3D Object and **Expand as Wireframes** report that the 3D surface is too complex. A stroke left
   out for its own limits does not count.
+- Inflate works out how high every shape puffs before it builds the first solid, because the highest puff sets
+  how far away the eye is. At a Volume of 0 % no shape puffs, so each shape's puff is worked out only when its
+  solid is built, and none is worked out for the solids after the limit stops. The shadow builds no solid for a
+  fill or stroke that is fully transparent.
 
 ## Groups
 
