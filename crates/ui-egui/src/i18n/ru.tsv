@@ -902,6 +902,9 @@ font-technology	Variable	Вариативные
 	The selected character's font is not available.	Шрифт выделенного символа недоступен.
 	No alternates for the selected character.	У выделенного символа нет альтернатив.
 	Double-click to replace	Дважды щёлкните для замены
+	Click to replace	Щёлкните для замены
+	Show all alternates in the Glyphs panel	Показать все альтернативы в панели «Глифы»
+	Show Character Alternates	Показывать альтернативы символа
 	Select one character with the Type tool first.	Сначала выделите один символ инструментом «Текст».
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} — глиф шрифта {font}, а не шрифта выделенного текста ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} относится к символу {base} (U+{base_code}) {place}; выделен символ {sel} (U+{code}).
@@ -1348,6 +1351,7 @@ file-filter	Templates	Шаблоны
 	Format	Формат
 	Format Options	Параметры формата
 	Format Settings	Параметры формата
+	Format Settings…	Параметры формата…
 	Format:	Формат:
 	Formats:	Форматы:
 	Fractional Widths	Дробные ширины
@@ -6319,7 +6323,7 @@ axis	Y Axis	Ось Y
 @plural	Result: {n}|Results: {n}	Результат: {n}|Результаты: {n}|Результаты: {n}
 @msg	select one object	выберите один объект
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Глобальное редактирование работает с контурами, составными контурами, экземплярами символов и их группами
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	похожие объекты не найдены (повёрнутые или отражённые копии не учитываются); измените параметры глобального редактирования и повторите попытку
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	похожие объекты не найдены (отражённые копии не учитываются); измените параметры глобального редактирования и повторите попытку
 @msg	Global Edit is off	Глобальное редактирование выключено
 @msg	only an object of the Global Edit other than the one it started from can be left out	исключить из глобального редактирования можно только объект, отличный от того, с которого оно началось
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all или диапазон, например 1, 3-5, а не {v}
@@ -7590,6 +7594,9 @@ shape	Open	Открытый
 	Open Tutorial Sample	Открыть пример урока
 	Finish Tutorial	Завершить урок
 	Next Tutorial	Следующий урок
+	Show Learn Tab	Показать вкладку панели «Обучение»
+	Show Skill	Показать навык
+	Back One Level	На уровень назад
 	Back to Skills	Назад к навыкам
 @msg	tutorial `{id}` has no practice sample	у урока `{id}` нет учебного примера
 @msg	open the practice sample of `{id}` first (see learn.openSample)	сначала откройте учебный пример урока `{id}` (см. learn.openSample)
@@ -7630,6 +7637,9 @@ shape	Open	Открытый
 	Grommets	Люверсы
 	Grommet Inset	Отступ люверсов от края
 	Diameter	Диаметр
+	Nest Shapes…	Раскладка фигур…
+	Nest Shapes	Раскладка фигур
+	Roll	Рулон
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-эффектам нужны конечные координаты в пределах 100 миллионов пунктов

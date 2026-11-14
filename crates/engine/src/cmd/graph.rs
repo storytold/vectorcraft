@@ -41,6 +41,7 @@ pub(crate) use data::apply_csv;
 #[cfg(test)]
 use data::{fmt_value, parse_csv, to_csv};
 pub use edit::{GraphTypeSubject, graph_type_subject};
+pub(crate) use edit::{graphs_holding, keep_placed};
 pub use generate::calculated_axes;
 #[cfg(test)]
 use generate::generate;
