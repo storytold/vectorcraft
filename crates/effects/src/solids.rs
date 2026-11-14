@@ -1433,6 +1433,15 @@ fn art_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile]) ->
     Some((shadow, art))
 }
 
+/// The shadow [`art_for`] draws for effect `fx` on `shapes` behind the surfaces of object `id`:
+/// none with the shadow off, and an error when it is past the limits.
+pub(crate) fn shadow_for(id: NodeId, fx: &Effect, shapes: &[Profile]) -> Result<Vec<Arc<Node>>, String> {
+    Ok(match cast_shadow(&fx.id, &crate::merged_params(&fx.id, &fx.params), shapes)? {
+        Some((caster, settings, cast)) => shadow::scoped_art(id, &caster, settings, cast, has_masks(shapes)),
+        None => vec![],
+    })
+}
+
 /// What the shadow of the solids [`surfaces_for`] builds for effect `id` with parameters `p` on
 /// `shapes` is cast from, on one plane: the faces of every solid, the shadow's settings and the
 /// faces of each solid of visible art with its member's scopes and ink. `None` with the shadow

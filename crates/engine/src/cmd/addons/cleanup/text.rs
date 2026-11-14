@@ -871,13 +871,17 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
             let named: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
             let threads = thread_index(d);
             let mut done = std::collections::HashSet::new();
+            // The threads already found not to be a story whose frames are all among them: their
+            // other frames are read one at a time without going through the thread again.
+            let mut partial = std::collections::HashSet::new();
             let mut out: Vec<(NodeId, Vec<(usize, bool)>)> = vec![];
             for &id in &ids {
                 if !done.insert(id) {
                     continue;
                 }
-                let story = match threads.get(&id).and_then(|&i| d.text_threads.get(i)) {
-                    Some(thread) => crate::cmd::threads::story_in(d, thread, id),
+                let thread = threads.get(&id).copied();
+                let story = match thread.filter(|i| !partial.contains(i)).and_then(|i| d.text_threads.get(i)) {
+                    Some(frames) => crate::cmd::threads::story_in(d, frames, id),
                     None => vec![],
                 };
                 if !story.is_empty() && story.iter().all(|f| named.contains(f)) {
@@ -885,6 +889,8 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
                     // Every frame is among them, so each one keeps its breaks.
                     out.extend(story_cuts(d, &story, brk, true));
                 } else if let Some(t) = text_of(d, id) {
+                    // `id` is type, so the story of its thread is the same for each of its frames.
+                    partial.extend(thread);
                     out.push((id, break_cuts(&t.plain_text(), 0, usize::MAX, brk)));
                 }
             }
