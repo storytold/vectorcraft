@@ -765,12 +765,10 @@ fn chosen_path(items: &[(String, Value)]) -> Option<&str> {
     items.iter().find(|(_, p)| is_bare(p)).or(items.first()).map(|(path, _)| path.as_str())
 }
 
-/// Does a command's params doc (`{a?, b?} …`) say it runs with no params, as a shortcut runs it?
+/// Does a command's params doc (`{a?, b?: bool} …`) say it runs with no params, as a shortcut runs
+/// it? It does when it starts with `{` and [`names_a_required_field`] finds no field a call must give.
 fn runs_without_params(params: &str) -> bool {
-    params
-        .strip_prefix('{')
-        .and_then(|r| r.split_once('}'))
-        .is_some_and(|(fields, _)| fields.split(',').all(|f| f.trim().is_empty() || f.trim_end().ends_with('?')))
+    params.starts_with('{') && !names_a_required_field(params)
 }
 
 /// Does the editor list `e` under `overrides`? An entry that [`needs_a_value`] is listed only while
@@ -783,8 +781,13 @@ fn listed(overrides: &Overrides, e: &Entry) -> bool {
 /// with none, and that no item of the menu bar runs: Transparency and Opacity Mask Options need
 /// a value to set, Align and Distribute a direction, Delete Swatch and Move Swatch a swatch name,
 /// and the library, data set, text style and SVG filter loaders a file, which their menu items ask
-/// for.
-const NEEDS_A_PARAM: [&str; 20] = [
+/// for. The commands after them have no menu path: the setters of panels and dialogs (Fill, Stroke
+/// Options, Character, Set Bounds), the exports and saves that give the file back without a `path`
+/// (Save Document gives the file back when the document has no file yet; File › Save takes a key
+/// instead), the undo group's begin and end, and the commands that need a point, a value or a name
+/// (Create Dimension, Edit Freeform Point, Select by Color, Move Brush, Paintbrush). New Symbol is left out
+/// because the Symbols panel runs it through the Symbol Options dialog.
+const NEEDS_A_PARAM: [&str; 75] = [
     "transparency.set",
     "transparency.setOpacityMask",
     "stroke.set",
@@ -805,6 +808,61 @@ const NEEDS_A_PARAM: [&str; 20] = [
     "paraStyle.load",
     "textStyle.loadAll",
     "svgFilter.import",
+    "addon.pathtools.setAnchor",
+    "addon.shapes.configure",
+    "appearance.addEffect",
+    "artboard.align",
+    "artboard.distribute",
+    "assets.export",
+    "assets.export3D",
+    "assets.settings.set",
+    "attributes.set",
+    "brush.freehand",
+    "brush.move",
+    "css.export",
+    "dimension.create",
+    "document.export",
+    "document.exportDxf",
+    "document.exportEps",
+    "document.exportForWeb",
+    "document.exportPdf",
+    "document.save",
+    "document.setup",
+    "edit.undoGroup.begin",
+    "edit.undoGroup.end",
+    "eyedropper.setOptions",
+    "file.package",
+    "library.createGroup",
+    "links.placementOptions",
+    "links.unembed",
+    "livePaint.gapOptions",
+    "object.blend.createSpine",
+    "object.blend.setEasing",
+    "object.intertwine.arrange",
+    "object.objectsOnPath.options",
+    "object.puppetWarp.pins",
+    "object.setBounds",
+    "object.setLiveShape",
+    "object.setOverprint",
+    "object.setProps",
+    "object.slice.select",
+    "paint.freeform.setPoint",
+    "paint.setFill",
+    "paint.setGradientGeom",
+    "paint.setStroke",
+    "perspective.grid.define",
+    "perspective.grid.set",
+    "perspective.plane.move",
+    "print.setup",
+    "select.color",
+    "select.globalEditOptions",
+    "stroke.setAdvanced",
+    "symbol.new",
+    "symbol.options",
+    "text.setFormat",
+    "text.setRangeStyle",
+    "text.setStyle",
+    "type.ruby",
 ];
 
 /// The (label, params) of each menu bar item, by command id.
@@ -907,7 +965,7 @@ fn a_menu_bar_item_runs(id: &str, params: &str) -> bool {
 /// Is engine command `c` listed in Edit › Keyboard Shortcuts whether or not an item of the menu bar
 /// runs it? A command with a menu path of its own is. One without (a panel menu item) is when a key
 /// alone can run it: it has a default key, or it is an undoable command, not an alias, whose params
-/// doc ends each field with `?`.
+/// doc names no field a call must give ([`runs_without_params`]).
 fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
     !c.menu.is_empty() || c.shortcut.is_some() || (c.journal && !vectorcraft_engine::cmd::is_alias(c.id) && runs_without_params(c.params))
 }
@@ -2309,10 +2367,38 @@ mod tests {
         for id in ["brush.duplicate", "path.convertAnchors", "document.json", "prefs.list"] {
             assert!(entry(id).is_none(), "{id}");
         }
-        for (doc, bare) in
-            [("{}", true), ("{dx?, dy?} x", true), ("{id?|ids?, clip?}", true), ("{name, newName?}", false), ("{a?: {b}}", false), ("same as", false)]
-        {
+        // The Symbols panel runs New Symbol through Symbol Options, so it waits for a key the user gives it.
+        assert!(entry("symbol.new").is_some_and(|e| !listed(&Overrides::new(), &e)));
+        for (doc, bare) in [
+            ("{}", true),
+            ("{dx?, dy?} x", true),
+            ("{id?|ids?, clip?}", true),
+            ("{name, newName?}", false),
+            ("{a?: {b}}", true),
+            ("{ids?|id?, on?: bool} turn it on or off", true),
+            ("{ids?: [id…] (the selection), anchors?: [index…]}", true),
+            ("{format?: a|b, size?: 1|3|5}", true),
+            ("{artboard?: index=0}", true),
+            ("{mode: a|b, on?: bool}", false),
+            ("same as", false),
+        ] {
             assert_eq!(runs_without_params(doc), bare, "{doc}");
+        }
+        // Panel menu commands whose params doc gives each optional field a type are listed too.
+        let none = Overrides::new();
+        for id in [
+            "type.fractionalWidths",
+            "type.systemLayout",
+            "object.setPixelAligned",
+            "links.embed",
+            "links.update",
+            "object.slice.delete",
+            "artboard.switchOrientation",
+            "appearance.targetContents",
+            "paint.invert",
+            "artboard.distributeSpacing",
+        ] {
+            assert!(entry(id).is_some_and(|e| listed(&none, &e)), "{id}");
         }
         let mut ov = Overrides::new();
         assert!(assign(&mut ov, "symbol.breakLink", Some("Cmd+Alt+Shift+F9"), true).is_ok());
