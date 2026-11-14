@@ -31,7 +31,7 @@ pub(crate) fn adapter_summary(info: &eframe::wgpu::AdapterInfo) -> String {
     format!("{} ({:?}, {:?})", info.name.trim(), info.backend, info.device_type)
 }
 
-/// Windows and Linux: no OS title bar; the app bar is the title bar (`vectorcraft_ui_egui::titlebar`).
+/// Windows: no OS title bar; the app bar is the title bar (`vectorcraft_ui_egui::titlebar`).
 /// macOS keeps its traffic lights over the integrated title strip.
 ///
 /// Used on macOS and Windows (where VectorCraft keeps today's frame regardless of the

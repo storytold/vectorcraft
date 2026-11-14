@@ -345,7 +345,10 @@ Tile Edge Color: Object → Pattern → Tile Edge Color… (`ui.tileEdgeColor`) 
 `patternTileEdgeColor` (`prefs.set`), the colour pattern editing mode draws the tile edge and the swatch bounds in.
 A `color` with an alpha part (`#rrggbbaa` or `#rgba`) is an error, and the preference does not change.
 
-Window title bar: on Windows and Linux the window has no OS decorations and the app bar is the title bar. Its
+Window title bar: on Windows the window has no OS decorations and the app bar is the title bar. On Linux and the BSDs
+the app bar is the title bar by default only on a Wayland session without server-side decorations, such as GNOME, in a
+window not opened through XWayland. Elsewhere the desktop draws the frame and the app bar has no caption buttons,
+unless VectorCraft Title Bar on Every Desktop or `VECTORCRAFT_TITLEBAR=app` turns the app frame on (see below). The
 caption buttons (Minimize, Maximize/Restore, Close) are 46 pt each. By default all three sit at the bar's right end.
 On Linux and the BSDs, when the desktop leaves the window's frame to the app (a Wayland session without server-side
 decorations, such as GNOME), the window is not opened through XWayland and `VECTORCRAFT_TITLEBAR` is unset, they
