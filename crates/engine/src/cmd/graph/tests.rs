@@ -2967,6 +2967,57 @@ fn rewriting_a_series_marks_drawn_gradient_stroke_records_no_undo_step() {
     }
 }
 
+/// Writing the fill of a series mark with no height (a column for a value of 0) as it is, after the graph drew the mark's
+/// fill from a gradient the series keeps relative to the unit box, leaves the kept gradient and its unit-box flag as they
+/// are.
+#[test]
+fn rewriting_a_drawn_gradient_fill_on_a_series_mark_with_no_height_keeps_the_kept_gradient() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [marks[0].0], "start": [0, 0], "end": [10, 40]})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert!(kept.fill_unit_box);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[0, 2], [3, 4], [6, 1]]})).unwrap();
+    let flat = series_parts(&s, id, 0)
+        .into_iter()
+        .find(|m| matches!(m.appearance.fill_paint(), Paint::Gradient(_)) && m.geometric_bounds().is_some_and(|b| b.height() < 1e-9))
+        .unwrap()
+        .id;
+    let changed = s.edit("Write the fill as it is", |d, _| Ok(super::capture_series_top_paints(d, &[(flat, true)]))).unwrap();
+    assert!(!changed);
+    assert_eq!(spec(&s, id).series_paints[0], kept);
+}
+
+/// Writing a series mark's stroke weight as it is, after the graph drew the mark's stroke from a gradient the series keeps
+/// in document coordinates (a file saved before the unit box), leaves the kept gradient and its unit-box flag as they are
+/// and records no undo step.
+#[test]
+fn rewriting_a_series_marks_stroke_drawn_from_a_gradient_kept_in_document_coordinates_keeps_it() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setStroke", &json!({"ids": [marks[1].0], "gradient": {"kind": "radial"}})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [marks[1].0], "weight": 2})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [marks[1].0], "stroke": true, "start": [150, 200], "end": [170, 260]})).unwrap();
+    let placed = s.doc().unwrap().doc.node(marks[1]).unwrap().appearance.stroke_paint();
+    s.edit("Kept in document coordinates", |d, _| {
+        let mut extras = d.node_mut(id).unwrap().extras_mut();
+        let slot = &mut extras.graph.as_mut().unwrap().series_paints[0];
+        (slot.stroke, slot.stroke_unit_box, slot.stroke_width) = (Some(placed.clone()), false, Some(2.0));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4], [6, 1]]})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let drawn: Vec<_> = series_parts(&s, id, 0).into_iter().filter(|m| m.appearance.stroke_paint() == placed).collect();
+    assert!(drawn.len() >= 3, "{}", drawn.len());
+    for mark in drawn {
+        let row = top_row(&s, mark.id, false);
+        s.execute("appearance.setItem", &json!({"ids": [mark.id.0], "index": row, "weight": mark.appearance.stroke_width()})).unwrap();
+        assert_eq!(spec(&s, id).series_paints[0], kept, "writing mark {:?} changed the kept stroke", mark.id);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    }
+}
+
 /// A gradient placed on a line series' stroke is kept relative to the line's stroke box, and with Draw Filled Lines the
 /// band, which takes the kept stroke as its fill, has it at the same place on its own box.
 #[test]

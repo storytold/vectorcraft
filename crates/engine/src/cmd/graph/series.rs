@@ -285,11 +285,16 @@ fn settle_series_paints(doc: &mut Document, before: SeriesPaintsBefore) -> bool 
 /// The box a series keeps a gradient relative to: (0, 0)–(1, 1), as graphic styles keep theirs.
 const UNIT_BOX: Rect = vectorcraft_doc::GraphicStyle::UNIT_BOX;
 
-/// The gradient `slot` keeps for its fill (`fill`) or stroke relative to the unit box, placed on box `on` as the graph
-/// draws it there. None when the slot keeps no such gradient or there is no box.
+/// The gradient `slot` keeps for its fill (`fill`) or stroke as the graph draws it on box `on`: one kept relative to the
+/// unit box placed on `on`, also when `on` has no width or no height, and one kept in document coordinates as it is kept.
+/// None when the slot keeps no gradient, or keeps one relative to the unit box and there is no box.
 fn kept_on(slot: &vectorcraft_doc::SeriesPaint, fill: bool, on: Option<Rect>) -> Option<Paint> {
     let (kept, unit) = if fill { (&slot.fill, slot.fill_unit_box) } else { (&slot.stroke, slot.stroke_unit_box) };
-    let (Some(Paint::Gradient(g)), true, Some(on)) = (kept, unit, on) else { return None };
+    let Some(Paint::Gradient(g)) = kept else { return None };
+    if !unit {
+        return Some(Paint::Gradient(g.clone()));
+    }
+    let on = on?;
     let mut g = g.clone();
     g.rebase(UNIT_BOX, on);
     Some(Paint::Gradient(g))
@@ -331,18 +336,17 @@ fn same_paint_placed(a: &Paint, b: &Paint) -> bool {
 }
 
 /// The box a gradient on `node`'s fill (`width` None) or on its stroke of `width` is placed on: the geometric bounds, grown
-/// by half the weight for a stroke. None for a box with no width or no height, which a gradient's place cannot be kept
-/// relative to.
+/// by half the weight for a stroke. The box can have no width or no height.
 fn paint_box(node: &Node, width: Option<f64>) -> Option<Rect> {
     let b = node.geometric_bounds()?;
-    let b = width.map_or(b, |w| vectorcraft_doc::appearance::stroke_paint_bounds(b, w));
-    (b.width() > 1e-9 && b.height() > 1e-9).then_some(b)
+    Some(width.map_or(b, |w| vectorcraft_doc::appearance::stroke_paint_bounds(b, w)))
 }
 
 /// `paint` as a series keeps it: a gradient placed on `from` (the edited mark's [`paint_box`]) is moved to the same place
-/// relative to [`UNIT_BOX`], so each mark takes it on its own box. Returns the paint and whether it was moved.
+/// relative to [`UNIT_BOX`], so each mark takes it on its own box. A box with no width or no height, which a gradient's
+/// place cannot be kept relative to, leaves the paint in document coordinates. Returns the paint and whether it was moved.
 fn unit_box_paint(paint: Paint, from: Option<Rect>) -> (Paint, bool) {
-    match (paint, from) {
+    match (paint, from.filter(|b| b.width() > 1e-9 && b.height() > 1e-9)) {
         (Paint::Gradient(mut g), Some(from)) => {
             g.rebase(from, UNIT_BOX);
             (Paint::Gradient(g), true)
