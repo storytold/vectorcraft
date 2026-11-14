@@ -245,7 +245,8 @@ private editing data. VectorCraft:
   group is tagged once and paints its marks with one fill and one stroke, which the graph keeps as that series'
   paint; Graph Data then edits it. Other graphs (pie and scatter graphs, graphs with designs or
   customizations, records of later versions) come in as plain groups, paths and type, with a note. Saving a graph to
-  `.ai`, in either form, writes its art without its data or settings, with a warning.
+  `.ai`, in either form, writes these records around its art when the reader above reads them back as the same graph,
+  so the file opens again with its data and settings; any other graph is written as its art, with a warning.
   Legacy `.ai` patterns in the version 7 form (a list of `@` and `&` layers, `_ &` for the tile's background)
   open as pattern swatches, with a fill's offset, scale, rotation, reflection and shear applied before its
   matrix. Legacy `.ai` linked images in

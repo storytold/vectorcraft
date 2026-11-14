@@ -2122,3 +2122,64 @@ fn a_stained_instance_is_written_in_its_stained_color() {
     let text = String::from_utf8(write(&doc).bytes).unwrap();
     assert!(text.contains("0 0 1 Xa") && !text.contains("1 0 0 Xa"), "{text}");
 }
+
+/// A graph whose records read back whole is written with them (§17), and opens again as the same
+/// live graph: its table, type and settings, its series' groups tagged in order, without a warning
+/// about graphs.
+#[test]
+fn graphs_are_written_with_their_records_and_open_live() {
+    use crate::ai_graph::sample;
+    for (what, doc) in sample::kept() {
+        let out = write(&doc);
+        assert!(!out.warnings.iter().any(|w| w == GRAPHS), "{what}: {:?}", out.warnings);
+        let text = String::from_utf8(out.bytes.clone()).unwrap();
+        assert_eq!((text.matches("%_Gs\n").count(), text.matches("%_GS\n").count()), (1, 1), "{what}: {text}");
+        let read = crate::import(&out.bytes).unwrap();
+        let written = sample::graphs(&doc);
+        let graphs = sample::graphs(&read.document);
+        assert_eq!(graphs.len(), 1, "{what}: {:?}", read.warnings);
+        assert!(sample::same(&written[0].0, &graphs[0].0), "{what}: {:#?}\n{:#?}", written[0].0, graphs[0].0);
+        assert_eq!(graphs[0].1, written[0].1, "{what}: the members and their series");
+    }
+}
+
+/// A graph inside a group is written with its records too, and opens on its own group.
+#[test]
+fn a_graph_in_a_group_is_written_with_its_records() {
+    use crate::ai_graph::sample;
+    let mut doc = Document::new(400.0, 300.0);
+    let graph = sample::graph(&mut doc, sample::spec(vectorcraft_doc::GraphKind::Column));
+    let frame = shape(&mut doc, shapes::rectangle(Rect::new(10.0, 10.0, 20.0, 20.0)), red(), Paint::None);
+    let outer = Node::group(doc.alloc_id(), vec![Arc::new(frame), Arc::new(graph)]);
+    let l = doc.layers[0].id;
+    doc.insert(Some(l), 0, outer).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == GRAPHS), "{:?}", out.warnings);
+    let read = crate::import(&out.bytes).unwrap();
+    let graphs = sample::graphs(&read.document);
+    assert_eq!(graphs.len(), 1, "{:?}", read.warnings);
+    assert!(sample::same(&sample::graphs(&doc)[0].0, &graphs[0].0));
+    let layer = children(&read.document.layers[0]);
+    assert!(layer[0].extras().graph.is_none() && layer[0].children().is_some_and(|c| c.len() == 2), "{layer:#?}");
+}
+
+/// A graph whose records wouldn't read back as it is is written as its art, without records, with
+/// the warning, and opens as that art.
+#[test]
+fn graphs_the_records_cant_keep_are_written_as_their_art() {
+    use crate::ai_graph::sample;
+    for (what, doc) in sample::unkept() {
+        let out = export_legacy_ai(&doc, &LegacyAiOptions::default()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == GRAPHS), "{what}: {:?}", out.warnings);
+        let text = String::from_utf8_lossy(&out.bytes).into_owned();
+        assert!(!text.contains("%_Gs") && !text.contains(" Go\n") && !text.contains("%_GS"), "{what}: {text}");
+        let read = crate::import(&out.bytes).unwrap();
+        assert!(sample::graphs(&read.document).is_empty(), "{what}");
+        let paths = |d: &Document| {
+            let mut count = 0;
+            d.walk(|n| count += usize::from(matches!(n.kind, NodeKind::Path { .. })));
+            count
+        };
+        assert_eq!(paths(&read.document), paths(&doc), "{what}: the graph's art is kept");
+    }
+}

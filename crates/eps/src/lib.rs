@@ -31,9 +31,11 @@
 //! - `ai_editing`: the editing copy of the art a PDF-compatible `.ai` file carries
 //!   ([`export_ai_editing`], [`ai_private_data`]).
 //! - `ai_ops`: the path and line style operators those two write.
+//! - `ai_graph`: the records of a live graph those two write around its group.
 //! - [`dcs`]: DCS files, an EPS file with one program per printing plate, read for placing.
 
 mod ai_editing;
+mod ai_graph;
 mod ai_ops;
 pub mod dcs;
 mod import;

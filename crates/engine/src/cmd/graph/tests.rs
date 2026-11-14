@@ -6769,8 +6769,8 @@ fn graph_commands_refuse_params_of_the_wrong_type() {
 }
 
 /// A `.ai` in PostScript form whose graph's records read whole (version 7 specification, appendix A)
-/// opens as a graph whose data can be edited: Graph Data redraws it on its plot. Saving it as `.ai`
-/// says its data and settings aren't written, in either form.
+/// opens as a graph whose data can be edited: Graph Data redraws it on its plot. Saving it as `.ai`,
+/// in either form, writes its records, and the file opens again with the graph's new data.
 #[test]
 fn a_graph_opened_from_ai_keeps_its_data_for_editing() {
     let graph = "%_Gs\n%_100 200 300 100 Gb\n%_5 0 0 14 0 1 0 0 6 44 Gy\n%_10 2 0 0 90 80 0 Gd\n\
@@ -6827,6 +6827,56 @@ fn a_graph_opened_from_ai_keeps_its_data_for_editing() {
         }
         let r = s.execute("file.saveAs", &p).unwrap();
         let notes = r["warnings"].as_array().cloned().unwrap_or_default();
-        assert!(notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+        assert!(!notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
+        let mut again = Session::new();
+        again.execute("document.open", &json!({"path": dir.join(name)})).unwrap();
+        let mut graphs = vec![];
+        again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().cloned()));
+        assert_eq!(graphs.len(), 1, "{name}");
+        let g = &graphs[0];
+        assert_eq!(
+            (g.series.as_slice(), g.categories.as_slice(), g.rows.as_slice()),
+            (&after.series[..], &after.categories[..], &after.rows[..]),
+            "{name}"
+        );
+        assert_eq!(g.kind, after.kind, "{name}");
     }
+}
+
+/// A graph the graph tools draw, of each type, saved as `.ai` in either form, opens again as the same
+/// graph exactly when the save gives no warning about graphs; a column graph does.
+#[test]
+fn a_drawn_graph_saved_as_ai_opens_as_a_graph_unless_the_save_warns() {
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-save");
+    let mut live = vec![];
+    for ty in ["column", "stackedColumn", "bar", "stackedBar", "line", "area", "scatter", "pie", "radar"] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,1,6";
+        let id = s.execute("graph.create", &json!({"type": ty, "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let written = spec(&s, NodeId(id));
+        for (name, version) in [("v7.ai", Some("7")), ("pdf.ai", None)] {
+            let path = dir.join(format!("{ty}-{name}"));
+            let mut p = json!({"path": path, "format": "ai"});
+            if let Some(v) = version {
+                p["aiVersion"] = json!(v);
+            }
+            let r = s.execute("file.saveAs", &p).unwrap();
+            let notes = r["warnings"].as_array().cloned().unwrap_or_default();
+            let warned = notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art")));
+            let mut again = Session::new();
+            again.execute("document.open", &json!({"path": path})).unwrap();
+            let mut graphs = vec![];
+            again.doc().unwrap().doc.walk(|n| graphs.extend(n.extras().graph.as_deref().cloned()));
+            assert_eq!(graphs.len(), usize::from(!warned), "{ty} {name}: {r}");
+            if let Some(g) = graphs.first() {
+                assert_eq!((g.kind, g.cells()), (written.kind, written.cells()), "{ty} {name}");
+                assert_eq!((g.series.as_slice(), g.categories.as_slice()), (&written.series[..], &written.categories[..]), "{ty} {name}");
+                live.push(format!("{ty} {name}"));
+            }
+        }
+    }
+    assert!(live.contains(&"column v7.ai".to_string()) && live.contains(&"column pdf.ai".to_string()), "{live:?}");
 }
