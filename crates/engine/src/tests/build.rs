@@ -1748,6 +1748,203 @@ fn shape_builder_arrow_keys_pass_swatches_of_the_same_color() {
     assert_eq!(s.paint.fill, after, "the swatch after Twin B");
 }
 
+/// The colors of the cursor swatch preview's chips, left to right, and which one is ringed.
+fn swatch_chips(s: &mut Session, v: ViewInfo) -> Vec<([u8; 4], bool)> {
+    let mut chips: Vec<(f64, [u8; 4], bool)> = s
+        .overlays(v)
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Swatch { p, color, selected } => Some((p.x, color, selected)),
+            _ => None,
+        })
+        .collect();
+    chips.sort_by(|a, b| a.0.total_cmp(&b.0));
+    chips.into_iter().map(|(_, c, sel)| (c, sel)).collect()
+}
+
+/// A solid paint's color as the chips draw it.
+fn chip_color(p: &Paint) -> [u8; 4] {
+    match p {
+        Paint::Solid { color, .. } => color.to_rgba8(1.0),
+        _ => panic!("not a solid color: {p:?}"),
+    }
+}
+
+/// Live Paint Bucket: Left and Right step the active paint through the document's color swatches
+/// (the selected art keeps its paint), the Cursor Swatch Preview (on at first) shows the active
+/// paint ringed between the swatches before and after it, and with it off the arrows still step.
+#[test]
+fn live_paint_bucket_arrow_keys_step_the_active_paint_through_the_swatches() {
+    let mut s = session();
+    let (a, _) = two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    assert_eq!(s.tool_options_of("livePaintBucket")["cursorSwatchPreview"], json!(true));
+    assert!(s.tool_claims_key(ToolKey::Right, v) && s.tool_claims_key(ToolKey::Left, v));
+    assert!(!s.tool_claims_key(ToolKey::Up, v), "Up and Down keep their own use");
+    let list: Vec<(String, Paint)> =
+        vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| (sw.name.clone(), sw.paint.clone())).collect();
+    assert!(list.len() >= 4);
+    let n = list.len();
+    let stroke = s.paint.stroke.clone();
+    s.execute("paint.setFill", &json!({"swatch": list[0].0, "ids": []})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[2].1);
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[1].1);
+    assert_eq!(s.paint.stroke, stroke, "the stroke stays");
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its fill");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&list[0].1), false), (chip_color(&list[1].1), true), (chip_color(&list[2].1), false)]);
+    let alt = Mods { alt: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0).with_mods(alt), v).unwrap();
+    assert!(swatch_chips(&mut s, v).is_empty(), "Alt samples with the eyedropper and shows no chips");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    // Past the first swatch, Left wraps around to the last.
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[n - 1].1);
+    assert_eq!(swatch_chips(&mut s, v).iter().map(|c| c.0).collect::<Vec<_>>(), [&list[n - 2].1, &list[n - 1].1, &list[0].1].map(chip_color));
+    // With the Stroke proxy in front, the arrows step the stroke and the chips show it.
+    s.execute("paint.toggleActive", &json!({"fill": false})).unwrap();
+    let fill = s.paint.fill.clone();
+    s.execute("paint.setStroke", &json!({"swatch": list[1].0, "ids": []})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!((&s.paint.fill, &s.paint.stroke), (&fill, &list[2].1));
+    assert!(!s.fill_active, "the Stroke proxy stays in front");
+    assert_eq!(swatch_chips(&mut s, v)[1], (chip_color(&list[2].1), true));
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its paint");
+    // Cursor Swatch Preview off hides the chips; the arrows still step.
+    s.set_tool_option_cmd(&json!({"tool": "livePaintBucket", "values": {"cursorSwatchPreview": false}})).unwrap();
+    assert!(swatch_chips(&mut s, v).is_empty());
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, list[3].1);
+}
+
+/// The Live Paint Bucket and the Shape Builder take Left and Right for swatches only without
+/// modifiers: Shift, Alt and Cmd/Ctrl arrows are left to their shortcuts and change no paint.
+#[test]
+fn swatch_arrow_keys_leave_modified_arrows_to_the_shortcuts() {
+    let mut s = session();
+    two(&mut s);
+    let v = ViewInfo::default();
+    let first = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[0].name.clone();
+    s.execute("paint.setFill", &json!({"swatch": first, "ids": []})).unwrap();
+    for tool in ["livePaintBucket", "shapeBuilder"] {
+        s.select_tool(tool, v).unwrap();
+        if tool == "shapeBuilder" {
+            s.set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "swatches"}})).unwrap();
+        }
+        let fill = s.paint.fill.clone();
+        assert!(s.tool_claims_key_with(ToolKey::Right, Mods::default(), v), "{tool}");
+        for m in [Mods { shift: true, ..Default::default() }, Mods { alt: true, ..Default::default() }, Mods { cmd: true, ..Default::default() }] {
+            for key in [ToolKey::Left, ToolKey::Right] {
+                assert!(!s.tool_claims_key_with(key, m, v), "{tool} {key:?} {m:?}");
+                s.tool_key(key, m, v).unwrap();
+                assert_eq!(s.paint.fill, fill, "{tool} {key:?} {m:?}");
+            }
+        }
+        s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+        assert_ne!(s.paint.fill, fill, "{tool}: a plain Right steps");
+    }
+}
+
+/// Two swatches of the same color: the Bucket's arrows step through both, and the fill and the
+/// stroke each step on from the swatch picked for them.
+#[test]
+fn live_paint_bucket_arrow_keys_pass_swatches_of_the_same_color_for_fill_and_stroke() {
+    let mut s = session();
+    two(&mut s);
+    for name in ["Twin A", "Twin B"] {
+        s.execute("swatch.new", &json!({"name": name, "color": "#123456"})).unwrap();
+    }
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    let names: Vec<String> = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| sw.name.clone()).collect();
+    let a = names.iter().position(|n| n == "Twin A").unwrap();
+    assert_eq!(names[a + 1], "Twin B");
+    let after = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[(a + 2) % names.len()].paint.clone();
+    // The fill goes to Twin B.
+    s.execute("paint.setFill", &json!({"swatch": "Twin A", "ids": []})).unwrap();
+    let twin = s.paint.fill.clone();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, twin, "Twin B");
+    // The stroke starts at Twin A: Right goes to Twin B, then past it.
+    s.execute("paint.setStroke", &json!({"swatch": "Twin A", "ids": []})).unwrap();
+    assert!(!s.fill_active);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, twin, "Twin B for the stroke");
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, after, "the swatch after Twin B");
+    // Back on the fill, which is still Twin B: Right goes past it.
+    s.execute("paint.toggleActive", &json!({"fill": true})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, after, "the fill steps on from Twin B");
+}
+
+/// A color that is no swatch shows alone and Right picks the first swatch, Left the last; a paint
+/// that is not a solid color shows no chip; one swatch steps to itself; with no color swatch the
+/// tool leaves the arrows alone; during a fill drag the arrows change nothing.
+#[test]
+fn live_paint_bucket_arrow_keys_handle_unmatched_paint_few_swatches_and_drags() {
+    let mut s = session();
+    live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    let list: Vec<Paint> = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| sw.paint.clone()).collect();
+    let odd = Paint::solid(Color::rgb8(0x12, 0x34, 0x57));
+    assert!(!list.contains(&odd));
+    s.paint.fill = odd.clone();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&odd), true)]);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[0]);
+    s.paint.fill = odd.clone();
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[list.len() - 1]);
+    s.paint.fill = Paint::None;
+    assert!(swatch_chips(&mut s, v).is_empty());
+
+    // During a fill drag the arrows are not taken and change nothing.
+    s.paint.fill = list[0].clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    assert!(s.tool_busy());
+    assert!(!s.tool_claims_key(ToolKey::Right, v));
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[0]);
+    assert!(swatch_chips(&mut s, v).is_empty(), "no chips during a drag");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 25.0, 50.0), v).unwrap();
+
+    // One color swatch: both arrows pick it, and it stands on both sides of itself.
+    let one = list[0].clone();
+    s.edit("t", |d, _| {
+        d.swatch_groups.clear();
+        d.swatches.retain(|sw| sw.paint == one);
+        d.swatches.truncate(1);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).len(), 1);
+    s.paint.fill = odd;
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
+    s.pointer(&PointerEvent::new(PointerKind::Move, 301.0, 300.0), v).unwrap();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&one), false), (chip_color(&one), true), (chip_color(&one), false)]);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
+
+    // No color swatch: the arrows are left to the canvas and the paint stays.
+    s.edit("t", |d, _| {
+        d.swatches.clear();
+        Ok(())
+    })
+    .unwrap();
+    assert!(!s.tool_claims_key(ToolKey::Right, v) && !s.tool_claims_key(ToolKey::Left, v));
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
+}
+
 #[test]
 fn shape_builder_tool_alt_deletes_line_pieces() {
     let mut s = session();
@@ -3284,9 +3481,10 @@ fn live_paint_tool_options_refuse_invalid_values_and_change_nothing() {
     let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
     let widths = [json!("wide"), json!(null), json!(true)];
     let switches = [json!("true"), json!(null), json!(1)];
-    for (tool, keys) in
-        [("livePaintBucket", &["paintFills", "paintStrokes", "highlight"][..]), ("livePaintSelection", &["selectFills", "selectStrokes"][..])]
-    {
+    for (tool, keys) in [
+        ("livePaintBucket", &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight"][..]),
+        ("livePaintSelection", &["selectFills", "selectStrokes"][..]),
+    ] {
         let mut bad: Vec<(&str, Value)> = keys.iter().flat_map(|k| switches.iter().map(move |v| (*k, v.clone()))).collect();
         bad.extend(colors.iter().map(|v| ("color", v.clone())));
         bad.extend(widths.iter().map(|v| ("width", v.clone())));

@@ -4036,6 +4036,7 @@ mark-style	Japanese	Kiểu Nhật
 	VectorCraft Title Bar on Every Desktop	Thanh tiêu đề VectorCraft trên mọi màn hình nền
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Khi biến môi trường VECTORCRAFT_TITLEBAR được đặt, biến này chọn thanh tiêu đề.
 	System Title Bar takes precedence over this option while it is on.	Khi Thanh tiêu đề hệ thống được bật, tùy chọn đó được ưu tiên hơn tùy chọn này.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Khi Thanh tiêu đề VectorCraft trên mọi màn hình nền đang tắt, màn hình nền này vẽ thanh tiêu đề của cửa sổ dù tùy chọn này bật hay tắt.
 	Tab	Tab
 	Tab Stops	Vị trí tab
 	Table	Bảng
@@ -6208,6 +6209,8 @@ axis	Y Axis	Trục Y
 	Action Options…	Tùy chọn hành động…
 	Action Options	Tùy chọn hành động
 	Playback Options…	Tùy chọn phát lại…
+	Button Mode	Chế độ nút
+	No actions.	Không có hành động.
 	Insert Stop…	Chèn điểm dừng…
 	Insert Stop	Chèn điểm dừng
 	Record Stop	Ghi điểm dừng

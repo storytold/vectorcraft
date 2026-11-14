@@ -32,8 +32,9 @@ pub struct Action {
     /// saved value that is not a function key loads as none.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_key")]
     pub key: Option<FunctionKey>,
-    /// The action's Button Mode color, one of [`COLORS`], if one is assigned. The panel does not
-    /// show it. A saved value that is not one of them loads as none.
+    /// The action's Button Mode color, one of [`COLORS`], if one is assigned: the color of its
+    /// button while the panel is in Button Mode ([`button_colors`]). A saved value that is not one
+    /// of them loads as none.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_color")]
     pub color: Option<String>,
 }
@@ -157,6 +158,40 @@ impl FunctionKey {
 
 /// The Button Mode colors an action can have, as (value, label).
 pub const COLORS: [(&str, &str); 5] = [("red", "Red"), ("yellow", "Yellow"), ("green", "Green"), ("blue", "Blue"), ("violet", "Violet")];
+
+/// The fill of a Button Mode button in color `color`, one of [`COLORS`]: VectorCraft's own shades.
+fn button_fill(color: &str) -> Option<egui::Color32> {
+    let rgb = egui::Color32::from_rgb;
+    Some(match color {
+        "red" => rgb(0xd4, 0x3f, 0x3f),
+        "yellow" => rgb(0xf0, 0xc8, 0x3c),
+        "green" => rgb(0x3f, 0xa8, 0x5a),
+        "blue" => rgb(0x3d, 0x7b, 0xd6),
+        "violet" => rgb(0x8e, 0x5a, 0xd0),
+        _ => return None,
+    })
+}
+
+/// The relative luminance of `c`, as WCAG 2 defines it.
+fn luminance(c: egui::Color32) -> f32 {
+    let channel = |v: u8| {
+        let v = f32::from(v) / 255.0;
+        if v <= 0.040_45 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * channel(c.r()) + 0.7152 * channel(c.g()) + 0.0722 * channel(c.b())
+}
+
+/// The (fill, text) colors of the Button Mode button of an action with color `color`: a colored
+/// fill with black or white text, whichever contrasts more with it, or the theme's ordinary button
+/// for an action without a color.
+fn button_colors(color: Option<&str>, t: &Tokens) -> (egui::Color32, egui::Color32) {
+    match color.and_then(button_fill) {
+        // Black text contrasts more than white above this luminance.
+        Some(fill) if luminance(fill) > 0.179 => (fill, egui::Color32::BLACK),
+        Some(fill) => (fill, egui::Color32::WHITE),
+        None => (t.button, t.text_strong),
+    }
+}
 
 /// Serde reader for [`Action::key`]: a value that is not a function key is none.
 fn deserialize_key<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<FunctionKey>, D::Error> {
@@ -937,6 +972,37 @@ pub fn play_action(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
         [(s, a)] => play(app, s, a),
         _ => Err(format!("more than one action is named “{}”", name)),
     }
+}
+
+/// The command that plays an action by its place in the panel ([`play_at`]).
+pub const PLAY_AT: &str = "ui.action.playAt";
+
+/// `ui.action.playAt {set, action}`: plays the action at index `action` of set `set` (0 is the top
+/// set) at the Playback Options speed, as [`play`] does; a click on an action's button in Button
+/// Mode runs this. A missing index, or one that is not a whole number or is past the last set or
+/// action, is an error, and then nothing plays. → what [`play`] returns
+pub fn play_at(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let index = |k: &str| p.get(k).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok());
+    let (set, at) = index("set").zip(index("action")).ok_or("no such action")?;
+    play(app, set, at)
+}
+
+/// The command behind the panel menu's Button Mode ([`button_mode`]).
+pub const BUTTON_MODE: &str = "ui.action.buttonMode";
+
+/// `ui.action.buttonMode {enabled?}`: with `enabled: true` the Actions panel shows every action of
+/// every set as a button in its color ([`Action::color`]) that plays the action when clicked, and
+/// with `false` it shows its list of sets, actions and steps again; left out or null, it switches
+/// to the other view. The view is kept with the UI preferences. Turning Button Mode on while an
+/// action records is an error, and so is an `enabled` that is not true, false or null; then the
+/// view does not change. → {enabled}
+pub fn button_mode(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let enabled = crate::menus::opt_bool(p, "enabled")?.unwrap_or(!app.ui.action_button_mode);
+    if enabled && !app.ui.action_button_mode && app.ui.recording.is_some() {
+        return Err("an action is already recording".into());
+    }
+    app.ui.action_button_mode = enabled;
+    Ok(json!({ "enabled": enabled }))
 }
 
 /// The command that ends a recording ([`stop`]).
@@ -2058,9 +2124,18 @@ pub fn duplicate(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 
 /// The panel's (≡) menu.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    // Button Mode is off while an action records, so the Stop button the list shows stays in reach.
+    let buttons = app.ui.action_button_mode;
+    if widgets::menu_item(ui, tl!("Button Mode"), buttons || app.ui.recording.is_none(), buttons)
+        && let Err(e) = app.run(BUTTON_MODE, json!({}))
+    {
+        app.status(e);
+    }
+    ui.separator();
     // A selected action counts only while its set is the current one, as the panel shows it: a set
-    // deleted since leaves the stored pair pointing at another set's action.
-    let selected = pstate::<Option<(usize, usize)>>(ui.ctx(), "actions-selected").filter(|&(s, _)| app.ui.action_set == Some(s));
+    // deleted since leaves the stored pair pointing at another set's action. Button Mode shows no
+    // selected action and no current set, so the items that act on them are off there.
+    let selected = pstate::<Option<(usize, usize)>>(ui.ctx(), "actions-selected").filter(|&(s, _)| !buttons && app.ui.action_set == Some(s));
     let has = selected.and_then(|(s, a)| app.ui.action_sets.get(s).and_then(|set| set.actions.get(a))).is_some();
     if widgets::menu_item(ui, tl!("New Action…"), crate::dialogs::action_new::can_open(app), false)
         && let Err(e) = crate::dialogs::action_new::open(app)
@@ -2070,11 +2145,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     if widgets::menu_item(ui, tl!("New Set…"), true, false) {
         crate::dialogs::action_set_options::open_new(app);
     }
-    let current = app.ui.action_set.filter(|&s| s < app.ui.action_sets.len());
+    let current = app.ui.action_set.filter(|&s| !buttons && s < app.ui.action_sets.len());
     if widgets::menu_item(ui, tl!("Duplicate"), current.is_some(), false) {
         duplicate_selection(app, ui.ctx());
     }
-    if widgets::menu_item(ui, tl!("Delete"), has || !selected_sets(app).is_empty(), false) {
+    if widgets::menu_item(ui, tl!("Delete"), has || (!buttons && !selected_sets(app).is_empty()), false) {
         delete_selection(app, ui.ctx());
     }
     if widgets::menu_item(ui, tl!("Set Options…"), current.is_some(), false)
@@ -2207,8 +2282,78 @@ enum InclusionChange {
     Step(usize, usize, usize, bool),
 }
 
-/// Draw action sets, steps and playback controls, keeping the list above a pinned footer.
+/// Button Mode ([`button_mode`]): every action of every set, in set order and then action order,
+/// as a button with its name in its color ([`button_colors`]), with no set names, steps or
+/// checkmarks. A click on a button, or Enter or Space on the focused one, plays the action
+/// ([`PLAY_AT`]). The footer shows only while an action plays or records: Stop Playing/Recording,
+/// and Play Current Selection while a playback waits at a stop.
+fn show_buttons(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    let t = Tokens::get(ui.ctx());
+    let mut play_req = None;
+    let list_height = widgets::panel_list_height(ui, 260.0, 0.0).min(260.0);
+    egui::ScrollArea::vertical().id_salt("actions-buttons").max_height(list_height).min_scrolled_height(list_height.min(64.0)).show(ui, |ui| {
+        for (si, set) in app.ui.action_sets.iter().enumerate() {
+            for (ai, a) in set.actions.iter().enumerate() {
+                let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 24.0), egui::Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &a.name));
+                let (fill, text) = button_colors(a.color.as_deref(), &t);
+                let button = r.shrink2(egui::vec2(2.0, 1.0));
+                ui.painter().rect_filled(button, 3.0, fill);
+                // The pointer over a button, or the keyboard focus on it, rings it in its text color.
+                let (width, ring) = if resp.hovered() || resp.has_focus() { (2.0, text) } else { (1.0, t.button_border) };
+                ui.painter().rect_stroke(button, 3.0, egui::Stroke::new(width, ring), egui::StrokeKind::Inside);
+                ui.painter().with_clip_rect(button.shrink2(egui::vec2(6.0, 0.0))).text(
+                    button.left_center() + egui::vec2(8.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    &a.name,
+                    egui::FontId::proportional(12.5),
+                    text,
+                );
+                if resp.on_hover_text(&a.name).clicked() {
+                    play_req = Some((si, ai));
+                }
+            }
+        }
+    });
+    if app.ui.action_sets.iter().all(|s| s.actions.is_empty()) {
+        dim_label(ui, tl!("No actions."));
+    }
+    let waiting = waiting_at_stop(app);
+    if waiting {
+        dim_label(ui, tl!("Press Play Current Selection in the Actions panel to go on."));
+    }
+    let recording = app.ui.recording.is_some();
+    if recording || app.ui.action_playing.is_some() {
+        widgets::bottom_bar(ui, |ui| {
+            if widgets::icon_button(ui, "square", tl!("Stop Playing/Recording"), false, 24.0).clicked()
+                && let Err(e) = app.run(STOP_RECORDING, json!({}))
+            {
+                app.status(e);
+            }
+            if waiting
+                && widgets::icon_button(ui, "dc-actions", tl!("Play Current Selection"), false, 24.0).clicked()
+                && let Err(e) = app.run(CONTINUE_PLAYBACK, json!({}))
+            {
+                app.status(e);
+            }
+            if recording {
+                ui.label(egui::RichText::new(tl!("● Recording")).color(egui::Color32::from_rgb(0xe0, 0x30, 0x30)));
+            }
+        });
+    }
+    if let Some((si, ai)) = play_req
+        && let Err(e) = app.run(PLAY_AT, json!({"set": si, "action": ai}))
+    {
+        app.status(e);
+    }
+}
+
+/// Draw action sets, steps and playback controls, keeping the list above a pinned footer, or in
+/// Button Mode the actions as buttons ([`show_buttons`]).
 pub fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    if app.ui.action_button_mode {
+        return show_buttons(app, ui);
+    }
     let t = Tokens::get(ui.ctx());
     // The selected action as (set, action). Read as the type it is stored as: egui keeps a
     // value per type, so reading the bare pair never found it and no action stayed selected (#1629).
@@ -2721,6 +2866,186 @@ mod tests {
         assert_eq!(names(&app), before[1..], "the selected action is deleted");
         click(&ctx, &mut app, delete.center(), show);
         assert_eq!(names(&app), before[1..], "nothing selected after a delete: nothing more goes");
+    }
+
+    /// The fills of the rectangles drawn in one headless frame of the panel.
+    fn drawn_fills(ctx: &egui::Context, app: &mut VectorcraftApp) -> Vec<egui::Color32> {
+        fn collect(s: &egui::Shape, out: &mut Vec<egui::Color32>) {
+            match s {
+                egui::Shape::Rect(r) => out.push(r.fill),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+                _ => {}
+            }
+        }
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        output.textures_delta.clear();
+        let mut fills = vec![];
+        output.shapes.iter().for_each(|c| collect(&c.shape, &mut fills));
+        fills
+    }
+
+    /// The panel menu's Button Mode switches the panel to buttons and back, with a check mark while
+    /// it is on; `ui.action.buttonMode` does the same, and the view is kept with the UI preferences.
+    /// Turning it on while an action records is refused, so Stop stays in reach.
+    #[test]
+    fn button_mode_switches_the_view_and_is_kept_with_the_preferences() {
+        use super::super::tests_appearance::{click, frame_events};
+        let mut app = app_with_sets();
+        assert!(!app.ui.action_button_mode, "the list is the default");
+        let ctx = egui::Context::default();
+        let item = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+            let texts = frame_events(ctx, app, vec![], menu);
+            texts.into_iter().find(|(s, _)| s.trim_start_matches('✓').trim() == "Button Mode").expect("Button Mode in the menu")
+        };
+        let (label, at) = item(&ctx, &mut app);
+        assert_eq!(label, "   Button Mode", "no check mark while off");
+        click(&ctx, &mut app, at.center(), menu);
+        assert!(app.ui.action_button_mode, "the menu item turns it on");
+        assert_eq!(item(&ctx, &mut app).0, "✓ Button Mode", "a check mark while on");
+        let at = item(&ctx, &mut app).1;
+        click(&ctx, &mut app, at.center(), menu);
+        assert!(!app.ui.action_button_mode, "choosing it again returns to the list");
+
+        assert_eq!(app.run(BUTTON_MODE, json!({})).unwrap(), json!({"enabled": true}), "left out: the other view");
+        assert_eq!(app.run(BUTTON_MODE, json!({"enabled": true})).unwrap(), json!({"enabled": true}));
+        assert_eq!(app.run(BUTTON_MODE, json!({"enabled": "no"})).unwrap_err(), "`enabled` must be true or false");
+        assert!(app.ui.action_button_mode, "a bad value keeps the view");
+        let saved = serde_json::to_value(&app.ui).unwrap();
+        assert_eq!(saved["action_button_mode"], json!(true));
+        assert!(serde_json::from_value::<crate::state::UiState>(saved.clone()).unwrap().action_button_mode, "kept after a restart");
+        let mut older = saved;
+        older.as_object_mut().unwrap().remove("action_button_mode");
+        assert!(!serde_json::from_value::<crate::state::UiState>(older).unwrap().action_button_mode, "older preferences show the list");
+
+        assert_eq!(app.run(BUTTON_MODE, json!({"enabled": null})).unwrap(), json!({"enabled": false}));
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run(START_RECORDING, json!({})).unwrap();
+        assert_eq!(app.run(BUTTON_MODE, json!({})).unwrap_err(), "an action is already recording");
+        let at = item(&ctx, &mut app).1;
+        click(&ctx, &mut app, at.center(), menu);
+        assert!(!app.ui.action_button_mode, "the menu item is off while an action records");
+        assert_eq!(app.run(BUTTON_MODE, json!({"enabled": false})).unwrap(), json!({"enabled": false}), "turning it off is never refused");
+        app.run(STOP_RECORDING, json!({})).unwrap();
+    }
+
+    /// Button Mode shows every action of every set by its name, in set order and then action order,
+    /// without set names, step counts or steps, each in its Action Options color; an action without
+    /// a color is an ordinary button. The menu items for a selected action or the current set are
+    /// off, since the view shows neither.
+    #[test]
+    fn button_mode_shows_every_action_as_a_button_in_its_color() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let mut app = app_with_sets();
+        app.run(ACTION_OPTIONS, json!({"set": 1, "action": 0, "color": "red"})).unwrap();
+        app.run(ACTION_OPTIONS, json!({"set": 1, "action": 1, "color": "yellow"})).unwrap();
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Nudge").center(), show);
+        assert_eq!(pstate::<Option<(usize, usize)>>(&ctx, "actions-selected"), Some((1, 0)), "selected in the list");
+        app.run(BUTTON_MODE, json!({"enabled": true})).unwrap();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        let names: Vec<&str> = texts.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "Duplicate and Offset 10 pt",
+                "Unite and Simplify",
+                "Center on Artboard",
+                "Outline Text",
+                "Rotate 90° CW",
+                "Reflect Horizontal",
+                "Nudge",
+                "Nudge Again"
+            ],
+            "only the actions' names, in set and action order"
+        );
+        let tops: Vec<f32> = texts.iter().map(|(_, r)| r.top()).collect();
+        assert!(tops.windows(2).all(|w| w[0] < w[1]), "one button under the other: {tops:?}");
+        let t = Tokens::get(&ctx);
+        let fills = drawn_fills(&ctx, &mut app);
+        for color in ["red", "yellow"] {
+            let fill = button_fill(color).unwrap();
+            assert_eq!(fills.iter().filter(|f| **f == fill).count(), 1, "{color}: {fills:?}");
+        }
+        assert_eq!(fills.iter().filter(|f| **f == t.button).count(), 6, "the six actions without a color: {fills:?}");
+        for (color, _) in COLORS {
+            let (fill, text) = button_colors(Some(color), &t);
+            let (hi, lo) = (luminance(fill).max(luminance(text)), luminance(fill).min(luminance(text)));
+            assert!((hi + 0.05) / (lo + 0.05) >= 4.5, "{color}: its name is legible");
+        }
+        assert_eq!(button_colors(None, &t), (t.button, t.text_strong));
+        let menu_texts = frame_events(&ctx, &mut app, vec![], menu);
+        click(&ctx, &mut app, text_rect(&menu_texts, "   Delete").center(), menu);
+        click(&ctx, &mut app, text_rect(&menu_texts, "   Action Options…").center(), menu);
+        assert!(app.ui.dialog.is_none(), "Delete and Action Options… are off in Button Mode");
+        assert_eq!(set_names(&app), ["Default Actions", "Mine", "Other"]);
+        assert_eq!(action_names(&app, 1), ["Nudge", "Nudge Again"], "the action selected in the list stays");
+    }
+
+    /// A click on a button plays that action at once, as one undo step at Accelerated, without its
+    /// excluded steps, which stay excluded; `ui.action.playAt` refuses an index that names no action.
+    #[test]
+    fn a_click_on_a_button_plays_its_action_without_its_excluded_steps() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let (mut app, x) = app_with_three_moves();
+        app.run(INCLUDE_STEPS, json!({"set": 0, "action": 0, "step": 1, "included": false})).unwrap();
+        app.run(BUTTON_MODE, json!({"enabled": true})).unwrap();
+        let ctx = egui::Context::default();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        let undo = undo_steps(&app);
+        click(&ctx, &mut app, text_rect(&texts, "Three Moves").center(), show);
+        assert_eq!((x(&app), undo_steps(&app)), (5.0, undo + 1), "1 and 4 pt as one undo step; the 2 pt step is skipped");
+        assert_eq!(app.ui.action_sets[0].actions[0].excluded_steps, BTreeSet::from([1]), "the exclusion stays");
+        for (p, want) in [
+            (json!({"set": 0, "action": 1}), "no such action"),
+            (json!({"set": 1, "action": 0}), "no such action"),
+            (json!({"set": "0", "action": 0}), "no such action"),
+            (json!({"set": 0}), "no such action"),
+        ] {
+            assert_eq!(app.run(PLAY_AT, p.clone()).unwrap_err(), want, "{p}");
+        }
+        assert_eq!(x(&app), 5.0, "nothing more played");
+        app.run(PLAY_AT, json!({"set": 0, "action": 0})).unwrap();
+        assert_eq!(x(&app), 10.0);
+    }
+
+    /// Button Mode shows no bottom bar while nothing plays or records. While an action plays step by
+    /// step its Stop Playing/Recording button ends the playback, and while one waits at a stop its
+    /// Play Current Selection button plays on.
+    #[test]
+    fn button_mode_shows_stop_and_continue_only_while_an_action_plays() {
+        use super::super::tests_appearance::{click, frame_events, text_rect};
+        let bar = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+            frame_events(ctx, app, vec![], show);
+            let mut bar = crate::toolbar::tests::widget_rects(ctx, egui::vec2(24.0, 24.0));
+            bar.sort_by(|a, b| a.left().total_cmp(&b.left()));
+            // A button can be listed more than once in a pass.
+            bar.dedup();
+            bar
+        };
+        let (mut app, x) = app_with_three_moves();
+        app.run(BUTTON_MODE, json!({"enabled": true})).unwrap();
+        app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
+        let ctx = egui::Context::default();
+        assert_eq!(bar(&ctx, &mut app), [], "no bottom bar while idle");
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Three Moves").center(), show);
+        assert_eq!(x(&app), 1.0, "the first step played");
+        let [stop] = bar(&ctx, &mut app)[..] else { panic!("only Stop while it plays") };
+        click(&ctx, &mut app, stop.center(), show);
+        assert!(app.ui.action_playing.is_none(), "Stop ends the playback");
+        assert_eq!(x(&app), 1.0);
+
+        let (mut app, x) = app_with_a_stop(true);
+        app.run(BUTTON_MODE, json!({"enabled": true})).unwrap();
+        let texts = frame_events(&ctx, &mut app, vec![], show);
+        click(&ctx, &mut app, text_rect(&texts, "Three Moves").center(), show);
+        assert!(waiting_at_stop(&app));
+        assert_eq!(x(&app), 1.0, "played up to the stop");
+        let [_, play] = bar(&ctx, &mut app)[..] else { panic!("Stop and Play Current Selection at a stop") };
+        click(&ctx, &mut app, play.center(), show);
+        assert!(app.ui.action_playing.is_none());
+        assert_eq!(x(&app), 7.0, "Play Current Selection plays on");
     }
 
     /// #3712: Create New Set asks for a name (Set 1 when free), the new set is the current one, so a
