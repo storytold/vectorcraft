@@ -1445,13 +1445,38 @@ fn offset_stroke(f: &Filter) -> Result<Option<StyleItem>, ()> {
     stroke_item(f, if inside { StrokeAlign::Inside } else { StrokeAlign::Outside })
 }
 
+/// The entries a Calligraphic brush's filter may hold, with the settings [`calligraphic_stroke`]
+/// reads. Any other entry keeps the drawn look.
+const CALLIGRAPHIC_ENTRIES: [&str; 14] = [
+    "StrokeStyle",
+    "DisplayString",
+    "Brush",
+    "Diameter",
+    "DiameterVariation",
+    "DiameterDependsOn",
+    "Roundness",
+    "RoundnessVariation",
+    "RoundnessDependsOn",
+    "Angle",
+    "AngleVariation",
+    "AngleDependsOn",
+    "AngleRelativeTo",
+    "Adobe Effect Expand Before Version", // brand-ok: the entry's name in the files
+];
+
 /// A Calligraphic brush's filter `f` as the stroke it paints: `None` when it isn't a stroke in a
-/// colour, names no Calligraphic brush, or its settings aren't all there as numbers. An angle
-/// relative to the path isn't read.
+/// color, names no Calligraphic brush, holds an entry or a width that isn't read, or its settings
+/// aren't all there as numbers. An angle relative to the path isn't read.
 fn calligraphic_stroke(f: &Filter) -> Option<StyleItem> {
     let real = |key: &str| entry(f, key, Kind::Real).ok().flatten();
     let code = |key: &str| entry(f, key, Kind::Int).ok().flatten();
-    if !f.paints.0 || f.gradient || f.pattern.is_some() || f.repeated {
+    if !f.paints.0
+        || f.gradient
+        || f.pattern.is_some()
+        || f.repeated
+        || !f.arrays.is_empty()
+        || !f.kinds.keys().all(|k| CALLIGRAPHIC_ENTRIES.contains(&k.as_str()))
+    {
         return None;
     }
     if entry(f, "AngleRelativeTo", Kind::Int).ok()?.unwrap_or(0.0) != 0.0 {
