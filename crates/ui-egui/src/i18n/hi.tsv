@@ -6668,6 +6668,8 @@ antiAlias	Sharp	शार्प
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: कोई डायलॉग किसी बिल्ट-इन फ़ंक्शन के कॉलबैक, getter, रूपांतरण या $.evalFile द्वारा चलाई गई फ़ाइल के भीतर नहीं खुल सकता; इसे स्क्रिप्ट के अपने कोड से कॉल करें
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` में अगला उत्तर {_1} के लिए है, {name} के लिए नहीं
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` में इस डायलॉग के लिए कोई उत्तर नहीं बचा है
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` में {n} उत्तर है जिसका स्क्रिप्ट ने उपयोग नहीं किया|`answers` में {n} उत्तर हैं जिनका स्क्रिप्ट ने उपयोग नहीं किया
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ने ब्रश के नीचे {n} ऑब्जेक्ट को अपरिवर्तित छोड़ा ({_2}): यह केवल पाथ को नया आकार देता है|{_1} ने ब्रश के नीचे {n} ऑब्जेक्ट्स को अपरिवर्तित छोड़ा ({_2}): यह केवल पाथ्स को नया आकार देता है
 @msg	vc.document{place} is too large for a script	vc.document{place} स्क्रिप्ट के लिए बहुत बड़ा है
 @msg	vc.log: the log of this run is full	vc.log: इस रन का लॉग भर गया है
 @msg	this function's script run has ended	इस फ़ंक्शन का स्क्रिप्ट रन समाप्त हो गया है

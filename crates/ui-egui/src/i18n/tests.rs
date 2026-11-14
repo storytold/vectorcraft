@@ -2029,6 +2029,37 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
     }
 }
 
+/// A script's error about unused `answers` and Liquify's note on the objects it left as they were
+/// are translated whole for one object as well as for several, in every complete-message language,
+/// and keep their counts.
+#[test]
+fn messages_with_one_or_several_items_translate_in_every_complete_catalog() {
+    let notes = [
+        ("`answers` has 1 answer the script did not use", "1"),
+        ("`answers` has 2 answers the script did not use", "2"),
+        ("`answers` has 5 answers the script did not use", "5"),
+        ("Warp left 1 object under the brush as it was (type): it reshapes paths only", "1"),
+        ("Twirl left 2 objects under the brush as they were (type, images): it reshapes paths only", "2"),
+        ("Pucker left 5 objects under the brush as they were (symbols): it reshapes paths only", "5"),
+    ];
+    // Whole words, so that a word such as Swedish "under" or Dutch "object" is not read as English.
+    let english = ["answer", "did", "use", "left", "brush", "was", "they", "were", "reshapes", "paths", "only"];
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        for (note, count) in notes {
+            let shown = message(lang, note);
+            assert_ne!(shown, note, "{code}");
+            assert!(shown.split(|c: char| !c.is_alphabetic()).all(|w| !english.contains(&w)), "{code}: {shown}");
+            assert!(shown.contains(count) && (!note.starts_with('`') || shown.contains("`answers`")), "{code}: {shown}");
+        }
+    }
+    // The count picks the language's form.
+    let cs = cs();
+    assert!(message(cs, "`answers` has 1 answer the script did not use").contains("1 odpověď,"));
+    assert!(message(cs, "`answers` has 2 answers the script did not use").contains("2 odpovědi,"));
+    assert!(message(cs, "`answers` has 5 answers the script did not use").contains("5 odpovědí,"));
+}
+
 #[test]
 fn package_status_message_templates_parse() {
     let c = Catalog::parse(concat!(

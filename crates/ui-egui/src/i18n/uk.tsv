@@ -4391,6 +4391,8 @@ axis	Both	Обидві
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: діалогове вікно не може відкритися всередині зворотного виклику вбудованої функції, гетера, перетворення або файлу, який виконує $.evalFile; викличте його з власного коду скрипту
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: наступна відповідь у `answers` призначена для {_1}, а не для {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: у `answers` не залишилося відповіді для цього діалогового вікна
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	У `answers` залишилася {n} відповідь, яку скрипт не використав|У `answers` залишилися {n} відповіді, які скрипт не використав|У `answers` залишилося {n} відповідей, які скрипт не використав
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} залишив без змін {n} об’єкт під пензлем ({_2}): він змінює форму лише контурів|{_1} залишив без змін {n} об’єкти під пензлем ({_2}): він змінює форму лише контурів|{_1} залишив без змін {n} об’єктів під пензлем ({_2}): він змінює форму лише контурів
 @msg	vc.document{place} is too large for a script	vc.document{place} завеликий для скрипту
 @msg	vc.log: the log of this run is full	vc.log: журнал цього запуску заповнений
 @msg	this function's script run has ended	запуск скрипту цієї функції завершився
