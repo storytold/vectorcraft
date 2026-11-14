@@ -27,6 +27,13 @@ fn curved_path_frame() -> TextObject {
     t
 }
 
+/// Type on a closed path, a circle about 314 round.
+fn closed_path_frame() -> TextObject {
+    let mut t = path_frame(300.0);
+    t.kind = TextKind::OnPath { path: shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0)), start: 0.0, end: None };
+    t
+}
+
 /// Type on a path that overflows ends its line where its text stops fitting, as area type's
 /// last line does, so a story flows on from there through area type and type on a path alike.
 #[test]
@@ -724,7 +731,7 @@ fn frames_take_the_shares_the_whole_rest_gives_them() {
     ]
     .concat();
     type Edit = fn(&mut TextObject);
-    let edits: [(&str, Edit); 15] = [
+    let edits: [(&str, Edit); 18] = [
         ("path", |_| {}),
         ("path, Left", |t| t.para.justify = Justify::Left),
         ("path, Auto", |t| t.para.justify = Justify::Auto),
@@ -732,6 +739,20 @@ fn frames_take_the_shares_the_whole_rest_gives_them() {
         ("path, Center", |t| t.para.justify = Justify::Center),
         ("path, Right", |t| t.para.justify = Justify::Right),
         ("path, Justify All", |t| t.para.justify = Justify::JustifyAll),
+        ("path, Justify All, spacing", |t| {
+            t.para.justify = Justify::JustifyAll;
+            t.path_spacing = 8.0;
+        }),
+        ("path, Justify All, negative spacing", |t| {
+            t.para.justify = Justify::JustifyAll;
+            t.path_spacing = -8.0;
+        }),
+        ("closed path, Justify All", |t| {
+            t.para.justify = Justify::JustifyAll;
+            if let TextKind::OnPath { path, .. } = &mut t.kind {
+                *path = shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0));
+            }
+        }),
         ("path, spacing", |t| t.path_spacing = 8.0),
         ("path, Optical Margin Alignment", |t| t.optical_margin = true),
         ("path, Roman Hanging Punctuation", |t| t.para.roman_hanging = true),
@@ -756,6 +777,35 @@ fn frames_take_the_shares_the_whole_rest_gives_them() {
         took += same_as_whole_rest(db, &refs(&on), &story(&last_long), &[], &format!("{case}, long last paragraph"));
         // The story's last character does not hang, the last one measured does.
         took += same_as_whole_rest(db, &refs(&on), &story(&ends_unhung), &[], &format!("{case}, story ending in a letter"));
+    }
+    // Glyphs whose advance is negative, and punctuation and quotes that end paragraphs, some of
+    // them alone after empty paragraphs.
+    let tight = CharStyle { tracking: -1200.0, ..Default::default() };
+    let text = paragraphs(120);
+    let mut negative: Vec<TextRun> =
+        text.split_inclusive(' ').enumerate().map(|(i, w)| TextRun::new(w, if i % 4 == 0 { tight.clone() } else { plain.clone() })).collect();
+    normalize(&mut negative);
+    let punctuated = (1..=150)
+        .map(|i| match i % 3 {
+            0 => ".".to_string(),
+            1 => format!("Item {i}: the \u{201c}fox.\u{201d}"),
+            _ => String::new(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    for justify in [Justify::Left, Justify::JustifyAll, Justify::Center, Justify::Right] {
+        let mut on = paths(|_| {});
+        on.push(closed_path_frame());
+        for t in &mut on {
+            t.para.justify = justify;
+        }
+        took += same_as_whole_rest(db, &refs(&on), &negative, &[], &format!("path, {justify:?}, negative tracking"));
+        took += same_as_whole_rest(db, &refs(&on), &story(&punctuated), &[], &format!("path, {justify:?}, punctuation at paragraph ends"));
+        let mut spaced = on.clone();
+        for t in &mut spaced {
+            t.path_spacing = -8.0;
+        }
+        took += same_as_whole_rest(db, &refs(&spaced), &negative, &[], &format!("path, {justify:?}, negative tracking and spacing"));
     }
     let on = paths(|_| {});
     took += same_as_whole_rest(db, &refs(&on), &styled, &[], "path, style runs");
@@ -877,7 +927,7 @@ fn many_frames_measure_about_the_text_they_take() {
         }
         measures_about_the_text_taken(db, &shaped, &format!("{align:?}, ellipses"));
     }
-    for justify in [Justify::Left, Justify::JustifyLeft, Justify::Auto] {
+    for justify in [Justify::Left, Justify::JustifyLeft, Justify::JustifyAll, Justify::Auto] {
         let paths: Vec<TextObject> = (0..40)
             .map(|_| {
                 let mut t = path_frame(300.0);
@@ -886,6 +936,34 @@ fn many_frames_measure_about_the_text_they_take() {
             })
             .collect();
         measures_about_the_text_taken(db, &paths, &format!("path, {justify:?}"));
+    }
+    // Justify All on curved, bracketed and closed paths, and with Spacing.
+    type Make = fn() -> TextObject;
+    let kinds: [(&str, Make); 4] = [
+        ("curved", curved_path_frame),
+        ("bracketed", || {
+            let mut t = path_frame(300.0);
+            if let TextKind::OnPath { start, end, .. } = &mut t.kind {
+                (*start, *end) = (0.1, Some(0.8));
+            }
+            t
+        }),
+        ("closed", closed_path_frame),
+        ("spaced", || {
+            let mut t = curved_path_frame();
+            t.path_spacing = -20.0;
+            t
+        }),
+    ];
+    for (shape, make) in kinds {
+        let paths: Vec<TextObject> = (0..40)
+            .map(|_| {
+                let mut t = make();
+                t.para.justify = Justify::JustifyAll;
+                t
+            })
+            .collect();
+        measures_about_the_text_taken(db, &paths, &format!("{shape} path, Justify All"));
     }
     let vertical: Vec<TextObject> = (0..40)
         .map(|_| {
