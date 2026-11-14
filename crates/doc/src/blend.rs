@@ -677,14 +677,21 @@ fn gradient_from(g: &Gradient, s: f32) -> Gradient {
         // The first of `own` not yet matched: the parts' stops run in order, so the links are
         // found in one pass.
         let mut j = 0;
-        for st in g.span(from, to).stops {
+        for (k, st) in g.span(from, to).stops.into_iter().enumerate() {
             let p = from + (to - from) * st.offset;
             while own.get(j).is_some_and(|o| o.offset <= p - STEP) {
                 j += 1;
             }
-            let hit = (j..own.len())
-                .take_while(|&i| own.get(i).is_some_and(|o| o.offset < p + STEP))
-                .find(|&i| own.get(i).is_some_and(|o| o.color == st.color && o.opacity == st.opacity));
+            let same = |i: usize| own.get(i).is_some_and(|o| o.color == st.color && o.opacity == st.opacity);
+            let near = (j..own.len()).take_while(|&i| own.get(i).is_some_and(|o| o.offset < p + STEP));
+            let mut hit = near.clone().find(|&i| same(i));
+            // A part starting on a step starts with the color after it, so its first stop takes
+            // the link of the step's last stop of that color.
+            if k == 0
+                && let Some(at) = hit.and_then(|i| own.get(i)).map(|o| o.offset)
+            {
+                hit = near.filter(|&i| own.get(i).is_some_and(|o| o.offset == at) && same(i)).last().or(hit);
+            }
             let (swatch, tint, plates) = match hit.and_then(|i| own.get(i).map(|o| (i, o))) {
                 Some((i, o)) => {
                     j = i + 1;
@@ -2987,6 +2994,23 @@ mod tests {
             p => panic!("a gradient: {p:?}"),
         };
         assert_eq!(links, vec![Some("Ink".into()), Some("Paper".into())], "{:?}", s.paint);
+        // A step of one color between two swatches, where the turned subpath now starts: the
+        // start takes the link after the step and the end the link before it.
+        let seam_step = keyed(square(100.0), &|s| {
+            let mut g = Gradient::default();
+            let gray = Color::rgb8(128, 128, 128);
+            let (mut before, mut after) = (GradientStop::new(0.5, gray), GradientStop::new(0.5, gray));
+            (before.swatch, after.swatch) = (Some("Ink".into()), Some("Paper".into()));
+            g.stops.splice(1..1, [before, after]);
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+            s.gradient_mode = StrokeGradientMode::Along;
+        });
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &seam_step, (Some(0), Some(2))).b);
+        let ends = match &s.paint {
+            Paint::Gradient(g) => (g.gradient.stops.first().map(|st| st.swatch.clone()), g.gradient.stops.last().map(|st| st.swatch.clone())),
+            p => panic!("a gradient: {p:?}"),
+        };
+        assert_eq!(ends, (Some(Some("Paper".into())), Some(Some("Ink".into()))), "{:?}", s.paint);
         // Blended with a gradient of other stops, the steps keep that step.
         let three = keyed(square(0.0), &|s| {
             let mut g = Gradient::default();
