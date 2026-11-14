@@ -82,8 +82,9 @@ impl Default for HitOptions {
     }
 }
 
-/// The shapes that an image's own fills and strokes paint, each with its fill rule and the fill or
-/// stroke that paints it (none for fills and strokes that paint nothing). Effects are evaluated
+/// The shapes that an image's own fills and strokes paint, or the fills and strokes of the art of a
+/// symbol instance whose own fill or stroke has a geometry effect, each with its fill rule and the
+/// fill or stroke that paints it (none for fills and strokes that paint nothing). Effects are evaluated
 /// above this crate, so the engine registers one with [`set_image_paint`]. It looks up swatches and
 /// patterns in the document it is given.
 pub type ImagePaint = fn(Option<&Document>, &Node) -> Vec<(BezPath, FillRule, AppearanceItem)>;
@@ -97,8 +98,8 @@ pub fn set_image_paint(f: ImagePaint) {
     let _ = IMAGE_PAINT.set(f);
 }
 
-/// The shapes that the image `n`'s own fills and strokes paint ([`set_image_paint`]), none while
-/// nothing is registered.
+/// The shapes that the image or symbol instance `n` paints with its geometry effects
+/// ([`set_image_paint`]), none while nothing is registered.
 pub(crate) fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
     IMAGE_PAINT.get().map_or_else(Vec::new, |f| f(doc, n))
 }
@@ -891,12 +892,21 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
             if opt.outline {
                 return None;
             }
-            image_paint(Some(symbols.document()), n).iter().rev().find_map(|(bp, rule, item)| match item {
-                AppearanceItem::Stroke(s) => s.hits(bp, *rule, p, opt.tol).then_some(HitKind::Stroke),
-                AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
-            })
+            hit_painted(n, p, opt, symbols)
         }
-        NodeKind::Text(_) | NodeKind::PlacedDocument(_) | NodeKind::SymbolInstance { .. } => {
+        // A symbol instance is hit within its bounds, and outside them where the geometry effects
+        // of its active fill or stroke reshape the art it draws ([`image_paint`]) except in outline
+        // mode.
+        NodeKind::SymbolInstance { .. } => {
+            if n.geometric_bounds_with(symbols).is_some_and(|b| b.inflate(opt.tol, opt.tol).contains(p)) {
+                return Some(HitKind::Bounds);
+            }
+            if opt.outline {
+                return None;
+            }
+            hit_painted(n, p, opt, symbols)
+        }
+        NodeKind::Text(_) | NodeKind::PlacedDocument(_) => {
             n.geometric_bounds_with(symbols).filter(|b| b.inflate(opt.tol, opt.tol).contains(p)).map(|_| HitKind::Bounds)
         }
         // A blend or an envelope is hit within its bounds, and outside them where its evaluated
@@ -922,6 +932,16 @@ fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Optio
         }
         _ => None,
     }
+}
+
+/// What a click at `p` hits among the shapes that the fills and strokes of `n` (an image or a
+/// symbol instance) paint with their geometry effects ([`image_paint`]), the frontmost first: a
+/// stroke along its shape, a fill inside it except with Selection by Path Only.
+fn hit_painted(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
+    image_paint(Some(symbols.document()), n).iter().rev().find_map(|(bp, rule, item)| match item {
+        AppearanceItem::Stroke(s) => s.hits(bp, *rule, p, opt.tol).then_some(HitKind::Stroke),
+        AppearanceItem::Fill(_) => (!opt.path_only && fill_contains(bp, *rule, p)).then_some(HitKind::Fill),
+    })
 }
 
 /// Is `p` within `tol` of the type path of `t` (in `n`), what "Type Object Selection by Path

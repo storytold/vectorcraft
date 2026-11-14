@@ -178,7 +178,7 @@ fn geometry_of(fx: &[Effect]) -> Vec<Effect> {
 /// of a symbol whose art (in `doc`) holds an instance of `n`'s symbol, at any depth, keeps its
 /// appearance, so the effects never pass round a symbol that holds itself. Without `doc`, no
 /// instance in the art takes them.
-fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
+pub(crate) fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
     let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
     let fill = active_fill(n).map_or(vec![], |f| geometry_of(&f.effects));
     let stroke = active_stroke(n).map_or(vec![], |s| geometry_of(&s.effects));
@@ -404,30 +404,92 @@ fn traced_opaque_area(bytes: &[u8]) -> Traced {
 /// rule and the fill or stroke that paints it: the paths (or compound paths) that [`reshape`]
 /// makes along its frame or, for those whose first effect is Outline Object, along the outline of
 /// its opaque area ([`opaque_area`]), with each fill's or stroke's geometry effects applied as the
-/// renderer applies them. Empty for anything but an image with such fills or strokes. The swatches
-/// and patterns that live-effect plug-ins painting their pieces name are looked up in `doc`, and
-/// the image's pixels in `doc` when the image does not hold them.
+/// renderer applies them. For a symbol instance whose active fill or stroke has a visible geometry
+/// effect ([`has_item_geometry`]), the shapes that the fills and strokes of the art it draws paint
+/// ([`instance_paint`]). Empty for anything else. The swatches and patterns that live-effect
+/// plug-ins painting their pieces name are looked up in `doc`, and the image's pixels in `doc` when
+/// the image does not hold them.
 pub fn image_paint(doc: Option<&Document>, n: &Node) -> Vec<(BezPath, FillRule, AppearanceItem)> {
-    if !matches!(n.kind, NodeKind::Image(_)) || !has_item_geometry(n) {
-        return vec![];
-    }
-    let Some(art) = reshape(doc, n, None) else { return vec![] };
     let mut out = vec![];
-    art.walk(&mut |c| {
-        let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }) = &c.kind else { return };
-        let Some(g) = c.stroke_path() else { return };
-        let ctx = GeomContext { doc, ..GeomContext::of(c) };
-        for item in c.appearance.items.iter().filter(|i| crate::paints(i)) {
-            let fx = item.effects();
-            let shape = if crate::has_geometry(fx) && !g.elements().is_empty() {
-                crate::apply_geometry_bez(fx, &g, g.bounding_box(), &ctx.item(item))
-            } else {
-                g.clone()
-            };
-            out.push((shape, *rule, item.clone()));
-        }
-    });
+    if matches!(n.kind, NodeKind::SymbolInstance { .. }) {
+        let mut budget = SYMBOL_ART_MAX_NODES;
+        instance_paint(doc, n, 1, &mut budget, &mut out);
+        return out;
+    }
+    if !matches!(n.kind, NodeKind::Image(_)) || !has_item_geometry(n) {
+        return out;
+    }
+    let Some(art) = reshape(doc, n, None) else { return out };
+    art.walk(&mut |c| push_painted(doc, c, &mut out));
     out
+}
+
+/// The shapes that the fills and strokes of path or compound path `c` paint, each with the
+/// geometry effects of that fill or stroke applied ([`image_paint`]); nothing for other objects.
+fn push_painted(doc: Option<&Document>, c: &Node, out: &mut Vec<(BezPath, FillRule, AppearanceItem)>) {
+    let (NodeKind::Path { rule, .. } | NodeKind::Compound { rule, .. }) = &c.kind else { return };
+    let Some(g) = c.stroke_path() else { return };
+    let ctx = GeomContext { doc, ..GeomContext::of(c) };
+    for item in c.appearance.items.iter().filter(|i| crate::paints(i)) {
+        let fx = item.effects();
+        let shape = if crate::has_geometry(fx) && !g.elements().is_empty() {
+            crate::apply_geometry_bez(fx, &g, g.bounding_box(), &ctx.item(item))
+        } else {
+            g.clone()
+        };
+        out.push((shape, *rule, item.clone()));
+    }
+}
+
+/// The shapes that symbol instance `n`, `depth` instances deep, paints with the geometry effects of
+/// its active fill and stroke ([`has_item_geometry`]): the paths of the art [`reshape`] makes of it,
+/// each with its own geometry effects and those of each fill and stroke applied
+/// ([`crate::bake_type_appearance`], [`push_painted`]), the paths that the own fills and strokes of
+/// the groups and layers in the art paint ([`crate::evaluate_container`]), and the instances in that
+/// art that took those effects, in turn. Hidden objects, clipping paths, guides and the members of
+/// clip groups add nothing, and neither does an instance more than
+/// [`vectorcraft_doc::depth::MAX_DEPTH`] deep or whose symbol's art would take the objects measured
+/// so far past `budget`.
+fn instance_paint(doc: Option<&Document>, n: &Node, depth: usize, budget: &mut u64, out: &mut Vec<(BezPath, FillRule, AppearanceItem)>) {
+    let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
+    if depth >= vectorcraft_doc::depth::MAX_DEPTH || !has_item_geometry(n) {
+        return;
+    }
+    let Some(sym) = doc.and_then(|d| d.symbols.iter().find(|s| s.name == *symbol)) else { return };
+    let count = sym.art.count() as u64;
+    if count > *budget {
+        return;
+    }
+    *budget -= count;
+    let Some(art) = reshape(doc, n, Some(&vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n))) else { return };
+    painted_in(doc, &art, depth, budget, out);
+}
+
+/// [`instance_paint`] of the objects in `n`, art of an instance `depth` instances deep.
+fn painted_in(doc: Option<&Document>, n: &Node, depth: usize, budget: &mut u64, out: &mut Vec<(BezPath, FillRule, AppearanceItem)>) {
+    if !n.visible {
+        return;
+    }
+    match &n.kind {
+        NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. } => match crate::bake_type_appearance(doc, n) {
+            // One path for each fill and stroke, its effects applied.
+            Some(pieces) => painted_in(doc, &pieces, depth, budget, out),
+            None => push_painted(doc, n, out),
+        },
+        NodeKind::Path { .. } => {}
+        NodeKind::SymbolInstance { .. } => instance_paint(doc, n, depth + 1, budget, out),
+        _ if n.clips() => {}
+        _ => {
+            let evaluated = crate::has_container_appearance(n).then(|| crate::evaluate_container(doc, n)).flatten();
+            let g = evaluated.as_ref().unwrap_or(n);
+            if g.clips() {
+                return;
+            }
+            for c in g.children().into_iter().flatten() {
+                painted_in(doc, c, depth, budget, out);
+            }
+        }
+    }
 }
 
 /// The glyph outlines of type `t` in text space with its underline and strikethrough bars: one
