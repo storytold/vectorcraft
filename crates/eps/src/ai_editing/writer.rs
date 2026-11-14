@@ -206,6 +206,9 @@ pub(super) struct Writer<'a> {
     mask_level: Option<(u32, u32)>,
     /// The image just written was written as a placed file.
     placed: bool,
+    /// The image being written is the copy of a styled object on the layers, on `%_` lines: linked,
+    /// it is written as a placed file there ([`Self::styled_object`]).
+    styled_copy: bool,
     /// The type just written was written as type, not as its outlines.
     typed: bool,
     /// The objects bound to variables so far, in the order they are written: each one's id, its XML
@@ -299,6 +302,7 @@ impl<'a> Writer<'a> {
             hidden: 0,
             mask_level: None,
             placed: false,
+            styled_copy: false,
             typed: false,
             bound: vec![],
             texts: texts::TextDoc::default(),
