@@ -31,7 +31,8 @@ fn polygon_len(c: CubicBez) -> f64 {
 /// The places (0 to 1, in order, without 0 and with 1) on the curved segment `c` that
 /// [`smooth_corners`] measures it at: up to [`CORNER_PIECES`] evenly spaced, and near each end, over
 /// a stretch at least three times `reach` long where the segment is that long, up to as many more
-/// that are no more than `reach` / 8 apart along the control polygon. The turns over `reach` and
+/// that are no more than `reach` / 8 apart along the control polygon, and as many again in each
+/// stretch twice as long after it until the pieces reach three times `reach`. The turns over `reach` and
 /// twice `reach` from an anchor are then measured along the curve however long the segment is.
 fn corner_places(c: CubicBez, reach: f64) -> Vec<f64> {
     let piece = reach / 8.0;
@@ -41,7 +42,8 @@ fn corner_places(c: CubicBez, reach: f64) -> Vec<f64> {
     if piece > 0.0 {
         for from_start in [true, false] {
             // The stretch from the end: halved until its control polygon is at most six reaches long.
-            let mut t = 1.0 / k as f64;
+            let first = 1.0 / k as f64;
+            let mut t = first;
             let part = |t: f64| if from_start { c.subsegment(0.0..t) } else { c.subsegment(1.0 - t..1.0) };
             for _ in 0..60 {
                 if polygon_len(part(t)) <= 6.0 * reach {
@@ -49,8 +51,34 @@ fn corner_places(c: CubicBez, reach: f64) -> Vec<f64> {
                 }
                 t /= 2.0;
             }
+            let side = |u: f64| if from_start { u } else { 1.0 - u };
             let m = pieces(polygon_len(part(t)));
-            places.extend((1..m).map(|j| t * j as f64 / m as f64).map(|u| if from_start { u } else { 1.0 - u }));
+            let mut fine: Vec<f64> = (1..=m).map(|j| t * j as f64 / m as f64).collect();
+            // Then the stretches twice as long in turn, cut as finely, up to the first even place, until
+            // the pieces reach three reaches from the end, so twice the reach is measured along the curve
+            // where a handle that does not reach out makes the curve start more slowly than its polygon.
+            let mut covered = 0.0;
+            let mut at = c.eval(side(0.0));
+            for u in &fine {
+                let q = c.eval(side(*u));
+                covered += at.distance(q);
+                at = q;
+            }
+            let (mut from, mut levels) = (t, 0);
+            while covered < 3.0 * reach && from < first && levels < 60 {
+                let to = (2.0 * from).min(first);
+                let piece_len = polygon_len(if from_start { c.subsegment(from..to) } else { c.subsegment(1.0 - to..1.0 - from) });
+                let m = pieces(piece_len);
+                for j in 1..=m {
+                    let u = from + (to - from) * j as f64 / m as f64;
+                    let q = c.eval(side(u));
+                    covered += at.distance(q);
+                    at = q;
+                    fine.push(u);
+                }
+                (from, levels) = (to, levels + 1);
+            }
+            places.extend(fine.into_iter().map(side));
         }
     }
     places.retain(|u| *u > 0.0 && *u <= 1.0);
@@ -967,6 +995,22 @@ mod tests {
         };
         assert_eq!(at_v(&fine), Some(true), "cut finely, the anchor is a corner");
         assert_eq!(at_v(&long), Some(true));
+    }
+
+    /// A line that meets a curve leaving with no handle, turning by 58° at the anchor and by about
+    /// 57.53° over twice a reach of 0.02 pt: the anchor is a corner, measured either way along the path,
+    /// as the stretch measured finely near the anchor covers twice the reach along the curve.
+    #[test]
+    fn a_corner_next_to_a_curve_without_a_handle_is_kept() {
+        let at = 58f64.to_radians();
+        let prev = Anchor::corner(Point::new(-100.0 * at.cos(), -100.0 * at.sin()));
+        let v = Point::new(0.0, 0.0);
+        let a = Anchor::with_handles(v, v, v);
+        let end = Point::new(600.0, 600.0);
+        let next = Anchor::with_handles(end, Point::new(200.0, 0.0), end);
+        assert_eq!(smooth_corners(&[prev, a, next], false, 0.02), vec![false, true, false]);
+        let back = |x: Anchor| Anchor::with_handles(x.p, x.h_out, x.h_in);
+        assert_eq!(smooth_corners(&[back(next), back(a), back(prev)], false, 0.02), vec![false, true, false]);
     }
 
     /// A jagged closed path whose length is less than twice the reach: its jags are not corners,
