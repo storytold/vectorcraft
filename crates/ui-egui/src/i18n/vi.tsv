@@ -154,10 +154,6 @@
 	Add to Selection	Thêm vào vùng chọn
 	Add to Swatches	Thêm vào mẫu màu
 	Add Used Colors	Thêm các màu đã dùng
-	Show Document Colors	Hiện màu của tài liệu
-	Document Colors	Màu của tài liệu
-	Selection Colors	Màu của vùng chọn
-@plural	Used {n} time|Used {n} times	Dùng {n} lần
 	Additional Fonts Folder	Thư mục phông bổ sung
 	Additional Plug-ins Folder	Thư mục plug-in bổ sung
 	Adjust Adjoining Width Points	Điều chỉnh các điểm chiều rộng kề nhau
@@ -668,6 +664,10 @@ font-technology	Variable	Biến thiên
 	Box Channel	Kênh của hộp
 	Color box	Hộp màu
 	Color Wheel Options	Tùy chọn bánh xe màu
+	Show Document Colors	Hiện màu của tài liệu
+	Document Colors	Màu của tài liệu
+	Selection Colors	Màu của vùng chọn
+@plural	Used {n} time|Used {n} times	Dùng {n} lần
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu

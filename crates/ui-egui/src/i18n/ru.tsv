@@ -136,10 +136,6 @@
 	Add to Selection	Добавить к выделению
 	Add to Swatches	Добавить в образцы
 	Add Used Colors	Добавить использованные цвета
-	Show Document Colors	Показать цвета документа
-	Document Colors	Цвета документа
-	Selection Colors	Цвета выделения
-@plural	Used {n} time|Used {n} times	Используется {n} раз|Используется {n} раза|Используется {n} раз
 	Additional Plug-ins Folder	Папка дополнительных модулей
 	Additional Fonts Folder	Папка дополнительных шрифтов
 	Adjust Adjoining Width Points	Настроить смежные точки ширины
@@ -579,6 +575,10 @@ font-technology	Variable	Вариативные
 	Box Channel	Канал квадрата
 	Color box	Цветовой квадрат
 	Color Wheel Options	Параметры цветового круга
+	Show Document Colors	Показать цвета документа
+	Document Colors	Цвета документа
+	Selection Colors	Цвета выделения
+@plural	Used {n} time|Used {n} times	Используется {n} раз|Используется {n} раза|Используется {n} раз
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать

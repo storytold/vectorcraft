@@ -220,10 +220,6 @@
 	Add to Symbols	Afegeix als símbols
 	Add to the Current Shortcuts	Afegeix a les dreceres actuals
 	Add Used Colors	Afegeix els colors utilitzats
-	Show Document Colors	Mostra els colors del document
-	Document Colors	Colors del document
-	Selection Colors	Colors de la selecció
-@plural	Used {n} time|Used {n} times	Utilitzat {n} vegada|Utilitzat {n} vegades
 	Additional Fonts Folder	Carpeta addicional de tipus de lletra
 	Additional Plug-ins Folder	Carpeta addicional de complements
 	Adjust Adjoining Width Points	Ajusta els punts d’amplada contigus
@@ -828,6 +824,10 @@ antiAlias	Sharp	Nítid
 	Box Channel	Canal del quadre
 	Color box	Quadre de color
 	Color Wheel Options	Opcions de la roda de colors
+	Show Document Colors	Mostra els colors del document
+	Document Colors	Colors del document
+	Selection Colors	Colors de la selecció
+@plural	Used {n} time|Used {n} times	Utilitzat {n} vegada|Utilitzat {n} vegades
 	Color Type:	Tipus de color:
 	Color wheel	Roda de color
 	Color:	Color:

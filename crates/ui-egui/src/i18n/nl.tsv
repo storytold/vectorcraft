@@ -1216,6 +1216,10 @@
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
+	Show Document Colors	Documentkleuren tonen
+	Document Colors	Documentkleuren
+	Selection Colors	Kleuren van de selectie
+@plural	Used {n} time|Used {n} times	{n} keer gebruikt|{n} keer gebruikt
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld
@@ -4287,10 +4291,6 @@ theme	Appearance	Vormgeving
 	Add to Graphic Styles	Aan grafische stijlen toevoegen
 	Graphic Style Library	Bibliotheek met grafische stijlen
 	Add Used Colors	Gebruikte kleuren toevoegen
-	Show Document Colors	Documentkleuren tonen
-	Document Colors	Documentkleuren
-	Selection Colors	Kleuren van de selectie
-@plural	Used {n} time|Used {n} times	{n} keer gebruikt|{n} keer gebruikt
 	Delete Swatch	Kleurstaal verwijderen
 	Duplicate Swatch	Kleurstaal dupliceren
 	Merge Swatches	Kleurstalen samenvoegen

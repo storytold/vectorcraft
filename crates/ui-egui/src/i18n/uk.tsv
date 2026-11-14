@@ -132,10 +132,6 @@
 	Add to Selection	Додати до виділення
 	Add to Swatches	Додати до зразків
 	Add Used Colors	Додати використані кольори
-	Show Document Colors	Показати кольори документа
-	Document Colors	Кольори документа
-	Selection Colors	Кольори виділення
-@plural	Used {n} time|Used {n} times	Використано {n} раз|Використано {n} рази|Використано {n} разів
 	Additional Plug-ins Folder	Папка додаткових модулів
 	Additional Fonts Folder	Папка додаткових шрифтів
 	Adjust Adjoining Width Points	Налаштувати суміжні точки ширини
@@ -575,6 +571,10 @@ font-technology	Variable	Варіативні
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
+	Show Document Colors	Показати кольори документа
+	Document Colors	Кольори документа
+	Selection Colors	Кольори виділення
+@plural	Used {n} time|Used {n} times	Використано {n} раз|Використано {n} рази|Використано {n} разів
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати

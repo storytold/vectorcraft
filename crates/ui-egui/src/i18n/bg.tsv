@@ -124,10 +124,6 @@
 	Add to Selection	Добавяне към селекцията
 	Add to Swatches	Добавяне към образци
 	Add Used Colors	Добавяне на използваните цветове
-	Show Document Colors	Показване на цветовете на документа
-	Document Colors	Цветове на документа
-	Selection Colors	Цветове на селекцията
-@plural	Used {n} time|Used {n} times	Използван {n} път|Използван {n} пъти
 	Additional Plug-ins Folder	Допълнителна папка за плъгини
 	Additional Fonts Folder	Допълнителна папка за шрифтове
 	Adjust Adjoining Width Points	Регулиране на прилежащите точки за ширина
@@ -566,6 +562,10 @@ font-technology	Variable	Променливи
 	Box Channel	Канал на квадрата
 	Color box	Цветови квадрат
 	Color Wheel Options	Опции на цветното колело
+	Show Document Colors	Показване на цветовете на документа
+	Document Colors	Цветове на документа
+	Selection Colors	Цветове на селекцията
+@plural	Used {n} time|Used {n} times	Използван {n} път|Използван {n} пъти
 	Color Type:	Цветен тип:
 	Color:	Цвят:
 	Colorize	Оцветяване

@@ -162,7 +162,8 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// Panel state: the Show Document Colors row's colors, with the [`UsedKey`] they were read for.
 const USED: &str = "color-wheel-used";
-/// The most chips the row asks `color.used` for.
+/// The fewest chips the row asks `color.used` for; a row wider than this many chips asks for as
+/// many as it holds.
 const MAX_CHIPS: usize = 128;
 /// Above this many color uses, an edit makes the row read the colors again at most once every
 /// [`LARGE_EVERY`] seconds; a change of document or selection still reads them at once.
@@ -184,6 +185,8 @@ struct UsedCache {
     uses: u64,
     /// Whether the colors are the selection's.
     selected: bool,
+    /// The most colors asked for.
+    limit: usize,
     colors: Vec<Used>,
 }
 
@@ -210,15 +213,19 @@ impl Used {
 /// The colors the row shows and whether they are the selection's, read with `color.used` once per
 /// document revision and selection and kept as they are while an interaction is in progress (a
 /// preview raises the revision on every frame of a drag). In art with more than [`LARGE_USES`]
-/// color uses, an edit reads them again only after [`LARGE_EVERY`] seconds.
-fn used_colors(app: &mut VectorcraftApp, ui: &Ui) -> Arc<UsedCache> {
+/// color uses, an edit reads them again only after [`LARGE_EVERY`] seconds. A row that holds more
+/// than the colors last asked for reads them again.
+fn used_colors(app: &mut VectorcraftApp, ui: &Ui, per_row: usize) -> Arc<UsedCache> {
+    let limit = per_row.max(MAX_CHIPS);
     let key: UsedKey = app.session.active().map(|d| {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         d.selection.objects.hash(&mut h);
         (d.uid, d.revision, d.selection.objects.len(), h.finish())
     });
     let now = ui.input(|i| i.time);
-    if let Some(cache) = pstate::<Option<Arc<UsedCache>>>(ui.ctx(), USED) {
+    if let Some(cache) = pstate::<Option<Arc<UsedCache>>>(ui.ctx(), USED)
+        && (cache.limit >= per_row || cache.colors.len() < cache.limit)
+    {
         if cache.key == key || app.session.in_interaction() {
             return cache;
         }
@@ -229,7 +236,7 @@ fn used_colors(app: &mut VectorcraftApp, ui: &Ui) -> Arc<UsedCache> {
             return cache;
         }
     }
-    let r = key.as_ref().and_then(|_| app.session.execute("color.used", &json!({ "limit": MAX_CHIPS })).ok());
+    let r = key.as_ref().and_then(|_| app.session.execute("color.used", &json!({ "limit": limit })).ok());
     let colors: Vec<Used> = r
         .as_ref()
         .and_then(|r| r["colors"].as_array())
@@ -246,7 +253,7 @@ fn used_colors(app: &mut VectorcraftApp, ui: &Ui) -> Arc<UsedCache> {
         .unwrap_or_default();
     let selected = r.as_ref().is_some_and(|r| r["selection"] == true);
     let uses = r.as_ref().and_then(|r| r["uses"].as_u64()).unwrap_or(0);
-    let cache = Arc::new(UsedCache { key, at: now, uses, selected, colors });
+    let cache = Arc::new(UsedCache { key, at: now, uses, selected, limit, colors });
     set_pstate(ui.ctx(), USED, Some(Arc::clone(&cache)));
     cache
 }
@@ -254,13 +261,13 @@ fn used_colors(app: &mut VectorcraftApp, ui: &Ui) -> Arc<UsedCache> {
 /// The Show Document Colors row: a heading (Selection Colors or Document Colors) and the colors,
 /// most used first, as many as fit in one row. Returns the color clicked.
 fn document_colors_row(app: &mut VectorcraftApp, ui: &mut Ui) -> Option<Used> {
-    let cache = used_colors(app, ui);
-    widgets::subheader(ui, if cache.selected { tl!("Selection Colors") } else { tl!("Document Colors") });
-    let t = Tokens::get(ui.ctx());
     let width = ui.available_width();
     // Chips are 16 px on a 19 px pitch, inset 3 px, with 2 px kept clear of the right edge, as
     // in the Recent Colors row.
     let per_row = (((width - 21.0) / 19.0).floor().max(0.0) as usize + 1).max(1);
+    let cache = used_colors(app, ui, per_row);
+    widgets::subheader(ui, if cache.selected { tl!("Selection Colors") } else { tl!("Document Colors") });
+    let t = Tokens::get(ui.ctx());
     let (r, _) = ui.allocate_exact_size(vec2(width, 22.0), Sense::hover());
     ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
     let mut chosen = None;

@@ -97,10 +97,6 @@
 	Add to Selection	加入選取範圍
 	Add to Swatches	新增至色票
 	Add Used Colors	新增使用中的顏色
-	Show Document Colors	顯示文件顏色
-	Document Colors	文件顏色
-	Selection Colors	所選物件的顏色
-@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Additional Plug-ins Folder	額外的增效模組資料夾
 	Additional Fonts Folder	額外的字體資料夾
 	Adjust Adjoining Width Points	調整相鄰寬度點
@@ -544,6 +540,10 @@ font-technology	Variable	可變
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
+	Show Document Colors	顯示文件顏色
+	Document Colors	文件顏色
+	Selection Colors	所選物件的顏色
+@plural	Used {n} time|Used {n} times	使用 {n} 次
 	Color Type:	顏色類型：
 	Color:	顏色：
 	Colorize	上色

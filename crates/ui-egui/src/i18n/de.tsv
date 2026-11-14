@@ -113,10 +113,6 @@
 	Add to Selection	Zur Auswahl hinzufügen
 	Add to Swatches	Zu Farbfeldern hinzufügen
 	Add Used Colors	Verwendete Farben hinzufügen
-	Show Document Colors	Dokumentfarben einblenden
-	Document Colors	Dokumentfarben
-	Selection Colors	Farben der Auswahl
-@plural	Used {n} time|Used {n} times	{n}-mal verwendet|{n}-mal verwendet
 	Additional Plug-ins Folder	Zusätzlicher Plug-in-Ordner
 	Additional Fonts Folder	Zusätzlicher Schriftenordner
 	Adjust Adjoining Width Points	Angrenzende Breitenpunkte anpassen
@@ -559,6 +555,10 @@ font-technology	Variable	Variabel
 	Box Channel	Kanal des Quadrats
 	Color box	Farbquadrat
 	Color Wheel Options	Optionen für den Farbkreis
+	Show Document Colors	Dokumentfarben einblenden
+	Document Colors	Dokumentfarben
+	Selection Colors	Farben der Auswahl
+@plural	Used {n} time|Used {n} times	{n}-mal verwendet|{n}-mal verwendet
 	Color Type:	Farbart:
 	Color:	Farbe:
 	Colorize	Einfärben

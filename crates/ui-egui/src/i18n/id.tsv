@@ -698,6 +698,10 @@
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna
+	Show Document Colors	Tampilkan warna dokumen
+	Document Colors	Warna dokumen
+	Selection Colors	Warna pilihan
+@plural	Used {n} time|Used {n} times	Dipakai {n} kali
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata
@@ -3769,10 +3773,6 @@ theme	Appearance	Tampilan
 	Add to Graphic Styles	Tambahkan ke gaya grafis
 	Graphic Style Library	Pustaka gaya grafis
 	Add Used Colors	Tambahkan warna yang digunakan
-	Show Document Colors	Tampilkan warna dokumen
-	Document Colors	Warna dokumen
-	Selection Colors	Warna pilihan
-@plural	Used {n} time|Used {n} times	Dipakai {n} kali
 	Delete Swatch	Hapus sampel
 	Duplicate Swatch	Duplikatkan sampel
 	Merge Swatches	Gabungkan sampel

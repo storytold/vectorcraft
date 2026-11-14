@@ -208,10 +208,6 @@
 	Add to Selection	Hozzáadás a kijelöléshez
 	Add to Swatches	Hozzáadás a színmintákhoz
 	Add Used Colors	Használt színek hozzáadása
-	Show Document Colors	Dokumentumszínek megjelenítése
-	Document Colors	Dokumentumszínek
-	Selection Colors	A kijelölés színei
-@plural	Used {n} time|Used {n} times	{n} alkalommal használva
 	Additional Fonts Folder	További betűtípusok mappája
 	Additional Plug-ins Folder	További bővítmények mappája
 	Adjust Adjoining Width Points	Szomszédos szélességi pontok igazítása
@@ -757,6 +753,10 @@ font-technology	Variable	Változó
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
+	Show Document Colors	Dokumentumszínek megjelenítése
+	Document Colors	Dokumentumszínek
+	Selection Colors	A kijelölés színei
+@plural	Used {n} time|Used {n} times	{n} alkalommal használva
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés

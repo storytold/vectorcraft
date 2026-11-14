@@ -139,10 +139,6 @@
 	Add to Selection	Ajouter à la sélection
 	Add to Swatches	Ajouter au nuancier
 	Add Used Colors	Ajouter les couleurs utilisées
-	Show Document Colors	Afficher les couleurs du document
-	Document Colors	Couleurs du document
-	Selection Colors	Couleurs de la sélection
-@plural	Used {n} time|Used {n} times	Utilisée {n} fois|Utilisée {n} fois
 	Additional Plug-ins Folder	Dossier de modules externes supplémentaires
 	Additional Fonts Folder	Dossier de polices supplémentaires
 	Adjust Adjoining Width Points	Ajuster les points de largeur adjacents
@@ -582,6 +578,10 @@ font-technology	Variable	Variables
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
+	Show Document Colors	Afficher les couleurs du document
+	Document Colors	Couleurs du document
+	Selection Colors	Couleurs de la sélection
+@plural	Used {n} time|Used {n} times	Utilisée {n} fois|Utilisée {n} fois
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser

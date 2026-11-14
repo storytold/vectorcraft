@@ -1,6 +1,6 @@
 //! The Color Wheel panel's Show Document Colors row drawn headless: its colors and their order,
 //! the heading that follows the selection, the colors that fit in one row, a click and an Alt+click
-//! on a color, swatch links, gradient stops, the colors kept during a drag, the panel menu,
+//! on a color, swatch links, gradient stops and freeform points, the colors kept during a drag, the panel menu,
 //! `ui.colorWheel {documentColors}` and the saved setting.
 
 use egui::{Event, Modifiers, PointerButton, Pos2, vec2};
@@ -110,6 +110,21 @@ fn the_row_shows_only_the_colors_that_fit() {
     assert!(shown.iter().all(|r| (r.top() - red.top()).abs() < 0.5 && r.right() <= 260.0), "one row inside the panel: {shown:?}");
 }
 
+/// A row wide enough for more than 128 chips shows as many colors as fit.
+#[test]
+fn a_wide_row_shows_more_than_128_colors() {
+    let (mut app, _, _) = app();
+    let hex = |i: usize| format!("#{:02x}{:02x}80", i % 256, i / 256 + 1);
+    for i in 0..160 {
+        rect(&mut app, 170.0, json!({"color": hex(i)}));
+    }
+    app.run("select.none", json!({})).unwrap();
+    let mut h = Harness::builder().with_size(vec2(3400.0, 360.0)).build_ui_state(|ui, app: &mut VectorcraftApp| show(app, ui), app);
+    h.run_steps(2);
+    let shown = (0..160).filter(|i| has(&h, &label(&hex(*i), 1))).count();
+    assert!(shown > 128, "{shown} of the 160 colors show");
+}
+
 /// A click on a color fills the selection with it, as one undo step.
 #[test]
 fn a_click_on_a_color_sets_the_fill() {
@@ -170,13 +185,13 @@ fn a_click_keeps_a_swatch_link_and_its_tint() {
     assert!((tint - 0.4).abs() < 1e-3, "tint {tint}");
 }
 
-/// A click recolors the selected gradient stop, linking it to a color's swatch.
+/// A click recolors the selected gradient stop, linking it to a color's swatch at its tint.
 #[test]
 fn a_click_recolors_the_selected_gradient_stop() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true})).unwrap();
-    let stops = json!([{"offset": 0, "color": "#000000", "swatch": "Ink"}, {"offset": 1, "color": "#0000ff"}]);
+    let stops = json!([{"offset": 0, "color": "#000000", "swatch": "Ink", "tint": 40}, {"offset": 1, "color": "#0000ff"}]);
     rect(&mut app, 10.0, json!({"gradient": {"stops": stops, "start": [10, 25], "end": [40, 25]}}));
     app.select_tool("gradient");
     app.run("gradient.selectStop", json!({"index": 1})).unwrap();
@@ -196,6 +211,37 @@ fn a_click_recolors_the_selected_gradient_stop() {
     let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
     let stop = &g.gradient.stops[1];
     assert_eq!((stop.color.to_hex(), stop.swatch.as_deref()), (hex, Some("Ink")));
+    assert!((stop.tint - 0.4).abs() < 1e-3, "tint {}", stop.tint);
+}
+
+/// A click on a color linked to a swatch gives a selected freeform point the color alone and keeps
+/// the freeform fill.
+#[test]
+fn a_click_gives_a_freeform_point_the_color_alone() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 100, "height": 100})).unwrap();
+    app.run("paint.editGradient", json!({"kind": "freeform"})).unwrap();
+    app.run("paint.setStroke", json!({"swatch": "Ink", "tint": 40, "focus": false})).unwrap();
+    app.select_tool("gradient");
+    app.run("paint.freeform.selectPoint", json!({"index": 1})).unwrap();
+    app.run("ui.colorWheel", json!({"documentColors": true})).unwrap();
+    let hex = app.session.execute("color.used", &json!({})).unwrap()["colors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["swatch"] == "Ink")
+        .expect("the stroke's color is listed")["hex"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mut h = harness(app);
+    let at = h.get_by_label(&label(&hex, 1)).rect().center();
+    click(&mut h, at, Modifiers::NONE);
+    let Paint::Gradient(g) = crate::panels::current_paints(h.state()).0 else { panic!("still a gradient") };
+    let points = g.freeform.expect("still freeform").points;
+    assert_eq!(points[1].color.to_hex(), hex);
 }
 
 /// While a drag on the wheel recolors the selection, the row keeps the colors from before the

@@ -138,10 +138,6 @@
 	Add to Selection	Aggiungi alla selezione
 	Add to Swatches	Aggiungi ai campioni
 	Add Used Colors	Aggiungi colori usati
-	Show Document Colors	Mostra colori del documento
-	Document Colors	Colori del documento
-	Selection Colors	Colori della selezione
-@plural	Used {n} time|Used {n} times	Usato {n} volta|Usato {n} volte
 	Additional Plug-ins Folder	Cartella plug-in aggiuntivi
 	Additional Fonts Folder	Cartella font aggiuntivi
 	Adjust Adjoining Width Points	Regola punti di larghezza adiacenti
@@ -581,6 +577,10 @@ font-technology	Variable	Variabili
 	Box Channel	Canale del riquadro
 	Color box	Riquadro colore
 	Color Wheel Options	Opzioni ruota dei colori
+	Show Document Colors	Mostra colori del documento
+	Document Colors	Colori del documento
+	Selection Colors	Colori della selezione
+@plural	Used {n} time|Used {n} times	Usato {n} volta|Usato {n} volte
 	Color Type:	Tipo di colore:
 	Color:	Colore:
 	Colorize	Colora

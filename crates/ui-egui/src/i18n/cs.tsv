@@ -753,6 +753,10 @@
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
+	Show Document Colors	Zobrazit barvy dokumentu
+	Document Colors	Barvy dokumentu
+	Selection Colors	Barvy výběru
+@plural	Used {n} time|Used {n} times	Použito {n}krát|Použito {n}krát|Použito {n}krát
 	CSS Properties	Vlastnosti CSS
 	Document Info	Informace o dokumentu
 	Flattener Preview	Náhled sloučení
@@ -4052,10 +4056,6 @@ theme	Appearance	Motiv
 	Add to Graphic Styles	Přidat do grafických stylů
 	Graphic Style Library	Knihovna grafických stylů
 	Add Used Colors	Přidat použité barvy
-	Show Document Colors	Zobrazit barvy dokumentu
-	Document Colors	Barvy dokumentu
-	Selection Colors	Barvy výběru
-@plural	Used {n} time|Used {n} times	Použito {n}krát|Použito {n}krát|Použito {n}krát
 	Delete Swatch	Odstranit položku vzorníku
 	Duplicate Swatch	Duplikovat položku vzorníku
 	Merge Swatches	Sloučit položky vzorníku

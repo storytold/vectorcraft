@@ -250,6 +250,32 @@ fn used_colors_take_the_swatch_of_a_plain_use_painted_after_a_mixed_stop_of_the_
 }
 
 #[test]
+fn recolor_colors_keeps_the_swatch_of_the_first_linked_use_when_a_mixed_stop_comes_first() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+    let mut s = session();
+    run(&mut s, "swatch.new", json!({"name": "Ink", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true}));
+    run(&mut s, "swatch.new", json!({"name": "Other", "color": {"c": 0, "m": 100, "y": 60, "k": 0}, "spot": true}));
+    let shape = rect(&mut s, json!("#000000"));
+    let plain = rect(&mut s, json!("#000000"));
+    run(&mut s, "paint.setFill", json!({"ids": [plain.0], "swatch": "Other", "tint": 50}));
+    let ink = fill(&s, plain);
+    // The stop below the plain fill has the same color, linked to another swatch, with process
+    // plates that add nothing.
+    let stop = GradientStop { swatch: Some("Ink".into()), tint: 0.5, plates: Some([0.0; 4]), ..GradientStop::new(0.0, ink) };
+    let mut end = stop.clone();
+    end.offset = 1.0;
+    let g = Gradient::new(GradientKind::Linear, vec![stop, end]);
+    let st = s.doc_mut().unwrap();
+    std::sync::Arc::make_mut(&mut st.doc).node_mut(shape).unwrap().appearance.set_fill(Paint::Gradient(Box::new(GradientPaint::new(g))));
+    run(&mut s, "select.set", json!({"ids": []}));
+    let three = |r: &Value| r["colors"].as_array().unwrap().iter().find(|c| c["count"] == 3).cloned().unwrap();
+    let used = run(&mut s, "color.used", json!({}));
+    assert_eq!(three(&used)["swatch"], "Other", "{used}");
+    let listed = run(&mut s, "recolor.colors", json!({}));
+    assert_eq!(three(&listed)["swatch"], "Ink", "recolor.colors names the first linked use: {listed}");
+}
+
+#[test]
 fn colors_with_nothing_selected_leave_out_hidden_and_locked_objects_in_groups() {
     let mut s = session();
     rect(&mut s, json!("#ff0000"));

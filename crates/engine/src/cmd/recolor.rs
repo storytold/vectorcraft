@@ -954,15 +954,14 @@ fn pick_theme(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"colors": colors.iter().map(key_str).collect::<Vec<_>>(), "objects": theme.objects}))
 }
 
-/// A color the art uses: how often, and the global swatch it is linked to with the tint (0..1) of
-/// the swatch its paint stores, when the paint gives one.
+/// A color the art uses: how often, and the global swatch of its first linked use in paint order.
 struct Used {
     color: Color,
     count: usize,
     swatch: Option<String>,
-    tint: Option<f32>,
-    /// The link comes from a gradient stop that mixes the swatch's ink with process inks.
-    mixed: bool,
+    /// The global swatch of the first linked use that is not a gradient stop mixing the swatch's
+    /// ink with process inks, with the tint (0..1) its paint stores when the paint gives one.
+    plain: Option<(String, Option<f32>)>,
 }
 
 /// The unique colours of the objects `ids` and the objects inside them, most used first (ties by
@@ -983,19 +982,20 @@ fn used_colors(d: &Document, ids: &[NodeId], only: Option<&BTreeSet<NodeId>>) ->
     let mut count_tint = |c: &Color, link: Option<&str>, tint: Option<f32>, mixed: bool| {
         let k = ColorKey::of(c);
         let i = *index.entry(k).or_insert_with(|| {
-            used.push((k, Used { color: *c, count: 0, swatch: None, tint: None, mixed: false }));
+            used.push((k, Used { color: *c, count: 0, swatch: None, plain: None }));
             used.len() - 1
         });
         let u = &mut used[i].1;
         u.count += 1;
-        // The first linked use in paint order gives the swatch and tint; a plain linked use
-        // replaces one from a stop that mixes the swatch's ink with process inks.
-        if u.swatch.is_none() || (u.mixed && !mixed) {
-            let linked = link.filter(|l| d.swatch(l).is_some_and(|w| w.global && w.paint.color().is_some()));
-            if let Some(l) = linked {
+        if u.swatch.is_some() && (u.plain.is_some() || mixed) {
+            return;
+        }
+        if let Some(l) = link.filter(|l| d.swatch(l).is_some_and(|w| w.global && w.paint.color().is_some())) {
+            if u.swatch.is_none() {
                 u.swatch = Some(l.to_string());
-                u.tint = tint;
-                u.mixed = mixed;
+            }
+            if u.plain.is_none() && !mixed {
+                u.plain = Some((l.to_string(), tint));
             }
         }
     };
@@ -1089,20 +1089,23 @@ fn all_art(st: &crate::DocState) -> (Vec<NodeId>, Option<BTreeSet<NodeId>>) {
 }
 
 /// The `colors` list of `recolor.colors` and `color.used` for the objects `ids` (see
-/// [`used_colors`]). With `with_color`, each has its color in its own model and the tint of its
-/// swatch, and a gradient stop's color that mixes the swatch's ink with process inks has no swatch.
+/// [`used_colors`]). Each names the swatch of its first linked use. With `with_color`, each has its
+/// color in its own model, and the swatch and tint come from its first linked use that is not a
+/// gradient stop mixing the swatch's ink with process inks (none when every linked use is one).
 fn colors_json(used: &[Used], with_color: bool) -> Vec<Value> {
     used.iter()
         .map(|u| {
             let mut v = json!({"key": key_str(&u.color), "hex": u.color.to_hex(), "count": u.count});
             if with_color {
                 v["color"] = json!(u.color);
-            }
-            if let Some(w) = u.swatch.as_ref().filter(|_| !(with_color && u.mixed)) {
-                v["swatch"] = json!(w);
-                if let Some(t) = u.tint.filter(|_| with_color) {
-                    v["tint"] = json!((f64::from(t) * 100_000.0).round() / 1000.0);
+                if let Some((w, tint)) = &u.plain {
+                    v["swatch"] = json!(w);
+                    if let Some(t) = tint {
+                        v["tint"] = json!((f64::from(*t) * 100_000.0).round() / 1000.0);
+                    }
                 }
+            } else if let Some(w) = &u.swatch {
+                v["swatch"] = json!(w);
             }
             v
         })

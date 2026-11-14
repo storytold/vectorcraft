@@ -740,6 +740,10 @@
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
+	Show Document Colors	Prikaži boje dokumenta
+	Document Colors	Boje dokumenta
+	Selection Colors	Boje odabira
+@plural	Used {n} time|Used {n} times	Korišteno {n} put|Korišteno {n} puta|Korišteno {n} puta
 	CSS Properties	CSS svojstva
 	Document Info	Informacije o dokumentu
 	Flattener Preview	Pregled spljoštavanja
@@ -3996,10 +4000,6 @@ theme	Appearance	Izgled
 	Add to Graphic Styles	Dodaj u grafičke stilove
 	Graphic Style Library	Biblioteka grafičkih stilova
 	Add Used Colors	Dodaj korištene boje
-	Show Document Colors	Prikaži boje dokumenta
-	Document Colors	Boje dokumenta
-	Selection Colors	Boje odabira
-@plural	Used {n} time|Used {n} times	Korišteno {n} put|Korišteno {n} puta|Korišteno {n} puta
 	Delete Swatch	Izbriši uzorak boje
 	Duplicate Swatch	Dupliciraj uzorak boje
 	Merge Swatches	Spoji uzorke boja
