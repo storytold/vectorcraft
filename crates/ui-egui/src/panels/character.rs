@@ -26,6 +26,8 @@ pub const SCALE_PRESETS: [f64; 8] = [25.0, 50.0, 75.0, 90.0, 100.0, 110.0, 125.0
 /// Insert Aki Left and Right presets, in thousandths of an em: none, a quarter, half and a whole
 /// full-width space.
 pub const AKI_PRESETS: [f64; 4] = [0.0, 250.0, 500.0, 1000.0];
+/// Tsume presets, in percent.
+pub const TSUME_PRESETS: [f64; 5] = [0.0, 25.0, 50.0, 75.0, 100.0];
 
 /// The stored character style: the selected range's (or the caret's) while the Type
 /// tool edits text, else the first selected text object's first run (including groups). With it, the paragraph
@@ -847,7 +849,7 @@ fn cell(ui: &mut Ui, label: &str, tip: &str, add: impl FnOnce(&mut Ui)) {
 /// The Character panel's grid of fields, `w` wide: Font Size, Leading, Kerning and Tracking,
 /// then with `more` the scales, Baseline Shift and Character Rotation, and a row with the
 /// Anti-aliasing Method dropdown under Character Rotation (`s`: the style shown), and with Show East
-/// Asian Options on a row with Insert Aki Left and Right. With Show Font
+/// Asian Options on a row with Insert Aki Left and Right and a row with Tsume. With Show Font
 /// Height Options on, a row under Font Size holds the Set Font Height Reference dropdown. The
 /// Properties panel shows its first rows.
 pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &CharStyle, w: f32, more: bool) {
@@ -942,6 +944,14 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
                     }
                 });
             }
+            ui.end_row();
+            // Tsume: the share of the blank space beside each character's ink taken away.
+            cell(ui, "→A←", tl!("Tsume"), |ui| {
+                if let Some(v) = widgets::spin_plain(ui, "ch-tsume", shared(app, |s| s.tsume), "%", 1, fw, 1.0, 0.0, &TSUME_PRESETS) {
+                    // The field stops at the largest value the command takes.
+                    format(app, json!({ "tsume": v.min(vectorcraft_doc::text::MAX_TSUME) }));
+                }
+            });
             ui.end_row();
         }
     });
@@ -1687,7 +1697,7 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// and Small Caps off, the normal position (neither superscript nor subscript), Roman Baseline
 /// character alignment, Proportional Metrics, Tate-chu-yoko, Warichu, Standard Vertical Roman Alignment and
 /// No Break off, Tate-chu-yoko Settings Up/Down and Left/Right 0, the default Warichu Settings (2 lines, no
-/// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, the Default character direction,
+/// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, Tsume 0, the Default character direction,
 /// Kashidas on, the Default digits and the Em Box font height reference, whether or not Show East Asian
 /// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
 /// already open, the reset is part of that group's step.
@@ -1707,7 +1717,7 @@ fn reset_panel(app: &mut VectorcraftApp) {
             "allCaps": false, "smallCaps": d.small_caps.is_some(), "position": d.position.id(), "charAlign": d.char_align,
             "proportionalMetrics": d.proportional_metrics, "tateChuYoko": d.tate_chu_yoko,
             "tcyUpDown": d.tcy_up_down, "tcyLeftRight": d.tcy_left_right, "akiLeft": d.aki_left, "akiRight": d.aki_right,
-            "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
+            "tsume": d.tsume, "warichu": d.warichu, "warichuLines": d.warichu_lines, "warichuGap": d.warichu_gap, "warichuScale": d.warichu_scale,
             "warichuAlign": d.warichu_align,
             "standardVerticalRoman": d.standard_vertical_roman, "noBreak": d.no_break, "charDirection": "default", "kashidas": d.kashidas,
             "digits": d.digits, "fontHeightReference": d.font_height_reference

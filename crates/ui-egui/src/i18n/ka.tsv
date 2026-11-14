@@ -1446,6 +1446,7 @@ lighting	Light	სინათლე
 	Proportional Metrics	პროპორციული მეტრიკა
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
+	Tsume	ცუმე
 	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
@@ -4424,6 +4425,7 @@ font-technology	Variable	ცვლადი
 @msg	no action set to save	შესანახი მოქმედებების ნაკრები არ არის
 @msg	the action set file can't be read in full	მოქმედებების ნაკრების ფაილის სრულად წაკითხვა შეუძლებელია
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: ცნობარი {MAX_BYTES} ბაიტზე დიდი იქნებოდა
@@ -4643,6 +4645,7 @@ font-technology	Variable	ცვლადი
 @msg	tool shortcuts must be a single key (optionally with Shift)	ხელსაწყოს მალსახმობი ერთი კლავიში უნდა იყოს (სურვილისამებრ Shift-ით)
 @msg	truncated	შეკვეცილია
 @msg	unknown command `{0}`	უცნობი ბრძანება `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	„{action}“, ნაბიჯი {step}: უცნობი ბრძანება `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	უცნობი ბრძანება `{0}`; იქნებ `{1}` იგულისხმეთ?
 @msg	unknown effect `{id}`	უცნობი ეფექტი `{id}`
 @msg	unknown format	უცნობი ფორმატი
@@ -6347,8 +6350,8 @@ axis	Y Axis	Y ღერძი
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ექსპორტის პლაგინი აცხადებს 1-დან {MAX_EXTENSIONS}-მდე `extensions`-ს
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	ჯგუფების გარეთ მაქსიმუმ {MAX_UNGROUPED} პარამეტრია დასაშვები: დანარჩენებს მიეცით `group`
 @msg	can't encode the input	შეყვანის კოდირება ვერ ხერხდება
-@msg	expected {"dataBase64"}	მოსალოდნელი იყო {"dataBase64"}
-@msg	expected {"objects"}	მოსალოდნელი იყო {"objects"}
+@msg	expected {{"dataBase64": "…"}}	მოსალოდნელი იყო {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	მოსალოდნელი იყო {{"objects": [...]}}
 @msg	export `{name}`: {e}	მოდულის ექსპორტი `{name}`: {e}
 @msg	extension {e} is listed twice	გაფართოება {e} ორჯერაა მითითებული
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	გაფართოება {e}: გამოიყენეთ 1-16 პატარა ასო და ციფრი, წერტილის გარეშე
@@ -6412,11 +6415,11 @@ axis	Y Axis	Y ღერძი
 @msg	a painted live effect returns only `objects`	მხატვრული ცოცხალი ეფექტი აბრუნებს მხოლოდ `objects`-ს
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	მხატვრული ცოცხალი ეფექტის ნაწილს აქვს მხოლოდ `path`, `fillRule`, `fills` და `strokes`
 @msg	a read-only object was left out	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {"id"}-ის სახით ან ისე, როგორც მიიღეთ
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {{"id": …}}-ის სახით ან ისე, როგორც მიიღეთ
 @msg	a string	სტრიქონი
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	კონტურს აქვს მხოლოდ `paint`, `width`, `join`, `cap` და `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	კონტური უნდა იყოს {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ეფექტი უნდა იყოს {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	კონტური უნდა იყოს {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ეფექტი უნდა იყოს {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	შევსების ეფექტი აბრუნებს მხოლოდ `fills`-ს
 @msg	an effect on a stroke returns only `strokes`	კონტურის ეფექტი აბრუნებს მხოლოდ `strokes`-ს
 @msg	an object must be a JSON object	ობიექტი უნდა იყოს JSON ობიექტი
@@ -7362,7 +7365,7 @@ font-script	Japanese	იაპონური
 	Japanese Envelope #3	იაპონური კონვერტი #3
 	Japanese Envelope #4	იაპონური კონვერტი #4
 @msg	image '{key}' has no pixels and was left out	გამოსახულებას '{key}' პიქსელები არ აქვს და გამოტოვდა
-@msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
+@msg	not an RTF file: it doesn't start with {{\\rtf	RTF ფაილი არ არის: არ იწყება {{\\rtf-ით
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	ტექსტის ხელსაწყოები
 	Text Tweaker…	ტექსტის მორგება…

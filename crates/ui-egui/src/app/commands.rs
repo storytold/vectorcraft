@@ -477,5 +477,6 @@ impl VectorcraftApp {
     /// Show a transient status message.
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
+        self.ui.status_sets = self.ui.status_sets.wrapping_add(1);
     }
 }

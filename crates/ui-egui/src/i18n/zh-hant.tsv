@@ -7,6 +7,7 @@
 #                                 the translation is a single string (see `plural` in i18n.rs)
 #            anything else        a disambiguating context passed to `tr_ctx`
 #   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns.
+#            In @msg rows a literal brace is written {{ or }}, as in a Rust format string.
 #   lines starting with # and blank lines are ignored.
 #
 # Clean-room: every entry was written from the plain meaning of the English label using the
@@ -2119,6 +2120,7 @@ file-filter	Templates	範本
 @msg	objects can't be nested more than 32 deep	物件的巢狀層級不能超過 32 層
 @msg	the SVG's elements are nested more than {0} deep	SVG 的元素巢狀超過 {0} 層
 @msg	unknown command `{0}`	未知的指令 `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	「{action}」的步驟 {step} 執行未知的指令 `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	未知的指令 `{0}`；您是指 `{1}` 嗎？
 @msg	`{what}` closes nothing	`{what}` 沒有可結束的內容
 @msg	`{what}` closes something it didn't open	`{what}` 結束了並非由它開始的內容
@@ -2457,6 +2459,7 @@ file-filter	Templates	範本
 @msg	no action set to save	沒有要儲存的動作組
 @msg	the action set file can't be read in full	無法完整讀取動作組檔案
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	已載入「{name}」：已略過 {n} 個步驟
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	已載入「{name}」：保留了 {n} 個含未知指令的步驟；第一個：「{action}」，步驟 {step}，`{command}`
 @msg	not an action set file	不是動作組檔案
 @msg	the action set file is larger than 8 MiB	動作組檔案大於 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`：參考將大於 {MAX_BYTES} 位元組
@@ -3782,6 +3785,7 @@ font-script	Japanese	漢字
 	Proportional Metrics	比例度量
 	Insert Aki Left	在前方插入空白
 	Insert Aki Right	在後方插入空白
+	Tsume	比例間距
 	Character Direction	字元方向
 	Digits	數字
 	Arabic	阿拉伯數字
@@ -6041,8 +6045,8 @@ axis	Y Axis	Y 軸
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	匯出增效模組宣告 1 到 {MAX_EXTENSIONS} 個 `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	群組外最多 {MAX_UNGROUPED} 個參數：請為其餘參數指定 `group`
 @msg	can't encode the input	無法編碼輸入
-@msg	expected {"dataBase64"}	應為 {"dataBase64"}
-@msg	expected {"objects"}	應為 {"objects"}
+@msg	expected {{"dataBase64": "…"}}	應為 {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	應為 {{"objects": [...]}}
 @msg	export `{name}`: {e}	模組匯出 `{name}`：{e}
 @msg	extension {e} is listed twice	副檔名 {e} 列出了兩次
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	副檔名 {e}：請使用 1-16 個小寫字母和數字，不含點
@@ -6106,11 +6110,11 @@ axis	Y Axis	Y 軸
 @msg	a painted live effect returns only `objects`	繪製型即時效果只傳回 `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	繪製型即時效果的片段只有 `path`、`fillRule`、`fills` 和 `strokes`
 @msg	a read-only object was left out	漏掉了一個唯讀物件
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	漏掉了一個唯讀物件：請以單獨的 {"id"} 或原樣傳回它
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一個唯讀物件：請以單獨的 {{"id": …}} 或原樣傳回它
 @msg	a string	字串
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	筆畫只有 `paint`、`width`、`join`、`cap` 和 `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	筆畫必須是 {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} 形式
-@msg	an effect must be {"id", "params"?, "visible"?}	效果必須是 {"id", "params"?, "visible"?} 形式
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	筆畫必須是 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 形式
+@msg	an effect must be {{"id", "params"?, "visible"?}}	效果必須是 {{"id", "params"?, "visible"?}} 形式
 @msg	an effect on a fill returns only `fills`	填色上的效果只傳回 `fills`
 @msg	an effect on a stroke returns only `strokes`	筆畫上的效果只傳回 `strokes`
 @msg	an object must be a JSON object	物件必須是 JSON 物件

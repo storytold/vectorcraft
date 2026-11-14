@@ -2450,6 +2450,7 @@ shape	Open	Açık
 	Proportional Metrics	Orantılı Metrikler
 	Insert Aki Left	Sola Aki Ekle
 	Insert Aki Right	Sağa Aki Ekle
+	Tsume	Tsume
 	Digits	Rakamlar
 	Arabic	Arapça
 	Hindi	Hintçe
@@ -4478,6 +4479,7 @@ axis	Both	Her İkisi
 @msg	no action set to save	kaydedilecek eylem seti yok
 @msg	the action set file can't be read in full	eylem seti dosyası tamamen okunamıyor
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” yüklendi: bilinmeyen komutlu {n} adım korundu; ilki: “{action}”, adım {step}, `{command}`
 @msg	not an action set file	bir eylem seti dosyası değil
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: başvuru {MAX_BYTES} bayttan büyük olur
@@ -4519,7 +4521,7 @@ axis	Both	Her İkisi
 @msg	not an HP-GL file	HP-GL dosyası değil
 @msg	not a PICT file	PICT dosyası değil
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` 1 ile 255 arasında #rrggbb renginden oluşan bir dizi olmalıdır
-@msg	not an RTF file: it doesn't start with {\\rtf	bir RTF dosyası değil: {\\rtf ile başlamıyor
+@msg	not an RTF file: it doesn't start with {{\\rtf	bir RTF dosyası değil: {{\\rtf ile başlamıyor
 @msg	not found	bulunamadı
 @msg	not in pattern editing mode	desen düzenleme modunda değil
 @msg	finish editing the pattern first	önce deseni düzenlemeyi bitir
@@ -4701,6 +4703,7 @@ axis	Both	Her İkisi
 @msg	tool shortcuts must be a single key (optionally with Shift)	araç kısayolları tek tuş olmalıdır (isteğe bağlı olarak Shift ile)
 @msg	truncated	kesik
 @msg	unknown command `{0}`	bilinmeyen komut `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	“{action}” eylemi, adım {step}: bilinmeyen `{command}` komutunu çalıştırıyor
 @msg	unknown command `{0}`; did you mean `{1}`?	bilinmeyen komut `{0}`; `{1}` mi demek istediniz?
 @msg	unknown effect `{id}`	bilinmeyen etki `{id}`
 @msg	unknown format	bilinmeyen format
@@ -6352,8 +6355,8 @@ axis	Y Axis	Y ekseni
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	dışa aktarma eklentisi 1 ile {MAX_EXTENSIONS} arasında `extensions` bildirir
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	gruplar dışında en fazla {MAX_UNGROUPED} parametre olabilir: diğerlerine bir `group` verin
 @msg	can't encode the input	girdi kodlanamıyor
-@msg	expected {"dataBase64"}	beklenen: {"dataBase64"}
-@msg	expected {"objects"}	beklenen: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	beklenen: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	beklenen: {{"objects": [...]}}
 @msg	export `{name}`: {e}	modül dışa aktarımı `{name}`: {e}
 @msg	extension {e} is listed twice	{e} uzantısı iki kez listelenmiş
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	{e} uzantısı: nokta olmadan 1-16 küçük harf ve rakam kullanın
@@ -6417,11 +6420,11 @@ axis	Y Axis	Y ekseni
 @msg	a painted live effect returns only `objects`	boyama türü canlı efekt yalnızca `objects` döndürür
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	boyama türü canlı efektin bir parçasında yalnızca `path`, `fillRule`, `fills` ve `strokes` bulunur
 @msg	a read-only object was left out	salt okunur bir nesne atlandı
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	salt okunur bir nesne atlandı: onu yalnızca {"id"} olarak veya verildiği gibi döndürün
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	salt okunur bir nesne atlandı: onu yalnızca {{"id": …}} olarak veya verildiği gibi döndürün
 @msg	a string	bir dize
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	bir konturda yalnızca `paint`, `width`, `join`, `cap` ve `miterLimit` bulunur
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	bir kontur {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} biçiminde olmalıdır
-@msg	an effect must be {"id", "params"?, "visible"?}	bir efekt {"id", "params"?, "visible"?} biçiminde olmalıdır
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	bir kontur {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} biçiminde olmalıdır
+@msg	an effect must be {{"id", "params"?, "visible"?}}	bir efekt {{"id", "params"?, "visible"?}} biçiminde olmalıdır
 @msg	an effect on a fill returns only `fills`	dolgudaki bir efekt yalnızca `fills` döndürür
 @msg	an effect on a stroke returns only `strokes`	konturdaki bir efekt yalnızca `strokes` döndürür
 @msg	an object must be a JSON object	bir nesne bir JSON nesnesi olmalıdır
