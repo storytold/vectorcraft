@@ -5,7 +5,7 @@
 
 use craft_pdf::syntax::Pdf;
 use craft_pdf::syntax::object::{DateTime, Dict, Stream};
-use roxmltree::Node;
+use craft_xml::{Canonical, Doctype, El, Limits, Names, Options};
 
 use crate::import_scan::text_string;
 
@@ -15,11 +15,13 @@ const MAX_XMP: usize = 8 << 20;
 const MAX_NESTING: usize = 256;
 
 const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
-const XML: &str = "http://www.w3.org/XML/1998/namespace";
 pub(crate) const DC: &str = "http://purl.org/dc/elements/1.1/";
 const XMP: &str = "http://ns.adobe.com/xap/1.0/"; // brand-ok: the XMP namespace the files use
 pub(crate) const XMP_RIGHTS: &str = "http://ns.adobe.com/xap/1.0/rights/"; // brand-ok: the XMP namespace the files use
 const PDF: &str = "http://ns.adobe.com/pdf/1.3/"; // brand-ok: the XMP namespace the files use
+
+const XMP_NAMESPACES: Canonical<'static> =
+    Canonical::new(&[("rdf", RDF), ("dc", DC), ("xmp", XMP), ("xmpRights", XMP_RIGHTS), ("pdf", PDF)]);
 
 /// The File Info fields a PDF gives, each `None` when the file gives none (or only blank text).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -73,39 +75,39 @@ fn packet(pdf: &Pdf) -> Option<Vec<u8>> {
 }
 
 /// The File Info fields of an XMP packet; `None` when it isn't XML in UTF-8 or UTF-16, or when its
-/// elements nest more than [`MAX_NESTING`] deep.
+/// [`xmp`] of `packet`; `None` when it isn't XML in UTF-8 or UTF-16, or when its elements nest
+/// more than [`MAX_NESTING`] deep.
 fn xmp(packet: &[u8]) -> Option<FileInfo> {
     let text = xml_text(packet)?;
-    // roxmltree parses nested elements recursively.
-    if nesting(&text) > MAX_NESTING {
-        return None;
+    let opts = Options {
+        names: Names::Canonical(&XMP_NAMESPACES),
+        doctype: Doctype::Reject,
+        limits: Limits { max_depth: MAX_NESTING, ..Limits::DEFAULT },
+        ..Options::default()
     }
-    let xml = roxmltree::Document::parse(&text).ok()?;
+    .strict();
+    let root = opts.parse(text.as_bytes()).ok()?;
     // The resource's own descriptions: those right under `rdf:RDF`, not the ones inside a value.
-    let descriptions: Vec<Node<'_, '_>> = xml
-        .descendants()
-        .filter(|n| n.has_tag_name((RDF, "RDF")))
-        .flat_map(|rdf| rdf.children())
-        .filter(|n| n.has_tag_name((RDF, "Description")))
-        .collect();
-    let get = |ns: &str, name: &str| property(&descriptions, ns, name);
-    let first = |ns: &str, name: &str| get(ns, name).into_iter().next();
-    let creators = get(DC, "creator");
-    let subjects = get(DC, "subject");
+    let descriptions: Vec<&El> =
+        std::iter::once(&root).chain(root.descendants()).filter(|n| n.is("rdf:RDF")).flat_map(|rdf| rdf.children("rdf:Description")).collect();
+    let get = |name: &str| property(&descriptions, name);
+    let first = |name: &str| get(name).into_iter().next();
+    let creators = get("dc:creator");
+    let subjects = get("dc:subject");
     Some(FileInfo {
-        title: first(DC, "title"),
+        title: first("dc:title"),
         author: (!creators.is_empty()).then(|| creators.join(", ")),
-        description: first(DC, "description"),
-        keywords: if subjects.is_empty() { first(PDF, "Keywords").map(|k| split(&k)).filter(|k| !k.is_empty()) } else { Some(subjects) },
-        copyright_notice: first(DC, "rights"),
-        copyright_url: first(XMP_RIGHTS, "WebStatement"),
-        copyrighted: first(XMP_RIGHTS, "Marked").and_then(|m| match m.to_ascii_lowercase().as_str() {
+        description: first("dc:description"),
+        keywords: if subjects.is_empty() { first("pdf:Keywords").map(|k| split(&k)).filter(|k| !k.is_empty()) } else { Some(subjects) },
+        copyright_notice: first("dc:rights"),
+        copyright_url: first("xmpRights:WebStatement"),
+        copyrighted: first("xmpRights:Marked").and_then(|m| match m.to_ascii_lowercase().as_str() {
             "true" => Some(true),
             "false" => Some(false),
             _ => None,
         }),
-        created: first(XMP, "CreateDate").and_then(|d| xmp_date(&d)),
-        modified: first(XMP, "ModifyDate").and_then(|d| xmp_date(&d)),
+        created: first("xmp:CreateDate").and_then(|d| xmp_date(&d)),
+        modified: first("xmp:ModifyDate").and_then(|d| xmp_date(&d)),
     })
 }
 
@@ -123,58 +125,14 @@ fn xml_text(b: &[u8]) -> Option<String> {
     }
 }
 
-/// How deep the elements of `xml` nest: start tags less end tags, at most, outside comments,
-/// CDATA sections, processing instructions, declarations and quoted attribute values.
-fn nesting(xml: &str) -> usize {
-    let b = xml.as_bytes();
-    let (mut depth, mut most, mut i) = (0usize, 0usize, 0usize);
-    // The index just past the first `end` at or after `from` (the end of the text if none).
-    let past = |from: usize, end: &[u8]| {
-        b.get(from..).and_then(|rest| rest.windows(end.len()).position(|w| w == end)).map_or(b.len(), |at| from + at + end.len())
-    };
-    while let Some(at) = b.get(i..).and_then(|rest| rest.iter().position(|&c| c == b'<')) {
-        let start = i + at;
-        let rest = b.get(start..).unwrap_or_default();
-        if rest.starts_with(b"<!--") {
-            i = past(start + 4, b"-->");
-        } else if rest.starts_with(b"<![CDATA[") {
-            i = past(start + 9, b"]]>");
-        } else if rest.starts_with(b"<?") {
-            i = past(start + 2, b"?>");
-        } else if rest.starts_with(b"<!") || rest.starts_with(b"</") {
-            depth = depth.saturating_sub(usize::from(rest.starts_with(b"</")));
-            i = past(start + 2, b">");
-        } else {
-            // A start tag: up to its `>` outside quotes; `/>` closes it at once.
-            let mut j = start + 1;
-            let mut quote = None;
-            while let Some(&c) = b.get(j) {
-                match (quote, c) {
-                    (None, b'"' | b'\'') => quote = Some(c),
-                    (Some(q), _) if c == q => quote = None,
-                    (None, b'>') => break,
-                    _ => {}
-                }
-                j += 1;
-            }
-            if b.get(j.saturating_sub(1)) != Some(&b'/') {
-                depth += 1;
-                most = most.max(depth);
-            }
-            i = j + 1;
-        }
-    }
-    most
-}
-
-/// The values of property `ns` `name` on the first of `descriptions` that gives it: an attribute
+/// The values of property `name` on the first of `descriptions` that gives it: an attribute
 /// of the `rdf:Description`, or a property element's items ([`items`]), blank ones left out.
-fn property(descriptions: &[Node<'_, '_>], ns: &str, name: &str) -> Vec<String> {
+fn property(descriptions: &[&El], name: &str) -> Vec<String> {
     for d in descriptions {
-        if let Some(v) = d.attribute((ns, name)).map(str::trim).filter(|v| !v.is_empty()) {
+        if let Some(v) = d.attr(name).map(str::trim).filter(|v| !v.is_empty()) {
             return vec![v.to_string()];
         }
-        let found = d.children().filter(|c| c.has_tag_name((ns, name))).map(items).find(|v| !v.is_empty());
+        let found = d.children(name).map(items).find(|v| !v.is_empty());
         if let Some(v) = found {
             return v;
         }
@@ -185,13 +143,12 @@ fn property(descriptions: &[Node<'_, '_>], ns: &str, name: &str) -> Vec<String> 
 /// The items of property element `p`: the `rdf:li` of its `rdf:Seq`, `rdf:Bag` or `rdf:Alt` (the
 /// `x-default` language item first), else its own value ([`value_of`]); trimmed, blank ones left
 /// out.
-fn items(p: Node<'_, '_>) -> Vec<String> {
-    let array = p.children().find(|c| ["Seq", "Bag", "Alt"].into_iter().any(|t| c.has_tag_name((RDF, t))));
+fn items(p: &El) -> Vec<String> {
+    let array = p.elements().find(|c| matches!(c.name.as_str(), "rdf:Seq" | "rdf:Bag" | "rdf:Alt"));
     let mut values: Vec<(bool, String)> = match array {
         Some(a) => a
-            .children()
-            .filter(|c| c.has_tag_name((RDF, "li")))
-            .map(|li| (li.attribute((XML, "lang")).is_some_and(|l| l.eq_ignore_ascii_case("x-default")), value_of(li)))
+            .children("rdf:li")
+            .map(|li| (li.attr("xml:lang").is_some_and(|l| l.eq_ignore_ascii_case("x-default")), value_of(li)))
             .collect(),
         None => vec![(false, value_of(p))],
     };
@@ -203,19 +160,19 @@ fn items(p: Node<'_, '_>) -> Vec<String> {
 /// The value of element `n`: the URI of its `rdf:resource` attribute (how RDF writes a URI value);
 /// for a qualified value, its `rdf:value` (an attribute or an element, on `n` or on an
 /// `rdf:Description` inside it), without the qualifiers; else the text inside it.
-fn value_of(mut n: Node<'_, '_>) -> String {
+fn value_of(mut n: &El) -> String {
     // Each step goes to an element inside `n`, so the loop ends.
     loop {
-        if let Some(uri) = n.attribute((RDF, "resource")) {
+        if let Some(uri) = n.attr("rdf:resource") {
             return uri.to_string();
         }
-        let holder = n.children().find(|c| c.has_tag_name((RDF, "Description"))).unwrap_or(n);
-        if let Some(v) = holder.attribute((RDF, "value")) {
+        let holder = n.child("rdf:Description").unwrap_or(n);
+        if let Some(v) = holder.attr("rdf:value") {
             return v.to_string();
         }
-        match holder.children().find(|c| c.has_tag_name((RDF, "value"))) {
+        match holder.child("rdf:value") {
             Some(v) => n = v,
-            None => return n.descendants().filter(|d| d.is_text()).filter_map(|d| d.text()).collect(),
+            None => return n.deep_text(),
         }
     }
 }
