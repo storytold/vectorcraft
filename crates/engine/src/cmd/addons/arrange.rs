@@ -21,6 +21,7 @@ use vectorcraft_geom::{Affine, Point, Rect};
 use vectorcraft_render::effects;
 
 use super::super::appearance::series_children_in_paint_order;
+use super::super::colorcmds::edit_if_changed;
 use super::super::edit::selected_roots;
 use super::super::graph::capture_series_object_opacity;
 use super::super::menucmds::whole_or;
@@ -92,7 +93,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Randomize Opacity",
             ["Object", "Plug-ins", "Arrange Tools"],
             None,
-            "{min?: % 0..100 (30), max?: % 0..100 (100; not less than min), seed?: whole number (0; the same seed, objects and range give the same opacities), ids?: [id…] (default: the selection)} give each selected object (the top-level ones) its own opacity, picked at random and evenly from min to max, as one undo step; it is the object's opacity, as the Transparency panel sets it. On paths directly in a graph series whose opacity changes, the graph stores the opacity and blend mode of the frontmost of them for its next redraw (docs/mcp.md) → {count}",
+            "{min?: % 0..100 (30), max?: % 0..100 (100; not less than min), seed?: whole number (0; the same seed, objects and range give the same opacities), ids?: [id…] (default: the selection)} give each selected object (the top-level ones) its own opacity, picked at random and evenly from min to max, as one undo step (none when no opacity changes); it is the object's opacity, as the Transparency panel sets it. On paths directly in a graph series whose opacity changes, the graph stores the opacity and blend mode of the frontmost of them for its next redraw (docs/mcp.md) → {count}",
             has_selection,
             randomize_opacity
         ),
@@ -397,7 +398,8 @@ fn randomize_opacity(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "count": 0 }));
     }
     let (lo, hi) = ((min / 100.0) as f32, (max / 100.0) as f32);
-    s.edit("Randomize Opacity", |d, _| {
+    // A run that gives every object the opacity it has records no undo step.
+    edit_if_changed(s, "Randomize Opacity", |_, d| {
         let mut changed = vec![];
         for id in &ids {
             let o = rng.range(lo, hi);
@@ -409,7 +411,7 @@ fn randomize_opacity(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         keep_series_opacity(d, &changed);
-        Ok(())
+        Ok(((), !changed.is_empty()))
     })?;
     Ok(json!({ "count": ids.len() }))
 }
