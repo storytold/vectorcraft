@@ -300,6 +300,37 @@ fn pasted_type_brings_its_kinsoku_sets() {
     assert_eq!(style_set(&s), Value::Null);
 }
 
+/// A pasted set whose name, at the longest a name can be, the document's set with other
+/// characters already has comes in under a free name that fits: the number takes the place of the
+/// name's last characters, and a space left at the end of them is dropped. A second paste uses
+/// the set the first added.
+#[test]
+fn a_pasted_set_with_the_longest_name_comes_in_under_a_name_that_fits() {
+    for (long, fitted) in
+        [("あ".repeat(128), format!("{} 2", "あ".repeat(126))), (format!("{} いい", "あ".repeat(125)), format!("{} 2", "あ".repeat(125)))]
+    {
+        let mut s = session();
+        s.execute("type.kinsokuSets.set", &json!({"sets": [{"name": long, "cannotStart": "」"}]})).unwrap();
+        let id = type_object(&mut s);
+        s.execute("text.setFormat", &json!({"ids": [id], "kinsoku": long})).unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        s.execute("edit.copy", &json!({})).unwrap();
+        s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+        s.execute("type.kinsokuSets.set", &json!({"sets": [{"name": long, "cannotStart": "ー"}]})).unwrap();
+        let v = s.execute("edit.paste", &json!({})).unwrap();
+        assert_eq!(names(&s), [long.clone(), fitted.clone()]);
+        let t = text(&s, v["ids"][0].as_u64().unwrap());
+        let p = t.para_at(0);
+        assert_eq!((p.kinsoku_name(), p.kinsoku_set.as_deref().map(|k| k.cannot_start.clone())), (fitted.as_str(), Some(vec!['」'])));
+        let again = s.execute("edit.paste", &json!({})).unwrap();
+        assert_eq!(
+            (again["added"].clone(), names(&s)),
+            (json!(0), vec![long.clone(), fitted.clone()]),
+            "a second paste uses the set the first added"
+        );
+    }
+}
+
 /// The Kinsoku Sets a graph keeps for its labels (value axis, categories, legend), and those its
 /// labels are drawn with now.
 fn graph_label_sets(s: &Session, id: u64) -> (Vec<String>, Vec<String>) {

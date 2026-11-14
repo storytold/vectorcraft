@@ -519,6 +519,36 @@ fn copy_of(base: &str, name: &str) -> bool {
     name == base || name.strip_prefix(base).and_then(|r| r.strip_prefix(' ')).is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
+/// The `i`th numbered copy of a Kinsoku Shori set's name `base` ("name 2"), within
+/// [`KINSOKU_NAME_MAX`]: when it would be too long, the number takes the place of the name's last
+/// characters, and spaces left at the end of what remains are dropped.
+fn numbered_kinsoku_name(base: &str, i: usize) -> String {
+    let number = format!(" {i}");
+    let head: String = base.chars().take(KINSOKU_NAME_MAX.saturating_sub(number.chars().count())).collect();
+    format!("{}{number}", head.trim_end())
+}
+
+/// [`unique_name`] for a pasted Kinsoku Shori set among `sets` (a document's custom sets, any
+/// case), with names that fit [`KINSOKU_NAME_MAX`] ([`numbered_kinsoku_name`]).
+fn unique_kinsoku_name(base: &str, sets: &[KinsokuSet]) -> String {
+    let taken = |n: &str| KinsokuSet::named(sets, n).is_some();
+    if !taken(base) {
+        return base.to_string();
+    }
+    (2..).map(|i| numbered_kinsoku_name(base, i)).find(|n| !taken(n)).unwrap_or_else(|| base.to_string())
+}
+
+/// Is `name` (any case) the Kinsoku Shori set name `base` or a numbered copy of it, as
+/// [`unique_kinsoku_name`] names one?
+fn kinsoku_copy_of(base: &str, name: &str) -> bool {
+    KinsokuSet::same_name(base, name)
+        || name.rsplit_once(' ').is_some_and(|(_, n)| {
+            !n.is_empty()
+                && n.bytes().all(|b| b.is_ascii_digit())
+                && n.parse::<usize>().is_ok_and(|i| i >= 2 && KinsokuSet::same_name(&numbered_kinsoku_name(base, i), name))
+        })
+}
+
 /// The document's own resource for pasted resource `name`, among the document's `names`: the
 /// one of that name when `same` holds for it (or, pasting back into the source document, at all),
 /// else a numbered copy of it (added by an earlier paste) that is the same. `None`: add it.
@@ -1311,9 +1341,10 @@ impl Clipboard {
     /// to `d`'s sets, and record in [`Relink::kinsoku`] which set of `d` each one takes. A set
     /// takes `d`'s set of its name (in any case) when that has the same characters, or, pasted
     /// back into its own document, in any case; else a numbered copy of it ("Tight 2") with the
-    /// same characters. Any other set is added under a free name, so editing `d`'s set of that
-    /// name leaves the pasted paragraphs alone. When `d` already holds [`KINSOKU_SETS_MAX`] sets,
-    /// or no free name fits [`KINSOKU_NAME_MAX`], the paragraphs and styles take Hard.
+    /// same characters. Any other set is added under a free name that fits [`KINSOKU_NAME_MAX`]
+    /// ([`unique_kinsoku_name`]), so editing `d`'s set of that name leaves the pasted paragraphs
+    /// alone. When `d` already holds [`KINSOKU_SETS_MAX`] sets, or the pasted set's own name is
+    /// longer than a name can be, the paragraphs and styles take Hard.
     fn import_kinsoku_sets(&self, d: &mut Document, used: &Used, same_doc: bool, out: &mut Imported) {
         let mut found: Vec<KinsokuSet> = vec![];
         let mut seen: HashSet<KinsokuSet> = HashSet::new();
@@ -1350,7 +1381,8 @@ impl Clipboard {
         }
         for set in found {
             let lower = set.name.to_lowercase();
-            let mut copies: Vec<&KinsokuSet> = d.kinsoku_sets.iter().filter(|x| copy_of(&lower, &x.name.to_lowercase())).collect();
+            let mut copies: Vec<&KinsokuSet> =
+                d.kinsoku_sets.iter().filter(|x| copy_of(&lower, &x.name.to_lowercase()) || kinsoku_copy_of(&set.name, &x.name)).collect();
             // The set of its name first.
             copies.sort_by_key(|x| !KinsokuSet::same_name(&x.name, &set.name));
             let own = copies.first().copied().filter(|x| same_doc && KinsokuSet::same_name(&x.name, &set.name));
@@ -1362,7 +1394,7 @@ impl Clipboard {
                     Some(Arc::new(x.clone()))
                 }
                 None => {
-                    let name = unique_name(&set.name, |n| KinsokuSet::named(&d.kinsoku_sets, n).is_some());
+                    let name = unique_kinsoku_name(&set.name, &d.kinsoku_sets);
                     (d.kinsoku_sets.len() < KINSOKU_SETS_MAX && name.chars().count() <= KINSOKU_NAME_MAX).then(|| {
                         let added = KinsokuSet { name: name.clone(), ..set.clone() };
                         d.kinsoku_sets.push(added.clone());
