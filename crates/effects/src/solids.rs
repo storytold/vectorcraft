@@ -1326,11 +1326,17 @@ fn art_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile]) ->
     let art = surfaces_for(doc, n, fx, shapes)?;
     // A shadow past the limits draws the source path, as a solid past them does; commands report
     // the error ([`validate_solid_in`]).
-    let shadow = match cast_shadow(&fx.id, &crate::merged_params(&fx.id, &fx.params), shapes).ok()? {
-        Some((caster, settings, cast)) => shadow::scoped_art(n.id, &caster, settings, cast, has_masks(shapes)),
-        None => vec![],
-    };
+    let shadow = shadow_for(n.id, fx, shapes).ok()?;
     Some((shadow, art))
+}
+
+/// The shadow [`art_for`] draws for effect `fx` on `shapes` behind the surfaces of object `id`:
+/// none with the shadow off, and an error when it is past the limits.
+pub(crate) fn shadow_for(id: NodeId, fx: &Effect, shapes: &[Profile]) -> Result<Vec<Arc<Node>>, String> {
+    Ok(match cast_shadow(&fx.id, &crate::merged_params(&fx.id, &fx.params), shapes)? {
+        Some((caster, settings, cast)) => shadow::scoped_art(id, &caster, settings, cast, has_masks(shapes)),
+        None => vec![],
+    })
 }
 
 /// What the shadow of the solids [`surfaces_for`] builds for effect `id` with parameters `p` on

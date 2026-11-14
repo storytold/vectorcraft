@@ -192,6 +192,32 @@ fn a_geometry_effect_after_a_fill_s_3d_effect_reshapes_its_edges() {
     }
 }
 
+/// A Transform effect after the 3D effect scales the faces about the center of the drawn art with
+/// its shadow, as it scales the surfaces on the canvas.
+#[test]
+fn a_later_transform_measures_the_faces_with_their_shadow() {
+    for id in [super::super::EXTRUDE, crate::REVOLVE] {
+        let scale = crate::new_effect("distort.transform", &json!({"scaleH": 50.0, "scaleV": 50.0})).unwrap();
+        let mut n = solid_square(id, json!({"shadow": true, "shadowDistance": 100}));
+        n.appearance.effects.push(scale.clone());
+        let wire = bounds(&three_d_wireframe_in(None, &n).unwrap_or_else(|e| panic!("{id}: {e}")));
+        let art = if id == crate::REVOLVE { crate::revolve_art(&n) } else { super::super::solid_art(&n) }.unwrap();
+        let mut drawn = art.clone();
+        let fx: Vec<&Effect> = art.appearance.effects.iter().collect();
+        crate::reshape::reshape_leaves(&mut drawn, &fx, &art.appearance.effects, None);
+        // The shadow is the art's first member; the surfaces follow it.
+        let surfaces: Vec<PathData> = drawn.children().unwrap().iter().skip(1).flat_map(|c| face_paths(c)).collect();
+        let a = bounds(&surfaces);
+        for (x, y) in [(wire.x0, a.x0), (wire.y0, a.y0), (wire.x1, a.x1), (wire.y1, a.y1)] {
+            assert!((x - y).abs() < 1e-6, "{id}: {wire:?} {a:?}");
+        }
+        // Without the shadow, the faces are scaled about their own center.
+        let mut alone = solid_square(id, json!({}));
+        alone.appearance.effects.push(scale);
+        assert!((bounds(&three_d_wireframe_in(None, &alone).unwrap()).x0 - wire.x0).abs() > 1.0, "{id}");
+    }
+}
+
 /// With two 3D effects, a geometry effect between them reshapes the faces of the one drawn only
 /// once: Revolve is drawn, so a Transform before it moves its profile and not its faces again.
 #[test]
