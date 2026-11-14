@@ -73,6 +73,38 @@ fn images_above_the_threshold_are_resampled_to_the_target_resolution() {
     assert!(text.contains("/Width 100") && text.contains("/DeviceGray"), "grey at 100 ppi");
 }
 
+/// An image with clear pixels, resampled, keeps the color of its opaque pixels: the clear black
+/// beside them does not darken them.
+#[test]
+fn resampled_images_keep_their_color_beside_clear_pixels() {
+    let striped = image::RgbaImage::from_fn(600, 600, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) });
+    let d = doc(encoded(striped.into(), ImageFormat::Png), "image/png");
+    for method in ["average", "bicubic"] {
+        let mut settings: PdfSettings =
+            serde_json::from_value(json!({"compression": {"color": {"downsample": method, "ppi": 150, "abovePpi": 225, "compression": "zip"}}}))
+                .unwrap();
+        settings.compression.compress_text = false;
+        let bytes = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
+        let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(bytes)).unwrap();
+        let rgb = file
+            .objects()
+            .into_iter()
+            .find_map(|o| match o {
+                Object::Stream(s)
+                    if s.dict().get::<Name<'_>>(b"Subtype").is_some_and(|n| n.as_ref() == b"Image") && s.dict().contains_key(b"SMask") =>
+                {
+                    Some(s.decoded().unwrap().into_owned())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{method}: a color image with a soft mask"));
+        assert_eq!(rgb.len(), 150 * 150 * 3, "{method}");
+        for p in rgb.as_chunks::<3>().0 {
+            assert!(p[0].abs_diff(200) <= 3 && p[1].abs_diff(30) <= 3 && p[2].abs_diff(30) <= 3, "{method}: {p:?}");
+        }
+    }
+}
+
 /// The width and height of each image XObject in `pdf`.
 fn image_sizes(pdf: &[u8]) -> Vec<(u32, u32)> {
     let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();

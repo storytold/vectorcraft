@@ -171,6 +171,8 @@ fn run_ui_part1(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 r
             })
         }
+        // Without params the save panel picks the file, then its format's options dialog follows.
+        "document.exportSelection" if p.as_object().is_none_or(|o| o.is_empty()) => crate::dialogs::export_selection(app),
         "document.exportSelection" => {
             io::save_command_output(app, id, "png", if p.is_object() { p.clone() } else { json!({}) }).map(|p| json!({"path": p}))
         }

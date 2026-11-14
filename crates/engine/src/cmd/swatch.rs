@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Swatch",
             ["Window", "Swatches"],
             None,
-            "{name?, color? | colors?: [colour] (one swatch each, in one undo step; #rrggbbaa and #rgba are refused) | swatch? | gradient? | pattern?: name (default: the current fill), tint?: 0..100 (% of the global or spot `swatch`, or of the one the current fill links to), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour; lab: CIE L*a*b*, how spot colours are usually defined), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped), none?: true (the None paint), paint?: paint.setFill params, keepModel?: bool (as paint.setFill)} save a colour, gradient or pattern as a swatch. A tint of a global or spot colour (below 100%, without mode, global or spot) becomes a tint swatch, \"Name 40%\", linked to its base: it follows edits to the base and applies as that tint of it. A gradient swatch holds no link to the swatch its gradient came from, and a pattern swatch holds the pattern untransformed. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\", \"L=55 a=60 b=40\") → {name, names: [every new swatch]}",
+            "{name?, color? | colors?: [colour] (one swatch each, in one undo step; #rrggbbaa and #rgba are refused) | swatch? | gradient? | pattern?: name (default: the current fill), tint?: 0..100 (% of the global or spot `swatch`, or of the one the current fill links to), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour; lab: CIE L*a*b*, how spot colours are usually defined), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped), none?: true (the None paint), paint?: paint.setFill params, keepModel?: bool (as paint.setFill)} save a colour, gradient or pattern as a swatch. A tint of a global or spot colour (below 100%, without mode, global or spot) becomes a tint swatch, \"Name 40%\", linked to its base: it follows edits to the base and applies as that tint of it. A gradient swatch keeps the gradient's aspect (with or without start/end) and holds no link to the swatch its gradient came from, and a pattern swatch holds the pattern untransformed. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\", \"L=55 a=60 b=40\") → {name, names: [every new swatch]}",
             has_doc,
             swatch_new
         ),
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Options",
             ["Window", "Swatches"],
             None,
-            "{name, newName?, color? (e.g. {l, a, b} for a Lab colour; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill; the swatch's own color and a color given with mode keep their model), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient}, {swatch} or {pattern}) replacing the swatch's colour; gradient or pattern with one of the same kind} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
+            "{name, newName?, color? (e.g. {l, a, b} for a Lab colour; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill; the swatch's own color and a color given with mode keep their model), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient} or {swatch}) or {pattern: name} replacing the swatch's colour; gradient or pattern with one of the same kind (stored as swatch.new stores it: a gradient keeps its aspect with or without start/end and holds no swatch link; a pattern is untransformed)} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
             has_doc,
             swatch_edit
         ),
@@ -187,11 +187,7 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
             })),
             Paint::None => Err(bad(C, "a swatch needs a colour, gradient or pattern")),
             _ if spot || mode.is_some() || group.is_some() => Err(bad(C, "spot, mode and group apply to solid colours only")),
-            // The swatch holds the gradient itself, not a link to the swatch it may have come from.
-            // It keeps `geom`, which holds the aspect the swatch is applied with.
-            Paint::Gradient(g) => Ok(Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { swatch: None, ..*g }))),
-            // The swatch holds the pattern untransformed, not the placement of the art it came from.
-            Paint::Pattern { pattern, .. } => Ok(pattern_paint(&pattern)),
+            paint @ (Paint::Gradient(_) | Paint::Pattern { .. }) => Ok(stored_paint(paint, p)),
         })
         .collect::<Result<Vec<_>>>()?;
     // A name applies to a single new swatch.
@@ -218,6 +214,27 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(names)
     })?;
     Ok(json!({ "name": names[0], "names": names }))
+}
+
+/// A gradient or pattern `paint`, parsed from the paint params `p`, as a new or edited swatch
+/// stores it.
+fn stored_paint(paint: Paint, p: &Value) -> Paint {
+    match paint {
+        // A gradient given an `aspect` but no vector is placed on a box so that the swatch keeps
+        // the aspect, as `paint.setFill` places it on each object.
+        Paint::Gradient(ref g) if g.geom.is_none() && g.freeform.is_none() => {
+            match super::gradient::place_paint(&paint, p, Some(vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0))) {
+                Paint::Gradient(g) => Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { swatch: None, ..*g })),
+                other => other,
+            }
+        }
+        // The swatch holds the gradient itself, not a link to the swatch it may have come from.
+        // It keeps `geom`, which holds the aspect the swatch is applied with.
+        Paint::Gradient(g) => Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { swatch: None, ..*g })),
+        // The swatch holds the pattern untransformed, not the placement of the art it came from.
+        Paint::Pattern { pattern, .. } => pattern_paint(&pattern),
+        other => other,
+    }
 }
 
 /// The `names` list and `name` parameters, without repeats; at least one is required.
@@ -866,12 +883,21 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // A replacement paint of the swatch's kind (a dropped colour or edited gradient).
     let paint = match p.get("paint").filter(|v| !v.is_null()) {
-        Some(v) => match (if given("mode") { paint_from(s, &keeping_model(v))? } else { paint_from(s, v)? }, &sw.paint) {
+        Some(v) => match (
+            // A pattern by name, as `swatch.new` takes it.
+            match str_param(v, "pattern") {
+                Some(pat) if d.pattern(pat).is_some() => Some(pattern_paint(pat)),
+                Some(pat) => return Err(bad(C, format!("no pattern `{pat}`"))),
+                None if given("mode") => paint_from(s, &keeping_model(v))?,
+                None => paint_from(s, v)?,
+            },
+            &sw.paint,
+        ) {
             (Some(Paint::Solid { color, .. }), Paint::Solid { .. }) => Some(Paint::solid(color)),
-            (Some(Paint::Gradient(g)), Paint::Gradient(_)) => {
-                Some(Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { geom: None, swatch: None, ..*g })))
+            // Stored as `swatch.new` stores it.
+            (Some(new @ Paint::Gradient(_)), Paint::Gradient(_)) | (Some(new @ Paint::Pattern { .. }), Paint::Pattern { .. }) => {
+                Some(stored_paint(new, v))
             }
-            (Some(new @ Paint::Pattern { .. }), Paint::Pattern { .. }) => Some(new),
             _ => return Err(bad(C, format!("`{name}` takes a paint of its own kind (colour, gradient or pattern)"))),
         },
         None => None,

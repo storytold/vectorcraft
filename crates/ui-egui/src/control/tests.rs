@@ -474,6 +474,36 @@ fn a_recovery_folder_outside_the_read_root_is_hidden_in_the_status() {
     assert_eq!(inspect(&mut app, format!("Copies go to {inside}")), json!(format!("Copies go to {inside}")));
 }
 
+/// `ui.inspect` shows a file on the way to a recovery folder outside the read root, which a failed
+/// recovery copy names, by its name, and a missing folder on the way too. A path that only begins or
+/// only ends with a folder on the way stays.
+#[test]
+fn a_file_on_the_way_to_a_recovery_folder_outside_the_read_root_is_hidden_in_the_status() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let outside = crate::tests_folder::Folder::new("recovery-in-the-way");
+    let file = outside.file("private", b"a file");
+    let folder = std::path::Path::new(&file).join("recovery").to_string_lossy().into_owned();
+    app.session.recovery.set_default_folder(Some(folder));
+    let root = crate::tests_folder::Folder::new("recovery-in-the-way-root");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
+    let inspect = |app: &mut VectorcraftApp, status: String| {
+        app.ui.status = status;
+        let reply = vectorcraft_engine::file_access::confine(roots.as_ref(), || input_request(app, "ui.inspect", json!({})));
+        reply["result"]["ui"]["status"].clone()
+    };
+    let status = format!("Couldn't save recovery data: {file} is not a folder");
+    assert_eq!(inspect(&mut app, status), "Couldn't save recovery data: private is not a folder");
+    let missing = outside.join("gone");
+    let folder = missing.join("recovery").to_string_lossy().into_owned();
+    app.session.recovery.set_default_folder(Some(folder));
+    let status = format!("Couldn't save recovery data: couldn't make {}", missing.display());
+    assert_eq!(inspect(&mut app, status), "Couldn't save recovery data: couldn't make gone");
+    let under = format!("Copies go near {}", outside.join("other.svg").display());
+    assert_eq!(inspect(&mut app, under.clone()), json!(under));
+    let longer = format!("Copies go near /work{}", missing.display());
+    assert_eq!(inspect(&mut app, longer.clone()), json!(longer));
+}
+
 /// A path outside the read root that a request sent is shown by its file name in a reply that succeeded
 /// as in one that failed.
 #[test]
