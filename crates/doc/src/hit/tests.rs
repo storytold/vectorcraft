@@ -111,10 +111,17 @@ fn half_clipped(d: &mut Document) -> (Node, Node) {
 }
 
 /// A stand-in for the engine's [`ClipRegion`]: with an effect named `test.move` in the clipping
-/// path, its first shape moved 100 pt right; without one, no geometry effect.
+/// path, its first shape moved 100 pt right; with one named `test.empty`, no region left to clip
+/// by; without either, no geometry effect.
 fn moved_clip_region(clip: &Node) -> Option<Option<(BezPath, FillRule)>> {
-    let mut moves = false;
-    clip.walk(&mut |n| moves |= n.appearance.effects.iter().any(|e| e.visible && e.id == "test.move"));
+    let (mut moves, mut empty) = (false, false);
+    clip.walk(&mut |n| {
+        moves |= n.appearance.effects.iter().any(|e| e.visible && e.id == "test.move");
+        empty |= n.appearance.effects.iter().any(|e| e.visible && e.id == "test.empty");
+    });
+    if empty {
+        return Some(None);
+    }
     if !moves {
         return None;
     }
@@ -1790,18 +1797,24 @@ fn an_object_a_clipping_layer_in_symbol_art_hides_is_not_picked_there() {
 
 /// In a dynamic symbol's art, an object in a clipping layer whose clipping path has a live effect
 /// is picked and outlined in the region the effect gives the clipping path. In Outline view, and
-/// when the layer's Preview is off, the plain clipping path counts, as the canvas draws it.
+/// when Preview is off for the layer in the art or for the layer the instance is on, the plain
+/// clipping path counts, as the canvas draws it. An effect that leaves no region leaves no outline.
 #[test]
 fn a_symbol_part_follows_the_region_its_clipping_layers_effects_give_it() {
     set_clip_region(moved_clip_region);
-    let instance = |preview: bool| {
+    // The instance of a symbol whose art is a clipping layer; `preview` is the Preview of that
+    // layer and of the document layer the instance is on.
+    let instance = |effect: &str, preview: [bool; 2]| {
         let mut d = Document::new(300.0, 200.0);
+        if let NodeKind::Layer { preview: p, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+            *p = preview[1];
+        }
         let l = d.layers[0].id;
         let (mut mask, art) = half_clipped(&mut d);
-        mask.appearance.effects.push(test_move());
+        mask.appearance.effects.push(crate::Effect { id: effect.into(), ..test_move() });
         let mut layer = Node::layer(d.alloc_id(), "Masked", crate::LayerColor::Preset(2));
         if let NodeKind::Layer { children, preview: p, .. } = &mut layer.kind {
-            (*children, *p) = (vec![Arc::new(mask), Arc::new(art)], preview);
+            (*children, *p) = (vec![Arc::new(mask), Arc::new(art)], preview[0]);
         }
         layer.set_clips(true);
         let root = Node::group(d.alloc_id(), vec![Arc::new(layer)]);
@@ -1810,26 +1823,33 @@ fn a_symbol_part_follows_the_region_its_clipping_layers_effects_give_it() {
         d.insert(Some(l), 0, Node::new(inst, NodeKind::SymbolInstance { symbol: "Clipped".into(), xf: vectorcraft_geom::Affine::IDENTITY })).unwrap();
         (d, inst)
     };
-    let outline_box = |d: &Document, inst: NodeId, outline: bool| {
-        let o = symbol_part_outline_in_view(d, d.node(inst).unwrap(), &[0, 1], outline).unwrap();
+    let outline_box = |d: &Document, inst: NodeId, opt: HitOptions| {
+        let o = symbol_part_outline_in_view(d, d.node(inst).unwrap(), &[0, 1], opt).unwrap();
         vectorcraft_geom::kurbo::Shape::bounding_box(&o)
     };
     let opt = HitOptions::default();
-    let (d, inst) = instance(true);
+    let (d, inst) = instance("test.move", [true, true]);
     let n = d.node(inst).unwrap();
     assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 50.0), opt), Some(vec![0, 1]), "in the moved region");
     assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), None, "where the clipping path was");
-    let b = outline_box(&d, inst, false);
+    let b = outline_box(&d, inst, opt);
     assert!((b.x0 - 100.0).abs() < 1e-6 && (b.x1 - 200.0).abs() < 1e-6, "the outline is cut to the moved region: {b:?}");
-    let b = outline_box(&d, inst, true);
+    let b = outline_box(&d, inst, HitOptions { outline: true, ..opt });
     assert!(b.x0.abs() < 1e-6 && (b.x1 - 100.0).abs() < 1e-6, "in Outline view, to the plain clipping path: {b:?}");
-    // With the layer's Preview off, the art's top edge counts within the plain clipping path.
-    let (d, inst) = instance(false);
+    // With Preview off, the art's top edge counts within the plain clipping path.
+    for (preview, what) in [([false, true], "the layer in the art"), ([true, false], "the layer the instance is on")] {
+        let (d, inst) = instance("test.move", preview);
+        let n = d.node(inst).unwrap();
+        assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 0.5), opt), Some(vec![0, 1]), "on the edge the canvas draws, Preview off for {what}");
+        assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 0.5), opt), None, "past the plain clipping path, Preview off for {what}");
+        let b = outline_box(&d, inst, opt);
+        assert!(b.x0.abs() < 1e-6 && (b.x1 - 100.0).abs() < 1e-6, "Preview off for {what}: the plain clipping path: {b:?}");
+    }
+    // An effect that leaves the clipping path no region hides the art: no pick and no outline.
+    let (d, inst) = instance("test.empty", [true, true]);
     let n = d.node(inst).unwrap();
-    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 0.5), opt), Some(vec![0, 1]), "on the edge the canvas draws");
-    assert_eq!(symbol_part_at(&d, n, Point::new(150.0, 0.5), opt), None, "past the plain clipping path");
-    let b = outline_box(&d, inst, false);
-    assert!(b.x0.abs() < 1e-6 && (b.x1 - 100.0).abs() < 1e-6, "Preview off: the plain clipping path: {b:?}");
+    assert_eq!(symbol_part_at(&d, n, Point::new(50.0, 50.0), opt), None);
+    assert!(symbol_part_outline(&d, n, &[0, 1]).unwrap().elements().is_empty(), "nothing is drawn, so nothing is outlined");
 }
 
 /// In a dynamic symbol's art that placing through its 9-slice guides could make more than

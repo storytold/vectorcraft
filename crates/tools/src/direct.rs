@@ -1029,7 +1029,7 @@ impl Tool for DirectSelectionTool {
                 out.extend(self.mesh.overlays(cx, &|id| cx.selection.contains(id)));
                 if !self.group {
                     if let Some(sp) = &cx.selection.symbol_part
-                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline_in_view(cx.doc, n, &sp.path, cx.outline))
+                        && let Some(path) = cx.doc.node(sp.instance).and_then(|n| symbol_part_outline_in_view(cx.doc, n, &sp.path, cx.hit_options()))
                     {
                         out.push(Overlay::Path { path, color: cx.doc.layer_color(sp.instance), width: 1.0, dashed: false });
                     }
