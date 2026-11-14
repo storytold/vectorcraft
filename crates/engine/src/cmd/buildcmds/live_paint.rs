@@ -1,7 +1,8 @@
 use super::{
-    Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, PathData, Point, Rect,
-    Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint, json,
-    number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+    Appearance, AppearanceItem, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId,
+    PathData, Point, Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json,
+    is_live_paint, json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes,
+    switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -524,6 +525,37 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "group": g.0, "edge": edge.0 }))
 }
 
+/// Every fill and stroke row of face or edge `n`, bottom first, as `livePaint.info` lists them. A
+/// row is `drawn` when the part is shown with an opacity above 0 and the row is shown, has paint
+/// and has an opacity above 0 (a stroke also a weight above 0): the rule of [`draws`], row by row.
+fn appearance_rows(n: &Node) -> Vec<Value> {
+    let part_shown = n.visible && n.opacity > 0.0;
+    n.appearance
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let shown = part_shown && item.visible() && !item.paint().is_none() && item.opacity() > 0.0;
+            let mut row = json!({
+                "index": i,
+                "kind": item.kind_name(),
+                "paint": item.paint().label(),
+                "opacity": item.opacity(),
+                "visible": item.visible(),
+            });
+            let drawn = match item {
+                AppearanceItem::Fill(_) => shown,
+                AppearanceItem::Stroke(st) => {
+                    row["width"] = json!(st.width);
+                    shown && st.width > 0.0
+                }
+            };
+            row["drawn"] = json!(drawn);
+            row
+        })
+        .collect()
+}
+
 pub(super) fn lp_info(s: &mut Session, p: &Value) -> Result<Value> {
     let g = match object_param(p, "group", "livePaint.info")? {
         Some(g) => g,
@@ -535,12 +567,24 @@ pub(super) fn lp_info(s: &mut Session, p: &Value) -> Result<Value> {
         .iter()
         .map(|f| {
             let bb = f.geometric_bounds().unwrap_or(Rect::ZERO);
-            json!({ "id": f.id.0, "fill": f.appearance.fill_paint().label(), "bounds": [bb.x0, bb.y0, bb.x1, bb.y1] })
+            json!({
+                "id": f.id.0,
+                "fill": f.appearance.fill_paint().label(),
+                "bounds": [bb.x0, bb.y0, bb.x1, bb.y1],
+                "appearance": appearance_rows(f),
+            })
         })
         .collect();
     let edges: Vec<Value> = b::edges(n)
         .iter()
-        .map(|e| json!({ "id": e.id.0, "stroke": e.appearance.stroke_paint().label(), "width": e.appearance.stroke_width() }))
+        .map(|e| {
+            json!({
+                "id": e.id.0,
+                "stroke": e.appearance.stroke_paint().label(),
+                "width": e.appearance.stroke_width(),
+                "appearance": appearance_rows(e),
+            })
+        })
         .collect();
     let sources = b::sources(n).and_then(|g| g.children()).map(|c| c.len()).unwrap_or(0);
     let options = n.gap_options();
