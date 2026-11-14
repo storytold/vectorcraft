@@ -7365,8 +7365,8 @@ restore the selection that was cleared. While the slices are locked or hidden, a
 ```
 
 The Slice tool (`slice`, Shift+K) and the Slice Selection tool (`sliceSelection`) reduce to commands:
-`object.slice.create {x, y, width, height}` (the Slice tool's drag; it snaps to ruler guides), `object.slice.select
-{slices?, toggle?}`, `object.slice.move {slices?, dx, dy}` (an object slice moves its object),
+`object.slice.create {x, y, width, height}` (the Slice tool's drag; it snaps as drawn points do, then to ruler guides),
+`object.slice.select {slices?, toggle?}`, `object.slice.move {slices?, dx, dy}` (an object slice moves its object),
 `object.slice.setRect {id, x, y, width, height}` (user slices) and `object.slice.delete {slices?}`. Slice ids are user
 slice ids and the ids of objects with an object slice. `object.slice.select` with `slices` left out or null deselects
 the slices.
@@ -10709,7 +10709,8 @@ Tools:
   centre (move), the box's lower right corner (size; Shift keeps the proportions), a handle above the top (rotation;
   Shift: 45° steps), a dot on the top edge (corner radius) and one of the kind's own (a star's or ring's inner radius, a
   gear's tooth height, an arrow's head, a cross's bar, a heart's notch, a bubble's tail tip); each drag runs
-  `addon.pathtools.shape.set`. A double-click on the canvas places a shape with the last settings. Options
+  `addon.pathtools.shape.set`. A double-click on the canvas places a shape with the last settings. A new shape's
+  center and the point dragged out from it snap as drawn points do. Options
   (`tool.setOption`, or the panel with no shape selected) are the next shape's numbers, as the commands take them.
 - **Corner Tool** (`cornerTool`, or the UI command `addon.pathtools.cornerTool`, which also shows the Anchor Inspector
   panel with its Corners section): edits the app's Live Corners on any path, selected or not. Over an anchor where two
