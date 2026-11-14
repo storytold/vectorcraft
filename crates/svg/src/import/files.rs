@@ -102,6 +102,8 @@ struct DataUrls {
     numbers: HashMap<Arc<str>, usize>,
     /// Each href: a data URL, then what it decoded to, or a link.
     urls: Vec<DataUrl>,
+    /// Each href as it was written, for the filters kept as written ([`Files::data_href`]).
+    hrefs: Vec<Arc<str>>,
 }
 
 enum DataUrl {
@@ -322,6 +324,7 @@ impl Files {
                     let href: Arc<str> = Arc::from(a.value());
                     let n = data.urls.len();
                     data.numbers.insert(href.clone(), n);
+                    data.hrefs.push(href.clone());
                     data.urls.push(if url { DataUrl::Encoded(href) } else { DataUrl::Link(href) });
                     n
                 }
@@ -599,6 +602,13 @@ impl Files {
         let n: usize = h.strip_prefix(DATA_URL_KEY)?.parse().ok()?;
         let known = n < self.data.lock().ok()?.urls.len();
         (known && h.len() == DATA_URL_KEY.len() + n.to_string().len()).then_some(n)
+    }
+
+    /// The href whose key is `h`, as it was written: a filter kept as an effect holds its
+    /// `<feImage>` hrefs as written, not their keys ([`super::fx::sources`]).
+    pub(in crate::import) fn data_href(&self, h: &str) -> Option<Arc<str>> {
+        let n = self.data_number(h)?;
+        self.data.lock().ok()?.hrefs.get(n).cloned()
     }
 
     /// The image of data URL `n`: decoded the first time ([`Files::decode`]), then kept; the link

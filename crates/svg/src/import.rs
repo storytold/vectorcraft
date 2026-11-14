@@ -188,7 +188,7 @@ pub(crate) fn import_finding(
         symbol_suffixes: HashMap::new(),
         pattern_suffixes: HashMap::new(),
         blends: fx::blends(&xml, &scan.markers),
-        filter_sources: fx::sources(&xml, &scan.markers),
+        filter_sources: fx::sources(&xml, &scan.markers, |h| files.data_href(h)),
         files,
         non_scaling: found.non_scaling,
         data: found.data,
