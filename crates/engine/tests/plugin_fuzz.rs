@@ -950,9 +950,10 @@ proptest! {
         prop_assert_eq!(theirs.setting("mine", m).unwrap(), Some(b"kept".to_vec()));
         prop_assert_eq!(theirs.cache_entry("mine", m).unwrap(), Some(b"kept".to_vec()));
         prop_assert_eq!(theirs.cache_bytes(), 4);
-        // The host names every file: the store holds the two modules, their grants and their folders.
+        // The host names every file: the store holds the two modules, their grants, their folders and
+        // the file windows lock while they change the store.
         let names = |dir: &std::path::Path| std::fs::read_dir(dir).unwrap().filter_map(Result::ok).map(|e| e.file_name()).collect::<Vec<_>>();
-        prop_assert!(names(&folder).len() <= 4, "{:?}", names(&folder));
+        prop_assert!(names(&folder).len() <= 5, "{:?}", names(&folder));
         prop_assert!(names(&folder.join("storage")).len() <= 2, "{:?}", names(&folder.join("storage")));
         let _ = s.execute("plugin.remove", &json!({"id": "fuzz.storage"}));
         let _ = s.execute("plugin.remove", &json!({"id": "fuzz.storage.other"}));

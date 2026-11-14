@@ -199,8 +199,11 @@ fn optical_margin_alignment_is_set_per_object_and_saved_only_when_on() {
     assert!(left(&s) < inside - 5.0, "{} {inside}", left(&s));
     assert_eq!(serde_json::to_value(text(&s)).unwrap()["opticalMarginAlignment"], true);
     // `on` sets it; without `on` it toggles.
+    // Setting the value the type already has: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
     assert_eq!(s.execute("type.opticalMarginAlignment", &json!({"on": true})).unwrap()["on"], true);
     assert!(text(&s).optical_margin);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
     assert_eq!(s.execute("type.opticalMarginAlignment", &json!({})).unwrap()["on"], false);
     assert!(!text(&s).optical_margin);
     assert_eq!(left(&s), inside);
@@ -247,6 +250,10 @@ fn system_layout_sets_the_document_and_every_text_object() {
     assert!(fractional.iter().zip(&whole).any(|(a, b)| (a - b).abs() > 0.05), "{fractional:?} {whole:?}");
     assert_eq!(serde_json::to_value(setup(&s)).unwrap()["systemLayout"], true);
     assert_eq!(serde_json::to_value(text(&s, id)).unwrap()["systemLayout"], true);
+    // Setting the value the document and its type already have: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("type.systemLayout", &json!({"on": true})).unwrap()["on"], true);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
     // New type inherits the document's setting.
     let made = s.execute("text.create", &json!({"x": 10, "y": 120, "text": "Z"})).unwrap()["id"].as_u64().unwrap();
     assert!(text(&s, made).system_layout);
@@ -305,6 +312,10 @@ fn fractional_widths_is_set_per_object_and_saved_only_when_off() {
     assert!(text(&s).fractional_widths);
     assert_eq!(s.execute("type.fractionalWidths", &json!({"on": false})).unwrap()["on"], false);
     assert!(!text(&s).fractional_widths);
+    // Setting the value the type already has: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("type.fractionalWidths", &json!({"on": false})).unwrap()["on"], false);
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
     // One undo step.
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(text(&s).fractional_widths);
@@ -1821,6 +1832,61 @@ fn insert_aki_is_a_character_attribute_set_one_side_at_a_time() {
     assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
 }
 
+/// Tsume (Character panel, East Asian options): a character attribute in percent, 0 by default
+/// and saved only when not 0. Both commands set it in one undo step, a call that gives the value
+/// the text already has records none, and a value that is not a number or lies outside 0 to 100 is
+/// refused, naming the key, before anything changes; a character style captured from the
+/// characters carries it.
+#[test]
+fn tsume_is_a_character_attribute() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let tsume = |s: &Session| runs(s).iter().map(|r| (r.text.clone(), r.style.tsume)).collect::<Vec<_>>();
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(saved.get("tsume").is_none());
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"tsume": 50})).unwrap();
+    assert_eq!(tsume(&s), [("（日本）".to_string(), 50.0)]);
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"tsume": 50})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step without a change");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(tsume(&s), [("（日本）".to_string(), 0.0)], "one undo step");
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(tsume(&s), [("（日本）".to_string(), 50.0)]);
+
+    let paren = "（".len();
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": paren, "tsume": 100})).unwrap();
+    assert_eq!(tsume(&s), [("（".to_string(), 100.0), ("日本）".to_string(), 50.0)]);
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert_eq!(saved["tsume"], json!(100.0));
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    let reopened: Vec<_> = t.runs.iter().map(|r| (r.text.clone(), r.style.tsume)).collect();
+    assert_eq!(reopened, tsume(&s));
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[0].style);
+    assert_eq!(attrs["tsume"], json!(100.0));
+
+    let before = tsume(&s);
+    let undo = s.doc().unwrap().history.undo.len();
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"tsume": "50"}), "`tsume` must be a number"),
+        ("text.setFormat", json!({"tsume": -1}), "`tsume` must be from 0 to 100"),
+        ("text.setRangeStyle", json!({"id": id, "tsume": true}), "`tsume` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "start": 0, "end": paren, "tsume": 100.5}), "`tsume` must be from 0 to 100"),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(tsume(&s), before);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step for a refused call");
+}
+
 /// Standard Vertical Roman Alignment (Character panel menu, East Asian options): a character
 /// attribute, off by default and saved only when on. Documents written before it read as off; a
 /// character style captured from the characters carries it.
@@ -2276,8 +2342,17 @@ fn vertical_point_type_keeps_its_anchor_on_the_column_centre_line() {
     let tall = bounds(&s);
     assert!(tall.height() > tall.width(), "{tall:?}");
     assert!((tall.center().x - 100.0).abs() < 6.0, "the anchor stays on the column's centre line: {tall:?}");
+    // Vertical type set vertical again: no undo step.
+    let n = s.doc().unwrap().history.undo.len();
+    s.execute("type.orientation.vertical", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
+    assert_eq!(bounds(&s), tall);
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(bounds(&s), wide);
+    // Horizontal type set horizontal: no undo step either.
+    let n = s.doc().unwrap().history.undo.len();
+    s.execute("type.orientation.horizontal", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), n);
 }
 
 #[test]

@@ -171,6 +171,94 @@ fn a_move_grabbed_by_an_anchor_lands_it_on_another_anchor() {
     assert!((200.0 + x - 350.3).abs() < 1e-9 && (200.0 + y - 250.0).abs() < 1e-9, "the corner lands at ({}, {})", 200.0 + x, 200.0 + y);
 }
 
+/// A document with the rectangle of [`doc_with_rect`] (100..200 square) and a straight path from
+/// `a` to `b` for each pair, and the rectangle's id.
+fn doc_with_rect_and_lines(lines: &[(Point, Point)]) -> (vectorcraft_doc::Document, NodeId) {
+    let (mut d, id) = doc_with_rect();
+    let l = d.layers[0].id;
+    for &(a, b) in lines {
+        let n = d.alloc_id();
+        let path = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&[a, b], false));
+        d.insert(Some(l), 1, vectorcraft_doc::Node::path(n, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    }
+    (d, id)
+}
+
+/// The rectangle of `d` grabbed at `(gx, gy)` (hovered first, so a press near an anchor grabs it)
+/// and dragged to `to`, with Smart Guides on or off (`smart`): the point it was grabbed at after the
+/// move, and the label shown.
+fn grabbed_and_dragged(d: &vectorcraft_doc::Document, id: NodeId, smart: bool, (gx, gy): (f64, f64), to: (f64, f64)) -> (Point, Option<String>) {
+    let (none, mut picked, p) = (Selection::default(), Selection::default(), paint());
+    picked.add(id);
+    let (before, after) = (ToolContext { smart_guides: smart, ..cx(d, &none, &p) }, ToolContext { smart_guides: smart, ..cx(d, &picked, &p) });
+    let mut t = SelectionTool::default();
+    t.pointer(&before, &ev(PointerKind::Move, gx, gy));
+    t.pointer(&before, &ev(PointerKind::Down, gx, gy));
+    let a = t.pointer(&after, &ev(PointerKind::Drag, to.0, to.1));
+    let Some(Action::Preview(_, v)) = a.iter().find(|a| matches!(a, Action::Preview(..))) else { panic!("{a:?}") };
+    let start = SelectionTool::hover_point(&before, Point::new(gx, gy)).map_or(Point::new(gx, gy), |(q, _)| q);
+    let label = t.overlays(&after).iter().find_map(|o| match o {
+        Overlay::Label { text, .. } => Some(text.clone()),
+        _ => None,
+    });
+    (start + Vec2::new(v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap()), label)
+}
+
+/// #7411: grabbed by an anchor and dropped near a point along another path, away from its anchors
+/// and center, the anchor lands on the path ("path") with Smart Guides. A selection grabbed
+/// elsewhere, or with Smart Guides off, does not land on the path.
+#[test]
+fn a_move_grabbed_by_an_anchor_lands_it_on_another_path() {
+    let (a, b) = (Point::new(300.0, 400.0), Point::new(500.0, 300.0));
+    let (d, id) = doc_with_rect_and_lines(&[(a, b)]);
+    let off_line = |q: Point| ((b - a).cross(q - a) / (b - a).hypot()).abs();
+    // Grab the rectangle by its bottom-right corner (200, 200) and drop it half a point beside
+    // the line, at (430, 335) on it.
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (430.0, 335.5));
+    assert!(off_line(corner) < 1e-9, "the corner lands at {corner:?}, {} off the line", off_line(corner));
+    assert!((corner.x - 430.0).abs() < 0.5, "{corner:?}");
+    assert_eq!(label.as_deref(), Some("path"));
+    // Grabbed by its fill instead, the pointer stays half a point beside the line.
+    let (grip, _) = grabbed_and_dragged(&d, id, true, (150.0, 170.0), (430.0, 335.5));
+    assert!(off_line(grip) > 0.4, "the grip lands at {grip:?}");
+    // With Smart Guides off, the corner stays where it was dragged.
+    let (corner, _) = grabbed_and_dragged(&d, id, false, (201.0, 201.0), (430.0, 335.5));
+    assert!(off_line(corner) > 0.4, "the corner lands at {corner:?}");
+}
+
+/// #7411: a selection grabbed by an anchor lands it where two other paths cross ("intersect"), and
+/// on another object's anchor near the path rather than on the path.
+#[test]
+fn a_move_grabbed_by_an_anchor_lands_it_where_paths_cross() {
+    let (d, id) =
+        doc_with_rect_and_lines(&[(Point::new(300.0, 400.0), Point::new(500.0, 300.0)), (Point::new(460.0, 250.0), Point::new(460.0, 420.0))]);
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (460.4, 320.5));
+    assert!(corner.distance(Point::new(460.0, 320.0)) < 1e-9, "the corner lands at {corner:?}");
+    assert_eq!(label.as_deref(), Some("intersect"));
+    // The end of the upright path (460, 250) is an anchor: the corner lands on it.
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (460.5, 251.0));
+    assert!(corner.distance(Point::new(460.0, 250.0)) < 1e-9, "the corner lands at {corner:?}");
+    assert_eq!(label.as_deref(), Some("anchor"));
+}
+
+/// #7411: a selection grabbed by an anchor lands it where another path crosses a ruler guide
+/// ("intersect"), and a ruler guide running past does not pull it off a path it landed on.
+#[test]
+fn a_move_grabbed_by_an_anchor_lands_it_where_a_path_crosses_a_ruler_guide() {
+    let (a, b) = (Point::new(300.0, 400.0), Point::new(500.0, 300.0));
+    let (mut d, id) = doc_with_rect_and_lines(&[(a, b)]);
+    d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 440.0));
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (440.5, 330.5));
+    assert!(corner.distance(Point::new(440.0, 330.0)) < 1e-9, "the corner lands at {corner:?}");
+    assert_eq!(label.as_deref(), Some("intersect"));
+    // Beyond reach of the crossing, the corner stays on the path with the guide 3.7 points beside
+    // it.
+    let off_line = |q: Point| ((b - a).cross(q - a) / (b - a).hypot()).abs();
+    let (corner, label) = grabbed_and_dragged(&d, id, true, (201.0, 201.0), (436.43, 332.12));
+    assert!(off_line(corner) < 1e-9, "the corner lands at {corner:?}");
+    assert_eq!(label.as_deref(), Some("path"));
+}
+
 /// #3716: a press a few pixels from an anchor grabs the object by that anchor, but the drag
 /// threshold counts from where the pointer went down. A click that wobbles by a pixel selects
 /// the object without moving it, instead of jumping the anchor onto the pointer.
