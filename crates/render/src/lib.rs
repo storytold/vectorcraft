@@ -65,8 +65,8 @@ pub struct Renderer {
     /// The latest cached glyph geometry for each text object id. A move changes the node's Arc
     /// but not its glyphs in text space, so the old geometry can still be used after comparison.
     text_ids: PtrMap<NodeId, usize>,
-    /// The [`vectorcraft_text::FontDb::generation`] `texts` was laid out with: type lays out
-    /// again when fonts are added or rescanned.
+    /// The [`vectorcraft_text::layout_inputs`] `texts` was laid out with: type lays out again
+    /// when fonts are added or rescanned and when the hyphenation exceptions change.
     text_fonts: u64,
     /// Clip regions per clipping path (see [`Self::clip_of`]).
     clips: FrameCache<usize, ClipEntry>,
