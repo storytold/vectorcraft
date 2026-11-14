@@ -7488,10 +7488,9 @@ breakText	Glyphs	Glyphes
 	Grommet Inset	Distance des œillets au bord
 	Diameter	Diamètre
 
-# Messages of the effects, 3D, image export, color profiles, composite fonts, swatch exchange files and color books.
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	Les effets 3D exigent des coordonnées finies comprises dans 100 millions de points
 @msg	3D effects require one to ten lights	Les effets 3D exigent d’une à dix lumières
-@msg	<{_1}> isn't an element of an SVG filter	<{_1}> n’est pas un élément de filtre SVG
 @msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Profondeur BMP {_1} : 1, 4, 8, 16, 24 ou 32 bits par pixel
 @msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Échec de l’encodage BMP : {width} × {height} pixels ne conviennent ni au format ni au tampon de pixels
 @msg	GIF encoding failed: the palette image is malformed	Échec de l’encodage GIF : l’image à palette est mal formée
@@ -7536,16 +7535,6 @@ breakText	Glyphs	Glyphes
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}` : {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` vaut smallThumb, mediumThumb, largeThumb, smallList ou largeList
-@msg	`{_1}` can't name a composite font	`{_1}` ne peut pas nommer une police composite
-@msg	`{_1}` is the name of an installed font	`{_1}` est le nom d’une police installée
-@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}` : {_2} est composé en `{font}`, une police composite
-@msg	`{name}`: give the kanji part	`{name}` : indiquez la partie kanji
-@msg	`{name}`: parts must be an object	`{name}` : parts doit être un objet
-@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}` : classe inconnue `{k}` ; les classes sont kanji, kana, punctuation, symbols, roman et numerals
-@msg	`{name}`: unknown key `{k}` in {_1}	`{name}` : clé inconnue `{k}` dans {_1}
-@msg	`{name}`: {_1} must be an object	`{name}` : {_1} doit être un objet
-@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` ne peut pas nommer une police composite (de 1 à {COMPOSITE_NAME_MAX} caractères, sans caractères de contrôle)
-@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un document conserve au plus {COMPOSITE_FONTS_MAX} polices composites
 @msg	a line can't run from a point to itself	une ligne ne peut pas relier un point à lui-même
 @msg	a line needs at least two points	une ligne nécessite au moins deux points
 @msg	a linked JavaScript file is outside the read roots	un fichier JavaScript lié se trouve hors des dossiers racines de lecture
@@ -7555,13 +7544,6 @@ breakText	Glyphs	Glyphes
 @msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	une image de {sw} × {sh} ne peut pas être redimensionnée à {width} × {height} pixels
 @msg	a {width} × {height} image is too large	une image de {width} × {height} est trop grande
 @msg	a {width} × {height} image: {e}	une image de {width} × {height} : {e}
-@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	un filtre SVG comporte au plus {MAX_PRIMITIVES} primitives
-@msg	an SVG filter has no event attributes such as {_1}	un filtre SVG ne comporte aucun attribut d’événement tel que {_1}
-@msg	an SVG filter is at most {_1} KB	un filtre SVG fait au plus {_1} Ko
-@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	les éléments d’un filtre SVG s’imbriquent sur au plus {MAX_DEPTH} niveaux
-@msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG compte au plus {MAX_NAME} caractères
-@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	les images d’un filtre SVG sont des URL data: PNG, JPEG, GIF ou WebP
-@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	les images d’un filtre SVG comptent au plus {MAX_IMAGE_PIXELS} pixels au total
 @msg	an image could not be written: {e}	une image n’a pas pu être écrite : {e}
 @msg	an image that couldn't be read was left out	une image illisible a été omise
 @msg	can't open “{name}”: {e}	impossible d’ouvrir « {name} » : {e}
@@ -7570,18 +7552,11 @@ breakText	Glyphs	Glyphes
 @msg	cannot read profile: {0}	impossible de lire le profil : {0}
 @msg	color book version {version} isn't supported (only 1)	la version {version} du carnet de couleurs n’est pas prise en charge (seulement 1)
 @msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	les carnets de couleurs dans l’espace colorimétrique {other} ne sont pas pris en charge (seulement RVB, CMJN et Lab)
-@msg	dataBase64 is not base64	dataBase64 n’est pas en base64
-@msg	each font must be {name, parts}	chaque police doit être {name, parts}
-@msg	each font needs a name	chaque police nécessite un nom
-@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	le numOctaves de feTurbulence vaut au plus {MAX_OCTAVES}
 @msg	file name too long to zip: {_1}	nom de fichier trop long pour le zip : {_1}
 @msg	file name too long to zip: {name}	nom de fichier trop long pour le zip : {name}
-@msg	fonts must be a list of composite fonts	fonts doit être une liste de polices composites
 @msg	freeform line {i}: {e}	ligne libre {i} : {e}
 @msg	freeform point {i}: {e}	point libre {i} : {e}
 @msg	give `{key}` or `{other}`, not both	indiquez `{key}` ou `{other}`, pas les deux
-@msg	give fonts: [{name, parts}…]	indiquez fonts: [{name, parts}…]
-@msg	give one of path, data or dataBase64	indiquez path, data ou dataBase64
 @msg	grayscale profiles can't be working spaces yet	les profils en niveaux de gris ne peuvent pas encore servir d’espaces de travail
 @msg	input contains NaN or infinite coordinates	l’entrée contient des coordonnées NaN ou infinies
 @msg	input path could not be closed	le tracé d’entrée n’a pas pu être fermé
@@ -7590,37 +7565,20 @@ breakText	Glyphs	Glyphes
 @msg	its localized names take more than {_1} KB	ses noms localisés occupent plus de {_1} Ko
 @msg	its objects are nested too deep ({e})	ses objets sont trop profondément imbriqués ({e})
 @msg	its tag table lists the `{_1}` tag more than once	sa table de balises répertorie la balise `{_1}` plus d’une fois
-@msg	names must be a list of names	names doit être une liste de noms
-@msg	names must be strings	names doit contenir des chaînes
-@msg	no composite font	aucune police composite
-@msg	no composite font named `{n}`	aucune police composite nommée `{n}`
-@msg	no composite fonts to export	aucune police composite à exporter
-@msg	not a composite fonts file: no compositeFonts list	ce n’est pas un fichier de polices composites : aucune liste compositeFonts
-@msg	not a composite fonts file: {e}	ce n’est pas un fichier de polices composites : {e}
 @msg	not a graphic style library: {e}	ce n’est pas une bibliothèque de styles graphiques : {e}
 @msg	not a swatch library (.vcswatches or .gpl)	ce n’est pas une bibliothèque de nuances (.vcswatches ou .gpl)
 @msg	not a swatch library (format `{_1}`)	ce n’est pas une bibliothèque de nuances (format `{_1}`)
 @msg	not a swatch library: {e}	ce n’est pas une bibliothèque de nuances : {e}
 @msg	not an action set file ({e})	ce n’est pas un fichier de jeu de scripts ({e})
-@msg	path is empty	le chemin est vide
 @msg	profile colour space {other} is not RGB, CMYK or Gray	l’espace colorimétrique {other} du profil n’est pas RVB, CMJN ou Niveaux de gris
 @msg	regular expression too large	expression régulière trop volumineuse
 @msg	script file is not UTF-8 text: {value}	le fichier de script n’est pas du texte UTF-8 : {value}
 @msg	stop {i}: {e}	étape de dégradé {i} : {e}
 @msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	la version {major}.{minor} du fichier d’échange de nuances n’est pas prise en charge (seulement 1.x)
-@msg	the <filter> element needs an id, the filter's name	l’élément <filter> nécessite un id, le nom du filtre
-@msg	the SVG filter can't be drawn: check its primitives and their inputs	le filtre SVG ne peut pas être dessiné : vérifiez ses primitives et leurs entrées
-@msg	the SVG filter has no primitives	le filtre SVG ne comporte aucune primitive
-@msg	the SVG filter is too large once its attributes are written out	le filtre SVG est trop volumineux une fois ses attributs écrits en entier
-@msg	the SVG filter isn't valid XML: {e}	le filtre SVG n’est pas du XML valide : {e}
 @msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	l’illustration d’une conception de graphe dans une série de graphe est redessinée à partir de la conception : modifiez la conception pour la changer
 @msg	the color book holds more than {ASE_MAX_ENTRIES} colors	le carnet de couleurs contient plus de {ASE_MAX_ENTRIES} couleurs
 @msg	the color book is cut short	le carnet de couleurs est tronqué
 @msg	the color book's names take more than {_1} MB	les noms du carnet de couleurs occupent plus de {_1} Mo
-@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	le fichier contient plus de {COMPOSITE_FONTS_MAX} polices composites
-@msg	the file holds no composite fonts	le fichier ne contient aucune police composite
-@msg	the file holds two composite fonts named `{_1}`	le fichier contient deux polices composites nommées `{_1}`
-@msg	the file is larger than 4 MB	le fichier dépasse 4 Mo
 @msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	l’image mesurerait {w} × {h} pixels ; les exports en pixels sont limités à {MAX_RASTER_SIDE} pixels par côté et à {_1} mégapixels : réduisez l’échelle ou la résolution
 @msg	the optimised image can't be read back: {e}	l’image optimisée ne peut pas être relue : {e}
 @msg	the pixel buffer doesn't match the image size	le tampon de pixels ne correspond pas à la taille de l’image
@@ -7635,21 +7593,12 @@ breakText	Glyphs	Glyphes
 @msg	too many groups	trop de groupes
 @msg	too many layers for PSD (at most 32767)	trop de calques pour le PSD (32767 au plus)
 @msg	too many swatch exchange blocks	trop de blocs dans le fichier d’échange de nuances
-@msg	two composite fonts are named `{_1}`	deux polices composites sont nommées `{_1}`
 @msg	unknown colour profile: {0}	profil colorimétrique inconnu : {0}
-@msg	unknown key `{k}`; a font takes name and parts	clé inconnue `{k}` ; une police accepte name et parts
 @msg	{_1} clashes with a built-in profile name	{_1} entre en conflit avec le nom d’un profil intégré
 @msg	{_1}: no usable transform to/from sRGB	{_1} : aucune transformation utilisable vers ou depuis sRGB
-@msg	{k}: baseline must be {_1} to {_2}%	{k} : baseline doit être compris entre {_1} et {_2} %
-@msg	{k}: give a font	{k} : indiquez une police
-@msg	{k}: only kana can be scaled at the center	{k} : seuls les kana peuvent être mis à l’échelle au centre
-@msg	{k}: only kana, roman and numerals can be scaled	{k} : seuls kana, roman et numerals peuvent être mis à l’échelle
-@msg	{k}: scale must be {_1} to {_2}%	{k} : scale doit être compris entre {_1} et {_2} %
-@msg	{k}: size must be {_1} to {_2}%	{k} : size doit être compris entre {_1} et {_2} %
 @msg	{name} is not a CMYK profile	{name} n’est pas un profil CMJN
 @msg	{name} is not an RGB profile	{name} n’est pas un profil RVB
 @msg	{path}: could not be read	{path} : lecture impossible
-@msg	{what} is at most {max}	{what} vaut au plus {max}
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels, c’est trop grand pour le JPEG (65535 pixels par côté au plus) : réduisez la résolution
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels, c’est trop grand pour le Targa (65535 pixels par côté au plus) : réduisez la résolution
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels, c’est trop grand pour le PSD ({MAX_SIDE} pixels par côté au plus) : réduisez la résolution
