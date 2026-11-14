@@ -6487,6 +6487,245 @@ axis	Y Axis	Y 軸
 	Stars	星
 	Triangles	三角形
 	Sparkles	きらめき
+	Warm Gray	ウォームグレー
+	Cool Gray	クールグレー
+	Neutrals	ニュートラル系
+	Ivory	アイボリー
+	Linen	リネン
+	Oat	オート
+	Greige	グレージュ
+	Stone	ストーン
+	Taupe	トープ
+	Slate	スレート
+	Clay	クレイ
+	Terracotta	テラコッタ
+	Ochre	オーカー
+	Umber	焦げ茶
+	Sand	サンド
+	Olive	オリーブ
+	Moss	モス
+	Rosy	ロージー
+	Neutral	ニュートラル
+	Golden	ゴールデン
+	Pastel	パステル
+	Pastel Red	パステルレッド
+	Pastel Orange	パステルオレンジ
+	Pastel Amber	パステルアンバー
+	Pastel Yellow	パステルイエロー
+	Pastel Lime	パステルライム
+	Pastel Green	パステルグリーン
+	Pastel Teal	パステルティール
+	Pastel Cyan	パステルシアン
+	Pastel Azure	パステルアジュール
+	Pastel Blue	パステルブルー
+	Pastel Violet	パステルバイオレット
+	Pastel Magenta	パステルマゼンタ
+	Soft Red	ソフトレッド
+	Soft Orange	ソフトオレンジ
+	Soft Amber	ソフトアンバー
+	Soft Yellow	ソフトイエロー
+	Soft Lime	ソフトライム
+	Soft Green	ソフトグリーン
+	Soft Teal	ソフトティール
+	Soft Cyan	ソフトシアン
+	Soft Azure	ソフトアジュール
+	Soft Blue	ソフトブルー
+	Soft Violet	ソフトバイオレット
+	Soft Magenta	ソフトマゼンタ
+	Vivid Red	ビビッドレッド
+	Vivid Orange	ビビッドオレンジ
+	Vivid Amber	ビビッドアンバー
+	Vivid Yellow	ビビッドイエロー
+	Vivid Lime	ビビッドライム
+	Vivid Green	ビビッドグリーン
+	Vivid Teal	ビビッドティール
+	Vivid Cyan	ビビッドシアン
+	Vivid Azure	ビビッドアジュール
+	Vivid Blue	ビビッドブルー
+	Vivid Violet	ビビッドバイオレット
+	Vivid Magenta	ビビッドマゼンタ
+	Deep	ディープ
+	Deep Red	ディープレッド
+	Deep Orange	ディープオレンジ
+	Deep Amber	ディープアンバー
+	Deep Yellow	ディープイエロー
+	Deep Lime	ディープライム
+	Deep Green	ディープグリーン
+	Deep Teal	ディープティール
+	Deep Cyan	ディープシアン
+	Deep Azure	ディープアジュール
+	Deep Blue	ディープブルー
+	Deep Violet	ディープバイオレット
+	Deep Magenta	ディープマゼンタ
+	Gold	ゴールド
+	Silver	シルバー
+	Bronze	ブロンズ
+	Copper	カッパー
+	Brass	ブラス
+	Rose Gold	ローズゴールド
+	Gunmetal	ガンメタル
+	Platinum	プラチナ
+	Pewter	ピューター
+	Ember	残り火
+	Lagoon	ラグーン
+	Dusk	夕暮れ
+	Clay to Teal	クレイからティール
+	Plum to Olive	プラムからオリーブ
+	Complementary Coral	コーラル (補色)
+	Split Complementary Coral	コーラル (分割補色)
+	Analogous Coral	コーラル (類似色)
+	Triad Coral	コーラル (トライアド)
+	Tetrad Coral	コーラル (テトラード)
+	Pentagram Coral	コーラル (ペンタグラム)
+	Complementary Teal	ティール (補色)
+	Split Complementary Teal	ティール (分割補色)
+	Analogous Teal	ティール (類似色)
+	Triad Teal	ティール (トライアド)
+	Tetrad Teal	ティール (テトラード)
+	Pentagram Teal	ティール (ペンタグラム)
+	Soft Spectrum	ソフトスペクトル
+	Red to Amber	レッドからアンバー
+	Orange to Yellow	オレンジからイエロー
+	Amber to Lime	アンバーからライム
+	Yellow to Green	イエローからグリーン
+	Lime to Teal	ライムからティール
+	Green to Cyan	グリーンからシアン
+	Teal to Azure	ティールからアジュール
+	Cyan to Blue	シアンからブルー
+	Azure to Violet	アジュールからバイオレット
+	Blue to Magenta	ブルーからマゼンタ
+	Violet to Red	バイオレットからレッド
+	Magenta to Orange	マゼンタからオレンジ
+	Dawn	夜明け
+	Noon	正午
+	Sunset	夕焼け
+	Night	夜
+	Overcast	曇り空
+	White to Black	ホワイトからブラック
+	Light Grays	ライトグレー
+	Dark Grays	ダークグレー
+	Warm Grays	ウォームグレー系
+	Cool Grays	クールグレー系
+	Fade to Transparent	透明へフェード
+	White Fade	ホワイトフェード
+	Vignette	ビネット
+	Mist	ミスト
+	Petal	花びら
+	Fern	シダ
+	Smoke	スモーク
+	Honey	ハニー
+	Seafoam	シーフォーム
+	Lavender	ラベンダー
+	Driftwood	流木
+	Ink Wash	墨のにじみ
+	Tide	潮
+	Bloom	開花
+	Dew	露
+	Pollen	花粉
+	Lichen	地衣
+	Prism Veil	プリズムベール
+	Opal Ribbon	オパールリボン
+	Pearl Flash	パールフラッシュ
+	Aurora Foil	オーロラ箔
+	Iris Sheen	虹彩の光沢
+	Frost Spectrum	霜のスペクトル
+	Silver Tide	銀の潮
+	Rose Quartz Gleam	ローズクォーツの輝き
+	Moonstone Shift	ムーンストーンの揺らめき
+	Violet Edge	バイオレットの縁
+	Mint Halo	ミントのハロー
+	Amber Corona	アンバーのコロナ
+	Polar Glint	極光のきらめき
+	Pastel Orbit	パステルの軌道
+	Coral and Navy	コーラルとネイビー
+	Plum and Lime	プラムとライム
+	Teal and Gold	ティールとゴールド
+	Indigo and Peach	インディゴとピーチ
+	Forest and Rose	フォレストとローズ
+	Red Glow	レッドグロー
+	Orange Glow	オレンジグロー
+	Amber Glow	アンバーグロー
+	Yellow Glow	イエローグロー
+	Lime Glow	ライムグロー
+	Green Glow	グリーングロー
+	Teal Glow	ティールグロー
+	Cyan Glow	シアングロー
+	Azure Glow	アジュールグロー
+	Blue Glow	ブルーグロー
+	Violet Glow	バイオレットグロー
+	Magenta Glow	マゼンタグロー
+	Polka Dots	水玉
+	Vertical Stripes	縦ストライプ
+	Horizontal Stripes	横ストライプ
+	Diagonal Stripes	斜めストライプ
+	Checkerboard	市松模様
+	Diamonds	ダイヤ柄
+	Crosses	十字柄
+	Coarse Grit	粗い粒子
+	Stipple	点描
+	Scratches	引っかき傷
+	Sparse Flecks	まばらな斑点
+	Dense Flecks	密な斑点
+	Sine Bands	正弦波の帯
+	Ripple Lines	波紋線
+	Interference Rings	干渉リング
+	Offset Rings	ずれたリング
+	Warped Checks	ゆがんだチェック
+	Pinched Stripes	すぼまったストライプ
+	Chevron Pulse	山形パルス
+	Radiating Lenses	放射状レンズ
+	Soft Shadow	ソフトシャドウ
+	Hard Shadow	ハードシャドウ
+	Lifted Card	浮き上がったカード
+	Neon Tube	ネオン管
+	Inner Light	内側の光
+	Feathered	ぼかし
+	Haze	もや
+	Double Rule	二重罫線
+	Triple Rule	三重罫線
+	Dashed Border	破線の枠
+	Dotted Border	点線の枠
+	Offset Keyline	オフセットキーライン
+	Inset Keyline	内側キーライン
+	Outside Stroke	外側の線
+	Pointer	ポインター
+	Highlighter	蛍光ペン
+	Sketchy Line	スケッチ風の線
+	Scribble Fill	落書き風塗り
+	Wobble	揺らぎ
+	Zig Zag Edge	ジグザグの縁
+	Wavy Edge	波形の縁
+	Puffy	ふくらみ
+	Starburst	スターバースト
+	Glossy	光沢
+	Brushed Metal	ヘアライン金属
+	Spotlight	スポットライト
+	Sunset Band	夕焼けの帯
+	Sea Glass	シーグラス
+	Pearl	パール
+	Chrome Rim	クロームの縁
+	Glow Orb	光る球
+	Pill Badge	ピル型バッジ
+	Round Badge	丸型バッジ
+	Flag Wave	旗のなびき
+	Bulge	膨らみ
+	Twisted	ねじれ
+	Echo	エコー
+	Spiral Copies	らせん状のコピー
+	Multiply Tint	乗算の色合い
+	Darken Veil	比較 (暗) のベール
+	Ghosted	半透明
+	Two Tone	ツートーン
+	Overlay Glaze	オーバーレイの釉
+	Screen Light	スクリーンの光
+	Soft Light Wash	ソフトライトのにじみ
+	Burst	バースト
+	Rounded Square	角丸の正方形
+	Bar	バー
+	Hexagon	六角形
+	Spectrum	スペクトル
+	Triangle	三角形
+	Vivid	ビビッド
 	Save Brush Library…	ブラシライブラリを保存…
 @msg	`{_1}` has no brushes to apply	`{_1}` に適用できるブラシがありません
 @msg	missing `library` (see brush.libraries)	`library` がありません (brush.libraries を参照)

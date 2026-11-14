@@ -6294,6 +6294,240 @@ axis	Y Axis	Y osa
 	Stars	Zvijezde
 	Triangles	Trouglovi
 	Sparkles	Iskrice
+	Warm Gray	Topla siva
+	Cool Gray	Hladna siva
+	Neutrals	Neutralne
+	Ivory	Slonovača
+	Linen	Lan
+	Oat	Zob
+	Greige	Greige
+	Stone	Kamen
+	Taupe	Taupe
+	Slate	Škriljac
+	Clay	Glina
+	Terracotta	Terakota
+	Ochre	Oker
+	Umber	Umbra
+	Sand	Pijesak
+	Olive	Maslinasta
+	Moss	Mahovina
+	Rosy	Ružičasta
+	Neutral	Neutralna
+	Golden	Zlatna
+	Pastel	Pastelne
+	Pastel Red	Pastelna crvena
+	Pastel Orange	Pastelna narandžasta
+	Pastel Amber	Pastelni jantar
+	Pastel Yellow	Pastelna žuta
+	Pastel Lime	Pastelna limeta
+	Pastel Green	Pastelna zelena
+	Pastel Teal	Pastelna plavozelena
+	Pastel Cyan	Pastelni cijan
+	Pastel Azure	Pastelna azurna
+	Pastel Blue	Pastelna plava
+	Pastel Violet	Pastelna ljubičasta
+	Pastel Magenta	Pastelna magenta
+	Soft Red	Blaga crvena
+	Soft Orange	Blaga narandžasta
+	Soft Amber	Blagi jantar
+	Soft Yellow	Blaga žuta
+	Soft Lime	Blaga limeta
+	Soft Green	Blaga zelena
+	Soft Teal	Blaga plavozelena
+	Soft Cyan	Blagi cijan
+	Soft Azure	Blaga azurna
+	Soft Blue	Blaga plava
+	Soft Violet	Blaga ljubičasta
+	Soft Magenta	Blaga magenta
+	Vivid Red	Živa crvena
+	Vivid Orange	Živa narandžasta
+	Vivid Amber	Živi jantar
+	Vivid Yellow	Živa žuta
+	Vivid Lime	Živa limeta
+	Vivid Green	Živa zelena
+	Vivid Teal	Živa plavozelena
+	Vivid Cyan	Živi cijan
+	Vivid Azure	Živa azurna
+	Vivid Blue	Živa plava
+	Vivid Violet	Živa ljubičasta
+	Vivid Magenta	Živa magenta
+	Deep	Tamne
+	Deep Red	Tamnocrvena
+	Deep Orange	Tamnonarandžasta
+	Deep Amber	Tamni jantar
+	Deep Yellow	Tamnožuta
+	Deep Lime	Tamna limeta
+	Deep Green	Tamnozelena
+	Deep Teal	Tamna plavozelena
+	Deep Cyan	Tamni cijan
+	Deep Azure	Tamna azurna
+	Deep Blue	Tamnoplava
+	Deep Violet	Tamnoljubičasta
+	Deep Magenta	Tamna magenta
+	Gold	Zlato
+	Silver	Srebro
+	Bronze	Bronza
+	Copper	Bakar
+	Brass	Mesing
+	Rose Gold	Rozo zlato
+	Gunmetal	Čelično siva
+	Platinum	Platina
+	Pewter	Kalaj
+	Ember	Žar
+	Lagoon	Laguna
+	Dusk	Sumrak
+	Clay to Teal	Od gline do plavozelene
+	Plum to Olive	Od šljive do maslinaste
+	Complementary Coral	Koralna, komplementarne
+	Split Complementary Coral	Koralna, podijeljene komplementarne
+	Analogous Coral	Koralna, analogne
+	Triad Coral	Koralna, trijada
+	Tetrad Coral	Koralna, tetrada
+	Pentagram Coral	Koralna, pentagram
+	Complementary Teal	Plavozelena, komplementarne
+	Split Complementary Teal	Plavozelena, podijeljene komplementarne
+	Analogous Teal	Plavozelena, analogne
+	Triad Teal	Plavozelena, trijada
+	Tetrad Teal	Plavozelena, tetrada
+	Pentagram Teal	Plavozelena, pentagram
+	Soft Spectrum	Blagi spektar
+	Red to Amber	Od crvene do jantara
+	Orange to Yellow	Od narandžaste do žute
+	Amber to Lime	Od jantara do limete
+	Yellow to Green	Od žute do zelene
+	Lime to Teal	Od limete do plavozelene
+	Green to Cyan	Od zelene do cijana
+	Teal to Azure	Od plavozelene do azurne
+	Cyan to Blue	Od cijana do plave
+	Azure to Violet	Od azurne do ljubičaste
+	Blue to Magenta	Od plave do magente
+	Violet to Red	Od ljubičaste do crvene
+	Magenta to Orange	Od magente do narandžaste
+	Dawn	Zora
+	Noon	Podne
+	Sunset	Zalazak sunca
+	Night	Noć
+	Overcast	Oblačno
+	White to Black	Od bijele do crne
+	Light Grays	Svijetle sive
+	Dark Grays	Tamne sive
+	Warm Grays	Tople sive
+	Cool Grays	Hladne sive
+	Fade to Transparent	Prelaz u providno
+	White Fade	Bijeli prelaz
+	Vignette	Vinjeta
+	Mist	Izmaglica
+	Petal	Latica
+	Fern	Paprat
+	Smoke	Dim
+	Honey	Med
+	Seafoam	Morska pjena
+	Lavender	Lavanda
+	Driftwood	Naplavljeno drvo
+	Ink Wash	Lavirani tuš
+	Tide	Plima
+	Bloom	Cvjetanje
+	Dew	Rosa
+	Pollen	Polen
+	Lichen	Lišaj
+	Prism Veil	Prizmatični veo
+	Opal Ribbon	Opalna traka
+	Pearl Flash	Biserni bljesak
+	Aurora Foil	Folija polarne svjetlosti
+	Iris Sheen	Sjaj irisa
+	Frost Spectrum	Mrazni spektar
+	Silver Tide	Srebrna plima
+	Rose Quartz Gleam	Sjaj ružičastog kvarca
+	Moonstone Shift	Prelivanje mjesečevog kamena
+	Violet Edge	Ljubičasta ivica
+	Mint Halo	Oreol boje mente
+	Amber Corona	Jantarna korona
+	Polar Glint	Polarni odsjaj
+	Pastel Orbit	Pastelna orbita
+	Coral and Navy	Koralna i mornarsko plava
+	Plum and Lime	Šljiva i limeta
+	Teal and Gold	Plavozelena i zlatna
+	Indigo and Peach	Indigo i breskva
+	Forest and Rose	Šuma i ruža
+	Red Glow	Crveni sjaj
+	Orange Glow	Narandžasti sjaj
+	Amber Glow	Jantarni sjaj
+	Yellow Glow	Žuti sjaj
+	Lime Glow	Sjaj limete
+	Green Glow	Zeleni sjaj
+	Teal Glow	Plavozeleni sjaj
+	Cyan Glow	Cijan sjaj
+	Azure Glow	Azurni sjaj
+	Blue Glow	Plavi sjaj
+	Violet Glow	Ljubičasti sjaj
+	Magenta Glow	Magenta sjaj
+	Polka Dots	Tufne
+	Vertical Stripes	Vertikalne pruge
+	Horizontal Stripes	Horizontalne pruge
+	Diagonal Stripes	Dijagonalne pruge
+	Checkerboard	Šahovska tabla
+	Diamonds	Rombovi
+	Crosses	Krstići
+	Coarse Grit	Grubo zrno
+	Stipple	Tačkanje
+	Scratches	Ogrebotine
+	Sparse Flecks	Rijetke mrlje
+	Dense Flecks	Guste mrlje
+	Sine Bands	Sinusne trake
+	Ripple Lines	Talasaste linije
+	Interference Rings	Interferentni prstenovi
+	Offset Rings	Pomaknuti prstenovi
+	Warped Checks	Iskrivljene kocke
+	Pinched Stripes	Stisnute pruge
+	Chevron Pulse	Pulsirajući ševroni
+	Radiating Lenses	Zračeća sočiva
+	Soft Shadow	Meka sjena
+	Hard Shadow	Oštra sjena
+	Lifted Card	Podignuta kartica
+	Neon Tube	Neonska cijev
+	Inner Light	Unutrašnje svjetlo
+	Feathered	Omekšane ivice
+	Haze	Sumaglica
+	Double Rule	Dvostruka linija
+	Triple Rule	Trostruka linija
+	Dashed Border	Isprekidani okvir
+	Dotted Border	Tačkasti okvir
+	Offset Keyline	Pomaknuta kontura
+	Inset Keyline	Unutrašnja kontura
+	Outside Stroke	Vanjski potez
+	Pointer	Pokazivač
+	Highlighter	Marker
+	Sketchy Line	Skicirana linija
+	Scribble Fill	Išarana ispuna
+	Wobble	Klimanje
+	Zig Zag Edge	Cik-cak ivica
+	Wavy Edge	Talasasta ivica
+	Puffy	Napuhan
+	Starburst	Zvjezdana eksplozija
+	Glossy	Sjajan
+	Brushed Metal	Brušeni metal
+	Spotlight	Reflektor
+	Sunset Band	Traka zalaska sunca
+	Sea Glass	Morsko staklo
+	Pearl	Biser
+	Chrome Rim	Hromirani rub
+	Glow Orb	Svjetleća kugla
+	Pill Badge	Značka u obliku pilule
+	Round Badge	Okrugla značka
+	Flag Wave	Vijoreća zastava
+	Bulge	Ispupčenje
+	Twisted	Uvrnut
+	Echo	Eho
+	Spiral Copies	Kopije u spirali
+	Multiply Tint	Nijansa množenja
+	Darken Veil	Veo potamnjivanja
+	Ghosted	Sablasno
+	Two Tone	Dvobojno
+	Overlay Glaze	Glazura prekrivanja
+	Screen Light	Svjetlo ekrana
+	Soft Light Wash	Laviranje mekim svjetlom
+	Burst	Prasak
+	Rounded Square	Zaobljeni kvadrat
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)

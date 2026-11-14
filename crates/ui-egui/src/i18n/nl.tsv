@@ -6879,6 +6879,240 @@ axis	Y Axis	Y-as
 	Stars	Sterren
 	Triangles	Driehoeken
 	Sparkles	Fonkelingen
+	Warm Gray	Warm grijs
+	Cool Gray	Koel grijs
+	Neutrals	Neutrale tinten
+	Ivory	Ivoor
+	Linen	Linnen
+	Oat	Haver
+	Greige	Greige
+	Stone	Steen
+	Taupe	Taupe
+	Slate	Leisteen
+	Clay	Klei
+	Terracotta	Terracotta
+	Ochre	Oker
+	Umber	Omber
+	Sand	Zand
+	Olive	Olijf
+	Moss	Mos
+	Rosy	Rozig
+	Neutral	Neutraal
+	Golden	Goudkleurig
+	Pastel	Pastel
+	Pastel Red	Pastelrood
+	Pastel Orange	Pasteloranje
+	Pastel Amber	Pastelamber
+	Pastel Yellow	Pastelgeel
+	Pastel Lime	Pastellimoen
+	Pastel Green	Pastelgroen
+	Pastel Teal	Pastelblauwgroen
+	Pastel Cyan	Pastelcyaan
+	Pastel Azure	Pastelazuur
+	Pastel Blue	Pastelblauw
+	Pastel Violet	Pastelviolet
+	Pastel Magenta	Pastelmagenta
+	Soft Red	Zacht rood
+	Soft Orange	Zacht oranje
+	Soft Amber	Zacht amber
+	Soft Yellow	Zacht geel
+	Soft Lime	Zacht limoen
+	Soft Green	Zacht groen
+	Soft Teal	Zacht blauwgroen
+	Soft Cyan	Zacht cyaan
+	Soft Azure	Zacht azuur
+	Soft Blue	Zacht blauw
+	Soft Violet	Zacht violet
+	Soft Magenta	Zacht magenta
+	Vivid Red	Levendig rood
+	Vivid Orange	Levendig oranje
+	Vivid Amber	Levendig amber
+	Vivid Yellow	Levendig geel
+	Vivid Lime	Levendig limoen
+	Vivid Green	Levendig groen
+	Vivid Teal	Levendig blauwgroen
+	Vivid Cyan	Levendig cyaan
+	Vivid Azure	Levendig azuur
+	Vivid Blue	Levendig blauw
+	Vivid Violet	Levendig violet
+	Vivid Magenta	Levendig magenta
+	Deep	Diep
+	Deep Red	Dieprood
+	Deep Orange	Dieporanje
+	Deep Amber	Diepamber
+	Deep Yellow	Diepgeel
+	Deep Lime	Dieplimoen
+	Deep Green	Diepgroen
+	Deep Teal	Diepblauwgroen
+	Deep Cyan	Diepcyaan
+	Deep Azure	Diepazuur
+	Deep Blue	Diepblauw
+	Deep Violet	Diepviolet
+	Deep Magenta	Diepmagenta
+	Gold	Goud
+	Silver	Zilver
+	Bronze	Brons
+	Copper	Koper
+	Brass	Messing
+	Rose Gold	Roségoud
+	Gunmetal	Antraciet metaal
+	Platinum	Platina
+	Pewter	Tin
+	Ember	Gloed
+	Lagoon	Lagune
+	Dusk	Schemering
+	Clay to Teal	Klei naar blauwgroen
+	Plum to Olive	Pruim naar olijf
+	Complementary Coral	Koraal complementair
+	Split Complementary Coral	Koraal gesplitst complementair
+	Analogous Coral	Koraal analoog
+	Triad Coral	Koraal triade
+	Tetrad Coral	Koraal tetrade
+	Pentagram Coral	Koraal pentagram
+	Complementary Teal	Blauwgroen complementair
+	Split Complementary Teal	Blauwgroen gesplitst complementair
+	Analogous Teal	Blauwgroen analoog
+	Triad Teal	Blauwgroen triade
+	Tetrad Teal	Blauwgroen tetrade
+	Pentagram Teal	Blauwgroen pentagram
+	Soft Spectrum	Zacht spectrum
+	Red to Amber	Rood naar amber
+	Orange to Yellow	Oranje naar geel
+	Amber to Lime	Amber naar limoen
+	Yellow to Green	Geel naar groen
+	Lime to Teal	Limoen naar blauwgroen
+	Green to Cyan	Groen naar cyaan
+	Teal to Azure	Blauwgroen naar azuur
+	Cyan to Blue	Cyaan naar blauw
+	Azure to Violet	Azuur naar violet
+	Blue to Magenta	Blauw naar magenta
+	Violet to Red	Violet naar rood
+	Magenta to Orange	Magenta naar oranje
+	Dawn	Dageraad
+	Noon	Middag
+	Sunset	Zonsondergang
+	Night	Nacht
+	Overcast	Bewolkt
+	White to Black	Wit naar zwart
+	Light Grays	Lichte grijstinten
+	Dark Grays	Donkere grijstinten
+	Warm Grays	Warme grijstinten
+	Cool Grays	Koele grijstinten
+	Fade to Transparent	Vervagen naar transparant
+	White Fade	Witte vervaging
+	Vignette	Vignet
+	Mist	Nevel
+	Petal	Bloemblad
+	Fern	Varen
+	Smoke	Rook
+	Honey	Honing
+	Seafoam	Zeeschuim
+	Lavender	Lavendel
+	Driftwood	Drijfhout
+	Ink Wash	Inktwassing
+	Tide	Getij
+	Bloom	Bloei
+	Dew	Dauw
+	Pollen	Stuifmeel
+	Lichen	Korstmos
+	Prism Veil	Prismasluier
+	Opal Ribbon	Opaallint
+	Pearl Flash	Parelflits
+	Aurora Foil	Noorderlichtfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	IJzig spectrum
+	Silver Tide	Zilveren getij
+	Rose Quartz Gleam	Rozenkwartsglans
+	Moonstone Shift	Maansteenglans
+	Violet Edge	Violette rand
+	Mint Halo	Munthalo
+	Amber Corona	Ambercorona
+	Polar Glint	Poolschittering
+	Pastel Orbit	Pastelbaan
+	Coral and Navy	Koraal en marineblauw
+	Plum and Lime	Pruim en limoen
+	Teal and Gold	Blauwgroen en goud
+	Indigo and Peach	Indigo en perzik
+	Forest and Rose	Bos en roze
+	Red Glow	Rode gloed
+	Orange Glow	Oranje gloed
+	Amber Glow	Amberkleurige gloed
+	Yellow Glow	Gele gloed
+	Lime Glow	Limoengloed
+	Green Glow	Groene gloed
+	Teal Glow	Blauwgroene gloed
+	Cyan Glow	Cyaangloed
+	Azure Glow	Azuurgloed
+	Blue Glow	Blauwe gloed
+	Violet Glow	Violette gloed
+	Magenta Glow	Magentagloed
+	Polka Dots	Stippen
+	Vertical Stripes	Verticale strepen
+	Horizontal Stripes	Horizontale strepen
+	Diagonal Stripes	Diagonale strepen
+	Checkerboard	Dambord
+	Diamonds	Ruiten
+	Crosses	Kruisjes
+	Coarse Grit	Grove korrel
+	Stipple	Stippeling
+	Scratches	Krassen
+	Sparse Flecks	Verspreide spikkels
+	Dense Flecks	Dichte spikkels
+	Sine Bands	Sinusbanden
+	Ripple Lines	Rimpellijnen
+	Interference Rings	Interferentieringen
+	Offset Rings	Verschoven ringen
+	Warped Checks	Vervormde ruiten
+	Pinched Stripes	Ingesnoerde strepen
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Stralende lenzen
+	Soft Shadow	Zachte schaduw
+	Hard Shadow	Harde schaduw
+	Lifted Card	Opgetilde kaart
+	Neon Tube	Neonbuis
+	Inner Light	Binnenlicht
+	Feathered	Zachte rand
+	Haze	Waas
+	Double Rule	Dubbele lijn
+	Triple Rule	Driedubbele lijn
+	Dashed Border	Gestreepte rand
+	Dotted Border	Gestippelde rand
+	Offset Keyline	Verschoven contour
+	Inset Keyline	Binnencontour
+	Outside Stroke	Buitenlijn
+	Pointer	Aanwijzer
+	Highlighter	Markeerstift
+	Sketchy Line	Schetslijn
+	Scribble Fill	Krabbelvulling
+	Wobble	Wiebel
+	Zig Zag Edge	Zigzagrand
+	Wavy Edge	Golvende rand
+	Puffy	Opgeblazen
+	Starburst	Sterrenuitbarsting
+	Glossy	Glanzend
+	Brushed Metal	Geborsteld metaal
+	Spotlight	Spotlight
+	Sunset Band	Zonsondergangband
+	Sea Glass	Zeeglas
+	Pearl	Parel
+	Chrome Rim	Chromen rand
+	Glow Orb	Gloeibol
+	Pill Badge	Pilbadge
+	Round Badge	Ronde badge
+	Flag Wave	Wapperende vlag
+	Bulge	Bolling
+	Twisted	Gedraaid
+	Echo	Echo
+	Spiral Copies	Spiraalkopieën
+	Multiply Tint	Vermenigvuldigen-tint
+	Darken Veil	Donkerder-sluier
+	Ghosted	Doorschijnend
+	Two Tone	Tweekleurig
+	Overlay Glaze	Bedekken-glazuur
+	Screen Light	Scherm-licht
+	Soft Light Wash	Zacht-licht-wassing
+	Burst	Uitbarsting
+	Rounded Square	Afgerond vierkant
 	Save Brush Library…	Penseelbibliotheek opslaan…
 @msg	no empty artboards to delete	geen lege tekengebieden om te verwijderen
 	Scale Presets	Schaalvoorinstellingen

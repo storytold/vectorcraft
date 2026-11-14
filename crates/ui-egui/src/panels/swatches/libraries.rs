@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::actions::deletable;
 use super::dnd::selection;
 use super::tiles::{describe, global_mark, list_icons, pattern_thumb_in};
@@ -82,9 +84,10 @@ impl LibraryKind for SwatchLibraries {
         app.session.swatch_libraries.path(id).map(str::to_string)
     }
     /// Ungrouped swatches, then each colour group's folder and swatches (a group whose name
-    /// matches shows all of them), as in the Swatches panel.
-    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, Swatch>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// matches shows all of them), as in the Swatches panel. Find matches a name as shown and as
+    /// stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, Swatch>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         let row = |w: &'a Swatch| Row { name: &w.name, item: Some(w) };
         let mut out: Vec<Row<Swatch>> = lib.swatches.iter().filter(|w| found(&w.name)).map(row).collect();
         for g in &lib.groups {
@@ -96,6 +99,12 @@ impl LibraryKind for SwatchLibraries {
             }
         }
         out
+    }
+    /// A built-in library's swatch or color group in the UI language, a numbered one ("Warm Gray
+    /// 3") with its number as it is; a User Defined or loaded library's as it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        let built_in = SWATCH_LIBRARIES.iter().chain(GRADIENT_LIBRARIES).any(|b| b.id == id) || PATTERN_LIBRARIES.iter().any(|b| b.id == id);
+        if built_in { crate::i18n::numbered_label(crate::i18n::current(), name) } else { Cow::Borrowed(name) }
     }
     fn draw(_: &VectorcraftApp, ui: &Ui, r: Rect, w: &Swatch, selected: bool, hovered: bool) {
         swatch_tile(ui, r, &w.paint, selected, hovered);

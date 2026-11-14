@@ -460,6 +460,240 @@ antiAlias	Sharp	शार्प
 	Stars	तारे
 	Triangles	त्रिभुज
 	Sparkles	चमक
+	Warm Gray	वार्म ग्रे
+	Cool Gray	कूल ग्रे
+	Neutrals	न्यूट्रल रंग
+	Ivory	हाथीदाँत
+	Linen	लिनन
+	Oat	जई
+	Greige	ग्रेज
+	Stone	पत्थर
+	Taupe	टोप
+	Slate	स्लेट
+	Clay	मिट्टी
+	Terracotta	टेराकोटा
+	Ochre	गेरू
+	Umber	अम्बर मिट्टी
+	Sand	रेत
+	Olive	जैतूनी
+	Moss	काई
+	Rosy	गुलाबी आभा
+	Neutral	न्यूट्रल
+	Golden	सुनहरा
+	Pastel	पेस्टल
+	Pastel Red	पेस्टल लाल
+	Pastel Orange	पेस्टल नारंगी
+	Pastel Amber	पेस्टल एम्बर
+	Pastel Yellow	पेस्टल पीला
+	Pastel Lime	पेस्टल लाइम
+	Pastel Green	पेस्टल हरा
+	Pastel Teal	पेस्टल टील
+	Pastel Cyan	पेस्टल सियान
+	Pastel Azure	पेस्टल आसमानी
+	Pastel Blue	पेस्टल नीला
+	Pastel Violet	पेस्टल बैंगनी
+	Pastel Magenta	पेस्टल मैजेंटा
+	Soft Red	सॉफ़्ट लाल
+	Soft Orange	सॉफ़्ट नारंगी
+	Soft Amber	सॉफ़्ट एम्बर
+	Soft Yellow	सॉफ़्ट पीला
+	Soft Lime	सॉफ़्ट लाइम
+	Soft Green	सॉफ़्ट हरा
+	Soft Teal	सॉफ़्ट टील
+	Soft Cyan	सॉफ़्ट सियान
+	Soft Azure	सॉफ़्ट आसमानी
+	Soft Blue	सॉफ़्ट नीला
+	Soft Violet	सॉफ़्ट बैंगनी
+	Soft Magenta	सॉफ़्ट मैजेंटा
+	Vivid Red	चटक लाल
+	Vivid Orange	चटक नारंगी
+	Vivid Amber	चटक एम्बर
+	Vivid Yellow	चटक पीला
+	Vivid Lime	चटक लाइम
+	Vivid Green	चटक हरा
+	Vivid Teal	चटक टील
+	Vivid Cyan	चटक सियान
+	Vivid Azure	चटक आसमानी
+	Vivid Blue	चटक नीला
+	Vivid Violet	चटक बैंगनी
+	Vivid Magenta	चटक मैजेंटा
+	Deep	गहरे
+	Deep Red	गहरा लाल
+	Deep Orange	गहरा नारंगी
+	Deep Amber	गहरा एम्बर
+	Deep Yellow	गहरा पीला
+	Deep Lime	गहरा लाइम
+	Deep Green	गहरा हरा
+	Deep Teal	गहरा टील
+	Deep Cyan	गहरा सियान
+	Deep Azure	गहरा आसमानी
+	Deep Blue	गहरा नीला
+	Deep Violet	गहरा बैंगनी
+	Deep Magenta	गहरा मैजेंटा
+	Gold	सोना
+	Silver	चाँदी
+	Bronze	काँसा
+	Copper	ताँबा
+	Brass	पीतल
+	Rose Gold	रोज़ गोल्ड
+	Gunmetal	गनमेटल
+	Platinum	प्लैटिनम
+	Pewter	प्यूटर
+	Ember	अंगारा
+	Lagoon	लैगून
+	Dusk	साँझ
+	Clay to Teal	मिट्टी से टील
+	Plum to Olive	आलूबुखारा से जैतूनी
+	Complementary Coral	कोरल, पूरक
+	Split Complementary Coral	कोरल, विभाजित पूरक
+	Analogous Coral	कोरल, अनुरूप
+	Triad Coral	कोरल, त्रिदाद
+	Tetrad Coral	कोरल, चतुष्क
+	Pentagram Coral	कोरल, पेंटाग्राम
+	Complementary Teal	टील, पूरक
+	Split Complementary Teal	टील, विभाजित पूरक
+	Analogous Teal	टील, अनुरूप
+	Triad Teal	टील, त्रिदाद
+	Tetrad Teal	टील, चतुष्क
+	Pentagram Teal	टील, पेंटाग्राम
+	Soft Spectrum	सॉफ़्ट स्पेक्ट्रम
+	Red to Amber	लाल से एम्बर
+	Orange to Yellow	नारंगी से पीला
+	Amber to Lime	एम्बर से लाइम
+	Yellow to Green	पीला से हरा
+	Lime to Teal	लाइम से टील
+	Green to Cyan	हरा से सियान
+	Teal to Azure	टील से आसमानी
+	Cyan to Blue	सियान से नीला
+	Azure to Violet	आसमानी से बैंगनी
+	Blue to Magenta	नीला से मैजेंटा
+	Violet to Red	बैंगनी से लाल
+	Magenta to Orange	मैजेंटा से नारंगी
+	Dawn	भोर
+	Noon	दोपहर
+	Sunset	सूर्यास्त
+	Night	रात
+	Overcast	बादल
+	White to Black	सफ़ेद से काला
+	Light Grays	हल्के ग्रे
+	Dark Grays	गहरे ग्रे
+	Warm Grays	वार्म ग्रे रंग
+	Cool Grays	कूल ग्रे रंग
+	Fade to Transparent	पारदर्शी तक फ़ेड
+	White Fade	सफ़ेद फ़ेड
+	Vignette	विनेट
+	Mist	धुंध
+	Petal	पंखुड़ी
+	Fern	फ़र्न
+	Smoke	धुआँ
+	Honey	शहद
+	Seafoam	समुद्री झाग
+	Lavender	लैवेंडर
+	Driftwood	बहती लकड़ी
+	Ink Wash	स्याही वॉश
+	Tide	ज्वार
+	Bloom	खिलना
+	Dew	ओस
+	Pollen	पराग
+	Lichen	लाइकेन
+	Prism Veil	प्रिज़्म परदा
+	Opal Ribbon	ओपल रिबन
+	Pearl Flash	मोती चमक
+	Aurora Foil	ऑरोरा फ़ॉइल
+	Iris Sheen	आइरिस आभा
+	Frost Spectrum	पाला स्पेक्ट्रम
+	Silver Tide	चाँदी ज्वार
+	Rose Quartz Gleam	रोज़ क्वार्ट्ज़ दमक
+	Moonstone Shift	चंद्रमणि झिलमिल
+	Violet Edge	बैंगनी किनारा
+	Mint Halo	पुदीना हलो
+	Amber Corona	एम्बर कोरोना
+	Polar Glint	ध्रुवीय झलक
+	Pastel Orbit	पेस्टल कक्षा
+	Coral and Navy	कोरल व नेवी
+	Plum and Lime	आलूबुखारा व लाइम
+	Teal and Gold	टील व सोना
+	Indigo and Peach	इंडिगो व आड़ू
+	Forest and Rose	जंगल व गुलाब
+	Red Glow	लाल ग्लो
+	Orange Glow	नारंगी ग्लो
+	Amber Glow	एम्बर ग्लो
+	Yellow Glow	पीला ग्लो
+	Lime Glow	लाइम ग्लो
+	Green Glow	हरा ग्लो
+	Teal Glow	टील ग्लो
+	Cyan Glow	सियान ग्लो
+	Azure Glow	आसमानी ग्लो
+	Blue Glow	नीला ग्लो
+	Violet Glow	बैंगनी ग्लो
+	Magenta Glow	मैजेंटा ग्लो
+	Polka Dots	पोल्का डॉट्स
+	Vertical Stripes	खड़ी धारियाँ
+	Horizontal Stripes	आड़ी धारियाँ
+	Diagonal Stripes	तिरछी धारियाँ
+	Checkerboard	चेकरबोर्ड
+	Diamonds	डायमंड
+	Crosses	क्रॉस
+	Coarse Grit	मोटा दाना
+	Stipple	बिंदुकारी
+	Scratches	खरोंचें
+	Sparse Flecks	विरल छींटे
+	Dense Flecks	घने छींटे
+	Sine Bands	साइन पट्टियाँ
+	Ripple Lines	लहर रेखाएँ
+	Interference Rings	व्यतिकरण छल्ले
+	Offset Rings	खिसके छल्ले
+	Warped Checks	मुड़े चेक
+	Pinched Stripes	सिकुड़ी धारियाँ
+	Chevron Pulse	शेवरॉन स्पंदन
+	Radiating Lenses	विकिरित लेंस
+	Soft Shadow	सॉफ़्ट छाया
+	Hard Shadow	कड़ी छाया
+	Lifted Card	उठा कार्ड
+	Neon Tube	नियॉन ट्यूब
+	Inner Light	भीतरी रोशनी
+	Feathered	फ़ेदर किया
+	Haze	कुहासा
+	Double Rule	दोहरी रेखा
+	Triple Rule	तिहरी रेखा
+	Dashed Border	डैश बॉर्डर
+	Dotted Border	डॉट बॉर्डर
+	Offset Keyline	खिसकी कीलाइन
+	Inset Keyline	भीतरी कीलाइन
+	Outside Stroke	बाहरी स्ट्रोक
+	Pointer	पॉइंटर
+	Highlighter	हाइलाइटर
+	Sketchy Line	स्केच रेखा
+	Scribble Fill	स्क्रिबल फ़िल
+	Wobble	डगमग
+	Zig Zag Edge	ज़िगज़ैग किनारा
+	Wavy Edge	लहरदार किनारा
+	Puffy	फूला
+	Starburst	तारा विस्फोट
+	Glossy	चमकदार
+	Brushed Metal	ब्रश्ड मेटल
+	Spotlight	स्पॉटलाइट
+	Sunset Band	सूर्यास्त पट्टी
+	Sea Glass	समुद्री काँच
+	Pearl	मोती
+	Chrome Rim	क्रोम किनारा
+	Glow Orb	ग्लो गोला
+	Pill Badge	पिल बैज
+	Round Badge	गोल बैज
+	Flag Wave	लहराता झंडा
+	Bulge	उभार
+	Twisted	ऐंठा
+	Echo	प्रतिध्वनि
+	Spiral Copies	सर्पिल कॉपियाँ
+	Multiply Tint	मल्टिप्लाई टिंट
+	Darken Veil	डार्कन परदा
+	Ghosted	धुंधला
+	Two Tone	दो टोन
+	Overlay Glaze	ओवरले ग्लेज़
+	Screen Light	स्क्रीन रोशनी
+	Soft Light Wash	सॉफ़्ट लाइट वॉश
+	Burst	विस्फोट
+	Rounded Square	गोल कोनों वाला वर्ग
 	Art using a deleted global swatch keeps its colour.	हटाए गए ग्लोबल स्वॉच वाला आर्टवर्क अपना रंग बनाए रखता है।
 	Artboard	आर्टबोर्ड
 	Artboard {n} of {total}	{total} में से आर्टबोर्ड {n}
@@ -5486,7 +5720,7 @@ antiAlias	Sharp	शार्प
 	Visibility	दृश्यता
 	Visible & Printable Layers	दृश्यमान और प्रिंट करने योग्य लेयरें
 	Visible Layers	दृश्यमान लेयरें
-	Vivid	विद
+	Vivid	चटक
 	Volume	आयतन
 	W:	W:
 	Warm	गर्म

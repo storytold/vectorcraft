@@ -6795,6 +6795,240 @@ axis	Y Axis	osa Y
 	Stars	Hvězdy
 	Triangles	Trojúhelníky
 	Sparkles	Jiskry
+	Warm Gray	Teplá šedá
+	Cool Gray	Studená šedá
+	Neutrals	Neutrální tóny
+	Ivory	Slonovina
+	Linen	Len
+	Oat	Oves
+	Greige	Greige
+	Stone	Kámen
+	Taupe	Taupe
+	Slate	Břidlice
+	Clay	Hlína
+	Terracotta	Terakota
+	Ochre	Okr
+	Umber	Umbra
+	Sand	Písek
+	Olive	Olivová
+	Moss	Mech
+	Rosy	Růžová
+	Neutral	Neutrální
+	Golden	Zlatavá
+	Pastel	Pastelové
+	Pastel Red	Pastelová červená
+	Pastel Orange	Pastelová oranžová
+	Pastel Amber	Pastelová jantarová
+	Pastel Yellow	Pastelová žlutá
+	Pastel Lime	Pastelová limetková
+	Pastel Green	Pastelová zelená
+	Pastel Teal	Pastelová modrozelená
+	Pastel Cyan	Pastelová azurová
+	Pastel Azure	Pastelová blankytná
+	Pastel Blue	Pastelová modrá
+	Pastel Violet	Pastelová fialová
+	Pastel Magenta	Pastelová purpurová
+	Soft Red	Jemná červená
+	Soft Orange	Jemná oranžová
+	Soft Amber	Jemná jantarová
+	Soft Yellow	Jemná žlutá
+	Soft Lime	Jemná limetková
+	Soft Green	Jemná zelená
+	Soft Teal	Jemná modrozelená
+	Soft Cyan	Jemná azurová
+	Soft Azure	Jemná blankytná
+	Soft Blue	Jemná modrá
+	Soft Violet	Jemná fialová
+	Soft Magenta	Jemná purpurová
+	Vivid Red	Sytá červená
+	Vivid Orange	Sytá oranžová
+	Vivid Amber	Sytá jantarová
+	Vivid Yellow	Sytá žlutá
+	Vivid Lime	Sytá limetková
+	Vivid Green	Sytá zelená
+	Vivid Teal	Sytá modrozelená
+	Vivid Cyan	Sytá azurová
+	Vivid Azure	Sytá blankytná
+	Vivid Blue	Sytá modrá
+	Vivid Violet	Sytá fialová
+	Vivid Magenta	Sytá purpurová
+	Deep	Tmavé
+	Deep Red	Tmavě červená
+	Deep Orange	Tmavě oranžová
+	Deep Amber	Tmavě jantarová
+	Deep Yellow	Tmavě žlutá
+	Deep Lime	Tmavě limetková
+	Deep Green	Tmavě zelená
+	Deep Teal	Tmavě modrozelená
+	Deep Cyan	Tmavě azurová
+	Deep Azure	Tmavě blankytná
+	Deep Blue	Tmavě modrá
+	Deep Violet	Tmavě fialová
+	Deep Magenta	Tmavě purpurová
+	Gold	Zlato
+	Silver	Stříbro
+	Bronze	Bronz
+	Copper	Měď
+	Brass	Mosaz
+	Rose Gold	Růžové zlato
+	Gunmetal	Ocelově šedá
+	Platinum	Platina
+	Pewter	Cín
+	Ember	Žhavé uhlíky
+	Lagoon	Laguna
+	Dusk	Soumrak
+	Clay to Teal	Hlína do modrozelené
+	Plum to Olive	Švestka do olivové
+	Complementary Coral	Korálová, komplementární
+	Split Complementary Coral	Korálová, rozdělená komplementární
+	Analogous Coral	Korálová, analogická
+	Triad Coral	Korálová, triáda
+	Tetrad Coral	Korálová, tetráda
+	Pentagram Coral	Korálová, pentagram
+	Complementary Teal	Modrozelená, komplementární
+	Split Complementary Teal	Modrozelená, rozdělená komplementární
+	Analogous Teal	Modrozelená, analogická
+	Triad Teal	Modrozelená, triáda
+	Tetrad Teal	Modrozelená, tetráda
+	Pentagram Teal	Modrozelená, pentagram
+	Soft Spectrum	Jemné spektrum
+	Red to Amber	Červená do jantarové
+	Orange to Yellow	Oranžová do žluté
+	Amber to Lime	Jantarová do limetkové
+	Yellow to Green	Žlutá do zelené
+	Lime to Teal	Limetková do modrozelené
+	Green to Cyan	Zelená do azurové
+	Teal to Azure	Modrozelená do blankytné
+	Cyan to Blue	Azurová do modré
+	Azure to Violet	Blankytná do fialové
+	Blue to Magenta	Modrá do purpurové
+	Violet to Red	Fialová do červené
+	Magenta to Orange	Purpurová do oranžové
+	Dawn	Svítání
+	Noon	Poledne
+	Sunset	Západ slunce
+	Night	Noc
+	Overcast	Zataženo
+	White to Black	Bílá do černé
+	Light Grays	Světlé šedé
+	Dark Grays	Tmavé šedé
+	Warm Grays	Teplé šedé
+	Cool Grays	Studené šedé
+	Fade to Transparent	Přechod do průhledné
+	White Fade	Bílý přechod
+	Vignette	Viněta
+	Mist	Opar
+	Petal	Okvětní lístek
+	Fern	Kapradí
+	Smoke	Kouř
+	Honey	Med
+	Seafoam	Mořská pěna
+	Lavender	Levandule
+	Driftwood	Naplavené dřevo
+	Ink Wash	Tušová lavírovka
+	Tide	Příliv
+	Bloom	Rozkvět
+	Dew	Rosa
+	Pollen	Pyl
+	Lichen	Lišejník
+	Prism Veil	Hranolový závoj
+	Opal Ribbon	Opálová stuha
+	Pearl Flash	Perleťový záblesk
+	Aurora Foil	Polární fólie
+	Iris Sheen	Duhový lesk
+	Frost Spectrum	Ojíněné spektrum
+	Silver Tide	Stříbrný příliv
+	Rose Quartz Gleam	Lesk růženínu
+	Moonstone Shift	Měsíční třpyt
+	Violet Edge	Fialový okraj
+	Mint Halo	Mátová svatozář
+	Amber Corona	Jantarová koróna
+	Polar Glint	Polární záblesk
+	Pastel Orbit	Pastelová dráha
+	Coral and Navy	Korálová a námořnická modrá
+	Plum and Lime	Švestková a limetková
+	Teal and Gold	Modrozelená a zlatá
+	Indigo and Peach	Indigo a broskvová
+	Forest and Rose	Lesní a růžová
+	Red Glow	Červená záře
+	Orange Glow	Oranžová záře
+	Amber Glow	Jantarová záře
+	Yellow Glow	Žlutá záře
+	Lime Glow	Limetková záře
+	Green Glow	Zelená záře
+	Teal Glow	Modrozelená záře
+	Cyan Glow	Azurová záře
+	Azure Glow	Blankytná záře
+	Blue Glow	Modrá záře
+	Violet Glow	Fialová záře
+	Magenta Glow	Purpurová záře
+	Polka Dots	Puntíky
+	Vertical Stripes	Svislé pruhy
+	Horizontal Stripes	Vodorovné pruhy
+	Diagonal Stripes	Šikmé pruhy
+	Checkerboard	Šachovnice
+	Diamonds	Kosočtverce
+	Crosses	Křížky
+	Coarse Grit	Hrubé zrno
+	Stipple	Tečkování
+	Scratches	Škrábance
+	Sparse Flecks	Řídké skvrnky
+	Dense Flecks	Husté skvrnky
+	Sine Bands	Sinusové pásy
+	Ripple Lines	Zvlněné čáry
+	Interference Rings	Interferenční kruhy
+	Offset Rings	Posunuté kruhy
+	Warped Checks	Zkreslené kostky
+	Pinched Stripes	Sevřené pruhy
+	Chevron Pulse	Pulzující krokve
+	Radiating Lenses	Paprsčité čočky
+	Soft Shadow	Měkký stín
+	Hard Shadow	Ostrý stín
+	Lifted Card	Zvednutá karta
+	Neon Tube	Neonová trubice
+	Inner Light	Vnitřní světlo
+	Feathered	Měkké okraje
+	Haze	Mlžný opar
+	Double Rule	Dvojitá linka
+	Triple Rule	Trojitá linka
+	Dashed Border	Čárkovaný okraj
+	Dotted Border	Tečkovaný okraj
+	Offset Keyline	Posunutá obrysová linka
+	Inset Keyline	Vnitřní obrysová linka
+	Outside Stroke	Vnější tah
+	Pointer	Ukazatel
+	Highlighter	Zvýrazňovač
+	Sketchy Line	Skicovitá čára
+	Scribble Fill	Čmáraná výplň
+	Wobble	Kolísání
+	Zig Zag Edge	Klikatý okraj
+	Wavy Edge	Vlnitý okraj
+	Puffy	Nafouknutý
+	Starburst	Hvězdný výbuch
+	Glossy	Lesklý
+	Brushed Metal	Kartáčovaný kov
+	Spotlight	Reflektor
+	Sunset Band	Pás západu slunce
+	Sea Glass	Mořské sklo
+	Pearl	Perla
+	Chrome Rim	Chromový lem
+	Glow Orb	Zářící koule
+	Pill Badge	Odznak tvaru pilulky
+	Round Badge	Kulatý odznak
+	Flag Wave	Vlající vlajka
+	Bulge	Vyboulení
+	Twisted	Zkroucený
+	Echo	Ozvěna
+	Spiral Copies	Kopie ve spirále
+	Multiply Tint	Odstín násobení
+	Darken Veil	Ztmavující závoj
+	Ghosted	Průsvitný
+	Two Tone	Dvoubarevný
+	Overlay Glaze	Glazura překrytí
+	Screen Light	Světlo závoje
+	Soft Light Wash	Lavírka měkkého světla
+	Burst	Výbuch
+	Rounded Square	Zaoblený čtverec
 	Save Brush Library…	Uložit knihovnu štětců…
 @msg	`{_1}` has no brushes to apply	`{_1}` nemá žádné štětce k použití
 @msg	missing `library` (see brush.libraries)	chybí `library` (viz brush.libraries)

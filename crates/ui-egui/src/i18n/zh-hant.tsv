@@ -6440,6 +6440,245 @@ axis	Y Axis	Y 軸
 	Stars	星形
 	Triangles	三角形
 	Sparkles	閃光
+	Warm Gray	暖灰
+	Cool Gray	冷灰
+	Neutrals	中性色
+	Ivory	象牙白
+	Linen	亞麻
+	Oat	燕麥
+	Greige	灰米色
+	Stone	石色
+	Taupe	灰褐
+	Slate	石板灰
+	Clay	陶土
+	Terracotta	赤陶
+	Ochre	赭石
+	Umber	棕土
+	Sand	沙色
+	Olive	橄欖
+	Moss	苔蘚
+	Rosy	玫瑰調
+	Neutral	中性
+	Golden	金黃
+	Pastel	粉彩
+	Pastel Red	粉彩紅
+	Pastel Orange	粉彩橙
+	Pastel Amber	粉彩琥珀
+	Pastel Yellow	粉彩黃
+	Pastel Lime	粉彩萊姆
+	Pastel Green	粉彩綠
+	Pastel Teal	粉彩藍綠
+	Pastel Cyan	粉彩青
+	Pastel Azure	粉彩天藍
+	Pastel Blue	粉彩藍
+	Pastel Violet	粉彩紫羅蘭
+	Pastel Magenta	粉彩洋紅
+	Soft Red	柔和紅
+	Soft Orange	柔和橙
+	Soft Amber	柔和琥珀
+	Soft Yellow	柔和黃
+	Soft Lime	柔和萊姆
+	Soft Green	柔和綠
+	Soft Teal	柔和藍綠
+	Soft Cyan	柔和青
+	Soft Azure	柔和天藍
+	Soft Blue	柔和藍
+	Soft Violet	柔和紫羅蘭
+	Soft Magenta	柔和洋紅
+	Vivid Red	鮮豔紅
+	Vivid Orange	鮮豔橙
+	Vivid Amber	鮮豔琥珀
+	Vivid Yellow	鮮豔黃
+	Vivid Lime	鮮豔萊姆
+	Vivid Green	鮮豔綠
+	Vivid Teal	鮮豔藍綠
+	Vivid Cyan	鮮豔青
+	Vivid Azure	鮮豔天藍
+	Vivid Blue	鮮豔藍
+	Vivid Violet	鮮豔紫羅蘭
+	Vivid Magenta	鮮豔洋紅
+	Deep	深色
+	Deep Red	深紅
+	Deep Orange	深橙
+	Deep Amber	深琥珀
+	Deep Yellow	深黃
+	Deep Lime	深萊姆
+	Deep Green	深綠
+	Deep Teal	深藍綠
+	Deep Cyan	深青
+	Deep Azure	深天藍
+	Deep Blue	深藍
+	Deep Violet	深紫羅蘭
+	Deep Magenta	深洋紅
+	Gold	金
+	Silver	銀
+	Bronze	青銅
+	Copper	銅
+	Brass	黃銅
+	Rose Gold	玫瑰金
+	Gunmetal	槍灰
+	Platinum	白金
+	Pewter	錫鑞
+	Ember	餘燼
+	Lagoon	潟湖
+	Dusk	黃昏
+	Clay to Teal	陶土到藍綠
+	Plum to Olive	梅紫到橄欖
+	Complementary Coral	珊瑚色，互補色
+	Split Complementary Coral	珊瑚色，分割互補色
+	Analogous Coral	珊瑚色，類似色
+	Triad Coral	珊瑚色，三色組
+	Tetrad Coral	珊瑚色，四色組
+	Pentagram Coral	珊瑚色，五角星
+	Complementary Teal	藍綠，互補色
+	Split Complementary Teal	藍綠，分割互補色
+	Analogous Teal	藍綠，類似色
+	Triad Teal	藍綠，三色組
+	Tetrad Teal	藍綠，四色組
+	Pentagram Teal	藍綠，五角星
+	Soft Spectrum	柔和光譜
+	Red to Amber	紅到琥珀
+	Orange to Yellow	橙到黃
+	Amber to Lime	琥珀到萊姆
+	Yellow to Green	黃到綠
+	Lime to Teal	萊姆到藍綠
+	Green to Cyan	綠到青
+	Teal to Azure	藍綠到天藍
+	Cyan to Blue	青到藍
+	Azure to Violet	天藍到紫羅蘭
+	Blue to Magenta	藍到洋紅
+	Violet to Red	紫羅蘭到紅
+	Magenta to Orange	洋紅到橙
+	Dawn	黎明
+	Noon	正午
+	Sunset	日落
+	Night	夜晚
+	Overcast	陰天
+	White to Black	白到黑
+	Light Grays	淺灰
+	Dark Grays	深灰
+	Warm Grays	暖灰系
+	Cool Grays	冷灰系
+	Fade to Transparent	漸隱到透明
+	White Fade	白色漸隱
+	Vignette	暈影
+	Mist	薄霧
+	Petal	花瓣
+	Fern	蕨
+	Smoke	煙
+	Honey	蜂蜜
+	Seafoam	海沫
+	Lavender	薰衣草
+	Driftwood	漂流木
+	Ink Wash	水墨
+	Tide	潮汐
+	Bloom	綻放
+	Dew	露珠
+	Pollen	花粉
+	Lichen	地衣
+	Prism Veil	稜鏡紗
+	Opal Ribbon	蛋白石緞帶
+	Pearl Flash	珍珠閃光
+	Aurora Foil	極光箔
+	Iris Sheen	虹彩光澤
+	Frost Spectrum	霜之光譜
+	Silver Tide	銀潮
+	Rose Quartz Gleam	粉晶微光
+	Moonstone Shift	月光石流光
+	Violet Edge	紫羅蘭邊
+	Mint Halo	薄荷光暈
+	Amber Corona	琥珀日冕
+	Polar Glint	極地閃爍
+	Pastel Orbit	粉彩軌道
+	Coral and Navy	珊瑚色與海軍藍
+	Plum and Lime	梅紫與萊姆
+	Teal and Gold	藍綠與金
+	Indigo and Peach	靛藍與桃色
+	Forest and Rose	森林與玫瑰
+	Red Glow	紅色光暈
+	Orange Glow	橙色光暈
+	Amber Glow	琥珀光暈
+	Yellow Glow	黃色光暈
+	Lime Glow	萊姆光暈
+	Green Glow	綠色光暈
+	Teal Glow	藍綠光暈
+	Cyan Glow	青色光暈
+	Azure Glow	天藍光暈
+	Blue Glow	藍色光暈
+	Violet Glow	紫羅蘭光暈
+	Magenta Glow	洋紅光暈
+	Polka Dots	圓點
+	Vertical Stripes	直條紋
+	Horizontal Stripes	橫條紋
+	Diagonal Stripes	斜條紋
+	Checkerboard	棋盤格
+	Diamonds	菱形
+	Crosses	十字
+	Coarse Grit	粗顆粒
+	Stipple	點畫
+	Scratches	刮痕
+	Sparse Flecks	稀疏斑點
+	Dense Flecks	密集斑點
+	Sine Bands	正弦帶
+	Ripple Lines	漣漪線
+	Interference Rings	干涉環
+	Offset Rings	錯位環
+	Warped Checks	扭曲方格
+	Pinched Stripes	收縮條紋
+	Chevron Pulse	人字脈衝
+	Radiating Lenses	放射透鏡
+	Soft Shadow	柔和陰影
+	Hard Shadow	硬陰影
+	Lifted Card	浮起卡片
+	Neon Tube	霓虹燈管
+	Inner Light	內光
+	Feathered	羽化
+	Haze	霧靄
+	Double Rule	雙線
+	Triple Rule	三線
+	Dashed Border	虛線邊框
+	Dotted Border	點線邊框
+	Offset Keyline	位移輪廓線
+	Inset Keyline	內縮輪廓線
+	Outside Stroke	外側筆畫
+	Pointer	指標
+	Highlighter	螢光筆
+	Sketchy Line	草圖線
+	Scribble Fill	塗鴉填色
+	Wobble	搖晃
+	Zig Zag Edge	鋸齒邊
+	Wavy Edge	波浪邊
+	Puffy	鼓起
+	Starburst	星爆
+	Glossy	光澤
+	Brushed Metal	拉絲金屬
+	Spotlight	聚光燈
+	Sunset Band	日落條帶
+	Sea Glass	海玻璃
+	Pearl	珍珠
+	Chrome Rim	鍍鉻邊
+	Glow Orb	發光球
+	Pill Badge	膠囊徽章
+	Round Badge	圓形徽章
+	Flag Wave	飄揚的旗幟
+	Bulge	凸起
+	Twisted	扭轉
+	Echo	回聲
+	Spiral Copies	螺旋副本
+	Multiply Tint	色彩增值色調
+	Darken Veil	變暗薄紗
+	Ghosted	半透明
+	Two Tone	雙色調
+	Overlay Glaze	覆蓋釉
+	Screen Light	濾色光
+	Soft Light Wash	柔光暈染
+	Burst	爆發
+	Rounded Square	圓角正方形
+	Bar	長條
+	Hexagon	六邊形
+	Spectrum	光譜
+	Triangle	三角
+	Vivid	鮮豔
 	Save Brush Library…	儲存筆刷資料庫…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中沒有可套用的筆刷
 @msg	missing `library` (see brush.libraries)	未提供 `library`（請參閱 brush.libraries）

@@ -6387,6 +6387,247 @@ axis	Y Axis	Y-Achse
 	Stars	Sterne
 	Triangles	Dreiecke
 	Sparkles	Funkeln
+	Warm Gray	Warmgrau
+	Cool Gray	Kühlgrau
+	Neutrals	Neutraltöne
+	Ivory	Elfenbein
+	Linen	Leinen
+	Oat	Hafer
+	Greige	Greige
+	Stone	Stein
+	Taupe	Taupe
+	Slate	Schiefer
+	Clay	Ton
+	Terracotta	Terrakotta
+	Ochre	Ocker
+	Umber	Umbra
+	Sand	Sand
+	Olive	Oliv
+	Moss	Moos
+	Rosy	Rosig
+	Neutral	Neutral
+	Golden	Golden
+	Pastel	Pastell
+	Pastel Red	Pastellrot
+	Pastel Orange	Pastellorange
+	Pastel Amber	Pastellbernstein
+	Pastel Yellow	Pastellgelb
+	Pastel Lime	Pastelllimette
+	Pastel Green	Pastellgrün
+	Pastel Teal	Pastellpetrol
+	Pastel Cyan	Pastellcyan
+	Pastel Azure	Pastellazur
+	Pastel Blue	Pastellblau
+	Pastel Violet	Pastellviolett
+	Pastel Magenta	Pastellmagenta
+	Soft Red	Sanftes Rot
+	Soft Orange	Sanftes Orange
+	Soft Amber	Sanfter Bernstein
+	Soft Yellow	Sanftes Gelb
+	Soft Lime	Sanfte Limette
+	Soft Green	Sanftes Grün
+	Soft Teal	Sanftes Petrol
+	Soft Cyan	Sanftes Cyan
+	Soft Azure	Sanftes Azur
+	Soft Blue	Sanftes Blau
+	Soft Violet	Sanftes Violett
+	Soft Magenta	Sanftes Magenta
+	Vivid Red	Leuchtendes Rot
+	Vivid Orange	Leuchtendes Orange
+	Vivid Amber	Leuchtender Bernstein
+	Vivid Yellow	Leuchtendes Gelb
+	Vivid Lime	Leuchtende Limette
+	Vivid Green	Leuchtendes Grün
+	Vivid Teal	Leuchtendes Petrol
+	Vivid Cyan	Leuchtendes Cyan
+	Vivid Azure	Leuchtendes Azur
+	Vivid Blue	Leuchtendes Blau
+	Vivid Violet	Leuchtendes Violett
+	Vivid Magenta	Leuchtendes Magenta
+	Deep	Tief
+	Deep Red	Tiefrot
+	Deep Orange	Tieforange
+	Deep Amber	Tiefbernstein
+	Deep Yellow	Tiefgelb
+	Deep Lime	Tieflimette
+	Deep Green	Tiefgrün
+	Deep Teal	Tiefpetrol
+	Deep Cyan	Tiefcyan
+	Deep Azure	Tiefazur
+	Deep Blue	Tiefblau
+	Deep Violet	Tiefviolett
+	Deep Magenta	Tiefmagenta
+	Gold	Gold
+	Silver	Silber
+	Bronze	Bronze
+	Copper	Kupfer
+	Brass	Messing
+	Rose Gold	Roségold
+	Gunmetal	Anthrazitmetall
+	Platinum	Platin
+	Pewter	Zinn
+	Ember	Glut
+	Lagoon	Lagune
+	Dusk	Abenddämmerung
+	Clay to Teal	Ton zu Petrol
+	Plum to Olive	Pflaume zu Oliv
+	Complementary Coral	Koralle komplementär
+	Split Complementary Coral	Koralle geteilt komplementär
+	Analogous Coral	Koralle analog
+	Triad Coral	Koralle Triade
+	Tetrad Coral	Koralle Tetrade
+	Pentagram Coral	Koralle Pentagramm
+	Complementary Teal	Petrol komplementär
+	Split Complementary Teal	Petrol geteilt komplementär
+	Analogous Teal	Petrol analog
+	Triad Teal	Petrol Triade
+	Tetrad Teal	Petrol Tetrade
+	Pentagram Teal	Petrol Pentagramm
+	Soft Spectrum	Sanftes Spektrum
+	Red to Amber	Rot zu Bernstein
+	Orange to Yellow	Orange zu Gelb
+	Amber to Lime	Bernstein zu Limette
+	Yellow to Green	Gelb zu Grün
+	Lime to Teal	Limette zu Petrol
+	Green to Cyan	Grün zu Cyan
+	Teal to Azure	Petrol zu Azur
+	Cyan to Blue	Cyan zu Blau
+	Azure to Violet	Azur zu Violett
+	Blue to Magenta	Blau zu Magenta
+	Violet to Red	Violett zu Rot
+	Magenta to Orange	Magenta zu Orange
+	Dawn	Morgendämmerung
+	Noon	Mittag
+	Sunset	Sonnenuntergang
+	Night	Nacht
+	Overcast	Bewölkt
+	White to Black	Weiß zu Schwarz
+	Light Grays	Helle Grautöne
+	Dark Grays	Dunkle Grautöne
+	Warm Grays	Warme Grautöne
+	Cool Grays	Kühle Grautöne
+	Fade to Transparent	Verlauf zu transparent
+	White Fade	Weißer Verlauf
+	Vignette	Vignette
+	Mist	Nebel
+	Petal	Blütenblatt
+	Fern	Farn
+	Smoke	Rauch
+	Honey	Honig
+	Seafoam	Meerschaum
+	Lavender	Lavendel
+	Driftwood	Treibholz
+	Ink Wash	Tuschelavierung
+	Tide	Gezeiten
+	Bloom	Blüte
+	Dew	Tau
+	Pollen	Pollen
+	Lichen	Flechte
+	Prism Veil	Prismenschleier
+	Opal Ribbon	Opalband
+	Pearl Flash	Perlmuttblitz
+	Aurora Foil	Polarlichtfolie
+	Iris Sheen	Irisschimmer
+	Frost Spectrum	Frostspektrum
+	Silver Tide	Silberflut
+	Rose Quartz Gleam	Rosenquarzglanz
+	Moonstone Shift	Mondsteinschimmer
+	Violet Edge	Violetter Rand
+	Mint Halo	Minzhof
+	Amber Corona	Bernsteinkorona
+	Polar Glint	Polarglanz
+	Pastel Orbit	Pastellorbit
+	Coral and Navy	Koralle und Marineblau
+	Plum and Lime	Pflaume und Limette
+	Teal and Gold	Petrol und Gold
+	Indigo and Peach	Indigo und Pfirsich
+	Forest and Rose	Wald und Rosé
+	Red Glow	Rotes Leuchten
+	Orange Glow	Oranges Leuchten
+	Amber Glow	Bernsteinleuchten
+	Yellow Glow	Gelbes Leuchten
+	Lime Glow	Limettenleuchten
+	Green Glow	Grünes Leuchten
+	Teal Glow	Petrolleuchten
+	Cyan Glow	Cyanleuchten
+	Azure Glow	Azurleuchten
+	Blue Glow	Blaues Leuchten
+	Violet Glow	Violettes Leuchten
+	Magenta Glow	Magentaleuchten
+	Polka Dots	Tupfen
+	Vertical Stripes	Senkrechte Streifen
+	Horizontal Stripes	Waagerechte Streifen
+	Diagonal Stripes	Diagonale Streifen
+	Checkerboard	Schachbrett
+	Diamonds	Rauten
+	Crosses	Kreuze
+	Coarse Grit	Grobe Körnung
+	Stipple	Punktierung
+	Scratches	Kratzer
+	Sparse Flecks	Lockere Sprenkel
+	Dense Flecks	Dichte Sprenkel
+	Sine Bands	Sinusbänder
+	Ripple Lines	Wellenlinien
+	Interference Rings	Interferenzringe
+	Offset Rings	Versetzte Ringe
+	Warped Checks	Verzerrte Karos
+	Pinched Stripes	Eingeschnürte Streifen
+	Chevron Pulse	Winkelpuls
+	Radiating Lenses	Strahlende Linsen
+	Soft Shadow	Weicher Schatten
+	Hard Shadow	Harter Schatten
+	Lifted Card	Angehobene Karte
+	Neon Tube	Neonröhre
+	Inner Light	Inneres Licht
+	Feathered	Weiche Kante
+	Haze	Dunst
+	Double Rule	Doppellinie
+	Triple Rule	Dreifachlinie
+	Dashed Border	Gestrichelter Rahmen
+	Dotted Border	Gepunkteter Rahmen
+	Offset Keyline	Versetzte Kontur
+	Inset Keyline	Innere Kontur
+	Outside Stroke	Außenkontur
+	Pointer	Zeiger
+	Highlighter	Textmarker
+	Sketchy Line	Skizzenlinie
+	Scribble Fill	Kritzelfüllung
+	Wobble	Wackeln
+	Zig Zag Edge	Zickzackkante
+	Wavy Edge	Wellenkante
+	Puffy	Aufgebläht
+	Starburst	Sternexplosion
+	Glossy	Glänzend
+	Brushed Metal	Gebürstetes Metall
+	Spotlight	Spotlicht
+	Sunset Band	Abendrotband
+	Sea Glass	Meerglas
+	Pearl	Perle
+	Chrome Rim	Chromrand
+	Glow Orb	Leuchtkugel
+	Pill Badge	Pillenabzeichen
+	Round Badge	Rundes Abzeichen
+	Flag Wave	Flaggenwelle
+	Bulge	Wölbung
+	Twisted	Verdreht
+	Echo	Echo
+	Spiral Copies	Spiralkopien
+	Multiply Tint	Multiplizieren-Tönung
+	Darken Veil	Abdunkeln-Schleier
+	Ghosted	Geisterhaft
+	Two Tone	Zweifarbig
+	Overlay Glaze	Ineinanderkopieren-Lasur
+	Screen Light	Negativ-multiplizieren-Licht
+	Soft Light Wash	Weiches-Licht-Lavierung
+	Burst	Strahlenkranz
+	Rounded Square	Abgerundetes Quadrat
+	Bar	Balken
+	Fine Dots	Feine Punkte
+	Hexagon	Sechseck
+	Speckle	Sprenkel
+	Spectrum	Spektrum
+	Triangle	Dreieck
+	Vivid	Leuchtend
 	Save Brush Library…	Pinsel-Bibliothek speichern…
 @msg	`{_1}` has no brushes to apply	`{_1}` hat keine Pinsel zum Anwenden
 @msg	missing `library` (see brush.libraries)	`library` fehlt (siehe brush.libraries)

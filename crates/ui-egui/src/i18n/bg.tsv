@@ -6241,6 +6241,240 @@ axis	Y Axis	Y ос
 	Stars	Звезди
 	Triangles	Триъгълници
 	Sparkles	Искри
+	Warm Gray	Топло сиво
+	Cool Gray	Студено сиво
+	Neutrals	Неутрални
+	Ivory	Слонова кост
+	Linen	Лен
+	Oat	Овес
+	Greige	Грейж
+	Stone	Камък
+	Taupe	Сиво-кафяво
+	Slate	Шисти
+	Clay	Глина
+	Terracotta	Теракота
+	Ochre	Охра
+	Umber	Умбра
+	Sand	Пясък
+	Olive	Маслинено
+	Moss	Мъх
+	Rosy	Розовеещо
+	Neutral	Неутрално
+	Golden	Златисто
+	Pastel	Пастелни
+	Pastel Red	Пастелно червено
+	Pastel Orange	Пастелно оранжево
+	Pastel Amber	Пастелно кехлибарено
+	Pastel Yellow	Пастелно жълто
+	Pastel Lime	Пастелно лаймово
+	Pastel Green	Пастелно зелено
+	Pastel Teal	Пастелно синьо-зелено
+	Pastel Cyan	Пастелен циан
+	Pastel Azure	Пастелно лазурно
+	Pastel Blue	Пастелно синьо
+	Pastel Violet	Пастелно виолетово
+	Pastel Magenta	Пастелна магента
+	Soft Red	Меко червено
+	Soft Orange	Меко оранжево
+	Soft Amber	Меко кехлибарено
+	Soft Yellow	Меко жълто
+	Soft Lime	Меко лаймово
+	Soft Green	Меко зелено
+	Soft Teal	Меко синьо-зелено
+	Soft Cyan	Мек циан
+	Soft Azure	Меко лазурно
+	Soft Blue	Меко синьо
+	Soft Violet	Меко виолетово
+	Soft Magenta	Мека магента
+	Vivid Red	Ярко червено
+	Vivid Orange	Ярко оранжево
+	Vivid Amber	Ярко кехлибарено
+	Vivid Yellow	Ярко жълто
+	Vivid Lime	Ярко лаймово
+	Vivid Green	Ярко зелено
+	Vivid Teal	Ярко синьо-зелено
+	Vivid Cyan	Ярък циан
+	Vivid Azure	Ярко лазурно
+	Vivid Blue	Ярко синьо
+	Vivid Violet	Ярко виолетово
+	Vivid Magenta	Ярка магента
+	Deep	Наситени
+	Deep Red	Тъмночервено
+	Deep Orange	Тъмнооранжево
+	Deep Amber	Тъмно кехлибарено
+	Deep Yellow	Тъмножълто
+	Deep Lime	Тъмно лаймово
+	Deep Green	Тъмнозелено
+	Deep Teal	Тъмно синьо-зелено
+	Deep Cyan	Тъмен циан
+	Deep Azure	Тъмно лазурно
+	Deep Blue	Тъмносиньо
+	Deep Violet	Тъмновиолетово
+	Deep Magenta	Тъмна магента
+	Gold	Злато
+	Silver	Сребро
+	Bronze	Бронз
+	Copper	Мед
+	Brass	Месинг
+	Rose Gold	Розово злато
+	Gunmetal	Оръжеен метал
+	Platinum	Платина
+	Pewter	Калай
+	Ember	Жарава
+	Lagoon	Лагуна
+	Dusk	Здрач
+	Clay to Teal	От глина до синьо-зелено
+	Plum to Olive	От слива до маслинено
+	Complementary Coral	Коралово, комплементарни
+	Split Complementary Coral	Коралово, сплит-комплементарни
+	Analogous Coral	Коралово, аналогови
+	Triad Coral	Коралово, триада
+	Tetrad Coral	Коралово, тетрада
+	Pentagram Coral	Коралово, петограм
+	Complementary Teal	Синьо-зелено, комплементарни
+	Split Complementary Teal	Синьо-зелено, сплит-комплементарни
+	Analogous Teal	Синьо-зелено, аналогови
+	Triad Teal	Синьо-зелено, триада
+	Tetrad Teal	Синьо-зелено, тетрада
+	Pentagram Teal	Синьо-зелено, петограм
+	Soft Spectrum	Мек спектър
+	Red to Amber	От червено до кехлибарено
+	Orange to Yellow	От оранжево до жълто
+	Amber to Lime	От кехлибарено до лаймово
+	Yellow to Green	От жълто до зелено
+	Lime to Teal	От лаймово до синьо-зелено
+	Green to Cyan	От зелено до циан
+	Teal to Azure	От синьо-зелено до лазурно
+	Cyan to Blue	От циан до синьо
+	Azure to Violet	От лазурно до виолетово
+	Blue to Magenta	От синьо до магента
+	Violet to Red	От виолетово до червено
+	Magenta to Orange	От магента до оранжево
+	Dawn	Зазоряване
+	Noon	Пладне
+	Sunset	Залез
+	Night	Нощ
+	Overcast	Облачно
+	White to Black	От бяло до черно
+	Light Grays	Светлосиви
+	Dark Grays	Тъмносиви
+	Warm Grays	Топли сиви
+	Cool Grays	Студени сиви
+	Fade to Transparent	Преливане към прозрачно
+	White Fade	Бяло преливане
+	Vignette	Винетка
+	Mist	Мъгла
+	Petal	Венчелистче
+	Fern	Папрат
+	Smoke	Дим
+	Honey	Пчелен мед
+	Seafoam	Морска пяна
+	Lavender	Лавандула
+	Driftwood	Изхвърлено дърво
+	Ink Wash	Лавиран туш
+	Tide	Прилив
+	Bloom	Цъфтеж
+	Dew	Роса
+	Pollen	Прашец
+	Lichen	Лишей
+	Prism Veil	Призмен воал
+	Opal Ribbon	Опалова лента
+	Pearl Flash	Перлен проблясък
+	Aurora Foil	Фолио полярно сияние
+	Iris Sheen	Ирисов отблясък
+	Frost Spectrum	Скрежен спектър
+	Silver Tide	Сребърен прилив
+	Rose Quartz Gleam	Блясък на розов кварц
+	Moonstone Shift	Преливане на лунен камък
+	Violet Edge	Виолетов ръб
+	Mint Halo	Ментов ореол
+	Amber Corona	Кехлибарена корона
+	Polar Glint	Полярен проблясък
+	Pastel Orbit	Пастелна орбита
+	Coral and Navy	Коралово и тъмносиньо
+	Plum and Lime	Слива и лайм
+	Teal and Gold	Синьо-зелено и злато
+	Indigo and Peach	Индиго и праскова
+	Forest and Rose	Гора и роза
+	Red Glow	Червено сияние
+	Orange Glow	Оранжево сияние
+	Amber Glow	Кехлибарено сияние
+	Yellow Glow	Жълто сияние
+	Lime Glow	Лаймово сияние
+	Green Glow	Зелено сияние
+	Teal Glow	Синьо-зелено сияние
+	Cyan Glow	Цианово сияние
+	Azure Glow	Лазурно сияние
+	Blue Glow	Синьо сияние
+	Violet Glow	Виолетово сияние
+	Magenta Glow	Магентено сияние
+	Polka Dots	Едри точки
+	Vertical Stripes	Вертикални ивици
+	Horizontal Stripes	Хоризонтални ивици
+	Diagonal Stripes	Диагонални ивици
+	Checkerboard	Шахматна дъска
+	Diamonds	Ромбове
+	Crosses	Кръстчета
+	Coarse Grit	Едро зърно
+	Stipple	Пунктир
+	Scratches	Драскотини
+	Sparse Flecks	Редки петънца
+	Dense Flecks	Гъсти петънца
+	Sine Bands	Синусоидни ленти
+	Ripple Lines	Вълнисти линии
+	Interference Rings	Интерференчни пръстени
+	Offset Rings	Отместени пръстени
+	Warped Checks	Изкривени квадрати
+	Pinched Stripes	Притиснати ивици
+	Chevron Pulse	Пулсиращи шеврони
+	Radiating Lenses	Излъчващи лещи
+	Soft Shadow	Мека сянка
+	Hard Shadow	Твърда сянка
+	Lifted Card	Повдигната карта
+	Neon Tube	Неонова тръба
+	Inner Light	Вътрешна светлина
+	Feathered	Размити ръбове
+	Haze	Омара
+	Double Rule	Двойна линия
+	Triple Rule	Тройна линия
+	Dashed Border	Пунктирана рамка
+	Dotted Border	Точкова рамка
+	Offset Keyline	Отместен контур
+	Inset Keyline	Вътрешен контур
+	Outside Stroke	Външен щрих
+	Pointer	Показалец
+	Highlighter	Маркер
+	Sketchy Line	Скицирана линия
+	Scribble Fill	Драскано запълване
+	Wobble	Клатене
+	Zig Zag Edge	Зигзагообразен ръб
+	Wavy Edge	Вълнист ръб
+	Puffy	Надут
+	Starburst	Звезден взрив
+	Glossy	Лъскав
+	Brushed Metal	Шлифован метал
+	Spotlight	Прожектор
+	Sunset Band	Ивица на залеза
+	Sea Glass	Морско стъкло
+	Pearl	Перла
+	Chrome Rim	Хромиран кант
+	Glow Orb	Светеща сфера
+	Pill Badge	Значка-капсула
+	Round Badge	Кръгла значка
+	Flag Wave	Развяващо се знаме
+	Bulge	Издутина
+	Twisted	Усукан
+	Echo	Ехо
+	Spiral Copies	Копия по спирала
+	Multiply Tint	Оттенък умножение
+	Darken Veil	Воал потъмняване
+	Ghosted	Призрачен
+	Two Tone	Двуцветен
+	Overlay Glaze	Глазура прекриване
+	Screen Light	Светлина екран
+	Soft Light Wash	Лавиране мека светлина
+	Burst	Взрив
+	Rounded Square	Закръглен квадрат
 	Save Brush Library…	Запази библиотека с четки…
 @msg	no empty artboards to delete	няма празни работни области за изтриване
 	Scale Presets	Пресети за мащаб

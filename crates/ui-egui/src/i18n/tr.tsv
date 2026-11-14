@@ -6751,6 +6751,240 @@ axis	Y Axis	Y ekseni
 	Stars	Yıldızlar
 	Triangles	Üçgenler
 	Sparkles	Parıltılar
+	Warm Gray	Sıcak Gri
+	Cool Gray	Soğuk Gri
+	Neutrals	Nötrler
+	Ivory	Fildişi
+	Linen	Keten
+	Oat	Yulaf
+	Greige	Grej
+	Stone	Taş
+	Taupe	Vizon
+	Slate	Arduvaz
+	Clay	Kil
+	Terracotta	Terrakota
+	Ochre	Aşı Boyası
+	Umber	Toprak Kahve
+	Sand	Kum
+	Olive	Zeytin
+	Moss	Yosun
+	Rosy	Pembemsi
+	Neutral	Nötr
+	Golden	Altın Sarısı
+	Pastel	Pastel
+	Pastel Red	Pastel Kırmızı
+	Pastel Orange	Pastel Turuncu
+	Pastel Amber	Pastel Kehribar
+	Pastel Yellow	Pastel Sarı
+	Pastel Lime	Pastel Limon Yeşili
+	Pastel Green	Pastel Yeşil
+	Pastel Teal	Pastel Petrol Mavisi
+	Pastel Cyan	Pastel Camgöbeği
+	Pastel Azure	Pastel Gök Mavisi
+	Pastel Blue	Pastel Mavi
+	Pastel Violet	Pastel Menekşe
+	Pastel Magenta	Pastel Macenta
+	Soft Red	Yumuşak Kırmızı
+	Soft Orange	Yumuşak Turuncu
+	Soft Amber	Yumuşak Kehribar
+	Soft Yellow	Yumuşak Sarı
+	Soft Lime	Yumuşak Limon Yeşili
+	Soft Green	Yumuşak Yeşil
+	Soft Teal	Yumuşak Petrol Mavisi
+	Soft Cyan	Yumuşak Camgöbeği
+	Soft Azure	Yumuşak Gök Mavisi
+	Soft Blue	Yumuşak Mavi
+	Soft Violet	Yumuşak Menekşe
+	Soft Magenta	Yumuşak Macenta
+	Vivid Red	Canlı Kırmızı
+	Vivid Orange	Canlı Turuncu
+	Vivid Amber	Canlı Kehribar
+	Vivid Yellow	Canlı Sarı
+	Vivid Lime	Canlı Limon Yeşili
+	Vivid Green	Canlı Yeşil
+	Vivid Teal	Canlı Petrol Mavisi
+	Vivid Cyan	Canlı Camgöbeği
+	Vivid Azure	Canlı Gök Mavisi
+	Vivid Blue	Canlı Mavi
+	Vivid Violet	Canlı Menekşe
+	Vivid Magenta	Canlı Macenta
+	Deep	Koyu
+	Deep Red	Koyu Kırmızı
+	Deep Orange	Koyu Turuncu
+	Deep Amber	Koyu Kehribar
+	Deep Yellow	Koyu Sarı
+	Deep Lime	Koyu Limon Yeşili
+	Deep Green	Koyu Yeşil
+	Deep Teal	Koyu Petrol Mavisi
+	Deep Cyan	Koyu Camgöbeği
+	Deep Azure	Koyu Gök Mavisi
+	Deep Blue	Koyu Mavi
+	Deep Violet	Koyu Menekşe
+	Deep Magenta	Koyu Macenta
+	Gold	Altın
+	Silver	Gümüş
+	Bronze	Bronz
+	Copper	Bakır
+	Brass	Pirinç
+	Rose Gold	Rose Altın
+	Gunmetal	Füme Metal
+	Platinum	Platin
+	Pewter	Kalay
+	Ember	Kor
+	Lagoon	Lagün
+	Dusk	Alacakaranlık
+	Clay to Teal	Kilden Petrol Mavisine
+	Plum to Olive	Erikten Zeytine
+	Complementary Coral	Mercan Tamamlayıcı
+	Split Complementary Coral	Mercan Bölünmüş Tamamlayıcı
+	Analogous Coral	Mercan Benzer
+	Triad Coral	Mercan Üçlü
+	Tetrad Coral	Mercan Dörtlü
+	Pentagram Coral	Mercan Pentagram
+	Complementary Teal	Petrol Mavisi Tamamlayıcı
+	Split Complementary Teal	Petrol Mavisi Bölünmüş Tamamlayıcı
+	Analogous Teal	Petrol Mavisi Benzer
+	Triad Teal	Petrol Mavisi Üçlü
+	Tetrad Teal	Petrol Mavisi Dörtlü
+	Pentagram Teal	Petrol Mavisi Pentagram
+	Soft Spectrum	Yumuşak Spektrum
+	Red to Amber	Kırmızıdan Kehribara
+	Orange to Yellow	Turuncudan Sarıya
+	Amber to Lime	Kehribardan Limon Yeşiline
+	Yellow to Green	Sarıdan Yeşile
+	Lime to Teal	Limon Yeşilinden Petrol Mavisine
+	Green to Cyan	Yeşilden Camgöbeğine
+	Teal to Azure	Petrol Mavisinden Gök Mavisine
+	Cyan to Blue	Camgöbeğinden Maviye
+	Azure to Violet	Gök Mavisinden Menekşeye
+	Blue to Magenta	Maviden Macentaya
+	Violet to Red	Menekşeden Kırmızıya
+	Magenta to Orange	Macentadan Turuncuya
+	Dawn	Şafak
+	Noon	Öğle
+	Sunset	Gün Batımı
+	Night	Gece
+	Overcast	Kapalı Hava
+	White to Black	Beyazdan Siyaha
+	Light Grays	Açık Griler
+	Dark Grays	Koyu Griler
+	Warm Grays	Sıcak Griler
+	Cool Grays	Soğuk Griler
+	Fade to Transparent	Saydama Geçiş
+	White Fade	Beyaz Geçiş
+	Vignette	Vinyet
+	Mist	Pus
+	Petal	Taç Yaprağı
+	Fern	Eğrelti
+	Smoke	Duman
+	Honey	Bal
+	Seafoam	Deniz Köpüğü
+	Lavender	Lavanta
+	Driftwood	Dalga Odunu
+	Ink Wash	Mürekkep Lavisi
+	Tide	Gelgit
+	Bloom	Çiçeklenme
+	Dew	Çiy
+	Pollen	Polen
+	Lichen	Liken
+	Prism Veil	Prizma Tül
+	Opal Ribbon	Opal Şerit
+	Pearl Flash	İnci Parıltısı
+	Aurora Foil	Kutup Işığı Folyosu
+	Iris Sheen	İris Parlaklığı
+	Frost Spectrum	Kırağı Spektrumu
+	Silver Tide	Gümüş Gelgit
+	Rose Quartz Gleam	Pembe Kuvars Işıltısı
+	Moonstone Shift	Aytaşı Yansıması
+	Violet Edge	Menekşe Kenar
+	Mint Halo	Nane Hale
+	Amber Corona	Kehribar Korona
+	Polar Glint	Kutup Pırıltısı
+	Pastel Orbit	Pastel Yörünge
+	Coral and Navy	Mercan ve Lacivert
+	Plum and Lime	Erik ve Limon Yeşili
+	Teal and Gold	Petrol Mavisi ve Altın
+	Indigo and Peach	Çivit ve Şeftali
+	Forest and Rose	Orman ve Gül
+	Red Glow	Kırmızı Işıma
+	Orange Glow	Turuncu Işıma
+	Amber Glow	Kehribar Işıma
+	Yellow Glow	Sarı Işıma
+	Lime Glow	Limon Yeşili Işıma
+	Green Glow	Yeşil Işıma
+	Teal Glow	Petrol Mavisi Işıma
+	Cyan Glow	Camgöbeği Işıma
+	Azure Glow	Gök Mavisi Işıma
+	Blue Glow	Mavi Işıma
+	Violet Glow	Menekşe Işıma
+	Magenta Glow	Macenta Işıma
+	Polka Dots	Puantiye
+	Vertical Stripes	Dikey Çizgiler
+	Horizontal Stripes	Yatay Çizgiler
+	Diagonal Stripes	Çapraz Çizgiler
+	Checkerboard	Dama Tahtası
+	Diamonds	Baklavalar
+	Crosses	Artılar
+	Coarse Grit	İri Gren
+	Stipple	Noktalama
+	Scratches	Çizikler
+	Sparse Flecks	Seyrek Benekler
+	Dense Flecks	Sık Benekler
+	Sine Bands	Sinüs Bantları
+	Ripple Lines	Dalgacık Çizgileri
+	Interference Rings	Girişim Halkaları
+	Offset Rings	Kaydırılmış Halkalar
+	Warped Checks	Bükülmüş Kareler
+	Pinched Stripes	Sıkıştırılmış Çizgiler
+	Chevron Pulse	Şerit Darbesi
+	Radiating Lenses	Işıyan Mercekler
+	Soft Shadow	Yumuşak Gölge
+	Hard Shadow	Sert Gölge
+	Lifted Card	Kaldırılmış Kart
+	Neon Tube	Neon Tüp
+	Inner Light	İç Işık
+	Feathered	Yumuşak Kenarlı
+	Haze	Sis
+	Double Rule	Çift Çizgi Kenar
+	Triple Rule	Üçlü Çizgi Kenar
+	Dashed Border	Kesik Çizgili Kenarlık
+	Dotted Border	Noktalı Kenarlık
+	Offset Keyline	Kaydırılmış Kontur
+	Inset Keyline	İç Kontur
+	Outside Stroke	Dış Kontur
+	Pointer	İşaretçi
+	Highlighter	Fosforlu Kalem
+	Sketchy Line	Eskiz Çizgisi
+	Scribble Fill	Karalama Dolgu
+	Wobble	Titreşim
+	Zig Zag Edge	Zikzak Kenar
+	Wavy Edge	Dalgalı Kenar
+	Puffy	Kabarık
+	Starburst	Yıldız Patlaması
+	Glossy	Parlak
+	Brushed Metal	Fırçalanmış Metal
+	Spotlight	Spot Işık
+	Sunset Band	Gün Batımı Bandı
+	Sea Glass	Deniz Camı
+	Pearl	İnci
+	Chrome Rim	Krom Kenar
+	Glow Orb	Işıyan Küre
+	Pill Badge	Hap Rozet
+	Round Badge	Yuvarlak Rozet
+	Flag Wave	Dalgalanan Bayrak
+	Bulge	Şişkinlik
+	Twisted	Bükülmüş
+	Echo	Yankı
+	Spiral Copies	Sarmal Kopyalar
+	Multiply Tint	Çarp Tonu
+	Darken Veil	Koyulaştır Örtüsü
+	Ghosted	Hayalet
+	Two Tone	İki Renkli
+	Overlay Glaze	Kaplama Sırı
+	Screen Light	Ekran Işığı
+	Soft Light Wash	Yumuşak Işık Lavisi
+	Burst	Patlama
+	Rounded Square	Yuvarlatılmış Kare
 	Save Brush Library…	Fırça Kitaplığını Kaydet…
 @msg	`{_1}` has no brushes to apply	`{_1}` içinde uygulanacak fırça yok
 @msg	missing `library` (see brush.libraries)	`library` eksik (bkz. brush.libraries)
