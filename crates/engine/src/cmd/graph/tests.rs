@@ -508,6 +508,89 @@ fn paint_targets_leave_a_graph_designs_copy_out() {
     assert_eq!(super::paint_targets(d, &[copy, art, mark]), [mark]);
 }
 
+/// The art of a marker design in series 1 of a line graph: the design's copy and a path inside it.
+fn marker_design_art() -> (Session, NodeId, NodeId) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Pill");
+    let id = graph(&mut s, "line");
+    s.execute("graph.marker", &json!({"id": id.0, "seriesIndexes": [1], "design": "Pill"})).unwrap();
+    let marker = series(s.doc().unwrap().doc.node(id).unwrap(), 1).children().unwrap()[1].clone();
+    assert!(matches!(marker.kind, NodeKind::Group { .. }), "the design's art");
+    let mut art = vec![];
+    marker.walk(&mut |m| {
+        if matches!(m.kind, NodeKind::Path { .. }) {
+            art.push(m.id);
+        }
+    });
+    (s, marker.id, art[0])
+}
+
+/// The ids `graphicStyle.list` reports as linked to style `name`.
+fn linked_to(s: &mut Session, name: &str) -> Vec<u64> {
+    let list = s.execute("graphicStyle.list", &json!({})).unwrap();
+    let style = list["styles"].as_array().unwrap().iter().find(|g| g["name"] == name).unwrap().clone();
+    let mut ids: Vec<u64> = style["linked"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    ids.sort_unstable();
+    ids
+}
+
+/// Graphic styles and the art of a column or marker design in a series (the design's copy and a path inside it):
+/// `graphicStyle.new` makes a style from the art without linking it; `graphicStyle.redefine` leaves the art's look as
+/// it was and unlinks it, whether the art is linked (as in a document saved before) or the source, while the other
+/// linked objects follow the new look.
+#[test]
+fn graphic_styles_leave_a_graph_designs_art_unlinked() {
+    let make = |marker: bool| {
+        if marker {
+            marker_design_art()
+        } else {
+            let (s, _, copy, art, _) = design_art();
+            (s, copy, art)
+        }
+    };
+    let rows = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    let link = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().extras().graphic_style;
+    let link_directly = |s: &mut Session, ids: &[NodeId], style: u32| {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        for id in ids {
+            d.node_mut(*id).unwrap().extras_mut().graphic_style = Some(style);
+        }
+    };
+    let rect = |s: &mut Session| {
+        NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap())
+    };
+    for marker in [false, true] {
+        for source in [0, 1] {
+            let at = format!("marker {marker}, source {source}");
+            // New: the style is made from the art, which stays unlinked.
+            let (mut s, copy, art) = make(marker);
+            let source = [copy, art][source];
+            s.execute("graphicStyle.new", &json!({"id": source.0, "name": "Art"})).unwrap();
+            assert_eq!(link(&s, source), None, "{at}");
+            assert_eq!(linked_to(&mut s, "Art"), Vec::<u64>::new(), "{at}");
+            // Redefine from another object: linked art keeps its look and is unlinked; a linked rectangle follows.
+            let follower = rect(&mut s);
+            s.execute("graphicStyle.apply", &json!({"name": "Art", "ids": [follower.0]})).unwrap();
+            let style = link(&s, follower).unwrap();
+            link_directly(&mut s, &[copy, art], style);
+            let (copy_was, art_was) = (rows(&s, copy), rows(&s, art));
+            let (blue_rect, blue) = blue_style(&mut s, "Blue", false);
+            s.execute("graphicStyle.redefine", &json!({"name": "Art", "id": blue_rect.0})).unwrap();
+            assert_eq!((rows(&s, copy), rows(&s, art)), (copy_was.clone(), art_was.clone()), "{at}");
+            assert_eq!((link(&s, copy), link(&s, art)), (None, None), "{at}");
+            assert_eq!(rows(&s, follower).fill_paint(), blue, "{at}");
+            assert_eq!(linked_to(&mut s, "Art"), [follower.0.min(blue_rect.0), follower.0.max(blue_rect.0)], "{at}");
+            // Redefine from the art itself: the art is unlinked and the linked rectangle takes the art's look.
+            link_directly(&mut s, &[copy, art], style);
+            s.execute("graphicStyle.redefine", &json!({"name": "Art", "id": source.0})).unwrap();
+            assert_eq!((rows(&s, copy), rows(&s, art)), (copy_was, art_was), "{at}");
+            assert_eq!((link(&s, copy), link(&s, art)), (None, None), "{at}");
+            assert_eq!(linked_to(&mut s, "Art"), [follower.0.min(blue_rect.0), follower.0.max(blue_rect.0)], "{at}");
+        }
+    }
+}
+
 /// The art of a marker design in a series is refused too.
 #[test]
 fn effect_commands_refuse_a_marker_designs_art() {

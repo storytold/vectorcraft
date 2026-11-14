@@ -587,6 +587,12 @@ fn unicode_bidi_values_the_text_model_cannot_hold_are_reported() {
         (r#"<tspan display="none">&#x5D0;&#x5D1;</tspan>ab"#.to_string(), "ab", Ltr),
         (format!("<tspan>{far}</tspan>"), "\u{5D0}", Rtl),
         (format!("<tspan>\n</tspan>12 <tspan>{far}</tspan>"), "\u{5D0}", Rtl),
+        // An isolate that opens in one text node and closes in a later one is skipped whole.
+        ("&#x2067;ab<tspan>&#x2069;&#x5D0;</tspan>".to_string(), "\u{5D0}", Rtl),
+        ("&#x2067;ab<tspan>cd</tspan>&#x2069;&#x5D0;".to_string(), "\u{5D0}", Rtl),
+        // An isolate that opens in a nested `plaintext` element and closes after it hides the rest of that element.
+        (r#"<tspan unicode-bidi="plaintext">&#x2067;ab</tspan>&#x2069;&#x5D0;"#.to_string(), "\u{5D0}", Rtl),
+        (r#"<tspan unicode-bidi="plaintext">&#x2067;ab</tspan>&#x2069;&#x5D0;"#.to_string(), "ab", Ltr),
     ] {
         let (d, _) =
             import_with_report(&svg(&format!(r#"<text y="40">x <tspan direction="ltr" unicode-bidi="plaintext">{body}</tspan></text>"#))).unwrap();
