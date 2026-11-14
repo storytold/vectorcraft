@@ -5241,7 +5241,7 @@ lighting	Light	Светлина
 @msg	{name} must be {range} (got {v})	{name} трябва да бъде {range} (получено {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Първият опит на графичния процесор да покаже прозореца не успя, затова VectorCraft стартира отново на {summary} (Настройки › Производителност › Графичен процесор › Автоматично използва този, който управлява вашия дисплей)
 @msg	Sent “{title}” to {to}	“{title}” е изпратено към {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” е изпратено към {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” е изпратено към {to}. Отговор на опашката за печат: {note}
 @msg	the default printer	принтера по подразбиране
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растерни ефекти върху обект {object}: поискани {requested} ppi, постигнати {achieved} ppi заради ограничението от 64 милиона пиксела
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестен параметър `{key}`; командата приема: {keys}

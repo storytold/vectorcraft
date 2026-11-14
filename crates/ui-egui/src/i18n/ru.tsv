@@ -5644,7 +5644,7 @@ lighting	Light	Свет
 @msg	{name} must be {range} (got {v})	{name} должен быть {range} (получено {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Графический процессор, выбранный первым, не смог показать окно, поэтому VectorCraft запустился снова на {summary} (Настройки › Производительность › Графический процессор › Автоматически использует тот, к которому подключён дисплей)
 @msg	Sent “{title}” to {to}	“{title}” отправлено: {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” отправлено: {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” отправлено: {to}. Ответ очереди печати: {note}
 @msg	the default printer	принтер по умолчанию
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растровые эффекты объекта {object}: запрошено {requested} ppi, получено {achieved} ppi из-за ограничения в 64 миллиона пикселей
 @msg	unknown parameter `{key}`; the command takes: {keys}	неизвестный параметр `{key}`; команда принимает: {keys}

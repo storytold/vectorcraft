@@ -5639,7 +5639,7 @@ lighting	Light	Світло
 @msg	{name} must be {range} (got {v})	{name} має бути {range} (отримано {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Графічний процесор, обраний першим, не зміг показати вікно, тому VectorCraft запустився знову на {summary} (Налаштування › Продуктивність › Графічний процесор › Автоматично використовує той, до якого під’єднано дисплей)
 @msg	Sent “{title}” to {to}	“{title}” відправлено: {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” відправлено: {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” відправлено: {to}. Відповідь черги друку: {note}
 @msg	the default printer	принтер за замовчуванням
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	растрові ефекти об’єкта {object}: запитано {requested} ppi, отримано {achieved} ppi через обмеження у 64 мільйони пікселів
 @msg	unknown parameter `{key}`; the command takes: {keys}	невідомий параметр `{key}`; команда приймає: {keys}

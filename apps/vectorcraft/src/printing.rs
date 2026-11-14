@@ -30,10 +30,11 @@ impl PrintService for SystemPrint {
 
 /// The status after the job `title` went to `printer` (the default one without a name), with the
 /// spooler's `note` when it gave one. Each message has text between its values, so a catalog can
-/// match it and translate it.
+/// match it and translate it. The note follows as its own sentence: a printer name can end in
+/// parentheses ("HP LaserJet (Copy 1)"), and a note in parentheses would match that name.
 fn sent(title: &str, printer: Option<&str>, note: &str) -> String {
     let to = printer.unwrap_or("the default printer");
-    if note.is_empty() { format!("Sent “{title}” to {to}") } else { format!("Sent “{title}” to {to} ({note})") }
+    if note.is_empty() { format!("Sent “{title}” to {to}") } else { format!("Sent “{title}” to {to}. The spooler replied: {note}") }
 }
 
 mod system {
@@ -141,7 +142,19 @@ mod turn_tests {
     fn the_sent_status_names_the_job_the_printer_and_the_note() {
         assert_eq!(sent("Poster", None, ""), "Sent “Poster” to the default printer");
         assert_eq!(sent("Poster", Some("Office Laser"), ""), "Sent “Poster” to Office Laser");
-        assert_eq!(sent("Poster", Some("Office Laser"), "job 12"), "Sent “Poster” to Office Laser (job 12)");
+        assert_eq!(sent("Poster", Some("Office Laser"), "job 12"), "Sent “Poster” to Office Laser. The spooler replied: job 12");
+    }
+
+    #[test]
+    fn a_printer_name_ending_in_parentheses_stays_whole_in_a_translation() {
+        use vectorcraft_ui_egui::i18n::{Lang, message};
+        let Some(de) = Lang::from_code("de") else { panic!("no German catalog") };
+        let printer = Some("HP LaserJet (Copy 1)");
+        assert_eq!(message(de, &sent("Poster", printer, "")), "“Poster” an HP LaserJet (Copy 1) gesendet");
+        assert_eq!(
+            message(de, &sent("Poster", printer, "job 12")),
+            "“Poster” an HP LaserJet (Copy 1) gesendet. Antwort der Druckwarteschlange: job 12"
+        );
     }
 
     #[test]

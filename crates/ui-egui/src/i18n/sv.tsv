@@ -5509,7 +5509,7 @@ lighting	Light	Ljus
 @msg	DXF doesn't take it (see document.formats)	DXF tar den inte (se document.formats)
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Grafikprocessorn som prövades först kunde inte visa fönstret, så VectorCraft startade om med {summary} (Inställningar › Prestanda › Grafikprocessor › Automatisk använder den som driver din skärm)
 @msg	Sent “{title}” to {to}	Skickade “{title}” till {to}
-@msg	Sent “{title}” to {to} ({note})	Skickade “{title}” till {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Skickade “{title}” till {to}. Svar från utskriftskön: {note}
 @msg	the default printer	standardskrivaren
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rastereffekter på objekt {object}: begärde {requested} ppi, uppnådde {achieved} ppi på grund av gränsen på 64 miljoner pixlar
 @msg	unknown parameter `{key}`; the command takes: {keys}	okänd parameter `{key}`; kommandot tar: {keys}

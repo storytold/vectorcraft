@@ -5402,7 +5402,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	{name} must be {range} (got {v})	το {name} πρέπει να είναι {range} (δόθηκε {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Ο αρχικός επεξεργαστής γραφικών δεν μπόρεσε να εμφανίσει το παράθυρο και το VectorCraft επανεκκίνησε στον {summary} (Ρυθμίσεις › Επιδόσεις › Επεξεργαστής γραφικών › Αυτόματο: χρησιμοποιεί αυτόν που οδηγεί την οθόνη σας)
 @msg	Sent “{title}” to {to}	Το “{title}” στάλθηκε: {to}
-@msg	Sent “{title}” to {to} ({note})	Το “{title}” στάλθηκε: {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Το “{title}” στάλθηκε: {to}. Απάντηση της ουράς εκτύπωσης: {note}
 @msg	the default printer	προεπιλεγμένος εκτυπωτής
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	εφέ ράστερ στο αντικείμενο {object}: ζητήθηκαν {requested} ppi, επιτεύχθηκαν {achieved} ppi λόγω του ορίου των 64 εκατομμυρίων pixel
 @msg	unknown parameter `{key}`; the command takes: {keys}	άγνωστη παράμετρος `{key}`· η εντολή δέχεται: {keys}

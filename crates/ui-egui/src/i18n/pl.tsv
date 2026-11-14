@@ -5883,7 +5883,7 @@ mark-style	Japanese	Japońskie
 @msg	{name} must be {range} (got {v})	{name} musi wynosić {range} (podano {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Pierwszy wypróbowany procesor graficzny nie mógł wyświetlić okna, więc VectorCraft uruchomił się ponownie na {summary} (Ustawienia › Wydajność › Procesor graficzny › Automatycznie używa tego, który obsługuje ekran)
 @msg	Sent “{title}” to {to}	Wysłano “{title}” do: {to}
-@msg	Sent “{title}” to {to} ({note})	Wysłano “{title}” do: {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Wysłano “{title}” do: {to}. Odpowiedź kolejki wydruku: {note}
 @msg	the default printer	drukarka domyślna
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efekty rastrowe na obiekcie {object}: żądano {requested} ppi, uzyskano {achieved} ppi z powodu limitu 64 milionów pikseli
 @msg	unknown parameter `{key}`; the command takes: {keys}	nieznany parametr `{key}`; polecenie przyjmuje: {keys}

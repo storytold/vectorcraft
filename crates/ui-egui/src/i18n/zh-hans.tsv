@@ -5914,7 +5914,7 @@ lighting	Light	光源
 @msg	{name} must be {range} (got {v})	{name} 必须为 {range} (实际为 {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	首先尝试的图形处理器无法显示窗口，因此 VectorCraft 已在 {summary} 上重新启动 (设置 › 性能 › 图形处理器 › 自动 会使用驱动显示器的处理器)
 @msg	Sent “{title}” to {to}	已将 “{title}” 发送到 {to}
-@msg	Sent “{title}” to {to} ({note})	已将 “{title}” 发送到 {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	已将 “{title}” 发送到 {to}。打印队列的回复：{note}
 @msg	the default printer	默认打印机
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	对象 {object} 上的栅格效果：请求 {requested} ppi，受 6400 万像素上限限制，实际为 {achieved} ppi
 @msg	unknown parameter `{key}`; the command takes: {keys}	未知参数 `{key}`；该命令接受：{keys}

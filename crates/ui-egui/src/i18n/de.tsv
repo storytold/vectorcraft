@@ -5617,7 +5617,7 @@ lighting	Light	Licht
 @msg	{name} must be {range} (got {v})	{name} muss {range} sein (erhalten: {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Der zuerst verwendete Grafikprozessor konnte das Fenster nicht anzeigen, daher wurde VectorCraft auf {summary} neu gestartet (Einstellungen › Leistung › Grafikprozessor › Automatisch verwendet den, der Ihren Bildschirm ansteuert)
 @msg	Sent “{title}” to {to}	“{title}” an {to} gesendet
-@msg	Sent “{title}” to {to} ({note})	“{title}” an {to} gesendet ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” an {to} gesendet. Antwort der Druckwarteschlange: {note}
 @msg	the default printer	den Standarddrucker
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	Rastereffekte auf Objekt {object}: {requested} ppi angefordert, {achieved} ppi erreicht wegen der Obergrenze von 64 Millionen Pixeln
 @msg	unknown parameter `{key}`; the command takes: {keys}	unbekannter Parameter `{key}`; der Befehl akzeptiert: {keys}

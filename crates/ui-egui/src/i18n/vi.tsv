@@ -5553,7 +5553,7 @@ theme	Appearance	Giao diện
 @msg	{name} must be {range} (got {v})	{name} phải là {range} (nhận được {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Bộ xử lý đồ họa thử trước không hiển thị được cửa sổ, VectorCraft đã khởi động lại trên {summary} (Cài đặt › Hiệu suất › Bộ xử lý đồ họa › Tự động dùng bộ xử lý đang điều khiển màn hình của bạn)
 @msg	Sent “{title}” to {to}	Đã gửi “{title}” đến {to}
-@msg	Sent “{title}” to {to} ({note})	Đã gửi “{title}” đến {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Đã gửi “{title}” đến {to}. Phản hồi của hàng đợi in: {note}
 @msg	the default printer	máy in mặc định
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	hiệu ứng raster trên đối tượng {object}: yêu cầu {requested} ppi, đạt {achieved} ppi do giới hạn 64 triệu điểm ảnh
 @msg	unknown parameter `{key}`; the command takes: {keys}	tham số không xác định `{key}`; lệnh nhận: {keys}

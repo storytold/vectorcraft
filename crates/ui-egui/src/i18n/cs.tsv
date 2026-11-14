@@ -6043,7 +6043,7 @@ mark-style	Japanese	Japonské
 @msg	{name} must be {range} (got {v})	{name} musí být {range} (zadáno {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Grafický procesor zkoušený jako první nedokázal zobrazit okno, proto se VectorCraft znovu spustil na {summary} (Nastavení › Výkon › Grafický procesor › Automaticky použije ten, který obsluhuje váš displej)
 @msg	Sent “{title}” to {to}	“{title}” odesláno do {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” odesláno do {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” odesláno do {to}. Odpověď tiskové fronty: {note}
 @msg	the default printer	výchozí tiskárny
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rastrové efekty na objektu {object}: požadováno {requested} ppi, dosaženo {achieved} ppi kvůli limitu 64 milionů pixelů
 @msg	unknown parameter `{key}`; the command takes: {keys}	neznámý parametr `{key}`; příkaz přijímá: {keys}

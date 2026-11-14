@@ -5403,7 +5403,7 @@ mark-style	Japanese	Jepang
 @msg	{name} must be {range} (got {v})	{name} harus {range} (diperoleh {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Prosesor grafis yang dicoba pertama kali tidak dapat menampilkan jendela, jadi VectorCraft memulai ulang dengan {summary} (Pengaturan › Kinerja › Prosesor grafis › Otomatis menggunakan prosesor yang menjalankan layar Anda)
 @msg	Sent “{title}” to {to}	“{title}” dikirim ke {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” dikirim ke {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” dikirim ke {to}. Balasan antrean cetak: {note}
 @msg	the default printer	printer bawaan
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efek raster pada objek {object}: diminta {requested} ppi, tercapai {achieved} ppi karena batas 64 juta piksel
 @msg	unknown parameter `{key}`; the command takes: {keys}	parameter `{key}` tidak dikenal; perintah menerima: {keys}

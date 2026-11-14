@@ -5924,7 +5924,7 @@ mark-style	Japanese	Japanilainen
 @msg	{name} must be {range} (got {v})	arvon {name} on oltava {range} (saatiin {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Ensin kokeiltu grafiikkasuoritin ei pystynyt näyttämään ikkunaa, joten VectorCraft käynnistyi uudelleen: {summary} (Asetukset › Suorituskyky › Grafiikkasuoritin › Automaattinen käyttää näyttöäsi ohjaavaa suoritinta)
 @msg	Sent “{title}” to {to}	“{title}” lähetettiin kohteeseen {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” lähetettiin kohteeseen {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” lähetettiin kohteeseen {to}. Tulostusjonon vastaus: {note}
 @msg	the default printer	oletustulostin
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rasteritehosteet objektissa {object}: pyydettiin {requested} ppi, saatiin {achieved} ppi 64 miljoonan pikselin rajan vuoksi
 @msg	unknown parameter `{key}`; the command takes: {keys}	tuntematon parametri `{key}`; komennon parametrit: {keys}

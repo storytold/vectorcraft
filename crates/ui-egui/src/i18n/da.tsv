@@ -5403,7 +5403,7 @@ mark-style	Japanese	Japansk
 @msg	{name} must be {range} (got {v})	{name} skal være {range} (fik {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	Den grafikprocessor, der blev prøvet først, kunne ikke vise vinduet, så VectorCraft startede igen med {summary} (Indstillinger › Ydeevne › Grafikprocessor › Automatisk bruger den, der driver din skærm)
 @msg	Sent “{title}” to {to}	Sendte “{title}” til {to}
-@msg	Sent “{title}” to {to} ({note})	Sendte “{title}” til {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	Sendte “{title}” til {to}. Svar fra udskriftskøen: {note}
 @msg	the default printer	standardprinteren
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rastereffekter på objekt {object}: anmodet om {requested} ppi, opnåede {achieved} ppi på grund af grænsen på 64 millioner pixel
 @msg	unknown parameter `{key}`; the command takes: {keys}	ukendt parameter `{key}`; kommandoen tager: {keys}

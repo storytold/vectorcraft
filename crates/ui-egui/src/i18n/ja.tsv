@@ -5702,7 +5702,7 @@ lighting	Light	ライト
 @msg	{name} must be {range} (got {v})	{name} は {range} にしてください (指定値: {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	最初に試したグラフィックスプロセッサーではウィンドウを表示できなかったため、{summary} で VectorCraft を再起動しました (環境設定 › パフォーマンス › グラフィックプロセッサー › 自動 では、ディスプレイを駆動しているプロセッサーを使います)
 @msg	Sent “{title}” to {to}	“{title}” を {to} に送信しました
-@msg	Sent “{title}” to {to} ({note})	“{title}” を {to} に送信しました ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” を {to} に送信しました。印刷キューの応答: {note}
 @msg	the default printer	デフォルトのプリンター
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	オブジェクト {object} のラスター効果: 要求は {requested} ppi ですが、6400 万ピクセルの上限により {achieved} ppi になりました
 @msg	unknown parameter `{key}`; the command takes: {keys}	`{key}` は不明なパラメーターです。このコマンドで使えるパラメーター: {keys}

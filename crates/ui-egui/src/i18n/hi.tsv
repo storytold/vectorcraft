@@ -8462,7 +8462,7 @@ antiAlias	Sharp	शार्प
 @msg	DXF doesn't take it (see document.formats)	DXF इसे नहीं लेता (document.formats देखें)
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	पहले आज़माया गया ग्राफिक्स प्रोसेसर विंडो नहीं दिखा सका, इसलिए VectorCraft फिर से {summary} पर शुरू हुआ (सेटिंग्स › प्रदर्शन › ग्राफिक्स प्रोसेसर › स्वचालित उस प्रोसेसर का उपयोग करता है जो आपका डिस्प्ले चलाता है)
 @msg	Sent “{title}” to {to}	“{title}” को {to} पर भेजा गया
-@msg	Sent “{title}” to {to} ({note})	“{title}” को {to} पर भेजा गया ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” को {to} पर भेजा गया। प्रिंट कतार का उत्तर: {note}
 @msg	the default printer	डिफ़ॉल्ट प्रिंटर
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	ऑब्जेक्ट {object} पर रास्टर इफ़ेक्ट: {requested} ppi माँगा गया, 64 मिलियन पिक्सेल की सीमा के कारण {achieved} ppi मिला
 @msg	unknown parameter `{key}`; the command takes: {keys}	अज्ञात पैरामीटर `{key}`; कमांड लेता है: {keys}

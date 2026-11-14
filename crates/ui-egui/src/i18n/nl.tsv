@@ -5983,7 +5983,7 @@ mark-style	Japanese	Japans
 @msg	{name} must be {range} (got {v})	{name} moet {range} zijn (kreeg {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	De grafische processor die eerst werd geprobeerd, kon het venster niet weergeven, dus VectorCraft is opnieuw gestart met {summary} (Instellingen › Prestaties › Grafische processor › Automatisch gebruikt de processor die je beeldscherm aanstuurt)
 @msg	Sent “{title}” to {to}	“{title}” verzonden naar {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” verzonden naar {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” verzonden naar {to}. Antwoord van de afdrukwachtrij: {note}
 @msg	the default printer	de standaardprinter
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	rastereffecten op object {object}: {requested} ppi gevraagd, {achieved} ppi bereikt vanwege de limiet van 64 miljoen pixels
 @msg	unknown parameter `{key}`; the command takes: {keys}	onbekende parameter `{key}`; de opdracht accepteert: {keys}

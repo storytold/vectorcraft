@@ -4766,7 +4766,7 @@ axis	Both	Ambos
 @msg	{name} must be {range} (got {v})	{name} deve ser {range} (recebido {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	O processador gráfico tentado primeiro não conseguiu exibir a janela, então o VectorCraft reiniciou em {summary} (Configurações › Desempenho › Processador Gráfico › Automático usa o que controla sua tela)
 @msg	Sent “{title}” to {to}	“{title}” enviado para {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” enviado para {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” enviado para {to}. Resposta da fila de impressão: {note}
 @msg	the default printer	a impressora padrão
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efeitos de rasterização no objeto {object}: solicitados {requested} ppi, obtidos {achieved} ppi devido ao limite de 64 milhões de pixels
 @msg	unknown parameter `{key}`; the command takes: {keys}	parâmetro desconhecido `{key}`; o comando aceita: {keys}

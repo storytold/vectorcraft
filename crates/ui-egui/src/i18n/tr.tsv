@@ -5278,7 +5278,7 @@ lighting	Light	Işık
 @msg	{name} must be {range} (got {v})	{name} {range} olmalıdır ({v} verildi)
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	İlk önce denenen grafik işlemcisi pencereyi gösteremedi, bu yüzden VectorCraft {summary} üzerinde yeniden başladı (Ayarlar › Performans › Grafik İşlemcisi › Otomatik, ekranınızı süren işlemciyi kullanır)
 @msg	Sent “{title}” to {to}	“{title}” şuraya gönderildi: {to}
-@msg	Sent “{title}” to {to} ({note})	“{title}” şuraya gönderildi: {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	“{title}” şuraya gönderildi: {to}. Yazdırma kuyruğunun yanıtı: {note}
 @msg	the default printer	varsayılan yazıcı
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	{object} nesnesindeki raster efektleri: {requested} ppi istendi, 64 milyon piksel sınırı nedeniyle {achieved} ppi elde edildi
 @msg	unknown parameter `{key}`; the command takes: {keys}	bilinmeyen parametre `{key}`; komut şunları alır: {keys}

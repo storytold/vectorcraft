@@ -6388,7 +6388,7 @@ digits	Malayalam	Malaiàlam
 @msg	{name} must be {range} (got {v})	{name} ha de ser {range} (rebut {v})
 @msg	The graphics processor tried first couldn't show the window, so VectorCraft started again on {summary} (Settings › Performance › Graphics Processor › Automatic uses the one that drives your display)	El processador gràfic provat primer no ha pogut mostrar la finestra, així que VectorCraft s’ha iniciat de nou amb {summary} (Configuració › Rendiment › Processador gràfic › Automàtic fa servir el que controla la pantalla)
 @msg	Sent “{title}” to {to}	S’ha enviat “{title}” a {to}
-@msg	Sent “{title}” to {to} ({note})	S’ha enviat “{title}” a {to} ({note})
+@msg	Sent “{title}” to {to}. The spooler replied: {note}	S’ha enviat “{title}” a {to}. Resposta de la cua d’impressió: {note}
 @msg	the default printer	la impressora per defecte
 @msg	raster effects on object {object}: requested {requested} ppi, achieved {achieved} ppi due to the 64 million pixel cap	efectes de ràster a l’objecte {object}: s’han demanat {requested} ppi i s’han obtingut {achieved} ppi a causa del límit de 64 milions de píxels
 @msg	unknown parameter `{key}`; the command takes: {keys}	paràmetre desconegut `{key}`; l’ordre admet: {keys}
