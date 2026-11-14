@@ -9793,3 +9793,233 @@ fn envelopes_document() -> Document {
     }
     doc
 }
+
+// ---------- text wrap ----------
+
+/// `n` with text wrap options `offset` and `invert`.
+fn wrapped(mut n: Node, offset: f64, invert: bool) -> Node {
+    n.extras_mut().wrap = Some(vectorcraft_doc::TextWrap { offset, invert });
+    n
+}
+
+/// The text wrap options of `nodes` and of the objects they hold, in order, each with its object's
+/// name.
+fn wraps(nodes: &[Arc<Node>]) -> Vec<(Option<String>, f64, bool)> {
+    let mut out = vec![];
+    for n in nodes {
+        n.walk(&mut |m| {
+            if let Some(w) = m.extras().wrap {
+                out.push((m.name.clone(), w.offset, w.invert));
+            }
+        });
+    }
+    out
+}
+
+/// `got` and `want` name the same objects with the same Invert Wrap, and offsets within `1e-6`.
+fn same_wraps(got: &[(Option<String>, f64, bool)], want: &[(Option<String>, f64, bool)]) {
+    let close = got.len() == want.len() && got.iter().zip(want).all(|(g, w)| g.0 == w.0 && g.2 == w.2 && (g.1 - w.1).abs() < 1e-6);
+    assert!(close, "{got:?}\n{want:?}");
+}
+
+/// The dictionary entries of text wrap options `offset` (as written) and `invert`.
+fn wrap_entries(offset: &str, invert: bool) -> String {
+    format!("%_{offset} /Real (AI11TextWrapOffset) ,\n%_{} /Bool (AI11TextWrapInvert) ,\n", u8::from(invert))
+}
+
+/// Text wrap options are written in each object's dictionary and read back: a positive and a
+/// negative offset, Invert Wrap on and off, the default options, an object without them, a named
+/// object with an opacity mask, a group, a compound path and a clipping group's clipping path. An
+/// offset that isn't finite is written as the default 6 pt, and one past the -1000 to 1000 pt the
+/// reader keeps as the nearer end of that range.
+#[test]
+fn text_wrap_options_are_written_and_read_back() {
+    let mut doc = Document::new(400.0, 200.0);
+    let layer = doc.layers[0].id;
+    let plain = |doc: &mut Document, x: f64| square(doc, Rect::new(x, 10.0, x + 20.0, 30.0), Color::gray(0.5));
+    let a = wrapped(plain(&mut doc, 10.0), 12.5, false);
+    let b = wrapped(plain(&mut doc, 40.0), -4.25, true);
+    let c = wrapped(plain(&mut doc, 70.0), 6.0, false);
+    let d = plain(&mut doc, 100.0);
+    let mut e = named(wrapped(plain(&mut doc, 130.0), 3.0, true), "Badge");
+    let mask_art = plain(&mut doc, 130.0);
+    e.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, false)));
+    let members = vec![plain(&mut doc, 160.0), plain(&mut doc, 190.0)];
+    let f = wrapped(group(&mut doc, members, false), -2.0, false);
+    let outer = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(220.0, 10.0, 260.0, 50.0)), Appearance::default());
+    let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(230.0, 20.0, 250.0, 40.0)), Appearance::default());
+    let mut ring = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd });
+    ring.appearance = Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0).into();
+    let g = wrapped(ring, 7.0, true);
+    let clip = wrapped(clipping(&mut doc, shapes::rectangle(Rect::new(280.0, 10.0, 320.0, 50.0))), 5.0, false);
+    let clipped = plain(&mut doc, 290.0);
+    let h = group(&mut doc, vec![clip, clipped], true);
+    for n in [a, b, c, d, e, f, g, h] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    assert_eq!(doc.layers[0].children().unwrap()[2].extras().wrap, Some(vectorcraft_doc::TextWrap::default()));
+    let text = program(&doc);
+    for entries in
+        [wrap_entries("12.5", false), wrap_entries("-4.25", true), wrap_entries("6", false), wrap_entries("-2", false), wrap_entries("7", true)]
+    {
+        assert!(text.contains(&entries), "{entries}\n{text}");
+    }
+    assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 7, "{text}");
+    assert!(!text.contains("AI11TextWrapPath"), "{text}");
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &wraps(doc.layers[0].children().unwrap()));
+    let kept: Vec<_> = back.layers[0].children().unwrap().iter().map(|n| (n.extras().wrap, n.extras().mask.is_some())).collect();
+    let want: Vec<_> = doc.layers[0].children().unwrap().iter().map(|n| (n.extras().wrap, n.extras().mask.is_some())).collect();
+    assert_eq!(kept, want);
+
+    // An offset that isn't finite, and offsets past the range the reader keeps.
+    let mut doc = Document::new(200.0, 100.0);
+    let odd = wrapped(plain(&mut doc, 10.0), f64::NAN, true);
+    let far = wrapped(plain(&mut doc, 40.0), 1e300, false);
+    let far_in = wrapped(plain(&mut doc, 70.0), -1000.5, false);
+    let layer = doc.layers[0].id;
+    for n in [odd, far, far_in] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let text = program(&doc);
+    for entries in [wrap_entries("6", true), wrap_entries("1000", false), wrap_entries("-1000", false)] {
+        assert!(text.contains(&entries), "{entries}\n{text}");
+    }
+    same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 6.0, true), (None, 1000.0, false), (None, -1000.0, false)]);
+}
+
+/// The art drawn for an object (a blend's steps, a stained symbol instance's art) is written
+/// without the text wrap options of the objects it is made from, which wrap no type; the object
+/// keeps its own. A symbol's art and a live instance keep theirs.
+#[test]
+fn drawn_art_keeps_only_its_objects_text_wrap() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let keys = vec![
+        Arc::new(wrapped(square(&mut doc, Rect::new(10.0, 10.0, 12.0, 12.0), Color::gray(0.5)), 2.0, true)),
+        Arc::new(wrapped(square(&mut doc, Rect::new(30.0, 10.0, 32.0, 12.0), Color::gray(0.5)), 2.0, true)),
+    ];
+    let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(10.0), ..Default::default() };
+    let blend = wrapped(Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) }), 8.0, false);
+    let art = wrapped(square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF), 4.0, true);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+    let mut stained = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    stained.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    let live = wrapped(instance(&mut doc, "Leaf", Affine::translate((80.0, 10.0))), -3.0, false);
+    for n in [blend, stained, live] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &[(None, 8.0, false), (None, -3.0, false)]);
+    assert!(matches!(back.layers[0].children().unwrap()[2].kind, NodeKind::SymbolInstance { .. }));
+    same_wraps(&wraps(&[back.symbols[0].art.clone()]), &[(None, 4.0, true)]);
+
+    // An object kept with an art style: its options go with the object, not its drawn look.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let shadow = fx("stylize.dropShadow", serde_json::json!({"x": 6.0, "y": 4.0, "blur": 8.0}));
+    let shadowed = styled_rect(&mut doc, "Shadowed", Rect::new(10.0, 10.0, 60.0, 50.0), solid(Color::gray(0.5)), Paint::None, vec![shadow]);
+    doc.insert(Some(layer), usize::MAX, wrapped(shadowed, 9.0, true)).unwrap();
+    let text = program(&doc);
+    assert!(text.contains("(Anon 1) XW") && text.matches("(AI11TextWrapOffset)").count() == 1, "{text}");
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &[(Some("Shadowed".into()), 9.0, true)]);
+}
+
+/// On a large canvas the offsets are written at the art's scale (1/10) and read back at their size,
+/// an instance written as its art keeps its own options, and a symbol's art, defined at its own
+/// size, keeps its offset as it is.
+#[test]
+fn text_wrap_offsets_on_a_large_canvas_come_back_at_their_size() {
+    let mut doc = Document::new(20_000.0, 20_000.0);
+    let layer = doc.layers[0].id;
+    let a = wrapped(square(&mut doc, Rect::new(1000.0, 1000.0, 1200.0, 1200.0), Color::gray(0.5)), -12.34, true);
+    let b = wrapped(square(&mut doc, Rect::new(1400.0, 1000.0, 1600.0, 1200.0), Color::gray(0.5)), 250.0, false);
+    let art = wrapped(square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), LEAF), 4.0, true);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+    let one = wrapped(instance(&mut doc, "Leaf", Affine::translate((2000.0, 1000.0))), -3.0, false);
+    for n in [a, b, one] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let text = program(&doc);
+    for entries in [wrap_entries("-1.234", true), wrap_entries("25", false), wrap_entries("-0.3", false), wrap_entries("4", true)] {
+        assert!(text.contains(&entries), "{entries}\n{text}");
+    }
+    let want = [(None, -12.34, true), (None, 250.0, false), (None, -3.0, false)];
+    let symbol = [(None, 4.0, true)];
+    // From the editing data alone.
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &want);
+    same_wraps(&wraps(&[back.symbols[0].art.clone()]), &symbol);
+    // Beside a page of the artboard's size in points.
+    let (p, _) = private_data(&doc, &opts()).unwrap();
+    let (read, notes, layers) = crate::layered_ai(&p.data, Document::new(20_000.0, 20_000.0), vec![], false, true, 1.389);
+    assert!(layers, "{notes:?}");
+    same_wraps(&wraps(read.layers[0].children().unwrap()), &want);
+    same_wraps(&wraps(&[read.symbols[0].art.clone()]), &symbol);
+}
+
+/// Type and envelopes keep their own text wrap options: point type, each frame of threaded area
+/// type (one with options, one without, in either order) and an envelope kept live.
+#[test]
+fn text_wrap_options_of_type_and_envelopes_are_read_back() {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    for first_wraps in [true, false] {
+        let mut doc = Document::new(300.0, 100.0);
+        let layer = doc.layers[0].id;
+        let st = style(10.0, Color::BLACK);
+        let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "", st.clone());
+        first.runs = vec![TextRun::new("One two three ", st.clone())];
+        first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+        first.xf = Affine::IDENTITY;
+        let mut second = first.clone();
+        second.runs = vec![TextRun::new("four five", st.clone())];
+        second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 40.0)) };
+        let (mut first, mut second) = (named(text_node(&mut doc, first), "First"), named(text_node(&mut doc, second), "Second"));
+        let frame = if first_wraps { &mut first } else { &mut second };
+        frame.extras_mut().wrap = Some(vectorcraft_doc::TextWrap { offset: 3.5, invert: true });
+        doc.text_threads.push(vec![first.id, second.id]);
+        let label = TextObject::point(vectorcraft_geom::Point::new(210.0, 30.0), "Label", st);
+        let label = wrapped(named(text_node(&mut doc, label), "Label"), -1.5, false);
+        for n in [first, second, label] {
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        let back = read_back(&doc);
+        assert_eq!(back.text_threads.len(), 1, "the frames stay type");
+        let frame = if first_wraps { "First" } else { "Second" };
+        same_wraps(&wraps(back.layers[0].children().unwrap()), &[(Some(frame.into()), 3.5, true), (Some("Label".into()), -1.5, false)]);
+    }
+
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let kinds = live_envelope_kinds();
+    let (_, arc) = kinds.iter().find(|(n, _)| *n == "arc").unwrap();
+    let bent = wrapped(envelope_node(&mut doc, arc.clone(), 50.0, false, vectorcraft_doc::live::EnvelopeOptions::NEW), 2.5, true);
+    doc.insert(Some(layer), usize::MAX, bent).unwrap();
+    let back = read_back(&doc);
+    let top = back.layers[0].children().unwrap();
+    assert!(matches!(top[0].kind, NodeKind::Envelope { .. }));
+    same_wraps(&wraps(top), &[(Some("Bent".into()), 2.5, true)]);
+}
+
+/// A clipping path inside art cut to a clipping object is written as its fills and its strokes,
+/// two objects: its text wrap options are written once, whether it has both or only strokes.
+#[test]
+fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
+    for fill in [solid(Color::gray(0.5)), Paint::None] {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut cutter = clipping(&mut doc, shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)));
+        cutter.appearance = Appearance::basic(fill, solid(Color::BLACK), 2.0).into();
+        let cutter = wrapped(cutter, 5.0, true);
+        let member = square(&mut doc, Rect::new(30.0, 30.0, 120.0, 60.0), Color::rgb(1.0, 0.0, 0.0));
+        let inner = group(&mut doc, vec![cutter, member], true);
+        let frame = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.9));
+        let frame = group(&mut doc, vec![frame], false);
+        let outer = group(&mut doc, vec![frame, inner], true);
+        doc.insert(Some(layer), usize::MAX, outer).unwrap();
+        let text = program(&doc);
+        assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "{text}");
+        same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 5.0, true)]);
+    }
+}

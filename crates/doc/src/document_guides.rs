@@ -183,8 +183,8 @@ impl Document {
         self.layers.retain(|l| !l.is_ruler_guide());
         gone -= self.layers.len();
         for l in &mut self.layers {
-            if layer_untidy(l) {
-                gone += tidy_layer(Arc::make_mut(l));
+            if let Some(found) = untidy(l, &Node::is_ruler_guide) {
+                gone += tidy_layer(Arc::make_mut(l), found);
             }
         }
         let others = self
@@ -198,8 +198,8 @@ impl Document {
             if root.is_ruler_guide() {
                 *root = Arc::new(Node::group(root.id, vec![]));
                 gone += 1;
-            } else if any_guide(root) {
-                gone += drop_guides_below(Arc::make_mut(root));
+            } else if let Some(found) = guides_below(root, &Node::is_ruler_guide) {
+                gone += drop_guides_below(Arc::make_mut(root), found);
             }
         }
         gone
@@ -272,8 +272,8 @@ impl Document {
             return;
         }
         for l in &mut self.layers {
-            if l.holds_ruler_guides() {
-                Arc::make_mut(l).strip_ruler_guides();
+            if let Some(held) = picked_in_layers(l, &Node::is_ruler_guide) {
+                drop_picked(l, held);
             }
         }
         self.saved_guides.extend(guides);
@@ -347,16 +347,14 @@ impl Document {
     /// saved guide whose layer is gone opens. Returns the removed node, without the guides.
     pub fn remove_edit_layer(&mut self, id: NodeId) -> Result<Arc<Node>, crate::DocError> {
         let mut layer = self.remove(id)?;
-        if !layer.holds_ruler_guides() {
-            return Ok(layer);
-        }
+        let Some(held) = picked_in_layers(&layer, &Node::is_ruler_guide) else { return Ok(layer) };
         let mut guides = vec![];
         layer.walk(&mut |c| {
             if c.is_ruler_guide() {
                 guides.push(Arc::new(c.clone()));
             }
         });
-        Arc::make_mut(&mut layer).strip_ruler_guides();
+        drop_picked(&mut layer, held);
         let home = self.default_layer().unwrap_or_else(|| self.add_layer(None));
         self.children_mut(Some(home))?.extend(guides);
         Ok(layer)
@@ -418,21 +416,11 @@ impl Document {
         if gone.is_empty() {
             return 0;
         }
-        fn drop(layer: &mut Arc<Node>, gone: &HashSet<NodeId>) {
-            fn holds(n: &Node, gone: &HashSet<NodeId>) -> bool {
-                n.is_layer() && n.children().is_some_and(|ch| ch.iter().any(|c| gone.contains(&c.id) || holds(c, gone)))
-            }
-            if !holds(layer, gone) {
-                return;
-            }
-            let Some(ch) = Arc::make_mut(layer).children_mut() else { return };
-            ch.retain(|c| !(c.is_ruler_guide() && gone.contains(&c.id)));
-            for c in ch.iter_mut().filter(|c| c.is_layer()) {
-                drop(c, gone);
-            }
-        }
+        let pick = |n: &Node| n.is_ruler_guide() && gone.contains(&n.id);
         for l in &mut self.layers {
-            drop(l, &gone);
+            if let Some(held) = picked_in_layers(l, &pick) {
+                drop_picked(l, held);
+            }
         }
         sel.guides.retain(|id| !gone.contains(id));
         if sel.key_guide.is_some_and(|k| gone.contains(&k)) {
@@ -444,29 +432,11 @@ impl Document {
     /// Change the line of every ruler guide on artboard `id` with `f` (whether it is vertical, its
     /// position).
     fn edit_artboard_guides(&mut self, id: u32, f: &mut impl FnMut(bool, &mut f64)) {
-        fn visit(layer: &mut Arc<Node>, id: u32, f: &mut impl FnMut(bool, &mut f64)) {
-            fn holds(n: &Node, id: u32) -> bool {
-                n.is_layer()
-                    && n.children().is_some_and(|ch| {
-                        ch.iter().any(|c| matches!(c.kind, NodeKind::RulerGuide { artboard: Some(a), .. } if a == id) || holds(c, id))
-                    })
-            }
-            if !holds(layer, id) {
-                return;
-            }
-            let Some(ch) = Arc::make_mut(layer).children_mut() else { return };
-            for c in ch.iter_mut() {
-                if matches!(c.kind, NodeKind::RulerGuide { artboard: Some(a), .. } if a == id) {
-                    if let NodeKind::RulerGuide { vertical, pos, .. } = &mut Arc::make_mut(c).kind {
-                        f(*vertical, pos);
-                    }
-                } else if c.is_layer() {
-                    visit(c, id, f);
-                }
-            }
-        }
+        let pick = |n: &Node| matches!(n.kind, NodeKind::RulerGuide { artboard: Some(a), .. } if a == id);
         for l in &mut self.layers {
-            visit(l, id, f);
+            if let Some(held) = picked_in_layers(l, &pick) {
+                edit_picked(l, held, f);
+            }
         }
     }
 
@@ -580,65 +550,172 @@ impl Document {
     }
 }
 
-/// Does `n`, or anything below it (opacity-mask art included), hold a ruler guide?
-fn any_guide(n: &Node) -> bool {
-    let mut any = false;
-    crate::swatches::walk_with_masks(n, &mut |m| any |= m.is_ruler_guide());
-    any
+/// What a walk picked in a node: its children by index in order, each with what was picked
+/// inside it, and what was picked in its opacity-mask art. Empty for a node picked itself.
+#[derive(Debug, Default)]
+struct Picked {
+    children: Vec<(usize, Picked)>,
+    mask: Option<Box<Picked>>,
 }
 
-/// Remove every ruler guide below `n`, in its members and its opacity-mask art (`n` itself
-/// stays). Mask art that is a ruler guide becomes an empty group. Returns how many went.
-fn drop_guides_below(n: &mut Node) -> usize {
-    let mut gone = drop_mask_guides(n);
-    if let Some(ch) = n.children_mut() {
-        let before = ch.len();
-        ch.retain(|c| !c.is_ruler_guide());
-        gone += before - ch.len();
-        for c in ch.iter_mut().filter(|c| any_guide(c)) {
-            gone += drop_guides_below(Arc::make_mut(c));
+impl Picked {
+    fn is_empty(&self) -> bool {
+        self.children.is_empty() && self.mask.is_none()
+    }
+
+    /// `self`, or `None` when nothing was picked.
+    fn some(self) -> Option<Self> {
+        (!self.is_empty()).then_some(self)
+    }
+}
+
+/// The children of `n`, if it is a layer, that `pick` picks (with nothing inside), and its
+/// sublayers holding one (with what they hold), or `None` when it holds none. `pick` looks at
+/// each child of the layers once.
+fn picked_in_layers(n: &Node, pick: &impl Fn(&Node) -> bool) -> Option<Picked> {
+    if !n.is_layer() {
+        return None;
+    }
+    let children = n
+        .children()
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter_map(|(i, c)| if pick(c) { Some((i, Picked::default())) } else { picked_in_layers(c, pick).map(|p| (i, p)) })
+        .collect();
+    Picked { children, mask: None }.some()
+}
+
+/// Remove the children of `layer` and of its sublayers that [`picked_in_layers`] picked (`held`).
+/// Only the layers holding one are copied, and only those are visited.
+fn drop_picked(layer: &mut Arc<Node>, held: Picked) {
+    let Some(ch) = Arc::make_mut(layer).children_mut() else { return };
+    let mut held = held.children.into_iter().peekable();
+    let mut next = 0;
+    ch.retain_mut(|c| {
+        let at = next;
+        next += 1;
+        let Some((_, inner)) = held.next_if(|(i, _)| *i == at) else { return true };
+        // A sublayer holds something; a child picked itself has nothing inside.
+        if inner.is_empty() {
+            return false;
         }
+        drop_picked(c, inner);
+        true
+    });
+}
+
+/// Change with `f` (whether it is vertical, its position) the line of each ruler guide of `layer`
+/// and of its sublayers that [`picked_in_layers`] picked (`held`), in the order they lie in. Only
+/// the layers holding one, and the guides, are copied, and only those layers are visited.
+fn edit_picked(layer: &mut Arc<Node>, held: Picked, f: &mut impl FnMut(bool, &mut f64)) {
+    let Some(ch) = Arc::make_mut(layer).children_mut() else { return };
+    for (i, inner) in held.children {
+        let Some(c) = ch.get_mut(i) else { continue };
+        if !inner.is_empty() {
+            edit_picked(c, inner, f);
+        } else if let NodeKind::RulerGuide { vertical, pos, .. } = &mut Arc::make_mut(c).kind {
+            f(*vertical, pos);
+        }
+    }
+}
+
+/// `n` picked itself when it is a ruler guide by `is_guide`, else the ruler guides below it
+/// ([`guides_below`]).
+fn guide_or_below(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option<Picked> {
+    if is_guide(n) { Some(Picked::default()) } else { guides_below(n, is_guide) }
+}
+
+/// The ruler guides below `n`, by `is_guide`: those among its members and its opacity-mask art
+/// (each with nothing inside), and the members and mask art holding one further down (with what
+/// they hold), or `None` when there is none. `is_guide` looks at each node below `n` once, and at
+/// nothing inside a ruler guide.
+fn guides_below(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option<Picked> {
+    let mask = n.extras().mask.as_deref().and_then(|m| guide_or_below(&m.art, is_guide)).map(Box::new);
+    let children = n.children().into_iter().flatten().enumerate().filter_map(|(i, c)| guide_or_below(c, is_guide).map(|p| (i, p))).collect();
+    Picked { children, mask }.some()
+}
+
+/// Remove the ruler guides below `n` that [`guides_below`] `found`, in its members and its
+/// opacity-mask art (`n` itself stays). Mask art that is a ruler guide becomes an empty group.
+/// Only the nodes holding one are copied, and only those are visited. Returns how many went.
+fn drop_guides_below(n: &mut Node, found: Picked) -> usize {
+    let mut gone = drop_mask_guides(n, found.mask);
+    if let Some(ch) = n.children_mut() {
+        let mut found = found.children.into_iter().peekable();
+        let mut next = 0;
+        ch.retain_mut(|c| {
+            let at = next;
+            next += 1;
+            let Some((_, inner)) = found.next_if(|(i, _)| *i == at) else { return true };
+            if inner.is_empty() {
+                gone += 1;
+                return false;
+            }
+            gone += drop_guides_below(Arc::make_mut(c), inner);
+            true
+        });
     }
     gone
 }
 
-/// Remove every ruler guide in the opacity-mask art of `n`. Mask art that is a ruler guide
-/// becomes an empty group. Returns how many went.
-fn drop_mask_guides(n: &mut Node) -> usize {
+/// Remove the ruler guides `found` in the opacity-mask art of `n` ([`guides_below`]'s mask
+/// part). Mask art that is a ruler guide becomes an empty group. Returns how many went.
+fn drop_mask_guides(n: &mut Node, found: Option<Box<Picked>>) -> usize {
+    let Some(found) = found else { return 0 };
     let Some(mask) = n.extras_if_any().and_then(|e| e.mask.as_deref_mut()) else { return 0 };
-    if mask.art.is_ruler_guide() {
+    if found.is_empty() {
         mask.art = Arc::new(Node::group(mask.art.id, vec![]));
         1
-    } else if any_guide(&mask.art) {
-        drop_guides_below(Arc::make_mut(&mut mask.art))
     } else {
-        0
+        drop_guides_below(Arc::make_mut(&mut mask.art), *found)
     }
 }
 
-/// Does layer `l` hold a ruler guide out of place: below art, in an object or in mask art, or so
-/// in one of its sublayers?
-fn layer_untidy(l: &Node) -> bool {
-    let Some(ch) = l.children() else { return false };
-    let start = Node::guide_run_start(ch);
-    l.extras().mask.as_deref().is_some_and(|m| any_guide(&m.art))
-        || ch.iter().take(start).any(|c| c.is_ruler_guide() || if c.is_layer() { layer_untidy(c) } else { any_guide(c) })
+/// The ruler guides, by `is_guide`, that layer `l` holds out of place, or `None` when it holds
+/// none: those below art (each with nothing inside), those in its mask art and in its objects
+/// ([`guides_below`]), and its sublayers holding one out of place (with what they hold).
+/// `is_guide` looks at each node once; the guides at the end of a layer are in place and are
+/// not looked at.
+fn untidy(l: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option<Picked> {
+    let ch = l.children()?;
+    let mask = l.extras().mask.as_deref().and_then(|m| guide_or_below(&m.art, is_guide)).map(Box::new);
+    let children = ch
+        .iter()
+        .enumerate()
+        .take(Node::guide_run_start(ch))
+        .filter_map(|(i, c)| {
+            let found = if is_guide(c) {
+                Some(Picked::default())
+            } else if c.is_layer() {
+                untidy(c, is_guide)
+            } else {
+                guides_below(c, is_guide)
+            };
+            found.map(|p| (i, p))
+        })
+        .collect();
+    Picked { children, mask }.some()
 }
 
-/// [`Document::tidy_ruler_guides`] for layer `l`. Returns how many guides were removed.
-fn tidy_layer(l: &mut Node) -> usize {
-    let mut gone = drop_mask_guides(l);
+/// [`Document::tidy_ruler_guides`] for layer `l`, whose guides out of place [`untidy`] `found`.
+/// Only the nodes holding one are copied, and only those are visited. Returns how many guides
+/// were removed.
+fn tidy_layer(l: &mut Node, found: Picked) -> usize {
+    let mut gone = drop_mask_guides(l, found.mask);
     let Some(ch) = l.children_mut() else { return gone };
-    for c in ch.iter_mut() {
-        if c.is_layer() {
-            if layer_untidy(c) {
-                gone += tidy_layer(Arc::make_mut(c));
-            }
-        } else if !c.is_ruler_guide() && any_guide(c) {
-            gone += drop_guides_below(Arc::make_mut(c));
+    let mut below_art = false;
+    for (i, inner) in found.children {
+        let Some(c) = ch.get_mut(i) else { continue };
+        if inner.is_empty() {
+            below_art = true;
+        } else if c.is_layer() {
+            gone += tidy_layer(Arc::make_mut(c), inner);
+        } else {
+            gone += drop_guides_below(Arc::make_mut(c), inner);
         }
     }
-    if ch.iter().take(Node::guide_run_start(ch)).any(|c| c.is_ruler_guide()) {
+    if below_art {
         let (guides, art): (Vec<_>, Vec<_>) = std::mem::take(ch).into_iter().partition(|c| c.is_ruler_guide());
         *ch = art;
         ch.extend(guides);
@@ -696,5 +773,288 @@ impl PartialEq for GuideCache {
 impl std::fmt::Debug for GuideCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("GuideCache")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Appearance, OpacityMask, Symbol};
+    use std::cell::Cell;
+    use vectorcraft_geom::shapes;
+
+    /// The sublayers in [`nested`]'s chain: with the top-level layer around them and the objects in
+    /// the innermost, the deepest a document goes ([`crate::MAX_DEPTH`]).
+    const CHAIN: u64 = 30;
+
+    fn rect(id: u64) -> Arc<Node> {
+        Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art()))
+    }
+
+    fn guide(id: u64, artboard: Option<u32>) -> Arc<Node> {
+        Arc::new(Node::new(NodeId(id), NodeKind::RulerGuide { vertical: false, pos: id as f64, artboard }))
+    }
+
+    fn group(id: u64, children: Vec<Arc<Node>>) -> Arc<Node> {
+        Arc::new(Node::group(NodeId(id), children))
+    }
+
+    /// `n` with `art` as its opacity-mask art.
+    fn masked(n: Arc<Node>, art: Arc<Node>) -> Arc<Node> {
+        let mut n = (*n).clone();
+        n.extras_mut().mask = Some(Box::new(OpacityMask { art, clip: true, invert: false, disabled: false, linked: true }));
+        Arc::new(n)
+    }
+
+    /// A sublayer like a new document's first layer, holding `children`.
+    fn sublayer(id: u64, children: Vec<Arc<Node>>) -> Arc<Node> {
+        let mut l = (*Document::new(1.0, 1.0).layers[0]).clone();
+        l.id = NodeId(id);
+        if let Some(ch) = l.children_mut() {
+            *ch = children;
+        }
+        Arc::new(l)
+    }
+
+    /// A document whose first layer holds `children`.
+    fn doc(children: Vec<Arc<Node>>) -> Document {
+        let mut d = Document::new(100.0, 100.0);
+        if let Some(ch) = d.layers.first_mut().and_then(|l| Arc::make_mut(l).children_mut()) {
+            *ch = children;
+        }
+        d
+    }
+
+    /// The ids of the nodes in the layers, in tree order.
+    fn ids(d: &Document) -> Vec<u64> {
+        fn walk(n: &Node, out: &mut Vec<u64>) {
+            out.push(n.id.0);
+            for c in n.children().into_iter().flatten() {
+                walk(c, out);
+            }
+        }
+        let mut out = vec![];
+        for l in &d.layers {
+            walk(l, &mut out);
+        }
+        out
+    }
+
+    /// [`CHAIN`] sublayers, each inside the one before and holding an object, a canvas guide and a
+    /// guide of artboard 7 (the innermost: object 150, guides 200 and 201). Beside the chain, a
+    /// sublayer with a canvas guide only. Returns the document and that sublayer.
+    fn nested() -> (Document, Arc<Node>) {
+        let mut chain = sublayer(100, vec![rect(150), guide(200, None), guide(201, Some(7))]);
+        for depth in 1..CHAIN {
+            chain = sublayer(100 + depth, vec![rect(600 + depth), chain, guide(300 + depth * 2, None), guide(301 + depth * 2, Some(7))]);
+        }
+        let still = sublayer(500, vec![rect(502), guide(501, None)]);
+        (doc(vec![chain, Arc::clone(&still)]), still)
+    }
+
+    /// How many children the layers of [`nested`] hold: the first layer's 2, the untouched
+    /// sublayer's 2, the innermost sublayer's 3 and 4 in each sublayer around it.
+    const NESTED_CHILDREN: usize = 2 + 2 + 3 + (CHAIN as usize - 1) * 4;
+
+    fn on_artboard_7(n: &Node) -> bool {
+        matches!(n.kind, NodeKind::RulerGuide { artboard: Some(7), .. })
+    }
+
+    #[test]
+    fn removing_guides_looks_at_each_child_of_nested_layers_once() {
+        let (mut d, still) = nested();
+        assert!(!d.clone().limit_depth(), "the chain is as deep as a document goes");
+        let mut deeper = doc(vec![sublayer(999, d.layers[0].children().cloned().unwrap_or_default())]);
+        assert!(deeper.limit_depth(), "a document nested deeper is brought within the cap when it is read");
+        let mut whole = d.clone();
+        let looked = Cell::new(0_usize);
+        let pick = |n: &Node| {
+            looked.set(looked.get() + 1);
+            on_artboard_7(n)
+        };
+        let held = picked_in_layers(&d.layers[0], &pick).unwrap();
+        assert_eq!(looked.get(), NESTED_CHILDREN, "each child of the layers is looked at once");
+        drop_picked(&mut d.layers[0], held);
+        assert_eq!(looked.get(), NESTED_CHILDREN, "removing looks at nothing again");
+        assert!(d.layers[0].children().is_some_and(|c| Arc::ptr_eq(&c[1], &still)), "a sublayer with nothing to remove is not copied");
+
+        // The command's own entry point removes the same guides.
+        let before = whole.clone();
+        let mut sel = Selection::default();
+        sel.set_guides([NodeId(200), NodeId(201), NodeId(501)]);
+        sel.objects.push(NodeId(150));
+        sel.key_guide = Some(NodeId(201));
+        assert_eq!(whole.retain_guides(&mut sel, |g| g.artboard != Some(7)), CHAIN as usize);
+        assert_eq!(ids(&whole), ids(&d));
+        assert_eq!(ids(&whole).len(), ids(&before).len() - CHAIN as usize);
+        assert!(whole.ruler_guides().iter().all(|g| g.artboard.is_none()));
+        assert_eq!(whole.ruler_guides().len(), CHAIN as usize + 1);
+        assert_eq!((sel.objects.as_slice(), sel.guides.as_slice(), sel.key_guide), (&[NodeId(150)][..], &[NodeId(200), NodeId(501)][..], None));
+        assert!(whole.layers[0].children().is_some_and(|c| Arc::ptr_eq(&c[1], &still)));
+        // The document as it was (an undo step's copy) still holds every guide.
+        assert_eq!(before.ruler_guides().len(), CHAIN as usize * 2 + 1);
+
+        // Saving the guides as a list, and removing a layer but not its guides, take the guides
+        // out of the nested layers too.
+        let mut saved = before.clone();
+        saved.guides_to_saved();
+        assert_eq!(saved.saved_guides, before.ruler_guides());
+        assert_eq!(ids(&saved).len(), 1 + CHAIN as usize * 2 + 2);
+        assert!(saved.layers[0].children().is_some_and(|c| !Arc::ptr_eq(&c[1], &still) && c[1].children().is_some_and(|c| c.len() == 1)));
+        let mut edited = before.clone();
+        let chain = edited.remove_edit_layer(NodeId(100 + CHAIN - 1)).unwrap();
+        assert!(!chain.holds_ruler_guides());
+        assert_eq!(edited.ruler_guides().len(), before.ruler_guides().len(), "the removed layer's guides stay in the document");
+        assert_eq!(edited.guides_on(edited.layers[0].id).len(), CHAIN as usize * 2);
+
+        // Keeping every guide changes nothing and copies no layer.
+        let kept = whole.clone();
+        assert_eq!(whole.retain_guides(&mut sel, |_| true), 0);
+        assert!(Arc::ptr_eq(&whole.layers[0], &kept.layers[0]));
+        // Removing every guide leaves the objects.
+        assert_eq!(whole.retain_guides(&mut sel, |_| false), CHAIN as usize + 1);
+        assert!(whole.ruler_guides().is_empty() && sel.guides.is_empty());
+        assert_eq!(ids(&whole).len(), 1 + CHAIN as usize * 2 + 2);
+        assert_eq!(sel.objects, [NodeId(150)]);
+        // A document without layers, and one without guides, have nothing to remove.
+        let mut empty = Document::new(10.0, 10.0);
+        assert_eq!(empty.retain_guides(&mut sel, |_| false), 0);
+        empty.layers.clear();
+        assert_eq!(empty.retain_guides(&mut sel, |_| false), 0);
+    }
+
+    #[test]
+    fn moving_an_artboards_guides_looks_at_each_child_of_nested_layers_once() {
+        let (mut d, still) = nested();
+        let mut whole = d.clone();
+        let looked = Cell::new(0_usize);
+        let pick = |n: &Node| {
+            looked.set(looked.get() + 1);
+            on_artboard_7(n)
+        };
+        let held = picked_in_layers(&d.layers[0], &pick).unwrap();
+        assert_eq!(looked.get(), NESTED_CHILDREN, "each child of the layers is looked at once");
+        let mut seen = vec![];
+        edit_picked(&mut d.layers[0], held, &mut |vertical, pos: &mut f64| {
+            seen.push((vertical, *pos));
+            *pos += 9.0;
+        });
+        assert_eq!(looked.get(), NESTED_CHILDREN, "changing looks at nothing again");
+        // A sublayer comes before its layer's own guides, so the innermost guide is changed first.
+        let order: Vec<(bool, f64)> = [201.0].into_iter().chain((1..CHAIN).map(|depth| (301 + depth * 2) as f64)).map(|pos| (false, pos)).collect();
+        assert_eq!(seen, order, "each guide of the artboard is changed once, in the order the guides lie in");
+        assert!(d.layers[0].children().is_some_and(|c| Arc::ptr_eq(&c[1], &still)), "a sublayer with no guide of the artboard is not copied");
+
+        // The public moves change the same guides by the same amount.
+        let before = whole.clone();
+        whole.move_artboard_guides(7, Vec2::new(5.0, 9.0));
+        assert_eq!(whole, d);
+        assert_eq!(ids(&whole), ids(&before));
+        for g in whole.ruler_guides() {
+            let id = g.id.map_or(0, |id| id.0) as f64;
+            assert_eq!(g.pos, if g.artboard == Some(7) { id + 9.0 } else { id }, "guide {id}");
+        }
+        assert!(whole.layers[0].children().is_some_and(|c| Arc::ptr_eq(&c[1], &still)));
+        assert_eq!(before.ruler_guide(NodeId(201)).map(|g| g.pos), Some(201.0), "the document as it was keeps its guides");
+        whole.map_artboard_guides(7, Affine::scale(2.0));
+        assert_eq!(whole.ruler_guide(NodeId(201)).map(|g| g.pos), Some(420.0));
+        assert_eq!(whole.ruler_guide(NodeId(200)).map(|g| g.pos), Some(200.0), "a canvas guide stays");
+
+        // An artboard without guides, and a document without layers, change nothing and copy no layer.
+        let kept = whole.clone();
+        whole.move_artboard_guides(99, Vec2::new(5.0, 9.0));
+        assert!(Arc::ptr_eq(&whole.layers[0], &kept.layers[0]));
+        let mut empty = Document::new(10.0, 10.0);
+        empty.layers.clear();
+        empty.move_artboard_guides(7, Vec2::new(5.0, 9.0));
+        assert!(empty.layers.is_empty());
+    }
+
+    #[test]
+    fn guides_in_objects_are_found_by_looking_at_each_node_once() {
+        // Groups, each inside the one before and holding an object and a guide. Beside them, an
+        // object whose mask art holds a guide, one whose mask art is a guide, and a group with none.
+        let mut chain = group(100, vec![rect(150), guide(200, None)]);
+        for depth in 1..CHAIN {
+            chain = group(100 + depth, vec![rect(600 + depth), chain, guide(300 + depth, None)]);
+        }
+        let still = group(700, vec![rect(701)]);
+        let root = group(
+            1,
+            vec![chain, masked(rect(800), group(801, vec![guide(802, None), rect(803)])), masked(rect(810), guide(811, None)), Arc::clone(&still)],
+        );
+        let looked = Cell::new(0_usize);
+        let is_guide = |n: &Node| {
+            looked.set(looked.get() + 1);
+            n.is_ruler_guide()
+        };
+        // The chain's groups, objects and guides; a masked object, its mask group and the two in
+        // it; a masked object and its mask guide; the last group and its object.
+        let nodes = CHAIN as usize * 3 + 4 + 2 + 2;
+        let found = guides_below(&root, &is_guide).unwrap();
+        assert_eq!(looked.get(), nodes, "each node below the root is looked at once");
+        let mut cleared = (*root).clone();
+        assert_eq!(drop_guides_below(&mut cleared, found), CHAIN as usize + 2);
+        assert_eq!(looked.get(), nodes, "removing looks at nothing again");
+        assert!(guides_below(&cleared, &Node::is_ruler_guide).is_none());
+        let ch = cleared.children().unwrap();
+        assert!(Arc::ptr_eq(&ch[3], &still), "a group without guides is not copied");
+        assert_eq!(
+            ch[1].extras().mask.as_deref().map(|m| m.art.children().map(|c| c.iter().map(|c| c.id.0).collect::<Vec<_>>())),
+            Some(Some(vec![803]))
+        );
+        assert_eq!(ch[2].extras().mask.as_deref().map(|m| (m.art.id, m.art.children().map(Vec::len))), Some((NodeId(811), Some(0))));
+
+        // Opening a file removes the same guides from an object on a layer and from a symbol's art.
+        let mut d = doc(vec![Arc::clone(&root), guide(900, None)]);
+        d.symbols = vec![Symbol { name: "s".into(), art: Arc::clone(&root), dynamic: false }];
+        assert_eq!(d.tidy_ruler_guides(), (CHAIN as usize + 2) * 2);
+        assert_eq!(d.layers[0].children().map(|c| (*c[0]).clone()), Some(cleared.clone()));
+        assert_eq!(*d.symbols[0].art, cleared);
+        assert_eq!(d.ruler_guides().iter().map(|g| g.id).collect::<Vec<_>>(), [Some(NodeId(900))]);
+    }
+
+    #[test]
+    fn guides_out_of_place_are_found_by_looking_at_each_node_once() {
+        // Sublayers, each inside the one before, with their guides in place; the innermost also
+        // holds a guide below its art. Beside them, a group holding a guide, a sublayer with its
+        // guide in place, and a sublayer whose mask art holds a guide.
+        let mut chain = sublayer(100, vec![guide(200, None), rect(150), guide(201, None)]);
+        for depth in 1..CHAIN {
+            chain = sublayer(100 + depth, vec![rect(600 + depth), chain, guide(300 + depth, None)]);
+        }
+        let still = sublayer(500, vec![rect(502), guide(501, None)]);
+        let with_mask = masked(sublayer(510, vec![rect(513)]), group(511, vec![guide(512, None)]));
+        let mut d = doc(vec![chain, group(700, vec![rect(701), guide(702, None)]), Arc::clone(&still), with_mask, guide(900, None)]);
+        let mut whole = d.clone();
+        let looked = Cell::new(0_usize);
+        let is_guide = |n: &Node| {
+            looked.set(looked.get() + 1);
+            n.is_ruler_guide()
+        };
+        // Below the guides at the end of each layer: the first layer's 4, the group's 2, the
+        // untouched sublayer's 1, the masked sublayer's mask group, its guide and the object, 2 in
+        // the innermost sublayer and 2 in each sublayer around it.
+        let nodes = 4 + 2 + 1 + 3 + 2 + (CHAIN as usize - 1) * 2;
+        let found = untidy(&d.layers[0], &is_guide).unwrap();
+        assert_eq!(looked.get(), nodes, "each node below the guides in place is looked at once");
+        assert_eq!(tidy_layer(Arc::make_mut(&mut d.layers[0]), found), 2);
+        assert_eq!(looked.get(), nodes, "tidying looks at nothing again");
+        assert!(d.layers[0].children().is_some_and(|c| Arc::ptr_eq(&c[2], &still)), "a sublayer with its guides in place is not copied");
+        assert!(untidy(&d.layers[0], &Node::is_ruler_guide).is_none());
+
+        // Opening a file does the same.
+        let before = whole.clone();
+        assert_eq!(whole.tidy_ruler_guides(), 2);
+        assert_eq!(whole, d);
+        let all = ids(&whole);
+        assert!(!all.contains(&702) && all.len() == ids(&before).len() - 1);
+        let innermost = whole.node(NodeId(100)).and_then(|n| n.children()).map(|c| c.iter().map(|c| c.id.0).collect::<Vec<_>>());
+        assert_eq!(innermost, Some(vec![150, 200, 201]), "a guide below art moves up to the other guides");
+        assert!(whole.node(NodeId(510)).is_some_and(|n| n.extras().mask.as_deref().is_some_and(|m| m.art.children().is_some_and(Vec::is_empty))));
+        // A tidy document is left alone, and no layer is copied.
+        let kept = whole.clone();
+        assert_eq!(whole.tidy_ruler_guides(), 0);
+        assert!(Arc::ptr_eq(&whole.layers[0], &kept.layers[0]));
     }
 }

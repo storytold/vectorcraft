@@ -234,6 +234,14 @@ the suite) keep the agent to the folders you give it:
   file outside the read roots by its file name alone in `files`, as `document.json` does, and `removeFile` takes that
   name for it (see SVG interactivity). In a frame a request drives, the JavaScript Files dialog lists such a file by
   its file name, and `ui_inspect` gives the file selected in the dialog the same way.
+- An SVG or SVGZ of a document that links a JavaScript file outside the read roots (SVG Interactivity's files: a
+  path, a `file:` URL, or a relative path taken from the document's folder) is refused with "a linked JavaScript
+  file is outside the read roots", which names no file or folder: `document.serialize`, `document.export` (MCP's
+  `export`), `document.exportSelection`, `document.exportForScreens` and `assets.export` (before the folder is
+  made or any row is written), `document.save`, `file.save`, `file.saveAs` and `file.saveCopy` (also a save
+  without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
+  Show Code. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
+  person at the keyboard exports it as stored.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
   folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
@@ -794,6 +802,16 @@ The other commands given a series group's id edit the group itself, and the grap
 `transparency.set` and `object.setProps` with an opacity or blend mode for the object, the `effect.*` commands and
 `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
 group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
+
+The graph draws the art of a column or marker design in a series again from the design, so the commands that add,
+change, move or remove fill and stroke rows, effects or graphic styles leave that art out: the `appearance.*` commands
+listed above, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit, move or remove an
+effect, `graphicStyle.apply` (and `graphicStyle.addFromLibrary` with `apply`), `transparency.set` with a fill or stroke
+`item`, and `appearance.copyFrom` as the target. The art is any object inside a series group other than a path directly
+in it, whether given by id, selected, or reached through `target: "contents"`. The commands edit the other objects they
+are given, and a command whose objects are all design art is an error. `appearance.transfer` with design art as its
+`target`, or as its `source` without `copy`, is an error. The paint commands leave the art out as well, without an
+error. To change the art, edit the design with `graph.design`.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
@@ -4979,7 +4997,8 @@ more than one linked file (two such files, or such a file and a file linked as t
 error and unlinks nothing. `ui.javascriptFilesDialog {}`
 opens the JavaScript Files dialog, whose Choose… puts a picked file in as a `file:///` URL. SVG export writes each event
 as an event attribute on the object's element (`onclick="…"`; with the SVG Tiny 1.2 profile it leaves them out with a
-warning) and each file as `<script xlink:href>`. SVG import reads the event attributes the panel lists and the
+warning) and each file as `<script xlink:href>`, as stored; for a caller with automation read roots, an SVG or SVGZ
+of a document that links a file outside them is refused (see the read roots above). SVG import reads the event attributes the panel lists and the
 `<script>` links back as text; it never reads a script file or runs a script, and leaves inline scripts and the links
 after the first 64 out with a warning. An unnamed `<g>` with event attributes of its own stays a group, apart from the object in
 it. The native format keeps the events and the files.

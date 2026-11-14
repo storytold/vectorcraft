@@ -4430,6 +4430,7 @@ axis	Both	Обидві
 @msg	Plug-ins can't be loaded from {path}: {e}	Не вдається завантажити модулі з {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	виділіть прямим виділенням опорні точки для розрізу (не кінцеві точки відкритих контурів)
 @msg	Divide Objects Below: select a path	Поділ об’єктів нижче: виділіть контур
+@msg	select a path	виділіть контур
 @msg	Divide Objects Below: select exactly one path	Поділ об’єктів нижче: виділіть рівно один контур
 @msg	Downloaded {what}	Завантажено: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Розбір оформлення: виділення основне оформлення
@@ -5189,6 +5190,8 @@ axis	Both	Обидві
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вбудоване зображення {_1} × {_2} пікселів зменшено до {_3} × {_4} пікселів, щоб зберегти шари
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	пов’язані зображення показуються як збережений у файлі перегляд низької роздільності, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»
 @msg	linked type areas past VectorCraft's limits were left out	пов’язані текстові області понад обмеження VectorCraft пропущено
+@msg	the Line Breaking setting of legacy type was left out	налаштування розриву рядків тексту старого формату пропущено
+@msg	the Japanese layout rules of legacy type were left out	японські правила верстки тексту старого формату пропущено
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, що змінює напрямок письма всередині текстового об’єкта, відкривається в напрямку свого першого символу
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, використаний як маска у пов’язаних областях, тексті з обтіканням або складеному контурі, не обрізає
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	пов’язані зображення без перегляду у файлі показуються як заповнювач, доки їхні файли не знайдено: відновіть зв’язки на панелі «Зв’язки»

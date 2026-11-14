@@ -4595,6 +4595,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	direct-select anchor points to cut at (not the end points of open paths)	ダイレクト選択ツールで、カットする位置のアンカーポイントを選択してください (オープンパスの端点を除く)
 @msg	select paths or anchor points	パスまたはアンカーポイントを選択してください
 @msg	Divide Objects Below: select a path	背面のオブジェクトで型抜き: パスを選択してください
+@msg	select a path	パスを選択してください
 @msg	Divide Objects Below: select exactly one path	背面のオブジェクトで型抜き: パスを 1 つだけ選択してください
 @msg	Offset Path: select paths	パスのオフセット: パスを選択してください
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	パスのオフセット: オフセットすると選択したパスが何も残りません (内側へのオフセットがシェイプより大きい)
@@ -4738,6 +4739,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	レイヤーを保持するため、{_1} × {_2} ピクセルの埋め込み画像を {_3} × {_4} ピクセルに縮小しました
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	リンク画像は、元のファイルが見つかるまで、ファイルに保存された低解像度のプレビューで表示されます：リンクパネルで再リンクしてください
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft の上限を超えるリンクされたテキストエリアは省略されました
+@msg	the Line Breaking setting of legacy type was left out	旧形式のテキストの行分割の設定は読み込まれませんでした
+@msg	the Japanese layout rules of legacy type were left out	旧形式のテキストの日本語組版ルールは読み込まれませんでした
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	テキストオブジェクト内で書字方向が変わる文字は、最初の文字の方向で開きます
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	リンクされたエリア、テキストの回り込み、複合パス内でマスクとして使われた文字はクリップしません
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	ファイルにプレビューのないリンク画像は、元のファイルが見つかるまでプレースホルダーで表示されます：リンクパネルで再リンクしてください

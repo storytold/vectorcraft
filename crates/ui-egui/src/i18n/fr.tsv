@@ -4383,6 +4383,7 @@ axis	Both	Les deux
 @msg	Plug-ins can't be loaded from {path}: {e}	Impossible de charger les plug-ins depuis {path} ({e})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	sélectionnez avec l’outil Sélection directe les points d’ancrage où couper (pas les extrémités des tracés ouverts)
 @msg	Divide Objects Below: select a path	Diviser les objets inférieurs : sélectionnez un tracé
+@msg	select a path	sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
 @msg	Downloaded {what}	{what} téléchargé
 @msg	Expand Appearance: the selection has a basic appearance	Décomposer l’aspect : la sélection a un aspect de base
@@ -5140,6 +5141,8 @@ axis	Both	Les deux
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	une image incorporée de {_1} × {_2} pixels a été réduite à {_3} × {_4} pixels pour conserver les calques
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	linked type areas past VectorCraft's limits were left out	les zones de texte liées au-delà des limites de VectorCraft ont été omises
+@msg	the Line Breaking setting of legacy type was left out	le réglage de coupure de ligne du texte à l’ancien format a été omis
+@msg	the Japanese layout rules of legacy type were left out	les règles de composition japonaise du texte à l’ancien format ont été omises
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	le texte qui change de sens d’écriture dans un objet texte s’ouvre dans le sens de son premier caractère
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	le texte utilisé comme masque dans des zones liées, un habillage de texte ou un tracé transparent ne découpe pas
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les images liées sans aperçu dans le fichier affichent un espace réservé tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
