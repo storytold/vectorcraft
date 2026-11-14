@@ -7527,6 +7527,7 @@ breakText	Glyphs	Glifák
 @msg	WebP encoding failed: {e}	A WebP-kódolás sikertelen: {e}
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`index` must be a whole number	`index`: egész szám kell
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`: smallThumb, mediumThumb, largeThumb, smallList vagy largeList lehet
 @msg	a line can't run from a point to itself	egy vonal nem futhat egy pontból önmagába
 @msg	a line needs at least two points	egy vonalhoz legalább két pont kell
@@ -7557,6 +7558,7 @@ breakText	Glyphs	Glifák
 @msg	its localized names take more than {_1} KB	a honosított nevei több mint {_1} KB helyet foglalnak
 @msg	its objects are nested too deep ({e})	az objektumai túl mélyen egymásba ágyazottak ({e})
 @msg	its tag table lists the `{_1}` tag more than once	a címketáblája többször is felsorolja ezt a címkét: `{_1}`
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	a túl sok egymást átfedő áttetsző elemet tartalmazó kiütő csoportok PDF-kiütőcsoportként íródnak: az áttetsző elemeik teljesen kiütik azt, amit takarnak
 @msg	not a graphic style library: {e}	nem grafikaistílus-könyvtár: {e}
 @msg	not a swatch library (.vcswatches or .gpl)	nem színminta-könyvtár (.vcswatches vagy .gpl)
 @msg	not a swatch library (format `{_1}`)	nem színminta-könyvtár (formátum: `{_1}`)
