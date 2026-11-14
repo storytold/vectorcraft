@@ -46,6 +46,34 @@ fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     }
 }
 
+#[test]
+fn tamil_resolves_locales_and_uses_one_other_plurals() {
+    let ta = Lang::from_code("ta").expect("ta registered");
+    for tag in ["ta", "ta-IN", "ta_IN.UTF-8", "TA-in", "ta-LK", "ta-SG", "ta-Taml-IN"] {
+        assert_eq!(lang_from_tag(tag), Some(ta), "{tag}");
+    }
+    assert_eq!(ta.name(), "தமிழ்");
+    assert_eq!([0, 1, 2, 21, u64::MAX].map(ta.0.plural), [1, 0, 1, 1, 1]);
+    assert_eq!(tr(ta, "Save"), "சேமி");
+    assert_eq!(tr(ta, "Save As…"), "இவ்வாறு சேமி…");
+    assert_eq!(tr(ta, "Open"), "திற");
+    assert_eq!(tr(ta, "Path"), "பாதை");
+    assert_eq!(tr(ta, "Artboard"), "ஆர்ட்போர்டு");
+    assert_eq!(tr(ta, "Stroke"), "கோடு");
+    let (entries, errors) = parse_entries(ta.0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    for (ctx, src, translation) in entries.iter().filter(|(ctx, _, _)| ctx == "@plural" || ctx == "@msgplural") {
+        let (one, other) = src.split_once('|').expect("one|other source");
+        let forms: Vec<_> = translation.split('|').collect();
+        assert_eq!(forms.len(), 2, "{ctx}: {src}");
+        if ctx == "@plural" {
+            for (n, index) in [(0, 1), (1, 0), (2, 1), (21, 1)] {
+                assert_eq!(trn(ta, n, one, other), forms[index].replace("{n}", &n.to_string()));
+            }
+        }
+    }
+}
+
 /// Every Hindi row uses the terms `docs/localization-hi.md` sets for what its English names:
 /// सेव for saving, स्वॉच for a swatch, क्रॉप for cropping, रिज़ॉल्यूशन for a resolution and पाथ for
 /// a path, never पाठ (a reading), and a number of points is a number (संख्या) in points (पॉइंट).
@@ -853,6 +881,12 @@ fn is_gujarati(c: char) -> bool {
     matches!(c as u32, 0x0A80..=0x0AFF)
 }
 
+/// Tamil letters and signs (the Tamil block and Tamil Supplement).
+#[cfg(feature = "interface-fonts")]
+fn is_tamil(c: char) -> bool {
+    matches!(c as u32, 0x0B80..=0x0BFF | 0x11FC0..=0x11FFF)
+}
+
 /// The UI fonts draw every character the catalogs use, in every family the UI draws text with
 /// (the web build has no system fonts to fall back to). Chinese and Japanese characters come from
 /// the craft-fonts build input, which is optional: without it they are left to the installed
@@ -867,6 +901,7 @@ fn bundled_fonts_cover_the_catalogs() {
     let georgian_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_georgian());
     let devanagari_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Deva"));
     let gujarati_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Gujr"));
+    let tamil_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Taml"));
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -891,6 +926,7 @@ fn bundled_fonts_cover_the_catalogs() {
                         && (georgian_ui_font || !is_georgian(*c))
                         && (devanagari_ui_font || !is_devanagari(*c))
                         && (gujarati_ui_font || !is_gujarati(*c))
+                        && (tamil_ui_font || !is_tamil(*c))
                 })
                 .collect();
             for family in &families {
@@ -1557,8 +1593,8 @@ fn cs() -> Lang {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 20] =
-    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
+const KEEPS_MENU_NAMES: [&str; 21] =
+    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "ta", "uk", "vi", "fi", "tr", "ca"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -4146,8 +4182,8 @@ fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
-    "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl",
+    "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "ta", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr",
+    "ca", "nl",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
