@@ -4859,7 +4859,6 @@ theme	Appearance	Giao diện
 @msg	`answers` must be a list of answers	`answers` phải là một danh sách câu trả lời
 @msg	`answers` has more than {MAX_ANSWERS} answers	`answers` có hơn {MAX_ANSWERS} câu trả lời
 @msg	`answers` is larger than 1 MiB	`answers` lớn hơn 1 MiB
-@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	must be an object with `kind` and `value`	phải là một đối tượng có `kind` và `value`
 @msg	must have exactly `kind` and `value`	phải có đúng `kind` và `value`
 @msg	is an alert's answer, whose `value` must be "ok"	là câu trả lời cho alert, nên `value` phải là "ok"
