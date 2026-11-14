@@ -1958,6 +1958,7 @@ mod tests {
             para_sheets: vec![],
             frames: vec![],
             patterns: HashMap::new(),
+            kinsoku_sets: vec![],
         };
         let aki = |defaults: &[u8], normal: &[u8], run: &[u8]| {
             let s = texts(defaults, normal).style(Some(&read(run).unwrap()));
