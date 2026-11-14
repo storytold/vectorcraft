@@ -4473,8 +4473,8 @@ fn type_the_data_cant_hold_is_written_as_its_outlines() {
     rings.subpaths.extend(shapes::rectangle(Rect::new(120.0, 30.0, 170.0, 70.0)).subpaths);
     holed.kind = vectorcraft_doc::TextKind::Area { frame: rings };
     holed.xf = Affine::IDENTITY;
-    // A carriage return in the characters: a story ends its paragraphs with it. Area type that
-    // flows around a wrap object: the wrap object's settings aren't written.
+    // A carriage return in the characters: a story ends its paragraphs with it. Area type with
+    // wrap shapes and no wrap object: the text document doesn't hold the shapes.
     let returned = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(10.0, 90.0), "A\rB", style(10.0, Color::BLACK));
     let mut wrapped = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::ZERO, "Wrapped round", style(10.0, Color::BLACK));
     wrapped.kind = vectorcraft_doc::TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 60.0)) };
