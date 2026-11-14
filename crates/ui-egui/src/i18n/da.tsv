@@ -5066,6 +5066,7 @@ imageTrace	Outline	Kontur
 @msg	bad trailer	ugyldig trailer
 @msg	balance must be between 0 and 100	balance skal være mellem 0 og 100
 @msg	batch step {_1} (`{id}`) failed: {e}	batchtrin {_1} (`{id}`) mislykkedes: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	handlingstrin {_1} (`{id}`) mislykkedes: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness skal være dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	kan ikke kode dokumentet: {0}
 @msg	can't parse shortcut `{c}`	kan ikke parse genvejen `{c}`
