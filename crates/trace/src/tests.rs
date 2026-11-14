@@ -893,6 +893,35 @@ fn presets_resolve() {
 }
 
 #[test]
+fn presets_have_their_paths_corners_and_noise() {
+    let expected: &[(&str, f64, f64, u32)] = &[
+        ("Default", 50.0, 75.0, 25),
+        ("High Fidelity Photo", 50.0, 50.0, 5),
+        ("Low Fidelity Photo", 50.0, 50.0, 10),
+        ("3 Colors", 50.0, 50.0, 15),
+        ("6 Colors", 50.0, 50.0, 15),
+        ("16 Colors", 50.0, 50.0, 15),
+        ("Shades of Gray", 50.0, 50.0, 15),
+        ("Black and White Logo", 50.0, 75.0, 25),
+        ("Sketched Art", 50.0, 50.0, 20),
+        ("Silhouettes", 50.0, 50.0, 90),
+        ("Line Art", 50.0, 75.0, 20),
+        ("Technical Drawing", 50.0, 100.0, 1),
+        ("Outline", 50.0, 75.0, 20),
+    ];
+    for &(name, paths, corners, noise) in expected {
+        let p = preset(name).unwrap();
+        assert_eq!((p.paths, p.corners, p.noise), (paths, corners, noise), "{name}");
+    }
+    // The color counts stay as they were.
+    let colors: Vec<u32> = ["High Fidelity Photo", "Low Fidelity Photo", "3 Colors", "6 Colors", "16 Colors", "Shades of Gray"]
+        .iter()
+        .map(|n| preset(n).unwrap().colors)
+        .collect();
+    assert_eq!(colors, [64, 20, 3, 6, 16, 8]);
+}
+
+#[test]
 fn params_json_roundtrip_and_partial() {
     let p = preset("6 Colors").unwrap();
     let v = serde_json::to_value(&p).unwrap();
