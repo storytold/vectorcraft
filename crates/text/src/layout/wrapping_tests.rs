@@ -719,6 +719,32 @@ fn a_tabbed_line_stepping_back_ends_at_the_latest_break_read_that_fits() {
     assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 3075), (3075, false));
 }
 
+/// A tabbed line with glyphs stepping back that stops reading at a soft hyphen ending the text ends
+/// there without a hyphen, as a line that reads to the end of the text does.
+#[test]
+fn a_tabbed_line_stepping_back_ends_at_a_final_soft_hyphen_without_a_hyphen() {
+    // The 1,023 spaces and the soft hyphen are the 1,024 breaks the line reads past its overflow.
+    let text = format!("a\ty{}b\u{00AD}", "bz ".repeat(1023));
+    let specs: Vec<_> = text
+        .char_indices()
+        .map(|(byte, ch)| {
+            let adv = match ch {
+                'y' | 'z' => -1.0,
+                ' ' | '\u{00AD}' => 0.0,
+                _ => 1.0,
+            };
+            (byte, ch.len_utf8(), adv, ch)
+        })
+        .collect();
+    let glyphs = synthetic_glyphs(&specs);
+    let len = glyphs.len();
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 10 || end == len;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 30.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (len, false));
+}
+
 /// A long tabbed line with a glyph that steps back ends at the latest break that fits as drawn, even
 /// where a later break than one that does not fit fits again.
 #[test]

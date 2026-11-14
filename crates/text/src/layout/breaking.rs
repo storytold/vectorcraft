@@ -525,9 +525,10 @@ pub(super) fn break_line(
                 // A line with a glyph stepping back stops reading MAX_DRAWN_CHECKS_STEPPING_BACK
                 // breaks past where it first overflowed in the order of its text, and ends at the
                 // latest break read that fits as drawn: each of those breaks is measured one by one.
+                // A soft hyphen ending the text draws no hyphen there, as at the end of the text below.
                 breaks_past_overflow += usize::from(overflowed && back > 0.0);
                 if breaks_past_overflow >= MAX_DRAWN_CHECKS_STEPPING_BACK {
-                    return settle(tabbed, checks(back), (cluster_end, hyphenated), &breaks);
+                    return settle(tabbed, checks(back), (cluster_end, hyphenated && cluster_end < g.len()), &breaks);
                 }
             }
         }
