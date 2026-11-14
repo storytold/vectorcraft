@@ -1757,3 +1757,38 @@ fn a_sublayers_ruler_guide_in_a_hidden_or_locked_group_stays_hidden_or_locked() 
         assert_eq!(guides, [(NodeId(20), !hidden, locked)], "hidden {hidden}, locked {locked}");
     }
 }
+
+/// A group's own Fill + Offset Path below its contents follows the outline of a clip group among
+/// its members, its clipping path, not the clipped art it hides outside that path (#7289).
+#[test]
+fn a_groups_own_fill_follows_a_clip_groups_clipping_path_not_its_hidden_art() {
+    let mut clip = square_at_100();
+    clip.id = NodeId(2);
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    // The clipped art reaches 100 pt past the clipping path on either side.
+    let hidden = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 100.0, 300.0, 200.0)), black());
+    let clipped = Node::new(NodeId(5), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(hidden)], clip: true });
+    let mut g = Node::group(NodeId(10), vec![Arc::new(clipped.clone())]);
+    let mut fill = vectorcraft_doc::FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    fill.effects.push(offset_10());
+    g.appearance.items = vec![AppearanceItem::Fill(fill)];
+    g.appearance.set_contents_at(1);
+    let near = |a: Rect, b: Rect| (a.x0 - b.x0).abs() < 0.5 && (a.y0 - b.y0).abs() < 0.5 && (a.x1 - b.x1).abs() < 0.5 && (a.y1 - b.y1).abs() < 0.5;
+    let expected = Rect::new(90.0, 90.0, 210.0, 210.0);
+
+    let art = evaluate_container(None, &g).unwrap();
+    let ch = art.children().unwrap();
+    assert_eq!(ch.len(), 2, "the fill's art below the clip group");
+    assert_eq!(ch[0].id, NodeId(10));
+    let b = drawn_bounds(&ch[0]).unwrap();
+    assert!(near(b, expected), "the offset fill hugs the clipping path: {b:?}");
+
+    // The clip group itself with that fill: the same outline.
+    let mut own = clipped;
+    own.appearance = g.appearance.clone();
+    assert_eq!(member_shapes(None, &own).len(), 1);
+    let b = member_shapes(None, &own)[0].0.bounds().unwrap();
+    assert!(near(b, Rect::new(100.0, 100.0, 200.0, 200.0)), "the clipping path's region: {b:?}");
+}

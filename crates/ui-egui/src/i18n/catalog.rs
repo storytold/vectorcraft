@@ -13,7 +13,8 @@ pub struct Catalog {
     ids: HashMap<String, String>,
     /// plural messages: `one|other` → forms
     plurals: HashMap<String, Vec<String>>,
-    /// status and error messages without placeholders (`@msg`): English → translation
+    /// status and error messages without placeholders (`@msg`): English, its `{{` and `}}` read as
+    /// `{` and `}` → translation, as written
     messages: HashMap<String, String>,
     /// status and error messages with `{name}` placeholders (`@msg`, and each English form of a
     /// `@msgplural` row), most specific first
@@ -179,11 +180,6 @@ pub fn parse_entries(text: &str) -> (Vec<Entry>, Vec<String>) {
     (entries, errors)
 }
 
-/// Whether an `@msg` source is a template, matched piece by piece, and not a whole message.
-fn is_template(source: &str) -> bool {
-    source.contains('{') || source.contains("}}")
-}
-
 /// Whether a message can be matched against the template `source`: it has literal text and no two
 /// placeholders in a row.
 #[cfg(test)]
@@ -197,7 +193,7 @@ pub fn matchable(source: &str) -> bool {
 #[cfg(test)]
 pub fn unmatchable_rows(text: &str) -> Vec<String> {
     let left_out = |(ctx, src, _): &Entry| match ctx.as_str() {
-        "@msg" => is_template(src) && !matchable(src),
+        "@msg" => src.contains(['{', '}']) && !matchable(src),
         "@msgplural" => src.split('|').any(|english| !matchable(english)),
         _ => false,
     };
@@ -218,13 +214,20 @@ impl Catalog {
                 "@plural" => {
                     c.plurals.insert(src, tr.split('|').map(str::to_string).collect());
                 }
-                "@msg" => {
-                    if is_template(&src) {
-                        c.templates.extend(Template::parse(&src, vec![tr], false));
-                    } else {
-                        c.messages.insert(src, tr);
-                    }
+                "@msg" if !src.contains(['{', '}']) => {
+                    c.messages.insert(src, tr);
                 }
+                "@msg" => match Template::parse(&src, vec![tr], false) {
+                    // A row without placeholders is an exact message, under its text with `{{` and
+                    // `}}` read as literal braces.
+                    Some(Template { pieces, mut forms, .. }) if matches!(pieces.as_slice(), [Piece::Text(_)]) => {
+                        if let (Some(Piece::Text(text)), Some(tr)) = (pieces.into_iter().next(), forms.pop()) {
+                            c.messages.insert(text, tr);
+                        }
+                    }
+                    Some(template) => c.templates.push(template),
+                    None => {}
+                },
                 "@msgplural" => {
                     let forms: Vec<String> = tr.split('|').map(str::to_string).collect();
                     c.templates.extend(src.split('|').filter_map(|english| Template::parse(english, forms.clone(), true)));
@@ -274,8 +277,8 @@ impl Catalog {
         self.templates.iter().find_map(|t| t.captures(s).map(|caps| (t.forms.as_slice(), caps)))
     }
 
-    /// The translation of a status or error message that has an exact `@msg` entry; templates are
-    /// not tried.
+    /// The translation of a status or error message that has an exact `@msg` entry, as written in
+    /// the catalog (`{{` and `}}` for literal braces); templates are not tried.
     pub fn exact_message(&self, s: &str) -> Option<&str> {
         self.messages.get(s).map(String::as_str)
     }
