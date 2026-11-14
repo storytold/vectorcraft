@@ -540,7 +540,8 @@ fn enter_in_a_scripts_file_dialog_denies() {
     let source = "vc.log(Folder.selectDialog('Pick'));";
     menus::run_ui_command(&mut app, "ui.runScript", &json!({ "source": source })).unwrap().unwrap();
     script_runs::poll(&mut app);
-    app.script_picked = vec![folder("enterdeny").to_string_lossy().into_owned()];
+    let dir = folder("enterdeny");
+    app.script_picked = vec![dir.to_string_lossy().into_owned()];
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
@@ -551,6 +552,7 @@ fn enter_in_a_scripts_file_dialog_denies() {
     assert!(app.ui.dialog.as_ref().is_none_or(|d| d.kind != dialogs::script_run::PICKER_KIND), "the dialog closes");
     finish(&mut app);
     assert_eq!(app.session.script_report().unwrap()["log"], json!([null]));
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Enter on the file dialog's focused Choose… button goes to that button, which opens the folder
