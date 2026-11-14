@@ -2573,3 +2573,62 @@ fn context_menu_others_actions_preserve_multiselected_layers() {
     assert!(lock_enabled);
     assert_eq!(lock_params["ids"], json!([l1, l2]));
 }
+
+/// Context menu Others action resolves an object row to its holding top-level layer.
+#[test]
+fn context_menu_others_actions_object_row_resolves_to_holding_layer() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    // Layer 1 (current) holding a rectangle.
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let rect_id = rect["id"].as_u64().unwrap();
+
+    // Create Layer 2 and hide it.
+    let l2 = app.session.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("layer.setProps", &json!({"ids": [l2], "visible": false})).unwrap();
+
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 2);
+
+    // Right-clicking the object in Layer 1: Layer 1 is visible, Layer 2 is hidden.
+    // There are no other visible layers, so the action should be Show All Layers, enabled.
+    let (hide_cmd, _hide_params, hide_enabled) = super::rows::multi_others_action(doc, &[rect_id], true);
+    assert_eq!(hide_cmd, "layer.showAll");
+    assert!(hide_enabled, "Show All Layers is enabled because Layer 2 is hidden");
+
+    // Now make Layer 2 visible, but lock it.
+    app.session.execute("layer.setProps", &json!({"ids": [l2], "visible": true, "locked": true})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    // Right-clicking the object in Layer 1: Layer 1 is unlocked, Layer 2 is locked.
+    // There are no other unlocked layers, so the action should be Unlock All Layers, enabled.
+    let (lock_cmd, _lock_params, lock_enabled) = super::rows::multi_others_action(doc, &[rect_id], false);
+    assert_eq!(lock_cmd, "layer.unlockAll");
+    assert!(lock_enabled, "Unlock All Layers is enabled because Layer 2 is locked");
+}
+
+/// Context menu Show/Unlock All Layers are enabled when sublayers are hidden or locked.
+#[test]
+fn context_menu_others_actions_sublayer_state_enables_all_commands() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert_eq!(doc.layers.len(), 1);
+    let l1 = doc.layers[0].id.0;
+
+    // Create a sublayer in Layer 1.
+    let sub = app.session.execute("layer.newSublayer", &json!({"parent": l1})).unwrap()["id"].as_u64().unwrap();
+
+    // Case 1: Sublayer is hidden while top layer is visible.
+    app.session.execute("layer.setProps", &json!({"ids": [sub], "visible": false})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let (hide_cmd, _, hide_enabled) = super::rows::multi_others_action(doc, &[l1], true);
+    assert_eq!(hide_cmd, "layer.showAll");
+    assert!(hide_enabled, "hidden sublayer enables Show All Layers");
+
+    // Case 2: Sublayer is visible, but locked while top layer is unlocked.
+    app.session.execute("layer.setProps", &json!({"ids": [sub], "visible": true, "locked": true})).unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    let (lock_cmd, _, lock_enabled) = super::rows::multi_others_action(doc, &[l1], false);
+    assert_eq!(lock_cmd, "layer.unlockAll");
+    assert!(lock_enabled, "locked sublayer enables Unlock All Layers");
+}

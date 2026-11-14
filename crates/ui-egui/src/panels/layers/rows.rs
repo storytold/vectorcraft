@@ -517,14 +517,7 @@ fn row_context_menu(ui: &mut Ui, view: &View, n: &Node, collect_ids: &[u64], out
 /// When any other layer is unlocked (visible), returns `lockOthers` (`hideOthers`) preserving all layers holding
 /// `ids`. When all other layers are locked (hidden) already, returns `unlockAll` (`showAll`).
 pub(crate) fn multi_others_action(doc: &Document, ids: &[u64], eye: bool) -> (String, Value, bool) {
-    let own_layers: std::collections::HashSet<NodeId> = ids
-        .iter()
-        .filter_map(|&id| {
-            let nid = NodeId(id);
-            let own = doc.layer_of(nid);
-            doc.node(nid).map(|n| layer_row(n, own))
-        })
-        .collect();
+    let own_layers: std::collections::HashSet<NodeId> = ids.iter().filter_map(|&id| doc.layer_of(NodeId(id))).collect();
     let has_other_active = if eye {
         doc.layers.iter().any(|l| !own_layers.contains(&l.id) && l.visible)
     } else {
@@ -537,13 +530,22 @@ pub(crate) fn multi_others_action(doc: &Document, ids: &[u64], eye: bool) -> (St
         (false, false) => "layer.unlockAll",
     };
     let enabled = match (eye, has_other_active) {
-        (true, true) => true,
-        (true, false) => doc.layers.iter().any(|l| !l.visible),
-        (false, true) => true,
-        (false, false) => doc.layers.iter().any(|l| l.locked),
+        (true, true) | (false, true) => true,
+        (true, false) => any_layer_state(doc, |n| !n.visible),
+        (false, false) => any_layer_state(doc, |n| n.locked),
     };
     let params = if cmd.ends_with("Others") { json!({ "ids": ids }) } else { json!({}) };
     (cmd.into(), params, enabled)
+}
+
+fn any_layer_state(doc: &Document, pred: impl Fn(&Node) -> bool) -> bool {
+    let mut found = false;
+    doc.walk(|n| {
+        if !found && n.is_layer() && pred(n) {
+            found = true;
+        }
+    });
+    found
 }
 
 /// Alt-clicking row `n`'s eye (`eye`) or lock: Hide Others or Lock Others, every top-level layer
