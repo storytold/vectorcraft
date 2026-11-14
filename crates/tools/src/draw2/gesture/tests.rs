@@ -369,7 +369,7 @@ fn the_freehand_tools_want_every_sample() {
 
 #[test]
 fn alt_shows_the_closing_cursor_and_a_release_with_alt_closes() {
-    let (d, _) = doc_with_rect();
+    let (d, rect) = doc_with_rect();
     let s = Selection::default();
     let p = paint();
     let cx = cx(&d, &s, &p);
@@ -396,18 +396,26 @@ fn alt_shows_the_closing_cursor_and_a_release_with_alt_closes() {
     }
     // With Alt key toggles to Smooth Tool on, Alt lends the Pencil the Smooth tool instead, until
     // a stroke has begun to draw: Alt then neither smooths nor closes, and the cursor stays the Pencil's.
+    // With nothing selected to smooth, the Smooth tool it lends shows Not Allowed.
     let mut t = GestureTool::new("pencil");
     t.set_option("altSmooth", &json!(true));
-    assert_eq!(t.cursor(&cx, at, alt), Cursor::Smooth);
+    assert_eq!(t.cursor(&cx, at, alt), Cursor::NotAllowed);
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 10.0, 5.0));
     assert_eq!(t.cursor(&cx, at, alt), Cursor::Pencil, "a stroke that has begun");
     let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 20.0, 0.0).with_mods(alt));
     assert!(matches!(&acts[0], Action::Preview(_, v) if v["closed"] == false), "{acts:?}");
-    // A smoothing drag keeps the Smooth cursor when Alt is let go.
-    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0).with_mods(alt));
-    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 10.0, 5.0).with_mods(alt));
-    assert_eq!(t.cursor(&cx, at, Mods::default()), Cursor::Smooth, "a smoothing drag");
+    // A smoothing drag keeps the lent cursor when Alt is let go: Smooth with a selected path, Not
+    // Allowed without one.
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    for (sel, c) in [(&s, Cursor::NotAllowed), (&selected, Cursor::Smooth)] {
+        let cx = crate::testutil::cx(&d, sel, &p);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 0.0, 0.0).with_mods(alt));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 10.0, 5.0).with_mods(alt));
+        assert_eq!(t.cursor(&cx, at, Mods::default()), c, "a smoothing drag");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 20.0, 0.0).with_mods(alt));
+    }
 }
 
 #[test]
@@ -2591,6 +2599,117 @@ fn smooth_needs_selection_and_brackets_resize() {
     let mut b = GestureTool::new("blobBrush");
     b.key(&cx, ToolKey::BracketRight, Mods::default());
     assert_eq!(b.options()["size"], 11.0);
+}
+
+/// The Smooth tool shows Not Allowed while no selected path can be smoothed: nothing selected, only
+/// type, a path of two anchors or a locked path. A selected path anywhere, alone or in a selected
+/// group, gives the Smooth cursor wherever the pointer is, and the cursor follows the selection while
+/// the tool stays chosen.
+#[test]
+fn smooth_shows_not_allowed_without_a_selected_path_to_smooth() {
+    use std::sync::Arc;
+    let (mut d, rect) = doc_with_rect();
+    let layer = d.layers[0].id;
+    let line_id = d.alloc_id();
+    let line = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(Point::new(300.0, 300.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(400.0, 300.0)),
+    ]));
+    d.insert(Some(layer), 1, vectorcraft_doc::Node::path(line_id, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let square = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(300.0, 350.0, 350.0, 400.0));
+    let inner = vectorcraft_doc::Node::path(d.alloc_id(), square, vectorcraft_doc::Appearance::default_art());
+    let group = vectorcraft_doc::Node::group(d.alloc_id(), vec![Arc::new(inner)]);
+    let group_id = group.id;
+    d.insert(Some(layer), 2, group).unwrap();
+    let (text_doc, text) = doc_with_area_type();
+    let mut locked = d.clone();
+    locked.node_mut(rect).unwrap().locked = true;
+    let p = paint();
+    let sel = |ids: &[NodeId]| {
+        let mut s = Selection::default();
+        s.set(ids.iter().copied());
+        s
+    };
+    let t = GestureTool::new("smooth");
+    let far = Point::new(480.0, 20.0);
+    let cases: [(&vectorcraft_doc::Document, Selection, Cursor, &str); 7] = [
+        (&d, Selection::default(), Cursor::NotAllowed, "nothing selected"),
+        (&text_doc, sel(&[text]), Cursor::NotAllowed, "type"),
+        (&d, sel(&[line_id]), Cursor::NotAllowed, "a two-anchor path"),
+        (&locked, sel(&[rect]), Cursor::NotAllowed, "a locked path"),
+        (&d, sel(&[rect]), Cursor::Smooth, "a path away from the pointer"),
+        (&d, sel(&[line_id, rect]), Cursor::Smooth, "a path beside one it cannot smooth"),
+        (&d, sel(&[group_id]), Cursor::Smooth, "a group holding a path"),
+    ];
+    for (doc, s, c, what) in &cases {
+        assert_eq!(t.cursor(&cx(doc, s, &p), far, Mods::default()), *c, "{what}");
+    }
+    // The cursor changes as the selection does, with the same tool.
+    let (none, one) = (Selection::default(), sel(&[rect]));
+    for (s, c) in [(&none, Cursor::NotAllowed), (&one, Cursor::Smooth), (&none, Cursor::NotAllowed)] {
+        assert_eq!(t.cursor(&cx(&d, s, &p), Point::new(150.0, 150.0), Mods::default()), c);
+    }
+    // A drag with Not Allowed showing sends nothing.
+    let mut t = GestureTool::new("smooth");
+    let acts = drag(&mut t, &cx(&d, &none, &p), &[(50.0, 150.0), (150.0, 150.0), (250.0, 150.0)], Mods::default());
+    assert!(acts.iter().all(|a| a.is_empty()), "{acts:?}");
+}
+
+/// The Blob Brush's Alt shows Not Allowed with no selected path to smooth, and the Smooth cursor with
+/// one; the Paintbrush's Alt without one keeps the closing cursor, since its release closes the stroke.
+#[test]
+fn borrowed_smooth_shows_not_allowed_without_a_selected_path_to_smooth() {
+    let (d, rect) = doc_with_rect();
+    let none = Selection::default();
+    let mut one = Selection::default();
+    one.set([rect]);
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let at = Point::new(400.0, 400.0);
+    let blob = GestureTool::new("blobBrush");
+    assert_eq!(blob.cursor(&cx(&d, &none, &p), at, alt), Cursor::NotAllowed);
+    assert_eq!(blob.cursor(&cx(&d, &one, &p), at, alt), Cursor::Smooth);
+    assert_eq!(blob.cursor(&cx(&d, &none, &p), at, Mods::default()), Cursor::BlobBrush);
+    let mut pencil = GestureTool::new("pencil");
+    pencil.set_option("altSmooth", &json!(true));
+    assert_eq!(pencil.cursor(&cx(&d, &none, &p), at, alt), Cursor::NotAllowed);
+    assert_eq!(pencil.cursor(&cx(&d, &one, &p), at, alt), Cursor::Smooth);
+    let brush = GestureTool::new("paintbrush");
+    assert_eq!(brush.cursor(&cx(&d, &none, &p), at, alt), Cursor::PaintbrushClose);
+    assert_eq!(brush.cursor(&cx(&d, &one, &p), at, alt), Cursor::Smooth);
+}
+
+/// A Smooth release sends no command while the selection holds no path it can smooth, from the
+/// Smooth tool and from the Blob Brush and Pencil with Alt; with a path selected it smooths.
+#[test]
+fn smoothing_release_sends_nothing_without_a_selected_path_to_smooth() {
+    let (text_doc, text) = doc_with_area_type();
+    let (d, rect) = doc_with_rect();
+    let mut type_only = Selection::default();
+    type_only.set([text]);
+    let mut one = Selection::default();
+    one.set([rect]);
+    let p = paint();
+    let alt = Mods { alt: true, ..Default::default() };
+    let stroke = [(50.0, 150.0), (150.0, 150.0), (250.0, 160.0)];
+    let smooths = |acts: &[Vec<Action>]| acts.iter().flatten().any(|a| matches!(a, Action::Exec(c, _) if c == "path.smoothRegion"));
+    for (id, mods) in [("smooth", Mods::default()), ("blobBrush", alt), ("pencil", alt)] {
+        let tool = || {
+            let mut t = GestureTool::new(id);
+            if id == "pencil" {
+                t.set_option("altSmooth", &json!(true));
+            }
+            t
+        };
+        let mut c = cx(&text_doc, &type_only, &p);
+        c.smart_guides = false;
+        let acts = drag_held(&mut tool(), &c, &stroke, mods);
+        assert!(!smooths(&acts), "{id} with only type selected: {acts:?}");
+        let mut c = cx(&d, &one, &p);
+        c.smart_guides = false;
+        let acts = drag_held(&mut tool(), &c, &stroke, mods);
+        assert!(smooths(&acts), "{id} with a path selected: {acts:?}");
+    }
 }
 
 #[test]
