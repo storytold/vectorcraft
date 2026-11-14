@@ -4943,6 +4943,40 @@ axis	Both	Ambos
 	Gradient (. or Shift+.)	Gradiente (. ou Shift+.)
 	Graph Data	Dados do Gráfico
 	Graph Type	Tipo de Gráfico
+	Graph Options	Opções do Gráfico
+	Left Axis	Eixo Esquerdo
+	Right Axis	Eixo Direito
+	Category Axis	Eixo de Categorias
+	Separate Scales	Escalas Separadas
+	Add Drop Shadow	Adicionar Sombra Projetada
+	Add Legend Across Top	Adicionar Legenda na Parte Superior
+	First Row in Front	Primeira Linha na Frente
+	First Column in Front	Primeira Coluna na Frente
+	Legend	Legenda
+	Column Width	Largura da Coluna
+	Bar Width	Largura da Barra
+	Cluster Width	Largura do Grupo
+	Mark Data Points	Marcar Pontos de Dados
+	Connect Data Points	Conectar Pontos de Dados
+	Edge-to-Edge Lines	Linhas de Borda a Borda
+	Draw Filled Lines	Desenhar Linhas Preenchidas
+	Tick Values	Valores das Marcas
+	Override Calculated Values	Substituir Valores Calculados
+	Divisions	Divisões
+	Tick Marks	Marcas de Escala
+	Tick Marks per Division	Marcas por Divisão
+	Draw Tick Marks Between Labels	Desenhar Marcas entre Rótulos
+	Add Labels	Adicionar Rótulos
+	Maximum must be more than Minimum.	O máximo deve ser maior que o mínimo.
+	Column Graph	Gráfico de Colunas
+	Stacked Column Graph	Gráfico de Colunas Empilhadas
+	Bar Graph	Gráfico de Barras
+	Stacked Bar Graph	Gráfico de Barras Empilhadas
+	Line Graph	Gráfico de Linhas
+	Area Graph	Gráfico de Áreas
+	Scatter Graph	Gráfico de Dispersão
+	Pie Graph	Gráfico de Pizza
+	Radar Graph	Gráfico de Radar
 	New Design	Novo Design
 	Delete Design	Excluir Design
 	Paste Design	Colar Design

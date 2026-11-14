@@ -3824,6 +3824,40 @@ file-filter	Templates	템플릿
 	Gradient (. or Shift+.)	그레이디언트 (. 또는 Shift+.)
 	Graph Data	그래프 데이터
 	Graph Type	그래프 유형
+	Graph Options	그래프 옵션
+	Left Axis	왼쪽 축
+	Right Axis	오른쪽 축
+	Category Axis	범주 축
+	Separate Scales	별도 눈금
+	Add Drop Shadow	드롭 섀도 추가
+	Add Legend Across Top	위쪽에 범례 추가
+	First Row in Front	첫 행을 앞에
+	First Column in Front	첫 열을 앞에
+	Legend	범례
+	Column Width	세로 막대 폭
+	Bar Width	가로 막대 폭
+	Cluster Width	묶음 폭
+	Mark Data Points	데이터 요소 표시
+	Connect Data Points	데이터 요소 연결
+	Edge-to-Edge Lines	가장자리 간 선
+	Draw Filled Lines	채워진 선 그리기
+	Tick Values	눈금 값
+	Override Calculated Values	계산된 값 재정의
+	Divisions	구간
+	Tick Marks	눈금 표시
+	Tick Marks per Division	구간당 눈금 표시
+	Draw Tick Marks Between Labels	레이블 사이에 눈금 표시 그리기
+	Add Labels	레이블 추가
+	Maximum must be more than Minimum.	최대값은 최소값보다 커야 합니다.
+	Column Graph	세로 막대 그래프
+	Stacked Column Graph	누적 세로 막대 그래프
+	Bar Graph	가로 막대 그래프
+	Stacked Bar Graph	누적 가로 막대 그래프
+	Line Graph	선 그래프
+	Area Graph	영역 그래프
+	Scatter Graph	분산형 그래프
+	Pie Graph	원형 그래프
+	Radar Graph	방사형 그래프
 	Graph Design	그래프 디자인
 	Graph Marker	그래프 마커
 	New Design	새 디자인

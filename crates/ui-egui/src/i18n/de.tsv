@@ -1404,6 +1404,40 @@ file-filter	Templates	Vorlagen
 	Graph	Diagramm
 	Graph Data	Diagrammdaten
 	Graph Type	Diagrammtyp
+	Graph Options	Diagrammoptionen
+	Left Axis	Linke Achse
+	Right Axis	Rechte Achse
+	Category Axis	Kategorieachse
+	Separate Scales	Getrennte Skalen
+	Add Drop Shadow	Schlagschatten hinzufügen
+	Add Legend Across Top	Legende oben hinzufügen
+	First Row in Front	Erste Zeile vorne
+	First Column in Front	Erste Spalte vorne
+	Legend	Legende
+	Column Width	Säulenbreite
+	Bar Width	Balkenbreite
+	Cluster Width	Gruppenbreite
+	Mark Data Points	Datenpunkte markieren
+	Connect Data Points	Datenpunkte verbinden
+	Edge-to-Edge Lines	Linien von Kante zu Kante
+	Draw Filled Lines	Gefüllte Linien zeichnen
+	Tick Values	Teilstrichwerte
+	Override Calculated Values	Berechnete Werte überschreiben
+	Divisions	Teilungen
+	Tick Marks	Teilstriche
+	Tick Marks per Division	Teilstriche pro Teilung
+	Draw Tick Marks Between Labels	Teilstriche zwischen Beschriftungen zeichnen
+	Add Labels	Beschriftungen hinzufügen
+	Maximum must be more than Minimum.	Das Maximum muss größer als das Minimum sein.
+	Column Graph	Säulendiagramm
+	Stacked Column Graph	Gestapeltes Säulendiagramm
+	Bar Graph	Balkendiagramm
+	Stacked Bar Graph	Gestapeltes Balkendiagramm
+	Line Graph	Liniendiagramm
+	Area Graph	Flächendiagramm
+	Scatter Graph	Streudiagramm
+	Pie Graph	Kreisdiagramm
+	Radar Graph	Netzdiagramm
 	Graph Design	Diagrammdesign
 	Graph Marker	Diagrammmarkierung
 	New Design	Neues Design

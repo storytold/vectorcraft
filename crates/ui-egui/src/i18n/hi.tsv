@@ -2101,6 +2101,40 @@ antiAlias	Sharp	शार्प
 	Graph Design	ग्राफ़ डिजाइन
 	Graph Marker	ग्राफ़ मार्कर
 	Graph Type	ग्राफ़ टाइप
+	Graph Options	ग्राफ़ विकल्प
+	Left Axis	बायाँ एक्सिस
+	Right Axis	दायाँ एक्सिस
+	Category Axis	श्रेणी एक्सिस
+	Separate Scales	अलग स्केल
+	Add Drop Shadow	ड्रॉप शैडो जोड़ें
+	Add Legend Across Top	ऊपर लेजेंड जोड़ें
+	First Row in Front	पहली पंक्ति आगे
+	First Column in Front	पहला कॉलम आगे
+	Legend	लेजेंड
+	Column Width	कॉलम चौड़ाई
+	Bar Width	बार चौड़ाई
+	Cluster Width	समूह चौड़ाई
+	Mark Data Points	डेटा पॉइंट चिह्नित करें
+	Connect Data Points	डेटा पॉइंट जोड़ें
+	Edge-to-Edge Lines	किनारे से किनारे तक रेखाएँ
+	Draw Filled Lines	भरी हुई रेखाएँ बनाएँ
+	Tick Values	टिक मान
+	Override Calculated Values	परिकलित मानों को बदलें
+	Divisions	विभाजन
+	Tick Marks	टिक चिह्न
+	Tick Marks per Division	प्रति विभाजन टिक चिह्न
+	Draw Tick Marks Between Labels	लेबलों के बीच टिक चिह्न बनाएँ
+	Add Labels	लेबल जोड़ें
+	Maximum must be more than Minimum.	अधिकतम, न्यूनतम से अधिक होना चाहिए।
+	Column Graph	कॉलम ग्राफ़
+	Stacked Column Graph	स्टैक्ड कॉलम ग्राफ़
+	Bar Graph	बार ग्राफ़
+	Stacked Bar Graph	स्टैक्ड बार ग्राफ़
+	Line Graph	लाइन ग्राफ़
+	Area Graph	एरिया ग्राफ़
+	Scatter Graph	स्कैटर ग्राफ़
+	Pie Graph	पाई ग्राफ़
+	Radar Graph	रडार ग्राफ़
 	Graphic	ग्राफिक
 	Graphic Pen	ग्राफ़िक पेन
 	Graphic Pen…	ग्राफ़िक पेन…

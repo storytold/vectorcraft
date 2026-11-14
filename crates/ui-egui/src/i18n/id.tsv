@@ -3331,6 +3331,40 @@ theme	Appearance	Tampilan
 	Create Graph	Buat grafik
 	Graph Data	Data grafik
 	Graph Type	Jenis grafik
+	Graph Options	Opsi grafik
+	Left Axis	Sumbu kiri
+	Right Axis	Sumbu kanan
+	Category Axis	Sumbu kategori
+	Separate Scales	Skala terpisah
+	Add Drop Shadow	Tambahkan bayangan jatuh
+	Add Legend Across Top	Tambahkan legenda di atas
+	First Row in Front	Baris pertama di depan
+	First Column in Front	Kolom pertama di depan
+	Legend	Legenda
+	Column Width	Lebar kolom
+	Bar Width	Lebar batang
+	Cluster Width	Lebar kelompok
+	Mark Data Points	Tandai titik data
+	Connect Data Points	Hubungkan titik data
+	Edge-to-Edge Lines	Garis dari tepi ke tepi
+	Draw Filled Lines	Gambar garis terisi
+	Tick Values	Nilai tanda skala
+	Override Calculated Values	Timpa nilai terhitung
+	Divisions	Pembagian
+	Tick Marks	Tanda skala
+	Tick Marks per Division	Tanda skala per pembagian
+	Draw Tick Marks Between Labels	Gambar tanda skala di antara label
+	Add Labels	Tambahkan label
+	Maximum must be more than Minimum.	Maksimum harus lebih besar dari minimum.
+	Column Graph	Grafik kolom
+	Stacked Column Graph	Grafik kolom bertumpuk
+	Bar Graph	Grafik batang
+	Stacked Bar Graph	Grafik batang bertumpuk
+	Line Graph	Grafik garis
+	Area Graph	Grafik area
+	Scatter Graph	Grafik sebar
+	Pie Graph	Grafik pai
+	Radar Graph	Grafik radar
 	Vector Halftone	Halftone vektor
 	spot	spot
 	Text	Teks

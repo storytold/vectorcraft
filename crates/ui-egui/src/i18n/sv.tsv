@@ -1372,6 +1372,40 @@ font-technology	Variable	Variabla
 	Graph	Diagram
 	Graph Data	Diagramdata
 	Graph Type	Diagramtyp
+	Graph Options	Diagramalternativ
+	Left Axis	Vänster axel
+	Right Axis	Höger axel
+	Category Axis	Kategoriaxel
+	Separate Scales	Separata skalor
+	Add Drop Shadow	Lägg till slagskugga
+	Add Legend Across Top	Lägg till förklaring överst
+	First Row in Front	Första raden längst fram
+	First Column in Front	Första kolumnen längst fram
+	Legend	Förklaring
+	Column Width	Stapelbredd
+	Bar Width	Liggande stapelbredd
+	Cluster Width	Gruppbredd
+	Mark Data Points	Markera datapunkter
+	Connect Data Points	Förbind datapunkter
+	Edge-to-Edge Lines	Linjer från kant till kant
+	Draw Filled Lines	Rita fyllda linjer
+	Tick Values	Skalstrecksvärden
+	Override Calculated Values	Åsidosätt beräknade värden
+	Divisions	Indelningar
+	Tick Marks	Skalstreck
+	Tick Marks per Division	Skalstreck per indelning
+	Draw Tick Marks Between Labels	Rita skalstreck mellan etiketter
+	Add Labels	Lägg till etiketter
+	Maximum must be more than Minimum.	Maximum måste vara större än minimum.
+	Column Graph	Stapeldiagram
+	Stacked Column Graph	Staplat stapeldiagram
+	Bar Graph	Liggande stapeldiagram
+	Stacked Bar Graph	Staplat liggande stapeldiagram
+	Line Graph	Linjediagram
+	Area Graph	Ytdiagram
+	Scatter Graph	Punktdiagram
+	Pie Graph	Cirkeldiagram
+	Radar Graph	Polärdiagram
 	Graph Design	Diagramdesign
 	Graph Marker	Diagrammarkör
 	New Design	Ny design

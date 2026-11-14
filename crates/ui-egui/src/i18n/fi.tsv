@@ -3538,6 +3538,40 @@ theme	Appearance	Ulkoasu
 	Create Graph	Luo kaavio
 	Graph Data	Kaavion tiedot
 	Graph Type	Kaavion tyyppi
+	Graph Options	Kaavion asetukset
+	Left Axis	Vasen akseli
+	Right Axis	Oikea akseli
+	Category Axis	Luokka-akseli
+	Separate Scales	Erilliset asteikot
+	Add Drop Shadow	Lisää pudotusvarjo
+	Add Legend Across Top	Lisää selite ylös
+	First Row in Front	Ensimmäinen rivi edessä
+	First Column in Front	Ensimmäinen sarake edessä
+	Legend	Selite
+	Column Width	Pylvään leveys
+	Bar Width	Palkin leveys
+	Cluster Width	Ryhmän leveys
+	Mark Data Points	Merkitse arvopisteet
+	Connect Data Points	Yhdistä arvopisteet
+	Edge-to-Edge Lines	Viivat reunasta reunaan
+	Draw Filled Lines	Piirrä täytetyt viivat
+	Tick Values	Asteikon arvot
+	Override Calculated Values	Ohita lasketut arvot
+	Divisions	Jaot
+	Tick Marks	Asteikkomerkit
+	Tick Marks per Division	Asteikkomerkkejä jakoa kohden
+	Draw Tick Marks Between Labels	Piirrä asteikkomerkit nimien väliin
+	Add Labels	Lisää nimet
+	Maximum must be more than Minimum.	Suurimman on oltava pienintä suurempi.
+	Column Graph	Pylväskaavio
+	Stacked Column Graph	Pinottu pylväskaavio
+	Bar Graph	Palkkikaavio
+	Stacked Bar Graph	Pinottu palkkikaavio
+	Line Graph	Viivakaavio
+	Area Graph	Aluekaavio
+	Scatter Graph	Hajontakaavio
+	Pie Graph	Ympyräkaavio
+	Radar Graph	Säteittäinen kaavio
 	Vector Halftone	Vektorirasteri
 	spot	spotti
 	Text	Teksti

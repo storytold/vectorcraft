@@ -1759,6 +1759,40 @@ file-filter	Templates	Sablonok
 	Graph	Diagram
 	Graph Data	Diagramadatok
 	Graph Type	Diagramtípus
+	Graph Options	Diagrambeállítások
+	Left Axis	Bal tengely
+	Right Axis	Jobb tengely
+	Category Axis	Kategóriatengely
+	Separate Scales	Külön skálák
+	Add Drop Shadow	Vetett árnyék hozzáadása
+	Add Legend Across Top	Jelmagyarázat felül
+	First Row in Front	Első sor elöl
+	First Column in Front	Első oszlop elöl
+	Legend	Jelmagyarázat
+	Column Width	Oszlopszélesség
+	Bar Width	Sávszélesség
+	Cluster Width	Csoportszélesség
+	Mark Data Points	Adatpontok jelölése
+	Connect Data Points	Adatpontok összekötése
+	Edge-to-Edge Lines	Széltől szélig érő vonalak
+	Draw Filled Lines	Kitöltött vonalak rajzolása
+	Tick Values	Osztásértékek
+	Override Calculated Values	Számított értékek felülírása
+	Divisions	Osztások
+	Tick Marks	Osztásjelek
+	Tick Marks per Division	Osztásjelek osztásonként
+	Draw Tick Marks Between Labels	Osztásjelek a címkék között
+	Add Labels	Címkék hozzáadása
+	Maximum must be more than Minimum.	A maximumnak nagyobbnak kell lennie a minimumnál.
+	Column Graph	Oszlopdiagram
+	Stacked Column Graph	Halmozott oszlopdiagram
+	Bar Graph	Sávdiagram
+	Stacked Bar Graph	Halmozott sávdiagram
+	Line Graph	Vonaldiagram
+	Area Graph	Területdiagram
+	Scatter Graph	Pontdiagram
+	Pie Graph	Kördiagram
+	Radar Graph	Sugárdiagram
 	Select Segments	Szakaszok kijelölése
 	Artistic	Művészi
 	Film Grain…	Filmszemcse…
