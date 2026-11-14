@@ -584,8 +584,9 @@ fn image(id: u64, effects: Vec<Effect>) -> Node {
 /// A group's Transform effect transforms, with Scale Strokes & Effects off or on, the raster
 /// effects that a member's own Transform effect with copies holds back: they keep their value
 /// through the member's effect and transform with the group's. That holds for a shadow listed
-/// before the member's copying effect, one listed after it, a fill's shadow under it, the shadow
-/// of a member of a nested group with such an effect, and an image's shadow.
+/// before the member's copying effect (which each copy carries), one listed after it, a fill's
+/// shadow under it, the shadow of a member of a nested group with such an effect, and an image's
+/// shadow.
 #[test]
 fn a_groups_transform_moves_the_shadows_its_members_copies_hold_back() {
     let copies = || transform(json!({"moveH": 60, "copies": 1}));
@@ -605,7 +606,8 @@ fn a_groups_transform_moves_the_shadows_its_members_copies_hold_back() {
         let art = crate::evaluate_container(None, &g).unwrap();
         for id in [71, 72, 73, 75, 76] {
             let drawn = shadows_in(&node_in(&art, id));
-            assert!(near(&drawn, &[want]), "Scale Strokes & Effects {strokes}: {id} {drawn:?}");
+            let wanted = if id == 71 { vec![want, want] } else { vec![want] };
+            assert!(near(&drawn, &wanted), "Scale Strokes & Effects {strokes}: {id} {drawn:?}");
         }
     }
 }
@@ -840,4 +842,94 @@ fn copying_and_object_disabled_transforms_keep_their_existing_shadow_rules() {
         assert!(!carry.skipped(), "{t:?}");
         assert!(close(drawn_shadow(&effects), (10.0, 5.0, 4.0)), "{t:?}: {:?}", drawn_shadow(&effects));
     }
+}
+
+/// The blur of every Drop Shadow drawn on `n` and the nodes under it, in the order of
+/// [`shadows_in`].
+fn shadow_blurs_in(n: &Node) -> Vec<f64> {
+    let mut out = vec![];
+    n.walk(&mut |m| {
+        let lists = std::iter::once(&m.appearance.effects).chain(m.appearance.items.iter().map(|i| i.effects()));
+        for list in lists {
+            for r in raster_effects(list) {
+                if let RasterFx::DropShadow { blur, .. } = r {
+                    out.push(blur);
+                }
+            }
+        }
+    });
+    out
+}
+
+/// How many paths `n` holds.
+fn paths_in(n: &Node) -> usize {
+    let mut count = 0;
+    n.walk(&mut |m| count += usize::from(matches!(m.kind, vectorcraft_doc::NodeKind::Path { .. })));
+    count
+}
+
+/// A Transform effect that makes copies gives each copy the shadow listed before it, moved, turned,
+/// reflected and scaled with that copy, the last copy lowest: drawn, expanded and baked. The object
+/// itself keeps the shadow as it is, and paints none around all of them. With Scale Strokes &
+/// Effects on, the shadow is not scaled a second time.
+#[test]
+fn each_copy_of_a_transform_effect_carries_the_shadow_listed_before_it() {
+    let cases = [
+        (json!({"moveH": 100, "copies": 2}), vec![(10.0, 0.0), (10.0, 0.0), (10.0, 0.0)], vec![4.0, 4.0, 4.0]),
+        // A turn of 90° counterclockwise on screen takes an offset to the right to one upward.
+        (json!({"rotate": 90, "copies": 2}), vec![(-10.0, 0.0), (0.0, -10.0), (10.0, 0.0)], vec![4.0, 4.0, 4.0]),
+        (json!({"reflectX": true, "moveH": 100, "copies": 1}), vec![(-10.0, 0.0), (10.0, 0.0)], vec![4.0, 4.0]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1}), vec![(20.0, 0.0), (10.0, 0.0)], vec![8.0, 4.0]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1, "strokes": true}), vec![(20.0, 0.0), (10.0, 0.0)], vec![8.0, 4.0]),
+        (json!({"scaleH": 200, "scaleV": 200, "moveH": 100, "copies": 1, "random": true}), vec![(10.0, 0.0), (10.0, 0.0)], vec![4.0, 4.0]),
+    ];
+    for (params, want, blurs) in cases {
+        let n = square(91, vec![shadow(10.0, 0.0, 4.0), transform(params.clone())]);
+        assert!(crate::has_transform_art(&n), "{params}");
+        assert!(crate::outer_effects(&n).iter().all(|e| e.id != "stylize.dropShadow"), "{params}");
+        let random = params["random"].as_bool().unwrap_or(false);
+        for (how, art) in
+            [("drawn", crate::reshape(None, &n, None).unwrap()), ("expanded", expand_outlined(None, &n, None).unwrap()), ("baked", baked(n.clone()))]
+        {
+            let drawn = shadows_in(&art);
+            assert_eq!(paths_in(&art), want.len(), "{params}: {how} {art:?}");
+            if random {
+                // Random scales the copy by a share of the 200 %, and its shadow with it; the object
+                // keeps its own.
+                assert_eq!(drawn.len(), want.len(), "{params}: {how} {drawn:?}");
+                assert!(near(&drawn[1..], &want[1..]), "{params}: {how} {drawn:?}");
+                continue;
+            }
+            assert!(near(&drawn, &want), "{params}: {how} {drawn:?}");
+            let b = shadow_blurs_in(&art);
+            assert!(b.len() == blurs.len() && b.iter().zip(&blurs).all(|(x, y)| (x - y).abs() < 1e-9), "{params}: {how} blurs {b:?}");
+        }
+    }
+}
+
+/// A shadow listed after a Transform effect that makes copies paints once around all of them, and
+/// one listed before it on each copy. A Transform effect that makes no copies, or has Transform
+/// Objects off, leaves the object's shadows on the object.
+#[test]
+fn a_shadow_after_a_copying_transform_paints_once_around_the_copies() {
+    let n = square(92, vec![shadow(10.0, 0.0, 0.0), transform(json!({"rotate": 90, "copies": 1})), shadow(0.0, 5.0, 0.0)]);
+    let art = crate::reshape(None, &n, None).unwrap();
+    assert!(near(&shadows_in(&art), &[(0.0, 5.0), (0.0, -10.0), (10.0, 0.0)]), "{:?}", shadows_in(&art));
+    assert_eq!(crate::outer_effects(&n).len(), 2);
+    for params in [json!({"rotate": 90}), json!({"rotate": 90, "copies": 1, "objects": false})] {
+        let n = square(93, vec![shadow(10.0, 0.0, 0.0), transform(params.clone())]);
+        assert!(!crate::has_transform_art(&n), "{params}");
+        assert_eq!(crate::outer_effects(&n).len(), 2, "{params}");
+    }
+}
+
+/// Copies that stop at the effect budget each keep their shadow: no copy goes without one, and no
+/// shadow is left without its copy.
+#[test]
+fn copies_past_the_budget_each_keep_their_shadow() {
+    let n = path_node(94, wavy(30_000), vec![shadow(1.0, 0.5, 0.0), transform(json!({"moveV": 50, "copies": 1000}))]);
+    let art = crate::reshape(None, &n, None).unwrap();
+    let paths = paths_in(&art);
+    assert!(paths > 1 && paths < 1001, "{paths}");
+    assert_eq!(shadows_in(&art).len(), paths);
 }

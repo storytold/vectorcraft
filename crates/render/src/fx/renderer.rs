@@ -423,11 +423,12 @@ impl Renderer {
         let outer = self.made_again;
         self.made_again = outer || !kept;
         // With Crop Marks, the object inside the art paints its own raster effects; Vector
-        // Halftone samples them with the object.
+        // Halftone samples them with the object. The copies of a Transform effect that carry the
+        // raster effects listed before it paint those themselves.
         let rfx = if effects::has_crop_marks(a) || effects::addons::halftone::has_halftone(a) {
             vec![]
         } else {
-            effects::raster_effects(&a.appearance.effects)
+            effects::raster_effects(effects::outer_effects(a))
         };
         match cull_bounds(f.symbols, &art) {
             Some(reach) if !f.opts.outline && !rfx.is_empty() => {
