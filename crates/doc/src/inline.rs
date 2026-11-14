@@ -8,12 +8,19 @@ use std::sync::{Arc, RwLock, Weak};
 
 use vectorcraft_geom::{Affine, Rect};
 
-use crate::{Document, Node, NodeId, NodeKind, Symbol, TextObject};
+use crate::symbols::SymbolNames;
+use crate::{Document, Node, NodeId, NodeKind, Symbol, SymbolBoxes, TextObject};
 
 /// The document key under which the app records each symbol's natural size (`{name: [w, h]}`).
 pub const SYMBOL_SIZES: &str = "symbolSizes";
 /// Half the side of the square symbol art is normalised to.
 pub const SYMBOL_HALF: f64 = 10.0;
+
+/// The box symbol art `art` is measured by in [`Document::symbol_art_bounds`]: its visual bounds,
+/// or its geometric bounds when it has no visual bounds.
+fn art_extent(art: &Node, boxes: &SymbolBoxes) -> Option<Rect> {
+    art.visual_bounds_with(boxes).or_else(|| art.geometric_bounds_with(boxes))
+}
 
 /// Usable art bounds: finite, non-degenerate.
 fn usable(r: Option<Rect>) -> Option<Rect> {
@@ -35,27 +42,38 @@ impl Document {
     }
 
     /// Visual bounds of the art of the symbol named `name` at its natural size (see
-    /// [`Self::symbol_natural_xf`]), if it exists and has a usable extent.
+    /// [`Self::symbol_natural_xf`]), if it exists and has a usable extent. The symbol instances in
+    /// the art are measured by their own symbols' art ([`Node::visual_bounds_with`]), or by the
+    /// 20 × 20 square where [`crate::SymbolBoxes`] measures them by it.
     pub fn symbol_art_bounds(&self, name: &str) -> Option<Rect> {
-        let s = self.symbols.iter().find(|s| s.name == name)?;
-        let b = usable(s.art.visual_bounds().or_else(|| s.art.geometric_bounds()))?;
+        self.symbol_art_bounds_in(name, &self.symbol_boxes())
+    }
+
+    /// [`Self::symbol_art_bounds`], with the symbols found and the instances measured by `boxes`
+    /// (new boxes of this document).
+    fn symbol_art_bounds_in(&self, name: &str, boxes: &SymbolBoxes) -> Option<Rect> {
+        let b = usable(art_extent(boxes.symbol_art(name)?, boxes))?;
         usable(Some(self.symbol_natural_xf(name).transform_rect_bbox(b)))
     }
 
     /// The art bounds an inline graphic of the symbol named `name` takes: [`Self::symbol_art_bounds`],
     /// or `None` (an empty slot) when the symbol's art shows the symbol itself inline, directly or
-    /// through the inline graphics in other symbols' art, so that its size would depend on itself.
+    /// through the inline graphics and symbol instances in other symbols' art, so that its size
+    /// would depend on itself.
     pub fn inline_art_bounds(&self, name: &str) -> Option<Rect> {
-        if self.inline_cycles().contains(name) { None } else { self.symbol_art_bounds(name) }
+        let (cyclic, names) = self.inline_cycles();
+        if cyclic.contains(name) { None } else { self.symbol_art_bounds_in(name, &self.symbol_boxes().with_names(&names)) }
     }
 
-    /// The names of the symbols that reach themselves through the inline graphics in symbol art,
-    /// found once while the symbols stay as they are.
-    fn inline_cycles(&self) -> Arc<HashSet<String>> {
+    /// The names of the symbols that reach themselves through the inline graphics in symbol art
+    /// ([`InlineGraph`]), with each symbol name → the index of the first symbol of that name, found
+    /// once while the symbols stay as they are.
+    fn inline_cycles(&self) -> (Arc<HashSet<String>>, Arc<SymbolNames>) {
         if let Some(found) = self.inline_cycles.get(&self.symbols) {
             return found;
         }
-        let found = Arc::new(InlineGraph::of(self).cyclic);
+        let graph = InlineGraph::of(self);
+        let found = (Arc::new(graph.cyclic), graph.names);
         self.inline_cycles.set(&self.symbols, &found);
         found
     }
@@ -94,7 +112,8 @@ impl Document {
     /// of symbols, graph designs and pattern tiles, and the opacity masks and live objects in
     /// them. Each text whose inline graphics changed has its cached layout cleared and is passed
     /// to `layout` to be laid out again. The symbols are resolved first, each after the symbols its
-    /// inline graphics show, so a symbol's art is measured with its type already laid out; a
+    /// inline graphics and symbol instances show, so a symbol's art is measured with its type, and
+    /// the type in the art of the symbols its instances show, already laid out; a
     /// symbol that shows itself inline ([`Self::inline_art_bounds`]) is shown as an empty slot.
     /// Returns the ids of the texts in the layers that changed.
     pub fn resolve_inline_art_with(&mut self, layout: &mut dyn FnMut(&mut TextObject)) -> Vec<NodeId> {
@@ -241,34 +260,48 @@ fn inline_symbols(n: &Node) -> Vec<String> {
     out
 }
 
-/// Each symbol name of `d` → the index of the first symbol of that name (the one a name finds).
-fn symbol_index(d: &Document) -> HashMap<&str, usize> {
-    let mut index = HashMap::with_capacity(d.symbols.len());
-    for (i, s) in d.symbols.iter().enumerate() {
-        index.entry(s.name.as_str()).or_insert(i);
-    }
-    index
-}
-
-/// The symbols of a document as their inline graphics depend on each other.
+/// The symbols of a document as their sizes depend on each other: a symbol's art depends on the
+/// symbols its type shows inline, and on the symbols its instances show when those instances are
+/// measured by their symbols' art ([`crate::SymbolBoxes`]).
 struct InlineGraph {
-    /// Every symbol index, each after the symbols its art shows inline (except along a cycle).
+    /// Every symbol index, each after the symbols its art depends on (except along a cycle).
     order: Vec<usize>,
-    /// The names of the symbols that reach themselves through inline graphics.
+    /// The names of the symbols that reach themselves through inline graphics. Instances alone make
+    /// no cycle: an instance of a symbol that holds an instance of itself is measured by the
+    /// 20 × 20 square, so every cycle passes through an inline graphic.
     cyclic: HashSet<String>,
+    /// Each symbol name → the index of the first symbol of that name, which stay the same while
+    /// [`Document::resolve_inline_art_with`] changes the symbols' art.
+    names: Arc<SymbolNames>,
 }
 
 impl InlineGraph {
-    /// The graph of `d`'s symbols: each symbol's art is walked once, and the order and cycles are
-    /// found in time linear in the symbols and their inline references (Tarjan's strongly
-    /// connected components, without recursion).
+    /// The graph of `d`'s symbols: each symbol's art is walked once, and, when the art of any
+    /// symbol holds an inline graphic, measured once with the art boxes of the symbols its
+    /// instances show measured once in all ([`SymbolBoxes::consulted`]: an instance that does not
+    /// size the art, such as one a clipping path hides, adds nothing). The order and cycles are
+    /// found in time linear in the symbols and their inline references and instances (Tarjan's
+    /// strongly connected components, without recursion).
     fn of(d: &Document) -> Self {
-        let index = symbol_index(d);
+        let names = Arc::new(d.symbol_names());
+        let boxes = d.symbol_boxes().quick().with_names(&names);
+        let inline: Vec<Vec<String>> = d.symbols.iter().map(|s| inline_symbols(&s.art)).collect();
+        // Without inline graphics in symbol art, no symbol's type depends on another symbol.
+        let any_inline = inline.iter().any(|v| !v.is_empty());
         let edges: Vec<Vec<usize>> = d
             .symbols
             .iter()
-            .map(|s| {
-                let mut e: Vec<usize> = inline_symbols(&s.art).iter().filter_map(|n| index.get(n.as_str()).copied()).collect();
+            .zip(inline)
+            .map(|(s, inline)| {
+                let measured = if any_inline {
+                    boxes.consulted(|| {
+                        art_extent(&s.art, &boxes);
+                    })
+                } else {
+                    HashSet::new()
+                };
+                let shows = inline.into_iter().chain(measured);
+                let mut e: Vec<usize> = shows.filter_map(|n| names.get(n.as_str()).copied()).collect();
                 e.sort_unstable();
                 e.dedup();
                 e
@@ -276,12 +309,13 @@ impl InlineGraph {
             .collect();
         let (order, cyclic) = components(&edges);
         let cyclic = order.iter().filter(|&&i| cyclic[i]).map(|&i| d.symbols[i].name.clone()).collect();
-        Self { order, cyclic }
+        Self { order, cyclic, names }
     }
 
-    /// [`Document::inline_art_bounds`] with the cycles found in this graph.
+    /// [`Document::inline_art_bounds`] with the cycles found in this graph, for `d` with the
+    /// symbols' names and order the graph was made with.
     fn bounds(&self, d: &Document, name: &str) -> Option<Rect> {
-        if self.cyclic.contains(name) { None } else { d.symbol_art_bounds(name) }
+        if self.cyclic.contains(name) { None } else { d.symbol_art_bounds_in(name, &d.symbol_boxes().with_names(&self.names)) }
     }
 }
 
@@ -354,12 +388,16 @@ fn components(edges: &[Vec<usize>]) -> (Vec<usize>, Vec<bool>) {
 #[derive(Default)]
 pub(crate) struct InlineCycles(RwLock<Option<Arc<Found>>>);
 
-/// The name and art of each symbol the cycles were found in, and the names of the symbols on one.
-type Found = (Vec<(String, Weak<Node>)>, Arc<HashSet<String>>);
+/// The names of the symbols on a cycle, and each symbol name → the index of the first symbol of that
+/// name.
+type Cycles = (Arc<HashSet<String>>, Arc<SymbolNames>);
+
+/// The name and art of each symbol the cycles were found in, and what was found.
+type Found = (Vec<(String, Weak<Node>)>, Cycles);
 
 impl InlineCycles {
     /// The cached names, when they were found in `symbols`.
-    fn get(&self, symbols: &[Symbol]) -> Option<Arc<HashSet<String>>> {
+    fn get(&self, symbols: &[Symbol]) -> Option<Cycles> {
         let g = self.0.read().ok()?;
         let (from, found) = &**g.as_ref()?;
         let same = from.len() == symbols.len()
@@ -368,7 +406,7 @@ impl InlineCycles {
     }
 
     /// Keep `found`, found in `symbols`.
-    fn set(&self, symbols: &[Symbol], found: &Arc<HashSet<String>>) {
+    fn set(&self, symbols: &[Symbol], found: &Cycles) {
         if let Ok(mut g) = self.0.write() {
             *g = Some(Arc::new((symbols.iter().map(|s| (s.name.clone(), Arc::downgrade(&s.art))).collect(), found.clone())));
         }
@@ -483,6 +521,109 @@ mod tests {
             assert_eq!(measured.get("Missing", || measure(None)), None);
         }
         assert_eq!(count.get(), 2);
+    }
+
+    /// A rectangle `r` filled black, with a 2 pt black stroke.
+    fn stroked(d: &mut Document, r: Rect) -> Arc<Node> {
+        use vectorcraft_color::{Color, Paint};
+        let look = crate::Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::BLACK), 2.0);
+        Arc::new(Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(r), look))
+    }
+
+    fn instance(d: &mut Document, symbol: &str, xf: Affine) -> Arc<Node> {
+        Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: symbol.into(), xf }))
+    }
+
+    /// Symbol `name` holding `art` in a group.
+    fn symbol(d: &mut Document, name: &str, art: Vec<Arc<Node>>) {
+        let group = Node::group(d.alloc_id(), art);
+        d.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(group) });
+    }
+
+    #[test]
+    fn a_symbol_nested_in_symbol_art_is_measured_by_its_own_art() {
+        // `Far` is a rectangle from (200, 100) to (240, 130) with a 2 pt stroke, far from the
+        // 20 × 20 square around the origin.
+        let mut d = Document::new(500.0, 500.0);
+        let far = stroked(&mut d, Rect::new(200.0, 100.0, 240.0, 130.0));
+        symbol(&mut d, "Far", vec![far]);
+        let moved = instance(&mut d, "Far", Affine::translate((-100.0, 0.0)));
+        symbol(&mut d, "Moved", vec![moved.clone()]);
+        let scaled = instance(&mut d, "Far", Affine::scale(2.0));
+        symbol(&mut d, "Scaled", vec![scaled]);
+        symbol(&mut d, "Sized", vec![moved]);
+        d.unknown.insert(SYMBOL_SIZES.into(), serde_json::json!({ "Sized": [40.0, 20.0] }));
+        assert_eq!(d.symbol_art_bounds("Far"), Some(Rect::new(199.0, 99.0, 241.0, 131.0)));
+        // The stroke paints 1 pt around the moved rectangle.
+        assert_eq!(d.symbol_art_bounds("Moved"), Some(Rect::new(99.0, 99.0, 141.0, 131.0)));
+        // Scaled 2 times, the stroke keeps its weight.
+        assert_eq!(d.symbol_art_bounds("Scaled"), Some(Rect::new(399.0, 199.0, 481.0, 261.0)));
+        // At its natural size, 40 × 20 for the 20 × 20 square: 2 times across.
+        assert_eq!(d.symbol_art_bounds("Sized"), Some(Rect::new(198.0, 99.0, 282.0, 131.0)));
+        assert_eq!(d.inline_art_bounds("Moved"), d.symbol_art_bounds("Moved"));
+    }
+
+    #[test]
+    fn nested_instances_without_art_of_their_own_are_measured_by_the_square() {
+        let mut d = Document::new(500.0, 500.0);
+        let r = Rect::new(0.0, 0.0, 10.0, 10.0);
+        // An instance of a missing symbol and one of a symbol with no art, beside a rectangle.
+        symbol(&mut d, "Empty", vec![]);
+        let pieces = vec![stroked(&mut d, r), instance(&mut d, "Nowhere", Affine::translate((100.0, 0.0)))];
+        symbol(&mut d, "Missing", pieces);
+        let pieces = vec![stroked(&mut d, r), instance(&mut d, "Empty", Affine::translate((100.0, 0.0)))];
+        symbol(&mut d, "Holds empty", pieces);
+        let with_square = Some(Rect::new(-1.0, -10.0, 110.0, 11.0));
+        assert_eq!(d.symbol_art_bounds("Empty"), None);
+        assert_eq!(d.symbol_art_bounds("Missing"), with_square);
+        assert_eq!(d.symbol_art_bounds("Holds empty"), with_square);
+        // A symbol that holds an instance of itself: the instance is measured by the square, and
+        // an inline graphic of it is not an empty slot.
+        let pieces = vec![stroked(&mut d, r), instance(&mut d, "Loop", Affine::translate((100.0, 0.0)))];
+        symbol(&mut d, "Loop", pieces);
+        assert_eq!(d.symbol_art_bounds("Loop"), with_square);
+        assert_eq!(d.inline_art_bounds("Loop"), with_square);
+        // A chain of 40 symbols, each holding a rectangle and an instance of the next one 1 pt to
+        // the right: symbols nest 39 deep in Link 0's art, past the limit of 32, so its instance of
+        // Link 1 is measured by the square.
+        for i in 0..40 {
+            let unit = stroked(&mut d, Rect::new(0.0, 0.0, 1.0, 1.0));
+            let next = instance(&mut d, &format!("Link {}", i + 1), Affine::translate((1.0, 0.0)));
+            symbol(&mut d, &format!("Link {i}"), if i < 39 { vec![unit, next] } else { vec![unit] });
+        }
+        assert_eq!(d.symbol_art_bounds("Link 0"), Some(Rect::new(-9.0, -10.0, 11.0, 10.0)));
+        // Link 8's art nests 31 deep: measured by the art of the links after it.
+        assert_eq!(d.symbol_art_bounds("Link 8"), Some(Rect::new(-1.0, -1.0, 33.0, 2.0)));
+    }
+
+    /// Type showing the symbol named `symbol` inline.
+    fn showing(d: &mut Document, symbol: &str) -> Arc<Node> {
+        let style = crate::CharStyle::default();
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "Type", style.clone());
+        t.runs.push(crate::TextRun::new("", style));
+        t.runs[1].inline = Some(crate::InlineArt { symbol: symbol.into(), scale: 1.0, baseline_shift: 0.0, bounds: None });
+        Arc::new(Node::new(d.alloc_id(), NodeKind::Text(Box::new(t))))
+    }
+
+    #[test]
+    fn only_instances_that_size_a_symbols_art_make_it_depend_on_their_symbol() {
+        // B's type shows A inline. A's art is a clip group: a clipping rectangle, then an instance
+        // of B that the rectangle clips, so A's size does not depend on B's.
+        let mut d = Document::new(500.0, 500.0);
+        let text = showing(&mut d, "A");
+        symbol(&mut d, "B", vec![text]);
+        let clip = stroked(&mut d, Rect::new(0.0, 0.0, 10.0, 10.0));
+        let inner = instance(&mut d, "B", Affine::IDENTITY);
+        let group = Arc::new(Node::new(d.alloc_id(), NodeKind::Group { children: vec![clip, inner.clone()], clip: true }));
+        symbol(&mut d, "A", vec![group]);
+        assert_eq!(d.inline_art_bounds("A"), Some(Rect::new(-1.0, -1.0, 11.0, 11.0)));
+        // Without the clip, A's size depends on B's and B's on A's: both are empty slots.
+        let art = Arc::new(Node::group(d.alloc_id(), vec![inner]));
+        if let Some(a) = d.symbols.iter_mut().find(|s| s.name == "A") {
+            a.art = art;
+        }
+        assert_eq!(d.inline_art_bounds("A"), None);
+        assert_eq!(d.inline_art_bounds("B"), None);
     }
 
     #[test]
