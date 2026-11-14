@@ -727,12 +727,14 @@ fn aligned_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objects(
 
     // A row of the art (its red fill) that the mark has no equal of: transparency.set is an error, and appearance.setItem
     // and appearance.removeItem leave the document as it is.
-    let mark_was = rows(&s, mark);
+    let (art_was, mark_was) = (rows(&s, art), rows(&s, mark));
+    let steps = s.doc().unwrap().history.undo.len();
     let e = s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "item": 0, "aligned": true, "opacity": 40})).unwrap_err();
     assert!(e.to_string().contains("no appearance item 0"), "{e}");
     s.execute("appearance.setItem", &json!({"ids": [art.0, mark.0], "index": 0, "aligned": true, "color": "#00ff00"})).unwrap();
     s.execute("appearance.removeItem", &json!({"ids": [art.0, mark.0], "index": 0, "aligned": true})).unwrap();
-    assert_eq!(rows(&s, mark), mark_was);
+    assert_eq!((rows(&s, art), rows(&s, mark)), (art_was, mark_was));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps, "no undo step is recorded");
 }
 
 /// Aligned effects given with the art of a graph design in a series first go on, and come off, the rows equal to the art's
@@ -758,6 +760,13 @@ fn aligned_effects_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objec
     assert_eq!(effects(&s, mark), [1, 0], "the shadow goes on the mark's blue fill");
     assert_eq!(rows(&s, other), other_was, "the other mark has no blue fill");
     assert_eq!((&r["ids"], &r["item"], &r["index"]), (&json!([mark.0]), &json!(0), &json!(0)), "the reply names the mark's row");
+    s.execute("edit.undo", &json!({})).unwrap();
+    // A 3D effect is checked on the rows it goes on only.
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [art.0, mark.0, other.0], "item": 1, "aligned": true})).unwrap();
+    assert_eq!((rows(&s, art), effects(&s, mark), rows(&s, other)), (art_was.clone(), vec![1, 0], other_was.clone()));
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("appearance.addEffect", &json!({"effect": "stylize.dropShadow", "ids": [art.0, mark.0, other.0], "item": 1, "aligned": true})).unwrap();
+    assert_eq!((rows(&s, art), effects(&s, mark), rows(&s, other)), (art_was, vec![1, 0], other_was));
 
     // The art's blue fill with the same shadow as the mark's: removing it from the art's row takes it off the mark's.
     s.edit("Shadow", |d, _| {
@@ -770,6 +779,14 @@ fn aligned_effects_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objec
     // The effect dialog reads the shadow from the art's row and passes the art on first.
     let (target, fx) = s.appearance_effect_target(&json!({"ids": [art.0, mark.0], "item": 1, "aligned": true})).unwrap();
     assert_eq!((fx.len(), &target["ids"], &target["item"]), (1, &json!([art.0, mark.0]), &json!(1)));
+    // Edits of the art's row effect change the mark's equal row.
+    s.execute("effect.setParams", &json!({"ids": [art.0, mark.0], "item": 1, "index": 0, "visible": false, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert!(!rows(&s, mark).items[0].effects()[0].visible, "the mark's shadow is hidden");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("effect.duplicate", &json!({"ids": [art.0, mark.0], "item": 1, "index": 0, "aligned": true})).unwrap();
+    assert_eq!((rows(&s, art), effects(&s, mark)), (art_was.clone(), vec![2, 0]));
+    s.execute("edit.undo", &json!({})).unwrap();
     s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": 1, "index": 0, "aligned": true})).unwrap();
     assert_eq!(rows(&s, art), art_was);
     assert_eq!(effects(&s, mark), [0, 0]);
@@ -796,7 +813,17 @@ fn aligned_effects_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_objec
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0], "item": null})).unwrap();
     let mark_was = rows(&s, mark);
     assert!(s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "index": 1, "aligned": true})).is_err());
-    assert_eq!((rows(&s, art), rows(&s, mark)), (art_was, mark_was));
+    assert_eq!((rows(&s, art), rows(&s, mark)), (art_was.clone(), mark_was));
+    // The mark with the art's object-level shadow after its roughen: removing the art's effect 0 takes off the mark's 1.
+    s.edit("Shadow", |d, _| {
+        let shadow = d.node(art).unwrap().appearance.effects[0].clone();
+        d.node_mut(mark).unwrap().appearance.effects[1] = shadow;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("effect.remove", &json!({"ids": [art.0, mark.0], "item": null, "index": 0, "aligned": true})).unwrap();
+    assert_eq!(rows(&s, art), art_was);
+    assert_eq!(rows(&s, mark).effects.iter().map(|e| e.id.to_string()).collect::<Vec<_>>(), ["distort.roughen"]);
 }
 
 /// Aligned rows of a graph design's art and of another object whose stack differs are not one place in both stacks, so

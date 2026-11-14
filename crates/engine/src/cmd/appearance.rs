@@ -102,7 +102,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Effect",
             [],
             None,
-            "{…as effect.apply} same as effect.apply (an alias): {effect: id, params?: {…}, item?: appearance item index|null, ids?, target?} → {ids, index, item}",
+            "{…as effect.apply} same as effect.apply (an alias): {effect: id, params?: {…}, item?: appearance item index|null, ids?, target?, aligned?} → {ids, index, item}",
             has_doc,
             super::effectcmd::apply
         ),
