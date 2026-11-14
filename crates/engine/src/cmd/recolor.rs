@@ -1721,7 +1721,7 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({ "changed": changed, "swatches": added });
     not_changed.report(&mut out);
     if let Some(e) = edit {
-        e.defaults(s);
+        e.defaults(s)?;
         out["relinked"] = json!(e.relinked());
     }
     if converted {
