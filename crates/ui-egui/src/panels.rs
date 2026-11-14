@@ -54,7 +54,7 @@ pub mod variables;
 use egui::{Rect, Sense, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{LiveCorners, Node, StrokeLayer};
+use vectorcraft_doc::{LiveCorners, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_engine::inspect::StrokeMixed;
 use vectorcraft_geom::shapes::CornerKind;
 
@@ -322,11 +322,13 @@ pub(crate) fn current_paints(app: &VectorcraftApp) -> (Paint, Paint) {
 }
 
 /// Whether the selected objects' fills and strokes differ (the proxies show "?"), cached per
-/// document revision and Appearance panel item.
+/// document revision, Appearance panel item and picked gradient mesh points (picking points
+/// changes no revision).
 pub(crate) fn mixed_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (bool, bool) {
+    type Key = (u64, u64, Option<usize>, Vec<(NodeId, Vec<usize>)>);
     let Some(st) = app.session.active() else { return (false, false) };
-    let key = (st.uid, st.revision, app.session.appearance_item());
-    match pstate::<Option<((u64, u64, Option<usize>), (bool, bool))>>(ctx, "proxy-mixed") {
+    let key: Key = (st.uid, st.revision, app.session.appearance_item(), app.session.fill_mesh_points());
+    match pstate::<Option<(Key, (bool, bool))>>(ctx, "proxy-mixed") {
         Some((k, mixed)) if k == key => mixed,
         _ => {
             let mixed = app.session.proxy_mixed();
@@ -365,13 +367,23 @@ pub(crate) fn stroke_mixed(app: &VectorcraftApp, ctx: &egui::Context) -> StrokeM
 }
 
 /// Opacity and blend mode as the Transparency panel and Control bar show them: the Appearance
-/// panel's active item's, else the first selected object's.
+/// panel's active item's, else the first picked gradient mesh point's opacity (which
+/// `transparency.set` changes then) with its object's blend mode, else the first selected object's.
 pub(crate) fn current_transparency(app: &VectorcraftApp) -> Option<(f32, BlendMode)> {
     let n = first_node(app)?;
-    Some(match app.session.appearance_item().and_then(|i| n.appearance.items.get(i)) {
-        Some(it) => (it.opacity(), it.blend()),
-        None => (n.opacity, n.blend),
-    })
+    if let Some(it) = app.session.appearance_item().and_then(|i| n.appearance.items.get(i)) {
+        return Some((it.opacity(), it.blend()));
+    }
+    let picked = app.session.mesh_points_picked().and_then(|points| {
+        let (id, v) = points.first()?;
+        let d = &app.session.active()?.doc;
+        let m = match &d.node(*id)?.kind {
+            NodeKind::Mesh(m) => m,
+            _ => return None,
+        };
+        Some((m.points.get(*v.first()?)?.opacity, d.node(*id)?.blend))
+    });
+    Some(picked.unwrap_or((n.opacity, n.blend)))
 }
 
 /// Is the active proxy "?" (the selected objects' paints differ)?

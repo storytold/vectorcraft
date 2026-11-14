@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fill",
             [],
             None,
-            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid colour recolours only the gradient mesh point last clicked with the Mesh tool or Direct Selection; while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it (exceptions: docs/mcp.md); on a graph label, the graph stores the paint for every label of its kind, as a character fill when the characters took it and with the label's rows when a row did → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
+            "{color?: \"#rrggbb\"|[r,g,b]|{c,m,y,k}|{gray}|{l,a,b} (CIE Lab; #rrggbbaa and #rgba are refused), none?: true, swatch?: name (a global or spot colour stays linked, so swatch edits recolour it; a tint swatch links to its base at its tint; a gradient swatch is recorded as the gradient's swatch and fits each object, keeping its aspect; the built-in \"[Registration]\" prints on every plate), tint?: 0..100 (% of a global or spot `swatch`; default 100, or a tint swatch's own), gradient?: {kind?: linear|radial|conic|diamond|freeform (conic, also accepted as angle or conical: the stops sweep once around the center `start`, clockwise from the vector; diamond: the stops run from the center `start` out to a square with a corner at `end`), method?: classic|perceptual|hue-clockwise|hue-counterclockwise (as paint.editGradient; default classic), spread?: pad|repeat|reflect (as paint.editGradient; default pad), repeats?: 1..100 (as paint.editGradient; default 1), stops?: [{offset 0..1, color, opacity? 0..1 (or 0..100), midpoint? 0.13..0.87, swatch?: global or spot colour (or tint) swatch the stop links to (its colour comes from the swatch), tint?: 0..100}] (at least 2; default white→black), angle?: deg counter-clockwise (0: the gradient runs left to right), start?: [x,y], end?: [x,y] (the vector in document coordinates, both or neither; type objects keep it in text space), aspect?: % (radial, conic and diamond; a negative one mirrors a conic's sweep, counterclockwise, and is an error for the other kinds; without start/end the gradient is placed on each object's bounds), focal?: [x,y] (radial, with start/end: the focal point, where the first stop sits; an error with a conic or diamond), dither?: bool (linear, radial, conic and diamond fills: drawn with fine noise that hides banding, and as pixels in SVG and PDF exports; strokes ignore it), swatch?: linked gradient swatch name}, item?: appearance item index|null (omitted: the Appearance panel's active item if it is a fill, else the top fill), ids?|id?, focus?: true (false keeps the active proxy), keepModel?: false (in a CMYK document, RGB colours and gradient stops are stored as CMYK unless true; Gray stays Gray), target?: \"object\"|\"contents\", span?: \"object\" (default: each target fits a gradient to its own bounds)|\"selection\" (a linear, radial, conic or diamond `gradient` without start/end is placed once on the union of the targets' bounds, so it runs across them)} sets the selection's fill and the default (new art fits a gradient to itself); a solid color recolors only the gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso (unless an `item` index is given or the Appearance panel's active item is a fill); while the Type tool has characters selected (and no ids or item are given), the paint goes to those characters only; without `item`, a grayscale or 1-bit image takes a solid color as the color it is drawn in (white pixels transparent; `none` takes it off; an image with an alpha channel takes only a spot color, black or white; a colorized image whose link is missing takes a solid color as its new colorize color, and refuses a process color while its color is a spot color, black or white); with an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, that object's fill changes for this instance only (solid, none, gradient or pattern). On a path directly in a graph series, the graph also stores the paint of the topmost visible fill when the command wrote that row or changed it (exceptions: docs/mcp.md); on a graph label, the graph stores the paint for every label of its kind, as a character fill when the characters took it and with the label's rows when a row did → {objects: how many objects took the paint (the objects inside a group, unless an appearance item of the group's own is targeted; 0 when only the default changed)}",
             has_doc,
             |s, p| set_paint(s, p, true)
         ),
@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Transparency",
             ["Window", "Transparency"],
             None,
-            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; a gradient mesh point last clicked with the Mesh tool or Direct Selection takes the opacity itself). With an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, opacity and blend change that object for this instance only (isolate, knockout, knockoutShape, aligned and target are refused). On a path directly in a graph series (for a fill or stroke item, a series group's id stands for those paths), the graph also stores the opacity and blend mode of the object and of the topmost visible fill and stroke (exceptions: docs/mcp.md); on a graph label, the graph stores the label's object opacity and blend mode for every label of its kind, and with `item` its topmost visible fill and stroke rows too",
+            "{ids?|id?, opacity?: 0..100, blend?: name, isolate?, knockout?: \"on\"|\"off\"|\"neutral\"|bool (true = on, false = neutral), knockoutShape?: bool, item?: appearance item index|null, target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} for `ids`, the selection, or the object whose opacity mask is being edited; opacity and blend go to the targeted fill/stroke item (omitted: the Appearance panel's active item, else the objects; when every target is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso, those points take the opacity themselves). With an object of a dynamic symbol instance selected by Direct Selection and no ids, id or item, opacity and blend change that object for this instance only (isolate, knockout, knockoutShape, aligned and target are refused). On a path directly in a graph series (for a fill or stroke item, a series group's id stands for those paths), the graph also stores the opacity and blend mode of the object and of the topmost visible fill and stroke (exceptions: docs/mcp.md); on a graph label, the graph stores the label's object opacity and blend mode for every label of its kind, and with `item` its topmost visible fill and stroke rows too",
             has_doc,
             transparency
         ),
@@ -154,7 +154,7 @@ pub fn proxy_specs() -> Vec<CommandSpec> {
             "Fill and Stroke",
             [],
             None,
-            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, type: its first run's; else the defaults for new art), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, shown as a \"?\" proxy}",
+            "{} → {fill, stroke: the paints the Fill/Stroke proxies show (the Appearance panel's active item for the proxy of its kind, else the first selected object's, a group's first painted object's, type: its first run's; else the defaults for new art; when that object is a gradient mesh with points picked by the Mesh tool, Direct Selection or the Lasso and no fill item is active, the fill is its first picked point's color), fillActive, fillMixed, strokeMixed: the selected objects' (or a selected group's contents') fills (strokes) differ, shown as a \"?\" proxy (a gradient mesh with points picked counts with their colors)}",
             always,
             proxies
         ),
@@ -179,9 +179,13 @@ impl Session {
     /// The fill and stroke the Fill/Stroke proxies show: the Appearance panel's active item (in the
     /// first selected object's own stack) for the proxy of its kind, else the first selected
     /// object's (a group's first painted object's; type: its first run's), else the defaults for
-    /// new art.
+    /// new art. When the object whose fill the proxy shows is a gradient mesh with points picked
+    /// ([`Session::fill_mesh_points`]), the fill is its first picked point's color, which a solid
+    /// fill color changes.
     pub fn proxy_paints(&self) -> (Paint, Paint) {
+        let points = self.fill_mesh_points();
         let show = |stroke: bool| match self.proxy_source(stroke) {
+            Some((n, None)) if !stroke && let Some(c) = picked_colors(&n, &points).first() => Paint::solid(*c),
             Some((n, item)) => proxy_paint(&n, stroke, item),
             None if stroke => self.paint.stroke.clone(),
             None => self.paint.fill.clone(),
@@ -273,6 +277,13 @@ impl DocState {
     /// each selected object's own stack is compared. One walk of the document, so callers that ask
     /// every frame cache it by revision.
     pub fn proxy_mixed(&self, item: Option<usize>) -> (bool, bool) {
+        self.proxy_mixed_with(item, &[])
+    }
+
+    /// [`DocState::proxy_mixed`] with the gradient mesh points a solid fill color recolors
+    /// (`points`, see [`Session::fill_mesh_points`]): a mesh among them counts with the colors of
+    /// its picked points instead of its fill.
+    fn proxy_mixed_with(&self, item: Option<usize>, points: &[(NodeId, Vec<usize>)]) -> (bool, bool) {
         if self.selection.is_empty() {
             return (false, false);
         }
@@ -291,7 +302,10 @@ impl DocState {
         let differ = |stroke: bool| {
             let item = first.and_then(|f| f.appearance.item_of_kind(item, !stroke));
             let set = if item.is_some() { &selected } else { &nodes };
-            let mut paints = set.iter().map(|n| proxy_paint(n, stroke, item));
+            let mut paints = set.iter().flat_map(|n| match picked_colors(n, if stroke || item.is_some() { &[] } else { points }) {
+                c if c.is_empty() => vec![proxy_paint(n, stroke, item)],
+                c => c.into_iter().map(Paint::solid).collect(),
+            });
             let Some(p0) = paints.next() else { return false };
             paints.any(|p| !same_in_proxy(&p0, &p))
         };
@@ -313,8 +327,9 @@ impl DocState {
 
 impl Session {
     /// [`DocState::proxy_mixed`] of the active document for the Appearance panel's active item.
+    /// A gradient mesh with points picked ([`Session::fill_mesh_points`]) counts with their colors.
     pub fn proxy_mixed(&self) -> (bool, bool) {
-        self.active().map_or((false, false), |st| st.proxy_mixed(self.appearance_item()))
+        self.active().map_or((false, false), |st| st.proxy_mixed_with(self.appearance_item(), &self.fill_mesh_points()))
     }
 }
 
@@ -539,8 +554,8 @@ pub(crate) fn apply_paint(s: &mut Session, p: &Value, paint: Paint, fill: bool) 
     let selected = item.targets(s, p)?;
     let ids = super::graph::paint_targets(&s.doc()?.doc, &selected);
     let paint = if span { placed_across(&s.doc()?.doc, &ids, paint, p, fill) } else { paint };
-    // The gradient mesh points picked with the Mesh tool or Direct Selection: a solid fill
-    // recolours just those points of their meshes.
+    // The gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso: a solid
+    // fill recolors just those points of their meshes (the proxies show them: `fill_mesh_points`).
     let mesh_points = if fill && matches!(paint, Paint::Solid { .. }) { picked_mesh_points(s, &ids) } else { vec![] };
     // Without `item`, unless the Appearance panel's active fill item takes the paint.
     let colorized = if fill && p.get("item").is_none() && item == ItemTarget::Top {
@@ -871,6 +886,55 @@ pub(crate) fn picked_mesh_points_of(s: &Session, ids: &[NodeId]) -> Option<Vec<(
     (!ids.is_empty() && ids.iter().all(|id| v.iter().any(|(m, _)| m == id))).then_some(v)
 }
 
+/// The colors of the picked points of `n` (see [`picked_mesh_points`]) when it is a gradient mesh
+/// among `points`, in the order they were picked; empty otherwise.
+fn picked_colors(n: &Node, points: &[(NodeId, Vec<usize>)]) -> Vec<Color> {
+    match (&n.kind, points.iter().find(|(id, _)| *id == n.id)) {
+        (NodeKind::Mesh(m), Some((_, v))) => v.iter().filter_map(|i| m.points.get(*i)).map(|q| q.color).collect(),
+        _ => vec![],
+    }
+}
+
+impl Session {
+    /// The picked gradient mesh points that a solid fill color (`paint.setFill` without `ids` or
+    /// `item`) recolors instead of their meshes' fills, each mesh with its points: the targets are
+    /// resolved as [`set_paint`] resolves them, so this is empty while the Appearance panel's
+    /// active item is a fill row or an object of a symbol instance is selected, and a mesh with
+    /// points picked counts even when other objects are selected with it.
+    pub fn fill_mesh_points(&self) -> Vec<(NodeId, Vec<usize>)> {
+        let Some(st) = self.active() else { return vec![] };
+        // Only gradient meshes have points to pick: a selection with no mesh and no container that
+        // could hold one skips reading the tool's options.
+        let may_hold_mesh = |id: &NodeId| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Mesh(_)) || n.is_container());
+        if st.selection.symbol_part.is_some() || !st.selection.subjects().iter().any(may_hold_mesh) {
+            return vec![];
+        }
+        let Ok(item) = item_target(self, &Value::Null, "paint.setFill").map(|t| t.of_kind(self, true)) else { return vec![] };
+        if item != ItemTarget::Top {
+            return vec![];
+        }
+        let Ok(selected) = item.targets(self, &Value::Null) else { return vec![] };
+        picked_mesh_points(self, &super::graph::paint_targets(&st.doc, &selected))
+    }
+
+    /// The picked gradient mesh points that the Transparency panel's opacity (`transparency.set`
+    /// without `ids` or `item`) fades instead of their objects: `None` unless every target is a
+    /// gradient mesh with points picked, and while the Appearance panel's active item takes the
+    /// opacity (outside opacity mask editing).
+    pub fn mesh_points_picked(&self) -> Option<Vec<(NodeId, Vec<usize>)>> {
+        let st = self.active()?;
+        let ids = super::opacitymask::transparency_targets(self, &Value::Null).ok()?;
+        // Only gradient meshes have points to pick: other targets skip reading the tool's options.
+        if ids.is_empty() || !ids.iter().all(|id| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Mesh(_)))) {
+            return None;
+        }
+        if st.doc.mask_edit.is_none() && self.appearance_item().is_some() {
+            return None;
+        }
+        picked_mesh_points_of(self, &ids)
+    }
+}
+
 /// A type run's stroke; a painted stroke on a run without one gets 1 pt.
 pub(super) fn set_run_stroke(style: &mut CharStyle, paint: Paint) {
     if !paint.is_none() {
@@ -1084,8 +1148,8 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     q.remove("item");
     q.remove("id");
     q.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
-    // The gradient mesh points picked with the Mesh tool or Direct Selection take the opacity
-    // themselves, so only the mesh around them fades (#4206, #4170, #4208).
+    // The gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso take the
+    // opacity themselves, so only the mesh around them fades (#4206, #4170, #4208).
     if matches!(item, ItemTarget::Top)
         && let Some(o) = q.get("opacity").and_then(Value::as_f64)
         && let Some(points) = picked_mesh_points_of(s, &ids)
