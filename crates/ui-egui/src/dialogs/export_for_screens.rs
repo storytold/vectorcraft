@@ -391,7 +391,11 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.vertical(|ui| {
             ui.set_width(LEFT_W);
             if let Some(i) = widgets::tab_bar(ui, &[tl!("Artboards"), tl!("Assets")], tab) {
-                d.fields.remove(RENAME_ARTBOARD);
+                if i != tab
+                    && let Some((index, text, _)) = take_artboard_edit(d)
+                {
+                    rename_artboard(app, index, &text);
+                }
                 d.fields.insert("tab".into(), json!(TABS.get(i).copied().unwrap_or("artboards")));
             }
             ui.add_space(6.0);
@@ -521,7 +525,7 @@ fn select_options(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, list: bool) {
     let mut boards = boards(app, d);
     let before = boards.clone();
-    let mut editing: Option<(usize, String, bool)> = d.fields.remove(RENAME_ARTBOARD).and_then(|value| serde_json::from_value(value).ok());
+    let mut editing = take_artboard_edit(d);
     let mut rename = None;
     let names: Vec<String> = app.session.active().map(|s| s.doc.artboards.iter().map(|a| a.name.clone()).collect()).unwrap_or_default();
     ui.add_enabled_ui(d.str("select") != "full", |ui| {
@@ -559,10 +563,8 @@ fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, l
     {
         d.fields.insert(RENAME_ARTBOARD.into(), json!(edit));
     }
-    if let Some((i, name)) = rename
-        && let Err(err) = app.run("artboard.rename", json!({"indices": [i], "name": name}))
-    {
-        app.status(err);
+    if let Some((i, name)) = rename {
+        rename_artboard(app, i, &name);
     }
     if boards != before {
         set_select(d, if boards.iter().all(|b| *b) { "all" } else { "range" });
@@ -573,6 +575,20 @@ fn artboard_tiles(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, l
 
 /// Inline editor state belongs to this dialog, not to the document or its export settings.
 pub(super) const RENAME_ARTBOARD: &str = "__renameArtboard";
+
+fn take_artboard_edit(d: &mut Dialog) -> Option<(usize, String, bool)> {
+    d.fields.remove(RENAME_ARTBOARD).and_then(|value| serde_json::from_value(value).ok())
+}
+
+fn rename_artboard(app: &mut VectorcraftApp, index: usize, text: &str) {
+    let name = text.trim();
+    if !name.is_empty()
+        && app.session.active().and_then(|s| s.doc.artboards.get(index)).is_some_and(|a| a.name != name)
+        && let Err(err) = app.run("artboard.rename", json!({"indices": [index], "name": name}))
+    {
+        app.status(err);
+    }
+}
 
 fn edit_artboard_name(
     ui: &mut egui::Ui,
@@ -595,8 +611,8 @@ fn edit_artboard_name(
             widgets::focus_field(ui, field, text);
             *focus = false;
         } else if cancel || enter || response.lost_focus() {
-            if !cancel && !text.trim().is_empty() && text.trim() != name {
-                *rename = Some((*i, text.trim().into()));
+            if !cancel {
+                *rename = Some((*i, std::mem::take(text)));
             }
             response.surrender_focus();
             *editing = None;
