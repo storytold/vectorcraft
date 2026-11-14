@@ -20,12 +20,14 @@ pub(crate) fn has_fx(n: &Node) -> bool {
 /// Does `n` carry visible object-level effects that only apply through its art (type, images,
 /// symbol instances, live objects; Crop Marks and colour adjustments on anything), is it type with
 /// a geometry effect on a fill or stroke of its own or an image with a fill or stroke of its own
-/// that paints a shape ([`effects::has_item_geometry`]), is it a path whose Transform effect copies
-/// it with a gradient or changes its fills and strokes ([`effects::has_transform_art`]), or is it a
-/// group or layer with an appearance of its own (see [`Renderer::draw_object_fx`])?
+/// that paints a shape ([`effects::has_item_geometry`]), a symbol instance whose active fill or
+/// stroke has a raster effect ([`effects::has_instance_row_raster`]), is it a path whose Transform
+/// effect copies it with a gradient or changes its fills and strokes ([`effects::has_transform_art`]),
+/// or is it a group or layer with an appearance of its own (see [`Renderer::draw_object_fx`])?
 pub(crate) fn has_object_fx(n: &Node) -> bool {
     (effects::needs_outline(n) && (visible(&n.appearance.effects) || n.projection().is_some()))
         || effects::has_item_geometry(n)
+        || effects::has_instance_row_raster(n)
         || effects::has_transform_art(n)
         || effects::has_container_appearance(n)
         || effects::has_crop_marks(n)
