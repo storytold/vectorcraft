@@ -144,9 +144,10 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => None,
         Some(_) => {
             // Images and placed documents in opacity-mask art and in the art of symbols, graph
-            // designs and patterns are named by their ids too (`links.list`).
+            // designs, patterns and stored brushes are named by their ids too (`links.list`).
             let ids = ids_param(p, "ids", C)?.unwrap_or_default();
-            let kind = |id: &NodeId| st.doc.stored_node(*id).map(|(n, _)| &n.kind);
+            let doc = super::links::with_brush_art(&st.doc);
+            let kind = |id: &NodeId| doc.stored_node(*id).map(|(n, _)| &n.kind);
             if let Some(value) = ids.iter().find(|id| kind(id).is_none()).map(|id| id.0) {
                 return Err(bad(C, format!("no such object id {value}")));
             }

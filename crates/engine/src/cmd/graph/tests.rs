@@ -508,6 +508,89 @@ fn paint_targets_leave_a_graph_designs_copy_out() {
     assert_eq!(super::paint_targets(d, &[copy, art, mark]), [mark]);
 }
 
+/// The art of a marker design in series 1 of a line graph: the design's copy and a path inside it.
+fn marker_design_art() -> (Session, NodeId, NodeId) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_design(&mut s, "Pill");
+    let id = graph(&mut s, "line");
+    s.execute("graph.marker", &json!({"id": id.0, "seriesIndexes": [1], "design": "Pill"})).unwrap();
+    let marker = series(s.doc().unwrap().doc.node(id).unwrap(), 1).children().unwrap()[1].clone();
+    assert!(matches!(marker.kind, NodeKind::Group { .. }), "the design's art");
+    let mut art = vec![];
+    marker.walk(&mut |m| {
+        if matches!(m.kind, NodeKind::Path { .. }) {
+            art.push(m.id);
+        }
+    });
+    (s, marker.id, art[0])
+}
+
+/// The ids `graphicStyle.list` reports as linked to style `name`.
+fn linked_to(s: &mut Session, name: &str) -> Vec<u64> {
+    let list = s.execute("graphicStyle.list", &json!({})).unwrap();
+    let style = list["styles"].as_array().unwrap().iter().find(|g| g["name"] == name).unwrap().clone();
+    let mut ids: Vec<u64> = style["linked"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect();
+    ids.sort_unstable();
+    ids
+}
+
+/// Graphic styles and the art of a column or marker design in a series (the design's copy and a path inside it):
+/// `graphicStyle.new` makes a style from the art without linking it; `graphicStyle.redefine` leaves the art's look as
+/// it was and unlinks it, whether the art is linked (as in a document saved before) or the source, while the other
+/// linked objects follow the new look.
+#[test]
+fn graphic_styles_leave_a_graph_designs_art_unlinked() {
+    let make = |marker: bool| {
+        if marker {
+            marker_design_art()
+        } else {
+            let (s, _, copy, art, _) = design_art();
+            (s, copy, art)
+        }
+    };
+    let rows = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().appearance.clone();
+    let link = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().extras().graphic_style;
+    let link_directly = |s: &mut Session, ids: &[NodeId], style: u32| {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        for id in ids {
+            d.node_mut(*id).unwrap().extras_mut().graphic_style = Some(style);
+        }
+    };
+    let rect = |s: &mut Session| {
+        NodeId(s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap())
+    };
+    for marker in [false, true] {
+        for source in [0, 1] {
+            let at = format!("marker {marker}, source {source}");
+            // New: the style is made from the art, which stays unlinked.
+            let (mut s, copy, art) = make(marker);
+            let source = [copy, art][source];
+            s.execute("graphicStyle.new", &json!({"id": source.0, "name": "Art"})).unwrap();
+            assert_eq!(link(&s, source), None, "{at}");
+            assert_eq!(linked_to(&mut s, "Art"), Vec::<u64>::new(), "{at}");
+            // Redefine from another object: linked art keeps its look and is unlinked; a linked rectangle follows.
+            let follower = rect(&mut s);
+            s.execute("graphicStyle.apply", &json!({"name": "Art", "ids": [follower.0]})).unwrap();
+            let style = link(&s, follower).unwrap();
+            link_directly(&mut s, &[copy, art], style);
+            let (copy_was, art_was) = (rows(&s, copy), rows(&s, art));
+            let (blue_rect, blue) = blue_style(&mut s, "Blue", false);
+            s.execute("graphicStyle.redefine", &json!({"name": "Art", "id": blue_rect.0})).unwrap();
+            assert_eq!((rows(&s, copy), rows(&s, art)), (copy_was.clone(), art_was.clone()), "{at}");
+            assert_eq!((link(&s, copy), link(&s, art)), (None, None), "{at}");
+            assert_eq!(rows(&s, follower).fill_paint(), blue, "{at}");
+            assert_eq!(linked_to(&mut s, "Art"), [follower.0.min(blue_rect.0), follower.0.max(blue_rect.0)], "{at}");
+            // Redefine from the art itself: the art is unlinked and the linked rectangle takes the art's look.
+            link_directly(&mut s, &[copy, art], style);
+            s.execute("graphicStyle.redefine", &json!({"name": "Art", "id": source.0})).unwrap();
+            assert_eq!((rows(&s, copy), rows(&s, art)), (copy_was, art_was), "{at}");
+            assert_eq!((link(&s, copy), link(&s, art)), (None, None), "{at}");
+            assert_eq!(linked_to(&mut s, "Art"), [follower.0.min(blue_rect.0), follower.0.max(blue_rect.0)], "{at}");
+        }
+    }
+}
+
 /// The art of a marker design in a series is refused too.
 #[test]
 fn effect_commands_refuse_a_marker_designs_art() {
@@ -755,6 +838,24 @@ fn an_opacity_sort_objects_stores_the_frontmost_mark_it_changes() {
     let opacities: Vec<f32> = marks[..3].iter().map(|m| s.doc().unwrap().doc.node(*m).unwrap().opacity).collect();
     assert_eq!(opacities, [0.3, 0.6, 1.0]);
     assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.6));
+}
+
+/// A Sort Objects that gives series marks the opacities they already have changes nothing: the value the graph stores
+/// stays and no undo step is made, even when the evenly stepped percentage differs from a mark's in the last digits.
+#[test]
+fn an_opacity_sort_objects_that_changes_no_mark_keeps_the_stored_opacity() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("object.setProps", &json!({"id": marks[1].0, "opacity": 65})).unwrap();
+    s.execute("object.setProps", &json!({"id": marks[0].0, "opacity": 30})).unwrap();
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.3));
+    // From left to right the columns have 30%, 65% and 100%, the values an even step from 30% to 100% gives them.
+    let undo = s.doc().unwrap().history.undo.len();
+    let ids = [marks[0].0, marks[1].0, marks[2].0];
+    s.execute("addon.arrange.sort", &json!({"ids": ids, "by": "x", "apply": "opacity", "distribute": true})).unwrap();
+    let opacities: Vec<f32> = marks[..3].iter().map(|m| s.doc().unwrap().doc.node(*m).unwrap().opacity).collect();
+    assert_eq!(opacities, [0.3, 0.65, 1.0]);
+    assert_eq!(spec(&s, id).series_paints[0].opacity, Some(0.3));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no undo step");
 }
 
 /// An object opacity, blend mode, fill, stroke and weight that Global Edit gives a mark of another series from the mark
@@ -2754,10 +2855,39 @@ fn a_gradient_edit_on_a_series_mark_is_kept() {
     series_0_is(&mut s, id, (&fill, 0.4, &red, 2.0), &was);
 }
 
-/// A gradient placed on a series mark's fill with `paint.setGradientGeom` is stored on the graph as it is placed, and
-/// every mark of the series has that fill, placement included, after the graph is drawn again.
+/// Where gradient `paint` sits on box `b`: its vector's start and end, then each freeform point, as fractions of the box.
+fn gradient_place(paint: &Paint, b: vectorcraft_geom::Rect) -> Vec<f64> {
+    let Paint::Gradient(g) = paint else { panic!("not a gradient: {paint:?}") };
+    let points = g.geom.iter().flat_map(|geom| [geom.start, geom.end]).chain(g.freeform.iter().flat_map(|f| f.points.iter().map(|p| p.at)));
+    points.flat_map(|p| [(p.x - b.x0) / b.width(), (p.y - b.y0) / b.height()]).collect()
+}
+
+/// The box a gradient on `mark`'s fill (`stroke` false) or stroke is placed on.
+fn paint_box_of(mark: &vectorcraft_doc::Node, stroke: bool) -> vectorcraft_geom::Rect {
+    let b = mark.geometric_bounds().unwrap();
+    if stroke { vectorcraft_doc::appearance::stroke_paint_bounds(b, mark.appearance.stroke_width()) } else { b }
+}
+
+/// The fill (`stroke` false) or stroke of every path of series 0, the legend swatch included, has a gradient at `place` on
+/// its own box, and the gradients are not all at one place in the document. Returns how many paths were checked.
+fn series_0_gradients_at(s: &Session, id: NodeId, stroke: bool, place: &[f64]) -> usize {
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let paths: Vec<_> = series(&n, 0).children().unwrap().iter().filter(|m| matches!(m.kind, NodeKind::Path { .. })).cloned().collect();
+    let paints: Vec<Paint> = paths.iter().map(|m| if stroke { m.appearance.stroke_paint() } else { m.appearance.fill_paint() }).collect();
+    for (m, paint) in paths.iter().zip(&paints) {
+        let at = gradient_place(paint, paint_box_of(m, stroke));
+        assert_eq!(at.len(), place.len(), "{at:?}");
+        assert!(at.iter().zip(place).all(|(a, b)| (a - b).abs() < 1e-9), "{at:?} is not {place:?}");
+    }
+    assert!(paints.windows(2).any(|w| w[0] != w[1]), "every mark has the gradient at one place: {paints:?}");
+    paths.len()
+}
+
+/// A gradient placed on a series mark's fill with `paint.setGradientGeom` is stored relative to the mark's box, and every
+/// mark of the series has it at the same place on its own box after the graph is drawn again, also after a data change
+/// moves and resizes the marks and after the graph is moved.
 #[test]
-fn a_gradient_placed_on_a_series_mark_is_kept_with_its_placement() {
+fn a_gradient_placed_on_a_series_mark_takes_the_same_place_on_every_mark() {
     let (mut s, id, _, marks) = column_marks();
     // `paint.setFill` stores the gradient before it is placed.
     s.execute("paint.setFill", &json!({"ids": [marks[0].0], "gradient": {"kind": "linear"}})).unwrap();
@@ -2766,26 +2896,258 @@ fn a_gradient_placed_on_a_series_mark_is_kept_with_its_placement() {
     s.execute("paint.setGradientGeom", &json!({"ids": [marks[0].0], "start": [0, 0], "end": [10, 40]})).unwrap();
     let placed = fill_of(&s, marks[0]);
     assert_ne!(placed, fill, "the command places the gradient");
-    assert_eq!(spec(&s, id).series_paints[0].fill, Some(placed.clone()));
-    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
-    assert!(marks_of(&s, id, 0).iter().all(|m| m.0 == placed), "{:?}", marks_of(&s, id, 0));
+    let mark = s.doc().unwrap().doc.node(marks[0]).unwrap().clone();
+    let place = gradient_place(&placed, paint_box_of(&mark, false));
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert!(kept.fill_unit_box);
+    assert_eq!(gradient_place(kept.fill.as_ref().unwrap(), vectorcraft_doc::GraphicStyle::UNIT_BOX), place);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4], [6, 1]]})).unwrap();
+    assert!(series_0_gradients_at(&s, id, false, &place) >= 4);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 50, "dy": 30})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[2, 2], [5, 4], [1, 1]]})).unwrap();
+    series_0_gradients_at(&s, id, false, &place);
 }
 
-/// A point recolored with `paint.freeform.setPoint` in a freeform gradient on a series mark's fill is stored on the graph.
+/// A gradient placed on a series mark's stroke is kept relative to the mark's stroke box, and every mark of the series has
+/// it at the same place on its own stroke box after the graph is drawn again.
+#[test]
+fn a_gradient_placed_on_a_series_marks_stroke_takes_the_same_place_on_every_mark() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setStroke", &json!({"ids": [marks[1].0], "gradient": {"kind": "radial"}})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [marks[1].0], "weight": 4})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [marks[1].0], "stroke": true, "start": [150, 200], "end": [170, 260]})).unwrap();
+    let mark = s.doc().unwrap().doc.node(marks[1]).unwrap().clone();
+    let place = gradient_place(&mark.appearance.stroke_paint(), paint_box_of(&mark, true));
+    assert!(spec(&s, id).series_paints[0].stroke_unit_box);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4], [6, 1]]})).unwrap();
+    series_0_gradients_at(&s, id, true, &place);
+}
+
+/// A placed gradient picked up with the Eyedropper from art outside the graph is kept relative to the series mark it is
+/// dropped on, and every mark of the series has it at the same place on its own box.
+#[test]
+fn a_placed_gradient_dropped_on_a_series_mark_takes_the_same_place_on_every_mark() {
+    let (mut s, id, _, marks) = column_marks();
+    let r = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [r.0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [r.0], "start": [610, 600], "end": [630, 620]})).unwrap();
+    s.execute("appearance.copyFrom", &json!({"source": r.0, "ids": [marks[2].0]})).unwrap();
+    let mark = s.doc().unwrap().doc.node(marks[2]).unwrap().clone();
+    let place = gradient_place(&mark.appearance.fill_paint(), paint_box_of(&mark, false));
+    assert!(spec(&s, id).series_paints[0].fill_unit_box);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4], [6, 1]]})).unwrap();
+    series_0_gradients_at(&s, id, false, &place);
+}
+
+/// A graphic style with a placed gradient applied to a series mark is kept relative to that mark's box, and every mark of
+/// the series has the gradient at the same place on its own box.
+#[test]
+fn a_graphic_style_gradient_applied_to_a_series_mark_takes_the_same_place_on_every_mark() {
+    let (mut s, id, _, marks) = column_marks();
+    let r = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 40, "height": 20})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [r.0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [r.0], "start": [610, 600], "end": [630, 620]})).unwrap();
+    s.execute("graphicStyle.new", &json!({"id": r.0, "name": "Placed"})).unwrap();
+    s.execute("graphicStyle.apply", &json!({"name": "Placed", "ids": [marks[2].0]})).unwrap();
+    let mark = s.doc().unwrap().doc.node(marks[2]).unwrap().clone();
+    let place = gradient_place(&mark.appearance.fill_paint(), paint_box_of(&mark, false));
+    assert!(spec(&s, id).series_paints[0].fill_unit_box);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4], [6, 1]]})).unwrap();
+    series_0_gradients_at(&s, id, false, &place);
+}
+
+/// A point recolored with `paint.freeform.setPoint` in a freeform gradient on a series mark's fill is stored on the graph,
+/// and every mark of the series has the gradient's points at the same place on its own box after the graph is drawn again.
 #[test]
 fn a_freeform_gradient_edit_on_a_series_mark_is_kept() {
     let (mut s, id, _, marks) = column_marks();
     let points = json!([{"at": [20, 20], "color": "#53aadf"}, {"at": [50, 50], "color": "#ff8000"}]);
     // `paint.setFill` stores the gradient before its point is recolored.
     s.execute("paint.setFill", &json!({"ids": [marks[0].0], "gradient": {"kind": "freeform", "freeform": {"points": points}}})).unwrap();
-    let fill = fill_of(&s, marks[0]);
-    assert_eq!(spec(&s, id).series_paints[0].fill, Some(fill.clone()));
     s.execute("paint.freeform.setPoint", &json!({"ids": [marks[0].0], "index": 1, "color": "#00ff00"})).unwrap();
     let edited = fill_of(&s, marks[0]);
-    assert_ne!(edited, fill, "the command recolors the point");
-    assert_eq!(spec(&s, id).series_paints[0].fill, Some(edited.clone()));
+    let Paint::Gradient(g) = &edited else { panic!("{edited:?}") };
+    assert_eq!(g.freeform.as_ref().unwrap().points[1].color.to_hex(), "#00ff00");
+    let mark = s.doc().unwrap().doc.node(marks[0]).unwrap().clone();
+    let place = gradient_place(&edited, paint_box_of(&mark, false));
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert!(kept.fill_unit_box);
+    assert_eq!(gradient_place(kept.fill.as_ref().unwrap(), vectorcraft_doc::GraphicStyle::UNIT_BOX), place);
     s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
-    assert!(marks_of(&s, id, 0).iter().all(|m| m.0 == edited), "{:?}", marks_of(&s, id, 0));
+    series_0_gradients_at(&s, id, false, &place);
+}
+
+/// A gradient a graph kept in document coordinates (a file saved before gradients were kept relative to the unit box) is
+/// drawn on every mark as it was kept.
+#[test]
+fn a_gradient_kept_in_document_coordinates_is_drawn_as_kept() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [marks[0].0], "start": [0, 0], "end": [10, 40]})).unwrap();
+    let placed = fill_of(&s, marks[0]);
+    s.edit("Kept in document coordinates", |d, _| {
+        let mut extras = d.node_mut(id).unwrap().extras_mut();
+        let slot = &mut extras.graph.as_mut().unwrap().series_paints[0];
+        (slot.fill, slot.fill_unit_box) = (Some(placed.clone()), false);
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4]]})).unwrap();
+    assert!(marks_of(&s, id, 0).iter().all(|m| m.0 == placed), "{:?}", marks_of(&s, id, 0));
+    // The same gradient kept for the fill relative to the unit box leaves the stroke kept in document coordinates as it is.
+    s.edit("Kept fill and stroke", |d, _| {
+        let mut extras = d.node_mut(id).unwrap().extras_mut();
+        let slot = &mut extras.graph.as_mut().unwrap().series_paints[0];
+        (slot.fill, slot.fill_unit_box) = (Some(placed.clone()), true);
+        (slot.stroke, slot.stroke_unit_box, slot.stroke_width) = (Some(placed.clone()), false, Some(2.0));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[2, 2], [3, 4]]})).unwrap();
+    let drawn = marks_of(&s, id, 0);
+    assert!(drawn.iter().all(|m| m.1 == placed), "{drawn:?}");
+    series_0_gradients_at(&s, id, false, &gradient_place(&placed, vectorcraft_doc::GraphicStyle::UNIT_BOX));
+}
+
+/// A gradient placed on a series path with no height (a flat line's fill) is kept in document coordinates, and every
+/// path of the series that takes the kept fill has it at that place in the document.
+#[test]
+fn a_gradient_placed_on_a_series_path_with_no_height_is_kept_in_document_coordinates() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "line");
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[3, 2], [3, 4], [3, 6]]})).unwrap();
+    let flat = |s: &Session| {
+        let parts = series_parts(s, id, 0);
+        parts.into_iter().find(|m| m.appearance.fill_paint().is_none() && m.geometric_bounds().is_some_and(|b| b.height() < 1e-9)).unwrap().id
+    };
+    let line = flat(&s);
+    s.execute("paint.setFill", &json!({"ids": [line.0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [line.0], "start": [150, 120], "end": [300, 280]})).unwrap();
+    let placed = fill_of(&s, line);
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert!(!kept.fill_unit_box);
+    assert_eq!(kept.fill, Some(placed.clone()));
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[3, 1], [3, 5], [3, 2]]})).unwrap();
+    let fills: Vec<Paint> = series_parts(&s, id, 0).iter().map(|m| m.appearance.fill_paint()).filter(|p| matches!(p, Paint::Gradient(_))).collect();
+    assert!(fills.len() >= 2 && fills.iter().all(|p| *p == placed), "{fills:?}");
+}
+
+/// Writing a series mark's stroke weight as it is, after the graph drew the mark's stroke from a gradient the series
+/// keeps relative to the unit box, leaves the kept gradient, the document and its undo history as they are, on every mark.
+#[test]
+fn rewriting_a_series_marks_drawn_gradient_stroke_records_no_undo_step() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setStroke", &json!({"ids": [marks[1].0], "gradient": {"kind": "radial"}})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [marks[1].0], "weight": 4})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [marks[1].0], "stroke": true, "start": [150, 200], "end": [170, 260]})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1.3, 2], [3.7, 4], [6.1, 1]]})).unwrap();
+    let was = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let drawn: Vec<_> = series_parts(&s, id, 0).into_iter().filter(|m| matches!(m.appearance.stroke_paint(), Paint::Gradient(_))).collect();
+    assert!(drawn.len() >= 4, "{}", drawn.len());
+    for mark in drawn {
+        let row = top_row(&s, mark.id, false);
+        s.execute("appearance.setItem", &json!({"ids": [mark.id.0], "index": row, "weight": mark.appearance.stroke_width()})).unwrap();
+        assert!(s.doc().unwrap().doc == was, "writing mark {:?} changed the document", mark.id);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    }
+    // A mark moved with its gradient shows the kept gradient on its moved box, up to rounding.
+    let kept = spec(&s, id).series_paints[0].clone();
+    for (i, mark) in series_parts(&s, id, 0).into_iter().filter(|m| matches!(m.appearance.stroke_paint(), Paint::Gradient(_))).enumerate() {
+        s.execute("select.set", &json!({"ids": [mark.id.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 13.37 + i as f64 * 0.731, "dy": -7.19})).unwrap();
+        let moved = s.doc().unwrap().doc.node(mark.id).unwrap().geometric_bounds().unwrap();
+        assert!((moved.x0 - mark.geometric_bounds().unwrap().x0 - 13.37 - i as f64 * 0.731).abs() < 1e-9, "mark {:?} did not move", mark.id);
+        let undo = s.doc().unwrap().history.undo.len();
+        let row = top_row(&s, mark.id, false);
+        s.execute("appearance.setItem", &json!({"ids": [mark.id.0], "index": row, "weight": mark.appearance.stroke_width()})).unwrap();
+        assert_eq!(spec(&s, id).series_paints[0], kept, "writing moved mark {:?} changed the kept stroke", mark.id);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    }
+}
+
+/// Writing the fill of a series mark with no height (a column for a value of 0) as it is, after the graph drew the mark's
+/// fill from a gradient the series keeps relative to the unit box, leaves the kept gradient and its unit-box flag as they
+/// are.
+#[test]
+fn rewriting_a_drawn_gradient_fill_on_a_series_mark_with_no_height_keeps_the_kept_gradient() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [marks[0].0], "start": [0, 0], "end": [10, 40]})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert!(kept.fill_unit_box);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[0, 2], [3, 4], [6, 1]]})).unwrap();
+    let flat = series_parts(&s, id, 0)
+        .into_iter()
+        .find(|m| matches!(m.appearance.fill_paint(), Paint::Gradient(_)) && m.geometric_bounds().is_some_and(|b| b.height() < 1e-9))
+        .unwrap()
+        .id;
+    let changed = s.edit("Write the fill as it is", |d, _| Ok(super::capture_series_top_paints(d, &[(flat, true)]))).unwrap();
+    assert!(!changed);
+    assert_eq!(spec(&s, id).series_paints[0], kept);
+}
+
+/// Writing a series mark's stroke weight as it is, after the graph drew the mark's stroke from a gradient the series keeps
+/// in document coordinates (a file saved before the unit box), leaves the kept gradient and its unit-box flag as they are
+/// and records no undo step.
+#[test]
+fn rewriting_a_series_marks_stroke_drawn_from_a_gradient_kept_in_document_coordinates_keeps_it() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setStroke", &json!({"ids": [marks[1].0], "gradient": {"kind": "radial"}})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [marks[1].0], "weight": 2})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [marks[1].0], "stroke": true, "start": [150, 200], "end": [170, 260]})).unwrap();
+    let placed = s.doc().unwrap().doc.node(marks[1]).unwrap().appearance.stroke_paint();
+    s.edit("Kept in document coordinates", |d, _| {
+        let mut extras = d.node_mut(id).unwrap().extras_mut();
+        let slot = &mut extras.graph.as_mut().unwrap().series_paints[0];
+        (slot.stroke, slot.stroke_unit_box, slot.stroke_width) = (Some(placed.clone()), false, Some(2.0));
+        Ok(())
+    })
+    .unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2], [3, 4], [6, 1]]})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let drawn: Vec<_> = series_parts(&s, id, 0).into_iter().filter(|m| m.appearance.stroke_paint() == placed).collect();
+    assert!(drawn.len() >= 3, "{}", drawn.len());
+    for mark in drawn {
+        let row = top_row(&s, mark.id, false);
+        s.execute("appearance.setItem", &json!({"ids": [mark.id.0], "index": row, "weight": mark.appearance.stroke_width()})).unwrap();
+        assert_eq!(spec(&s, id).series_paints[0], kept, "writing mark {:?} changed the kept stroke", mark.id);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    }
+}
+
+/// A gradient placed on a line series' stroke is kept relative to the line's stroke box, and with Draw Filled Lines the
+/// band, which takes the kept stroke as its fill, has it at the same place on its own box.
+#[test]
+fn a_gradient_kept_for_a_lines_stroke_takes_the_same_place_on_its_filled_line() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "line");
+    let line = series_parts(&s, id, 0).into_iter().find(|m| m.appearance.fill_paint().is_none()).unwrap().id;
+    s.execute("paint.setStroke", &json!({"ids": [line.0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [line.0], "stroke": true, "start": [150, 120], "end": [300, 280]})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert!(kept.stroke_unit_box && kept.fill.is_none());
+    let place = gradient_place(kept.stroke.as_ref().unwrap(), vectorcraft_doc::GraphicStyle::UNIT_BOX);
+    s.execute("graph.setType", &json!({"id": id.0, "filledLines": true})).unwrap();
+    let band = series_parts(&s, id, 0).into_iter().find(|m| matches!(m.appearance.fill_paint(), Paint::Gradient(_))).unwrap();
+    let at = gradient_place(&band.appearance.fill_paint(), band.geometric_bounds().unwrap());
+    assert!(at.iter().zip(&place).all(|(a, b)| (a - b).abs() < 1e-9), "{at:?} is not {place:?}");
+}
+
+/// A series' kept unit-box flags are read from and written to a file, and a file without them reads as document
+/// coordinates.
+#[test]
+fn a_series_paints_unit_box_flags_round_trip() {
+    let kept = vectorcraft_doc::SeriesPaint { fill_unit_box: true, stroke_unit_box: true, ..Default::default() };
+    let text = serde_json::to_string(&kept).unwrap();
+    assert_eq!(text, r#"{"fillUnitBox":true,"strokeUnitBox":true}"#);
+    assert_eq!(serde_json::from_str::<vectorcraft_doc::SeriesPaint>(&text).unwrap(), kept);
+    let old: vectorcraft_doc::SeriesPaint = serde_json::from_str("{}").unwrap();
+    assert!(!old.fill_unit_box && !old.stroke_unit_box);
 }
 
 /// A series mark's fill recolored with Invert or Complement (the proxy, or one appearance row), an Edit Colors command,
@@ -5728,6 +6090,247 @@ fn a_graphic_style_on_a_label_is_kept_for_its_kind() {
     s.execute("graphicStyle.redefine", &json!({"name": "Orange", "id": r.0})).unwrap();
     let looks = redrawn_label_rows(&mut s, id);
     assert!(rows_of(&looks, "0").0.iter().any(|(fill, hex, _, _)| *fill && hex == "#0080ff"), "{looks:?}");
+}
+
+/// The character style of the first run of label `text` in group `grp`.
+fn label_run_style(s: &Session, id: NodeId, grp: &str, text: &str) -> CharStyle {
+    let NodeKind::Text(t) = label_node(s, id, grp, text).kind else { panic!("{text} is not type") };
+    t.runs[0].style.clone()
+}
+
+/// A recolor of the whole graph (Invert or Complement on the proxy, an Edit Colors command, a color filter or Recolor
+/// Artwork) is kept for the characters and the rows of every kind of label when the graph is drawn again, and undo takes
+/// it back with its edit.
+#[test]
+fn recoloring_a_graph_keeps_its_labels_paint_for_every_kind() {
+    let cases = [
+        ("paint.invert", json!({})),
+        ("paint.complement", json!({})),
+        ("edit.colors.invert", json!({})),
+        ("edit.colors.toGrayscale", json!({})),
+        ("addon.color.filter", json!({"effect": "addon.color.invert"})),
+        ("recolor.apply", json!({"map": {"#3366cc": "#00ff00", "#ff8000": "#8000ff"}})),
+    ];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        // Characters of every label in a color that every case changes, and an orange fill row on the category labels.
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("paint.setFill", &json!({"color": "#3366cc"})).unwrap();
+        let c = text_id(&s, id, "Axes", "Q2");
+        s.execute("appearance.addFill", &json!({"ids": [c.0]})).unwrap();
+        s.execute("appearance.setItem", &json!({"ids": [c.0], "index": 0, "color": "#ff8000"})).unwrap();
+        let was = spec(&s, id).label_styles;
+        let mut p = params.clone();
+        if *cmd == "recolor.apply" {
+            // Recolor Artwork works on the selection.
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        } else {
+            p["ids"] = json!([id.0]);
+        }
+        s.execute(cmd, &p).unwrap();
+        let hex = |p: &Paint| p.color().map(|c| c.to_hex()).unwrap_or_default();
+        let characters = hex(&label_run_style(&s, id, "Axes", "4").fill);
+        assert_ne!(characters, "#3366cc", "{cmd} recolors the characters");
+        let row = label_node(&s, id, "Axes", "Q2").appearance.items[0].paint().clone();
+        assert_ne!(hex(&row), "#ff8000", "{cmd} recolors the row");
+        let looks = label_looks(&mut s, id);
+        for t in ["0", "Q1", "2024"] {
+            assert!(looks.iter().any(|(x, _, fill)| x == t && *fill == characters), "{cmd}: {t}: {looks:?}");
+        }
+        let rows = redrawn_label_rows(&mut s, id);
+        assert_eq!(rows_of(&rows, "Q1").0.first().map(|r| r.1.clone()), Some(hex(&row)), "{cmd}: {rows:?}");
+        // Undo takes back the recolor and what the graph keeps (the two redraws are undone first).
+        for _ in 0..3 {
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert_eq!(spec(&s, id).label_styles, was, "{cmd}");
+    });
+}
+
+/// A recolor of one label changes what the graph keeps for that kind of label only.
+#[test]
+fn recoloring_one_label_keeps_its_paint_for_its_kind_only() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("edit.colors.invert", &json!({"ids": [v.0]})).unwrap();
+    let looks = label_looks(&mut s, id);
+    assert!(looks.iter().any(|(t, _, fill)| t == "0" && fill == "#ffffff"), "{looks:?}");
+    assert!(looks.iter().any(|(t, _, fill)| t == "Q1" && fill == "#000000"), "{looks:?}");
+    assert!(looks.iter().any(|(t, _, fill)| t == "2024" && fill == "#000000"), "{looks:?}");
+    let g = spec(&s, id).label_styles;
+    assert!(g.categories.is_none() && g.legend.is_none(), "{g:?}");
+}
+
+/// A recolor that leaves a label's first characters as they were and gives the rest the same fill is kept for its kind.
+#[test]
+fn a_recolor_that_evens_out_a_labels_characters_is_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let q2 = text_id(&s, id, "Axes", "Q2");
+    s.select_tool("type", crate::ViewInfo::default()).unwrap();
+    for (start, end, hex) in [(0, 1, "#ff0000"), (1, 2, "#0000ff")] {
+        s.set_tool_option("textSelection", &json!({"id": q2.0, "start": start, "end": end}));
+        s.execute("paint.setFill", &json!({"color": hex})).unwrap();
+    }
+    s.select_tool("selection", crate::ViewInfo::default()).unwrap();
+    assert_eq!(spec(&s, id).label_styles.categories, None, "part of a label's text is not kept");
+    s.execute("select.set", &json!({"ids": [q2.0]})).unwrap();
+    s.execute("recolor.apply", &json!({"map": {"#0000ff": "#ff0000"}})).unwrap();
+    let looks = label_looks(&mut s, id);
+    assert!(looks.iter().any(|(t, _, fill)| t == "Q1" && fill == "#ff0000"), "{looks:?}");
+    assert!(looks.iter().any(|(t, _, fill)| t == "0" && fill == "#000000"), "{looks:?}");
+}
+
+/// Stroke options set with `stroke.set` and a gradient made with `paint.editGradient` and placed with
+/// `paint.setGradientGeom` on a label's characters are kept for every label of its kind, the gradient without its
+/// placement.
+#[test]
+fn stroke_and_gradient_edits_on_a_labels_characters_are_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let category = label_run_style(&s, id, "Axes", "Q1");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("paint.setStroke", &json!({"ids": [v.0], "color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [v.0], "weight": 3, "cap": "round"})).unwrap();
+    s.execute("paint.editGradient", &json!({"ids": [v.0], "kind": "linear", "stroke": false})).unwrap();
+    let placement = json!({"ids": [v.0], "stroke": false, "start": [100, 100], "end": [200, 100], "aspect": 50});
+    s.execute("paint.setGradientGeom", &placement).unwrap();
+    let fill = label_run_style(&s, id, "Axes", "4").fill;
+    assert!(matches!(&fill, Paint::Gradient(g) if g.geom.is_some()), "the edited label's gradient is placed: {fill:?}");
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "0");
+    assert_eq!((st.stroke_width, st.stroke_cap), (3.0, vectorcraft_doc::LineCap::Round));
+    assert!(matches!(&st.fill, Paint::Gradient(g) if g.geom.is_none()), "{:?}", st.fill);
+    assert_eq!(label_run_style(&s, id, "Axes", "Q1"), category, "the category labels are left as they were");
+}
+
+/// `stroke.set`, `stroke.weightUp` and `stroke.weightDown` given the whole graph are kept for every kind of label.
+#[test]
+fn stroke_weights_set_on_the_whole_graph_are_kept_for_its_labels() {
+    let cases = [("stroke.set", json!({"weight": 2}), 2.0), ("stroke.weightUp", json!({}), 2.0), ("stroke.weightDown", json!({}), 0.75)];
+    every_case(cases, |(cmd, params, weight)| {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("paint.setStroke", &json!({"ids": [id.0], "color": "#ff0000"})).unwrap();
+        let mut p = params.clone();
+        p["ids"] = json!([id.0]);
+        s.execute(cmd, &p).unwrap();
+        assert_eq!(label_run_style(&s, id, "Axes", "4").stroke_width, *weight, "{cmd}");
+        label_looks(&mut s, id);
+        for (grp, t) in [("Axes", "0"), ("Axes", "Q1"), ("Legend", "2024")] {
+            assert_eq!(label_run_style(&s, id, grp, t).stroke_width, *weight, "{cmd}: {t}");
+        }
+    });
+}
+
+/// A stroke weight set on a scaled label is kept as the label shows it, since the graph draws its labels unscaled.
+#[test]
+fn a_stroke_weight_on_a_scaled_label_is_kept_as_it_shows() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("select.set", &json!({"ids": [v.0]})).unwrap();
+    s.execute("object.scale", &json!({"sx": 200, "sy": 200})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [v.0], "color": "#ff0000"})).unwrap();
+    s.execute("stroke.set", &json!({"ids": [v.0], "weight": 3})).unwrap();
+    assert_eq!(label_run_style(&s, id, "Axes", "4").stroke_width, 1.5, "drawn at twice its size");
+    label_looks(&mut s, id);
+    assert_eq!(label_run_style(&s, id, "Axes", "0").stroke_width, 3.0);
+}
+
+/// When the characters of two labels of one kind are recolored differently, the frontmost one sets what the kind
+/// keeps, whatever order `ids` are in.
+#[test]
+fn the_frontmost_label_of_a_kind_sets_what_its_recolor_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    // Legend labels: the axes tell value and category labels apart by their order, so these are moved instead.
+    let (a, b) = (text_id(&s, id, "Legend", "2024"), text_id(&s, id, "Legend", "2025"));
+    s.execute("paint.setFill", &json!({"ids": [a.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [b.0], "color": "#0000ff"})).unwrap();
+    // The label made first goes in front, so neither the order of `ids` nor the order the labels were made in decides.
+    let (front, back) = if a < b { (a, b) } else { (b, a) };
+    s.execute("select.set", &json!({"ids": [front.0]})).unwrap();
+    s.execute("object.arrange.bringToFront", &json!({})).unwrap();
+    let path = |n: NodeId| s.doc().unwrap().doc.index_path(n);
+    assert!(path(front) > path(back), "{:?} {:?}", path(front), path(back));
+    let front_fill = if front == a { "#00ffff" } else { "#ffff00" };
+    s.execute("edit.colors.invert", &json!({"ids": [front.0, back.0]})).unwrap();
+    let kept = spec(&s, id).label_styles.legend.unwrap().fill;
+    assert_eq!(kept.color().map(|c| c.to_hex()).as_deref(), Some(front_fill));
+}
+
+/// Apply Nearest Swatch and the ink limit of Print Ink Fixes on a label are kept for its kind.
+#[test]
+fn nearest_swatch_and_ink_limit_on_a_label_are_kept_for_its_kind() {
+    let cases = [
+        ("addon.color.applyNearestSwatch", json!({"library": "web-safe-216"})),
+        ("addon.color.printFixes", json!({"scope": "selection", "inkLimit": 200})),
+    ];
+    every_case(cases, |(cmd, params)| {
+        let mut s = Session::new();
+        // Print Ink Fixes works on CMYK documents.
+        s.execute("file.new", &json!({"width": 800, "height": 800, "colorMode": "cmyk"})).unwrap();
+        let id = graph(&mut s, "column");
+        let v = text_id(&s, id, "Axes", "4");
+        s.execute("paint.setFill", &json!({"ids": [v.0], "color": {"c": 90, "m": 80, "y": 70, "k": 60}})).unwrap();
+        let was = label_run_style(&s, id, "Axes", "4").fill;
+        let mut p = params.clone();
+        p["ids"] = json!([v.0]);
+        s.execute(cmd, &p).unwrap();
+        let now = label_run_style(&s, id, "Axes", "4").fill;
+        assert_ne!(now, was, "{cmd} changes the fill");
+        label_looks(&mut s, id);
+        assert_eq!(label_run_style(&s, id, "Axes", "0").fill, now, "{cmd}");
+    });
+}
+
+/// Swap Fill and Stroke and Default Fill and Stroke on a label are kept for its kind.
+#[test]
+fn swap_and_default_fill_and_stroke_on_a_label_are_kept_for_its_kind() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let v = text_id(&s, id, "Axes", "4");
+    s.execute("paint.setStroke", &json!({"ids": [v.0], "color": "#ff0000"})).unwrap();
+    s.execute("paint.swap", &json!({"ids": [v.0]})).unwrap();
+    let swapped = label_run_style(&s, id, "Axes", "4");
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "0");
+    assert_eq!((&st.fill, &st.stroke), (&swapped.fill, &swapped.stroke));
+    assert_eq!(st.fill.color().map(|c| c.to_hex()).as_deref(), Some("#ff0000"));
+    s.execute("paint.default", &json!({"ids": [text_id(&s, id, "Axes", "4").0]})).unwrap();
+    label_looks(&mut s, id);
+    let st = label_run_style(&s, id, "Axes", "0");
+    assert_eq!((st.fill.color().map(|c| c.to_hex()).as_deref(), st.stroke.is_none()), (Some("#000000"), true));
+}
+
+/// On a pie with Legends in Wedges, a recolor of the whole graph leaves the legend labels to the graph's black or white.
+#[test]
+fn a_recolor_leaves_wedge_legend_labels_their_contrast() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = make(&mut s, "pie", ",a,b\nP1,1,2");
+    s.execute("graph.setType", &json!({"id": id.0, "pieLegend": "wedges"})).unwrap();
+    s.execute("edit.colors.invert", &json!({"ids": [id.0]})).unwrap();
+    assert_eq!(spec(&s, id).label_styles.legend, None);
+    s.execute("graph.setData", &json!({"id": id.0, "rows": [[1, 2]]})).unwrap();
+    // The first series' black wedge is white now, so its label is black.
+    let NodeKind::Text(t) = label_node(&s, id, "Legend", "a").kind else { panic!("a is not type") };
+    assert_eq!(t.runs[0].style.fill.color().map(|c| c.to_hex()).as_deref(), Some("#000000"));
+    // A recolor of one legend label gives the kind that label's fill.
+    s.execute("edit.colors.invert", &json!({"ids": [text_id(&s, id, "Legend", "a").0]})).unwrap();
+    let kept = spec(&s, id).label_styles.legend.map(|st| st.fill);
+    assert_eq!(kept.and_then(|f| f.color()).map(|c| c.to_hex()).as_deref(), Some("#ffffff"));
 }
 
 #[test]

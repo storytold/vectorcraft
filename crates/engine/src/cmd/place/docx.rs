@@ -38,7 +38,7 @@
 
 use std::collections::HashMap;
 
-use roxmltree::Node;
+use craft_xml::{Canonical, Doctype, El, Limits, Names, Options};
 use vectorcraft_doc::text::Kashida;
 use vectorcraft_doc::{CharPosition, CharStyle, Justify, ParaDirection, ParaStyle, ScriptMetrics, TextRun};
 
@@ -88,6 +88,7 @@ const MAX_RUNS: usize = 100_000;
 
 /// WordprocessingML's namespaces: Transitional, then Strict.
 const W: [&str; 2] = ["http://schemas.openxmlformats.org/wordprocessingml/2006/main", "http://purl.oclc.org/ooxml/wordprocessingml/main"];
+const DOCX_NS: Canonical<'static> = Canonical::new(&[("w", W[0]), ("w", W[1])]);
 
 /// Is the file `name` with `bytes` a Word document: a ZIP archive named `.docx`, or one that holds
 /// `word/document.xml`?
@@ -104,7 +105,7 @@ pub(super) fn import(bytes: &[u8], cmd: &str) -> Result<Story> {
     let main = relationship(&zip, "", "officeDocument", cmd)?.unwrap_or_else(|| "word/document.xml".into());
     let Some(xml) = part(&zip, &main, cmd)? else { return Err(bad(cmd, "not a Word document: its package has no main document part")) };
     let doc = parse(&xml, &main, cmd)?;
-    if local(doc.root_element()) != Some("document") {
+    if local(&doc) != Some("document") {
         return Err(bad(cmd, "not a Word document: its main part is not a WordprocessingML document"));
     }
     let folder = main.rfind('/').and_then(|i| main.get(..=i)).unwrap_or_default();
@@ -117,7 +118,7 @@ pub(super) fn import(bytes: &[u8], cmd: &str) -> Result<Story> {
     if let Some(xml) = part(&zip, &styles, cmd)? {
         r.styles(&parse(&xml, &styles, cmd)?);
     }
-    if let Some(body) = doc.root_element().children().find(|n| local(*n) == Some("body")) {
+    if let Some(body) = child(&doc, "body") {
         r.block(body, 0);
     }
     r.finish(cmd)
@@ -158,57 +159,17 @@ fn part(zip: &Archive, name: &str, cmd: &str) -> Result<Option<String>> {
 }
 
 /// The XML of the part `name`.
-fn parse<'a>(xml: &'a str, name: &str, cmd: &str) -> Result<roxmltree::Document<'a>> {
-    // roxmltree parses nested elements recursively.
-    if nesting(xml) > MAX_NESTING {
-        return Err(bad(cmd, format!("`{name}` in the Word document nests elements more than {MAX_NESTING} deep")));
-    }
-    let opts = roxmltree::ParsingOptions { nodes_limit: MAX_NODES, ..roxmltree::ParsingOptions::default() };
-    roxmltree::Document::parse_with_options(xml, opts).map_err(|e| bad(cmd, format!("`{name}` in the Word document is not well-formed XML: {e}")))
-}
-
-/// How deep the elements of `xml` nest: start tags less end tags, at most, outside comments,
-/// CDATA sections, processing instructions, declarations and quoted attribute values.
-pub(crate) fn nesting(xml: &str) -> usize {
-    let b = xml.as_bytes();
-    let (mut depth, mut most, mut i) = (0usize, 0usize, 0usize);
-    // The index just past the first `end` at or after `from` (the end of the text if none).
-    let past = |from: usize, end: &[u8]| {
-        b.get(from..).and_then(|rest| rest.windows(end.len()).position(|w| w == end)).map_or(b.len(), |at| from + at + end.len())
+fn parse(xml: &str, name: &str, cmd: &str) -> Result<El> {
+    let opts = Options {
+        names: Names::Canonical(&DOCX_NS),
+        doctype: Doctype::Reject,
+        limits: Limits { max_depth: MAX_NESTING, max_nodes: MAX_NODES as usize, ..Limits::DEFAULT },
+        ..Options::default()
     };
-    while let Some(at) = b.get(i..).and_then(|rest| rest.iter().position(|&c| c == b'<')) {
-        let start = i + at;
-        let rest = b.get(start..).unwrap_or_default();
-        if rest.starts_with(b"<!--") {
-            i = past(start + 4, b"-->");
-        } else if rest.starts_with(b"<![CDATA[") {
-            i = past(start + 9, b"]]>");
-        } else if rest.starts_with(b"<?") {
-            i = past(start + 2, b"?>");
-        } else if rest.starts_with(b"<!") || rest.starts_with(b"</") {
-            depth = depth.saturating_sub(usize::from(rest.starts_with(b"</")));
-            i = past(start + 2, b">");
-        } else {
-            // A start tag: up to its `>` outside quotes; `/>` closes it at once.
-            let mut j = start + 1;
-            let mut quote = None;
-            while let Some(&c) = b.get(j) {
-                match (quote, c) {
-                    (None, b'"' | b'\'') => quote = Some(c),
-                    (Some(q), _) if c == q => quote = None,
-                    (None, b'>') => break,
-                    _ => {}
-                }
-                j += 1;
-            }
-            if b.get(j.saturating_sub(1)) != Some(&b'/') {
-                depth += 1;
-                most = most.max(depth);
-            }
-            i = j + 1;
-        }
-    }
-    most
+    opts.parse(xml.as_bytes()).map_err(|e| match e {
+        craft_xml::Error::TooDeep(_) => bad(cmd, format!("`{name}` in the Word document nests elements more than {MAX_NESTING} deep")),
+        _ => bad(cmd, format!("`{name}` in the Word document is not well-formed XML: {e}")),
+    })
 }
 
 /// The part that the first relationship of part `source` (`""`: the package) whose type ends in
@@ -220,11 +181,10 @@ fn relationship(zip: &Archive, source: &str, kind: &str, cmd: &str) -> Result<Op
     let Some(xml) = part(zip, &rels, cmd)? else { return Ok(None) };
     let doc = parse(&xml, &rels, cmd)?;
     let target = doc
-        .root_element()
-        .children()
-        .filter(|n| n.tag_name().name() == "Relationship" && n.attribute("TargetMode") != Some("External"))
-        .find(|n| n.attribute("Type").is_some_and(|t| t.rsplit('/').next() == Some(kind)))
-        .and_then(|n| n.attribute("Target"));
+        .elements()
+        .filter(|n| n.local() == "Relationship" && n.attr("TargetMode") != Some("External"))
+        .find(|n| n.attr("Type").is_some_and(|t| t.rsplit('/').next() == Some(kind)))
+        .and_then(|n| n.attr("Target"));
     Ok(target.map(|t| resolve(folder, t)))
 }
 
@@ -248,22 +208,22 @@ fn resolve(folder: &str, target: &str) -> String {
 }
 
 /// `n`'s local name when it is a WordprocessingML element.
-fn local<'a>(n: Node<'a, '_>) -> Option<&'a str> {
-    (n.is_element() && n.tag_name().namespace().is_some_and(|ns| W.contains(&ns))).then(|| n.tag_name().name())
+fn local(n: &El) -> Option<&str> {
+    n.name.strip_prefix("w:")
 }
 
 /// `n`'s first WordprocessingML child element named `name`.
-fn child<'a, 'i>(n: Node<'a, 'i>, name: &str) -> Option<Node<'a, 'i>> {
-    n.children().find(|c| local(*c) == Some(name))
+fn child<'a>(n: &'a El, name: &str) -> Option<&'a El> {
+    n.elements().find(|c| local(c) == Some(name))
 }
 
 /// `n`'s WordprocessingML attribute `name`.
-fn attr<'a>(n: Node<'a, '_>, name: &str) -> Option<&'a str> {
-    n.attributes().find(|a| a.name() == name && a.namespace().is_some_and(|ns| W.contains(&ns))).map(|a| a.value())
+fn attr<'a>(n: &'a El, name: &str) -> Option<&'a str> {
+    n.attrs.iter().find_map(|(k, v)| k.strip_prefix("w:").filter(|&l| l == name).map(|_| v.as_str()))
 }
 
 /// An on/off property (ST_OnOff): on unless `w:val` is `false`, `0` or `off`.
-fn on(n: Node) -> bool {
+fn on(n: &El) -> bool {
     !matches!(attr(n, "val"), Some("false" | "0" | "off"))
 }
 
@@ -280,12 +240,12 @@ fn measure(v: &str, per_pt: f64) -> Option<f64> {
 }
 
 /// Twentieths of a point.
-fn twips(n: Node, name: &str) -> Option<f64> {
+fn twips(n: &El, name: &str) -> Option<f64> {
     attr(n, name).and_then(|v| measure(v, 20.0))
 }
 
 /// Half points.
-fn half_points(n: Node) -> Option<f64> {
+fn half_points(n: &El) -> Option<f64> {
     attr(n, "val").and_then(|v| measure(v, 2.0))
 }
 
@@ -462,21 +422,21 @@ struct Reader {
 
 impl Reader {
     /// The major and minor fonts of a theme part's font scheme.
-    fn theme_fonts(&mut self, doc: &roxmltree::Document) {
+    fn theme_fonts(&mut self, doc: &El) {
         for (slot, scheme) in self.theme.iter_mut().zip(["majorFont", "minorFont"]) {
-            *slot = doc
-                .descendants()
-                .find(|n| n.tag_name().name() == scheme)
-                .and_then(|n| n.children().find(|c| c.tag_name().name() == "latin"))
-                .and_then(|n| n.attribute("typeface"))
+            *slot = std::iter::once(doc)
+                .chain(doc.descendants())
+                .find(|n| n.local() == scheme)
+                .and_then(|n| n.elements().find(|c| c.local() == "latin"))
+                .and_then(|n| n.attr("typeface"))
                 .map(font_name)
                 .filter(|f| !f.is_empty());
         }
     }
 
     /// The document defaults and the styles of the styles part.
-    fn styles(&mut self, doc: &roxmltree::Document) {
-        for n in doc.root_element().children() {
+    fn styles(&mut self, doc: &El) {
+        for n in doc.elements() {
             match local(n) {
                 Some("docDefaults") => {
                     let props = |outer: &str, inner: &str| child(n, outer).and_then(|d| child(d, inner));
@@ -526,7 +486,7 @@ impl Reader {
     }
 
     /// The number of the font a `w:rFonts` element names.
-    fn font(&mut self, n: Node) -> Option<usize> {
+    fn font(&mut self, n: &El) -> Option<usize> {
         let theme = |v: &str| self.theme.get(usize::from(v.starts_with("minor"))).and_then(Option::as_deref);
         let name = attr(n, "asciiTheme")
             .and_then(theme)
@@ -549,9 +509,9 @@ impl Reader {
     }
 
     /// The run properties of a `w:rPr` element.
-    fn run_props(&mut self, rpr: Node) -> RunProps {
+    fn run_props(&mut self, rpr: &El) -> RunProps {
         let mut p = RunProps::default();
-        for n in rpr.children() {
+        for n in rpr.elements() {
             match local(n) {
                 Some("rFonts") => p.font = self.font(n),
                 Some("b") => p.bold = Some(on(n)),
@@ -594,11 +554,11 @@ impl Reader {
     }
 
     /// The paragraphs, tables and containers of them that are `n`'s children.
-    fn block(&mut self, n: Node, depth: usize) {
+    fn block(&mut self, n: &El, depth: usize) {
         if depth > MAX_DEPTH {
             return;
         }
-        for c in n.children() {
+        for c in n.elements() {
             if self.full {
                 return;
             }
@@ -617,7 +577,7 @@ impl Reader {
     }
 
     /// A table: each row a paragraph, its cells separated by tabs.
-    fn table(&mut self, tbl: Node, depth: usize) {
+    fn table(&mut self, tbl: &El, depth: usize) {
         for row in items(tbl, "tr", depth) {
             for cell in items(row, "tc", depth) {
                 self.flush();
@@ -638,7 +598,7 @@ impl Reader {
     }
 
     /// A paragraph.
-    fn paragraph(&mut self, p: Node, depth: usize) {
+    fn paragraph(&mut self, p: &El, depth: usize) {
         self.flush();
         let ppr = child(p, "pPr");
         let style = ppr
@@ -675,11 +635,11 @@ impl Reader {
     }
 
     /// The runs of a paragraph, and the containers of runs in it.
-    fn inline(&mut self, n: Node, depth: usize) {
+    fn inline(&mut self, n: &El, depth: usize) {
         if depth > MAX_DEPTH {
             return;
         }
-        for c in n.children() {
+        for c in n.elements() {
             match local(c) {
                 Some("r") => self.run(c),
                 Some("hyperlink" | "ins" | "moveTo" | "smartTag" | "customXml" | "fldSimple" | "dir" | "bdo") => self.inline(c, depth + 1),
@@ -694,7 +654,7 @@ impl Reader {
     }
 
     /// A run.
-    fn run(&mut self, r: Node) {
+    fn run(&mut self, r: &El) {
         let rpr = child(r, "rPr");
         let mut chars = self.base;
         let style = rpr
@@ -709,11 +669,10 @@ impl Reader {
             let props = self.run_props(n);
             chars.apply(&props, false);
         }
-        for c in r.children() {
+        for c in r.elements() {
             match local(c) {
                 Some("t") => {
-                    // Comments and processing instructions may split the text.
-                    for ch in c.children().filter(|n| n.is_text()).filter_map(|n| n.text()).flat_map(str::chars) {
+                    for ch in c.text().chars() {
                         self.put(ch, chars);
                     }
                 }
@@ -907,9 +866,9 @@ fn font_name(name: &str) -> String {
 }
 
 /// The paragraph properties of a `w:pPr` element.
-fn para_props(ppr: Node) -> ParaProps {
+fn para_props(ppr: &El) -> ParaProps {
     let mut p = ParaProps::default();
-    for n in ppr.children() {
+    for n in ppr.elements() {
         match local(n) {
             Some("jc") => {
                 p.align = match attr(n, "val") {
@@ -945,12 +904,12 @@ fn para_props(ppr: Node) -> ParaProps {
 }
 
 /// `n`'s children named `name`, and those inside content controls and custom XML among them.
-fn items<'a, 'i>(n: Node<'a, 'i>, name: &str, depth: usize) -> Vec<Node<'a, 'i>> {
+fn items<'a>(n: &'a El, name: &str, depth: usize) -> Vec<&'a El> {
     let mut out = vec![];
     if depth > MAX_DEPTH {
         return out;
     }
-    for c in n.children() {
+    for c in n.elements() {
         match local(c) {
             Some(l) if l == name => out.push(c),
             Some("sdt") => {
@@ -977,15 +936,6 @@ mod tests {
         assert_eq!(measure("2.54cm", 1.0).map(|v| (v * 1e9).round() / 1e9), Some(72.0));
         assert_eq!(measure("1e999", 20.0), None);
         assert_eq!(measure("wide", 20.0), None);
-    }
-
-    #[test]
-    fn nesting_counts_elements_outside_markup_that_is_not_an_element() {
-        assert_eq!(nesting(r#"<?xml version="1.0"?><a><b x="1>2" y='</c>'><c/></b><!-- <d><e> --><![CDATA[<f><g>]]></a>"#), 2);
-        assert_eq!(nesting("<a><b><c>"), 3, "unclosed elements count");
-        assert_eq!(nesting("</a></b><a>"), 1);
-        assert_eq!(nesting("<a x=\"unterminated"), 1);
-        assert_eq!(nesting(""), 0);
     }
 
     #[test]

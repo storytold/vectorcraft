@@ -419,6 +419,56 @@ fn a_reflected_horizontal_dimension_keeps_its_line_on_the_reflected_side() {
     assert_eq!(text(&s, id), "100.00 pt");
 }
 
+/// An unlinked aligned dimension reflected on its own has its line on the reflected side of its
+/// points: a line 30 pt above a level pair is 30 pt below it after a flip top to bottom, and a
+/// half turn moves it below them as well, by turning it.
+#[test]
+fn a_reflected_aligned_dimension_keeps_its_line_on_the_reflected_side() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,200],"offset":-30}))["id"].as_u64().unwrap();
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 170.0), (200.0, 170.0)]);
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    run(&mut s, "object.reflect", json!({"axis":"horizontal","origin":[0,200]}));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 230.0), (200.0, 230.0)]);
+    assert_eq!(text(&s, id), "100.00 pt");
+    // Reflected left to right, the points swap ends and the line stays below them.
+    run(&mut s, "object.reflect", json!({"axis":"vertical","origin":[150,0]}));
+    assert_eq!(path_ends(&s, id)[2], vec![(200.0, 230.0), (100.0, 230.0)]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(path_ends(&s, id)[2], vec![(100.0, 170.0), (200.0, 170.0)]);
+    // A half turn about the points' midpoint puts the line below them by turning it.
+    run(&mut s, "object.rotate", json!({"angle":180,"origin":[150,200]}));
+    let ends = path_ends(&s, id)[2].iter().map(|(x, y)| (x.round(), y.round())).collect::<Vec<_>>();
+    assert_eq!(ends, vec![(200.0, 230.0), (100.0, 230.0)]);
+}
+
+/// An unlinked aligned dimension of a diagonal pair reflected about a mirror line through its
+/// points has its line on the other side of them, and a scale by a negative factor reverses the
+/// side as a reflection does, while a scale by positive factors keeps it.
+#[test]
+fn an_aligned_dimension_reflected_about_an_angle_or_scaled_by_a_negative_factor_changes_sides() {
+    let mut s = session();
+    let id = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,100],"offset":-30}))["id"].as_u64().unwrap();
+    let k = 30.0 / 2f64.sqrt();
+    let near = |got: &[(f64, f64)], want: [(f64, f64); 2]| got.iter().zip(want).all(|(g, w)| (g.0 - w.0).abs() < 1e-6 && (g.1 - w.1).abs() < 1e-6);
+    let ends = path_ends(&s, id)[2].clone();
+    assert!(near(&ends, [(100.0 - k, 200.0 - k), (200.0 - k, 100.0 - k)]), "{ends:?}");
+    run(&mut s, "select.set", json!({"ids":[id]}));
+    // The mirror line at 45 degrees through (150, 150) holds both points.
+    run(&mut s, "object.reflect", json!({"axis":45,"origin":[150,150]}));
+    let ends = path_ends(&s, id)[2].clone();
+    assert!(near(&ends, [(100.0 + k, 200.0 + k), (200.0 + k, 100.0 + k)]), "{ends:?}");
+    run(&mut s, "edit.undo", json!({}));
+    let level = run(&mut s, "dimension.create", json!({"a":[100,200],"b":[200,200],"offset":-30}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[level]}));
+    run(&mut s, "object.scale", json!({"sx":-200,"sy":100,"origin":[150,0]}));
+    assert_eq!(path_ends(&s, level)[2], vec![(250.0, 170.0), (50.0, 170.0)]);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "object.scale", json!({"sx":200,"sy":200,"origin":[150,200]}));
+    assert_eq!(path_ends(&s, level)[2], vec![(50.0, 170.0), (250.0, 170.0)]);
+}
+
 /// The line of a linked horizontal dimension below both points stays below them when the art
 /// turns a half turn; a line between the points keeps its distance from the first point.
 #[test]
@@ -1721,8 +1771,9 @@ fn both_points_snap_onto_anchors_with_a_visible_indicator() {
 }
 
 /// Smart Guides for the Linear picks: hovering away from any line, the first point slides into
-/// line with another object's corner and its guides show before the click; the second slides onto
-/// the construction guide through the first. The dimension measures between the snapped points.
+/// line with another object's corner and its guides show before the click; the second slides into
+/// line with the other corner, with no construction guide through the first point pulling it
+/// sideways. The dimension measures between the snapped points.
 #[test]
 fn linear_picks_show_and_snap_to_smart_guides() {
     use vectorcraft_engine::tools::Overlay;
@@ -1738,18 +1789,20 @@ fn linear_picks_show_and_snap_to_smart_guides() {
     assert!(o.iter().any(|o| matches!(o, Overlay::Line { .. } | Overlay::Label { .. })), "its guides show before the click: {o:?}");
     ev(&mut s, PointerKind::Down, 250.0, 202.5);
     ev(&mut s, PointerKind::Up, 250.0, 202.5);
-    // Straight below the first point, 1.5 pt off: the rubber band ends on the vertical through it.
-    ev(&mut s, PointerKind::Move, 251.5, 260.0);
+    // Below the first point, 1.5 pt to its right and 2.5 pt off the bottom edge's level: the
+    // rubber band ends on that level, where the pointer is across it.
+    ev(&mut s, PointerKind::Move, 251.5, 262.5);
     let end = overlays(&mut s).into_iter().find_map(|o| if let Overlay::Line { b, dashed: true, .. } = o { Some(b) } else { None }).unwrap();
-    assert_eq!((end.x, end.y), (250.0, 260.0), "on the construction guide");
-    ev(&mut s, PointerKind::Down, 251.5, 260.0);
-    ev(&mut s, PointerKind::Up, 251.5, 260.0);
+    assert_eq!((end.x, end.y), (251.5, 260.0), "in line with the bottom edge, not on a vertical through the first point");
+    ev(&mut s, PointerKind::Down, 251.5, 262.5);
+    ev(&mut s, PointerKind::Up, 251.5, 262.5);
     ev(&mut s, PointerKind::Move, 220.0, 230.0);
     assert!(!overlays(&mut s).iter().any(|o| matches!(o, Overlay::Label { .. })), "placing: the guides are gone");
     ev(&mut s, PointerKind::Down, 220.0, 230.0);
     ev(&mut s, PointerKind::Up, 220.0, 230.0);
     let id = s.doc().unwrap().selection.objects[0].0;
-    assert_eq!(text(&s, id), "60.00 pt");
+    // Aligned from (250, 200) to (251.5, 260): √(1.5² + 60²).
+    assert_eq!(text(&s, id), "60.02 pt");
 }
 
 /// The page content streams of exported PDF `v`, inflated.

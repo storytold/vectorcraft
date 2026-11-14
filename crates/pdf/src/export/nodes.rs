@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use super::exporter::{UNDECODED, address, blend, color, constant_mask, cover, in_range, norm, rects_overlap, rule, to_path, writable, xf};
 use super::{
-    Affine, AppearanceItem, BezPath, BlendMode, Exporter, Fill, FillRule, GradientKind, LineCap, LineJoin, Mark, Node, NodeKind, NormalizedF32,
-    Paint, Path, Rect, Shape, Stroke, StrokeAlign, StrokeDash, StrokeLayer, Surface, WrittenShape, krilla, stroke,
+    Affine, AppearanceItem, BezPath, BlendMode, Document, Exporter, Fill, FillRule, GradientKind, LineCap, LineJoin, Mark, Node, NodeKind,
+    NormalizedF32, Paint, Path, Rect, Shape, Stroke, StrokeAlign, StrokeDash, StrokeLayer, Surface, WrittenShape, krilla, stroke,
 };
 
 /// An object's visual box for leaving out what is off the page. A plain group or layer also holds
@@ -57,72 +59,130 @@ impl Exporter<'_> {
 
     /// The children of a group, as the elements of a knockout group when it is one.
     pub(super) fn children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect) {
-        self.measured_children(s, children, page, &[]);
+        self.measured_children(s, children, page, &[], false);
     }
 
-    /// [`Self::children`] with the boxes of the last members in `measured`.
-    fn measured_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured]) {
+    /// [`Self::children`] with the boxes of the last members in `measured`, in an isolated group
+    /// when `isolated`.
+    fn measured_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured], isolated: bool) {
         if !self.knockout {
+            if isolated {
+                s.push_isolated();
+            }
             let unmeasured = children.len().saturating_sub(measured.len());
             for (i, c) in children.iter().enumerate() {
                 self.measured_node(s, c, page, false, i.checked_sub(unmeasured).and_then(|i| measured.get(i)));
             }
+            if isolated {
+                s.pop();
+            }
             return;
         }
-        let elements: Vec<_> = Node::knockout_elements(children)
+        let elements: Vec<(&Node, Measured)> = Node::knockout_elements(children)
             .into_iter()
-            .map(|c| (c, self.measure(c)))
+            .map(|c| (&**c, self.measure(c)))
             .filter(|(_, m)| m.bounds.is_some_and(|b| rects_overlap(b.inflate(1.0, 1.0), page)))
             .collect();
-        if !elements.is_empty() && elements.iter().all(|(c, _)| c.knockout_outline().is_some()) {
-            let pieces: Vec<&Node> = elements.iter().map(|(c, _)| &***c).collect();
-            if vectorcraft_effects::warp_pieces_translucent(self.doc, &pieces) {
-                return self.warp_pieces(s, &elements, page);
+        if elements.is_empty() {
+            return;
+        }
+        if elements.iter().all(|(c, _)| c.knockout_outline().is_some()) {
+            let pieces: Vec<&Node> = elements.iter().map(|(c, _)| *c).collect();
+            if isolated {
+                s.push_isolated();
             }
-            for (c, m) in &elements {
-                self.measured_node(s, c, page, false, Some(m));
+            if vectorcraft_effects::warp_pieces_translucent(self.doc, &pieces) {
+                self.warp_pieces(s, &elements, page);
+            } else {
+                for (c, m) in &elements {
+                    self.measured_node(s, c, page, false, Some(m));
+                }
+            }
+            if isolated {
+                s.pop();
             }
             return;
         }
-        // The PDF writer has no knockout groups: each element is drawn through a soft mask of
-        // where the elements above it don't paint (the same look for Normal blending). The masks
-        // nest, so element i sits inside the masks of elements i+1…n: open them outermost first.
-        self.warn("knockout groups are written as soft-masked groups (same look, but not editable as knockout groups)");
-        let Some(((first, measured), rest)) = elements.split_first() else { return };
-        for (c, m) in rest.iter().rev() {
-            let mask = self.knockout_mask(s, c, page, m);
-            s.push_mask(mask);
+        let several = elements.len() > 1;
+        // A PDF knockout group (`/K`) knocks out by the area each element paints. Where an element
+        // above another knocks out by less (its opacity or mask defines its knockout shape, or it
+        // paints translucently), each element is drawn through one soft mask of where the
+        // elements above it that overlap it paint, while those masks hold no more than
+        // [`MAX_KNOCKOUT_MASK_OBJECTS`] objects and no brushed stroke.
+        if several && !elements.iter().skip(1).all(|(c, _)| shape_is_coverage(c)) {
+            let doc = self.doc;
+            let brushes = self.brushes.get_or_insert_with(|| vectorcraft_brush::library(doc));
+            match knockout_masks(BrushSearch::new(doc, brushes), &elements) {
+                Ok(above) => {
+                    // Every mask is made before anything is drawn: when the symbol objects the
+                    // masks may hold run out, one would leave out art its element covers, and
+                    // the group is written as a PDF knockout group instead.
+                    let outer = std::mem::take(&mut self.mask_art_left_out);
+                    let before = *self.mask_counter();
+                    let mut masks = Vec::with_capacity(above.len());
+                    for above in above {
+                        let shapes: Vec<_> = above.into_iter().map(|j| &elements[j]).collect();
+                        masks.push((!shapes.is_empty()).then(|| self.knockout_mask(s, &shapes, page)));
+                    }
+                    let left_out = std::mem::replace(&mut self.mask_art_left_out, outer);
+                    if left_out {
+                        *self.mask_counter() = before;
+                        self.warn(KNOCKOUT_SHAPES);
+                    } else {
+                        if isolated {
+                            s.push_isolated();
+                        }
+                        for ((c, m), mask) in elements.iter().zip(masks) {
+                            if let Some(mask) = mask {
+                                s.push_mask(mask);
+                                self.measured_node(s, c, page, false, Some(m));
+                                s.pop();
+                            } else {
+                                self.measured_node(s, c, page, false, Some(m));
+                            }
+                        }
+                        if isolated {
+                            s.pop();
+                        }
+                        return;
+                    }
+                }
+                Err(warning) => self.warn(warning),
+            }
         }
-        self.measured_node(s, first, page, false, Some(measured));
-        for (c, m) in rest {
-            s.pop();
+        let group = several || isolated;
+        if group {
+            s.push_group(krilla::blend::GroupOptions { isolated, knockout: several });
+        }
+        for (c, m) in &elements {
+            // In a PDF knockout group each painting operation knocks out the ones before it. An
+            // element drawn with several is one non-isolated group (drawn through a full alpha
+            // mask), so that its own fills and strokes don't knock each other out; its opacity
+            // or opacity mask makes it one already.
+            let unit = several && !one_paint(c) && c.opacity >= 1.0 && c.extras().mask.as_deref().is_none_or(|m| m.disabled);
+            if unit {
+                let all = constant_mask(s, page, 1.0);
+                s.push_mask(all);
+            }
             self.measured_node(s, c, page, false, Some(m));
+            if unit {
+                s.pop();
+            }
+        }
+        if group {
+            s.pop();
         }
     }
 
     /// [`Self::measured_children`] of a plain group or layer. When they are the pieces of a
     /// mesh-warped image, every piece, on the page or not, takes part in the one size its pixels
     /// are resampled for ([`Self::warp_image_size`]).
-    fn group_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured]) {
+    fn group_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured], isolated: bool) {
         let outer = self.warp_image_size(children).map(|w| self.warp_size.replace(w));
-        self.measured_children(s, children, page, measured);
+        self.measured_children(s, children, page, measured, isolated);
         if let Some(outer) = outer {
             self.warp_size = outer;
         }
-    }
-
-    /// A luminosity mask that is 1 − the knockout shape of `c`, whose box is in `measured`: white,
-    /// then black through an alpha mask of `c` (at full object opacity without its own mask, unless
-    /// those define its shape).
-    fn knockout_mask(&mut self, s: &mut Surface, c: &Node, page: Rect, measured: &Measured) -> krilla::mask::Mask {
-        let shape = if c.knockout_shape {
-            c.clone()
-        } else {
-            let mut s = c.clone().with_mask(None);
-            s.opacity = 1.0;
-            s
-        };
-        self.shapes_mask(s, &[(&shape, Some(measured))], page)
     }
 
     /// The pieces of a partly transparent mesh-warped image (`elements`, each with its box) as the
@@ -131,14 +191,14 @@ impl Exporter<'_> {
     /// ([`vectorcraft_effects::knockout_silhouette`]): only neighbors overlap, so each mask holds a
     /// few triangles and no mask nests in another. A piece above that overlaps it only over opaque
     /// pixels ([`vectorcraft_effects::WarpSeams`]) is left out of its mask.
-    fn warp_pieces(&mut self, s: &mut Surface, elements: &[(&std::sync::Arc<Node>, Measured)], page: Rect) {
+    fn warp_pieces(&mut self, s: &mut Surface, elements: &[(&Node, Measured)], page: Rect) {
         // Each piece's triangle and its box: a piece paints inside its triangle only.
         let silhouette = |c: &Node| {
             let b = c.knockout_outline()?.geometric_bounds()?;
             Some((vectorcraft_effects::knockout_silhouette(c, vectorcraft_doc::color::Color::WHITE)?, b))
         };
         let silhouettes: Vec<Option<(Node, Rect)>> = elements.iter().map(|(c, _)| silhouette(c)).collect();
-        let pieces: Vec<&Node> = elements.iter().map(|(c, _)| &***c).collect();
+        let pieces: Vec<&Node> = elements.iter().map(|(c, _)| *c).collect();
         let seams = vectorcraft_effects::WarpSeams::new(self.doc, &pieces);
         for (i, (c, measured)) in elements.iter().enumerate() {
             let Some((_, reach)) = &silhouettes[i] else { continue };
@@ -186,6 +246,67 @@ impl Exporter<'_> {
         ms.push_mask(alpha);
         cover(&mut ms, page, 0, 1.0);
         ms.pop();
+        ms.pop();
+        ms.finish();
+        krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
+    }
+
+    /// A luminosity mask that is 1 − the knockout shapes of `shapes` (each with its box): white,
+    /// then black through an alpha mask of each (at full object opacity without its own mask,
+    /// unless those define its shape). The symbol instances in the copies count toward
+    /// [`Exporter::mask_symbol_nodes`], not toward the objects the visible art may draw. A
+    /// knockout mask drawn inside another one counts toward the same objects as the outer one.
+    fn knockout_mask(&mut self, s: &mut Surface, shapes: &[&(&Node, Measured)], page: Rect) -> krilla::mask::Mask {
+        if self.in_knockout_mask {
+            return self.knockout_mask_art(s, shapes, page);
+        }
+        self.in_knockout_mask = true;
+        let visible = std::mem::replace(&mut self.symbol_nodes, self.mask_symbol_nodes);
+        let limit = std::mem::replace(&mut self.symbol_limit, vectorcraft_doc::MAX_SYMBOL_NODES);
+        let mask = self.knockout_mask_art(s, shapes, page);
+        self.mask_symbol_nodes = std::mem::replace(&mut self.symbol_nodes, visible);
+        self.symbol_limit = limit;
+        self.in_knockout_mask = false;
+        mask
+    }
+
+    /// The symbol objects the copies drawn in knockout masks held, together: [`Self::symbol_nodes`]
+    /// while a knockout mask is being drawn, [`Exporter::mask_symbol_nodes`] otherwise.
+    fn mask_counter(&mut self) -> &mut u64 {
+        if self.in_knockout_mask { &mut self.symbol_nodes } else { &mut self.mask_symbol_nodes }
+    }
+
+    /// [`Self::knockout_mask`], drawn within the symbol objects counted at the time.
+    fn knockout_mask_art(&mut self, s: &mut Surface, shapes: &[&(&Node, Measured)], page: Rect) -> krilla::mask::Mask {
+        let transform = s.group_transform();
+        let mut sb = s.stream_builder();
+        let mut ms = Surface::stream(sb.surface());
+        ms.push_transform(&transform);
+        cover(&mut ms, page, 255, 1.0);
+        for (c, measured) in shapes.iter().map(|e| (e.0, &e.1)) {
+            let shape = if c.knockout_shape {
+                c.clone()
+            } else {
+                let mut s = c.clone().with_mask(None);
+                s.opacity = 1.0;
+                s
+            };
+            let alpha = {
+                let transform = ms.group_transform();
+                let mut ab = ms.stream_builder();
+                let mut als = Surface::stream(ab.surface());
+                als.push_transform(&transform);
+                let overprint = std::mem::take(&mut self.overprint);
+                self.measured_node(&mut als, &shape, page, false, Some(measured));
+                self.overprint = overprint;
+                als.pop();
+                als.finish();
+                krilla::mask::Mask::new(ab.finish(), krilla::mask::MaskType::Alpha)
+            };
+            ms.push_mask(alpha);
+            cover(&mut ms, page, 0, 1.0);
+            ms.pop();
+        }
         ms.pop();
         ms.finish();
         krilla::mask::Mask::new(sb.finish(), krilla::mask::MaskType::Luminosity)
@@ -242,23 +363,7 @@ impl Exporter<'_> {
         // Whether this container's children knock each other out (a knockout group is written as a group).
         let knockout = n.knocks_out(self.knockout);
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
-        let mut pushes = 0;
-        if n.blend != BlendMode::Normal {
-            s.push_blend_mode(blend(n.blend));
-            pushes += 1;
-        }
-        if n.opacity < 1.0 || (container && (n.isolate || n.blend != BlendMode::Normal || knockout)) {
-            if !n.isolate && n.blends_through() {
-                // Not isolated: blending inside reaches the art below the group.
-                let alpha = constant_mask(s, page, n.opacity);
-                s.push_mask(alpha);
-            } else if n.opacity < 1.0 {
-                s.push_opacity(norm(n.opacity));
-            } else {
-                s.push_isolated();
-            }
-            pushes += 1;
-        }
+        let (mut pushes, isolated_children) = transparency(s, n, page, container, knockout);
         let mask = n.extras().mask.as_deref().filter(|m| !m.disabled);
         let alpha = match (&n.kind, mask) {
             (NodeKind::Image(im), Some(m)) => self.masked_image(im, m, !n.extras().pixelated),
@@ -279,7 +384,7 @@ impl Exporter<'_> {
         }
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
-                self.group_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()));
+                self.group_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()), isolated_children);
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // The region every output clips to; nothing to clip by hides the clipped art. The
@@ -366,8 +471,10 @@ impl Exporter<'_> {
                             (art, count)
                         })
                     });
-                    if let Some(art) = placed.flatten() {
-                        self.node(s, &art, page, true);
+                    match placed.flatten() {
+                        Some(art) => self.node(s, &art, page, true),
+                        // A knockout mask that leaves the art out no longer matches what it masks.
+                        None => self.mask_art_left_out |= self.in_knockout_mask,
                     }
                 }
             }
@@ -739,5 +846,381 @@ impl Exporter<'_> {
             s.pop();
         }
         true
+    }
+}
+
+/// Opens the blend mode and the transparency group `n` is drawn with (`container` when it is a
+/// group or layer whose children `knockout` each other). Returns how many were opened, and
+/// whether the children are to be drawn in an isolated group of their own: the knockout group of
+/// an unclipped group's elements is its isolated group too.
+fn transparency(s: &mut Surface, n: &Node, page: Rect, container: bool, knockout: bool) -> (usize, bool) {
+    let mut pushes = 0;
+    if n.blend != BlendMode::Normal {
+        s.push_blend_mode(blend(n.blend));
+        pushes += 1;
+    }
+    let mut isolated_children = false;
+    if n.opacity < 1.0 || (container && (n.isolate || n.blend != BlendMode::Normal || knockout)) {
+        if !n.isolate && n.blends_through() {
+            // Not isolated: blending inside reaches the art below the group.
+            let alpha = constant_mask(s, page, n.opacity);
+            s.push_mask(alpha);
+            pushes += 1;
+        } else if n.opacity < 1.0 {
+            s.push_opacity(norm(n.opacity));
+            pushes += 1;
+        } else if knockout && matches!(n.kind, NodeKind::Layer { clip: false, .. } | NodeKind::Group { clip: false, .. }) {
+            isolated_children = true;
+        } else {
+            s.push_isolated();
+            pushes += 1;
+        }
+    }
+    (pushes, isolated_children)
+}
+
+/// The warning for a knockout group whose elements are too many to draw through soft masks: it is
+/// written as a PDF knockout group, where an element knocks out all of the area it paints.
+pub(crate) const KNOCKOUT_SHAPES: &str = "knockout groups with too many overlapping translucent elements are written as PDF knockout groups: \
+     their translucent elements knock out what they cover fully";
+
+/// The most objects the soft masks of one knockout group's elements draw between them: each mask
+/// draws the elements above its own element that overlap it.
+pub(crate) const MAX_KNOCKOUT_MASK_OBJECTS: usize = 1 << 16;
+
+/// The most elements of one knockout group drawn through soft masks: finding the elements that
+/// overlap compares every pair.
+pub(crate) const MAX_MASKED_ELEMENTS: usize = 2048;
+
+/// The warning for a knockout group in which a soft mask would draw an element with a brushed
+/// stroke: it is written as a PDF knockout group, where an element knocks out all of the area it
+/// paints.
+pub(crate) const KNOCKOUT_BRUSHES: &str = "knockout groups with brushed strokes over other translucent elements are written as PDF knockout groups: \
+     their translucent elements knock out what they cover fully";
+
+/// For each element of a knockout group (with its box), the indices of the elements above it whose
+/// boxes overlap its own. The warning to give instead ([`KNOCKOUT_SHAPES`]) when there are more than
+/// [`MAX_MASKED_ELEMENTS`] elements or the masks would draw more than
+/// [`MAX_KNOCKOUT_MASK_OBJECTS`] objects, or ([`KNOCKOUT_BRUSHES`]) when a mask would draw a
+/// brushed stroke ([`BrushSearch`]), whose brush art the object count leaves out.
+fn knockout_masks(mut search: BrushSearch, elements: &[(&Node, Measured)]) -> Result<Vec<Vec<usize>>, &'static str> {
+    if elements.len() > MAX_MASKED_ELEMENTS {
+        return Err(KNOCKOUT_SHAPES);
+    }
+    let counts: Vec<usize> = elements.iter().map(|(c, _)| c.count_with_masks()).collect();
+    let mut checked: Vec<Option<bool>> = vec![None; elements.len()];
+    let mut objects = 0usize;
+    let mut out = Vec::with_capacity(elements.len());
+    for (i, (_, below)) in elements.iter().enumerate() {
+        let mut above = vec![];
+        for (j, (over_node, over)) in elements.iter().enumerate().skip(i + 1) {
+            if let (Some(a), Some(b)) = (below.bounds, over.bounds)
+                && rects_overlap(a.inflate(1.0, 1.0), b.inflate(1.0, 1.0))
+            {
+                // The mask draws a copy of the element without its own opacity mask, unless the
+                // mask defines its knockout shape.
+                if *checked[j].get_or_insert_with(|| search.node(over_node, over_node.knockout_shape, 0)) {
+                    return Err(if search.exhausted { KNOCKOUT_SHAPES } else { KNOCKOUT_BRUSHES });
+                }
+                objects = objects.checked_add(counts[j]).filter(|&o| o <= MAX_KNOCKOUT_MASK_OBJECTS).ok_or(KNOCKOUT_SHAPES)?;
+                above.push(j);
+            }
+        }
+        out.push(above);
+    }
+    Ok(out)
+}
+
+/// The art a [`BrushSearch`] looks through once: a symbol's or a pattern's, by name, or a
+/// symbol's with one instance's appearance changes, by the symbol's name and the changes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum SharedArt {
+    Symbol,
+    Pattern,
+    Dynamic,
+}
+
+/// A search for the brushed strokes drawing an object draws, whose brush art can hold many more
+/// objects than the stroked path.
+struct BrushSearch<'a> {
+    doc: &'a Document,
+    /// The brushes the export draws strokes with ([`Exporter::brush_art`]); a stroke whose brush
+    /// is not among them is drawn as a plain stroke.
+    brushes: &'a [vectorcraft_brush::Brush],
+    /// The answer for each symbol's and pattern's art, and each symbol's art with an instance's
+    /// appearance changes, once found: false while it is being looked through, so that art that
+    /// uses itself ends the search.
+    seen: HashMap<(SharedArt, String), bool>,
+    /// The objects the search may still visit or copy: [`MAX_KNOCKOUT_MASK_OBJECTS`] at the start.
+    left: usize,
+    /// Whether the search stopped because [`Self::left`] ran out; it then answers true.
+    exhausted: bool,
+}
+
+impl<'a> BrushSearch<'a> {
+    fn new(doc: &'a Document, brushes: &'a [vectorcraft_brush::Brush]) -> Self {
+        Self { doc, brushes, seen: HashMap::new(), left: MAX_KNOCKOUT_MASK_OBJECTS, exhausted: false }
+    }
+
+    /// Takes `n` objects from [`Self::left`]; false, and the search exhausted, when fewer are left.
+    fn spend(&mut self, n: usize) -> bool {
+        match self.left.checked_sub(n) {
+            Some(left) if !self.exhausted => {
+                self.left = left;
+                true
+            }
+            _ => {
+                (self.left, self.exhausted) = (0, true);
+                false
+            }
+        }
+    }
+
+    /// Takes the objects of `n` (its members and opacity-mask art included) from [`Self::left`],
+    /// counting no further than what is left; false when they don't fit.
+    fn spend_tree(&mut self, n: &Node) -> bool {
+        self.spend(1)
+            && n.extras().mask.as_deref().is_none_or(|m| self.spend_tree(&m.art))
+            && n.children().into_iter().flatten().all(|c| self.spend_tree(c))
+    }
+
+    /// Whether drawing `n` draws a brushed stroke: on `n` or its visible members (a compound
+    /// path's members are drawn with its own paint), in the art of the opacity masks that are on
+    /// (`n`'s own when `own_mask`), of symbol instances and inline graphics, of live objects as
+    /// evaluated, and of the patterns that fills, strokes and type paint with. `depth` counts the
+    /// objects and the mask, symbol and pattern art above `n`: past
+    /// [`vectorcraft_doc::depth::MAX_DRAWN_DEPTH`] the search stops and counts as a brush, and so
+    /// it does when the objects it may visit or copy ([`Self::left`]) run out.
+    fn node(&mut self, n: &Node, own_mask: bool, depth: usize) -> bool {
+        if depth > vectorcraft_doc::depth::MAX_DRAWN_DEPTH || !self.spend(1) {
+            return true;
+        }
+        let depth = depth + 1;
+        // A fill is drawn when it is visible, and a stroke when it also paints and has a width
+        // (as `Exporter::shape` draws them).
+        for item in n.appearance.items.iter().filter(|i| i.visible()) {
+            let paint = match item {
+                AppearanceItem::Fill(f) => &f.paint,
+                AppearanceItem::Stroke(st) if st.paint.is_none() || st.width <= 0.0 => continue,
+                AppearanceItem::Stroke(st) => {
+                    if st.brush.as_deref().is_some_and(|name| self.brushes.iter().any(|b| b.name == name)) {
+                        return true;
+                    }
+                    &st.paint
+                }
+            };
+            if self.paint(paint, depth) {
+                return true;
+            }
+        }
+        if own_mask && n.extras().mask.as_deref().is_some_and(|m| !m.disabled && self.node(&m.art, true, depth)) {
+            return true;
+        }
+        match &n.kind {
+            NodeKind::SymbolInstance { symbol, .. } => {
+                // A dynamic symbol's instance draws its art with its own appearance changes: the
+                // art is copied once for each set of changes, counted before it is copied.
+                let doc = self.doc;
+                match doc.symbols.iter().find(|s| &s.name == symbol) {
+                    Some(s) if !n.extras().symbol_overrides.is_empty() => {
+                        let key = format!("{symbol}\u{0}{:?}", n.extras().symbol_overrides);
+                        self.shared(SharedArt::Dynamic, &key, |search| {
+                            !search.spend_tree(&s.art) || search.node(&vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n), true, depth)
+                        })
+                    }
+                    _ => self.symbol(symbol, depth),
+                }
+            }
+            NodeKind::Text(t) => t.runs.iter().any(|r| {
+                let stroke = r.style.stroke_width > 0.0 && self.paint(&r.style.stroke, depth);
+                stroke || self.paint(&r.style.fill, depth) || r.inline.as_ref().is_some_and(|ig| self.symbol(&ig.symbol, depth))
+            }),
+            NodeKind::Compound { .. } => false,
+            // Live objects are drawn as their evaluated art, as `Exporter::measured_node` draws them.
+            NodeKind::Blend { .. }
+            | NodeKind::Envelope { .. }
+            | NodeKind::Mesh(_)
+            | NodeKind::Repeat(_)
+            | NodeKind::PlacedDocument(_)
+            | NodeKind::Intertwine { .. } => {
+                // Each live object is reached once in the art searched (shared art is searched
+                // once); its evaluated art is counted before it is searched.
+                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                !self.spend_tree(&g) || g.children().into_iter().flatten().filter(|c| c.visible).any(|c| self.node(c, true, depth))
+            }
+            _ => n.children().into_iter().flatten().filter(|c| c.visible).any(|c| self.node(c, true, depth)),
+        }
+    }
+
+    /// Whether the art of the symbol named `name` draws a brushed stroke.
+    fn symbol(&mut self, name: &str, depth: usize) -> bool {
+        let doc = self.doc;
+        let Some(s) = doc.symbols.iter().find(|s| s.name == name) else { return false };
+        self.shared(SharedArt::Symbol, name, |search| search.node(&s.art, true, depth))
+    }
+
+    /// Whether `paint` is a pattern whose tile art draws a brushed stroke.
+    fn paint(&mut self, paint: &Paint, depth: usize) -> bool {
+        let Paint::Pattern { pattern, .. } = paint else { return false };
+        let doc = self.doc;
+        let Some(def) = doc.pattern(pattern) else { return false };
+        self.shared(SharedArt::Pattern, pattern, |search| def.art.iter().filter(|c| c.visible).any(|c| search.node(c, true, depth)))
+    }
+
+    /// The answer of `search` for the shared art `kind` named `name`, found once.
+    fn shared(&mut self, kind: SharedArt, name: &str, search: impl FnOnce(&mut Self) -> bool) -> bool {
+        let key = (kind, name.to_string());
+        if let Some(&b) = self.seen.get(&key) {
+            return b;
+        }
+        self.seen.insert(key.clone(), false);
+        let b = search(self);
+        self.seen.insert(key, b);
+        b
+    }
+}
+
+/// Whether `n` is drawn with one painting operation at most: a path or compound path with at most
+/// one visible fill or stroke that paints, in a solid color, without effects, a brush or
+/// arrowheads.
+fn one_paint(n: &Node) -> bool {
+    let mut items = n.appearance.items.iter().filter(|i| i.visible() && !matches!(i.paint(), Paint::None));
+    let simple = items.next().is_none_or(|i| {
+        let plain = match i {
+            AppearanceItem::Fill(_) => true,
+            AppearanceItem::Stroke(st) => st.brush.is_none() && st.start_arrow.is_none() && st.end_arrow.is_none(),
+        };
+        plain && i.effects().is_empty() && matches!(i.paint(), Paint::Solid { .. })
+    });
+    matches!(n.kind, NodeKind::Path { .. } | NodeKind::Compound { .. }) && n.appearance.effects.is_empty() && simple && items.next().is_none()
+}
+
+/// Whether element `c` of a knockout group knocks out all of the area it paints, as an element of
+/// a PDF knockout group does: its opacity and opacity mask are full or don't define its knockout
+/// shape, and every part of it paints opaquely.
+fn shape_is_coverage(c: &Node) -> bool {
+    let own = !c.knockout_shape || (c.opacity >= 1.0 && c.extras().mask.as_deref().is_none_or(|m| m.disabled));
+    own && paints_opaque(c)
+}
+
+/// Whether what `n` paints is opaque wherever it paints, at its own opacity and mask: its visible
+/// fills and strokes are solid colors or gradients with opaque stops, without effects or brushes,
+/// and so are the members of a group or compound path, at full opacity without an opacity mask.
+fn paints_opaque(n: &Node) -> bool {
+    let paint = |p: &Paint| match p {
+        Paint::None | Paint::Solid { .. } => true,
+        Paint::Gradient(g) => g.gradient.stops.iter().all(|s| s.opacity >= 1.0),
+        _ => false,
+    };
+    let items = n.appearance.items.iter().all(|i| {
+        let brush = matches!(i, AppearanceItem::Stroke(s) if s.brush.is_some());
+        !i.visible() || (i.opacity() >= 1.0 && i.effects().is_empty() && !brush && paint(i.paint()))
+    });
+    let member =
+        |c: &std::sync::Arc<Node>| !c.visible || (c.opacity >= 1.0 && c.extras().mask.as_deref().is_none_or(|m| m.disabled) && paints_opaque(c));
+    n.appearance.effects.is_empty()
+        && items
+        && match &n.kind {
+            NodeKind::Path { .. } => true,
+            NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } => children.iter().all(member),
+            NodeKind::Mesh(m) => m.points.iter().all(|p| p.opacity >= 1.0),
+            _ => false,
+        }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::{Appearance, NodeId, Symbol, SymbolOverride};
+    use vectorcraft_geom::shapes;
+
+    use super::*;
+
+    /// An instance of a dynamic symbol whose art holds an instance of the same symbol with the same
+    /// appearance changes ends the search for brushed strokes where the art comes round again,
+    /// after a few objects, instead of recursing until the stack runs out.
+    #[test]
+    fn a_dynamic_symbol_holding_itself_ends_the_brush_search() {
+        let mut d = Document::new(200.0, 200.0);
+        let instance = || {
+            let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Loop".into(), xf: Affine::translate((40.0, 0.0)) });
+            n.extras_mut().symbol_overrides = vec![SymbolOverride { path: vec![0], opacity: Some(0.5), ..Default::default() }];
+            n
+        };
+        let square = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+        let art = Node::group(NodeId(0), vec![Arc::new(square), Arc::new(instance())]);
+        d.symbols.push(Symbol { dynamic: true, name: "Loop".into(), art: Arc::new(art) });
+        let mut search = BrushSearch::new(&d, &[]);
+        assert!(!search.node(&instance(), true, 0));
+        assert!(!search.exhausted);
+        assert!(MAX_KNOCKOUT_MASK_OBJECTS - search.left < 10, "{} objects", MAX_KNOCKOUT_MASK_OBJECTS - search.left);
+    }
+
+    /// A group of 1,000 instances of a dynamic symbol whose art holds 100 squares, each instance
+    /// with appearance changes of its own: copying and looking through every instance's art would
+    /// take about 203,000 objects, and the search stops when [`MAX_KNOCKOUT_MASK_OBJECTS`] are
+    /// used, counting as a brush. With the same changes on every instance, the art is copied
+    /// once.
+    #[test]
+    fn the_brush_search_stops_within_its_object_limit() {
+        let mut d = Document::new(200.0, 200.0);
+        let square =
+            Arc::new(Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::basic(Paint::None, Paint::None, 0.0)));
+        d.symbols.push(Symbol { dynamic: true, name: "Dots".into(), art: Arc::new(Node::group(NodeId(0), vec![square; 100])) });
+        let group = |distinct: bool| {
+            let instances = (0..1000u32)
+                .map(|i| {
+                    let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Dots".into(), xf: Affine::IDENTITY });
+                    let path = if distinct { vec![0, i] } else { vec![0] };
+                    n.extras_mut().symbol_overrides = vec![SymbolOverride { path, opacity: Some(0.5), ..Default::default() }];
+                    Arc::new(n)
+                })
+                .collect();
+            Node::group(NodeId(0), instances)
+        };
+        let mut search = BrushSearch::new(&d, &[]);
+        assert!(search.node(&group(true), true, 0));
+        assert!(search.exhausted);
+        assert_eq!(search.left, 0);
+        let mut search = BrushSearch::new(&d, &[]);
+        assert!(!search.node(&group(false), true, 0));
+        assert!(!search.exhausted);
+        // The group, the 1,000 instances, and one copy of the art counted and looked through.
+        assert_eq!(MAX_KNOCKOUT_MASK_OBJECTS - search.left, 1 + 1000 + 101 + 101);
+    }
+
+    /// A placed file read as one square with a 3 pt brushed stroke.
+    fn brushed_art() -> (Document, Node, Rect) {
+        let mut d = Document::new(40.0, 20.0);
+        d.layers.clear();
+        let mut st = StrokeLayer::new(Paint::solid(vectorcraft_color::Color::BLACK), 3.0);
+        st.brush = Some("3 pt. Round".into());
+        let mut square = Node::path(NodeId(0), shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 20.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+        square.appearance.items.push(AppearanceItem::Stroke(st));
+        let art = Node::group(NodeId(0), vec![Arc::new(square)]);
+        (d, art, Rect::new(0.0, 0.0, 40.0, 20.0))
+    }
+
+    /// A placed document is drawn as the art read from its file, and the brushed strokes in that
+    /// art count.
+    #[test]
+    fn brushed_strokes_in_a_placed_documents_art_count() {
+        let d = Document::new(200.0, 200.0);
+        let placed = vectorcraft_doc::PlacedDocument {
+            link: vectorcraft_doc::LinkInfo::new("/art/placed.vectorcraft"),
+            key: "placed-1".into(),
+            bounding: false,
+            page_box: vectorcraft_doc::placed_document::PageBox::Crop,
+            width: 40.0,
+            height: 20.0,
+            xf: Affine::IDENTITY,
+            placement: Default::default(),
+        };
+        // The art the export reads for it before drawing (`Document::with_placed_art`).
+        vectorcraft_doc::placed_document::prime(&placed, Arc::new(vec![]), brushed_art());
+        let n = Node::new(NodeId(0), NodeKind::PlacedDocument(Box::new(placed)));
+        let brushes = vectorcraft_brush::library(&d);
+        assert!(BrushSearch::new(&d, &brushes).node(&n, true, 0));
     }
 }

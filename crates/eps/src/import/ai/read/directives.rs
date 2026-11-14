@@ -79,6 +79,10 @@ impl<'a> Reader<'a> {
                 }
                 return Ok(());
             }
+            if let Some(v) = bytes.strip_prefix(b"%Creator:") {
+                self.symbols_own_size = v.trim_ascii() == crate::ai_editing::CREATOR_TEXT.as_bytes();
+                return Ok(());
+            }
             if bytes == b"%EndComments" {
                 self.header_done = true;
             }
@@ -1181,7 +1185,7 @@ mod tests {
         assert!(nodes > 0);
         let draft = |i: usize| brush::BrushDraft {
             name: format!("Brush {i}"),
-            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string(), plain: false },
+            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string(), settings: None },
         };
         let drafts: Vec<_> = (0..5).map(draft).collect();
         let (kept, left_out) = brush::finish_brushes_within(drafts.clone(), &reader.brush_art, None, 3 * nodes);

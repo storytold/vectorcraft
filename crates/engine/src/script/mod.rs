@@ -26,7 +26,8 @@
 //! Before a run starts, its preprocessor lines are read ([`include`]): included files take the
 //! place of their lines, and an error in one is reported at its own file, line and column.
 //! `$.evalFile(path)` runs another file in the same global environment and gives its last value,
-//! `$.fileName` is the file being run and `$.includePath` the `#includepath` list.
+//! `$.fileName` is the file of the code that reads it (the file being run for code that `eval` or
+//! `Function` compiled) and `$.includePath` the `#includepath` list.
 //!
 //! A run writes to the Script Console with `$.write` and `$.writeln`, and `vc.log` adds a line
 //! there too. The session's console gets a start line, the run's output, its uncaught error, an end
