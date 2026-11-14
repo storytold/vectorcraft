@@ -180,7 +180,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paintbrush",
             [],
             None,
-            "{…params as path.freehand, brush} paint a freehand stroke with a brush → {id}",
+            "{…params as path.freehand, brush?: name} paint a freehand stroke with a brush; without `brush` (or with null) the plain path is drawn; a `brush` that names no brush in the document, or a `style` other than \"pencil\" or \"brush\", is an error and nothing is drawn → {id}",
             has_doc,
             brush_freehand
         ),
