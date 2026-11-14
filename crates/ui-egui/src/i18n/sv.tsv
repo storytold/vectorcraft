@@ -891,6 +891,9 @@ font-technology	Variable	Variabla
 	The selected character's font is not available.	Typsnittet för det markerade tecknet är inte tillgängligt.
 	No alternates for the selected character.	Inga alternativ för det markerade tecknet.
 	Double-click to replace	Dubbelklicka för att ersätta
+	Click to replace	Klicka för att ersätta
+	Show all alternates in the Glyphs panel	Visa alla alternativ i panelen Glyfer
+	Show Character Alternates	Visa teckenalternativ
 	Select one character with the Type tool first.	Markera först ett tecken med textverktyget.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} är en glyf i {font}, inte i det typsnitt den markerade texten är satt i ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hör till {base} (U+{base_code}) {place}; din markering är {sel} (U+{code}).
@@ -1297,6 +1300,7 @@ font-technology	Variable	Variabla
 	Format	Format
 	Format Options	Formatalternativ
 	Format Settings	Formatinställningar
+	Format Settings…	Formatinställningar…
 	Format:	Format:
 	Formats:	Format:
 	Fractional Widths	Bråkdelsbredder
@@ -1643,6 +1647,7 @@ font-technology	Variable	Variabla
 	Images:	Bilder:
 	Import Keyboard Shortcuts…	Importera kortkommandon…
 	Import PDF	Importera PDF
+	Import PDF pages as links	Importera PDF-sidor som länkar
 	Import PDF Presets	Importera PDF-förinställningar
 	Import Perspective Grid Presets	Importera förinställningar för perspektivrutnät
 	Import Print Presets	Importera utskriftsförinställningar
@@ -3363,6 +3368,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Smarta stödlinjer (Visa → Smarta stödlinjer)
 	Smart Guides (⌘U)	Smarta stödlinjer (⌘U)
 	Smart Punctuation…	Smarta skiljetecken…
+	Smart Punctuation	Smarta skiljetecken
+	ff, fi, ffi Ligatures	Ligaturer ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligaturer ff, fl, ffl
+	Smart Quotes	Smarta citattecken
+	Smart Spaces	Smarta blanksteg
+	En, Em Dashes	Korta och långa tankstreck
+	Ellipses	Ellipser
+	Expert Fractions	Expertbråk
+	Replace In	Ersätt i
+	Selected Text Only	Endast markerad text
+	Entire Document	Hela dokumentet
+	Report Results	Rapportera resultat
 	Smooth	Mjuk
 	Corner	Hörn
 	Relative	Relativ
@@ -3393,6 +3410,7 @@ digits	Malayalam	Malayalam
 	Solid	Enfärgad
 	Sort by Kind	Sortera efter typ
 	Sort by Name	Sortera efter namn
+	Sort by Size	Sortera efter storlek
 	Sort by Status	Sortera efter status
 	Source code on GitHub	Källkod på GitHub
 	Source Sans 3	Source Sans 3
@@ -6692,7 +6710,7 @@ axis	Y Axis	Y-axel
 @plural	Result: {n}|Results: {n}	Resultat: {n}|Resultat: {n}
 @msg	select one object	markera ett objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering fungerar på banor, sammansatta banor, symbolinstanser och grupper av dem
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (roterade eller speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
 @msg	Global Edit is off	Global redigering är inte aktiv
 @msg	only an object of the Global Edit other than the one it started from can be left out	bara ett annat objekt än det som den globala redigeringen började med kan uteslutas
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller ett intervall som 1, 3-5, inte {v}
@@ -8688,6 +8706,7 @@ digits	Hindi	Hindi
 @msg	the subpath has no ends to extend (it is closed or a single point)	delbanan har inga ändar att förlänga (den är stängd eller en enkel punkt)
 @msg	the SVG expands to more than {0} nested SVG images	SVG-filen expanderar till fler än {0} kapslade SVG-bilder
 @msg	the SVG expands to more than {0} objects	SVG-filen expanderar till fler än {0} objekt
+@msg	the SVG's styles expand to more than {0} MB	SVG-filens stilar expanderar till mer än {0} MB
 @msg	the SVG has no drawable objects	SVG-filen har inga ritbara objekt
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ-filen packas upp till mer än {_1} MB
 @msg	the symbols are nested too deeply to expand their instances	symbolerna är kapslade för djupt för att deras instanser ska kunna expanderas
@@ -8943,6 +8962,9 @@ digits	Hindi	Hindi
 	Open Tutorial Sample	Öppna övningsexempel för självstudie
 	Finish Tutorial	Slutför självstudie
 	Next Tutorial	Nästa självstudie
+	Show Learn Tab	Visa flik i Lär dig
+	Show Skill	Visa färdighet
+	Back One Level	En nivå tillbaka
 	Back to Skills	Tillbaka till färdigheter
 @msg	tutorial `{id}` has no practice sample	självstudien `{id}` har inget övningsexempel
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öppna först övningsexemplet för `{id}` (se learn.openSample)
@@ -9020,6 +9042,9 @@ digits	Hindi	Hindi
 	Grommets	Öljetter
 	Grommet Inset	Öljetternas avstånd från kanten
 	Diameter	Diameter
+	Nest Shapes…	Packa former…
+	Nest Shapes	Packa former
+	Roll	Rulle
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-effekter kräver ändliga koordinater inom 100 miljoner punkter

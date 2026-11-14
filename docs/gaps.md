@@ -634,6 +634,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   made to an object inside it at the object in the same place ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html));
   a group that holds type or an image is not taken, as Global Edit does not take images or text
   ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-similar-objects.html));
+  rotated copies of the object or group are taken too, and an edit reaches each turned by its angle
+  ([public source](https://helpx.adobe.com/vn_vi/illustrator/how-to/modern-logo-design.html); reflected copies are not
+  taken, VectorCraft's own rule);
   with one such object or group selected with the Selection tool, the objects Start Global Edit would take are
   highlighted on the canvas before it starts (`selecting_one_object_highlights_the_similar_objects_before_global_edit_starts`);
   dynamic symbols (#4938): Symbol Options › Symbol Type (Dynamic Symbol / Static Symbol; `type` on
@@ -679,8 +682,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
   `graphicStyle.addFromLibrary`).
 - **Missing:** more built-in brush libraries beyond the eight shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
-  Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
-  Global Edit of rotated copies as matches.
+  Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write.
 - **Estimate:** 4–14 h.
 
 ## G3 3D and Materials
