@@ -906,6 +906,8 @@ font-technology	Variable	Változó
 	Crop Image	Kép körülvágása
 	Image Tools	Képeszközök
 	Remove Background…	Háttér eltávolítása…
+	Draw (Pencil)	Rajzolás (Ceruza)
+	Place Image	Kép elhelyezése
 	Remove Background	Háttér eltávolítása
 	Background	Háttér
 	Edge Color	Szélszín
@@ -3222,6 +3224,7 @@ mark-style	Japanese	Japán
 	Proportional Metrics	Arányos metrika
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
+	Tsume	Tsume
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -4311,6 +4314,7 @@ mark-style	Japanese	Japán
 	VectorCraft Title Bar on Every Desktop	A VectorCraft címsora minden asztali környezetben
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Amíg a VECTORCRAFT_TITLEBAR környezeti változó be van állítva, az választja ki a címsort.
 	System Title Bar takes precedence over this option while it is on.	Amíg a Rendszer címsora be van kapcsolva, elsőbbséget élvez ezzel a beállítással szemben.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Amíg a VectorCraft címsora minden asztali környezetben beállítás ki van kapcsolva, ez az asztali környezet rajzolja az ablak címsorát, akár be van kapcsolva ez a beállítás, akár nem.
 	Tab	Tabulátor
 	Tab Stops	Tabulátorpontok
 	Table	Táblázat
@@ -4913,6 +4917,7 @@ imageTrace	Outline	Körvonal
 @msg	`select` must be true or false	`select`: true vagy false kell
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` és `maxAnchors`: egész szám kell
 @msg	`{key}` must be a number not below 0	`{key}`: legalább 0 értékű szám kell
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}`: négy legalább 0 értékű szám kell: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}`: [x, y, width, height] kell, négy véges szám, a szélesség és a magasság nem negatív
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` nagyobb, mint `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	adj meg legalább egyet ezek közül: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -6372,8 +6377,8 @@ axis	Y Axis	Y tengely
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	az exportáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	csoporton kívül legfeljebb {MAX_UNGROUPED} paraméter lehet: a többinek adj meg `group` értéket
 @msg	can't encode the input	a bemenet nem kódolható
-@msg	expected {"dataBase64"}	várt formátum: {"dataBase64"}
-@msg	expected {"objects"}	várt formátum: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	várt formátum: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	várt formátum: {{"objects": [...]}}
 @msg	export `{name}`: {e}	`{name}` modulexport: {e}
 @msg	extension {e} is listed twice	a(z) {e} kiterjesztés kétszer szerepel
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	{e} kiterjesztés: 1-16 kisbetűt és számjegyet használj, pont nélkül
@@ -6437,11 +6442,11 @@ axis	Y Axis	Y tengely
 @msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
 @msg	a read-only object was left out	kimaradt egy írásvédett objektum
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {"id"} formában vagy úgy, ahogy megkapta
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
 @msg	a string	karakterlánc
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	a körvonalnak csak `paint`, `width`, `join`, `cap` és `miterLimit` kulcsa van
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	a körvonal formája {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} legyen
-@msg	an effect must be {"id", "params"?, "visible"?}	az effektus formája {"id", "params"?, "visible"?} legyen
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	a körvonal formája {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} legyen
+@msg	an effect must be {{"id", "params"?, "visible"?}}	az effektus formája {{"id", "params"?, "visible"?}} legyen
 @msg	an effect on a fill returns only `fills`	a kitöltésen lévő effektus csak `fills` értéket ad vissza
 @msg	an effect on a stroke returns only `strokes`	a körvonalon lévő effektus csak `strokes` értéket ad vissza
 @msg	an object must be a JSON object	az objektum JSON-objektum legyen
@@ -6583,6 +6588,8 @@ axis	Y Axis	Y tengely
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
 	Playback Options…	Lejátszási beállítások…
+	Button Mode	Gomb mód
+	No actions.	Nincs művelet.
 	Insert Stop…	Megállás beszúrása…
 	Insert Stop	Megállás beszúrása
 	Record Stop	Megállás rögzítése

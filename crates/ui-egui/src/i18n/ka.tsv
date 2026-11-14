@@ -166,6 +166,8 @@
 	Crop Image	გამოსახულების ჩამოჭრა
 	Image Tools	გამოსახულების ხელსაწყოები
 	Remove Background…	ფონის მოშორება…
+	Draw (Pencil)	ხატვა (ფანქარი)
+	Place Image	გამოსახულების განთავსება
 	Remove Background	ფონის მოშორება
 	Background	ფონი
 	Edge Color	კიდის ფერი
@@ -890,6 +892,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	სანამ გარემოს ცვლადი VECTORCRAFT_TITLEBAR დაყენებულია, სათაურის ზოლს ის ირჩევს.
 	System Title Bar takes precedence over this option while it is on.	სანამ სისტემის სათაურის ზოლი ჩართულია, მას ამ პარამეტრზე უპირატესობა აქვს.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	სანამ VectorCraft-ის სათაურის ზოლი ყველა სამუშაო მაგიდაზე გამორთულია, ეს სამუშაო მაგიდა ფანჯრის სათაურის ზოლს ხატავს, ეს პარამეტრი ჩართულია თუ გამორთული.
 	Exit	გასვლა
 	Distort	დეფორმაცია
 	Diffuse Glow…	გაბნეული ნათება…
@@ -1443,6 +1446,7 @@ lighting	Light	სინათლე
 	Proportional Metrics	პროპორციული მეტრიკა
 	Insert Aki Left	აკის ჩასმა მარცხნივ
 	Insert Aki Right	აკის ჩასმა მარჯვნივ
+	Tsume	ცუმე
 	Character Direction	სიმბოლოების მიმართულება
 	Digits	ციფრები
 	Arabic	არაბული
@@ -4185,6 +4189,7 @@ font-technology	Variable	ცვლადი
 @msg	`select` must be true or false	`select` უნდა იყოს true ან false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` და `maxAnchors` უნდა იყოს მთელი რიცხვები
 @msg	`{key}` must be a number not below 0	`{key}` უნდა იყოს რიცხვი, არანაკლებ 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` უნდა იყოს ოთხი რიცხვი, თითოეული არანაკლებ 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` უნდა იყოს [x, y, width, height]: ოთხი სასრული რიცხვი, სიგანე და სიმაღლე არ უნდა იყოს უარყოფითი
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` მეტია, ვიდრე `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	მიუთითეთ ერთი მაინც: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -6340,8 +6345,8 @@ axis	Y Axis	Y ღერძი
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ექსპორტის პლაგინი აცხადებს 1-დან {MAX_EXTENSIONS}-მდე `extensions`-ს
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	ჯგუფების გარეთ მაქსიმუმ {MAX_UNGROUPED} პარამეტრია დასაშვები: დანარჩენებს მიეცით `group`
 @msg	can't encode the input	შეყვანის კოდირება ვერ ხერხდება
-@msg	expected {"dataBase64"}	მოსალოდნელი იყო {"dataBase64"}
-@msg	expected {"objects"}	მოსალოდნელი იყო {"objects"}
+@msg	expected {{"dataBase64": "…"}}	მოსალოდნელი იყო {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	მოსალოდნელი იყო {{"objects": [...]}}
 @msg	export `{name}`: {e}	მოდულის ექსპორტი `{name}`: {e}
 @msg	extension {e} is listed twice	გაფართოება {e} ორჯერაა მითითებული
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	გაფართოება {e}: გამოიყენეთ 1-16 პატარა ასო და ციფრი, წერტილის გარეშე
@@ -6405,11 +6410,11 @@ axis	Y Axis	Y ღერძი
 @msg	a painted live effect returns only `objects`	მხატვრული ცოცხალი ეფექტი აბრუნებს მხოლოდ `objects`-ს
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	მხატვრული ცოცხალი ეფექტის ნაწილს აქვს მხოლოდ `path`, `fillRule`, `fills` და `strokes`
 @msg	a read-only object was left out	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {"id"}-ის სახით ან ისე, როგორც მიიღეთ
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	გამოტოვებულია მხოლოდ წასაკითხი ობიექტი: დააბრუნეთ ის მხოლოდ {{"id": …}}-ის სახით ან ისე, როგორც მიიღეთ
 @msg	a string	სტრიქონი
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	კონტურს აქვს მხოლოდ `paint`, `width`, `join`, `cap` და `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	კონტური უნდა იყოს {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ეფექტი უნდა იყოს {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	კონტური უნდა იყოს {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ეფექტი უნდა იყოს {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	შევსების ეფექტი აბრუნებს მხოლოდ `fills`-ს
 @msg	an effect on a stroke returns only `strokes`	კონტურის ეფექტი აბრუნებს მხოლოდ `strokes`-ს
 @msg	an object must be a JSON object	ობიექტი უნდა იყოს JSON ობიექტი
@@ -6551,6 +6556,8 @@ axis	Y Axis	Y ღერძი
 	Action Options…	მოქმედების პარამეტრები…
 	Action Options	მოქმედების პარამეტრები
 	Playback Options…	შესრულების პარამეტრები…
+	Button Mode	ღილაკების რეჟიმი
+	No actions.	მოქმედებები არ არის.
 	Insert Stop…	გაჩერების ჩასმა…
 	Insert Stop	გაჩერების ჩასმა
 	Record Stop	გაჩერების ჩაწერა
@@ -7353,7 +7360,7 @@ font-script	Japanese	იაპონური
 	Japanese Envelope #3	იაპონური კონვერტი #3
 	Japanese Envelope #4	იაპონური კონვერტი #4
 @msg	image '{key}' has no pixels and was left out	გამოსახულებას '{key}' პიქსელები არ აქვს და გამოტოვდა
-@msg	not an RTF file: it doesn't start with {\\rtf	RTF ფაილი არ არის: არ იწყება {\\rtf-ით
+@msg	not an RTF file: it doesn't start with {{\\rtf	RTF ფაილი არ არის: არ იწყება {{\\rtf-ით
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	ტექსტის ხელსაწყოები
 	Text Tweaker…	ტექსტის მორგება…

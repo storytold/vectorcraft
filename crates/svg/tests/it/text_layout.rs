@@ -196,6 +196,35 @@ fn insert_aki_places_each_moved_character() {
     assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Insert Aki")), "{:?}", out.warnings);
 }
 
+/// Tsume: each character the layout moves by its Tsume starts a `<tspan>` where the character is
+/// drawn, so a reader draws the text where the canvas does, with fewer `<tspan>`s asked for too.
+/// On a path the type is outlined.
+#[test]
+fn tsume_places_each_moved_character() {
+    let tight = CharStyle { tsume: 50.0, ..style(12.0) };
+    let runs =
+        vec![run("H", style(12.0)), run("O", tight.clone()), run("H ", style(12.0)), run("OHO\nHO", CharStyle { tsume: 100.0, ..style(12.0) })];
+    for justify in [Justify::Left, Justify::Center, Justify::Right] {
+        assert_drawn_in_place(&area_doc(runs.clone(), 200.0, justify));
+    }
+    let d = area_doc(runs, 200.0, Justify::Left);
+    let plain = tspans(&export(&area_doc(vec![run("HOH OHO\nHO", style(12.0))], 200.0, Justify::Left), &ExportOptions::default())).len();
+    let fewer = tspans(&export(&d, &ExportOptions { fewer_tspans: true, ..Default::default() })).len();
+    assert!(fewer > plain, "each moved character is placed with fewer tspans too: {plain} {fewer}");
+    let mut t = TextObject::point(Point::ZERO, "", style(12.0));
+    t.runs = vec![run("HO", tight)];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    t.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut d = Document::new(300.0, 200.0);
+    let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(t)));
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let out = vectorcraft_svg::export_full(&d, &ExportOptions::default(), None);
+    assert!(!out.svg.contains("<textPath") && out.warnings.iter().any(|w| w.contains("Tsume")), "{:?}", out.warnings);
+}
+
 /// Proportional Metrics (#966) is written as the `palt` feature, beside the character's own.
 #[test]
 fn proportional_metrics_write_palt() {
@@ -257,6 +286,40 @@ fn character_direction_is_written_on_its_runs() {
         let d = area_doc(vec![run("Due ", style(12.0)), run(date, rtl.clone())], 280.0, Justify::Left);
         let svg = export(&d, &ExportOptions::default());
         assert!(!svg.contains("<text"), "{date}: {svg}");
+    }
+}
+
+/// A run set Left to Right keeps its Character Direction when its SVG is opened again, on a line
+/// and on a path.
+#[test]
+fn character_direction_reads_back() {
+    use vectorcraft_doc::ParaDirection;
+    let ltr = CharStyle { char_direction: Some(ParaDirection::LeftToRight), ..style(12.0) };
+    let mut on_path = TextObject::point(Point::ZERO, "", style(12.0));
+    on_path.runs = vec![run("Due ", style(12.0)), run("21 10 2026", ltr.clone())];
+    let mut line = BezPath::new();
+    line.move_to((20.0, 100.0));
+    line.line_to((280.0, 100.0));
+    on_path.kind = TextKind::OnPath { path: PathData::from_bezpath(&line), start: 0.0, end: None };
+    let mut path_doc = Document::new(300.0, 200.0);
+    let n = Node::new(path_doc.alloc_id(), NodeKind::Text(Box::new(on_path)));
+    let l = path_doc.layers[0].id;
+    path_doc.insert(Some(l), 0, n).unwrap();
+    let area = area_doc(vec![run("Due ", style(12.0)), run("21 10 2026", ltr), run(" ok", style(12.0))], 280.0, Justify::Left);
+    for (name, d) in [("area", area), ("path", path_doc)] {
+        let svg = export(&d, &ExportOptions::default());
+        let back = vectorcraft_svg::import(&svg).unwrap_or_else(|e| panic!("{name}: {e}\n{svg}"));
+        let mut texts = vec![];
+        back.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                texts.push((**t).clone());
+            }
+        });
+        assert_eq!(texts.len(), 1, "{name}: {svg}");
+        let t = &texts[0];
+        let dir = |part: &str| t.runs.iter().find(|r| r.text.contains(part)).map(|r| r.style.char_direction);
+        assert_eq!(dir("2026"), Some(Some(ParaDirection::LeftToRight)), "{name}: {:?}\n{svg}", t.runs);
+        assert_eq!(dir("Due"), Some(None), "{name}: {:?}", t.runs);
     }
 }
 
