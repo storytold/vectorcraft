@@ -297,7 +297,7 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   placeholders are translated in turn (the reason after `: {e}` is often a message too). A literal brace in a
   row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
   doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
-  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan and Dutch
+  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch and Danish
   translate status and error messages (`COMPLETE_MESSAGES` in `i18n::tests`); the untranslated report lists the
   message literals the scan finds, and the phrases a parameter schema's error builds at run time
   (`SCHEMA_PHRASES`), that one of them has no row for. The scan covers the crates in `MESSAGE_CRATES`, the

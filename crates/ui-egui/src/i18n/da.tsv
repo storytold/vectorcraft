@@ -25,6 +25,615 @@
 @msg	{key} must be [x, y] with finite coordinates	{key} skal være [x, y] med endelige koordinater
 @msg	ids must contain 1–10000 object ids	ids skal indeholde 1–10000 objekt-id’er
 
+# Status and error messages: 3D assets, type on a path, scripts and their File and $ objects, presets,
+# PDF page sizes, Objects on Path, plug-ins, file readers and data sets. Names in backticks, command ids,
+# double-quoted values and bare true, false and null stay as the English writes them; names the user
+# gave are quoted »…«, and numbers use a period between thousands (2.048).
+@msg	{what} can't be exported in 3D: {e}	{what} kan ikke eksporteres i 3D: {e}
+@msg	asset {id} isn't a 3D asset	aktiv {id} er ikke et 3D-aktiv
+@msg	asset {id} is a 3D asset: assets.export3D writes it	aktiv {id} er et 3D-aktiv: assets.export3D skriver det
+@msg	no 3D assets yet: collect an object with a 3D effect first (assets.add3D)	ingen 3D-aktiver endnu: saml først et objekt med en 3D-effekt (assets.add3D)
+@msg	select an object with a 3D effect (or give its ids)	markér et objekt med en 3D-effekt (eller angiv dets id’er)
+@msg	select point type or type on a path	markér punkttekst eller tekst på en kurve
+@msg	type on a path in a thread cannot use Dynamic Text: {frames}	tekst på en kurve i en tekstkæde kan ikke bruge dynamisk tekst: {frames}
+@msg	type on an open or compound path cannot be centered on its top or bottom: {open}	tekst på en åben eller sammensat kurve kan ikke centreres på dens top eller bund: {open}
+@msg	type on a path with no length or no height cannot be centered: {flat}	tekst på en kurve uden længde eller højde kan ikke centreres: {flat}
+@msg	type on a path in a thread cannot be centered on its top or bottom: {frames}	tekst på en kurve i en tekstkæde kan ikke centreres på dens top eller bund: {frames}
+@msg	select type on a closed path	markér tekst på en lukket kurve
+@msg	`Custom` stands for changed settings: save the preset under another name	`Custom` står for ændrede indstillinger: gem forudindstillingen under et andet navn
+@msg	the selection has no gradient fill	markeringen har ingen gradientudfyldning
+@msg	the selection has no gradient stroke	markeringen har ingen gradientstreg
+@msg	the selection has no pattern fill	markeringen har ingen mønsterudfyldning
+@msg	the selection has no pattern stroke	markeringen har ingen mønsterstreg
+@msg	no gradient swatch `{name}`	ingen gradientfarveprøve `{name}`
+@msg	no pattern swatch `{name}`	ingen mønsterfarveprøve `{name}`
+@msg	the library item is damaged	bibliotekselementet er beskadiget
+@msg	its zlib compression is damaged	dens zlib-komprimering er beskadiget
+@msg	its Zstandard compression is damaged	dens Zstandard-komprimering er beskadiget
+@msg	it decompresses to more than {_1} MB	den udpakkes til mere end {_1} MB
+@msg	its editing data is for a different page	dens redigeringsdata er til en anden side
+@msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` skal være "emBox", "capHeight", "xHeight" eller "icfBox"
+@msg	Choose a .js or .jsx script	Vælg et .js- eller .jsx-script
+@msg	Ran {name}	Kørte {name}
+@msg	The script was stopped and its changes were undone	Scriptet blev stoppet, og dets ændringer blev fortrudt
+@msg	a script is running: stop it or wait for it to finish	et script kører: stop det, eller vent, til det er færdigt
+@msg	this is a compiled script, which cannot be run; use its source text	dette er et kompileret script, som ikke kan køres; brug dets kildetekst
+@msg	the script is not UTF-8 text	scriptet er ikke UTF-8-tekst
+@msg	the script is too large to run	scriptet er for stort til at blive kørt
+@msg	a drag or an undo group is open; finish it before running a script	en trækning eller en fortrydelsesgruppe er åben; afslut den, før du kører et script
+@msg	the script left a document that cannot be kept	scriptet efterlod et dokument, der ikke kan beholdes
+@msg	the script is no longer in the Scripts folder	scriptet ligger ikke længere i mappen Scripter
+@msg	the script's run is no longer available	scriptets kørsel er ikke længere tilgængelig
+@msg	a failed command changed undo steps that could not be put back, so the script was stopped	en mislykket kommando ændrede fortrydelsestrin, der ikke kunne genskabes, så scriptet blev stoppet
+@msg	a recovery copy could not be written, so the script was not run	en gendannelseskopi kunne ikke skrives, så scriptet blev ikke kørt
+@msg	Script file access denied	Scriptets filadgang blev nægtet
+@msg	Script file exceeds 8 MiB	Scriptfilen er større end 8 MiB
+@msg	Script file is not open	Scriptfilen er ikke åben
+@msg	Script file cannot be decoded	Scriptfilen kan ikke afkodes
+@msg	Script file is not a regular file	Scriptfilen er ikke en almindelig fil
+@msg	Script file does not exist	Scriptfilen findes ikke
+@msg	Script file could not be read	Scriptfilen kunne ikke læses
+@msg	Script folder has more than 2,048 entries	Scriptmappen har mere end 2.048 elementer
+@msg	Script file open mode must be r, w, e or a	Scriptfilens åbningstilstand skal være r, w, e eller a
+@msg	Script file writing is not available	Skrivning af scriptfiler er ikke tilgængelig
+@msg	Script file dialogs are not available	Scriptfildialoger er ikke tilgængelige
+@msg	Script files cannot be opened in another application	Scriptfiler kan ikke åbnes i et andet program
+@msg	Script file access is unavailable on the web	Scriptets filadgang er ikke tilgængelig på nettet
+@msg	Script has 256 files open	Scriptet har 256 filer åbne
+@msg	Script file path exceeds 32,767 characters	Scriptfilens sti er længere end 32.767 tegn
+@msg	Script folder mask takes too many steps to match	Scriptmappens maske kræver for mange trin at matche
+@msg	the script opened more file data than one run may open (32 MiB)	scriptet åbnede flere fildata, end én kørsel må åbne (32 MiB)
+@msg	File.seek: takes a position and a mode	File.seek: tager en position og en tilstand
+@msg	vc.run: give a command id, as a string	vc.run: angiv et kommando-id som en streng
+@msg	vc.run: takes a command id and an object of parameters	vc.run: tager et kommando-id og et objekt med parametre
+@msg	vc.run: the parameters must be an object	vc.run: parametrene skal være et objekt
+@msg	vc.run: the result{place} is too large for a script	vc.run: resultatet{place} er for stort til et script
+@msg	$.evalFile requires a file path	$.evalFile kræver en filsti
+@msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: tidsgrænsen skal være et endeligt antal millisekunder, 0 eller mere
+@msg	$.evalFile: takes a file path and a timeout	$.evalFile: tager en filsti og en tidsgrænse
+@msg	{name}: line {line}, column {column} of {file}: {e} (thrown)	{name}: linje {line}, kolonne {column} i {file}: {e} (kastet)
+@msg	{name}: line {line}, column {column}: {e} (thrown)	{name}: linje {line}, kolonne {column}: {e} (kastet)
+@msg	{name}: {e} (thrown)	{name}: {e} (kastet)
+@msg	{name}: line {line}, column {column} of {file}: {e} (limit)	{name}: linje {line}, kolonne {column} i {file}: {e} (grænse)
+@msg	{name}: line {line}, column {column}: {e} (limit)	{name}: linje {line}, kolonne {column}: {e} (grænse)
+@msg	{name}: {e} (limit)	{name}: {e} (grænse)
+@msg	{name}: line {line}, column {column} of {file}: {e} (syntax)	{name}: linje {line}, kolonne {column} i {file}: {e} (syntaksfejl)
+@msg	{name}: line {line}, column {column}: {e} (syntax)	{name}: linje {line}, kolonne {column}: {e} (syntaksfejl)
+@msg	{name}: {e} (syntax)	{name}: {e} (syntaksfejl)
+@msg	{name}: line {line}, column {column} of {file}: {e} (stopped)	{name}: linje {line}, kolonne {column} i {file}: {e} (stoppet)
+@msg	{name}: line {line}, column {column}: {e} (stopped)	{name}: linje {line}, kolonne {column}: {e} (stoppet)
+@msg	{name}: {e} (stopped)	{name}: {e} (stoppet)
+@msg	{name}: line {line}, column {column} of {file}: {e} (internal)	{name}: linje {line}, kolonne {column} i {file}: {e} (intern fejl)
+@msg	{name}: line {line}, column {column}: {e} (internal)	{name}: linje {line}, kolonne {column}: {e} (intern fejl)
+@msg	{name}: {e} (internal)	{name}: {e} (intern fejl)
+@msg	{e} (these files stay written: {paths})	{e} (disse filer forbliver skrevet: {paths})
+@msg	$.{name}: give a name, as a string	$.{name}: angiv et navn som en streng
+@msg	$.locale: give a locale such as "en" or "de_DE", or null for the interface's	$.locale: angiv en landestandard som "en" eller "de_DE", eller null for brugerfladens
+@msg	$.localize: give true or false	$.localize: angiv true eller false
+@msg	$.flags: only 512, which turns localization on, or 0 can be set	$.flags: kun 512, som slår lokalisering til, eller 0 kan angives
+@msg	$.flags: give a number	$.flags: angiv et tal
+@msg	$.appEncoding: scripts here read and write UTF-8 only	$.appEncoding: scripter her læser og skriver kun UTF-8
+@msg	$.appEncoding: give an encoding's name, as a string	$.appEncoding: angiv navnet på en tegnkodning som en streng
+@msg	$.memCache: the memory cache size cannot be set	$.memCache: hukommelsescachens størrelse kan ikke angives
+@msg	$.setenv: give a value, as a string	$.setenv: angiv en værdi som en streng
+@msg	$.setenv: only {_1} can be set	$.setenv: kun {_1} kan angives
+@msg	$.setenv: a value has at most {MAX_ENV_BYTES} letters, digits and _ . - @	$.setenv: en værdi har højst {MAX_ENV_BYTES} bogstaver, cifre og _ . - @
+@msg	$.sleep: give a number of milliseconds from 0 to {MAX_SLEEP_MS}	$.sleep: angiv et antal millisekunder fra 0 til {MAX_SLEEP_MS}
+@msg	$.sleep: give a number of milliseconds	$.sleep: angiv et antal millisekunder
+@msg	$.sleep: a run cannot wait inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	$.sleep: en kørsel kan ikke vente i et tilbagekald fra en indbygget funktion, en getter, en konvertering eller en fil, som $.evalFile kører; kald den fra scriptets egen kode
+@msg	$.bp: scripts here have no debugger	$.bp: scripter her har ingen debugger
+@msg	$.colorPicker: scripts cannot show a dialog yet	$.colorPicker: scripter kan endnu ikke vise en dialog
+@msg	{name}: give a message	{name}: angiv en meddelelse
+@msg	{name}: give the text the field starts with	{name}: angiv den tekst, feltet starter med
+@msg	{name}: the message is longer than 16 KiB	{name}: meddelelsen er længere end 16 KiB
+@msg	{name}: the title is longer than 256 bytes	{name}: titlen er længere end 256 byte
+@msg	{name}: the text the field starts with is longer than 16 KiB	{name}: den tekst, feltet starter med, er længere end 16 KiB
+@msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en dialog kan ikke åbne i et tilbagekald fra en indbygget funktion, en getter, en konvertering eller en fil, som $.evalFile kører; kald den fra scriptets egen kode
+@msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: det næste svar i `answers` er til {_1}, ikke til {name}
+@msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` har intet svar tilbage til denne dialog
+@msg	vc.document{place} is too large for a script	vc.document{place} er for stort til et script
+@msg	vc.log: the log of this run is full	vc.log: loggen for denne kørsel er fuld
+@msg	this function's script run has ended	denne funktions scriptkørsel er afsluttet
+@msg	the script made more host calls than one run may make	scriptet foretog flere værtskald, end én kørsel må foretage
+@msg	the script passed more data to and from commands than one run may pass	scriptet sendte flere data til og fra kommandoer, end én kørsel må sende
+@msg	the script added more objects and data to the documents than one run may add	scriptet tilføjede flere objekter og data til dokumenterne, end én kørsel må tilføje
+@msg	{what}: the object is not a File or a Folder	{what}: objektet er ikke en File eller en Folder
+@msg	{what}: the count must be a finite number, 0 or more	{what}: antallet skal være et endeligt tal, 0 eller mere
+@msg	File.seek: the position must be a finite number	File.seek: positionen skal være et endeligt tal
+@msg	File.seek: the mode must be 0, 1 or 2	File.seek: tilstanden skal være 0, 1 eller 2
+@msg	script file is compiled: {value}	scriptfilen er kompileret: {value}
+@msg	`name` must be the name of a script engine	`name` skal være navnet på en scriptmotor
+@msg	the main script engine is new for each run and is never kept, so it cannot be dropped	hovedscriptmotoren er ny ved hver kørsel og bevares aldrig, så den kan ikke fjernes
+@msg	there is no script engine named {name}	der findes ingen scriptmotor med navnet {name}
+@msg	Running a script	Kører et script
+@msg	Data Recovery can't keep copies in {path}: {e}	Datagendannelse kan ikke opbevare kopier i {path}: {e}
+@msg	Plug-ins can't be loaded from {path}: {e}	Plug-ins kan ikke indlæses fra {path}: {e}
+@msg	select a path	markér en kurve
+@msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Gem skriver {_1}, ikke {_2}: brug file.saveAsTemplate til at skrive det
+@msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 skriver ældre .ai-filer, ikke .ait-skabeloner
+@msg	`groupColors` must be an array	`groupColors` skal være et array
+@msg	`preserve` must be an object	`preserve` skal være et objekt
+@msg	`{key}` must be an array	`{key}` skal være et array
+@msg	`{key}` must be a #rrggbb color	`{key}` skal være en #rrggbb-farve
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` skal være en #rrggbb-farve eller navnet på en lagfarve
+@msg	unknown Live Paint option `{key}`	ukendt Live Paint-indstilling `{key}`
+@msg	unknown Shape Builder option `{key}`	ukendt Formbygger-indstilling `{key}`
+@msg	`{key}` must be a profile name or null	`{key}` skal være et profilnavn eller null
+@msg	`top` and `below` can't both be true	`top` og `below` kan ikke begge være true
+@msg	`select` must be true or false	`select` skal være true eller false
+@msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` og `maxAnchors` skal være heltal
+@msg	`{key}` must be a number not below 0	`{key}` skal være et tal, der ikke er under 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` skal være fire tal, der ikke er under 0: [tl, tr, br, bl]
+@msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` skal være [x, y, width, height]: fire endelige tal, hvor width og height ikke er negative
+@msg	`{min_key}` is greater than `{max_key}`	`{min_key}` er større end `{max_key}`
+@msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	angiv mindst én af `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
+@msg	a process color can't colorize a grayscale image with transparency: use a spot color, black or white	en procesfarve kan ikke farvelægge et gråtonebillede med gennemsigtighed: brug en staffagefarve, sort eller hvid
+@msg	a key object sits on that point	et nøgleobjekt ligger på det punkt
+@msg	`name` is empty	`name` er tom
+@msg	`newName` is empty	`newName` er tom
+@msg	`{name}` is a built-in preset and can't change: save it under another name	`{name}` er en indbygget forudindstilling og kan ikke ændres: gem den under et andet navn
+@msg	`{name}` is a built-in preset and stays	`{name}` er en indbygget forudindstilling og bevares
+@msg	a spine keeps at least two points	en rygrad beholder mindst to punkter
+@msg	`guideLabel` is null, a layer color's name or #rrggbb	`guideLabel` er null, navnet på en lagfarve eller #rrggbb
+@msg	the Simplify slider is not open	skyderen Forenkl er ikke åben
+@msg	the Smooth slider is not open	skyderen Udglat er ikke åben
+@msg	handle must be in or out	handle skal være in eller out
+@msg	index must be ≥ 0	index skal være ≥ 0
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	siden for tegneflade {n} er {size}, længere end PDF's sidegrænse på 14.400 pt (200 in): den skrives med en UserUnit på {unit}, så programmer, der ignorerer UserUnit, viser den så mange gange mindre
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	siden for tegneflade {n} er {size}, længere end PDF's sidegrænse på 14.400 pt (200 in): den skrives med en UserUnit på {unit}, så programmer, der ignorerer UserUnit, viser den så mange gange mindre: slå Skriv sider længere end 200 in i fuld størrelse i punkter til
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	siden for tegneflade {n} er {size}, længere end PDF's sidegrænse på 14.400 pt (200 in): {label}-sider skrives uden en UserUnit, i punkter, og programmer, der overholder grænsen, beskærer siden til 200 in
+@msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 har ingen UserUnit, som en side længere end 14.400 pt (200 in) har brug for for at bevare sin størrelse: filen skrives som PDF 1.6
+@msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 har ingen UserUnit, som en side længere end 14.400 pt (200 in) har brug for for at holde sig inden for PDF/A-2's sidegrænse på 14.400 enheder: filen skrives som PDF 1.6
+@msg	the page of artboard {n} is {size}, too long and narrow for PDF's page sides of 3 to 14,400 units: it is written with a UserUnit of {unit}, which keeps the short side at 3 units or more, and apps that keep to the limit cut the long side to 14,400 units	siden for tegneflade {n} er {size}, for lang og smal til PDF's sidelængder på 3 til 14.400 enheder: den skrives med en UserUnit på {unit}, som holder den korte side på 3 enheder eller mere, og programmer, der overholder grænsen, beskærer den lange side til 14.400 enheder
+@msg	{label} files hold real numbers up to {max}, and the page of artboard {n}, {side} pt long, needs larger ones: choose PDF 1.6 or later without a PDF/X standard, or a smaller artboard	{label}-filer rummer reelle tal op til {max}, og siden for tegneflade {n}, der er {side} pt lang, kræver større: vælg PDF 1.6 eller nyere uden en PDF/X-standard, eller en mindre tegneflade
+@msg	line {line}: value for `{var}` must be true or false	linje {line}: værdien for `{var}` skal være true eller false
+@msg	line {line}: value for `{var}` is longer than {MAX_GRAPH_CSV} bytes	linje {line}: værdien for `{var}` er længere end {MAX_GRAPH_CSV} byte
+@msg	a bristle brush name can have at most {max} characters: `{name}` has {count}	navnet på en børstepensel kan have højst {max} tegn: `{name}` har {count}
+@msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` er ikke et VectorCraft-dokument, en PDF eller en PDF-kompatibel .ai-fil
+@msg	no saved preset named `{name}`	ingen gemt forudindstilling med navnet `{name}`
+@msg	no saved preset named `{name}` to rename	ingen gemt forudindstilling med navnet `{name}` at omdøbe
+@msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: referencen ville være større end {MAX_BYTES} byte
+@msg	the artboard is locked	tegnefladen er låst
+@msg	no such spine point	intet sådant rygradpunkt
+@msg	`with` must be a list of at most 10000 spine point indexes	`with` skal være en liste med højst 10000 rygradpunktindekser
+@msg	`with` moves points, not a handle	`with` flytter punkter, ikke et håndtag
+@msg	no such spine segment	intet sådant rygradsegment
+@msg	node {_1} is on a locked artboard	node {_1} ligger på en låst tegneflade
+@msg	not a blend	ikke en blanding
+@msg	not a PICT file	ikke en PICT-fil
+@msg	thumbnail: no page {n} (the file has 1)	miniature: ingen side {n} (filen har 1)
+@msg	select a blend or give `id`	markér en blanding, eller angiv `id`
+@msg	select an Objects on Path group	markér en gruppe med objekter på kurve
+@msg	choose the object to detach with its Select/Move widget	vælg det objekt, der skal frigøres, med dets Markér/Flyt-kontrol
+@msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	en kurve i en sammensat kurve, blanding, kuvert, gentagelse eller sammenfletningsgruppe kan ikke modtage objekter
+@msg	a clipping path can't take objects	en beskæringskurve kan ikke modtage objekter
+@msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekter i en blanding, kuvert, gentagelse eller sammenfletningsgruppe kan ikke knyttes til en kurve
+@msg	a clipping path can't be attached to a path	en beskæringskurve kan ikke knyttes til en kurve
+@msg	`background` must be edges, corners or colors	`background` skal være edges, corners eller colors
+@msg	`match` must be distance or channels	`match` skal være distance eller channels
+@msg	`{key}` must be from 0 to 100	`{key}` skal være fra 0 til 100
+@msg	`colors` must list 1 to 16 colors, each hex (#rrggbb or #rgb) or black, white, red, green or blue	`colors` skal angive 1 til 16 farver, hver som hex (#rrggbb eller #rgb) eller black, white, red, green eller blue
+@msg	the linked image shows its preview: embed or relink it first	det sammenkædede billede viser sin forhåndsvisning: integrér det, eller genopret linket først
+@msg	a CMYK image has no transparency to set	et CMYK-billede har ingen gennemsigtighed at angive
+@msg	every pixel matches the background: no image would be left	hver pixel matcher baggrunden: der ville ikke være noget billede tilbage
+@msg	an image of {w} × {h} pixels is too large to change	et billede på {w} × {h} pixels er for stort til at ændre
+@msg	select an image with a color mask	markér et billede med en farvemaske
+@msg	the color mask's settings are out of range	farvemaskens indstillinger er uden for området
+@msg	a CMYK image can't take a color mask	et CMYK-billede kan ikke få en farvemaske
+@msg	the mask would hide every pixel	masken ville skjule hver pixel
+@msg	Recolor completed; {locked} and {hidden} were left unchanged	Omfarvning fuldført; {locked} og {hidden} blev ikke ændret
+@msg	Recolor completed; {objects} were left unchanged	Omfarvning fuldført; {objects} blev ikke ændret
+@msg	Recolor completed; {objects} was left unchanged	Omfarvning fuldført; {objects} blev ikke ændret
+@msg	1 locked object	1 låst objekt
+@msg	{n} locked objects	{n} låste objekter
+@msg	1 hidden object	1 skjult objekt
+@msg	{n} hidden objects	{n} skjulte objekter
+@msg	t, dx and dy must be finite	t, dx og dy skal være endelige
+@msg	the blend has no spine	blandingen har ingen rygrad
+@msg	the spine has no segments	rygraden har ingen segmenter
+@msg	panels can't be shown in Presentation Mode	paneler kan ikke vises i Præsentationstilstand
+@msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	ukendt forudindstilling `{name}`: ikke en indbygget eller gemt forudindstilling (se imageTrace.presets)
+@msg	variables are locked	variablerne er låst
+@msg	more than {MAX_CSV_ROWS} data sets: Import Data Sets reads at most {MAX_CSV_ROWS}	mere end {MAX_CSV_ROWS} datasæt: Importér datasæt læser højst {MAX_CSV_ROWS}
+@msg	more than {MAX_CSV_COLS} variables: Import Data Sets reads at most {MAX_CSV_COLS}	mere end {MAX_CSV_COLS} variabler: Importér datasæt læser højst {MAX_CSV_COLS}
+@msg	`{key}: {top}` and `options.{key}: {inner}` disagree: give the option once	`{key}: {top}` og `options.{key}: {inner}` er uenige: angiv indstillingen én gang
+@msg	x and y must be finite	x og y skal være endelige
+@msg	{_1} is an exporter (File › Export › Export As…)	{_1} er en eksportør (Filer › Eksportér › Eksportér som…)
+@msg	`documentData` is {size} bytes (limit {MAX_DOCUMENT_DATA})	`documentData` fylder {size} byte (grænse {MAX_DOCUMENT_DATA})
+@msg	a mask that covers several layers comes in as a clipping group in each layer it covers	en maske, der dækker flere lag, indlæses som en beskæringsgruppe i hvert lag, den dækker
+@msg	a graph's records don't end where they should: its art was read as it is	en grafs poster slutter ikke, hvor de skal: dens grafik blev læst, som den er
+@msg	`{w}` takes no operands	`{w}` tager ingen operander
+@msg	a wraparound group is inside a compound path	en ombrydningsgruppe ligger i en sammensat kurve
+@msg	it ends inside a multi-layer mask	den slutter inde i en maske over flere lag
+@msg	a multi-layer mask's operators are out of order	operatorerne i en maske over flere lag står i forkert rækkefølge
+@msg	a multi-layer mask needs one clipping path	en maske over flere lag kræver én beskæringskurve
+@msg	a group crosses a multi-layer mask	en gruppe krydser en maske over flere lag
+@msg	graphs come in as plain art, without their data or settings	grafer indlæses som almindelig grafik uden deres data eller indstillinger
+@msg	the active document changed while the question was open; nothing was deleted	det aktive dokument ændrede sig, mens spørgsmålet var åbent; intet blev slettet
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Linket ligger i et symbol, et grafdesign, et mønster eller en opacitetsmaske og har ingen plads på lærredet
+@msg	source must be the id of a Shaper Group's original shape	source skal være id’et for en shapergruppes oprindelige form
+@msg	group must be the id of a Shaper Group	group skal være id’et for en shapergruppe
+@msg	the shape is not an editable original shape of that Shaper Group	formen er ikke en redigerbar oprindelig form i den shapergruppe
+@msg	id {value} is a layer, not an object	id {value} er et lag, ikke et objekt
+@msg	id {value} is a layer, not an object; move layers with layer.move	id {value} er et lag, ikke et objekt; flyt lag med layer.move
+@msg	the PCX file is cut short	PCX-filen er afkortet
+@msg	the PCX file's header is damaged	PCX-filens header er beskadiget
+@msg	PCX files with {bits}-bit pixels in {planes} planes can't be read	PCX-filer med {bits}-bit-pixels i {planes} planer kan ikke læses
+@msg	the Pixar file is cut short	Pixar-filen er afkortet
+@msg	the Pixar file's header is damaged	Pixar-filens header er beskadiget
+@msg	the Pixar file's image data is damaged	Pixar-filens billeddata er beskadigede
+@msg	the JPEG 2000 file can't be read	JPEG 2000-filen kan ikke læses
+@msg	the JPEG 2000 file has an unsupported color space or JPX content	JPEG 2000-filen har et farverum eller JPX-indhold, der ikke understøttes
+@msg	the HEIC or HEIF file can't be read	HEIC- eller HEIF-filen kan ikke læses
+@msg	the HEIC or HEIF file holds a kind of image that can't be read	HEIC- eller HEIF-filen indeholder en billedtype, der ikke kan læses
+@msg	HEIC and HEIF images can't be opened in this build	HEIC- og HEIF-billeder kan ikke åbnes i denne version
+@msg	the JPEG XL file is cut short	JPEG XL-filen er afkortet
+@msg	the JPEG XL container is too large to read	JPEG XL-containeren er for stor til at blive læst
+@msg	CMYK JPEG XL images can't be read	CMYK-billeder i JPEG XL kan ikke læses
+@msg	the JPEG XL file can't be read: {e}	JPEG XL-filen kan ikke læses: {e}
+@msg	Extrude & Bevel	Ekstrudér og facet
+@msg	Revolve	Omdrej
+@msg	Inflate	Pust op
+@msg	Rotate	Rotér
+@msg	Extrude & Bevel (Classic)	Ekstrudér og facet (klassisk)
+@msg	Revolve (Classic)	Omdrej (klassisk)
+@msg	Rotate (Classic)	Rotér (klassisk)
+@msg	This effect	Denne effekt
+@msg	clipping paths	beskæringskurver
+@msg	other objects	andre objekter
+@msg	{label} requires a group holding a shape with at least two anchors	{label} kræver en gruppe, der indeholder en form med mindst to ankerpunkter
+@msg	Revolve requires a group holding a shape with at least two anchors	Omdrej kræver en gruppe, der indeholder en form med mindst to ankerpunkter
+@msg	Revolve requires a shape with at least two anchors	Omdrej kræver en form med mindst to ankerpunkter
+@msg	{label} on a group needs paths, compound paths, type, groups, clipping groups, blends and symbol instances: release or expand its {what} first.	{label} på en gruppe kræver kurver, sammensatte kurver, tekst, grupper, beskæringsgrupper, blandinger og symbolforekomster: frigør eller udvid først dens {what}.
+@msg	{label} on a group takes at most {MAX_MEMBERS} objects	{label} på en gruppe tager højst {MAX_MEMBERS} objekter
+@msg	A 3D effect on a group or layer goes on the group itself, not on its fill or stroke	En 3D-effekt på en gruppe eller et lag anvendes på selve gruppen, ikke på dens udfyldning eller streg
+@msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en gruppes udfyldning eller streg tegner intet
+@msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en gruppes udfyldning eller streg tegner intet at eksportere
+@msg	The 3D object is too complex to export	3D-objektet er for komplekst til at blive eksporteret
+@msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Ekstrudér og facet, Omdrej, Pust op eller Rotér)
+@msg	its 3D effect builds no solid	dens 3D-effekt danner intet legeme
+@msg	bevel must be none or one of {_1}	bevel skal være none eller en af {_1}
+@msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} kan ikke danne legemer af denne grafik: dens symbolforekomster, blandinger og beskæringsgrupper indeholder for mange objekter
+@msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} kan ikke danne et legeme af forekomsten af symbolet "{symbol}": symbolets grafik er ikke tilgængelig
+@msg	{_1}: the clipping path is too complex to cut the art with	{_1}: beskæringskurven er for kompleks til at skære grafikken med
+@msg	{_1} takes at most {MAX_MEMBERS} objects	{_1} tager højst {MAX_MEMBERS} objekter
+@msg	{_1} can't build solids from art nested more than {MAX_DEPTH} levels deep	{_1} kan ikke danne legemer af grafik, der er indlejret mere end {MAX_DEPTH} niveauer dybt
+@msg	Revolve paint is too complex for this surface; reduce Segments or simplify the gradient	Omdrej-malingen er for kompleks til denne overflade; reducér Segmenter, eller forenkl gradienten
+@msg	Revolve edge must be left or right	Omdrej: edge skal være left eller right
+@msg	Revolve cap must be a boolean	Omdrej: cap skal være en boolesk værdi
+@msg	the revolved object has no fill or stroke	det omdrejede objekt har ingen udfyldning eller streg
+@msg	lightColor must be an opaque RGB color in #rrggbb form	lightColor skal være en uigennemsigtig RGB-farve i formen #rrggbb
+@msg	lights must contain one to ten lights	lights skal indeholde et til ti lys
+@msg	each light must be an object	hvert lys skal være et objekt
+@msg	unknown light setting: use color, intensity, rotation, height, softness or behind	ukendt lysindstilling: brug color, intensity, rotation, height, softness eller behind
+@msg	light {key} must be a number from {min} to {max}	lys: {key} skal være et tal fra {min} til {max}
+@msg	light color must use opaque #rrggbb	lys: color skal bruge uigennemsigtig #rrggbb
+@msg	light behind must be true or false	lys: behind skal være true eller false
+@msg	shadow must be true or false	shadow skal være true eller false
+@msg	shadowPosition must be behind or below	shadowPosition skal være behind eller below
+@msg	{key} must be a number from {min} to {max}	{key} skal være et tal fra {min} til {max}
+@msg	each of `{GRAPHICS}` must be an object	hvert element i `{GRAPHICS}` skal være et objekt
+@msg	`{GRAPHICS}` entries take symbol, face, x, y, scale and rotation, not `{k}`	elementer i `{GRAPHICS}` tager symbol, face, x, y, scale og rotation, ikke `{k}`
+@msg	each of `{GRAPHICS}` needs `symbol`, the name of a symbol	hvert element i `{GRAPHICS}` kræver `symbol`, navnet på et symbol
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}`: face skal være front eller back
+@msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}`: {key} skal være et tal fra {lo} til {hi}
+@msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` skal være et array
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik kortlægges på objekttyperne Plan, Ekstrudér og Omdrej
+@msg	Revolve maps graphics onto its side: map them onto the front	Omdrej kortlægger grafik på siden: kortlæg den på forsiden
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafikken er for kompleks til denne overflade: forenkl symbolernes grafik, eller reducér Segmenter
+@msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tager højst {MAX_GRAPHICS} grafikelementer
+@msg	A plane has one face: map its graphics onto the front	Et plan har én flade: kortlæg dets grafik på forsiden
+@msg	The graphics are too complex: simplify the symbols' art	Grafikken er for kompleks: forenkl symbolernes grafik
+@msg	A graphic's art may be nested at most {MAX_LEVELS} levels deep: simplify the symbol's art	Et grafikelements grafik må højst være indlejret {MAX_LEVELS} niveauer dybt: forenkl symbolets grafik
+@msg	A graphic's art may nest symbols at most {MAX_NESTING} levels deep: simplify the symbol's art	Et grafikelements grafik må højst indlejre symboler {MAX_NESTING} niveauer dybt: forenkl symbolets grafik
+@msg	A graphic's art holds too many objects: simplify the symbol's art	Et grafikelements grafik indeholder for mange objekter: forenkl symbolets grafik
+@msg	A graphic draws at most {MAX_PIECES} fills and strokes: simplify the symbol's art	Et grafikelement tegner højst {MAX_PIECES} udfyldninger og streger: forenkl symbolets grafik
+@msg	`surface` must be one of {_1}	`surface` skal være en af {_1}
+@msg	{label} draws the source art for this object instead of its 3D surface	{label} tegner kildegrafikken for dette objekt i stedet for dets 3D-overflade
+@msg	{label} draws no faces for this object	{label} tegner ingen flader for dette objekt
+@msg	the wireframe has more than {MAX_WIRE_EDGES} edges	trådmodellen har mere end {MAX_WIRE_EDGES} kanter
+@msg	the params must be an object, not {got}	parametrene skal være et objekt, ikke {got}
+@msg	unknown parameter `{path}`; the object takes no keys	ukendt parameter `{path}`; objektet tager ingen nøgler
+@msg	unknown parameter `{path}`; it takes: {keys}	ukendt parameter `{path}`; den tager: {keys}
+@msg	missing `{path}`	`{path}` mangler
+@msg	`{path}` must be {expected}, not {got}	`{path}` skal være {expected}, ikke {got}
+@msg	`{path}` is nested too deeply	`{path}` er indlejret for dybt
+@msg	{path}: not a PNG, JPEG, WebP, TIFF or BMP image	{path}: ikke et PNG-, JPEG-, WebP-, TIFF- eller BMP-billede
+@msg	the image is {iw} × {ih} pixels and the artboard at that width is {rw} × {rh} pixels: their proportions differ	billedet er {iw} × {ih} pixels, og tegnefladen i den bredde er {rw} × {rh} pixels: deres proportioner er forskellige
+@msg	`threshold` must be a number from 0 to 1	`threshold` skal være et tal fra 0 til 1
+@msg	background {v}: a color such as "#808080"	baggrund {v}: en farve som "#808080"
+@msg	comparing with an image file isn't available in the browser	sammenligning med en billedfil er ikke tilgængelig i browseren
+@msg	columns {first} and {column} both name the variable `{name}`	kolonnerne {first} og {column} angiver begge variablen `{name}`
+@msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	intet i datasættet {name} blev anvendt: intet objekt er bundet til en variabel, som det har en værdi for
+@msg	no bound object reports a value (locked objects and embedded images report none)	intet bundet objekt rapporterer en værdi (låste objekter og integrerede billeder rapporterer ingen)
+@msg	Edit Original opens image and document files only; “{name}” is not one	Redigér original åbner kun billed- og dokumentfiler; »{name}« er ikke en sådan
+@msg	only http, https and mailto URLs open in the browser, not “{url}”	kun http-, https- og mailto-URL’er åbnes i browseren, ikke »{url}«
+@msg	{id} opens another app: only the person at the keyboard can run it	{id} åbner et andet program: kun personen ved tastaturet kan køre den
+@msg	“{name}” is not a file	»{name}« er ikke en fil
+@msg	a mask has more than one art block	en maske har mere end én grafikblok
+@msg	mask art ends outside a mask dictionary	maskegrafik slutter uden for en maskeordbog
+@msg	cancelled; nothing was changed	annulleret; intet blev ændret
+@msg	a linked image can't become a gradient mesh: embed it first	et sammenkædet billede kan ikke blive et gradientnet: integrér det først
+@msg	the image has no usable size or position	billedet har ingen brugbar størrelse eller position
+@msg	the image's pixels can't be read	billedets pixels kan ikke læses
+@msg	Persistent libraries not found: {files}	Vedvarende biblioteker blev ikke fundet: {files}
+@msg	`{given}` isn't a library panel (see window.swatchLibrary)	`{given}` er ikke et bibliotekspanel (se window.swatchLibrary)
+@msg	library panel `{given}` isn't open	bibliotekspanelet `{given}` er ikke åbent
+@msg	too many changed shortcuts	for mange ændrede genveje
+@msg	library panel `{given}` isn't missing its library	bibliotekspanelet `{given}` mangler ikke sit bibliotek
+@msg	too many library panels were opened in this session	der blev åbnet for mange bibliotekspaneler i denne session
+@msg	The image is {_1} × {_2} pixels, more than {LARGE_TRACE_SIDE} on a side: it is traced, but more slowly. A lower-fidelity preset or a smaller copy of the image traces faster.	Billedet er {_1} × {_2} pixels, mere end {LARGE_TRACE_SIDE} på en side: det spores, men langsommere. En forudindstilling med lavere præcision eller en mindre kopi af billedet spores hurtigere.
+@msg	The image was traced at {_1} × {_2} pixels, scaled down from {_3} × {_4} ({_5} megapixels at most).	Billedet blev sporet ved {_1} × {_2} pixels, skaleret ned fra {_3} × {_4} (højst {_5} megapixel).
+@msg	byColor must be true or false	byColor skal være true eller false
+@msg	byColor can't split Auto Grouping groups: trace without Auto Grouping	byColor kan ikke opdele grupper fra Autogruppering: spor uden Autogruppering
+@msg	byColor can't regroup a trace with a live Pathfinder effect: expand without byColor	byColor kan ikke omgruppere en sporing med en live Pathfinder-effekt: udvid uden byColor
+@msg	Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds.	Tilstanden Fladt logo bruger ikke keepColors: den sporer de farver, logoColors angiver, eller de farver, den finder.
+@msg	Nothing was traced: none of the colors the trace found matches keepColors ({_1}).	Intet blev sporet: ingen af de farver, sporingen fandt, matcher keepColors ({_1}).
+@msg	Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists.	Intet blev sporet: Ignorér farve udelader alle områder med de farver, keepColors angiver.
+@msg	Nothing was traced: the colors that match keepColors produce no paths.	Intet blev sporet: de farver, der matcher keepColors, danner ingen kurver.
+@msg	keepColors: none of the colors the trace found matches {c}, so nothing of it is traced.	keepColors: ingen af de farver, sporingen fandt, matcher {c}, så intet af den spores.
+@msg	`colorGroup` needs `library: "document"`	`colorGroup` kræver `library: "document"`
+@msg	`colorGroup` needs `palette: "documentLibrary"`	`colorGroup` kræver `palette: "documentLibrary"`
+@msg	`colorGroup` needs `mode: "color"`	`colorGroup` kræver `mode: "color"`
+@msg	no color group `{name}` in the document (see swatch.list)	ingen farvegruppe `{name}` i dokumentet (se swatch.list)
+@msg	Flat Logo traced the image at {_1} × {_2} pixels, averaged down from {_3} × {_4}.	Fladt logo sporede billedet ved {_1} × {_2} pixels, udjævnet ned fra {_3} × {_4}.
+@msg	{label} keeps 1 of the document's {n} artboards: the file reopens with one. Turn on Preserve Editing Capabilities to keep them all.	{label} beholder 1 af dokumentets {n} tegneflader: filen genåbnes med én. Slå Bevar redigeringsfunktioner til for at beholde dem alle.
+@msg	`spread` must be pad, repeat or reflect	`spread` skal være pad, repeat eller reflect
+@msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` skal være et heltal fra 1 til {MAX_REPEATS}
+@msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` gælder for lineære, radiale, koniske og diamantformede gradienter
+@msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} blev færdig, men dokumentet eller plug-in'et ændrede sig i mellemtiden: kør det igen
+@msg	Running “{name}”…	Kører »{name}«…
+@msg	a live effect runs while the document is drawn, so it can't be `heavy`	en live-effekt kører, mens dokumentet tegnes, så den kan ikke være `heavy`
+@msg	an exporter always gets an export's budget: leave `budget` out	en eksportør får altid et eksportbudget: udelad `budget`
+@msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	»{_1}« beder om et tungt budget (hver kørsel op til {minutes} minutter og {times} gange de sædvanlige instruktioner): en person skal godkende det i skrivebordsappen, eller send `allowHeavy: true` i en session startet med --allow-plugin-grants
+@msg	`name` must be 1-64 printable characters	`name` skal være 1-64 tegn, der kan udskrives
+@msg	`version`, `description` or `author` is too long	`version`, `description` eller `author` er for lang
+@msg	`warnings` must be a list of strings	`warnings` skal være en liste med strenge
+@msg	`{k}` must be one of {_1}	`{k}` skal være en af {_1}
+@msg	`{k}` must be {what}	`{k}` skal være {what}
+@msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	en eksportør angiver 1 til {MAX_EXTENSIONS} `extensions`
+@msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	højst {MAX_UNGROUPED} parametre uden for grupper: giv de andre en `group`
+@msg	can't encode the input	kan ikke kode inputtet
+@msg	expected {{"dataBase64": "…"}}	forventet: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	forventet: {{"objects": [...]}}
+@msg	export `{name}`: {e}	eksport `{name}`: {e}
+@msg	extension {e} is listed twice	filtypenavnet {e} er angivet to gange
+@msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	filtypenavn {e}: brug 1-16 små bogstaver og cifre uden punktum
+@msg	invalid id {_1}: use 1-64 characters from A-Z a-z 0-9 . _ -	ugyldigt id {_1}: brug 1-64 tegn fra A-Z a-z 0-9 . _ -
+@msg	invalid parameter name {k}	ugyldigt parameternavn {k}
+@msg	manifest is not UTF-8	manifestet er ikke UTF-8
+@msg	manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)	manifestet er for langt (grænse {MAX_MANIFEST_BYTES} byte)
+@msg	manifest is {_1} bytes (limit {MAX_MANIFEST_BYTES})	manifestet fylder {_1} byte (grænse {MAX_MANIFEST_BYTES})
+@msg	module is {_1} bytes (limit {_2})	modulet fylder {_1} byte (grænse {_2})
+@msg	needs approval: it asks for {0}, which the user grants when installing it on its own	kræver godkendelse: det beder om {0}, som brugeren tildeler, når det installeres for sig selv
+@msg	not JSON: {e}	ikke JSON: {e}
+@msg	not a WebAssembly binary (missing \0asm header)	ikke en WebAssembly-binærfil (headeren \0asm mangler)
+@msg	parameter `{k}`: {what}	parameteren `{k}`: {what}
+@msg	parameter `{name}`: {what}	parameteren `{name}`: {what}
+@msg	plug-in parameters must be a JSON object	plug-in-parametrene skal være et JSON-objekt
+@msg	the module must export its linear memory as `memory`	modulet skal eksportere sin lineære hukommelse som `memory`
+@msg	the objects to change are no longer in the document	de objekter, der skal ændres, er ikke længere i dokumentet
+@msg	the runtime panicked	runtime-miljøet gik i panik
+@msg	unexpected host trap	uventet trap i værten
+@msg	vc_abi_version returned {v}; this host implements version {ABI_VERSION}	vc_abi_version returnerede {v}; denne vært implementerer version {ABI_VERSION}
+@msg	vc_alloc returned 0 (out of memory)	vc_alloc returnerede 0 (ikke mere hukommelse)
+@msg	vc_alloc returned a block outside memory	vc_alloc returnerede en blok uden for hukommelsen
+@msg	vc_run returned error code {packed}	vc_run returnerede fejlkoden {packed}
+@msg	{_1} is not a file	{_1} er ikke en fil
+@msg	{_1} is {_2} bytes (limit {_3})	{_1} fylder {_2} byte (grænse {_3})
+@msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objekter (grænse {MAX_OBJECTS})
+@msg	{at}: {msg}	{at}: {msg}
+@msg	{what} points outside memory	{what} peger uden for hukommelsen
+@msg	`angle` must be a number	`angle` skal være et tal
+@msg	`aspect` must be from 0.01 to 100	`aspect` skal være fra 0,01 til 100
+@msg	`cap` must be "butt", "round" or "square"	`cap` skal være "butt", "round" eller "square"
+@msg	`fillRule` must be "nonzero" or "evenodd"	`fillRule` skal være "nonzero" eller "evenodd"
+@msg	`helpUrl` must be an https:// address of at most {MAX_HELP_URL} bytes	`helpUrl` skal være en https://-adresse på højst {MAX_HELP_URL} byte
+@msg	`help` must be 1-{MAX_HELP} printable characters	`help` skal være 1-{MAX_HELP} tegn, der kan udskrives
+@msg	`id` must be an effect id of 1-{MAX_EFFECT_ID} bytes	`id` skal være et effekt-id på 1-{MAX_EFFECT_ID} byte
+@msg	`id` must be the id of an input object	`id` skal være id’et for et inputobjekt
+@msg	`join` must be "miter", "round" or "bevel"	`join` skal være "miter", "round" eller "bevel"
+@msg	`label` and `group` must be 1-{MAX_LABEL} printable characters	`label` og `group` skal være 1-{MAX_LABEL} tegn, der kan udskrives
+@msg	`maxLength` must be 1-{MAX_TEXT}, and the default no longer	`maxLength` skal være 1-{MAX_TEXT}, og standardværdien må ikke være længere
+@msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` og `maxItems` skal være 0-{MAX_LIST}, `maxItems` mindst 1, og standardværdien skal have så mange
+@msg	`name` must be a string	`name` skal være en streng
+@msg	`opacity` must be a number	`opacity` skal være et tal
+@msg	`type` must be "path" or "compound"	`type` skal være "path" eller "compound"
+@msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` skal være 1-{MAX_UNIT} tegn, der kan udskrives
+@msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` angiver 1 til {MAX_CONDITION_VALUES} værdier for `{other}`
+@msg	`visibleWhen` names `{other}`, which isn't a parameter declared before this one	`visibleWhen` angiver `{other}`, som ikke er en parameter, der er erklæret før denne
+@msg	`visibleWhen` names at most {MAX_CONDITIONS} parameters	`visibleWhen` angiver højst {MAX_CONDITIONS} parametre
+@msg	`visibleWhen` takes `{other}`'s values, of a checkbox or a choice	`visibleWhen` tager værdierne for `{other}`, fra et afkrydsningsfelt eller et valg
+@msg	`visible` must be true or false	`visible` skal være true eller false
+@msg	`{key}` must be a number from {_1} to {_2}	`{key}` skal være et tal fra {_1} til {_2}
+@msg	`{key}` must be an array of at most {MAX_ITEMS} entries	`{key}` skal være et array med højst {MAX_ITEMS} elementer
+@msg	a color default must be a color object or a hex string such as "#3a7bd5"	en standardfarve skal være et farveobjekt eller en hex-streng som "#3a7bd5"
+@msg	a color object or a hex string such as "#3a7bd5"	et farveobjekt eller en hex-streng som "#3a7bd5"
+@msg	a freeform gradient holds at most {MAX_ITEMS} points and lines	en friformsgradient indeholder højst {MAX_ITEMS} punkter og linjer
+@msg	a freeform gradient line names a point it doesn't have	en linje i en friformsgradient angiver et punkt, som gradienten ikke har
+@msg	a gradient needs 1-{MAX_ITEMS} stops	en gradient kræver 1-{MAX_ITEMS} farvestop
+@msg	a list of numbers	en liste med tal
+@msg	a list of {min_items} to {max_items} numbers	en liste med {min_items} til {max_items} tal
+@msg	a new object needs a `path`	et nyt objekt kræver en `path`
+@msg	a number	et tal
+@msg	a painted live effect returns only `objects`	en malet live-effekt returnerer kun `objects`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	et stykke fra en malet live-effekt har kun `path`, `fillRule`, `fills` og `strokes`
+@msg	a read-only object was left out	et skrivebeskyttet objekt blev udeladt
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	et skrivebeskyttet objekt blev udeladt: returnér det, som {{"id": …}} alene eller som det blev givet
+@msg	a string	en streng
+@msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en streg har kun `paint`, `width`, `join`, `cap` og `miterLimit`
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	en streg skal være {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	en effekt skal være {{"id", "params"?, "visible"?}}
+@msg	an effect on a fill returns only `fills`	en effekt på en udfyldning returnerer kun `fills`
+@msg	an effect on a stroke returns only `strokes`	en effekt på en streg returnerer kun `strokes`
+@msg	an object must be a JSON object	et objekt skal være et JSON-objekt
+@msg	bad range	ugyldigt interval
+@msg	choices must be 1-64 non-empty, printable strings	valgmulighederne skal være 1-64 ikke-tomme strenge, der kan udskrives
+@msg	coordinate out of range (limit ±{MAX_COORD} pt)	koordinat uden for området (grænse ±{MAX_COORD} pt)
+@msg	default is not one of the options	standardværdien er ikke en af valgmulighederne
+@msg	each piece needs a `path`	hvert stykke kræver en `path`
+@msg	is listed twice	er angivet to gange
+@msg	pattern transform out of range	mønstertransformation uden for området
+@msg	read-only field '{field}' changed	det skrivebeskyttede felt '{field}' blev ændret
+@msg	stops must be in order of `offset`	farvestoppene skal stå i rækkefølge efter `offset`
+@msg	the document has no pattern {pattern}	dokumentet har intet mønster {pattern}
+@msg	the document has no swatch {n}	dokumentet har ingen farveprøve {n}
+@msg	the output	outputtet
+@msg	the path has no anchor points	kurven har ingen ankerpunkter
+@msg	too many anchor points (limit {MAX_ANCHORS})	for mange ankerpunkter (grænse {MAX_ANCHORS})
+@msg	true or false	true eller false
+@msg	a number >= {_1}	et tal >= {_1}
+@msg	a number > {_1}	et tal > {_1}
+@msg	a number <= {_1}	et tal <= {_1}
+@msg	a number < {_1}	et tal < {_1}
+@msg	a number {_1} to {_2}	et tal fra {_1} til {_2}
+@msg	a number >= {_1} and < {_2}	et tal >= {_1} og < {_2}
+@msg	a number > {_1} and <= {_2}	et tal > {_1} og <= {_2}
+@msg	a number > {_1} and < {_2}	et tal > {_1} og < {_2}
+@msg	a number ({_1})	et tal ({_1})
+@msg	a number >= {_1} ({_2})	et tal >= {_1} ({_2})
+@msg	a number > {_1} ({_2})	et tal > {_1} ({_2})
+@msg	a number <= {_1} ({_2})	et tal <= {_1} ({_2})
+@msg	a number < {_1} ({_2})	et tal < {_1} ({_2})
+@msg	a number {_1} to {_2} ({_3})	et tal fra {_1} til {_2} ({_3})
+@msg	a number >= {_1} and < {_2} ({_3})	et tal >= {_1} og < {_2} ({_3})
+@msg	a number > {_1} and <= {_2} ({_3})	et tal > {_1} og <= {_2} ({_3})
+@msg	a number > {_1} and < {_2} ({_3})	et tal > {_1} og < {_2} ({_3})
+@msg	an integer	et heltal
+@msg	an integer >= {_1}	et heltal >= {_1}
+@msg	an integer <= {_1}	et heltal <= {_1}
+@msg	an integer {_1} to {_2}	et heltal fra {_1} til {_2}
+@msg	one of {_1}	en af {_1}
+@msg	an object id (a non-negative integer)	et objekt-id (et ikke-negativt heltal)
+@msg	a list of object ids	en liste med objekt-id’er
+@msg	a color (a string, [r, g, b] or an object)	en farve (en streng, [r, g, b] eller et objekt)
+@msg	[x, y] (two numbers)	[x, y] (to tal)
+@msg	an object	et objekt
+@msg	a list	en liste
+@msg	unknown key `{k}`; the keys here are {_1}	ukendt nøgle `{k}`; nøglerne her er {_1}
+@msg	{_1} is listed twice	{_1} er angivet to gange
+@msg	{_1} is not the id of an input object	{_1} er ikke id’et for et inputobjekt
+@msg	{_1} is read-only	{_1} er skrivebeskyttet
+@msg	{what} must be from {lo} to {hi}	{what} skal være fra {lo} til {hi}
+@msg	a color component	en farvekomponent
+@msg	a plate	en plade
+@msg	Automation asked to install this plug-in. To install it, choose Object › Plug-ins › Install Plug-in… yourself.	Automatiseringen bad om at installere dette plug-in. Vælg selv Objekt › Plug-ins › Installér plug-in… for at installere det.
+@msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	»{name}« er et andet modul end plug-in'et med id {_1} og ville få de indstillinger og den cache, der er gemt til det: installér det med `replace: true`, når brugeren accepterer
+@msg	“{name}” lists `{id}` in `commandAllowlist`, which a plug-in may not call	»{name}« angiver `{id}` i `commandAllowlist`, som et plug-in ikke må kalde
+@msg	vc_call `{shown}`: {why}	vc_call `{shown}`: {why}
+@msg	vc_call `{shown}`: the manifest's `commandAllowlist` doesn't list it	vc_call `{shown}`: manifestets `commandAllowlist` angiver den ikke
+@msg	vc_call `{shown}`: the id or the arguments lie outside the module's memory	vc_call `{shown}`: id’et eller argumenterne ligger uden for modulets hukommelse
+@msg	vc_call `{shown}`: the id or the arguments are not UTF-8	vc_call `{shown}`: id’et eller argumenterne er ikke UTF-8
+@msg	vc_call `{shown}`: the arguments are not a JSON object	vc_call `{shown}`: argumenterne er ikke et JSON-objekt
+@msg	only a filter with the usual budget declares `commandAllowlist`	kun et filter med det sædvanlige budget angiver `commandAllowlist`
+@msg	command calls ({MAX_CALLS} calls and {MAX_CALL_BYTES} bytes per run)	kommandokald ({MAX_CALLS} kald og {MAX_CALL_BYTES} byte pr. kørsel)
+@msg	command call size (vc_call `{shown}`: {len} bytes, limit {MAX_CALL_DATA})	kommandokaldets størrelse (vc_call `{shown}`: {len} byte, grænse {MAX_CALL_DATA})
+@msg	at most {MAX_ALLOWED_COMMANDS} commands in `commandAllowlist`	højst {MAX_ALLOWED_COMMANDS} kommandoer i `commandAllowlist`
+@msg	a plug-in may not call this command	et plug-in må ikke kalde denne kommando
+@msg	`commandAllowlist` needs the permission `commands`, and `commands` needs a `commandAllowlist`	`commandAllowlist` kræver tilladelsen `commands`, og `commands` kræver en `commandAllowlist`
+@msg	`commandAllowlist` names `{shown}`, which is not a command id or is listed twice	`commandAllowlist` angiver `{shown}`, som ikke er et kommando-id eller er angivet to gange
+@msg	permission `{permission}` needs plug-in API level {PROGRESS_API}: give `api` {PROGRESS_API}	tilladelsen `{permission}` kræver plug-in-API-niveau {PROGRESS_API}: angiv `api` {PROGRESS_API}
+@msg	the module imports `env.{name}` with another type than the host's: it is {signature}	modulet importerer `env.{name}` med en anden type end værtens: den er {signature}
+@msg	the module imports `env.{name}`, which a plug-in may use only at plug-in API level {PROGRESS_API} (`api` {PROGRESS_API}) and with the permission `{permission}`	modulet importerer `env.{name}`, som et plug-in kun må bruge på plug-in-API-niveau {PROGRESS_API} (`api` {PROGRESS_API}) og med tilladelsen `{permission}`
+@msg	the module imports `{from}.{name}`, which the host doesn't offer: a plug-in may import only the `env.vc_*` functions that docs/plugins.md lists (plug-in API level 2), and no WASI, files or network	modulet importerer `{from}.{name}`, som værten ikke tilbyder: et plug-in må kun importere de `env.vc_*`-funktioner, som docs/plugins.md angiver (plug-in-API-niveau 2), og ingen WASI, filer eller netværk
+@msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` er {_1}; denne vært implementerer plug-in-API-niveau 1 til {API_LEVEL}
+@msg	`paintOutput` may only be true	`paintOutput` må kun være true
+@msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` er kun til en live-effekt (`kind` "effect") ved `api` 2
+@msg	`grant` must be a list of permission names	`grant` skal være en liste med tilladelsesnavne
+@msg	`grant` names an unknown permission `{shown}`	`grant` angiver en ukendt tilladelse `{shown}`
+@msg	a plug-in of kind `{_1}` needs the permission `{_2}`	et plug-in af typen `{_1}` kræver tilladelsen `{_2}`
+@msg	at most {MAX_PERMISSIONS} `permissions`	højst {MAX_PERMISSIONS} `permissions`
+@msg	permission `{shown}` doesn't apply to a plug-in of kind `{_1}`	tilladelsen `{shown}` gælder ikke for et plug-in af typen `{_1}`
+@msg	permission `{shown}` is listed twice	tilladelsen `{shown}` er angivet to gange
+@msg	only a filter declares `inputs`	kun et filter angiver `inputs`
+@msg	`inputs` names an unknown object kind `{shown}`: use type, image or symbolInstance	`inputs` angiver en ukendt objekttype `{shown}`: brug type, image eller symbolInstance
+@msg	`inputs` lists `{shown}` twice	`inputs` angiver `{shown}` to gange
+@msg	`inputs` needs `api` 2 or later	`inputs` kræver `api` 2 eller nyere
+@msg	`inputs` needs the permission `doc.read`	`inputs` kræver tilladelsen `doc.read`
+@msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	hukommelsesbudget (objekt {_1} kræver {size} byte input, {left} tilbage)
+@msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektbudget (mere end {MAX_OBJECTS} skrivebeskyttede objekter)
+@msg	instruction budget	instruktionsbudget
+@msg	time budget	tidsbudget
+@msg	memory budget (the selection is too large to hand over)	hukommelsesbudget (markeringen er for stor til at blive overdraget)
+@msg	output size ({what} is {len} bytes, limit {max})	outputstørrelse ({what} fylder {len} byte, grænse {max})
+@msg	the plug-in's grant can't be removed from the plug-in store	plug-in'ets tilladelse kan ikke fjernes fra plug-in-lageret
+@msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	tilladelsen `{shown}` er reserveret til et senere plug-in-API; denne vært tildeler den ikke
+@msg	unknown permission `{shown}`	ukendt tilladelse `{shown}`
+@msg	“{name}” asks for the permissions {asked}: a person has to approve them in the desktop app, or pass `grant` in a session started with --allow-plugin-grants	»{name}« beder om tilladelserne {asked}: en person skal godkende dem i skrivebordsappen, eller send `grant` i en session startet med --allow-plugin-grants
+@msg	`grant` and `allowHeavy` take effect only in a session started with --allow-plugin-grants: approve the plug-in in the desktop app	`grant` og `allowHeavy` virker kun i en session startet med --allow-plugin-grants: godkend plug-in'et i skrivebordsappen
+@msg	Only the person at the keyboard can approve installing a plug-in	Kun personen ved tastaturet kan godkende installation af et plug-in
+@msg	“{name}” wasn't granted `{p}`, which its output needs: nothing was changed	»{name}« fik ikke tildelt `{p}`, som dets output kræver: intet blev ændret
+@msg	a heavy filter runs in the background, so it can't declare `commands`	et tungt filter kører i baggrunden, så det kan ikke angive `commands`
+@msg	at most {MAX_COMMANDS} `commands`	højst {MAX_COMMANDS} `commands`
+@msg	command {name} is declared twice	kommandoen {name} er erklæret to gange
+@msg	command {name}: `label` must be 1-64 printable characters	kommandoen {name}: `label` skal være 1-64 tegn, der kan udskrives
+@msg	command {name}: use an id of 1-{MAX_COMMAND_ID} characters from a-z 0-9 _ that starts with a letter	kommandoen {name}: brug et id på 1-{MAX_COMMAND_ID} tegn fra a-z 0-9 _, der starter med et bogstav
+@msg	command {name}: {e}	kommandoen {name}: {e}
+@msg	manifest: {e}	manifest: {e}
+@msg	manifest: {e} at line {line} column {column}	manifest: {e} på linje {line} kolonne {column}
+@msg	`commands` must be a list of commands, each with an `id` and a `label`	`commands` skal være en liste med kommandoer, hver med et `id` og et `label`
+@msg	command {name} must be an object with an `id` and a `label`	kommandoen {name} skal være et objekt med et `id` og et `label`
+@msg	missing field `{key}`	feltet `{key}` mangler
+@msg	duplicate field `{key}`	dobbelt felt `{key}`
+@msg	only a filter or a live effect declares `commands`	kun et filter eller en live-effekt angiver `commands`
+@msg	“{name}” › {label}: {e}	»{name}« › {label}: {e}
+@msg	the module doesn't have the SHA-256 `hash` gives: nothing was installed	modulet har ikke den SHA-256, som `hash` angiver: intet blev installeret
+@msg	select one object	markér ét objekt
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	ingen lignende objekter fundet (roterede eller spejlede kopier matches ikke); ændr Indstillinger for global redigering, og prøv igen
+@msg	Global Edit is off	Global redigering er slået fra
+@msg	only an object of the Global Edit other than the one it started from can be left out	kun et objekt i den globale redigering, bortset fra det, den startede fra, kan udelades
+@msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller et interval som 1, 3-5, ikke {v}
+@msg	`{_1}` has no symbols to place	`{_1}` har ingen symboler at placere
+@msg	missing `library` (see symbol.libraries)	`library` mangler (se symbol.libraries)
+@msg	no symbol `{n}`	intet symbol `{n}`
+@msg	no symbol `{n}` in `{_1}`	intet symbol `{n}` i `{_1}`
+@msg	no symbol library `{key}` (see symbol.libraries)	intet symbolbibliotek `{key}` (se symbol.libraries)
+@msg	the document has no symbols to save	dokumentet har ingen symboler at gemme
+@msg	`{_1}` has no brushes to apply	`{_1}` har ingen pensler at anvende
+@msg	missing `library` (see brush.libraries)	`library` mangler (se brush.libraries)
+@msg	no brush `{n}`	ingen pensel `{n}`
+@msg	no brush `{n}` in `{_1}`	ingen pensel `{n}` i `{_1}`
+@msg	no brush library `{key}` (see brush.libraries)	intet penselbibliotek `{key}` (se brush.libraries)
+@msg	the document has no brushes to save	dokumentet har ingen pensler at gemme
+@msg	a {width}×{height} screenshot's byte count overflows	bytetallet for et skærmbillede på {width}×{height} løber over
+@msg	the window's {what} ({points} points × {scale} DPI) cannot size a screenshot	vinduets {what} ({points} punkter × {scale} DPI) kan ikke give et skærmbillede en størrelse
+@msg	{label} must be a number	{label} skal være et tal
+@msg	{label} must be a number of at least 0.1	{label} skal være et tal på mindst 0,1
+@msg	{label} must be a number from {min} to {max}	{label} skal være et tal fra {min} til {max}
+@msg	{label} must be a whole number from {min} to {max}	{label} skal være et heltal fra {min} til {max}
+@msg	features lists at most {max} tags	features angiver højst {max} tags
+@msg	unknown OpenType feature `{t}`	ukendt OpenType-funktion `{t}`
+@msg	{label} must be a number above 0 and at most {max}	{label} skal være et tal over 0 og højst {max}
+@msg	{label} must be at most {max} characters	{label} må højst være {max} tegn
+@msg	{label} must be one character	{label} skal være ét tegn
+@msg	at most {max} tab stops	højst {max} tabulatorstop
+@msg	unknown align `{other}`	ukendt justering `{other}`
+@msg	no character style `{name}`	ingen tegnstil `{name}`
+@msg	{_1} is an importer (File › Open With)	{_1} er en importør (Filer › Åbn med)
+@msg	missing `importer` (see document.formats)	`importer` mangler (se document.formats)
+@msg	`importer` must be a plug-in format id (see document.formats)	`importer` skal være id’et for et plug-in-format (se document.formats)
+@msg	“{shown}” opens {_1} files, not `{_2}`	»{shown}« åbner {_1}-filer, ikke `{_2}`
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an importer	`{_1}` er et plug-in af typen `{_2}`, ikke en importør
+@msg	`{_1}` is a plug-in of kind `{_2}`, not an exporter	`{_1}` er et plug-in af typen `{_2}`, ikke en eksportør
+@msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` er en importør: åbn en fil med document.open {{"importer": "{_2}"}}
+@msg	`{_1}` is an exporter: export with document.export {{"format": "{_2}"}}	`{_1}` er en eksportør: eksportér med document.export {{"format": "{_2}"}}
+@msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` er en live-effekt: anvend den med effect.apply {{"effect": "{_2}"}}
+@msg	the importer returned no objects	importøren returnerede ingen objekter
+@msg	an importer returns `objects` and `warnings`, not `{key}`	en importør returnerer `objects` og `warnings`, ikke `{key}`
+@msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen er større end de {MAX_INPUT_BYTES} byte, en importør læser
+@msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importør angiver 1 til {MAX_EXTENSIONS} `extensions`
+@msg	only an exporter or an importer declares `extensions`	kun en eksportør eller en importør angiver `extensions`
+@msg	an importer always gets an import's budget: leave `budget` out	en importør får altid et importbudget: udelad `budget`
+@msg	only paths and compound paths can be aligned to the pixel grid	kun kurver og sammensatte kurver kan justeres til pixelgitteret
+@msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` og `last` skal være numre på linjer, som konsollen indeholder, first før last
+@msg	no plug-in effect is deferred	ingen plug-in-effekt er udskudt
+@msgplural	Opened with {n} plug-in effect deferred. Effect › Refresh Deferred Effects runs it.|Opened with {n} plug-in effects deferred. Effect › Refresh Deferred Effects runs them.	Åbnede med {n} udskudt plug-in-effekt. Effekt › Opdatér udskudte effekter kører den.|Åbnede med {n} udskudte plug-in-effekter. Effekt › Opdatér udskudte effekter kører dem.
+@msg	The selected art has no islands to bridge	Den markerede grafik har ingen øer at bygge bro over
+@msg	No bridge of this width fits across the selected art	Ingen bro med denne bredde passer hen over den markerede grafik
+@msg	Some islands could not be joined to the area around the art	Nogle øer kunne ikke forbindes med området omkring grafikken
+@msg	`width` must be from {lo} to {hi} pt	`width` skal være fra {lo} til {hi} pt
+@msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` skal være et heltal fra 1 til {MAX_BRIDGES_PER_ISLAND}
+
 	File	Filer
 	New…	Ny…
 	New Without Dialog	Ny uden dialog
@@ -4595,6 +5204,7 @@ imageTrace	Outline	Kontur
 @msg	no action set to save	intet handlingssæt at gemme
 @msg	the action set file can't be read in full	handlingssætfilen kan ikke læses helt
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Indlæste »{name}«: {n} trin blev udeladt|Indlæste »{name}«: {n} trin blev udeladt
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Indlæste »{name}«: {n} trin har en ukendt kommando og blev beholdt: »{action}«, trin {step}, `{command}`|Indlæste »{name}«: {n} trin har ukendte kommandoer og blev beholdt; det første: »{action}«, trin {step}, `{command}`
 @msg	not an action set file	ikke en handlingssætfil
 @msg	the action set file is larger than 8 MiB	handlingssætfilen er større end 8 MiB
 @msg	the action set file holds more than 1,000 actions	handlingssætfilen indeholder mere end 1.000 handlinger
