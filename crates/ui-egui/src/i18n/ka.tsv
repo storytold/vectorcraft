@@ -4839,6 +4839,9 @@ font-technology	Variable	ცვლადი
 @msg	automation filesystem access is not granted: write authority is absent: {path}	ავტომატიზაციას ფაილურ სისტემაზე წვდომა არ აქვს: ჩაწერის უფლება არ არის: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: წაკითხვის ძირების {roots} გარეთაა: {path}
+@msg	a linked JavaScript file is outside the read roots	დაკავშირებული JavaScript ფაილი წაკითხვის ძირების გარეთაა
+@msg	the library's file is outside the read roots	ბიბლიოთეკის ფაილი წაკითხვის ძირების გარეთაა
+@msg	{file} names more than one linked JavaScript file	{file} ერთზე მეტ დაკავშირებულ JavaScript ფაილს შეესაბამება
 @msg	automation path rejected: outside the write root {root}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირის {root} გარეთაა: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	ავტომატიზაციის გზა უარყოფილია: ჩაწერის ძირების {roots} გარეთაა: {path}
 @msg	automation path rejected: path is empty	ავტომატიზაციის გზა უარყოფილია: გზა ცარიელია
@@ -5200,6 +5203,7 @@ font-technology	Variable	ცვლადი
 @msg	every numbered name for {name} is taken in the document's folder	დოკუმენტის საქაღალდეში {name}-ის ყველა დანომრილი სახელი დაკავებულია
 @msg	No linked files to look for	მოსაძებნი დაკავშირებული ფაილები არ არის
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	ბმული სიმბოლოში, დიაგრამის დიზაინში, პატერნში ან გაუმჭვირვალობის ნიღაბშია და ტილოზე ადგილი არ აქვს
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	დიაგრამის სერიაში დიაგრამის დიზაინის გრაფიკა დიზაინიდან თავიდან იხატება: მის შესაცვლელად დაარედაქტირეთ დიზაინი
 	Ruler Origin	სახაზავების სათავე
 	Reset Ruler Origin	სახაზავების სათავის ჩამოყრა
 	Artistic	მხატვრული

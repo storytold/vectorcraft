@@ -6434,6 +6434,9 @@ antiAlias	Sharp	शार्प
 @msg	automation path rejected: cannot resolve {path}: {e}	स्वचालन पाथ खारिज कर दिया: {path} को हल नहीं कर सकता: {e}
 @msg	automation path rejected: outside the read root {root}: {path}	स्वचालन पाथ खारिज: पढ़ने की जड़ के बाहर {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	स्वचालन पाथ खारिज: पढ़ने की जड़ों के बाहर {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	एक लिंक की गई जावास्क्रिप्ट फ़ाइल पढ़ने की जड़ों के बाहर है
+@msg	the library's file is outside the read roots	लाइब्रेरी की फ़ाइल पढ़ने की जड़ों के बाहर है
+@msg	{file} names more than one linked JavaScript file	{file} एक से अधिक लिंक की गई जावास्क्रिप्ट फ़ाइलों से मेल खाता है
 @msg	automation path rejected: outside the write root {root}: {path}	स्वचालन पाथ खारिज: लिखने की जड़ के बाहर {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	स्वचालन पाथ खारिज: लिखने की जड़ों के बाहर {roots}: {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	स्वचालन पाथ खारिज कर दिया: एक फ़ोल्डर के नीचे माता-पिता traversal जो मौजूद नहीं है: {path}
@@ -7345,6 +7348,7 @@ antiAlias	Sharp	शार्प
 @msg	No line breaks to remove	हटाने के लिए कोई लाइन ब्रेक नहीं
 @msg	No linked files to look for	देखने के लिए कोई लिंक्ड फ़ाइल नहीं
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	लिंक किसी सिंबल, ग्राफ़ डिज़ाइन, पैटर्न या ओपेसिटी मास्क के अंदर है और कैनवास पर इसकी कोई जगह नहीं है
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	ग्राफ़ श्रृंखला में ग्राफ़ डिज़ाइन की कला डिज़ाइन से फिर से बनाई जाती है: इसे बदलने के लिए डिज़ाइन संपादित करें
 @msg	no Live Paint edge near that point	उस बिंदु के पास कोई लाइव पेंट एज नहीं
 @msg	no Live Paint face at that point	उस बिंदु पर कोई लाइव पेंट फेस नहीं
 @msg	no metafile format	कोई मेटाफ़ाइल फ़ॉर्मैट
