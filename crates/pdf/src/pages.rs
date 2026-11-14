@@ -312,10 +312,15 @@ pub struct TrimPages {
     pub bleed: [f64; 4],
 }
 
-/// Preserve the application's existing accepted file sizes. Ordinary stream decoding still
-/// uses the shared reader's immutable per-document limits, and its input copy is fallible.
+/// Most bytes a PDF may be before it is refused. An import reads the file whole, so this bounds
+/// the copy instead of letting a crafted file name any size (audit: VectorCraft #4).
+const MAX_PDF_INPUT_BYTES: usize = 1 << 30;
+
+/// Preserve the application's existing accepted file sizes, up to a real ceiling. Ordinary stream
+/// decoding still uses the shared reader's immutable per-document limits, and its input copy is
+/// fallible.
 pub(crate) fn open_options() -> craft_pdf::OpenOptions {
-    craft_pdf::OpenOptions { max_input_bytes: usize::MAX, ..Default::default() }
+    craft_pdf::OpenOptions { max_input_bytes: MAX_PDF_INPUT_BYTES, ..Default::default() }
 }
 
 pub(crate) fn open_with_options(bytes: &[u8], password: Option<&str>, options: &craft_pdf::OpenOptions) -> Result<Pdf, PdfError> {
