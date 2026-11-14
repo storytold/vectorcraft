@@ -129,6 +129,34 @@ fn insert_aki_is_saved_only_when_set() {
     assert_eq!((d.char_styles[0].attrs["akiLeft"].as_f64(), d.char_styles[0].attrs["akiRight"].as_f64()), (Some(MAX_AKI), Some(0.0)));
 }
 
+/// Tsume is 0 by default and saved only when not 0; styles written before it read as 0, and a
+/// value out of range from a file, in a run or a character style, is kept from 0 to 100.
+#[test]
+fn tsume_is_saved_only_when_set_and_kept_in_range() {
+    let st = CharStyle::default();
+    assert_eq!(st.tsume, 0.0);
+    let saved = serde_json::to_value(&st).unwrap();
+    assert!(saved.get("tsume").is_none());
+    let read = serde_json::from_value::<CharStyle>(saved).unwrap();
+    assert_eq!(read.tsume, 0.0);
+    let set = CharStyle { tsume: 37.5, ..CharStyle::default() };
+    let saved = serde_json::to_value(&set).unwrap();
+    assert_eq!(saved.get("tsume").and_then(serde_json::Value::as_f64), Some(37.5));
+    assert_eq!(serde_json::from_value::<CharStyle>(saved).unwrap(), set);
+    for (stored, kept) in [(-5.0, 0.0), (250.0, MAX_TSUME), (f64::NAN, 0.0), (f64::INFINITY, MAX_TSUME), (50.0, 50.0)] {
+        let mut damaged = CharStyle { tsume: stored, ..CharStyle::default() };
+        damaged.keep_dimensions_in_range();
+        assert_eq!(damaged.tsume, kept, "{stored}");
+    }
+    let mut d = crate::Document::new(100.0, 100.0);
+    for tsume in [500, -1] {
+        let attrs = serde_json::json!({ "tsume": tsume });
+        d.char_styles.push(TextStyleDef { name: format!("Tight {tsume}"), attrs: attrs.as_object().cloned().unwrap_or_default() });
+    }
+    d.keep_type_values_in_range();
+    assert_eq!((d.char_styles[0].attrs["tsume"].as_f64(), d.char_styles[1].attrs["tsume"].as_f64()), (Some(MAX_TSUME), Some(0.0)));
+}
+
 /// Each Indic numeral system draws 0–9 (and the Arabic-Indic sets) as the ten digits of its
 /// script's block; every system saves under its id, which reads back, and other names are refused.
 #[test]

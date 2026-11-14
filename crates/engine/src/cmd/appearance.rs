@@ -612,9 +612,11 @@ fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
 
 /// One undo step (`label`) running `f` on each of `ids` with the item a fill (`fill`) or stroke
 /// edit aimed at `item` changes there (`None`: the topmost one; text then edits its characters).
-/// What the edit changes on the topmost visible fill and stroke of graph series marks is stored on
-/// their graphs in the same step ([`capture_series_changes`]). Nothing targeted is not an edit, and
-/// when `f` leaves every target as it was, the document and its undo history stay as they are.
+/// What the edit changes on the topmost visible fill and stroke of graph series marks, and on the
+/// rows and characters of graph labels, is stored on their graphs in the same step
+/// ([`capture_series_changes`], [`super::graph::capture_label_changes`]). Nothing targeted is not
+/// an edit, and when `f` leaves every target as it was, the document and its undo history stay as
+/// they are.
 /// With `of` (see [`reference_of`]), an explicit aligned `item` is a row of the stack of `of`, which
 /// is not among `ids`: it must be there and of the edited kind, each target edits the row equal to
 /// it, a target without one is left as it is, and no target with one is an error. Returns the
@@ -630,7 +632,12 @@ pub(crate) fn edit_items(
     fill: bool,
     f: impl FnMut(&mut Node, Option<usize>) -> Result<()>,
 ) -> Result<Vec<NodeId>> {
-    edit_items_then(s, ids, item, of, cmd, label, fill, f, |before, d, edited| Ok(capture_series_changes(before, d, edited)))
+    edit_items_then(s, ids, item, of, cmd, label, fill, f, |before, d, edited| {
+        let series = capture_series_changes(before, d, edited);
+        // The rows `f` edited are kept by `edit_items_then`.
+        let labels = super::graph::capture_label_changes(before, d, edited, false);
+        Ok(series || labels)
+    })
 }
 
 /// [`edit_items`], then `after` on the document as it was before the edit, the edited document and
