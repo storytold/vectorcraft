@@ -835,6 +835,29 @@ fn on_path_circle_and_overflow() {
     assert!(l.overflow && l.glyphs.len() < t.plain_text().len());
 }
 
+/// Type on a curve with Spacing, aligned right or centered, is placed by what its glyphs take where
+/// it ends up, which differs from what they take at the start bracket: text that fits shows whole.
+#[test]
+fn on_path_aligned_spaced_text_that_fits_shows_whole() {
+    let circle = PathData::from_bezpath(&kurbo::Circle::new((0.0, 0.0), 200.0).to_path(0.1));
+    for text in ["Hi", "Around"] {
+        for justify in [Justify::Right, Justify::Center] {
+            for spacing in [20.0, -20.0] {
+                for (start, end) in [(0.0, Some(0.05)), (0.3, Some(0.4)), (0.0, None)] {
+                    let mut t = point(text, style(12.0));
+                    t.para.justify = justify;
+                    t.path_spacing = spacing;
+                    t.kind = TextKind::OnPath { path: circle.clone(), start, end };
+                    let l = layout(db(), &t);
+                    let case = format!("{text} {justify:?} {spacing} {start} {end:?}");
+                    assert!(!l.overflow, "{case}");
+                    assert_eq!(l.glyphs.len(), text.len(), "{case}");
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn fallback_font_per_character() {
     let primary = db().face("Source Sans 3", "Regular").unwrap();
