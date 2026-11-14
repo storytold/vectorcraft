@@ -7476,3 +7476,119 @@ breakText	Glyphs	Glifs
 	Grommets	Ullets
 	Grommet Inset	Distància dels ullets a la vora
 	Diameter	Diàmetre
+# Status and error messages of image export, color profiles and libraries, 3D effects, path operations and scripts.
+@msg	3D effects require finite coordinates within 100 million points	Els efectes 3D requereixen coordenades finites dins de 100 milions de punts
+@msg	3D effects require one to ten lights	Els efectes 3D requereixen d’un a deu llums
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Profunditat BMP {_1}: 1, 4, 8, 16, 24 o 32 bits per píxel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	La codificació BMP ha fallat: {width} × {height} píxels no caben al format ni a la memòria intermèdia de píxels
+@msg	GIF encoding failed: the palette image is malformed	La codificació GIF ha fallat: la imatge de paleta està mal formada
+@msg	GIF encoding failed: {e}	La codificació GIF ha fallat: {e}
+@msg	JPEG colour profile: {e}	Perfil de color JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	La codificació JPEG ha fallat: la memòria intermèdia de píxels no coincideix amb la mida de la imatge
+@msg	JPEG encoding failed: {e}	La codificació JPEG ha fallat: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	La codificació PNG ha fallat: la memòria intermèdia de píxels no coincideix amb la mida de la imatge
+@msg	PNG encoding failed: the palette image is malformed	La codificació PNG ha fallat: la imatge de paleta està mal formada
+@msg	PNG encoding failed: {e}	La codificació PNG ha fallat: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	La codificació PNG ha fallat: {width} × {height} píxels no és una mida d’imatge vàlida
+@msg	PSD colour profile: {e}	Perfil de color PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	La codificació PSD ha fallat: la memòria intermèdia de píxels no coincideix amb la mida de la imatge
+@msg	Revolve profile contains invalid coordinates	El perfil de Revolució conté coordenades no vàlides
+@msg	Revolve profile is too complex	El perfil de Revolució és massa complex
+@msg	Revolve projection is not finite	La projecció de Revolució no és finita
+@msg	Revolve requires finite profile coordinates within 100 million points	Revolució requereix coordenades de perfil finites dins de 100 milions de punts
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	La superfície de Revolució és massa complexa; redueix Segments o simplifica el perfil
+@msg	Revolve surface is too complex; simplify the profile	La superfície de Revolució és massa complexa; simplifica el perfil
+@msg	Revolve visibility cannot split the projected boundary	La visibilitat de Revolució no pot dividir el contorn projectat
+@msg	Revolve visibility creates too many fragments	La visibilitat de Revolució crea massa fragments
+@msg	Revolve visibility creates too many vector anchors	La visibilitat de Revolució crea massa punts d’ancoratge vectorials
+@msg	Revolve visibility exceeds its geometry work limit	La visibilitat de Revolució supera el seu límit de treball geomètric
+@msg	Revolve visibility exceeds its spatial index limit	La visibilitat de Revolució supera el seu límit d’índex espacial
+@msg	Revolve visibility has too many boundary crossings	La visibilitat de Revolució té massa encreuaments de contorn
+@msg	Revolve visibility has too many input anchors	La visibilitat de Revolució té massa punts d’ancoratge d’entrada
+@msg	Revolve visibility requires convex cap sectors	La visibilitat de Revolució requereix sectors de tapa convexos
+@msg	Revolve visibility requires finite projected faces	La visibilitat de Revolució requereix cares projectades finites
+@msg	SVG options: {e}	Opcions SVG: {e}
+@msg	Save for Web settings: {e}	Paràmetres de Desa per a web: {e}
+@msg	TIFF colour profile: {e}	Perfil de color TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	La codificació TIFF ha fallat: la memòria intermèdia de píxels no coincideix amb la mida de la imatge
+@msg	TIFF encoding failed: {e}	La codificació TIFF ha fallat: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Profunditat Targa {_1}: 16, 24 o 32 bits per píxel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	La codificació Targa ha fallat: la memòria intermèdia de píxels no coincideix amb la mida de la imatge
+@msg	The 3D projection is not finite	La projecció 3D no és finita
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	L’ombra 3D és massa complexa; desactiva Ombres o simplifica la il·lustració
+@msg	The shape contains invalid coordinates	La forma conté coordenades no vàlides
+@msg	Too many Revolve faces for visibility evaluation	Massa cares de Revolució per avaluar-ne la visibilitat
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft llegeix com a màxim {ASE_MAX_ENTRIES} colors i grups d’un fitxer d’intercanvi de mostres, i aquesta biblioteca en té {entries}
+@msg	WebP encoding failed: {e}	La codificació WebP ha fallat: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`index` must be a whole number	`index` ha de ser un nombre enter
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` és smallThumb, mediumThumb, largeThumb, smallList o largeList
+@msg	a line can't run from a point to itself	una línia no pot anar d’un punt a ell mateix
+@msg	a line needs at least two points	una línia necessita almenys dos punts
+@msg	a number cannot be read	no es pot llegir un número
+@msg	a swatch exchange block is too long	un bloc d’intercanvi de mostres és massa llarg
+@msg	a swatch exchange name is too long	un nom d’intercanvi de mostres és massa llarg
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	una imatge de {sw} × {sh} no es pot redimensionar a {width} × {height} píxels
+@msg	a {width} × {height} image is too large	una imatge de {width} × {height} és massa gran
+@msg	a {width} × {height} image: {e}	una imatge de {width} × {height}: {e}
+@msg	an image could not be written: {e}	no s’ha pogut escriure una imatge: {e}
+@msg	an image that couldn't be read was left out	s’ha omès una imatge que no s’ha pogut llegir
+@msg	can't open “{name}”: {e}	no es pot obrir “{name}”: {e}
+@msg	cannot align zip entries to {align} bytes	no es poden alinear les entrades del zip a {align} bytes
+@msg	cannot open the automation {kind} root `{_1}`: {e}	no es pot obrir l’arrel {kind} de l’automatització `{_1}`: {e}
+@msg	cannot read profile: {0}	no es pot llegir el perfil: {0}
+@msg	color book version {version} isn't supported (only 1)	la versió {version} del llibre de colors no és compatible (només 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	els llibres de colors en l’espai de color {other} no són compatibles (només RGB, CMYK i Lab)
+@msg	file name too long to zip: {_1}	nom de fitxer massa llarg per afegir-lo al zip: {_1}
+@msg	file name too long to zip: {name}	nom de fitxer massa llarg per afegir-lo al zip: {name}
+@msg	freeform line {i}: {e}	línia de forma lliure {i}: {e}
+@msg	freeform point {i}: {e}	punt de forma lliure {i}: {e}
+@msg	give `{key}` or `{other}`, not both	indiqueu `{key}` o `{other}`, no tots dos
+@msg	grayscale profiles can't be working spaces yet	els perfils d’escala de grisos encara no poden ser espais de treball
+@msg	input contains NaN or infinite coordinates	l’entrada conté coordenades NaN o infinites
+@msg	input path could not be closed	no s’ha pogut tancar el traçat d’entrada
+@msg	invalid ICC profile: {0}	perfil ICC no vàlid: {0}
+@msg	invalid scale {scale}	escala no vàlida {scale}
+@msg	its localized names take more than {_1} KB	els seus noms localitzats ocupen més de {_1} KB
+@msg	its objects are nested too deep ({e})	els seus objectes estan imbricats massa profundament ({e})
+@msg	its tag table lists the `{_1}` tag more than once	la seva taula d’etiquetes inclou l’etiqueta `{_1}` més d’una vegada
+@msg	not a graphic style library: {e}	no és una biblioteca d’estils gràfics: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	no és una biblioteca de mostres (.vcswatches o .gpl)
+@msg	not a swatch library (format `{_1}`)	no és una biblioteca de mostres (format `{_1}`)
+@msg	not a swatch library: {e}	no és una biblioteca de mostres: {e}
+@msg	not an action set file ({e})	no és un fitxer de conjunt d’accions ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	l’espai de color del perfil, {other}, no és RGB, CMYK ni Gray
+@msg	regular expression too large	expressió regular massa gran
+@msg	script file is not UTF-8 text: {value}	el fitxer de l’script no és text UTF-8: {value}
+@msg	stop {i}: {e}	la parada {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	la versió {major}.{minor} del fitxer d’intercanvi de mostres no és compatible (només 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	el llibre de colors conté més de {ASE_MAX_ENTRIES} colors
+@msg	the color book is cut short	el llibre de colors està tallat
+@msg	the color book's names take more than {_1} MB	els noms del llibre de colors ocupen més de {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	la imatge faria {w} × {h} píxels; les exportacions ràster estan limitades a {MAX_RASTER_SIDE} píxels per costat i {_1} megapíxels: reduïu l’escala o la resolució
+@msg	the optimised image can't be read back: {e}	la imatge optimitzada no es pot tornar a llegir: {e}
+@msg	the pixel buffer doesn't match the image size	la memòria intermèdia de píxels no coincideix amb la mida de la imatge
+@msg	the preview: {e}	la previsualització: {e}
+@msg	the request may not read the New Document profiles folder	la sol·licitud no pot llegir la carpeta de perfils de document nou
+@msg	the shapes are too degenerate to combine	les formes són massa degenerades per combinar-les
+@msg	the shapes cross themselves and each other too often to combine	les formes es creuen amb si mateixes i entre elles massa vegades per combinar-les
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	el fitxer d’intercanvi de mostres conté més de {ASE_MAX_ENTRIES} colors i grups
+@msg	the swatch exchange file is cut short	el fitxer d’intercanvi de mostres està tallat
+@msg	the {_1} plate can't be read: {e}	la planxa {_1} no es pot llegir: {e}
+@msg	this binary DXF file is damaged or cut short	aquest fitxer DXF binari està malmès o tallat
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	aquest és un dibuix DWG, que no es pot llegir: desa’l des de l’aplicació CAD com a DXF i obre’l
+@msg	too many classes	massa classes
+@msg	too many groups	massa grups
+@msg	too many layers for PSD (at most 32767)	massa capes per a PSD (com a màxim 32767)
+@msg	too many swatch exchange blocks	massa blocs d’intercanvi de mostres
+@msg	unknown colour profile: {0}	perfil de color desconegut: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} coincideix amb el nom d’un perfil integrat
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} píxels és massa gran per a GIF (com a màxim 65535 píxels per costat): reduïu la resolució
+@msg	{_1}: no usable transform to/from sRGB	{_1}: no hi ha cap transformació utilitzable a sRGB o des de sRGB
+@msg	{name} is not a CMYK profile	{name} no és un perfil CMYK
+@msg	{name} is not an RGB profile	{name} no és un perfil RGB
+@msg	{path}: could not be read	{path}: no s’ha pogut llegir
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a JPEG (com a màxim 65535 píxels per costat): reduïu la resolució
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} píxels és massa gran per a Targa (com a màxim 65535 píxels per costat): reduïu la resolució
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} píxels és massa gran per a PSD (com a màxim {MAX_SIDE} píxels per costat): reduïu la resolució
