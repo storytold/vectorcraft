@@ -1274,7 +1274,9 @@ pub fn handle(app: &mut VectorcraftApp, ctx: &egui::Context, req: &ControlReques
 
 /// Hides in `reply` the libraries hidden now and in `before`, and the paths outside the read root that
 /// `sent`, the request's params, holds ([`handle`]), and the recovery folders outside the read root
-/// that are in use or that a failure message named. The `path` and `files` entries of the reply's
+/// that are in use or that a failure message named, with each folder on the way to one that the reply
+/// writes as a whole path ([`writes_whole_path`]): a failure names a file or a missing folder there.
+/// The `path` and `files` entries of the reply's
 /// `result`, at any depth, that name a file the request gave inside the write roots, the file it
 /// wrote, stay as given ([`written_paths`]).
 fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: Hiding) {
@@ -1288,14 +1290,40 @@ fn hide_in_reply(app: &VectorcraftApp, reply: &mut Value, sent: &Value, before: 
     hiding.merge(before);
     let mut paths = Vec::new();
     sent_paths(sent, &mut paths);
-    // The status text of a recovery copy that failed names the recovery folder it went to.
+    // The status text of a recovery copy that failed names the recovery folder it went to, or the
+    // first folder on the way to it that is a file or is missing.
     let current = vectorcraft_engine::cmd::recovery::folder(&app.session).map(|(f, _)| f);
     for folder in app.recovery.named.iter().chain(current.as_ref()) {
         collect_sent_paths(&json!(folder), true, &mut paths);
+        for on_the_way in std::path::Path::new(folder).ancestors().skip(1).map(|p| p.to_string_lossy()) {
+            if !on_the_way.is_empty() && writes_whole_path(reply, &on_the_way) {
+                collect_sent_paths(&json!(on_the_way), true, &mut paths);
+            }
+        }
     }
     hiding.set_hidden(paths, cfg!(windows));
     hide_library_ids(reply, &hiding);
     restore_written_paths(reply, kept);
+}
+
+/// Does `v` write `path` in a string or a key at any depth with no path text before it (a letter, a
+/// digit, `_`, `-`, `.`, `~` or a separator) or after it ([`continues_path`]), a Windows path
+/// ([`splits_at_backslash`]) with either separator and in any case of ASCII letters too? Only the text
+/// is compared: nothing on disk is looked up.
+fn writes_whole_path(v: &Value, path: &str) -> bool {
+    let windows = splits_at_backslash(path);
+    let path_before =
+        |before: &str| before.chars().next_back().is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '~' | '/' | '\\'));
+    let whole = |s: &str| {
+        let spellings = if windows { vec![path.replace('\\', "/"), path.replace('/', "\\")] } else { vec![path.to_string()] };
+        spellings.iter().any(|p| occurrences(s, p, windows).into_iter().any(|at| !path_before(&s[..at]) && !continues_path(&s[at + p.len()..])))
+    };
+    match v {
+        Value::String(s) => whole(s),
+        Value::Array(items) => items.iter().any(|item| writes_whole_path(item, path)),
+        Value::Object(fields) => fields.iter().any(|(key, item)| whole(key) || writes_whole_path(item, path)),
+        _ => false,
+    }
 }
 
 /// The strings that `v`'s path params hold at any depth ([`vectorcraft_engine::file_access::is_path_key`])

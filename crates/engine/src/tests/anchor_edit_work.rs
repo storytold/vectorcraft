@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId};
 use vectorcraft_geom::path::measured_segments;
-use vectorcraft_geom::{Anchor, PathData, Point, SubPath};
+use vectorcraft_geom::{Anchor, AnchorKind, PathData, Point, SubPath, Vec2};
 
 use crate::*;
 
@@ -107,5 +107,31 @@ fn an_anchor_edit_that_changes_nothing_records_no_undo_step() {
     assert!(s.execute("path.setHandle", &json!({"id": id.0, "anchor": 100, "which": "out", "x": 0, "y": 0})).is_err());
     // A change still records one.
     s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 5, "x": a.p.x + 1.0, "y": a.p.y})).unwrap();
+    assert_eq!(undo_steps(&s), 1);
+}
+
+/// `path.setHandle` to where the handle already is, on a smooth anchor whose other handle is not in
+/// line with it, leaves both handles as they are and records no undo step. With `independent` it
+/// makes the anchor a corner, which records one.
+#[test]
+fn a_handle_already_in_place_on_a_smooth_anchor_records_no_undo_step() {
+    let (mut s, id) = long_path(100);
+    let p = anchor(&s, id, 5).p;
+    let smooth = Anchor { p, h_in: p + Vec2::new(-3.0, 0.0), h_out: p + Vec2::new(0.0, 4.0), kind: AnchorKind::Smooth };
+    let path = Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().path_data_mut().unwrap();
+    path.subpaths[0].anchors[5] = smooth;
+    for which in ["out", "in"] {
+        let h = if which == "out" { smooth.h_out } else { smooth.h_in };
+        s.execute("path.setHandle", &json!({"id": id.0, "anchor": 5, "which": which, "x": h.x, "y": h.y})).unwrap();
+        assert_eq!(undo_steps(&s), 0, "path.setHandle on the {which} handle recorded an undo step");
+        assert_eq!(anchor(&s, id, 5), smooth, "path.setHandle on the {which} handle changed the anchor");
+    }
+    s.execute("path.setHandle", &json!({"id": id.0, "anchor": 5, "which": "out", "x": smooth.h_out.x, "y": smooth.h_out.y, "independent": true}))
+        .unwrap();
+    assert_eq!(undo_steps(&s), 1);
+    assert_eq!(anchor(&s, id, 5).kind, AnchorKind::Corner);
+    // On a corner, the same independent request changes nothing.
+    s.execute("path.setHandle", &json!({"id": id.0, "anchor": 5, "which": "out", "x": smooth.h_out.x, "y": smooth.h_out.y, "independent": true}))
+        .unwrap();
     assert_eq!(undo_steps(&s), 1);
 }
