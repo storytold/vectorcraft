@@ -1248,6 +1248,15 @@ empty `boxes`, and `thumbnail: 1` shows what that page prints. A page whose `Use
 opens at its size in points, the file's numbers times the `UserUnit` (one above 75,000 counts as 75,000), and
 `document.pdfInfo` gives its size and boxes in points too. A `.ai` whose editing data has its artboards in the units of
 such a page opens from that data at the page's size.
+`linkPages: true` (File › Open's Import PDF dialog: Import PDF pages as links) opens each page `pages` picks as a
+placed document linked to that page of the file, as `file.place` with `link` places one, instead of as editable art.
+Each page gets an artboard of its `cropTo` box (`bounding`: its art's bounds), in a row from the left 36 pt apart, and
+a layer named after the page (`Page 2`). The document opens in CMYK when most of those pages are painted mostly in
+CMYK, unless `colorMode` names a mode. All the pages' objects share one copy of the file. The Links panel lists each
+page, and `links.embed` makes a page editable art.
+`document.open` refuses `linkPages` for a file that is not a PDF or a PDF-compatible `.ai`, for a file given as
+`dataBase64` without a path, with a `password`, and with `textAs: "outlines"`, and rejects a `linkPages` that is not
+true or false. Save then asks for a name.
 `document.open`, `file.place` and `document.pdfInfo` reject a `cropTo`, `crop`, `password`, `colorMode` or `textAs`
 that is not a string, and `document.pdfInfo` rejects a `thumbnailSize` that is not a number. The error names the param,
 and nothing opens or is placed. Leaving a param out or giving null keeps its default.
@@ -1263,6 +1272,7 @@ CMYK too.
 ```json
 {"name":"run_command","arguments":{"command":"document.pdfInfo","params":{"path":"/tmp/brochure.pdf","thumbnail":2,"cropTo":"trim"}}}
 {"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/brochure.pdf","pages":"2-3","cropTo":"trim"}}}
+{"name":"run_command","arguments":{"command":"document.open","params":{"path":"/tmp/brochure.pdf","linkPages":true}}}
 ```
 
 PostScript files (`.eps`, `.epsf`, `.ps`, and `.ai` files saved in older formats or without PDF compatibility) open through the EPS
