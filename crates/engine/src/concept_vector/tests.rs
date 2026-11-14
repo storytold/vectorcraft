@@ -387,7 +387,8 @@ fn malformed_results_panics_and_cancels_keep_no_job_and_change_nothing() {
 }
 
 /// A part at a time (the web build's way): the built-in provider decodes the image in one part,
-/// finds a style's colour layers in another and traces one layer a part, and makes the variations
+/// finds a style's colour layers in another and traces one layer a part (all of them in one part
+/// for a style that stacks them), and makes the variations
 /// one call makes; Cancel takes effect before the next part, inside a style.
 #[test]
 fn the_built_in_styles_are_made_a_part_at_a_time() {
