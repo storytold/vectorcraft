@@ -133,7 +133,7 @@ fn aims(s: &Session, p: &Value, cmd: &str, kinds: impl IntoIterator<Item = bool>
         .into_iter()
         .map(|fill| {
             let it = item.of_kind(s, fill);
-            Ok((fill, it, it.targets(s, p)?))
+            Ok((fill, it, super::appearance::drop_design_art(&s.doc()?.doc, it.targets(s, p)?)))
         })
         .collect()
 }

@@ -234,6 +234,8 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     let item = item_target(s, p, C)?.of_kind(s, false);
     let mut ids = if item == ItemTarget::Top { own_stroke_or_leaves(s, p)? } else { item.targets(s, p)? };
     let new_art = no_targets(&ids, p);
+    // The art of a graph design in a series keeps the design's stroke.
+    ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
     if item == ItemTarget::Top {
         // Images and symbol instances take no stroke from the panel.
         let d = &s.doc()?.doc;
@@ -368,6 +370,7 @@ fn stroke_step(s: &mut Session, p: &Value, up: bool) -> Result<Value> {
         }
         return Ok(json!({"objects": 0}));
     }
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
     let label = if up { "Stroke Weight Up" } else { "Stroke Weight Down" };
     edit_items(s, &ids, item, c, label, false, |n, index| {
         if index.is_none()
@@ -510,6 +513,9 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?.of_kind(s, false);
     let ids = item.targets(s, p)?;
+    let new_art = no_targets(&ids, p);
+    // The art of a graph design in a series keeps the design's stroke.
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, ids);
     let arrows_and_profile = |st: &mut StrokeLayer| {
         if let Some(sc) = scale {
             st.arrow_scale = sc;
@@ -523,7 +529,7 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     // As stroke.set: with nothing selected, for the next object drawn.
-    if no_targets(&ids, p)
+    if new_art
         && (scale.is_some() || swap || flip.is_some())
         && let Some(st) = s.new_art_stroke_mut()
     {
