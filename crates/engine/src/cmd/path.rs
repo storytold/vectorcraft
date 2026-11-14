@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reverse Path Direction",
             ["Object", "Path"],
             None,
-            "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step → {changed: paths}",
+            "{ids?|id?, subpath?: usize (reverse only this subpath of each path, 0 included; default: every subpath), reversed?: bool (true: every subpath runs counter-clockwise on screen, false: clockwise, the Attributes panel's Reverse Path Direction On / Off; omitted: flip each path; with subpath, the direction is not read: that subpath is flipped)} the paths in ids or the selection (groups and compound paths: the paths inside), as one undo step; when every subpath of a path turns alike, its strokes' width profiles (sides swapped) and pen pressure, tilt, bearing and rotation turn with it, so they draw as before → {changed: paths}",
             has_selected_path,
             reverse
         ),
@@ -462,22 +462,24 @@ fn reverse(s: &mut Session, p: &Value) -> Result<Value> {
         let mut changed = 0;
         for id in &ids {
             let path = path_mut(d, *id)?;
-            if let Some(si) = subpath {
-                if let Some(sp) = path.subpaths.get_mut(si) {
+            let flip: Vec<bool> = match subpath {
+                Some(si) => (0..path.subpaths.len()).map(|i| i == si).collect(),
+                None => path.subpaths.iter().map(|sp| want.is_none_or(|ccw| (sp.signed_area() < 0.0) != ccw)).collect(),
+            };
+            if !flip.contains(&true) {
+                continue;
+            }
+            // The stroke's width profile and pen recordings turn with the path, read before it turns.
+            if let Some(n) = d.node_mut(*id) {
+                vectorcraft_doc::blend::reverse_stroke_records(n, &flip);
+            }
+            let path = path_mut(d, *id)?;
+            for (sp, f) in path.subpaths.iter_mut().zip(flip) {
+                if f {
                     sp.reverse();
-                    changed += 1;
-                }
-            } else {
-                let flip: Vec<bool> = path.subpaths.iter().map(|sp| want.is_none_or(|ccw| (sp.signed_area() < 0.0) != ccw)).collect();
-                if flip.contains(&true) {
-                    for (sp, f) in path.subpaths.iter_mut().zip(flip) {
-                        if f {
-                            sp.reverse();
-                        }
-                    }
-                    changed += 1;
                 }
             }
+            changed += 1;
         }
         Ok(changed)
     })?;
