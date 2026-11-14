@@ -3263,7 +3263,8 @@ already walks Image Trace. Short agent entry points:
   trimmed) after the last action of set `set` (0 is the top set), starts recording into it and returns
   `{set, action}`; Stop Playing/Recording (`ui.action.stop`) ends the recording. `key` 1 to 15 is the function key F1 to F15 that plays the
   action (0 or null for none), with `cmd` (Ctrl, Command on macOS) and `shift`. `color` is its Button Mode color
-  (`red`, `yellow`, `green`, `blue` or `violet`; null or `""` for none), which the panel does not show. Action function
+  (`red`, `yellow`, `green`, `blue` or `violet`; null or `""` for none), the color of its button in Button Mode
+  (`ui.action.buttonMode`). Action function
   keys take priority over command shortcuts and preserve the command's binding. On Windows F1, Ctrl+F4 and Ctrl+F6
   cannot be used. While an action is recording, and for an index past the last set,
   an empty name, or a key or color that is not one of these, it is an error and nothing is added. So is an action that
@@ -3319,6 +3320,21 @@ already walks Image Trace. Short agent entry points:
   result is `{results}` with every step's result in order. A step that fails ends the playback with its error: the
   batch it is in changes nothing, and the steps before that batch stay done. While another action records, the View
   menu step is recorded too. Batch… refuses an action with an included View menu step.
+- Actions: `ui.action.playAt {set, action}` plays the action at `action` in set `set` (0 is the top set) as
+  `ui.action.play` plays it and returns what `ui.action.play` returns. A click on an action's button in Button Mode
+  runs this. A missing index, or one that is not a whole number or is past the last set or action, is an error, and
+  then nothing plays.
+- Actions: `ui.action.buttonMode {enabled?}` with `enabled: true` shows the Actions panel's actions as buttons, each
+  with the action's name in its Action Options color (`ui.action.options`), without set names, steps or checkmarks, as
+  [the help page](https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=467)
+  describes; a click on a button plays its action (`ui.action.playAt`) without its excluded steps. With `false` the
+  panel shows its list again, and with `enabled` left out or null the command switches to the other view. It returns
+  `{enabled}`. The panel menu's Button Mode runs this. VectorCraft's own rules: the menu item shows a check mark while
+  Button Mode is on; the actions of every set show, in set order and then action order; an action without a color is
+  an ordinary button; the bottom bar shows only Stop Playing/Recording while an action plays or records, and Play
+  Current Selection while one waits at a stop; the panel menu's items for a selected action or the current set are
+  off; and the mode is kept with the UI preferences. Turning Button Mode on while an action records, or an `enabled`
+  that is not true, false or null, is an error, and then the view does not change.
 - Actions: `ui.action.insertStop {set?, action?, step?, message?, allowContinue?}` inserts a stop. With `set` and
   `action`, the stop goes into that action, after step `step`, else after its last step, and the command returns
   `{set, action, step}`. Without them it goes into the recording in progress, after the steps recorded so far, and
