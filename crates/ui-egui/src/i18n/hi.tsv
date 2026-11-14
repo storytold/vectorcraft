@@ -4997,6 +4997,7 @@ antiAlias	Sharp	शार्प
 	VectorCraft Title Bar on Every Desktop	हर डेस्कटॉप पर VectorCraft टाइटल बार
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	जब तक एनवायरनमेंट वेरिएबल VECTORCRAFT_TITLEBAR सेट है, टाइटल बार वही चुनता है।
 	System Title Bar takes precedence over this option while it is on.	जब तक सिस्टम टाइटल बार चालू है, उसे इस विकल्प पर प्राथमिकता मिलती है।
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	जब तक हर डेस्कटॉप पर VectorCraft टाइटल बार बंद है, यह डेस्कटॉप विंडो का टाइटल बार बनाता है, चाहे यह विकल्प चालू हो या बंद।
 	Tab	Tab
 	Tab Stops	टैब स्टॉप्स
 	Table	तालिका

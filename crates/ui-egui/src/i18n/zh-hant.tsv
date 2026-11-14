@@ -5493,6 +5493,7 @@ effect	Soft	柔和
 	VectorCraft Title Bar on Every Desktop	在所有桌面上使用 VectorCraft 標題列
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	設定了環境變數 VECTORCRAFT_TITLEBAR 時，由它選擇標題列。
 	System Title Bar takes precedence over this option while it is on.	開啟系統標題列時，它優先於此選項。
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	未開啟「在所有桌面上使用 VectorCraft 標題列」時，無論此選項是否開啟，此桌面都會繪製視窗的標題列。
 	Value Axis	數值軸
 	On Left Side	左側
 	On Right Side	右側

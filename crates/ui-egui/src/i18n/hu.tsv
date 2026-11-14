@@ -4311,6 +4311,7 @@ mark-style	Japanese	Japán
 	VectorCraft Title Bar on Every Desktop	A VectorCraft címsora minden asztali környezetben
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Amíg a VECTORCRAFT_TITLEBAR környezeti változó be van állítva, az választja ki a címsort.
 	System Title Bar takes precedence over this option while it is on.	Amíg a Rendszer címsora be van kapcsolva, elsőbbséget élvez ezzel a beállítással szemben.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Amíg a VectorCraft címsora minden asztali környezetben beállítás ki van kapcsolva, ez az asztali környezet rajzolja az ablak címsorát, akár be van kapcsolva ez a beállítás, akár nem.
 	Tab	Tabulátor
 	Tab Stops	Tabulátorpontok
 	Table	Táblázat
