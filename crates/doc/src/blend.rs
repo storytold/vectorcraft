@@ -45,7 +45,24 @@ fn lerp_f64(x: f64, y: f64, t: f64) -> f64 {
     x + (y - x) * t
 }
 
-/// `like` with every stop painting `c`, linked as the solid is (`swatch` at `tint`).
+/// The process plates between two stops linked to one spot swatch: each of C, M, Y and K in turn,
+/// a stop without plates counting as none of each. The ends keep their own plates.
+fn lerp_plates(a: Option<[f32; 4]>, b: Option<[f32; 4]>, t: f32) -> Option<[f32; 4]> {
+    if t <= 0.0 {
+        return a;
+    }
+    if t >= 1.0 {
+        return b;
+    }
+    if a.is_none() && b.is_none() {
+        return None;
+    }
+    let (a, b) = (a.unwrap_or_default(), b.unwrap_or_default());
+    Some(std::array::from_fn(|i| lerp_f32(a[i], b[i], t)))
+}
+
+/// `like` with every stop painting `c`, linked as the solid is (`swatch` at `tint`), with no
+/// process plates (a solid has none).
 fn solid_gradient(c: Color, swatch: Option<&str>, tint: f32, like: &Gradient) -> Gradient {
     let mut g = like.clone();
     for s in &mut g.stops {
@@ -53,16 +70,18 @@ fn solid_gradient(c: Color, swatch: Option<&str>, tint: f32, like: &Gradient) ->
         s.opacity = 1.0;
         s.swatch = swatch.map(str::to_string);
         s.tint = tint;
+        s.plates = None;
     }
     g
 }
 
-/// The swatch and tint `g` paints at `t`: a stop's own link, or the shared swatch of the two stops
-/// around `t` at the tint between theirs (unlinked when they differ), as [`Gradient::sample_with`] walks.
-fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32) {
+/// The swatch, tint and process plates `g` paints at `t`: a stop's own link, or the shared swatch
+/// of the two stops around `t` at the tint and plates between theirs (unlinked when they differ),
+/// as [`Gradient::sample_with`] walks.
+fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32, Option<[f32; 4]>) {
     let stops = &g.stops;
-    let link = |s: &GradientStop| (s.swatch.clone(), s.tint);
-    let Some(first) = stops.first() else { return (None, 1.0) };
+    let link = |s: &GradientStop| (s.swatch.clone(), s.tint, s.plates);
+    let Some(first) = stops.first() else { return (None, 1.0, None) };
     if t <= first.offset {
         return link(first);
     }
@@ -74,14 +93,14 @@ fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32) {
             let m = a.midpoint.clamp(0.01, 0.99);
             let v = if u < m { 0.5 * u / m } else { 0.5 + 0.5 * (u - m) / (1.0 - m) };
             return match (&a.swatch, &b.swatch) {
-                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(a.tint, b.tint, v)),
                 _ if v <= 0.0 => link(a),
                 _ if v >= 1.0 => link(b),
-                _ => (None, 1.0),
+                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(a.tint, b.tint, v), lerp_plates(a.plates, b.plates, v)),
+                _ => (None, 1.0, None),
             };
         }
     }
-    stops.last().map_or((None, 1.0), link)
+    stops.last().map_or((None, 1.0, None), link)
 }
 
 /// `g` with its stops at `offsets`, each painting what `g` paints there (midpoints centred).
@@ -91,8 +110,8 @@ fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
         .iter()
         .map(|&o| {
             let (color, opacity) = g.sample_keep_model(o);
-            let (swatch, tint) = link_at(g, o);
-            GradientStop { opacity, swatch, tint, ..GradientStop::new(o, color) }
+            let (swatch, tint, plates) = link_at(g, o);
+            GradientStop { opacity, swatch, tint, plates, ..GradientStop::new(o, color) }
         })
         .collect();
     out
@@ -139,16 +158,18 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
         .iter()
         .zip(&gb.stops)
         .map(|(sa, sb)| {
-            // Stops on two tints of one swatch stay linked to it, as solids do (#3234).
-            let (swatch, tint) = match (&sa.swatch, &sb.swatch) {
-                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(sa.tint, sb.tint, t)),
-                _ => (None, 1.0),
+            // Stops on two tints of one swatch stay linked to it, as solids do (#3234), and keep
+            // the process plates printed with it.
+            let (swatch, tint, plates) = match (&sa.swatch, &sb.swatch) {
+                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(sa.tint, sb.tint, t), lerp_plates(sa.plates, sb.plates, t)),
+                _ => (None, 1.0, None),
             };
             GradientStop {
                 opacity: lerp_f32(sa.opacity, sb.opacity, t),
                 midpoint: lerp_f32(sa.midpoint, sb.midpoint, t),
                 swatch,
                 tint,
+                plates,
                 ..GradientStop::new(lerp_f32(sa.offset, sb.offset, t), lerp_color(&sa.color, &sb.color, t))
             }
         })
@@ -2460,6 +2481,112 @@ mod tests {
         let mixed = paint(vec![spot(0.0, 1.0), plain, spot(1.0, 1.0)]);
         let Paint::Gradient(m) = lerp_paint(&two, &mixed, 0.5) else { panic!() };
         assert!(m.gradient.stops.iter().any(|s| s.swatch.is_none()), "{:?}", m.gradient.stops);
+    }
+
+    /// A stop linked to the spot swatch "Spot" at `tint`, printed with process `plates`.
+    fn spot_stop(offset: f32, tint: f32, plates: Option<[f32; 4]>) -> GradientStop {
+        let mut stop = GradientStop::new(offset, Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint));
+        stop.swatch = Some("Spot".into());
+        stop.tint = tint;
+        stop.plates = plates;
+        stop
+    }
+
+    fn gradient_paint(stops: Vec<GradientStop>) -> Paint {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient { stops, ..Gradient::default() })))
+    }
+
+    fn assert_plates(got: Option<[f32; 4]>, want: [f32; 4]) {
+        let got = got.unwrap_or_else(|| panic!("plates {want:?}, not none"));
+        assert!(got.iter().zip(&want).all(|(g, w)| (g - w).abs() < 1e-5), "{got:?} != {want:?}");
+    }
+
+    #[test]
+    fn blend_gradient_spot_process_plates_interpolate() {
+        let (p, q) = ([0.2, 0.4, 0.0, 0.0], [0.6, 0.0, 0.8, 1.0]);
+        let a = gradient_paint(vec![spot_stop(0.0, 0.2, Some(p)), spot_stop(1.0, 0.2, Some(p))]);
+        let b = gradient_paint(vec![spot_stop(0.0, 1.0, Some(q)), spot_stop(1.0, 1.0, Some(q))]);
+        let Paint::Gradient(m) = lerp_paint(&a, &b, 0.25) else { panic!() };
+        for s in &m.gradient.stops {
+            assert_eq!(s.swatch.as_deref(), Some("Spot"));
+            assert!((s.tint - 0.4).abs() < 1e-6, "{}", s.tint);
+            assert_plates(s.plates, [0.3, 0.3, 0.2, 0.25]);
+        }
+        // Without plates on either side the steps print the spot ink alone, as before.
+        let bare = |tint| gradient_paint(vec![spot_stop(0.0, tint, None), spot_stop(1.0, tint, None)]);
+        let Paint::Gradient(m) = lerp_paint(&bare(0.2), &bare(1.0), 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.plates.is_none()), "{:?}", m.gradient.stops);
+    }
+
+    #[test]
+    fn resampled_gradient_spot_process_plates_interpolate() {
+        let (p, q, r) = ([0.0, 0.4, 0.0, 0.0], [0.6, 0.4, 0.3, 0.0], [0.2, 0.2, 0.2, 0.2]);
+        let mut first = spot_stop(0.0, 0.2, Some(p));
+        first.midpoint = 0.25;
+        let two = Gradient { stops: vec![first, spot_stop(1.0, 0.8, Some(q))], ..Gradient::default() };
+        let three =
+            Gradient { stops: vec![spot_stop(0.0, 1.0, Some(r)), spot_stop(0.5, 1.0, Some(r)), spot_stop(1.0, 1.0, Some(r))], ..Gradient::default() };
+        let Some((ra, rb)) = common_stops(&two, &three) else { panic!() };
+        let offsets: Vec<f32> = ra.stops.iter().map(|s| s.offset).collect();
+        assert_eq!(offsets, [0.0, 0.25, 0.5, 1.0]);
+        // The original stops keep their plates; between them, the midpoint at 0.25 puts 0.5 two
+        // thirds of the way along the inks.
+        assert_eq!((ra.stops[0].plates, ra.stops[3].plates), (Some(p), Some(q)));
+        assert_plates(ra.stops[1].plates, [0.3, 0.4, 0.15, 0.0]);
+        assert_plates(ra.stops[2].plates, [0.4, 0.4, 0.2, 0.0]);
+        assert!((ra.stops[2].tint - 0.6).abs() < 1e-5, "{}", ra.stops[2].tint);
+        assert!(rb.stops.iter().all(|s| s.plates == Some(r)), "{:?}", rb.stops);
+
+        let Paint::Gradient(m) = lerp_paint(&gradient_paint(two.stops), &gradient_paint(three.stops), 0.5) else { panic!() };
+        assert_eq!(m.gradient.stops.len(), 4);
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot")), "{:?}", m.gradient.stops);
+        assert_plates(m.gradient.stops[2].plates, [0.3, 0.3, 0.2, 0.1]);
+    }
+
+    #[test]
+    fn blend_gradient_missing_plates_mean_zero() {
+        let p = [0.4, 0.8, 0.0, 0.2];
+        let with = gradient_paint(vec![spot_stop(0.0, 1.0, Some(p)), spot_stop(1.0, 1.0, Some(p))]);
+        let without = gradient_paint(vec![spot_stop(0.0, 1.0, None), spot_stop(1.0, 1.0, None)]);
+        let Paint::Gradient(m) = lerp_paint(&without, &with, 0.25) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot")), "{:?}", m.gradient.stops);
+        m.gradient.stops.iter().for_each(|s| assert_plates(s.plates, [0.1, 0.2, 0.0, 0.05]));
+        // The ends keep their own plates.
+        let Paint::Gradient(m) = lerp_paint(&without, &with, 0.0) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.plates.is_none()), "{:?}", m.gradient.stops);
+
+        // Another swatch, or an unlinked stop: process steps with no plates, as before.
+        let mut other = spot_stop(0.0, 1.0, Some(p));
+        other.swatch = Some("Other".into());
+        let other = gradient_paint(vec![other.clone(), GradientStop { offset: 1.0, ..other }]);
+        let mut plain = spot_stop(0.0, 1.0, None);
+        plain.swatch = None;
+        let plain = gradient_paint(vec![plain.clone(), GradientStop { offset: 1.0, ..plain }]);
+        for b in [&other, &plain] {
+            let Paint::Gradient(m) = lerp_paint(&with, b, 0.5) else { panic!() };
+            assert!(m.gradient.stops.iter().all(|s| s.swatch.is_none() && s.plates.is_none()), "{:?}", m.gradient.stops);
+        }
+    }
+
+    #[test]
+    fn blend_solid_to_spot_gradient_does_not_copy_plates() {
+        let p = [0.4, 0.8, 0.0, 0.2];
+        let gradient = gradient_paint(vec![spot_stop(0.0, 1.0, Some(p)), spot_stop(1.0, 1.0, Some(p))]);
+        let Paint::Gradient(g) = &gradient else { panic!() };
+        assert!(solid_gradient(Color::BLACK, Some("Spot"), 0.2, &g.gradient).stops.iter().all(|s| s.plates.is_none()));
+        let solid = Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(0.2), swatch: Some("Spot".into()), tint: 0.2 };
+        // The solid's end has no plates: they grow from none toward the gradient's, both ways round.
+        for (a, b, t) in [(&solid, &gradient, 0.25), (&gradient, &solid, 0.75)] {
+            let Paint::Gradient(m) = lerp_paint(a, b, t) else { panic!() };
+            for s in &m.gradient.stops {
+                assert_eq!(s.swatch.as_deref(), Some("Spot"));
+                assert!((s.tint - 0.4).abs() < 1e-6, "{}", s.tint);
+                assert_plates(s.plates, [0.1, 0.2, 0.0, 0.05]);
+            }
+        }
+        // A process solid unlinks the steps, and they take no plates.
+        let Paint::Gradient(m) = lerp_paint(&Paint::solid(Color::BLACK), &gradient, 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.is_none() && s.plates.is_none()), "{:?}", m.gradient.stops);
     }
 
     #[test]
