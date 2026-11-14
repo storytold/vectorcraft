@@ -1322,6 +1322,38 @@ fn the_dialog_builds_the_preset_list_again_only_when_the_presets_change() {
 
 /// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
 #[test]
+fn switching_export_tabs_commits_an_artboard_name() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let out = h.settle(&mut app);
+        let old = app.session.active().unwrap().doc.artboards[0].name.clone();
+        let at = screen_text_at(&out, &format!("1  {old}"));
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        assert!(h.ctx.egui_wants_keyboard_input());
+        h.frame(&mut app, vec![egui::Event::Text("Committed on tab".into())]);
+        h.click_label(&mut app, "Assets");
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Committed on tab");
+        assert_eq!(field(&app, "tab"), "assets");
+        assert_eq!(field(&app, "boards"), before);
+        assert!(log.borrow().is_empty());
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old);
+    }
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
 fn double_clicking_an_artboard_name_in_export_for_screens_renames_it() {
     for view in ["grid", "list"] {
         let (mut app, log) = app(2, true);
