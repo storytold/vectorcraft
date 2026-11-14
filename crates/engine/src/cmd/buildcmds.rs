@@ -749,8 +749,9 @@ fn build_children(d: &mut Document, sources: Vec<Arc<Node>>, max_gap: Option<f64
 /// Give the faces and edges of `g`, a Live Paint group made again from the sources of `old`, the
 /// look of `old`'s face or edge where they lie: each face takes everything but the outline (its
 /// appearance, none included, its transparency and the rest) of the old face its inside point is
-/// in, and each edge that of the old edge its middle lies on. Faces and edges where `old` had none
-/// keep the paint of their sources.
+/// in, and each edge that of the old edge its middle lies on, with the old edge's stroke rows fitted
+/// to the part of it the new edge runs, as [`fit_to_edge`] fits a source's rows. Faces and edges
+/// where `old` had none keep the paint of their sources.
 fn repaint_from(g: &mut Node, old: &Node) {
     /// How far an edge's middle may be from the old edge it lies on.
     const ON_EDGE: f64 = 1e-3;
@@ -773,6 +774,20 @@ fn repaint_from(g: &mut Node, old: &Node) {
             n.id = c.id;
             n.kind = c.kind.clone();
             n.bbox_angle = c.bbox_angle;
+            // An edge cut from the old one takes the old edge's dashes, arrowheads, width profile
+            // and brush as they fall on its part of the old edge.
+            if c.name.as_deref() == Some(EDGE_NAME)
+                && n.appearance.items.iter().any(depends_on_place)
+                && let Some(old_path) = was.path_data()
+            {
+                let tracks: Vec<Track> = old_path.subpaths.iter().map(Track::new).collect();
+                let run = n.path_data_mut().and_then(|path| edge_run(&tracks, path));
+                let mut a = (*n.appearance).clone();
+                for r in &mut a.items {
+                    fit_to_edge(r, run);
+                }
+                n.appearance = a.into();
+            }
             *c = Arc::new(n);
         }
     }

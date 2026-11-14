@@ -2753,6 +2753,50 @@ fn live_paint_make_fits_dashes_and_arrowheads_to_each_edge() {
     assert_eq!(edges, vec![rows]);
 }
 
+/// When Gap Options cuts an edge in two, each piece keeps the edge's dashes going on from where it
+/// starts along the edge, an arrowhead only at the end of the edge it ends at, and no brush.
+#[test]
+fn live_paint_gap_options_fits_an_edge_look_to_each_piece() {
+    use vectorcraft_doc::{Arrowhead, Dash};
+    let mut s = session();
+    let l = line(&mut s, (0.0, 50.0), (100.0, 50.0));
+    let stub = line(&mut s, (50.0, 0.0), (50.0, 48.0));
+    let row = stroke_row(Paint::solid(Color::BLACK), 2.0, |st| {
+        st.dash = Some(Dash { pattern: vec![10.0, 5.0], offset: 2.0, align_corners: false });
+        st.start_arrow = Some(Arrowhead::Triangle);
+        st.end_arrow = Some(Arrowhead::Circle);
+        st.brush = Some("Charcoal".into());
+    });
+    let rows = set_rows(&mut s, l, vec![row]);
+    s.execute("select.set", &json!({"ids": [l.0, stub.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let dashed = |s: &Session| {
+        let mut out: Vec<(f64, f64, vectorcraft_doc::StrokeLayer)> = vectorcraft_tools::builder::edges(&node(s, g))
+            .iter()
+            .filter_map(|e| {
+                let st = e.appearance.stroke().filter(|st| st.dash.is_some())?.clone();
+                let sp = e.path_data()?.subpaths.first()?;
+                Some(((sp.anchors.first()?.p.x * 1e3).round() / 1e3, (sp.anchors.last()?.p.x * 1e3).round() / 1e3, st))
+            })
+            .collect();
+        out.sort_by(|p, q| p.0.total_cmp(&q.0));
+        out
+    };
+    let before = dashed(&s);
+    assert_eq!(before.len(), 1, "nothing cuts the line yet");
+    assert_eq!(vec![AppearanceItem::Stroke(before[0].2.clone())], rows);
+    let r = s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true})).unwrap();
+    assert_eq!(r["closed"], json!(1));
+    let pieces = dashed(&s);
+    let ends: Vec<(f64, f64)> = pieces.iter().map(|p| (p.0, p.1)).collect();
+    assert_eq!(ends, vec![(0.0, 50.0), (50.0, 100.0)], "the line is cut where the gap closes");
+    let offsets: Vec<f64> = pieces.iter().map(|p| (p.2.dash.as_ref().unwrap().offset * 1e3).round() / 1e3).collect();
+    assert_eq!(offsets, vec![2.0, 52.0], "the dashes go on along the line");
+    let arrows: Vec<_> = pieces.iter().map(|p| (p.2.start_arrow.clone(), p.2.end_arrow.clone())).collect();
+    assert_eq!(arrows, vec![(Some(Arrowhead::Triangle), None), (None, Some(Arrowhead::Circle))]);
+    assert!(pieces.iter().all(|p| p.2.brush.is_none()), "a brush spreads over the whole line");
+}
+
 /// The edge Make builds from a closed path that nothing cuts starts at the anchor the path starts
 /// at and runs the way the path does, whichever anchor that is, so its dashes and brush lie where
 /// they do on the path, and it keeps the path's stroke row as it is.
