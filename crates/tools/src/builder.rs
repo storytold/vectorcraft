@@ -676,6 +676,14 @@ impl Tool for ShapeBuilderTool {
         self.finish_edit(cx)
     }
 
+    /// The pointer hovers nothing for the tool: its highlight, the stroke a click would split and
+    /// the cursor swatch preview go, and a map that arrives afterwards highlights nothing.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = None;
+        self.stroke = None;
+        self.at = None;
+    }
+
     fn poll(&mut self, cx: &ToolContext, wait: bool) -> Vec<Action> {
         let mut acts = self.poll_merge(cx, wait);
         if !acts.is_empty() || self.dragging {

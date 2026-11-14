@@ -700,6 +700,11 @@ impl Tool for LivePaintSelectionTool {
         vec![]
     }
 
+    /// The pointer hovers nothing for the tool: its highlight goes.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = LpHover::None;
+    }
+
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         if let Some(r) = self.drag.and_then(|d| d.marquee(cx)) {
             return vec![Overlay::Marquee(r)];
