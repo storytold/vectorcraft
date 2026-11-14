@@ -522,7 +522,9 @@ fn the_wheel_steps_the_families_in_properties_and_the_control_bar() {
     type Draw = fn(&mut VectorcraftApp, &mut egui::Ui);
     let places: [(&str, Draw); 2] = [
         ("Properties", |app, ui| crate::panels::properties::type_sections(app, ui)),
-        ("Control bar", |app, ui| crate::panels::character::control_bar(app, ui)),
+        ("Control bar", |app, ui| {
+            crate::panels::character::control_bar(app, ui, 0.0);
+        }),
     ];
     let at = |f: &str| FontDb::global().menu_family_list().iter().position(|x| x == f);
     for (place, draw) in places {
