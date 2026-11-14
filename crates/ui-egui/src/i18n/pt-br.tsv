@@ -2232,6 +2232,7 @@ antiAlias	Sharp	Nítido
 	Proportional Metrics	Métrica Proporcional
 	Insert Aki Left	Inserir Aki à Esquerda
 	Insert Aki Right	Inserir Aki à Direita
+	Tsume	Tsume
 	Character Direction	Direção de Caracteres
 	Digits	Dígitos
 	Arabic	Arábicos
@@ -4198,6 +4199,7 @@ axis	Both	Ambos
 @msg	no action set to save	nenhum conjunto de ações para salvar
 @msg	the action set file can't be read in full	o arquivo de conjunto de ações não pode ser lido por inteiro
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” carregado: {n} etapa foi omitida|“{name}” carregado: {n} etapas foram omitidas
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” carregado: {n} etapa tem um comando desconhecido e foi mantida: “{action}”, etapa {step}, `{command}`|“{name}” carregado: {n} etapas têm comandos desconhecidos e foram mantidas; a primeira: “{action}”, etapa {step}, `{command}`
 @msg	not an action set file	não é um arquivo de conjunto de ações
 @msg	the action set file is larger than 8 MiB	o arquivo de conjunto de ações tem mais de 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: a referência teria mais de {MAX_BYTES} bytes
@@ -4437,6 +4439,7 @@ axis	Both	Ambos
 @msg	tool shortcuts must be a single key (optionally with Shift)	os atalhos de ferramenta devem ser uma única tecla (opcionalmente com Shift)
 @msg	truncated	truncado
 @msg	unknown command `{0}`	comando desconhecido `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	a etapa {step} de “{action}” executa o comando desconhecido `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	comando desconhecido `{0}`; você quis dizer `{1}`?
 @msg	unknown effect `{id}`	efeito desconhecido `{id}`
 @msg	unknown format	formato desconhecido
@@ -6308,8 +6311,8 @@ axis	Y Axis	Eixo Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	um plug-in de exportação declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	no máximo {MAX_UNGROUPED} parâmetros fora de grupos: dê um `group` aos outros
 @msg	can't encode the input	não é possível codificar a entrada
-@msg	expected {"dataBase64"}	esperado {"dataBase64"}
-@msg	expected {"objects"}	esperado {"objects"}
+@msg	expected {{"dataBase64": "…"}}	esperado {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	esperado {{"objects": [...]}}
 @msg	export `{name}`: {e}	exportação do módulo `{name}`: {e}
 @msg	extension {e} is listed twice	a extensão {e} aparece duas vezes
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensão {e}: use 1-16 letras minúsculas e dígitos, sem o ponto
@@ -6373,11 +6376,11 @@ axis	Y Axis	Eixo Y
 @msg	a painted live effect returns only `objects`	um efeito dinâmico de pintura retorna apenas `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills` e `strokes`
 @msg	a read-only object was left out	um objeto somente leitura foi omitido
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {"id"} sozinho ou como foi recebido
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {{"id": …}} sozinho ou como foi recebido
 @msg	a string	uma string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	um traçado tem apenas `paint`, `width`, `join`, `cap` e `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	um traçado deve ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	um efeito deve ser {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	um traçado deve ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	um efeito deve ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	um efeito em um preenchimento retorna apenas `fills`
 @msg	an effect on a stroke returns only `strokes`	um efeito em um traçado retorna apenas `strokes`
 @msg	an object must be a JSON object	um objeto deve ser um objeto JSON
@@ -7276,7 +7279,7 @@ swatch	Lime	Lima
 	Line Weight:	Espessura da linha:
 	Load Variable Library	Carregar biblioteca de variáveis
 swatch	Magenta	Magenta
-@msg	not an RTF file: it doesn't start with {\\rtf	não é um arquivo RTF: ele não começa com {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	não é um arquivo RTF: ele não começa com {{\\rtf
 swatch	Ocean	Oceano
 shape	Open	Aberta
 swatch	Orange	Laranja

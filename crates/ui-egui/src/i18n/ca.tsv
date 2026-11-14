@@ -3358,6 +3358,7 @@ digits	Malayalam	Malaiàlam
 	Proportional Metrics	Mètriques proporcionals
 	Insert Aki Left	Insereix aki a l'esquerra
 	Insert Aki Right	Insereix aki a la dreta
+	Tsume	Tsume
 	Proportional Lining	Xifres proporcionals alineades
 	Position:	Posició:
 	Default Position	Posició predeterminada
@@ -5875,6 +5876,7 @@ digits	Malayalam	Malaiàlam
 @msg	no action set to save	no hi ha cap conjunt d’accions per desar
 @msg	the action set file can't be read in full	el fitxer de conjunt d’accions no es pot llegir sencer
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	S’ha carregat “{name}”: s’ha omès {n} pas|S’ha carregat “{name}”: s’han omès {n} passos
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	S’ha carregat “{name}”: {n} pas té una ordre desconeguda i s’ha conservat: “{action}”, pas {step}, `{command}`|S’ha carregat “{name}”: {n} passos tenen ordres desconegudes i s’han conservat; el primer: “{action}”, pas {step}, `{command}`
 @msg	not an action set file	no és un fitxer de conjunt d’accions
 @msg	the action set file is larger than 8 MiB	el fitxer de conjunt d’accions supera els 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: la referència superaria els {MAX_BYTES} bytes
@@ -5933,7 +5935,7 @@ digits	Malayalam	Malaiàlam
 @msg	not an HP-GL file	no és un fitxer HP-GL
 @msg	not a PICT file	no és un fitxer PICT
 @msg	`pens` must be an array of 1 to 255 #rrggbb colors	`pens` ha de ser una matriu d’1 a 255 colors #rrggbb
-@msg	not an RTF file: it doesn't start with {\\rtf	no és un fitxer RTF: no comença amb {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	no és un fitxer RTF: no comença amb {{\\rtf
 @msg	not found	no s’ha trobat
 @msg	not in pattern editing mode	no esteu en mode d’edició de motius
 @msg	finish editing the pattern first	acabeu primer l’edició del motiu
@@ -6366,6 +6368,7 @@ digits	Malayalam	Malaiàlam
 @msg	truncated	truncat
 @msg	Unembedded to {_1}	S’ha desincrustat a {_1}
 @msg	unknown command `{0}`	ordre desconeguda `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	el pas {step} de “{action}” executa l’ordre desconeguda `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	ordre desconeguda `{0}`; volies dir `{1}`?
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	control desconegut `{name}`: fillStroke, coloring, drawMode o screenMode
 @msg	Unknown dimension mode	Mode de dimensió desconegut
@@ -6498,8 +6501,8 @@ digits	Malayalam	Malaiàlam
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	un exportador declara d’1 a {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	com a màxim {MAX_UNGROUPED} paràmetres fora de grups: doneu un `group` als altres
 @msg	can't encode the input	no es pot codificar l’entrada
-@msg	expected {"dataBase64"}	s’esperava {"dataBase64"}
-@msg	expected {"objects"}	s’esperava {"objects"}
+@msg	expected {{"dataBase64": "…"}}	s’esperava {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	s’esperava {{"objects": [...]}}
 @msg	export `{name}`: {e}	exportació del mòdul `{name}`: {e}
 @msg	extension {e} is listed twice	l’extensió {e} apareix dues vegades
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	extensió {e}: feu servir 1-16 lletres minúscules i dígits, sense el punt
@@ -6563,11 +6566,11 @@ digits	Malayalam	Malaiàlam
 @msg	a painted live effect returns only `objects`	un efecte dinàmic de pintura només retorna `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	s’ha omès un objecte de només lectura
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {"id"} sol o tal com s’ha rebut
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {{"id": …}} sol o tal com s’ha rebut
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un traç només té `paint`, `width`, `join`, `cap` i `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	un traç ha de ser {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	un efecte ha de ser {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un traç ha de ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	un efecte ha de ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecte en un farciment només retorna `fills`
 @msg	an effect on a stroke returns only `strokes`	un efecte en un traç només retorna `strokes`
 @msg	an object must be a JSON object	un objecte ha de ser un objecte JSON

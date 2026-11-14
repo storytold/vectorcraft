@@ -3698,6 +3698,7 @@ antiAlias	Sharp	शार्प
 	Proportional Metrics	आनुपातिक मीट्रिक
 	Insert Aki Left	बाईं ओर आकी जोड़ें
 	Insert Aki Right	दाईं ओर आकी जोड़ें
+	Tsume	त्सुमे
 	Proportional Oldstyle	आनुपातिक ओल्डस्टाइल
 	Protect Corners	कॉर्नर को सुरक्षित रखें
 	Proximity Guides	निकटता गाइड
@@ -5616,11 +5617,11 @@ antiAlias	Sharp	शार्प
 @msg	a painted live effect returns only `objects`	पेंट करने वाला लाइव इफ़ेक्ट केवल `objects` लौटाता है
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	पेंट करने वाले लाइव इफ़ेक्ट के हिस्से में केवल `path`, `fillRule`, `fills` और `strokes` होते हैं
 @msg	a read-only object was left out	एक केवल-पढ़ने योग्य ऑब्जेक्ट छोड़ दिया गया
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	एक केवल-पढ़ने योग्य ऑब्जेक्ट छोड़ दिया गया: इसे केवल {"id"} के रूप में या जैसा दिया गया था वैसा लौटाएँ
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	एक केवल-पढ़ने योग्य ऑब्जेक्ट छोड़ दिया गया: इसे केवल {{"id": …}} के रूप में या जैसा दिया गया था वैसा लौटाएँ
 @msg	a string	एक स्ट्रिंग
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	स्ट्रोक में केवल `paint`, `width`, `join`, `cap` और `miterLimit` होते हैं
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	स्ट्रोक {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} होना चाहिए
-@msg	an effect must be {"id", "params"?, "visible"?}	इफ़ेक्ट {"id", "params"?, "visible"?} होना चाहिए
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	स्ट्रोक {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} होना चाहिए
+@msg	an effect must be {{"id", "params"?, "visible"?}}	इफ़ेक्ट {{"id", "params"?, "visible"?}} होना चाहिए
 @msg	an effect on a fill returns only `fills`	फ़िल पर इफ़ेक्ट केवल `fills` लौटाता है
 @msg	an effect on a stroke returns only `strokes`	स्ट्रोक पर इफ़ेक्ट केवल `strokes` लौटाता है
 @msg	an object must be a JSON object	ऑब्जेक्ट एक JSON ऑब्जेक्ट होना चाहिए
@@ -6084,7 +6085,7 @@ antiAlias	Sharp	शार्प
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` में पिछली text.findFontFiles सर्च में मिली फ़ॉन्ट फ़ाइलों के 1 से 1000 पाथ होने चाहिए
 @msg	`folder` must be an absolute folder path	`folder` एक पूर्ण फ़ोल्डर पाथ होना चाहिए
 @msg	`follow` must be "average", "a" or "b"	`follow` को "average", "a" या "b" होना चाहिए।
-@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` को अक्ष टैग और मानों का एक ऑब्जेक्ट होना चाहिए, जैसे कि {"wght"}
+@msg	`fontAxes` must be an object of axis tags and values, such as {{"wght": 650}}	`fontAxes` को अक्ष टैग और मानों का एक ऑब्जेक्ट होना चाहिए, जैसे कि {{"wght": 650}}
 @msg	`fontHeightReference` must be "emBox", "capHeight", "xHeight" or "icfBox"	`fontHeightReference` को "emBox", "capHeight", "xHeight" या "icfBox" होना चाहिए
 @msg	`format` must be a string	`format` एक स्ट्रिंग होना चाहिए
 @msg	`format` must be one of {_1}	`format` को {_1} में से एक होना चाहिए
@@ -6118,12 +6119,12 @@ antiAlias	Sharp	शार्प
 @msg	`index` must be a point index	`index` एक बिंदु सूचकांक होना चाहिए
 @msg	`index` must be a whole number or null	`index` होना चाहिए पूरी संख्या या null होना चाहिए
 @msg	`indices` must be a non-empty array of item indices	`indices` आइटम सूचकांकों की एक गैर-खाली सरणी होना चाहिए
-@msg	`items` is a list of {kind, item}	`items` {kind, item} की सूची है
+@msg	`items` is a list of {{kind, item}}	`items` {{kind, item}} की सूची है
 @msg	`items` is empty	`items` खाली है
 @msg	`items` must be a list of {{id, anchors?}}, not {v}	`items` को {{id, anchors?}} की सूची होना चाहिए, {v} नहीं
-@msg	`items` must be a list of {id, points}	`items` को {id, points} की सूची होना चाहिए
+@msg	`items` must be a list of {{id, points}}	`items` को {{id, points}} की सूची होना चाहिए
 @msg	`items` must be an array of {{id, corners?}}, not {v}	`items` को {{id, corners?}} की ऐरे होना चाहिए, {v} नहीं
-@msg	`items` must be an array of {id, anchors}	`items` को {id, anchors} की ऐरे होना चाहिए
+@msg	`items` must be an array of {{id, anchors}}	`items` को {{id, anchors}} की ऐरे होना चाहिए
 @msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida` होना चाहिए "none", "short", "medium", "long" या "stylistic"।
 @msg	`kind` is one of {_1}	`kind` {_1} में से एक है
 @msg	`kind` must be "line" or "paragraph", not {other}	`kind` होना चाहिए "line" या "paragraph", नहीं {other}
@@ -6408,7 +6409,7 @@ antiAlias	Sharp	शार्प
 @msg	artboard {i} doesn't print	आर्टबोर्ड {i} प्रिंट नहीं करता है
 @msg	artboard is a 0-based index	artboard 0 से शुरू होने वाला इंडेक्स है
 @msg	artboard must be a 0-based index	artboard 0 से शुरू होने वाला इंडेक्स होना चाहिए
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout को {layout?, columns?, spacing?, rightToLeft?} होना चाहिए
+@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout को {{layout?, columns?, spacing?, rightToLeft?}} होना चाहिए
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns को 1 या अधिक होना चाहिए
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout को gridByRow, gridByColumn, row या column होना चाहिए
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft को true या false होना चाहिए
@@ -6777,13 +6778,13 @@ antiAlias	Sharp	शार्प
 @msg	DXF scale must be a positive number up to {_1}, not {scale}	DXF स्केल {_1} तक की धनात्मक संख्या होनी चाहिए, न कि {scale}
 @msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf इकाई `{u}`: एक इकाई जैसे mm, cm, in या pt
 @msg	dxf: {e}	dxf: {e}
-@msg	each format is an object {format, scale?, suffix?}	हर फ़ॉर्मैट एक ऑब्जेक्ट {format, scale?, suffix?} है
+@msg	each format is an object {{format, scale?, suffix?}}	हर फ़ॉर्मैट एक ऑब्जेक्ट {{format, scale?, suffix?}} है
 @msg	each item needs an id	प्रत्येक आइटम को एक आईडी की आवश्यकता होती है
 @msg	each match needs `kind`	प्रत्येक मैच की जरूरत है `kind`
 @msg	each match needs a `name`	प्रत्येक मैच को `name` की आवश्यकता होती है
-@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	`fonts` का हर आइटम {family, style?} है; 1 से 1000 आइटम
+@msg	each of `fonts` is {{family, style?}}; 1 to 1000 of them	`fonts` का हर आइटम {{family, style?}} है; 1 से 1000 आइटम
 @msg	each of `items` is {{id, corners?}} with an object id, not {it}	`items` का हर आइटम ऑब्जेक्ट आईडी वाला {{id, corners?}} है, {it} नहीं
-@msg	each of `items` is {kind, item}	`items` का हर आइटम {kind, item} है
+@msg	each of `items` is {{kind, item}}	`items` का हर आइटम {{kind, item}} है
 @msg	each row needs `from`	हर पंक्ति के लिए `from` चाहिए
 @msg	each stop needs a position	प्रत्येक स्टॉप को स्थिति की आवश्यकता होती है
 @msg	each subpath needs an anchors array	प्रत्येक उपपाथ को एक एंकर सरणी की आवश्यकता होती है
@@ -6815,8 +6816,8 @@ antiAlias	Sharp	शार्प
 @msg	Expand: no gradient fills	विस्तार: कोई ग्रेडिएंट भरता नहीं
 @msg	Expand: nothing to expand	विस्तार: विस्तार करने के लिए कुछ नहीं
 @msg	expanded SVG styles exceed the import size limit	विस्तारित SVG स्टाइल्स आयात आकार सीमा से अधिक है
-@msg	expected {"dataBase64"}	अपेक्षित: {"dataBase64"}
-@msg	expected {"objects"}	अपेक्षित: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	अपेक्षित: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	अपेक्षित: {{"objects": [...]}}
 @msg	export `{name}`: {e}	निर्यात `{name}`: {e}
 @msg	Export cancelled	निर्यात रद्द
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	स्क्रीन के लिए एक्सपोर्ट png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai या vectorcraft लिखता है
@@ -6836,7 +6837,7 @@ antiAlias	Sharp	शार्प
 @msg	features must be a list of tags	features टैग की एक सूची होनी चाहिए
 @msg	fidelity must be 0..100	fidelity 0..100 होना चाहिए
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	फ़ाइल संस्करण {0} इस वेक्टर क्रेफ्ट समर्थन ({VERSION}) की तुलना में नया है।
-@msg	files must be {name, dataBase64}	files {name, dataBase64} होना चाहिए
+@msg	files must be {{name, dataBase64}}	files {{name, dataBase64}} होना चाहिए
 @msg	finish editing the pattern first	पहले पैटर्न को संपादित करना
 @msg	First measured segment no longer exists	पहले मापा खंड अब मौजूद नहीं है
 @msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit को none|autoHeight|shrinkText|block होना चाहिए, {id} मिला
@@ -6862,7 +6863,7 @@ antiAlias	Sharp	शार्प
 @msg	frequency must be between 1 and 300 lines per inch	frequency प्रति इंच 1 से 300 लाइनों के बीच होनी चाहिए
 @msg	from and to must be finite	से और होना चाहिए करने के लिए
 @msg	from must be [x0, y0, x1, y1]	from [x0, y0, x1, y1] होना चाहिए
-@msg	give {key, value} or {values}	{key, value} या {values} दें
+@msg	give {{key, value}} or {{values}}	{{key, value}} या {{values}} दें
 @msg	give `{a}` and `{b}`	`{a}` और `{b}` दें
 @msg	give `anchor`, the index of the anchor to slide	खिसकाने वाले एंकर का इंडेक्स `anchor` दें
 @msg	give `before` or `after`, not both	`before` या `after` दें, दोनों नहीं
@@ -6880,7 +6881,7 @@ antiAlias	Sharp	शार्प
 @msg	give `id` or `guide`, not both	`id` या `guide` दें, दोनों नहीं
 @msg	give `inkLimit`, `removeWhiteOverprint` or `overprintBlack`	`inkLimit`, `removeWhiteOverprint` या `overprintBlack` दें
 @msg	give `length` or `to`	`length` या `to` देना
-@msg	give `matches`: [{kind, name, target}]	`matches`: [{kind, name, target}]
+@msg	give `matches`: [{{kind, name, target}}]	`matches`: [{{kind, name, target}}]
 @msg	give `name` (or edit a pattern)	`name` (या एक पैटर्न संपादित करें)
 @msg	give `name` or `names`	`name` या `names` दें
 @msg	give `path` (a .wasm file) or `dataBase64` (the module)	`path` (.wasm फ़ाइल) या `dataBase64` (मॉड्यूल) दें
@@ -6937,7 +6938,7 @@ antiAlias	Sharp	शार्प
 @msg	give the preset a `name`	प्रीसेट देना `name`
 @msg	give the preset a name	प्रीसेट को एक नाम देना
 @msg	give the preset a name (1–64 characters)	प्रीसेट का नाम दें (1–64 अक्षर)
-@msg	give the settings to change, e.g. {"formats"}]}	सेटिंग्स को बदलने के लिए, उदाहरण के लिए {"formats"}]}
+@msg	give the settings to change, e.g. {{"formats": [{{"format": "png", "scale": "2x"}}]}}	सेटिंग्स को बदलने के लिए, उदाहरण के लिए {{"formats": [{{"format": "png", "scale": "2x"}}]}}
 @msg	give the style a name	स्टाइल को एक नाम दें
 @msg	give two or more style `names`	दो या अधिक स्टाइल `names`
 @msg	give two or more swatches	दो या अधिक स्वॉच दें
@@ -7157,7 +7158,7 @@ antiAlias	Sharp	शार्प
 @msg	missing `library` (see graphicStyle.libraries)	लापता `library` (graphicStyle.libraries देखें)
 @msg	missing `library` (see swatch.library.list)	लापता `library` (swatch.library.list देखें)
 @msg	missing `library` (see symbol.libraries)	`library` अनुपस्थित है (symbol.libraries देखें)
-@msg	missing `map` (rows [{from, to}] or {current})	लापता `map` (rows [{from, to}] या {current})
+@msg	missing `map` (rows [{{from, to}}] or {{current: new}})	लापता `map` (rows [{{from, to}}] या {{current: new}})
 @msg	missing `matrix` [a,b,c,d,e,f]	लापता `matrix` [a,b,c,d,e,f]
 @msg	missing `name`	लापता `name`
 @msg	missing `name` (see gradient.presets.list)	लापता `name` (gradient.presets.list देखें)
@@ -7519,6 +7520,7 @@ antiAlias	Sharp	शार्प
 @msg	not a Word document: its WordDocument stream doesn't start with a file information block	वर्ड डॉक्यूमेंट नहीं: इसकी WordDocument धारा फ़ाइल सूचना ब्लॉक के साथ शुरू नहीं होती है
 @msg	the action set file can't be read in full	एक्शन सेट फ़ाइल पूरी तरह नहीं पढ़ी जा सकती
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” लोड किया गया: {n} चरण छोड़ा गया|“{name}” लोड किया गया: {n} चरण छोड़े गए
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” लोड किया गया: {n} चरण में अज्ञात आदेश है और उसे रखा गया: “{action}”, चरण {step}, `{command}`|“{name}” लोड किया गया: {n} चरणों में अज्ञात आदेश हैं और उन्हें रखा गया; पहला: “{action}”, चरण {step}, `{command}`
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
 @msg	not an HP-GL file	HP-GL फ़ाइल नहीं है
@@ -7527,7 +7529,7 @@ antiAlias	Sharp	शार्प
 @msg	not an export presets file (format `{_1}`)	यह एक्सपोर्ट प्रीसेट फ़ाइल नहीं है (फ़ॉर्मैट `{_1}`)
 @msg	not an export presets file: {e}	एक निर्यात प्रीसेट फ़ाइल नहीं: {e}
 @msg	not an image VectorCraft reads (see document.formats)	यह ऐसी इमेज नहीं है जिसे VectorCraft पढ़ सके (document.formats देखें)
-@msg	not an RTF file: it doesn't start with {\\rtf	RTF फ़ाइल नहीं: यह {\rtf के साथ शुरू नहीं होता है
+@msg	not an RTF file: it doesn't start with {{\\rtf	RTF फ़ाइल नहीं: यह {{\rtf के साथ शुरू नहीं होता है
 @msg	not area type (text in a frame) outside perspective	पर्सपेक्टिव के बाहर का एरिया टाइप (फ़्रेम में टेक्स्ट) नहीं है
 @msg	not editing an opacity mask	ओपेसिटी मास्क संपादित नहीं किया जा रहा है
 @msg	not found	नहीं मिला
@@ -7724,7 +7726,7 @@ antiAlias	Sharp	शार्प
 @msg	printing isn't available here	मुद्रण यहाँ उपलब्ध नहीं है
 @msg	procedures nest too deeply	प्रक्रियाओं घोंसला बहुत गहराई से
 @msg	procedures nested too deeply	प्रक्रियाओं ने बहुत गहराई से घोंसले
-@msg	quotes must be {double?, single?}	quotes को {double?, single?} होना चाहिए
+@msg	quotes must be {{double?, single?}}	quotes को {{double?, single?}} होना चाहिए
 @msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	उद्धरण.{k} एक उद्घाटन और एक समापन उद्धरण होना चाहिए, उदाहरण के लिए "“”"
 @msg	range `{s}` is empty	श्रेणी `{s}` खाली है
 @msg	range `{s}`: `{part}` names no number	सीमा `{s}`: `{part}` कोई संख्या नहीं बताता
@@ -7965,14 +7967,14 @@ antiAlias	Sharp	शार्प
 @msg	Switch x/y is for scatter graphs	स्विच x/y स्कैटर ग्राफ़ के लिए है
 @msg	t, dx and dy must be finite	टी, डीएक्स और डीआई को परिमित होना चाहिए
 @msg	Targa files are RGB: colorModel rgb	Targa फ़ाइलें RGB हैं: colorModel rgb
-@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text को {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?} होना चाहिए
+@msg	text must be {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}}	text को {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}} होना चाहिए
 @msg	Text options: {e}	टेक्स्ट ऑप्शन्स: {e}
 @msg	text transform is collapsed or unrepresentable	टेक्स्ट ट्रांसफ़ॉर्म सिमटा हुआ है या उसे दर्शाया नहीं जा सकता
 @msg	Text Wrap: select a wrap object	टेक्स्ट लपेटें: एक रैप ऑब्जेक्ट चुनें
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	Text.{key} `{v}`: "{_1}" या "{_2}" का उपयोग करें।
 @msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces को 2 से 100 के बीच पूर्णांक होना चाहिए
 @msg	textureImage: {e}	textureImage: {e}
-@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: किसी इमेज फ़ाइल का {path} या {name, dataBase64} दें, या effect.list द्वारा दिया गया टेक्सचर दें
+@msg	textureImage: give {{path}} or {{name, dataBase64}} of an image file, or a texture as effect.list gives it	textureImage: किसी इमेज फ़ाइल का {{path}} या {{name, dataBase64}} दें, या effect.list द्वारा दिया गया टेक्सचर दें
 @msg	that anchor can't slide: an end of an open path has nowhere to go	कि एंकर स्लाइड नहीं कर सकते: एक खुले रास्ते का अंत कहीं नहीं जाना है
 @msg	the active document changed while the question was open; nothing was deleted	प्रश्न खुला रहते हुए सक्रिय डॉक्यूमेंट बदल गया; कुछ भी नहीं हटाया गया
 @msg	that document is no longer open	यह डॉक्यूमेंट अब खुला नहीं है
@@ -8409,6 +8411,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown character style number field	अज्ञात चरित्र स्टाइल संख्या क्षेत्र
 @msg	unknown CMYK profile `{name}`	अज्ञात CMYK प्रोफ़ाइल `{name}`
 @msg	unknown command `{0}`	अज्ञात आदेश `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	“{action}” का चरण {step} अज्ञात आदेश `{command}` चलाता है
 @msg	unknown command `{0}`; did you mean `{1}`?	अज्ञात आदेश `{0}`; क्या आपको `{1}` का मतलब है?
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	अज्ञात नियंत्रण `{name}`: fillStroke, रंग, drawMode या screenMode
 @msg	Unknown dimension mode	अज्ञात आयाम मोड

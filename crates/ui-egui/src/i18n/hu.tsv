@@ -3224,6 +3224,7 @@ mark-style	Japanese	Japán
 	Proportional Metrics	Arányos metrika
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
+	Tsume	Tsume
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -5433,6 +5434,7 @@ imageTrace	Outline	Körvonal
 @msg	no action set to save	nincs menthető műveletkészlet
 @msg	the action set file can't be read in full	a műveletkészlet-fájl nem olvasható be teljesen
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	„{name}” betöltve; kihagyott lépések: {n}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	„{name}” betöltve; megtartott lépések ismeretlen paranccsal: {n}; az első: „{action}”, lépés: {step}, `{command}`
 @msg	not an action set file	nem műveletkészlet-fájl
 @msg	the action set file is larger than 8 MiB	a műveletkészlet-fájl nagyobb 8 MiB-nál
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: a referencia nagyobb lenne {MAX_BYTES} bájtnál
@@ -5806,6 +5808,7 @@ imageTrace	Outline	Körvonal
 @msg	truncated	csonka
 @msg	Unembedded to {_1}	Beágyazás megszüntetve, ide: {_1}
 @msg	unknown command `{0}`	ismeretlen parancs: `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	„{action}”, lépés: {step}: ismeretlen parancsot futtat: `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	ismeretlen parancs: `{0}`; erre gondolt: `{1}`?
 @msg	unknown effect `{id}`	ismeretlen effektus: `{id}`
 @msg	unknown format	ismeretlen formátum
@@ -6376,8 +6379,8 @@ axis	Y Axis	Y tengely
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	az exportáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	csoporton kívül legfeljebb {MAX_UNGROUPED} paraméter lehet: a többinek adj meg `group` értéket
 @msg	can't encode the input	a bemenet nem kódolható
-@msg	expected {"dataBase64"}	várt formátum: {"dataBase64"}
-@msg	expected {"objects"}	várt formátum: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	várt formátum: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	várt formátum: {{"objects": [...]}}
 @msg	export `{name}`: {e}	`{name}` modulexport: {e}
 @msg	extension {e} is listed twice	a(z) {e} kiterjesztés kétszer szerepel
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	{e} kiterjesztés: 1-16 kisbetűt és számjegyet használj, pont nélkül
@@ -6441,11 +6444,11 @@ axis	Y Axis	Y tengely
 @msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
 @msg	a read-only object was left out	kimaradt egy írásvédett objektum
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {"id"} formában vagy úgy, ahogy megkapta
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
 @msg	a string	karakterlánc
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	a körvonalnak csak `paint`, `width`, `join`, `cap` és `miterLimit` kulcsa van
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	a körvonal formája {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} legyen
-@msg	an effect must be {"id", "params"?, "visible"?}	az effektus formája {"id", "params"?, "visible"?} legyen
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	a körvonal formája {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} legyen
+@msg	an effect must be {{"id", "params"?, "visible"?}}	az effektus formája {{"id", "params"?, "visible"?}} legyen
 @msg	an effect on a fill returns only `fills`	a kitöltésen lévő effektus csak `fills` értéket ad vissza
 @msg	an effect on a stroke returns only `strokes`	a körvonalon lévő effektus csak `strokes` értéket ad vissza
 @msg	an object must be a JSON object	az objektum JSON-objektum legyen
@@ -7485,3 +7488,120 @@ breakText	Glyphs	Glifák
 	Nest Shapes…	Alakzatok elrendezése…
 	Nest Shapes	Alakzatok elrendezése
 	Roll	Tekercs
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	A 3D effektusokhoz 100 millió ponton belüli véges koordináták kellenek
+@msg	3D effects require one to ten lights	A 3D effektusokhoz egy és tíz közötti számú fény kell
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP-színmélység {_1}: 1, 4, 8, 16, 24 vagy 32 bit/pixel lehet
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	A BMP-kódolás sikertelen: {width} × {height} pixel nem fér bele a formátumba vagy a pixelpufferbe
+@msg	GIF encoding failed: the palette image is malformed	A GIF-kódolás sikertelen: a palettás kép hibás szerkezetű
+@msg	GIF encoding failed: {e}	A GIF-kódolás sikertelen: {e}
+@msg	JPEG colour profile: {e}	JPEG-színprofil: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	A JPEG-kódolás sikertelen: a pixelpuffer nem egyezik a kép méretével
+@msg	JPEG encoding failed: {e}	A JPEG-kódolás sikertelen: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	A PNG-kódolás sikertelen: a pixelpuffer nem egyezik a kép méretével
+@msg	PNG encoding failed: the palette image is malformed	A PNG-kódolás sikertelen: a palettás kép hibás szerkezetű
+@msg	PNG encoding failed: {e}	A PNG-kódolás sikertelen: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	A PNG-kódolás sikertelen: {width} × {height} pixel nem érvényes képméret
+@msg	PSD colour profile: {e}	PSD-színprofil: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	A PSD-kódolás sikertelen: a pixelpuffer nem egyezik a kép méretével
+@msg	Revolve profile contains invalid coordinates	Forgatás tengely körül: a profil érvénytelen koordinátákat tartalmaz
+@msg	Revolve profile is too complex	Forgatás tengely körül: a profil túl összetett
+@msg	Revolve projection is not finite	Forgatás tengely körül: a vetület nem véges
+@msg	Revolve requires finite profile coordinates within 100 million points	Forgatás tengely körül: 100 millió ponton belüli véges profilkoordináták kellenek
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Forgatás tengely körül: a felület túl összetett; csökkentsd a Szakaszok értékét, vagy egyszerűsítsd a profilt
+@msg	Revolve surface is too complex; simplify the profile	Forgatás tengely körül: a felület túl összetett; egyszerűsítsd a profilt
+@msg	Revolve visibility cannot split the projected boundary	Forgatás tengely körül: a láthatóság számítása nem tudja felosztani a vetített határvonalat
+@msg	Revolve visibility creates too many fragments	Forgatás tengely körül: a láthatóság számítása túl sok darabot hoz létre
+@msg	Revolve visibility creates too many vector anchors	Forgatás tengely körül: a láthatóság számítása túl sok vektoros horgonypontot hoz létre
+@msg	Revolve visibility exceeds its geometry work limit	Forgatás tengely körül: a láthatóság számítása túllépi a geometriai számítások korlátját
+@msg	Revolve visibility exceeds its spatial index limit	Forgatás tengely körül: a láthatóság számítása túllépi a térbeli index korlátját
+@msg	Revolve visibility has too many boundary crossings	Forgatás tengely körül: a láthatóság számításában túl sok a határvonal-keresztezés
+@msg	Revolve visibility has too many input anchors	Forgatás tengely körül: a láthatóság számításában túl sok a bemeneti horgonypont
+@msg	Revolve visibility requires convex cap sectors	Forgatás tengely körül: a láthatóság számításához konvex zárólap-szektorok kellenek
+@msg	Revolve visibility requires finite projected faces	Forgatás tengely körül: a láthatóság számításához véges vetített lapok kellenek
+@msg	SVG options: {e}	SVG-beállítások: {e}
+@msg	Save for Web settings: {e}	Webes mentés beállításai: {e}
+@msg	TIFF colour profile: {e}	TIFF-színprofil: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	A TIFF-kódolás sikertelen: a pixelpuffer nem egyezik a kép méretével
+@msg	TIFF encoding failed: {e}	A TIFF-kódolás sikertelen: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa-színmélység {_1}: 16, 24 vagy 32 bit/pixel lehet
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	A Targa-kódolás sikertelen: a pixelpuffer nem egyezik a kép méretével
+@msg	The 3D projection is not finite	A 3D vetület nem véges
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	A 3D árnyék túl összetett; kapcsold ki az Árnyékok beállítást, vagy egyszerűsítsd a rajzot
+@msg	The shape contains invalid coordinates	Az alakzat érvénytelen koordinátákat tartalmaz
+@msg	Too many Revolve faces for visibility evaluation	Túl sok lap a láthatóság kiértékeléséhez (Forgatás tengely körül)
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	A VectorCraft legfeljebb {ASE_MAX_ENTRIES} színt és csoportot olvas be egy színmintacsere-fájlból, ebben a könyvtárban pedig ennyi van: {entries}
+@msg	WebP encoding failed: {e}	A WebP-kódolás sikertelen: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`index` must be a whole number	`index`: egész szám kell
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`: smallThumb, mediumThumb, largeThumb, smallList vagy largeList lehet
+@msg	a line can't run from a point to itself	egy vonal nem futhat egy pontból önmagába
+@msg	a line needs at least two points	egy vonalhoz legalább két pont kell
+@msg	a number cannot be read	egy szám nem olvasható be
+@msg	a swatch exchange block is too long	egy színmintacsere-blokk túl hosszú
+@msg	a swatch exchange name is too long	egy színmintacsere-név túl hosszú
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	egy {sw} × {sh} méretű kép nem méretezhető át erre: {width} × {height} pixel
+@msg	a {width} × {height} image is too large	egy {width} × {height} méretű kép túl nagy
+@msg	a {width} × {height} image: {e}	egy {width} × {height} méretű kép: {e}
+@msg	an image could not be written: {e}	egy képet nem sikerült kiírni: {e}
+@msg	an image that couldn't be read was left out	kimaradt egy kép, amely nem volt beolvasható
+@msg	can't open “{name}”: {e}	nem nyitható meg: „{name}”: {e}
+@msg	cannot align zip entries to {align} bytes	a zip-bejegyzések nem igazíthatók {align} bájtos határra
+@msg	cannot open the automation {kind} root `{_1}`: {e}	az automatizálás gyökérmappája nem nyitható meg ({kind}): `{_1}`: {e}
+@msg	cannot read profile: {0}	a profil nem olvasható: {0}
+@msg	color book version {version} isn't supported (only 1)	a színkönyv verziója nem támogatott: {version} (csak 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	a színkönyvek nem támogatottak ebben a színtérben: {other} (csak RGB, CMYK és Lab)
+@msg	file name too long to zip: {_1}	a fájlnév túl hosszú a zip-tömörítéshez: {_1}
+@msg	file name too long to zip: {name}	a fájlnév túl hosszú a zip-tömörítéshez: {name}
+@msg	freeform line {i}: {e}	szabad formájú vonal {i}: {e}
+@msg	freeform point {i}: {e}	szabad formájú pont {i}: {e}
+@msg	give `{key}` or `{other}`, not both	`{key}` vagy `{other}`: csak az egyiket add meg, ne mindkettőt
+@msg	grayscale profiles can't be working spaces yet	a szürkeárnyalatos profilok egyelőre nem lehetnek munkaszínterek
+@msg	input contains NaN or infinite coordinates	a bemenet NaN vagy végtelen koordinátákat tartalmaz
+@msg	input path could not be closed	a bemeneti útvonalat nem sikerült lezárni
+@msg	invalid ICC profile: {0}	érvénytelen ICC-profil: {0}
+@msg	invalid scale {scale}	érvénytelen méretarány: {scale}
+@msg	its localized names take more than {_1} KB	a honosított nevei több mint {_1} KB helyet foglalnak
+@msg	its objects are nested too deep ({e})	az objektumai túl mélyen egymásba ágyazottak ({e})
+@msg	its tag table lists the `{_1}` tag more than once	a címketáblája többször is felsorolja ezt a címkét: `{_1}`
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	a túl sok egymást átfedő áttetsző elemet tartalmazó kiütő csoportok PDF-kiütőcsoportként íródnak: az áttetsző elemeik teljesen kiütik azt, amit takarnak
+@msg	not a graphic style library: {e}	nem grafikaistílus-könyvtár: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	nem színminta-könyvtár (.vcswatches vagy .gpl)
+@msg	not a swatch library (format `{_1}`)	nem színminta-könyvtár (formátum: `{_1}`)
+@msg	not a swatch library: {e}	nem színminta-könyvtár: {e}
+@msg	not an action set file ({e})	nem műveletkészlet-fájl ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	a profil színtere nem RGB, CMYK vagy szürkeárnyalatos: {other}
+@msg	regular expression too large	a reguláris kifejezés túl nagy
+@msg	script file is not UTF-8 text: {value}	a parancsfájl nem UTF-8 szöveg: {value}
+@msg	stop {i}: {e}	színátmenet-pont {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	a színmintacsere-fájl verziója nem támogatott: {major}.{minor} (csak 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	a színkönyv több mint {ASE_MAX_ENTRIES} színt tartalmaz
+@msg	the color book is cut short	a színkönyv csonka
+@msg	the color book's names take more than {_1} MB	a színkönyv nevei több mint {_1} MB helyet foglalnak
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	a kép mérete {w} × {h} pixel lenne; a raszteres exportálás oldalanként legfeljebb {MAX_RASTER_SIDE} pixelt és összesen legfeljebb {_1} megapixelt enged: csökkentsd a méretarányt vagy a felbontást
+@msg	the optimised image can't be read back: {e}	az optimalizált kép nem olvasható vissza: {e}
+@msg	the pixel buffer doesn't match the image size	a pixelpuffer nem egyezik a kép méretével
+@msg	the preview: {e}	az előnézeti kép: {e}
+@msg	the request may not read the New Document profiles folder	a kérés nem olvashatja az Új dokumentum profiljainak mappáját
+@msg	the shapes are too degenerate to combine	az alakzatok túlságosan elfajultak az egyesítéshez
+@msg	the shapes cross themselves and each other too often to combine	az alakzatok túl sokszor keresztezik önmagukat és egymást az egyesítéshez
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	a színmintacsere-fájl több mint {ASE_MAX_ENTRIES} színt és csoportot tartalmaz
+@msg	the swatch exchange file is cut short	a színmintacsere-fájl csonka
+@msg	the {_1} plate can't be read: {e}	a nyomólemez nem olvasható be ({_1}): {e}
+@msg	this binary DXF file is damaged or cut short	ez a bináris DXF-fájl sérült vagy csonka
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	ez DWG-rajz, amely nem olvasható: mentsd DXF-ként a CAD-alkalmazásból, és azt nyisd meg
+@msg	too many classes	túl sok karakterosztály
+@msg	too many groups	túl sok csoport
+@msg	too many layers for PSD (at most 32767)	túl sok réteg a PSD formátumhoz (legfeljebb 32767)
+@msg	too many swatch exchange blocks	túl sok színmintacsere-blokk
+@msg	unknown colour profile: {0}	ismeretlen színprofil: {0}
+@msg	{_1} clashes with a built-in profile name	{_1}: ütközik egy beépített profil nevével
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixel túl nagy a GIF formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
+@msg	{_1}: no usable transform to/from sRGB	{_1}: nincs használható átalakítás az sRGB színtérbe vagy onnan
+@msg	{name} is not a CMYK profile	{name}: nem CMYK-profil
+@msg	{name} is not an RGB profile	{name}: nem RGB-profil
+@msg	{path}: could not be read	{path}: nem sikerült beolvasni
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixel túl nagy a JPEG formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixel túl nagy a Targa formátumhoz (oldalanként legfeljebb 65535 pixel): csökkentsd a felbontást
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixel túl nagy a PSD formátumhoz (oldalanként legfeljebb {MAX_SIDE} pixel): csökkentsd a felbontást

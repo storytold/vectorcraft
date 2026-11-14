@@ -1,5 +1,6 @@
-//! Export As → Text: the Text Export Options (encoding, line endings, selection only) for a
-//! picked `.txt` path. Fields are `document.export` params (`format`, `path`…).
+//! Export As → Text and Export Selection to `.txt`: the Text Export Options (encoding, line
+//! endings, selection only) for a picked `.txt` path. Fields are `document.export` params
+//! (`format`, `path`…).
 
 use serde_json::{Value, json};
 
@@ -39,14 +40,25 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.end_row();
     });
     ui.add_space(8.0);
-    let selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
+    // Export Selection keeps Selection Only on.
+    let selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty()) && !d.bool(super::export_as::SELECTION_FIELD);
     ui.add_enabled_ui(selected, |ui| form::check(ui, d, "selectionOnly", tl!("Selection Only")));
     false
 }
 
-/// Write the text file (the command runs first, so a bad option keeps the dialog open).
+/// Write the text file (the command runs first, so a bad option keeps the dialog open). Opened by
+/// Export Selection, it writes `document.exportSelection`'s text.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let path = io::save_command_output(app, "document.export", "txt", form::params(d))?;
+    let mut params = form::params(d);
+    let id = if d.bool(super::export_as::SELECTION_FIELD) {
+        if let Some(o) = params.as_object_mut() {
+            o.remove("selectionOnly");
+        }
+        "document.exportSelection"
+    } else {
+        "document.export"
+    };
+    let path = io::save_command_output(app, id, "txt", params)?;
     app.ui.dialog = None;
     Ok(json!({ "path": path }))
 }
