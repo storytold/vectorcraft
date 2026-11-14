@@ -8815,8 +8815,9 @@ justification keeps that width. Live SVG text places each character the space mo
 Insert Aki is written as outlines. An SVG saved without Preserve Editing (`preserveEditing`) reopens without the
 Insert Aki values; save it with Preserve Editing to keep them editable. An `.ai` file's text document keeps both
 values, and opening the file reads them back. The stored values are read in thousandths of an em and a negative
-value opens as 0; these are VectorCraft's own rules. A legacy `.ai` save writes type with Insert Aki as text without the values and warns that they are left
-out.
+value opens as 0; these are VectorCraft's own rules. When a legacy `.ai` save writes type as text, it writes type with
+Insert Aki without the values and warns that they are left out. With `outlineText: true` it writes the type as outlines,
+which keep the space Insert Aki adds, and does not warn that the values are left out.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"akiRight":500}}}
