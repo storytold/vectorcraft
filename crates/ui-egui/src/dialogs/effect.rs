@@ -41,7 +41,7 @@ fn three_d_refusal(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, 
     } else if !app.session.in_interaction() && d.fields.get(TRIED) != Some(&params) {
         // Waits for another interaction to end: trying inside it would replace its preview and
         // cancel it. A failure to begin leaves no interaction: the preview below then reports it.
-        let _ = app.session.begin_interaction(&d.str("__label"));
+        let _ = app.begin_interaction(&d.str("__label"));
         match app.session.preview(cmd, &params) {
             Ok(_) => {
                 d.fields.remove(form::REFUSED);
@@ -253,9 +253,14 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     d.fields.insert("preview".into(), json!(pv));
     if pv && (changed || pv_changed || !app.session.in_interaction()) {
         let label = d.str("__label");
-        let _ = app.session.begin_interaction(&label);
-        let (cmd, p) = command(d);
-        let _ = app.session.preview(cmd, &p);
+        // A failure to begin (typing that can't be kept) shows, and nothing previews.
+        match app.begin_interaction(&label) {
+            Ok(()) => {
+                let (cmd, p) = command(d);
+                let _ = app.session.preview(cmd, &p);
+            }
+            Err(e) => app.status(e),
+        }
     } else if !pv && pv_changed {
         let _ = app.session.cancel_interaction();
     }

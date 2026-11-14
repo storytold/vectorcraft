@@ -142,6 +142,31 @@ fn type_tool_inserts_at_its_caret_and_deletes_the_graphic_whole() {
     assert_eq!(inline_count(&obj(&s, id)), 1);
 }
 
+/// With Performance › Real-time Drawing and Editing off, the typing waits for its session to end:
+/// a graphic inserted while typing applies it first, as a step of its own, and goes in at the
+/// caret after it.
+#[test]
+fn inserting_while_deferred_typing_keeps_the_typing() {
+    let mut s = session();
+    s.prefs.real_time_drawing = false;
+    // The new type starts empty: the caret after "Pay " is past the end of the text until the
+    // typing is applied.
+    s.prefs.placeholder_text = false;
+    circle_symbol(&mut s, "Mana", 10.0);
+    s.execute("symbol.setCurrent", &json!({"name": "Mana"})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for k in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(k, 50.0, 300.0), v).unwrap();
+    }
+    let id = s.doc().unwrap().selection.objects[0];
+    s.tool_text("Pay ", v).unwrap();
+    s.execute("text.insertInline", &json!({})).unwrap();
+    assert_eq!(obj(&s, id).plain_text(), format!("Pay {INLINE_CHAR}"));
+    let labels: Vec<String> = s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect();
+    assert_eq!(labels[labels.len() - 2..], ["Typing", "Insert Inline Symbol"], "{labels:?}");
+}
+
 #[test]
 fn inline_graphics_follow_their_symbol() {
     let mut s = session();

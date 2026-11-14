@@ -85,8 +85,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
     // While typing, the dialog acts on the paragraphs of the text being edited.
     let mut targets = json!({});
-    if let Some((id, a, b)) = crate::panels::character::text_editing(app) {
-        crate::panels::character::end_typing(app);
+    if let Some((id, a, b)) = crate::panels::character::text_editing_kept(app) {
         targets = json!({"ids": [id.0], "start": a, "end": b});
     }
     let mut values = Map::new();

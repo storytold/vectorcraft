@@ -123,8 +123,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         d.fields.insert("preview".into(), json!(pv));
     }
     if pv && (changed || pv_changed || !app.session.in_interaction()) {
-        let _ = app.session.begin_interaction("Swatch Options");
-        if let Err(e) = app.session.preview("swatch.edit", &edit_params(d)) {
+        // A failure to begin (typing that can't be kept) shows, and nothing previews.
+        if let Err(e) = app.begin_interaction("Swatch Options") {
+            app.status(e);
+        } else if let Err(e) = app.session.preview("swatch.edit", &edit_params(d)) {
             app.status(e.to_string());
         }
     } else if !pv && pv_changed {

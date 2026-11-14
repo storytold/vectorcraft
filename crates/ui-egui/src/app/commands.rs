@@ -458,4 +458,30 @@ impl VectorcraftApp {
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
     }
+
+    /// Begin the interaction a dialog or a panel previews on. Typing in progress is kept as its own
+    /// undo step first, and the warning of the preview that keeping it applied shows in the status
+    /// bar, as it does when a tool's drag begins. On an error no interaction begins, so the caller
+    /// runs no preview.
+    pub(crate) fn begin_interaction(&mut self, label: &str) -> Result<(), String> {
+        let warnings = self.session.begin_interaction_warned(label).map_err(|e| e.to_string())?;
+        self.show_warnings(warnings);
+        Ok(())
+    }
+
+    /// Keep typing in progress as one undo step and end the Type tool's typing session, with the
+    /// typing that Real-time Drawing off left unapplied applied first; its warning shows in the
+    /// status bar.
+    pub(crate) fn keep_typing(&mut self) -> Result<(), String> {
+        let warnings = self.session.keep_typing().map_err(|e| e.to_string())?;
+        self.show_warnings(warnings);
+        Ok(())
+    }
+
+    /// Each warning in the status bar in turn, as the tool's status requests show; the last stays.
+    fn show_warnings(&mut self, warnings: Vec<String>) {
+        for w in warnings {
+            self.status(w);
+        }
+    }
 }

@@ -1698,7 +1698,8 @@ pub(crate) fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, pick: FontPic
         FontPick::Preview(f, style) => {
             if !previewing {
                 crate::panels::character::end_typing(app);
-                if app.session.begin_interaction("Font").is_err() {
+                if let Err(e) = app.begin_interaction("Font") {
+                    app.status(e);
                     return;
                 }
                 crate::panels::set_pstate(ctx, PREVIEWING, true);

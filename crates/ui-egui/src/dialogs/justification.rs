@@ -90,8 +90,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     // While typing, the dialog acts on the paragraphs of the text being edited.
     let mut targets = json!({});
     let mut story = None;
-    if let Some((id, a, b)) = crate::panels::character::text_editing(app) {
-        crate::panels::character::end_typing(app);
+    if let Some((id, a, b)) = crate::panels::character::text_editing_kept(app) {
         targets = json!({"ids": [id.0], "start": a, "end": b});
         // After Select All in threaded text: every paragraph of every frame ([`params`]).
         story = crate::panels::character::text_story(app).map(|_| id.0);
