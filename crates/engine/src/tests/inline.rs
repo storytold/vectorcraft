@@ -1,8 +1,12 @@
 //! Inline graphics in text: `text.insertInline`, editing over them, undo, following their symbol.
 
+use std::sync::Arc;
+
 use serde_json::json;
+use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::text::INLINE_CHAR;
 use vectorcraft_doc::{Node, NodeId, NodeKind, TextObject};
+use vectorcraft_geom::{Affine, Rect};
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
 
 use crate::*;
@@ -323,6 +327,143 @@ fn a_symbol_that_shows_itself_inline_is_an_empty_slot() {
     assert_eq!(inline_bounds(&obj(&s, line)), d.symbol_art_bounds("P"));
     assert_eq!(inline_bounds(&art_text(&s, "P")), d.symbol_art_bounds("Q"));
     assert_eq!(d.inline_art_bounds("Loop"), None);
+}
+
+/// A rectangle `r` filled black, without a stroke.
+fn filled_rect(d: &mut vectorcraft_doc::Document, r: Rect) -> Arc<Node> {
+    let look = vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0);
+    Arc::new(Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(r), look))
+}
+
+/// An instance of symbol `name` placed by `xf`.
+fn symbol_instance(d: &mut vectorcraft_doc::Document, name: &str, xf: Affine) -> Arc<Node> {
+    Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: name.into(), xf }))
+}
+
+/// Gives symbol `name` the art `art` in a group, adding the symbol when there is none of that name.
+fn set_symbol_art(d: &mut vectorcraft_doc::Document, name: &str, art: Vec<Arc<Node>>) {
+    let art = Arc::new(Node::group(d.alloc_id(), art));
+    match d.symbols.iter_mut().find(|x| x.name == name) {
+        Some(x) => x.art = art,
+        None => d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art }),
+    }
+}
+
+/// An inline graphic of a symbol whose art holds an instance of another symbol is sized by that
+/// symbol's art, and follows it when it changes, through undo, redo and a saved copy.
+#[test]
+fn an_inline_graphic_follows_the_art_of_a_symbol_nested_in_its_symbol() {
+    let mut s = session();
+    s.edit("Symbols", |d, _| {
+        let far = filled_rect(d, Rect::new(100.0, 0.0, 160.0, 20.0));
+        set_symbol_art(d, "Far", vec![far]);
+        let inner = symbol_instance(d, "Far", Affine::IDENTITY);
+        set_symbol_art(d, "Holder", vec![inner]);
+        Ok(())
+    })
+    .unwrap();
+    let id = text(&mut s, "ab");
+    let w0 = obj(&s, id).bounds().unwrap().width();
+    s.execute("text.insertInline", &json!({"id": id.0, "at": 1, "symbol": "Holder", "scale": 1})).unwrap();
+    let wide = Some(Rect::new(100.0, 0.0, 160.0, 20.0));
+    let t = obj(&s, id);
+    assert_eq!(inline_bounds(&t), wide);
+    // 20 pt tall at 20 pt type and 3 times as wide: the text grows by 60 pt.
+    let w1 = t.bounds().unwrap().width();
+    assert!((w1 - w0 - 60.0).abs() < 1.5, "{w0} → {w1}");
+    // Far redefined as a 10 × 40 rectangle: the graphic is 20 pt tall and 5 pt wide.
+    s.edit("Redefine Far", |d, _| {
+        let tall = filled_rect(d, Rect::new(0.0, 0.0, 10.0, 40.0));
+        set_symbol_art(d, "Far", vec![tall]);
+        Ok(())
+    })
+    .unwrap();
+    let tall = Some(Rect::new(0.0, 0.0, 10.0, 40.0));
+    let t = obj(&s, id);
+    assert_eq!(inline_bounds(&t), tall);
+    assert_eq!(s.doc().unwrap().doc.symbol_art_bounds("Holder"), tall);
+    let w2 = t.bounds().unwrap().width();
+    assert!((w2 - w0 - 5.0).abs() < 1.5, "{w0} → {w2}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(inline_bounds(&obj(&s, id)), wide);
+    assert!((obj(&s, id).bounds().unwrap().width() - w1).abs() < 1e-6);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(inline_bounds(&obj(&s, id)), tall);
+    // Opening a saved copy measures it the same way.
+    let doc = (*s.doc().unwrap().doc).clone();
+    let mut back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    back.title = "copy".into();
+    let mut s2 = Session::new();
+    s2.add_document(back, None);
+    assert_eq!(inline_bounds(&obj(&s2, id)), tall);
+    assert!((obj(&s2, id).bounds().unwrap().width() - w2).abs() < 1e-6);
+}
+
+/// Symbol C shows Holder inline, Holder holds an instance of B, and B shows A inline: with the
+/// symbols listed C, Holder, B, A, a change to A reaches C through B's and Holder's new sizes.
+#[test]
+fn symbols_are_resolved_after_the_symbols_their_instances_show() {
+    let mut s = session();
+    circle_symbol(&mut s, "A", 10.0);
+    let t = text(&mut s, "z");
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 0, "symbol": "A"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "B", "ids": [t.0]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.edit("Holder", |d, _| {
+        let inner = symbol_instance(d, "B", Affine::IDENTITY);
+        set_symbol_art(d, "Holder", vec![inner]);
+        Ok(())
+    })
+    .unwrap();
+    let t = text(&mut s, "z");
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 0, "symbol": "Holder"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "C", "ids": [t.0]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.edit("Reverse the symbols", |d, _| {
+        d.symbols.reverse();
+        Ok(())
+    })
+    .unwrap();
+    let h0 = s.doc().unwrap().doc.symbol_art_bounds("Holder");
+    redefine_as_wide_ellipse(&mut s, "A");
+    let d = &s.doc().unwrap().doc;
+    assert_ne!(d.symbol_art_bounds("Holder"), h0);
+    assert_eq!(inline_bounds(&art_text(&s, "C")), d.symbol_art_bounds("Holder"));
+}
+
+/// Symbol A holds an instance of B, and B's type shows A inline: the size of each would depend on
+/// itself, so both are empty slots, and stay so through later edits.
+#[test]
+fn a_symbol_that_shows_itself_through_an_instance_is_an_empty_slot() {
+    let mut s = session();
+    circle_symbol(&mut s, "A", 10.0);
+    let t = text(&mut s, "ab");
+    s.execute("text.insertInline", &json!({"id": t.0, "at": 1, "symbol": "A"})).unwrap();
+    s.execute("symbol.new", &json!({"name": "B", "ids": [t.0]})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.edit("A holds B", |d, _| {
+        let inner = symbol_instance(d, "B", Affine::IDENTITY);
+        set_symbol_art(d, "A", vec![inner]);
+        Ok(())
+    })
+    .unwrap();
+    let line = text(&mut s, "x");
+    s.execute("text.insertInline", &json!({"id": line.0, "at": 0, "symbol": "A"})).unwrap();
+    for _ in 0..2 {
+        for name in ["A", "B"] {
+            assert_eq!(s.doc().unwrap().doc.inline_art_bounds(name), None, "{name}");
+        }
+        assert_eq!(inline_bounds(&art_text(&s, "B")), None);
+        assert_eq!(inline_bounds(&obj(&s, line)), None);
+        s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    }
+    let _ = s.execute("document.serialize", &json!({"format": "png"})).unwrap();
+    // Redefined without the instance, A is on no cycle.
+    redefine_as_wide_ellipse(&mut s, "A");
+    let d = &s.doc().unwrap().doc;
+    assert!(d.inline_art_bounds("A").is_some());
+    assert_eq!(inline_bounds(&art_text(&s, "B")), d.symbol_art_bounds("A"));
+    assert_eq!(inline_bounds(&obj(&s, line)), d.symbol_art_bounds("A"));
 }
 
 /// A list paragraph that starts with an inline graphic draws its bullet before the graphic, and
