@@ -526,12 +526,15 @@ fn color_groups(cmd: &str, d: &mut Document, items: Vec<Arc<Node>>) -> Result<Ve
         .collect())
 }
 
-/// What a trace depends on: the object traced (an image, or an Image Trace object traced again),
-/// its image, the image's encoded bytes, and the settings it is traced with. The tracer makes the
-/// same paths of the same inputs, so a trace made away from the command ([`TraceRun`]) stands in
-/// for the command's own.
+/// What a trace depends on: the document it is made in, the object traced (an image, or an Image
+/// Trace object traced again), its image, the image's encoded bytes, and the settings it is traced
+/// with. The tracer makes the same paths of the same inputs, so a trace made away from the command
+/// ([`TraceRun`]) stands in for the command's own in the same document.
 #[derive(Clone, Debug, PartialEq)]
 struct TraceInputs {
+    /// The [`DocState::uid`](crate::DocState::uid) of the document traced in. A trace made in one
+    /// document never stands in for one in another, however alike their images and settings.
+    doc: u64,
     target: NodeId,
     image: Box<ImageObject>,
     /// The settings traced with, as JSON.
@@ -600,7 +603,7 @@ fn prepare(s: &Session, c: &str, p: &Value) -> Result<Prepared> {
     let bytes = Arc::clone(&blob.bytes);
     let library = trace_library(c, s, &mut params)?;
     let traced_with = serde_json::to_value(&params).map_err(|e| EngineError::Other(e.to_string()))?;
-    let inputs = TraceInputs { target, image, params: traced_with, swatches: params.swatches.clone(), bytes };
+    let inputs = TraceInputs { doc: s.doc()?.uid, target, image, params: traced_with, swatches: params.swatches.clone(), bytes };
     Ok(Prepared { inputs, trace: params, view, params_json, preset_label, library })
 }
 
@@ -612,8 +615,9 @@ pub struct Traced {
 }
 
 impl Traced {
-    /// Hand it to the next run of its command with the same inputs ([`TraceRun::params`]), which
-    /// applies it as one undo step instead of tracing again. Any other trace drops it.
+    /// Hand it to the next run of its command with the same inputs ([`TraceRun::params`]) in the
+    /// document it was made in, which applies it as one undo step instead of tracing again. Any
+    /// other trace drops it, a trace in another document included.
     pub fn hand_in(self, s: &mut Session) {
         s.trace_hand_off = Some(self);
     }
@@ -686,7 +690,7 @@ impl TraceRun {
     }
 
     /// Does it still apply: would the command trace the same object, image, pixels and settings
-    /// now?
+    /// now, in the document it was prepared in?
     pub fn current(&self, s: &Session) -> bool {
         prepare(s, self.command, &self.params).is_ok_and(|now| now.inputs == self.prepared.inputs)
     }

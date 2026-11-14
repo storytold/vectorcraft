@@ -544,6 +544,9 @@ struct LineJustification {
     fit: LineFit,
     start_x: f64,
     after: Vec<Option<usize>>,
+    /// The warichu glyphs drawn inside a block already started, by offset from the line's first
+    /// glyph ([`blocks_begun`]).
+    begun: Vec<bool>,
     kashidas: Vec<(usize, f64)>,
     /// Right-aligned area type: the line's last tab, which takes the text after it to the right
     /// edge (the text before it sits at its stops, from the left edge).
@@ -805,14 +808,14 @@ fn visible_after(index: usize, glyph: usize, after: &[Option<usize>], sg: &[SGly
     next
 }
 
-// The glyph after which a gap between drawn glyphs opens, and the visible glyph that follows it:
-// not a held glyph, and never a zero-width format control on either side.
-fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &'a [SGlyph]) -> Option<(&'a SGlyph, &'a SGlyph)> {
+// The glyph after which a gap between drawn glyphs opens, and the visible glyph that follows it
+// with its index: not a held glyph, and never a zero-width format control on either side.
+fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &'a [SGlyph]) -> Option<(&'a SGlyph, &'a SGlyph, usize)> {
     if held.contains(&glyph) {
         return None;
     }
     let a = sg.get(glyph).filter(|a| !is_format_control(a.ch))?;
-    visible_after(index, glyph, after, sg).and_then(|next| sg.get(next)).map(|b| (a, b))
+    visible_after(index, glyph, after, sg).and_then(|next| sg.get(next).map(|b| (a, b, next)))
 }
 
 // Are `a` and `b` glyphs of the same warichu block? Right to left, the bidi order can draw a
@@ -821,18 +824,61 @@ fn same_warichu_block(a: &SGlyph, b: &SGlyph) -> bool {
     a.wari.zip(b.wari).is_some_and(|(first, second)| first.start == second.start)
 }
 
+// Is glyph `next` drawn inside a block the line has already started: a tate-chu-yoko glyph after
+// its block's first, or a warichu glyph drawn after another glyph of its block (`begun`, by offset
+// from the line's first glyph, from [`blocks_begun`])? A warichu block starts at the first of its
+// glyphs drawn on the line, which right to left is not the block's first glyph.
+fn continues_drawn_block(next: usize, index: usize, begun: &[bool], sg: &[SGlyph]) -> bool {
+    let Some(b) = sg.get(next) else { return false };
+    match (b.wari, next.checked_sub(index).and_then(|k| begun.get(k))) {
+        (Some(_), Some(&begun)) => begun,
+        _ => b.continues_block(),
+    }
+}
+
+// The warichu glyphs of `line` drawn after another glyph of their block, by offset from the line's
+// first glyph. A block the bidi order interleaves with another keeps its start.
+fn blocks_begun(line: &LineGeometry, sg: &[SGlyph]) -> Vec<bool> {
+    let len = line.body.saturating_sub(line.index);
+    // Each glyph's block, as the offset of the block's first glyph: a block's glyphs are neighbors
+    // in `sg`, and a block stays on one line.
+    let mut first: Vec<usize> = Vec::with_capacity(len);
+    for k in 0..len {
+        let pair = k.checked_sub(1).and_then(|p| sg.get(line.index + p)).zip(sg.get(line.index + k));
+        let block = match first.last() {
+            Some(&f) if pair.is_some_and(|(a, b)| same_warichu_block(a, b)) => f,
+            _ => k,
+        };
+        first.push(block);
+    }
+    let mut started = vec![false; len];
+    let mut begun = vec![false; len];
+    for &j in &line.drawn {
+        let Some(k) = j.checked_sub(line.index).filter(|_| sg.get(j).is_some_and(|g| g.wari.is_some())) else { continue };
+        let Some(&f) = first.get(k) else { continue };
+        if let (Some(seen), Some(slot)) = (started.get(f).copied(), begun.get_mut(k)) {
+            *slot = seen;
+        }
+        if let Some(seen) = started.get_mut(f) {
+            *seen = true;
+        }
+    }
+    begun
+}
+
 // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
 // gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko or warichu block or a
-// shaped cluster.
-pub(super) fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
-    gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b)| {
+// shaped cluster. `begun` holds the warichu glyphs drawn inside a block already started
+// ([`blocks_begun`]).
+pub(super) fn is_cjk_gap(glyph: usize, held: &[usize], (after, begun): (&[Option<usize>], &[bool]), index: usize, sg: &[SGlyph]) -> bool {
+    gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b, next)| {
         a.byte != b.byte
             && !a.is_space()
             && !b.is_space()
-            && !b.continues_block()
             && !same_warichu_block(a, b)
             && a.ch != '\t'
             && (is_cjk(a.ch) || is_cjk(b.ch))
+            && !continues_drawn_block(next, index, begun, sg)
     }) && !in_pair(glyph, index, after, sg)
 }
 
@@ -861,13 +907,20 @@ fn in_pair(glyph: usize, index: usize, after: &[Option<usize>], sg: &[SGlyph]) -
 // its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell) or a
 // warichu block (set as one piece), a shaped cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
 // together, or an inseparable pair. On a line that ends in a drawn hyphen, the gap before the
-// hyphen counts too: it follows the line's last visible glyph.
-pub(super) fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
+// hyphen counts too: it follows the line's last visible glyph. `begun` is as for [`is_cjk_gap`].
+pub(super) fn is_letter_gap(
+    glyph: usize,
+    held: &[usize],
+    (after, begun): (&[Option<usize>], &[bool]),
+    index: usize,
+    sg: &[SGlyph],
+    hyphen: bool,
+) -> bool {
     if held.contains(&glyph) || sg.get(glyph).is_none_or(|a| is_format_control(a.ch)) || in_pair(glyph, index, after, sg) {
         return false;
     }
     match gap_pair(glyph, held, after, index, sg) {
-        Some((a, b)) => a.byte != b.byte && !b.continues_block() && !same_warichu_block(a, b),
+        Some((a, b, next)) => a.byte != b.byte && !same_warichu_block(a, b) && !continues_drawn_block(next, index, begun, sg),
         None => hyphen,
     }
 }
@@ -974,7 +1027,8 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             *slot = Some(b);
         }
     }
-    let cjk_gaps = (line.index..line.body).filter(|&j| free(j) && is_cjk_gap(j, held, &after, line.index, sg)).count();
+    let begun = blocks_begun(line, sg);
+    let cjk_gaps = (line.index..line.body).filter(|&j| free(j) && is_cjk_gap(j, held, (&after, &begun), line.index, sg)).count();
     // Single Word Justification: a justified line holding one word (no word space) is
     // spread between its letters (Full Justify) or aligned. A tab separates two words.
     let single_word = justify && fixed.is_empty() && spaces == 0 && cjk_gaps == 0;
@@ -1013,7 +1067,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
     let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
     if pushed_in {
         let ems: f64 = (line.index..line.body)
-            .filter(|&j| free(j) && is_cjk_gap(j, held, &after, line.index, sg) && may_squeeze(&sg[j]))
+            .filter(|&j| free(j) && is_cjk_gap(j, held, (&after, &begun), line.index, sg) && may_squeeze(&sg[j]))
             .map(|j| squeeze_em(&sg[j], cx.vertical))
             .sum();
         if ems > EPS {
@@ -1044,7 +1098,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             let used: f64 = flex.iter().map(|f| fit.letter(f) + fit.glyph(f)).sum();
             let rest = room - width - used;
             let hyphen = line.hyphen.is_some();
-            let gaps = (line.index..line.body).filter(|&j| free(j) && is_letter_gap(j, held, &after, line.index, sg, hyphen)).count();
+            let gaps = (line.index..line.body).filter(|&j| free(j) && is_letter_gap(j, held, (&after, &begun), line.index, sg, hyphen)).count();
             if gaps > 0 && rest > EPS {
                 per_gap = rest / gaps as f64;
             }
@@ -1076,7 +1130,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             _ => line.ax1 + line.opt_r - width,
         }
     };
-    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab, trailing, fixed }
+    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, begun, kashidas, last_tab, trailing, fixed }
 }
 
 /// The advance and leader of tab `glyph_index` of `line`, drawn at `order_index` of
@@ -1203,10 +1257,10 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 advance += justification.fit.letter(&flex) + justification.fit.glyph(&flex);
                 scale = justification.fit.glyph_scale(&flex);
                 if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
-                    if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
+                    if is_cjk_gap(glyph_index, &line.held, (&justification.after, &justification.begun), index, sg) {
                         advance += justification.per_cjk + squeeze_after(glyph, justification.squeeze, cx.vertical);
                     }
-                } else if is_letter_gap(glyph_index, &line.held, &justification.after, index, sg, line.hyphen.is_some()) {
+                } else if is_letter_gap(glyph_index, &line.held, (&justification.after, &justification.begun), index, sg, line.hyphen.is_some()) {
                     advance += justification.per_gap;
                 }
             }
