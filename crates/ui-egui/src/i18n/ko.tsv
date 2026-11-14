@@ -4398,6 +4398,7 @@ theme	Appearance	외관
 @msg	Expand: no gradient fills	확장: 그레이디언트 칠이 없습니다
 @msg	Expand: nothing to expand	확장: 확장할 항목이 없습니다
 @msg	batch step {_1} (`{id}`) failed: {e}	일괄 처리 단계 {_1}(`{id}`) 실패: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	액션 단계 {_1}(`{id}`) 실패: {reason}
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP 파일은 RGB 또는 그레이스케일입니다: colorModel rgb 또는 gray
 @msg	Targa files are RGB: colorModel rgb	Targa 파일은 RGB입니다: colorModel rgb
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`: none, art 또는 type이어야 합니다

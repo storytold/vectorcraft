@@ -4316,6 +4316,7 @@ axis	Both	Her İkisi
 @msg	bad trailer	kötü römork
 @msg	balance must be between 0 and 100	balance 0 ile 100 arasında olmalıdır
 @msg	batch step {_1} (`{id}`) failed: {e}	toplu adım {_1} (`{id}`) başarısız oldu: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	eylem adımı {_1} (`{id}`) başarısız oldu: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness dark|mediumDark|mediumLight|light olmalıdır
 @msg	can't encode the document: {0}	belge kodlanamıyor: {0}
 @msg	can't parse shortcut `{c}`	`{c}` kısayolu ayrıştırılamıyor

@@ -4174,6 +4174,7 @@ imageTrace	Outline	轮廓
 @msg	Expand: no gradient fills	扩展：没有渐变填色
 @msg	Expand: nothing to expand	扩展：没有可扩展的内容
 @msg	batch step {_1} (`{id}`) failed: {e}	批处理步骤 {_1} (`{id}`) 失败：{e}
+@msg	action step {_1} (`{id}`) failed: {reason}	动作步骤 {_1} (`{id}`) 失败：{reason}
 @msg	BMP files are RGB or grayscale: colorModel rgb or gray	BMP 文件为 RGB 或灰度：colorModel rgb 或 gray
 @msg	Targa files are RGB: colorModel rgb	Targa 文件为 RGB：colorModel rgb
 @msg	antiAlias `{id}`: none, art or type	antiAlias `{id}`：none、art 或 type

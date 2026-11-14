@@ -4633,6 +4633,7 @@ axis	Both	Entrambi
 @msg	bad trailer	trailer non valido
 @msg	balance must be between 0 and 100	balance deve essere compreso tra 0 e 100
 @msg	batch step {_1} (`{id}`) failed: {e}	il passaggio {_1} del batch (`{id}`) non è riuscito: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	il passaggio {_1} dell’azione (`{id}`) non è riuscito: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness deve essere dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	impossibile codificare il documento: {0}
 @msg	can't parse shortcut `{c}`	impossibile interpretare la scelta rapida `{c}`

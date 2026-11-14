@@ -5041,6 +5041,7 @@ imageTrace	Outline	Körvonal
 @msg	bad trailer	hibás záró rész (trailer)
 @msg	balance must be between 0 and 100	a balance értéke 0 és 100 között lehet
 @msg	batch step {_1} (`{id}`) failed: {e}	a kötegelt lépés sikertelen: {_1} (`{id}`): {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	a művelet lépése sikertelen: {_1} (`{id}`): {reason}
 @msg	before must name a panel	a before egy panelt kell megnevezzen
 @msg	below and above must name a panel floating in another group	a below és az above egy másik csoportban lebegő panelt kell megnevezzen
 @msg	Blend colors: select at least three objects with filled colours	Színek összemosása: jelölj ki legalább három kitöltött objektumot

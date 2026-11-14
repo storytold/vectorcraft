@@ -4967,6 +4967,7 @@ imageTrace	Outline	Contour
 @msg	bad trailer	onjuiste trailer
 @msg	balance must be between 0 and 100	balance moet tussen 0 en 100 liggen
 @msg	batch step {_1} (`{id}`) failed: {e}	batchstap {_1} (`{id}`) is mislukt: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	actiestap {_1} (`{id}`) is mislukt: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness moet dark|mediumDark|mediumLight|light zijn
 @msg	can't encode the document: {0}	kan het document niet coderen: {0}
 @msg	can't parse shortcut `{c}`	kan sneltoets `{c}` niet parseren

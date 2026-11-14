@@ -4796,6 +4796,7 @@ imageTrace	Outline	Ääriviiva
 @msg	bad trailer	virheellinen trailer
 @msg	balance must be between 0 and 100	balance-arvon on oltava väliltä 0–100
 @msg	batch step {_1} (`{id}`) failed: {e}	erävaihe {_1} (`{id}`) epäonnistui: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	toiminnon vaihe {_1} (`{id}`) epäonnistui: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness-arvon on oltava dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	asiakirjaa ei voi koodata: {0}
 @msg	can't parse shortcut `{c}`	pikanäppäintä `{c}` ei voi jäsentää

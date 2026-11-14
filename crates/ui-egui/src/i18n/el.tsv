@@ -4537,6 +4537,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	bad trailer	μη έγκυρο τελικό τμήμα
 @msg	balance must be between 0 and 100	το balance πρέπει να είναι μεταξύ 0 και 100
 @msg	batch step {_1} (`{id}`) failed: {e}	απέτυχε το βήμα {_1} της μαζικής επεξεργασίας (`{id}`): {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	απέτυχε το βήμα {_1} της ενέργειας (`{id}`): {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	το brightness πρέπει να είναι dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	δεν είναι δυνατή η κωδικοποίηση εγγράφου: {0}
 @msg	can't parse shortcut `{c}`	δεν είναι δυνατή η ανάλυση της συντόμευσης `{c}`

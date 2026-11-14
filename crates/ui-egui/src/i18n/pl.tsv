@@ -4714,6 +4714,7 @@ imageTrace	Outline	Kontur
 @msg	bad trailer	nieprawidłowa sekcja trailer
 @msg	balance must be between 0 and 100	balance musi mieścić się w zakresie od 0 do 100
 @msg	batch step {_1} (`{id}`) failed: {e}	krok wsadowy {_1} (`{id}`) nie powiódł się: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	krok operacji {_1} (`{id}`) nie powiódł się: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness musi mieć wartość dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	nie można zakodować dokumentu: {0}
 @msg	can't parse shortcut `{c}`	nie można przeanalizować skrótu `{c}`

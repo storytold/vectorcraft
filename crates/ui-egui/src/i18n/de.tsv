@@ -4504,6 +4504,7 @@ theme	Appearance	Erscheinungsbild
 @msg	bad trailer	fehlerhafter Trailer
 @msg	balance must be between 0 and 100	balance muss zwischen 0 und 100 liegen
 @msg	batch step {_1} (`{id}`) failed: {e}	Stapelschritt {_1} (`{id}`) ist fehlgeschlagen: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	Aktionsschritt {_1} (`{id}`) ist fehlgeschlagen: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness muss dark|mediumDark|mediumLight|light sein
 @msg	can't encode the document: {0}	das Dokument kann nicht kodiert werden: {0}
 @msg	can't parse shortcut `{c}`	Tastaturbefehl `{c}` kann nicht ausgewertet werden

@@ -4618,6 +4618,7 @@ axis	Both	Оба
 @msg	bad trailer	недопустимый трейлер
 @msg	balance must be between 0 and 100	balance должен быть от 0 до 100
 @msg	batch step {_1} (`{id}`) failed: {e}	шаг пакета {_1} (`{id}`) не выполнен: {e}
+@msg	action step {_1} (`{id}`) failed: {reason}	шаг действия {_1} (`{id}`) не выполнен: {reason}
 @msg	brightness must be dark|mediumDark|mediumLight|light	brightness должен быть dark|mediumDark|mediumLight|light
 @msg	can't encode the document: {0}	не удалось закодировать документ: {0}
 @msg	can't parse shortcut `{c}`	не удалось разобрать сочетание `{c}`

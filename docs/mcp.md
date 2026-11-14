@@ -3323,8 +3323,11 @@ already walks Image Trace. Short agent entry points:
   menu step (`ui.action.insertMenuItem`) plays at every speed in its place among the steps, as its menu item runs, and
   adds no undo step. At Accelerated the steps before it and the steps after it are one undoable batch each, and the
   result is `{results}` with every step's result in order. A step that fails ends the playback with its error: the
-  batch it is in changes nothing, and the steps before that batch stay done. While another action records, the View
-  menu step is recorded too. Batch… refuses an action with an included View menu step.
+  batch it is in changes nothing, and the steps before that batch stay done. At every speed, and after
+  `ui.action.continue`, the error names the step by its place in the action, 1 for the first step, counting excluded
+  steps and stops (``action step 4 (`object.align`) failed: …``). A failing step of a recorded `command.batch` is
+  named by the batch's place and its own command. An error about the whole batch names no step. While another action
+  records, the View menu step is recorded too. Batch… refuses an action with an included View menu step.
 - Actions: `ui.action.insertStop {set?, action?, step?, message?, allowContinue?}` inserts a stop. With `set` and
   `action`, the stop goes into that action, after step `step`, else after its last step, and the command returns
   `{set, action, step}`. Without them it goes into the recording in progress, after the steps recorded so far, and
