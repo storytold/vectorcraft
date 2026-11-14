@@ -7547,6 +7547,9 @@ shape	Open	Открытый
 	Open Tutorial Sample	Открыть пример урока
 	Finish Tutorial	Завершить урок
 	Next Tutorial	Следующий урок
+	Show Learn Tab	Показать вкладку панели «Обучение»
+	Show Skill	Показать навык
+	Back One Level	На уровень назад
 	Back to Skills	Назад к навыкам
 @msg	tutorial `{id}` has no practice sample	у урока `{id}` нет учебного примера
 @msg	open the practice sample of `{id}` first (see learn.openSample)	сначала откройте учебный пример урока `{id}` (см. learn.openSample)

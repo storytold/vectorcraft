@@ -7154,6 +7154,9 @@ breakText	Glyphs	字形
 	Open Tutorial Sample	チュートリアルのサンプルを開く
 	Finish Tutorial	チュートリアルを完了
 	Next Tutorial	次のチュートリアル
+	Show Learn Tab	学ぶのタブを表示
+	Show Skill	スキルを表示
+	Back One Level	1 つ上の階層に戻る
 	Back to Skills	スキルに戻る
 @msg	tutorial `{id}` has no practice sample	チュートリアル `{id}` には練習用サンプルがありません
 @msg	open the practice sample of `{id}` first (see learn.openSample)	先に `{id}` の練習用サンプルを開いてください (learn.openSample を参照)

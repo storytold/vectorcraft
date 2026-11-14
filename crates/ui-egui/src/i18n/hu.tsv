@@ -7442,6 +7442,9 @@ breakText	Glyphs	Glifák
 	Open Tutorial Sample	Oktatóanyag mintafájljának megnyitása
 	Finish Tutorial	Oktatóanyag befejezése
 	Next Tutorial	Következő oktatóanyag
+	Show Learn Tab	Tanulás lap megjelenítése
+	Show Skill	Készség megjelenítése
+	Back One Level	Egy szinttel vissza
 	Back to Skills	Vissza a készségekhez
 @msg	tutorial `{id}` has no practice sample	nincs gyakorló mintafájl ehhez az oktatóanyaghoz: `{id}`
 @msg	open the practice sample of `{id}` first (see learn.openSample)	előbb nyissa meg a gyakorló mintafájlt ehhez: `{id}` (lásd: learn.openSample)

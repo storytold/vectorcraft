@@ -7054,6 +7054,9 @@ breakText	Glyphs	Glyphen
 	Open Tutorial Sample	Übungsdatei des Lernprogramms öffnen
 	Finish Tutorial	Lernprogramm abschließen
 	Next Tutorial	Nächstes Lernprogramm
+	Show Learn Tab	Registerkarte in Lernen anzeigen
+	Show Skill	Fertigkeit anzeigen
+	Back One Level	Eine Ebene zurück
 	Back to Skills	Zurück zu den Fertigkeiten
 @msg	tutorial `{id}` has no practice sample	das Lernprogramm `{id}` hat keine Übungsdatei
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öffnen Sie zuerst die Übungsdatei von `{id}` (siehe learn.openSample)

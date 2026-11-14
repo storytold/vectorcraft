@@ -7315,6 +7315,9 @@ breakText	Glyphs	Glify
 	Open Tutorial Sample	Otwórz przykład samouczka
 	Finish Tutorial	Zakończ samouczek
 	Next Tutorial	Następny samouczek
+	Show Learn Tab	Pokaż kartę panelu Nauka
+	Show Skill	Pokaż umiejętność
+	Back One Level	Wróć o jeden poziom
 	Back to Skills	Powrót do umiejętności
 @msg	tutorial `{id}` has no practice sample	samouczek `{id}` nie ma przykładu do ćwiczeń
 @msg	open the practice sample of `{id}` first (see learn.openSample)	najpierw otwórz przykład do ćwiczeń samouczka `{id}` (patrz learn.openSample)

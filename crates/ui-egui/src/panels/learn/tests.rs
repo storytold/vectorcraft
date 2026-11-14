@@ -493,6 +493,77 @@ fn learn_show_rejects_a_missing_or_unknown_tutorial() {
     }
 }
 
+/// The tab buttons, a skill's row, a tutorial's row and Back run `learn.tab`, `learn.skill`,
+/// `learn.show` and `learn.back`: each one also shows a panel that was hidden, as the command does.
+#[test]
+fn the_tabs_rows_and_back_run_their_commands() {
+    for cmd in ["learn.tab", "learn.skill", "learn.back"] {
+        assert!(crate::menus::UI_COMMANDS.iter().any(|c| c.0 == cmd), "{cmd} is in the UI command catalog");
+    }
+    let mut app = app();
+    let ctx = context();
+    let (skill, tutorial) = catalog::tutorial("gradient").unwrap();
+    let press = |app: &mut VectorcraftApp, name: &str, view: View| {
+        app.run("window.learn", json!({"show": false})).unwrap();
+        assert!(!shown(app));
+        click(app, &ctx, name, show);
+        assert_eq!(app.ui.learn, view, "{name}");
+        assert!(shown(app), "{name} runs its command: {}", app.ui.status);
+    };
+    press(&mut app, "Skills", View { tab: Tab::Skills, skill: None, tutorial: None });
+    press(&mut app, skill.title, View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None });
+    press(&mut app, tutorial.title, View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) });
+    press(&mut app, "For you", View { tab: Tab::ForYou, skill: Some(skill.id), tutorial: Some(tutorial.id) });
+    press(&mut app, "Skills", View { tab: Tab::Skills, skill: Some(skill.id), tutorial: Some(tutorial.id) });
+    press(&mut app, "Back", View { tab: Tab::Skills, skill: Some(skill.id), tutorial: None });
+    press(&mut app, "Back", View { tab: Tab::Skills, skill: None, tutorial: None });
+}
+
+/// `learn.tab` switches tabs and keeps what the Skills tab had open; `learn.skill` opens a skill's
+/// tutorials and answers the skill as `learn.list` lists it; `learn.back` goes up one level and
+/// keeps the view on the list of skills and on the For you tab.
+#[test]
+fn learn_tab_skill_and_back_move_the_view() {
+    let mut app = app();
+    let list = app.run("learn.list", json!({})).unwrap();
+    assert_eq!(app.run("learn.skill", json!({"skill": "color"})).unwrap(), list["skills"][2]);
+    assert!(shown(&app));
+    assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("color"), tutorial: None });
+    app.run("learn.show", json!({"tutorial": "gradient"})).unwrap();
+    let view = json!({"tab": "forYou", "skill": "color", "tutorial": "gradient"});
+    assert_eq!(app.run("learn.tab", json!({"tab": "forYou"})).unwrap(), view);
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), view, "Back on the For you tab keeps the view");
+    assert_eq!(app.run("learn.tab", json!({"tab": "skills"})).unwrap(), json!({"tab": "skills", "skill": "color", "tutorial": "gradient"}));
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), json!({"tab": "skills", "skill": "color", "tutorial": null}));
+    let skills = json!({"tab": "skills", "skill": null, "tutorial": null});
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), skills);
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), skills, "Back on the list of skills keeps the view");
+    app.run("window.learn", json!({"show": false})).unwrap();
+    assert_eq!(app.run("learn.back", json!({})).unwrap(), skills);
+    assert!(shown(&app), "learn.back shows the panel");
+}
+
+/// `learn.tab` and `learn.skill` reject a missing, mistyped or unknown value and change nothing.
+#[test]
+fn learn_tab_and_learn_skill_reject_a_missing_or_unknown_value() {
+    let mut app = app();
+    let before = app.ui.learn.clone();
+    let skills = catalog::SKILLS.iter().map(|s| s.id).collect::<Vec<_>>().join(", ");
+    for (cmd, params, error) in [
+        ("learn.tab", json!({}), "missing `tab`".to_string()),
+        ("learn.tab", json!({"tab": null}), "missing `tab`".to_string()),
+        ("learn.tab", json!({"tab": 1}), "`tab` must be a string".to_string()),
+        ("learn.tab", json!({"tab": "Skills"}), "`tab` must be one of forYou, skills".to_string()),
+        ("learn.skill", json!({}), "missing `skill`".to_string()),
+        ("learn.skill", json!({"skill": ["draw"]}), "`skill` must be a string".to_string()),
+        ("learn.skill", json!({"skill": "nope"}), format!("`skill` must be one of {skills}")),
+    ] {
+        assert_eq!(app.run(cmd, params.clone()).unwrap_err(), error, "{cmd} {params}");
+        assert_eq!(app.ui.learn, before);
+        assert!(!shown(&app));
+    }
+}
+
 /// The Pen tutorial's steps, as the panel shows them.
 fn pen_paths(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     app.ui.learn = View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("pen-paths") };

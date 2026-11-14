@@ -7297,6 +7297,9 @@ breakText	Glyphs	字形
 	Open Tutorial Sample	打开教程示例
 	Finish Tutorial	完成教程
 	Next Tutorial	下一个教程
+	Show Learn Tab	显示学习选项卡
+	Show Skill	显示技能
+	Back One Level	返回上一级
 	Back to Skills	返回技能
 @msg	tutorial `{id}` has no practice sample	教程 `{id}` 没有练习示例
 @msg	open the practice sample of `{id}` first (see learn.openSample)	请先打开 `{id}` 的练习示例 (请参阅 learn.openSample)

@@ -7068,6 +7068,9 @@ breakText	Glyphs	Гліфи
 	Open Tutorial Sample	Відкрити приклад уроку
 	Finish Tutorial	Завершити урок
 	Next Tutorial	Наступний урок
+	Show Learn Tab	Показати вкладку панелі «Навчання»
+	Show Skill	Показати навичку
+	Back One Level	На рівень назад
 	Back to Skills	Назад до навичок
 @msg	tutorial `{id}` has no practice sample	урок `{id}` не має навчального прикладу
 @msg	open the practice sample of `{id}` first (see learn.openSample)	спочатку відкрийте навчальний приклад уроку `{id}` (див. learn.openSample)

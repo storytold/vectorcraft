@@ -7439,6 +7439,9 @@ breakText	Glyphs	Glifs
 	Open Tutorial Sample	Obre la mostra del tutorial
 	Finish Tutorial	Acaba el tutorial
 	Next Tutorial	Tutorial següent
+	Show Learn Tab	Mostra una pestanya d'Aprèn
+	Show Skill	Mostra l'habilitat
+	Back One Level	Torna un nivell enrere
 	Back to Skills	Torna a les habilitats
 @msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no té cap mostra de pràctica
 @msg	open the practice sample of `{id}` first (see learn.openSample)	obriu primer la mostra de pràctica de `{id}` (vegeu learn.openSample)

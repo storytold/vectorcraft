@@ -7411,6 +7411,9 @@ breakText	Glyphs	Γλύφοι
 	Open Tutorial Sample	Άνοιγμα δείγματος οδηγού εκμάθησης
 	Finish Tutorial	Ολοκλήρωση οδηγού εκμάθησης
 	Next Tutorial	Επόμενος οδηγός εκμάθησης
+	Show Learn Tab	Εμφάνιση καρτέλας της Εκμάθησης
+	Show Skill	Εμφάνιση δεξιότητας
+	Back One Level	Ένα επίπεδο πίσω
 	Back to Skills	Πίσω στις δεξιότητες
 @msg	tutorial `{id}` has no practice sample	ο οδηγός εκμάθησης `{id}` δεν έχει δείγμα εξάσκησης
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ανοίξτε πρώτα το δείγμα εξάσκησης του `{id}` (δείτε learn.openSample)

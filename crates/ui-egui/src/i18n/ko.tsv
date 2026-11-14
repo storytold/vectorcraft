@@ -7049,6 +7049,9 @@ breakText	Glyphs	글리프
 	Open Tutorial Sample	튜토리얼 샘플 열기
 	Finish Tutorial	튜토리얼 완료
 	Next Tutorial	다음 튜토리얼
+	Show Learn Tab	학습 탭 표시
+	Show Skill	기술 표시
+	Back One Level	한 단계 뒤로
 	Back to Skills	기술로 돌아가기
 @msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
 @msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)

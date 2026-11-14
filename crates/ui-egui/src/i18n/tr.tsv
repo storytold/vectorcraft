@@ -7414,6 +7414,9 @@ breakText	Glyphs	Glifler
 	Open Tutorial Sample	Öğretici Örneğini Aç
 	Finish Tutorial	Öğreticiyi Bitir
 	Next Tutorial	Sonraki Öğretici
+	Show Learn Tab	Öğren Sekmesini Göster
+	Show Skill	Beceriyi Göster
+	Back One Level	Bir Düzey Geri
 	Back to Skills	Becerilere Dön
 @msg	tutorial `{id}` has no practice sample	`{id}` öğreticisinin alıştırma örneği yok
 @msg	open the practice sample of `{id}` first (see learn.openSample)	önce `{id}` öğreticisinin alıştırma örneğini açın (bkz. learn.openSample)
