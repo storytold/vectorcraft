@@ -156,8 +156,7 @@ impl ImageBlob {
     /// decoded none (an image past the allowance).
     pub fn checked_with_pixels(mut self, proxy: bool) -> Option<(Self, Option<image::DynamicImage>)> {
         let max = crate::MAX_RASTER_ALLOC;
-        let info = craft_image_codecs::probe(&self.bytes).ok()?;
-        let (w, h) = (info.width, info.height);
+        let (w, h) = craft_image_codecs::probe_size(&self.bytes).ok()?;
         if u64::from(w) * u64::from(h) > max / 4 {
             return Some((self, None));
         }
@@ -214,7 +213,7 @@ pub fn missing_placeholder() -> Option<Vec<u8>> {
 
 fn decode_dynamic(bytes: &[u8], max_alloc: u64) -> Result<image::DynamicImage, bool> {
     use craft_image_codecs::{ChannelLayout, CodecError, DecodeOptions, Limits, SampleType};
-    let opts = DecodeOptions { limits: Limits { max_alloc: Some(max_alloc), ..Limits::default() }, ..DecodeOptions::default() };
+    let opts = DecodeOptions { limits: Limits { max_alloc, ..Limits::default() }, ..DecodeOptions::default() };
     let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| matches!(e, CodecError::LimitExceeded(_)))?;
     let (w, h) = img.dimensions();
     match (img.layout(), img.sample_type()) {
@@ -234,8 +233,7 @@ fn decode_dynamic(bytes: &[u8], max_alloc: u64) -> Result<image::DynamicImage, b
 /// `bytes` decoded and shrunk to fit [`PROXY_SIZE`] as a PNG; `None` when small enough already or
 /// undecodable.
 fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
-    let info = craft_image_codecs::probe(bytes).ok()?;
-    let (w, h) = (info.width, info.height);
+    let (w, h) = craft_image_codecs::probe_size(bytes).ok()?;
     if w.max(h) <= PROXY_SIZE {
         return None;
     }

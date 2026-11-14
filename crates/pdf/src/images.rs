@@ -417,7 +417,7 @@ pub(crate) fn recode_cmyk(
     let jpeg = jpeg_components(&blob.bytes).is_some();
     let icc = icc.filter(|_| convert.is_none());
     if jpeg && convert.is_none() && alpha.is_none() {
-        let dims = craft_image_codecs::probe(&blob.bytes).ok().map(|i| (i.width, i.height));
+        let dims = craft_image_codecs::probe_size(&blob.bytes).ok();
         if let Some((w, h)) = dims.filter(|d| kept(&rule, *d, size, true)) {
             // The JPEG data as it is, tagged with `icc` rather than with its own segments; one
             // larger than [`MAX_EMBED_PIXELS`] is not written.
@@ -511,8 +511,8 @@ pub(crate) fn mask_alpha(blob: &ImageBlob, width: u32, height: u32, clip: bool) 
     }
     // The size from the header first: a mask of another size, or too large to hold as RGBA, is
     // not decoded at all.
-    let info = craft_image_codecs::probe(&blob.bytes).ok()?;
-    if (info.width, info.height) != (width, height) || u64::from(width) * u64::from(height) * 4 > MAX_DECODE {
+    let (w, h) = craft_image_codecs::probe_size(&blob.bytes).ok()?;
+    if (w, h) != (width, height) || u64::from(width) * u64::from(height) * 4 > MAX_DECODE {
         return None;
     }
     let img = decoded(&blob.bytes)?.into_rgba8();

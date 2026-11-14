@@ -318,8 +318,8 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
 pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool) -> Option<Image> {
     // The header's size first: the writer's decoders allocate what it declares, and the encoded
     // bytes of an image that is far larger than any the app reads may be a few kilobytes.
-    let info = craft_image_codecs::probe(&blob.bytes).ok();
-    if info.as_ref().is_some_and(|i| u64::from(i.width) * u64::from(i.height) > crate::images::MAX_EMBED_PIXELS) {
+    let dims = craft_image_codecs::probe_size(&blob.bytes).ok();
+    if dims.is_some_and(|(w, h)| u64::from(w) * u64::from(h) > crate::images::MAX_EMBED_PIXELS) {
         return None;
     }
     let bytes = blob.bytes.as_ref().clone();

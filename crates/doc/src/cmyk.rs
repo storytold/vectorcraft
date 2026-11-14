@@ -276,7 +276,7 @@ enum SampleSlice<'a> {
 fn decode_cmyk_tiff_samples(bytes: &[u8], info: &craft_tiff::image::ImageInfo) -> Option<Samples> {
     let _ = is_cmyk_tiff_info(info)?;
     let _ = pixels(info.width, info.height)?;
-    let opts = craft_image_codecs::DecodeOptions { limits: CodecLimits::unlimited(), keep_orientation: true };
+    let opts = craft_image_codecs::DecodeOptions { limits: CodecLimits::none(), keep_orientation: true };
     let img = craft_image_codecs::decode_as_with(Format::Tiff, bytes, &opts).ok()?;
     if img.layout != ChannelLayout::Cmyk || img.width != info.width || img.height != info.height {
         return None;
@@ -616,7 +616,7 @@ pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3])
     let n = usize::try_from(pixels(w, h)?).ok()?;
     // ExtraSamples 1: associated alpha (premultiplied colour), 2: unassociated alpha, 0: not alpha.
     let extra = ifd.u64s(craft_tiff::tags::EXTRA_SAMPLES).and_then(|v| v.first().copied()).and_then(|v| u16::try_from(v).ok());
-    let opts = craft_image_codecs::DecodeOptions { limits: CodecLimits::unlimited(), keep_orientation: true };
+    let opts = craft_image_codecs::DecodeOptions { limits: CodecLimits::none(), keep_orientation: true };
     let img = craft_image_codecs::decode_as_with(Format::Tiff, bytes, &opts).ok()?;
     let (samples, colour, alpha) = match img.layout {
         ChannelLayout::CmykA if is_cmyka => (5, 4, true),

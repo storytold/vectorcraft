@@ -347,7 +347,7 @@ pub fn full_bytes(p: &PlacedDocument, blob: &ImageBlob) -> Option<Arc<Vec<u8>>> 
 
 /// The size in pixels of image bytes `bytes` (a preview), read from its header.
 pub fn image_size(bytes: &[u8]) -> Option<(u32, u32)> {
-    craft_image_codecs::probe(bytes).ok().map(|i| (i.width, i.height))
+    craft_image_codecs::probe_size(bytes).ok()
 }
 
 // ---------- reading files ----------
