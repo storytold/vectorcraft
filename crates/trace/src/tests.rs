@@ -2033,6 +2033,16 @@ fn a_gray_photo_is_continuous_tone_as_its_color_original_is() {
     }
 }
 
+/// A gray photo with little or no noise (a render, a denoised scan) is continuous tone, as its
+/// color original is. Sixteen colors stay 0.19 as far from its pixels as eight do.
+#[test]
+fn a_clean_gray_photo_is_continuous_tone_as_its_color_original_is() {
+    for noise in [0.0, 1.0, 2.0, 3.0] {
+        assert!(quantize::continuous_tone(&photo_scene(noise, false)), "color, noise {noise}");
+        assert!(quantize::continuous_tone(&photo_scene(noise, true)), "gray, noise {noise}");
+    }
+}
+
 /// Sepia: dark brown to cream.
 const SEPIA: [[f64; 3]; 2] = [[45.0, 28.0, 15.0], [250.0, 235.0, 205.0]];
 /// A single blue hue: navy to pale blue.

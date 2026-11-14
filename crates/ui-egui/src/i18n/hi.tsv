@@ -2367,6 +2367,7 @@ antiAlias	Sharp	शार्प
 	Import Library…	आयात लाइब्रेरी…
 	Import Matches	आयात मैच
 	Import PDF	PDF आयात करें
+	Import PDF pages as links	PDF पृष्ठों को लिंक के रूप में आयात करें
 	Import PDF Presets	PDF प्रीसेट्स इम्पोर्ट करें
 	Import Perspective Grid Presets	आयात पर्सपेक्टिव ग्रिड प्रीसेट
 	Import Preset…	प्रीसेट इम्पोर्ट करें…
@@ -4764,6 +4765,18 @@ antiAlias	Sharp	शार्प
 	Smart Pen Panel	स्मार्ट पेन पैनल
 	Smart Pen Tool	स्मार्ट पेन टूल
 	Smart Punctuation…	स्मार्ट विराम-चिह्न…
+	Smart Punctuation	स्मार्ट विराम-चिह्न
+	ff, fi, ffi Ligatures	ff, fi, ffi लिगेचर
+	ff, fl, ffl Ligatures	ff, fl, ffl लिगेचर
+	Smart Quotes	स्मार्ट उद्धरण-चिह्न
+	Smart Spaces	स्मार्ट स्पेस
+	En, Em Dashes	एन और एम डैश
+	Ellipses	दीर्घविराम
+	Expert Fractions	विशेषज्ञ भिन्न
+	Replace In	इसमें रिप्लेस करें
+	Selected Text Only	केवल सिलेक्ट किया गया टेक्स्ट
+	Entire Document	पूरा डॉक्यूमेंट
+	Report Results	परिणाम रिपोर्ट करें
 	Smooth	स्मूथ
 	Smooth Anchors	चिकना एंकर
 	Smooth Anchors…	चिकना एंकर…
@@ -4803,6 +4816,7 @@ antiAlias	Sharp	शार्प
 	Sort by Luminance	द्वारा क्रमबद्ध Luminance
 	Sort by Name	नाम से क्रमबद्ध करें
 	Sort by Popularity	लोकप्रियता द्वारा क्रमबद्ध
+	Sort by Size	आकार द्वारा क्रमबद्ध
 	Sort by Status	स्थिति द्वारा क्रमबद्ध
 	Sort By:	द्वारा क्रमबद्ध:
 	Sort Objects	ऑब्जेक्ट्स को क्रमबद्ध करें
@@ -8318,6 +8332,7 @@ antiAlias	Sharp	शार्प
 @msg	the subpath is closed or too short to close	सबपैथ बंद है या बंद करने के लिए बहुत कम है
 @msg	the SVG expands to more than {0} nested SVG images	SVG {0} नेस्टेड SVG इमेज से अधिक का विस्तार करता है
 @msg	the SVG expands to more than {0} objects	SVG {0} ऑब्जेक्ट्स से अधिक का विस्तार करता है
+@msg	the SVG's styles expand to more than {0} MB	SVG की शैलियाँ {0} MB से अधिक तक विस्तारित होती हैं
 @msg	the SVG has no drawable objects	SVG में कोई आकर्षक ऑब्जेक्ट नहीं है
 @msg	the SVG's elements are nested more than {0} deep	SVG के तत्वों को {0} से अधिक गहरा घोंसला दिया जाता है
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ फ़ाइल ने {_1} MB से अधिक के लिए अनपैक किया

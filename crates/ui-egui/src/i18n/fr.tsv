@@ -1717,6 +1717,7 @@ font-technology	Variable	Variables
 	Images:	Images :
 	Import Keyboard Shortcuts…	Importer des raccourcis clavier…
 	Import PDF	Importer un PDF
+	Import PDF pages as links	Importer les pages PDF comme liens
 	Import PDF Presets	Importer des paramètres prédéfinis PDF
 	Import Perspective Grid Presets	Importer des paramètres prédéfinis de grille de perspective
 	Import Print Presets	Importer des paramètres prédéfinis d’impression
@@ -3471,6 +3472,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Repères commentés (Affichage → Repères commentés)
 	Smart Guides (⌘U)	Repères commentés (⌘U)
 	Smart Punctuation…	Ponctuation typographique…
+	Smart Punctuation	Ponctuation typographique
+	ff, fi, ffi Ligatures	Ligatures ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatures ff, fl, ffl
+	Smart Quotes	Guillemets typographiques
+	Smart Spaces	Espaces typographiques
+	En, Em Dashes	Tirets demi-cadratin et cadratin
+	Ellipses	Points de suspension
+	Expert Fractions	Fractions expertes
+	Replace In	Remplacer dans
+	Selected Text Only	Texte sélectionné uniquement
+	Entire Document	Document entier
+	Report Results	Afficher les résultats
 	Smooth	Lisser
 	Corner	Angle
 	Relative	Relatif
@@ -3501,6 +3514,7 @@ digits	Malayalam	Malayalam
 	Solid	Plein
 	Sort by Kind	Trier par type
 	Sort by Name	Trier par nom
+	Sort by Size	Trier par taille
 	Sort by Status	Trier par état
 	Source code on GitHub	Code source sur GitHub
 	Source Sans 3	Source Sans 3
@@ -8913,6 +8927,7 @@ breakText	Glyphs	Glyphes
 @msg	the RTF file is too large to place as type (at most {_1} MB)	le fichier RTF est trop volumineux pour être importé comme texte (au plus {_1} Mo)
 @msg	the SVG expands to more than {0} nested SVG images	le SVG se développe en plus de {0} images SVG imbriquées
 @msg	the SVG expands to more than {0} objects	le SVG se développe en plus de {0} objets
+@msg	the SVG's styles expand to more than {0} MB	les styles du SVG se développent en plus de {0} Mo
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	le fichier SVG dépasse {MAX_IMPORT_BYTES} octets
 @msg	the SVG has no drawable objects	le SVG n’a aucun objet dessinable
 @msg	the SVGZ file unpacks to more than {_1} MB	le fichier SVGZ se décompresse en plus de {_1} Mo

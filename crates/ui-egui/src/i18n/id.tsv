@@ -389,6 +389,18 @@
 	Title Case	Huruf besar di awal kata
 	Sentence case	Huruf besar di awal kalimat
 	Smart Punctuation…	Tanda baca cerdas…
+	Smart Punctuation	Tanda baca cerdas
+	ff, fi, ffi Ligatures	Ligatur ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatur ff, fl, ffl
+	Smart Quotes	Tanda kutip cerdas
+	Smart Spaces	Spasi cerdas
+	En, Em Dashes	Tanda pisah en dan em
+	Ellipses	Elipsis
+	Expert Fractions	Pecahan ahli
+	Replace In	Ganti di
+	Selected Text Only	Hanya teks terpilih
+	Entire Document	Seluruh dokumen
+	Report Results	Laporkan hasil
 	Create Outlines	Buat garis luar
 	Optical Margin Alignment	Perataan margin optik
 	Dynamic Text	Teks dinamis
@@ -2080,6 +2092,7 @@ digits	Malayalam	Malayalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	entri paths {i} memerlukan path dan ids (id objek yang tidak dimiliki entri lain)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder menerima path: tautan hilang lainnya dicari di folder file tersebut
 	Show Missing	Tampilkan yang hilang
+	Sort by Size	Urutkan berdasarkan ukuran
 	Sort by Status	Urutkan berdasarkan status
 	Clear Overrides	Hapus penimpaan
 	Create New {kind} Style	Buat gaya {kind} baru
@@ -2419,6 +2432,7 @@ digits	Malayalam	Malayalam
 	e.g. 1-3, 5	mis. 1-3, 5
 	First Page	Halaman pertama
 	Import PDF	Impor PDF
+	Import PDF pages as links	Impor halaman PDF sebagai tautan
 	Last Page	Halaman terakhir
 	Next Page	Halaman berikutnya
 	of {count}	dari {count}
