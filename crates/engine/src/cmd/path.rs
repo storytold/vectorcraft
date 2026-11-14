@@ -50,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Direction Handle",
             [],
             None,
-            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool}",
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, at?: [x,y] (move the anchor there, both handles with it, before placing the handle)}",
             has_doc,
             set_handle
         ),
@@ -314,10 +314,17 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let out = str_param(p, "which") != Some("in");
     let pos = Point::new(f64_req(p, "x", "path.setHandle")?, f64_req(p, "y", "path.setHandle")?);
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
-    // A handle already there, on an anchor already of the kind it would get, changes nothing and
-    // records no undo step.
+    let at = match p.get("at").filter(|v| !v.is_null()) {
+        None => None,
+        Some(v) => Some(finite_numbers(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad("path.setHandle", "`at` must be [x, y]"))?),
+    };
+    // Compare the final anchor after translation and handle placement: repeating the same edit
+    // changes nothing and records no undo step.
     if let Some(a) = anchor_of(s, id, si, ai)? {
         let mut b = a;
+        if let Some(to) = at {
+            b.translate(to - b.p);
+        }
         b.set_handle(out, pos, independent);
         if b == a {
             return ok();
@@ -326,6 +333,9 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
         let a = path.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
+        if let Some(to) = at {
+            a.translate(to - a.p);
+        }
         a.set_handle(out, pos, independent);
         Ok(())
     })?;
