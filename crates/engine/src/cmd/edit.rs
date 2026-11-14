@@ -562,12 +562,11 @@ fn switch_units(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "units": next.label() }))
 }
 
-/// The `artboard` param of the ruler origin commands: an artboard index, 0 when not given.
+/// The `artboard` param of the ruler origin commands: an artboard index, 0 when left out or null. A
+/// value that is not a whole number is "`artboard` must be a whole number"; one past the artboards
+/// is "index out of range".
 fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
-    let index = match p.get("artboard") {
-        None => 0,
-        Some(v) => v.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| bad(c, "index out of range"))?,
-    };
+    let index = super::index_opt(p, "artboard", c)?.unwrap_or(0);
     if index >= s.doc()?.doc.artboards.len() {
         return Err(bad(c, "index out of range"));
     }
@@ -577,14 +576,15 @@ fn artboard_param(s: &Session, p: &Value, c: &str) -> Result<usize> {
 fn ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
     let d = &s.doc()?.doc;
     // A document without artboards measures from its global zero point.
-    let index = if d.artboards.is_empty() && p.get("artboard").is_none() { 0 } else { artboard_param(s, p, "document.rulerOrigin")? };
+    let index =
+        if d.artboards.is_empty() && p.get("artboard").is_none_or(Value::is_null) { 0 } else { artboard_param(s, p, "document.rulerOrigin")? };
     Ok(json!(s.doc()?.doc.ruler_origin_for(index)))
 }
 
 fn set_ruler_origin(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "document.setRulerOrigin";
     let origin = Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
-    let index = if s.doc()?.doc.rulers == RulerMode::Global && p.get("artboard").is_none() { 0 } else { artboard_param(s, p, C)? };
+    let index = if s.doc()?.doc.rulers == RulerMode::Global && p.get("artboard").is_none_or(Value::is_null) { 0 } else { artboard_param(s, p, C)? };
     change_ruler_origin(s, index, Some(origin), "Ruler Origin")
 }
 
