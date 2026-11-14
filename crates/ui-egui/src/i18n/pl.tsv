@@ -4493,6 +4493,8 @@ imageTrace	Outline	Kontur
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: okno dialogowe nie może się otworzyć w wywołaniu zwrotnym funkcji wbudowanej, getterze, konwersji ani pliku uruchamianym przez $.evalFile; wywołaj je z własnego kodu skryptu
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: następna odpowiedź w `answers` jest dla {_1}, nie dla {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: w `answers` nie została żadna odpowiedź dla tego okna dialogowego
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` zawiera {n} odpowiedź, której skrypt nie użył|`answers` zawiera {n} odpowiedzi, których skrypt nie użył|`answers` zawiera {n} odpowiedzi, których skrypt nie użył
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} pozostawił {n} obiekt pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki|{_1} pozostawił {n} obiekty pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki|{_1} pozostawił {n} obiektów pod pędzlem bez zmian ({_2}): przekształca tylko ścieżki
 @msg	vc.document{place} is too large for a script	vc.document{place} jest za duży dla skryptu
 @msg	vc.log: the log of this run is full	vc.log: dziennik tego uruchomienia jest pełny
 @msg	this function's script run has ended	uruchomienie skryptu tej funkcji zakończyło się

@@ -4410,6 +4410,8 @@ axis	Both	Entrambi
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: una finestra di dialogo non può aprirsi dentro un callback di una funzione integrata, un getter, una conversione o un file eseguito da $.evalFile; chiamala dal codice dello script stesso
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: la prossima risposta in `answers` è per {_1}, non per {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: in `answers` non rimangono risposte per questa finestra di dialogo
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` contiene {n} risposta che lo script non ha usato|`answers` contiene {n} risposte che lo script non ha usato
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ha lasciato {n} oggetto sotto il pennello senza modifiche ({_2}): rimodella solo i tracciati|{_1} ha lasciato {n} oggetti sotto il pennello senza modifiche ({_2}): rimodella solo i tracciati
 @msg	vc.document{place} is too large for a script	vc.document{place} è troppo grande per uno script
 @msg	vc.log: the log of this run is full	vc.log: il registro di questa esecuzione è pieno
 @msg	this function's script run has ended	l'esecuzione dello script di questa funzione è terminata

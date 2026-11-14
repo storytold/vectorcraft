@@ -631,13 +631,12 @@ impl LiquifyStroke {
         }
         let msg = (!ids.is_empty()).then(|| {
             let n = ids.len();
-            format!(
-                "{} left {n} object{} under the brush as {} ({}): it reshapes paths only",
-                self.prm.kind.label(),
-                if n == 1 { "" } else { "s" },
-                if n == 1 { "it was" } else { "they were" },
-                kinds.join(", ")
-            )
+            let (tool, kinds) = (self.prm.kind.label(), kinds.join(", "));
+            if n == 1 {
+                format!("{tool} left {n} object under the brush as it was ({kinds}): it reshapes paths only")
+            } else {
+                format!("{tool} left {n} objects under the brush as they were ({kinds}): it reshapes paths only")
+            }
         });
         (ids, msg)
     }

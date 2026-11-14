@@ -131,6 +131,8 @@
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: een dialoogvenster kan niet openen binnen een callback van een ingebouwde functie, een getter, een conversie of een bestand dat $.evalFile uitvoert; roep het aan vanuit de eigen code van het script
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: het volgende antwoord in `answers` is voor {_1}, niet voor {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` heeft geen antwoord meer voor dit dialoogvenster
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` bevat {n} antwoord dat het script niet heeft gebruikt|`answers` bevat {n} antwoorden die het script niet heeft gebruikt
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} liet {n} object onder het penseel ongewijzigd ({_2}): het vervormt alleen paden|{_1} liet {n} objecten onder het penseel ongewijzigd ({_2}): het vervormt alleen paden
 @msg	vc.document{place} is too large for a script	vc.document{place} is te groot voor een script
 @msg	vc.log: the log of this run is full	vc.log: het logboek van deze uitvoering is vol
 @msg	this function's script run has ended	de scriptuitvoering van deze functie is beëindigd

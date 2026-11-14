@@ -4395,6 +4395,8 @@ axis	Both	Оба
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: диалоговое окно не может открыться внутри обратного вызова встроенной функции, геттера, преобразования или файла, который выполняет $.evalFile; вызовите его из собственного кода скрипта
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: следующий ответ в `answers` предназначен для {_1}, а не для {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: в `answers` не осталось ответа для этого диалогового окна
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	В `answers` остался {n} ответ, который скрипт не использовал|В `answers` осталось {n} ответа, которые скрипт не использовал|В `answers` осталось {n} ответов, которые скрипт не использовал
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} оставил без изменений {n} объект под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объекта под кистью ({_2}): он изменяет только контуры|{_1} оставил без изменений {n} объектов под кистью ({_2}): он изменяет только контуры
 @msg	vc.document{place} is too large for a script	vc.document{place} слишком велик для скрипта
 @msg	vc.log: the log of this run is full	vc.log: журнал этого запуска заполнен
 @msg	this function's script run has ended	запуск скрипта этой функции завершён

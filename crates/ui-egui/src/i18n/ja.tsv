@@ -5173,6 +5173,8 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: 組み込み関数のコールバック、getter、変換、または $.evalFile が実行するファイルの中ではダイアログを開けません。スクリプト自身のコードから呼び出してください
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: `answers` の次の回答は {name} ではなく {_1} のものです
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` にこのダイアログの回答が残っていません
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` にスクリプトが使用しなかった回答が {n} 件あります
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} はブラシの下にある {n} 個のオブジェクトを変更せずに残しました（{_2}）。パスのみを変形します
 @msg	vc.document{place} is too large for a script	vc.document{place} はスクリプトには大きすぎます
 @msg	vc.log: the log of this run is full	vc.log: この実行のログがいっぱいです
 @msg	this function's script run has ended	この関数のスクリプトの実行は終了しています

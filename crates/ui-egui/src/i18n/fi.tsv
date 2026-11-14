@@ -4583,6 +4583,8 @@ imageTrace	Outline	Ääriviiva
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: valintaikkuna ei voi avautua sisäänrakennetun funktion takaisinkutsussa, getterissä, muunnoksessa tai tiedostossa, jonka $.evalFile ajaa; kutsu sitä skriptin omasta koodista
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: seuraava vastaus kohteessa `answers` on kohteelle {_1}, ei kohteelle {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: kohteessa `answers` ei ole enää vastausta tälle valintaikkunalle
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	`answers` sisältää {n} vastauksen, jota komentosarja ei käyttänyt|`answers` sisältää {n} vastausta, joita komentosarja ei käyttänyt
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} jätti {n} objektin siveltimen alla muuttamatta ({_2}): se muokkaa vain polkuja|{_1} jätti {n} objektia siveltimen alla muuttamatta ({_2}): se muokkaa vain polkuja
 @msg	vc.document{place} is too large for a script	vc.document{place} on liian suuri skriptille
 @msg	vc.log: the log of this run is full	vc.log: tämän ajon loki on täynnä
 @msg	this function's script run has ended	tämän funktion skriptiajo on päättynyt

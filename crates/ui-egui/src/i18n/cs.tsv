@@ -4669,6 +4669,8 @@ imageTrace	Outline	Obrys
 @msg	{name}: a dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: dialog se nemůže otevřít uvnitř zpětného volání vestavěné funkce, getteru, převodu ani souboru, který spouští $.evalFile; zavolejte jej z vlastního kódu skriptu
 @msg	{name}: the next answer in `answers` is for {_1}, not {name}	{name}: další odpověď v `answers` je pro {_1}, ne pro {name}
 @msg	{name}: `answers` has no answer left for this dialog	{name}: `answers` už nemá pro tento dialog žádnou odpověď
+@msgplural	`answers` has {n} answer the script did not use|`answers` has {n} answers the script did not use	V `answers` je {n} odpověď, kterou skript nepoužil|V `answers` jsou {n} odpovědi, které skript nepoužil|V `answers` je {n} odpovědí, které skript nepoužil
+@msgplural	{_1} left {n} object under the brush as it was ({_2}): it reshapes paths only|{_1} left {n} objects under the brush as they were ({_2}): it reshapes paths only	{_1} ponechal {n} objekt pod štětcem beze změny ({_2}): mění pouze cesty|{_1} ponechal {n} objekty pod štětcem beze změny ({_2}): mění pouze cesty|{_1} ponechal {n} objektů pod štětcem beze změny ({_2}): mění pouze cesty
 @msg	vc.document{place} is too large for a script	vc.document{place} je pro skript příliš velký
 @msg	vc.log: the log of this run is full	vc.log: protokol tohoto běhu je plný
 @msg	this function's script run has ended	běh skriptu této funkce skončil
