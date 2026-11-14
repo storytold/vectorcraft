@@ -646,6 +646,55 @@ fn a_negative_advance_after_a_tab_keeps_a_fitting_line_whole() {
     assert_eq!(ended, (5, false));
 }
 
+/// A long tabbed line with a glyph that steps back ends at the latest break that fits as drawn, even
+/// where a later break than one that does not fit fits again.
+#[test]
+fn a_long_tabbed_line_that_steps_back_ends_at_the_latest_break_that_fits_as_drawn() {
+    // a (0), tab (1), then b and a space for each u: breaks before 4 + 2u.
+    let text = format!("a\t{}", "b ".repeat(400));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), if byte == 2 { -0.5 } else { 1.0 }, ch)).collect();
+    let glyphs = synthetic_glyphs(&specs);
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 10 || end == 200;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 1e6, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (200, false));
+}
+
+/// A tabbed line with a glyph that steps back, ending in a word with more hyphenation points than
+/// are measured one by one, ends at the latest point that fits as drawn.
+#[test]
+fn a_tabbed_line_that_steps_back_ends_at_the_latest_hyphenation_point_that_fits_as_drawn() {
+    let opts = HyphenationOptions { words_longer_than: 0, after_first: 1, before_last: 1, ..Default::default() };
+    // a (0), tab (1), then a word of 400 syllables of two glyphs from glyph 2: points before 4, 6, ...
+    let text = format!("a\t{}", "कि".repeat(400));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), if byte == 2 { -1.0 } else { 1.0 }, ch)).collect();
+    let mut glyphs = synthetic_glyphs(&specs);
+    for glyph in &mut glyphs {
+        glyph.hyphen_language = crate::hyphen::Language::from_tag(Some("hi"));
+        glyph.sx = 0.001;
+    }
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 20 || end == 50;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended = break_line(
+        &text,
+        &glyphs,
+        0,
+        600.0,
+        &[],
+        0.0,
+        Some((&opts, 0.0)),
+        Burasagari::None,
+        Kinsoku::None,
+        KinsokuShoriType::PushOutOnly,
+        false,
+        false,
+        &[],
+        fits,
+    );
+    assert_eq!(ended, (50, true));
+}
+
 /// Mojikumi: the greedy breaker measures a line as it is set, with its last character narrowed
 /// (`line_end`): 」 set half width ends a measure of three and a half characters. Only the last
 /// glyph of the last cluster counts, and only where the line may end.

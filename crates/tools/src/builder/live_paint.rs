@@ -1,5 +1,7 @@
 use super::cache::RegionCache;
-use super::lookup::{is_live_paint, live_paint_at, live_paint_at_where, visible_edge_near, visible_face_at};
+use super::lookup::{
+    connected_edges, flood_faces, is_live_paint, live_paint_at, live_paint_at_where, lp_stroke_paint, visible_edge_near, visible_face_at,
+};
 use super::map::{HIGHLIGHT_RED, sorted_roots};
 use super::{
     Action, Arc, BezPath, CLICK_TOL_PX, Cursor, Document, EDGE_NAME, FACE_NAME, FillRule, Mods, Node, NodeId, Overlay, Point, PointerEvent,
@@ -540,7 +542,11 @@ pub const LP_SELECT_WIDTH_RANGE: (f64, f64) = (1.0, 20.0);
 /// Live Paint Selection: click selects a face (Shift adds); Alt-click selects an edge. A drag draws
 /// a marquee, and on release the faces and edges it touches ([`lp_parts_in`]) become the selection;
 /// with Shift held at the press, each of them leaves the selection if it is selected and joins it
-/// otherwise. A click and a marquee change the selection on release, so Escape between the press
+/// otherwise. A double-click on a face selects it and the faces of its group that are not parted
+/// from it by a stroked edge; on an edge, it selects the edge and the edges joined to it end to end
+/// that have its stroke paint ([`LivePaintSelectionTool::reach_at`]). With Shift held, each of them
+/// leaves the selection if it is selected and joins it otherwise.
+/// A click and a marquee change the selection on release, so Escape between the press
 /// and the release (which removes the marquee) leaves the selection as it was. The tool does not
 /// highlight or select the faces and edges of a Live Paint group that is locked, on a locked layer
 /// or on a locked artboard, or in isolation mode outside the isolated art. Its Tool Options
@@ -626,6 +632,18 @@ impl LivePaintSelectionTool {
             (Some(_), false) => Cursor::LivePaintSelectFace,
         };
         (hit, cursor)
+    }
+
+    /// What a double-click at `p` selects, Alt held or not: on the face a click there picks
+    /// ([`LivePaintSelectionTool::picks_edge`]), that face and the faces of its group a flood from it
+    /// reaches across edges that are hidden or draw no stroke ([`flood_faces`]); on the edge a click
+    /// picks, that edge and the edges of its group joined to it end to end through edges that draw
+    /// with the stroke paint it draws with ([`connected_edges`], [`lp_stroke_paint`]). Empty where a click selects no face or edge.
+    fn reach_at(&self, cx: &ToolContext, p: Point, alt: bool) -> Vec<NodeId> {
+        let Some(edge) = self.picks_edge(alt) else { return vec![] };
+        let Some((gid, Some(part))) = lp_part_at(cx.doc, p, cx.tol(4.0), edge, &|id| lp_selectable(cx, id)) else { return vec![] };
+        let Some(group) = cx.doc.node(gid) else { return vec![] };
+        if edge { connected_edges(group, part.id, &lp_stroke_paint(part)) } else { flood_faces(group, part.id) }
     }
 }
 
@@ -748,7 +766,16 @@ impl Tool for LivePaintSelectionTool {
                     (false, false) => vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) }))],
                 }
             }
-            _ => vec![],
+            PointerKind::DoubleClick => {
+                // The two clicks before it already selected the part under the pointer (or, with
+                // Shift, toggled it twice); the double-click selects the part with what it reaches.
+                let ids = self.reach_at(cx, p, ev.mods.alt);
+                match (ids.is_empty(), ev.mods.shift) {
+                    (true, _) => vec![],
+                    (false, true) => vec![Action::Exec("select.toggle".into(), json!({ "ids": json_ids(&ids) }))],
+                    (false, false) => vec![Action::Exec("select.set".into(), json!({ "ids": json_ids(&ids) }))],
+                }
+            }
         }
     }
 

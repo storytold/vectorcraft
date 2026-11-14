@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-13 · **Change:** Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-14 · **Change:** Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 
 `vectorcraft-cli mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio
 (newline-delimited JSON-RPC 2.0; see [Protocol](#protocol) for version negotiation). Agents use it to
@@ -3224,8 +3224,12 @@ already walks Image Trace. Short agent entry points:
   is rejected with an error. The Pencil and the Paintbrush give Fidelity in screen pixels, 0.01 to 100 px, and send it
   divided by the zoom (0.0313 to 640) and kept within that range, so a stroke is fitted at the same tolerance on screen
   at every zoom. A stroke
-  that continues a path (`extend`) closes it when it ends within four times the Fidelity of the path's other end, at
-  least 6 pt and at most 400 pt. The Blob Brush's `path.blob` Fidelity stays in points, 0.01 to 100 pt.
+  that continues a path (`extend`) closes it when `closed` is true: the Pencil and the Paintbrush send it when the
+  stroke ends within Close Paths When Ends Are Within of the path's other end (the cursor shows the closing ring there),
+  a straight Pencil line too, or with Alt held at the release. The stroke's end then joins the other end when it is
+  within four times the Fidelity of it (at least 6 pt and at most 400 pt), and a straight segment closes the path from
+  farther away. Without `closed`, the stroke closes the path when it ends within that four-times-Fidelity distance. The
+  Blob Brush's `path.blob` Fidelity stays in points, 0.01 to 100 pt.
 - Variables: `variable.list`, `variable.define {name, kind: text|visibility|image|graph}`, `variable.bind {variable, ids?}`,
   `variable.makeTextDynamic`, `variable.makeVisibilityDynamic`, `variable.makeImageDynamic`, `variable.makeGraphDynamic`
   (`variable.bind` and `variable.makeTextDynamic` refuse type that already has another text variable and name it),
@@ -3269,8 +3273,9 @@ already walks Image Trace. Short agent entry points:
   byte order that reads a line break (`\n` or `\r`). It is refused when fewer of its units hold a NUL byte (UTF-8 or
   Windows-1252 text with stray NUL bytes, or UTF-16 text made mostly of other characters, which needs a byte-order
   mark), when both byte orders read a line break (the text holds U+0A00 or U+0D00), when it has an odd length, and
-  when it isn't valid UTF-16 in that order or holds a NUL character. A file with no line break has no data rows and is
-  refused for that. `csv` and `data` are read as the text they hold.
+  when it isn't valid UTF-16 in that order or holds a NUL character. A file with no line break is read big-endian when
+  more of its two-byte units start with a NUL byte than end with one, and little-endian otherwise; it has no data rows,
+  so the import is refused. `csv` and `data` are read as the text they hold.
 - Variable libraries: `variable.loadLibrary {path|xml|dataBase64}` (the Variables panel menu's Load Variable
   Library…) replaces the document's variables and data sets with a variable library's in one undo step. A load, like a
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
@@ -3646,6 +3651,16 @@ already walks Image Trace. Short agent entry points:
   a locked artboard, or in isolation mode outside the isolated art. In the app, the tool's cursor shows what a click
   at the pointer selects under these rules: the arrow with a filled square for a face, with a short line for an edge,
   and with an x for nothing. It keeps the look it had at the press until the release.
+  A double-click (`pointer_gesture` kind `doubleclick`, after the two clicks' `down` and `up`) on the face a click there
+  picks runs `select.set {ids}` with that face and the faces of its group that a flood from it reaches across edges
+  that are hidden or draw no stroke (an edge that is fully transparent, or whose strokes are each hidden, without
+  paint, 0 pt wide or fully transparent); a stroked edge and a Gap Detection gap stop the flood, and hidden faces are
+  left out. On the edge a click
+  there picks, it runs `select.set {ids}` with that edge and the edges of its group, not hidden, joined to it end to
+  end through edges that draw with the stroke paint it draws with (the paint of an edge's topmost stroke that is
+  shown, with paint, above 0 pt and not fully transparent; none for an edge that draws no stroke). With Shift held it runs `select.toggle {ids}` with the same faces or edges,
+  and where a click selects no face or edge it runs nothing. The same options, locks and isolation rules apply as for
+  a click.
   The Live Paint Bucket's options (`tool.setOption {tool: "livePaintBucket", values}`; double-clicking the tool opens
   them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `cursorSwatchPreview` (on),
   `highlight` (on), `color` (the
@@ -5135,7 +5150,8 @@ The Attributes panel (`window.panel {panel: "attributes"}`, Cmd+F11) reads `attr
 objects differ) and `recentUrls`. `attributes.set {overprintFill?, overprintStroke?, showCenter?, imageMap?, url?,
 note?, ids?}` sets them in one undo step; `path.setFillRule {rule: "nonZero"|"evenOdd"}` sets the fill rule of the
 paths and compound paths, and `path.reverse {reversed?}` makes subpaths run counter-clockwise (true) or clockwise
-(false). SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
+(false). When every subpath of a path turns alike, its strokes' width profiles (left and right swapped) and pen
+pressure, tilt, bearing and rotation turn with it, so the strokes draw as before. SVG export wraps an object with a URL in `<a xlink:href>`, and SVG import reads `<a href>` links back.
 
 ```json
 {"name":"run_command","arguments":{"command":"attributes.set","params":{"ids":[12],"url":"https://example.com","imageMap":"rectangle"}}}
@@ -7228,9 +7244,14 @@ the document; so does `object.expand`.
 Placing a text file (`.txt`) sets it as area type: `file.place {path | name+dataBase64, text?: {characterSet?:
 "unicode" | "ansi", platform?: "windows" | "mac", removeLineReturns?, removeParagraphReturns?, replaceSpaces?: n}}`
 (Text Import Options). Unicode reads UTF-8, or UTF-16 with a byte-order mark; ANSI reads Windows-1252 (Mac Roman on
-`mac`). `removeLineReturns` joins the lines of each block into one paragraph, `removeParagraphReturns` drops blank
-lines, `replaceSpaces: 3` turns runs of 3 or more spaces into tabs. The frame fills `rect`, the replaced object's
-bounds, or the artboard less a 36 pt margin.
+`mac`). Unicode reads a file without a byte-order mark as UTF-16 by the rule `dataset.import` uses: at least half of
+its two-byte units hold a NUL byte, in the byte order that reads a line break, or for a file with one line, big-endian
+when more of its units start with a NUL byte than end with one, and little-endian otherwise. Any other file is read as
+UTF-8, else as the platform's 8-bit set: one with fewer NUL bytes, one with an odd length, one where both byte orders
+read a line break, and one that isn't valid UTF-16 in that order or holds a NUL character. `removeLineReturns` joins
+the lines of each block into one paragraph, `removeParagraphReturns` drops blank lines, `replaceSpaces: 3` turns runs
+of 3 or more spaces into tabs. The frame fills `rect`, the replaced object's bounds, or the artboard less a 36 pt
+margin.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/notes.txt","text":{"removeLineReturns":true,"removeParagraphReturns":true}}}}
@@ -9144,7 +9165,9 @@ send an Alignment or Level change for paragraphs that stay in no list. With no t
 with an unknown `tab`, `ui.bulletsAndNumbering` is an error.
 
 Type › Bullets and Numbering › Convert to Text runs `type.convertListToText` on the selected type's paragraphs, or on
-those the Type tool's selection touches, and that runs `text.convertListToText {ids?, start?, end?}`. The marker of
+those the Type tool's selection touches, and that runs `text.convertListToText {ids?, start?, end?}`. With the
+Selection tool, a selected frame of threaded text names every frame of its story in `ids`, locked and hidden frames
+included, as Apply Bullets and Apply Numbers do. The marker of
 each list paragraph becomes characters at the start of the paragraph: the bullet, or the number and its period as the
 paragraph showed it, then a tab. They are set in the marker's font, size and color: the style of the paragraph's first
 character without the attributes the marker leaves out. The paragraph leaves its list. A paragraph at a list level
@@ -10655,6 +10678,10 @@ threaded frame, which composes them again at its own widths. Such a paragraph fa
 frame has no room for its first line, or when the search for its breaks passes VectorCraft's own limits (1,000,000
 lines tried and 2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the
 paragraphs of a frame).
+Single-line measures each line's room the same way: a line that takes in a taller character is placed again across its
+new height and broken again in the room there. When that leaves the taller character for the next line, the line is
+set at its own height where the room there is no narrower, with the words before that character that fit there, and
+otherwise stays where it was placed.
 The UI command `type.lineComposer` (Cmd+Alt+Shift+C, in remote mode `press_key {key: "C", mods: {cmd: true, alt: true,
 shift: true}}` or `invoke_menu`) sets `singleLine` when every paragraph of the selected type (or every paragraph the
 Type tool's selection touches) uses Every-line, else `everyLine`, and returns the composer it set.
@@ -10713,7 +10740,12 @@ and the arrow keys nudge them by the keyboard increment. The active tool lists t
 (`tool.setOption {}` returns them as `meshPoints: [{id, index}…]`). On gradient meshes a solid fill colour (`paint.setFill`, from the
 Color panel, Swatches or the Eyedropper) recolours just the picked points, and when every target of
 `transparency.set` is a gradient mesh with points picked, its `opacity` fades those points instead of the objects
-(`transparency.info` then shows their opacity, `null` when it differs). Both are one undo step.
+(`transparency.info` then shows their opacity, `null` when it differs). Both are one undo step, and neither goes to the
+points while the Appearance panel's active row takes the fill or the opacity. When the first selected object is a
+gradient mesh with points picked, the Fill proxy, the Color panel, the Color Wheel and `paint.proxies` show its first
+picked point's color, and `fillMixed` compares the picked points' colors with each other and with the fills of the other
+selected objects. The Transparency panel shows the picked points' opacity (blank when it differs), and the Control
+bar shows the first picked point's opacity.
 
 `object.mesh.movePoints {id, points: [index…], dx, dy}` (or `{items: [{id, points}…], dx, dy}` over several meshes)
 moves points by (dx, dy), their handles with them; `object.mesh.setPointColor` takes `points` or `items` the same
@@ -11842,6 +11874,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | `path.freehand`: `closed`, when given, decides whether a stroke that continues a path (`extend`) closes it; the Pencil and the Paintbrush send it by Close Paths When Ends Are Within. |
 | 2026-11-13 | Snap to Point with Smart Guides off draws no Smart Guides labels or lines (#7250). |
 | 2026-11-13 | Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097). |
 | 2026-11-11 | Document READ_ONLY_LOCATION for saves (#6146); no response-shape change. |
