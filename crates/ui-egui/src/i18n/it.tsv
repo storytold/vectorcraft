@@ -705,6 +705,8 @@ font-technology	Variable	Variabili
 	Crop Image	Ritaglia immagine
 	Image Tools	Strumenti immagine
 	Remove Background…	Rimuovi sfondo…
+	Draw (Pencil)	Disegna (Matita)
+	Place Image	Inserisci immagine
 	Remove Background	Rimuovi sfondo
 	Background	Sfondo
 	Edge Color	Colore del bordo
@@ -4541,6 +4543,7 @@ axis	Both	Entrambi
 @msg	`select` must be true or false	`select` deve essere true o false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` e `maxAnchors` devono essere numeri interi
 @msg	`{key}` must be a number not below 0	`{key}` deve essere un numero non inferiore a 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` deve essere quattro numeri non inferiori a 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` deve essere [x, y, width, height]: quattro numeri finiti, con larghezza e altezza non negative
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` è maggiore di `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	indica almeno uno tra `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -5379,6 +5382,7 @@ effect	Regular	Normale
 	VectorCraft Title Bar on Every Desktop	Barra del titolo di VectorCraft su ogni desktop
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Finché è impostata, la variabile d'ambiente VECTORCRAFT_TITLEBAR sceglie la barra del titolo.
 	System Title Bar takes precedence over this option while it is on.	Finché è attiva, Barra del titolo di sistema ha la precedenza su questa opzione.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Finché Barra del titolo di VectorCraft su ogni desktop è disattivata, questo desktop disegna la barra del titolo della finestra, sia con questa opzione attiva sia disattivata.
 	Value Axis	Asse dei valori
 	On Left Side	Sul lato sinistro
 	On Right Side	Sul lato destro
@@ -6228,6 +6232,8 @@ axis	Y Axis	Asse Y
 	Action Options…	Opzioni azione…
 	Action Options	Opzioni azione
 	Playback Options…	Opzioni di riproduzione…
+	Button Mode	Modalità pulsante
+	No actions.	Nessuna azione.
 	Insert Stop…	Inserisci interruzione…
 	Insert Stop	Inserisci interruzione
 	Record Stop	Registra interruzione

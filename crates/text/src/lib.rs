@@ -47,7 +47,7 @@ pub use fontdb::{
     user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
-pub use layout::{envelope_ink, register_envelope_ink};
+pub use layout::{envelope_ink, layout_inputs, register_envelope_ink};
 use std::sync::Arc;
 pub use svg_glyph::{SvgGlyphReader, set_svg_glyph_reader};
 
