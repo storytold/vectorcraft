@@ -514,8 +514,7 @@ fn the_preset_menu_saves_changes_and_opens_import_and_export() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn export_writes_into_the_picked_folder() {
-    let dir = std::env::temp_dir().join(format!("vc-asset-panel-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel");
     let folder = dir.to_string_lossy().replace('\\', "/");
     let (mut app, _, [a, _]) = app(false);
     let picked = folder.clone();
@@ -528,7 +527,6 @@ fn export_writes_into_the_picked_folder() {
     frame(&ctx, &mut app, click(at(&texts, "Export")), false);
     // Create Sub-folders is on by default: the 1x row's folder.
     assert!(dir.join("1x").join("Badge.png").is_file(), "{:?}", std::fs::read_dir(&dir).map(|d| d.count()));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The panel menu's Create Sub-folders and Open Location after Export are check items, on by
@@ -537,8 +535,7 @@ fn export_writes_into_the_picked_folder() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn the_menu_sets_create_subfolders_and_open_location_and_export_follows_them() {
-    let dir = std::env::temp_dir().join(format!("vc-asset-panel-menu-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel-menu");
     let folder = dir.to_string_lossy().replace('\\', "/");
     let (mut app, _, [a, _]) = app(false);
     let picked = folder.clone();
@@ -593,7 +590,6 @@ fn the_menu_sets_create_subfolders_and_open_location_and_export_follows_them() {
     for bad in [json!({"openLocation": "yes"}), json!({"subfolders": 1})] {
         assert!(app.run("assets.settings.set", bad.clone()).is_err(), "{bad}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A folder per format, remembered by Export for Screens or a preset, is used by the panel's Export
@@ -601,8 +597,7 @@ fn the_menu_sets_create_subfolders_and_open_location_and_export_follows_them() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn export_uses_a_remembered_folder_per_format() {
-    let dir = std::env::temp_dir().join(format!("vc-asset-panel-format-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = vectorcraft_testkit::TempDir::new("asset-panel-format");
     let folder = dir.to_string_lossy().replace('\\', "/");
     let (mut app, _, [a, _]) = app(false);
     app.services.pick_folder = Some(Box::new(move || Some(folder.clone())));
@@ -619,7 +614,6 @@ fn export_uses_a_remembered_folder_per_format() {
     let texts = frame(&ctx, &mut app, vec![], false);
     frame(&ctx, &mut app, click(at(&texts, "Export")), false);
     assert!(dir.join("png").join("Badge.png").is_file() && dir.join("svg").join("Badge.svg").is_file());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Remembered empty folders are none, as an export reads them: Create Sub-folders is off in the
@@ -892,8 +886,7 @@ fn tiff_panel_preserves_shared_antialias_and_explicit_overrides() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
-    let dir = std::env::temp_dir().join(format!("vc-asset-tiff-aliases-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = vectorcraft_testkit::TempDir::new("asset-tiff-aliases");
     // The first case is the historical control: saved tif without an explicit model must be CMYK.
     // Native picked folders let the mixed-row case inspect each file without introducing a ZIP decoder.
     for (case, (alias, rgb_override, mixed)) in
@@ -940,7 +933,6 @@ fn tiff_saved_aliases_use_document_defaults_and_explicit_rgb() {
             "direct export preserves saved aliases and explicit options"
         );
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Export 3D Object in the panel menu collects the selected 3D object; its tile is marked 3D, the
