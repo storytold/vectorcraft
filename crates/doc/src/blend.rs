@@ -727,8 +727,13 @@ fn reorient_dash(d: &mut Dash, o: Orient, lens: &[f64]) {
         pat.extend_from_within(..);
     }
     let period: f64 = pat.iter().sum();
-    // Where along the key's own subpath the turned one starts (a closed one wraps round).
-    let at = if o.closed { o.seam() } else { o.start };
+    // Where along the key's own subpath the turned one starts (a closed one wraps round). A
+    // closed one reversed from its own start runs back from its end.
+    let at = match (o.closed, o.seam()) {
+        (true, s) if s == 0.0 && o.reversed => 1.0,
+        (true, s) => s,
+        (false, _) => o.start,
+    };
     let first = pat.first().copied().unwrap_or(0.0);
     let offset = |len: f64| if o.reversed { first - at * len - d.offset } else { d.offset + at * len };
     let offsets: Vec<f64> = lens.iter().map(|&len| offset(len)).collect();
@@ -2962,6 +2967,23 @@ mod tests {
         for k in 1..200 {
             let u = k as f64 / 10.0 + 0.03;
             assert_eq!(dash_at(&d, u), dash_at(&own, u + 20.0), "at {u}: {d:?}");
+        }
+        // A closed key that winds the other way runs the other way from the same anchor: its
+        // dashes are read back from the end of its own subpath, which is 40 long and not a whole
+        // number of periods.
+        let wound = |x: f64| {
+            let mut p = square(x);
+            for sp in &mut p.subpaths {
+                sp.reverse();
+            }
+            p
+        };
+        let back = keyed(wound(100.0), &graded(StrokeGradientMode::Along));
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &back, (Some(0), Some(0))).at(1.0));
+        let (own, d) = (stroke(&back).dash.unwrap_or_default(), s.dash.unwrap_or_default());
+        for k in 1..400 {
+            let u = k as f64 / 10.0 + 0.03;
+            assert_eq!(dash_at(&d, u), dash_at(&own, 40.0 - u), "at {u}: {d:?}");
         }
         // Stops that reflect twice read the same either way; a link to a swatch stays.
         let reflected = keyed(line(100.0), &|s| {
