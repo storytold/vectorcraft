@@ -123,7 +123,8 @@ pub(crate) fn joins(script: Script) -> bool {
 }
 
 /// Is `script` one a Standard composer leaves unshaped: Indic (conjuncts, half forms, marks placed
-/// by the font's layout tables), Arabic-like ([`joins`]) and Hebrew?
+/// by the font's layout tables), the joining scripts ([`joins`]: Arabic, Syriac, N'Ko, Mongolian…)
+/// and Hebrew?
 fn is_complex_script(script: Script) -> bool {
     joins(script)
         || matches!(
@@ -1395,11 +1396,12 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
     let text_seg = &text[range.clone()];
     // The segment's script: that of its first character of a script of its own.
     let first_script = text_seg.chars().map(|c| c.script()).find(|s| !matches!(s, Script::Common | Script::Inherited));
-    let cursive = first_script.is_some_and(joins);
     // A Standard composer sets a complex script glyph by glyph (no layout tables, nominal glyphs).
     // shortcut: decided for the whole segment by its first strong script, as `cursive` is; segments
     // already split where the script changes.
     let unshaped = feats.unshaped_complex && first_script.is_some_and(is_complex_script);
+    // Unshaped letters don't join, so they are not bent along a path as joined ones are.
+    let cursive = first_script.is_some_and(joins) && !unshaped;
     let full = st.size.max(0.0);
     // Superscript/subscript and small capitals shrink the glyphs; line metrics keep the full size.
     let (_, pos_shift) = st.position.scale_shift(full);
@@ -1593,14 +1595,16 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                     let c = st.digits.map(c);
                     let chars: Vec<char> = if upper { c.to_uppercase().collect() } else { vec![c] };
                     for u in chars {
-                        let g = cmap.map(u).unwrap_or_default();
-                        let adv = gm.advance_width(g).unwrap_or(face.upem as f32 * 0.5);
+                        // Format characters (joiners, direction marks) have no glyph of their own in most
+                        // fonts, and the shaper hides them: draw the space's glyph with no advance.
+                        let (g, adv) = if crate::justify::is_format_control(u) {
+                            (cmap.map(' ').unwrap_or_default(), 0.0)
+                        } else {
+                            let g = cmap.map(u).unwrap_or_default();
+                            (g, gm.advance_width(g).unwrap_or(face.upem as f32 * 0.5))
+                        };
                         raw.push((g.to_u32(), cl, adv.round() as i32, 0, 0));
                     }
-                }
-                // Shaped right-to-left text comes out in visual order, which layout expects.
-                if unshaped && level.is_rtl() {
-                    raw.reverse();
                 }
             }
         }

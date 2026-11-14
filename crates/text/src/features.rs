@@ -164,6 +164,7 @@ impl OtFeatures {
             extra: u32::MAX >> (32 - EXTRA_FEATURES.len()),
             extra_values: [0; EXTRA_FEATURES.len()],
             swash_value: 0,
+            unshaped_complex: false,
         };
         change(&mut off);
         change(&mut on);

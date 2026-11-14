@@ -97,11 +97,16 @@ fn toggling_the_line_composer_keeps_the_shaping() {
         assert_eq!(toggle_composer(&mut app).unwrap(), json!(first), "{from}");
         assert_eq!(toggle_composer(&mut app).unwrap(), json!(second), "{from} again");
     }
-    // Paragraphs that differ take Every-line, as before the Standard composers existed.
+    // Paragraphs that break differently take Every-line, as before the Standard composers existed.
     app.run("text.setFormat", json!({"id": id, "composer": "standardSingleLine"})).unwrap();
     app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "composer": "singleLine"})).unwrap();
     app.session.set_tool_option("selectAll", &json!(true));
     assert_eq!(toggle_composer(&mut app).unwrap(), json!("everyLine"));
+    // Paragraphs that both break every-line but differ in shaping: Single-line, Middle Eastern & South Asian.
+    app.run("text.setFormat", json!({"id": id, "composer": "everyLine"})).unwrap();
+    app.run("text.setFormat", json!({"id": id, "start": 2, "end": 3, "composer": "standardEveryLine"})).unwrap();
+    app.session.set_tool_option("selectAll", &json!(true));
+    assert_eq!(toggle_composer(&mut app).unwrap(), json!("singleLine"));
 }
 
 /// The Paragraph panel menu lists the four composers, and ticks the one every selected paragraph has.
@@ -126,15 +131,23 @@ fn the_paragraph_menu_sets_each_of_the_four_composers() {
             _ => {}
         }
     }
-    let texts = items(&mut app);
-    for label in [
-        "Middle Eastern & South Asian Single-line Composer",
-        "Middle Eastern & South Asian Every-line Composer",
-        "Standard Single-line Composer",
-        "Standard Every-line Composer",
-    ] {
-        assert!(texts.iter().any(|t| t == label), "{label} in {texts:?}");
+    let labels = [
+        ("singleLine", "Middle Eastern & South Asian Single-line Composer"),
+        ("everyLine", "Middle Eastern & South Asian Every-line Composer"),
+        ("standardSingleLine", "Standard Single-line Composer"),
+        ("standardEveryLine", "Standard Every-line Composer"),
+    ];
+    // The menu lists all four, each row ticked (and only that one) when every selected paragraph has it.
+    for (value, _) in labels {
+        app.run("text.setFormat", json!({"id": id, "composer": value})).unwrap();
+        app.session.set_tool_option("selectAll", &json!(true));
+        let texts = items(&mut app);
+        for (v, label) in labels {
+            let row = if v == value { format!("✓ {label}") } else { format!("   {label}") };
+            assert!(texts.iter().any(|t| *t == row), "{value}: {row:?} in {texts:?}");
+        }
     }
+    // Choosing a row sets its composer: the row is a `text.setFormat {composer}` with the row's id.
     for (value, want) in [
         ("standardEveryLine", Composer::StandardEveryLine),
         ("singleLine", Composer::SingleLine),
@@ -142,6 +155,7 @@ fn the_paragraph_menu_sets_each_of_the_four_composers() {
     ] {
         app.run("text.setFormat", json!({"id": id, "composer": value})).unwrap();
         assert_eq!(shared_composer(&app), Some(want), "{value}");
+        assert_eq!(composer_id(want), value);
     }
 }
 

@@ -220,7 +220,7 @@ fn all_four_composers_round_trip() {
     use vectorcraft_doc::{TextKind, TextObject};
     let one = |c: Composer| {
         let mut d = Document::new(200.0, 200.0);
-        let mut t = TextObject::point(kurbo::Point::ZERO, "ક\u{ACD}ક", Default::default());
+        let mut t = TextObject::point(vectorcraft_geom::Point::ZERO, "ક\u{ACD}ક", Default::default());
         t.para.composer = c;
         t.kind = TextKind::Point;
         let id = d.alloc_id();

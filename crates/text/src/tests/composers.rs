@@ -33,8 +33,8 @@ fn g(c: char) -> u32 {
     u32::from(source_sans_gid(c).expect("a Source Sans glyph"))
 }
 
-/// Under the ME&SA composers the conjunct forms (Devanagari: the vowel sign I drawn before its
-/// syllable and Ka's half form; Gujarati: the half form); under the Standard ones each character
+/// Under the ME&SA composers the conjunct forms (the vowel sign I drawn before its syllable and Ka's
+/// half form, in Devanagari and in Gujarati); under the Standard ones each character
 /// has its own glyph, in text order, as the font maps it.
 #[test]
 fn standard_composers_set_indic_text_glyph_by_glyph() {
@@ -42,7 +42,7 @@ fn standard_composers_set_indic_text_glyph_by_glyph() {
     let ids = |v: Vec<(u32, usize)>| v.into_iter().map(|(gid, _)| gid).collect::<Vec<_>>();
     for composer in [Composer::SingleLine, Composer::EveryLine] {
         assert_eq!(ids(drawn(&db, DEVANAGARI, composer)), [g('i'), g('k'), g('K')], "{composer:?} Devanagari");
-        assert_eq!(ids(drawn(&db, GUJARATI, composer)), [g('k'), g('K'), g('i')], "{composer:?} Gujarati");
+        assert_eq!(ids(drawn(&db, GUJARATI, composer)), [g('i'), g('k'), g('K')], "{composer:?} Gujarati");
     }
     for composer in [Composer::StandardSingleLine, Composer::StandardEveryLine] {
         let plain = [g('K'), g('.'), g('K'), g('i')];
@@ -93,4 +93,19 @@ fn composers_split_into_breaking_and_shaping() {
         );
     }
     assert_eq!(Composer::default(), EveryLine, "new type and old documents are ME&SA Every-line");
+}
+
+/// A joiner or non-joiner has no glyph in most fonts and the shaper hides it; a Standard composer
+/// draws it as no width at all, not as a missing-glyph box.
+#[test]
+fn standard_composers_give_format_characters_no_width() {
+    let db = db();
+    let text = "क\u{200C}क";
+    for composer in [Composer::StandardSingleLine, Composer::StandardEveryLine] {
+        let l = layout(&db, &object(text, composer));
+        let widths: Vec<f64> = l.glyphs.iter().map(|g| g.advance).collect();
+        assert_eq!(widths.len(), 3, "{composer:?}: {widths:?}");
+        assert_eq!(widths[1], 0.0, "{composer:?}: the non-joiner takes no room: {widths:?}");
+        assert!(widths[0] > 0.0 && widths[2] > 0.0, "{composer:?}: {widths:?}");
+    }
 }

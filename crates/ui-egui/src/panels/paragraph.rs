@@ -54,13 +54,15 @@ pub(crate) fn align(app: &mut VectorcraftApp, justify: &str) -> Result<Value, St
 }
 
 /// `type.lineComposer` (Cmd+Alt+Shift+C): the Single-line Composer for the paragraphs the panel
-/// acts on when they all use the Every-line Composer, else the Every-line Composer; each keeps its
-/// shaping (a Standard composer toggles to the other Standard one). Returns the composer set.
+/// acts on when they all break their lines every-line (either shaping), else the Every-line
+/// Composer. Paragraphs that all use a Standard composer keep it; any other mix takes the Middle
+/// Eastern & South Asian one. Returns the composer set.
 pub(crate) fn toggle_composer(app: &mut VectorcraftApp) -> Result<Value, String> {
     text_style(app).ok_or("select some type first")?;
-    let shared = shared_composer(app);
-    let to_single = shared.is_some_and(|c| !c.is_single_line());
-    let id = composer_id(shared.unwrap_or_default().with_breaking(to_single));
+    let to_single = shared_para(app, |p| p.composer.is_single_line()) == Some(false);
+    let standard = shared_para(app, |p| p.composer.shapes_complex_scripts()) == Some(false);
+    let base = if standard { Composer::StandardEveryLine } else { Composer::EveryLine };
+    let id = composer_id(base.with_breaking(to_single));
     format(app, json!({ "composer": id }));
     Ok(json!(id))
 }

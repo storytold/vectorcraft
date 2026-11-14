@@ -10485,8 +10485,9 @@ attributes as `para.composer`, saved only when it is not Every-line, which is th
 Standard composers existed). `singleLine` and `everyLine` shape Indic, Arabic and Hebrew type with the font's layout
 tables, as all type is set; `standardSingleLine` and `standardEveryLine` break lines the same way but set such type
 glyph by glyph as the font maps its characters (no conjuncts, reordering, mark placement or joining forms), for legacy
-fonts that keep a script on Latin character codes. Latin and other scripts keep their kerning and ligatures under every
-composer. An older VectorCraft cannot open a file that uses a Standard composer. `.ai`, EPS and PDF files carry no composer.
+fonts that keep a script on Latin character codes. The scripts a Standard composer leaves unshaped are Indic, Arabic and the
+other joining scripts (Syriac, N'Ko, Mongolian, Adlam…) and Hebrew; Latin, Greek, Cyrillic, CJK, Thai and the rest keep their
+kerning and ligatures under every composer. Letters left unshaped do not join, so Insert Kashidas adds no tatweel between them. An older VectorCraft cannot open a file that uses a Standard composer. `.ai`, EPS and PDF files carry no composer.
 Every-line, the default, picks the breaks of the whole paragraph together in area type:
 justified text gets even word spacing, ragged text (left, centre or right aligned) an even rag, so it may move a word
 that fits to the next line to avoid a lone short word on the last line or a full line next to a short one.
@@ -10500,8 +10501,9 @@ no room for all of it, or when the search for its breaks passes VectorCraft's ow
 2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the paragraphs of a frame).
 The UI command `type.lineComposer` (Cmd+Alt+Shift+C, in remote mode `press_key {key: "C", mods: {cmd: true, alt: true,
 shift: true}}` or `invoke_menu`) sets the Single-line form when every paragraph of the selected type (or every paragraph the
-Type tool's selection touches) uses an Every-line one, else the Every-line form, keeping each paragraph's shaping (`singleLine`
-or `everyLine`; a Standard composer toggles between `standardSingleLine` and `standardEveryLine`), and returns the composer it set.
+Type tool's selection touches) uses an Every-line one, else the Every-line form. Paragraphs that all use a Standard composer
+keep it (`standardSingleLine` or `standardEveryLine`); any other mix takes the Middle Eastern & South Asian one (`singleLine`
+or `everyLine`). It returns the composer it set.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.setFormat","params":{"ids":[7],"composer":"singleLine"}}}
