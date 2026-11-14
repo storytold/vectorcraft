@@ -220,6 +220,10 @@ pub struct Prefs {
     /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
     /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
+    /// The desktop canvas converts its sRGB into the ICC profile of the display that shows the
+    /// window, where the system doesn't (Windows without Advanced Color, X11). Display only: it
+    /// changes no document, proof or export.
+    pub monitor_profile_display: bool,
     // File Handling
     pub background_save: bool,
     pub background_export: bool,
@@ -499,6 +503,7 @@ impl Default for Prefs {
             real_time_drawing: true,
             render_threads: -1,
             linux_display_server: s("automatic"),
+            monitor_profile_display: true,
             background_save: true,
             background_export: true,
             autosave_recovery: true,

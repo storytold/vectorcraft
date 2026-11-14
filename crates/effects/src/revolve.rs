@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, LineJoin, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, FillLayer, Node, NodeId, NodeKind};
 use vectorcraft_geom::{PathData, PathEl, Point, Rect, Vec2};
 use vectorcraft_three_d::{Edge, Revolve};
 
@@ -494,10 +494,10 @@ fn surface(
                 .into_iter()
                 .flat_map(|item| {
                     let AppearanceItem::Fill(fill) = &item else { return vec![item] };
-                    let mut edge = StrokeLayer::new(fill.paint.clone(), SEAM_WIDTH);
-                    // Acute face corners must stay within the overlap width. Miter joins
-                    // amplify this seam stroke into visible spikes along the silhouette.
-                    edge.join = LineJoin::Round;
+                    // Acute face corners must stay within the overlap width: meets() counts on a
+                    // stroked seam reaching no more than half its width; faces drawn as clipped
+                    // groups are measured by their box.
+                    let mut edge = crate::lighting::seam_stroke(fill.paint.clone(), SEAM_WIDTH);
                     edge.opacity = fill.opacity;
                     vec![item, AppearanceItem::Stroke(edge)]
                 })

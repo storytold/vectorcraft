@@ -29,10 +29,9 @@ fn finished(s: &mut Session) -> Value {
 
 #[test]
 fn a_found_font_is_copied_without_replacing_a_file_and_its_type_redraws() {
-    let root = vectorcraft_testkit::temp_dir("font-folder");
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(root.join("Downloads/Deep")).unwrap();
-    let root = plain(std::fs::canonicalize(&root).unwrap());
+    let dir = vectorcraft_testkit::TempDir::new("font-folder");
+    std::fs::create_dir_all(dir.join("Downloads/Deep")).unwrap();
+    let root = plain(std::fs::canonicalize(&*dir).unwrap());
     let fonts = root.join("App Fonts");
     vectorcraft_text::set_app_font_dir(fonts.clone());
     assert!(vectorcraft_text::system_font_dirs().contains(&fonts));
@@ -85,5 +84,4 @@ fn a_found_font_is_copied_without_replacing_a_file_and_its_type_redraws() {
     // Only files the last search found are copied.
     let r = s.execute("text.addFontFiles", &json!({"files": [root.join("other.ttf")]}));
     assert!(r.as_ref().is_err_and(|e| e.to_string().contains("the last text.findFontFiles search")), "{r:?}");
-    let _ = std::fs::remove_dir_all(&root);
 }

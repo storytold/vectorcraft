@@ -45,8 +45,9 @@ use generate::generate;
 #[cfg(test)]
 use series::default_series_color;
 pub(crate) use series::{
-    capture_label_anti_alias, capture_label_paragraphs, capture_label_styles, capture_series_object_opacity, capture_series_opacity,
-    capture_series_paints, capture_series_top_paints, paint_targets, series_group_marks, series_group_marks_where, series_object_opacity_differs,
+    LabelTextChange, capture_label_anti_alias, capture_label_object_opacity, capture_label_paragraphs, capture_label_rows, capture_label_styles,
+    capture_label_text, capture_series_object_opacity, capture_series_opacity, capture_series_top_paints, is_design_art,
+    label_object_opacity_differs, paint_targets, series_group_marks, series_group_marks_where, series_marks_in, series_object_opacity_differs,
     shown_paint,
 };
 

@@ -136,6 +136,12 @@ pub trait Tool: Send {
     fn overlays(&self, _cx: &ToolContext) -> Vec<Overlay> {
         vec![]
     }
+    /// Did the last [`Tool::overlays`] leave part of its overlays for later calls (the outline of a
+    /// long Blob Brush or Eraser drag, the band of a long smoothing drag outlined again after a
+    /// zoom change)? The host then draws again on the next frame, even when the pointer holds still.
+    fn overlays_pending(&self) -> bool {
+        false
+    }
     fn cursor(&self, _cx: &ToolContext, _p: Point, _mods: Mods) -> Cursor {
         Cursor::Arrow
     }
@@ -175,6 +181,11 @@ pub trait Tool: Send {
     /// with a stop selected takes Delete and the arrows)?
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
         false
+    }
+    /// [`Self::claims_key`] for a press with `mods` held. By default the modifiers do not matter;
+    /// a tool that takes a key only without modifiers leaves the modified presses to the shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> bool {
+        self.claims_key(cx, key)
     }
     /// Has the tool started something that Escape ends while no button is pressed (a path being
     /// drawn, the Blend tool's first pick)? That Escape ends nothing else, such as isolation mode or

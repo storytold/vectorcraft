@@ -47,7 +47,7 @@ pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
 pub mod kinsokusets;
-mod layer;
+pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
 pub mod linkfiles;

@@ -239,6 +239,11 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("tateChuYoko", json!(v.tate_chu_yoko)),
         ("tcyUpDown", json!(v.tcy_up_down)),
         ("tcyLeftRight", json!(v.tcy_left_right)),
+        ("warichu", json!(v.warichu)),
+        ("warichuLines", json!(v.warichu_lines)),
+        ("warichuGap", json!(v.warichu_gap)),
+        ("warichuScale", json!(v.warichu_scale)),
+        ("warichuAlign", json!(v.warichu_align)),
         ("akiLeft", json!(v.aki_left)),
         ("akiRight", json!(v.aki_right)),
         ("standardVerticalRoman", json!(v.standard_vertical_roman)),
@@ -626,6 +631,19 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     }
                     let (lo, hi) = (0.0, vectorcraft_doc::text::MAX_AKI);
                     for (key, value) in [("akiLeft", st.aki_left), ("akiRight", st.aki_right)] {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                        }
+                    }
+                    let lines = vectorcraft_doc::text::WARICHU_LINES;
+                    if changed("warichuLines") && !lines.contains(&st.warichu_lines) {
+                        return Err(bad(&c, format!("`warichuLines` must be a whole number from {} to {}", lines.start(), lines.end())));
+                    }
+                    let scale = vectorcraft_doc::text::WARICHU_SCALE;
+                    for (key, value, lo, hi) in [
+                        ("warichuGap", st.warichu_gap, 0.0, vectorcraft_doc::text::MAX_WARICHU_GAP),
+                        ("warichuScale", st.warichu_scale, *scale.start(), *scale.end()),
+                    ] {
                         if changed(key) && !(lo..=hi).contains(&value) {
                             return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
                         }
@@ -1136,12 +1154,12 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
 
 /// The styles of `kind` in `src` that load, with their source names so that art in the file keeps
 /// referring to them: not the Normal style, and not one whose attributes don't read, whose sizes,
-/// scales, leading, shifts, Insert Aki or stroke width are out of the range `charStyle.new` takes, whose
+/// scales, leading, shifts, Insert Aki, Warichu Settings or stroke width are out of the range `charStyle.new` takes, whose
 /// indents, spacing, Hyphenation or Justification options or tab stops are out of the range
 /// `paraStyle.new` takes, or whose name is empty, which are skipped. → (the styles, the names in
 /// `src` of those skipped)
 fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
-    const RANGED: [&str; 18] = [
+    const RANGED: [&str; 21] = [
         "size",
         "h_scale",
         "v_scale",
@@ -1151,6 +1169,9 @@ fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
         "akiRight",
         "tcyUpDown",
         "tcyLeftRight",
+        "warichuLines",
+        "warichuGap",
+        "warichuScale",
         "stroke_width",
         "left_indent",
         "right_indent",
