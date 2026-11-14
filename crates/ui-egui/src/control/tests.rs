@@ -293,6 +293,42 @@ fn an_absolute_path_outside_the_read_root_is_unreadable() {
     });
 }
 
+/// Under a read root, an absolute path or a `file:` URL outside it is written as a path also with
+/// whitespace around it, and a recorded step's text param loses it; a path inside the root stays.
+#[test]
+fn a_spaced_absolute_path_outside_the_read_root_is_left_out() {
+    let base = crate::tests_folder::Folder::new("unreadable-spaced");
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let inside = format!(" {} ", base.join("in").join("a.svg").to_string_lossy());
+    let mut params = json!({"target": " /outside/root/x", "name": "\tfile:///outside/root/x ", "keep": inside, "list": [" /outside/root/y"]});
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        assert!(super::unreadable_path_like(" /outside/root/x"));
+        assert!(super::unreadable_path_like("\tfile:///outside/root/x "));
+        assert!(!super::unreadable_path_like(&inside), "{inside}");
+        super::leave_out_unreadable_params(params.as_object_mut().unwrap(), vectorcraft_engine::cmd::ParamsPlace::top(None));
+    });
+    assert_eq!(params, json!({"keep": inside, "list": []}));
+}
+
+/// Under a read root, an empty or blank value names no path, so a recorded step keeps it under a path
+/// param and in a path param's list, a folder preference reset in a `prefs.set` step's `values`
+/// included; a path outside the root is still left out.
+#[test]
+fn an_empty_path_param_stays_under_a_read_root() {
+    let base = crate::tests_folder::Folder::new("unreadable-empty");
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let mut params = json!({
+        "values": {"fontsFolder": "", "templatesFolder": " ", "recoveryFolder": "/outside/root/x"},
+        "path": "", "destinationFolder": " ", "files": ["", "/outside/root/y"],
+    });
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        super::leave_out_unreadable_step("prefs.set", params.as_object_mut().unwrap());
+    });
+    assert_eq!(params, json!({"values": {"fontsFolder": "", "templatesFolder": " "}, "path": "", "destinationFolder": " ", "files": [""]}));
+}
+
 /// Without a read root, a `file:` URL that names another host may be read, and a recorded step keeps
 /// it.
 #[test]
