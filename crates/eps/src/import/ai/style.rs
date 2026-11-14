@@ -1500,11 +1500,30 @@ const ART_ENTRIES: [&str; 18] = [
     "Adobe Effect Expand Before Version", // brand-ok: the entry's name in the files
 ];
 
-/// An Art brush's filter `f` as the stroke it paints: `None` when it isn't a stroke in a color, names
-/// no Art brush, holds an entry that isn't read, or its settings aren't those of art that stretches
-/// along the path, unflipped, at the brush's own width (`Scaling` 1), in Tints (`Colorization` 1),
-/// with `FoldAdjustment` 1, which is [`vectorcraft_brush::ArtBrush`]'s `overlap: false`: its drawn
-/// look stays.
+/// The entries of an Art brush's filter that hold its settings, in the order of
+/// [`super::brush::ArtSettings`], with how each is written and its value when the filter leaves it
+/// out (`None`: the filter must hold it).
+const ART_SETTINGS: [(&str, Kind, Option<f64>); 14] = [
+    ("Colorization", Kind::Int, None),
+    ("Scaling", Kind::Real, None),
+    ("Spacing", Kind::Real, Some(0.0)),
+    ("Adjustment", Kind::Int, Some(1.0)),
+    ("Counterclockwise", Kind::Int, Some(0.0)),
+    ("UpsideDown", Kind::Int, Some(0.0)),
+    ("Proportional", Kind::Bool, Some(0.0)),
+    ("MinScaling", Kind::Real, Some(1.0)),
+    ("MaxScaling", Kind::Real, Some(1.0)),
+    ("ScaleYDependsOn", Kind::Int, Some(0.0)),
+    ("Segmented", Kind::Bool, Some(0.0)),
+    ("StartSegmentLength", Kind::Real, Some(0.0)),
+    ("EndSegmentLength", Kind::Real, Some(0.0)),
+    ("FoldAdjustment", Kind::Bool, Some(1.0)),
+];
+
+/// An Art brush's filter `f` as the stroke it paints, with its settings: `None` when it isn't a
+/// stroke in a color, names no Art brush, holds an entry that isn't read or a setting that isn't a
+/// number of its kind, or tints its art with a swatch's color: its drawn look stays. Whether the
+/// brush draws as these settings is [`super::brush::draws_as`]'s to say.
 fn art_stroke(f: &Filter) -> Option<StyleItem> {
     if !f.paints.0
         || f.gradient
@@ -1519,28 +1538,13 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
     if plugin != ART_BRUSH {
         return None;
     }
-    let off = |key: &str, kind: Kind| matches!(entry(f, key, kind), Ok(None | Some(0.0)));
-    let plain = off("Proportional", Kind::Bool)
-        && off("Segmented", Kind::Bool)
-        && off("UpsideDown", Kind::Int)
-        && off("Counterclockwise", Kind::Int)
-        && off("ScaleYDependsOn", Kind::Int)
-        && off("Spacing", Kind::Real)
-        && off("StartSegmentLength", Kind::Real)
-        && off("EndSegmentLength", Kind::Real);
-    if !plain || entry(f, "Adjustment", Kind::Int).ok()?.unwrap_or(1.0) != 1.0 || entry(f, "FoldAdjustment", Kind::Bool).ok()?.unwrap_or(1.0) != 1.0 {
-        return None;
-    }
-    let one = |key: &str| entry(f, key, Kind::Real).is_ok_and(|v| v.unwrap_or(1.0) == 1.0);
-    if entry(f, "Scaling", Kind::Real).ok()?? != 1.0 || !one("MinScaling") || !one("MaxScaling") {
-        return None;
-    }
-    if entry(f, "Colorization", Kind::Int).ok()?? != 1.0 {
-        return None;
+    let mut settings = [0.0; 14];
+    for (slot, (key, kind, missing)) in settings.iter_mut().zip(ART_SETTINGS) {
+        *slot = entry(f, key, kind).ok()?.or(missing)?;
     }
     let paint = f.stroke.clone()?;
     // The tinted pieces are process colors, so a swatch's ink would be lost.
-    if matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
+    if settings[0] == 1.0 && matches!(paint, Paint::Solid { swatch: Some(_), .. }) {
         return None;
     }
     Some(StyleItem::Stroke {
@@ -1552,7 +1556,7 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
         dash: None,
         profile: None,
         align: StrokeAlign::Center,
-        brush: Some((name.clone(), PathBrush::Art)),
+        brush: Some((name.clone(), PathBrush::Art(settings))),
     })
 }
 
