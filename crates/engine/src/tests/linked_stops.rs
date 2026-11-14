@@ -214,6 +214,24 @@ fn spot_stops_with_process_plates_export_both_in_device_n_shadings() {
 }
 
 #[test]
+fn deleting_a_spot_swatch_takes_the_process_plates_of_the_stops_it_unlinks() {
+    let (mut s, id) = setup();
+    let plated = json!({"stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 1, "swatch": "Ink", "tint": 50, "plates": [0.3, 0, 0, 0]}]});
+    run(&mut s, "paint.editGradient", plated.clone());
+    run(&mut s, "swatch.new", json!({"name": "Glow", "gradient": plated}));
+    let linked = gradient(&s, id).gradient.stops[1].clone();
+    assert_eq!((linked.swatch.as_deref(), linked.plates), (Some("Ink"), Some([0.3, 0.0, 0.0, 0.0])));
+    run(&mut s, "swatch.delete", json!({"name": "Ink"}));
+    // The art's stop and the gradient swatch's stop keep the color they show, unlinked and without plates.
+    let Paint::Gradient(sw) = doc(&s).swatch("Glow").unwrap().paint.clone() else { panic!("a gradient swatch") };
+    for st in [&gradient(&s, id).gradient.stops[1], &sw.gradient.stops[1]] {
+        assert_eq!((st.color, st.swatch.as_deref(), st.tint, st.plates), (linked.color, None, 1.0, None), "{st:?}");
+    }
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(gradient(&s, id).gradient.stops[1], linked, "undo brings back the link and the plates");
+}
+
+#[test]
 fn radial_spot_gradients_mixed_with_other_inks_export_as_device_n_shadings() {
     let (mut s, _) = setup();
     run(
