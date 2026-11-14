@@ -500,16 +500,18 @@ fn script_files_write_in_the_temporary_and_data_folders() {
          vc.log(out); vc.log(u.fsName); vc.log(Folder.temp.fsName);",
     )
     .unwrap();
-    assert_eq!(r["log"][0], json!([true, true, true, true, true, true, true, "a1trueb\nc\r\n", true, true, true, 4, true, true]));
+    // The first `writeln` uses the default line end, which is the platform's.
+    let text = if cfg!(windows) { "a1trueb\r\nc\r\n" } else { "a1trueb\nc\r\n" };
+    assert_eq!(r["log"][0], json!([true, true, true, true, true, true, true, text, true, true, true, 4, true, true]));
     let notes = PathBuf::from(r["log"][1].as_str().unwrap());
     let temp = PathBuf::from(r["log"][2].as_str().unwrap());
-    assert_eq!(std::fs::read(&notes).unwrap(), b"a1trueb\nc\r\n");
-    assert!(notes.starts_with(std::fs::canonicalize(base.join("settings/Script Data")).unwrap()), "{notes:?}");
+    assert_eq!(std::fs::read(&notes).unwrap(), text.as_bytes());
+    assert!(notes.starts_with(crate::cmd::findfiles::plain(std::fs::canonicalize(base.join("settings/Script Data")).unwrap())), "{notes:?}");
     assert!(!temp.exists(), "the run's temporary folder is deleted when it ends");
     let written: Vec<&str> = r["written"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
     assert!(written.contains(&notes.to_string_lossy().as_ref()), "{written:?}");
     let again = run_in(&mut s, &base, "var u = new File(Folder.userData.fsName + '/notes.txt'); u.open('r'); vc.log(u.read());").unwrap();
-    assert_eq!(again["log"], json!(["a1trueb\nc\r\n"]), "a script's data folder is kept between runs");
+    assert_eq!(again["log"], json!([text]), "a script's data folder is kept between runs");
     let _ = std::fs::remove_dir_all(base);
 }
 
