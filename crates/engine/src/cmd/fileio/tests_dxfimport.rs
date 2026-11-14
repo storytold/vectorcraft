@@ -163,12 +163,12 @@ fn dxf_info_lists_layouts_layers_and_units() {
 }
 
 #[test]
-fn binary_dxf_says_to_save_it_as_ascii() {
+fn damaged_binary_dxf_says_so() {
     let mut s = Session::new();
     let mut bytes = vectorcraft_cad::import::BINARY_SENTINEL.to_vec();
     bytes.extend([0u8; 64]);
     let e = open(&mut s, &bytes, json!({})).unwrap_err().to_string();
-    assert!(e.contains("binary DXF") && e.contains("ASCII"), "{e}");
+    assert!(e.contains("binary DXF") && e.contains("damaged"), "{e}");
     let e = s.execute("document.dxfInfo", &json!({"dataBase64": b64(&bytes)})).unwrap_err().to_string();
     assert!(e.contains("binary DXF"), "{e}");
 }
