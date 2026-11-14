@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{CharStyle, Effect, NodeId, TextObject};
-use vectorcraft_geom::{Point, Rect, shapes};
+use vectorcraft_geom::{Point, Rect, Shape, shapes};
 
 /// Type tests need glyph outlines, which only the optional craft-fonts build input provides.
 fn skip_without_craft_fonts() -> bool {
@@ -793,7 +793,7 @@ fn type_outlined_next_to_type_that_stays_type_keeps_its_look() {
 }
 
 #[test]
-fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
+fn type_in_a_clipping_group_with_a_fill_of_its_own_keeps_its_effect() {
     if skip_without_craft_fonts() {
         return;
     }
@@ -808,9 +808,59 @@ fn type_in_a_clipping_group_with_a_fill_of_its_own_is_outlined_plain() {
     g.children_mut().unwrap().push(Arc::new(clip));
     let d = bake_document(&doc_with(g)).unwrap();
     assert_eq!(type_origins(&d), [(20.0, 60.0), (220.0, 60.0)]);
-    // The type clips by its plain outlines, as the canvas clips by them: its own effect is left out.
+    // The type clips by its outlines moved by its own effect, as the canvas clips by them.
     let b = d.node(NodeId(59)).and_then(|n| n.geometric_bounds()).unwrap();
-    assert!(b.y0 > 30.0 && b.y1 < 70.0, "{b:?}");
+    assert!(b.y0 > 330.0 && b.y1 < 370.0, "{b:?}");
+}
+
+#[test]
+fn clipping_type_whose_fill_has_a_geometry_effect_clips_by_its_plain_outlines() {
+    if skip_without_craft_fonts() {
+        return;
+    }
+    let near = |a: Rect, b: Rect, tol: f64| [a.x0 - b.x0, a.y0 - b.y0, a.x1 - b.x1, a.y1 - b.y1].iter().all(|v| v.abs() < tol);
+    for stroke in [Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0))] {
+        // Type that clips a square, with a Transform effect on its own fill.
+        let mut t = type_node(60);
+        t.appearance = Appearance::basic(Paint::solid(Color::BLACK), stroke.clone(), 1.0).into();
+        for item in &mut t.appearance.items {
+            if let AppearanceItem::Fill(f) = item {
+                f.effects.push(fx("distort.transform", json!({"moveH": 300})));
+            }
+        }
+        let square = Node::path(NodeId(61), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art());
+        let clip = Node::new(NodeId(62), NodeKind::Group { children: vec![Arc::new(t.clone()), Arc::new(square)], clip: true });
+        let canvas = crate::clip_outline(&t).map(|(bp, _)| bp.bounding_box()).unwrap();
+        assert!(canvas.x1 < 100.0, "the canvas clips by the plain outlines: {canvas:?}");
+        let d = bake_document(&doc_with(clip)).unwrap();
+        let baked = d.node(NodeId(62)).unwrap();
+        // With a stroke, the clip group sits in a group with the stroke over it, outside the clip.
+        let group = match baked.kind {
+            NodeKind::Group { clip: true, .. } => {
+                assert!(stroke.is_none(), "{baked:?}");
+                baked
+            }
+            _ => {
+                let ch = baked.children().unwrap();
+                assert_eq!(ch.len(), 2, "{baked:?}");
+                let strokes = ch[1].appearance.items.iter().all(|i| matches!(i, AppearanceItem::Stroke(_)));
+                assert!(matches!(ch[1].kind, NodeKind::Text(_)) && strokes, "the type with only its stroke: {:?}", ch[1]);
+                &ch[0]
+            }
+        };
+        let ch = group.children().unwrap();
+        assert!(matches!(group.kind, NodeKind::Group { clip: true, .. }) && ch.len() == 3, "{group:?}");
+        // The export clips by the outlines the canvas clips by.
+        assert!(matches!(ch[0].kind, NodeKind::Path { clipping: true, .. }), "{:?}", ch[0]);
+        let b = crate::clip_outline(&ch[0]).map(|(bp, _)| bp.bounding_box()).unwrap();
+        assert!(near(b, canvas, 1e-6), "canvas {canvas:?}, export {b:?}");
+        // The fills (the characters' and the moved one) paint behind the square, inside the clip.
+        let fill = ch[1].geometric_bounds().unwrap();
+        assert!((fill.x0 - canvas.x0).abs() < 1e-6 && fill.x1 > canvas.x1 + 250.0, "{fill:?}");
+        assert_eq!(ch[2].id, NodeId(61));
+        let mut ids = std::collections::HashSet::new();
+        baked.walk(&mut |n| assert!(ids.insert(n.id), "duplicate id {}", n.id));
+    }
 }
 
 #[test]
