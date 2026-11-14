@@ -1571,6 +1571,27 @@ fn outline_object_is_a_geometry_effect_that_keeps_the_path() {
     assert_eq!(apply_geometry(&[fx("path.outlineObject", json!({})), offset.clone()], &square(), b), apply_geometry(&[offset], &square(), b));
 }
 
+/// A symbol instance given to Pathfinder and compound shapes as its art: the group takes the
+/// instance's box angle and the art turns with it, turned with the instance or reset to 0.
+#[test]
+fn outline_object_turns_an_instances_art_with_its_box() {
+    use std::sync::Arc;
+
+    use vectorcraft_doc::orient::transformed_angle;
+    use vectorcraft_doc::{Appearance, Document, NodeId, Symbol};
+    let mut d = Document::new(500.0, 500.0);
+    d.symbols.push(Symbol { dynamic: false, name: "s".into(), art: Arc::new(Node::path(NodeId(0), square(), Appearance::default())) });
+    let xf = Affine::translate((200.0, 100.0)) * Affine::rotate(0.35);
+    for box_angle in [transformed_angle(0.0, xf), 0.0] {
+        let mut inst = Node::new(NodeId(3), NodeKind::SymbolInstance { symbol: "s".into(), xf });
+        inst.bbox_angle = box_angle;
+        let out = outline_object(Some(&d), &inst).unwrap();
+        let mut angles = vec![];
+        out.walk(&mut |c| angles.push(c.bbox_angle));
+        assert!(angles.len() == 2 && angles.iter().all(|a| close(*a, box_angle, 1e-9)), "{box_angle}: {angles:?}");
+    }
+}
+
 #[test]
 fn convert_to_shape_sizes() {
     let r = run("convertToShape.rectangle", json!({"extraW": 20, "extraH": 10}), &square()).bounds().unwrap();

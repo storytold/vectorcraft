@@ -162,15 +162,26 @@ fn active_stroke(n: &Node) -> Option<&vectorcraft_doc::StrokeLayer> {
     n.appearance.stroke().filter(|s| s.visible && s.opacity > 0.0)
 }
 
-/// The visible geometry effects in `fx`, in order.
-fn geometry_of(fx: &[Effect]) -> Vec<Effect> {
-    fx.iter().filter(|e| e.visible && is_geometry(&e.id)).cloned().collect()
+/// Is `n` a symbol instance whose active fill or stroke has a visible raster effect (a shadow, glow,
+/// blur, feather or other painted effect, [`crate::is_raster`])? Its art takes that effect on each
+/// fill or stroke in it that paints ([`add_instance_row_effects`]), and draws it there.
+pub fn has_instance_row_raster(n: &Node) -> bool {
+    let raster = |fx: &[Effect]| fx.iter().any(|e| e.visible && crate::is_raster(&e.id));
+    matches!(n.kind, NodeKind::SymbolInstance { .. })
+        && (active_fill(n).is_some_and(|f| raster(&f.effects)) || active_stroke(n).is_some_and(|s| raster(&s.effects)))
 }
 
-/// `art`, the art symbol instance `n` places, with the visible geometry effects of `n`'s active
-/// fill added after the effects of every fill in it that paints, and those of its active stroke
-/// after the effects of every stroke in it that paints ([`active_fill`], [`active_stroke`]). Each
-/// fill or stroke keeps its paint, and the others keep their shapes. Live objects in it that are
+/// The visible geometry and raster effects in `fx`, in order: those a symbol instance's active fill
+/// or stroke passes on to its art.
+fn row_effects_of(fx: &[Effect]) -> Vec<Effect> {
+    fx.iter().filter(|e| e.visible && (is_geometry(&e.id) || crate::is_raster(&e.id))).cloned().collect()
+}
+
+/// `art`, the art symbol instance `n` places, with the visible geometry and raster effects of
+/// `n`'s active fill added after the effects of every fill in it that paints, and those of its
+/// active stroke after the effects of every stroke in it that paints ([`active_fill`],
+/// [`active_stroke`]): a Drop Shadow on the instance's fill shadows each filled shape in the art.
+/// Each fill or stroke keeps its paint, and the others keep their shapes. Live objects in it that are
 /// reached are evaluated first (with the symbols of `doc`), so the effects reshape what they draw.
 /// Clip groups' clipping paths, guides and the art of opacity masks keep their shapes. A symbol
 /// instance in the art takes the effects on its own active fill or stroke, or on a new fill or
@@ -180,8 +191,8 @@ fn geometry_of(fx: &[Effect]) -> Vec<Effect> {
 /// instance in the art takes them.
 fn add_instance_row_effects(doc: Option<&Document>, n: &Node, art: &mut Node) {
     let NodeKind::SymbolInstance { symbol, .. } = &n.kind else { return };
-    let fill = active_fill(n).map_or(vec![], |f| geometry_of(&f.effects));
-    let stroke = active_stroke(n).map_or(vec![], |s| geometry_of(&s.effects));
+    let fill = active_fill(n).map_or(vec![], |f| row_effects_of(&f.effects));
+    let stroke = active_stroke(n).map_or(vec![], |s| row_effects_of(&s.effects));
     if !fill.is_empty() || !stroke.is_empty() {
         add_row_effects(doc, symbol, art, &fill, &stroke);
     }
@@ -526,8 +537,8 @@ fn with_id(art: &Node, id: NodeId) -> Node {
 /// a symbol instance as `symbol_art` (the symbol's art, stained as the caller draws it) placed by
 /// the instance's transform (through the symbol's 9-slice guides in `doc`, when it has them), as
 /// the art its members draw when the instance has geometry effects of its own
-/// ([`crate::group::members_as_drawn`]), its fills and strokes carrying the geometry effects of the
-/// instance's active fill and stroke ([`add_instance_row_effects`]).
+/// ([`crate::group::members_as_drawn`]), its fills and strokes carrying the geometry and raster
+/// effects of the instance's active fill and stroke ([`add_instance_row_effects`]).
 /// `None` for other kinds (images, paths, containers), and for an instance whose art placed
 /// through the guides could hold more than [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects. A Repeat counts the Repeats in the art of
 /// `doc`'s symbols that its instances show toward its instance budget.
@@ -719,12 +730,14 @@ pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping
 /// reshaped with it, and keep their effects from their first Convert to Shape or Outline Object
 /// on. The result is a group with `n`'s id, name, visibility, transparency, opacity mask
 /// and remaining (raster) effects; `None` when `n` has no visible geometry effect, no perspective
-/// and is not type or an image with a fill or stroke of its own that [`has_item_geometry`] counts,
-/// or has no art (a symbol instance without `symbol_art`). A path with [`has_transform_art`] is
-/// always reshaped. The fills and strokes in the art whose own Transform effects reach their
-/// appearance become objects of their own ([`transform_items`]).
+/// and is not type or an image with a fill or stroke of its own that [`has_item_geometry`] counts
+/// or a symbol instance whose active fill or stroke has a raster effect
+/// ([`has_instance_row_raster`]), or has no art (a symbol instance without `symbol_art`). A path
+/// with [`has_transform_art`] is always reshaped. The fills and strokes in the art whose own
+/// Transform effects reach their appearance become objects of their own ([`transform_items`]).
 pub fn reshape(doc: Option<&Document>, n: &Node, symbol_art: Option<&Node>) -> Option<Node> {
-    if !has_transform_art(n) && ((geometry_effects(n).is_empty() && n.projection().is_none() && !has_item_geometry(n)) || !needs_outline(n)) {
+    let own = !geometry_effects(n).is_empty() || n.projection().is_some() || has_item_geometry(n) || has_instance_row_raster(n);
+    if !has_transform_art(n) && (!own || !needs_outline(n)) {
         return None;
     }
     as_art(doc, n, symbol_art)
