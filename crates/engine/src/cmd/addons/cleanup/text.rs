@@ -12,7 +12,7 @@ use vectorcraft_doc::{CharStyle, Document, Justify, Node, NodeId, NodeKind, Para
 use vectorcraft_geom::{Affine, Point, Vec2};
 use vectorcraft_text::{FontDb, FontMatch, TextLayout, edit};
 
-use crate::cmd::fonts::{edit_symbol_texts, symbol_texts};
+use crate::cmd::fonts::{art_texts_of, edit_art_texts_of};
 use crate::cmd::textedit::{editing_range, editing_story};
 use crate::cmd::typecmd::refresh_bounds;
 use crate::cmd::{CommandSpec, bad, checked_ids_or_selection, cmd, has_doc, has_selection, switch_or, text_param};
@@ -108,7 +108,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Missing Fonts…",
             ["Object", "Plug-ins", "Artwork Cleanup"],
             None,
-            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type (the type in the art of its symbols included) whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
+            "{font?: family (default: the default type font, Source Sans 3; any of its names)} set every character of the document's type (the type in its opacity masks and in the art of its symbols and patterns included, hidden or locked type and disabled masks too) whose font family isn't available in `font`, in the style it has closest to the one each had, as one undo step → {runs (style runs changed), font}",
             has_doc,
             replace_fonts
         ),
@@ -206,11 +206,31 @@ struct Source {
     text: String,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many times [`thread_index`] went through the document's threads on this thread.
+    static THREAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Each object the document's text threads list, with the index of the first thread that lists it.
+fn thread_index(d: &Document) -> std::collections::HashMap<NodeId, usize> {
+    #[cfg(test)]
+    THREAD_SCANS.with(|c| c.set(c.get() + 1));
+    let mut out = std::collections::HashMap::new();
+    for (i, thread) in d.text_threads.iter().enumerate() {
+        for id in thread {
+            out.entry(*id).or_insert(i);
+        }
+    }
+    out
+}
+
 impl Source {
-    /// Horizontal point or area type that isn't threaded and whose text all fits; None otherwise.
-    fn of(d: &Document, id: NodeId) -> Option<Self> {
+    /// Horizontal point or area type that isn't threaded (`threaded` false) and whose text all
+    /// fits; None otherwise.
+    fn of(d: &Document, id: NodeId, threaded: bool) -> Option<Self> {
         let t = text_of(d, id)?;
-        if t.vertical || matches!(t.kind, TextKind::OnPath { .. }) || d.text_threads.iter().any(|th| th.contains(&id)) {
+        if t.vertical || matches!(t.kind, TextKind::OnPath { .. }) || threaded {
             return None;
         }
         let lay = layout(t);
@@ -376,8 +396,10 @@ fn break_text(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let d = &s.doc()?.doc;
     let (mut items, mut skipped, mut count) = (vec![], vec![], 0);
-    for id in texts_under(d, &checked_ids_or_selection(s, p, C)?)? {
-        let (Some(src), Some(node)) = (Source::of(d, id), d.node(id)) else {
+    let ids = texts_under(d, &checked_ids_or_selection(s, p, C)?)?;
+    let threads = thread_index(d);
+    for id in ids {
+        let (Some(src), Some(node)) = (Source::of(d, id, threads.contains_key(&id)), d.node(id)) else {
             skipped.push(id);
             continue;
         };
@@ -405,7 +427,8 @@ fn split_text(s: &mut Session, _: &Value) -> Result<Value> {
         return Err(EngineError::Other("Click in type with a Type tool to split it".into()));
     };
     let d = &s.doc()?.doc;
-    let (Some(src), Some(node)) = (Source::of(d, id), d.node(id).filter(|_| d.is_editable(id))) else {
+    let threaded = d.text_threads.iter().any(|th| th.contains(&id));
+    let (Some(src), Some(node)) = (Source::of(d, id, threaded), d.node(id).filter(|_| d.is_editable(id))) else {
         return Err(EngineError::Other("Select horizontal point or area type whose text fits".into()));
     };
     let text = &src.text;
@@ -544,7 +567,11 @@ fn merge(chain: &[&Piece]) -> std::result::Result<TextObject, usize> {
         for (k, w) in off.windows(2).enumerate() {
             let (delta, Some(&(s, e))) = (w[1] - w[0], before.get(k)) else { continue };
             if delta.abs() > 1e-9 {
-                edit::style_range(&mut m.runs, s, e, |st| st.tracking += delta / st.size.max(1e-6) * 1000.0);
+                // Thousandths of the em as the Horizontal Scale draws it (`spacing_scale`).
+                let vertical = m.vertical;
+                edit::style_range(&mut m.runs, s, e, |st| {
+                    st.tracking += delta / (st.size * vectorcraft_text::spacing_scale(st, vertical)).max(1e-6) * 1000.0;
+                });
                 if !TRACKING.contains(&edit::style_at(&m.runs, s).tracking) {
                     return Err(k + 1);
                 }
@@ -802,7 +829,7 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // The characters a Type tool has selected (after Select All in threaded text, all the text of
     // every frame of the story), else all the text of the selected type.
-    let editing = if p.get("ids").is_some() { None } else { editing_range(s)?.filter(|(_, a, b)| a != b) };
+    let editing = if p.get("ids").is_some_and(|v| !v.is_null()) { None } else { editing_range(s)?.filter(|(_, a, b)| a != b) };
     let story = if editing.is_some() { editing_story(s) } else { vec![] };
     let d = &s.doc()?.doc;
     // Each type object with the breaks that go from it.
@@ -817,13 +844,17 @@ fn remove_breaks(s: &mut Session, p: &Value) -> Result<Value> {
             let ids = texts_under(d, &checked_ids_or_selection(s, p, C)?)?;
             // A threaded story whose frames are all among them is read as one text, once.
             let named: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+            let threads = thread_index(d);
             let mut done = std::collections::HashSet::new();
             let mut out: Vec<(NodeId, Vec<(usize, bool)>)> = vec![];
             for &id in &ids {
                 if !done.insert(id) {
                     continue;
                 }
-                let story = crate::cmd::threads::story_of(d, id);
+                let story = match threads.get(&id).and_then(|&i| d.text_threads.get(i)) {
+                    Some(thread) => crate::cmd::threads::story_in(d, thread, id),
+                    None => vec![],
+                };
                 if !story.is_empty() && story.iter().all(|f| named.contains(f)) {
                     done.extend(story.iter().copied());
                     out.extend(story_cuts(d, &story, brk));
@@ -962,11 +993,9 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
     let default = CharStyle::default().font_family;
     let wanted = text_param(p, "font", C)?.filter(|f| !f.trim().is_empty()).unwrap_or(&default);
     let db = FontDb::global();
-    // Any name of the family is stored as its own name.
-    let family = match db.resolve(wanted, "Regular") {
-        Some((f, m)) if m != FontMatch::Missing => f.family.clone(),
-        _ => return Err(bad(C, "the replacement font is not available")),
-    };
+    // Any name of the family is stored as its own name, and a composite font as its own name.
+    let composite = db.composite_font(wanted).is_some();
+    let family = db.stored_family(wanted, "Regular").ok_or_else(|| bad(C, "the replacement font is not available"))?;
     let missing = |st: &CharStyle| db.resolve(&st.font_family, &st.font_style).is_none_or(|(_, m)| m == FontMatch::Missing);
     let lacks = |t: &TextObject| t.runs.iter().any(|r| missing(&r.style));
     let d = &s.doc()?.doc;
@@ -980,16 +1009,20 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
             }
         });
     }
-    // The type in the symbols' art too, which exports name when its font is missing.
-    if ids.is_empty() && !symbol_texts(d, None).into_iter().any(|(t, _)| lacks(t)) {
+    // The type in opacity masks and in the art of symbols and patterns too, hidden or locked type
+    // included, which exports name when its font is missing.
+    if ids.is_empty() && !art_texts_of(d).into_iter().any(|(_, t, _)| lacks(t)) {
         return Err(EngineError::Other("No fonts are missing".into()));
     }
     let runs = s.edit("Replace Missing Fonts", |d, _| {
         let mut runs = 0;
         let mut replace = |t: &mut TextObject| {
             for r in t.runs.iter_mut().filter(|r| missing(&r.style)) {
-                // The style the font has closest to the one the character had.
-                r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                // The style the font has closest to the one the character had (a composite font's
+                // parts name their own styles: the character keeps its style).
+                if !composite {
+                    r.style.font_style = db.face(&family, &r.style.font_style).map_or_else(|| r.style.font_style.clone(), |f| f.style.clone());
+                }
                 r.style.font_family = family.clone();
                 r.style.font_version = None;
                 r.style.font_axes.clear();
@@ -1003,8 +1036,7 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
                 replace(t);
             }
         }
-        edit_symbol_texts(d, None, &|t, _| lacks(t), &mut replace);
-        drop(replace);
+        edit_art_texts_of(d, &lacks, &mut replace);
         Ok(runs)
     })?;
     Ok(json!({ "runs": runs, "font": family }))

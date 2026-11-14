@@ -92,13 +92,37 @@ fn clicking_a_library_style_adds_and_applies_it_in_one_step() {
     assert!(d.graphic_style("Feathered").is_some() && d.graphic_style("Haze").is_some());
     // Find filters by name; list rows describe the styles; looks are computed once per library.
     let lib = GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1;
-    let rows = GraphicStyleLibraries::rows(&lib, "ember");
+    let rows = GraphicStyleLibraries::rows(&lib, "shadows-glows", "ember");
     assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Ember"]);
     assert_eq!(GraphicStyleLibraries::describe(rows[0].item.unwrap()), "1 fill, Inner Glow, Outer Glow");
     assert!(std::sync::Arc::ptr_eq(&lib, &GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1));
     assert!(app.run("window.graphicStyleLibrary", json!({"library": "nope"})).is_err());
     app.run("window.graphicStyleLibrary", json!({"library": null})).unwrap();
     assert!(last_open(&app.ui).is_none());
+}
+
+#[test]
+fn painted_and_sketched_opens_from_the_window_menu_and_a_click_applies_its_style() {
+    let mut app = app();
+    let entry = crate::menus::menu_entries(&app)
+        .into_iter()
+        .find(|e| e.path == ["Window", "Graphic Style Libraries"] && e.label == "Painted and Sketched")
+        .expect("a Window menu item");
+    assert_eq!((entry.command.as_deref(), &entry.params["library"]), (Some("window.graphicStyleLibrary"), &json!("painted-sketched")));
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run(entry.command.as_deref().unwrap(), entry.params.clone()).unwrap();
+    assert_eq!(last_open(&app.ui).map(|p| (p.kind.as_str(), p.id.as_str())), Some(("graphicStyles", "painted-sketched")));
+    let ctx = context();
+    let undo = undo_len(&app);
+    click(&mut app, &ctx, "Charcoal Shade", Modifiers::NONE, 0.0);
+    let (g, linked) = app.session.selection_graphic_style().expect("applied to the selection");
+    assert_eq!((g.name.as_str(), linked), ("Charcoal Shade", true));
+    assert_eq!(undo_len(&app), undo + 1, "added and applied as one undo step");
+    let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).unwrap().appearance.effects.clone();
+    assert_eq!(node.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["sketch.charcoal"]);
+    let lib = GraphicStyleLibraries::get(&app, "painted-sketched").unwrap().1;
+    let rows = GraphicStyleLibraries::rows(&lib, "painted-sketched", "ink");
+    assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Ink Contour", "Wet Ink"]);
 }
 
 #[test]

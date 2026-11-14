@@ -1,5 +1,6 @@
 use super::compare::{
-    MAX_DIFFERENCE, MAX_PAGES_COMPARED, MAX_PIXELS_COMPARED, MAX_SOLID_DIFFERENCE, PageView, compare, comparison_samples, difference, pixels_compared,
+    MAX_DIFFERENCE, MAX_PAGES_COMPARED, MAX_PIXELS_COMPARED, MAX_SOLID_DIFFERENCE, PAST_THE_PAGE, PageView, compare, comparison_samples, difference,
+    pixels_compared,
 };
 use super::plan::{made_only, make_slots, plan, readable_all};
 use super::slots::{
@@ -9,6 +10,7 @@ use super::slots::{
 use super::{
     Affine, Arc, BTreeSet, Document, Node, NodeId, NodeKind, PathData, Rect, Scaling, Story, Structure, Texts, Unit, VariableKind, Vec2, ai,
 };
+use vectorcraft_doc::PlacedDocument;
 
 /// Which box of the editing copy is the page.
 #[derive(Clone, Copy)]
@@ -21,7 +23,8 @@ pub(super) enum Page {
 
 /// How art moved from a page to its place in the layers' document transforms: its pattern tiles
 /// move with it.
-pub(super) const PAGE_MOVE: Scaling = Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true };
+pub(super) const PAGE_MOVE: Scaling =
+    Scaling { strokes: false, effects: None, keep_type_strokes: false, keep_corners: false, patterns: true, keep_fit_when_flat: false };
 
 /// The page (`visible`, the file read as its page) and the place of its area in the layers'
 /// document.
@@ -47,7 +50,7 @@ pub(super) struct Frame<'a> {
 /// (a `.ai` saved without its PDF part), its type is made from the file's text document alone and
 /// nothing is compared. `outlined`: the page's type was read as outlines, so it has none to put in
 /// the text objects. `unit`: the size in points of a unit of the page's user space (see
-/// [`layered_ai`]).
+/// [`layered_ai`]). `names`: the encoding of names that aren't UTF-8.
 pub(super) fn build(
     data: &[u8],
     visible: Option<&Document>,
@@ -55,19 +58,23 @@ pub(super) fn build(
     outlined: bool,
     trust: bool,
     unit: f64,
+    names: ai::NameEncoding,
 ) -> Result<(Document, Vec<String>), String> {
     // An EPS (its page is its art) draws a Large Canvas page at full size; a `.ai` keeps its art
     // space, as its PDF part may (#2031).
-    build_from(ai::read(data, matches!(page, Page::Art))?, data, visible, page, outlined, trust, unit)
+    let large_canvas = matches!(page, Page::Art);
+    let structure = if visible.is_some() { ai::read_over_page(data, large_canvas, names)? } else { ai::read_in(data, large_canvas, names)? };
+    build_from(structure, data, visible, page, outlined, trust, unit)
 }
 
 /// [`build`] without a page, for a `.ai` whose PDF part can't be read, its first page `page`
 /// (width and height, either way round) points large in units of `unit` points: the document is
 /// drawn `unit` times as large when its first artboard, or its art's box, has the page's size in
 /// those units and not in points, as [`build_from`] decides with a page; else as many times as
-/// large as its declared large canvas scale when it has the page's size at that scale.
-pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64) -> Result<(Document, Vec<String>), String> {
-    let structure = ai::read(data, false)?;
+/// large as its declared large canvas scale when it has the page's size at that scale. `names`: the
+/// encoding of names that aren't UTF-8.
+pub(super) fn build_on_page(data: &[u8], page: (f64, f64), unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
+    let structure = ai::read_in(data, false, names)?;
     let board = structure.artboard.map(|a| structure.to_doc.transform_rect_bbox(a));
     let art = structure.bbox.map(|[a, b, c, d]| structure.to_doc.transform_rect_bbox(Rect::new(a, b, c, d)));
     let (w, h) = page;
@@ -98,8 +105,7 @@ pub(super) type Built = Result<(Document, Vec<String>), String>;
 /// units ([`page_scale_alone`]). The document is drawn at that scale. Else `Err(structure)`, for
 /// [`build_from`] with the page.
 pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Result<Built, Box<Structure>> {
-    let Some(scale) = page_scale_alone(&structure, pages, unit).filter(|_| nothing_waits_on_page(&structure) && type_all_made(&structure, data))
-    else {
+    let Some(scale) = alone_scale(&structure, data, pages, unit) else {
         return Err(Box::new(structure));
     };
     let styles = structure.styles_read;
@@ -112,6 +118,12 @@ pub(super) fn build_without_page(structure: Structure, data: &[u8], pages: &[(f6
         (doc, notes)
     });
     Ok(built)
+}
+
+/// The scale [`build_without_page`] draws `structure` (the editing copy `data` read) at on `pages`
+/// in units of `unit` points, when it builds it without the page.
+pub(super) fn alone_scale(structure: &Structure, data: &[u8], pages: &[(f64, f64)], unit: f64) -> Option<f64> {
+    page_scale_alone(structure, pages, unit).filter(|_| nothing_waits_on_page(structure) && type_all_made(structure, data))
 }
 
 /// Is nothing in `structure` waiting on the page: no object unread (the page's art takes its
@@ -180,6 +192,36 @@ fn left_out_of_comparisons(page: Page, mut restyled: Vec<Rect>, placeholders: Ve
     restyled
 }
 
+/// A single PDF page capped at the format's 14,400-unit limit, without user-space scaling.
+/// The other dimension must still match; unrelated page-size mismatches remain errors.
+fn capped_pdf_page(doc: &Document, visible: &Document, board: Rect, page: Rect, unit: f64) -> bool {
+    let capped = |side: f64, pdf: f64| (pdf - 14_400.0).abs() <= 0.5 && side > pdf + 0.5;
+    let matching = |side: f64, pdf: f64| (side - pdf).abs() <= 0.5 || capped(side, pdf);
+    unit == 1.0
+        && doc.artboards.len() == 1
+        && visible.artboards.len() == 1
+        && (capped(board.width(), page.width()) || capped(board.height(), page.height()))
+        && matching(board.width(), page.width())
+        && matching(board.height(), page.height())
+}
+/// The PDF-covered area of a trusted oversized artboard; its full artboard stays in the document.
+fn compared_page_rect(
+    doc: &Document,
+    visible: &Document,
+    board: Rect,
+    pdf: Rect,
+    trusted_page: Option<Page>,
+    unit: f64,
+    warnings: &mut Vec<String>,
+) -> Rect {
+    if matches!(trusted_page, Some(Page::Artboard)) && capped_pdf_page(doc, visible, board, pdf, unit) {
+        warnings.push("the editing data's artboard is larger than the PDF page: the full artboard comes from its editing data".into());
+        Rect::new(board.x0, board.y0, board.x0 + pdf.width(), board.y0 + pdf.height())
+    } else {
+        board
+    }
+}
+
 /// [`build`] from `structure`, the editing copy `data` already read.
 pub(super) fn build_from(
     structure: Structure,
@@ -189,6 +231,24 @@ pub(super) fn build_from(
     outlined: bool,
     trust: bool,
     unit: f64,
+) -> Result<(Document, Vec<String>), String> {
+    build_weighing(structure, data, visible, page, outlined, trust, unit, &mut None)
+}
+
+/// [`build_from`]. When the layers with their live envelopes don't draw as the page, and don't with
+/// the drawn art of every live envelope put back either, `free` is set to the envelopes of type
+/// (by their place among them, as read) that opened live and that the page doesn't hold against
+/// them ([`held_back`]), whether or not the layers are then used, and however.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_weighing(
+    structure: Structure,
+    data: &[u8],
+    visible: Option<&Document>,
+    page: Page,
+    outlined: bool,
+    trust: bool,
+    unit: f64,
+    free: &mut Option<Vec<usize>>,
 ) -> Result<(Document, Vec<String>), String> {
     let Structure {
         mut doc,
@@ -203,15 +263,18 @@ pub(super) fn build_from(
         restyled,
         placeholders,
         placed_elsewhere,
+        placed_pages,
         envelopes_drawn,
         styles_read,
+        text_patterns,
         canvas_scale,
         xml_ids,
         bindings,
         bindings_skipped,
-        warnings,
+        warped_type,
+        mut warnings,
     } = structure;
-    let restyled = left_out_of_comparisons(page, restyled, placeholders);
+    let mut restyled = left_out_of_comparisons(page, restyled, placeholders);
     // Editing data in the units of the page's user space ([`in_units`]), or at its declared large
     // canvas scale ([`page_scale`]), is compared with the page scaled down to those units, and the
     // document read from it is scaled up by `unit`.
@@ -257,6 +320,7 @@ pub(super) fn build_from(
         {
             (rect, cropped) = (art, true);
         }
+        rect = compared_page_rect(&doc, visible, rect, page_rect, trust.then_some(page), unit, &mut warnings);
         if !fits(&rect) {
             // Both sizes in points as the fields show them, and the editing data's page to the
             // file's as a scale (1:10 is a tenth of its size) when its sides are in proportion and
@@ -284,16 +348,20 @@ pub(super) fn build_from(
                 lone.push(vec![Arc::new(n.clone())]);
             }
         });
-        // A `.ai` read as its PDF part has a page for each artboard, in a row: the type on each
-        // goes where the layers have that artboard.
+        // A `.ai` read as its PDF part has a page for each artboard it was saved with, in a row:
+        // the type on each goes where the layers have that artboard.
         let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
-        let boards = page_boards(&doc.artboards, first, &pages);
+        let boards = page_boards(&doc, visible, first, &pages);
+        // The first page's type goes to the first artboard only when that artboard is the page's
+        // (every artboard has a page); otherwise it goes to `rect`, the art's box or the editing
+        // data's artboard.
+        let first_board = first > 0 || pages.len() == doc.artboards.len();
+        let board_of = |i: usize| boards.as_ref()?.get(i).filter(|_| i > 0 || first_board);
         let page_moves: Vec<(Rect, Affine)> = pages
             .iter()
             .enumerate()
             .map(|(i, page)| {
-                let move_to_doc =
-                    boards.and_then(|boards| boards.get(i)).map(|board| Affine::translate(board.rect.origin() - page.origin())).unwrap_or(shift);
+                let move_to_doc = board_of(i).map(|board| Affine::translate(board.rect.origin() - page.origin())).unwrap_or(shift);
                 (*page, move_to_doc)
             })
             .collect();
@@ -312,7 +380,7 @@ pub(super) fn build_from(
         }
         for object in shown.iter_mut().chain(hidden.iter_mut()).chain(lone.iter_mut()) {
             let on = page_of(object);
-            let shift = match on.and_then(|(i, page)| Some((boards?.get(i)?, page))) {
+            let shift = match on.and_then(|(i, page)| Some((board_of(i)?, page))) {
                 Some((board, page)) => Affine::translate(board.rect.origin() - page.origin()),
                 None => shift,
             };
@@ -322,7 +390,7 @@ pub(super) fn build_from(
         }
         // Pages cropped to the art are copies of the first, and a PDF saved with some of the
         // artboards can hold any of them.
-        let more = more_pages(boards.filter(|b| !cropped && b.len() == doc.artboards.len()), &pages, comparison_samples(visible));
+        let more = more_pages(boards.as_deref().filter(|b| !cropped && b.len() == doc.artboards.len()), &pages, comparison_samples(visible));
         // An EPS saved as its artboard has the art outside it left out of its page.
         let artboard_page =
             artboard.is_some_and(|a| [a.x0 - art_box.x0, a.y0 - art_box.y0, a.x1 - art_box.x1, a.y1 - art_box.y1].iter().all(|d| d.abs() <= 1.0));
@@ -357,7 +425,7 @@ pub(super) fn build_from(
     // The page's type that needs no text object of the layers: the layers' own legacy text, or
     // placed files that show it.
     let as_outlines = page_type_elsewhere(infos.is_empty(), infos.iter().all(|i| !i.shown), &mut shown, &mut hidden, &doc, &placed_elsewhere)?;
-    let texts = Texts::read(data);
+    let texts = Texts::read(data).map(|t| t.with_patterns(text_patterns));
     // Each story is read once, however many text objects name it.
     let mut read: std::collections::BTreeMap<u32, Option<Arc<Story>>> = Default::default();
     let stories: Vec<Option<Arc<Story>>> = infos
@@ -412,6 +480,22 @@ pub(super) fn build_from(
     }
     // Area type flows around the wrap objects above it before it is compared with the page.
     resolve_text_wrap(&mut doc)?;
+    let bound_text = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Text);
+    let bound_visible = bound_slots(&doc, &bindings, &xml_ids, VariableKind::Visibility);
+    // Without a page to compare the layers with, envelopes of type keep their drawn art: like the
+    // other live envelopes, one opens live only where the layers with it draw as the page.
+    let warped_type = warped_type.compared(frame.is_some(), &mut notes);
+    let bound = [&bound_text, &bound_visible];
+    let typed = settle_warped_type(warped_type, &mut doc, &filled, &threaded_frames, bound, &mut restyled, &mut notes)?;
+    // Each live envelope of type's place among the envelopes of type, by its id.
+    let places: Vec<(NodeId, usize)> = typed.iter().map(|(place, id, _)| (*id, *place)).collect();
+    // The live envelopes and what takes the place of each again, when the layers with them don't
+    // draw as the page, with the note that says so.
+    let envelopes_drawn: Vec<(NodeId, Vec<Node>, &str)> = envelopes_drawn
+        .into_iter()
+        .map(|(id, art)| (id, vec![art], ai::ENVELOPE_DRAWN))
+        .chain(typed.into_iter().map(|(_, id, nodes)| (id, nodes, ai::ENVELOPE_TYPE_DRAWN)))
+        .collect();
     if empty > 0 {
         notes.push(format!("{empty} {}", if frame.is_some() { TEXT_LEFT_OUT } else { TYPE_LEFT_OUT }));
     }
@@ -462,19 +546,26 @@ pub(super) fn build_from(
                         notes.extend(unseen_note(unseen).into_iter().chain(note));
                     }
                     other => match drawn_or_trusted(&frame, &mut view, &mut doc, &envelopes_drawn, &notes, unseen, trust, why, reflow) {
-                        Ok(more) => notes.extend(more),
+                        Ok((more, held)) => {
+                            *free = held.map(|held| free_places(&places, &held));
+                            notes.extend(more);
+                        }
                         // The objects that draw differently from the page come in as its art, from
-                        // the placement that draws closer to it.
+                        // the placement that draws closer to it. The layers don't draw as the page:
+                        // the envelopes of type it holds against them keep their drawn art and their
+                        // type, hidden. Where no placement's differing objects can then come in as the
+                        // page's art (an object that holds type isn't replaced), every envelope of type
+                        // keeps its drawn art, and that is tried again.
                         Err(why) => {
                             let other = other.map(|(_, other, unseen)| (other, unseen));
-                            let placements = closer_first(&frame, &mut view, (doc, unseen), other, reflow);
-                            let Some((kept, unseen, kept_notes)) = placements.into_iter().find_map(|(base, unseen)| {
-                                keep_differing(&base, &frame, &mut view, &threaded_frames, &shown, reflow).map(|(kept, n)| (kept, unseen, n))
-                            }) else {
+                            let layers = Placements { doc: &doc, unseen, other: other.as_ref(), drawn: &envelopes_drawn, places: &places };
+                            let found = keep_differing_typed(&frame, &mut view, &layers, &threaded_frames, &shown, reflow, free);
+                            let Some((kept, unseen, kept_notes, typed)) = found else {
                                 return Err(why);
                             };
                             doc = kept;
-                            notes.extend(unseen_note(unseen).into_iter().chain(kept_notes));
+                            let typed = typed.then(|| ai::ENVELOPE_TYPE_DRAWN.to_string()).filter(|n| !notes.contains(n));
+                            notes.extend(typed.into_iter().chain(unseen_note(unseen)).chain(kept_notes));
                         }
                     },
                 },
@@ -484,11 +575,62 @@ pub(super) fn build_from(
     }
     doc.limit_depth_noting(&mut notes);
     bind_variables(&mut doc, &bindings, bindings_skipped, &xml_ids, &filled, &mut notes);
+    placed_documents(&mut doc, &placed_pages);
     if small.is_some() {
         scale_document(&mut doc, unit, styles_read);
         relayout_wrapped(&mut doc);
     }
     Ok((doc, notes))
+}
+
+/// The linked images of `pages` that are still in `doc`, opacity-mask art included, as placed
+/// documents of their page and box, over the same place, each showing the same preview until its
+/// file is read. An image bound to an image variable stays a linked image, the object an image
+/// variable binds.
+fn placed_documents(doc: &mut Document, pages: &[ai::PlacedPage]) {
+    if pages.is_empty() {
+        return;
+    }
+    let vars = &doc.variables;
+    let image_bound = |id: &NodeId| {
+        vars.bindings.get(id).is_some_and(|names| names.iter().any(|v| vars.variable(v).is_some_and(|v| v.kind == VariableKind::Image)))
+    };
+    let pages: std::collections::HashMap<NodeId, ai::PlacedPage> = pages.iter().filter(|p| !image_bound(&p.id)).map(|p| (p.id, *p)).collect();
+    for layer in &mut doc.layers {
+        to_placed_documents(Arc::make_mut(layer), &pages);
+    }
+}
+
+/// [`placed_documents`] in `n` and everything in it.
+fn to_placed_documents(n: &mut Node, pages: &std::collections::HashMap<NodeId, ai::PlacedPage>) {
+    // A box too small to take the image's pixels to (its transform not finite) keeps the linked image.
+    if let Some(page) = pages.get(&n.id)
+        && let NodeKind::Image(im) = &n.kind
+        && let Some(link) = &im.link
+        && let (width, height) = page.size
+        && let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width) / width, f64::from(im.height) / height)
+        && xf.as_coeffs().iter().all(|v| v.is_finite())
+        && xf.determinant().abs() > 1e-12
+    {
+        let link = vectorcraft_doc::LinkInfo { page: Some(page.page), ..link.clone() };
+        let placed = PlacedDocument {
+            link,
+            key: im.key.clone(),
+            bounding: page.bounding,
+            page_box: page.page_box,
+            width,
+            height,
+            xf,
+            placement: im.placement,
+        };
+        n.kind = NodeKind::PlacedDocument(Box::new(placed));
+    }
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        to_placed_documents(Arc::make_mut(&mut m.art), pages);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        to_placed_documents(Arc::make_mut(c), pages);
+    }
 }
 
 /// Bind the objects of `doc` to the variables of its library that `bindings` binds them to, each
@@ -549,6 +691,72 @@ fn bind_variables(
         }
     }
     notes.extend(ai::bindings_note(skipped));
+}
+
+/// The objects of `doc`, text object slots among them, that `bindings` binds to a variable of
+/// `kind`, each named by its XML id (`ids`).
+fn bound_slots(
+    doc: &Document,
+    bindings: &[ai::BindingRef],
+    ids: &std::collections::HashMap<String, Option<NodeId>>,
+    kind: VariableKind,
+) -> BTreeSet<NodeId> {
+    bindings
+        .iter()
+        .filter(|b| doc.variables.variable(&b.variable).is_some_and(|v| v.kind == kind))
+        .filter_map(|b| b.target.as_ref().and_then(|t| ids.get(t).copied().flatten()))
+        .collect()
+}
+
+/// Warped type stays type where its live warp draws as its look, and where a text variable binds it
+/// (`bound`'s first set, by slot). Elsewhere the look takes its place, and one note says how many did.
+/// `filled` says what each slot became, and the comparisons with the page leave out the boxes in
+/// `restyled`. Fails as [`resolve_text_wrap`] does when the looks give the wrap shapes too many
+/// anchors. Before that, the envelopes of type open live where they draw as their drawn art, with
+/// the type of their text slots (made type, one text object for the slot, not threaded, bound to
+/// no text variable and no visibility variable, `bound`'s second set, and no wrap object); the
+/// others keep their drawn art, with a note. Returns each live envelope of type's place among the
+/// envelopes of type (in the order they were read) and id, with what takes its place again (its
+/// hidden type, then its drawn art).
+fn settle_warped_type(
+    mut warped: ai::WarpedType,
+    doc: &mut Document,
+    filled: &std::collections::HashMap<NodeId, Filled>,
+    threaded: &BTreeSet<NodeId>,
+    bound: [&BTreeSet<NodeId>; 2],
+    restyled: &mut Vec<Rect>,
+    notes: &mut Vec<String>,
+) -> Result<Vec<(usize, NodeId, Vec<Node>)>, String> {
+    let [bound_text, bound_visible] = bound;
+    let made = |slot| match filled.get(&slot).map(|f| f.text.as_slice()).filter(|_| !bound_text.contains(&slot)) {
+        Some(&[one]) => Some(one),
+        _ => None,
+    };
+    // An envelope's type: the one text object a slot became (hidden, with nothing else), named as
+    // the slot (made type is no longer weighed against the page: the envelope draws it). A variable
+    // binds the hidden text object a slot became, which the live envelope's type takes the place of
+    // with an id of its own: a slot bound to one keeps its type hidden, and the drawn art stays.
+    let type_of = |doc: &Document, slot: NodeId| {
+        if bound_visible.contains(&slot) {
+            return None;
+        }
+        let id = made(slot).filter(|id| !threaded.contains(id) && filled.get(&slot).is_some_and(|f| f.objects == [*id]))?;
+        let mut text = doc.node(id).filter(|n| matches!(n.kind, NodeKind::Text(_)) && n.extras().wrap.is_none())?.clone();
+        if let Some(name) = text.name.as_deref().and_then(|n| n.strip_prefix(MADE)) {
+            text.name = (!name.is_empty()).then(|| name.to_string());
+        }
+        Some((id, text))
+    };
+    let typed = warped.settle_envelopes(doc, type_of);
+    if !typed.kept.is_empty() && !notes.iter().any(|n| n == ai::ENVELOPE_TYPE_DRAWN) {
+        notes.push(ai::ENVELOPE_TYPE_DRAWN.into());
+    }
+    let replaced = warped.settle(doc, made, threaded, restyled);
+    if replaced > 0 {
+        notes.push(format!("{}: {replaced}", ai::WARPED_TYPE_DRAWN));
+        resolve_text_wrap(doc)?;
+    }
+    Ok(typed.put_back)
 }
 
 /// Most anchors copied into the wrap shapes of a file's area type ([`vectorcraft_doc::text::wrap_work`]).
@@ -967,15 +1175,15 @@ const MAX_DIFFERING: usize = 64;
 const MAX_PATCH_PAIRS: usize = 4_000_000;
 
 /// The layers as read and at the placed files' other placement (each with its count of text
-/// objects the page doesn't draw), the one that draws closer to the page first. `reflow` as in
-/// [`PageView::difference`].
-fn closer_first(
+/// objects the page doesn't draw, and what goes with it), the one that draws closer to the page
+/// first. `reflow` as in [`PageView::difference`].
+fn closer_first<T>(
     frame: &Frame<'_>,
     view: &mut PageView,
-    doc: (Document, usize),
-    other: Option<(Document, usize)>,
+    doc: (Document, usize, T),
+    other: Option<(Document, usize, T)>,
     reflow: bool,
-) -> Vec<(Document, usize)> {
+) -> Vec<(Document, usize, T)> {
     match other {
         Some(other)
             if view.difference_on_every_page(&other.0, frame.rect, reflow).any < view.difference_on_every_page(&doc.0, frame.rect, reflow).any =>
@@ -1093,8 +1301,75 @@ fn keep_differing(
     Some((kept, note.into_iter().chain([format!("{DREW_DIFFERENTLY}: {}", layers.join(", "))]).collect()))
 }
 
+/// The places (among the envelopes of type, as read) of the live envelopes of type in `places`
+/// (each with its id) that `held` doesn't list.
+fn free_places(places: &[(NodeId, usize)], held: &BTreeSet<NodeId>) -> Vec<usize> {
+    places.iter().filter(|(id, _)| !held.contains(id)).map(|(_, place)| *place).collect()
+}
+
+/// The layers of [`keep_differing_typed`]: `doc`, `unseen` text objects of it taken out; the placed
+/// files' other placement of it, when it has one, with how many of its text objects were; its live
+/// envelopes, as [`drawn_or_trusted`] takes them; and the place of each live envelope of type
+/// among the envelopes of type, by its id.
+struct Placements<'a> {
+    doc: &'a Document,
+    unseen: usize,
+    other: Option<&'a (Document, usize)>,
+    drawn: &'a [(NodeId, Vec<Node>, &'a str)],
+    places: &'a [(NodeId, usize)],
+}
+
+/// [`keep_differing`] of the placement of `layers` that draws closer to the page, the envelopes of
+/// type the page holds against that placement ([`held_back`], each placement weighed on its own: the
+/// other one draws placed files elsewhere, under or over the envelopes) having their drawn art and
+/// hidden type back; and where none of the placements' differing objects can then come in as the
+/// page's art, every envelope of type: the document, how many of its text objects were taken out,
+/// its notes, and whether an envelope of type got its drawn art back. A placement that draws as the
+/// page with only the envelopes the page holds put back is used as it is, as one with all the live
+/// envelopes' drawn art put back would have been ([`drawn_or_trusted`]): nothing in it differs to
+/// come in as the page's art. `free` is set to the places of those the page doesn't hold against
+/// the layers as read.
+#[allow(clippy::too_many_arguments)]
+fn keep_differing_typed(
+    frame: &Frame<'_>,
+    view: &mut PageView,
+    layers: &Placements<'_>,
+    threaded_frames: &BTreeSet<NodeId>,
+    shown: &[Vec<Arc<Node>>],
+    reflow: bool,
+    free: &mut Option<Vec<usize>>,
+) -> Option<(Document, usize, Vec<String>, bool)> {
+    let held = held_back(frame, view, layers.doc, layers.drawn, reflow);
+    *free = Some(free_places(layers.places, &held));
+    let held_other = layers.other.map(|(other, _)| held_back(frame, view, other, layers.drawn, reflow));
+    let all: BTreeSet<NodeId> = layers.places.iter().map(|(id, _)| *id).collect();
+    let fewer = held.len() < all.len() || held_other.as_ref().is_some_and(|h| h.len() < all.len());
+    let mut tries = vec![];
+    if fewer {
+        tries.push((held, held_other));
+    }
+    tries.push((all.clone(), Some(all.clone())));
+    tries.into_iter().find_map(|(held, held_other)| {
+        // Each placement with what it put back: whether an envelope of type, and whether only some.
+        let mut base = layers.doc.clone();
+        let typed = (type_drawn(&mut base, layers.drawn, &held), held.len() < all.len());
+        let other = layers.other.map(|(other, unseen)| {
+            let (mut other, held) = (other.clone(), held_other.as_ref().unwrap_or(&held));
+            let typed = (type_drawn(&mut other, layers.drawn, held), held.len() < all.len());
+            (other, *unseen, typed)
+        });
+        let placements = closer_first(frame, view, (base, layers.unseen, typed), other, reflow);
+        placements.into_iter().find_map(|(base, unseen, (typed, some))| {
+            if some && let Ok(notes) = compare(frame, view, &base, reflow) {
+                return Some((base, unseen, notes, typed));
+            }
+            keep_differing(&base, frame, view, threaded_frames, shown, reflow).map(|(kept, notes)| (kept, unseen, notes, typed))
+        })
+    })
+}
+
 /// Copy page drawing IDs, including mask art outside the ordinary child tree.
-fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
+pub(super) fn reid_page_art(doc: &mut Document, source: &Node) -> Node {
     let mut copy = doc.reid(source);
     if let Some(mask) = &mut copy.extras_mut().mask {
         mask.art = Arc::new(reid_page_art(doc, &mask.art));
@@ -1153,41 +1428,193 @@ fn slot_content(
 /// The layers `doc` don't draw as the page (`why`), `unseen` text objects of them taken out: the
 /// notes to add when `doc` with each live envelope `drawn` lists replaced by the drawn art it took
 /// the place of (see [`ai::Structure::envelopes_drawn`]) draws as the page, `doc` then being that;
-/// else, with `trust`, the notes for `doc` as it is. An error, `why`, otherwise. The envelope note
-/// is added unless `notes` has it.
+/// else, with `trust`, the notes for `doc` as it is but for the envelopes of type the page holds
+/// against it ([`held_back`]), which keep their drawn art ([`type_drawn`]), with those envelopes.
+/// An error, `why`, otherwise. The envelope note is added unless `notes` has it.
 #[allow(clippy::too_many_arguments)]
 fn drawn_or_trusted(
     frame: &Frame<'_>,
     view: &mut PageView,
     doc: &mut Document,
-    drawn: &[(NodeId, Node)],
+    drawn: &[(NodeId, Vec<Node>, &str)],
     notes: &[String],
     unseen: usize,
     trust: bool,
     why: String,
     reflow: bool,
-) -> Result<Vec<String>, String> {
+) -> Result<(Vec<String>, Option<BTreeSet<NodeId>>), String> {
     let unseen_note = |n: usize| (n > 0).then(|| format!("{n} {UNSEEN_TEXT}"));
     let mut put_back = doc.clone();
-    let mut any = false;
-    for (id, art) in drawn {
-        if let Some(n) = put_back.node_mut(*id) {
-            *n = art.clone();
-            any = true;
-        }
+    // Each envelope still there, in place of the art it took the place of.
+    let there: Vec<&(NodeId, Vec<Node>, &str)> = drawn.iter().filter(|(id, ..)| put_back.node(*id).is_some()).collect();
+    // One inside another's art goes with it: only the outermost are put back (a place inside
+    // another place fails the whole put-back).
+    let mut inside = std::collections::HashSet::new();
+    for n in there.iter().filter_map(|(id, ..)| put_back.node(*id)) {
+        n.walk(&mut |c| {
+            if c.id != n.id {
+                inside.insert(c.id);
+            }
+        });
     }
+    let outermost = there.iter().filter(|(id, ..)| !inside.contains(id)).map(|(id, art, _)| (*id, art.clone())).collect();
+    let any = !there.is_empty() && put_back.insert_beside(outermost, true).is_ok();
     if any {
         let more = prune_unseen(frame, view, &mut put_back, reflow);
         if let Ok(note) = compare(frame, view, &put_back, reflow) {
             *doc = put_back;
-            let envelope = (!notes.iter().any(|n| n == ai::ENVELOPE_DRAWN)).then(|| ai::ENVELOPE_DRAWN.to_string());
-            return Ok(envelope.into_iter().chain(unseen_note(unseen + more)).chain(note).collect());
+            let mut envelope: Vec<String> = vec![];
+            for (.., say) in there {
+                if !notes.iter().chain(&envelope).any(|n| n == say) {
+                    envelope.push(say.to_string());
+                }
+            }
+            return Ok((envelope.into_iter().chain(unseen_note(unseen + more)).chain(note).collect(), None));
         }
     }
     if trust {
-        return Ok(unseen_note(unseen).into_iter().chain([format!("{why}: they come from its editing data all the same")]).collect());
+        let held = held_back(frame, view, doc, drawn, reflow);
+        let typed = type_drawn(doc, drawn, &held).then(|| ai::ENVELOPE_TYPE_DRAWN.to_string()).filter(|n| !notes.contains(n));
+        let trusted = format!("{why}: they come from its editing data all the same");
+        return Ok((typed.into_iter().chain(unseen_note(unseen)).chain([trusted]).collect(), Some(held)));
     }
     Err(why)
+}
+
+/// The live envelopes of type in `drawn` (as [`drawn_or_trusted`] takes them) that the page holds
+/// against the layers `doc`, which don't draw as it even with every live envelope's drawn art put
+/// back: by their ids, those where the layers don't draw as the page. The envelope and its drawn art
+/// are drawn together on a layer of their own, without the rest of the layers, on the page check's
+/// drawing of each page they lie on: in the pixels they ink there, the layers with the envelope may
+/// differ from the page in no more than the envelope's own check allows against its drawn art (at
+/// all, and with all their neighbors, away from type: [`compare`]); and in the order they were
+/// read, the envelopes that stay live may differ there in no more of each page together than half
+/// of what the page check allows (a budget of the same size as the one their own checks share, kept
+/// apart from it). Art that differs elsewhere on the page doesn't hold them. One the layers don't
+/// draw where it is and as itself ([`drawn_in_place`]) is held, wherever it lies: drawn on its own,
+/// it would be weighed elsewhere than it draws, or on pixels a clip or mask hides, and what holds it
+/// can draw it onto a page from off it. Another envelope on no page stays live, as the page check
+/// doesn't see it, unless the page holds all the art that prints ([`Frame::whole`]), where art past
+/// it is compared too: there one reaching past the page is held. Past [`MAX_WEIGHED`] of them on
+/// the pages, or where the page check can't weigh one, they are all held.
+fn held_back(frame: &Frame<'_>, view: &mut PageView, doc: &Document, drawn: &[(NodeId, Vec<Node>, &str)], reflow: bool) -> BTreeSet<NodeId> {
+    let typed: Vec<(NodeId, &Node, &Node)> = drawn
+        .iter()
+        .filter(|(_, _, say)| *say == ai::ENVELOPE_TYPE_DRAWN)
+        .filter_map(|(id, art, _)| Some((*id, doc.node(*id)?, art.last()?)))
+        .collect();
+    let all: BTreeSet<NodeId> = typed.iter().map(|(id, ..)| *id).collect();
+    if all.is_empty() {
+        return all;
+    }
+    let pages = view.regions(frame.rect);
+    let past = |b: Rect| frame.whole && !frame.rect.inflate(PAST_THE_PAGE, PAST_THE_PAGE).contains_rect(b);
+    let mut held = BTreeSet::new();
+    let mut in_place = std::collections::HashMap::new();
+    drawn_in_place(&doc.layers, &all, true, &mut in_place);
+    // Those the page check sees, by the boxes of the envelope and its drawn art.
+    let mut seen = vec![];
+    for (id, live, art) in typed {
+        if !in_place.get(&id).copied().unwrap_or(false) {
+            held.insert(id);
+            continue;
+        }
+        match vectorcraft_geom::union_opt(live.visual_bounds(), art.visual_bounds()) {
+            Some(b) if past(b) => {
+                held.insert(id);
+            }
+            Some(b) if pages_touched(b, &pages, 1.0).is_empty() => {}
+            _ => seen.push((id, live, art)),
+        }
+    }
+    if seen.len() > MAX_WEIGHED {
+        return all;
+    }
+    // The pixels of each page where the envelopes that stay live differ from it: at all, and with
+    // all their neighbors.
+    let mut spent = vec![(0usize, 0usize); pages.len()];
+    for (id, live, art) in seen {
+        // The envelope and its drawn art, shown, on a layer of their own in `doc`.
+        let mut nodes: Vec<Arc<Node>> = [live, art].into_iter().cloned().map(Arc::new).collect();
+        for n in &mut nodes {
+            let n = Arc::make_mut(n);
+            (n.visible, n.opacity) = (true, 1.0);
+        }
+        let mut one = doc.clone();
+        let mut layer = Node::layer(NodeId(0), "", vectorcraft_doc::LayerColor::Preset(0));
+        if let Some(children) = layer.children_mut() {
+            *children = nodes;
+        }
+        one.layers = vec![Arc::new(layer)];
+        let bounds = vectorcraft_render::encode::art_bounds(&one);
+        if bounds.is_some_and(past) {
+            held.insert(id);
+            continue;
+        }
+        let on = bounds.map_or(vec![], |b| pages_touched(b, &pages, 1.0));
+        let mut added = spent.clone();
+        let mut fits = true;
+        for (i, ink) in view.inked(&one, &on) {
+            let Some((any, solid)) = view.differing_in(doc, i, &ink, reflow) else { return all };
+            let inked = ink.iter().filter(|p| **p).count() as f64;
+            let pixels = ink.len().max(1) as f64;
+            let Some((a, s)) = added.get_mut(i) else { return all };
+            *a += any;
+            *s += solid;
+            fits &= any as f64 <= inked * ai::ENVELOPE_MAX_ANY
+                && solid as f64 <= inked * ai::ENVELOPE_MAX_SOLID
+                && *a as f64 <= pixels * MAX_DIFFERENCE / 2.0
+                && *s as f64 <= pixels * MAX_SOLID_DIFFERENCE / 2.0;
+        }
+        if fits {
+            spent = added;
+        } else {
+            held.insert(id);
+        }
+    }
+    held
+}
+
+/// Which of the objects `ids` among `nodes` (or what they hold) are drawn where they are and as
+/// themselves (`plain`: so far, above `nodes`), into `out` by id: under layers and groups that
+/// neither clip them, mask them nor have an appearance of their own (whose effects can move or copy
+/// them), and in no envelope, repeat, blend or other object that draws what it holds elsewhere or
+/// more than once.
+fn drawn_in_place(nodes: &[Arc<Node>], ids: &BTreeSet<NodeId>, plain: bool, out: &mut std::collections::HashMap<NodeId, bool>) {
+    for n in nodes {
+        if ids.contains(&n.id) {
+            out.insert(n.id, plain);
+        }
+        let Some(children) = n.children() else { continue };
+        let keeps = match n.kind {
+            NodeKind::Layer { clip, .. } | NodeKind::Group { clip, .. } => {
+                !clip && n.appearance == vectorcraft_doc::Appearance::default() && n.extras().mask.is_none()
+            }
+            _ => false,
+        };
+        drawn_in_place(children, ids, plain && keeps, out);
+    }
+}
+
+/// Put each live envelope of type in `drawn` (as [`drawn_or_trusted`] takes them) that `doc` still
+/// has and `held` lists back as its hidden type and its drawn art: whether one was. An envelope of
+/// type opens live only where the page doesn't hold it against the layers ([`held_back`]), so where
+/// they don't draw as the page though they are used all the same (the editing data trusted, or the
+/// objects that differ come in as the page's art), one the page holds against them keeps its drawn
+/// art.
+fn type_drawn(doc: &mut Document, drawn: &[(NodeId, Vec<Node>, &str)], held: &BTreeSet<NodeId>) -> bool {
+    let typed: Vec<(NodeId, Vec<Node>)> = drawn
+        .iter()
+        .filter(|(id, _, say)| *say == ai::ENVELOPE_TYPE_DRAWN && held.contains(id) && doc.node(*id).is_some())
+        .map(|(id, art, _)| (*id, art.clone()))
+        .collect();
+    if typed.is_empty() || doc.insert_beside(typed, true).is_err() {
+        return false;
+    }
+    // The type put back is still marked as made from the text document, which the rest no longer
+    // is once the page has weighed it ([`prune_unseen`]).
+    unmark(&mut doc.layers, true, true, &mut vec![]);
+    true
 }
 
 /// `doc` with the placed files `placed` lists at their other placement (see
@@ -1356,18 +1783,47 @@ fn in_units(board: Option<Rect>, page: &Document, unit: f64) -> bool {
     unit.is_finite() && unit > 1.0 && fits(unit) && !fits(1.0)
 }
 
-/// The most artboards [`shown_artboard`] weighs, a render each.
+/// The most artboards [`shown_artboard`] weighs for the first page, and the most [`page_boards`]
+/// weighs for all the pages after it together, a render each.
 const MAX_BOARDS_WEIGHED: usize = 16;
+
+/// Does artboard `a` have the size of `page`?
+fn board_fits(a: &vectorcraft_doc::Artboard, page: &Rect) -> bool {
+    (a.rect.width() - page.width()).abs() <= 0.5 && (a.rect.height() - page.height()).abs() <= 0.5
+}
+
+/// The last of the artboards `boards` that each page of `pages` can show when every page shows
+/// one, in the pages' order. A page after the first shows an artboard of its size. Working from
+/// the last page back, each page's entry is the last artboard of its size before the next page's
+/// entry. The first page's entry is the artboard before the second page's entry, or the last
+/// artboard when there is one page. `None` when the pages after the first have no such artboards.
+fn last_boards(boards: &[vectorcraft_doc::Artboard], pages: &[Rect]) -> Option<Vec<usize>> {
+    let mut last = vec![0; pages.len()];
+    let mut end = boards.len();
+    for (i, page) in pages.iter().enumerate().skip(1).rev() {
+        let j = (1..end).rev().find(|&j| boards.get(j).is_some_and(|a| board_fits(a, page)))?;
+        *last.get_mut(i)? = j;
+        end = j;
+    }
+    if let Some(l) = last.first_mut() {
+        *l = end.checked_sub(1)?;
+    }
+    Some(last)
+}
 
 /// Which of the artboards of `doc` (the layers' document) the page `page_rect` of `visible` shows,
 /// when `visible` has fewer pages than `doc` has artboards (a PDF saved with a range of them): of
-/// those of the page's size (`fits`), the one whose art draws most like the page, the first of
-/// them on a tie. Else (and for an EPS, whose page is its art) the first artboard (0).
+/// those of the page's size (`fits`) that leave an artboard for each later page ([`last_boards`]),
+/// the one whose art draws most like the page, the first of them on a tie. Else (and for an EPS,
+/// whose page is its art) the first artboard (0).
 fn shown_artboard(doc: &Document, visible: &Document, page: Page, page_rect: Rect, fits: impl Fn(&Rect) -> bool) -> usize {
     if matches!(page, Page::Art) || visible.artboards.len() >= doc.artboards.len() {
         return 0;
     }
-    let sized: Vec<usize> = doc.artboards.iter().enumerate().filter(|(_, a)| fits(&a.rect)).map(|(i, _)| i).take(MAX_BOARDS_WEIGHED).collect();
+    let pages: Vec<Rect> = visible.artboards.iter().map(|a| a.rect).collect();
+    let last = last_boards(&doc.artboards, &pages).and_then(|l| l.first().copied()).unwrap_or(usize::MAX);
+    let sized: Vec<usize> =
+        doc.artboards.iter().enumerate().filter(|(i, a)| *i <= last && fits(&a.rect)).map(|(i, _)| i).take(MAX_BOARDS_WEIGHED).collect();
     if let [only] = sized.as_slice() {
         return *only;
     }
@@ -1407,19 +1863,52 @@ fn pages_touched(bounds: Rect, pages: &[Rect], margin: f64) -> Vec<usize> {
     pages.iter().enumerate().filter(|(_, p)| !b.intersect(**p).is_zero_area()).map(|(i, _)| i).collect()
 }
 
-/// The artboards of the layers' document (`boards`) that the pages show, one a page from the
-/// first page's (`first`), when they are the pages' sizes: every artboard, or those of a PDF saved
-/// with some of them (`first` after the first artboard).
-fn page_boards<'a>(boards: &'a [vectorcraft_doc::Artboard], first: usize, pages: &[Rect]) -> Option<&'a [vectorcraft_doc::Artboard]> {
-    let same = |(a, p): (&vectorcraft_doc::Artboard, &Rect)| (a.rect.width() - p.width()).abs() <= 0.5 && (a.rect.height() - p.height()).abs() <= 0.5;
-    let shown = boards.get(first..first.saturating_add(pages.len()))?;
-    ((first > 0 || pages.len() == boards.len()) && shown.iter().zip(pages).all(same)).then_some(shown)
+/// The artboards of the layers' document (`doc`) that the pages of `visible` (`pages`) show, one a
+/// page, the first page's being `first`, each of its page's size. The artboards are in the pages'
+/// order. A page after the first shows an artboard after the previous page's, and only one that
+/// leaves an artboard for each later page ([`last_boards`]). When several artboards can be the
+/// page's (a PDF saved with some of them), the page shows the one whose art draws most like it,
+/// the first of them on a tie. At most [`MAX_BOARDS_WEIGHED`] artboards are weighed for all the
+/// later pages together, each page's candidates in order: a page takes the best of its candidates
+/// that were weighed, or its first candidate when none of them were. `None` when the pages have no
+/// such artboards.
+fn page_boards(doc: &Document, visible: &Document, first: usize, pages: &[Rect]) -> Option<Vec<vectorcraft_doc::Artboard>> {
+    let boards = &doc.artboards;
+    let same = |j: usize, p: &Rect| boards.get(j).is_some_and(|a| board_fits(a, p));
+    let last = last_boards(boards, pages)?;
+    if !pages.first().is_some_and(|p| same(first, p)) || last.first().is_none_or(|&l| first > l) {
+        return None;
+    }
+    let mut shown = vec![boards.get(first)?.clone()];
+    let (mut after, mut weighed) = (first + 1, 0);
+    for (i, page) in pages.iter().enumerate().skip(1) {
+        let sized: Vec<usize> = (after..=*last.get(i)?).filter(|&j| same(j, page)).collect();
+        let j = match sized.as_slice() {
+            [] => return None,
+            [only] => *only,
+            many => {
+                let weigh: Vec<usize> = many.iter().copied().take(MAX_BOARDS_WEIGHED.saturating_sub(weighed)).collect();
+                weighed += weigh.len();
+                let mut best: Option<(usize, f64)> = None;
+                for (j, a) in weigh.iter().filter_map(|&j| Some((j, boards.get(j)?))) {
+                    let d = difference(visible, *page, doc, a.rect).any;
+                    if best.is_none_or(|(_, b)| d < b) {
+                        best = Some((j, d));
+                    }
+                }
+                best.map_or(many.first().copied(), |(j, _)| Some(j))?
+            }
+        };
+        shown.push(boards.get(j)?.clone());
+        after = j + 1;
+    }
+    Some(shown)
 }
 
 /// Drops the guides of artboards `doc` no longer has: an artboard guide goes with its artboard.
 fn drop_guides_off_boards(doc: &mut Document) {
     let kept: Vec<u32> = doc.artboards.iter().map(|a| a.id).collect();
-    doc.guides.retain(|g| g.artboard.is_none_or(|id| kept.contains(&id)));
+    doc.retain_guides(&mut vectorcraft_doc::Selection::default(), |g| g.artboard.is_none_or(|id| kept.contains(&id)));
 }
 
 /// Draw `doc`'s layers, artboards and guides `k` times as large, from the origin, with their
@@ -1432,12 +1921,11 @@ pub(crate) fn scale_document(doc: &mut Document, k: f64, styles: bool) {
         let layer = Arc::make_mut(layer);
         layer.transform(a, scaling);
         scale_wrap_offsets(layer, k);
+        // A transform leaves ruler guides where they are: their positions scale here.
+        layer.map_ruler_guide_positions(&mut |_, pos| *pos *= k);
     }
     for board in &mut doc.artboards {
         board.rect = a.transform_rect_bbox(board.rect);
-    }
-    for guide in &mut doc.guides {
-        guide.pos *= k;
     }
     if styles {
         for g in doc.graphic_styles.iter_mut() {
@@ -1615,6 +2103,118 @@ mod candidate_tests {
         assert_eq!(more_pages(Some(&tiny_boards), &tiny, 1).len() + 1, MAX_PAGES_COMPARED);
     }
 
+    /// A page after the first doesn't take an artboard that a later page of another size needs,
+    /// even one that draws more like it.
+    #[test]
+    fn a_later_page_leaves_an_artboard_of_each_later_pages_size() {
+        let square = |doc: &mut Document, x: f64| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), 0, art).unwrap();
+        };
+        let board = |doc: &Document, x0: f64, width: f64| vectorcraft_doc::Artboard {
+            rect: Rect::new(x0, 0.0, x0 + width, 100.0),
+            ..doc.artboards[0].clone()
+        };
+        // Artboards of 100, 100, 200, 100 and 100 points, a square on the fourth.
+        let mut doc = Document::new(100.0, 100.0);
+        doc.artboards = [(0.0, 100.0), (150.0, 100.0), (300.0, 200.0), (550.0, 100.0), (700.0, 100.0)].map(|(x, w)| board(&doc, x, w)).to_vec();
+        square(&mut doc, 560.0);
+        // Pages of 100, 100 and 200 points, the second with the fourth artboard's square.
+        let mut page = Document::new(100.0, 100.0);
+        let pages = [Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(120.0, 0.0, 220.0, 100.0), Rect::new(240.0, 0.0, 440.0, 100.0)];
+        page.artboards = pages.iter().map(|r| board(&page, r.x0, r.width())).collect();
+        square(&mut page, 130.0);
+        let shown = page_boards(&doc, &page, 0, &pages).map(|b| b.iter().map(|a| a.rect.x0).collect::<Vec<_>>());
+        assert_eq!(shown, Some(vec![0.0, 150.0, 300.0]));
+    }
+
+    /// The pages after the first weigh at most [`MAX_BOARDS_WEIGHED`] artboards together: a page
+    /// takes the best of its candidates that were weighed, and a page left with none to weigh
+    /// takes its first candidate, even when a later candidate draws like it.
+    #[test]
+    fn the_later_pages_weigh_a_bounded_number_of_artboards() {
+        let square = |doc: &mut Document, x: f64| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), 0, art).unwrap();
+        };
+        let board = |doc: &Document, x0: f64, width: f64| vectorcraft_doc::Artboard {
+            rect: Rect::new(x0, 0.0, x0 + width, 100.0),
+            ..doc.artboards[0].clone()
+        };
+        // Artboards 0 to 17 are 100 points wide, 150 apart; artboards 18 and 19 are 200 points
+        // wide. The second page's square is on artboard 17 and the third page's on artboard 19.
+        let n = MAX_BOARDS_WEIGHED + 2;
+        let mut doc = Document::new(100.0, 100.0);
+        let mut boards: Vec<vectorcraft_doc::Artboard> = (0..n).map(|i| board(&doc, i as f64 * 150.0, 100.0)).collect();
+        let wide = n as f64 * 150.0;
+        boards.push(board(&doc, wide, 200.0));
+        boards.push(board(&doc, wide + 250.0, 200.0));
+        doc.artboards = boards;
+        square(&mut doc, (n - 1) as f64 * 150.0 + 10.0);
+        square(&mut doc, wide + 260.0);
+        let mut page = Document::new(100.0, 100.0);
+        let pages = [Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(120.0, 0.0, 220.0, 100.0), Rect::new(240.0, 0.0, 440.0, 100.0)];
+        page.artboards = pages.iter().map(|r| board(&page, r.x0, r.width())).collect();
+        square(&mut page, 130.0);
+        square(&mut page, 250.0);
+        // The second page weighs artboards 1 to 16, which draw alike, and takes artboard 1. The
+        // third page has no weighing left and takes artboard 18.
+        let shown = page_boards(&doc, &page, 0, &pages).map(|b| b.iter().map(|a| a.rect.x0).collect::<Vec<_>>());
+        assert_eq!(shown, Some(vec![0.0, 150.0, wide]));
+    }
+
+    /// The first page of a PDF of some artboards shows an artboard that leaves one for each later
+    /// page, even when a later artboard draws more like it.
+    #[test]
+    fn the_first_page_leaves_an_artboard_for_each_later_page() {
+        let square = |doc: &mut Document, x: f64| {
+            let art = Node::path(
+                doc.alloc_id(),
+                vectorcraft_geom::shapes::rectangle(Rect::new(x, 10.0, x + 20.0, 30.0)),
+                vectorcraft_doc::Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::None,
+                    0.0,
+                ),
+            );
+            let layer = doc.layers[0].id;
+            doc.insert(Some(layer), 0, art).unwrap();
+        };
+        let board = |doc: &Document, x0: f64| vectorcraft_doc::Artboard { rect: Rect::new(x0, 0.0, x0 + 100.0, 100.0), ..doc.artboards[0].clone() };
+        // Three artboards of one size, a square on the third.
+        let mut doc = Document::new(100.0, 100.0);
+        doc.artboards = [0.0, 150.0, 300.0].map(|x| board(&doc, x)).to_vec();
+        square(&mut doc, 310.0);
+        // Two pages, the square on the first.
+        let mut page = Document::new(100.0, 100.0);
+        let pages = [Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(120.0, 0.0, 220.0, 100.0)];
+        page.artboards = pages.iter().map(|r| board(&page, r.x0)).collect();
+        square(&mut page, 10.0);
+        let fits = |r: &Rect| (r.width() - 100.0).abs() <= 0.5 && (r.height() - 100.0).abs() <= 0.5;
+        let first = shown_artboard(&doc, &page, Page::Artboard, pages[0], fits);
+        assert_eq!(first, 0);
+        let shown = page_boards(&doc, &page, first, &pages).map(|b| b.iter().map(|a| a.rect.x0).collect::<Vec<_>>());
+        assert_eq!(shown, Some(vec![0.0, 150.0]));
+    }
+
     /// A linked image showing a placeholder (`XF`) waits on the page, whose PDF part draws its
     /// pixels: the layers aren't used without it.
     #[test]
@@ -1700,6 +2300,34 @@ mod candidate_tests {
             // Nor is anything copied on the way, as the placed files' other placement does.
             relayout_wrapped(&mut doc);
             assert!(ids.iter().all(|id| wrap_shapes(&doc, *id) == usize::from(ok)), "{texts} text objects");
+        }
+    }
+
+    /// Warped type whose look takes its place, with the type's wrap setting, is held to the same
+    /// limit on wrap shapes: a file whose looks would copy more than `MAX_WRAP_WORK` anchors isn't
+    /// read from its layers.
+    #[test]
+    fn warped_type_replaced_by_its_look_is_held_to_the_wrap_limit() {
+        for (texts, ok) in [(150, true), (250, false)] {
+            let mut doc = Document::new(100.0, 100.0);
+            (0..texts).for_each(|_| _ = insert_area(&mut doc, 0, Rect::new(0.0, 0.0, 100.0, 100.0)));
+            let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(50.0, 50.0), "TILT", Default::default());
+            let mut text = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+            let mut appearance = vectorcraft_doc::Appearance::default();
+            appearance.effects.push(vectorcraft_doc::Effect { id: "warp.arc".into(), params: serde_json::json!({"bend": 40.0}), visible: true });
+            text.appearance = appearance.into();
+            text.extras_mut().wrap = Some(vectorcraft_doc::TextWrap::default());
+            let top = doc.layers[0].children().map_or(0, Vec::len);
+            let id = doc.insert(Some(doc.layers[0].id), top, text).unwrap();
+            let look = insert_wrap(&mut doc, Rect::new(40.0, 0.0, 60.0, 100.0), 10_000);
+            let look = doc.remove(look).unwrap();
+            assert!(resolve_text_wrap(&mut doc).is_ok());
+            let warped = ai::WarpedType::unchecked(vec![(id, (*look).clone())]);
+            let filled = std::collections::HashMap::from([(id, Filled { text: vec![id], objects: vec![id] })]);
+            let mut notes = vec![];
+            let settled = settle_warped_type(warped, &mut doc, &filled, &BTreeSet::new(), [&BTreeSet::new(); 2], &mut vec![], &mut notes);
+            assert_eq!(settled.is_ok(), ok, "{texts} text objects");
+            assert_eq!(notes, ["warped text objects that came in as drawn art, not as editable type: 1"]);
         }
     }
 
@@ -2140,5 +2768,360 @@ mod candidate_tests {
         let mut copied = BTreeSet::new();
         replace_unread(&mut doc, &frame, &unread, &[], &BTreeSet::new(), &mut copied).unwrap();
         assert!(copied.contains(&nodes[0].id) && !copied.contains(&nodes[1].id));
+    }
+
+    /// A rectangle on `rect` filled with `color`, with an id of `doc`'s.
+    fn filled_rect(doc: &mut Document, rect: Rect, color: vectorcraft_color::Color) -> Node {
+        let paint = vectorcraft_color::Paint::solid(color);
+        Node::path(
+            doc.alloc_id(),
+            vectorcraft_geom::shapes::rectangle(rect),
+            vectorcraft_doc::Appearance::basic(paint, vectorcraft_color::Paint::None, 0.0),
+        )
+    }
+
+    /// A live envelope as [`drawn_or_trusted`] takes it: its id, what takes its place again, its note.
+    type Envelope = (NodeId, Vec<Node>, &'static str);
+
+    /// The layers `doc` with a black rectangle on each of `lives` standing in for a live envelope of
+    /// type, its drawn art a black rectangle on the matching one of `arts`: the layers, and the
+    /// envelopes as [`drawn_or_trusted`] takes them.
+    fn stand_ins(lives: &[Rect], arts: &[Rect]) -> (Document, Vec<Envelope>) {
+        let mut doc = Document::new(100.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut drawn = vec![];
+        for (live, art) in lives.iter().zip(arts) {
+            let n = filled_rect(&mut doc, *live, vectorcraft_color::Color::BLACK);
+            let id = n.id;
+            doc.insert(Some(layer), 0, n).unwrap();
+            let art = filled_rect(&mut doc, *art, vectorcraft_color::Color::BLACK);
+            drawn.push((id, vec![art], ai::ENVELOPE_TYPE_DRAWN));
+        }
+        (doc, drawn)
+    }
+
+    /// The page holds an envelope of type against layers that don't draw as it only where the
+    /// layers with the envelope differ from the page where it or its drawn art inks: not where the
+    /// page draws other art that the layers don't have.
+    #[test]
+    fn the_page_holds_back_only_envelopes_of_type_where_it_differs_from_them() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let mut page = Document::new(100.0, 100.0);
+        let layer = page.layers[0].id;
+        // The first two envelopes' drawn art, and a square the layers don't have.
+        for r in [Rect::new(10.0, 10.0, 30.0, 30.0), Rect::new(60.0, 10.0, 80.0, 30.0), Rect::new(10.0, 60.0, 30.0, 80.0)] {
+            let n = filled_rect(&mut page, r, vectorcraft_color::Color::BLACK);
+            page.insert(Some(layer), 0, n).unwrap();
+        }
+        // Live where its drawn art is; moved off its drawn art; and where the page draws nothing.
+        let (doc, drawn) = stand_ins(
+            &[Rect::new(10.0, 10.0, 30.0, 30.0), Rect::new(66.0, 10.0, 86.0, 30.0), Rect::new(60.0, 60.0, 80.0, 80.0)],
+            &[Rect::new(10.0, 10.0, 30.0, 30.0), Rect::new(60.0, 10.0, 80.0, 30.0), Rect::new(60.0, 60.0, 80.0, 80.0)],
+        );
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
+        let mut view = PageView::new(&frame);
+        assert!(compare(&frame, &mut view, &doc, false).is_err());
+        assert_eq!(held_back(&frame, &mut view, &doc, &drawn, false), BTreeSet::from([drawn[1].0, drawn[2].0]));
+        // Only envelopes of type are weighed.
+        let other: Vec<_> = drawn.iter().map(|(id, art, _)| (*id, art.clone(), ai::ENVELOPE_DRAWN)).collect();
+        assert!(held_back(&frame, &mut view, &doc, &other, false).is_empty());
+    }
+
+    /// The envelopes of type that stay live may together differ from the page where they ink in no
+    /// more than half of what the page check allows: the next one past that is held back, though
+    /// on its own it would stay.
+    #[test]
+    fn envelopes_of_type_stay_live_within_half_of_what_the_page_check_allows() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        let halves = [Rect::new(0.0, 0.0, 100.0, 25.0), Rect::new(0.0, 25.0, 100.0, 50.0)];
+        let mut page = Document::new(100.0, 100.0);
+        let layer = page.layers[0].id;
+        for r in halves {
+            let n = filled_rect(&mut page, r, vectorcraft_color::Color::BLACK);
+            page.insert(Some(layer), 0, n).unwrap();
+        }
+        // White lines two pixels high over each, 6 points apart: 8% of what each inks differs, 2% of
+        // the page, and none of it with all its neighbors.
+        for (i, y) in [3.0, 9.0, 15.0, 21.0, 28.0, 34.0, 40.0, 46.0].into_iter().enumerate() {
+            let n = filled_rect(&mut page, Rect::new(0.0, y, 100.0, y + 0.5), vectorcraft_color::Color::WHITE);
+            page.insert(Some(layer), halves.len() + i, n).unwrap();
+        }
+        let (doc, drawn) = stand_ins(&halves, &halves);
+        let frame = Frame { page: &page, page_rect: rect, rect, whole: false, pages: vec![(rect, Affine::IDENTITY)], more: vec![] };
+        let mut view = PageView::new(&frame);
+        assert_eq!(held_back(&frame, &mut view, &doc, &drawn, false), BTreeSet::from([drawn[1].0]));
+        assert!(held_back(&frame, &mut view, &doc, &drawn[1..], false).is_empty());
+    }
+
+    /// A page of 100 points with a black rectangle on each of `rects`, and its frame (`whole`: the
+    /// page holds all the art that prints).
+    fn black_page(rects: &[Rect]) -> Document {
+        let mut page = Document::new(100.0, 100.0);
+        let layer = page.layers[0].id;
+        for r in rects {
+            let n = filled_rect(&mut page, *r, vectorcraft_color::Color::BLACK);
+            page.insert(Some(layer), 0, n).unwrap();
+        }
+        page
+    }
+
+    /// The frame of `page`, its 100-point square (`whole`: the page holds all the art that prints).
+    fn frame_of(page: &Document, whole: bool) -> Frame<'_> {
+        let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
+        Frame { page, page_rect: rect, rect, whole, pages: vec![(rect, Affine::IDENTITY)], more: vec![] }
+    }
+
+    /// An envelope of type is held back where the layers with it differ from the page in more of
+    /// the pixels it and its drawn art ink than its own check allows against its drawn art, though
+    /// that is far less of the page than the page check allows.
+    #[test]
+    fn an_envelope_of_type_differing_in_more_of_its_pixels_than_its_check_allows_is_held_back() {
+        // Half a point off its drawn art, which the page draws: 22% of the pixels they ink differ,
+        // a tenth of a percent of the page, and none with all their neighbors.
+        let page = black_page(&[Rect::new(30.5, 10.0, 34.5, 20.0)]);
+        let (doc, drawn) = stand_ins(&[Rect::new(30.0, 10.0, 34.0, 20.0)], &[Rect::new(30.5, 10.0, 34.5, 20.0)]);
+        let frame = frame_of(&page, false);
+        let mut view = PageView::new(&frame);
+        assert_eq!(held_back(&frame, &mut view, &doc, &drawn, false), BTreeSet::from([drawn[0].0]));
+    }
+
+    /// An envelope of type that the layers don't draw where it is and as itself is held back though
+    /// it draws as the page, wherever it lies: one that a clip group or a clipping sublayer clips, an
+    /// opacity mask masks, or that a group with an appearance of its own, another envelope, a repeat
+    /// or a blend holds. Drawn on its own, it would be weighed on pixels a clip hides, or elsewhere
+    /// than it draws, and what holds it can draw it onto the page from off it. One in a plain group
+    /// is weighed, and one off the page in a plain group stays live.
+    #[test]
+    fn envelopes_of_type_the_layers_dont_draw_in_place_are_held_back() {
+        let at = |i: usize| {
+            let (x, y) = if i < 4 { (5.0 + 20.0 * i as f64, 5.0) } else { (5.0 + 20.0 * (i - 4) as f64, 30.0) };
+            Rect::new(x, y, x + 15.0, y + 15.0)
+        };
+        let off = [Rect::new(120.0, 5.0, 135.0, 20.0), Rect::new(140.0, 5.0, 155.0, 20.0)];
+        let page = black_page(&(0..8).map(at).collect::<Vec<_>>());
+        let mut doc = Document::new(100.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut drawn = vec![];
+        let mut stand_in = |doc: &mut Document, r: Rect| {
+            let n = filled_rect(doc, r, vectorcraft_color::Color::BLACK);
+            drawn.push((n.id, vec![filled_rect(doc, r, vectorcraft_color::Color::BLACK)], ai::ENVELOPE_TYPE_DRAWN));
+            Arc::new(n)
+        };
+        let group = |doc: &mut Document, children: Vec<Arc<Node>>, clip: bool| Node::new(doc.alloc_id(), NodeKind::Group { children, clip });
+        let fill = vectorcraft_doc::Appearance {
+            items: vec![vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(vectorcraft_color::Paint::solid(
+                vectorcraft_color::Color::BLACK,
+            )))],
+            ..Default::default()
+        };
+        let mut objects = vec![];
+        // 0: in a plain group.
+        let n = stand_in(&mut doc, at(0));
+        objects.push(group(&mut doc, vec![n], false));
+        // 1: in a clip group.
+        let n = stand_in(&mut doc, at(1));
+        let mut clip = filled_rect(&mut doc, at(1).inflate(2.0, 2.0), vectorcraft_color::Color::BLACK);
+        if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+            *clipping = true;
+        }
+        objects.push(group(&mut doc, vec![Arc::new(clip), n], true));
+        // 2: in another envelope.
+        let n = stand_in(&mut doc, at(2));
+        let r = at(2);
+        let points = vec![kurbo::Point::new(r.x0, r.y0), kurbo::Point::new(r.x1, r.y0), kurbo::Point::new(r.x0, r.y1), kurbo::Point::new(r.x1, r.y1)];
+        let kind = Box::new(vectorcraft_doc::live::EnvelopeKind::Mesh { rows: 1, cols: 1, points, handles: vec![] });
+        let options = vectorcraft_doc::live::EnvelopeOptions::NEW;
+        objects.push(Node::new(
+            doc.alloc_id(),
+            NodeKind::Envelope { content: vec![n], kind, fidelity: 50.0, editing: false, options, frame: Box::default() },
+        ));
+        // 3: in a group with an appearance of its own.
+        let n = stand_in(&mut doc, at(3));
+        let mut styled = group(&mut doc, vec![n], false);
+        styled.appearance = fill.clone().into();
+        objects.push(styled);
+        // 4: in a group with an opacity mask.
+        let n = stand_in(&mut doc, at(4));
+        let mut masked = group(&mut doc, vec![n], false);
+        let mask = filled_rect(&mut doc, at(4).inflate(2.0, 2.0), vectorcraft_color::Color::WHITE);
+        masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(mask, true)));
+        objects.push(masked);
+        // 5: in a clipping sublayer.
+        let n = stand_in(&mut doc, at(5));
+        let mut clip = filled_rect(&mut doc, at(5).inflate(2.0, 2.0), vectorcraft_color::Color::BLACK);
+        if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+            *clipping = true;
+        }
+        let mut sublayer = Node::layer(doc.alloc_id(), "Clipped", vectorcraft_doc::LayerColor::Preset(1));
+        if let NodeKind::Layer { clip: c, children, .. } = &mut sublayer.kind {
+            (*c, *children) = (true, vec![Arc::new(clip), n]);
+        }
+        objects.push(sublayer);
+        // 6: in a repeat; 7: in a blend.
+        let n = stand_in(&mut doc, at(6));
+        objects.push(Node::new(doc.alloc_id(), NodeKind::Repeat(vectorcraft_doc::RepeatSpec::grid(vec![n], 0.0, 0.0))));
+        let n = stand_in(&mut doc, at(7));
+        objects.push(Node::new(doc.alloc_id(), NodeKind::Blend { children: vec![n], spec: Box::default() }));
+        // 8: off the page in a group with an appearance of its own (an effect could draw it onto the
+        // page); 9: off the page in a plain group.
+        let n = stand_in(&mut doc, off[0]);
+        let mut styled = group(&mut doc, vec![n], false);
+        styled.appearance = fill.into();
+        objects.push(styled);
+        let n = stand_in(&mut doc, off[1]);
+        objects.push(group(&mut doc, vec![n], false));
+        for n in objects {
+            doc.insert(Some(layer), 0, n).unwrap();
+        }
+        let frame = frame_of(&page, false);
+        let mut view = PageView::new(&frame);
+        let held = held_back(&frame, &mut view, &doc, &drawn, false);
+        assert_eq!(held, drawn[1..9].iter().map(|(id, ..)| *id).collect::<BTreeSet<_>>());
+    }
+
+    /// On a page that holds all the art that prints, which the page check also compares past the
+    /// page, an envelope of type reaching past the page, or lying off it, is held back; on another
+    /// page, the part on the page is weighed, and one off it stays live.
+    #[test]
+    fn on_a_page_that_holds_all_the_art_an_envelope_of_type_past_it_is_held_back() {
+        let on = Rect::new(10.0, 10.0, 30.0, 30.0);
+        let across = Rect::new(90.0, 40.0, 110.0, 60.0);
+        let off = Rect::new(120.0, 10.0, 140.0, 30.0);
+        let page = black_page(&[on, Rect::new(90.0, 40.0, 100.0, 60.0)]);
+        let (doc, drawn) = stand_ins(&[on, across, off], &[on, across, off]);
+        for (whole, held) in [(true, BTreeSet::from([drawn[1].0, drawn[2].0])), (false, BTreeSet::new())] {
+            let frame = frame_of(&page, whole);
+            let mut view = PageView::new(&frame);
+            assert_eq!(held_back(&frame, &mut view, &doc, &drawn, false), held, "whole: {whole}");
+        }
+        // On the page by its box, past it by what it draws: a Transform effect of its own draws a
+        // copy of it 100 points to the right, off the page.
+        let page = black_page(&[on]);
+        let (mut doc, drawn) = stand_ins(&[on], &[on]);
+        let effect =
+            vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 100, "copies": 1}), visible: true };
+        doc.node_mut(drawn[0].0).unwrap().appearance.effects.push(effect);
+        for (whole, held) in [(true, BTreeSet::from([drawn[0].0])), (false, BTreeSet::new())] {
+            let frame = frame_of(&page, whole);
+            let mut view = PageView::new(&frame);
+            assert_eq!(held_back(&frame, &mut view, &doc, &drawn, false), held, "drawn past the page, whole: {whole}");
+        }
+    }
+
+    /// Where the objects that draw differently from the page are to come in as its art and the
+    /// envelopes of type the page doesn't hold stay live, but one of those holds the difference in
+    /// its box (an object that holds type isn't replaced), every envelope of type gets its drawn art
+    /// back and that is tried again: the layers are still used.
+    #[test]
+    fn objects_come_in_as_the_page_art_with_every_envelope_of_type_put_back_where_a_live_one_holds_a_difference() {
+        let (a, b, dot, other) = (
+            Rect::new(10.0, 10.0, 20.0, 20.0),
+            Rect::new(40.0, 10.0, 50.0, 20.0),
+            Rect::new(27.0, 12.0, 33.0, 18.0),
+            Rect::new(70.0, 70.0, 90.0, 90.0),
+        );
+        // The page draws a dot in the gap between the two rectangles of the envelope's stand-in.
+        let page = black_page(&[a, b, dot, other]);
+        let mut doc = Document::new(100.0, 100.0);
+        let layer = doc.layers[0].id;
+        let square = filled_rect(&mut doc, other, vectorcraft_color::Color::BLACK);
+        doc.insert(Some(layer), 0, square).unwrap();
+        // The stand-in holds type, hidden; its drawn art is the two rectangles.
+        let style = vectorcraft_doc::CharStyle::default();
+        let mut text =
+            Node::new(doc.alloc_id(), NodeKind::Text(Box::new(vectorcraft_doc::TextObject::point(kurbo::Point::new(12.0, 18.0), "A", style))));
+        text.visible = false;
+        let parts = vec![
+            Arc::new(filled_rect(&mut doc, a, vectorcraft_color::Color::BLACK)),
+            Arc::new(filled_rect(&mut doc, b, vectorcraft_color::Color::BLACK)),
+        ];
+        let mut children = parts.clone();
+        children.push(Arc::new(text));
+        let live = Node::new(doc.alloc_id(), NodeKind::Group { children, clip: false });
+        let id = live.id;
+        doc.insert(Some(layer), 0, live).unwrap();
+        let art = Node::new(doc.alloc_id(), NodeKind::Group { children: parts, clip: false });
+        let drawn: Vec<Envelope> = vec![(id, vec![art], ai::ENVELOPE_TYPE_DRAWN)];
+        let frame = frame_of(&page, false);
+        let mut view = PageView::new(&frame);
+        assert!(compare(&frame, &mut view, &doc, false).is_err());
+        let layers = Placements { doc: &doc, unseen: 0, other: None, drawn: &drawn, places: &[(id, 0)] };
+        let mut free = None;
+        let found = keep_differing_typed(&frame, &mut view, &layers, &BTreeSet::new(), &[], false, &mut free);
+        assert_eq!(free, Some(vec![0]), "the page doesn't hold the envelope");
+        let Some((kept, _, notes, typed)) = found else { panic!("the layers aren't used") };
+        assert!(typed, "the envelope got its drawn art back");
+        assert!(kept.node(id).is_none());
+        assert!(notes.iter().any(|n| n.starts_with(DREW_DIFFERENTLY)), "{notes:?}");
+    }
+
+    /// The placed files' other placement is weighed on its own: an envelope of type that the layers
+    /// as read draw as the page, but that a placed file moved over it at the other placement makes
+    /// differ, gets its drawn art back there, where that placement's differing objects then come in
+    /// as the page's art.
+    #[test]
+    fn the_other_placement_of_placed_files_is_weighed_on_its_own() {
+        let black = vectorcraft_color::Color::BLACK;
+        let gray = vectorcraft_color::Color::rgb(0.5, 0.5, 0.5);
+        let (envelope, fillers) = (Rect::new(10.0, 10.0, 30.0, 30.0), [Rect::new(40.0, 80.0, 50.0, 90.0), Rect::new(70.0, 80.0, 80.0, 90.0)]);
+        let placed = Rect::new(60.0, 60.0, 76.0, 76.0);
+        // The page draws the envelope's drawn art in two halves.
+        let page = black_page(&[Rect::new(10.0, 10.0, 20.0, 30.0), Rect::new(20.0, 10.0, 30.0, 30.0), placed, fillers[0], fillers[1]]);
+        let (mut doc, drawn) = stand_ins(&[envelope], &[envelope]);
+        let layer = doc.layers[0].id;
+        for r in fillers {
+            let n = filled_rect(&mut doc, r, black);
+            doc.insert(Some(layer), 0, n).unwrap();
+        }
+        // Two placed files, standing in as rectangles: one 20 points above where the page has it, one
+        // a gray rectangle off the art. At their other placement the first is where the page has it
+        // and the gray one lies over half of the envelope.
+        let image = filled_rect(&mut doc, Rect::new(60.0, 40.0, 76.0, 56.0), black);
+        let strip = filled_rect(&mut doc, Rect::new(85.0, 40.0, 95.0, 60.0), gray);
+        // On top of the layer: the strip covers the envelope where it lies over it.
+        let top = doc.layers[0].children().map_or(0, Vec::len);
+        let (image, strip) = (doc.insert(Some(layer), top, image).unwrap(), doc.insert(Some(layer), top + 1, strip).unwrap());
+        let mut other = doc.clone();
+        other.node_mut(image).unwrap().transform(Affine::translate(Vec2::new(0.0, 20.0)), PAGE_MOVE);
+        other.node_mut(strip).unwrap().transform(Affine::translate(Vec2::new(-65.0, -30.0)), PAGE_MOVE);
+        let frame = frame_of(&page, false);
+        let mut view = PageView::new(&frame);
+        assert!(held_back(&frame, &mut view, &doc, &drawn, false).is_empty());
+        assert_eq!(held_back(&frame, &mut view, &other, &drawn, false), BTreeSet::from([drawn[0].0]));
+        let other = (other, 0);
+        let layers = Placements { doc: &doc, unseen: 0, other: Some(&other), drawn: &drawn, places: &[(drawn[0].0, 0)] };
+        let mut free = None;
+        let found = keep_differing_typed(&frame, &mut view, &layers, &BTreeSet::new(), &[], false, &mut free);
+        assert_eq!(free, Some(vec![0]), "the layers as read don't hold the envelope");
+        let Some((kept, _, notes, typed)) = found else { panic!("the layers aren't used") };
+        assert!(notes.iter().any(|n| n.starts_with(DREW_DIFFERENTLY)), "{notes:?}");
+        assert!(typed && kept.node(drawn[0].0).is_none(), "the envelope keeps its drawn art at the other placement");
+    }
+
+    /// Where putting back only the envelopes of type the page holds makes the layers draw as the page,
+    /// though putting back every live envelope's drawn art doesn't (an envelope of type the page
+    /// doesn't hold has stale drawn art), the layers are used as they then are: nothing differs to
+    /// come in as the page's art.
+    #[test]
+    fn layers_that_draw_as_the_page_with_the_held_envelopes_of_type_put_back_are_used_so() {
+        let (held, kept_live) = (Rect::new(10.0, 10.0, 30.0, 30.0), Rect::new(60.0, 10.0, 80.0, 30.0));
+        let page = black_page(&[held, kept_live]);
+        // The first is drawn 6 points off its drawn art, which the page draws; the second draws as the
+        // page, its drawn art 6 points off.
+        let (doc, drawn) = stand_ins(&[Rect::new(16.0, 10.0, 36.0, 30.0), kept_live], &[held, Rect::new(66.0, 10.0, 86.0, 30.0)]);
+        let frame = frame_of(&page, false);
+        let mut view = PageView::new(&frame);
+        assert!(compare(&frame, &mut view, &doc, false).is_err());
+        let mut all = doc.clone();
+        all.insert_beside(drawn.iter().map(|(id, art, _)| (*id, art.clone())).collect(), true).unwrap();
+        assert!(compare(&frame, &mut view, &all, false).is_err(), "with every drawn art put back they don't draw as the page");
+        let places = [(drawn[0].0, 0), (drawn[1].0, 1)];
+        let layers = Placements { doc: &doc, unseen: 0, other: None, drawn: &drawn, places: &places };
+        let mut free = None;
+        let found = keep_differing_typed(&frame, &mut view, &layers, &BTreeSet::new(), &[], false, &mut free);
+        assert_eq!(free, Some(vec![1]));
+        let Some((kept, _, notes, typed)) = found else { panic!("the layers aren't used") };
+        assert!(typed && kept.node(drawn[0].0).is_none() && kept.node(drawn[1].0).is_some());
+        assert!(!notes.iter().any(|n| n.starts_with(DREW_DIFFERENTLY)), "{notes:?}");
     }
 }

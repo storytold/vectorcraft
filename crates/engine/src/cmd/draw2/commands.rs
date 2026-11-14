@@ -11,7 +11,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Pencil",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] or [[x,y,pressure,tiltX,tiltY,rotation]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic and Scatter brushes with Pressure variation; a point without one presses fully. Pen tilt in degrees, each −90..90, x positive leaning right and y leaning down the page, and barrel rotation in degrees clockwise: the stroke keeps how far the pen leaned, which way and how far its barrel turned, for brushes with Tilt, Bearing and Rotation variation; null for what a point lacks), fidelity?: pt (1.5), fit?: bool (true; false: the points are joined by straight segments, as the Pencil previews a stroke with Live curve fitting off), closed?, style?: \"pencil\"|\"brush\", fill?: bool, keepSelected?: bool (true: the drawn or continued path is selected; false: a new path leaves nothing selected, and a continued or redrawn one is deselected while the rest of the selection stays), extend?: {id, end: \"start\"|\"end\"}, connect?: {id, end: \"start\"|\"end\"}, redraw?: {id, within?: pt (12)}} fit a freehand stroke → {id}. extend continues the path from that end; with connect, the stroke ends on that end of another path's last open subpath and joins it on, in one path with the extended path's appearance (the other path is removed when nothing of it is left); redraw (Edit Selected Paths) replaces the section of the path between where the stroke starts and ends, each within `within` of one subpath (the shorter way round a closed one), and draws a new path when the stroke doesn't end on it",
+            "{points: [[x,y]…] or [[x,y,pressure]…] or [[x,y,pressure,tiltX,tiltY,rotation]…] (pen pressure 0..1: the stroke keeps it, for Calligraphic and Scatter brushes with Pressure variation; a point without one presses fully. Pen tilt in degrees, each −90..90, x positive leaning right and y leaning down the page, and barrel rotation in degrees clockwise: the stroke keeps how far the pen leaned, which way and how far its barrel turned, for brushes with Tilt, Bearing and Rotation variation; null for what a point lacks), fidelity?: pt (1.5; from 0.000015625 (0.01 / 640) to 100 / 0.0313 (about 3194.89), the Pencil's and the Paintbrush's 0.01 to 100 px Fidelity at the highest and the lowest zoom; a value outside that range is an error. The tools send their Fidelity in pixels divided by the zoom, kept within the range), fit?: bool (true; false: the points are joined by straight segments, as the Pencil previews a stroke with Live curve fitting off), closed?, style?: \"pencil\"|\"brush\", fill?: bool, keepSelected?: bool (true: the drawn or continued path is selected; false: a new path leaves nothing selected, and a continued or redrawn one is deselected while the rest of the selection stays), extend?: {id, end: \"start\"|\"end\"}, connect?: {id, end: \"start\"|\"end\"}, redraw?: {id, within?: pt (12)}} fit a freehand stroke → {id}. extend continues the path from that end; with connect, the stroke ends on that end of another path's last open subpath and joins it on, in one path with the extended path's appearance (the other path is removed when nothing of it is left); redraw (Edit Selected Paths) replaces the section of the path between where the stroke starts and ends, each within `within` of one subpath (the shorter way round a closed one), and draws a new path when the stroke doesn't end on it",
             has_doc,
             freehand
         ),
@@ -74,7 +74,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Split Path",
             [],
             None,
-            "{id, subpath?, segment, t} or {id, subpath?, anchor}: closed paths open there, open paths become two → {ids}",
+            "{id, subpath?, segment, t} or {id, subpath?, anchor}: closed paths open there, open paths become two; one of the two new end points is left selected → {ids}",
             has_doc,
             split
         ),
@@ -92,7 +92,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Eraser",
             [],
             None,
-            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1), size?: pt (10), sizeMode?: \"fixed\" (default) | \"pressure\" (Eraser Tool Options' Size set to Pressure: the tip is size − sizeVariation across where the pen presses lightest and size + sizeVariation where it presses hardest, as path.blob), sizeVariation?: pt (0), angle?: ° (0), roundness?: % (100, kept within 1–100)} erase the stroke of an elliptical tip from paths (selected, or all) → {ids}. The tip is `size` across its long axis, which runs at `angle` counter-clockwise from horizontal; its short axis is `roundness` percent of the long one",
+            "{points: [[x,y]…] or [[x,y,pressure]…] (pen pressure 0..1), size?: pt (10), sizeMode?: \"fixed\" (default) | \"pressure\" (Eraser Tool Options' Size set to Pressure: the tip is size − sizeVariation across where the pen presses lightest and size + sizeVariation where it presses hardest, as path.blob), sizeVariation?: pt (0), angle?: ° (0: the tip's long axis counter-clockwise from level), roundness?: % (100, kept within 1–100)} erase the stroke of an elliptical tip from paths (selected, or all) → {ids}. The tip is `size` across its long axis, which runs at `angle` counter-clockwise from horizontal; its short axis is `roundness` percent of the long one",
             has_doc,
             erase_region
         ),
@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smooth",
             [],
             None,
-            "{points: [[x,y]…], radius?: pt (12), fidelity?: pt (2.5)} smooth selected paths near the drag → {ids, before, after}",
+            "{points: [[x,y]…], radius?: pt (12), fidelity?: pt (2.5; kept within 0.000078125 and about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom)} smooth selected paths near the drag → {ids, before, after}",
             has_selection,
             smooth_region
         ),

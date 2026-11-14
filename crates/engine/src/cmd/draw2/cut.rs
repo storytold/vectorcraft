@@ -4,7 +4,7 @@ use super::common::{
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, ParamCurve, PathData, Point, Result, Session, SubPath,
-    Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, id_param, json, number_or, po,
+    Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
 };
 
 /// Split a filled path into connected pieces (each outer contour with its holes).
@@ -170,7 +170,7 @@ pub(in super::super) fn erase_outline(pd: &PathData, step: f64, remove: &dyn Fn(
 
 pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.split";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let anchor = usize_opt(p, "anchor", C)?;
     let seg = usize_opt(p, "segment", C)?;
@@ -200,9 +200,16 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
             _ => return Err(EngineError::Other("no such segment".into())),
         };
         let mut pieces = sp.cut_at(&std::collections::BTreeSet::from([k]));
+        // The cut leaves one of its two coincident end points selected, as `path.cutAtAnchors`
+        // does, so a Direct Selection drag pulls the path apart there.
+        let pick = |sel: &mut vectorcraft_doc::Selection, id: NodeId, si: usize| {
+            sel.clear();
+            sel.add(id);
+            sel.anchors.entry(id).or_default().insert((si, 0));
+        };
         if sp.closed {
             path.subpaths[si] = pieces.pop().ok_or_else(|| EngineError::Other("no such anchor".into()))?;
-            sel.set([id]);
+            pick(sel, id, si);
             return Ok(vec![id]);
         }
         let [left, right] = <[SubPath; 2]>::try_from(pieces).map_err(|_| EngineError::Other("cannot split an open path at its end point".into()))?;
@@ -211,12 +218,12 @@ pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
             let node = sibling_with(d, id, PathData::single(right))?;
             let (parent, idx, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
             let nid = d.insert(parent, idx + 1, node)?;
-            sel.set([id, nid]);
+            pick(sel, nid, 0);
             Ok(vec![id, nid])
         } else {
             path.subpaths[si] = left;
             path.subpaths.insert(si + 1, right);
-            sel.set([id]);
+            pick(sel, id, si + 1);
             Ok(vec![id])
         }
     })?;

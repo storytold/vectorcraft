@@ -159,6 +159,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::panels::image_trace::trace_button(app, ui, ui.available_width());
         actions.push((tl!("Crop Image"), "ui.cropImage"));
         actions.push((tl!("Mask"), "object.maskImage"));
+        // Remove Background at once with its defaults, as the reference app's Quick Actions do
+        // (<https://community.adobe.com/announcements-651/ai-powered-image-editing-features-in-illustrator-1624061>).
+        actions.push((tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND));
     }
     // Object › Path's Offset Path and Simplify take paths: type alone could only fail, and offsets
     // live through the Appearance panel's Effect › Path › Offset Path (#2238).
@@ -386,12 +389,15 @@ fn trace_section(app: &mut VectorcraftApp, ui: &mut Ui, preset: &str, view: vect
     });
 }
 
-/// The Objects on Path groups selected with nothing else: their ids, and the Pivot and Rotate they
-/// share (`None` where they differ).
+/// The Objects on Path groups selected with nothing else: their ids, the Pivot and Rotate they
+/// share (`None` where they differ), and whether Detach can take an object off the path: one group,
+/// neither hidden nor locked, with an object chosen with its Select/Move widget that is neither
+/// hidden nor locked.
 struct ObjectsOnPathSelection {
     ids: Vec<u64>,
     pivot: Option<u8>,
     rotate: Option<f64>,
+    detachable: bool,
 }
 
 /// The selection as Objects on Path groups ([`ObjectsOnPathSelection`]), when every selected
@@ -402,7 +408,11 @@ fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelecti
     for id in &st.selection.objects {
         let rec = st.doc.node(*id)?.extras().objects_on_path.as_deref()?;
         match &mut out {
-            None => out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate) }),
+            None => {
+                let chosen = st.selection.on_path_member.filter(|m| st.selection.objects.len() == 1 && rec.members.iter().any(|x| x.id == *m));
+                let detachable = chosen.is_some_and(|m| st.doc.is_editable(*id) && st.doc.is_editable(m));
+                out = Some(ObjectsOnPathSelection { ids: vec![id.0], pivot: Some(rec.pivot), rotate: Some(rec.rotate), detachable });
+            }
             Some(s) => {
                 s.ids.push(id.0);
                 if s.pivot != Some(rec.pivot) {
@@ -422,7 +432,8 @@ fn selected_objects_on_path(app: &VectorcraftApp) -> Option<ObjectsOnPathSelecti
 /// path, as the help page places them in the Properties panel
 /// (<https://helpx.adobe.com/illustrator/using/objects-on-path.html>). A change goes to every
 /// selected group in one undo step (`object.objectsOnPath.options`). Where the groups differ, no
-/// Pivot square is chosen and Rotate is blank.
+/// Pivot square is chosen and Rotate is blank. Detach takes the object chosen with its Select/Move
+/// widget off the path (`object.objectsOnPath.detach`), and is dimmed until one is chosen.
 fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsOnPathSelection) {
     section_header(ui, tl!("Objects on Path Options"));
     let fw = super::field_width(ui);
@@ -435,7 +446,7 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
     egui::Grid::new("props-objects-on-path").num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         dim_label(ui, tl!("Pivot:"));
         // 9 is no square: the groups' pivots differ.
-        if let Some(i) = widgets::reference_point(ui, oop.pivot.map_or(9, usize::from))
+        if let Some(i) = widgets::reference_point_named(ui, oop.pivot.map_or(9, usize::from), tl!("Pivot:"))
             && oop.pivot.is_none_or(|p| usize::from(p) != i)
         {
             set(app, json!({ "pivot": i }));
@@ -449,6 +460,12 @@ fn objects_on_path_section(app: &mut VectorcraftApp, ui: &mut Ui, oop: &ObjectsO
         }
         ui.end_row();
     });
+    let w = ui.available_width();
+    if ui.add_enabled_ui(oop.detachable, |ui| widgets::flat_button(ui, tl!("Detach"), w)).inner.clicked()
+        && let Err(e) = app.run("object.objectsOnPath.detach", json!({}))
+    {
+        app.status(e);
+    }
 }
 
 /// Whether the selection uses more than one colour (`recolor.colors`), which offers the Recolor
@@ -1014,9 +1031,12 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         }
         super::paragraph::hyphenate_check(app, ui, &para);
+        // Area type: Dynamic Text's Block and its gaps.
+        dynamic_text::rows(app, ui);
     }
 }
 
+pub(crate) mod dynamic_text;
 pub(crate) mod vertical_align;
 
 #[cfg(test)]

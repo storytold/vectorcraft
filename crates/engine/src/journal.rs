@@ -25,6 +25,8 @@ pub struct Journal {
     bytes: usize,
     /// Keep every entry from this number on ([`Journal::hold`]).
     held: Option<usize>,
+    /// How many times kept entries were changed, dropped or renumbered ([`Journal::rewrites`]).
+    rewrites: u64,
 }
 
 /// Journals with the same entries (by number) are equal, whatever their history.
@@ -66,13 +68,23 @@ impl Journal {
         self.entries.get(i.checked_sub(self.dropped)?)
     }
     pub fn get_mut(&mut self, i: usize) -> Option<&mut JournalEntry> {
+        self.rewrites += 1;
         self.entries.get_mut(i.checked_sub(self.dropped)?)
     }
     pub fn last(&self) -> Option<&JournalEntry> {
         self.entries.last()
     }
     pub fn last_mut(&mut self) -> Option<&mut JournalEntry> {
+        self.rewrites += 1;
         self.entries.last_mut()
+    }
+    /// A number that grows whenever a kept entry may have changed, gone or been renumbered
+    /// ([`Journal::truncate`], [`Journal::remove`], [`Journal::replace`], [`Journal::get_mut`],
+    /// [`Journal::last_mut`]), and that [`Journal::push`] and letting old entries go leave as it
+    /// is. While it stays the same, the entries from a held number on are the ones counted before,
+    /// with the new ones after them.
+    pub fn rewrites(&self) -> u64 {
+        self.rewrites
     }
     pub fn push(&mut self, e: JournalEntry) {
         let size = entry_bytes(&e);
@@ -83,6 +95,7 @@ impl Journal {
     }
     /// Drop the entries from number `len` on.
     pub fn truncate(&mut self, len: usize) {
+        self.rewrites += 1;
         let keep = len.saturating_sub(self.dropped);
         self.entries.truncate(keep);
         self.sizes.truncate(keep);
@@ -92,6 +105,7 @@ impl Journal {
     /// Drop the entries numbered `numbers` (sorted, a number may repeat; the entries of canceled undo
     /// groups). The entries after them are numbered down to close the gaps.
     pub fn remove(&mut self, numbers: &[usize]) {
+        self.rewrites += 1;
         let dropped = self.dropped;
         let gone = |i: usize| numbers.binary_search(&(dropped + i)).is_ok();
         let mut i = 0;
@@ -115,6 +129,7 @@ impl Journal {
     }
     /// Put `e` in place of entry number `i`, if kept.
     pub fn replace(&mut self, i: usize, e: JournalEntry) {
+        self.rewrites += 1;
         let Some(k) = i.checked_sub(self.dropped) else { return };
         if let (Some(old), Some(size)) = (self.entries.get_mut(k), self.sizes.get_mut(k)) {
             *size = entry_bytes(&e);
@@ -252,5 +267,30 @@ mod tests {
         // A replaced entry is counted at its new size.
         j.replace(29_000, big(0));
         assert_eq!(j.bytes, j.iter().map(entry_bytes).sum::<usize>());
+    }
+
+    #[test]
+    fn rewrites_count_changes_to_kept_entries_but_not_new_ones() {
+        let mut j = Journal::default();
+        j.hold(Some(0));
+        for i in 0..100 {
+            j.push(("object.move".into(), json!({"dx": i})));
+        }
+        assert_eq!(j.rewrites(), 0, "pushes add entries after the counted ones");
+        let changes: [fn(&mut Journal); 5] = [
+            |j| j.truncate(90),
+            |j| j.remove(&[3]),
+            |j| j.replace(4, ("object.group".into(), json!({}))),
+            |j| {
+                let _ = j.get_mut(5);
+            },
+            |j| {
+                let _ = j.last_mut();
+            },
+        ];
+        for (i, change) in changes.into_iter().enumerate() {
+            change(&mut j);
+            assert_eq!(j.rewrites(), i as u64 + 1);
+        }
     }
 }

@@ -166,15 +166,16 @@ fn a_star_drag_holds_the_inner_radius_it_shows_when_ctrl_goes_down() {
     close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 170.0, 50.0).with_mods(ctrl))), (120.0, 40.0 * straight));
 
     // Escape with the key held, then a new press and the key before the first move: the next star
-    // holds what it shows, not the canceled radius.
+    // has the ratio from before the canceled drag and holds the inner radius it shows, not the
+    // canceled one.
     let mut t = ShapeTool::new("star");
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0));
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl));
     assert_eq!(t.key(&cx, ToolKey::Escape, ctrl), vec![Action::Cancel]);
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
-    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 50.0).with_mods(ctrl))), (10.0, 2.5));
-    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 70.0, 50.0).with_mods(ctrl))), (20.0, 2.5));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 50.0).with_mods(ctrl))), (10.0, 5.0));
+    close(radii(&t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 70.0, 50.0).with_mods(ctrl))), (20.0, 5.0));
 
     // Ctrl/Cmd pressed inside the drag threshold, where no star is shown yet.
     let mut t = ShapeTool::new("star");
@@ -301,6 +302,81 @@ fn rounded_rectangle_radius_is_clamped_to_its_range() {
     assert_eq!(t.options()["cornerRadius"], json!(MAX_CORNER_RADIUS));
 }
 
+/// Escape during a polygon, star or rounded rectangle drag puts back the side count, point count
+/// or corner radius its arrows changed, for the next drag and the tool's options; a drag that is
+/// let go keeps them.
+#[test]
+fn escape_puts_back_the_options_a_drag_changed() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    for (id, field) in [("polygon", "sides"), ("star", "points"), ("roundedRectangle", "radius")] {
+        let mut t = ShapeTool::new(id);
+        let value = |a: Vec<Action>| match a.last() {
+            Some(Action::Preview(_, v)) => v[field].clone(),
+            _ => panic!("{id}: {a:?}"),
+        };
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        let before = value(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0)));
+        let options = t.options();
+        t.key(&cx, ToolKey::Up, Mods::default());
+        let changed = value(t.key(&cx, ToolKey::Up, Mods::default()));
+        assert_ne!(changed, before, "{id}: the arrows change the option");
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{id}");
+        assert_eq!(t.options(), options, "{id}: the tool's options");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        assert_eq!(value(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))), before, "{id}: the next drag");
+        // A drag that is let go keeps what its arrows changed.
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.key(&cx, ToolKey::Up, Mods::default());
+        assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 40.0)), vec![Action::Commit]);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        assert_eq!(value(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))), changed, "{id}: a finished drag keeps it");
+        t.key(&cx, ToolKey::Down, Mods::default());
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let kept = t.options();
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        // Escape puts back only what this drag changed.
+        assert_eq!(value(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0))), changed, "{id}: only this drag");
+        assert_ne!(kept, options, "{id}");
+    }
+}
+
+/// Ctrl/Cmd changes a star's inner-to-outer ratio as it is dragged out; Escape puts it back, and
+/// an option set during the drag stays.
+#[test]
+fn escape_puts_back_the_star_ratio_and_keeps_an_option_set_during_the_drag() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let mut cx = cx(&d, &s, &p);
+    cx.smart_guides = false;
+    let ctrl = Mods { cmd: true, ..Default::default() };
+    let mut t = ShapeTool::new("star");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 50.0, 50.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 90.0, 50.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 130.0, 50.0).with_mods(ctrl));
+    assert!((t.star_ratio - 0.25).abs() < 1e-9, "{}", t.star_ratio);
+    t.key(&cx, ToolKey::Escape, ctrl);
+    assert_eq!(t.star_ratio, 0.5);
+
+    // Options set with `tool.setOption` during the drag stay; the arrows' change goes back.
+    for (id, key, set) in [("polygon", "sides", json!(9)), ("star", "points", json!(8)), ("roundedRectangle", "cornerRadius", json!(30.0))] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 40.0));
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.set_option(key, &set);
+        t.set_option("starRatio", &json!(0.3));
+        t.key(&cx, ToolKey::Up, Mods::default());
+        t.key(&cx, ToolKey::Escape, Mods::default());
+        let o = t.options();
+        assert_eq!((o[key].clone(), o["starRatio"].clone()), (set, json!(0.3)), "{id}");
+    }
+}
+
 /// The start and the dragged corner land on another object's anchors (#506), hovering shows
 /// it before the press, and the measurement label gives the size drawn.
 #[test]
@@ -392,7 +468,7 @@ fn a_shape_tool_drags_the_selected_shapes_widgets() {
             matches!(a.last(), Some(Action::Preview(cmd, v)) if cmd == "object.setLiveShape" && v["radius"].as_f64().is_some_and(|r| r > 0.0)),
             "{id}: {a:?}"
         );
-        assert!(t.transforming(), "{id}");
+        assert!(t.transforming() && !t.drawing_boxed() && !t.moving(), "{id}");
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 130.0, 130.0)), vec![Action::Commit], "{id}");
         assert!(!t.busy() && !t.transforming(), "{id}");
         // Escape cancels a widget drag.
@@ -453,14 +529,15 @@ fn a_shape_tool_moves_the_selection_by_its_centre_point_and_turns_it_from_a_corn
         // A drag moves the selection by the pointer's offset.
         let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 170.0, 160.0));
         assert_eq!(a.first(), Some(&Action::Begin("Move".into())), "{id}: {a:?}");
-        assert!(t.transforming(), "{id}");
+        // A move, which the canvas can show the bounding box for.
+        assert!(t.transforming() && t.moving() && !t.resizing() && !t.drawing_boxed(), "{id}");
         assert_eq!(
             a.last(),
             Some(&Action::Preview("object.transform".into(), json!({"matrix": [1.0, 0.0, 0.0, 1.0, 20.0, 10.0], "copy": false}))),
             "{id}"
         );
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 170.0, 160.0)), vec![Action::Commit], "{id}");
-        assert!(!t.busy() && !t.transforming(), "{id}");
+        assert!(!t.busy() && !t.transforming() && !t.moving(), "{id}");
     }
     // Alt pressed once the drag has begun copies, and the copy cursor shows, as the Selection
     // tool's do.
@@ -505,6 +582,122 @@ fn a_shape_tool_moves_the_selection_by_its_centre_point_and_turns_it_from_a_corn
     t.pointer(&c, &PointerEvent::new(PointerKind::Down, away.x, away.y));
     let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 350.0, 340.0));
     assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{a:?}");
+    assert!(t.drawing_boxed() && !t.moving() && !t.transforming());
+}
+
+/// The shape tools that show the selection's bounding box report a shape being drawn once the drag
+/// has begun, until the release or Escape. The Line Segment tool shows no box and reports none.
+#[test]
+fn a_shape_being_drawn_has_its_bounding_box_drawn_by_the_tools_that_show_one() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    for id in ["rectangle", "roundedRectangle", "ellipse", "polygon", "star", "lineSegment"] {
+        let mut t = ShapeTool::new(id);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        assert!(!t.drawing_boxed(), "{id}: not before the drag begins");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 140.0));
+        assert_eq!(t.drawing_boxed(), id != "lineSegment", "{id}");
+        assert!(!t.moving() && !t.resizing(), "{id}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 140.0));
+        assert!(!t.drawing_boxed(), "{id}: not after the release");
+        // Escape ends the drag.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 140.0));
+        t.key(&c, ToolKey::Escape, Mods::default());
+        assert!(!t.drawing_boxed(), "{id}: not after Escape");
+    }
+}
+
+/// With a shape tool, a drag on one of the eight handles of the selection's bounding box scales the
+/// selection, as with the Selection tool, instead of drawing a new shape from the handle.
+#[test]
+fn a_shape_tool_scales_the_selection_by_its_bounding_box_handles() {
+    let (d, s) = unfilled_live_rect();
+    let p = paint();
+    let c = cx(&d, &s, &p);
+    let corner = Point::new(200.0, 200.0);
+    for id in ["rectangle", "roundedRectangle", "polygon", "star", "ellipse"] {
+        let mut t = ShapeTool::new(id);
+        assert_eq!(t.cursor(&c, corner, Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{id}");
+        // No Smart Guide for a new shape's start over a handle.
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, corner.x, corner.y));
+        assert!(t.overlays(&c).is_empty(), "{id}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Scale".into())], "{id}");
+        // A resize: the canvas keeps the box on show at the changing bounds.
+        assert!(t.busy() && t.transforming() && t.resizing() && !t.moving(), "{id}");
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 220.0, 230.0));
+        let want = scale_for_drag(Rect::new(100.0, 100.0, 200.0, 200.0), Handle::BottomRight, Point::new(220.0, 230.0), false, false);
+        assert_eq!(a, vec![Action::Preview("object.transform".into(), json!({"matrix": matrix_json(want), "copy": false}))], "{id}");
+        assert_eq!(t.cursor(&c, Point::new(220.0, 230.0), Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{id}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 220.0, 230.0)), vec![Action::Commit], "{id}");
+        assert!(!t.busy() && !t.transforming() && !t.resizing(), "{id}");
+    }
+    // The side handles scale along one axis; Escape turns the scale back.
+    let mut t = ShapeTool::new("rectangle");
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 100.0)), vec![Action::Begin("Scale".into())]);
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 150.0, 80.0));
+    let want = scale_for_drag(Rect::new(100.0, 100.0, 200.0, 200.0), Handle::Top, Point::new(150.0, 80.0), false, false);
+    assert_eq!(a, vec![Action::Preview("object.transform".into(), json!({"matrix": matrix_json(want), "copy": false}))]);
+    assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(!t.busy());
+    // Backtick pressed after the last drag: the release previews the scale again for the patterns
+    // only, then commits.
+    let mut t = ShapeTool::new("rectangle");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y));
+    t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 220.0, 230.0));
+    let a = t.pointer(&c, &PointerEvent { backquote: true, ..PointerEvent::new(PointerKind::Up, 220.0, 230.0) });
+    let want = scale_for_drag(Rect::new(100.0, 100.0, 200.0, 200.0), Handle::BottomRight, Point::new(220.0, 230.0), false, false);
+    let patterns = json!({"matrix": matrix_json(want), "copy": false, "objects": false, "patterns": true});
+    assert_eq!(a, vec![Action::Preview("object.transform".into(), patterns), Action::Commit]);
+    assert!(!t.busy());
+    // View › Hide Bounding Box hides the handles, and a press there draws a new shape.
+    let hidden = ToolContext { show_bbox: false, ..cx(&d, &s, &p) };
+    let mut t = ShapeTool::new("rectangle");
+    assert_eq!(t.cursor(&hidden, corner, Mods::default()), Cursor::Crosshair);
+    t.pointer(&hidden, &PointerEvent::new(PointerKind::Down, corner.x, corner.y));
+    let a = t.pointer(&hidden, &PointerEvent::new(PointerKind::Drag, 240.0, 240.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{a:?}");
+    // The Line Segment tool shows no box, so its press draws.
+    let mut t = ShapeTool::new("lineSegment");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y));
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 240.0, 240.0));
+    assert_eq!(a.first(), Some(&Action::Begin("Line".into())), "{a:?}");
+}
+
+/// A shape tool's press scales the selection only on the drawn handle square: 3 screen points from
+/// the handle's centre along each axis at the default Anchor Size, at any zoom. A press 4 points
+/// from it draws a new shape; at Anchor Size 7 the square is 10 points wide and that press scales.
+#[test]
+fn a_shape_tool_draws_from_a_press_just_beside_a_handle() {
+    let (d, s) = unfilled_live_rect();
+    let p = paint();
+    for zoom in [1.0, 4.0] {
+        let c = ToolContext { zoom, ..cx(&d, &s, &p) };
+        let on = Point::new(200.0 + 3.0 / zoom, 200.0 - 3.0 / zoom);
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&c, on, Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{zoom}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, on.x, on.y)), vec![Action::Begin("Scale".into())], "{zoom}");
+        let beside = Point::new(200.0 + 2.0 / zoom, 200.0 + 4.0 / zoom);
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&c, beside, Mods::default()), Cursor::Crosshair, "{zoom}");
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, beside.x, beside.y));
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 260.0, 260.0));
+        assert_eq!(a.first(), Some(&Action::Begin("Rectangle".into())), "{zoom}: {a:?}");
+        let big = ToolContext { anchor_size: 7, ..c };
+        let mut t = ShapeTool::new("rectangle");
+        assert_eq!(t.cursor(&big, beside, Mods::default()), handle_cursor(Handle::BottomRight, 0.0), "{zoom}");
+        assert_eq!(t.pointer(&big, &PointerEvent::new(PointerKind::Down, beside.x, beside.y)), vec![Action::Begin("Scale".into())], "{zoom}");
+    }
+    // In a view turned 45°, the drawn square stays square to the screen: a press 3 screen points
+    // right of and below the handle's centre, 4.24 pt along the box's x axis, scales.
+    let screen = turned_view(45.0);
+    let c = ToolContext { screen, ..cx(&d, &s, &p) };
+    let f = screen.unwrap_or_else(|| panic!("a turned view"));
+    let corner = Point::new(200.0, 200.0) + f.right * 3.0 + f.down * 3.0;
+    let mut t = ShapeTool::new("rectangle");
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, corner.x, corner.y)), vec![Action::Begin("Scale".into())]);
 }
 
 /// Two selected live rectangles, the second placed so that its top-left Live Corners widget (10 pt

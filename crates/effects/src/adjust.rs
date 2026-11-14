@@ -435,11 +435,19 @@ impl ColorVisitor for Live<'_, '_> {
 /// adjustments of an object `n` is the art of) on everything it paints. The adjustment effects
 /// are gone from the result; embedded images take the keys `images` gives. `swatches` tells the
 /// document's global and spot swatches apart ([`crate::addons::duotone::swatch_kind`]).
-pub fn adjust(n: &Node, outer: Option<&ColorMap>, swatches: &SwatchKinds, images: &mut ImageHook<'_>) -> Option<Node> {
+/// `has_image` tells whether the document holds an image: an image whose color mask's pixels are
+/// missing is recoloured from its own pixels, as it is drawn without the adjustment.
+pub fn adjust(
+    n: &Node,
+    outer: Option<&ColorMap>,
+    swatches: &SwatchKinds,
+    images: &mut ImageHook<'_>,
+    has_image: &dyn Fn(&str) -> bool,
+) -> Option<Node> {
     let mut m: Option<Node> = None;
     if let Some(ch) = n.children() {
         for (i, c) in ch.iter().enumerate() {
-            if let Some(new) = adjust(c, None, swatches, images)
+            if let Some(new) = adjust(c, None, swatches, images, has_image)
                 && let Some(slot) = m.get_or_insert_with(|| n.clone()).children_mut().and_then(|ch| ch.get_mut(i))
             {
                 *slot = Arc::new(new);
@@ -462,31 +470,82 @@ pub fn adjust(n: &Node, outer: Option<&ColorMap>, swatches: &SwatchKinds, images
     if let Some(map) = map {
         let mm = m.get_or_insert_with(|| n.clone());
         mm.appearance.effects.retain(|e| !is_adjustment(&e.id));
+        show_color_masks(mm, has_image);
         recolor_node(mm, Reach::ALL, &mut Live { map: &map, swatches, images });
     }
     m
 }
 
+/// Whether `n` is an image that [`recolor_node`] recolours (embedded, not colorized, without
+/// pixels of its own) with a color mask made from its pixels.
+fn recoloured_with_mask(n: &Node) -> bool {
+    match (&n.kind, Document::color_mask_of(n)) {
+        (NodeKind::Image(im), Some(m)) => im.link.is_none() && n.extras().colorize.is_none() && m.made_for(im),
+        _ => false,
+    }
+}
+
+/// Whether `n` is or holds an image [`recoloured_with_mask`] counts.
+fn holds_recoloured_with_mask(n: &Node) -> bool {
+    recoloured_with_mask(n) || n.children().is_some_and(|ch| ch.iter().any(|c| holds_recoloured_with_mask(c)))
+}
+
+/// Give each image in `n` that [`recoloured_with_mask`] counts its masked pixels as its own,
+/// without the mask, so [`recolor_node`] recolours the pixels it shows and the colors the mask
+/// hides stay hidden. An image whose masked pixels the document does not hold (`has_image`) is
+/// drawn from its own pixels ([`Document::shown_image`]): it keeps its key and loses the mask, so
+/// the recoloured copy is drawn the same way.
+fn show_color_masks(n: &mut Node, has_image: &dyn Fn(&str) -> bool) {
+    if recoloured_with_mask(n)
+        && let Some(masked) = Document::color_mask_of(n).map(|m| m.key.clone())
+    {
+        if let NodeKind::Image(im) = &mut n.kind
+            && has_image(&masked)
+        {
+            im.key = masked;
+        }
+        n.extras_mut().color_mask = None;
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        if holds_recoloured_with_mask(c) {
+            show_color_masks(Arc::make_mut(c), has_image);
+        }
+    }
+}
+
+/// The keys of the masked pixels of the color masks in `n` and its members.
+fn color_mask_keys<'a>(n: &'a Node, out: &mut Vec<&'a str>) {
+    out.extend(Document::color_mask_of(n).map(|m| m.key.as_str()));
+    for c in n.children().into_iter().flatten() {
+        color_mask_keys(c, out);
+    }
+}
+
 /// [`adjust`] for export and Expand Appearance: recoloured embedded images become new images in
-/// `d` (named by their content), and a symbol instance stands for its symbol's art.
-pub fn adjust_in_document(d: &mut Document, n: &Node) -> Option<Node> {
+/// `d` (named by their content), and a symbol instance stands for its symbol's art: `symbol_art`
+/// when given, otherwise the symbol's art with the instance's own appearance changes.
+pub fn adjust_in_document(d: &mut Document, n: &Node, symbol_art: Option<Node>) -> Option<Node> {
     let art;
     let src = match &n.kind {
         NodeKind::SymbolInstance { symbol, .. } if has_adjustment(n) => {
-            let symbol = d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n));
+            let symbol = symbol_art
+                .or_else(|| d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n)));
             art = crate::reshape::as_art(Some(d), n, symbol.as_ref())?;
             &art
         }
         _ => n,
     };
     let kinds = crate::addons::duotone::swatch_kinds(d);
+    let mut masked = vec![];
+    color_mask_keys(src, &mut masked);
+    masked.retain(|k| d.images.contains_key(*k));
     let mut hook = |key: &str, map: &ColorMap| -> Option<String> {
         let blob = d.images.get(key)?.map_rgb(|rgb| map.apply_rgb8(rgb))?;
         let k = blob.content_key();
         d.images.entry(k.clone()).or_insert(blob);
         Some(k)
     };
-    adjust(src, None, &|name| kinds.get(name).copied(), &mut hook)
+    adjust(src, None, &|name| kinds.get(name).copied(), &mut hook, &|key| masked.contains(&key))
 }
 
 #[cfg(test)]
@@ -549,17 +608,17 @@ mod tests {
         let mut g = Node::group(NodeId(1), vec![leaf(2), leaf(3)]);
         g.appearance.effects.push(Effect { id: "adjust.hueSaturation".into(), params: json!({"hue": 120}), visible: true });
         assert!(has_adjustment(&g));
-        let out = adjust(&g, None, &|_| None, &mut |_, _| None).unwrap();
+        let out = adjust(&g, None, &|_| None, &mut |_, _| None, &|_| true).unwrap();
         assert!(out.appearance.effects.is_empty());
         for c in out.children().unwrap() {
             assert_eq!(c.appearance.fill_paint().color().unwrap().to_hex(), "#00ff00");
         }
         // A hidden effect does nothing; a stroke's own effect recolours just that stroke.
         g.appearance.effects[0].visible = false;
-        assert!(!has_adjustment(&g) && adjust(&g, None, &|_| None, &mut |_, _| None).is_none());
+        assert!(!has_adjustment(&g) && adjust(&g, None, &|_| None, &mut |_, _| None, &|_| true).is_none());
         let mut p = Node::path(NodeId(5), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art());
         p.appearance.items[1].effects_mut().push(Effect { id: "adjust.levels".into(), params: json!({"outputBlack": 255}), visible: true });
-        let out = adjust(&p, None, &|_| None, &mut |_, _| None).unwrap();
+        let out = adjust(&p, None, &|_| None, &mut |_, _| None, &|_| true).unwrap();
         assert_eq!(out.appearance.items[1].paint().color().unwrap().to_hex(), "#ffffff");
         assert_eq!(out.appearance.items[0].paint(), p.appearance.items[0].paint());
         assert!(out.appearance.items[1].effects().is_empty());
@@ -574,7 +633,7 @@ mod tests {
         let fill = Appearance::basic(Paint::Gradient(Box::new(gp)), Paint::None, 0.0);
         let mut p = Node::path(NodeId(1), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), fill);
         p.appearance.effects.push(Effect { id: "adjust.hueSaturation".into(), params: json!({"hue": 120}), visible: true });
-        let out = adjust(&p, None, &|_| None, &mut |_, _| None).unwrap();
+        let out = adjust(&p, None, &|_| None, &mut |_, _| None, &|_| true).unwrap();
         let Paint::Gradient(g) = out.appearance.fill_paint() else { panic!("a gradient fill") };
         // The points are what a freeform gradient draws from, not its stops.
         let hexes: Vec<String> = g.freeform.as_ref().unwrap().points.iter().map(|p| p.color.to_hex()).collect();

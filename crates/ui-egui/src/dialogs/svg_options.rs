@@ -112,7 +112,8 @@ pub fn open(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>) {
 /// only when saving).
 fn options(d: &Dialog) -> Value {
     let mode = Mode::of(d);
-    let mut o: Map<String, Value> = d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let mut o: Map<String, Value> =
+        d.fields.iter().filter(|(k, _)| !UI_KEYS.contains(&k.as_str()) && !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     if mode == Mode::Export {
         o.remove("preserveEditing");
         if d.bool("useArtboards") {
@@ -226,6 +227,9 @@ pub(super) fn option_fields(ui: &mut egui::Ui, d: &mut Dialog, screens: bool) {
     check(ui, d, "embedFonts", tl!("Embed Fonts (Glyphs Used)"), !d.bool("outlineText") && !tiny);
     check(ui, d, "fewerTspans", tl!("Fewer <tspan> Elements"), !d.bool("outlineText"));
     check(ui, d, "metadata", tl!("Include Metadata"), true);
+    if !screens {
+        check(ui, d, "variableData", tl!("Include Variable Data"), true);
+    }
 }
 
 /// Use Artboards: all of them or a range; off = the bounds of all art.
@@ -268,12 +272,16 @@ fn code_view(app: &VectorcraftApp, ui: &mut egui::Ui, d: &Dialog) {
     }
     // One cached text, replaced when the document or the options change.
     let key = egui::Id::unique("svg-code");
-    let sig = egui::Id::unique((st.uid, st.revision, opts.to_string())).value();
+    // The read roots in force and the document's folder decide whether the text may be shown.
+    let roots = vectorcraft_engine::file_access::current().map(|r| r.describe());
+    let sig = egui::Id::unique((st.uid, st.revision, opts.to_string(), roots, st.path.as_deref())).value();
     let code: Arc<String> = match ui.ctx().data(|m| m.get_temp::<(u64, Arc<String>)>(key)).filter(|(s, _)| *s == sig) {
         Some((_, c)) => c,
         None => {
             const MAX: usize = 200_000;
-            let mut text = match vectorcraft_engine::cmd::fileio::encode_all(&st.doc, "svg", &json!({ "svg": opts })) {
+            let encoded = vectorcraft_engine::cmd::fileio::check_linked_scripts("document.export", "svg", st)
+                .and_then(|()| vectorcraft_engine::cmd::fileio::encode_all(&st.doc, "svg", &json!({ "svg": opts })));
+            let mut text = match encoded {
                 // Shown as text whatever the file's encoding.
                 Ok(enc) => enc
                     .files
@@ -379,6 +387,51 @@ mod tests {
         assert_eq!(app.ui.dialog.as_ref().unwrap().f64("decimals", 0.0), 1.0);
     }
 
+    /// Show Code under read roots draws no SVG of a document that links a JavaScript file outside
+    /// them: it shows the error, which names no file or folder. Without roots it shows the link.
+    #[test]
+    fn show_code_leaves_out_a_linked_javascript_file_outside_the_read_roots() {
+        let tmp = std::env::temp_dir();
+        let root = tmp.join(format!("vc-svg-code-root-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let script = tmp.join(format!("vc-svg-code-away-{}", std::process::id())).join("menu.js").to_string_lossy().into_owned();
+        let (mut app, _) = app("/tmp/code.svg");
+        app.run("svgInteractivity.addFile", json!({"file": script})).unwrap();
+        app.run("file.export.svg", Value::Null).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("showCode".into(), json!(true));
+        let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap().unwrap();
+        // The text the code view shows after two frames in one context, with `roots` in force.
+        let code = |app: &mut VectorcraftApp, roots: Option<&Arc<vectorcraft_engine::file_access::AutomationRoots>>| {
+            let ctx = egui::Context::default();
+            theme::install_fonts(&ctx);
+            for _ in 0..2 {
+                let mut out =
+                    vectorcraft_engine::file_access::confine(roots, || ctx.run_ui(Default::default(), |ui| super::super::show(app, ui.ctx())));
+                out.textures_delta.clear();
+            }
+            ctx.data(|m| m.get_temp::<(u64, Arc<String>)>(egui::Id::unique("svg-code"))).map(|(_, c)| c.to_string()).unwrap_or_default()
+        };
+        let confined = code(&mut app, Some(&roots));
+        assert!(confined.contains("a linked JavaScript file is outside the read roots"), "{confined}");
+        assert!(!confined.contains("menu.js") && !confined.contains("vc-svg-code"), "{confined}");
+        let shown = code(&mut app, None);
+        assert!(shown.contains(&format!("<script xlink:href=\"{script}\"/>")), "{shown}");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// A dialog a save panel opened carries the dialog layer's own `__` fields; the save is given
+    /// only the SVG options, so it is not refused for an unknown key.
+    #[test]
+    fn save_as_svg_from_a_save_panel_passes_only_the_options() {
+        let (mut app, written) = app("/tmp/panel.svg");
+        app.run("file.saveAs", Value::Null).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert(crate::dialogs::AFTER_PANEL.into(), json!(true));
+        assert!(options(app.ui.dialog.as_ref().unwrap()).get(crate::dialogs::AFTER_PANEL).is_none());
+        let d = app.ui.dialog.take().unwrap();
+        confirm(&mut app, &d).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(written.borrow()[0].0, "/tmp/panel.svg");
+    }
+
     #[test]
     fn all_artboards_export_one_file_each() {
         let (mut app, written) = app("/tmp/set.svg");
@@ -427,6 +480,24 @@ mod tests {
         assert!(app.ui.dialog.as_ref().unwrap().fields.get("artboard").is_none());
         super::super::confirm(&mut app).unwrap();
         assert_eq!((written.borrow().len(), written.borrow()[1].0.as_str()), (2, "/tmp/doc.svg"));
+    }
+
+    /// Include Variable Data starts off, draws in the dialog, and writes the text variables and
+    /// data sets into the saved SVG when it is on.
+    #[test]
+    fn include_variable_data_reaches_the_file() {
+        let (mut app, written) = app("/tmp/vars.svg");
+        let id = app.run("text.create", json!({"x": 10, "y": 60, "text": "Alice"})).unwrap()["id"].clone();
+        app.run("variable.define", json!({"name": "Name", "kind": "text"})).unwrap();
+        app.run("variable.bind", json!({"variable": "Name", "ids": [id]})).unwrap();
+        app.run("dataset.new", json!({"name": "Row", "values": {"Name": "Bob"}})).unwrap();
+        app.run("file.saveAs", Value::Null).unwrap();
+        assert!(!app.ui.dialog.as_ref().unwrap().bool("variableData"), "off at first");
+        frame(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert("variableData".into(), json!(true));
+        super::super::confirm(&mut app).unwrap();
+        let svg = text(&written, 0);
+        assert!(svg.contains("<variable varName=\"Name\"") && svg.contains("dataSetName=\"Row\"") && svg.contains("<p>Bob</p>"), "{svg}");
     }
 
     #[test]

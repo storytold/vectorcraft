@@ -10,7 +10,7 @@ use super::{
 
 impl Document {
     /// Is everything but the layers the same in `other`, as the next version of the document after
-    /// an edit of its art? The id counter and the id index are left out, and art outside the layers
+    /// an edit of its art? The id counter and the caches are left out, and art outside the layers
     /// (symbols, patterns, graph designs) compares by identity, which an edit keeps for what it
     /// doesn't change: quick for every frame of an animation.
     pub fn same_outside_layers(&self, other: &Self) -> bool {
@@ -34,10 +34,11 @@ impl Document {
             graphic_styles,
             char_styles,
             para_styles,
+            composite_fonts,
             text_threads,
             symbols,
             graph_designs,
-            guides,
+            saved_guides,
             views,
             saved_selections,
             variables,
@@ -68,12 +69,16 @@ impl Document {
             print_setup,
             assets,
             svg_scripts,
+            svg_filters,
             puppet,
             new_art,
             dimensions,
             retired_artboard_id: _,
             opened_artboard: _,
+            units_from_file: _,
             index: _,
+            guide_cache: _,
+            inline_cycles: _,
         } = self;
         *version == other.version
             && *title == other.title
@@ -89,12 +94,13 @@ impl Document {
             && *graphic_styles == other.graphic_styles
             && *char_styles == other.char_styles
             && *para_styles == other.para_styles
+            && *composite_fonts == other.composite_fonts
             && *text_threads == other.text_threads
             && symbols.len() == other.symbols.len()
             && symbols.iter().zip(&other.symbols).all(|(a, b)| a.name == b.name && Arc::ptr_eq(&a.art, &b.art))
             && graph_designs.len() == other.graph_designs.len()
             && graph_designs.iter().zip(&other.graph_designs).all(|(a, b)| a.name == b.name && Arc::ptr_eq(&a.art, &b.art))
-            && *guides == other.guides
+            && *saved_guides == other.saved_guides
             && *views == other.views
             && *saved_selections == other.saved_selections
             && *variables == other.variables
@@ -135,6 +141,7 @@ impl Document {
             && *print_setup == other.print_setup
             && *assets == other.assets
             && *svg_scripts == other.svg_scripts
+            && *svg_filters == other.svg_filters
             && match (puppet, &other.puppet) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (a, b) => a.is_none() && b.is_none(),
@@ -204,6 +211,7 @@ impl Document {
                 show_video_safe_areas: false,
                 video_ruler_pixel_aspect_ratio: 1.0,
                 color: None,
+                guide_label: None,
             }],
             layers: vec![],
             swatches: swatches.into(),
@@ -211,10 +219,11 @@ impl Document {
             graphic_styles: default_graphic_styles().into(),
             char_styles: Default::default(),
             para_styles: Default::default(),
+            composite_fonts: Default::default(),
             text_threads: vec![],
             symbols: vec![],
             graph_designs: vec![],
-            guides: vec![],
+            saved_guides: vec![],
             views: vec![],
             saved_selections: Default::default(),
             variables: Default::default(),
@@ -245,12 +254,16 @@ impl Document {
             print_setup: None,
             assets: vec![],
             svg_scripts: vec![],
+            svg_filters: vec![],
             puppet: None,
             new_art: Default::default(),
             dimensions: false,
             retired_artboard_id: Default::default(),
             opened_artboard: None,
+            units_from_file: false,
             index: Default::default(),
+            guide_cache: Default::default(),
+            inline_cycles: Default::default(),
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
@@ -270,7 +283,14 @@ impl Document {
         self.next_id
     }
 
-    /// Ensure `next_id` is above every id in the tree (after deserializing foreign data).
+    /// Makes the next id at least `id`, so ids below it are not given out again.
+    pub fn raise_next_id(&mut self, id: u64) {
+        self.next_id = self.next_id.max(id);
+    }
+
+    /// Ensure `next_id` is above every id in the tree (after deserializing foreign data), then give
+    /// the objects outside the layer tree (opacity-mask art, symbols, graph designs and patterns)
+    /// whose id is missing or already taken a new one, so each stored object has an id of its own.
     pub fn fix_next_id(&mut self) {
         // Ids from [`MAX_NEXT_ID`] up (a damaged or hand-made file: #1718) are left out, as is a
         // counter up there: new ids start under them and never reach them, where counting on from
@@ -281,13 +301,12 @@ impl Document {
                 max = max.max(id);
             }
         };
-        for l in &self.layers {
-            l.walk(&mut |n| see(n.id.0));
-        }
+        self.visit_stored(|n, _| see(n.id.0));
         self.slices.iter().for_each(|s| see(s.id.0));
         self.assets.iter().for_each(|a| see(a.id));
         let counter = Some(self.next_id).filter(|n| *n <= MAX_NEXT_ID).unwrap_or(0);
         self.next_id = counter.max(max.saturating_add(1));
+        self.renumber_stored_duplicates();
     }
 
     /// Find a node anywhere in the tree.
@@ -352,6 +371,7 @@ impl Document {
             }
             false
         }
+        crate::id_index::note_tree_walk();
         let mut p = vec![];
         find(&self.layers, id, &mut p).then_some(p)
     }
@@ -393,6 +413,7 @@ impl Document {
             });
         }
         if !want.is_empty() {
+            crate::id_index::note_tree_walk();
             let mut rest = HashMap::with_capacity(want.len());
             walk(&self.layers, &want, &mut Vec::new(), &mut rest);
             out.extend(rest);
@@ -485,11 +506,13 @@ impl Document {
         }
     }
 
-    /// Insert `node` into `parent` at `index` (clamped; `usize::MAX` = top).
+    /// Insert `node` into `parent` at `index` (clamped; `usize::MAX` = top). In a layer, art goes
+    /// below the layer's ruler guides and a ruler guide among them ([`Node::insert_index`]).
     pub fn insert(&mut self, parent: Option<NodeId>, index: usize, node: Node) -> Result<NodeId, DocError> {
         let id = node.id;
+        self.check_ruler_guide_place(&node, parent)?;
         let ch = self.children_mut(parent)?;
-        let i = index.min(ch.len());
+        let i = Node::insert_index(ch, index, &node);
         ch.insert(i, Arc::new(node));
         Ok(id)
     }
@@ -506,17 +529,30 @@ impl Document {
         Ok(ch.remove(idx))
     }
 
-    /// Move a node to `parent` at `index` (index measured after removal).
+    /// Move a node to `parent` at `index` (index measured after removal), clamped as
+    /// [`Document::insert`] clamps it.
     pub fn move_node(&mut self, id: NodeId, parent: Option<NodeId>, index: usize) -> Result<(), DocError> {
         if let Some(p) = parent
             && self.ancestry(p).is_some_and(|a| a.contains(&id))
         {
             return Err(DocError::Invalid("cannot move an object into itself".into()));
         }
+        if let Some(n) = self.node(id) {
+            self.check_ruler_guide_place(n, parent)?;
+        }
         let n = self.remove(id)?;
         let ch = self.children_mut(parent)?;
-        let i = index.min(ch.len());
+        let i = Node::insert_index(ch, index, &n);
         ch.insert(i, n);
+        Ok(())
+    }
+
+    /// An error when `n` is a ruler guide and `parent` is not a layer or sublayer: a ruler guide is
+    /// always a direct child of one ([`NodeKind::RulerGuide`]).
+    fn check_ruler_guide_place(&self, n: &Node, parent: Option<NodeId>) -> Result<(), DocError> {
+        if n.is_ruler_guide() && !parent.and_then(|p| self.node(p)).is_some_and(Node::is_layer) {
+            return Err(DocError::Invalid("a ruler guide goes only directly in a layer or sublayer".into()));
+        }
         Ok(())
     }
 
@@ -723,7 +759,7 @@ impl Document {
             for c in n.children().into_iter().flatten() {
                 if c.is_layer() {
                     objects(c, out);
-                } else {
+                } else if !c.is_ruler_guide() {
                     out.insert(c.id);
                 }
             }
@@ -741,7 +777,8 @@ impl Document {
     }
 
     /// The object of a layer or sublayer that holds node `id`: `id` itself when it is one, else
-    /// the group or other object around it right inside a layer. None for a layer or sublayer.
+    /// the group or other object around it right inside a layer. None for a layer, a sublayer or a
+    /// ruler guide.
     pub fn layer_object(&self, id: NodeId) -> Option<&Node> {
         self.layer_object_at(&self.index_path(id)?)
     }
@@ -752,6 +789,9 @@ impl Document {
         let mut nodes = &self.layers;
         for &i in path {
             let n = nodes.get(i)?;
+            if n.is_ruler_guide() {
+                return None;
+            }
             if !n.is_layer() {
                 return Some(n.as_ref());
             }

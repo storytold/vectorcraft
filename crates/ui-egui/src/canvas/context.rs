@@ -20,6 +20,8 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
             .active()
             .filter(|_| app.session.tool_id() == "intertwine")
             .and_then(|st| vectorcraft_tools::intertwine::menu_target(&st.doc, &st.selection.objects, p).map(|(g, m)| (st.uid, g, p, m)));
+        // Auto Spell Check: the underlined word right-clicked, for its suggestions.
+        app.ui.context_spelling = if app.ui.view.auto_spell_check { super::tool_overlays::misspelled_word_at(app, p) } else { None };
         let on_artboards = app.session.tool_id() == "artboard";
         if on_artboards {
             crate::panels::artboards::right_click(app, p);
@@ -39,6 +41,7 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
         app.ui.context_locked = None;
         app.ui.context_intertwine = None;
         app.ui.context_artboards = None;
+        app.ui.context_spelling = None;
     }
     if let Some((id, p)) = clicked {
         crate::menus::invoke(app, &id, p);
@@ -50,7 +53,10 @@ pub(super) fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: 
 /// to its active proxy (`paint.setFill`/`paint.setStroke` with its `ids`; a gradient fits it), the
 /// Appearance panel's thumbnail gives the object (the topmost one hit) the appearance it carries
 /// (`appearance.copyFrom`), a graphic style is applied to it (`graphicStyle.apply`; with Alt, on
-/// top of its appearance). A chip follows the pointer meanwhile.
+/// top of its appearance), and a brush is applied to it (`brush.apply`, `brush.addFromLibrary`
+/// for a brush library's). A Brushes panel scatter, art or pattern
+/// brush dropped where there is no art places a copy of its art there (`brush.placeArt`). A chip
+/// follows the pointer meanwhile.
 pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Response, xf: &Xf) {
     crate::panels::swatches::drag_preview(app, ui.ctx());
     let Some(pos) = ui.input(|i| i.pointer.interact_pos()) else { return };
@@ -83,7 +89,19 @@ pub(super) fn panel_drop(app: &mut VectorcraftApp, ui: &Ui, resp: &egui::Respons
         }
         return;
     }
-    let Some(hit) = hit_at(app, xf.to_doc(pos), xf.zoom) else { return };
+    let hit = hit_at(app, xf.to_doc(pos), xf.zoom);
+    // A scatter, art or pattern brush from the Brushes panel dropped where there is no art: a copy
+    // of its art, centered where it is dropped, to edit and Alt-drag back onto the brush.
+    if let (None, widgets::PanelDrag::Brush { name, def }) = (&hit, &*d)
+        && matches!(def["type"].as_str(), Some("scatter" | "art" | "pattern"))
+    {
+        let at = xf.to_doc(pos);
+        if let Err(e) = app.run("brush.placeArt", json!({"name": name, "x": at.x, "y": at.y})) {
+            app.status(e);
+        }
+        return;
+    }
+    let Some(hit) = hit else { return };
     let Some(st) = app.session.active() else { return };
     let (cmd, params) = match &*d {
         widgets::PanelDrag::Paint { params, .. } => {

@@ -31,7 +31,8 @@ pub fn merged_params(id: &str, params: &Value) -> Value {
 /// (`lightRotation`, `lightHeight`, `lightBehind`). Scribble took one `variation` before its
 /// separate `overlapVariation` and `spacingVariation`. Earlier values (from a file or a script of
 /// then) become the current ones that show exactly the same, unless those are given too, which win.
-/// Scribble's angle is also stored above -180° and up to 180° (270° becomes -90°).
+/// Scribble's angle is also stored above -180° and up to 180° (270° becomes -90°), and a Warp's
+/// map `version` given as a whole float is stored as an integer.
 pub fn upgrade_params(id: &str, params: &Value) -> Value {
     match params {
         Value::Object(m) => {
@@ -39,6 +40,7 @@ pub fn upgrade_params(id: &str, params: &Value) -> Value {
             upgrade_perspective(id, &mut m);
             upgrade_light(id, &mut m);
             upgrade_scribble(id, &mut m);
+            upgrade_warp_version(id, &mut m);
             Value::Object(m)
         }
         other => other.clone(),
@@ -71,6 +73,19 @@ fn upgrade_perspective(id: &str, m: &mut Map<String, Value>) {
     }
 }
 
+/// A Warp's map `version` given as a whole float (`1.0`) is stored as the integer.
+fn upgrade_warp_version(id: &str, m: &mut Map<String, Value>) {
+    if !id.starts_with("warp.") {
+        return;
+    }
+    if let Some(v) = m.get_mut("version")
+        && !v.is_u64()
+        && let Some(n) = crate::warp::warp_version(v)
+    {
+        *v = json!(n);
+    }
+}
+
 fn upgrade_scribble(id: &str, m: &mut Map<String, Value>) {
     if id != "stylize.scribble" {
         return;
@@ -91,7 +106,15 @@ pub fn new_effect(id: &str, params: &Value) -> Option<Effect> {
     if !catalog_index().contains_key(id) {
         vectorcraft_plugins::effect::installed(id)?;
     }
-    Some(Effect { id: id.to_string(), params: merged_params(id, params), visible: true })
+    let mut params = merged_params(id, params);
+    // A new Warp takes its style's Bézier net unless a map is given; the catalog's defaults carry
+    // no version, so warps saved without one keep the earlier map.
+    if id.starts_with("warp.")
+        && let Value::Object(m) = &mut params
+    {
+        m.entry("version").or_insert(json!(crate::warp::WARP_NET));
+    }
+    Some(Effect { id: id.to_string(), params, visible: true })
 }
 
 /// Scale the distance parameters of `e` by `s` (Scale Strokes & Effects; see
@@ -119,6 +142,7 @@ pub fn scale_effect(e: &mut Effect, s: f64) {
 pub fn is_raster(id: &str) -> bool {
     matches!(id, "stylize.dropShadow" | "stylize.innerGlow" | "stylize.outerGlow" | "stylize.feather" | "blur.gaussian" | RASTERIZE)
         || PIXEL_EFFECTS.contains(&id)
+        || id == crate::SVG_FILTER
 }
 
 /// Does `id` change geometry? (Crop Marks and Vector Halftone add art of their own instead,
@@ -147,7 +171,21 @@ pub fn has_plugin_effect(n: &Node) -> bool {
     n.appearance.effects.iter().any(plugin) || n.appearance.items.iter().any(|i| i.effects().iter().any(plugin))
 }
 
-/// The plug-in registry's revision, which changes whenever a plug-in is installed or removed.
+/// Does `n` have a visible live-effect plug-in effect, its own or a fill's or stroke's, whose
+/// plug-in paints the pieces it returns? What such an effect draws also depends on the document's
+/// swatches and patterns, which its pieces may name.
+pub fn has_painted_plugin_effect(n: &Node) -> bool {
+    let painted = |e: &Effect| e.visible && vectorcraft_plugins::effect::plugin_id(&e.id).is_some_and(vectorcraft_plugins::effect::paints_output);
+    n.appearance.effects.iter().any(painted) || n.appearance.items.iter().any(|i| i.effects().iter().any(painted))
+}
+
+/// Is a live-effect plug-in that paints the pieces it returns installed?
+pub fn any_plugin_paints_output() -> bool {
+    vectorcraft_plugins::registry::list().iter().any(|p| vectorcraft_plugins::effect::paints_output(&p.manifest().id))
+}
+
+/// Changes whenever a plug-in is installed or removed (the registry's revision), and when deferred
+/// live-effect plug-in stages give results ([`vectorcraft_plugins::deferred::revision`]).
 pub fn plugin_revision() -> u64 {
-    vectorcraft_plugins::registry::revision()
+    vectorcraft_plugins::registry::revision() ^ vectorcraft_plugins::deferred::revision().rotate_left(32)
 }

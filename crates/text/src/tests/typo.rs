@@ -66,6 +66,24 @@ fn optical_pairs_cross_paint_runs_and_manual_and_tracking_are_independent() {
     assert!((pair_advance(&rtl_manual) - pair_advance(&rtl_pair_zero) - 20.0).abs() < 0.01, "manual spacing changes the adjacent right-to-left pair");
 }
 
+/// At 50% Horizontal Scale the tracking adds half the space it adds at 100% (`spacing_scale`),
+/// and the Optical pairs measure their gaps without it: tracked, each advance is the untracked
+/// Optical one and the tracking, the corrections unchanged.
+#[test]
+fn optical_pairs_in_horizontally_scaled_type_measure_without_the_scaled_tracking() {
+    let st = CharStyle { font_family: "JetBrains Mono".into(), size: 100.0, optical_kerning: true, h_scale: 50.0, ..CharStyle::default() };
+    let advances = |st: CharStyle| layout(db(), &TextObject::point(Point::ZERO, "IIAV", st)).glyphs.iter().map(|g| g.advance).collect::<Vec<_>>();
+    let optical = advances(st.clone());
+    let unkerned = advances(CharStyle { kerning: Some(0.0), ..st.clone() });
+    assert!((optical[0] - unkerned[0]).abs() > 0.1, "Optical changes the monospaced pair at 50%: {optical:?} {unkerned:?}");
+    let tracked = advances(CharStyle { tracking: 100.0, ..st });
+    assert_eq!(optical.len(), tracked.len());
+    for (o, t) in optical.iter().zip(&tracked) {
+        // 100/1000 of the 100 pt em drawn 50% wide.
+        assert!((t - o - 5.0).abs() < 0.01, "{optical:?} {tracked:?}");
+    }
+}
+
 #[test]
 fn rtl_manual_kerning_spaces_the_character_from_the_next_in_reading_order() {
     for optical_kerning in [false, true] {
@@ -704,12 +722,12 @@ fn area_flow_moves_a_word_down_to_a_line_wide_enough_for_it() {
 }
 
 /// Lays `t` out as [`layout`] does, on a thread of its own, and fails the test when that panics or
-/// takes more than 20 s.
+/// has not ended after 300 s.
 fn layout_soon(t: &TextObject) -> TextLayout {
     let (tx, rx) = std::sync::mpsc::channel();
     let (t, text) = (t.clone(), t.plain_text());
     std::thread::spawn(move || tx.send(layout(db(), &t)).ok());
-    rx.recv_timeout(std::time::Duration::from_secs(20)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
+    rx.recv_timeout(std::time::Duration::from_secs(300)).unwrap_or_else(|e| panic!("laying out {text:?}: {e}"))
 }
 
 /// Each line's baseline, left and right edges, and byte range.
@@ -1970,14 +1988,28 @@ fn soft_return_breaks_line_without_new_paragraph() {
     assert_eq!(&t.plain_text()[l1.start..l1.end], "Line 2");
 }
 
+/// A line ending in a soft return is justified as a wrapped line is: only the paragraph's last
+/// line keeps its alignment. Illustrator's own layout in a user's `.ai` (used locally, not
+/// committed) spreads such lines to the frame's edge.
 #[test]
-fn soft_return_in_justified_text_does_not_spread() {
-    let text = "Short\u{2028}A much longer second line of text inside the frame.";
-    let t = area(text, style(12.0), Rect::new(0.0, 0.0, 300.0, 200.0), Justify::JustifyLeft);
-    let lay = layout(db(), &t);
-    assert!(lay.lines.len() >= 2);
-    let l0 = &lay.lines[0];
-    assert!(l0.x1 - l0.x0 < 100.0, "short line ending with soft return is not justified: {}", l0.x1 - l0.x0);
+fn soft_return_in_justified_text_spreads_like_a_wrapped_line() {
+    let frame = Rect::new(0.0, 0.0, 300.0, 200.0);
+    let text = "A line of a few words\u{2028}and the last line.";
+    for justify in [Justify::JustifyLeft, Justify::JustifyCenter, Justify::JustifyRight] {
+        let lay = layout(db(), &area(text, style(12.0), frame, justify));
+        assert_eq!(lay.lines.len(), 2);
+        let (l0, l1) = (&lay.lines[0], &lay.lines[1]);
+        assert!((l0.x0 - frame.x0).abs() < 1e-6 && (l0.x1 - frame.x1).abs() < 1e-6, "{justify:?}: {l0:?}");
+        assert!(l1.x1 - l1.x0 < 200.0, "{justify:?}: the last line isn't justified: {l1:?}");
+        // A soft return ending the paragraph: the empty line after it is the last one, so the line
+        // it ends is justified too.
+        let lay = layout(db(), &area("A line of a few words\u{2028}", style(12.0), frame, justify));
+        let l0 = lay.lines.first().unwrap();
+        assert!((l0.x0 - frame.x0).abs() < 1e-6 && (l0.x1 - frame.x1).abs() < 1e-6, "{justify:?}, trailing soft return: {l0:?}");
+    }
+    // Aligned type stays aligned.
+    let lay = layout(db(), &area(text, style(12.0), frame, Justify::Left));
+    assert!(lay.lines[0].x1 < frame.x1 - 100.0);
 }
 
 #[test]

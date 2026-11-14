@@ -98,7 +98,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "command_list",
             "List commands",
-            "Discover command ids, labels, parameter descriptions and enabled state. Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief. list_commands lists the same commands; it takes enabledOnly instead of enabled_only and returns {count, commands}.",
+            "Discover command ids, labels, parameter descriptions and enabled state. Lists engine and plug-in commands, and desktop UI menu commands (ui: true; running a UI-only id headless needs --connect). A command with a parameter schema also lists it as schema (JSON Schema 2020-12) and as inputSchema (the same schema with an object root, the form of a tool's inputSchema). Returns an array. The whole catalogue is large: narrow it with filter (or query), menu, and brief. list_commands lists the same commands; it takes enabledOnly instead of enabled_only and returns {count, commands}. Effect ids (effect.list) are not command ids.",
             obj(
                 json!({"filter": string("Case-insensitive id, label or menu substring"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabled_only": {"type":"boolean"}, "brief": {"type":"boolean", "description": BRIEF}}),
                 &[],
@@ -156,7 +156,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "list_commands",
             "List commands",
-            "List VectorCraft commands (id, label, menu path, shortcut, parameter description, enabled state). Every editing action is a command; run any of them with run_command. Coordinates are points in document space, y down, origin at the first artboard's top-left. command_list lists the same commands as a bare array and takes enabled_only.",
+            "List VectorCraft commands (id, label, menu path, shortcut, parameter description, enabled state, and schema and inputSchema for a command with a parameter schema). Includes engine commands and desktop UI menu commands (ui: true; a UI-only id run headless needs --connect). Every editing action is a command; run any of them with run_command (or invoke_menu for a menu path). Coordinates are points in document space, y down, origin at the first artboard's top-left. command_list lists the same commands as a bare array and takes enabled_only. Effect ids (effect.list) are not command ids.",
             obj(
                 json!({"filter": string("Case-insensitive substring matched against id, label and menu path (e.g. \"align\", \"Object\")"), "query": string("Same as filter"), "menu": string(MENU_FILTER), "enabledOnly": {"type": "boolean", "description": "Only commands that can run right now"}, "brief": {"type": "boolean", "description": BRIEF}}),
                 &[],
@@ -259,7 +259,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "radius1": num("Star outer radius"),
                     "radius2": num("Star inner radius"),
                     "points": {"type": "integer", "minimum": 3, "description": "Star points (default 5)"},
-                    "rotation": num("Rotation in degrees (polygon/star)"),
+                    "rotation": num("Rotation in degrees clockwise about the centre (rectangle/ellipse: 0 upright; polygon/star: 0 a corner or point straight up)"),
                     "x1": num("Line start x"),
                     "y1": num("Line start y"),
                     "x2": num("Line end x"),
@@ -307,7 +307,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "answer_dialog",
             "Answer dialog",
-            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none. When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
+            "Set fields of the desktop app's open dialog in order, then confirm (OK) or cancel it, as the control protocol's ui.dialog.set, ui.dialog.confirm and ui.dialog.cancel do. The app stores all the fields or none and answers that same dialog in the same request (ui.dialog.set with action). When the app refuses the ui.dialog.set, for example because no dialog is open, the call is an error and the dialog is not confirmed or canceled. inspect_ui shows the open dialog and its fields (ui.dialog). After invoke_menu app.quit or file.close replies {\"pending\":\"saveChanges\"}: {action:\"confirm\"} saves, {set:[{field:\"discard\",value:true}],action:\"confirm\"} closes without saving, {action:\"cancel\"} cancels. Returns {dialog, result}: the dialog after the fields were set, and the reply to confirm or cancel. Desktop app only.",
             obj(
                 json!({
                     "set": {
@@ -316,7 +316,7 @@ pub fn tool_definitions() -> Vec<Value> {
                         "items": obj(json!({"field": string("Dialog field"), "value": {"description": "The field's new value (any JSON; default null)"}}), &["field"]),
                         "description": "Fields to set, in order (one ui.dialog.set that sets all of them or none)",
                     },
-                    "action": {"type": "string", "enum": ["confirm", "cancel"], "description": "Then confirm (OK) or cancel the dialog"},
+                    "action": {"type": "string", "enum": ["confirm", "cancel"], "description": "Then confirm (OK) or cancel the dialog the fields were set in"},
                 }),
                 &[],
             ),
@@ -357,10 +357,17 @@ pub fn tool_definitions() -> Vec<Value> {
             "open_file",
             "Open file",
             &format!(
-                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read).",
+                "Open a file as a new, active document: .{} (see run_command document.formats). Templates (.ait, native templates) open as a new untitled document. The reply's `warnings` say what didn't come in as it was (an EPS shown as its preview image says why its PostScript couldn't be read). A file of an extension no built-in format reads opens with the installed importer plug-in that lists it; `importer` names the importer to use (File › Open With), also for an extension a built-in format reads, and `params` gives that importer's parameters.",
                 OPEN_EXTS.join(", .")
             ),
-            obj(json!({"path": string("File path")}), &["path"]),
+            obj(
+                json!({
+                    "path": string("File path"),
+                    "importer": string("An importer plug-in's format id, plugin.<id> (see run_command document.formats), which must list the file's extension (default: the built-in format that reads the file, else the first importer by id that lists its extension)"),
+                    "params": {"type": "object", "description": "The importer plug-in's parameters (see run_command plugin.list; default: the defaults its manifest declares)"},
+                }),
+                &["path"],
+            ),
             false,
         ),
         tool(
@@ -386,14 +393,14 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "export",
             "Export",
-            "Export the active document with the engine's document.export (the same bytes in the app and headless), in any format of the `format` enum: vectors (svg/svgz with the artboard as viewBox, eps, dxf, emf, wmf), pdf and ai (one page per artboard: all, or `artboard` / `range`; ai is the PDF-compatible .ai file that Save writes, which carries the document when every artboard is written in order), rasters (one rendered artboard: png, jpg, webp, gif, png8 as an indexed .png, tiff, bmp, tga, psd with its layers), txt (the stories, back to front), vectorcraft or template (a native copy or template; the document keeps its path). run_command document.formats lists each format's options. For SVG/SVGZ, top-level `outlineText: true` writes text as paths; DXF takes it too (its type is outlined anyway unless `preserve: editability`). PDF instead uses `options.advanced.outlineText: true`, default false (live text). `selection: true` exports only the selected objects, cropped to their bounds. Template layers are left out; live effects are kept (geometry baked, SVG filters for shadows/glows/blur). Without `path` the bytes come back as dataBase64.",
+            "Export the active document with the engine's document.export (the same bytes in the app and headless), in any format of the `format` enum: vectors (svg/svgz with the artboard as viewBox, eps, dxf, emf, wmf, hpgl pen moves for plotters and cutters), pdf and ai (one page per artboard: all, or `artboard` / `range`; ai is the PDF-compatible .ai file that Save writes, which carries the document when every artboard is written in order), rasters (one rendered artboard: png, jpg, webp, gif, png8 as an indexed .png, tiff, bmp, tga, psd with its layers), txt (the stories, back to front), vectorcraft or template (a native copy or template; the document keeps its path). run_command document.formats lists each format's options. For SVG/SVGZ, top-level `outlineText: true` writes text as paths; DXF takes it too (its type is outlined anyway unless `preserve: editability`). PDF instead uses `options.advanced.outlineText: true`, default false (live text). `selection: true` exports only the selected objects, cropped to their bounds. Template layers are left out; live effects are kept (geometry baked, SVG filters for shadows/glows/blur). Without `path` the bytes come back as dataBase64.",
             obj(
                 json!({
                     "format": {"type": "string", "enum": FORMATS.iter().filter(|f| f.write).map(|f| f.id).collect::<Vec<_>>(), "description": "Default: from the path's extension"},
                     "path": string("Destination file (omit to get dataBase64)"),
                     "scale": num("Raster pixels per point (without scale or options.ppi, uses the document's raster effects resolution; options.ppi wins)"),
                     "artboard": {"type": "integer", "minimum": 0, "description": "0-based artboard (default: the first; PDF and .ai default: all)"},
-                    "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG and SVGZ: one file each; EPS: one file each, after a central file of the whole document when there are two or more and art shows; rasters, DXF, EMF and WMF: one, or one file each with options.useArtboards: true)"),
+                    "range": string("1-based artboards such as \"1-3, 5\" (PDF and .ai: one page each; SVG and SVGZ: one file each; EPS: one file each, after a central file of the whole document when there are two or more and art shows; rasters, DXF, EMF, WMF and HP-GL: one, or one file each with options.useArtboards: true)"),
                     "selection": {"type": "boolean", "description": "Export only the selection, cropped to it"},
                     "outlineText": {"type": "boolean", "description": "SVG/SVGZ: true writes text as outlines (viewable without the fonts). DXF takes it too (type outlined anyway unless preserve: editability). PDF uses options.advanced.outlineText instead (default false: live text)"},
                     "options": {"type": "object", "description": "More format options, passed through (see run_command document.formats), e.g. {\"quality\": 80} for jpg or {\"advanced\": {\"outlineText\": true}} for PDF text as outlines (default false: live text)"},
@@ -464,12 +471,12 @@ pub fn tool_definitions() -> Vec<Value> {
                     "ids": {"type": "array", "items": {"type": "integer"}},
                     "dx": num("Move right"),
                     "dy": num("Move down"),
-                    "rotate": num("Rotation in degrees"),
+                    "rotate": num("Rotation in degrees counter-clockwise"),
                     "scale": num("Uniform scale in %"),
                     "scaleX": num("Horizontal scale in %"),
                     "scaleY": num("Vertical scale in %"),
                     "reflect": {"type": "string", "enum": ["vertical", "horizontal"]},
-                    "shear": num("Shear angle in degrees (horizontal axis)"),
+                    "shear": num("Shear angle in degrees (horizontal axis: positive moves the top to the right, turning the vertical edges clockwise)"),
                     "origin": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
                     "copy": {"type": "boolean"},
                 }),
@@ -504,7 +511,7 @@ pub fn tool_definitions() -> Vec<Value> {
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
-                    "offset": num("Gap between text and object (default 6 pt)"),
+                    "offset": num("Gap between text and object in pt, -1000 to 1000 (default 6 pt); a negative gap lets text that far into the object"),
                     "invert": {"type": "boolean"},
                     "release": {"type": "boolean"},
                 }),

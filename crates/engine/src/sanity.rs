@@ -45,7 +45,7 @@ pub(crate) fn doc_sane(d: &Document, sel: &Selection) -> bool {
         && d.ruler_origin.x.abs() <= MAX_COORD
         && d.ruler_origin.y.abs() <= MAX_COORD
         && d.artboards.iter().all(|a| rect_in_range(a.rect))
-        && d.guides.iter().all(|g| g.pos.is_finite() && g.pos.abs() <= MAX_COORD)
+        && d.ruler_guides().iter().all(|g| g.pos.is_finite() && g.pos.abs() <= MAX_COORD)
         && objects_in_range(d, &sel.objects)
 }
 
@@ -54,7 +54,26 @@ fn rect_in_range(r: vectorcraft_geom::Rect) -> bool {
 }
 
 /// Do the objects `ids` have finite geometry within [`MAX_COORD`] (the ones not there pass)?
+///
+/// A path or compound path whose anchors and handles are all finite and inside the range by a
+/// margin passes without being measured: its curves stay inside their control points. Any other
+/// object, and a path with a point outside that margin, is measured.
 pub(crate) fn objects_in_range(d: &Document, ids: &[NodeId]) -> bool {
     let paths = d.index_paths(ids.iter().copied());
-    ids.iter().all(|id| paths.get(id).and_then(|p| d.node_at(p)).and_then(|n| n.geometric_bounds()).is_none_or(rect_in_range))
+    ids.iter().all(|id| paths.get(id).and_then(|p| d.node_at(p)).is_none_or(|n| points_in_range(n) || n.geometric_bounds().is_none_or(rect_in_range)))
+}
+
+/// Coordinates at most this far from 0 keep a curve's measured bounds within [`MAX_COORD`]
+/// whatever the rounding of its extrema.
+const POINTS_LIMIT: f64 = MAX_COORD * (1.0 - 1e-9);
+
+/// Whether every anchor and handle of path `n`, or of each path of compound path `n`, is finite and
+/// within [`POINTS_LIMIT`]. `false` for any other object.
+fn points_in_range(n: &vectorcraft_doc::Node) -> bool {
+    let near = |p: vectorcraft_geom::Point| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= POINTS_LIMIT && p.y.abs() <= POINTS_LIMIT;
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| near(a.p) && near(a.h_in) && near(a.h_out)),
+        NodeKind::Compound { .. } => n.editing_children().iter().all(|c| points_in_range(c)),
+        _ => false,
+    }
 }

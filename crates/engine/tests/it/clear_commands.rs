@@ -144,12 +144,14 @@ fn cut_compound_member_keeps_copy_and_delete_targets_consistent() {
     let (mut s, a, b, c) = compound();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     s.execute("edit.cut", &json!({})).unwrap();
+    // Cut takes the member it copies, and the other member stays in the compound.
     assert_eq!(s.clipboard.nodes.len(), 1);
-    assert_eq!(s.clipboard.nodes[0].id, c);
-    assert!(s.active().unwrap().doc.node(c).is_none());
+    assert_eq!(s.clipboard.nodes[0].id, a);
+    assert!(s.active().unwrap().doc.node(a).is_none());
+    assert_eq!(s.active().unwrap().doc.parent_of(b), Some(c));
     s.execute("edit.pasteInPlace", &json!({})).unwrap();
     let pasted = s.active().unwrap().selection.objects[0];
-    assert_eq!(s.active().unwrap().doc.node(pasted).unwrap().children().unwrap().len(), 2);
+    assert!(s.active().unwrap().doc.node(pasted).unwrap().path_data().is_some(), "an ordinary path is pasted");
     s.execute("edit.undo", &json!({})).unwrap();
     s.execute("edit.undo", &json!({})).unwrap();
     assert_eq!(s.active().unwrap().doc.parent_of(a), Some(c));
@@ -175,12 +177,12 @@ fn clear_guides_and_empty_explicit_targets_keep_their_separate_behavior() {
     s.execute("edit.clear", &json!({"ids": []})).unwrap();
     assert_eq!(s.active().unwrap().history.undo.len(), history);
     assert_eq!(s.active().unwrap().selection, selection);
-    assert_eq!(s.active().unwrap().doc.guides.len(), 1);
+    assert_eq!(s.active().unwrap().doc.ruler_guides().len(), 1);
     s.execute("edit.clear", &json!({})).unwrap();
-    assert!(s.active().unwrap().doc.guides.is_empty());
+    assert!(s.active().unwrap().doc.ruler_guides().is_empty());
     assert!(s.active().unwrap().doc.node(a).is_some());
     s.execute("edit.undo", &json!({})).unwrap();
-    assert_eq!(s.active().unwrap().doc.guides.len(), 1);
+    assert_eq!(s.active().unwrap().doc.ruler_guides().len(), 1);
 }
 
 #[test]

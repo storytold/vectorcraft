@@ -32,6 +32,20 @@ white beside a cream), at most six; scattered specks of a colour add none. Adobe
 its own palettes are chosen; this is VectorCraft's own method (see
 [image-trace-quality.md](image-trace-quality.md#auto-color-keeps-rare-colours)).
 
+**Keep Colors.** `"keepColors": ["#rrggbb", …]` in the params of `imageTrace.make` or
+`imageTrace.makeAndExpand` traces only the palette colors within about 30 levels of a listed color,
+the distance Ignore Color matches by, and leaves the other colors out. With Method Abutting, the paths
+of the kept colors are the same as in a trace of every color. With Method Overlapping, a kept color's
+paths reach under the kept colors above it in the stack and not under the colors left out, as with
+Ignore Color. An empty list traces every color, and a value that is not a six-digit hex color is
+refused. With Ignore Color as well, a kept color that Ignore Color matches is still left out. Flat
+Logo does not use `keepColors`: it traces the colors named in `logoColors`, or the colors it finds.
+The reply's `warnings` name each listed color that matches none of the colors the trace found. When
+nothing is traced because no listed color matches, because Ignore Color leaves out every area of the
+ones that match, or because the ones that match produce no paths, the first warning says so, and the
+status bar shows it. In Flat Logo mode the
+warning says that `keepColors` is not used.
+
 **Document Library color groups.** With Palette › Document Library and Library › Document Swatches,
 the panel's **Colors** menu traces with every document swatch (**All**) or with the colors of one
 color group from the Swatches panel, as the public
@@ -51,6 +65,13 @@ traced fills and strokes take the library color without a link to its swatch. Th
 spot and tint swatches. Tints trace at the color shown by the tint swatch. Editing a swatch later
 does not recolor the trace. Colors from other swatch libraries are also unlinked.
 
+**Ignore Color, background only.** Ignore Color leaves out every area of the chosen color. With
+`"ignoreBackground": true` beside `"ignoreWhite": true` in the params of `imageTrace.make` or
+`imageTrace.makeAndExpand`, it leaves out only the areas of that color that reach the image's edge,
+joined through pixels above, below or to either side, and traces the areas of it that other colors
+enclose: black line work inside a panel stays when the black around the panel is left out. Flat Logo
+leaves out every white area whatever `ignoreBackground` is.
+
 **Document Library** traces with the library's colors as they are. Each pixel takes the library
 color nearest to it in lightness and hue, with a difference in hue or chroma counted three times
 as much as one in lightness, so a gray or a muted brown takes a black, white or other neutral
@@ -65,7 +86,29 @@ size. Raster exports with Art Optimized anti-aliasing, the default, do not show 
 pixels and 16,384 pixels on a side. A raster export shows the line as the canvas does when it uses
 Type Optimized anti-aliasing, or when it uses Art Optimized and is larger than either limit.
 Overlapping stacks the colors instead: a lower color continues under the edge of the color above it,
-and no background shows along that edge.
+and no background shows along that edge. With Fills and without Create Strokes, Overlapping also
+follows a fill rule of VectorCraft's own: each shape is filled whole, and the area of other colors
+that a shape encloses is traced again as shapes of its own and stacked above it. Each enclosed
+outline is then fitted once. The [Image Trace presets](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-presets.html)
+page describes Overlapping as stacking shapes where it can and overlapping their edges elsewhere. A
+shape keeps a hole where the enclosed area holds a transparent pixel or a color that Ignore Color or
+Keep Colors leaves out. A hole smaller than Noise is filled with the shape's own color, as before.
+The pixels of an area inside other areas are scanned once more for each area around it, within a
+work budget of VectorCraft's own: four times the image's pixels (counted as at least 65,536) times
+its colors, with each area costing its bounding box times the colors in it. An area that costs more
+than what is left of the budget keeps its holes and is not charged, so a smaller area after it can
+still be filled.
+With Create Strokes, or without Fills, shapes keep their holes.
+
+**Flat Logo with named colors.** With `logoColors` named, Flat Logo decides whether the image is flat
+art by the image's own colors. It finds them the same way as when no colors are named, and looks for as
+many colors as are named, with white, or as the Colors setting gives, whichever is more. How far the named colors
+are from the image's colors does not change whether the image is refused. While no more colors are
+named than the Colors setting, an image is refused exactly when it is refused without named colors.
+The trace then uses only the named colors, and white while white is a color of its own. An area of a
+color that was not named is traced too: each of its pixels goes to the named color, white or
+transparent that has the largest share in the blend of them that comes closest to the pixel.
+
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)

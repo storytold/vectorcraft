@@ -10,8 +10,9 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Document, Node, NodeId, NodeKind, TextKind, TextObject, TextRun};
 use vectorcraft_geom::Rect;
 
+use super::select::on_artboard;
 use super::typecmd::refresh_bounds;
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, str_param};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index, str_param};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -20,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fonts in Document",
             [],
             None,
-            "{selectionOnly?} (the type in the art of the symbols in scope included: all of the document's, or those the selected instances show) → [{family, style, runs, objects, missing, status: exact|substitute|missing, resolved: {family, style}, missingGlyphs, version?: the installed version the type names (when it names one)}] sorted by name. A font is found by any of its names (ヒラギノ角ゴシック = Hiragino Sans) among the loaded and installed fonts; substitute: the family is there but not the style (resolved names the stand-in); missing: the family is unknown (the fallback family stands in); missingGlyphs: characters of its text the resolved font lacks (drawn by a fallback font)",
+            "{selectionOnly?} (the type in the opacity masks of the objects in scope and in the art of the symbols and patterns in scope included: all of the document's, a pattern swatch that nothing paints included, or those the selected objects show through their instances and paints; disabled masks too) → [{family, style, runs, objects, missing, status: exact|substitute|missing, resolved: {family, style}, missingGlyphs, version?: the installed version the type names (when it names one)}] sorted by name. A font is found by any of its names (ヒラギノ角ゴシック = Hiragino Sans) among the loaded and installed fonts; substitute: the family is there but not the style (resolved names the stand-in); missing: the family is unknown (the fallback family stands in); missingGlyphs: characters of its text the resolved font lacks (drawn by a fallback font). For a composite font, status is the worst among the parts its characters are drawn in, and missingGlyphs counts the characters their part's font lacks",
             has_doc,
             fonts
         ),
@@ -29,7 +30,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Font",
             [],
             None,
-            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); the type in the art of the symbols in scope changes too (all of the document's, or those the selected instances show, so every instance of them follows); text that is hidden or locked, in a hidden or locked group or layer (or group of a symbol's art), or on a locked artboard keeps its font; when no run changes (text already set in the new font, or none to change), the document and its undo history stay as they are → {runs: the runs changed, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
+            "{from: {family, style?}, to: {family (any of its names; stored as the font's own family name, a composite font's as its own name), style?}, selectionOnly?} (style omitted: every style of the family / keep the closest style); the type in the opacity masks of the objects in scope (disabled masks too) and in the art of the symbols and patterns in scope changes too (all of the document's, or those the selected objects show through their instances and paints, so every instance of a symbol and every object a pattern paints follows); text that is hidden or locked, in a hidden or locked group or layer (or group of a symbol's, pattern's or mask's art), in the mask of a hidden or locked object, or on a locked artboard keeps its font; when no run changes (text already set in the new font, or none to change), the document and its undo history stay as they are → {runs: the runs changed, skipped?: the text objects left in the font, warning?: text (some text was left in its font, or the style set isn't available: its type is drawn in the family's closest style)}",
             has_doc,
             replace
         ),
@@ -38,7 +39,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select Text by Font",
             [],
             None,
-            "{family, style?} select the text objects using the font, and the instances of the symbols whose art uses it, that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard → {count}",
+            "{family, style?, scope?: \"document\" (default) | {artboards: [index, …] (0-based)} | {layers: [id, …] (layers or sublayers)}} select the text objects using the font, the instances of the symbols whose art uses it, the text whose inline graphics draw such a symbol, the objects painted with a pattern whose art uses it (by a visible fill or stroke whose opacity is above 0, a stroke wider than 0) and the objects whose opacity mask uses it (in type that is not hidden or locked in that art), that are not hidden or locked, in a hidden or locked group or layer, or on a locked artboard; a pattern swatch that nothing paints, or a layer's mask, selects nothing; with scope, only those on one of the artboards (as All on Active Artboard takes them: their bounds overlap it or their center is on it) or in one of the layers → {count}",
             has_doc,
             select_font
         ),
@@ -63,15 +64,23 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-/// Text objects in scope: the selection's (and their descendants') or the whole document's.
-fn scope(s: &Session, selection_only: bool, selected: Option<&[NodeId]>) -> Result<Vec<NodeId>> {
+/// Text objects in scope: the selection's (and their descendants') or the whole document's, and
+/// the objects among them that have an opacity mask (not the object whose mask is being edited:
+/// its art is on the editing layer).
+fn scope(s: &Session, selection_only: bool, selected: Option<&[NodeId]>) -> Result<(Vec<NodeId>, Vec<NodeId>)> {
     let st = s.doc()?;
-    let mut v = vec![];
+    let editing = st.doc.mask_edit.map(|m| m.object);
+    let (mut texts, mut masked) = (vec![], vec![]);
     let mut seen = HashSet::new();
     let mut add = |n: &vectorcraft_doc::Node| {
         n.walk(&mut |c| {
-            if matches!(c.kind, NodeKind::Text(_)) && seen.insert(c.id) {
-                v.push(c.id);
+            if seen.insert(c.id) {
+                if matches!(c.kind, NodeKind::Text(_)) {
+                    texts.push(c.id);
+                }
+                if c.extras().mask.is_some() && Some(c.id) != editing {
+                    masked.push(c.id);
+                }
             }
         })
     };
@@ -86,7 +95,7 @@ fn scope(s: &Session, selection_only: bool, selected: Option<&[NodeId]>) -> Resu
             add(l);
         }
     }
-    Ok(v)
+    Ok((texts, masked))
 }
 
 /// Whether `name` is the symbol being edited, whose art is on the editing layer.
@@ -94,106 +103,333 @@ fn being_edited(d: &Document, name: &str) -> bool {
     d.symbol_edit.as_ref().is_some_and(|e| e.symbol == name)
 }
 
-/// The symbols that the selected objects of `s` show: those of the instances among them and their
-/// descendants, and of the instances in those symbols' art that are not hidden or locked, nor in a
-/// hidden or locked group of the art. Returned as (all of them, those shown by instances the
-/// Selection tool can reach: not hidden or locked, as `Document::editable` says).
-fn selected_symbols(s: &Session, selected: Option<&[NodeId]>) -> Result<(BTreeSet<String>, BTreeSet<String>)> {
-    fn open_instances(n: &Node, out: &mut BTreeSet<String>) {
+/// Whether `name` is the pattern being edited, whose tile art is on the editing layer.
+fn pattern_being_edited(d: &Document, name: &str) -> bool {
+    d.pattern_edit.as_ref().is_some_and(|e| e.pattern == name)
+}
+
+/// Whether fill or stroke `i` paints: it is visible, its opacity is above 0 and, a stroke, it is
+/// wider than 0.
+fn paints(i: &AppearanceItem) -> bool {
+    i.visible() && i.opacity() > 0.0 && !matches!(i, AppearanceItem::Stroke(s) if s.width <= 0.0)
+}
+
+/// The name of pattern paint `p`.
+fn pattern_name(p: &Paint) -> Option<&str> {
+    match p {
+        Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
+        _ => None,
+    }
+}
+
+/// Whether `r` is laid out as an inline graphic: it has one and holds only its character.
+fn draws_inline(r: &TextRun) -> bool {
+    r.inline.is_some() && vectorcraft_text::edit::is_inline_text(&r.text)
+}
+
+/// The fill and, when it is wider than 0, the stroke of the characters of `r`.
+fn run_paints(r: &TextRun) -> impl Iterator<Item = &Paint> {
+    [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)].into_iter().flatten()
+}
+
+/// [`run_paints`] of run `r` of `t` when its characters draw with them. The characters of an
+/// inline graphic draw no glyph: their fill and stroke paint only their underline and
+/// strikethrough (not on a path or in vertical type, see `vectorcraft_text::decorations`) and the
+/// ruby readings that layout draws with their run (`ruby`, as [`ruby_runs`] finds them).
+fn drawn_run_paints<'a>(t: &TextObject, ruby: &HashSet<*const TextRun>, r: &'a TextRun) -> impl Iterator<Item = &'a Paint> {
+    let drawn = !draws_inline(r) || inline_decorated(t, ruby, r);
+    run_paints(r).filter(move |_| drawn)
+}
+
+/// The inline graphic runs of `t` that layout draws a ruby reading with. A reading takes the run
+/// of the first base character on its line, and type on a path has no ruby. `t` is laid out only
+/// when it has ruby and an inline graphic painted with a pattern.
+fn ruby_runs(t: &TextObject) -> HashSet<*const TextRun> {
+    let patterned = |r: &TextRun| draws_inline(r) && run_paints(r).any(|p| pattern_name(p).is_some());
+    if t.ruby.is_empty() || !t.runs.iter().any(patterned) {
+        return HashSet::new();
+    }
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    lay.ruby.iter().filter_map(|g| t.runs.get(g.run)).filter(|r| draws_inline(r)).map(std::ptr::from_ref).collect()
+}
+
+/// Whether inline graphic run `r` of `t` has an underline or strikethrough that draws, or a ruby
+/// reading that layout draws with it (it is in `ruby`).
+fn inline_decorated(t: &TextObject, ruby: &HashSet<*const TextRun>, r: &TextRun) -> bool {
+    let bars = !t.vertical && !matches!(t.kind, TextKind::OnPath { .. });
+    if bars && (r.style.underline || r.style.strikethrough) {
+        return true;
+    }
+    ruby.contains(&std::ptr::from_ref(r))
+}
+
+/// The patterns that the fills and strokes `n` draws name (of a text object, also those of its
+/// characters): those that [`paints`] holds for, and the character paints of the runs that draw
+/// (as [`drawn_runs`] finds them: not the overset runs of area type or type on a path) where they
+/// draw (as [`drawn_run_paints`] says).
+fn paint_patterns(n: &Node) -> Vec<&str> {
+    let mut out: Vec<&str> = n.appearance.items.iter().filter(|i| paints(i)).filter_map(|i| pattern_name(i.paint())).collect();
+    if let NodeKind::Text(t) = &n.kind
+        && t.runs.iter().flat_map(run_paints).any(|p| pattern_name(p).is_some())
+    {
+        let ruby = ruby_runs(t);
+        out.extend(drawn_runs(t).0.into_iter().flat_map(|r| drawn_run_paints(t, &ruby, r)).filter_map(pattern_name));
+    }
+    out
+}
+
+/// The symbols that the inline graphics in the type of `n` draw (as [`drawn_runs`] finds them: not
+/// those in the overset runs of area type or type on a path).
+fn inline_symbols(n: &Node) -> Vec<&str> {
+    match &n.kind {
+        NodeKind::Text(t) if t.runs.iter().any(draws_inline) => {
+            drawn_runs(t).0.into_iter().filter(|r| draws_inline(r)).filter_map(|r| r.inline.as_ref().map(|art| art.symbol.as_str())).collect()
+        }
+        _ => vec![],
+    }
+}
+
+/// Symbols and patterns, by name: those whose art is in scope.
+#[derive(Clone, Debug, Default)]
+struct Resources {
+    symbols: BTreeSet<String>,
+    patterns: BTreeSet<String>,
+}
+
+impl Resources {
+    /// Adds what `n` itself shows: the symbol of an instance, the symbols of the inline graphics in
+    /// its type, the patterns its paints name, and what the art of its opacity mask shows (not
+    /// hidden or locked objects of that art).
+    fn add_own(&mut self, n: &Node) {
+        if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+            self.symbols.insert(symbol.clone());
+        }
+        self.symbols.extend(inline_symbols(n).into_iter().map(str::to_string));
+        self.patterns.extend(paint_patterns(n).into_iter().map(str::to_string));
+        if let Some(m) = n.extras().mask.as_deref() {
+            self.add(&m.art);
+        }
+    }
+
+    /// Adds what `n` and its descendants show, leaving out hidden or locked objects and what they
+    /// hold.
+    fn add(&mut self, n: &Node) {
         if !n.visible || n.locked {
             return;
         }
-        if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
-            out.insert(symbol.clone());
-        }
+        self.add_own(n);
         for c in n.children().map(Vec::as_slice).unwrap_or_default() {
-            open_instances(c, out);
+            self.add(c);
         }
     }
-    let expand = |names: &mut BTreeSet<String>, d: &Document| loop {
-        let mut more = BTreeSet::new();
-        for sym in d.symbols.iter().filter(|sym| names.contains(&sym.name)) {
-            open_instances(&sym.art, &mut more);
+
+    /// Adds what the art of the symbols and patterns named shows, until nothing more is added; each
+    /// symbol and pattern is read once, so art that shows itself ends.
+    fn expand(&mut self, d: &Document) {
+        let mut symbols: Vec<String> = self.symbols.iter().cloned().collect();
+        let mut patterns: Vec<String> = self.patterns.iter().cloned().collect();
+        while !symbols.is_empty() || !patterns.is_empty() {
+            let mut more = Resources::default();
+            for name in symbols.drain(..) {
+                if let Some(sym) = d.symbols.iter().find(|sym| sym.name == name) {
+                    more.add(&sym.art);
+                }
+            }
+            for name in patterns.drain(..) {
+                for art in d.pattern(&name).map(|p| p.art.as_slice()).unwrap_or_default() {
+                    more.add(art);
+                }
+            }
+            symbols.extend(more.symbols.into_iter().filter(|name| self.symbols.insert(name.clone())));
+            patterns.extend(more.patterns.into_iter().filter(|name| self.patterns.insert(name.clone())));
         }
-        let before = names.len();
-        names.extend(more);
-        if names.len() == before {
-            break;
+    }
+
+    /// The symbols and patterns of `self` that are not in `other`.
+    fn difference(&self, other: &Self) -> Self {
+        Self {
+            symbols: self.symbols.difference(&other.symbols).cloned().collect(),
+            patterns: self.patterns.difference(&other.patterns).cloned().collect(),
         }
-    };
+    }
+}
+
+/// The symbols and patterns that the selected objects of `s` show: those of the instances among
+/// them and their descendants and the patterns their paints name (also in the art of their
+/// opacity masks), and those that the art of these symbols and patterns shows through objects that
+/// are not hidden or locked, nor in a hidden or locked group of the art. Returned as (all of them,
+/// those shown by objects the Selection tool can reach: not hidden or locked, as
+/// `Document::editable` says).
+fn selected_art(s: &Session, selected: Option<&[NodeId]>) -> Result<(Resources, Resources)> {
     let st = s.doc()?;
-    let (mut all, mut open) = (BTreeSet::new(), BTreeSet::new());
+    let (mut all, mut open) = (Resources::default(), Resources::default());
     let editable = st.doc.editable();
     for id in selected.unwrap_or(&st.selection.objects) {
         if let Some(n) = st.doc.node(*id) {
             n.walk(&mut |c| {
-                if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
-                    all.insert(symbol.clone());
-                    if editable(c.id) {
-                        open.insert(symbol.clone());
-                    }
+                all.add_own(c);
+                if editable(c.id) {
+                    open.add_own(c);
                 }
             });
         }
     }
     drop(editable);
-    expand(&mut all, &st.doc);
-    expand(&mut open, &st.doc);
+    all.expand(&st.doc);
+    open.expand(&st.doc);
     Ok((all, open))
 }
 
-/// The text objects in the art of `d`'s symbols (with `only`, of those it names), each with
-/// whether it is open: neither it nor a group around it in the art is hidden or locked. The symbol
-/// being edited is left out: its art is on the editing layer.
-pub(super) fn symbol_texts<'a>(d: &'a Document, only: Option<&BTreeSet<String>>) -> Vec<(&'a TextObject, bool)> {
-    fn visit<'a>(n: &'a Node, open: bool, out: &mut Vec<(&'a TextObject, bool)>) {
-        let open = open && n.visible && !n.locked;
-        if let NodeKind::Text(t) = &n.kind {
-            out.push((&**t, open));
-        }
-        for c in n.children().map(Vec::as_slice).unwrap_or_default() {
-            visit(c, open, out);
-        }
+/// A text object found in art: its id, the text and whether it is open (neither it nor a group
+/// around it, nor an object whose opacity mask holds it, is hidden or locked).
+pub(super) type ArtText<'a> = (NodeId, &'a TextObject, bool);
+
+/// Adds the text objects of `n` and its descendants, the art of their opacity masks included, to
+/// `out`; each is open when `open` holds and [`ArtText`] says so.
+fn art_texts<'a>(n: &'a Node, open: bool, out: &mut Vec<ArtText<'a>>) {
+    let open = open && n.visible && !n.locked;
+    if let NodeKind::Text(t) = &n.kind {
+        out.push((n.id, &**t, open));
     }
+    if let Some(m) = n.extras().mask.as_deref() {
+        art_texts(&m.art, open, out);
+    }
+    for c in n.children().map(Vec::as_slice).unwrap_or_default() {
+        art_texts(c, open, out);
+    }
+}
+
+/// The text objects in the art of the opacity masks of the objects `masked` (each with whether
+/// the object is open: when it isn't, none of its mask's text is).
+fn mask_texts<'a>(d: &'a Document, masked: &[(NodeId, bool)]) -> Vec<ArtText<'a>> {
     let mut out = vec![];
-    for s in d.symbols.iter().filter(|s| !being_edited(d, &s.name) && only.is_none_or(|o| o.contains(&s.name))) {
-        visit(&s.art, true, &mut out);
+    for (id, open) in masked {
+        if let Some(m) = d.node(*id).and_then(|n| n.extras().mask.as_deref()) {
+            art_texts(&m.art, *open, &mut out);
+        }
     }
     out
 }
 
-/// Calls `f` on each text object in the art of `d`'s symbols (with `only`, of those it names) for
-/// which `wants(text, open)` holds (open as in [`symbol_texts`]), the symbol being edited left out.
-/// Art without such text is left as it is.
-pub(super) fn edit_symbol_texts(
-    d: &mut Document,
-    only: Option<&BTreeSet<String>>,
-    wants: &impl Fn(&TextObject, bool) -> bool,
-    f: &mut impl FnMut(&mut TextObject),
-) {
-    fn wanted(n: &Node, open: bool, wants: &impl Fn(&TextObject, bool) -> bool) -> bool {
-        let open = open && n.visible && !n.locked;
-        matches!(&n.kind, NodeKind::Text(t) if wants(t, open)) || n.children().is_some_and(|ch| ch.iter().any(|c| wanted(c, open, wants)))
+/// The text objects in the art of `d`'s symbols and patterns (with `only`, of those it names, a
+/// pattern's art read once however many objects it paints), opacity masks in that art included.
+/// The symbol and the pattern being edited are left out: their art is on the editing layer.
+fn resource_texts<'a>(d: &'a Document, only: Option<&Resources>) -> Vec<ArtText<'a>> {
+    let mut out = vec![];
+    for s in d.symbols.iter().filter(|s| !being_edited(d, &s.name) && only.is_none_or(|o| o.symbols.contains(&s.name))) {
+        art_texts(&s.art, true, &mut out);
     }
-    fn visit(n: &mut Node, open: bool, wants: &impl Fn(&TextObject, bool) -> bool, f: &mut impl FnMut(&mut TextObject)) {
-        let open = open && n.visible && !n.locked;
-        if let NodeKind::Text(t) = &mut n.kind
-            && wants(t, open)
-        {
-            f(t);
+    for p in d.patterns.iter().filter(|p| !pattern_being_edited(d, &p.name) && only.is_none_or(|o| o.patterns.contains(&p.name))) {
+        for art in &p.art {
+            art_texts(art, true, &mut out);
         }
-        for c in n.children_mut().into_iter().flatten() {
-            if wanted(c, open, wants) {
-                visit(Arc::make_mut(c), open, wants, f);
+    }
+    out
+}
+
+/// The text objects in the art of `d`'s symbols (with `only`, of those it names), as
+/// [`resource_texts`] finds them, each with whether it is open.
+#[cfg(test)]
+pub(super) fn symbol_texts<'a>(d: &'a Document, only: Option<&BTreeSet<String>>) -> Vec<(&'a TextObject, bool)> {
+    let mut out = vec![];
+    for s in d.symbols.iter().filter(|s| !being_edited(d, &s.name) && only.is_none_or(|o| o.contains(&s.name))) {
+        art_texts(&s.art, true, &mut out);
+    }
+    out.into_iter().map(|(_, t, open)| (t, open)).collect()
+}
+
+/// Whether `n` or a descendant (the art of their opacity masks included) holds a text object for
+/// which `wants(text, open)` holds, open as [`ArtText`] says.
+fn wanted(n: &Node, open: bool, wants: &impl Fn(&TextObject, bool) -> bool) -> bool {
+    let open = open && n.visible && !n.locked;
+    matches!(&n.kind, NodeKind::Text(t) if wants(t, open))
+        || n.extras().mask.as_deref().is_some_and(|m| wanted(&m.art, open, wants))
+        || n.children().is_some_and(|ch| ch.iter().any(|c| wanted(c, open, wants)))
+}
+
+/// Calls `f` on each text object of `n` and its descendants (the art of their opacity masks
+/// included) for which `wants(text, open)` holds; only the nodes on the way to such text are
+/// copied.
+fn edit_art(n: &mut Node, open: bool, wants: &impl Fn(&TextObject, bool) -> bool, f: &mut impl FnMut(&mut TextObject)) {
+    let open = open && n.visible && !n.locked;
+    if let NodeKind::Text(t) = &mut n.kind
+        && wants(t, open)
+    {
+        f(t);
+    }
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+        && wanted(&m.art, open, wants)
+    {
+        edit_art(Arc::make_mut(&mut m.art), open, wants, f);
+    }
+    for c in n.children_mut().into_iter().flatten() {
+        if wanted(c, open, wants) {
+            edit_art(Arc::make_mut(c), open, wants, f);
+        }
+    }
+}
+
+/// Calls `f` on each text object in the opacity masks of the objects `masked` (as [`mask_texts`]
+/// finds them) for which `wants(text, open)` holds. Masks without such text are left as they are.
+fn edit_mask_texts(d: &mut Document, masked: &[(NodeId, bool)], wants: &impl Fn(&TextObject, bool) -> bool, f: &mut impl FnMut(&mut TextObject)) {
+    for (id, open) in masked {
+        if d.node(*id).and_then(|n| n.extras().mask.as_deref()).is_some_and(|m| wanted(&m.art, *open, wants))
+            && let Some(m) = d.node_mut(*id).and_then(|n| n.extras_if_any()).and_then(|e| e.mask.as_mut())
+        {
+            edit_art(Arc::make_mut(&mut m.art), *open, wants, f);
+        }
+    }
+}
+
+/// Calls `f` on each text object in the art of `d`'s symbols and patterns (as [`resource_texts`]
+/// finds them) for which `wants(text, open)` holds. Art without such text is left as it is.
+fn edit_resource_texts(d: &mut Document, only: Option<&Resources>, wants: &impl Fn(&TextObject, bool) -> bool, f: &mut impl FnMut(&mut TextObject)) {
+    let symbol = d.symbol_edit.as_ref().map(|e| e.symbol.clone());
+    let pattern = d.pattern_edit.as_ref().map(|e| e.pattern.clone());
+    for s in &mut d.symbols {
+        if symbol.as_ref() != Some(&s.name) && only.is_none_or(|o| o.symbols.contains(&s.name)) && wanted(&s.art, true, wants) {
+            edit_art(Arc::make_mut(&mut s.art), true, wants, f);
+        }
+    }
+    for p in &mut d.patterns {
+        if pattern.as_ref() != Some(&p.name) && only.is_none_or(|o| o.patterns.contains(&p.name)) {
+            for art in &mut p.art {
+                if wanted(art, true, wants) {
+                    edit_art(Arc::make_mut(art), true, wants, f);
+                }
             }
         }
     }
-    let edited = d.symbol_edit.as_ref().map(|e| e.symbol.clone());
-    for s in &mut d.symbols {
-        if edited.as_ref() != Some(&s.name) && only.is_none_or(|o| o.contains(&s.name)) && wanted(&s.art, true, wants) {
-            visit(Arc::make_mut(&mut s.art), true, wants, f);
+}
+
+/// Every text object of `d` outside the objects of its layers: in the opacity masks of the
+/// objects on its layers, and in the art of its symbols and patterns (as [`mask_texts`] and
+/// [`resource_texts`] find them, each mask's text open).
+pub(super) fn art_texts_of(d: &Document) -> Vec<ArtText<'_>> {
+    let masked = masked_objects(d);
+    let mut out = mask_texts(d, &masked);
+    out.extend(resource_texts(d, None));
+    out
+}
+
+/// Calls `f` on each text object of [`art_texts_of`] for which `wants(text)` holds.
+pub(super) fn edit_art_texts_of(d: &mut Document, wants: &impl Fn(&TextObject) -> bool, f: &mut impl FnMut(&mut TextObject)) {
+    let masked = masked_objects(d);
+    edit_mask_texts(d, &masked, &|t, _| wants(t), f);
+    edit_resource_texts(d, None, &|t, _| wants(t), f);
+}
+
+/// The objects on the layers of `d` that have an opacity mask (not the object whose mask is being
+/// edited), each as open.
+fn masked_objects(d: &Document) -> Vec<(NodeId, bool)> {
+    let editing = d.mask_edit.map(|m| m.object);
+    let mut out = vec![];
+    d.walk(|n| {
+        if n.extras().mask.is_some() && Some(n.id) != editing {
+            out.push((n.id, true));
         }
-    }
+    });
+    out
 }
 
 /// A font as type names it: family, style and, when it names one, the installed version.
@@ -207,26 +443,36 @@ pub(super) fn font_label((family, style, version): &UsedFont) -> String {
     }
 }
 
-/// The fonts (family, style, version) of the type in the layers and symbols of `d`.
+/// The fonts (family, style, version) run `r` is drawn in: its own, or, set in a composite font,
+/// the fonts of the parts its characters fall in ([`vectorcraft_text::FontDb::composite_fonts_for`]).
+pub(super) fn run_fonts(r: &TextRun) -> Vec<UsedFont> {
+    let parts = if r.inline.is_some() { None } else { vectorcraft_text::FontDb::global().composite_fonts_for(&r.style.font_family, &r.text) };
+    match parts {
+        Some(parts) => parts.into_iter().map(|(family, style)| (family, style, None)).collect(),
+        None => vec![font_of(&r.style)],
+    }
+}
+
+/// The fonts (family, style, version) the type in the layers, symbols and patterns of `d` is drawn
+/// in, the type in opacity masks included, a composite font's parts in place of its name
+/// ([`run_fonts`]).
 pub(super) fn used_fonts(d: &Document) -> BTreeSet<UsedFont> {
     art_fonts(d, &[])
 }
 
-/// The fonts (family, style, version) of the type in the layers and symbols of `d` and in `art`
-/// (art read from a file, its resources in `d`).
+/// The fonts (family, style, version) of the type in the layers, symbols and patterns of `d` and
+/// in `art` (art read from a file, its resources in `d`), the type in opacity masks included. The
+/// pattern being edited is read from the editing layer only.
 pub(super) fn art_fonts(d: &Document, art: &[Node]) -> BTreeSet<UsedFont> {
     let mut fonts = BTreeSet::new();
     let mut add = |n: &Node| {
         if let NodeKind::Text(t) = &n.kind {
-            fonts.extend(t.runs.iter().map(|r| (r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone())));
+            fonts.extend(t.runs.iter().flat_map(run_fonts));
         }
     };
-    d.walk(&mut add);
-    for s in &d.symbols {
-        s.art.walk(&mut add);
-    }
-    for n in art {
-        n.walk(&mut add);
+    let patterns = d.patterns.iter().filter(|p| !pattern_being_edited(d, &p.name)).flat_map(|p| p.art.iter().map(|a| &**a));
+    for n in d.layers.iter().map(|l| &**l).chain(d.symbols.iter().map(|s| &*s.art)).chain(patterns).chain(art) {
+        vectorcraft_doc::swatches::walk_with_masks(n, &mut add);
     }
     fonts
 }
@@ -304,17 +550,16 @@ impl Printed<'_> {
             NodeKind::Text(t) => drawn_runs(t),
             _ => (vec![], false),
         };
-        let items: Vec<&AppearanceItem> =
-            n.appearance.items.iter().filter(|i| i.visible() && !matches!(i, AppearanceItem::Stroke(s) if s.width <= 0.0)).collect();
-        let patterns: Vec<&str> = items
-            .iter()
-            .map(|i| i.paint())
-            .chain(runs.iter().flat_map(|r| [Some(&r.style.fill), (r.style.stroke_width > 0.0).then_some(&r.style.stroke)]).flatten())
-            .filter_map(|p| match p {
-                Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
-                _ => None,
-            })
-            .collect();
+        let items: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| paints(i)).collect();
+        let ruby = match &n.kind {
+            NodeKind::Text(t) => ruby_runs(t),
+            _ => HashSet::new(),
+        };
+        let run_patterns = runs.iter().flat_map(|r| match &n.kind {
+            NodeKind::Text(t) => Some(drawn_run_paints(t, &ruby, r)),
+            _ => None,
+        });
+        let patterns: Vec<&str> = items.iter().map(|i| i.paint()).chain(run_patterns.flatten()).filter_map(pattern_name).collect();
         let brushed = vectorcraft_brush::has_brush(n);
         if (mask.is_some() || !patterns.is_empty() || brushed) && areas.is_none_or(|a| !open || self.meets(n, a)) {
             if let Some(m) = mask {
@@ -343,9 +588,9 @@ impl Printed<'_> {
                     self.overflow.insert(n.id);
                 }
                 for r in runs {
-                    self.fonts.insert((r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone()));
+                    self.fonts.extend(run_fonts(r));
                     // Inline graphics draw their symbols' art.
-                    if let Some(art) = &r.inline {
+                    if let Some(art) = r.inline.as_ref().filter(|_| draws_inline(r)) {
                         self.symbol(&art.symbol);
                     }
                 }
@@ -501,58 +746,87 @@ impl Session {
     pub fn skipped_font_ids(&self, params: &Value, selected: Option<&[NodeId]>) -> Result<Vec<NodeId>> {
         let (family, style) = font_param(params, "from", "text.replaceFont")?;
         let selection_only = bool_or(params, "selectionOnly", false);
-        let selected_symbols = selection_only.then(|| selected_symbols(self, selected)).transpose()?;
-        let d = &self.doc()?.doc;
-        let other: Vec<NodeId> = {
-            let editable = d.editable();
-            scope(self, selection_only, selected)?.into_iter().filter(|id| !editable(*id)).collect()
-        };
+        let in_scope = ReplaceScope::read(self, selection_only, selected)?;
         let uses = |t: &TextObject| {
             t.runs.iter().any(|r| {
                 r.style.font_family.eq_ignore_ascii_case(&family) && style.as_ref().is_none_or(|name| r.style.font_style.eq_ignore_ascii_case(name))
             })
         };
-        let mut ids = other.into_iter().filter(|id| text(d, *id).is_some_and(uses)).collect::<Vec<_>>();
-        fn visit(n: &Node, open: bool, closed: bool, uses: &impl Fn(&TextObject) -> bool, ids: &mut Vec<NodeId>) {
-            let open = open && n.visible && !n.locked;
-            if let NodeKind::Text(t) = &n.kind
-                && (!open || closed)
-                && uses(t)
-            {
-                ids.push(n.id);
-            }
-            for child in n.children().map(Vec::as_slice).unwrap_or_default() {
-                visit(child, open, closed, uses, ids);
-            }
+        Ok(in_scope.skipped(&self.doc()?.doc, &uses))
+    }
+}
+
+/// What Replace Font looks at: the text objects in scope that the Selection tool can reach and
+/// those it can't, the objects with an opacity mask (each with whether it can reach them), and the
+/// symbols and patterns whose art is in scope (`None`: all of the document's) with those shown
+/// only by hidden or locked objects of the selection.
+struct ReplaceScope {
+    ids: Vec<NodeId>,
+    other: Vec<NodeId>,
+    masked: Vec<(NodeId, bool)>,
+    resources: Option<Resources>,
+    closed: Resources,
+}
+
+impl ReplaceScope {
+    fn read(s: &Session, selection_only: bool, selected: Option<&[NodeId]>) -> Result<Self> {
+        // With selectionOnly: the symbols and patterns the selection shows; those shown only by
+        // hidden or locked objects keep their type, counted in `skipped`.
+        let (resources, closed) = if selection_only {
+            let (all, open) = selected_art(s, selected)?;
+            let closed = all.difference(&open);
+            (Some(open), closed)
+        } else {
+            (None, Resources::default())
+        };
+        let d = &s.doc()?.doc;
+        let editable = d.editable();
+        let (texts, masked) = scope(s, selection_only, selected)?;
+        let (ids, other): (Vec<NodeId>, Vec<NodeId>) = texts.into_iter().partition(|id| editable(*id));
+        let masked = masked.into_iter().map(|id| (id, editable(id))).collect();
+        Ok(Self { ids, other, masked, resources, closed })
+    }
+
+    /// The text objects in the art of opacity masks, symbols and patterns in scope.
+    fn art<'a>(&self, d: &'a Document) -> Vec<ArtText<'a>> {
+        let mut texts = mask_texts(d, &self.masked);
+        texts.extend(resource_texts(d, self.resources.as_ref()));
+        texts
+    }
+
+    /// The text objects in scope set in a font `uses` matches that Replace Font leaves as they are:
+    /// those the Selection tool can't reach, hidden or locked text in art, and the text of the
+    /// symbols and patterns shown only by hidden or locked objects of the selection.
+    fn skipped(&self, d: &Document, uses: &impl Fn(&TextObject) -> bool) -> Vec<NodeId> {
+        let mut ids: Vec<NodeId> = self.other.iter().copied().filter(|id| text(d, *id).is_some_and(uses)).collect();
+        ids.extend(self.art(d).into_iter().filter(|(_, t, open)| !open && uses(t)).map(|(id, ..)| id));
+        if !self.closed.symbols.is_empty() || !self.closed.patterns.is_empty() {
+            ids.extend(resource_texts(d, Some(&self.closed)).into_iter().filter(|(_, t, _)| uses(t)).map(|(id, ..)| id));
         }
-        for symbol in d
-            .symbols
-            .iter()
-            .filter(|symbol| !being_edited(d, &symbol.name) && selected_symbols.as_ref().is_none_or(|(all, _)| all.contains(&symbol.name)))
-        {
-            let closed = selected_symbols.as_ref().is_some_and(|(_, open)| !open.contains(&symbol.name));
-            visit(&symbol.art, true, closed, &uses, &mut ids);
-        }
-        Ok(ids)
+        ids
     }
 }
 
 fn font_inventory(s: &Session, selected: Option<&[NodeId]>) -> Result<Value> {
-    let ids = scope(s, selected.is_some(), selected)?;
+    let (ids, masked) = scope(s, selected.is_some(), selected)?;
     let d = &s.doc()?.doc;
     let db = vectorcraft_text::FontDb::global();
-    // The type in the art of the symbols in scope too: all of them, or those the selection shows.
-    let symbols = if selected.is_some() { Some(selected_symbols(s, selected)?.0) } else { None };
+    // The type in the art of the opacity masks of the objects in scope, and of the symbols and
+    // patterns in scope: all of them, or those the selection shows.
+    let resources = if selected.is_some() { Some(selected_art(s, selected)?.0) } else { None };
     let mut texts: Vec<&TextObject> = ids.iter().filter_map(|id| text(d, *id)).collect();
-    texts.extend(symbol_texts(d, symbols.as_ref()).into_iter().map(|(t, _)| t));
-    let mut found: BTreeMap<UsedFont, (usize, usize, String)> = BTreeMap::new();
+    let masked: Vec<(NodeId, bool)> = masked.into_iter().map(|id| (id, true)).collect();
+    texts.extend(mask_texts(d, &masked).into_iter().map(|(_, t, _)| t));
+    texts.extend(resource_texts(d, resources.as_ref()).into_iter().map(|(_, t, _)| t));
+    // Each font's runs, objects and the text of its runs.
+    let mut found: BTreeMap<UsedFont, (usize, usize, Vec<&str>)> = BTreeMap::new();
     for t in texts {
         let mut seen = BTreeSet::new();
         for r in &t.runs {
             let font = (r.style.font_family.clone(), r.style.font_style.clone(), r.style.font_version.clone());
             let e = found.entry(font.clone()).or_default();
             e.0 += 1;
-            e.2.push_str(&r.text);
+            e.2.push(&r.text);
             if seen.insert(font) {
                 e.1 += 1;
             }
@@ -560,14 +834,27 @@ fn font_inventory(s: &Session, selected: Option<&[NodeId]>) -> Result<Value> {
     }
     let list: Vec<Value> = found
         .into_iter()
-        .map(|((family, style, version), (runs, objects, chars))| {
+        .map(|((family, style, version), (runs, objects, texts))| {
             // The face the type is set in: the version it names when that one is installed.
-            let resolved = db.resolve(&family, &style).map(|(f, m)| (db.face_version(&family, &style, version.as_deref()).unwrap_or(f), m));
-            let status = resolved.as_ref().map(|(_, m)| *m).unwrap_or(vectorcraft_text::FontMatch::Missing);
-            let mut lacking: Vec<char> = chars.chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect();
-            lacking.sort_unstable();
-            lacking.dedup();
-            lacking.retain(|c| !resolved.as_ref().is_some_and(|(f, _)| f.covers(*c)));
+            let mut resolved = db.resolve(&family, &style).map(|(f, m)| (db.face_version(&family, &style, version.as_deref()).unwrap_or(f), m));
+            let (status, lacking) = match db.composite_coverage(&family, &texts) {
+                // A composite font: each character is drawn by the font of the part it falls in, and
+                // the row names the face of the first part that isn't there as named.
+                Some(c) => {
+                    if c.status != vectorcraft_text::FontMatch::Exact {
+                        resolved = c.face.map(|f| (f, c.status));
+                    }
+                    (c.status, c.lacking)
+                }
+                None => {
+                    let status = resolved.as_ref().map(|(_, m)| *m).unwrap_or(vectorcraft_text::FontMatch::Missing);
+                    let mut lacking: Vec<char> = texts.concat().chars().filter(|c| !c.is_whitespace() && !c.is_control()).collect();
+                    lacking.sort_unstable();
+                    lacking.dedup();
+                    lacking.retain(|c| !resolved.as_ref().is_some_and(|(f, _)| f.covers(*c)));
+                    (status, lacking)
+                }
+            };
             let mut row = json!({
                 "family": family, "style": style, "runs": runs, "objects": objects,
                 "missing": status == vectorcraft_text::FontMatch::Missing,
@@ -591,30 +878,16 @@ fn font_param(p: &Value, k: &str, c: &str) -> Result<(String, Option<String>)> {
     Ok((family.to_string(), v.get("style").and_then(Value::as_str).map(str::to_string)))
 }
 
-fn skipped_font_texts(
-    d: &Document,
-    other: &[NodeId],
-    symbols: &[(&TextObject, bool)],
-    closed: &BTreeSet<String>,
-    uses: &impl Fn(&TextObject) -> bool,
-) -> usize {
-    let mut skipped = other.iter().filter(|id| text(d, **id).is_some_and(uses)).count();
-    skipped += symbols.iter().filter(|(t, open)| !open && uses(t)).count();
-    if !closed.is_empty() {
-        skipped += symbol_texts(d, Some(closed)).into_iter().filter(|(t, _)| uses(t)).count();
-    }
-    skipped
-}
-
 fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.replaceFont";
     let (ff, fs) = font_param(p, "from", C)?;
     let (tf, ts) = font_param(p, "to", C)?;
     let db = vectorcraft_text::FontDb::global();
-    // Any name of the family (ヒラギノ角ゴシック) is stored as its own name (Hiragino Sans).
-    let tf = match db.resolve(&tf, ts.as_deref().unwrap_or("Regular")) {
-        Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => f.family.clone(),
-        _ => return Err(bad(C, format!("font family `{tf}` is not available"))),
+    // Any name of the family (ヒラギノ角ゴシック) is stored as its own name (Hiragino Sans), and a
+    // composite font as its own name.
+    let composite = db.composite_font(&tf).is_some();
+    let Some(tf) = db.stored_family(&tf, ts.as_deref().unwrap_or("Regular")) else {
+        return Err(bad(C, format!("font family `{tf}` is not available")));
     };
     let matches = |st: &vectorcraft_doc::CharStyle| {
         st.font_family.eq_ignore_ascii_case(&ff) && fs.as_ref().is_none_or(|x| st.font_style.eq_ignore_ascii_case(x))
@@ -625,41 +898,33 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
         if !matches(st) {
             return None;
         }
-        // An explicit style, else the closest the new family has to the old one.
-        let style = ts.clone().or_else(|| db.face(&tf, &st.font_style).map(|f| f.style.clone())).unwrap_or_else(|| st.font_style.clone());
+        // An explicit style, else the closest the new family has to the old one (a composite font's
+        // parts name their own styles: the run keeps its style).
+        let closest = || if composite { None } else { db.face(&tf, &st.font_style).map(|f| f.style.clone()) };
+        let style = ts.clone().or_else(closest).unwrap_or_else(|| st.font_style.clone());
         (st.font_family != tf || st.font_style != style || st.font_version.is_some() || !st.font_axes.is_empty()).then_some(style)
     };
     // Only text the Selection tool can reach changes: not hidden or locked, in a hidden or locked
     // group or layer, or on a locked artboard. The text left in the font is counted. The type in
-    // the art of the symbols in scope (all of them, or those the selection shows) changes too,
-    // unless it or a group around it in the art is hidden or locked.
+    // the opacity masks of the objects in scope, and in the art of the symbols and patterns in
+    // scope (all of them, or those the selection shows), changes too, unless it, a group around it
+    // in the art or the object whose mask holds it is hidden or locked.
     let selection_only = bool_or(p, "selectionOnly", false);
-    // With selectionOnly: the symbols the selection shows; those shown only by hidden or locked
-    // instances keep their type, counted in `skipped`.
-    let (symbols, closed) = if selection_only {
-        let (all, open) = selected_symbols(s, None)?;
-        let closed: BTreeSet<String> = all.difference(&open).cloned().collect();
-        (Some(open), closed)
-    } else {
-        (None, BTreeSet::new())
-    };
     let uses = |t: &TextObject| t.runs.iter().any(|r| matches(&r.style));
     // Whether a run of `t` changes.
     let changes = |t: &TextObject| t.runs.iter().any(|r| new_style(&r.style).is_some());
-    let (ids, skipped, in_symbols) = {
+    let in_scope = ReplaceScope::read(s, selection_only, None)?;
+    let (ids, skipped, in_art) = {
         let d = &s.doc()?.doc;
-        let editable = d.editable();
-        let (ids, other): (Vec<NodeId>, Vec<NodeId>) = scope(s, selection_only, None)?.into_iter().partition(|id| editable(*id));
-        let texts = symbol_texts(d, symbols.as_ref());
-        let skipped = skipped_font_texts(d, &other, &texts, &closed, &uses);
+        let skipped = in_scope.skipped(d, &uses).len();
         // The text that changes: when none does, the document and its undo history stay as they are.
-        let ids: Vec<NodeId> = ids.into_iter().filter(|id| text(d, *id).is_some_and(changes)).collect();
-        let in_symbols = texts.iter().any(|(t, open)| *open && changes(t));
-        (ids, skipped, in_symbols)
+        let ids: Vec<NodeId> = in_scope.ids.iter().copied().filter(|id| text(d, *id).is_some_and(changes)).collect();
+        let in_art = in_scope.art(d).iter().any(|(_, t, open)| *open && changes(t));
+        (ids, skipped, in_art)
     };
     // The fonts the replaced runs are set in, for the warning.
     let mut set = BTreeSet::new();
-    let n = if ids.is_empty() && !in_symbols {
+    let n = if ids.is_empty() && !in_art {
         0
     } else {
         s.edit("Replace Font", |d, _| {
@@ -673,7 +938,7 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
                         // Another font: none of the old one's versions or Variable Font settings.
                         r.style.font_version = None;
                         r.style.font_axes.clear();
-                        set.insert(font_of(&r.style));
+                        set.extend(run_fonts(r));
                         changed = true;
                         n += 1;
                     }
@@ -688,8 +953,9 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
                     replace_in(t);
                 }
             }
-            edit_symbol_texts(d, symbols.as_ref(), &|t, open| open && changes(t), &mut replace_in);
-            drop(replace_in);
+            let wants = |t: &TextObject, open: bool| open && changes(t);
+            edit_mask_texts(d, &in_scope.masked, &wants, &mut replace_in);
+            edit_resource_texts(d, in_scope.resources.as_ref(), &wants, &mut replace_in);
             Ok(n)
         })?
     };
@@ -706,14 +972,30 @@ fn replace(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// Whether `n` or a descendant that is not hidden or locked, nor in a hidden or locked group,
+/// shows type in a font `uses` matches: text set in it, an instance of a symbol in `found`, an
+/// inline graphic of a symbol in `found`, a paint naming a pattern in `found`, or such type in the
+/// art of its opacity mask.
+fn reaches(n: &Node, uses: &impl Fn(&TextObject) -> bool, found: &Resources) -> bool {
+    n.visible
+        && !n.locked
+        && (matches!(&n.kind, NodeKind::Text(t) if uses(t))
+            || matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if found.symbols.contains(symbol))
+            || inline_symbols(n).into_iter().any(|sym| found.symbols.contains(sym))
+            || paint_patterns(n).into_iter().any(|p| found.patterns.contains(p))
+            || n.extras().mask.as_deref().is_some_and(|m| reaches(&m.art, uses, found))
+            || n.children().is_some_and(|ch| ch.iter().any(|c| reaches(c, uses, found))))
+}
+
 /// What Replace Font says when it left text in the font that it can't reach.
 const REPLACE_SKIPPED: &str = "some text is hidden or locked, so its font wasn't replaced";
 
 fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
     let family = str_param(p, "family").ok_or_else(|| bad("select.font", "missing `family`"))?.to_string();
     let style = str_param(p, "style").map(str::to_string);
-    let ids = scope(s, false, None)?;
+    let (ids, masked) = scope(s, false, None)?;
     let d = &s.doc()?.doc;
+    let within = FontScope::read(d, p)?;
     // Only text the Selection tool can reach: not hidden or locked, in a hidden or locked group
     // or layer, or on a locked artboard.
     let editable = d.editable();
@@ -723,45 +1005,104 @@ fn select_font(s: &mut Session, p: &Value) -> Result<Value> {
             .any(|r| r.style.font_family.eq_ignore_ascii_case(&family) && style.as_ref().is_none_or(|x| r.style.font_style.eq_ignore_ascii_case(x)))
     };
     let mut hits: Vec<NodeId> = ids.into_iter().filter(|id| editable(*id) && text(d, *id).is_some_and(uses)).collect();
-    // The symbols whose art uses the font in type that is not hidden or locked, nor in a hidden or
-    // locked group of the art, also through the instances of other symbols it holds.
-    fn reaches(n: &Node, uses: &impl Fn(&TextObject) -> bool, symbols: &BTreeSet<&str>) -> bool {
-        n.visible
-            && !n.locked
-            && match &n.kind {
-                NodeKind::Text(t) => uses(t),
-                NodeKind::SymbolInstance { symbol, .. } => symbols.contains(symbol.as_str()),
-                _ => n.children().is_some_and(|ch| ch.iter().any(|c| reaches(c, uses, symbols))),
-            }
-    }
-    let mut symbols: BTreeSet<&str> = BTreeSet::new();
+    // The symbols and patterns whose art uses the font in type that is not hidden or locked, nor in
+    // a hidden or locked group of the art, also through the instances, patterns and opacity masks
+    // it holds. The pattern being edited is left out: its art is on the editing layer.
+    let mut found = Resources::default();
     loop {
-        let found: Vec<&str> = d
+        let symbols: Vec<String> = d
             .symbols
             .iter()
-            .filter(|sym| !symbols.contains(sym.name.as_str()) && reaches(&sym.art, &uses, &symbols))
-            .map(|sym| sym.name.as_str())
+            .filter(|sym| !found.symbols.contains(&sym.name) && reaches(&sym.art, &uses, &found))
+            .map(|sym| sym.name.clone())
             .collect();
-        if found.is_empty() {
+        let patterns: Vec<String> = d
+            .patterns
+            .iter()
+            .filter(|p| !pattern_being_edited(d, &p.name) && !found.patterns.contains(&p.name) && p.art.iter().any(|a| reaches(a, &uses, &found)))
+            .map(|p| p.name.clone())
+            .collect();
+        if symbols.is_empty() && patterns.is_empty() {
             break;
         }
-        symbols.extend(found);
+        found.symbols.extend(symbols);
+        found.patterns.extend(patterns);
     }
-    // Their instances the Selection tool can reach.
-    if !symbols.is_empty() {
+    // The objects the Selection tool can reach that show such type: the instances of those
+    // symbols, the text whose inline graphics draw them, the objects that those patterns paint,
+    // and the objects whose opacity mask holds it (not layers, which the Selection tool doesn't
+    // select).
+    let masked: HashSet<NodeId> = masked.into_iter().collect();
+    if !found.symbols.is_empty() || !found.patterns.is_empty() || !masked.is_empty() {
+        let texts: HashSet<NodeId> = hits.iter().copied().collect();
         d.walk(&mut |n: &Node| {
-            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
-                && symbols.contains(symbol.as_str())
-                && editable(n.id)
-            {
+            let shows = matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if found.symbols.contains(symbol))
+                || inline_symbols(n).into_iter().any(|sym| found.symbols.contains(sym))
+                || paint_patterns(n).into_iter().any(|p| found.patterns.contains(p))
+                || (masked.contains(&n.id) && n.extras().mask.as_deref().is_some_and(|m| reaches(&m.art, &uses, &found)));
+            if shows && !n.is_layer() && !texts.contains(&n.id) && editable(n.id) {
                 hits.push(n.id);
             }
         });
     }
     drop(editable);
+    let symbols = d.symbol_boxes();
+    hits.retain(|id| within.holds(d, &symbols, *id));
+    drop(symbols);
     let n = hits.len();
     s.select(|_, sel| sel.set(hits))?;
     Ok(json!({ "count": n }))
+}
+
+/// Where Select Text by Font looks: its `scope`.
+enum FontScope {
+    Document,
+    /// The artboards' rectangles.
+    Artboards(Vec<Rect>),
+    /// The layers and sublayers, with what they hold.
+    Layers(BTreeSet<NodeId>),
+}
+
+impl FontScope {
+    fn read(d: &Document, p: &Value) -> Result<Self> {
+        const C: &str = "select.font";
+        let expected = || bad(C, "`scope` must be \"document\", {artboards: [index, …]} or {layers: [id, …]}");
+        let scope = match p.get("scope") {
+            None | Some(Value::Null) => return Ok(Self::Document),
+            Some(Value::String(v)) if v == "document" => return Ok(Self::Document),
+            Some(Value::Object(m)) if m.len() == 1 => m,
+            Some(_) => return Err(expected()),
+        };
+        let list = |key: &str| -> Result<Option<&Vec<Value>>> {
+            match scope.get(key) {
+                None => Ok(None),
+                Some(Value::Array(a)) if !a.is_empty() => Ok(Some(a)),
+                Some(_) => Err(bad(C, format!("`scope.{key}` must be a non-empty array"))),
+            }
+        };
+        if let Some(a) = list("artboards")? {
+            let rect = |v: &Value| v.as_u64().and_then(|i| d.artboards.get(index(i))).map(|b| b.rect);
+            return a.iter().map(|v| rect(v).ok_or_else(|| bad(C, format!("no such artboard {v}")))).collect::<Result<_>>().map(Self::Artboards);
+        }
+        if let Some(a) = list("layers")? {
+            let layer = |v: &Value| v.as_u64().map(NodeId).filter(|id| d.node(*id).is_some_and(Node::is_layer));
+            return a
+                .iter()
+                .map(|v| layer(v).ok_or_else(|| bad(C, format!("{v} names no layer or sublayer"))))
+                .collect::<Result<_>>()
+                .map(Self::Layers);
+        }
+        Err(expected())
+    }
+
+    /// Is object `id` in the scope.
+    fn holds(&self, d: &Document, symbols: &vectorcraft_doc::SymbolBoxes, id: NodeId) -> bool {
+        match self {
+            Self::Document => true,
+            Self::Artboards(rects) => d.node(id).is_some_and(|n| rects.iter().any(|r| on_artboard(n, symbols, *r))),
+            Self::Layers(layers) => d.ancestry(id).is_some_and(|a| a.iter().any(|i| layers.contains(i))),
+        }
+    }
 }
 
 fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
@@ -802,7 +1143,9 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
     #[cfg(target_arch = "wasm32")]
     let faces = 0;
     // The canvas redraws type in the fonts available now (renderers lay it out again when the
-    // fonts change), and the bounds follow; that isn't an edit to save.
+    // fonts change), and the bounds follow, also of the type in opacity masks and in the art of
+    // symbols and patterns; that isn't an edit to save. The type in art is laid out first, and the
+    // inline graphics of the type on the layers then take the new bounds of their symbols' art.
     for d in &mut s.docs {
         let mut texts = vec![];
         d.doc.walk(|n| {
@@ -810,9 +1153,11 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
                 texts.push(n.id);
             }
         });
-        if !texts.is_empty() {
+        if !texts.is_empty() || !art_texts_of(&d.doc).is_empty() {
             d.change_unsaved(|doc| {
                 let doc = std::sync::Arc::make_mut(doc);
+                edit_art_texts_of(doc, &|_| true, &mut refresh_bounds);
+                doc.resolve_inline_art_with(&mut refresh_bounds);
                 for id in texts {
                     if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
                         refresh_bounds(t);
@@ -910,6 +1255,95 @@ mod tests {
         assert_eq!(s.doc().unwrap().selection.objects, [NodeId(ids[0]), NodeId(template)]);
         assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 0);
         assert!(s.doc().unwrap().selection.objects.is_empty());
+    }
+
+    /// Select Text by Font with an artboard scope takes the text on the artboards, as All on
+    /// Active Artboard does: overlapping one, or centered on it, a straddling one included.
+    #[test]
+    fn select_font_in_artboards() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 600, "y": 0, "width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, x: i32| {
+            NodeId(s.execute("text.create", &json!({"x": x, "y": 50, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap())
+        };
+        let first = text(&mut s, 10);
+        let straddling = text(&mut s, 180);
+        let second = text(&mut s, 350);
+        let third = text(&mut s, 650);
+        let _off = text(&mut s, 1000);
+        let select = |s: &mut Session, scope: Value| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": scope})).unwrap();
+            s.doc().unwrap().selection.objects.clone()
+        };
+        assert_eq!(select(&mut s, json!({"artboards": [0]})), [first, straddling]);
+        assert_eq!(select(&mut s, json!({"artboards": [1, 2]})), [second, third]);
+        assert_eq!(select(&mut s, json!("document")).len(), 5);
+        // The same objects All on Active Artboard takes.
+        s.execute("select.allOnArtboard", &json!({"artboard": 0})).unwrap();
+        assert_eq!(s.doc().unwrap().selection.objects, [first, straddling]);
+        // Hidden text stays out.
+        s.execute("select.set", &json!({"ids": [third.0]})).unwrap();
+        s.execute("object.hide", &json!({})).unwrap();
+        assert_eq!(select(&mut s, json!({"artboards": [1, 2]})), [second]);
+        for bad in [json!({"artboards": [3]}), json!({"artboards": []}), json!({"artboards": ["x"]}), json!({"pages": [0]}), json!("all"), json!(7)] {
+            assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": bad})).is_err(), "{bad}");
+        }
+    }
+
+    /// Select Text by Font with a layer scope takes the text in the layers, their sublayers
+    /// included, and still leaves out hidden and locked text.
+    #[test]
+    fn select_font_in_layers() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, y: i32| {
+            NodeId(s.execute("text.create", &json!({"x": 10, "y": y, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap())
+        };
+        let first_layer = s.doc().unwrap().doc.layers[0].id;
+        let a = text(&mut s, 20);
+        let second_layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+        let b = text(&mut s, 40);
+        let sub = s.execute("layer.newSublayer", &json!({"parent": second_layer})).unwrap()["id"].as_u64().unwrap();
+        s.execute("layer.setCurrent", &json!({"id": sub})).unwrap();
+        let in_sub = text(&mut s, 60);
+        let locked = text(&mut s, 80);
+        s.execute("select.set", &json!({"ids": [locked.0]})).unwrap();
+        s.execute("object.lock", &json!({})).unwrap();
+        let select = |s: &mut Session, layers: Value| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": layers}})).unwrap();
+            let mut v = s.doc().unwrap().selection.objects.clone();
+            v.sort();
+            v
+        };
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.ancestry(in_sub).unwrap()[1], NodeId(sub), "the text is in the sublayer");
+        assert_eq!(select(&mut s, json!([first_layer.0])), [a]);
+        assert_eq!(select(&mut s, json!([second_layer])), [b, in_sub]);
+        assert_eq!(select(&mut s, json!([sub])), [in_sub]);
+        assert_eq!(select(&mut s, json!([first_layer.0, sub])), [a, in_sub]);
+        // Not a layer: an error, the selection as it was.
+        assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": [a.0]}})).is_err());
+        assert!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"layers": [u64::MAX]}})).is_err());
+        assert_eq!(s.doc().unwrap().selection.objects.len(), 2);
+    }
+
+    /// A symbol instance whose art uses the font is selected when the instance is in scope.
+    #[test]
+    fn select_font_scope_takes_symbol_instances_in_it() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        s.execute("artboard.new", &json!({"x": 300, "y": 0, "width": 200, "height": 200})).unwrap();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [id]})).unwrap();
+        let instance = s.doc().unwrap().selection.objects[0];
+        let select = |s: &mut Session, i: u64| {
+            s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"artboards": [i]}})).unwrap()["count"].clone()
+        };
+        assert_eq!(select(&mut s, 0), 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [instance]);
+        assert_eq!(select(&mut s, 1), 0);
     }
 
     /// Replace Font leaves hidden and locked text in its font, and text inside a hidden or locked
@@ -1137,6 +1571,558 @@ mod tests {
         s.execute("select.set", &json!({"ids": outer})).unwrap();
         assert_eq!(s.execute("text.fonts", &json!({"selectionOnly": true})).unwrap(), json!([]));
         assert_eq!(s.execute("text.replaceFont", &serif_to_sans).unwrap(), json!({"runs": 0}));
+    }
+
+    /// Moves object `art` of the layers into the opacity mask of `owner` (a layer or an object).
+    fn mask_with(s: &mut Session, owner: u64, art: u64) {
+        s.edit("Mask", |d, _| {
+            let art = d.remove(NodeId(art))?;
+            d.node_mut(NodeId(owner)).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// The font families of the first runs of the text in the opacity mask of `owner`.
+    fn mask_families(s: &Session, owner: u64) -> Vec<String> {
+        let d = &s.doc().unwrap().doc;
+        mask_texts(d, &[(NodeId(owner), true)]).iter().map(|(_, t, _)| t.runs[0].style.font_family.clone()).collect()
+    }
+
+    /// The font families of the first runs of the text in the art of pattern `name`.
+    fn pattern_families(s: &Session, name: &str) -> Vec<String> {
+        let d = &s.doc().unwrap().doc;
+        let mut out = vec![];
+        for art in &d.pattern(name).unwrap().art {
+            art_texts(art, true, &mut out);
+        }
+        out.iter().map(|(_, t, _)| t.runs[0].style.font_family.clone()).collect()
+    }
+
+    /// The rows of `text.fonts` with `p`: family, runs and objects.
+    fn font_rows(s: &mut Session, p: Value) -> Vec<(String, u64, u64)> {
+        let fonts = s.execute("text.fonts", &p).unwrap();
+        fonts
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| (f["family"].as_str().unwrap().to_string(), f["runs"].as_u64().unwrap(), f["objects"].as_u64().unwrap()))
+            .collect()
+    }
+
+    /// Find Font lists, selects and changes the type in opacity masks: on objects, on a layer,
+    /// disabled and inside the art of another mask. The type in the mask of a locked object is
+    /// listed and left in its font; Find selects the objects whose mask holds the type.
+    #[test]
+    fn find_font_reaches_the_type_in_opacity_masks() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let text = |s: &mut Session, y: i32| {
+            s.execute("text.create", &json!({"x": 10, "y": y, "text": "Serif", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap()
+        };
+        let rect = |s: &mut Session, y: i32| {
+            s.execute("shape.rectangle", &json!({"x": 0, "y": y, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap()
+        };
+        let mut owners = vec![];
+        for y in [20, 50, 80] {
+            let owner = rect(&mut s, y);
+            let t = text(&mut s, y);
+            mask_with(&mut s, owner, t);
+            owners.push(owner);
+        }
+        let (open, locked, disabled) = (owners[0], owners[1], owners[2]);
+        s.execute("select.set", &json!({"ids": [locked]})).unwrap();
+        s.execute("object.lock", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [disabled]})).unwrap();
+        s.execute("transparency.disableOpacityMask", &json!({})).unwrap();
+        // A mask whose art is an object with a mask of its own, and a layer's mask.
+        let nested = rect(&mut s, 110);
+        let inner = rect(&mut s, 110);
+        let t = text(&mut s, 110);
+        mask_with(&mut s, inner, t);
+        mask_with(&mut s, nested, inner);
+        let layer = s.doc().unwrap().doc.layers[0].id.0;
+        let t = text(&mut s, 140);
+        mask_with(&mut s, layer, t);
+        let mut on_layers = 0;
+        s.doc().unwrap().doc.walk(|n| on_layers += usize::from(matches!(n.kind, NodeKind::Text(_))));
+        assert_eq!(on_layers, 0, "the type is only in masks");
+        assert_eq!(font_rows(&mut s, json!({})), [("Source Serif 4".to_string(), 5, 5)]);
+        s.execute("select.set", &json!({"ids": [open]})).unwrap();
+        assert_eq!(font_rows(&mut s, json!({"selectionOnly": true})), [("Source Serif 4".to_string(), 1, 1)]);
+        // Find selects the objects whose mask holds the type, not the locked one or the layer.
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 3);
+        let mut selected = s.doc().unwrap().selection.objects.clone();
+        selected.sort();
+        assert_eq!(selected, [NodeId(open), NodeId(disabled), NodeId(nested)]);
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4", "scope": {"artboards": [0]}})).unwrap()["count"], 3);
+        // Change All: one undo step, the locked object's mask left in its font and counted.
+        let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+        let before = steps(&s);
+        let serif_to_sans = json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}});
+        let r = s.execute("text.replaceFont", &serif_to_sans).unwrap();
+        assert_eq!((r["runs"].as_u64(), r["skipped"].as_u64()), (Some(4), Some(1)), "{r}");
+        assert_eq!(steps(&s), before + 1);
+        for owner in [open, disabled, nested, layer] {
+            assert_eq!(mask_families(&s, owner), ["Source Sans 3"], "the mask of {owner}");
+        }
+        assert_eq!(mask_families(&s, locked), ["Source Serif 4"]);
+        let r = s.execute("text.replaceFont", &serif_to_sans).unwrap();
+        assert_eq!(r, json!({"runs": 0, "skipped": 1, "warning": REPLACE_SKIPPED}));
+        assert_eq!(steps(&s), before + 1);
+        s.execute("edit.undo", &json!({})).unwrap();
+        for owner in [open, disabled, nested, layer] {
+            assert_eq!(mask_families(&s, owner), ["Source Serif 4"], "the mask of {owner} after Undo");
+        }
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(mask_families(&s, nested), ["Source Sans 3"]);
+        // While a mask is edited, its type on the editing layer is counted and changed once.
+        s.execute("transparency.editOpacityMask", &json!({"id": open})).unwrap();
+        assert_eq!(font_rows(&mut s, json!({})), [("Source Sans 3".to_string(), 4, 4), ("Source Serif 4".to_string(), 1, 1)]);
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}})).unwrap();
+        assert_eq!(r["runs"].as_u64(), Some(4), "{r}");
+        let families: Vec<String> = used_fonts(&s.doc().unwrap().doc).into_iter().map(|(family, ..)| family).collect();
+        assert_eq!(families, ["Inter", "Source Serif 4"], "the edited mask is written back after each edit");
+        s.execute("transparency.stopEditingOpacityMask", &json!({})).unwrap();
+        assert_eq!(mask_families(&s, open), ["Inter"]);
+    }
+
+    /// Find Font lists the type in pattern swatches once, also when nothing paints with them;
+    /// Find selects the objects the pattern paints, and Change changes the pattern's art once for
+    /// every object it paints. While a pattern is edited, its type is taken from the editing layer.
+    #[test]
+    fn find_font_reaches_the_type_in_patterns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let pattern = |s: &mut Session, name: &str, font: &str| {
+            let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": font})).unwrap()["id"].as_u64().unwrap();
+            s.execute("object.pattern.make", &json!({"ids": [t], "name": name, "edit": false})).unwrap();
+            s.execute("select.set", &json!({"ids": [t]})).unwrap();
+            s.execute("edit.clear", &json!({})).unwrap();
+        };
+        pattern(&mut s, "Dots", "Source Serif 4");
+        pattern(&mut s, "Unused", "Inter");
+        let mut on_layers = 0;
+        s.doc().unwrap().doc.walk(|n| on_layers += usize::from(matches!(n.kind, NodeKind::Text(_))));
+        assert_eq!(on_layers, 0, "the type is only in patterns");
+        let all = [("Inter".to_string(), 1, 1), ("Source Serif 4".to_string(), 1, 1)];
+        assert_eq!(font_rows(&mut s, json!({})), all);
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 0);
+        let mut painted = vec![];
+        for y in [20, 60] {
+            painted.push(s.execute("shape.rectangle", &json!({"x": 0, "y": y, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap());
+        }
+        s.execute("paint.setFill", &json!({"swatch": "Dots", "ids": painted})).unwrap();
+        assert_eq!(font_rows(&mut s, json!({})), all, "a pattern's type counts once");
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 2);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(painted[0]), NodeId(painted[1])]);
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 0);
+        // Only the selection: the patterns the selected objects paint with.
+        s.execute("select.set", &json!({"ids": [painted[0]]})).unwrap();
+        assert_eq!(font_rows(&mut s, json!({"selectionOnly": true})), [("Source Serif 4".to_string(), 1, 1)]);
+        let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+        let before = steps(&s);
+        let r = s
+            .execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}, "selectionOnly": true}))
+            .unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(steps(&s), before + 1);
+        assert_eq!(pattern_families(&s, "Dots"), ["Source Sans 3"]);
+        assert_eq!(pattern_families(&s, "Unused"), ["Inter"]);
+        // No run changes: no undo step.
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Source Sans 3"}})).unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        assert_eq!(steps(&s), before + 1);
+        // Change All reaches the swatch nothing paints with.
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Inter"}, "to": {"family": "Source Serif 4"}})).unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(pattern_families(&s, "Unused"), ["Source Serif 4"]);
+        // A pattern in a hidden fill doesn't show: Find doesn't select the object for its type.
+        let hidden = s.execute("shape.rectangle", &json!({"x": 100, "y": 20, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Unused", "ids": [hidden]})).unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
+        s.edit("Hide the fill", |d, _| {
+            for it in d.node_mut(NodeId(hidden)).unwrap().appearance.items.iter_mut() {
+                if let AppearanceItem::Fill(f) = it {
+                    f.visible = false;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 0);
+        // Nor does a pattern on a stroke of no width.
+        s.execute("paint.setStroke", &json!({"swatch": "Unused", "ids": [hidden]})).unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
+        s.edit("Thin the stroke", |d, _| {
+            for it in d.node_mut(NodeId(hidden)).unwrap().appearance.items.iter_mut() {
+                if let AppearanceItem::Stroke(st) = it {
+                    st.width = 0.0;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 0);
+        // A locked painted object: its pattern's type is listed and left in its font.
+        s.execute("select.set", &json!({"ids": [painted[1]]})).unwrap();
+        s.execute("object.lock", &json!({})).unwrap();
+        s.execute("select.set", &json!({"ids": [painted[1]]})).unwrap();
+        let r =
+            s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}, "selectionOnly": true})).unwrap();
+        assert_eq!((r["runs"].as_u64(), r["skipped"].as_u64()), (Some(0), Some(1)), "{r}");
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Sans 3"})).unwrap()["count"], 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(painted[0])]);
+        // While the pattern is edited, its type on the editing layer is counted and changed once.
+        s.execute("object.pattern.edit", &json!({"name": "Dots"})).unwrap();
+        let rows = font_rows(&mut s, json!({}));
+        assert_eq!(rows, [("Source Sans 3".to_string(), 1, 1), ("Source Serif 4".to_string(), 1, 1)]);
+        let r = s.execute("text.replaceFont", &json!({"from": {"family": "Source Sans 3"}, "to": {"family": "Inter"}})).unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        let families: Vec<String> = used_fonts(&s.doc().unwrap().doc).into_iter().map(|(family, ..)| family).collect();
+        assert_eq!(families, ["Inter", "Source Serif 4"], "the pattern's stored art is left out while it is edited");
+        s.execute("object.pattern.done", &json!({})).unwrap();
+        assert_eq!(pattern_families(&s, "Dots"), ["Inter"]);
+    }
+
+    /// A pattern whose art holds a symbol instance, painting objects inside and outside a symbol:
+    /// Find Font lists each pattern's and symbol's type once and reaches the symbol's type through
+    /// the pattern.
+    #[test]
+    fn find_font_reaches_symbols_through_patterns() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let inter = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "In", "font": "Inter"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [inter]})).unwrap();
+        let instance = s.doc().unwrap().selection.objects[0].0;
+        let serif = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "Se", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        let tile = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 80})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [tile, serif, instance], "name": "Loop", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [tile, serif, instance]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        // Another object paints with the pattern too: its type is still read once.
+        let other = s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Loop", "ids": [other]})).unwrap();
+        s.execute("symbol.new", &json!({"name": "Outer", "ids": [other]})).unwrap();
+        let outer = s.doc().unwrap().selection.objects[0];
+        let painted = s.execute("shape.rectangle", &json!({"x": 0, "y": 100, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Loop", "ids": [painted]})).unwrap();
+        let both = [("Inter".to_string(), 1, 1), ("Source Serif 4".to_string(), 1, 1)];
+        assert_eq!(font_rows(&mut s, json!({})), both);
+        s.execute("select.set", &json!({"ids": [painted]})).unwrap();
+        assert_eq!(font_rows(&mut s, json!({"selectionOnly": true})), both);
+        // Find reaches the symbol's type through the pattern, and through a symbol whose art paints
+        // with the pattern.
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 2);
+        assert_eq!(s.doc().unwrap().selection.objects, [outer, NodeId(painted)]);
+        s.execute("select.set", &json!({"ids": [painted]})).unwrap();
+        let r =
+            s.execute("text.replaceFont", &json!({"from": {"family": "Inter"}, "to": {"family": "Source Sans 3"}, "selectionOnly": true})).unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(symbol_texts(&s.doc().unwrap().doc, None)[0].0.runs[0].style.font_family, "Source Sans 3");
+    }
+
+    /// A pattern in a fill whose opacity is 0 paints nothing: Find doesn't select the object for
+    /// the pattern's type, a selection-only Change leaves that type in its font, and Print doesn't
+    /// count its font.
+    #[test]
+    fn find_font_skips_patterns_at_an_opacity_of_0() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [t], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let painted = s.execute("shape.rectangle", &json!({"x": 0, "y": 20, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Dots", "ids": [painted]})).unwrap();
+        let printed = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            printed_type(d, &d.layers, &[Rect::new(-1000.0, -1000.0, 1000.0, 1000.0)]).0.into_iter().map(|(family, ..)| family).collect::<Vec<_>>()
+        };
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
+        assert_eq!(printed(&s), ["Source Serif 4"]);
+        s.edit("Clear the fill", |d, _| {
+            for it in d.node_mut(NodeId(painted)).unwrap().appearance.items.iter_mut() {
+                if let AppearanceItem::Fill(f) = it {
+                    f.opacity = 0.0;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 0);
+        assert!(printed(&s).is_empty(), "{:?}", printed(&s));
+        s.execute("select.set", &json!({"ids": [painted]})).unwrap();
+        let r = s
+            .execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}, "selectionOnly": true}))
+            .unwrap();
+        assert_eq!(r, json!({"runs": 0}));
+        assert_eq!(pattern_families(&s, "Dots"), ["Source Serif 4"]);
+    }
+
+    /// Characters of area type that don't fit its frame paint nothing: their pattern's type isn't
+    /// found through them until they are drawn.
+    #[test]
+    fn find_font_skips_patterns_of_overset_characters() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [t], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let area = s
+            .execute(
+                "text.create",
+                &json!({"x": 10, "y": 60, "text": "A\nB", "font": "Source Sans 3", "size": 20, "area": {"width": 100, "height": 40}}),
+            )
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": area, "start": 2, "end": 3, "font": "Inter"})).unwrap();
+        let paint_run = |s: &mut Session, letter: &'static str| {
+            s.edit("Paint a run with the pattern", |d, _| {
+                if let Some(NodeKind::Text(t)) = d.node_mut(NodeId(area)).map(|n| &mut n.kind) {
+                    for r in t.runs.iter_mut().filter(|r| r.text.contains(letter)) {
+                        r.style.fill = Paint::Pattern { pattern: "Dots".into(), xf: Default::default() };
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+        };
+        paint_run(&mut s, "B");
+        let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), text(&s.doc().unwrap().doc, NodeId(area)).unwrap());
+        assert!(laid.overflow, "the second line doesn't fit the frame");
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 0);
+        paint_run(&mut s, "A");
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
+    }
+
+    /// An inline graphic that doesn't fit its area type draws nothing, and neither does an inline
+    /// graphic named on a run of other characters: Find doesn't select the text for its symbol.
+    #[test]
+    fn find_font_skips_undrawn_inline_graphics() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [t], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let mark = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Se", "font": "Inter"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [mark]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let area = s
+            .execute(
+                "text.create",
+                &json!({"x": 10, "y": 60, "text": "A\nB", "font": "Source Sans 3", "size": 20, "area": {"width": 100, "height": 40}}),
+            )
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        s.execute("text.insertInline", &json!({"id": area, "at": 3, "symbol": "Mark"})).unwrap();
+        let laid = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), text(&s.doc().unwrap().doc, NodeId(area)).unwrap());
+        assert!(laid.overflow && laid.inlines.is_empty(), "the inline graphic doesn't fit the frame");
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 0);
+        let point = s.execute("text.create", &json!({"x": 10, "y": 140, "text": "Hi", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.insertInline", &json!({"id": point, "at": 0, "symbol": "Mark"})).unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(point)]);
+        // A run that names an inline graphic but holds other characters is laid out as those
+        // characters: its fill paints them, and it draws no symbol.
+        let plain = s.execute("text.create", &json!({"x": 10, "y": 180, "text": "Ok", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        let art = text(&s.doc().unwrap().doc, NodeId(point)).unwrap().runs.iter().find_map(|r| r.inline.clone()).unwrap();
+        s.edit("Name an inline graphic on plain characters", |d, _| {
+            if let Some(NodeKind::Text(t)) = d.node_mut(NodeId(plain)).map(|n| &mut n.kind) {
+                for r in &mut t.runs {
+                    r.inline = Some(art.clone());
+                    r.style.fill = Paint::Pattern { pattern: "Dots".into(), xf: Default::default() };
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(plain)]);
+        assert_eq!(s.execute("select.font", &json!({"family": "Inter"})).unwrap()["count"], 1);
+        assert_eq!(s.doc().unwrap().selection.objects, [NodeId(point)]);
+    }
+
+    /// The characters of an inline graphic draw no glyph: their pattern fill paints only their
+    /// underline, strikethrough or ruby reading. Without one, Find doesn't select the text for the
+    /// pattern's type and Print doesn't count its font.
+    #[test]
+    fn find_font_skips_patterns_of_undecorated_inline_graphics() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Ab", "font": "Source Serif 4"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [t], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [t]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let mark = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [mark]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let point = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Hi", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.insertInline", &json!({"id": point, "at": 1, "symbol": "Mark"})).unwrap();
+        let style = |s: &mut Session, f: &dyn Fn(&mut TextObject)| {
+            s.edit("Style the inline graphic", |d, _| {
+                if let Some(NodeKind::Text(t)) = d.node_mut(NodeId(point)).map(|n| &mut n.kind) {
+                    f(t);
+                }
+                Ok(())
+            })
+            .unwrap();
+        };
+        let found = |s: &mut Session| s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"].as_u64();
+        let printed = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            printed_type(d, &d.layers, &[Rect::new(-1000.0, -1000.0, 1000.0, 1000.0)]).0.into_iter().map(|(family, ..)| family).collect::<Vec<_>>()
+        };
+        style(&mut s, &|t| {
+            for r in t.runs.iter_mut().filter(|r| r.inline.is_some()) {
+                r.style.fill = Paint::Pattern { pattern: "Dots".into(), xf: Default::default() };
+            }
+        });
+        assert_eq!(found(&mut s), Some(0));
+        assert_eq!(printed(&s), ["Source Sans 3"]);
+        // An underline paints with the pattern.
+        style(&mut s, &|t| t.runs.iter_mut().filter(|r| r.inline.is_some()).for_each(|r| r.style.underline = true));
+        assert_eq!(found(&mut s), Some(1));
+        assert_eq!(printed(&s), ["Source Sans 3", "Source Serif 4"]);
+        // Vertical type draws no underline.
+        style(&mut s, &|t| t.vertical = true);
+        assert_eq!(found(&mut s), Some(0));
+        // A ruby reading that starts over the character before the inline graphic draws with that
+        // character's paint.
+        style(&mut s, &|t| {
+            assert!(t.runs[1].inline.is_some(), "the inline graphic is the second run");
+            t.ruby.push(vectorcraft_doc::RubySpan {
+                start: 0,
+                end: t.runs[0].text.len() + t.runs[1].text.len(),
+                text: "x".into(),
+                position: Default::default(),
+                align: Default::default(),
+                size_percent: 50.0,
+                overhang: true,
+            });
+        });
+        assert_eq!(found(&mut s), Some(0));
+        // A ruby reading that starts over the inline graphic paints with the pattern.
+        style(&mut s, &|t| t.ruby[0].start = t.runs[0].text.len());
+        assert_eq!(found(&mut s), Some(1));
+    }
+
+    /// Text whose inline graphic draws a symbol shows the symbol's type: Find selects that text
+    /// and the objects painted with a pattern whose art holds it, and a selection-only Change
+    /// changes the symbol's type.
+    #[test]
+    fn find_font_reaches_symbols_through_inline_graphics() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let serif = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Se", "font": "Source Serif 4"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [serif]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let inline = |s: &mut Session, y: i32| {
+            let id = s.execute("text.create", &json!({"x": 10, "y": y, "text": "In", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+            s.execute("text.insertInline", &json!({"id": id, "at": 0, "symbol": "Mark"})).unwrap();
+            id
+        };
+        let listed = inline(&mut s, 60);
+        let tiled = inline(&mut s, 100);
+        s.execute("object.pattern.make", &json!({"ids": [tiled], "name": "Loop", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [tiled]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let painted = s.execute("shape.rectangle", &json!({"x": 0, "y": 140, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        s.execute("paint.setFill", &json!({"swatch": "Loop", "ids": [painted]})).unwrap();
+        let mut instances = 0;
+        s.doc().unwrap().doc.walk(|n| instances += usize::from(matches!(n.kind, NodeKind::SymbolInstance { .. })));
+        assert_eq!(instances, 0, "the symbol is drawn only by inline graphics");
+        assert_eq!(s.execute("select.font", &json!({"family": "Source Serif 4"})).unwrap()["count"], 2);
+        let mut selected = s.doc().unwrap().selection.objects.clone();
+        selected.sort();
+        assert_eq!(selected, [NodeId(listed), NodeId(painted)]);
+        s.execute("select.set", &json!({"ids": [painted]})).unwrap();
+        let rows = font_rows(&mut s, json!({"selectionOnly": true}));
+        assert_eq!(rows, [("Inter".to_string(), 2, 1), ("Source Serif 4".to_string(), 1, 1)]);
+        let r = s
+            .execute("text.replaceFont", &json!({"from": {"family": "Source Serif 4"}, "to": {"family": "Source Sans 3"}, "selectionOnly": true}))
+            .unwrap();
+        assert_eq!(r, json!({"runs": 1}));
+        assert_eq!(symbol_texts(&s.doc().unwrap().doc, None)[0].0.runs[0].style.font_family, "Source Sans 3");
+    }
+
+    /// Refresh Font List lays out again the type in opacity masks and in the art of symbols and
+    /// patterns, as it does the type on the layers, and the inline graphics of the type on the
+    /// layers follow the symbols' type as laid out again.
+    #[test]
+    fn rescanning_fonts_refreshes_the_bounds_of_type_in_art() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let owner = s.execute("shape.rectangle", &json!({"x": 0, "y": 20, "width": 50, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        let masked = s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Mask", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+        mask_with(&mut s, owner, masked);
+        let tiled = s.execute("text.create", &json!({"x": 10, "y": 60, "text": "Tile", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.pattern.make", &json!({"ids": [tiled], "name": "Dots", "edit": false})).unwrap();
+        s.execute("select.set", &json!({"ids": [tiled]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let stale = Rect::new(0.0, 0.0, 1.0, 1.0);
+        s.edit("Make the bounds stale", |d, _| {
+            edit_art_texts_of(d, &|_| true, &mut |t| t.cached_bounds = Some(stale));
+            Ok(())
+        })
+        .unwrap();
+        let bounds = |s: &Session| art_texts_of(&s.doc().unwrap().doc).iter().map(|(_, t, _)| t.cached_bounds).collect::<Vec<_>>();
+        assert_eq!(bounds(&s), [Some(stale), Some(stale)]);
+        s.execute("text.rescanFonts", &json!({})).unwrap();
+        let after = bounds(&s);
+        assert_eq!(after.len(), 2);
+        assert!(after.iter().all(|b| b.is_some_and(|b| b != stale && b.width() > 1.0)), "{after:?}");
+        let marked = s.execute("text.create", &json!({"x": 10, "y": 100, "text": "Se", "font": "Inter"})).unwrap()["id"].clone();
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [marked]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        let line = s.execute("text.create", &json!({"x": 10, "y": 140, "text": "In", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.insertInline", &json!({"id": line, "at": 0, "symbol": "Mark"})).unwrap();
+        s.edit("Make the bounds stale", |d, _| {
+            edit_art_texts_of(d, &|_| true, &mut |t| t.cached_bounds = Some(stale));
+            d.resolve_inline_art();
+            Ok(())
+        })
+        .unwrap();
+        let resolved = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            matches!(d.inline_resolved(text(d, NodeId(line)).unwrap()), std::borrow::Cow::Borrowed(_))
+        };
+        assert!(resolved(&s), "the inline graphic took the stale bounds");
+        s.execute("text.rescanFonts", &json!({})).unwrap();
+        assert!(resolved(&s), "the inline graphic follows the symbol's type laid out again");
+        // So does an inline graphic in the art of another symbol.
+        let held = s.execute("text.create", &json!({"x": 10, "y": 180, "text": "Out", "font": "Inter"})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.insertInline", &json!({"id": held, "at": 0, "symbol": "Mark"})).unwrap();
+        s.execute("symbol.new", &json!({"name": "Outer", "ids": [held]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        s.edit("Make the bounds stale", |d, _| {
+            edit_art_texts_of(d, &|_| true, &mut |t| t.cached_bounds = Some(stale));
+            Ok(())
+        })
+        .unwrap();
+        let shrunk = s.doc().unwrap().doc.symbol_art_bounds("Mark");
+        s.edit("Take the stale bounds", |d, _| {
+            edit_art_texts_of(d, &|_| true, &mut |t| {
+                for a in t.runs.iter_mut().filter_map(|r| r.inline.as_mut()) {
+                    a.bounds = shrunk;
+                }
+            });
+            Ok(())
+        })
+        .unwrap();
+        let nested = |s: &Session| {
+            let d = &s.doc().unwrap().doc;
+            art_texts_of(d).iter().flat_map(|(_, t, _)| t.runs.iter().filter_map(|r| r.inline.as_ref().map(|a| a.bounds))).collect::<Vec<_>>()
+        };
+        assert_eq!(nested(&s), [shrunk]);
+        s.execute("text.rescanFonts", &json!({})).unwrap();
+        let mark = s.doc().unwrap().doc.symbol_art_bounds("Mark");
+        assert_ne!(mark, shrunk);
+        assert_eq!(nested(&s), [mark], "the inline graphic in the art of Outer follows Mark's type laid out again");
     }
 
     /// The font family of text object `id`'s first run.

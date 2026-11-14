@@ -46,7 +46,7 @@ impl Document {
             return (0, 0);
         }
         let own = size_of::<Document>() + ALLOC + ARC;
-        let mut w = Walk { docs: [self, other], seen: [None, None], bytes: [own, own] };
+        let mut w = Walk { docs: [self, other], seen: [None, None], bytes: [own, own], appearances: Default::default() };
         w.list(&self.layers, &other.layers);
         for i in 0..self.symbols.len().max(other.symbols.len()) {
             match (self.symbols.get(i), other.symbols.get(i)) {
@@ -88,7 +88,7 @@ impl Document {
         }
         let mut n = 0;
         n += vec_bytes(&self.artboards) + self.artboards.iter().map(|a| a.name.capacity()).sum::<usize>();
-        n += vec_bytes(&self.guides) + vec_bytes(&self.views) + vec_bytes(&self.slices) + vec_bytes(&self.assets);
+        n += vec_bytes(&self.saved_guides) + vec_bytes(&self.views) + vec_bytes(&self.slices) + vec_bytes(&self.assets);
         n += vec_bytes(&self.text_threads) + self.text_threads.iter().map(vec_bytes).sum::<usize>();
         n += self.images.iter().map(|(k, b)| 4 * size_of::<usize>() + k.capacity() + b.mime.capacity() + size_of_val(b)).sum::<usize>();
         n += map_bytes(&self.export_settings) + map_bytes(&self.extra) + self.print_setup.as_ref().map_or(0, json_bytes);
@@ -103,6 +103,11 @@ impl Document {
         let styles = |s: &Vec<TextStyleDef>| vec_bytes(s) + s.iter().map(|s| s.name.capacity() + map_bytes(&s.attrs)).sum::<usize>();
         n += shared(&self.char_styles, &newer.char_styles, styles);
         n += shared(&self.para_styles, &newer.para_styles, styles);
+        n += shared(&self.composite_fonts, &newer.composite_fonts, |c| {
+            let part = |p: &crate::CompositePart| p.font.capacity() + p.style.capacity();
+            vec_bytes(c)
+                + c.iter().map(|f| f.name.capacity() + crate::CharClass::ALL.into_iter().map(|k| part(f.parts.get(k))).sum::<usize>()).sum::<usize>()
+        });
         n += shared(&self.saved_selections, &newer.saved_selections, |s| {
             vec_bytes(s) + s.iter().map(|s: &SavedSelection| s.name.capacity() + vec_bytes(&s.objects)).sum::<usize>()
         });
@@ -129,6 +134,9 @@ struct Walk<'a> {
     seen: [Option<HashSet<usize>>; 2],
     /// For each side, what it keeps that the other doesn't.
     bytes: [usize; 2],
+    /// For each side, the appearances counted so far (by address): objects that share one (a
+    /// graphic style applied to them all) count it once.
+    appearances: [HashSet<usize>; 2],
 }
 
 impl Walk<'_> {
@@ -169,8 +177,9 @@ impl Walk<'_> {
             self.alone(1, b);
             return;
         }
-        self.bytes[0] += node_bytes(a, Some(b));
-        self.bytes[1] += node_bytes(b, Some(a));
+        let [ca, cb] = &mut self.appearances;
+        self.bytes[0] += node_bytes(a, Some(b), ca);
+        self.bytes[1] += node_bytes(b, Some(a), cb);
         match (a.children(), b.children()) {
             (Some(x), Some(y)) => self.list(x, y),
             (x, y) => {
@@ -193,8 +202,8 @@ impl Walk<'_> {
         if self.other_holds(side, n) {
             return;
         }
-        if let Some(b) = self.bytes.get_mut(side) {
-            *b += node_bytes(n, None);
+        if let (Some(b), Some(counted)) = (self.bytes.get_mut(side), self.appearances.get_mut(side)) {
+            *b += node_bytes(n, None, counted);
         }
         for c in n.children().into_iter().flatten() {
             self.alone(side, c);
@@ -237,20 +246,25 @@ impl Walk<'_> {
 }
 
 /// One node's own heap: the node, and what it owns besides its children and mask art (counted
-/// as nodes of their own). Its appearance counts unless `other`, its other version, shares it.
-fn node_bytes(n: &Node, other: Option<&Node>) -> usize {
+/// as nodes of their own). Its appearance counts unless `other`, its other version, shares it, or
+/// another node of the same side shares it and was counted already (its address is in `counted`).
+fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> usize {
     fn boxed<T>(b: &Option<Box<T>>) -> usize {
         b.as_ref().map_or(0, |_| ALLOC + size_of::<T>())
     }
     let mut b = ALLOC + ARC + size_of::<Node>();
     b += n.name.as_ref().map_or(0, String::capacity);
-    if !other.is_some_and(|m| Shared::ptr_eq(&m.appearance, &n.appearance)) {
+    if !other.is_some_and(|m| Shared::ptr_eq(&m.appearance, &n.appearance)) && counted.insert(&*n.appearance as *const Appearance as usize) {
         b += ALLOC + ARC + appearance_heap_bytes(&n.appearance);
     }
     if let Some(e) = n.extras_box() {
         b += ALLOC + size_of::<NodeExtras>();
         b += boxed(&e.mask) + boxed(&e.graph) + boxed(&e.shaper) + boxed(&e.attrs) + boxed(&e.slice) + boxed(&e.perspective);
         b += boxed(&e.dimension) + boxed(&e.live_paint_gaps) + boxed(&e.colorize);
+        b += e
+            .color_mask
+            .as_deref()
+            .map_or(0, |m| ALLOC + size_of::<crate::color_mask::ColorMask>() + m.key.capacity() + m.from.capacity() + m.colors.capacity() * 3);
         b += e.trace.as_ref().map_or(0, |t| ALLOC + size_of::<Value>() + json_bytes(t));
         b += e.intertwine.as_deref().map_or(0, |a| ALLOC + size_of::<PathData>() + path_bytes(a));
         if e.intertwine_tiers.capacity() > 0 {
@@ -440,6 +454,29 @@ mod tests {
         // The old layer and its list are the old version's own; the new one holds three new nodes.
         assert!(kept < 4096, "{kept}");
         assert!(added > kept + 3 * 300, "{added} for three new rectangles");
+    }
+
+    /// Objects given one shared appearance (a graphic style applied to them all) count it once.
+    #[test]
+    fn a_shared_appearance_counts_once() {
+        let n = 100;
+        let before = doc_with_rects(n);
+        let ids: Vec<_> = before.layers[0].children().unwrap().iter().map(|c| c.id).collect();
+        let ap = Appearance::basic(Paint::None, Paint::solid(vectorcraft_color::Color::BLACK), 2.0);
+        let restyled = |each: bool| {
+            let mut d = before.clone();
+            let one = Shared::new(ap.clone());
+            for id in &ids {
+                d.node_mut(*id).unwrap().appearance = if each { Shared::new(ap.clone()) } else { one.clone() };
+            }
+            d
+        };
+        let (shared, copies) = (restyled(false), restyled(true));
+        let (kept, added) = before.retained_bytes_each(&shared);
+        assert_eq!(shared.retained_bytes_each(&before), (added, kept));
+        let (kept_copies, added_copies) = before.retained_bytes_each(&copies);
+        assert_eq!(kept, kept_copies, "the old version keeps the same either way");
+        assert_eq!(added_copies - added, (n - 1) * (ALLOC + ARC + appearance_heap_bytes(&ap)));
     }
 
     #[test]

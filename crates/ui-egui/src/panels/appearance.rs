@@ -251,6 +251,21 @@ pub(crate) fn shown_effect_label(id: &str) -> String {
     }
 }
 
+/// An effect row's name: [`shown_effect_label`], followed by "(Safe Mode)" for a plug-in effect
+/// Safe Mode skips (the object keeps it and draws without it).
+pub fn effect_row_label(id: &str) -> String {
+    let label = shown_effect_label(id);
+    if vectorcraft_plugins::effect::skipped(id) { format!("{label} ({})", tl!("Safe Mode")) } else { label }
+}
+
+/// The tooltip of an effect row Safe Mode skips: why it draws nothing, and its plug-in's id;
+/// `None` for an effect that draws.
+pub fn skipped_effect_tip(id: &str) -> Option<String> {
+    let plugin = vectorcraft_plugins::effect::plugin_id(id).filter(|_| vectorcraft_plugins::effect::skipped(id))?;
+    let why = crate::i18n::msg(&vectorcraft_plugins::Error::SafeMode.to_string());
+    Some(format!("{why}\n{}", vectorcraft_plugins::safe_mode::display_name(plugin)))
+}
+
 /// "Opacity: Default" or "Opacity: 50% Multiply".
 pub fn opacity_text(opacity: f32, blend: BlendMode) -> String {
     if (opacity - 1.0).abs() < 1e-4 && blend == BlendMode::Normal {
@@ -370,10 +385,22 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
     let area_id = egui::Id::unique("ap-row-popup");
     let shown = ctx.memory(|m| m.area_rect(area_id));
     // A press outside it (not one that closes a dropdown the popup opened) or Escape puts it away.
+    // With a field in it that has the keyboard, a press draws it once more first, so the field lets
+    // go of the keyboard to that press and commits what was typed, as in a panel (#6429). Escape
+    // drops what was typed.
     let pressed_outside = ctx.input(|i| i.pointer.any_pressed() && i.pointer.interact_pos().is_some_and(|p| shown.is_some_and(|r| !r.contains(p))));
-    if pressed_outside && !egui::Popup::is_any_open(ctx) || ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+    let mut last = false;
+    if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
         return close(app);
+    } else if pressed_outside && !egui::Popup::is_any_open(ctx) {
+        if !widgets::field_focused_in(ctx, egui::LayerId::new(egui::Order::Foreground, area_id)) {
+            return close(app);
+        }
+        last = true;
     }
+    // Fields let go of the keyboard on a click, which this press isn't yet. The app-wide option
+    // goes back however this function ends, a panic in the panel included.
+    let _surrender = last.then(|| SurrenderOnPress::set(ctx));
     let screen = ctx.content_rect();
     let left = panel.left() - POPUP_GAP - POPUP_W;
     let x = if left >= screen.left() + POPUP_GAP { left } else { (panel.right() + POPUP_GAP).min(screen.right() - POPUP_W - POPUP_GAP) };
@@ -400,6 +427,28 @@ pub(crate) fn row_popup(app: &mut VectorcraftApp, ctx: &egui::Context, panel: Re
             }
         });
     });
+    if last {
+        close(app);
+    }
+}
+
+/// While it lives, a press anywhere makes a field let go of the keyboard, as a click does
+/// otherwise; dropped, egui's previous `surrender_focus_on` is back ([`row_popup`]'s last frame).
+struct SurrenderOnPress(egui::Context, egui::SurrenderFocusOn);
+
+impl SurrenderOnPress {
+    fn set(ctx: &egui::Context) -> Self {
+        let before = ctx.options(|o| o.input_options.surrender_focus_on);
+        ctx.options_mut(|o| o.input_options.surrender_focus_on = egui::SurrenderFocusOn::Presses);
+        Self(ctx.clone(), before)
+    }
+}
+
+impl Drop for SurrenderOnPress {
+    fn drop(&mut self) {
+        let before = self.1;
+        self.0.options_mut(|o| o.input_options.surrender_focus_on = before);
+    }
 }
 
 /// A row's name that edits the row when clicked ([`link`]), with the tooltip "Click to edit".
@@ -509,7 +558,7 @@ fn delete_key(app: &mut VectorcraftApp, ui: &mut Ui) {
 fn thumbnail_drag(ui: &mut Ui, th: Rect, id: NodeId) {
     let resp = ui.interact(th, ui.scope_id().with("ap-thumb"), Sense::drag()).on_hover_text(tl!("Drag onto art to apply this appearance"));
     widgets::drag_source(ui, &resp, || PanelDrag::Appearance(id));
-    if resp.dragged() {
+    if resp.dragged_by(egui::PointerButton::Primary) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
 }
@@ -582,7 +631,7 @@ fn default_stack(app: &mut VectorcraftApp, ui: &mut Ui) {
     let fx = |ui: &mut Ui, e: &Effect, id: (Option<usize>, usize)| {
         let (r, _) = row(ui, false);
         eye(ui, r, ("ap-def-fx", id), e.visible, false);
-        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &shown_effect_label(&e.id), false);
+        text(ui, pos2(r.left() + EYE_W + 24.0 + if id.0.is_some() { 12.0 } else { 0.0 }, r.center().y), &effect_row_label(&e.id), false);
         icons::paint(ui, "dc-fx", Rect::from_center_size(r.right_center() - vec2(14.0, 0.0), vec2(16.0, 16.0)), t.icon);
     };
     for (i, it) in ap.items.iter().enumerate().rev() {
@@ -655,13 +704,13 @@ fn stack(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, sel: Sel, object_row: 
     let lit = |item: Option<usize>, k: usize| effects.as_ref().is_some_and(|(list, ks)| *list == item && ks.contains(&k));
     let mut rows = vec![(Slot::Object { top: true }, object_row)];
     let mut stopped = false;
-    // Starts or ends a row drag.
+    // Starts (primary button only) or ends a row drag.
     let frozen = only.is_some();
     let mut track = |resp: &egui::Response, what: Dragged| {
         if frozen {
             return;
         }
-        if resp.drag_started() {
+        if resp.drag_started_by(egui::PointerButton::Primary) {
             set_pstate(&ctx, "ap-drag", Some(what));
             // Where the row was grabbed, for its dimmed copy under the pointer.
             // (From where the button went down: the drag starts once the pointer has moved on.)
@@ -856,7 +905,7 @@ fn drag_ghost(app: &VectorcraftApp, ui: &Ui, n: &Node, what: Dragged, order: &[u
             Dragged::Effect(item, k) => {
                 let Some(e) = n.appearance.effects_at(item).and_then(|fx| fx.get(k)) else { return };
                 let indent = if item.is_some() { 12.0 } else { 0.0 };
-                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &shown_effect_label(&e.id), false);
+                text(ui, pos2(r.left() + indent + EYE_W + 24.0, y), &effect_row_label(&e.id), false);
             }
             Dragged::Contents => {
                 if let Some(label) = n.contents_label() {
@@ -1128,7 +1177,11 @@ fn effect_row(app: &mut VectorcraftApp, ui: &mut Ui, item: Option<usize>, k: usi
     // The name edits the effect on a click; the empty space takes the click rules (in `stack`)
     // and edits it on a double-click: its settings dialog, or the inline editor of an effect
     // without settings.
-    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &shown_effect_label(&e.id));
+    let name = name_link(ui, pos2(lx, r.center().y), ("ap-fx-link", item, k), &effect_row_label(&e.id));
+    let name = match skipped_effect_tip(&e.id) {
+        Some(tip) => name.on_hover_text(tip),
+        None => name,
+    };
     let resp = edit_tip(resp, &name);
     let edit = name.clicked() || resp.double_clicked();
     if edit {
@@ -1332,7 +1385,7 @@ fn swatch_button(app: &mut VectorcraftApp, ui: &mut Ui, r: Rect, paint: &Paint, 
         open_popup(app, ui.ctx(), "color");
     }
     egui::Popup::menu(&resp).open_memory((resp.clicked() && !mixer).then_some(egui::SetOpenCommand::Toggle)).show(|ui| {
-        swatch_picker(app, ui, target);
+        widgets::menu_scroll(ui, |ui| swatch_picker(app, ui, target));
     });
 }
 
@@ -1608,18 +1661,20 @@ pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
             None => groups.push((g, vec![(id.clone(), label.to_string())])),
         }
     }
-    for (g, items) in groups {
-        ui.menu_button(tl!(&g), |ui| {
-            crate::widgets::menu_scroll(ui, |ui| {
-                for (id, label) in items {
-                    if ui.button(format!("{label}…")).clicked() {
-                        app.run("effect.dialog", json!({"effect": id})).ok();
-                        ui.close();
+    crate::widgets::menu_scroll(ui, |ui| {
+        for (g, items) in groups {
+            ui.menu_button(tl!(&g), |ui| {
+                crate::widgets::menu_scroll(ui, |ui| {
+                    for (id, label) in items {
+                        if ui.button(format!("{label}…")).clicked() {
+                            app.run("effect.dialog", json!({"effect": id})).ok();
+                            ui.close();
+                        }
                     }
-                }
+                });
             });
-        });
-    }
+        }
+    });
 }
 
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {

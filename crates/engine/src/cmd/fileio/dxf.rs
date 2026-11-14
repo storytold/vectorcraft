@@ -1,12 +1,12 @@
 //! DXF export for every DXF path (`document.export {format: dxf}`, `document.exportDxf`, Export As
 //! → DXF Options): the options parsed from the params, one drawing per artboard with Use
-//! Artboards, and the formats that can't be written (DWG, PICT) with what to use instead.
+//! Artboards, and the formats that can't be written (DWG, PageMaker) with what to use instead.
 
 use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use vectorcraft_cad::{ColorDepth, DxfOptions, DxfVersion, Preserve, RasterFormat};
+use vectorcraft_cad::{ColorDepth, DxfOptions, DxfPreset, DxfVersion, Preserve, RasterFormat};
 use vectorcraft_doc::{Document, Unit};
 use vectorcraft_geom::Rect;
 
@@ -21,18 +21,24 @@ pub fn specs() -> Vec<CommandSpec> {
         "Export DXF",
         [],
         None,
-        "{path?, version?: R12|R13|R14|2000|2004|2007|2010|2013|2018 (default), unit?: mm (default; any unit name: pt, in, cm…), scale?: 1 (drawing units per unit), scaleLineweights?: false, colors?: 8|16|256|true (default; true colour needs 2004+, else 256), rasterFormat?: png (default)|jpeg (placed images, written next to the file), preserve?: appearance (default: type as outlines; strokes a CAD line can't draw as filled outlines; brush art)|editability (type as text; every stroke a line with its lineweight and dashes), alterPaths?: false (strokes a CAD line can't draw as their filled outlines, with editability too; also strokes wider than 2.11 mm, and every stroke in R13 and R14), outlineText?: false, selectedOnly?: false (the selected objects, in their layers), artboard?: 0 (the origin is its bottom-left corner), useArtboards?: true (one drawing per chosen artboard, artboards?/range?, holding the art over it: {stem}-{artboard}.dxf) | false (the origin at the art's bounds)} → {path, bytes, warnings, files?, linked?: [image files]}; no path → {dataBase64, …, linked?: [{name, dataBase64}]}. Layers become DXF layers (hidden: off; locked; non-printing: not plotted); paths become polylines and splines, fills their outlines (which laser and cutter software reads) and solid hatches. Same as document.export {format: dxf}",
+        "{path?, dxfPreset?: custom (default)|cnc (CNC / CAM: version 2000, the oldest version that has both lightweight polylines and lineweights; unit mm, scale 1; colors 256, all 2000 holds; preserve editability and alterPaths false, so strokes stay center lines; outlineText true, so type is paths; includeImages and includeHatches false, so fills are their outlines and no image files are written; rasterFormat png; the options given override it), version?: R12|R13|R14|2000|2004|2007|2010|2013|2018 (default), unit?: mm (default; any unit name: pt, in, cm…), scale?: 1 (drawing units per unit), scaleLineweights?: false, colors?: 8|16|256|true (default; true colour needs 2004+, else 256), rasterFormat?: png (default)|jpeg (placed images, written next to the file), includeImages?: true (false: placed images and their files are left out), includeHatches?: true (false: fills are their outlines, without solid hatches), preserve?: appearance (default: type as outlines; strokes a CAD line can't draw as filled outlines; brush art)|editability (type as text; every stroke a line with its lineweight and dashes), alterPaths?: false (strokes a CAD line can't draw as their filled outlines, with editability too; also strokes wider than 2.11 mm, and every stroke in R13 and R14), outlineText?: false, selectedOnly?: false (the selected objects, in their layers), artboard?: 0 (the origin is its bottom-left corner), useArtboards?: true (one drawing per chosen artboard, artboards?/range?, holding the art over it: {stem}-{artboard}.dxf) | false (the origin at the art's bounds)} → {path, bytes, warnings, files?, linked?: [image files]}; no path → {dataBase64, …, linked?: [{name, dataBase64}]}. Layers become DXF layers (hidden: off; locked; non-printing: not plotted); paths become polylines and splines, fills their outlines (which laser and cutter software reads) and solid hatches. Same as document.export {format: dxf}. A key DXF doesn't take is refused",
         has_doc,
         export_dxf
     )]
 }
 
 /// The DXF options `document.formats` lists.
-pub(super) const OPTIONS: &[FormatOption] = &[
+pub(crate) const OPTIONS: &[FormatOption] = &[
     super::ARTBOARD,
     super::ARTBOARDS,
     super::RANGE,
     super::USE_ARTBOARDS,
+    FormatOption {
+        name: "dxfPreset",
+        ty: "string",
+        default: "\"custom\"",
+        description: "custom, or cnc (CNC / CAM: version 2000, mm, 256 colors, editability, type as outlines, no images, no fill hatches); the options given override it",
+    },
     FormatOption { name: "version", ty: "string", default: "\"2018\"", description: "R12, R13, R14, 2000, 2004, 2007, 2010, 2013 or 2018" },
     FormatOption {
         name: "unit",
@@ -53,6 +59,18 @@ pub(super) const OPTIONS: &[FormatOption] = &[
         ty: "string",
         default: "\"png\"",
         description: "png or jpeg: the files placed images are written to, next to the drawing",
+    },
+    FormatOption {
+        name: "includeImages",
+        ty: "boolean",
+        default: "true",
+        description: "placed images are written, linked to their files; false leaves them and their files out",
+    },
+    FormatOption {
+        name: "includeHatches",
+        ty: "boolean",
+        default: "true",
+        description: "filled areas get a solid hatch after their outlines; false writes the outlines alone",
     },
     FormatOption {
         name: "preserve",
@@ -89,12 +107,6 @@ pub const UNSUPPORTED: &[Unsupported] = &[
         hint: "DWG is not available (no openly licensed writer exists): export DXF instead, which CAD apps open",
     },
     Unsupported {
-        id: "pict",
-        label: "PICT",
-        extensions: &["pict", "pct", "pic"],
-        hint: "PICT is a retired format and is not supported: convert the file to PDF or PNG first",
-    },
-    Unsupported {
         id: "pmd",
         label: "PageMaker",
         extensions: &["pmd"],
@@ -120,12 +132,15 @@ impl Unsupported {
 struct Params {
     #[serde(flatten)]
     boards: ArtboardPick,
+    dxf_preset: Option<String>,
     version: Option<Value>,
     unit: Option<String>,
     scale: Option<f64>,
     scale_lineweights: Option<bool>,
     colors: Option<Value>,
     raster_format: Option<String>,
+    include_images: Option<bool>,
+    include_hatches: Option<bool>,
     preserve: Option<String>,
     alter_paths: Option<bool>,
     outline_text: Option<bool>,
@@ -150,7 +165,8 @@ fn choice<T>(field: &str, v: Option<String>, read: impl Fn(&str) -> Option<T>, d
 /// The DXF options in `p` (the region and crop are set per drawing) and the artboard choice.
 fn parse(p: &Value) -> Result<(DxfOptions, ArtboardPick)> {
     let q: Params = if p.is_object() { Params::deserialize(p).map_err(|e| bad(C, format!("DXF options: {e}")))? } else { Params::default() };
-    let d = DxfOptions::default();
+    // The options a preset sets are the defaults of those `p` leaves out.
+    let d = choice("dxfPreset", q.dxf_preset, DxfPreset::from_id, DxfPreset::Custom, "custom or cnc")?.options();
     let scale = q.scale.unwrap_or(d.scale);
     if !(scale.is_finite() && vectorcraft_cad::SCALE_RANGE.contains(&scale)) {
         return Err(bad(C, format!("DXF scale must be a positive number up to {}, not {scale}", vectorcraft_cad::SCALE_RANGE.end())));
@@ -168,6 +184,8 @@ fn parse(p: &Value) -> Result<(DxfOptions, ArtboardPick)> {
         scale_lineweights: q.scale_lineweights.unwrap_or(d.scale_lineweights),
         colors: choice("colors", q.colors.as_ref().map(text), ColorDepth::from_id, d.colors, "8, 16, 256 or true")?,
         raster: choice("rasterFormat", q.raster_format, RasterFormat::from_id, d.raster, "png or jpeg")?,
+        include_images: q.include_images.unwrap_or(d.include_images),
+        include_hatches: q.include_hatches.unwrap_or(d.include_hatches),
         preserve: choice("preserve", q.preserve, Preserve::from_id, d.preserve, "appearance or editability")?,
         alter_paths: q.alter_paths.unwrap_or(d.alter_paths),
         outline_text: q.outline_text.unwrap_or(d.outline_text),
@@ -179,6 +197,11 @@ fn parse(p: &Value) -> Result<(DxfOptions, ArtboardPick)> {
 /// Check the DXF options in `p` without exporting (dialogs keep themselves open on an error).
 pub fn check(p: &Value) -> std::result::Result<(), String> {
     parse(p).map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// The DXF options in `p` (the region and crop left at their defaults).
+pub fn options(p: &Value) -> std::result::Result<DxfOptions, String> {
+    parse(p).map(|(o, _)| o).map_err(|e| e.to_string())
 }
 
 /// Encode `doc` as DXF: one drawing whose origin is the chosen artboard's bottom-left corner
@@ -212,6 +235,7 @@ pub(super) fn encode(doc: &Document, p: &Value, use_artboards: Option<bool>) -> 
                 enc.warnings.push(w);
             }
         }
+        enc.add_setting_notes(out.setting_notes);
         for img in out.images {
             if !enc.linked.iter().any(|l| l.name == img.name) {
                 enc.linked.push(vectorcraft_svg::LinkedImage { name: img.name, bytes: Arc::new(img.bytes) });

@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use kurbo::ParamCurveNearest;
-use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, PressureProfile, StrokeLayer};
+use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{Affine, BezPath, CubicBez, ParamCurve, PathData, PathEl, Point, Rect, SubPath, Vec2};
 
 use crate::track::{Rng, Track, normal, seed_of, tracks};
@@ -503,9 +503,10 @@ fn art_on_run(
     bend_widened(t, art, b, along, cross, widen)
 }
 
-/// An art brush's art along `bp`. With a width that follows the pen's pressure, the art is as
-/// wide as the pressure recorded at each point of the stroke gives (half way without a recording).
-pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>) -> Vec<Node> {
+/// An art brush's art along `bp`. With a width that follows the pen (its pressure, tilt, bearing
+/// or rotation), the art is as wide as what `stroke` recorded at each point gives (half way
+/// without a recording).
+pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, stroke: &StrokeLayer) -> Vec<Node> {
     let Some((art, b)) = oriented(&a.art, a.direction, a.flip_along, a.flip_across) else { return vec![] };
     let (light, heavy) = a.width_range();
     let width = light.max(heavy);
@@ -522,7 +523,7 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, pressure: Option<&Pre
             }
             // A run past the start of a closed track wraps round to it.
             let at = if s > l { s - l } else { s };
-            let p = pressure.map_or(PressureProfile::MID, |p| p.at(at / l)).clamp(0.0, 1.0);
+            let p = a.width_mode.and_then(|m| PenAt::of(stroke, at / l).control(m)).unwrap_or(0.5);
             (light + (heavy - light) * p) / width
         };
         let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, l)] };
@@ -879,12 +880,16 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
             };
             trims.push(None);
             corner_half = corner_half.max(bb.width() * k / 2.0);
-            let bis = a + b;
-            let bis = if bis.hypot() < 1e-9 { a } else { bis / bis.hypot() };
-            let xf = Affine::translate(t.verts[i].to_vec2())
-                * Affine::rotate(bis.y.atan2(bis.x))
-                * Affine::scale(k)
-                * Affine::translate(-bb.center().to_vec2());
+            // Inner and outer corner art is the corner that joins a side tile on its right to one
+            // below it, so its arms point along +x and +y (as the flips leave them). The tile is
+            // turned so that the line halving its arms lies on the line halving the sides at the
+            // corner, back along the incoming side and on along the outgoing one: at a right angle
+            // the arms meet the side tiles, and at other angles the difference is split between
+            // the two sides (#6110).
+            let arms = Vec2::new(if pb.flip_along { -1.0 } else { 1.0 }, if pb.flip_across { -1.0 } else { 1.0 });
+            let sides = b - a;
+            let angle = sides.y.atan2(sides.x) - arms.y.atan2(arms.x);
+            let xf = Affine::translate(t.verts[i].to_vec2()) * Affine::rotate(angle) * Affine::scale(k) * Affine::translate(-bb.center().to_vec2());
             let mut n = art.clone();
             n.transform(xf, true);
             out.take(Some(n));

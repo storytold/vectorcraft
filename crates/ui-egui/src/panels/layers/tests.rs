@@ -94,22 +94,30 @@ fn frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>
 }
 
 fn button(pos: egui::Pos2, pressed: bool) -> egui::Event {
-    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+    button_by(pos, pressed, egui::PointerButton::Primary)
+}
+
+/// `pointer` pressed (or released) at `pos`.
+fn button_by(pos: egui::Pos2, pressed: bool, pointer: egui::PointerButton) -> egui::Event {
+    egui::Event::PointerButton { pos, button: pointer, pressed, modifiers: Default::default() }
 }
 
 /// Drag from `a` to `b` over a few frames (Alt held when `alt`).
 fn drag(app: &mut VectorcraftApp, ctx: &egui::Context, a: egui::Pos2, b: egui::Pos2, alt: bool) {
-    let steps = [
-        vec![egui::Event::PointerMoved(a)],
-        vec![button(a, true)],
-        vec![egui::Event::PointerMoved(a + vec2(0.0, 6.0))],
-        vec![egui::Event::PointerMoved(b)],
-        vec![button(b, false)],
-        vec![],
-    ];
-    for e in steps {
-        frame(app, ctx, e, alt);
-    }
+    drag_by(app, ctx, a, b, alt, egui::PointerButton::Primary);
+}
+
+/// Drag from `a` to `b` with `pointer` over a few frames (Alt held when `alt`). Returns whether a
+/// drag-and-drop payload was held over `b` before the release.
+fn drag_by(app: &mut VectorcraftApp, ctx: &egui::Context, a: egui::Pos2, b: egui::Pos2, alt: bool, pointer: egui::PointerButton) -> bool {
+    frame(app, ctx, vec![egui::Event::PointerMoved(a)], alt);
+    frame(app, ctx, vec![button_by(a, true, pointer)], alt);
+    frame(app, ctx, vec![egui::Event::PointerMoved(a + vec2(0.0, 6.0))], alt);
+    frame(app, ctx, vec![egui::Event::PointerMoved(b)], alt);
+    let held = egui::DragAndDrop::has_any_payload(ctx);
+    frame(app, ctx, vec![button_by(b, false, pointer)], alt);
+    frame(app, ctx, vec![], alt);
+    held
 }
 
 #[test]
@@ -272,12 +280,44 @@ fn closing_a_document_releases_only_its_layer_thumbnails() {
     });
 }
 
+/// From now on each reading of this thread's render budget clock is `ms` later than the one before.
+/// A render reads it before and after, so each row thumbnail rendered takes `ms` of the budget.
+fn clock_steps(ms: f64) {
+    let mut now = 0.0;
+    THUMBS.with(|c| {
+        c.borrow_mut().clock = Some(Box::new(move || {
+            now += ms;
+            now
+        }))
+    });
+}
+
+/// Rendering on the UI thread stops for the pass once the thumbnails rendered in it took the
+/// budget, and the rest render in the next passes.
+#[test]
+fn row_thumbnails_past_the_render_budget_wait_for_the_next_pass() {
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let renders = || THUMBS.with(|c| c.borrow().renders);
+    // Each render takes 5 ms: after two renders the pass has used 10 ms, past the 8 ms budget.
+    clock_steps(5.0);
+    let mut per_pass = vec![];
+    for _ in 0..4 {
+        let before = renders();
+        frame(&mut app, &ctx, vec![], false);
+        per_pass.push(renders() - before);
+    }
+    assert_eq!(per_pass, [2, 1, 0, 0], "the layer's and two objects' thumbnails, two in the first pass");
+}
+
 #[test]
 fn row_thumbnails_wait_for_the_end_of_a_drag() {
     let (mut app, _, _) = two_rects();
     app.session.execute("select.all", &json!({})).unwrap();
     let ctx = egui::Context::default();
     let renders = || THUMBS.with(|c| c.borrow().renders);
+    // Renders take no time, so every row's thumbnail fits in a pass however busy the machine is.
+    clock_steps(0.0);
     frame(&mut app, &ctx, vec![], false);
     let first = renders();
     assert!(first >= 1, "the rows' thumbnails render at once");
@@ -412,6 +452,127 @@ fn dragging_rows_onto_the_trash_deletes_them() {
     assert!(doc.node(top).is_none());
 }
 
+/// The message of the confirmation open now, if one is.
+fn asked(app: &VectorcraftApp) -> Option<String> {
+    app.ui.dialog.as_ref().filter(|d| d.kind == crate::dialogs::confirm::KIND).map(|d| d.str("message"))
+}
+
+/// The trash, the Delete key and rows dropped on the trash ask before deleting a layer that holds
+/// art, hidden and locked art included: Cancel keeps it, and OK deletes the rows it asked about in
+/// one undo step, even after another row was highlighted.
+#[test]
+fn deleting_a_layer_that_holds_art_asks_first() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let rect = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    run(&mut app, "select.none", json!({}));
+    run(&mut app, "layer.setProps", json!({"ids": [rect.0], "visible": false, "locked": true}));
+    let art = app.session.active().unwrap().doc.layers[0].id;
+    run(&mut app, "layer.new", json!({}));
+    let there = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(art).is_some();
+    let ctx = egui::Context::default();
+    // Rows top first: Layer 2, Layer 1, its rectangle.
+    let (c, _) = frame(&mut app, &ctx, vec![], false);
+    let name = |i: usize| egui::pos2(150.0, c[i].y);
+    let question = Some("Delete this layer and its artwork?".to_string());
+    click_with(&mut app, &ctx, name(1), egui::Modifiers::NONE);
+    let trash = trash_pos(&mut app, &ctx);
+    click_with(&mut app, &ctx, trash, egui::Modifiers::NONE);
+    assert_eq!(asked(&app), question, "the trash asks");
+    assert!(there(&app), "nothing is deleted before OK");
+    crate::dialogs::cancel(&mut app);
+    assert!(app.ui.dialog.is_none() && there(&app), "Cancel keeps the layer");
+    click_with(&mut app, &ctx, name(1), egui::Modifiers::NONE);
+    let del = egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    frame(&mut app, &ctx, vec![del], false);
+    assert_eq!(asked(&app), question, "Delete asks");
+    assert!(there(&app));
+    crate::dialogs::cancel(&mut app);
+    let undo = app.session.active().unwrap().history.undo.len();
+    drag(&mut app, &ctx, c[1] - vec2(100.0, 0.0), trash, false);
+    assert_eq!(asked(&app), question, "a drop on the trash asks");
+    assert!(there(&app));
+    // Highlighting Layer 2 now leaves OK deleting the row that was dropped.
+    click_with(&mut app, &ctx, name(0), egui::Modifiers::NONE);
+    crate::dialogs::confirm(&mut app).unwrap();
+    let st = app.session.active().unwrap();
+    assert!(app.ui.dialog.is_none() && st.doc.node(art).is_none() && st.doc.node(rect).is_none());
+    assert_eq!((st.doc.layers.len(), st.history.undo.len()), (1, undo + 1), "one undo step");
+    run(&mut app, "edit.undo", json!({}));
+    assert!(there(&app));
+}
+
+/// The panel menu's Delete Selection (`ui.layerDelete`) asks once for several rows when one of
+/// them is a layer with art, art in a sublayer included; an empty layer, a layer with only a
+/// guide, and objects alone go at once, and `layer.delete` itself never asks.
+#[test]
+fn delete_selection_asks_only_for_layers_with_art() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let bottom = app.session.active().unwrap().doc.layers[0].id.0;
+    let loose = id(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20})));
+    let outer = id(run(&mut app, "layer.new", json!({})));
+    let sub = id(run(&mut app, "layer.newSublayer", json!({})));
+    let nested = id(run(&mut app, "shape.ellipse", json!({"x": 50, "y": 50, "width": 20, "height": 20})));
+    run(&mut app, "select.none", json!({}));
+    let empty = id(run(&mut app, "layer.new", json!({"top": true})));
+    let guided = id(run(&mut app, "layer.new", json!({"top": true})));
+    run(&mut app, "guide.add", json!({"vertical": true, "pos": 50, "layer": guided}));
+    run(&mut app, "select.none", json!({}));
+    let exists = |app: &VectorcraftApp, id: u64| app.session.active().unwrap().doc.node(NodeId(id)).is_some();
+    for (rows, what) in [(json!([empty]), "an empty layer"), (json!([guided]), "a layer with only a guide"), (json!([loose]), "an object")] {
+        app.run("ui.layerDelete", json!({ "ids": rows })).unwrap();
+        assert!(app.ui.dialog.is_none(), "{what} goes at once");
+        assert!(!exists(&app, rows[0].as_u64().unwrap()), "{what} is deleted");
+    }
+    run(&mut app, "edit.undo", json!({}));
+    // Art in a sublayer counts; the highlighted rows are the default, and a mixed selection asks once.
+    run(&mut app, "layer.highlight", json!({"ids": [outer, loose]}));
+    app.run("ui.layerDelete", json!({})).unwrap();
+    assert_eq!(asked(&app).as_deref(), Some("Delete the selected items and their artwork?"));
+    assert!(exists(&app, nested) && exists(&app, loose));
+    crate::dialogs::confirm(&mut app).unwrap();
+    assert!(!exists(&app, outer) && !exists(&app, sub) && !exists(&app, nested) && !exists(&app, loose));
+    assert!(app.ui.dialog.is_none(), "asked once");
+    // A sublayer with art asks as a layer does.
+    run(&mut app, "edit.undo", json!({}));
+    app.run("ui.layerDelete", json!({ "id": sub })).unwrap();
+    assert_eq!(asked(&app).as_deref(), Some("Delete this layer and its artwork?"));
+    crate::dialogs::cancel(&mut app);
+    // Scripts deleting with layer.delete are not asked.
+    app.run("layer.delete", json!({ "ids": [outer] })).unwrap();
+    assert!(app.ui.dialog.is_none() && !exists(&app, outer));
+    assert!(exists(&app, bottom));
+}
+
+/// Rows `layer.delete` refuses are refused without a question, and OK deletes nothing once another
+/// document is active.
+#[test]
+fn delete_selection_refusals_and_a_document_change() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    let only = app.session.active().unwrap().doc.layers[0].id.0;
+    let e = app.run("ui.layerDelete", json!({ "ids": [only] })).unwrap_err();
+    assert!(e.contains("at least one layer") && app.ui.dialog.is_none(), "{e}");
+    for bad in [json!({"ids": [999_999]}), json!({"id": "x"}), json!({"ids": 3}), json!({"confirmed": "yes"}), json!({"doc": -1})] {
+        assert!(app.run("ui.layerDelete", bad.clone()).is_err() && app.ui.dialog.is_none(), "{bad}");
+    }
+    let art = run(&mut app, "layer.new", json!({}))["id"].as_u64().unwrap();
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    app.run("ui.layerDelete", json!({ "ids": [art] })).unwrap();
+    assert!(asked(&app).is_some());
+    run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+    let e = crate::dialogs::confirm(&mut app).unwrap_err();
+    assert!(e.contains("nothing was deleted"), "{e}");
+    let first = &app.session.documents()[0].doc;
+    assert!(first.node(NodeId(art)).is_some(), "the first document keeps the layer");
+}
+
 #[test]
 fn renaming_a_layer_commits_on_enter_and_escape_cancels() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -494,14 +655,14 @@ fn rename_opens_the_name_field_of_the_selected_object() {
     assert_eq!(name(&app), before, "one undo step");
 }
 
-/// Rename (`ui.rename`) has no default key, F2 being free: it is listed in Keyboard Shortcuts,
+/// Rename (`ui.rename`) has no default key (F2 is Cut's alternate on Windows and Linux): it is listed in Keyboard Shortcuts,
 /// where a key can be assigned to it.
 #[test]
 fn rename_has_no_default_key() {
     use crate::shortcut_editor::{command_for_key, default_command_shortcut};
     crate::shortcut_editor::sync(&crate::state::UiState::default());
     assert_eq!(default_command_shortcut("ui.rename"), None);
-    assert_eq!(command_for_key("F2"), None);
+    assert_ne!(command_for_key("F2"), Some("ui.rename"));
     let (mut app, _, _) = two_rects();
     let listed = app.run("shortcuts.list", json!({"query": "ui.rename"})).unwrap();
     let rows: Vec<_> = listed.as_array().expect("rows").iter().map(|r| r["label"].clone()).collect();
@@ -625,9 +786,11 @@ fn rows_at_every_depth_are_clickable() {
     assert_eq!(rows_of(&app), vec![sub, b, a]);
     click_with(&mut app, &ctx, name(5), egui::Modifiers::COMMAND);
     assert_eq!(rows_of(&app), vec![sub, b, a, c]);
-    // Delete with the panel's keyboard: the highlighted rows go.
+    // Delete with the panel's keyboard: the highlighted rows go once OK answers the question the
+    // sublayer's art asks.
     let del = egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
     frame(&mut app, &ctx, vec![del], false);
+    crate::dialogs::confirm(&mut app).unwrap();
     let d = &app.session.active().unwrap().doc;
     assert!(d.node(sub).is_none() && d.node(c).is_none());
     assert_eq!(d.layers.len(), 1);
@@ -650,14 +813,17 @@ fn guide_rows_select_and_move_their_guides() {
     let (circles, _) = frame(&mut app, &ctx, vec![], false);
     assert_eq!(circles.len(), 3);
     let guide_row = egui::pos2(150.0, (circles[1].y + circles[2].y) / 2.0);
-    let guides = |app: &VectorcraftApp| app.session.active().unwrap().selection.guides.clone();
+    let guides = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        vectorcraft_engine::cmd::guide_indexes(&st.doc, &st.selection.guides)
+    };
     click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
     assert_eq!(guides(&app), [0], "its row selects it");
     // Dragged onto Layer 2's row, it goes on Layer 2, in one undo step.
     let undo = app.session.active().unwrap().history.undo.len();
     drag(&mut app, &ctx, guide_row, egui::pos2(150.0, circles[0].y), false);
     let st = app.session.active().unwrap();
-    assert_eq!((st.doc.guides[0].layer, st.history.undo.len()), (Some(second), undo + 1));
+    assert_eq!((st.doc.ruler_guides()[0].layer, st.history.undo.len()), (Some(second), undo + 1));
     // Now under Layer 2: locked, its row neither selects nor drags it.
     run(&mut app, "layer.setProps", json!({"ids": [second.0], "locked": true}));
     assert!(guides(&app).is_empty(), "deselected with its layer locked");
@@ -666,7 +832,159 @@ fn guide_rows_select_and_move_their_guides() {
     click_with(&mut app, &ctx, guide_row, egui::Modifiers::NONE);
     assert!(guides(&app).is_empty());
     drag(&mut app, &ctx, guide_row, egui::pos2(150.0, circles[2].y), false);
-    assert_eq!(app.session.active().unwrap().doc.guides[0].layer, Some(second));
+    assert_eq!(app.session.active().unwrap().doc.ruler_guides()[0].layer, Some(second));
+}
+
+/// A guide row's eye and lock hide and lock that guide alone, each click one undo step: a hidden
+/// guide neither shows nor stays selected and its row dims, a locked one shows but can't be
+/// selected. They work while the guide's layer is hidden, and a drag down the eye column passes
+/// the guide row like any other.
+#[test]
+fn guide_rows_have_their_own_eye_and_lock() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let rect = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top down: Layer 1, its guide (no target circle), the rectangle.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    let y = (circles[0].y + circles[1].y) / 2.0;
+    let (name, eye, lock) = (egui::pos2(150.0, y), egui::pos2(12.0, y), egui::pos2(37.0, y));
+    let st = app.session.active().unwrap();
+    let (layer, guide) = (st.doc.layers[0].id, st.doc.ruler_guides()[0].id.unwrap());
+    let node = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().clone();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.guides.clone();
+    let shown_and_editable = |app: &VectorcraftApp| {
+        let d = &app.session.active().unwrap().doc;
+        let g = d.ruler_guide(guide).unwrap();
+        (d.guide_shown(&g), d.guide_editable(&g))
+    };
+    let dimmed = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default()).iter().find(|r| r.guide.is_some()).unwrap().dim
+    };
+    click_with(&mut app, &ctx, name, egui::Modifiers::NONE);
+    assert_eq!(selected(&app), [guide]);
+    // The eye hides the guide alone, in one step, and deselects it.
+    let before = undo(&app);
+    click_with(&mut app, &ctx, eye, egui::Modifiers::NONE);
+    assert!(!node(&app, guide).visible && node(&app, layer).visible && node(&app, rect).visible);
+    assert_eq!((undo(&app), shown_and_editable(&app), dimmed(&app)), (before + 1, (false, false), true));
+    assert!(selected(&app).is_empty(), "a hidden guide can't stay selected");
+    click_with(&mut app, &ctx, name, egui::Modifiers::NONE);
+    assert!(selected(&app).is_empty(), "its row doesn't select a hidden guide");
+    click_with(&mut app, &ctx, eye, egui::Modifiers::NONE);
+    assert_eq!((node(&app, guide).visible, shown_and_editable(&app), dimmed(&app)), (true, (true, true), false));
+    // The lock locks it alone: it still shows, and its row no longer selects it.
+    click_with(&mut app, &ctx, lock, egui::Modifiers::NONE);
+    assert!(node(&app, guide).locked && !node(&app, layer).locked);
+    assert_eq!((undo(&app), shown_and_editable(&app), dimmed(&app)), (before + 3, (true, false), false));
+    click_with(&mut app, &ctx, name, egui::Modifiers::NONE);
+    assert!(selected(&app).is_empty(), "its row doesn't select a locked guide");
+    run(&mut app, "edit.undo", json!({}));
+    assert!(!node(&app, guide).locked);
+    run(&mut app, "edit.redo", json!({}));
+    assert!(node(&app, guide).locked);
+    click_with(&mut app, &ctx, lock, egui::Modifiers::NONE);
+    assert_eq!(shown_and_editable(&app), (true, true));
+    // With its layer hidden, the guide's own eye still changes the guide, which shows again with
+    // the layer only when its own eye is on.
+    run(&mut app, "layer.setProps", json!({"ids": [layer.0], "visible": false}));
+    click_with(&mut app, &ctx, eye, egui::Modifiers::NONE);
+    assert!(!node(&app, guide).visible);
+    run(&mut app, "layer.setProps", json!({"ids": [layer.0], "visible": true}));
+    assert_eq!(shown_and_editable(&app), (false, false));
+    click_with(&mut app, &ctx, eye, egui::Modifiers::NONE);
+    assert_eq!(shown_and_editable(&app), (true, true));
+    // A drag down the eye column from the guide row to the rectangle hides both, in one step.
+    let before = undo(&app);
+    let below = egui::pos2(12.0, circles[1].y);
+    let steps = [
+        vec![egui::Event::PointerMoved(eye)],
+        vec![button(eye, true)],
+        vec![egui::Event::PointerMoved(eye + vec2(0.0, 6.0))],
+        vec![egui::Event::PointerMoved(below)],
+        vec![button(below, false)],
+        vec![],
+    ];
+    for e in steps {
+        frame(&mut app, &ctx, e, false);
+    }
+    assert!(!node(&app, guide).visible && !node(&app, rect).visible && node(&app, layer).visible);
+    assert_eq!(undo(&app), before + 1, "one undo step");
+    assert!(!app.session.in_interaction());
+    run(&mut app, "edit.undo", json!({}));
+    assert!(node(&app, guide).visible && node(&app, rect).visible);
+    // Alt-click on the guide's eye or lock acts on the other layers, as on any row in its layer.
+    run(&mut app, "layer.new", json!({}));
+    let other = app.session.active().unwrap().doc.layers.iter().map(|l| l.id).find(|l| *l != layer).unwrap();
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 3, "the new layer, Layer 1 and the rectangle");
+    let y = (circles[1].y + circles[2].y) / 2.0;
+    click_with(&mut app, &ctx, egui::pos2(12.0, y), egui::Modifiers::ALT);
+    assert!(!node(&app, other).visible && node(&app, layer).visible && node(&app, guide).visible);
+    click_with(&mut app, &ctx, egui::pos2(37.0, y), egui::Modifiers::ALT);
+    assert!(node(&app, other).locked && !node(&app, layer).locked && !node(&app, guide).locked);
+}
+
+/// A guide row dropped on the trash deletes its guide, in one undo step; with no row highlighted
+/// the trash deletes the guide its row selected; and a click on a guide row lets go of the
+/// highlighted rows, so Delete goes to Edit › Clear, which deletes the guide and not the layer.
+#[test]
+fn guide_rows_are_deleted_with_the_trash_and_delete() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    let rect = NodeId(run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}))["id"].as_u64().unwrap());
+    for pos in [50, 80] {
+        run(&mut app, "guide.add", json!({"vertical": true, "pos": pos}));
+    }
+    run(&mut app, "select.none", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    // Rows top down: Layer 1, the 80 pt guide, the 50 pt guide, the rectangle.
+    let (circles, _) = frame(&mut app, &ctx, vec![], false);
+    assert_eq!(circles.len(), 2);
+    let h = (circles[1].y - circles[0].y) / 3.0;
+    let (row_80, row_50) = (egui::pos2(150.0, circles[0].y + h), egui::pos2(150.0, circles[0].y + 2.0 * h));
+    let positions = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides().iter().map(|g| g.pos).collect::<Vec<_>>();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let kept = |app: &VectorcraftApp| {
+        let d = &app.session.active().unwrap().doc;
+        d.layers.len() == 1 && d.node(rect).is_some()
+    };
+    let trash = trash_pos(&mut app, &ctx);
+    let before = undo(&app);
+    drag(&mut app, &ctx, row_80, trash, false);
+    assert_eq!((positions(&app), undo(&app)), (vec![50.0], before + 1));
+    assert!(kept(&app));
+    run(&mut app, "edit.undo", json!({}));
+    assert_eq!(positions(&app).len(), 2);
+    // The trash, with the guide selected through its row and no row highlighted.
+    click_with(&mut app, &ctx, row_50, egui::Modifiers::NONE);
+    assert!(app.session.active().unwrap().highlighted_rows().is_empty());
+    click_with(&mut app, &ctx, trash, egui::Modifiers::NONE);
+    assert_eq!(positions(&app), [80.0]);
+    assert!(kept(&app) && app.ui.dialog.is_none());
+    run(&mut app, "edit.undo", json!({}));
+    // Layer 1 highlighted, then the guide's row clicked: the panel lets Delete go.
+    let layer = app.session.active().unwrap().doc.layers[0].id;
+    click_with(&mut app, &ctx, egui::pos2(150.0, circles[0].y), egui::Modifiers::NONE);
+    assert_eq!(app.session.active().unwrap().highlighted_rows(), [layer]);
+    click_with(&mut app, &ctx, row_80, egui::Modifiers::NONE);
+    assert!(app.session.active().unwrap().highlighted_rows().is_empty());
+    let del = egui::Event::Key { key: egui::Key::Delete, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+    frame(&mut app, &ctx, vec![del], false);
+    assert!(kept(&app) && app.ui.dialog.is_none() && !crate::panels::rows_take_delete(&ctx));
+    assert_eq!(positions(&app).len(), 2);
+    app.run("edit.clear", json!({})).unwrap();
+    assert_eq!(positions(&app), [50.0]);
+    assert!(kept(&app));
 }
 
 /// The selection squares drawn: (big ones on rows whose object is selected, small ones on rows
@@ -1066,6 +1384,202 @@ fn dragging_rows_moves_them_into_other_layers_and_alt_copies() {
     let _ = (layer, c);
 }
 
+/// One headless frame of the panel on a short screen (300 × 260) with `events` (Alt held when
+/// `alt`): for every row name painted inside the list's view, its center, and the view.
+fn short_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, alt: bool) -> (HashMap<String, egui::Pos2>, egui::Rect) {
+    timed_short_frame(app, ctx, events, alt, 1.0 / 60.0)
+}
+
+/// [`short_frame`] for a frame that comes `dt` seconds after the one before it.
+fn timed_short_frame(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    alt: bool,
+    dt: f32,
+) -> (HashMap<String, egui::Pos2>, egui::Rect) {
+    let mut events = events;
+    events.insert(0, egui::Event::ModifiersChanged(egui::Modifiers { alt, ..Default::default() }));
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(300.0, 260.0));
+    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), predicted_dt: dt, ..Default::default() }, |ui| show(app, ui));
+    out.textures_delta.clear();
+    // The rows' eye column dividers are drawn clipped to the list's view.
+    let border = Tokens::get(ctx).input_border;
+    let view = out
+        .shapes
+        .iter()
+        .find_map(|c| match &c.shape {
+            egui::Shape::LineSegment { stroke, .. } if stroke.color == border && c.clip_rect.height() < screen.height() => Some(c.clip_rect),
+            _ => None,
+        })
+        .unwrap_or(egui::Rect::NOTHING);
+    let mut names = HashMap::new();
+    for c in &out.shapes {
+        if let egui::Shape::Text(t) = &c.shape
+            && t.galley.text().starts_with("Layer ")
+            && view.contains_rect(c.clip_rect)
+        {
+            let center = t.pos + t.galley.size() / 2.0;
+            if c.clip_rect.contains(center) {
+                names.insert(t.galley.text().to_string(), center);
+            }
+        }
+    }
+    (names, view)
+}
+
+/// A document of 30 empty layers named `Layer 1` (the bottom one) to `Layer 30` (the top one):
+/// more rows than [`short_frame`]'s list shows.
+fn thirty_layers() -> VectorcraftApp {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    for i in 2..=30 {
+        app.session.execute("layer.new", &json!({"top": true, "name": format!("Layer {i}")})).unwrap();
+    }
+    app
+}
+
+/// The layers' names, bottom first.
+fn layer_names(app: &VectorcraftApp) -> Vec<String> {
+    app.session.active().unwrap().doc.layers.iter().map(|l| l.display_name()).collect()
+}
+
+/// Hold the button still at `at` (a row is held) until `name`'s row is fully in view; → its center.
+fn hold_until(app: &mut VectorcraftApp, ctx: &egui::Context, at: egui::Pos2, name: &str, alt: bool) -> Option<egui::Pos2> {
+    short_frame(app, ctx, vec![egui::Event::PointerMoved(at)], alt);
+    for _ in 0..500 {
+        let (names, view) = short_frame(app, ctx, vec![], alt);
+        if let Some(&c) = names.get(name)
+            && c.y - ROW_MEDIUM / 2.0 >= view.top()
+            && c.y + ROW_MEDIUM / 2.0 <= view.bottom()
+        {
+            return Some(c);
+        }
+    }
+    None
+}
+
+#[test]
+fn rows_held_near_the_bottom_or_top_edge_scroll_the_list_to_a_row_out_of_view() {
+    let mut app = thirty_layers();
+    let ctx = egui::Context::default();
+    let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    let (names, view) = short_frame(&mut app, &ctx, vec![], false);
+    assert!(names.contains_key("Layer 30") && !names.contains_key("Layer 1"), "the list overflows: {names:?}");
+    let before = (undo(&app), layer_names(&app));
+    // Layer 30 held still just above the list's bottom edge: the list scrolls down to Layer 1.
+    let grab = names["Layer 30"];
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)], false);
+    short_frame(&mut app, &ctx, vec![button(grab, true)], false);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab + vec2(0.0, 6.0))], false);
+    let edge = egui::pos2(grab.x, view.bottom() - 3.0);
+    let target = hold_until(&mut app, &ctx, edge, "Layer 1", false).expect("Layer 1 scrolled into view while the row was held");
+    assert_eq!((undo(&app), layer_names(&app)), before, "scrolling alone changes nothing");
+    // Dropped on the upper edge of Layer 1's row: above it.
+    let drop = target - vec2(0.0, ROW_MEDIUM * 0.4);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)], false);
+    short_frame(&mut app, &ctx, vec![button(drop, false)], false);
+    let names = layer_names(&app);
+    assert_eq!(&names[..2], ["Layer 1", "Layer 30"], "{names:?}");
+    assert_eq!(undo(&app), before.0 + 1);
+    // Released, the list stays where it is with the pointer in the top band.
+    let (rows, _) = short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(drop.x, view.top() + 3.0))], false);
+    for _ in 0..10 {
+        assert_eq!(short_frame(&mut app, &ctx, vec![], false).0, rows, "no scrolling after the release");
+    }
+    // Layer 2, Alt-dragged to the top edge: the list scrolls back up, and dropped on the lower edge
+    // of Layer 29's row a copy goes below it.
+    let grab = rows["Layer 2"];
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)], true);
+    short_frame(&mut app, &ctx, vec![button(grab, true)], true);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab - vec2(0.0, 6.0))], true);
+    let (_, view) = short_frame(&mut app, &ctx, vec![], true);
+    let target = hold_until(&mut app, &ctx, egui::pos2(grab.x, view.top() + 3.0), "Layer 29", true).expect("Layer 29 scrolled into view");
+    let drop = target + vec2(0.0, ROW_MEDIUM * 0.4);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(drop)], true);
+    short_frame(&mut app, &ctx, vec![button(drop, false)], true);
+    let names = layer_names(&app);
+    assert_eq!(names.len(), 31);
+    assert_eq!((names[28].as_str(), names[30].as_str()), ("Layer 28", "Layer 29"), "{names:?}");
+    assert!(names[29].starts_with("Layer 2"), "the copy, below Layer 29: {names:?}");
+    assert_eq!(names[2], "Layer 2", "the original stays");
+}
+
+#[test]
+fn a_held_row_scrolls_the_list_as_far_in_the_same_time_at_any_frame_rate() {
+    // Layer 30 held just above the list's bottom edge for half a second, drawn in `frames` frames,
+    // then moved beside the list, where the scrolling stops: → where the rows in view came to rest.
+    let held = |frames: u16| {
+        let mut app = thirty_layers();
+        let ctx = egui::Context::default();
+        let (names, view) = short_frame(&mut app, &ctx, vec![], false);
+        let grab = names["Layer 30"];
+        short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)], false);
+        short_frame(&mut app, &ctx, vec![button(grab, true)], false);
+        short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab + vec2(0.0, 6.0))], false);
+        let dt = 0.5 / f32::from(frames);
+        timed_short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(grab.x, view.bottom() - 3.0))], false, dt);
+        for _ in 1..frames {
+            timed_short_frame(&mut app, &ctx, vec![], false, dt);
+        }
+        short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(view.right() + 2.0, view.bottom() - 3.0))], false);
+        let mut rows = HashMap::new();
+        for _ in 0..120 {
+            rows = short_frame(&mut app, &ctx, vec![], false).0;
+        }
+        // (Layer 30's dimmed copy follows the pointer.)
+        rows.remove("Layer 30");
+        rows
+    };
+    let (at_30, at_120) = (held(15), held(60));
+    assert!(!at_30.contains_key("Layer 29") && !at_30.is_empty(), "the list scrolled: {at_30:?}");
+    assert_eq!(at_30.len(), at_120.len(), "{at_30:?} {at_120:?}");
+    for (name, a) in &at_30 {
+        let b = at_120.get(name).unwrap_or_else(|| panic!("{name} is in view at 30 frames a second only: {at_120:?}"));
+        assert!((a.y - b.y).abs() < 2.0, "{name}: {a:?} at 30 frames a second, {b:?} at 120");
+    }
+}
+
+#[test]
+fn the_list_scrolls_only_for_rows_held_over_it() {
+    let mut app = thirty_layers();
+    let ctx = egui::Context::default();
+    let (rows, view) = short_frame(&mut app, &ctx, vec![], false);
+    // The pointer in the bottom band with no button down: nothing scrolls.
+    let edge = egui::pos2(150.0, view.bottom() - 3.0);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(edge)], false);
+    for _ in 0..20 {
+        assert_eq!(short_frame(&mut app, &ctx, vec![], false).0, rows, "hovering scrolls nothing");
+    }
+    // A row held in the bottom band beside the list (right of its view): nothing scrolls, and
+    // the release there moves nothing.
+    let before = layer_names(&app);
+    let grab = rows["Layer 30"];
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab)], false);
+    short_frame(&mut app, &ctx, vec![button(grab, true)], false);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(grab + vec2(0.0, 6.0))], false);
+    let beside = egui::pos2(view.right() + 2.0, view.bottom() - 3.0);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(beside)], false);
+    // (Layer 30's dimmed copy follows the pointer, so another row is compared.)
+    assert!(rows.contains_key("Layer 27"));
+    for _ in 0..20 {
+        assert_eq!(short_frame(&mut app, &ctx, vec![], false).0.get("Layer 27"), rows.get("Layer 27"), "held beside the list");
+    }
+    short_frame(&mut app, &ctx, vec![button(beside, false)], false);
+    short_frame(&mut app, &ctx, vec![], false);
+    assert_eq!(layer_names(&app), before);
+    // The eye column dragged down into the band: a column drag, which scrolls nothing.
+    let eye = egui::pos2(12.0, grab.y);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(eye)], false);
+    short_frame(&mut app, &ctx, vec![button(eye, true)], false);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(eye + vec2(0.0, 6.0))], false);
+    short_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(12.0, view.bottom() - 3.0))], false);
+    for _ in 0..20 {
+        assert_eq!(short_frame(&mut app, &ctx, vec![], false).0, rows, "a column drag");
+    }
+    short_frame(&mut app, &ctx, vec![button(egui::pos2(12.0, view.bottom() - 3.0), false)], false);
+}
+
 /// The centres of the bottom bar's buttons, right to left from under the right end of its top
 /// divider: Delete, New Layer, New Sublayer, Make/Release Clipping Mask, Locate Object.
 fn bar_buttons(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<egui::Pos2> {
@@ -1253,6 +1767,104 @@ fn the_selected_art_square_drags_the_selection_to_another_layer() {
     let d = &app.session.active().unwrap().doc;
     assert_eq!(d.node(d.layers[0].id).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>(), vec![c, sub, a, g]);
     assert_eq!(app.session.active().unwrap().selection.objects.len(), 2, "still selected");
+}
+
+/// The undo steps of the active document.
+fn undo_len(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// Drags from `a` to `b` with the secondary and then the middle button, each of which must carry
+/// nothing and leave the document and its undo steps as they were (`state` reads what the drag
+/// would change); then the same drag with the primary button, which must change `state`.
+fn only_the_primary_button_drags<S: PartialEq + std::fmt::Debug>(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    (a, b): (egui::Pos2, egui::Pos2),
+    state: impl Fn(&VectorcraftApp) -> S,
+    what: &str,
+) {
+    let (before, undo) = (state(app), undo_len(app));
+    for pointer in [egui::PointerButton::Secondary, egui::PointerButton::Middle] {
+        let held = drag_by(app, ctx, a, b, false, pointer);
+        assert!(!held, "{what}: a {pointer:?} drag carries nothing");
+        assert_eq!(state(app), before, "{what}: a {pointer:?} drag changes nothing");
+        assert_eq!(undo_len(app), undo, "{what}: a {pointer:?} drag records no undo step");
+    }
+    drag_by(app, ctx, a, b, false, egui::PointerButton::Primary);
+    assert_ne!(state(app), before, "{what}: the primary button drags");
+}
+
+/// Only the primary button drags in the panel: a drag with the secondary or middle button moves no
+/// row, guide or selected art, hides or locks no row and moves no appearance, and records no undo
+/// step. The secondary button still opens a row's menu.
+#[test]
+fn only_the_primary_button_drags_rows_guides_art_columns_and_appearances() {
+    let node = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().clone();
+    let rows = |app: &mut VectorcraftApp, ctx: &egui::Context| frame(app, ctx, vec![], false).0;
+
+    // A row, onto the middle of another layer's row.
+    let (mut app, [.., a, _]) = nested();
+    app.session.execute("layer.new", &json!({"top": true, "name": "Top"})).unwrap();
+    let ctx = egui::Context::default();
+    let c = rows(&mut app, &ctx);
+    let parent = |app: &VectorcraftApp| app.session.active().unwrap().doc.parent_of(a);
+    only_the_primary_button_drags(&mut app, &ctx, (egui::pos2(150.0, c[5].y), egui::pos2(150.0, c[0].y)), parent, "a row");
+
+    // A guide row, onto another layer's row.
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    let run = |app: &mut VectorcraftApp, id: &str, p: serde_json::Value| app.session.execute(id, &p).unwrap();
+    run(&mut app, "file.new", json!({"width": 200, "height": 200}));
+    run(&mut app, "shape.rectangle", json!({"x": 0, "y": 0, "width": 20, "height": 20}));
+    run(&mut app, "guide.add", json!({"vertical": true, "pos": 50}));
+    run(&mut app, "select.none", json!({}));
+    run(&mut app, "layer.new", json!({}));
+    expand(&mut app, &json!({})).unwrap();
+    let ctx = egui::Context::default();
+    let c = rows(&mut app, &ctx);
+    let guide_row = egui::pos2(150.0, (c[1].y + c[2].y) / 2.0);
+    let layer = |app: &VectorcraftApp| app.session.active().unwrap().doc.ruler_guides()[0].layer;
+    only_the_primary_button_drags(&mut app, &ctx, (guide_row, egui::pos2(150.0, c[0].y)), layer, "a guide row");
+
+    // The selected-art square, onto the layer's row.
+    let (mut app, [_, _, g, _, a, _]) = nested();
+    app.session.execute("select.set", &json!({"ids": [a.0, g.0]})).unwrap();
+    let ctx = egui::Context::default();
+    let c = rows(&mut app, &ctx);
+    let kids = |app: &VectorcraftApp| {
+        let d = &app.session.active().unwrap().doc;
+        d.node(d.layers[0].id).unwrap().children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>()
+    };
+    let square = c[1] + vec2(TARGET_X - SQUARE_X, 0.0);
+    only_the_primary_button_drags(&mut app, &ctx, (square, egui::pos2(150.0, c[0].y)), kids, "the selected-art square");
+
+    // Down the eye and the lock columns, from the group's row to a rectangle's.
+    for (x, what) in [(12.0, "the eye column"), (37.0, "the lock column")] {
+        let (mut app, [_, _, g, b, a, _]) = nested();
+        let ctx = egui::Context::default();
+        let c = rows(&mut app, &ctx);
+        let marks = move |app: &VectorcraftApp| [g, b, a].map(|id| (node(app, id).visible, node(app, id).locked));
+        only_the_primary_button_drags(&mut app, &ctx, (egui::pos2(x, c[2].y), egui::pos2(x, c[4].y)), marks, what);
+    }
+
+    // A target circle, onto another row's circle.
+    let (mut app, _, [a, b]) = two_rects();
+    app.session.execute("transparency.set", &json!({"ids": [a.0], "opacity": 30})).unwrap();
+    let ctx = egui::Context::default();
+    let c = rows(&mut app, &ctx);
+    let opacities = move |app: &VectorcraftApp| [a, b].map(|id| node(app, id).opacity);
+    only_the_primary_button_drags(&mut app, &ctx, (c[2], c[1]), opacities, "a target circle");
+
+    // A secondary click on a row opens its menu.
+    let (mut app, _, _) = two_rects();
+    let ctx = egui::Context::default();
+    let c = frame(&mut app, &ctx, vec![], false).0;
+    let at = egui::pos2(150.0, c[0].y);
+    let right = egui::PointerButton::Secondary;
+    for e in [egui::Event::PointerMoved(at), button_by(at, true, right), button_by(at, false, right)] {
+        frame(&mut app, &ctx, vec![e], false);
+    }
+    assert_eq!(texts(&mut app, &ctx, vec![], "Collect for Export"), 1, "the row menu is open");
 }
 
 #[test]
@@ -1782,4 +2394,49 @@ fn a_blends_spine_is_a_row_below_its_keys_that_selects_the_blend() {
     run(&mut app, "layer.setProps", json!({"ids": [blend.0], "locked": true}));
     click_with(&mut app, &ctx, spine_row, egui::Modifiers::NONE);
     assert!(selected(&app).is_empty(), "a locked blend's spine can't be selected");
+}
+
+/// A ruler guide node gets no object row, and a layer that holds only one has no rows to open.
+#[test]
+fn ruler_guide_nodes_get_no_object_row() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let rect = NodeId(app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap());
+    expand(&mut app, &json!({})).unwrap();
+    let st = app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    let (first, second) = (doc.layers[0].id, doc.add_layer(Some("Guides only")));
+    for l in [first, second] {
+        let g = Node::new(doc.alloc_id(), NodeKind::RulerGuide { vertical: true, pos: 20.0, artboard: None });
+        doc.insert(Some(l), usize::MAX, g).unwrap();
+    }
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let ids: Vec<NodeId> = rows.iter().filter(|r| r.guide.is_none()).map(|r| r.node.id).collect();
+    assert_eq!(ids, [second, first, rect]);
+    // Each guide is a guide row of its layer instead.
+    let guide_rows: Vec<NodeId> = rows.iter().filter(|r| r.guide.is_some()).map(|r| r.node.id).collect();
+    assert_eq!(guide_rows, [first], "the open layer lists its guide");
+    assert!(rows[0].opens, "a layer with only a ruler guide opens to its guide row");
+}
+
+/// A layer lists its guide rows by `guide.list` index, the highest first, whatever the order of
+/// the guide nodes in the layer (`guide.setLayer` puts a moved guide at the top of its new layer).
+#[test]
+fn guide_rows_list_by_index_whatever_the_node_order() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    for pos in [10, 20, 30] {
+        app.session.execute("guide.add", &json!({"vertical": true, "pos": pos})).unwrap();
+    }
+    let st = app.session.active_mut().unwrap();
+    let doc = Arc::make_mut(&mut st.doc);
+    let layer = doc.layers[0].id;
+    // The guide of index 0 moves to the top of the layer's guides.
+    let first = doc.ruler_guides()[0].id.unwrap();
+    doc.move_node(first, Some(layer), usize::MAX).unwrap();
+    let kids: Vec<NodeId> = doc.layers[0].children().unwrap().iter().map(|c| c.id).collect();
+    assert_eq!(kids.last(), Some(&first));
+    let rows = list_rows(&st.doc, &st.layers_open, &PanelOptions::default(), "", &Filter::default());
+    let indexes: Vec<usize> = rows.iter().filter_map(|r| r.guide).collect();
+    assert_eq!(indexes, [2, 1, 0]);
 }

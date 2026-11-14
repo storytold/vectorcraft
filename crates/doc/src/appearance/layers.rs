@@ -139,10 +139,6 @@ impl StrokeGradientMode {
     }
 }
 
-/// How far any arrowhead reaches from its tip, in units of its weight (the open arrow's arms are
-/// cut square a little behind its 4 × 4 box).
-pub(crate) const HEAD_REACH: f64 = 4.6;
-
 fn ten() -> f64 {
     10.0
 }
@@ -188,7 +184,8 @@ impl StrokeLayer {
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least
-    /// a quarter point. A head of weight `hw` fits a box about `4·hw` long and wide.
+    /// a quarter point. A head of weight `hw` fits a box about `4·hw` long and wide (see
+    /// [`Arrowhead::reach`] and [`Arrowhead::half_width`]).
     pub fn arrow_weight(&self, end: bool) -> f64 {
         let pct = if end { self.arrow_scale.1 } else { self.arrow_scale.0 };
         (self.width * pct / 100.0).max(0.25)
@@ -196,8 +193,10 @@ impl StrokeLayer {
     /// How far the start (`end == false`) or end arrowhead can reach from its end point (0
     /// without one): the head's diagonal, or with [`ArrowAlign::Extend`] its length, plus the cap.
     pub fn head_reach(&self, end: bool) -> f64 {
-        let head = if end { self.end_arrow } else { self.start_arrow };
-        head.map_or(0.0, |_| HEAD_REACH * self.arrow_weight(end) + self.width / 2.0)
+        let head = if end { &self.end_arrow } else { &self.start_arrow };
+        // A custom head can paint in front of its tip, which Extend puts past the end point.
+        let reach = |k: &Arrowhead| if self.arrow_align == ArrowAlign::Extend { k.reach().max(k.length()) } else { k.reach() };
+        head.as_ref().map_or(0.0, |k| reach(k) * self.arrow_weight(end) + self.width / 2.0)
     }
     /// How far the arrowheads can reach from the path's end points (0 without heads).
     pub fn arrow_reach(&self) -> f64 {

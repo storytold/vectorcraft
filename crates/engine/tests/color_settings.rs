@@ -9,6 +9,7 @@ use serde_json::json;
 use vectorcraft_color::cms;
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::colormgmt::{PROFILES_KEY, doc_profiles};
+use vectorcraft_engine::store::MAX_PRESET_FILE;
 use vectorcraft_geom::Affine;
 use vectorcraft_render::{RenderOptions, Renderer};
 use vectorcraft_testkit::fixtures::{exec, id_of, rect, select, session};
@@ -54,6 +55,258 @@ fn legacy_profile_name_resolves_in_commands_and_files() {
     let back = vectorcraft_format::load(&vectorcraft_format::save(&d, false)).unwrap();
     assert_eq!(doc_profiles(&back), (Some(cms::WIDE_GAMUT_RGB.to_string()), None));
     cms::set_active(&before).unwrap();
+}
+
+/// Assigning a profile other than the working space replaces the active color settings and raises
+/// the other open documents' revisions.
+#[test]
+fn assigning_another_profile_replaces_the_active_color_settings() {
+    let _g = settings();
+    let mut s = session();
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    let before = cms::active_settings();
+    assert_ne!(before.cmyk, cms::DEVICE_CMYK);
+    let active = cms::active();
+    let other = s.documents()[0].revision;
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK);
+    assert!(!std::sync::Arc::ptr_eq(&active, &cms::active()), "the active color settings were not replaced");
+    assert!(s.documents()[0].revision > other, "the other document's revision did not change");
+    cms::set_active(&before).unwrap();
+}
+
+/// Assign Profile tags the document and leaves the working spaces: Color Settings shows the
+/// working spaces, a later change to it saves them and not the assigned profile, and taking the
+/// profile off the document brings the working spaces back.
+#[test]
+fn assign_profile_leaves_the_working_spaces() {
+    let _g = settings();
+    let dir = fresh_dir("assign-profile");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    let file = dir.join("Color Settings.json");
+    let mut s = session();
+    s.attach_color_settings(file.clone());
+    let working = cms::working_settings();
+    assert_ne!(working.cmyk, cms::DEVICE_CMYK);
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "the document draws through its profile");
+    assert_eq!(cms::working_settings(), working);
+    assert!(!file.exists(), "Assign Profile saves no Color Settings");
+    let r = exec(&mut s, "edit.colorSettings", json!({}));
+    assert_eq!(r["cmyk"], working.cmyk.as_str(), "Color Settings shows the working CMYK space");
+    exec(&mut s, "edit.colorSettings", json!({"intent": "perceptual"}));
+    let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!((saved.cmyk.as_str(), saved.intent), (working.cmyk.as_str(), cms::Intent::Perceptual));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "the document still draws through its profile");
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": null}));
+    assert_eq!(cms::active_settings(), cms::working_settings(), "no profile: the working spaces");
+}
+
+/// A loaded profile that is assigned but is not a working space can be removed: the working space
+/// takes its place in the active settings, and the working spaces stay as they are.
+#[test]
+fn removing_an_assigned_profile_puts_the_working_space_back() {
+    const NAME: &str = "Assigned CMYK";
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: Some(NAME), paths: vec![] };
+    cms::register_icc(&cms::icc_bytes(cms::GENERIC_CMYK).unwrap(), Some(NAME.into())).unwrap();
+    let mut s = session();
+    let working = cms::working_settings();
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": NAME}));
+    assert_eq!(cms::active_settings().cmyk, NAME);
+    let revision = s.doc().unwrap().revision;
+    let r = exec(&mut s, "color.removeProfile", json!({"name": NAME}));
+    assert_eq!(r["removed"], NAME);
+    assert_eq!(cms::active_settings(), working, "the working CMYK space is in use again");
+    assert_eq!(cms::working_settings(), working);
+    assert!(s.doc().unwrap().revision > revision, "the canvas redraws");
+}
+
+/// Loading the file of an assigned profile in use again keeps it in use, loading it after it was
+/// removed puts it back in use, and the working spaces stay as they are.
+#[test]
+fn loading_an_assigned_profile_again_keeps_it_in_use() {
+    const NAME: &str = "Assigned P";
+    let _g = settings();
+    let dir = fresh_dir("reload-assigned");
+    let _reset = ColorSettingsReset { profile: Some(NAME), paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("assigned.icc");
+    std::fs::write(&path, icc_named(NAME)).unwrap();
+    let mut s = session();
+    let working = cms::working_settings();
+    let load = |s: &mut Session| assert_eq!(exec(s, "color.loadProfile", json!({"path": path.to_str().unwrap()}))["name"], NAME);
+    load(&mut s);
+    exec(&mut s, "edit.assignProfile", json!({"rgb": NAME}));
+    let before = cms::active();
+    load(&mut s);
+    assert_eq!(cms::active_settings().rgb, NAME, "the assigned profile stays in use");
+    assert!(!std::sync::Arc::ptr_eq(&before, &cms::active()), "the new file is in use");
+    exec(&mut s, "color.removeProfile", json!({"name": NAME}));
+    assert_eq!(cms::active_settings(), working);
+    load(&mut s);
+    assert_eq!(cms::active_settings().rgb, NAME, "loaded again, the assigned profile is in use");
+    assert_eq!(cms::working_settings(), working);
+}
+
+/// A batch that assigns a profile and then changes the color mode, as Document Setup's OK does,
+/// converts the colors through the profile it assigns.
+#[test]
+fn a_batch_converts_through_the_profile_it_assigns() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let blue = |s: &mut Session| {
+        let id = rect(s, 10.0, 10.0, 50.0, 50.0);
+        exec(s, "paint.setFill", json!({"ids": [id.0], "color": "#3366cc"}));
+        id
+    };
+    let fill = |s: &Session, id| s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint().color();
+    let mut working = session();
+    let w = blue(&mut working);
+    exec(&mut working, "file.documentColorMode", json!({"mode": "cmyk"}));
+    let mut tagged = session();
+    let a = blue(&mut tagged);
+    let steps = json!([
+        {"command": "edit.assignProfile", "params": {"cmyk": cms::DEVICE_CMYK}},
+        {"command": "file.documentColorMode", "params": {"mode": "cmyk"}},
+    ]);
+    exec(&mut tagged, "command.batch", json!({"commands": steps}));
+    let converted = fill(&tagged, a);
+    assert_ne!(converted, fill(&working, w), "converted through the working CMYK space");
+    let mut device = session();
+    let b = blue(&mut device);
+    exec(&mut device, "edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK}));
+    exec(&mut device, "file.documentColorMode", json!({"mode": "cmyk"}));
+    assert_eq!(converted, fill(&device, b));
+}
+
+/// The profiles a document is assigned are in use while it is in front: a new or opened document
+/// assigned none draws through the working spaces, switching back to the assigned document puts its
+/// profile in use again, and closing a document puts the profiles of the document left in front, or
+/// with none open the working spaces, in use.
+#[test]
+fn assigned_profiles_follow_the_front_document() {
+    let _g = settings();
+    let dir = fresh_dir("front-profiles");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let tagged = dir.join("tagged.vectorcraft");
+    let mut s = session();
+    let working = cms::working_settings();
+    assert_ne!(working.cmyk, cms::DEVICE_CMYK);
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    exec(&mut s, "file.saveAs", json!({"path": tagged.to_str().unwrap()}));
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    assert_eq!(cms::active_settings(), working, "a new document draws through the working spaces");
+    exec(&mut s, "document.activate", json!({"index": 0}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "back in front, the document draws through its profile");
+    assert!(s.set_active(1));
+    assert_eq!(cms::active_settings(), working, "a tab switch to the untagged document");
+    exec(&mut s, "file.close", json!({}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "the document left in front draws through its profile");
+    exec(&mut s, "file.close", json!({}));
+    assert_eq!(cms::active_settings(), working, "no document open: the working spaces");
+    exec(&mut s, "document.open", json!({"path": tagged.to_str().unwrap()}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "an opened document draws through its saved profile");
+}
+
+/// Undo and Redo of Assign Profile, and File › Revert to a file assigned no profile, put the
+/// profiles the document has then in use.
+#[test]
+fn undo_redo_and_revert_put_the_document_profiles_in_use() {
+    let _g = settings();
+    let dir = fresh_dir("undo-profiles");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    std::fs::create_dir_all(&dir).unwrap();
+    let untagged = dir.join("untagged.vectorcraft");
+    let mut s = session();
+    let working = cms::working_settings();
+    exec(&mut s, "file.saveAs", json!({"path": untagged.to_str().unwrap()}));
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK);
+    exec(&mut s, "edit.undo", json!({}));
+    assert_eq!(doc_profiles(&s.doc().unwrap().doc), (None, None));
+    assert_eq!(cms::active_settings(), working, "undone: the working spaces");
+    exec(&mut s, "edit.redo", json!({}));
+    assert_eq!(doc_profiles(&s.doc().unwrap().doc), (None, Some(cms::DEVICE_CMYK.to_string())));
+    assert_eq!(cms::active_settings().cmyk, cms::DEVICE_CMYK, "redone: the assigned profile");
+    exec(&mut s, "file.revert", json!({}));
+    assert_eq!(doc_profiles(&s.doc().unwrap().doc), (None, None));
+    assert_eq!(cms::active_settings(), working, "reverted: the working spaces");
+}
+
+/// A batch that assigns a profile and then fails puts the document back without it, and the
+/// working spaces back in use.
+#[test]
+fn a_failed_batch_puts_the_profiles_in_use_back() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    let working = cms::working_settings();
+    let steps = json!([
+        {"command": "edit.assignProfile", "params": {"cmyk": cms::DEVICE_CMYK}},
+        {"command": "document.activate", "params": {"index": 99}},
+    ]);
+    assert!(s.execute("command.batch", &json!({"commands": steps})).is_err());
+    assert_eq!(doc_profiles(&s.doc().unwrap().doc), (None, None));
+    assert_eq!(cms::active_settings(), working);
+}
+
+/// A batch step that switches documents makes the next step convert through the profiles of the
+/// document it switched to, not those of the document the batch began in.
+#[test]
+fn a_batch_converts_the_document_it_switches_to_through_its_profiles() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let blue = |s: &mut Session| {
+        let id = rect(s, 10.0, 10.0, 50.0, 50.0);
+        exec(s, "paint.setFill", json!({"ids": [id.0], "color": "#3366cc"}));
+        id
+    };
+    let fill = |s: &Session, id| s.doc().unwrap().doc.node(id).unwrap().appearance.fill_paint().color();
+    let mut working = session();
+    let w = blue(&mut working);
+    exec(&mut working, "file.documentColorMode", json!({"mode": "cmyk"}));
+    let mut s = session();
+    let b = blue(&mut s);
+    exec(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": cms::DEVICE_CMYK}));
+    let steps = json!([
+        {"command": "document.activate", "params": {"index": 0}},
+        {"command": "file.documentColorMode", "params": {"mode": "cmyk"}},
+    ]);
+    exec(&mut s, "command.batch", json!({"commands": steps}));
+    assert_eq!(s.active_index(), Some(0));
+    assert_eq!(fill(&s, b), fill(&working, w), "converted through the working CMYK space");
+}
+
+/// View › Proof Setup › Working CMYK simulates the working CMYK space of Color Settings in a
+/// document assigned another CMYK profile, in Proof Colors and in Separations Preview, and a change
+/// of the working CMYK space shows in the next proof while the document keeps its profile.
+#[test]
+fn working_cmyk_proofs_a_tagged_document_through_the_working_space() {
+    const NAME: &str = "Tagged CMYK";
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: Some(NAME), paths: vec![] };
+    cms::register_icc(&cms::icc_bytes(cms::GENERIC_CMYK).unwrap(), Some(NAME.into())).unwrap();
+    let proof = cms::ProofSetup::default();
+    assert_eq!(proof.target, cms::ProofTarget::WorkingCmyk);
+    let (blue, inks) = ([0.2, 0.4, 0.8], [0.6, 0.3, 0.0, 0.1]);
+    let mut s = session();
+    exec(&mut s, "edit.assignProfile", json!({"cmyk": NAME}));
+    let (active, working) = (cms::active(), cms::working());
+    assert_eq!(active.settings().cmyk, NAME);
+    assert_eq!(active.proof_srgb(blue, &proof), working.proof_srgb(blue, &proof), "Proof Colors");
+    assert_eq!(active.proof_cmyk_to_srgb(inks, &proof), working.proof_cmyk_to_srgb(inks, &proof), "Separations Preview");
+    let _ = active.proof_lut(&proof);
+    exec(&mut s, "edit.colorSettings", json!({"cmyk": cms::DEVICE_CMYK}));
+    let (active, working) = (cms::active(), cms::working());
+    assert_eq!(active.settings().cmyk, NAME, "the document keeps its profile");
+    let lut = active.proof_lut(&proof);
+    let fresh = cms::ProofLut::build(|rgb| working.proof_srgb(rgb, &proof));
+    for px in [[51, 102, 204], [230, 30, 30], [20, 160, 40], [128, 128, 128]] {
+        assert_eq!(lut.apply8(px), fresh.apply8(px), "the proof of {px:?} through the new working CMYK space");
+    }
 }
 
 /// Separations Preview follows the Color Settings and the profiles loaded: a renderer draws a gray
@@ -347,6 +600,42 @@ fn a_freeform_gradient_expands_with_its_rgb_values_in_the_working_rgb_space() {
     }
 }
 
+/// With a working RGB space other than sRGB, RGB freeform points mix in that space on the canvas
+/// and in a writer, as Object > Expand mixes them.
+#[test]
+fn freeform_rgb_points_mix_in_the_working_rgb_space() {
+    use vectorcraft_color::freeform::spread_scale;
+    use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, Paint};
+    use vectorcraft_doc::{Appearance, Document, Node};
+    use vectorcraft_geom::{Point, Rect, shapes};
+    let _g = settings();
+    let old = cms::active_settings();
+    cms::set_active(&cms::ColorSettings { rgb: cms::WIDE_GAMUT_RGB.into(), ..old.clone() }).unwrap();
+    let box_ = Rect::new(0.0, 0.0, 100.0, 100.0);
+    let (a, b) = (Color::rgb(0.9, 0.1, 0.1), Color::rgb(0.1, 0.2, 0.9));
+    let p = |x, c| FreeformPoint::new(Point::new(x, 50.5), c);
+    let f = Freeform { points: vec![p(20.5, a), p(80.5, b)], ..Default::default() };
+    let mut g = GradientPaint::new(Gradient { kind: GradientKind::Freeform, ..Default::default() });
+    g.freeform = Some(f.clone());
+    let mut d = Document::new(100.0, 100.0);
+    let id = d.alloc_id();
+    d.insert(Some(d.layers[0].id), 0, Node::path(id, shapes::rectangle(box_), Appearance::basic(Paint::Gradient(Box::new(g)), Paint::None, 0.0)))
+        .unwrap();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let canvas = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixel(50, 50);
+    let svg = vectorcraft_svg::export_full(&d, &vectorcraft_svg::ExportOptions::default(), None).svg;
+    let data = svg.split("data:image/png;base64,").nth(1).unwrap().split('"').next().unwrap();
+    let png = image::load_from_memory(&vectorcraft_testkit::format::base64_decode(data).unwrap()).unwrap().to_rgba8();
+    let written = png.get_pixel(png.width() / 2, png.height() / 2).0;
+    let want = Color::rgb(0.5, 0.15, 0.5).to_rgba8(1.0);
+    let display = f.field(spread_scale(box_)).sample(Point::new(50.5, 50.5)).0.map(|v| (v * 255.0).round() as u8);
+    cms::set_active(&old).unwrap();
+    let near = |got: [u8; 4]| got.iter().zip(want).take(3).all(|(g, w)| g.abs_diff(w) <= 3);
+    assert!(near(canvas), "canvas: {canvas:?} vs {want:?}");
+    assert!(near(written), "SVG: {written:?} vs {want:?}");
+    assert!(display.iter().zip(want).any(|(g, w)| g.abs_diff(w) > 8), "the display mix differs: {display:?} vs {want:?}");
+}
+
 /// Loading a new file of the working RGB profile (named after its description, as before) takes
 /// effect at once: CMYK colors convert into the new file and the canvas redraws, without choosing
 /// the working spaces again.
@@ -364,7 +653,7 @@ fn loading_the_working_rgb_profile_again_takes_effect_at_once() {
         bytes
     };
     let name = "Reload RGB";
-    let dir = vectorcraft_testkit::temp_dir("reload-working-rgb");
+    let dir = vectorcraft_testkit::TempDir::new("reload-working-rgb");
     let load = |s: &mut Session, builtin: &str| {
         let path = dir.join(format!("{}.icc", builtin.len()));
         std::fs::write(&path, renamed(builtin, name)).unwrap();
@@ -389,4 +678,162 @@ fn loading_the_working_rgb_profile_again_takes_effect_at_once() {
     assert!(in_p3.iter().zip(want).any(|(a, b)| (a - b).abs() > 0.05), "Display P3 {in_p3:?} vs ProPhoto {want:?}");
     assert!(after.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-4), "after the reload {after:?}, want {want:?}");
     assert!(redrawn, "the canvas redraws");
+}
+
+/// Loading a new file of the CMYK profile View → Proof Setup targets, or removing that profile,
+/// gives the documents new revisions, as a working space's new file does; loading or removing
+/// another profile does not.
+#[test]
+fn loading_or_removing_the_proof_profile_redraws() {
+    let _g = settings();
+    // A built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
+    let renamed = |builtin: &str, name: &str| {
+        let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+        let mut bytes = cms::icc_bytes(builtin).unwrap().to_vec();
+        let (from, to) = (utf16(builtin), utf16(&format!("{name:<width$}", width = builtin.len())));
+        let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+        bytes[at..at + to.len()].copy_from_slice(&to);
+        bytes
+    };
+    let dir = fresh_dir("reload-proof-cmyk");
+    std::fs::create_dir_all(&dir).unwrap();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    let load = |s: &mut Session, name: &str| {
+        let path = dir.join(format!("{}.icc", name.len()));
+        std::fs::write(&path, renamed(cms::GENERIC_CMYK, name)).unwrap();
+        let r = s.execute("color.loadProfile", &json!({"path": path.to_str().unwrap()})).unwrap();
+        assert_eq!(r["name"], name);
+        s.doc().unwrap().revision
+    };
+    let (proofed, other) = ("Reload Proof CMYK", "Reload Other CMYK 2");
+    let _view = ProofReset([proofed, other]);
+    let mut s = session();
+    load(&mut s, proofed);
+    load(&mut s, other);
+    exec(&mut s, "view.proofSetup", json!({"target": format!("cmyk:{proofed}"), "proof": true}));
+    let revision = s.doc().unwrap().revision;
+    assert_eq!(load(&mut s, other), revision, "another profile's file");
+    let reloaded = load(&mut s, proofed);
+    assert!(reloaded > revision, "the proof profile's file");
+    exec(&mut s, "color.removeProfile", json!({"name": other}));
+    assert_eq!(s.doc().unwrap().revision, reloaded, "another profile removed");
+    exec(&mut s, "color.removeProfile", json!({"name": proofed}));
+    assert!(s.doc().unwrap().revision > reloaded, "the proof profile removed");
+}
+
+/// Sets the default proof view and unregisters the profiles when dropped, also after a failed
+/// assertion.
+struct ProofReset([&'static str; 2]);
+
+impl Drop for ProofReset {
+    fn drop(&mut self) {
+        vectorcraft_render::proof::set_view(Default::default());
+        for name in self.0 {
+            cms::unregister_icc(name);
+        }
+    }
+}
+
+/// A folder of its own for the test `tag`, empty, removed when dropped.
+fn fresh_dir(tag: &str) -> vectorcraft_testkit::TempDir {
+    vectorcraft_testkit::TempDir::new(&format!("color-settings-{tag}"))
+}
+
+/// An ICC file of an RGB profile named `name` (a built-in one with its description replaced by a
+/// name of the same length).
+#[allow(clippy::unwrap_used, reason = "a test helper: a missing built-in profile fails the test")]
+fn icc_named(name: &str) -> Vec<u8> {
+    let builtin = cms::DISPLAY_P3;
+    assert_eq!(builtin.len(), name.len());
+    let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+    let mut bytes = cms::icc_bytes(builtin).unwrap().to_vec();
+    let (from, to) = (utf16(builtin), utf16(name));
+    let at = bytes.windows(from.len()).position(|w| w == from).unwrap();
+    bytes[at..at + to.len()].copy_from_slice(&to);
+    bytes
+}
+
+/// Puts the default Color Settings back, unregisters `profile` and deletes `paths` when dropped,
+/// also after a failed assertion, so the next test starts from the defaults.
+struct ColorSettingsReset {
+    profile: Option<&'static str>,
+    paths: Vec<std::path::PathBuf>,
+}
+
+impl Drop for ColorSettingsReset {
+    /// The defaults back, the profile unregistered and the paths deleted.
+    fn drop(&mut self) {
+        let _ = cms::set_active(&cms::ColorSettings::default());
+        if let Some(name) = self.profile {
+            cms::unregister_icc(name);
+        }
+        for path in &self.paths {
+            let _ = std::fs::remove_dir_all(path).or_else(|_| std::fs::remove_file(path));
+        }
+    }
+}
+
+/// #6335: Edit › Color Settings come back in the next session: the working spaces (a loaded
+/// profile among them, registered again by the profile store first), the intent and black point
+/// compensation. A session nobody attached a file to keeps nothing, and nothing is written before
+/// the settings change.
+#[test]
+fn color_settings_come_back_in_the_next_session() {
+    let _g = settings();
+    let root = fresh_dir("color-settings");
+    let (profiles, file) = (root.join("Color Profiles"), root.join("Color Settings.json"));
+    let loaded = "StoreRGB-6";
+    let icc_dir = vectorcraft_testkit::TempDir::new("store-color-settings");
+    let icc = icc_dir.join("loaded.icc");
+    let _reset = ColorSettingsReset { profile: Some(loaded), paths: vec![root.clone(), icc.clone()] };
+    std::fs::write(&icc, icc_named(loaded)).unwrap();
+
+    let mut a = Session::new();
+    a.attach_profile_store(profiles.clone());
+    a.attach_color_settings(file.clone());
+    a.execute("color.loadProfile", &json!({"path": icc.to_str().unwrap()})).unwrap();
+    a.execute("edit.colorSettings", &json!({})).unwrap();
+    assert!(!file.exists(), "nothing to keep before the settings change");
+    a.execute("edit.colorSettings", &json!({"rgb": loaded, "cmyk": cms::DEVICE_CMYK, "intent": "perceptual", "bpc": false})).unwrap();
+    let chosen = cms::ColorSettings { rgb: loaded.into(), cmyk: cms::DEVICE_CMYK.into(), intent: cms::Intent::Perceptual, bpc: false };
+    assert_eq!(cms::active_settings(), chosen);
+
+    // The next start begins with the defaults and without the loaded profile, which the profile
+    // store registers again before the settings name it.
+    cms::set_active(&cms::ColorSettings::default()).unwrap();
+    assert!(cms::unregister_icc(loaded));
+    let mut b = Session::new();
+    b.attach_profile_store(profiles);
+    b.attach_color_settings(file.clone());
+    assert_eq!(cms::active_settings(), chosen, "the saved settings are the active ones again");
+
+    // Without a file, a change is kept only for the process.
+    let mut c = Session::new();
+    c.execute("edit.colorSettings", &json!({"bpc": true})).unwrap();
+    let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!(saved, chosen, "the file is left alone");
+}
+
+/// #6335: saved Color Settings that can't be used (a profile that is gone, a damaged or oversized
+/// file) leave the defaults and the file as it is; the next change writes over it.
+#[test]
+fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
+    let _g = settings();
+    let dir = fresh_dir("color-settings-bad");
+    let _reset = ColorSettingsReset { profile: None, paths: vec![dir.clone()] };
+    let file = dir.join("Color Settings.json");
+    std::fs::create_dir_all(&dir).unwrap();
+    let gone = json!({"rgb": cms::SRGB, "cmyk": "A Profile That Is Gone", "intent": "perceptual", "bpc": false}).to_string().into_bytes();
+    let oversized = vec![b' '; MAX_PRESET_FILE as usize + 1];
+    for bytes in [gone, b"not json".to_vec(), oversized] {
+        cms::set_active(&cms::ColorSettings::default()).unwrap();
+        std::fs::write(&file, &bytes).unwrap();
+        let mut s = Session::new();
+        s.attach_color_settings(file.clone());
+        assert_eq!(cms::active_settings(), cms::ColorSettings::default());
+        assert_eq!(std::fs::read(&file).unwrap(), bytes, "left as it is");
+        s.execute("edit.colorSettings", &json!({"bpc": false})).unwrap();
+        let saved: cms::ColorSettings = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert!(!saved.bpc && saved.cmyk == cms::GENERIC_CMYK, "written over by the next change: {saved:?}");
+    }
 }

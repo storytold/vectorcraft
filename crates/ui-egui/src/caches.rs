@@ -7,7 +7,7 @@ pub struct CanvasCache {
     pub key: Option<CacheKey>,
     /// The document the frame shown was rendered from, and the options it was rendered with, with
     /// [`Self::key`]: when only the document changes, the canvas renders again only where it
-    /// changed ([`vectorcraft_render::changed`]).
+    /// changed, measured by [`Self::renderer`], which drew it ([`vectorcraft_render::Renderer::changed`]).
     pub shown: Option<(std::sync::Arc<vectorcraft_doc::Document>, vectorcraft_render::RenderOptions)>,
     pub last_ms: f64,
     /// The frame shown drew raster effects from rasters made before their objects moved, or at a
@@ -17,6 +17,10 @@ pub struct CanvasCache {
     /// The frame shown was rendered on the worker: an interaction's frames stay there
     /// ([`canvas::show`]).
     pub from_worker: bool,
+    /// The frame shown holds pixels the worker copied from its last frame, and when it was shown
+    /// (seconds, egui's input time): it renders whole once it has been shown for
+    /// [`canvas::STILL_SECS`] with the view unmoved.
+    pub reused: Option<f64>,
     /// Set in the web build, which has no render worker: while the view changes on a document whose
     /// last render took more than 8 ms, the canvas draws the frame shown reprojected and renders
     /// once the view has been still for [`canvas::STILL_SECS`].
@@ -41,15 +45,24 @@ pub struct CanvasCache {
     /// The marks Type → Show Hidden Characters drew on each text object in the last frame. A frame
     /// that does not draw them drops them ([`canvas::show`]).
     pub hidden_chars: canvas::HiddenChars,
+    /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
+    /// frame; dropped while it is off.
+    pub spelling: canvas::SpellingMarks,
     /// The selected objects' outlines, anchors and handles as drawn in the last frame. A frame that
     /// does not draw them drops them ([`canvas::show`]).
     pub selection_marks: canvas::SelectionMarks,
-    /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds).
-    pub selection_box: Option<((u64, u64, bool), Option<vectorcraft_doc::OrientedBox>)>,
+    /// [`VectorcraftApp::selection_box`] for (document uid, revision, Use Preview Bounds and
+    /// Measure Type by Glyph Bounds).
+    pub selection_box: Option<((u64, u64, vectorcraft_effects::preview::Measure), Option<vectorcraft_doc::OrientedBox>)>,
     /// [`VectorcraftApp::selection_bounds`] for (document uid, revision).
     pub selection_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
     /// [`VectorcraftApp::content_bounds`] for (document uid, revision).
     pub content_bounds: Option<((u64, u64), Option<vectorcraft_geom::Rect>)>,
+    /// [`CacheKey::plugins`] by document uid, with the plug-in revision
+    /// ([`vectorcraft_render::effects::plugin_revision`]) it was last checked at.
+    pub plugin_keys: std::collections::HashMap<u64, (u64, u64)>,
+    /// [`CacheKey::placed`] by document uid ([`canvas::placed_key`]).
+    pub placed_keys: std::collections::HashMap<u64, PlacedKey>,
     /// The tools' cursors as OS cursor bitmaps.
     pub cursors: cursors::Images,
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
@@ -61,10 +74,28 @@ pub struct CanvasCache {
     /// In Presentation Mode, the canvas rect the active artboard was last fitted to: it is fitted
     /// again when the rect changes (the window going full screen).
     pub presented: Option<egui::Rect>,
+    /// The canvas a document's opening view was fitted to, with the view the fit gave. The window's
+    /// layout can still move the canvas's edges over the next frames, so until the view is moved or
+    /// the user acts, the opening view is fitted again when the canvas changes ([`canvas::show`]).
+    pub opening_fit: Option<canvas::ViewKey>,
     /// Window › Arrange › Tile: the renders the panes of the other documents draw.
     pub panes: canvas::Panes,
     /// Window › Arrange › Float in Window: what the floating document windows keep between frames.
     pub windows: crate::doc_windows::Windows,
+}
+
+/// [`CanvasCache::placed_keys`]: a document's [`CacheKey::placed`] and the placed-document bitmap
+/// generations ([`vectorcraft_render::placed_document::generation`]) it was checked at.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlacedKey {
+    /// The last generation the document was checked at.
+    pub checked: u64,
+    /// The document's [`CacheKey::placed`]: the generation of its first check, or of the last check
+    /// that found a newly made bitmap the document may show.
+    pub key: u64,
+    /// The value before it last changed, and the last generation that value was checked at: no
+    /// bitmap of a placed document the document shows was made between the two.
+    pub before: (u64, u64),
 }
 
 /// [`CanvasCache::slices`]: the layout of the slices of (document uid, revision).
@@ -105,8 +136,16 @@ pub struct CacheKey {
     pub highlight_alternate_glyphs: bool,
     /// Type › Highlight Substituted Fonts.
     pub highlight_substituted_fonts: bool,
-    /// [`vectorcraft_render::placed_document::generation`]: placed documents' bitmaps made since.
+    /// A [`vectorcraft_render::placed_document::generation`] that changes when the frame may show a
+    /// newly made bitmap of a placed document ([`canvas::placed_key`]). Bitmaps of files that only
+    /// other documents hold leave it as it is, unless more bitmaps were made since the last check
+    /// than are recorded and the document shows a placed document.
     pub placed: u64,
+    /// The plug-in revision ([`vectorcraft_render::effects::plugin_revision`]) of the last plug-in
+    /// install or removal, or of the last time deferred plug-in effect stages gave results, after
+    /// which the document drew a plug-in effect ([`vectorcraft_render::draws_plugin_effects`]): a
+    /// frame drawn before it draws those effects as the plug-ins installed then did. 0 until then.
+    pub plugins: u64,
     /// View › Pixel Preview: the document pixels rendered (x0, y0, x1, y1), one per point, shown
     /// with hard edges. None: the art is rendered for the screen.
     pub pixel: Option<[i64; 4]>,
@@ -122,6 +161,9 @@ pub struct CacheKey {
     /// The Image Trace objects drawn with their source image
     /// ([`vectorcraft_render::RenderOptions::trace_source`]).
     pub trace_source: Option<std::sync::Arc<Vec<vectorcraft_doc::NodeId>>>,
+    /// The display profile the frame is converted into ([`crate::display_profile::DisplayProfile::key`]),
+    /// 0 for none.
+    pub display: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]

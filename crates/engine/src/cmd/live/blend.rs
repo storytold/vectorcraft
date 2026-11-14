@@ -1,5 +1,7 @@
 use std::collections::BTreeSet;
 
+use vectorcraft_doc::live::BlendSpineMode;
+
 use super::common::{
     DEFAULT_DISTANCE, DEFAULT_STEPS, ease_param, fix_ids, ids_json, is_blend, orientation_param, percent_param, roots_param, selected_of,
     spacing_param, starts_param, wrap,
@@ -7,7 +9,7 @@ use super::common::{
 use super::mesh::index_param;
 use super::{
     Affine, Anchor, Appearance, Arc, Beside, BlendDefaults, BlendOrientation, BlendSpacing, BlendSpec, Document, EngineError, Node, NodeId, NodeKind,
-    Paint, PathData, Point, Result, Session, Spine, Value, Vec2, bad, f64_req, id_param, json, live, number_or, ok, str_param, switch_or,
+    Paint, PathData, Point, Result, Session, Spine, Value, Vec2, bad, f64_req, json, live, number_or, ok, str_param, switch_or,
 };
 
 /// The first blend among `roots`.
@@ -61,6 +63,19 @@ fn extend_spine(spec: &mut BlendSpec, old: &[Arc<Node>], old_spec: &BlendSpec, k
     spec.spine = Some(path);
 }
 
+/// Does `p` set easing (`easingType` or `ramp`)? Easing needs a spine.
+fn gives_easing(p: &Value) -> bool {
+    ["easingType", "ramp"].iter().any(|key| p.get(*key).is_some_and(|v| !v.is_null()))
+}
+
+/// The Create Spine mode `p` gives as `key`, or `current` when it is omitted or null.
+fn spine_mode_param(p: &Value, cmd: &str, key: &str, current: BlendSpineMode) -> Result<BlendSpineMode> {
+    match p.get(key).filter(|v| !v.is_null()) {
+        None => Ok(current),
+        Some(v) => v.as_str().and_then(BlendSpineMode::from_id).ok_or_else(|| bad(cmd, format!("`{key}` must be one of auto, always, never"))),
+    }
+}
+
 pub(super) fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.blend.make";
     let roots = roots_param(s, p)?;
@@ -69,16 +84,22 @@ pub(super) fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let starts = starts_param(p, &roots)?;
     let base = first_blend(&s.doc()?.doc, &roots);
+    let defaults = s.prefs.blend_options.unwrap_or_default();
+    // Create Spine applies to a new blend; one taking more keys keeps whether it has a spine.
+    let create_spine = spine_mode_param(p, C, "createSpine", defaults.create_spine)?;
     let cur = match base.as_ref().map(|n| &n.kind) {
-        Some(NodeKind::Blend { spec, .. }) => BlendDefaults { spacing: spec.spacing, orientation: spec.orientation },
-        _ => s.prefs.blend_options.unwrap_or_default(),
+        Some(NodeKind::Blend { spec, .. }) => BlendDefaults { spacing: spec.spacing, orientation: spec.orientation, ..defaults },
+        _ => defaults,
     };
     let spacing = spacing_param(p, C, cur.spacing)?;
     let orientation = orientation_param(p, cur.orientation);
-    let (ease0, color0) = match base.as_ref().map(|n| &n.kind) {
-        Some(NodeKind::Blend { spec, .. }) => (spec.ease, spec.color_shift),
-        _ => Default::default(),
+    let (ease0, color0, no_spine) = match base.as_ref().map(|n| &n.kind) {
+        Some(NodeKind::Blend { spec, .. }) => (spec.ease, spec.color_shift, spec.no_spine),
+        _ => (Default::default(), 0.0, !create_spine.creates_spine()),
     };
+    if no_spine && gives_easing(p) {
+        return Err(bad(C, "the blend has no spine"));
+    }
     let ease = ease_param(p, C, ease0)?;
     let color_shift = percent_param(p, C, "colorShift", color0, -100.0)?;
     let id = s.edit("Make Blend", |d, sel| {
@@ -91,7 +112,7 @@ pub(super) fn blend_make(s: &mut Session, p: &Value) -> Result<Value> {
                 n.knockout = vectorcraft_doc::Knockout::On;
                 n
             });
-            let mut spec = BlendSpec { spacing, orientation, ease, color_shift, starts, ..Default::default() };
+            let mut spec = BlendSpec { spacing, orientation, ease, color_shift, starts, no_spine, ..Default::default() };
             if let NodeKind::Blend { children: old, spec: old_spec } = &n.kind {
                 extend_spine(&mut spec, old, old_spec, &children);
             }
@@ -160,7 +181,7 @@ fn edit_spine<T>(
     label: &str,
     f: impl FnOnce(&mut vectorcraft_geom::SubPath, &mut Vec<usize>, &mut [Arc<Node>]) -> Result<T>,
 ) -> Result<T> {
-    let id = match id_param(p, "id") {
+    let id = match crate::cmd::object_param(p, "id", cmd)? {
         Some(id) => id,
         None => *selected_of(s, is_blend).first().ok_or_else(|| bad(cmd, "select a blend or give `id`"))?,
     };
@@ -303,7 +324,11 @@ pub(super) fn spine_remove_anchor(s: &mut Session, p: &Value) -> Result<Value> {
         if anchors.contains(&index) {
             return Err(bad(C, "a key object sits on that point"));
         }
-        if sp.anchors.len() <= 2 {
+        // A closed spine pinned open keeps a copy of its first point at its end (#6809), so the
+        // points left must be two apart, not only two in number.
+        let mut rest = sp.anchors.iter().enumerate().filter(|(i, _)| *i != index).map(|(_, a)| a.p);
+        let first = rest.next();
+        if sp.anchors.len() <= 2 || first.is_none_or(|f| rest.all(|q| q.distance(f) < 0.01)) {
             return Err(bad(C, "a spine keeps at least two points"));
         }
         sp.anchors.remove(index);
@@ -346,9 +371,12 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
         // Nothing to set them on: the options new blends start with (easing is per blend).
         let d = s.prefs.blend_options.unwrap_or_default();
         let spacing = spacing_param(p, C, d.spacing)?;
-        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation) });
+        s.prefs.blend_options = Some(BlendDefaults { spacing, orientation: orientation_param(p, d.orientation), ..d });
         return Ok(json!({ "defaults": true }));
     };
+    if gives_easing(p) && any_without_spine(s) {
+        return Err(bad(C, "the blend has no spine"));
+    }
     let spacing = spacing_param(p, C, cur.spacing)?;
     let orientation = orientation_param(p, cur.orientation);
     let ease = ease_param(p, C, cur.ease)?;
@@ -359,6 +387,39 @@ pub(super) fn blend_options(s: &mut Session, p: &Value) -> Result<Value> {
         spec.ease = ease;
         spec.color_shift = color_shift;
     })
+}
+
+pub(super) fn blend_set_easing(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.blend.setEasing";
+    let id = match crate::cmd::object_param(p, "id", C)? {
+        Some(id) => id,
+        None => *selected_of(s, is_blend).first().ok_or_else(|| bad(C, "select a blend or give `id`"))?,
+    };
+    let doc = &s.doc()?.doc;
+    let Some(NodeKind::Blend { children, spec }) = doc.node(id).map(|n| &n.kind) else { return Err(bad(C, "not a blend")) };
+    if !doc.is_editable(id) {
+        return Err(bad(C, "the object is hidden or locked"));
+    }
+    let ease = ease_param(p, C, spec.ease)?;
+    let color_shift = percent_param(p, C, "colorShift", spec.color_shift, -100.0)?;
+    // Easing moves the steps along a spine, so it needs one with a length to run along.
+    let easing = ["easingType", "ramp"].iter().any(|key| p.get(*key).is_some_and(|v| !v.is_null()));
+    let spined = spec.eases_along_spine()
+        && live::blend_spine(children, spec).and_then(|(path, _)| Spine::new(&path)).is_some_and(|sp| sp.length().is_finite() && sp.length() > 0.0);
+    if easing && !spined {
+        return Err(bad(C, "the blend has no spine"));
+    }
+    let changed = ease != spec.ease || color_shift != spec.color_shift;
+    if changed {
+        s.edit("Blend Options", |d, _| {
+            if let Some(NodeKind::Blend { spec, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+                spec.ease = ease;
+                spec.color_shift = color_shift;
+            }
+            Ok(())
+        })?;
+    }
+    Ok(json!({ "id": id.0, "easingType": ease.kind.id(), "ramp": ease.ramp * 100.0, "colorShift": color_shift, "changed": changed }))
 }
 
 /// Spacing and orientation as `object.blend.options` takes them; the step count and distance
@@ -384,6 +445,7 @@ pub(super) fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
             v["colorShift"] = json!(spec.color_shift);
             v["starts"] = json!((0..keys.len()).map(|i| spec.start(i)).collect::<Vec<_>>());
             v["keys"] = json!(keys.iter().map(|k| k.0).collect::<Vec<_>>());
+            v["hasSpine"] = json!(!spec.no_spine);
             if let Some(NodeKind::Blend { children, .. }) = s.doc()?.doc.node(id).map(|n| &n.kind)
                 && let Some((path, anchors)) = live::blend_spine(children, &spec)
                 && let Some(sp) = path.subpaths.first()
@@ -401,6 +463,19 @@ pub(super) fn blend_info(s: &mut Session, _: &Value) -> Result<Value> {
             v
         }
     })
+}
+
+/// The Blend panel's Create Spine: with `mode`, sets whether new blends get a spine; without, reads
+/// it. A tool setting kept with the preferences, not an undo step; blends already made keep theirs.
+pub(super) fn blend_create_spine(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.blend.createSpine";
+    let mut d = s.prefs.blend_options.unwrap_or_default();
+    let mode = spine_mode_param(p, C, "mode", d.create_spine)?;
+    if mode != d.create_spine {
+        d.create_spine = mode;
+        s.prefs.blend_options = Some(d);
+    }
+    Ok(json!({ "mode": mode.id() }))
 }
 
 pub(super) fn blend_expand(s: &mut Session, _: &Value) -> Result<Value> {
@@ -507,6 +582,8 @@ pub(super) fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
         let spine = d.node(path).and_then(|n| n.path_data().cloned()).ok_or(EngineError::NoNode(path))?;
         d.remove(path)?;
         if let Some(NodeKind::Blend { children, spec }) = d.node_mut(b).map(|n| &mut n.kind) {
+            // A blend made without a spine gets this one.
+            spec.no_spine = false;
             spec.spine = Some(spine);
             spec.key_anchors.clear();
             keys_to_spine(children, spec);
@@ -517,7 +594,16 @@ pub(super) fn blend_replace_spine(s: &mut Session, _: &Value) -> Result<Value> {
     ok()
 }
 
+/// Is any selected blend one made without a spine?
+fn any_without_spine(s: &Session) -> bool {
+    let Ok(st) = s.doc() else { return false };
+    selected_of(s, is_blend).iter().any(|b| matches!(st.doc.node(*b).map(|n| &n.kind), Some(NodeKind::Blend { spec, .. }) if spec.no_spine))
+}
+
 pub(super) fn blend_reverse_spine(s: &mut Session, _: &Value) -> Result<Value> {
+    if any_without_spine(s) {
+        return Err(bad("object.blend.reverseSpine", "the blend has no spine"));
+    }
     edit_blends(s, "Reverse Spine", |children, spec| {
         if spec.spine.is_some() && pin(children, spec) {
             // The keys keep their anchors, which now count from the other end.

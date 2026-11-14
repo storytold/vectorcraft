@@ -1,6 +1,6 @@
 use super::slots::{PERSPECTIVE_SLOTS, RECENT_FONT_IDS, RECENT_IDS, SAVED_SELECTION_IDS, SAVED_VIEW_IDS};
 use super::submenus::{INSERT_BREAK, INSERT_SPECIAL, INSERT_WHITESPACE, PATH_EFFECTS, TYPE_SIZES, effect_menu, font_items, insert_items};
-use super::{Item, Sep, c, cp, json, sub, todo, todos};
+use super::{Item, Sep, c, cp, json, sub, todos};
 
 /// The in-window and native menu tree. The in-window bar skips the VectorCraft menu (see
 /// `menu_bar`); the native Mac bar is composed from the whole tree (see `native_menu`).
@@ -28,6 +28,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("New…", "file.newDialog"),
                 c("New from Template…", "file.newFromTemplate"),
                 c("Open…", "file.open"),
+                sub("Open With", crate::dialogs::plugin::open_with_menu()),
                 sub("Open Recent Files", {
                     let mut v: Vec<Item> = RECENT_IDS.iter().map(|id| c("Recent File", id)).collect();
                     v.push(Sep);
@@ -61,7 +62,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Export Selection…", "file.exportSelection"),
                 Sep,
                 c("Package…", "ui.packageDialog"),
-                sub("Scripts", vec![c("Check Script…", "ui.checkScript"), todos("Other Script…", "Cmd+F12")]),
+                sub("Scripts", crate::scripts_menu::items()),
                 Sep,
                 c("Document Setup…", "file.documentSetup"),
                 sub(
@@ -96,7 +97,10 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 cp("Find and Replace…", "edit.findReplace", json!({"find": "", "replace": "", "matchCase": false, "wholeWord": false})),
                 cp("Find Next", "edit.findNext", json!({"find": ""})),
-                sub("Spelling", vec![todo("Auto Spell Check"), todos("Check Spelling…", "Cmd+I"), todo("Edit Custom Dictionary…")]),
+                sub("Spelling", vec![c("Auto Spell Check", "edit.autoSpellCheck"), todos("Check Spelling…", "Cmd+I")]),
+                // Edit › Edit Custom Dictionary…, beside Spelling, on the public Check and correct
+                // spelling page.
+                c("Edit Custom Dictionary…", crate::dialogs::custom_dictionary::COMMAND),
                 Sep,
                 sub(
                     "Edit Colors",
@@ -117,6 +121,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Blend Vertically", "edit.colors.blendVertically"),
                         c("Convert to CMYK", "edit.colors.toCMYK"),
                         c("Convert to Grayscale", "edit.colors.toGrayscale"),
+                        c("Convert to Indexed Color…", "ui.indexedColorDialog"),
                         c("Convert to RGB", "edit.colors.toRGB"),
                         c("Invert Colors", "edit.colors.invert"),
                         cp(
@@ -392,8 +397,23 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                     PATH_EFFECTS
                         .iter()
                         .map(|&(label, effect)| cp(label, "type.pathOptions", json!({ "effect": effect })))
-                        .chain([Sep, c("Type on a Path Options…", "type.pathOptions")])
+                        .chain([
+                            Sep,
+                            c("Center on Top", "type.pathCenter.top"),
+                            c("Center on Bottom", "type.pathCenter.bottom"),
+                            Sep,
+                            c("Type on a Path Options…", "type.pathOptions"),
+                        ])
                         .collect(),
+                ),
+                c("Dynamic Text", "type.dynamicText"),
+                sub(
+                    "Dynamic Text Presets",
+                    vec![
+                        cp("Circle", "type.dynamicTextPreset", json!({"preset": "circle"})),
+                        cp("Arch", "type.dynamicTextPreset", json!({"preset": "arch"})),
+                        cp("Bow", "type.dynamicTextPreset", json!({"preset": "bow"})),
+                    ],
                 ),
                 sub(
                     "Threaded Text",
@@ -406,6 +426,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 c("Fit Headline", "text.fitHeadline"),
                 Sep,
                 c("Find Font…", "type.findFont"),
+                c("Composite Fonts…", crate::dialogs::composite_fonts::COMMAND),
                 sub(
                     "Change Case",
                     vec![
@@ -485,6 +506,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                         c("Slices", "select.object.slices"),
                         c("Stray Points", "select.object.strayPoints"),
                         c("Open Paths", "select.object.openPaths"),
+                        c("Not Aligned to Pixel Grid", "select.object.notAlignedToPixelGrid"),
                         Sep,
                         c("All Text Objects", "select.object.textObjects"),
                         c("Point Text Objects", "select.object.pointText"),
@@ -622,6 +644,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 sub("Workspace", crate::workspaces::menu_items()),
                 Sep,
                 c("Control", "window.control"),
+                c("Help Bar", "window.helpBar"),
                 c("Contextual Task Bar", "window.taskBar"),
                 c("Tools", "window.toolbar"),
                 sub("Toolbars", crate::custom_toolbars::menu_items()),
@@ -629,6 +652,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
             ];
             let lang = crate::i18n::current();
             let mut panels = vec![
+                panel("3D and Materials", crate::panels::three_d::ID),
                 panel("Actions", "actions"),
                 panel("Align", "align"),
                 panel("Appearance", "appearance"),
@@ -640,6 +664,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Color", "color"),
                 panel("Color Guide", "colorGuide"),
                 panel("Color Themes", "colorThemes"),
+                panel("Color Wheel", crate::panels::color_wheel::ID),
                 panel("CSS Properties", crate::panels::css_properties::ID),
                 panel("Document Info", "docInfo"),
                 panel("Flattener Preview", crate::panels::flattener_preview::ID),
@@ -649,6 +674,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Image Trace", "imageTrace"),
                 panel("Info", "info"),
                 panel("Layers", "layers"),
+                cp("Learn", "window.learn", json!({})),
                 panel("Libraries", "libraries"),
                 panel("Links", crate::panels::links::ID),
                 panel("Magic Wand", "magicWand"),
@@ -656,6 +682,7 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 panel("Pathfinder", "pathfinder"),
                 panel("Pattern Options", "patternOptions"),
                 panel("Properties", "properties"),
+                panel("Script Console", crate::panels::script_console::ID),
                 panel("Separations Preview", "separations"),
                 panel("Stroke", "stroke"),
                 panel("SVG Interactivity", crate::panels::svg_interactivity::ID),
@@ -701,6 +728,8 @@ pub fn menu_tree_named(english_names: bool) -> Vec<(&'static str, Vec<Item>)> {
                 Sep,
                 c("Search Commands…", "help.commandPalette"),
                 todos("VectorCraft Help…", "F1"),
+                c("Safe Mode…", "help.safeMode"),
+                c("Copy Troubleshooting Info", "help.copyTroubleshootingInfo"),
                 Sep,
                 c("Check for Updates…", "help.checkForUpdates"),
                 c("About VectorCraft", "help.about"),

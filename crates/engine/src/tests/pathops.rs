@@ -441,6 +441,98 @@ fn offset_open_path_whose_ends_meet_grows_the_shape() {
     assert_eq!(path_of(&s, r[0]).0.subpaths.len(), 1);
 }
 
+/// The ids of the objects in the first layer, back to front.
+fn first_layer(s: &Session) -> Vec<NodeId> {
+    s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect()
+}
+
+/// Offset Path of several objects at once: each result goes directly above its object and takes
+/// the next ids in the objects' order, a group gives a group of its paths' offsets with their
+/// styles, a compound path gives a compound path, an inset that leaves nothing and type give
+/// nothing, and one undo gives the objects back.
+#[test]
+fn offset_path_of_several_objects_keeps_their_order() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let c = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    set_fill(&mut s, b, Color::rgb(1.0, 0.0, 0.0));
+    set_fill(&mut s, c, Color::rgb(0.0, 0.0, 1.0));
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let tiny = rect(&mut s, 100.0, 0.0, 4.0, 4.0);
+    let outer = rect(&mut s, 200.0, 0.0, 40.0, 40.0);
+    let inner = rect(&mut s, 210.0, 10.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [outer.0, inner.0]})).unwrap();
+    let cp = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let t = NodeId(s.execute("text.create", &json!({"x": 300, "y": 10, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let before = first_layer(&s);
+    assert_eq!(before, [a, g, tiny, cp, t]);
+    let first = s.doc().unwrap().doc.peek_next_id();
+    s.execute("select.set", &json!({"ids": [a.0, g.0, tiny.0, cp.0, t.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": -3, "joins": "miter"})).unwrap());
+    // a's offset, then b's and c's and their group, then the compound path and its two subpaths.
+    assert_eq!(r, [NodeId(first), NodeId(first + 3), NodeId(first + 4)]);
+    assert_eq!(first_layer(&s), [a, r[0], g, r[1], tiny, cp, r[2], t]);
+    assert_eq!(s.doc().unwrap().selection.objects, r);
+    assert!(close(bounds(&s, r[0]), Rect::new(3.0, 3.0, 17.0, 17.0), 1e-2), "{:?}", bounds(&s, r[0]));
+    let group = node(&s, r[1]);
+    assert!(matches!(group.kind, NodeKind::Group { .. }), "{:?}", group.kind);
+    let kids = group.children().unwrap();
+    assert_eq!(kids.iter().map(|k| k.id).collect::<Vec<_>>(), [NodeId(first + 1), NodeId(first + 2)]);
+    assert_eq!(kids[0].appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(kids[1].appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let rings = node(&s, r[2]);
+    assert!(matches!(rings.kind, NodeKind::Compound { .. }), "{:?}", rings.kind);
+    assert!(close(bounds(&s, r[2]), Rect::new(203.0, 3.0, 237.0, 37.0), 1e-2), "{:?}", bounds(&s, r[2]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first_layer(&s), before);
+}
+
+/// Offset Path works out the offsets of several paths on more than one thread, and gives the
+/// results in the paths' order.
+#[test]
+fn offset_path_works_on_several_threads_in_order() {
+    let seen = std::sync::Mutex::new(vec![]);
+    let items: Vec<usize> = (0..8).collect();
+    let work = |i: &usize| {
+        if let Ok(mut seen) = seen.lock() {
+            seen.push(std::thread::current().id());
+        }
+        i * 2
+    };
+    let (out, used) = crate::cmd::pathops::ordered_map(&items, 4, work, |_| false);
+    assert_eq!(out, (0..8).map(|i| Some(i * 2)).collect::<Vec<_>>());
+    assert_eq!(used, 4);
+    let threads: std::collections::HashSet<_> = seen.into_inner().unwrap().into_iter().collect();
+    assert_eq!(threads.len(), 4);
+    // A count just past the threads still uses every thread.
+    let (out, used) = crate::cmd::pathops::ordered_map(&items[..5], 4, |i| i * 2, |_| false);
+    assert_eq!(out, (0..5).map(|i| Some(i * 2)).collect::<Vec<_>>());
+    assert_eq!(used, 4);
+    // One item, or one thread, is worked on here.
+    let (out, used) = crate::cmd::pathops::ordered_map(&items[..1], 4, |i| i * 2, |_| false);
+    assert_eq!((out, used), (vec![Some(0)], 1));
+    let (out, used) = crate::cmd::pathops::ordered_map(&items, 1, |i| i * 2, |_| false);
+    assert_eq!(used, 1);
+    assert_eq!(out.len(), 8);
+}
+
+/// Once a result stops the work (an offset that fails), the paths after it are left out, and every
+/// path before it has its result, so the first failure in the paths' order is the one reported.
+#[test]
+fn offset_path_stops_after_the_first_failure() {
+    let items: Vec<usize> = (0..8).collect();
+    let (out, _) = crate::cmd::pathops::ordered_map(&items, 1, |i| *i, |r| *r == 2 || *r == 5);
+    assert_eq!(out, [Some(0), Some(1), Some(2), None, None, None, None, None]);
+    for threads in [2, 4, 8] {
+        let (out, _) = crate::cmd::pathops::ordered_map(&items, threads, |i| *i, |r| *r == 2 || *r == 5);
+        assert_eq!(out[..3], [Some(0), Some(1), Some(2)], "{threads} threads");
+        let first = out.iter().position(|r| r.is_some_and(|r| r == 2 || r == 5));
+        assert_eq!(first, Some(2), "{threads} threads");
+    }
+}
+
 #[test]
 fn outline_stroke_of_line() {
     let mut s = session();
@@ -656,13 +748,13 @@ fn simplify_refreshes_changed_path_selection_and_undo() {
     let kept = NodeId(s.execute("path.create", &json!({"anchors": [{"x": 350, "y": 180}]})).unwrap()["id"].as_u64().unwrap());
     let unrelated = rect(&mut s, 400.0, 200.0, 40.0, 30.0);
     s.edit("selection fixture", |d, sel| {
-        d.guides.push(vectorcraft_doc::Guide::new(true, 30.0));
+        let guide = d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 30.0));
         sel.set([kept, id]);
         sel.anchors.insert(id, [(0, 19)].into_iter().collect());
         sel.anchors.insert(kept, [(0, 0)].into_iter().collect());
         sel.key = Some(kept);
         sel.target = Some(id);
-        sel.guides.push(0);
+        sel.guides.push(guide);
         Ok(())
     })
     .unwrap();
@@ -781,7 +873,7 @@ fn split_into_grid_options() {
         rect(&mut s, 10.0, 20.0, 110.0, 50.0);
         let r = s.execute("object.path.splitIntoGrid", &p).unwrap();
         let cells: Vec<Rect> = ids(&r).iter().map(|id| bounds(&s, *id)).collect();
-        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
+        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect();
         assert_eq!(r["guides"], guides.len());
         (cells, guides)
     };
@@ -812,13 +904,16 @@ fn split_into_grid_options() {
     assert!(close(bounds(&s, r[0]), Rect::new(0.0, 0.0, 40.0, 60.0), 1e-9) && close(bounds(&s, r[1]), Rect::new(60.0, 0.0, 100.0, 60.0), 1e-9));
     let st = s.doc().unwrap();
     assert!(r.iter().all(|id| node(&s, *id).appearance == node(&s, r[0]).appearance) && st.doc.node(back).is_none() && st.doc.node(front).is_none());
-    assert_eq!(st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>(), [kept, r[0], r[1]], "above the path left alone");
+    let art: Vec<NodeId> = st.doc.layers[0].children().unwrap().iter().filter(|n| !n.is_ruler_guide()).map(|n| n.id).collect();
+    assert_eq!(art, [kept, r[0], r[1]], "above the path left alone");
+    let children = st.doc.layers[0].children().unwrap();
+    assert!(children.len() == 9 && children[3..].iter().all(|n| n.is_ruler_guide()), "the six guides are above the art");
     assert_eq!(st.selection.objects, r);
-    assert!(st.doc.guides.iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
+    assert!(st.doc.ruler_guides().iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
     assert_eq!(st.history.undo.len(), undo + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     let st = s.doc().unwrap();
-    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.guides.is_empty());
+    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.ruler_guides().is_empty());
     // A grid with no room for its gutters is refused and changes nothing.
     assert!(s.execute("object.path.splitIntoGrid", &json!({"columns": 4, "gutter": 50})).is_err());
     assert!(s.execute("object.path.splitIntoGrid", &json!({"width": -5})).is_err());
@@ -842,6 +937,71 @@ fn clean_up_removes_junk() {
     let d = &s.doc().unwrap().doc;
     assert!(d.node(keep).is_some());
     assert!(d.node(unpainted).is_none() && d.node(stray).is_none() && d.node(empty).is_none());
+}
+
+/// Offset Path, Simplify, Split Into Grid and Clean Up refuse a param of the wrong type with an
+/// error naming the param, and leave the document, the selection and the undo history as they were.
+/// Null keeps a param's default, and a distance still takes a string with a unit.
+#[test]
+fn path_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 50.0, 40.0);
+    s.execute("path.create", &json!({"anchors": [{"x": 5, "y": 5}]})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.selection.objects.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    let number = |k: &str, v: &str| format!("`{k}` must be a number, not {v}");
+    let switch = |k: &str| format!("`{k}` must be true or false");
+    for (cmd, p, want) in [
+        ("object.path.offsetPath", json!({"offset": true}), number("offset", "true")),
+        ("object.path.offsetPath", json!({"offset": "wide"}), number("offset", "\"wide\"")),
+        ("object.path.offsetPath", json!({"offset": "10abc"}), number("offset", "\"10abc\"")),
+        ("object.path.offsetPath", json!({"offset": 5, "miterLimit": "4x"}), number("miterLimit", "\"4x\"")),
+        ("object.path.offsetPath", json!({"offset": 5, "joins": 3}), "`joins` must be a string".to_string()),
+        ("object.path.offsetPath", json!({"offset": 5, "joins": "pointy"}), "`joins` must be one of miter, round, bevel".to_string()),
+        ("object.path.offsetPath", json!({"offset": 5, "miterLimit": [4]}), number("miterLimit", "[4]")),
+        ("object.path.simplify", json!({"auto": "true"}), switch("auto")),
+        ("object.path.simplify", json!({"level": false}), number("level", "false")),
+        ("object.path.simplify", json!({"level": 50, "tolerance": {}}), number("tolerance", "{}")),
+        ("object.path.simplify", json!({"cornerAngle": "sharp"}), number("cornerAngle", "\"sharp\"")),
+        ("object.path.simplify", json!({"straightLines": 1}), switch("straightLines")),
+        ("object.path.simplify", json!({"wholePaths": "no"}), switch("wholePaths")),
+        ("object.path.splitIntoGrid", json!({"rows": "many"}), number("rows", "\"many\"")),
+        ("object.path.splitIntoGrid", json!({"columns": true}), number("columns", "true")),
+        ("object.path.splitIntoGrid", json!({"gutter": false}), number("gutter", "false")),
+        ("object.path.splitIntoGrid", json!({"rowGutter": 2, "gutter": "x"}), number("gutter", "\"x\"")),
+        ("object.path.splitIntoGrid", json!({"height": 5, "totalHeight": [1]}), number("totalHeight", "[1]")),
+        ("object.path.splitIntoGrid", json!({"width": "wide"}), number("width", "\"wide\"")),
+        ("object.path.splitIntoGrid", json!({"columnGutter": true}), number("columnGutter", "true")),
+        ("object.path.splitIntoGrid", json!({"totalWidth": {}}), number("totalWidth", "{}")),
+        ("object.path.splitIntoGrid", json!({"rowGutter": "a"}), number("rowGutter", "\"a\"")),
+        ("object.path.splitIntoGrid", json!({"addGuides": "yes"}), switch("addGuides")),
+        ("object.path.cleanUp", json!({"strayPoints": "false"}), switch("strayPoints")),
+        ("object.path.cleanUp", json!({"unpaintedObjects": 0}), switch("unpaintedObjects")),
+        ("object.path.cleanUp", json!({"emptyTextPaths": "no"}), switch("emptyTextPaths")),
+    ] {
+        let r = s.execute(cmd, &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+        assert!(state(&s) == before, "{cmd} {p} changed the document, the selection or the undo history");
+    }
+    // Null takes the default: a 10 pt offset with mitered joins.
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": null, "joins": null, "miterLimit": null})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(90.0, 90.0, 160.0, 150.0), 1e-2), "{:?}", bounds(&s, r[0]));
+    // A distance with a unit, and a join named in capitals.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.1 in", "joins": "Bevel"})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
+    // Null switches keep Clean Up's defaults, which remove the stray point.
+    let r = s.execute("object.path.cleanUp", &json!({"strayPoints": null, "unpaintedObjects": null, "emptyTextPaths": null})).unwrap();
+    assert_eq!(r["removed"], 1);
+    // Split Into Grid with null counts and a gutter with a unit: two by two, 0.5 in apart.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.splitIntoGrid", &json!({"rows": null, "columns": null, "gutter": "0.5 in", "addGuides": null})).unwrap());
+    assert_eq!(r.len(), 4);
+    assert!(close(bounds(&s, r[0]), Rect::new(100.0, 100.0, 107.0, 102.0), 1e-9), "{:?}", bounds(&s, r[0]));
 }
 
 #[test]
@@ -881,6 +1041,51 @@ fn create_outlines_matches_text_bounds() {
     assert_eq!(s.doc().unwrap().selection.objects, r);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(s.doc().unwrap().doc.node(t).is_some());
+}
+
+/// The type object's own fills and strokes (not its characters') become paths of its whole outline,
+/// with ids of their own: those below the Characters row under the glyph paths, the others over
+/// them, in their order. The group keeps no appearance of its own, and Undo brings the type back.
+#[test]
+fn create_outlines_keeps_the_objects_own_fills_and_strokes() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    for (cmd, p) in [
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("appearance.addStroke", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 1, "color": "#0000ff", "weight": 5})),
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 2, "color": "#00ff00", "opacity": 50})),
+        // The red fill paints below the characters; the stroke and the green fill over them.
+        ("appearance.moveItem", json!({"from": "contents", "to": 1})),
+    ] {
+        s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+    }
+    let own = node(&s, t).appearance.items.clone();
+    assert_eq!(own.len(), 3);
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert!(g.appearance.items.is_empty(), "the group paints nothing of its own");
+    let ch = g.children().unwrap();
+    assert_eq!(ch.len(), 4, "a path below, the two glyphs, a path above");
+    let (first, last) = (&ch[0], &ch[3]);
+    assert_eq!(first.appearance.items, own[..1], "the item below the characters");
+    assert_eq!(last.appearance.items, own[1..], "the items over them, in their order");
+    for c in [first, last] {
+        assert!(matches!(c.kind, NodeKind::Path { .. }), "{:?}", c.kind);
+        assert!(c.id != t && c.id != g.id, "a fresh id");
+    }
+    assert!(first.id != last.id);
+    for c in &ch[1..3] {
+        assert_eq!(c.appearance.fill_paint(), Paint::solid(Color::BLACK), "the characters keep their own paint");
+    }
+    // The whole-outline paths cover both glyphs.
+    let glyphs = ch[1].geometric_bounds().unwrap().union(ch[2].geometric_bounds().unwrap());
+    assert!(close(first.geometric_bounds().unwrap(), glyphs, 1e-6), "{:?} vs {glyphs:?}", first.geometric_bounds());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, t).appearance.items, own, "one undo step brings the type back");
 }
 
 /// Colour bitmap glyphs (emoji) become embedded images where they sat; glyphs showing one image

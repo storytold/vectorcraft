@@ -5,7 +5,7 @@
 //!   width profiles, fitted or dotted dashes as the canvas's filled outlines and brushed strokes
 //!   as their brush art), opacity and blend modes (transparency groups),
 //!   clip groups, linear/radial gradients (shadings), pattern fills and strokes as their tiles and
-//!   freeform and Perceptual gradients and dithered gradient fills as images at the raster
+//!   freeform and Perceptual gradients, gradients mixed around the hue wheel and dithered gradient fills as images at the raster
 //!   effects resolution (clipped to what they paint), embedded images (resampled and
 //!   compressed as the Compression settings say) and text as outlined glyph paths, or as real
 //!   text in embedded subset fonts (Advanced). Colours are converted, tagged with ICC profiles and
@@ -70,17 +70,18 @@ mod presets;
 mod print;
 mod settings;
 mod streams;
+mod surface;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use encrypt::Encryption;
-pub use export::{export, export_with_report, page_areas};
+pub use export::{check_page_sizes, export, export_with_report, page_areas};
 pub use file_info::{FileInfo, file_info};
 #[cfg(any(test, feature = "read-count"))]
 pub use import::imports_of;
 pub use import::{
-    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE, holds_outlines,
-    import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
+    INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, RESHAPED_TEXT_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE,
+    holds_outlines, import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
 #[cfg(any(test, feature = "read-count"))]
 pub use pages::reads_of;
@@ -212,7 +213,10 @@ pub struct ImportReport {
 #[derive(Clone, Debug)]
 pub struct ExportReport {
     pub bytes: Vec<u8>,
+    /// What the file leaves out of the document or writes differently.
     pub warnings: Vec<String>,
+    /// Notes on the options: one the export didn't apply or applied another way.
+    pub setting_notes: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]

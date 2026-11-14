@@ -8,10 +8,11 @@
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
-use vectorcraft_doc::{CharStyle, Document, Node, NodeId, NodeKind, ParaStyle, TextStyleDef};
+use vectorcraft_doc::{CharStyle, Document, Node, NodeId, NodeKind, ParaStyle, TabStop, TextStyleDef};
 
+use super::clipboard::resources::import_text_styles;
 use super::typecmd::{refresh_bounds, text_targets};
-use super::{CommandSpec, Result, Run, Session, bad, bool_or, has_doc, id_param, index, ok, str_param};
+use super::{CommandSpec, Result, Run, Session, bad, bool_or, has_doc, index, object_param, ok, str_param};
 
 pub const NORMAL_CHAR: &str = "[Normal Character Style]";
 pub const NORMAL_PARA: &str = "[Normal Paragraph Style]";
@@ -47,7 +48,7 @@ impl Kind {
 
 /// One command spec (the `cmd!` macro wants literals; these ids are built with `concat!`).
 const fn spec(id: &'static str, label: &'static str, menu: &'static [&'static str], params: &'static str, run: Run, journal: bool) -> CommandSpec {
-    CommandSpec { id, label, menu, shortcut: None, params, enabled: has_doc, run, journal }
+    CommandSpec { id, label, menu, shortcut: None, params, enabled: has_doc, run, journal, schema: None }
 }
 
 macro_rules! style_cmds {
@@ -111,9 +112,20 @@ macro_rules! style_cmds {
                 |s, _| unused(s, $kind),
                 false,
             ),
+            spec(
+                concat!($p, ".load"),
+                concat!("Load ", $what, " Styles…"),
+                &["Window", "Type", $menu],
+                LOAD_PARAMS,
+                |s, p| load(s, p, &[$kind]),
+                true,
+            ),
         ]
     };
 }
+
+/// The params of `charStyle.load`, `paraStyle.load` and `textStyle.loadAll`.
+const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with, the symbols and brushes those patterns use, and the styles of either kind that type in those patterns and symbols is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new or paraStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names in the file]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}}); charStyle.load and paraStyle.load list only the styles of their own kind";
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = style_cmds!(
@@ -131,7 +143,22 @@ pub fn specs() -> Vec<CommandSpec> {
         |s, p| edit_style(s, p, Kind::Char),
         true,
     ));
-    v.extend(style_cmds!(Kind::Para, "paraStyle", "Paragraph Styles", "Paragraph", ""));
+    v.extend(style_cmds!(
+        Kind::Para,
+        "paraStyle",
+        "Paragraph Styles",
+        "Paragraph",
+        "; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; changed tabs: at most 256 stops, each changed stop's position 0..=100000 pt and leader at most 8 characters, sorted by position keeping the first of stops at one position"
+    ));
+    v.push(spec(
+        "paraStyle.edit",
+        "Edit Paragraph Style",
+        &[],
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; changed tabs: at most 256 stops, each changed stop's position 0..=100000 pt and leader at most 8 characters, sorted by position keeping the first of stops at one position",
+        |s, p| edit_style(s, p, Kind::Para),
+        true,
+    ));
+    v.push(spec("textStyle.loadAll", "Load All Styles…", &["Window", "Type"], LOAD_PARAMS, |s, p| load(s, p, &[Kind::Char, Kind::Para]), true));
     v
 }
 
@@ -161,8 +188,10 @@ fn to_attrs<T: Serialize>(v: &T) -> Map<String, Value> {
 /// from a style instead leaves the text's own value alone.
 pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
     let mut m = to_attrs(v);
-    // A chosen glyph belongs to one character, not to a reusable character style.
+    // A chosen glyph belongs to one character, and the space before a line's first character to
+    // where it stands (#5111), not to a reusable character style.
     m.remove("glyphAlternate");
+    m.remove("kerningBefore");
     for (k, x) in [
         ("font_version", json!(v.font_version)),
         ("fontAxes", json!(v.font_axes)),
@@ -186,6 +215,13 @@ pub fn char_attrs(v: &CharStyle) -> Map<String, Value> {
         ("tateChuYoko", json!(v.tate_chu_yoko)),
         ("tcyUpDown", json!(v.tcy_up_down)),
         ("tcyLeftRight", json!(v.tcy_left_right)),
+        ("warichu", json!(v.warichu)),
+        ("warichuLines", json!(v.warichu_lines)),
+        ("warichuGap", json!(v.warichu_gap)),
+        ("warichuScale", json!(v.warichu_scale)),
+        ("warichuAlign", json!(v.warichu_align)),
+        ("akiLeft", json!(v.aki_left)),
+        ("akiRight", json!(v.aki_right)),
         ("standardVerticalRoman", json!(v.standard_vertical_roman)),
         ("noBreak", json!(v.no_break)),
         ("digits", json!(v.digits)),
@@ -213,8 +249,11 @@ pub fn para_attrs(v: &ParaStyle) -> Map<String, Value> {
         ("leading_model", json!(v.leading_model)),
         ("burasagari", json!(v.burasagari)),
         ("kinsoku", json!(v.kinsoku)),
+        ("kinsoku_type", json!(v.kinsoku_type)),
+        ("bunri_kinshi", json!(v.bunri_kinshi)),
         ("roman_hanging", json!(v.roman_hanging)),
         ("kashida", json!(v.kashida)),
+        ("korean_line_break_anywhere", json!(v.korean_line_break_anywhere)),
     ] {
         m.insert(k.into(), x);
     }
@@ -314,7 +353,7 @@ fn font_change(before: &CharStyle, mut st: CharStyle, attrs: &Map<String, Value>
 
 /// Change text in layers, symbols, graph designs, pattern tiles, saved pattern tiles restored by
 /// Cancel, and brush art, including opacity masks in those trees.
-fn each_text_mut(d: &mut Document, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
+pub(crate) fn each_text_mut(d: &mut Document, f: &mut impl FnMut(&mut vectorcraft_doc::TextObject) -> Result<()>) -> Result<()> {
     fn has_text(n: &Node) -> bool {
         matches!(n.kind, NodeKind::Text(_))
             || n.extras().mask.as_ref().is_some_and(|mask| has_text(&mask.art))
@@ -426,10 +465,11 @@ fn update_users(d: &mut Document, kind: Kind, name: &str, old: &Map<String, Valu
 
 /// The selected text's attributes: the first selected character for a nonempty range,
 /// the insertion style at a lone `start`, or the first selected text object's first run.
-/// Paragraph capture always samples the paragraph at `start`.
-fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<String, Value>>> {
+/// Paragraph capture always samples the paragraph at `start`. An `id` that isn't an object id is
+/// an error under the `verb` command of `kind`.
+fn selection_attrs(s: &Session, p: &Value, kind: Kind, verb: &str) -> Result<Option<Map<String, Value>>> {
     let d = &s.doc()?.doc;
-    let id = match id_param(p, "id") {
+    let id = match object_param(p, "id", &kind.cmd(verb))? {
         Some(id) => Some(id),
         None => text_targets(s, &json!({}), "").ok().and_then(|v| v.first().copied()),
     };
@@ -451,14 +491,14 @@ fn selection_attrs(s: &Session, p: &Value, kind: Kind) -> Result<Option<Map<Stri
 /// The selected text's character (`para`: paragraph) attributes, every one of them: what a
 /// library keeps of a text style. `None` without text selected.
 pub(crate) fn selected_style_attrs(s: &Session, para: bool) -> Result<Option<Map<String, Value>>> {
-    selection_attrs(s, &json!({}), if para { Kind::Para } else { Kind::Char })
+    selection_attrs(s, &json!({}), if para { Kind::Para } else { Kind::Char }, "new")
 }
 
 /// The attributes `charStyle.new` (`para`: `paraStyle.new`) would give a style made now from
 /// `target` (its `id`, `start` and `end`; empty for the selected objects). `None` without text
 /// there.
 pub fn target_style_attrs(s: &Session, target: &Value, para: bool) -> Option<Map<String, Value>> {
-    selection_attrs(s, target, if para { Kind::Para } else { Kind::Char }).ok().flatten()
+    selection_attrs(s, target, if para { Kind::Para } else { Kind::Char }, "new").ok().flatten()
 }
 
 /// The attributes a new character or paragraph style receives when no text is selected.
@@ -469,6 +509,13 @@ pub fn default_new_style_attrs(s: &Session, para: bool) -> Map<String, Value> {
 /// Whether the document has a character (`para`: paragraph) style `name`, and its attributes.
 pub(crate) fn style_attrs(d: &Document, para: bool, name: &str) -> Option<Map<String, Value>> {
     if para { Kind::Para } else { Kind::Char }.attrs(d, name)
+}
+
+/// `attrs` in the form `charStyle.new` (`para`: `paraStyle.new`) stores them in `d`, or `None`
+/// when they don't pass its checks.
+pub(crate) fn stored_style_attrs(d: &Document, para: bool, attrs: &Map<String, Value>) -> Option<Map<String, Value>> {
+    let kind = if para { Kind::Para } else { Kind::Char };
+    attrs_param(d, &json!({ "attrs": attrs }), kind, "new", None).ok().flatten()
 }
 
 /// The name `charStyle.new` (`para`: `paraStyle.new`) gives a style when it is given none: the
@@ -501,6 +548,12 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     if m.contains_key("glyphAlternate") {
                         return Err(bad(&c, "`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)"));
                     }
+                    if m.contains_key("kerningBefore") {
+                        return Err(bad(
+                            &c,
+                            "`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)",
+                        ));
+                    }
                     let mut st = with_attrs(&CharStyle::default(), m, &c)?;
                     let changed = |key: &str| m.contains_key(key) && kept.and_then(|k| k.get(key)) != m.get(key);
                     for (key, value, lo, hi) in
@@ -517,6 +570,25 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     for (key, value) in [("baseline_shift", st.baseline_shift), ("tcyUpDown", st.tcy_up_down), ("tcyLeftRight", st.tcy_left_right)] {
                         if changed(key) && !(-shift_max..=shift_max).contains(&value) {
                             return Err(bad(&c, format!("`{key}` must be from {} to {shift_max}", -shift_max)));
+                        }
+                    }
+                    let (lo, hi) = (0.0, vectorcraft_doc::text::MAX_AKI);
+                    for (key, value) in [("akiLeft", st.aki_left), ("akiRight", st.aki_right)] {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
+                        }
+                    }
+                    let lines = vectorcraft_doc::text::WARICHU_LINES;
+                    if changed("warichuLines") && !lines.contains(&st.warichu_lines) {
+                        return Err(bad(&c, format!("`warichuLines` must be a whole number from {} to {}", lines.start(), lines.end())));
+                    }
+                    let scale = vectorcraft_doc::text::WARICHU_SCALE;
+                    for (key, value, lo, hi) in [
+                        ("warichuGap", st.warichu_gap, 0.0, vectorcraft_doc::text::MAX_WARICHU_GAP),
+                        ("warichuScale", st.warichu_scale, *scale.start(), *scale.end()),
+                    ] {
+                        if changed(key) && !(lo..=hi).contains(&value) {
+                            return Err(bad(&c, format!("`{key}` must be from {lo} to {hi}")));
                         }
                     }
                     // A language of the list, stored as its tag (as text.setFormat takes it).
@@ -539,11 +611,112 @@ fn attrs_param(d: &Document, p: &Value, kind: Kind, verb: &str, kept: Option<&Ma
                     }
                     char_attrs(&st)
                 }
-                Kind::Para => para_attrs(&with_attrs(&ParaStyle::default(), m, &c)?),
+                Kind::Para => {
+                    let mut st = with_attrs(&ParaStyle::default(), m, &c)?;
+                    para_ranges(&st, m, kept, &c)?;
+                    sort_tabs(&mut st, m, kept);
+                    para_attrs(&st)
+                }
             };
             Ok(Some(m.keys().filter_map(|k| full.get(k).map(|v| (k.clone(), v.clone()))).collect()))
         }
         Some(_) => Err(bad(&kind.cmd(verb), "attrs must be an object")),
+    }
+}
+
+/// The range of a paragraph style's indents, space before and space after, and Hyphenation Zone (pt),
+/// as `text.setFormat` keeps them.
+const PARA_DISTANCE: f64 = 1296.0;
+
+/// Check the paragraph attributes of `st` (read from `attrs`) that differ from `kept` against the
+/// ranges `text.setFormat` keeps them to: the indents and the space before and after, each
+/// Hyphenation option, each Justification option (Minimum, Desired and Maximum in order, as
+/// `attrs` gives them), and the number of tab stops with the position and leader of each stop
+/// `kept` does not hold. A value `kept` has is not checked.
+fn para_ranges(st: &ParaStyle, attrs: &Map<String, Value>, kept: Option<&Map<String, Value>>, c: &str) -> Result<()> {
+    let within = |key: &str, value: f64, lo: f64, hi: f64| {
+        if (lo..=hi).contains(&value) { Ok(()) } else { Err(bad(c, format!("`{key}` must be from {lo} to {hi}"))) }
+    };
+    let changed = |key: &str| attrs.contains_key(key) && kept.and_then(|k| k.get(key)) != attrs.get(key);
+    let nested_changed = |key: &str, field: &str| {
+        changed(key) && attrs.get(key).and_then(|v| v.get(field)) != kept.and_then(|k| k.get(key)).and_then(|v| v.get(field))
+    };
+    for (key, value) in [
+        ("left_indent", st.left_indent),
+        ("right_indent", st.right_indent),
+        ("first_line_indent", st.first_line_indent),
+        ("space_before", st.space_before),
+        ("space_after", st.space_after),
+    ] {
+        if changed(key) {
+            within(key, value, -PARA_DISTANCE, PARA_DISTANCE)?;
+        }
+    }
+    let h = &st.hyphenation;
+    for (field, value, lo, hi) in [
+        ("words_longer_than", f64::from(h.words_longer_than), 1.0, 25.0),
+        ("after_first", f64::from(h.after_first), 1.0, 15.0),
+        ("before_last", f64::from(h.before_last), 1.0, 15.0),
+        ("hyphen_limit", f64::from(h.hyphen_limit), 0.0, 25.0),
+        ("zone", h.zone, 0.0, PARA_DISTANCE),
+    ] {
+        if nested_changed("hyphenation", field) {
+            within(&format!("hyphenation.{field}"), value, lo, hi)?;
+        }
+    }
+    // Read as given: a paragraph's attributes keep justification options in range as they load.
+    if let Some(given) = attrs.get("justification").filter(|_| changed("justification")) {
+        let j: vectorcraft_doc::JustificationOptions = serde_json::from_value(given.clone()).map_err(|e| bad(c, e.to_string()))?;
+        for (field, values, (lo, hi)) in [
+            ("word_spacing", j.word_spacing, vectorcraft_doc::JustificationOptions::WORD_SPACING),
+            ("letter_spacing", j.letter_spacing, vectorcraft_doc::JustificationOptions::LETTER_SPACING),
+            ("glyph_scaling", j.glyph_scaling, vectorcraft_doc::JustificationOptions::GLYPH_SCALING),
+        ] {
+            if !nested_changed("justification", field) {
+                continue;
+            }
+            let name = format!("justification.{field}");
+            for value in values {
+                within(&name, value, lo, hi)?;
+            }
+            if !(values[0] <= values[1] && values[1] <= values[2]) {
+                return Err(bad(c, format!("`{name}`: Minimum must not exceed Desired, nor Desired Maximum")));
+            }
+        }
+        if nested_changed("justification", "auto_leading") {
+            let (lo, hi) = vectorcraft_doc::JustificationOptions::AUTO_LEADING;
+            within("justification.auto_leading", j.auto_leading, lo, hi)?;
+        }
+    }
+    if changed("tabs") {
+        let kept_tabs = kept_tab_stops(kept);
+        let max = TabStop::MAX_STOPS;
+        if st.tabs.len() > max.max(kept_tabs.len()) {
+            return Err(bad(c, format!("at most {max} tab stops")));
+        }
+        for stop in st.tabs.iter().filter(|stop| !kept_tabs.contains(stop)) {
+            within("tabs.position", stop.position, 0.0, TabStop::MAX_POSITION)?;
+            let (label, max) = ("`tabs.leader`", TabStop::MAX_LEADER);
+            if stop.leader.chars().count() > max {
+                return Err(bad(c, format!("{label} must be at most {max} characters")));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The tab stops `kept` holds, each as it reads (a stop that does not read is left out).
+fn kept_tab_stops(kept: Option<&Map<String, Value>>) -> Vec<TabStop> {
+    let stops = kept.and_then(|k| k.get("tabs")).and_then(Value::as_array);
+    stops.into_iter().flatten().filter_map(|s| serde_json::from_value(s.clone()).ok()).collect()
+}
+
+/// `st`'s tab stops sorted by position, keeping the first of stops within 1e-6 pt of each other,
+/// as `text.tabs.set` keeps them, when `attrs` changes them from `kept`.
+fn sort_tabs(st: &mut ParaStyle, attrs: &Map<String, Value>, kept: Option<&Map<String, Value>>) {
+    if attrs.contains_key("tabs") && kept.and_then(|k| k.get("tabs")) != attrs.get("tabs") {
+        st.tabs.sort_by(|a, b| a.position.total_cmp(&b.position));
+        st.tabs.dedup_by(|a, b| (a.position - b.position).abs() < 1e-6);
     }
 }
 
@@ -631,7 +804,7 @@ fn new(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
 /// (`charStyle.duplicate`), which `attrs` keeps as [`attrs_param`] keeps the target text's.
 fn new_from(s: &mut Session, p: &Value, kind: Kind, copied: Option<&Map<String, Value>>) -> Result<Value> {
     let c = kind.cmd("new");
-    let target = selection_attrs(s, p, kind)?;
+    let target = selection_attrs(s, p, kind, "new")?;
     let attrs = match attrs_param(&s.doc()?.doc, p, kind, "new", copied.or(target.as_ref()))? {
         Some(a) => a,
         None => match target {
@@ -672,8 +845,9 @@ fn apply(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let style_name = (name != kind.normal()).then(|| name.clone());
     // A Type tool range or whole text objects.
     let text_range = super::typecmd::TextRange::parse(p, &c)?;
-    let range = id_param(p, "id").filter(|_| text_range.is_some());
-    let ids = match range.or_else(|| id_param(p, "id")) {
+    let given = object_param(p, "id", &c)?;
+    let range = given.filter(|_| text_range.is_some());
+    let ids = match given {
         Some(id) => vec![id],
         None => text_targets(s, p, &c)?,
     };
@@ -754,7 +928,7 @@ fn redefine_to(s: &mut Session, kind: Kind, name: &str, new_attrs: Map<String, V
 
 fn redefine(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let name = name_param(p, kind, "redefine")?.to_string();
-    let attrs = selection_attrs(s, p, kind)?.ok_or_else(|| bad(&kind.cmd("redefine"), "select text to redefine the style from"))?;
+    let attrs = selection_attrs(s, p, kind, "redefine")?.ok_or_else(|| bad(&kind.cmd("redefine"), "select text to redefine the style from"))?;
     redefine_to(s, kind, &name, attrs, "redefine")
 }
 
@@ -897,6 +1071,114 @@ fn unused(s: &mut Session, kind: Kind) -> Result<Value> {
     let uses = uses(d, kind);
     let names: Vec<&str> = kind.defs(d).iter().map(|s| s.name.as_str()).filter(|n| *n != kind.normal() && uses_of(&uses, kind, n) == 0).collect();
     Ok(json!({ "names": names }))
+}
+
+/// The styles of `kind` in `src` that load, with their source names so that art in the file keeps
+/// referring to them: not the Normal style, and not one whose attributes don't read, whose sizes,
+/// scales, leading, shifts, Insert Aki, Warichu Settings or stroke width are out of the range `charStyle.new` takes, whose
+/// indents, spacing, Hyphenation or Justification options or tab stops are out of the range
+/// `paraStyle.new` takes, or whose name is empty, which are skipped. → (the styles, the names in
+/// `src` of those skipped)
+fn loadable(src: &Document, kind: Kind) -> (Vec<TextStyleDef>, Vec<String>) {
+    const RANGED: [&str; 21] = [
+        "size",
+        "h_scale",
+        "v_scale",
+        "leading",
+        "baseline_shift",
+        "akiLeft",
+        "akiRight",
+        "tcyUpDown",
+        "tcyLeftRight",
+        "warichuLines",
+        "warichuGap",
+        "warichuScale",
+        "stroke_width",
+        "left_indent",
+        "right_indent",
+        "first_line_indent",
+        "space_before",
+        "space_after",
+        "hyphenation",
+        "justification",
+        "tabs",
+    ];
+    let (mut defs, mut skipped) = (vec![], vec![]);
+    for def in kind.defs(src) {
+        let name = def.name.as_str();
+        if name.trim() == kind.normal() {
+            continue;
+        }
+        // Paints, features and language are taken as the file stores them; the ranged values are checked.
+        let mut kept = def.attrs.clone();
+        kept.retain(|k, _| !RANGED.contains(&k.as_str()));
+        match attrs_param(src, &json!({ "attrs": def.attrs }), kind, "load", Some(&kept)).ok().flatten().filter(|_| !name.trim().is_empty()) {
+            Some(attrs) => defs.push(TextStyleDef { name: name.to_string(), attrs }),
+            None => skipped.push(def.name.clone()),
+        }
+    }
+    (defs, skipped)
+}
+
+/// Load Character Styles, Load Paragraph Styles and Load All Styles: the `kinds` of style of the
+/// document `p` gives (`path`, `data` or `dataBase64`) added to the active one with the swatches and
+/// patterns they paint with, as Paste adds those of pasted type ([`import_text_styles`]).
+fn load(s: &mut Session, p: &Value, kinds: &[Kind]) -> Result<Value> {
+    let label = match kinds {
+        [Kind::Char] => "Load Character Styles",
+        [Kind::Para] => "Load Paragraph Styles",
+        _ => "Load All Styles",
+    };
+    let c = &match kinds {
+        [kind] => kind.cmd("load"),
+        _ => "textStyle.loadAll".to_string(),
+    };
+    let path = str_param(p, "path");
+    let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => super::fileio::read_file(path)?,
+        (None, Some(text), _) => text.as_bytes().to_vec(),
+        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(c, "bad dataBase64"))?,
+        _ => return Err(bad(c, "give `path`, `data` or `dataBase64`")),
+    };
+    let file = str_param(p, "name").or(path).unwrap_or("Styles");
+    let src = super::fileio::load(file, &bytes).map_err(|e| bad(c, e.to_string()))?;
+    if src.preview_only {
+        return Err(bad(c, "only this Affinity file's embedded preview could be read; use File › Open to see it with its warning"));
+    }
+    // The source with only the styles that load. Those of a kind not loaded still come along when
+    // a pattern or symbol that a loaded style paints with sets type in them.
+    let mut src = src.doc;
+    let mut skipped = [vec![], vec![]];
+    for kind in [Kind::Char, Kind::Para] {
+        let (defs, names) = loadable(&src, kind);
+        *kind.defs_mut(&mut src) = defs;
+        if kinds.contains(&kind) {
+            skipped[usize::from(kind == Kind::Para)] = names;
+        }
+    }
+    let (chars, paras) = (kinds.contains(&Kind::Char), kinds.contains(&Kind::Para));
+    let mut trial = (*s.doc()?.doc).clone();
+    let mut placed = import_text_styles(&src, &mut trial, chars, paras)?;
+    // An undo step only when the document changes. The step takes the document the import made,
+    // unless the edit first ends a typing session, which can change the document it starts from.
+    if trial != *s.doc()?.doc {
+        if super::typing_in_progress(s) {
+            placed = s.edit(label, |d, _| import_text_styles(&src, d, chars, paras))?;
+        } else {
+            s.edit(label, |d, _| {
+                *d = trial;
+                Ok(())
+            })?;
+        }
+    }
+    let reply = |para: bool| {
+        let names = |added: bool| placed.iter().filter(|p| p.para == para && p.added == added).map(|p| p.name.as_str()).collect::<Vec<_>>();
+        json!({ "added": names(true), "existing": names(false), "skipped": skipped[usize::from(para)] })
+    };
+    Ok(match kinds {
+        [kind] => reply(*kind == Kind::Para),
+        _ => json!({ "charStyles": reply(false), "paraStyles": reply(true) }),
+    })
 }
 
 #[cfg(test)]

@@ -607,6 +607,501 @@ fn shape_builder_merge_uses_the_map_the_tool_has() {
     assert_eq!(maps_built(), built + 1, "another gap");
 }
 
+/// 40 squares 20 pt wide in a row, each 10 pt right of the one before (160 segments, which the
+/// Shape Builder merges on another thread), all selected.
+fn square_row(s: &mut Session) -> Vec<NodeId> {
+    let ids: Vec<NodeId> = (0..40).map(|k| rect(s, f64::from(k) * 10.0, 0.0, 20.0, 20.0)).collect();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    ids
+}
+
+/// The active document of `s` without its dates, so documents made in two sessions at different
+/// times compare equal when their art is.
+fn undated(s: &Session) -> vectorcraft_doc::Document {
+    let mut d = (*s.doc().unwrap().doc).clone();
+    (d.metadata.created, d.metadata.modified) = (None, None);
+    d
+}
+
+/// The Shape Builder over [`square_row`], its map built, after a click at (15, 10): the merge is
+/// being computed on another thread, and the document is as it was.
+fn click_row(s: &mut Session, v: ViewInfo) {
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 15.0, 10.0), v).unwrap();
+    s.tool_poll(v, true).unwrap();
+    let revision = s.doc().unwrap().revision;
+    s.pointer(&PointerEvent::new(PointerKind::Down, 15.0, 10.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 15.0, 10.0), v).unwrap();
+    assert!(s.tool_editing() && s.tool_waiting());
+    assert_eq!(s.doc().unwrap().revision, revision, "the release returns before the merge is applied");
+}
+
+/// A click of the Shape Builder on a large selection merges on another thread, and the merge the
+/// next poll applies is the command's own, as one undo step.
+#[test]
+fn shape_builder_merges_a_large_selection_on_another_thread() {
+    use vectorcraft_tools::builder::merges_computed;
+    let v = ViewInfo::default();
+    let mut s = session();
+    square_row(&mut s);
+    click_row(&mut s, v);
+    let computed = merges_computed();
+    s.tool_poll(v, true).unwrap();
+    assert!(!s.tool_editing());
+    assert_eq!(merges_computed(), computed, "the command takes the merge computed on another thread");
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    assert_eq!(layer_children(&s), 41, "the overlap and what is left of the two squares over it");
+    let mut direct = session();
+    square_row(&mut direct);
+    direct.execute("shapeBuilder.merge", &json!({"points": [[15, 10]]})).unwrap();
+    assert!(undated(&s) == undated(&direct), "the same document as the command gives");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(layer_children(&s), 40, "one undo step");
+}
+
+/// What comes after a click whose merge is being computed on another thread waits for the merge
+/// and runs on the merged art, as when the merge ran on the calling thread: a command (an edit,
+/// an undo, a selection, a save, a batch, Lock Guides, the proof views, a preference, Add Font
+/// Files), an option change, another tool, a save made outside a command, preferences applied
+/// outside a command, a dialog's preview, a scrubbed field's undo scope, a Cmd-click or Cmd-drag
+/// with the selection tool. The merge is the one computed on the other thread.
+#[test]
+fn shape_builder_applies_a_merge_before_what_comes_next() {
+    use vectorcraft_tools::builder::merges_computed;
+    type Next = (&'static str, fn(&mut Session, &[NodeId], &std::path::Path));
+    let v = ViewInfo::default();
+    let next: Vec<Next> = vec![
+        ("Select All Instances", |s, _, _| {
+            s.execute("symbol.selectInstances", &json!({"name": "S"})).unwrap();
+            assert_eq!(s.doc().unwrap().selection.objects.len(), 1);
+        }),
+        ("an edit", |s, _, _| {
+            s.execute("object.move", &json!({"dx": 0, "dy": 100})).unwrap();
+        }),
+        ("an undo", |s, _, _| {
+            s.execute("edit.undo", &json!({})).unwrap();
+            assert_eq!(layer_children(s), 40, "the undo takes the merge back");
+            s.execute("edit.redo", &json!({})).unwrap();
+        }),
+        ("another selection", |s, _, _| {
+            s.execute("select.inverse", &json!({})).unwrap();
+        }),
+        ("Select All", |s, _, _| {
+            s.execute("select.all", &json!({})).unwrap();
+            assert_eq!(s.doc().unwrap().selection.objects.len(), 41);
+        }),
+        ("a save", |s, _, dir| {
+            s.execute("file.saveAs", &json!({"path": dir.join("a.vectorcraft").to_string_lossy()})).unwrap();
+            assert!(!s.doc().unwrap().is_dirty(), "the file holds the merge");
+        }),
+        ("a save outside a command", |s, _, dir| {
+            let p = json!({"path": dir.join("b.vectorcraft").to_string_lossy()});
+            let plan = cmd::fileio::save_plan(s, cmd::fileio::SaveMode::SaveAs, &p).unwrap();
+            assert_eq!(layer_children(s), 40, "planning a save leaves the document");
+            let job = cmd::fileio::save_job(s, plan).unwrap();
+            assert_eq!(layer_children(s), 41, "the snapshot is taken after the merge");
+            drop(job);
+        }),
+        ("a batch", |s, _, _| {
+            s.execute("command.batch", &json!({"commands": [{"command": "object.move", "params": {"dx": 0, "dy": 50}}]})).unwrap();
+        }),
+        ("an option change", |s, _, _| {
+            s.set_tool_option_cmd(&json!({"key": "gapDetection", "value": true})).unwrap();
+        }),
+        ("another tool", |s, _, _| {
+            s.select_tool("selection", ViewInfo::default()).unwrap();
+        }),
+        ("a closed document", |s, _, _| {
+            s.execute("file.close", &json!({})).unwrap();
+        }),
+        ("Lock Guides", |s, _, _| {
+            s.execute("view.guides.lock", &json!({"locked": true})).unwrap();
+        }),
+        ("an option set from a panel", |s, _, _| {
+            s.set_tool_option("gapDetection", &json!(true));
+        }),
+        ("a dialog's preview, canceled", |s, _, _| {
+            s.begin_interaction("Move").unwrap();
+            s.preview("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+            s.preview("object.move", &json!({"dx": 9, "dy": 0})).unwrap();
+            s.cancel_interaction().unwrap();
+            assert_eq!(layer_children(s), 41, "canceling the preview keeps the merge");
+        }),
+        ("a dialog's preview, kept", |s, _, _| {
+            s.begin_interaction("Move").unwrap();
+            s.preview("object.move", &json!({"dx": 7, "dy": 0})).unwrap();
+            s.commit_interaction().unwrap();
+            let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+            assert_eq!(labels, ["Move", "Shape Builder"]);
+        }),
+        ("a scrubbed field, canceled", |s, _, _| {
+            let scope = s.begin_undo_scope().unwrap();
+            s.execute("object.move", &json!({"dx": 5, "dy": 0})).unwrap();
+            s.end_undo_scope(scope, true);
+            assert_eq!(
+                s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()),
+                Some("Shape Builder"),
+                "the scrub's step is undone, not the merge"
+            );
+        }),
+        ("a held click, then another tool", |s, _, _| {
+            let v = ViewInfo::default();
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+            }
+            assert!(s.tool_editing(), "the click is held");
+            s.select_tool("selection", v).unwrap();
+            let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+            assert_eq!(labels, ["Shape Builder", "Shape Builder"], "the held click merges with the Shape Builder first");
+        }),
+        ("a held click, then another document", |s, _, _| {
+            let v = ViewInfo::default();
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+            }
+            let first = s.active_index().unwrap();
+            s.add_document(vectorcraft_doc::Document::new(100.0, 100.0), None);
+            assert!(!s.tool_editing());
+            let labels: Vec<&str> = s.documents()[first].history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+            assert_eq!(labels, ["Shape Builder", "Shape Builder"], "the held click merges in its own document first");
+            s.set_active(first);
+        }),
+        ("a Cmd-click", |s, _, _| {
+            let v = ViewInfo::default();
+            let cmd = Mods { cmd: true, ..Default::default() };
+            assert_eq!(s.cursor(Point::new(500.0, 300.0), cmd, v), vectorcraft_tools::Cursor::Busy, "Cmd shows the merge is computed");
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 500.0, 300.0).with_mods(cmd), v).unwrap();
+            }
+            assert!(s.tool_editing(), "the click is held");
+            while s.tool_waiting() {
+                s.tool_poll(v, true).unwrap();
+            }
+            assert!(s.doc().unwrap().selection.is_empty(), "the lent selection tool deselects after the merge");
+            assert_eq!(s.tool_id(), "shapeBuilder");
+        }),
+        ("a Cmd-drag", |s, _, _| {
+            let v = ViewInfo::default();
+            let cmd = Mods { cmd: true, ..Default::default() };
+            for (kind, y) in [(PointerKind::Down, 10.0), (PointerKind::Drag, 60.0), (PointerKind::Drag, 110.0), (PointerKind::Up, 110.0)] {
+                s.pointer(&PointerEvent::new(kind, 305.0, y).with_mods(cmd), v).unwrap();
+            }
+            assert!(s.tool_editing(), "the drag is held");
+            while s.tool_waiting() {
+                s.tool_poll(v, true).unwrap();
+            }
+            let labels: Vec<&str> = s.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.as_str()).collect();
+            assert_eq!(labels, ["Move", "Shape Builder"]);
+        }),
+        // The proof views apply the merge first by command id (`WAIT_FOR_TOOL_EDIT`), also when
+        // the view does not change and no document gets a new revision. They are left off, as
+        // the other tests of the process-wide proof view expect.
+        ("Separations Preview", |s, _, _| {
+            s.execute("view.separationsPreview", &json!({"on": false})).unwrap();
+        }),
+        ("Overprint Preview", |s, _, _| {
+            s.execute("view.overprintPreview", &json!({"on": false})).unwrap();
+        }),
+        ("Proof Colors", |s, _, _| {
+            s.execute("view.proofColors", &json!({"on": false})).unwrap();
+        }),
+        ("Proof Setup", |s, _, _| {
+            s.execute("view.proofSetup", &json!({})).unwrap();
+        }),
+        ("a proof view that changes", |s, _, _| {
+            let _v = crate::tests_colormgmt::DefaultView::new();
+            s.execute("view.proofColors", &json!({"on": true})).unwrap();
+            let on = s.doc().unwrap().revision;
+            s.execute("view.proofColors", &json!({"on": false})).unwrap();
+            assert!(s.doc().unwrap().revision > on, "the view changes and the documents get new revisions");
+        }),
+        ("a preference", |s, _, _| {
+            let every = s.prefs.gridline_every;
+            s.execute("prefs.set", &json!({"key": "gridlineEvery", "value": every + 10.0})).unwrap();
+        }),
+        ("Reset Preferences", |s, _, _| {
+            s.execute("prefs.reset", &json!({})).unwrap();
+        }),
+        ("preferences applied outside a command", |s, _, _| {
+            let mut p = s.prefs.clone();
+            p.gridline_every += 10.0;
+            s.apply_prefs(p);
+        }),
+        ("Add Font Files", |s, _, _| {
+            // No files: the command fails after the merge.
+            assert!(s.execute("text.addFontFiles", &json!({"files": []})).is_err());
+        }),
+        ("a call its schema refuses", |s, _, _| {
+            // The refused call adds no undo step of its own: the merge's is the last one.
+            let e = s.execute("view.saved.new", &json!({"center": [0, 0], "zoom": 0})).unwrap_err().to_string();
+            assert!(e.contains("`zoom`"), "{e}");
+            assert!(s.doc().unwrap().doc.views.is_empty());
+            assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Shape Builder"));
+        }),
+    ];
+    let _proof = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let dir = vectorcraft_testkit::TempDir::new("shape-builder-merge-first");
+    for (what, then) in next {
+        let mut s = session();
+        if what == "Select All Instances" {
+            let far = rect(&mut s, 500.0, 500.0, 20.0, 20.0);
+            s.execute("symbol.new", &json!({"name": "S", "ids": [far.0]})).unwrap();
+        }
+        let ids = square_row(&mut s);
+        click_row(&mut s, v);
+        let computed = merges_computed();
+        let journal = s.journal.len();
+        then(&mut s, &ids, &dir);
+        assert!(!s.tool_editing(), "{what}");
+        assert_eq!(merges_computed(), computed, "{what}: the merge computed on another thread");
+        assert_eq!(s.journal.since(journal).first().map(|j| j.0.as_str()), Some("shapeBuilder.merge"), "{what}: the merge comes first");
+        if what != "a closed document" {
+            assert!(layer_children(&s) >= 41, "{what}: the merge stays");
+        }
+    }
+}
+
+/// Gestures and arrow keys that come while a merge is computed on another thread are held and
+/// made after it, in order: the document is the one they make one after the other, and the
+/// events count as made once they are and the merge they start is applied.
+#[test]
+fn shape_builder_holds_gestures_made_during_a_merge() {
+    type Gesture = fn(&mut Session, ViewInfo);
+    let cases: [(&str, bool, Gesture); 6] = [
+        ("a second click", false, |s, v| {
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+            }
+        }),
+        ("a drag", false, |s, v| {
+            for (kind, x) in [(PointerKind::Down, 75.0), (PointerKind::Drag, 85.0), (PointerKind::Drag, 95.0), (PointerKind::Up, 95.0)] {
+                s.pointer(&PointerEvent::new(kind, x, 10.0), v).unwrap();
+            }
+        }),
+        ("two clicks", false, |s, v| {
+            for x in [55.0, 135.0] {
+                for kind in [PointerKind::Down, PointerKind::Up] {
+                    s.pointer(&PointerEvent::new(kind, x, 10.0), v).unwrap();
+                }
+            }
+        }),
+        ("a Cmd-click", false, |s, v| {
+            let cmd = Mods { cmd: true, ..Default::default() };
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 500.0, 300.0).with_mods(cmd), v).unwrap();
+            }
+        }),
+        ("a Cmd-drag and a click", false, |s, v| {
+            let cmd = Mods { cmd: true, ..Default::default() };
+            for (kind, y) in [(PointerKind::Down, 10.0), (PointerKind::Drag, 110.0), (PointerKind::Up, 110.0)] {
+                s.pointer(&PointerEvent::new(kind, 305.0, y).with_mods(cmd), v).unwrap();
+            }
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+            }
+        }),
+        ("an arrow key", true, |s, v| {
+            s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+        }),
+    ];
+    let v = ViewInfo::default();
+    let start = |swatches: bool| {
+        let mut s = session();
+        if swatches {
+            s.select_tool("shapeBuilder", v).unwrap();
+            s.set_tool_option_cmd(&json!({"key": "pickColorFrom", "value": "swatches"})).unwrap();
+        }
+        square_row(&mut s);
+        click_row(&mut s, v);
+        s
+    };
+    for (what, swatches, send) in cases {
+        // One after the other: the merge applied before the gesture, and each merge after its own.
+        let mut one = start(swatches);
+        while one.tool_waiting() {
+            one.tool_poll(v, true).unwrap();
+        }
+        send(&mut one, v);
+        while one.tool_waiting() {
+            one.tool_poll(v, true).unwrap();
+        }
+        // While the merge is computed.
+        let mut s = start(swatches);
+        let revision = s.doc().unwrap().revision;
+        let from = s.input_count();
+        send(&mut s, v);
+        let to = s.input_count();
+        assert!(s.tool_editing() && !s.input_applied(from, to), "{what}: held");
+        assert_eq!(s.doc().unwrap().revision, revision, "{what}: nothing made before the merge");
+        while s.tool_waiting() {
+            s.tool_poll(v, true).unwrap();
+        }
+        assert!(!s.tool_editing() && s.input_applied(from, to), "{what}");
+        assert!(undated(&s) == undated(&one), "{what}: the document the gestures make one after the other");
+        assert_eq!(s.doc().unwrap().selection, one.doc().unwrap().selection, "{what}");
+        assert_eq!(s.paint.fill, one.paint.fill, "{what}");
+        let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+        assert_eq!(labels(&s), labels(&one), "{what}");
+        // The click's merge alone.
+        let mut merged = start(swatches);
+        while merged.tool_waiting() {
+            merged.tool_poll(v, true).unwrap();
+        }
+        let changed = labels(&s).len() > labels(&merged).len()
+            || s.paint.fill != merged.paint.fill
+            || s.doc().unwrap().selection != merged.doc().unwrap().selection;
+        assert!(changed, "{what}: the gesture did something");
+    }
+}
+
+/// A press held while a merge is computed on another thread, then dropped (a long touch, a
+/// canceled touch, a second finger), is never made: once the merge is applied, the tool is at
+/// rest and the document is the one the same input makes, dropped the same way, after the merge.
+/// A held click before the press is still made, and so is a perspective plane key held after it.
+#[test]
+fn shape_builder_drops_a_press_held_during_a_merge() {
+    use vectorcraft_tools::distort::perspective::{PerspectiveGrid, Plane};
+    type Gesture = fn(&mut Session, ViewInfo);
+    fn press(s: &mut Session, v: ViewInfo, x: f64, mods: Mods) {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, 10.0).with_mods(mods), v).unwrap();
+    }
+    fn click(s: &mut Session, v: ViewInfo) {
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            s.pointer(&PointerEvent::new(kind, 55.0, 10.0), v).unwrap();
+        }
+    }
+    // What a case sends, and whether the perspective grid is shown.
+    let cases: [(&str, bool, Gesture); 7] = [
+        ("a press", false, |s, v| press(s, v, 75.0, Mods::default())),
+        ("a drag", false, |s, v| {
+            press(s, v, 75.0, Mods::default());
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 95.0, 10.0), v).unwrap();
+        }),
+        ("a Cmd-press", false, |s, v| press(s, v, 305.0, Mods { cmd: true, ..Default::default() })),
+        ("a press and a key", false, |s, v| {
+            press(s, v, 75.0, Mods::default());
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+        }),
+        ("a press and an arrow key", false, |s, v| {
+            press(s, v, 75.0, Mods::default());
+            s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+        }),
+        ("a press and a plane key", true, |s, v| {
+            press(s, v, 75.0, Mods::default());
+            s.tool_key(ToolKey::Digit(3), Mods::default(), v).unwrap();
+        }),
+        ("a click, then a press", false, |s, v| {
+            click(s, v);
+            press(s, v, 135.0, Mods::default());
+        }),
+    ];
+    let v = ViewInfo::default();
+    let start = |grid: bool| {
+        let mut s = session();
+        s.select_tool("shapeBuilder", v).unwrap();
+        s.set_tool_option_cmd(&json!({"key": "pickColorFrom", "value": "swatches"})).unwrap();
+        if grid {
+            s.execute("perspective.grid.preset", &json!({"kind": 2})).unwrap();
+        }
+        square_row(&mut s);
+        click_row(&mut s, v);
+        s
+    };
+    // A tool left in the middle of a gesture keeps waiting: the polls stop after a few.
+    let settle = |s: &mut Session| {
+        for _ in 0..8 {
+            if !s.tool_waiting() {
+                return;
+            }
+            s.tool_poll(v, true).unwrap();
+        }
+    };
+    let labels = |s: &Session| s.doc().unwrap().history.undo.iter().map(|e| e.label.clone()).collect::<Vec<_>>();
+    let plane = |s: &Session| PerspectiveGrid::from_doc(&s.doc().unwrap().doc).unwrap().plane;
+    for (what, grid, send) in cases {
+        // The same input after the merge, dropped the same way.
+        let mut one = start(grid);
+        settle(&mut one);
+        send(&mut one, v);
+        one.drop_tool_press(v).unwrap();
+        settle(&mut one);
+        let mut s = start(grid);
+        if grid {
+            assert_ne!(plane(&s), Plane::Right, "{what}: the plane before the key");
+        }
+        let from = s.input_count();
+        send(&mut s, v);
+        let to = s.input_count();
+        assert!(s.tool_editing() && !s.input_applied(from, to), "{what}: held");
+        s.drop_tool_press(v).unwrap();
+        settle(&mut s);
+        assert!(!s.tool_waiting() && !s.tool_editing() && s.input_applied(from, to), "{what}");
+        assert!(!s.tool_busy(), "{what}: the tool is at rest");
+        assert_eq!(s.tool_id(), "shapeBuilder", "{what}: no tool is lent");
+        assert!(undated(&s) == undated(&one), "{what}: the document the input makes after the merge");
+        assert_eq!(labels(&s), labels(&one), "{what}");
+        assert_eq!(s.doc().unwrap().selection, one.doc().unwrap().selection, "{what}");
+        assert_eq!(s.paint.fill, one.paint.fill, "{what}");
+        if grid {
+            assert_eq!(plane(&one), Plane::Right, "{what}: the plane key is made after the merge");
+            assert_eq!(plane(&s), Plane::Right, "{what}: the plane key is made");
+        }
+    }
+}
+
+/// A new revision of the document made outside a command while a merge is computed on another
+/// thread keeps the merge when the selected art is as it was (the next poll applies it, as the
+/// command computes it), and drops it when the art changed.
+#[test]
+fn shape_builder_keeps_a_merge_over_a_new_revision_of_the_same_art() {
+    use vectorcraft_tools::builder::merges_computed;
+    let v = ViewInfo::default();
+    let mut s = session();
+    square_row(&mut s);
+    click_row(&mut s, v);
+    let computed = merges_computed();
+    s.active_mut().unwrap().revision += 1;
+    s.tool_poll(v, true).unwrap();
+    assert!(!s.tool_editing());
+    assert_eq!(merges_computed(), computed, "the merge computed on another thread");
+    assert_eq!(s.journal.last().unwrap().0, "shapeBuilder.merge");
+    let mut direct = session();
+    square_row(&mut direct);
+    direct.execute("shapeBuilder.merge", &json!({"points": [[15, 10]]})).unwrap();
+    assert!(undated(&s) == undated(&direct), "the same document as the command gives");
+    // The art changed: the merge is dropped.
+    let mut s = session();
+    let ids = square_row(&mut s);
+    click_row(&mut s, v);
+    let journal = s.journal.len();
+    let st = s.active_mut().unwrap();
+    Arc::make_mut(&mut st.doc).node_mut(ids[1]).unwrap().transform(Affine::translate((0.0, 50.0)), false);
+    st.revision += 1;
+    s.tool_poll(v, true).unwrap();
+    assert!(!s.tool_editing());
+    assert_eq!(s.journal.len(), journal, "nothing merged");
+    assert_eq!(layer_children(&s), 40);
+}
+
+/// A merge computed for the tool Cmd lent the selection tool's drag away from is applied before
+/// a command too.
+#[test]
+fn shape_builder_merge_of_the_lending_tool_comes_first() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    square_row(&mut s);
+    click_row(&mut s, v);
+    let lent = s.make_tool("selection");
+    s.lender = Some(std::mem::replace(&mut s.tool, lent));
+    assert!(s.tool_editing());
+    let journal = s.journal.len();
+    s.execute("object.move", &json!({"dx": 0, "dy": 100})).unwrap();
+    assert!(!s.tool_editing());
+    assert_eq!(s.journal.since(journal).first().map(|j| j.0.as_str()), Some("shapeBuilder.merge"));
+    assert_eq!(s.tool_id(), "selection", "the lent tool stays active until the release");
+    assert_eq!(s.lender.as_ref().map(|t| t.id()), Some("shapeBuilder"));
+}
+
 #[test]
 fn shape_builder_tool_merges_the_narrow_shape_it_highlights_in_a_wide_selection() {
     let mut s = session();
@@ -1951,6 +2446,193 @@ fn live_paint_stroke_edge() {
     assert!(s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [300, 300]})).is_err());
 }
 
+/// The undo and redo depths, the unsaved state and the revision of the active document.
+fn history_state(s: &Session) -> (usize, usize, bool, u64) {
+    let st = s.doc().unwrap();
+    (st.history.undo.len(), st.history.redo.len(), st.is_dirty(), st.revision)
+}
+
+/// Draw a rectangle and undo it, so a redo step is waiting, then mark the document saved with `g`
+/// alone selected.
+fn redo_waiting_and_saved(s: &mut Session, g: NodeId) {
+    rect(s, 300.0, 300.0, 10.0, 10.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+}
+
+/// The active document and its [`history_state`].
+type Snapshot = (vectorcraft_doc::Document, (usize, usize, bool, u64));
+
+fn snapshot(s: &Session) -> Snapshot {
+    ((*s.doc().unwrap().doc).clone(), history_state(s))
+}
+
+/// After a Live Paint edit that changed nothing: the document, the undo and redo steps, the saved
+/// state and the revision are as `before`, and Redo still brings back the rectangle
+/// [`redo_waiting_and_saved`] undid. Undoes the rectangle again, marks the document saved and
+/// takes a new `before`.
+fn assert_unchanged(s: &mut Session, before: &mut Snapshot, what: &str) {
+    assert!(*s.doc().unwrap().doc == before.0, "{what}: the document is as it was");
+    assert_eq!(history_state(s), before.1, "{what}: no undo step, the redo step kept, still saved");
+    let children = layer_children(s);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(layer_children(s), children + 1, "{what}: Redo brings back the rectangle");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    *before = snapshot(s);
+}
+
+#[test]
+fn live_paint_fill_same_paint_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let drag = json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#00ff00"});
+    s.execute("livePaint.fill", &drag).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    // A color used since stays the newest recent color and the last color.
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    s.remember_paint_now(&Paint::solid(blue));
+    let recent = (s.recent_colors.clone(), s.last_solid);
+    let mut before = snapshot(&s);
+    let click = s.execute("livePaint.fill", &json!({"group": g.0, "point": [75, 50], "color": "#00ff00"})).unwrap();
+    let face = vectorcraft_tools::builder::face_at(&node(&s, g), Point::new(75.0, 50.0)).unwrap().id;
+    assert_eq!(click, json!({"group": g.0, "face": face.0}), "the usual reply");
+    assert_unchanged(&mut s, &mut before, "a click on a face with the paint");
+    s.execute("livePaint.fill", &drag).unwrap();
+    assert_unchanged(&mut s, &mut before, "a drag over faces with the paint");
+    // Without a group, the click finds the Live Paint group among the selected objects.
+    s.execute("livePaint.fill", &json!({"point": [125, 50], "color": "#00ff00"})).unwrap();
+    assert_unchanged(&mut s, &mut before, "a click in the selected group");
+    assert_eq!((s.recent_colors.clone(), s.last_solid), recent, "the recent colors are as they were");
+    // A drag that reaches one face without the paint is one undo step and remembers the color.
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    for x in [25, 75] {
+        s.execute("livePaint.fill", &json!({"group": g.0, "point": [x, 50], "color": "#ff0000"})).unwrap();
+    }
+    s.remember_paint_now(&Paint::solid(blue));
+    let depth = s.doc().unwrap().history.undo.len();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#ff0000"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1);
+    assert_eq!(Paint::solid(s.last_solid), red);
+    let gn = node(&s, g);
+    for x in [25.0, 75.0, 125.0] {
+        assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), red, "{x}");
+    }
+}
+
+#[test]
+fn live_paint_bucket_click_with_the_face_paint_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+    let click = |s: &mut Session, x: f64| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, 50.0), v).unwrap();
+    };
+    click(&mut s, 125.0);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    click(&mut s, 125.0);
+    assert_unchanged(&mut s, &mut before, "a Bucket click on a face with the paint");
+    // A drag over faces with the paint changes nothing either.
+    click(&mut s, 25.0);
+    click(&mut s, 75.0);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+    assert_unchanged(&mut s, &mut before, "a Bucket drag over faces with the paint");
+}
+
+#[test]
+fn live_paint_stroke_edge_same_paint_and_width_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let call = json!({"group": g.0, "point": [100, 50], "color": "#ff0000", "width": 3});
+    let first = s.execute("livePaint.strokeEdge", &call).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    s.remember_paint_now(&Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let last = s.last_solid;
+    let mut before = snapshot(&s);
+    assert_eq!(s.execute("livePaint.strokeEdge", &call).unwrap(), first, "the usual reply");
+    assert_unchanged(&mut s, &mut before, "an edge with the paint and the width");
+    assert_eq!(s.last_solid, last, "the last color is as it was");
+    // Another width is an edit.
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100, 50], "color": "#ff0000", "width": 2})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
+#[test]
+fn live_paint_gap_options_same_values_are_no_op() {
+    let mut s = session();
+    let g = live_square_with_a_gap(&mut s);
+    let set = json!({"detect": true, "size": "small", "color": "#123456"});
+    let first = s.execute("livePaint.gapOptions", &set).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    assert_eq!(s.execute("livePaint.gapOptions", &set).unwrap(), first, "the usual reply");
+    assert_unchanged(&mut s, &mut before, "the options the group has");
+    s.execute("livePaint.gapOptions", &json!({})).unwrap();
+    assert_unchanged(&mut s, &mut before, "no options given");
+    // Close Gaps With Paths with a gap to close is an edit.
+    let r = s.execute("livePaint.gapOptions", &json!({"closeGaps": true})).unwrap();
+    assert_eq!(r["closed"], 1);
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
+#[test]
+fn live_paint_gap_options_close_without_gaps_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let r = s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true})).unwrap();
+    assert_eq!((ids(&r), &r["faces"], &r["closed"], gaps_of(&r).len()), (vec![g], &json!(3), &json!(0), 0));
+    assert_unchanged(&mut s, &mut before, "no gap to close");
+    // With other options, the faces keep their ids when no path is added.
+    let faces = |s: &Session| vectorcraft_tools::builder::faces(&node(s, g)).iter().map(|f| f.id).collect::<Vec<_>>();
+    let ids_before = faces(&s);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true, "color": "#00ff00"})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+    assert_eq!(faces(&s), ids_before);
+}
+
+#[test]
+fn live_paint_make_existing_group_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let r = s.execute("livePaint.make", &json!({})).unwrap();
+    assert_eq!((NodeId(r["id"].as_u64().unwrap()), &r["faces"]), (g, &json!(3)));
+    assert_eq!(r["edges"].as_u64().unwrap(), vectorcraft_tools::builder::edges(&node(&s, g)).len() as u64);
+    assert_unchanged(&mut s, &mut before, "Make with the group alone");
+}
+
+#[test]
+fn live_paint_merge_single_group_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let other = rect(&mut s, 300.0, 0.0, 50.0, 50.0);
+    redo_waiting_and_saved(&mut s, g);
+    // Given by id, the group is selected without an undo step.
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    let before = snapshot(&s);
+    let r = s.execute("livePaint.merge", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((NodeId(r["id"].as_u64().unwrap()), &r["faces"]), (g, &json!(3)));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
+    assert!(*s.doc().unwrap().doc == before.0);
+    let (undo, redo, dirty, _) = history_state(&s);
+    assert_eq!((undo, redo, dirty), (before.1.0, before.1.1, before.1.2));
+    // A path to add is an edit.
+    s.execute("livePaint.merge", &json!({"ids": [g.0, other.0]})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
 /// Shape Builder refuses an on/off option that is not true or false and a tolerance or gap that is
 /// not a number, given as text or as another value of the wrong kind, naming the key; the document
 /// and the undo history stay as they were. True, false and null still work.
@@ -2459,6 +3141,120 @@ fn merged_live_paint_groups_keep_the_bottom_groups_gap_options() {
 }
 
 #[test]
+fn live_paint_bucket_drag_fills_multiple_faces() {
+    let mut s = session();
+    let g = live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+    let before = s.doc().unwrap().doc.clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    // Skip the middle face between pointer events, as can happen in a fast drag.
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+    let gn = node(&s, g);
+    for x in [25.0, 75.0, 125.0] {
+        let f = vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap();
+        assert_eq!(f.appearance.fill_paint(), s.paint.fill, "dragged face at {x}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().doc, before, "one Undo restores every face");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 125.0, 50.0), v).unwrap();
+    assert!(!s.overlays(v).is_empty(), "hover still highlights a face");
+    assert_eq!(s.doc().unwrap().doc, before, "hover does not paint");
+}
+
+#[test]
+fn live_paint_bucket_drag_crosses_thin_grid_cells_and_can_cancel() {
+    for (deferred, cancel) in [(false, false), (false, true), (true, false)] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (50.25, 0.0), (50.25, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|i| i.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = !deferred;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+        if cancel {
+            assert!(s.tool_busy());
+            assert!(s.tool_claims_key(ToolKey::Escape, v));
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+            assert!(!s.tool_busy());
+            assert!(!s.tool_claims_key(ToolKey::Escape, v));
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 50.125, 125.0] {
+                let f = vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap();
+                assert_eq!(f.appearance.fill_paint(), s.paint.fill, "deferred={deferred}, x={x}");
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "deferred={deferred}, cancel={cancel}: original paths and selection art must be restored");
+    }
+}
+
+#[test]
+fn live_paint_bucket_long_drag_keeps_late_turns_and_release_as_one_undo() {
+    for cancel in [false, true] {
+        let mut s = session();
+        let ids = [rect(&mut s, 0.0, 0.0, 150.0, 100.0), line(&mut s, (50.0, 0.0), (50.0, 100.0)), line(&mut s, (100.0, 0.0), (100.0, 100.0))];
+        s.execute("select.set", &json!({"ids": ids.map(|id| id.0)})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let v = ViewInfo::default();
+        s.select_tool("livePaintBucket", v).unwrap();
+        s.prefs.real_time_drawing = false;
+        s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+        s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+        for i in 1..4096 {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 25.0 + f64::from(i) / 10000.0, 50.0), v).unwrap();
+        }
+        // Turn around the middle face after the chunk limit, then enter the right face on Up.
+        for (x, y) in [(25.0, 150.0), (125.0, 150.0)] {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, x, y), v).unwrap();
+        }
+        if cancel {
+            s.tool_key(ToolKey::Escape, Mods::default(), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+        if !cancel {
+            let g = s.doc().unwrap().selection.objects[0];
+            let gn = node(&s, g);
+            for x in [25.0, 125.0] {
+                assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), s.paint.fill);
+            }
+            assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(75.0, 50.0)).unwrap().appearance.fill_paint(), Paint::solid(Color::WHITE));
+            s.execute("edit.undo", &json!({})).unwrap();
+        }
+        assert!(s.doc().unwrap().doc == before, "long drag is one cancellable undo step");
+    }
+}
+
+#[test]
+fn live_paint_bucket_drag_rejects_invalid_points_atomically() {
+    let mut s = session();
+    let g = live(&mut s);
+    let before = s.doc().unwrap().doc.clone();
+    for points in
+        [json!([]), json!([[26.0, 50.0]]), json!([[25.0, 50.0], [null, 0]]), json!([[25.0, 50.0], [1e30, 0]]), json!(vec![[25.0, 50.0]; 4097])]
+    {
+        assert!(s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": points})).is_err());
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    for continuation in [json!(null), json!([[[26.0, 50.0], [125.0, 50.0]]]), json!([vec![[25.0, 50.0]; 4097]])] {
+        assert!(
+            s.execute("livePaint.fill", &json!({"group": g.0, "point": [25.0, 50.0], "points": [[25.0, 50.0]], "continuation": continuation}))
+                .is_err()
+        );
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+}
+
+#[test]
 fn live_paint_bucket_tool_fills_face() {
     let mut s = session();
     let g = live(&mut s);
@@ -2476,6 +3272,144 @@ fn live_paint_bucket_tool_fills_face() {
     s.pointer(&PointerEvent::new(PointerKind::Down, 125.0, 50.0), v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
     assert_eq!(s.doc().unwrap().selection.objects, vec![f.id]);
+}
+
+/// `tool.setOption` refuses an invalid value for the Live Paint tools, naming its key, whether the
+/// tool is active or not and in the `key`/`value` and `values` forms: a switch that is not true or
+/// false, a color that is not an RGB color (an alpha part included), a width that is not a number
+/// and an option the tool does not have. Nothing is set, also from the valid values sent with it,
+/// and the saved settings stay as they were.
+#[test]
+fn live_paint_tool_options_refuse_invalid_values_and_change_nothing() {
+    let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
+    let widths = [json!("wide"), json!(null), json!(true)];
+    let switches = [json!("true"), json!(null), json!(1)];
+    for (tool, keys) in
+        [("livePaintBucket", &["paintFills", "paintStrokes", "highlight"][..]), ("livePaintSelection", &["selectFills", "selectStrokes"][..])]
+    {
+        let mut bad: Vec<(&str, Value)> = keys.iter().flat_map(|k| switches.iter().map(move |v| (*k, v.clone()))).collect();
+        bad.extend(colors.iter().map(|v| ("color", v.clone())));
+        bad.extend(widths.iter().map(|v| ("width", v.clone())));
+        bad.push(("colour", json!("#00ff00")));
+        for active in [false, true] {
+            let mut s = session();
+            if active {
+                s.select_tool(tool, ViewInfo::default()).unwrap();
+            }
+            let (options, prefs) = (s.tool_options_of(tool), s.prefs.clone());
+            for (key, v) in &bad {
+                let mut values = serde_json::Map::new();
+                values.insert("width".into(), json!(9));
+                values.insert(key.to_string(), v.clone());
+                for p in [json!({"tool": tool, "values": values}), json!({"tool": tool, "key": key, "value": v})] {
+                    let e = s.set_tool_option_cmd(&p).unwrap_err();
+                    assert!(e.contains(&format!("`{key}`")), "{tool} {p}: {e}");
+                    assert_eq!((s.tool_options_of(tool), &s.prefs), (options.clone(), &prefs), "{tool} {p}");
+                }
+            }
+            // A `key` left without a `value` is an invalid value too.
+            assert!(s.set_tool_option_cmd(&json!({"tool": tool, "key": "color"})).is_err());
+            s.select_tool(tool, ViewInfo::default()).unwrap();
+            assert_eq!(s.tool_options_of(tool), options, "{tool}");
+        }
+    }
+}
+
+/// The Live Paint tools' options take each color form they took before, and a width out of range
+/// is clamped to 1–20 rather than refused; the values are saved with the preferences.
+#[test]
+fn live_paint_tool_options_take_rgb_colors_and_clamp_the_width() {
+    let mut s = session();
+    for tool in ["livePaintBucket", "livePaintSelection"] {
+        for (color, hex) in [("#00FF00", "#00ff00"), ("#0f0", "#00ff00"), ("0000ff", "#0000ff"), ("light blue", "#4f80ff"), ("white", "#ffffff")] {
+            let o = s.set_tool_option_cmd(&json!({"tool": tool, "key": "color", "value": color})).unwrap();
+            assert_eq!(o["color"], hex, "{tool} {color}");
+        }
+        for (width, set) in [(100.0, 20.0), (0.0, 1.0), (-3.0, 1.0), (7.5, 7.5)] {
+            let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"width": width}})).unwrap();
+            assert_eq!(o["width"], set, "{tool} {width}");
+        }
+        assert_eq!(s.prefs.tool_settings[tool]["width"], 7.5);
+        assert_eq!(s.prefs.tool_settings[tool]["color"], "#ffffff");
+    }
+    let o = s.set_tool_option_cmd(&json!({"tool": "livePaintBucket", "values": {"paintFills": false, "highlight": false}})).unwrap();
+    assert_eq!((&o["paintFills"], &o["highlight"]), (&json!(false), &json!(false)));
+}
+
+/// Saved Live Paint settings that hold an invalid value still load: the tool keeps its default for
+/// that option and takes the valid ones.
+#[test]
+fn live_paint_tools_load_saved_settings_with_invalid_values() {
+    let mut s = session();
+    let saved = json!({"paintFills": "yes", "highlight": false, "width": "wide", "color": "nope", "paintStrokes": true});
+    s.prefs.tool_settings.insert("livePaintBucket".into(), saved.as_object().unwrap().clone());
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    let o = s.tool_options_of("livePaintBucket");
+    assert_eq!(
+        (&o["paintFills"], &o["paintStrokes"], &o["highlight"], &o["width"], &o["color"]),
+        (&json!(true), &json!(true), &json!(false), &json!(4.0), &json!("#ff2a2a"))
+    );
+}
+
+/// `tool.setOption` refuses an invalid value for the Shape Builder, naming its key, whether the
+/// tool is active or not and in the `key`/`value` and `values` forms: a switch that is not true or
+/// false, a `pickColorFrom` or `selection` that is not one of its names, a `gapLength` that is not
+/// a number, a `highlightColor` that is not an RGB color (an alpha part included) and an option the
+/// tool does not have. Nothing is set, also from the valid values sent with it, and the saved
+/// settings stay as they were.
+#[test]
+fn shape_builder_tool_options_refuse_invalid_values_and_change_nothing() {
+    let tool = "shapeBuilder";
+    let switches = ["openFilledAsClosed", "cursorSwatchPreview", "highlightFill", "gapDetection", "clickStrokeSplitsPath", "highlightStroke"];
+    let mut bad: Vec<(&str, Value)> = switches.iter().flat_map(|k| [json!("true"), json!(null), json!(1)].map(move |v| (*k, v))).collect();
+    bad.extend([json!("Swatches"), json!(true), json!(null), json!("")].map(|v| ("pickColorFrom", v)));
+    bad.extend([json!("straight"), json!(1), json!(null)].map(|v| ("selection", v)));
+    bad.extend([json!("wide"), json!(null), json!(true)].map(|v| ("gapLength", v)));
+    let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
+    bad.extend(colors.map(|v| ("highlightColor", v)));
+    bad.push(("color", json!("#00ff00")));
+    for active in [false, true] {
+        let mut s = session();
+        if active {
+            s.select_tool(tool, ViewInfo::default()).unwrap();
+        }
+        let (options, prefs) = (s.tool_options_of(tool), s.prefs.clone());
+        for (key, v) in &bad {
+            let mut values = serde_json::Map::new();
+            values.insert("gapLength".into(), json!(9));
+            values.insert(key.to_string(), v.clone());
+            for p in [json!({"tool": tool, "values": values}), json!({"tool": tool, "key": key, "value": v})] {
+                let e = s.set_tool_option_cmd(&p).unwrap_err();
+                assert!(e.contains(&format!("`{key}`")), "{p}: {e}");
+                assert_eq!((s.tool_options_of(tool), &s.prefs), (options.clone(), &prefs), "{p}");
+            }
+        }
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        assert_eq!(s.tool_options_of(tool), options);
+    }
+}
+
+/// The Shape Builder's options take each value they took before: the names of `pickColorFrom` and
+/// `selection`, each RGB color form, and a gap length out of range clamped rather than refused.
+#[test]
+fn shape_builder_tool_options_take_valid_values_and_clamp_the_gap() {
+    let mut s = session();
+    let tool = "shapeBuilder";
+    for (color, hex) in [("#00FF00", "#00ff00"), ("#0f0", "#00ff00"), ("0000ff", "#0000ff"), ("light blue", "#4f80ff"), ("white", "#ffffff")] {
+        let o = s.set_tool_option_cmd(&json!({"tool": tool, "key": "highlightColor", "value": color})).unwrap();
+        assert_eq!(o["highlightColor"], hex, "{color}");
+    }
+    for (gap, set) in [(1000.0, vectorcraft_tools::builder::SHAPE_BUILDER_MAX_GAP), (-3.0, 0.0), (7.5, 7.5)] {
+        let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"gapLength": gap}})).unwrap();
+        assert_eq!(o["gapLength"], set, "{gap}");
+    }
+    let o = s
+        .set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "swatches", "selection": "straightLine", "gapDetection": true}}))
+        .unwrap();
+    assert_eq!((&o["pickColorFrom"], &o["selection"], &o["gapDetection"]), (&json!("swatches"), &json!("straightLine"), &json!(true)));
+    let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "artwork", "selection": "freeform"}})).unwrap();
+    assert_eq!((&o["pickColorFrom"], &o["selection"]), (&json!("artwork"), &json!("freeform")));
+    assert_eq!(s.prefs.tool_settings[tool]["gapLength"], 7.5);
 }
 
 #[test]
@@ -2969,6 +3903,91 @@ fn image_trace_make_places_paths_over_the_image() {
     assert_eq!(paths[0].appearance.fill_paint(), Paint::solid(Color::rgb8(0, 0, 0)));
 }
 
+#[test]
+fn image_trace_keep_colors_traces_only_the_colors_listed() {
+    // A light field with a black ring, a red square and a blue bar on it.
+    let art = vectorcraft_trace::Raster::from_fn(200, 150, |x, y| {
+        let r = (f64::from(x) + 0.5 - 70.0).hypot(f64::from(y) + 0.5 - 60.0);
+        if (34.0..=40.0).contains(&r) {
+            [0, 0, 0, 255]
+        } else if (130..170).contains(&x) && (30..70).contains(&y) {
+            [200, 40, 50, 255]
+        } else if (30..170).contains(&x) && (110..130).contains(&y) {
+            [40, 80, 200, 255]
+        } else {
+            [240, 240, 220, 255]
+        }
+    });
+    let traced = |keep: Value| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let params = json!({"params": {"mode": "color", "palette": "limited", "colors": 4, "keepColors": keep}});
+        let r = s.execute("imageTrace.makeAndExpand", &params)?;
+        let g = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let fills: Vec<Paint> = g.children().unwrap().iter().map(|n| n.appearance.fill_paint()).collect();
+        Ok::<_, EngineError>((r["colors"].clone(), fills))
+    };
+    let (black, red, blue, light) = (Color::rgb8(0, 0, 0), Color::rgb8(200, 40, 50), Color::rgb8(40, 80, 200), Color::rgb8(240, 240, 220));
+    let has = |fills: &[Paint], c: Color| fills.contains(&Paint::solid(c));
+    // Nothing listed: every color.
+    let (colors, fills) = traced(json!([])).unwrap();
+    assert_eq!(colors, 4);
+    assert!([black, red, blue, light].into_iter().all(|c| has(&fills, c)), "{fills:?}");
+    // The black and the red only.
+    let (colors, fills) = traced(json!(["#000000", "#c8283c"])).unwrap();
+    assert_eq!(colors, 2);
+    assert!(has(&fills, black) && has(&fills, red), "{fills:?}");
+    assert!(fills.iter().all(|f| *f == Paint::solid(black) || *f == Paint::solid(red)), "{fills:?}");
+    // A color that is none is refused.
+    let e = traced(json!(["#000000", "black"])).unwrap_err().to_string();
+    assert!(e.contains("\"black\"") && e.contains("#rrggbb"), "{e}");
+    assert!(find_command("imageTrace.make").unwrap().params.contains("keepColors?: [\"#rrggbb\"…]"));
+    assert!(find_command("imageTrace.makeAndExpand").unwrap().params.contains("warnings: [text…] (as imageTrace.make)"));
+}
+
+#[test]
+fn image_trace_keep_colors_warns_about_colors_that_match_nothing() {
+    // A light field with a black ring and a red square on it.
+    let art = vectorcraft_trace::Raster::from_fn(200, 150, |x, y| {
+        let r = (f64::from(x) + 0.5 - 70.0).hypot(f64::from(y) + 0.5 - 60.0);
+        if (34.0..=40.0).contains(&r) {
+            [0, 0, 0, 255]
+        } else if (130..170).contains(&x) && (30..70).contains(&y) {
+            [200, 40, 50, 255]
+        } else {
+            [240, 240, 220, 255]
+        }
+    });
+    let traced = |params: Value| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let r = s.execute("imageTrace.makeAndExpand", &json!({ "params": params })).unwrap();
+        (r["paths"].as_u64().unwrap(), r["warnings"].clone())
+    };
+    let color = |keep: Value| traced(json!({"mode": "color", "palette": "limited", "colors": 3, "keepColors": keep}));
+    // Every color listed is in the image: no warning.
+    let (paths, warnings) = color(json!(["#000000", "#c8283c"]));
+    assert!(paths > 0);
+    assert_eq!(warnings, json!([]));
+    // No color matches: nothing is traced, and the reply says why.
+    assert_eq!(
+        color(json!(["#ff00ff", "#00ffff"])),
+        (0, json!(["Nothing was traced: none of the colors the trace found matches keepColors (#ff00ff, #00ffff)."]))
+    );
+    // One color matches nothing: the others are traced, and that one is named.
+    let (paths, warnings) = color(json!(["#000000", "#00ffff"]));
+    assert!(paths > 0);
+    assert_eq!(warnings, json!(["keepColors: none of the colors the trace found matches #00ffff, so nothing of it is traced."]));
+    // Ignore Color leaves out the only color listed.
+    let ignored =
+        traced(json!({"mode": "color", "palette": "limited", "colors": 3, "keepColors": ["#000000"], "ignoreWhite": true, "ignoreColor": "#000000"}));
+    assert_eq!(ignored, (0, json!(["Nothing was traced: Ignore Color leaves out every area of the colors keepColors lists."])));
+    // Flat Logo mode does not use the list.
+    let (paths, warnings) = traced(json!({"mode": "logo", "keepColors": ["#ff00ff"]}));
+    assert!(paths > 0);
+    assert_eq!(warnings, json!(["Flat Logo mode does not use keepColors: it traces the colors named in logoColors, or the colors it finds."]));
+}
+
 /// #3098: a trace made away from the command (off the UI thread) and handed in makes the command's
 /// own edit, as one undo step; Cancel stops it; once its image has changed it no longer applies.
 #[test]
@@ -3012,6 +4031,73 @@ fn a_trace_run_hands_its_trace_to_the_command() {
     assert!((bb.center().x - 160.0).abs() < 1.5, "traced where the image is now: {bb:?}");
 }
 
+/// A plug-in run that calls Image Trace and then fails leaves a trace handed in for the command in
+/// place, as it leaves the document.
+#[test]
+fn a_failed_plugin_run_keeps_a_handed_in_trace() {
+    use vectorcraft_plugins::wat as tpl;
+    let (id, cmd, args) = ("test.engine.calltrace", "imageTrace.make", r#"{"params":{"ignoreWhite":true}}"#);
+    let mut s = session();
+    s.allow_plugin_grants_from_requests();
+    image_doc(&mut s);
+    let p: Value = serde_json::from_str(args).unwrap();
+    let run = cmd::TraceRun::prepare(&s, cmd, &p).unwrap();
+    run.run(&|_, _| true).unwrap().hand_in(&mut s);
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["{cmd}"]}}"#);
+    let imports = format!(
+        r#"(import "env" "vc_call" (func $vc_call (param i32 i32 i32 i32) (result i32)))
+  (data (i32.const 0x2000) "{}") (data (i32.const 0x2100) "{}")"#,
+        tpl::string(cmd),
+        tpl::string(args)
+    );
+    let first =
+        format!("(drop (call $vc_call (i32.const 0x2000) (i32.const {}) (i32.const 0x2100) (i32.const {}))) unreachable", cmd.len(), args.len());
+    let wasm = wat::parse_str(tpl::with_imports(&manifest, &imports, &first, "{}")).unwrap();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true})).unwrap();
+    assert!(s.execute("plugin.run", &json!({"id": id, "ids": []})).is_err());
+    assert!(s.trace_hand_off.is_some(), "the trace is still handed in");
+    assert!(s.execute(cmd, &p).is_ok());
+    assert!(s.trace_hand_off.is_none(), "taken");
+    s.execute("plugin.remove", &json!({"id": id})).unwrap();
+}
+
+#[test]
+fn image_trace_ignore_background_keeps_the_color_inside_the_art() {
+    // A black field, a light panel on it and a black ring on the panel.
+    let art = vectorcraft_trace::Raster::from_fn(200, 150, |x, y| {
+        let r = (f64::from(x) + 0.5 - 100.0).hypot(f64::from(y) + 0.5 - 75.0);
+        if !((20..180).contains(&x) && (20..130).contains(&y)) || (37.0..=43.0).contains(&r) { [0, 0, 0, 255] } else { [240, 240, 220, 255] }
+    });
+    let traced = |background: bool| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let params = json!({"params": {"mode": "color", "palette": "limited", "colors": 2, "ignoreWhite": true, "ignoreColor": "#000000", "ignoreBackground": background}});
+        let r = s.execute("imageTrace.makeAndExpand", &params).unwrap();
+        let g = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let black: Vec<_> = g
+            .children()
+            .unwrap()
+            .iter()
+            .filter(|n| n.appearance.fill_paint() == Paint::solid(Color::rgb8(0, 0, 0)))
+            .map(|n| outline(n).0.bounds().unwrap())
+            .collect();
+        (r["colors"].clone(), black)
+    };
+    // The whole color: the ring goes with the field.
+    let (colors, black) = traced(false);
+    assert_eq!(colors, 1);
+    assert!(black.is_empty(), "{black:?}");
+    // The background only: the ring stays, and nothing black reaches the image's edge.
+    let (colors, black) = traced(true);
+    assert_eq!(colors, 2);
+    assert_eq!(black.len(), 1, "{black:?}");
+    let bb = black[0];
+    assert!((bb.x0 - 57.0).abs() < 1.5 && (bb.x1 - 143.0).abs() < 1.5 && (bb.y0 - 32.0).abs() < 1.5 && (bb.y1 - 118.0).abs() < 1.5, "{bb:?}");
+    // The params doc tells agents about the option.
+    assert!(find_command("imageTrace.make").unwrap().params.contains("ignoreBackground: false"));
+}
+
 /// A Document Library trace made away from its command no longer applies once the library's
 /// colours change: the settings' JSON leaves them out (#4605 review).
 #[test]
@@ -3025,6 +4111,103 @@ fn a_trace_run_needs_the_library_colours_it_traced_with() {
     let name = s.doc().unwrap().doc.swatches_iter().find(swatch).map(|w| w.name.clone()).unwrap();
     s.execute("swatch.edit", &json!({"name": name, "color": "#123456"})).unwrap();
     assert!(!run.current(&s), "{name} changed");
+}
+
+/// `image_doc`'s image with its disc 20 px to the left: the same size, other pixels.
+fn moved_disc_png() -> Vec<u8> {
+    vectorcraft_trace::Raster::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (x as f64 + 0.5 - 30.0, y as f64 + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    })
+    .encode_png()
+}
+
+/// Puts `bytes` under the image key `key`, or takes the key's image data away (`None`).
+fn set_image_data(s: &mut Session, key: &str, bytes: Option<Vec<u8>>) {
+    s.edit("image data", |d, _| {
+        match bytes {
+            Some(b) => d.images.insert(key.into(), ImageBlob::new("image/png", b)),
+            None => d.images.remove(key),
+        };
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// The middle of the first traced path of the Image Trace object the reply `r` names, in x.
+fn traced_center_x(s: &Session, r: &Value) -> f64 {
+    outline(&traced_paths(&node(s, NodeId(r["id"].as_u64().unwrap())))[0]).0.bounds().unwrap().center().x
+}
+
+/// A trace made away from its command no longer applies once the pixels under its image's key
+/// change, though the object, its image record and the settings stay as they were; both commands
+/// then trace the pixels there now. The same bytes in another allocation still apply.
+#[test]
+fn a_trace_run_needs_the_pixels_it_traced() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut s = session();
+        image_doc(&mut s);
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        // The same bytes, allocated anew: still current.
+        let same = s.doc().unwrap().doc.images["img1"].bytes.to_vec();
+        set_image_data(&mut s, "img1", Some(same));
+        assert!(run.current(&s), "{command}: equal bytes");
+        // Other pixels under the same key: no longer current, and the hand-off is dropped.
+        set_image_data(&mut s, "img1", Some(moved_disc_png()));
+        assert!(!run.current(&s), "{command}: other pixels");
+        traced.hand_in(&mut s);
+        let r = s.execute(command, run.params()).unwrap();
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        // The disc is now at image x 30, which the ×2 placement at 50 puts at 110.
+        let x = traced_center_x(&s, &r);
+        assert!((x - 110.0).abs() < 1.5, "{command}: traced the pixels there now, at {x}");
+    }
+}
+
+/// Image data that is missing or empty: a run made before it went no longer applies, the run's
+/// command gives the error it gives without a run, and nothing panics.
+#[test]
+fn a_trace_run_of_missing_or_empty_image_data() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    let traced = run.run(&|_, _| true).unwrap();
+    set_image_data(&mut s, "img1", None);
+    assert!(!run.current(&s), "missing");
+    traced.hand_in(&mut s);
+    let e = s.execute(run.command(), run.params()).unwrap_err().to_string();
+    assert!(e.contains("image data `img1` is missing"), "{e}");
+    set_image_data(&mut s, "img1", Some(vec![]));
+    assert!(!run.current(&s), "empty");
+    let empty = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    assert!(empty.current(&s), "two empty blobs are equal");
+    assert!(matches!(empty.run(&|_, _| true), Err(EngineError::Other(_))));
+    assert!(matches!(s.execute(run.command(), run.params()), Err(EngineError::Other(_))));
+}
+
+/// Tracing an Image Trace object again follows the same rule: once the pixels of the image it
+/// holds change, a run made before no longer applies, and the command traces the pixels there now.
+#[test]
+fn a_trace_run_of_an_image_trace_object_needs_its_pixels() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let g = s.execute("imageTrace.make", &p).unwrap()["id"].as_u64().unwrap();
+    let again = json!({"id": g, "params": {"ignoreWhite": true}});
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &again).unwrap();
+    assert_eq!(run.target(), NodeId(g));
+    let traced = run.run(&|_, _| true).unwrap();
+    assert!(run.current(&s));
+    set_image_data(&mut s, "img1", Some(moved_disc_png()));
+    assert!(!run.current(&s));
+    traced.hand_in(&mut s);
+    let r = s.execute(run.command(), run.params()).unwrap();
+    assert!(s.trace_hand_off.is_none(), "dropped");
+    let x = traced_center_x(&s, &r);
+    assert!((x - 110.0).abs() < 1.5, "traced the pixels there now, at {x}");
 }
 
 /// Shapes: the disc of the test image comes out as a live ellipse where the image lies, the same
@@ -3219,6 +4402,319 @@ fn image_trace_release_and_expand() {
     assert!(n.name.is_none());
     assert!(n.children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Image(_))));
     assert!(s.execute("imageTrace.release", &json!({})).is_err());
+}
+
+/// Expand by color: each color's paths in a group of their own, named by the color, the groups
+/// stacked by the lowest path in each and the art drawn as before; Release to Layers then gives a
+/// sublayer for each color.
+#[test]
+#[allow(clippy::cognitive_complexity)] // Exercises several color and stacking cases in one trace fixture.
+fn image_trace_expand_by_color_groups_each_colors_paths() {
+    // A light field with a black ring and a red square on it.
+    let art = vectorcraft_trace::Raster::from_fn(200, 150, |x, y| {
+        let r = (f64::from(x) + 0.5 - 70.0).hypot(f64::from(y) + 0.5 - 75.0);
+        if (34.0..=40.0).contains(&r) {
+            [0, 0, 0, 255]
+        } else if (130..170).contains(&x) && (55..95).contains(&y) {
+            [200, 40, 50, 255]
+        } else {
+            [240, 240, 220, 255]
+        }
+    });
+    let names = |n: &Node| n.children().unwrap().iter().map(|c| c.name.clone().unwrap_or_default()).collect::<Vec<_>>();
+    let hex = |n: &Node| n.appearance.fill_paint().color().unwrap().to_hex();
+    let shot = |s: &Session| {
+        let img = render_doc(s, false);
+        (0..200).flat_map(|x| (0..150).map(move |y| (x, y))).map(|(x, y)| img.pixel(x, y)).collect::<Vec<_>>()
+    };
+    for method in ["abutting", "overlapping"] {
+        let params = json!({"mode": "color", "palette": "limited", "colors": 3, "method": method});
+        let expand = |by_color: bool| {
+            let mut s = session();
+            add_image(&mut s, &art, Affine::IDENTITY);
+            let r = s.execute("imageTrace.makeAndExpand", &json!({"params": params, "byColor": by_color})).unwrap();
+            let g = NodeId(r["id"].as_u64().unwrap());
+            (s, g)
+        };
+        let (flat, fg) = expand(false);
+        let (mut s, g) = expand(true);
+        let paths = node(&flat, fg).children().unwrap().clone();
+        // Without byColor (the default) the paths sit in the trace's group, with no group of their own.
+        assert!(paths.iter().all(|p| !matches!(p.kind, NodeKind::Group { .. })), "{method}");
+        let (default, dg) = {
+            let mut s = session();
+            add_image(&mut s, &art, Affine::IDENTITY);
+            let r = s.execute("imageTrace.makeAndExpand", &json!({"params": params})).unwrap();
+            (s, NodeId(r["id"].as_u64().unwrap()))
+        };
+        assert!(*node(&default, dg).children().unwrap() == paths, "{method}: byColor is false when not given");
+        // The colors in the order they first come in, bottom to top.
+        let mut order: Vec<String> = vec![];
+        for p in &paths {
+            if !order.contains(&hex(p)) {
+                order.push(hex(p));
+            }
+        }
+        let mut sorted = order.clone();
+        sorted.sort();
+        assert_eq!(sorted, ["#000000", "#c82832", "#f0f0dc"], "{method}");
+        let n = node(&s, g);
+        // Overlapping fills the ring whole and draws the field inside it above the ring: that path starts a second
+        // group of the field's color, above the black one.
+        let want: Vec<String> = if method == "overlapping" { order.iter().chain(order.first()).cloned().collect() } else { order.clone() };
+        assert_eq!(names(&n), want, "{method}");
+        // Each group holds its color's paths, and in turn they are the paths of the trace without
+        // byColor, in their order.
+        let groups = n.children().unwrap();
+        for c in groups {
+            assert!(matches!(c.kind, NodeKind::Group { .. }), "{method}");
+            assert!(c.children().unwrap().iter().all(|m| Some(hex(m)) == c.name), "{method}: {:?}", c.name);
+        }
+        let members: Vec<Arc<Node>> = groups.iter().flat_map(|c| c.children().unwrap().iter().cloned()).collect();
+        assert!(members == paths, "{method}");
+        assert!(shot(&s) == shot(&flat), "{method}: the art changed");
+        // Release to Layers: a sublayer for each color, in the same order.
+        let r = s.execute("layer.releaseToLayers", &json!({"id": g.0})).unwrap();
+        let subs = ids(&r);
+        assert_eq!(subs.len(), want.len(), "{method}");
+        for (sub, name) in subs.iter().zip(&want) {
+            let l = node(&s, *sub);
+            assert!(matches!(l.kind, NodeKind::Layer { .. }), "{method}");
+            assert_eq!(names(&l), std::slice::from_ref(name), "{method}");
+        }
+    }
+
+    // imageTrace.expand takes it too, as one undo step.
+    let mut s = session();
+    add_image(&mut s, &art, Affine::IDENTITY);
+    let params = json!({"mode": "color", "palette": "limited", "colors": 3});
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": params})).unwrap()["id"].as_u64().unwrap());
+    let steps = s.doc().unwrap().history.undo.len();
+    s.execute("imageTrace.expand", &json!({"byColor": true})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1);
+    let mut got = names(&node(&s, g));
+    got.sort();
+    assert_eq!(got, ["#000000", "#c82832", "#f0f0dc"]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
+
+    // A trace of one color gives one group holding every path.
+    let mut one = session();
+    let bar =
+        vectorcraft_trace::Raster::from_fn(80, 40, |x, y| if (10..70).contains(&x) && (10..30).contains(&y) { [0, 0, 0, 255] } else { [255; 4] });
+    add_image(&mut one, &bar, Affine::IDENTITY);
+    let r = one.execute("imageTrace.makeAndExpand", &json!({"params": {"ignoreWhite": true}, "byColor": true})).unwrap();
+    let og = node(&one, NodeId(r["id"].as_u64().unwrap()));
+    assert_eq!(names(&og), ["#000000"]);
+    let only = &og.children().unwrap()[0];
+    assert!(!only.children().unwrap().is_empty() && only.children().unwrap().iter().all(|m| hex(m) == "#000000"));
+
+    // Auto Grouping's groups are not split: refused, and the trace stays as it was.
+    let mut grouped = params.clone();
+    grouped["autoGrouping"] = json!(true);
+    let e = s.execute("imageTrace.makeAndExpand", &json!({"id": g.0, "params": grouped, "byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("Auto Grouping"), "{e}");
+    let g = NodeId(s.execute("imageTrace.make", &json!({"id": g.0, "params": grouped})).unwrap()["id"].as_u64().unwrap());
+    let e = s.execute("imageTrace.expand", &json!({"byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("Auto Grouping"), "{e}");
+    assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
+    let e = s.execute("imageTrace.expand", &json!({"byColor": "yes"})).unwrap_err().to_string();
+    assert!(e.contains("true or false"), "{e}");
+    // Refused too when Auto Grouping grouped nothing, as with side-by-side stripes.
+    let mut s = session();
+    let stripes = vectorcraft_trace::Raster::from_fn(60, 60, |x, _| match x / 20 {
+        0 => [200, 40, 40, 255],
+        1 => [40, 160, 60, 255],
+        _ => [40, 70, 200, 255],
+    });
+    add_image(&mut s, &stripes, Affine::IDENTITY);
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": grouped})).unwrap()["id"].as_u64().unwrap());
+    assert!(node(&s, g).children().unwrap().iter().all(|c| !matches!(c.kind, NodeKind::Group { .. })));
+    let e = s.execute("imageTrace.expand", &json!({"byColor": true})).unwrap_err().to_string();
+    assert!(e.contains("Auto Grouping"), "{e}");
+    assert_eq!(node(&s, g).name.as_deref(), Some("Image Trace"));
+
+    // A color linked to a global swatch goes by the swatch's name, a tint with its percentage.
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Ink", "color": "#c82828", "global": true})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Sky", "color": "#2846c8", "global": true})).unwrap();
+    let r = vectorcraft_trace::Raster::from_fn(60, 60, |x, y| match (x < 30, y < 30) {
+        (true, _) => [200, 40, 40, 255],
+        (false, true) => [40, 160, 60, 255],
+        (false, false) => [40, 70, 200, 255],
+    });
+    add_image(&mut s, &r, Affine::IDENTITY);
+    let limited = json!({"mode": "color", "palette": "limited", "colors": 3});
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
+    let paths: Vec<(u64, String)> =
+        node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).map(|c| (c.id.0, hex(c))).collect();
+    let mut colors: Vec<&str> = paths.iter().map(|(_, h)| h.as_str()).collect();
+    colors.sort();
+    colors.dedup();
+    assert_eq!(colors, ["#2846c8", "#28a03c", "#c82828"]);
+    // The red paths link to Ink and the blue ones to Sky at 50%; green stays a plain color.
+    let pick = |want: &str| paths.iter().filter(|(_, h)| h == want).map(|(id, _)| *id).collect::<Vec<_>>();
+    s.execute("paint.setFill", &json!({"ids": pick("#c82828"), "swatch": "Ink"})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": pick("#2846c8"), "swatch": "Sky", "tint": 50})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+    let mut got = names(&node(&s, g));
+    got.sort();
+    assert_eq!(got, ["#28a03c", "Ink", "Sky 50%"]);
+    // A swatch named as another color's #rrggbb still gets a group of its own.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("swatch.edit", &json!({"name": "Ink", "newName": "#28a03c"})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+    let mut got = names(&node(&s, g));
+    got.sort();
+    assert_eq!(got, ["#28a03c", "#28a03c", "Sky 50%"]);
+
+    // Gradient fills share one group, and a stroked line goes by its stroke.
+    let ramp = vectorcraft_trace::Raster::from_fn(100, 60, |x, _| {
+        let t = (f64::from(x) + 0.5) / 100.0;
+        [(20.0 + 200.0 * t) as u8, 40, (220.0 - 180.0 * t) as u8, 255]
+    });
+    let line =
+        vectorcraft_trace::Raster::from_fn(100, 100, |x, y| if (10..90).contains(&x) && (49..52).contains(&y) { [0, 0, 0, 255] } else { [255; 4] });
+    for (art, params, want) in [
+        (ramp, json!({"preset": "6 Colors", "params": {"gradients": true}, "byColor": true}), "Gradients"),
+        (line, json!({"params": {"ignoreWhite": true, "strokes": true, "strokeWidth": 5}, "byColor": true}), "#000000"),
+    ] {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let res = s.execute("imageTrace.makeAndExpand", &params).unwrap();
+        assert_eq!(names(&node(&s, NodeId(res["id"].as_u64().unwrap()))), [want]);
+    }
+
+    // Flat Logo stacks its shapes biggest first without cutting holes under white: a black ring's
+    // outline, a white disc on it and a black dot on that. Black keeps a group below white and one
+    // above it, and the art draws as before, through Make and Expand and through Expand.
+    let target = vectorcraft_trace::Raster::from_fn(120, 120, |x, y| {
+        let r = (f64::from(x) + 0.5 - 60.0).hypot(f64::from(y) + 0.5 - 60.0);
+        if r < 15.0 || (30.0..50.0).contains(&r) {
+            [0, 0, 0, 255]
+        } else if r < 30.0 {
+            [255, 255, 255, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    });
+    let logo = json!({"mode": "logo", "logoColors": ["#000000"]});
+    let traced = |by_color: bool, expand_after: bool| {
+        let mut s = session();
+        add_image(&mut s, &target, Affine::IDENTITY);
+        let g = if expand_after {
+            let g = s.execute("imageTrace.make", &json!({"params": logo})).unwrap()["id"].as_u64().unwrap();
+            s.execute("imageTrace.expand", &json!({"byColor": by_color})).unwrap();
+            g
+        } else {
+            s.execute("imageTrace.makeAndExpand", &json!({"params": logo, "byColor": by_color})).unwrap()["id"].as_u64().unwrap()
+        };
+        (s, NodeId(g))
+    };
+    for expand_after in [false, true] {
+        let (flat, fg) = traced(false, expand_after);
+        let (s, g) = traced(true, expand_after);
+        let paths = node(&flat, fg).children().unwrap().clone();
+        assert_eq!(paths.iter().map(|p| hex(p)).collect::<Vec<_>>(), ["#000000", "#ffffff", "#000000"]);
+        assert_eq!(names(&node(&s, g)), ["#000000", "#ffffff", "#000000"], "expand after: {expand_after}");
+        let members: Vec<Arc<Node>> = node(&s, g).children().unwrap().iter().flat_map(|c| c.children().unwrap().iter().cloned()).collect();
+        assert!(members == paths, "expand after: {expand_after}");
+        assert!(shot(&s) == shot(&flat), "expand after: {expand_after}: the art changed");
+    }
+
+    // An Abutting trace's top path, given the bottom path's color and moved onto the middle one (by
+    // a move or by a Transform effect), moved clear of it with a drop shadow cast onto it, or moved
+    // to share a pixel at its edge, before Expand, still draws on top of it.
+    let stripes = vectorcraft_trace::Raster::from_fn(90, 30, |x, _| match x / 30 {
+        0 => [200, 40, 40, 255],
+        1 => [40, 160, 60, 255],
+        _ => [40, 70, 200, 255],
+    });
+    let edited = |by_color: bool, how: &str| {
+        let mut s = session();
+        add_image(&mut s, &stripes, Affine::IDENTITY);
+        let limited = json!({"mode": "color", "palette": "limited", "colors": 3, "method": "abutting"});
+        let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
+        let paths: Vec<Arc<Node>> = node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).cloned().collect();
+        assert_eq!(paths.len(), 3);
+        let (first, middle, last) = (&paths[0], &paths[1], &paths[2]);
+        s.execute("paint.setFill", &json!({"ids": [last.id.0], "color": hex(first)})).unwrap();
+        let (to, from) = (middle.visual_bounds().unwrap(), last.visual_bounds().unwrap());
+        let (dx, dy) = (to.x0 - from.x0, to.y0 - from.y0);
+        match how {
+            "beside" => {
+                // The middle path and the moved top path end and start inside one pixel.
+                s.execute("object.move", &json!({"ids": [middle.id.0], "dx": -0.5, "dy": 0})).unwrap();
+                s.execute("object.move", &json!({"ids": [last.id.0], "dx": -0.3, "dy": 0})).unwrap()
+            }
+            "move" => s.execute("object.move", &json!({"ids": [last.id.0], "dx": dx, "dy": dy})).unwrap(),
+            "transform" => {
+                s.execute("effect.apply", &json!({"ids": [last.id.0], "effect": "distort.transform", "params": {"moveH": dx, "moveV": dy}})).unwrap()
+            }
+            _ => {
+                s.execute("object.move", &json!({"ids": [last.id.0], "dx": 40, "dy": 0})).unwrap();
+                s.execute("effect.apply", &json!({"ids": [last.id.0], "effect": "stylize.dropShadow", "params": {"x": -70, "y": 0, "blur": 0}}))
+                    .unwrap()
+            }
+        };
+        s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": by_color})).unwrap();
+        (s, g)
+    };
+    for how in ["move", "transform", "shadow", "beside"] {
+        let (flat, _) = edited(false, how);
+        let (s, g) = edited(true, how);
+        assert_eq!(names(&node(&s, g)).len(), 3, "{how}");
+        assert!(shot(&s) == shot(&flat), "{how}: the edited art changed");
+    }
+
+    // Two tints of one swatch that round to the same percentage are still two colors.
+    let mut s = session();
+    s.execute("swatch.new", &json!({"name": "Sky", "color": "#2846c8", "global": true})).unwrap();
+    add_image(&mut s, &stripes, Affine::IDENTITY);
+    let limited = json!({"mode": "color", "palette": "limited", "colors": 3});
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": limited})).unwrap()["id"].as_u64().unwrap());
+    let paths: Vec<u64> = node(&s, g).children().unwrap().iter().filter(|c| !matches!(c.kind, NodeKind::Image(_))).map(|c| c.id.0).collect();
+    assert_eq!(paths.len(), 3);
+    s.execute("paint.setFill", &json!({"ids": [paths[0]], "swatch": "Sky", "tint": 50.1})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [paths[1], paths[2]], "swatch": "Sky", "tint": 50.4})).unwrap();
+    s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true})).unwrap();
+    let groups = node(&s, g).children().unwrap().clone();
+    assert_eq!(names(&node(&s, g)), ["Sky 50%", "Sky 50%"]);
+    assert_eq!(groups.iter().map(|c| c.children().unwrap().len()).collect::<Vec<_>>(), [1, 2]);
+}
+
+#[test]
+fn image_trace_expand_by_color_preserves_live_pathfinder_art() {
+    let mut s = session();
+    let art = vectorcraft_trace::Raster::from_fn(100, 60, |x, y| {
+        if (10..40).contains(&y) && ((10..35).contains(&x) || (65..90).contains(&x)) { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    });
+    add_image(&mut s, &art, Affine::IDENTITY);
+    let g = NodeId(s.execute("imageTrace.make", &json!({"params": {"ignoreWhite": true}})).unwrap()["id"].as_u64().unwrap());
+    let paths: Vec<NodeId> = node(&s, g).children().unwrap().iter().filter(|c| c.path_data().is_some()).map(|c| c.id).collect();
+    assert_eq!(paths.len(), 2);
+    s.execute("select.set", &json!({"ids": [paths[1].0]})).unwrap();
+    s.execute("object.move", &json!({"dx": -45, "dy": 0})).unwrap();
+    s.execute("effect.apply", &json!({"ids": [g.0], "effect": "pathfinder.subtract"})).unwrap();
+    let before = render_doc(&s, false);
+    let before_pixels: Vec<_> = (0..100).flat_map(|x| (0..60).map(move |y| (x, y))).map(|(x, y)| before.pixel(x, y)).collect();
+    let original = node(&s, g);
+    let steps = s.doc().unwrap().history.undo.len();
+    let result = s.execute("imageTrace.expand", &json!({"id": g.0, "byColor": true}));
+    if let Err(e) = &result {
+        assert!(e.to_string().contains("Pathfinder"), "{e}");
+        assert_eq!(node(&s, g), original);
+        assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+    }
+    let after = render_doc(&s, false);
+    let after_pixels: Vec<_> = (0..100).flat_map(|x| (0..60).map(move |y| (x, y))).map(|(x, y)| after.pixel(x, y)).collect();
+    let changed = after_pixels.iter().zip(&before_pixels).filter(|(a, b)| a != b).count();
+    assert_eq!(changed, 0, "byColor changed {changed} live Pathfinder pixels: {result:?}");
+    assert!(result.is_err(), "byColor must refuse a live Pathfinder operand group");
+    let error = s.execute("imageTrace.makeAndExpand", &json!({"id": g.0, "params": {"ignoreWhite": true}, "byColor": true})).unwrap_err();
+    assert!(error.to_string().contains("Pathfinder"), "{error}");
+    assert_eq!(node(&s, g), original);
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
 }
 
 #[test]
@@ -3823,6 +5319,43 @@ fn image_trace_flat_logo_refuses_a_gradient_and_a_bad_palette() {
     // The named colours are used as given.
     let r = s.execute("imageTrace.makeAndExpand", &json!({"preset": "Flat Logo", "params": {"logoColors": ["#c8283c"]}})).unwrap();
     assert_eq!(r["colors"], 1);
+}
+
+#[test]
+fn image_trace_flat_logo_can_trace_only_the_named_colors() {
+    // A light disc in a black ring, a blue square on it, and a white spot.
+    let art = vectorcraft_trace::Raster::from_fn(120, 120, |x, y| {
+        let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        let d = (fx - 60.0).hypot(fy - 60.0);
+        if (fx - 32.0).hypot(fy - 40.0) <= 6.0 {
+            [255, 255, 255, 255]
+        } else if (45..75).contains(&x) && (45..75).contains(&y) {
+            [40, 120, 240, 255]
+        } else if d <= 46.0 {
+            [240, 240, 220, 255]
+        } else if d <= 50.0 {
+            [0, 0, 0, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    });
+    let fills = |logo_white: bool| {
+        let mut s = session();
+        add_image(&mut s, &art, Affine::IDENTITY);
+        let params = json!({"params": {"mode": "logo", "logoColors": ["#000000", "#F0F0DC", "#2878F0"], "logoWhite": logo_white}});
+        let r = s.execute("imageTrace.makeAndExpand", &params).unwrap();
+        let g = node(&s, NodeId(r["id"].as_u64().unwrap()));
+        let mut hex: Vec<String> = g.children().unwrap().iter().filter_map(|n| n.appearance.fill_paint().color()).map(|c| c.to_hex()).collect();
+        hex.sort();
+        hex.dedup();
+        (r["colors"].clone(), hex)
+    };
+    let (colors, hex) = fills(true);
+    assert_eq!(colors, 4);
+    assert!(hex.contains(&"#ffffff".to_string()), "{hex:?}");
+    let (colors, hex) = fills(false);
+    assert_eq!(colors, 3);
+    assert_eq!(hex, ["#000000", "#2878f0", "#f0f0dc"]);
 }
 
 #[test]

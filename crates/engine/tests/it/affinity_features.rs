@@ -568,12 +568,14 @@ fn artistic_text_aligns_its_lines_within_the_longest() {
         assert!(matches!(t.kind, TextKind::Point));
         let lines = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines;
         let (wide, mid) = (&lines[0], &lines[1]);
-        let w = wide.x1 - wide.x0;
+        // Each line as wide as it is aligned: without the tracking after its last character.
+        let width = |l: &vectorcraft_text::LineInfo| l.x1 - l.trailing - l.x0;
+        let w = width(wide);
         assert!(w > 0.0);
         // The block stays where the first paragraph's alignment puts it on the anchor.
         let start = [0.0, -0.5, -1.0][first as usize] * w;
         assert!((wide.x0 - start).abs() < 1e-6, "{first}/{second}: {} vs {start}", wide.x0);
-        let expected = wide.x0 + (w - (mid.x1 - mid.x0)) * at;
+        let expected = wide.x0 + (w - width(mid)) * at;
         assert!((mid.x0 - expected).abs() < 1e-6, "{first}/{second}: {} vs {expected}", mid.x0);
         // Each paragraph keeps its own alignment.
         use vectorcraft_doc::text::Justify;

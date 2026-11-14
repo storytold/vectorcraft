@@ -346,6 +346,36 @@ impl Library {
         }
     }
 
+    /// Name item `r` `name`, in its place in its kind's list; an item keyed by its name keeps its
+    /// group under the new name (a graphic is keyed by its id, which stays).
+    fn rename_item(&mut self, r: &ItemRef, name: &str) {
+        fn set<'a>(mut names: impl Iterator<Item = &'a mut String>, from: &str, to: &str) {
+            if let Some(n) = names.find(|n| n.as_str() == from) {
+                *n = to.to_string();
+            }
+        }
+        let from = r.item.as_str();
+        match r.kind {
+            ItemKind::Color => set(self.colors.iter_mut().map(|c| &mut c.name), from, name),
+            ItemKind::Gradient => set(self.gradients.iter_mut().map(|g| &mut g.name), from, name),
+            ItemKind::Pattern => set(self.patterns.iter_mut().map(|p| &mut p.name), from, name),
+            ItemKind::CharStyle => set(self.char_styles.iter_mut().map(|t| &mut t.name), from, name),
+            ItemKind::ParaStyle => set(self.para_styles.iter_mut().map(|t| &mut t.name), from, name),
+            ItemKind::Graphic => {
+                if let Some(g) = self.graphics.iter_mut().find(|g| g.id == from) {
+                    g.name = name.to_string();
+                }
+                return;
+            }
+            ItemKind::Unknown => return,
+        }
+        for x in self.groups.iter_mut().flat_map(|g| g.items.iter_mut()) {
+            if x == r {
+                x.item = name.to_string();
+            }
+        }
+    }
+
     /// Move item `r` next to `to`, an item of its kind: just before it, or just after it when
     /// `after`, in their kind's list (the order the panel shows them in).
     fn place_next_to(&mut self, r: &ItemRef, to: &ItemRef, after: bool) {
@@ -683,7 +713,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Use Library Item",
             [],
             None,
-            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; a spot color links to the document's spot swatch of its ink's name, added when the document has none of that colour (a name taken by another colour gets a number), one undo step; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number) and apply it to the selected text, one undo step → {kind, ids?, style?}",
+            "{library?, kind, item: name (graphic: id or name), center?: [x, y] (graphic; default: the first artboard's centre), to?: fill|stroke (colors, gradients, patterns; default: the kind's), recorded?: the item as it was when used (recorded in the journal so a replay matches)} graphic: place a copy centred on `center`, its resources pasted along, selected, one undo step; colors and gradients: paint the selection (and the defaults) as paint.setFill/paint.setStroke, a gradient fitting each object; a spot color links to the document's spot swatch of its ink's name, added when the document has none of that colour (a name taken by another colour gets a number), one undo step; patterns: add the pattern and its swatch to the document (a name the document gives another pattern gets a number; the same pattern is reused) and paint the selection (and the defaults) with it, one undo step; charStyle/paraStyle: add the style to the document (a name taken by different attributes gets a number; a character style's color linked to a swatch that isn't a global or spot swatch of the document keeps the color it shows, unlinked) and apply it to the selected text, one undo step → {kind, ids?, style?}",
             has_doc,
             use_item
         ),
@@ -695,6 +725,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{library?, kind, item: name (graphic: id or name)} delete an item (out of its group too) → null",
             always,
             remove_item
+        ),
+        cmd!(
+            "library.renameItem",
+            "Rename Library Item",
+            [],
+            None,
+            "{library?, kind, item: name (graphic: id or name), name: string (trimmed; 1 to 256 characters)} rename an item; it keeps its place and its group; another item of its kind with that name is an error, and its own name changes nothing; not undoable → {library, kind, item: its key now (graphic: its id), name}",
+            always,
+            rename_item
+        ),
+        cmd!(
+            "library.addToCharacterStyles",
+            "Add to Character Styles",
+            [],
+            None,
+            "{library?, item: a character style's name, recorded?: the style as it was when added (recorded in the journal so a replay matches)} add a library character style to the document's character styles without applying it (no text needs to be selected): a document style of that name with the same attributes is reused, a name taken by different attributes gets a number; a color linked to a swatch that isn't a global or spot swatch of the document keeps the color it shows, unlinked; a new style is one undo step, a reused one none → {style: its name in the document, existing: bool}",
+            has_doc,
+            add_to_char_styles
         ),
         cmd!(
             "library.createGroup",
@@ -966,7 +1014,7 @@ enum Item {
 /// The selected objects (or `ids`) as a library graphic (its id and name set by the caller).
 fn graphic_of(s: &Session, p: &Value, cmd: &str) -> Result<LibraryGraphic> {
     let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(ids) => ids,
         None => st.selection.in_paint_order(&st.doc),
     };
@@ -1006,7 +1054,7 @@ fn color_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<NewColor>
         let given = NewColor { name: color.to_hex(), color, spot: None, tint: 1.0 };
         return Ok(spot_color(s, given, swatch, tint));
     }
-    match selected_paint(s, p, stroke)? {
+    match selected_paint(s, p, stroke, cmd)? {
         Paint::Solid { color, swatch, tint } => {
             let swatch = swatch.filter(|n| !n.is_empty());
             let name = swatch.clone().unwrap_or_else(|| color.to_hex());
@@ -1029,9 +1077,9 @@ fn spot_color(s: &Session, c: NewColor, swatch: Option<String>, tint: f32) -> Ne
 
 /// The first selected object's (or `ids`') fill (`stroke`: stroke) paint (type's: its first
 /// character's, as the proxy shows it), else the default one.
-fn selected_paint(s: &Session, p: &Value, stroke: bool) -> Result<Paint> {
+fn selected_paint(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Paint> {
     let st = s.doc()?;
-    let ids = match ids_param(p, "ids") {
+    let ids = match ids_param(p, "ids", cmd)? {
         Some(ids) => ids,
         None => st.selection.objects.clone(),
     };
@@ -1071,7 +1119,7 @@ fn gradient_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Librar
             let sw = s.doc()?.doc.swatch(name).filter(|w| matches!(w.paint, Paint::Gradient(_)));
             (Some(name.to_string()), sw.ok_or_else(|| bad(cmd, format!("no gradient swatch `{name}`")))?.paint.clone())
         }
-        None => (None, selected_paint(s, p, stroke)?),
+        None => (None, selected_paint(s, p, stroke, cmd)?),
     };
     let Paint::Gradient(mut g) = paint else {
         return Err(bad(cmd, if stroke { "the selection has no gradient stroke" } else { "the selection has no gradient fill" }));
@@ -1094,7 +1142,7 @@ fn pattern_of(s: &Session, p: &Value, stroke: bool, cmd: &str) -> Result<Library
             _ if d.pattern(name).is_some() => name.to_string(),
             _ => return Err(bad(cmd, format!("no pattern swatch `{name}`"))),
         },
-        None => match selected_paint(s, p, stroke)? {
+        None => match selected_paint(s, p, stroke, cmd)? {
             Paint::Pattern { pattern, .. } => pattern,
             _ => return Err(bad(cmd, if stroke { "the selection has no pattern stroke" } else { "the selection has no pattern fill" })),
         },
@@ -1231,8 +1279,13 @@ fn use_item(s: &mut Session, p: &Value) -> Result<Value> {
         Kind::CharStyle | Kind::ParaStyle => {
             let para = kind == Kind::ParaStyle;
             let name = data.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).unwrap_or("Style").to_string();
-            let attrs = data.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
+            let mut attrs = data.get("attrs").and_then(Value::as_object).cloned().unwrap_or_default();
             let doc = &s.doc()?.doc;
+            if !para {
+                unlink_missing_swatches(doc, &mut attrs);
+            }
+            // Compared in the form the document stores them in.
+            let attrs = super::textstyles::stored_style_attrs(doc, para, &attrs).unwrap_or(attrs);
             // The document's style of that name when it is the same; else a new one.
             let same = super::textstyles::style_attrs(doc, para, &name).is_some_and(|a| a == attrs);
             let style = if same { name } else { unique(&name, |n| super::textstyles::style_attrs(doc, para, n).is_some()) };
@@ -1303,7 +1356,7 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     let choices = SwatchChoices::default();
     // The pattern's name in the document, worked out on a copy: nothing to add is no edit.
     let mut probe = (*s.doc()?.doc).clone();
-    let imported = clip.import_into(&mut probe, &choices, false);
+    let imported = clip.import_into(&mut probe, &choices, false)?;
     let renamed = imported.renamed.iter().find(|r| r["kind"] == "pattern" && r["from"] == name.as_str()).and_then(|r| r["to"].as_str());
     let target = renamed.unwrap_or(&name).to_string();
     let paint = vectorcraft_doc::pattern::pattern_paint(&target);
@@ -1315,7 +1368,7 @@ fn use_pattern(s: &mut Session, data: &Value, stroke: bool) -> Result<String> {
     in_one_step(s, |s| {
         if added {
             s.edit("Add to Swatches", |d, _| {
-                clip.import_into(d, &choices, false);
+                clip.import_into(d, &choices, false)?;
                 if !has_swatch(d) {
                     let swatch = d.free_swatch_name(&target);
                     d.swatches.push(vectorcraft_color::Swatch { name: swatch, paint: paint.clone(), global: false, spot: false });
@@ -1359,6 +1412,109 @@ fn remove_item(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+fn rename_item(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.renameItem";
+    let (id, kind, item) = item_param(s, p, C)?;
+    let name = match p.get("name") {
+        None | Some(Value::Null) => return Err(bad(C, "missing `name`")),
+        Some(Value::String(n)) => n.trim().to_string(),
+        Some(_) => return Err(bad(C, "`name` must be a string")),
+    };
+    if name.is_empty() {
+        return Err(bad(C, "missing `name`"));
+    }
+    if name.chars().count() > MAX_NAME {
+        let (label, max) = ("`name`", MAX_NAME);
+        return Err(bad(C, format!("{label} must be at most {max} characters")));
+    }
+    let lib = s.libraries.get(&id).ok_or_else(|| bad(C, format!("no library `{id}`")))?;
+    let r = lib.item_ref(kind.item_kind(), item).ok_or_else(|| bad(C, format!("the library has no item `{item}`")))?;
+    // The item's name now, and whether another item of its kind has the new one.
+    let mut same = false;
+    let mut taken = false;
+    for (_, key, shown) in lib.items().filter(|(k, ..)| *k == r.kind) {
+        if key == r.item {
+            same = shown == name;
+        } else if shown == name {
+            taken = true;
+        }
+    }
+    let key = if r.kind == ItemKind::Graphic { r.item.clone() } else { name.clone() };
+    let out = json!({ "library": id, "kind": str_param(p, "kind"), "item": key, "name": name });
+    if same {
+        return Ok(out);
+    }
+    if taken {
+        return Err(bad(C, format!("the library has another item of that kind named `{name}`")));
+    }
+    s.libraries.change(&id, |lib| {
+        lib.rename_item(&r, &name);
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+fn add_to_char_styles(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "library.addToCharacterStyles";
+    // A replay (the journal) carries what the style was, so it doesn't depend on the library.
+    let data = match p.get("recorded").cloned() {
+        Some(r) => r,
+        None => {
+            let id = library_id(s, p, C)?;
+            let item = str_param(p, "item").ok_or_else(|| bad(C, "missing `item`"))?;
+            let lib = s.libraries.get(&id).ok_or_else(|| bad(C, format!("no library `{id}`")))?;
+            let t = lib.char_styles.iter().find(|t| t.name == item).ok_or_else(|| bad(C, format!("the library has no item `{item}`")))?;
+            let data = json!({ "name": t.name, "attrs": t.attrs });
+            s.note_journal("recorded", data.clone());
+            data
+        }
+    };
+    let name = data.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).unwrap_or("Style").to_string();
+    let mut attrs = data.get("attrs").and_then(Value::as_object).cloned().ok_or_else(|| bad(C, "the library item is damaged"))?;
+    let doc = &s.doc()?.doc;
+    unlink_missing_swatches(doc, &mut attrs);
+    // Compared in the form the document stores them in.
+    let attrs = super::textstyles::stored_style_attrs(doc, false, &attrs).unwrap_or(attrs);
+    // The document's style of that name when it is the same; else a new one, which isn't applied.
+    if super::textstyles::style_attrs(doc, false, &name).is_some_and(|a| a == attrs) {
+        return Ok(json!({ "style": name, "existing": true }));
+    }
+    let style = unique(&name, |n| super::textstyles::style_attrs(doc, false, n).is_some());
+    s.execute("charStyle.new", &json!({ "name": style, "attrs": attrs }))?;
+    Ok(json!({ "style": style, "existing": false }))
+}
+
+/// Unlink a library character style's `fill` and `stroke` colors (solid, and each gradient stop)
+/// from swatches that are not global or spot swatches of `doc`: an unlinked color keeps the color
+/// it shows at full tint, as [`clean_gradient`] keeps a library gradient's stops. A link to a
+/// global or spot swatch `doc` has stays, and takes that swatch's color.
+fn unlink_missing_swatches(doc: &vectorcraft_doc::Document, attrs: &mut Map<String, Value>) {
+    let keep = |name: &str| doc.global_color(name).is_some();
+    for key in ["fill", "stroke"] {
+        let Some(mut paint) = attrs.get(key).and_then(|v| serde_json::from_value::<Paint>(v.clone()).ok()) else { continue };
+        let mut changed = false;
+        let mut unlink = |swatch: &mut Option<String>, tint: &mut f32| {
+            if swatch.as_deref().is_some_and(|n| !keep(n)) {
+                *swatch = None;
+                *tint = 1.0;
+                changed = true;
+            }
+        };
+        match &mut paint {
+            Paint::Solid { swatch, tint, .. } => unlink(swatch, tint),
+            Paint::Gradient(g) => {
+                for st in &mut g.gradient.stops {
+                    unlink(&mut st.swatch, &mut st.tint);
+                }
+            }
+            _ => {}
+        }
+        if changed && let Ok(v) = serde_json::to_value(&paint) {
+            attrs.insert(key.to_string(), v);
+        }
+    }
 }
 
 /// `p`'s `name`, trimmed and clipped, else `default`.

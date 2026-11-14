@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add Freeform Point",
             [],
             None,
-            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it → {index}",
+            "{at: [x,y] (document coordinates), color? (default: the gradient's colour there; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill), opacity?: 0..1 (or 0..100), spread?: 0..1 (or 0..100 %; the radius of pure colour around the point, a fraction of half the object's larger side; default 0), line?: true (join it to the selected point: extends the line ending there, else starts one), ids?|id?, stroke?: bool (default: the targeted item's kind, else the active proxy), item?: fill/stroke item index|null (omitted: the Appearance panel's active item when it is of the edited kind), target?: \"object\"|\"contents\"} add a point to the freeform gradient (an unplaced one keeps its automatic points first) and select it. On a path directly in a graph series, the graph also stores the edited gradient when it is on the topmost visible fill or stroke, as for the other paint.freeform edits (docs/mcp.md); on a graph label's row, the graph stores the label's topmost visible fill and stroke rows for every label of its kind → {index}",
             has_doc,
             add_point
         ),
@@ -92,8 +92,12 @@ impl Session {
 
     /// The freeform gradient behind the Fill (`stroke` false) or Stroke proxy, its points in
     /// document coordinates, and the length its spreads are fractions of there (see
-    /// [`Node::proxy_freeform`]).
+    /// [`Node::proxy_freeform`]). `None` while an object of a symbol instance is selected
+    /// ([`vectorcraft_doc::Selection::symbol_part`]): its points are in the symbol's coordinates.
     pub fn proxy_freeform(&self, stroke: bool) -> Option<(Freeform, f64)> {
+        if self.active()?.selection.symbol_part.is_some() {
+            return None;
+        }
         let (n, item) = self.proxy_source(stroke)?;
         n.proxy_freeform(stroke, item)
     }

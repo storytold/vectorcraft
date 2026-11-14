@@ -185,7 +185,7 @@ fn rasterize(
     let opts = RenderOptions { mark_undecoded_images, ..Default::default() };
     r.image_left_out = Some(false);
     let pattern_images_left_out = images_left_out();
-    r.check_plugins();
+    r.check_plugins(doc);
     r.check_symbols(doc);
     let symbols = doc.symbol_boxes().quick();
     r.stamp += 1;
@@ -201,6 +201,7 @@ fn rasterize(
             px: 1.0 / v.determinant().abs().sqrt().max(1e-12),
             opts: &opts,
             ink,
+            output: v,
             plates: None,
         };
         for a in &def.art {
@@ -345,7 +346,8 @@ impl Renderer {
         let comp = crate::group::Composite { opacity: dim, ..Default::default() };
         self.group(ctx, f, comp, &mut |r, c, fr| {
             for o in offsets {
-                let frame = Frame { view: fr.view * Affine::translate(*o), visible: fr.visible - *o, ..*fr };
+                let moved = Affine::translate(*o);
+                let frame = Frame { view: fr.view * moved, visible: fr.visible - *o, output: fr.output * moved, ..*fr };
                 for a in children {
                     r.draw_arc(c, &frame, a);
                 }
@@ -359,7 +361,8 @@ impl Renderer {
         let Some(pe) = &f.doc.pattern_edit else { return false };
         let Some(layer) = f.doc.layers.iter().find(|l| l.id == pe.layer) else { return false };
         let Some(def) = f.doc.pattern(&pe.pattern) else { return false };
-        let children: Vec<Arc<Node>> = layer.children().cloned().unwrap_or_default();
+        // The tile's art: the layer's ruler guides are not part of it.
+        let children: Vec<Arc<Node>> = layer.children().into_iter().flatten().filter(|c| !c.is_ruler_guide()).cloned().collect();
         if layer.visible && !children.is_empty() {
             let dim = (def.dim_copies / 100.0).clamp(0.0, 1.0);
             let (before, after) = def.preview_offsets_dimmed_sides();

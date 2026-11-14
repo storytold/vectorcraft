@@ -107,7 +107,12 @@ impl BrushCache {
             vectorcraft_brush::serde_json::to_string(v).unwrap_or_default().hash(&mut h);
             h.finish()
         });
-        self.lib = vectorcraft_brush::library(doc).into_iter().map(|b| (b.name.clone(), Arc::new(b))).collect();
+        // Of two brushes with one name, a stroke that names it draws with the first, as
+        // `vectorcraft_brush::find` and the exports take it.
+        self.lib.clear();
+        for b in vectorcraft_brush::library(doc) {
+            self.lib.entry(b.name.clone()).or_insert_with(|| Arc::new(b));
+        }
     }
 
     /// [`Self::key`] for the brush library `doc` holds (checked once a frame, `stamp`).
@@ -115,12 +120,25 @@ impl BrushCache {
         self.library(doc, stamp);
         self.key
     }
+
+    /// [`Self::library_key`] checked now, between frames: `doc` may be the document of the last
+    /// frame, edited in place.
+    pub(crate) fn library_key_now(&mut self, doc: &Document, stamp: u64) -> u64 {
+        self.checked = (u64::MAX, 0);
+        self.library_key(doc, stamp)
+    }
 }
 
 /// Cull bounds that allow for brush art reaching past the stroke (scatter, wide nibs), symbol
-/// instances measured by their art from `symbols`, with the brushed strokes in that art.
+/// instances measured by their art from `symbols`, with the brushed strokes in that art. A path
+/// whose live-effect plug-ins paint their pieces leaves that room past each piece
+/// ([`crate::fx::painted_cull_bounds`]). A group or layer leaves that room past each of its
+/// members, as the renderer measures a group by its members (`Renderer::bounds_of`).
 pub(crate) fn cull_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-    let b = crate::fx::cull_bounds(symbols, n)?;
+    if let Some(b) = crate::fx::painted_cull_bounds(symbols, n) {
+        return b;
+    }
+    let b = crate::fx::brushed_cull_bounds(symbols, n)?;
     let pad = pad(symbols, n);
     Some(b.inflate(pad, pad))
 }
@@ -138,12 +156,15 @@ pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnO
 /// How far brush art can paint past `n`'s brushed strokes, or past the brushed strokes in the art
 /// of symbol instance `n`: `16 × w + 8`, where `w` is the widest stroke (at least 1) of `n` when it
 /// has a visible brushed stroke and of the objects in that art that have one
-/// ([`SymbolBoxes::brush_width`]), and 0 when neither has one.
+/// ([`SymbolBoxes::brush_width`]) or the pieces live-effect plug-ins paint for them
+/// ([`crate::fx::painted_brush_width`]), and 0 when neither has one.
 pub(crate) fn pad(symbols: &SymbolBoxes, n: &Node) -> f64 {
     let own = vectorcraft_brush::has_brush(n)
         .then(|| n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s.width) } else { None }).fold(1.0, f64::max));
     let art = match &n.kind {
-        NodeKind::SymbolInstance { symbol, .. } => symbols.brush_width(symbol).map(|w| w.max(1.0)),
+        NodeKind::SymbolInstance { symbol, .. } => {
+            symbols.brush_width(symbol).into_iter().chain(crate::fx::painted_brush_width(symbols, symbol)).reduce(f64::max).map(|w| w.max(1.0))
+        }
         _ => None,
     };
     own.into_iter().chain(art).reduce(f64::max).map_or(0.0, |w| 16.0 * w + 8.0)
@@ -370,6 +391,24 @@ mod tests {
         vectorcraft_brush::store(&mut d, &lib);
         let b = render(&mut r, &d);
         assert!(!dark(a.pixel(100, 58)) && dark(b.pixel(100, 58)));
+    }
+
+    /// Of two brushes with one name, a stroke that names it draws with the first.
+    #[test]
+    fn a_stroke_draws_with_the_first_of_two_brushes_with_its_name() {
+        use vectorcraft_brush::{Brush, BrushKind, Calligraphic};
+        let nib = |size: f64| Brush { name: "Twin".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+        let doc = |lib: &[Brush]| {
+            let mut d = doc_with_line(Some("Twin"), 1.0);
+            vectorcraft_brush::store(&mut d, lib);
+            d
+        };
+        let (thin, wide) = (nib(1.0), nib(20.0));
+        let first = render(&mut Renderer::new(), &doc(std::slice::from_ref(&thin))).pixels;
+        let second = render(&mut Renderer::new(), &doc(std::slice::from_ref(&wide))).pixels;
+        assert_ne!(first, second, "the two nibs paint differently");
+        let both = render(&mut Renderer::new(), &doc(&[thin, wide])).pixels;
+        assert!(both == first, "the stroke draws with the first brush named Twin");
     }
 
     #[test]

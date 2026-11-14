@@ -97,7 +97,9 @@ fn applying_a_dataset_reports_the_area_type_it_overflows() {
     s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Name", "ids": [a.0, p.0]})).unwrap();
-    s.execute("variable.bind", &json!({"variable": "Title", "ids": [a.0]})).unwrap();
+    // `variable.bind` refuses a second text variable on one type object; a document saved
+    // before it did can hold two.
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc).variables.bind(a, "Title");
     s.execute("dataset.new", &json!({"name": "Short", "values": {"Name": "Ann", "Title": "Ann"}})).unwrap();
     s.execute("dataset.new", &json!({"name": "Long", "values": {"Name": long, "Title": long}})).unwrap();
 
@@ -263,6 +265,7 @@ fn a_row_with_no_value_for_a_bound_variable_warns_that_nothing_was_applied() {
     assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64(), &v["warning"]), (Some(0), Some(1), &json!(warning(b))), "{v}");
 
     // Bound to a variable with a value, the row applies it and gives no warning.
+    s.execute("variable.unbind", &json!({"variable": "Other", "ids": [t.0]})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
     let v = s.execute("dataset.select", &json!({"name": a})).unwrap();
     assert_eq!(v["applied"].as_u64(), Some(1), "{v}");
@@ -361,41 +364,137 @@ fn one_object_can_be_driven_by_several_variables() {
     let t = text(&mut s, "x");
     let r = rect(&mut s);
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
-    s.execute("variable.define", &json!({"name": "Price", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Shown", "kind": "visibility"})).unwrap();
     s.execute("variable.define", &json!({"name": "Badge", "kind": "visibility"})).unwrap();
 
-    // A text object driven by two text variables keeps both.
+    // A text object driven by a text variable and a visibility variable keeps both.
     assert_eq!(s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap()["bound"], 1);
-    let v = s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    let v = s.execute("variable.bind", &json!({"variable": "Shown", "ids": [t.0]})).unwrap();
     assert_eq!((v["bound"].clone(), v["already"].clone()), (json!(1), json!([])), "Title is untouched");
     // A rectangle driven by a visibility variable as well as nothing else yet.
     s.execute("variable.bind", &json!({"variable": "Badge", "ids": [r.0]})).unwrap();
-    s.execute("dataset.new", &json!({"name": "D", "values": {"Title": "Hat", "Price": "9.99", "Badge": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "D", "values": {"Title": "Hat", "Shown": true, "Badge": false}})).unwrap();
 
     let v = s.execute("dataset.select", &json!({"name": "D"})).unwrap();
     assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(3), Some(0)), "every binding applied");
-    // Both text variables are counted; the later one in definition order is what is left.
-    assert_eq!(plain(&s, t), "9.99");
+    assert_eq!(plain(&s, t), "Hat");
+    assert!(s.doc().unwrap().doc.node(t).unwrap().visible);
     assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
 
     let vars = s.execute("variable.list", &json!({})).unwrap();
     let of = |n: &str| vars["variables"].as_array().unwrap().iter().find(|v| v["name"] == n).unwrap()["bindings"].as_u64();
-    assert_eq!((of("Title"), of("Price"), of("Badge")), (Some(1), Some(1), Some(1)));
+    assert_eq!((of("Title"), of("Shown"), of("Badge")), (Some(1), Some(1), Some(1)));
 
     // Binding again to one it already has is not a change, and says so.
-    let v = s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    let v = s.execute("variable.bind", &json!({"variable": "Shown", "ids": [t.0]})).unwrap();
     assert_eq!((v["bound"].clone(), v["already"].clone()), (json!(0), json!([t.0])));
     // Unbinding one variable leaves the object's others alone.
-    assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Price"})).unwrap()["unbound"], 1);
+    assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Shown"})).unwrap()["unbound"], 1);
     s.execute("edit.undo", &json!({})).unwrap();
     let vars = s.execute("variable.list", &json!({})).unwrap();
     assert_eq!(vars["variables"][1]["bindings"], 1, "the other binding is still there");
     assert!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Ghost"})).is_err());
 
     // Deleting a variable drops only its own binding.
-    s.execute("variable.delete", &json!({"names": ["Price"]})).unwrap();
+    s.execute("variable.delete", &json!({"names": ["Shown"]})).unwrap();
     let vars = s.execute("variable.list", &json!({})).unwrap();
     assert_eq!(vars["variables"][0]["bindings"], 1, "Title still drives the text");
+}
+
+/// A type object holds one text variable: binding another text variable to it is refused, the
+/// error names the one it has, and nothing is bound, not even the other objects of the call.
+/// Variables of other kinds still share the object.
+#[test]
+fn a_type_object_holds_one_text_variable() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    let u = text(&mut s, "y");
+    for (name, kind) in [("Title", "text"), ("Price", "text"), ("Shown", "visibility")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
+    let bindings = |s: &Session, name: &str| s.doc().unwrap().doc.variables.objects_of(name);
+
+    let e = s.execute("variable.bind", &json!({"variable": "Price", "ids": [u.0, t.0]})).unwrap_err().to_string();
+    assert!(e.contains("`variable.bind`") && e.contains(&format!("node {} already has the text variable `Title`", t.0)), "{e}");
+    assert_eq!((bindings(&s, "Title"), bindings(&s, "Price")), (vec![t], vec![]), "nothing was bound");
+    // The same variable again is not a second one, and another type object takes Price.
+    assert_eq!(s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap()["already"], json!([t.0]));
+    s.execute("variable.bind", &json!({"variable": "Price", "ids": [u.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Shown", "ids": [t.0, u.0]})).unwrap();
+    assert_eq!(bindings(&s, "Shown"), vec![t, u]);
+    // After Title is unbound from it, the object takes Price.
+    s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Title"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
+    assert_eq!(bindings(&s, "Price"), vec![t, u]);
+}
+
+/// Make Text Dynamic refuses type that already has a text variable and defines no variable;
+/// Make Visibility Dynamic still binds it.
+#[test]
+fn make_text_dynamic_refuses_type_that_has_a_text_variable() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("variable.makeTextDynamic", &json!({})).unwrap();
+
+    let e = s.execute("variable.makeTextDynamic", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("`variable.makeTextDynamic`") && e.contains(&format!("node {} already has the text variable `Alice`", t.0)), "{e}");
+    let vars = s.execute("variable.list", &json!({})).unwrap();
+    assert_eq!(vars["variables"].as_array().map(Vec::len), Some(1), "{vars}");
+    let v = s.execute("variable.makeVisibilityDynamic", &json!({})).unwrap();
+    assert_eq!(v["ids"], json!([t.0]));
+}
+
+/// With unbound type selected before type that has a text variable, Make Text Dynamic is still
+/// refused: it defines no variable and binds neither object.
+#[test]
+fn make_text_dynamic_refuses_a_selection_where_a_later_object_has_a_text_variable() {
+    let mut s = session();
+    let u = text(&mut s, "Bob");
+    let t = text(&mut s, "Alice");
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    s.execute("variable.makeTextDynamic", &json!({})).unwrap();
+
+    s.execute("select.set", &json!({"ids": [u.0, t.0]})).unwrap();
+    let e = s.execute("variable.makeTextDynamic", &json!({})).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} already has the text variable `Alice`", t.0)), "{e}");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.variables.variables.len(), 1, "no variable was defined");
+    assert!(!doc.variables.bindings.contains_key(&u), "the unbound object stays unbound");
+    assert_eq!(doc.variables.bindings[&t].iter().collect::<Vec<_>>(), ["Alice"]);
+}
+
+/// A document saved with two text variables on one type object opens with both bindings, and
+/// applying a row still writes both, the later one defined last. Binding either again changes
+/// nothing, and binding a third is refused with the first one named.
+#[test]
+fn a_document_with_two_text_variables_on_one_type_object_opens_unchanged() {
+    let mut s = session();
+    let t = text(&mut s, "x");
+    let u = text(&mut s, "y");
+    for name in ["Title", "Price", "Note"] {
+        s.execute("variable.define", &json!({"name": name, "kind": "text"})).unwrap();
+    }
+    s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
+    Arc::make_mut(&mut s.doc_mut().unwrap().doc).variables.bind(t, "Price");
+    s.execute("dataset.new", &json!({"name": "D", "values": {"Title": "Hat", "Price": "9.99"}})).unwrap();
+    let saved = s.execute("document.export", &json!({"format": "vectorcraft"})).unwrap()["dataBase64"].clone();
+
+    let mut o = Session::new();
+    o.execute("document.open", &json!({"name": "two.vectorcraft", "dataBase64": saved})).unwrap();
+    let held: Vec<String> = o.doc().unwrap().doc.variables.bindings[&t].iter().cloned().collect();
+    assert_eq!(held, ["Price", "Title"]);
+    let v = o.execute("dataset.select", &json!({"name": "D"})).unwrap();
+    assert_eq!(v["applied"], json!(2), "{v}");
+    assert_eq!(plain(&o, t), "9.99");
+    for name in ["Title", "Price"] {
+        let v = o.execute("variable.bind", &json!({"variable": name, "ids": [t.0, u.0]})).unwrap();
+        assert_eq!((&v["bound"], &v["already"]), (&json!(1), &json!([t.0])), "{name}: {v}");
+        o.execute("edit.undo", &json!({})).unwrap();
+    }
+    let e = o.execute("variable.bind", &json!({"variable": "Note", "ids": [t.0]})).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} already has the text variable `Title`", t.0)), "{e}");
 }
 
 /// `unbound` counts what was actually dropped, like `variable.delete` does.
@@ -404,7 +503,7 @@ fn unbind_reports_what_it_actually_removed() {
     let mut s = session();
     let t = text(&mut s, "x");
     s.execute("variable.define", &json!({"name": "Title", "kind": "text"})).unwrap();
-    s.execute("variable.define", &json!({"name": "Price", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Price", "kind": "visibility"})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Title", "ids": [t.0]})).unwrap();
     s.execute("variable.bind", &json!({"variable": "Price", "ids": [t.0]})).unwrap();
     assert_eq!(s.execute("variable.unbind", &json!({"ids": [t.0], "variable": "Title"})).unwrap()["unbound"], 1);
@@ -417,7 +516,7 @@ fn unbind_reports_what_it_actually_removed() {
     assert!(v["variables"].get("bindings").is_none_or(|v| v == &json!({})), "{v}");
 }
 
-/// Locked art is the document's to rewrite only while it isn't locked.
+/// Locked type takes no new text variable binding, and a row leaves its text alone.
 #[test]
 fn locked_art_is_neither_bound_nor_rewritten() {
     let mut s = session();
@@ -535,6 +634,90 @@ fn binding_errors_say_whether_a_layer_or_group_is_hidden_or_locked() {
     assert!(e.contains(&format!("node {} is locked", t.0)), "{e}");
 }
 
+/// A visibility variable binds a locked layer and a locked object inside a locked group, and a row
+/// hides and shows them in one undo step without unlocking them. List, Capture and Update Data Set
+/// read whether they show.
+#[test]
+fn a_visibility_variable_shows_and_hides_locked_art() {
+    let mut s = session();
+    let badge = rect(&mut s);
+    let other = rect(&mut s);
+    let g = group(&mut s, &[badge, other]);
+    let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    rect(&mut s);
+    s.execute("object.setProps", &json!({"ids": [badge.0], "locked": true})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [g.0], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": true})).unwrap();
+    s.execute("variable.define", &json!({"name": "Layer", "kind": "visibility"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Badge", "kind": "visibility"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Layer", "ids": [layer.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Badge", "ids": [badge.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Shown", "values": {"Layer": true, "Badge": true}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Hidden", "values": {"Layer": false, "Badge": false}})).unwrap();
+    let shows = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).unwrap().visible;
+    let locked = |s: &Session| [layer, g, badge].iter().all(|id| s.doc().unwrap().doc.node(*id).unwrap().locked);
+
+    let v = s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    assert!(!shows(&s, layer) && !shows(&s, badge), "the row hides the locked layer and the locked object");
+    assert!(locked(&s), "the row leaves the locks as they were");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    let matching: Vec<&Value> = sets["datasets"].as_array().unwrap().iter().filter(|d| d["matches"] == json!(true)).map(|d| &d["name"]).collect();
+    assert_eq!(matching, [&json!("Hidden")], "List reads the locked art: {sets}");
+    assert_eq!(s.execute("dataset.capture", &json!({"name": "Captured"})).unwrap()["values"], 2);
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][2]["values"], json!({"Badge": {"visible": false}, "Layer": {"visible": false}}), "{sets}");
+
+    // Undo puts back what the row hid.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(shows(&s, layer) && shows(&s, badge), "undo shows them again");
+
+    let v = s.execute("dataset.select", &json!({"name": "Hidden"})).unwrap();
+    assert_eq!(v["applied"], 2, "{v}");
+    let v = s.execute("dataset.select", &json!({"name": "Shown"})).unwrap();
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(2), Some(0)), "{v}");
+    assert!(shows(&s, layer) && shows(&s, badge), "the row shows them");
+    assert!(locked(&s));
+
+    // Update writes the locked layer's visibility into the active row.
+    s.execute("layer.setProps", &json!({"id": layer.0, "visible": false})).unwrap();
+    let v = s.execute("dataset.update", &json!({})).unwrap();
+    assert_eq!((v["values"].clone(), v["left"].clone()), (json!(2), json!([])), "{v}");
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Badge": {"visible": true}, "Layer": {"visible": false}}), "{sets}");
+}
+
+/// Text and graph variables refuse locked art and art in a locked layer. A visibility variable is
+/// refused for art on a hidden layer that is also locked, and the error says the art is in a hidden
+/// group or layer.
+#[test]
+fn locked_art_refuses_text_and_graph_variables_and_a_hidden_layer_refuses_visibility() {
+    let mut s = session();
+    let layer = NodeId(s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let t = text(&mut s, "x");
+    let r = rect(&mut s);
+    s.execute("object.setProps", &json!({"ids": [r.0], "locked": true})).unwrap();
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": true})).unwrap();
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Chart", "kind": "graph"})).unwrap();
+    s.execute("variable.define", &json!({"name": "Show", "kind": "visibility"})).unwrap();
+    let bind = |s: &mut Session, var: &str, id: NodeId| s.execute("variable.bind", &json!({"variable": var, "ids": [id.0]}));
+
+    let e = bind(&mut s, "Name", t).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} is in a locked group or layer", t.0)), "{e}");
+    let e = bind(&mut s, "Chart", r).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} is locked", r.0)), "{e}");
+    bind(&mut s, "Show", t).unwrap();
+    assert!(s.doc().unwrap().doc.variables.objects_of("Name").is_empty());
+
+    s.execute("layer.setProps", &json!({"id": layer.0, "visible": false})).unwrap();
+    let e = bind(&mut s, "Show", r).unwrap_err().to_string();
+    assert!(e.contains(&format!("node {} is in a hidden group or layer", r.0)), "{e}");
+    // The hidden layer's own visibility is what the variable drives.
+    bind(&mut s, "Show", layer).unwrap();
+}
+
 /// Make Text Dynamic / Make Visibility Dynamic: what the panel's buttons run. One step from a
 /// selection to a bound variable, named after what it drives.
 #[test]
@@ -552,8 +735,9 @@ fn making_a_selection_dynamic_names_and_binds_it() {
     let v = s.execute("variable.makeVisibilityDynamic", &json!({})).unwrap();
     assert_eq!(v["kind"], "visibility");
 
-    // The same object twice takes a number rather than colliding with the first variable.
-    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    // Type with the same name takes a number rather than colliding with the first variable.
+    let twin = text(&mut s, "Alice");
+    s.execute("select.set", &json!({"ids": [twin.0]})).unwrap();
     let again = s.execute("variable.makeTextDynamic", &json!({})).unwrap();
     assert_eq!(again["name"], "Alice 2");
     let vars = s.execute("variable.list", &json!({})).unwrap();
@@ -748,7 +932,7 @@ fn updating_writes_only_the_variables_the_row_holds() {
     assert_eq!(sets["datasets"][0]["values"]["Client"], json!({"text": "Typed by hand"}), "{sets}");
 }
 
-/// A variable whose object is locked reports no value, so Update keeps the row's value for it
+/// A text variable whose object is locked reports no value, so Update keeps the row's value for it
 /// rather than dropping it from the row.
 #[test]
 fn updating_keeps_a_value_the_art_does_not_report() {
@@ -1101,8 +1285,8 @@ fn a_hidden_object_comes_back_and_is_captured_hidden() {
 }
 
 /// A row selected while a layer is hidden rewrites the type on it and applies its other values,
-/// and leaves the layer hidden: showing the layer shows that row's text. A layer that is locked
-/// as well as hidden is still left alone.
+/// and leaves the layer hidden: showing the layer shows that row's text. On a layer that is locked
+/// as well as hidden, the type keeps its text and the row's visibility value applies.
 #[test]
 fn a_row_rewrites_type_on_a_hidden_layer_but_not_on_a_locked_one() {
     let mut s = session();
@@ -1130,12 +1314,12 @@ fn a_row_rewrites_type_on_a_hidden_layer_but_not_on_a_locked_one() {
     s.execute("layer.setProps", &json!({"id": layer.0, "visible": true})).unwrap();
     assert_eq!(plain(&s, t), "Bob", "showing the layer shows the row's text");
 
-    // Locked and hidden: the row skips both objects and the type keeps its text.
+    // Locked and hidden: the row skips the type, which keeps its text, and shows the rectangle.
     s.execute("layer.setProps", &json!({"id": layer.0, "visible": false, "locked": true})).unwrap();
     let v = s.execute("dataset.select", &json!({"name": "A"})).unwrap();
-    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(0), Some(2)), "{v}");
+    assert_eq!((v["applied"].as_u64(), v["skipped"].as_u64()), (Some(1), Some(1)), "{v}");
     assert_eq!(plain(&s, t), "Bob", "the type on the locked layer keeps its text");
-    assert!(!s.doc().unwrap().doc.node(r).unwrap().visible);
+    assert!(s.doc().unwrap().doc.node(r).unwrap().visible, "the row's visibility value applies on the locked layer");
 }
 
 /// Type inside a hidden group is rewritten too, and List and Capture Data Set read it.
@@ -1254,8 +1438,7 @@ fn a_row_writes_type_inside_a_group_it_shows_or_hides() {
     assert!(!s.doc().unwrap().doc.node(g).unwrap().visible);
 }
 
-/// Of two visibility variables on one object, the one defined later decides whether it shows,
-/// as with two text variables.
+/// Of two visibility variables on one object, the one defined later decides whether it shows.
 #[test]
 fn the_later_visibility_variable_on_an_object_wins() {
     let mut s = session();
@@ -2732,4 +2915,192 @@ fn applying_a_graph_row_again_records_no_undo_step() {
     assert_eq!((v["applied"].as_u64(), super::history(&s)), (Some(1), before));
     s.execute("dataset.select", &json!({"name": "B"})).unwrap();
     assert_eq!(super::history(&s), (before.0 + 1, 0, true));
+}
+
+/// The document's SVG with the options `svg` → (its text, the export's warnings).
+fn svg_export(s: &mut Session, svg: Value) -> (String, Vec<Value>) {
+    let r = s.execute("document.export", &json!({"format": "svg", "svg": svg})).unwrap();
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    (String::from_utf8(bytes).unwrap(), r["warnings"].as_array().cloned().unwrap_or_default())
+}
+
+/// A new session with `svg` opened as `name` → (the session, the open's warnings).
+fn svg_opened(svg: &str, name: &str) -> (Session, Vec<Value>) {
+    let mut o = Session::new();
+    let r = o.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(svg.as_bytes())})).unwrap();
+    let warnings = r["warnings"].as_array().cloned().unwrap_or_default();
+    (o, warnings)
+}
+
+/// Include Variable Data writes the text variables, the data sets' text values and each text
+/// variable's bound type object into the SVG, and opening the SVG reads them back: the type
+/// objects are bound again, so a data set changes them. Variables of other kinds are left out with
+/// a warning. Unnamed objects get ids with Minimal ids, minified files, unique ids and style
+/// entities alike, and Load Variable Library reads the same file.
+#[test]
+fn an_svg_with_variable_data_opens_with_its_variables_data_sets_and_bindings() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let u = text(&mut s, "9.99");
+    // A fill of its appearance writes the type in a group with the fill's path.
+    s.execute("appearance.addFill", &json!({"ids": [u.0]})).unwrap();
+    let r = rect(&mut s);
+    for (name, kind) in [("Name", "text"), ("Shown", "visibility"), ("Price", "text")] {
+        s.execute("variable.define", &json!({"name": name, "kind": kind})).unwrap();
+    }
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Price", "ids": [u.0]})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Shown", "ids": [r.0]})).unwrap();
+    s.execute("dataset.new", &json!({"name": "A & <B>", "values": {"Name": "Bob", "Price": "1.00\nper pound & tax\r", "Shown": false}})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Second", "values": {"Name": ""}})).unwrap();
+    let before = s.doc().unwrap().doc.variables.clone();
+    let text_only: Vec<vectorcraft_doc::DataSet> = before
+        .datasets
+        .iter()
+        .map(|d| {
+            let mut d = d.clone();
+            d.values.retain(|k, _| k != "Shown");
+            d
+        })
+        .collect();
+
+    for opts in [
+        json!({"variableData": true}),
+        json!({"variableData": true, "objectIds": "minimal", "minify": true}),
+        json!({"variableData": true, "objectIds": "unique"}),
+        json!({"variableData": true, "styling": "entities", "encoding": "latin1"}),
+    ] {
+        let (svg, warnings) = svg_export(&mut s, opts.clone());
+        assert!(warnings.contains(&json!("Variables that aren't text variables were left out of the SVG's variable data")), "{opts}: {warnings:?}");
+        assert_eq!(svg.matches("docRef=\"id('").count(), 2, "{opts}: {svg}");
+        assert_eq!(s.doc().unwrap().doc.variables, before, "{opts}: exporting changes nothing");
+
+        let (mut o, warnings) = svg_opened(&svg, "vars.svg");
+        assert!(warnings.is_empty(), "{opts}: {warnings:?}");
+        let vars = o.doc().unwrap().doc.variables.clone();
+        assert_eq!(vars.variables.iter().map(|v| (v.name.as_str(), v.kind.label())).collect::<Vec<_>>(), [("Name", "text"), ("Price", "text")]);
+        assert_eq!(vars.datasets, text_only, "{opts}");
+        assert_eq!(vars.active_dataset, None);
+        let bound = |name: &str| {
+            let ids = vars.objects_of(name);
+            assert_eq!(ids.len(), 1, "{opts}: {name}");
+            ids[0]
+        };
+        let (name, price) = (bound("Name"), bound("Price"));
+        assert_eq!((plain(&o, name), plain(&o, price)), ("Alice".into(), "9.99".into()), "{opts}: the art stays as the file draws it");
+        let v = o.execute("dataset.select", &json!({"name": "A & <B>"})).unwrap();
+        assert_eq!(v["applied"], json!(2), "{opts}: {v}");
+        assert_eq!(plain(&o, name), "Bob");
+
+        let mut lib = session();
+        lib.execute("variable.loadLibrary", &json!({"xml": svg})).unwrap();
+        assert_eq!(lib.doc().unwrap().doc.variables.datasets, text_only, "{opts}");
+    }
+}
+
+/// Without Include Variable Data the SVG holds no variable data, and a document without variables
+/// writes none with it on. Outlined type is written unbound, characters XML can't hold are left
+/// out of the values, and variable data past the 8 MiB or 2,000,000-node cap is left out, each
+/// with a warning; past 256 text variables or 1,000 data sets the rest are left out with a
+/// warning. Look-alike text in comments and other markup is skipped when the file opens. A file
+/// whose variable data can't be read opens its art with a warning, and so does one whose
+/// namespace entities would grow the library past its cap.
+#[test]
+fn an_svg_without_readable_variable_data_opens_its_art() {
+    let mut s = session();
+    let t = text(&mut s, "Alice");
+    let (plain_svg, _) = svg_export(&mut s, json!({}));
+    assert!(!plain_svg.contains("variableSets"));
+    let (none, _) = svg_export(&mut s, json!({"variableData": true}));
+    assert!(!none.contains("variableSets"), "no variables, no variable data");
+    s.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    s.execute("variable.bind", &json!({"variable": "Name", "ids": [t.0]})).unwrap();
+    let (off, _) = svg_export(&mut s, json!({}));
+    assert!(!off.contains("variableSets"), "off by default");
+    // Outlined type opens as art: the variable is written unbound, and the values lose the
+    // characters XML can't hold, each with a warning.
+    s.execute("dataset.new", &json!({"name": "Row", "values": {"Name": "a\u{b}b\u{1}c"}})).unwrap();
+    let (outlined, warnings) = svg_export(&mut s, json!({"variableData": true, "outlineText": true}));
+    assert!(outlined.contains("<variable varName=\"Name\"") && !outlined.contains("docRef"), "{outlined}");
+    for w in [
+        "Type written as outlines opens as art: its text variables were written unbound in the SVG's variable data",
+        "Characters XML can't hold were left out of data set values in the SVG's variable data",
+    ] {
+        assert!(warnings.contains(&json!(w)), "{warnings:?}");
+    }
+    let (o, _) = svg_opened(&outlined, "outlined.svg");
+    let vars = &o.doc().unwrap().doc.variables;
+    assert!(vars.bindings.is_empty() && vars.variables.len() == 1, "{vars:?}");
+    assert_eq!(vars.datasets[0].values["Name"], vectorcraft_doc::DataValue::Text("a bc".into()));
+    // Variable data larger than Load Variable Library reads is left out with a warning.
+    s.execute("dataset.new", &json!({"name": "Huge", "values": {"Name": "x".repeat(8 << 20)}})).unwrap();
+    let (huge, warnings) = svg_export(&mut s, json!({"variableData": true}));
+    assert!(!huge.contains("variableSets"));
+    assert!(warnings.contains(&json!("The variable data is larger than 8 MiB, which Load Variable Library reads, and was left out of the SVG")));
+
+    let head = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\">";
+    let art = "<rect x=\"1\" y=\"1\" width=\"5\" height=\"5\"/></svg>";
+    let untraited = format!("{head}<variableSets><variableSet><variables><variable varName=\"A\"/></variables></variableSet></variableSets>{art}");
+    let refs = "&ns_big;".repeat(40_000);
+    let big = "x".repeat(250);
+    let growing = format!(
+        "<!DOCTYPE svg [<!ENTITY ns_big \"{big}\">]>{head}<variableSets><variableSet><variables><variable varName=\"A\" trait=\"textcontent\" category=\"{refs}\"/></variables></variableSet></variableSets>{art}"
+    );
+    // Variable data under 8 MiB with more XML nodes than Load Variable Library reads (a million
+    // one-character paragraphs, minified) is left out with a warning.
+    let mut lines = session();
+    lines.execute("variable.define", &json!({"name": "Name", "kind": "text"})).unwrap();
+    lines.execute("dataset.new", &json!({"name": "Row", "values": {"Name": "a\n".repeat(1_000_000)}})).unwrap();
+    let (dense, warnings) = svg_export(&mut lines, json!({"variableData": true, "minify": true}));
+    assert!(!dense.contains("variableSets"));
+    assert!(
+        warnings.contains(&json!(
+            "The variable data holds more than 2,000,000 XML nodes, which Load Variable Library reads, and was left out of the SVG"
+        )),
+        "{warnings:?}"
+    );
+
+    // More text variables and data sets than Load Variable Library reads: the first 256 and the
+    // first 1,000 are written, each with a warning, and the file opens with them.
+    let mut many = session();
+    {
+        let vars = &mut std::sync::Arc::make_mut(&mut many.doc_mut().unwrap().doc).variables;
+        vars.variables = (0..300).map(|i| vectorcraft_doc::Variable { name: format!("V{i}"), kind: vectorcraft_doc::VariableKind::Text }).collect();
+        vars.datasets = (0..1_100)
+            .map(|i| vectorcraft_doc::DataSet {
+                name: format!("D{i}"),
+                values: [("V0".to_string(), vectorcraft_doc::DataValue::Text(format!("{i}")))].into_iter().collect(),
+            })
+            .collect();
+    }
+    let (capped, warnings) = svg_export(&mut many, json!({"variableData": true}));
+    for w in [
+        "Text variables past the first 256, which Load Variable Library reads, were left out of the SVG's variable data",
+        "Data sets past the first 1,000, which Load Variable Library reads, were left out of the SVG's variable data",
+    ] {
+        assert!(warnings.contains(&json!(w)), "{warnings:?}");
+    }
+    let (o, warnings) = svg_opened(&capped, "many.svg");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let vars = &o.doc().unwrap().doc.variables;
+    assert_eq!((vars.variables.len(), vars.datasets.len()), (256, 1_000));
+    assert_eq!(vars.datasets[999].values["V0"], vectorcraft_doc::DataValue::Text("999".into()));
+
+    // Text that only looks like variable data, in a comment, a CDATA section, a processing
+    // instruction or the document type declaration, is skipped for the element itself.
+    let library = "<variableSets><variableSet><variables><variable varName=\"A\" trait=\"textcontent\"/></variables></variableSet></variableSets>";
+    let decoys = format!(
+        "<!DOCTYPE svg [<!-- > <variableSets> -->]>{head}<!-- a > <variableSets> --><metadata><![CDATA[ a > <variableSets> ]]></metadata><?pi a > <variableSets> ?>{library}<!-- </variableSets> -->{art}"
+    );
+    let (o, warnings) = svg_opened(&decoys, "decoys.svg");
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(o.doc().unwrap().doc.variables.variables.len(), 1);
+
+    for (svg, why) in [(untraited, "variable `A` has no `trait`"), (growing, "entities expand to more than")] {
+        let (o, warnings) = svg_opened(&svg, "broken.svg");
+        assert!(warnings.iter().any(|w| w.as_str().is_some_and(|w| w.contains("variable data wasn't read") && w.contains(why))), "{warnings:?}");
+        let d = &o.doc().unwrap().doc;
+        assert!(d.variables.variables.is_empty());
+        assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
+    }
 }

@@ -587,7 +587,8 @@ fn a_deferred_swatch_paste_rejects_a_changed_token_or_closed_document() {
                 &crate::control::ControlRequest::new("ui.dialog.set", json!({"field": "__deferredPaste", "value": 999999})).0,
             );
             let crate::control::Outcome::Done(result) = result else { panic!("expected dialog result") };
-            assert_eq!(result["ok"], true, "{result}");
+            assert_eq!(result["error"], "the `swatchConflict` dialog cannot set protected field `__deferredPaste`", "{result}");
+            app.ui.dialog.as_mut().unwrap().fields.insert("__deferredPaste".into(), json!(999999));
         }
         let error = crate::dialogs::confirm(&mut app).unwrap_err();
         assert!(
@@ -970,7 +971,7 @@ fn what_the_user_places_is_read_off_the_ui_thread_and_commands_read_at_once() {
     app.select_tool("selection");
     // A drop and bytes placed without a path.
     let doc = app.session.doc().unwrap().uid;
-    let drop = DropTarget::Place(DropAt { doc, at: vectorcraft_geom::Point::new(100.0, 100.0), embed: false });
+    let drop = DropTarget::Place(DropAt { doc, reverts: 0, at: vectorcraft_geom::Point::new(100.0, 100.0), embed: false });
     crate::place::drop_files(&mut app, vec![(drop, ("b.bmp".into(), Some(b.clone()), vec![]))]);
     crate::io::place_bytes(&mut app, "c.png", &picture(Png, 10, 10)).unwrap();
     assert_eq!(app.placing.pending.len(), 2);
@@ -1043,7 +1044,7 @@ fn files_dropped_together_are_placed_in_the_order_dropped() {
     let small = [saved("order", "small1.png", &picture(Png, 8, 8)), saved("order", "small2.png", &picture(Png, 8, 8))];
     let mut app = app(true);
     let doc = app.session.doc().unwrap().uid;
-    let drop = DropTarget::Place(DropAt { doc, at: vectorcraft_geom::Point::new(200.0, 150.0), embed: false });
+    let drop = DropTarget::Place(DropAt { doc, reverts: 0, at: vectorcraft_geom::Point::new(200.0, 150.0), embed: false });
     let files = [&large, &small[0], &small[1]].map(|p| (drop, (vectorcraft_engine::cmd::fileio::file_name(p), Some(p.clone()), vec![])));
     crate::place::drop_files(&mut app, files.into());
     assert_eq!(app.placing.pending.len(), 3);
@@ -1058,7 +1059,7 @@ fn files_dropped_together_are_read_one_at_a_time() {
     let files: Vec<String> = (0..4).map(|i| saved("one-at-a-time", &format!("large{i}.tif"), &picture(Tiff, 1500, 1500))).collect();
     let mut app = app(true);
     let doc = app.session.doc().unwrap().uid;
-    let drop = DropTarget::Place(DropAt { doc, at: vectorcraft_geom::Point::new(200.0, 150.0), embed: false });
+    let drop = DropTarget::Place(DropAt { doc, reverts: 0, at: vectorcraft_geom::Point::new(200.0, 150.0), embed: false });
     let dropped = files.iter().map(|p| (drop, (vectorcraft_engine::cmd::fileio::file_name(p), Some(p.clone()), vec![]))).collect();
     crate::place::drop_files(&mut app, dropped);
     placed(&mut app);
@@ -1122,7 +1123,7 @@ fn a_file_that_cant_be_read_off_the_ui_thread_reports_as_at_once() {
         let name = vectorcraft_engine::cmd::fileio::file_name(&path);
         for app in [&mut at_once, &mut app] {
             let doc = app.session.doc().unwrap().uid;
-            let drop = DropTarget::Place(DropAt { doc, at: vectorcraft_geom::Point::new(100.0, 100.0), embed: false });
+            let drop = DropTarget::Place(DropAt { doc, reverts: 0, at: vectorcraft_geom::Point::new(100.0, 100.0), embed: false });
             crate::place::drop_files(app, vec![(drop, (name.clone(), Some(path.clone()), vec![]))]);
             placed(app);
         }
@@ -1151,6 +1152,164 @@ fn a_file_whose_document_closed_meanwhile_is_not_placed() {
     }
 }
 
+/// `app`, which also writes files, with its active document saved to a file in a folder of
+/// `test`'s own and then changed (a rectangle drawn since the save) → the app and the file.
+fn saved_and_changed(mut app: VectorcraftApp, test: &str) -> (VectorcraftApp, String) {
+    app.services.write = Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string())));
+    let path = saved(test, "saved.vectorcraft", b"");
+    std::fs::remove_file(&path).unwrap();
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    (app, path)
+}
+
+/// A file read for Place, for the place cursor or dropped on the canvas is not placed when File ›
+/// Revert threw away the content of its document before it was read: the reverted document, its
+/// undo steps and the tool stay as they are, and the status bar says why. A file read after the
+/// Revert is placed.
+#[test]
+fn a_file_whose_document_was_reverted_meanwhile_is_not_placed() {
+    let tif = saved("reverted", "photo.tif", &picture(Tiff, 60, 40));
+    for kind in ["place", "drop", "queue"] {
+        let (mut app, _) = saved_and_changed(app(true), &format!("reverted-{kind}"));
+        let read = |app: &mut VectorcraftApp| match kind {
+            "queue" => start_queue(app, &json!({"paths": [tif]})),
+            _ => start(app, &json!({"path": tif}), kind == "drop"),
+        };
+        read(&mut app).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let reverted = state(&app);
+        placed(&mut app);
+        let why = if kind == "drop" { "dropped on" } else { "placed in" };
+        assert_eq!(app.ui.status, format!("Couldn't place photo.tif: the document it was {why} was reverted"), "{kind}");
+        assert!(state(&app) == reverted, "{kind}: nothing is placed");
+        assert_ne!(app.session.tool_id(), "place", "{kind}: the place cursor is not loaded");
+        read(&mut app).unwrap();
+        placed(&mut app);
+        if kind == "queue" {
+            assert_eq!((app.session.tool_id(), app.session.tool_options()["count"].as_u64()), ("place", Some(1)));
+        } else {
+            assert_eq!(names(&app), ["photo.tif"], "{kind}: a file read after the Revert is placed");
+        }
+    }
+}
+
+/// A Revert that fails, or that a batch rolls back, leaves a file being read for its document to
+/// be placed, and a Revert of one document leaves the files read for another to be placed.
+#[test]
+fn a_file_is_placed_after_a_revert_that_failed_or_of_another_document() {
+    let tif = saved("revert-failed", "photo.tif", &picture(Tiff, 60, 40));
+    let (mut first, path) = saved_and_changed(app(true), "revert-failed");
+    start(&mut first, &json!({"path": tif}), false).unwrap();
+    let revert = json!({"command": "file.revert", "params": {"confirmed": true}});
+    let failing = json!({"command": "select.set", "params": {"ids": [999999]}});
+    assert!(first.run("command.batch", json!({"commands": [revert, failing]})).is_err(), "the batch is rolled back");
+    std::fs::remove_file(&path).unwrap();
+    assert!(first.run("file.revert", json!({"confirmed": true})).is_err(), "the saved file is gone");
+    placed(&mut first);
+    assert_eq!(names(&first), ["photo.tif"]);
+    let (mut second, _) = saved_and_changed(app(true), "revert-other");
+    second.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    start(&mut second, &json!({"path": tif}), false).unwrap();
+    second.session.set_active(0);
+    second.sync_views();
+    second.run("file.revert", json!({"confirmed": true})).unwrap();
+    placed(&mut second);
+    assert_eq!(second.session.active_index(), Some(1));
+    assert_eq!(names(&second), ["photo.tif"], "the other document's file is placed");
+}
+
+/// Files dropped on a canvas that arrive after File › Revert threw away the content of their
+/// document (the web reads dropped files asynchronously) are not placed.
+#[test]
+fn files_dropped_on_a_document_reverted_before_they_arrive_are_not_placed() {
+    let tif = saved("revert-drop", "photo.tif", &picture(Tiff, 60, 40));
+    let (mut app, _) = saved_and_changed(app(true), "revert-drop");
+    let (doc, reverts) = app.session.doc().map(|st| (st.uid, st.reverts)).unwrap();
+    let drop = DropTarget::Place(DropAt { doc, reverts, at: vectorcraft_geom::Point::new(100.0, 100.0), embed: false });
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let reverted = state(&app);
+    crate::place::drop_files(&mut app, vec![(drop, ("photo.tif".into(), Some(tif), vec![]))]);
+    placed(&mut app);
+    assert_eq!(app.ui.status, "Couldn't place photo.tif: the document it was dropped on was reverted");
+    assert!(state(&app) == reverted, "nothing is placed");
+}
+
+/// Pastes whose bitmaps are read off the UI thread paste nothing when File › Revert threw away the
+/// content of their document before they were read: the clipboard and the selection stay as they
+/// are, and the status bar says why. A Paste in Front given after the Revert, while a paste given
+/// before it waits, does not follow that paste: it goes in front of what was selected when it was
+/// given.
+#[test]
+fn a_paste_whose_document_was_reverted_meanwhile_pastes_nothing() {
+    let bitmap = Some(Flavour { mime: PNG, data: picture(Png, 60, 40) });
+    let (pasting, _) = pasting_app(true, bitmap, None, true);
+    let (mut app, _) = saved_and_changed(pasting, "revert-paste");
+    app.run("select.set", json!({"ids": []})).unwrap();
+    crate::menus::invoke(&mut app, "edit.paste", json!({}));
+    crate::menus::invoke(&mut app, "edit.paste", json!({}));
+    assert_eq!(app.placing.pending.len(), 2);
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let (reverted, clipboard) = (state(&app), app.session.clipboard.clone());
+    placed(&mut app);
+    assert_eq!(app.ui.status, "Couldn't paste: the document it was pasted in was reverted");
+    assert!(state(&app) == reverted, "nothing is pasted");
+    assert!(app.session.clipboard == clipboard, "the clipboard is unchanged");
+    assert!(app.placing.chains.is_empty() && app.placing.latest_chain.is_empty(), "no paste waits");
+    // A paste given before a Revert, and one given after it with the same (empty) selection.
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.run("select.set", json!({"ids": []})).unwrap();
+    crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
+    assert_eq!(app.placing.pending.len(), 2);
+    let below = app.run("shape.rectangle", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 20, "height": 20})).unwrap();
+    app.run("select.set", json!({"ids": [below]})).unwrap();
+    placed(&mut app);
+    let st = app.session.doc().unwrap();
+    let order: Vec<_> = st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(order.len(), 3, "one picture is pasted");
+    assert_eq!(st.selection.objects, [order[2]], "pasted on top, with nothing selected as when it was given");
+    assert!(matches!(st.doc.node(order[2]).map(|n| &n.kind), Some(vectorcraft_doc::NodeKind::Image(_))));
+}
+
+/// A paste that waits for its own Swatch Conflict dialog pastes nothing once File › Revert (on its
+/// own or in a batch) threw away the content of its document: confirming the dialog gives an
+/// error, and the document and the clipboard stay as they are.
+#[test]
+fn a_deferred_swatch_paste_is_dropped_when_its_document_is_reverted() {
+    for batch in [false, true] {
+        let (mut app, _) = pasting_app(true, None, None, true);
+        app.run("swatch.new", json!({"name": "Brand", "color": "#ff0000", "global": true})).unwrap();
+        let source = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"ids": [source], "swatch": "Brand"})).unwrap();
+        app.run("edit.copy", json!({})).unwrap();
+        let clipboard = app.session.clipboard.clone();
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("swatch.new", json!({"name": "Brand", "color": "#0000ff", "global": true})).unwrap();
+        let (mut app, _) = saved_and_changed(app, &format!("revert-swatch-{batch}"));
+        crate::menus::invoke(&mut app, "edit.pasteInPlace", json!({}));
+        placed(&mut app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND);
+        let revert = json!({"command": "file.revert", "params": {"confirmed": true}});
+        if batch {
+            app.run("command.batch", json!({"commands": [revert]})).unwrap();
+        } else {
+            app.run("file.revert", json!({"confirmed": true})).unwrap();
+        }
+        let reverted = state(&app);
+        assert_eq!(app.ui.dialog.as_ref().unwrap().kind, crate::dialogs::swatch_conflict::KIND, "batch {batch}");
+        app.ui.dialog.as_mut().unwrap().fields.insert("choice".into(), json!("add"));
+        let error = crate::dialogs::confirm(&mut app).unwrap_err();
+        assert_eq!(error, "Couldn't paste: the document it was pasted in was reverted");
+        assert!(app.ui.dialog.is_none() && app.placing.swatch_paste.is_none());
+        assert!(app.placing.chains.is_empty() && app.placing.latest_chain.is_empty());
+        assert!(app.session.clipboard == clipboard);
+        assert!(state(&app) == reverted, "batch {batch}: nothing is pasted");
+    }
+}
+
 /// Replace swaps the object selected when Place started; when that object was deleted before the
 /// file was read, nothing is placed and the status bar says why.
 #[test]
@@ -1164,6 +1323,46 @@ fn a_replace_whose_object_was_deleted_meanwhile_places_nothing() {
     placed(&mut app);
     assert!(app.ui.status.contains("the object to replace was changed or deleted"), "{}", app.ui.status);
     assert!(state(&app) == cleared, "nothing placed");
+}
+
+/// A Replace started while a Shape Builder merge is computed on another thread swaps the object
+/// as the merge leaves it: the merge is applied first.
+#[test]
+fn a_replace_during_a_merge_on_another_thread_swaps_the_merged_object() {
+    use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
+    let path = saved("replace-merge", "photo.tif", &picture(Tiff, 60, 40));
+    let mut app = app(true);
+    for k in 0..40 {
+        app.run("shape.rectangle", json!({"x": k * 10, "y": 0, "width": 20, "height": 20})).unwrap();
+    }
+    app.run("select.all", json!({})).unwrap();
+    app.run("object.group", json!({})).unwrap();
+    app.run("tool.select", json!({"tool": "shapeBuilder"})).unwrap();
+    let view = app.view_info();
+    let at = |kind, x| PointerEvent {
+        kind,
+        pos: vectorcraft_geom::Point::new(x, 10.0),
+        mods: Mods::default(),
+        pressure: 1.0,
+        backquote: false,
+        pen: None,
+    };
+    crate::canvas::dispatch(&mut app, &at(PointerKind::Move, 5.0), view);
+    app.session.tool_poll(view, true).unwrap();
+    // A drag across the row merges every square into one object, the one Replace swaps.
+    for (kind, x) in [(PointerKind::Down, 5.0), (PointerKind::Drag, 200.0), (PointerKind::Drag, 405.0), (PointerKind::Up, 405.0)] {
+        crate::canvas::dispatch(&mut app, &at(kind, x), view);
+    }
+    assert!(app.session.tool_editing());
+    start(&mut app, &json!({"path": path, "replace": true}), false).unwrap();
+    assert!(!app.session.tool_editing(), "the merge is applied first");
+    placed(&mut app);
+    assert!(app.ui.status.is_empty(), "{}", app.ui.status);
+    let mut placed_names = vec![];
+    app.session.doc().unwrap().doc.walk(|n| placed_names.extend(n.name.clone()));
+    assert!(placed_names.iter().any(|n| n == "photo.tif"), "the merged art is replaced: {placed_names:?}");
+    let labels: Vec<String> = app.session.doc().unwrap().history.undo.iter().rev().take(2).map(|e| e.label.clone()).collect();
+    assert_eq!(labels.last().map(String::as_str), Some("Shape Builder"), "{labels:?}");
 }
 
 /// A file read while a dialog is open waits for the dialog to close, as a document that opens

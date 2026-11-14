@@ -81,6 +81,35 @@ fn document_setup_names_each_bleed_side() {
     }
 }
 
+/// New Document's Preset Details column names each field by the caption above it.
+#[test]
+fn new_document_names_its_fields_by_their_captions() {
+    let mut app = app();
+    app.run("file.newDialog", json!({})).unwrap();
+    let h = strict(app);
+    for name in ["Document Name", "Width", "Height", "Artboards"] {
+        let _ = h.get_by_role_and_label(Role::TextInput, name);
+    }
+    for name in ["Units", "Background Contents"] {
+        let _ = h.get_by_role_and_label(Role::ComboBox, name);
+    }
+}
+
+/// New Document's More Settings pop-up and Save Preset mode leave no field unnamed.
+#[test]
+fn new_document_more_settings_names_its_fields() {
+    let mut app = app();
+    app.run("file.newDialog", json!({})).unwrap();
+    let d = app.ui.dialog.as_mut().expect("New Document is open");
+    d.kind = super::new_document::MORE.into();
+    d.fields.insert("__saving".into(), json!(true));
+    d.fields.insert("artboards".into(), json!(3));
+    let h = strict(app);
+    for name in ["Preset Name", "Number of Artboards:", "Spacing:", "Columns:"] {
+        let _ = h.get_by_role_and_label(Role::TextInput, name);
+    }
+}
+
 /// Split Into Grid keeps translated visible labels while naming row and column gutter and total
 /// inputs by axis and context.
 #[test]

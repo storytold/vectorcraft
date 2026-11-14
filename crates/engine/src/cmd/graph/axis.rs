@@ -1,4 +1,4 @@
-use super::Value;
+use super::{GraphSpec, Result, Value, bad};
 
 pub(super) const LABEL_SIZE: f64 = 9.0;
 
@@ -22,6 +22,16 @@ pub(super) fn count_param(p: &Value, key: &str, max: u64) -> Option<usize> {
     usize::try_from(n.min(max)).ok()
 }
 
+/// [`count_param`], or `None` when `p` leaves `key` out or gives null. A negative number is an error, and so is any
+/// other value, such as `"5"`.
+pub(super) fn count_given(p: &Value, key: &str, max: u64, cmd: &str) -> Result<Option<usize>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) if !v.is_number() => Err(bad(cmd, format!("`{key}` must be a number, not {v}"))),
+        Some(_) => count_param(p, key, max).map(Some).ok_or_else(|| bad(cmd, format!("`{key}` must be 0 or more"))),
+    }
+}
+
 /// A "nice" axis: (min, max, step).
 pub(super) fn nice_axis(lo: f64, hi: f64, ticks: usize) -> (f64, f64, f64) {
     let (lo, hi) = if (hi - lo).abs() < 1e-12 { (lo.min(0.0), lo.max(0.0) + 1.0) } else { (lo, hi) };
@@ -30,6 +40,11 @@ pub(super) fn nice_axis(lo: f64, hi: f64, ticks: usize) -> (f64, f64, f64) {
     let mag = 10f64.powf(raw.log10().floor());
     let step = [1.0, 2.0, 2.5, 5.0, 10.0].iter().map(|m| m * mag).find(|s| *s >= raw - 1e-12).unwrap_or(10.0 * mag);
     ((lo / step).floor() * step, (hi / step).ceil() * step, step)
+}
+
+/// The value axis of a radar graph: from 0 to the largest value of any series.
+pub(super) fn radar_axis(g: &GraphSpec) -> (f64, f64, f64) {
+    value_axis(g.ticks, g.axis_min, g.axis_max, 0.0, g.rows.iter().flatten().copied().fold(0.0, f64::max))
 }
 
 /// A value axis: with both `min` and `max` set (Graph Type › Tick Values › Override Calculated Values), exactly that

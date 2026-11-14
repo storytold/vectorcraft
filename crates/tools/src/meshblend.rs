@@ -4,6 +4,7 @@
 //!   point of a path blends from that point (`starts`). Each further click adds the object as one
 //!   more key of the new blend (as does clicking a blend first). Double-click or Alt-click opens
 //!   Blend Options (dialog `blendOptions`). Clicking empty canvas or pressing Escape starts over.
+//!   A press on a widget of the selected blend drags it ([`crate::blendwidget`]).
 //! - Mesh: click inside a filled path → `object.mesh.create {ids, at}` (1×1 mesh plus lines through
 //!   the click); click inside a mesh or a mesh envelope → `object.mesh.addLine` (a gradient mesh's
 //!   new point takes the current fill color in its own model, unless Shift); drag a mesh point,
@@ -19,7 +20,8 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::Point;
 
-use crate::meshedit::{MeshEdit, grid_of};
+use crate::blendwidget::{self, BlendWidgetDrag};
+use crate::meshedit::{MeshEdit, grid_of, may_have_grid};
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 const FEEDBACK: [u8; 3] = [0x4f, 0x9d, 0xff];
@@ -51,6 +53,8 @@ pub struct BlendTool {
     /// `first` and `chained` when the button went down: a dropped press puts them back, unless
     /// the press picked an object or made a blend.
     before_press: Option<(Option<Pick>, bool)>,
+    /// A press on a widget of the selected blend, and its drag.
+    widget: Option<BlendWidgetDrag>,
 }
 
 /// The anchor of the first subpath of path or compound path `id` (its first member's) nearest
@@ -98,6 +102,19 @@ impl Tool for BlendTool {
         if self.first.is_some_and(|(a, _)| cx.doc.node(a).is_none()) {
             (self.first, self.chained) = (None, false);
         }
+        // The selected blend's widgets take a press before the picks, and its drag.
+        match (ev.kind, &mut self.widget) {
+            (PointerKind::Drag, Some(d)) => return d.drag(cx, ev.pos),
+            (PointerKind::Up, Some(_)) => return self.widget.take().map(BlendWidgetDrag::finish).unwrap_or_default(),
+            (PointerKind::DoubleClick, _) if blendwidget::over_widget(cx, ev.pos) => return vec![],
+            (PointerKind::Down, _) if !ev.mods.alt => {
+                if let Some(d) = BlendWidgetDrag::hit(cx, ev) {
+                    self.widget = Some(d);
+                    return vec![];
+                }
+            }
+            _ => {}
+        }
         match ev.kind {
             PointerKind::DoubleClick => options(self),
             PointerKind::Down if ev.mods.alt => options(self),
@@ -131,6 +148,9 @@ impl Tool for BlendTool {
         }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        if let Some(d) = &self.widget {
+            return d.overlays(cx);
+        }
         let Some((id, start)) = self.first(cx) else { return vec![] };
         let Some(n) = cx.doc.node(id) else { return vec![] };
         let at = match (start, &n.kind) {
@@ -144,6 +164,9 @@ impl Tool for BlendTool {
         vec![Overlay::Anchor { p, color: FEEDBACK, filled: true, size: 6.0 }]
     }
     fn cursor(&self, cx: &ToolContext, p: Point, _mods: Mods) -> Cursor {
+        if self.widget.is_some() || blendwidget::over_widget(cx, p) {
+            return Cursor::ArrowHollow;
+        }
         match pick(cx, p) {
             Some((_, Some(_))) => Cursor::BlendAnchor,
             Some(_) => Cursor::BlendObject,
@@ -151,11 +174,34 @@ impl Tool for BlendTool {
         }
     }
     fn busy(&self) -> bool {
-        self.first.is_some()
+        self.first.is_some() || self.widget.is_some()
+    }
+    fn transforming(&self) -> bool {
+        self.widget.as_ref().is_some_and(BlendWidgetDrag::adjusting)
+    }
+    /// The arrows while a blend widget is pressed: its value.
+    fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
+        self.widget.is_some() && matches!(key, ToolKey::Up | ToolKey::Down | ToolKey::Left | ToolKey::Right)
+    }
+    /// A first pick, or adding to the blend just made: Escape ends either.
+    fn ends_on_escape(&self, cx: &ToolContext) -> bool {
+        self.first(cx).is_some()
     }
     /// Escape drops the object picked first and stops adding to the blend just made, so the next
-    /// click picks a new first object. The document and the selection stay as they are.
-    fn key(&mut self, _cx: &ToolContext, key: crate::ToolKey, _mods: Mods) -> Vec<Action> {
+    /// click picks a new first object. The document and the selection stay as they are. While a
+    /// blend widget is pressed, the arrows change its value and Escape cancels its drag instead.
+    fn key(&mut self, cx: &ToolContext, key: crate::ToolKey, mods: Mods) -> Vec<Action> {
+        if let Some(d) = &mut self.widget {
+            return match key {
+                ToolKey::Up | ToolKey::Down | ToolKey::Left | ToolKey::Right => d.step(cx, matches!(key, ToolKey::Up | ToolKey::Right), mods.shift),
+                ToolKey::Escape => {
+                    let began = d.adjusting();
+                    self.widget = None;
+                    if began { vec![Action::Cancel] } else { vec![] }
+                }
+                _ => vec![],
+            };
+        }
         if key == crate::ToolKey::Escape {
             (self.first, self.chained, self.before_press) = (None, false, None);
         }
@@ -168,17 +214,29 @@ impl Tool for BlendTool {
         if let Some((first, chained)) = self.before_press.take() {
             (self.first, self.chained) = (first, chained);
         }
-        vec![]
+        // A dropped widget drag puts its value back.
+        match self.widget.take() {
+            Some(d) if d.adjusting() => vec![Action::Cancel],
+            _ => vec![],
+        }
     }
     fn deactivate(&mut self, _cx: &ToolContext) -> Vec<Action> {
         (self.first, self.chained, self.before_press) = (None, false, None);
-        vec![]
+        match self.widget.take() {
+            Some(d) if d.adjusting() => vec![Action::Cancel],
+            _ => vec![],
+        }
     }
     /// Choosing the Blend tool again finishes the blend: it drops the object picked first and
     /// stops adding to the blend just made, so the next click picks a new first object. The
     /// document and the selection stay as they are.
     fn chosen_again(&mut self, cx: &ToolContext) -> Vec<Action> {
         self.deactivate(cx)
+    }
+    /// An edit, Undo or Redo made outside the tool drops the object picked first and stops adding to
+    /// the blend just made, so the next click picks a new first object.
+    fn history_moved(&mut self) {
+        (self.first, self.chained) = (None, false);
     }
 }
 
@@ -188,13 +246,13 @@ pub struct MeshTool {
 }
 
 impl MeshTool {
-    /// Meshes (gradient meshes and mesh envelopes) to consider for point hits: selected ones
-    /// first, then any in the document.
+    /// Meshes (gradient meshes, and mesh and warp envelopes) to consider for point hits: selected
+    /// ones first, then any in the document.
     fn meshes(cx: &ToolContext) -> Vec<NodeId> {
-        let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).and_then(grid_of).is_some()).collect();
+        let mut v: Vec<NodeId> = cx.selection.objects.iter().copied().filter(|id| cx.doc.node(*id).is_some_and(may_have_grid)).collect();
         let mut rest = vec![];
         cx.doc.walk(|n| {
-            if grid_of(n).is_some() {
+            if may_have_grid(n) {
                 rest.push(n.id);
             }
         });
@@ -520,8 +578,10 @@ mod tests {
         let c = cx(&d, &s, &p);
         let mut t = BlendTool { first: None, chained: true, ..Default::default() };
         assert!(t.first(&c).is_some());
+        assert!(!t.busy() && t.ends_on_escape(&c), "Escape has adding to the blend to end");
         assert!(t.key(&c, crate::ToolKey::Escape, Mods::default()).is_empty());
         assert!(t.first(&c).is_none(), "Escape ends adding to the blend just made");
+        assert!(!t.ends_on_escape(&c), "and then has nothing to end");
         assert_eq!(t.pointer(&c, &down(150.0, 150.0)), picks(a));
         assert!(esc(&mut BlendTool::default()).is_empty(), "nothing to drop");
     }

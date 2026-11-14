@@ -561,6 +561,114 @@ fn small_caps_superscript_and_subscript_menu_items_set_and_check_the_text() {
     }
 }
 
+/// The Anti-aliasing Method dropdown under Character Rotation shows the method of the selected
+/// type, blank where the selected objects differ, and a pick sets it for the whole object, also
+/// while the Type tool has part of its text selected. Reset Panel sets Sharp.
+#[test]
+fn the_anti_aliasing_method_dropdown_shows_and_sets_the_types_method() {
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hamburg", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    let method = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.anti_alias,
+        _ => panic!("text"),
+    };
+    let ctx = egui::Context::default();
+    let texts = |app: &mut VectorcraftApp| frame_events(&ctx, app, vec![], show);
+    let shown = |app: &mut VectorcraftApp| {
+        texts(app).into_iter().map(|(t, _)| t).filter(|t| ["None", "Sharp", "Crisp", "Strong"].contains(&t.as_str())).collect::<Vec<_>>()
+    };
+    assert_eq!(shown(&mut app), ["Sharp"]);
+    // Open the dropdown and pick Crisp.
+    let at = text_rect(&texts(&mut app), "Sharp").center();
+    click(&ctx, &mut app, at, show);
+    let listed = texts(&mut app);
+    let crisp = text_rect(&listed, "Crisp").center();
+    click(&ctx, &mut app, crisp, show);
+    assert_eq!(method(&app, a), TypeAntiAlias::Crisp);
+    assert_eq!(shown(&mut app), ["Crisp"]);
+    // Another object with Sharp selected as well: blank.
+    let b = app.run("text.create", json!({"x": 20, "y": 120, "text": "Bremen", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+    assert!(shown(&mut app).is_empty(), "the methods differ");
+    // The Type tool with two letters selected: the whole object takes the method.
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    app.session.select_tool("type", Default::default()).unwrap();
+    app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+    app.session.set_tool_option("select", &json!({"start": 1, "end": 3}));
+    assert!(text_editing(&app).is_some());
+    set_anti_alias(&mut app, TypeAntiAlias::Strong);
+    assert_eq!(method(&app, a), TypeAntiAlias::Strong);
+    assert_eq!(method(&app, b), TypeAntiAlias::Sharp, "the other selected type is unchanged while editing");
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Strong));
+    // Reset Panel sets Sharp, with the characters' attributes, in one undo step.
+    range_style(&mut app, json!({"tracking": 50}));
+    let tracking = |app: &VectorcraftApp| shared(app, |s| s.tracking);
+    assert_eq!(tracking(&app), Some(50.0));
+    reset_panel(&mut app);
+    assert_eq!((method(&app, a), tracking(&app)), (TypeAntiAlias::Sharp, Some(0.0)));
+    app.run("edit.undo", json!({})).unwrap();
+    assert_eq!((method(&app, a), tracking(&app)), (TypeAntiAlias::Strong, Some(50.0)), "one undo step");
+}
+
+/// The Sharp method is named by its own `antiAlias` catalog row, not by the plain "Sharp" row
+/// that names the Contour tool's corner.
+#[test]
+fn the_sharp_method_takes_its_own_translation() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    app.run("text.create", json!({"x": 20, "y": 50, "text": "Hamburg", "size": 12})).unwrap();
+    let de = crate::i18n::Lang::from_code("de").unwrap();
+    let (method, corner) = (crate::i18n::tr_ctx(de, "antiAlias", "Sharp"), crate::i18n::tr(de, "Sharp"));
+    assert_ne!(method, corner, "the catalog names the two differently");
+    crate::i18n::set_current(de);
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert!(text.contains(method) && !text.contains(corner), "{text}");
+}
+
+/// Reset Panel closes only the undo group it opens: in an undo group that is already open,
+/// the reset is part of that group's step, and an undo group open in another document stays
+/// open, with that document's later edits part of its step.
+#[test]
+fn reset_panel_closes_only_its_own_undo_group() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let a = app.run("text.create", json!({"x": 20, "y": 50, "text": "A"})).unwrap()["id"].clone();
+    let steps = |st: &vectorcraft_engine::DocState| (st.history.undo.len(), st.history.undo.last().map(|e| e.label.clone()));
+    // An undo group open in the same document (MCP `command_batch` with `atomic`).
+    app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "crisp"})).unwrap();
+    reset_panel(&mut app);
+    assert!(app.session.active().unwrap().undo_group.is_some(), "the batch's undo group stays open");
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "strong"})).unwrap();
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    let a_steps = steps(app.session.active().unwrap());
+    assert_eq!(a_steps.1, Some("Batch".to_string()), "the reset is part of the Batch step");
+    // An undo group open in another document. The second document is open before the group
+    // begins, so switching to it opens no group there.
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    assert_eq!(app.session.active_index(), Some(1));
+    let b = app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap()["id"].clone();
+    app.session.set_active(0);
+    app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "none"})).unwrap();
+    let a_steps = steps(app.session.active().unwrap());
+    app.session.set_active(1);
+    assert!(app.session.active().unwrap().undo_group.is_none());
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    let b_steps = steps(app.session.active().unwrap()).0;
+    reset_panel(&mut app);
+    assert_eq!(steps(app.session.active().unwrap()), (b_steps + 1, Some("Reset Panel".to_string())));
+    assert!(app.session.active().unwrap().undo_group.is_none());
+    assert!(app.session.documents()[0].undo_group.is_some(), "the other document's undo group stays open");
+    app.session.set_active(0);
+    app.run("text.setFormat", json!({"id": a, "antiAlias": "crisp"})).unwrap();
+    app.run("edit.undoGroup.end", json!({})).unwrap();
+    assert_eq!(steps(app.session.active().unwrap()), a_steps, "the later edit is part of the Batch step");
+}
+
 /// Character panel menu › System Layout is off for a new document, and a click turns whole-point
 /// spacing on and back off for every text object.
 #[test]
@@ -638,6 +746,40 @@ fn character_alignment_shows_with_the_east_asian_options() {
     assert_eq!(shown(&mut app), (true, true));
 }
 
+/// Insert Aki Left and Right are fields of the panel with the East Asian options only, and show
+/// the selected characters' values, blank where they differ. A value typed past 1000 sets 1000.
+#[test]
+fn insert_aki_fields_show_with_the_east_asian_options() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "（日本）"})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    app.run("text.setFormat", json!({"akiLeft": 250, "akiRight": 750})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(!text.contains("↔A") && !text.contains("750"), "{text}");
+    app.session.prefs.show_east_asian_options = true;
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("↔A") && text.contains("A↔") && text.contains("250") && text.contains("750"), "{text}");
+    // Only the first character has 750 after it: the Right field is blank.
+    app.run("text.setRangeStyle", json!({"id": id, "start": 3, "end": 12, "akiRight": 0})).unwrap();
+    let text = crate::tests_labels::painted_text(&mut app, show);
+    assert!(text.contains("250") && !text.contains("750"), "{text}");
+    use super::super::tests_appearance::{click, frame_events, text_rect};
+    let ctx = egui::Context::default();
+    let texts = frame_events(&ctx, &mut app, vec![], show);
+    click(&ctx, &mut app, text_rect(&texts, "250").center(), show);
+    let key = |key, modifiers| egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers };
+    frame_events(&ctx, &mut app, vec![key(egui::Key::A, egui::Modifiers::COMMAND)], show);
+    frame_events(&ctx, &mut app, vec![egui::Event::Text("1500".into())], show);
+    frame_events(&ctx, &mut app, vec![key(egui::Key::Enter, egui::Modifiers::NONE)], show);
+    frame_events(&ctx, &mut app, vec![], show);
+    let left = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().map(|r| r.style.aki_left).collect::<Vec<_>>(),
+        _ => panic!("text"),
+    };
+    assert!(left(&app).iter().all(|v| *v == 1000.0), "{:?}", left(&app));
+}
+
 /// The panel menu's Show Font Height Options shows the Set Font Height Reference dropdown,
 /// which shows the selected type's reference and sets the one picked (one undo step); Hide
 /// Font Height Options hides it again.
@@ -678,6 +820,135 @@ fn show_font_height_options_shows_the_font_height_reference() {
     let at = item(&texts(&ctx, &mut app, menu), "Hide Font Height Options").unwrap();
     click(&ctx, &mut app, at, menu);
     assert!(item(&texts(&ctx, &mut app, show), "Cap Height").is_none());
+}
+
+/// The Set Font Height Reference dropdown shows an icon before each reference's name, in the
+/// closed field and in the open list, and each reference's icon is its own (#6304).
+#[test]
+fn font_height_references_show_their_icons() {
+    use super::super::tests_appearance::click;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, FONT_HEIGHT_OPTIONS, true);
+    // Every text drawn with its rect, and the rects of every other shape drawn.
+    let frame = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, texts: &mut Vec<(String, egui::Rect)>, marks: &mut Vec<egui::Rect>) {
+            match s {
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, texts, marks)),
+                egui::Shape::Noop => {}
+                s => marks.push(s.visual_bounding_rect()),
+            }
+        }
+        let (mut texts, mut marks) = (vec![], vec![]);
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts, &mut marks);
+        }
+        (texts, marks)
+    };
+    // The shapes in the icon's place before the text `rect`, relative to that place and rounded.
+    let icon = |marks: &[egui::Rect], rect: egui::Rect| {
+        let place = egui::Rect::from_min_max(
+            egui::pos2(rect.min.x - FONT_HEIGHT_ICON - 8.0, rect.center().y - 10.0),
+            egui::pos2(rect.min.x, rect.center().y + 10.0),
+        );
+        let mut found: Vec<[i32; 4]> = marks
+            .iter()
+            .filter(|m| m.is_finite() && place.contains_rect(**m))
+            .map(|m| [m.min.x - place.min.x, m.min.y - place.min.y, m.max.x - place.min.x, m.max.y - place.min.y].map(|v| v.round() as i32))
+            .collect();
+        found.sort_unstable();
+        found
+    };
+    frame(&ctx, &mut app);
+    let (texts, marks) = frame(&ctx, &mut app);
+    let field = texts.iter().find(|(t, _)| t == "Em Box").map(|(_, r)| *r).expect("the closed field shows Em Box");
+    assert!(icon(&marks, field).len() >= 2, "no icon before Em Box in the closed field: {:?}", icon(&marks, field));
+    click(&ctx, &mut app, field.center(), show);
+    frame(&ctx, &mut app);
+    let (texts, marks) = frame(&ctx, &mut app);
+    let mut icons = vec![];
+    for name in ["Em Box", "Cap Height", "x-Height", "ICF Box"] {
+        // The list's row is the last text of that name drawn (the closed field is drawn first).
+        let row = texts.iter().rev().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("the open list shows {name}: {texts:?}"));
+        let found = icon(&marks, row);
+        assert!(found.len() >= 2, "no icon before {name} in the open list: {found:?}");
+        icons.push(found);
+    }
+    for (i, a) in icons.iter().enumerate() {
+        assert!(icons.iter().skip(i + 1).all(|b| a != b), "two references share an icon: {icons:?}");
+    }
+}
+
+/// In the open Set Font Height Reference list, the current reference's row is drawn on the
+/// accent-tinted selection fill, so its icon draws the measure in the name's colour rather than
+/// the accent, which would lose its contrast there; the other rows keep the accent (#6304).
+#[test]
+fn the_highlighted_font_height_icon_keeps_its_contrast() {
+    use super::super::tests_appearance::click;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.run("text.create", json!({"x": 20, "y": 50, "text": "Hx", "size": 12})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    set_pstate(&ctx, FONT_HEIGHT_OPTIONS, true);
+    let accent = Tokens::get(&ctx).accent;
+    // Every text drawn with its rect, and every stroke drawn with its rect and colour.
+    let frame = |ctx: &egui::Context, app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        fn collect(s: &egui::Shape, texts: &mut Vec<(String, egui::Rect)>, strokes: &mut Vec<(egui::Rect, egui::Color32)>) {
+            match s {
+                egui::Shape::Text(t) => texts.push((t.galley.text().to_string(), t.visual_bounding_rect())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, texts, strokes)),
+                egui::Shape::LineSegment { stroke, .. } => strokes.push((s.visual_bounding_rect(), stroke.color)),
+                egui::Shape::Path(p) => {
+                    if let egui::epaint::ColorMode::Solid(c) = p.stroke.color {
+                        strokes.push((s.visual_bounding_rect(), c));
+                    }
+                }
+                egui::Shape::Rect(r) => strokes.push((s.visual_bounding_rect(), r.stroke.color)),
+                _ => {}
+            }
+        }
+        let (mut texts, mut strokes) = (vec![], vec![]);
+        for c in &out.shapes {
+            collect(&c.shape, &mut texts, &mut strokes);
+        }
+        (texts, strokes)
+    };
+    // The stroke colours in the icon's place before the text `rect`.
+    let colours = |strokes: &[(egui::Rect, egui::Color32)], rect: egui::Rect| -> Vec<egui::Color32> {
+        let place = egui::Rect::from_min_max(
+            egui::pos2(rect.min.x - FONT_HEIGHT_ICON - 8.0, rect.center().y - 10.0),
+            egui::pos2(rect.min.x, rect.center().y + 10.0),
+        );
+        strokes.iter().filter(|(r, _)| r.is_finite() && place.contains_rect(*r)).map(|(_, c)| *c).collect()
+    };
+    frame(&ctx, &mut app);
+    let (texts, _) = frame(&ctx, &mut app);
+    let field = texts.iter().find(|(t, _)| t == "Em Box").map(|(_, r)| *r).expect("the closed field shows Em Box");
+    click(&ctx, &mut app, field.center(), show);
+    frame(&ctx, &mut app);
+    let (texts, strokes) = frame(&ctx, &mut app);
+    let row = |name: &str| texts.iter().rev().find(|(t, _)| t == name).map(|(_, r)| *r).unwrap_or_else(|| panic!("the open list shows {name}"));
+    // The list fades in, so colours are compared without their alpha.
+    let rgb = |c: egui::Color32| {
+        let [r, g, b, _] = c.to_srgba_unmultiplied();
+        [r, g, b]
+    };
+    let is_accent = |c: &egui::Color32| rgb(*c).iter().zip(rgb(accent)).all(|(a, b)| a.abs_diff(b) <= 4);
+    let current = colours(&strokes, row("Em Box"));
+    assert!(!current.is_empty() && !current.iter().any(is_accent), "the highlighted Em Box icon draws in the accent: {current:?}");
+    let other = colours(&strokes, row("Cap Height"));
+    assert!(other.iter().any(is_accent), "the other rows keep the accent measure: {other:?}");
 }
 
 /// Tate-chu-yoko is in the panel menu with the East Asian options, and choosing it marks the
@@ -723,6 +994,43 @@ fn tate_chu_yoko_settings_menu_item_shows_with_east_asian_options_and_opens_the_
     let at = texts.iter().find(|(t, _)| t.trim() == "Tate-chu-yoko Settings…").unwrap_or_else(|| panic!("{texts:?}")).1;
     super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::tate_chu_yoko::KIND));
+}
+
+/// Warichu and Warichu Settings… are in the panel menu with the East Asian options: Warichu marks
+/// the selected characters and takes the mark off again, one undo step each way, and Warichu
+/// Settings… opens the dialog on them.
+#[test]
+fn warichu_menu_items_show_with_east_asian_options_toggle_and_open_the_settings() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 20, "y": 50, "text": "abcd"})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let ctx = egui::Context::default();
+    let painted = |app: &mut VectorcraftApp| crate::tests_labels::painted_text(app, menu);
+    assert!(!painted(&mut app).contains("Warichu"));
+    app.session.prefs.show_east_asian_options = true;
+    let on = |app: &VectorcraftApp| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.iter().all(|r| r.style.warichu),
+        _ => panic!("text"),
+    };
+    let undo = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+    let before = undo(&app);
+    let find = |ctx: &egui::Context, app: &mut VectorcraftApp, label: &str| {
+        let texts = super::super::tests_appearance::frame_events(ctx, app, vec![], menu);
+        texts.iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{texts:?}")).1
+    };
+    let at = find(&ctx, &mut app, "Warichu");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(on(&app));
+    assert_eq!(undo(&app), before + 1);
+    assert!(painted(&mut app).contains("✓ Warichu"));
+    let at = find(&ctx, &mut app, "Warichu");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert!(!on(&app));
+    assert_eq!(undo(&app), before + 2);
+    let at = find(&ctx, &mut app, "Warichu Settings…");
+    super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::warichu::KIND));
 }
 
 /// Standard Vertical Roman Alignment is in the panel menu with the East Asian options. Choosing it
@@ -1134,6 +1442,8 @@ fn reset_panel_resets_every_attribute_but_the_font() {
             s.tate_chu_yoko != d.tate_chu_yoko,
             s.tcy_up_down != d.tcy_up_down,
             s.tcy_left_right != d.tcy_left_right,
+            s.aki_left != d.aki_left,
+            s.aki_right != d.aki_right,
             s.standard_vertical_roman != d.standard_vertical_roman,
             s.no_break != d.no_break,
             s.char_direction != d.char_direction,
@@ -1148,16 +1458,16 @@ fn reset_panel_resets_every_attribute_but_the_font() {
                 "id": id, "tracking": 50, "leading": 30, "kerning": 20, "baselineShift": 3, "hScale": 120, "vScale": 90, "rotation": 15,
                 "underline": true, "strikethrough": true, "allCaps": true, "smallCaps": true, "position": "superscript",
                 "charAlign": "emBoxCenter", "proportionalMetrics": true, "tateChuYoko": true, "tcyUpDown": 2, "tcyLeftRight": -3,
-                "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
+                "akiLeft": 250, "akiRight": 500, "standardVerticalRoman": true, "noBreak": true, "charDirection": "rightToLeft", "digits": "hindi", "fontHeightReference": "capHeight"
             }),
         )
         .unwrap();
     };
     let plain = runs(&app)[0].1.clone();
-    assert_eq!(differs(&plain, &CharStyle::default()), [false; 22]);
+    assert_eq!(differs(&plain, &CharStyle::default()), [false; 24]);
     custom(&mut app);
     let styled = runs(&app)[0].1.clone();
-    assert_eq!(differs(&styled, &CharStyle::default()), [true; 22]);
+    assert_eq!(differs(&styled, &CharStyle::default()), [true; 24]);
     app.run("select.set", json!({"ids": [id]})).unwrap();
     reset_panel(&mut app);
     assert_eq!(runs(&app), [("One 12".to_string(), plain.clone())]);

@@ -62,6 +62,9 @@ fn render(w: u32, h: u32, blur: f64, shade: impl Fn(f64, f64) -> Option<[u8; 3]>
 
 const RED: [u8; 3] = [210, 40, 50];
 const BLUE: [u8; 3] = [40, 80, 200];
+const LIGHT: [u8; 3] = [240, 240, 220];
+const SKY: [u8; 3] = [40, 120, 240];
+const WHITE: [u8; 3] = [255, 255, 255];
 
 fn logo_params() -> TraceParams {
     TraceParams {
@@ -205,6 +208,99 @@ fn the_named_palette_is_used_exactly_and_a_bad_one_is_an_error() {
     assert!(matches!(trace_within(&img, &bad, 1000), Err(TraceError::BadPalette(s)) if s == "red"));
 }
 
+/// The color of the topmost path at `p` (paths are listed bottom first).
+fn top_color(res: &TraceResult, p: Point) -> Option<[u8; 3]> {
+    res.paths.iter().rev().find(|t| t.path.to_bezpath().winding(p) != 0).map(|t| t.color)
+}
+
+#[test]
+fn logo_white_off_traces_only_the_named_colors() {
+    // A light disc in a black ring, a blue square on it, and two white spots.
+    let img = render(120, 120, 0.7, |x, y| {
+        let d = (x - 60.0).hypot(y - 60.0);
+        if (x - 32.0).hypot(y - 40.0) <= 6.0 || (x - 78.0).hypot(y - 86.0) <= 6.0 {
+            Some(WHITE)
+        } else if (45.0..=75.0).contains(&x) && (45.0..=75.0).contains(&y) {
+            Some(SKY)
+        } else if d <= 46.0 {
+            Some(LIGHT)
+        } else if d <= 50.0 {
+            Some([0, 0, 0])
+        } else {
+            None
+        }
+    });
+    let named = TraceParams { logo_colors: vec!["#000000".into(), "#F0F0DC".into(), "#2878F0".into()], ..logo_params() };
+    // By default white is a fourth color.
+    let res = trace(&img, &named);
+    assert_eq!(res.palette.len(), 4, "{:?}", res.palette);
+    assert_eq!(top_color(&res, Point::new(32.0, 40.0)), Some(WHITE));
+    // Without it, the three named colors only: the white spots take the light color.
+    let res = trace(&img, &TraceParams { logo_white: false, ..named.clone() });
+    assert_eq!(res.palette.len(), 3, "{:?}", res.palette);
+    assert!(!res.palette.contains(&WHITE));
+    for p in [Point::new(32.0, 40.0), Point::new(78.0, 86.0), Point::new(20.0, 60.0)] {
+        assert_eq!(top_color(&res, p), Some(LIGHT), "at {p:?}");
+    }
+    assert_eq!(top_color(&res, Point::new(60.0, 60.0)), Some(SKY));
+    assert_eq!(top_color(&res, Point::new(60.0, 12.0)), Some([0, 0, 0]));
+    assert!(!covered(&res, Point::new(5.0, 5.0)));
+    // Ignore White still leaves the white spots out.
+    let res = trace(&img, &TraceParams { logo_white: false, ignore_white: true, ..named.clone() });
+    for p in [Point::new(32.0, 40.0), Point::new(78.0, 86.0)] {
+        assert!(!covered(&res, p), "at {p:?}");
+    }
+    assert_eq!(top_color(&res, Point::new(20.0, 60.0)), Some(LIGHT));
+}
+
+#[test]
+fn logo_white_off_keeps_a_named_white_and_knockouts_as_holes() {
+    let disc = render(64, 64, 0.7, |x, y| ((x - 32.0).hypot(y - 32.0) <= 20.0).then_some(WHITE));
+    let only_white = TraceParams { logo_colors: vec!["#ffffff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&disc, &only_white);
+    assert_eq!(res.paths.len(), 1);
+    assert_eq!(res.paths[0].color, WHITE);
+    // An enclosed transparent area stays a hole: there is no white to paint it with.
+    let ring = render(64, 64, 0.7, |x, y| (12.0..=25.0).contains(&(x - 32.0).hypot(y - 32.0)).then_some(BLUE));
+    let res = trace(&ring, &TraceParams { logo_colors: vec!["#2850c8".into()], logo_white: false, ..logo_params() });
+    assert_eq!(res.paths.len(), 1);
+    assert_eq!(res.paths[0].path.subpaths.len(), 2, "outer outline and a hole");
+    assert!(!covered(&res, Point::new(32.0, 32.0)), "the hole must be empty");
+    assert!(covered(&res, Point::new(32.0, 32.0 + 18.0)), "the ring itself is filled");
+}
+
+#[test]
+fn logo_white_off_gives_each_white_the_nearest_named_color() {
+    // Red and blue are equally far from white: the white disc takes the first one named.
+    let disc = render(64, 64, 0.7, |x, y| ((x - 32.0).hypot(y - 32.0) <= 20.0).then_some(WHITE));
+    let params = TraceParams { logo_colors: vec!["#ff0000".into(), "#0000ff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&disc, &params);
+    assert_eq!(top_color(&res, Point::new(32.0, 32.0)), Some([255, 0, 0]));
+    assert!(!covered(&res, Point::new(5.0, 5.0)));
+    // Each white takes the named color nearest it, so two named whites both stay.
+    const OFF: [u8; 3] = [245, 245, 245];
+    let two = render(96, 64, 0.7, |x, y| {
+        if (x - 24.0).hypot(y - 32.0) <= 16.0 {
+            Some(OFF)
+        } else if (x - 72.0).hypot(y - 32.0) <= 16.0 {
+            Some(WHITE)
+        } else {
+            None
+        }
+    });
+    let params = TraceParams { logo_colors: vec!["#f5f5f5".into(), "#ffffff".into()], logo_white: false, ..logo_params() };
+    let res = trace(&two, &params);
+    assert_eq!(top_color(&res, Point::new(24.0, 32.0)), Some(OFF));
+    assert_eq!(top_color(&res, Point::new(72.0, 32.0)), Some(WHITE));
+    // A white square on blue keeps its edges where they are when it turns red.
+    let square = render(100, 100, 0.7, |x, y| Some(if (30.0..70.0).contains(&x) && (30.0..70.0).contains(&y) { WHITE } else { [0, 0, 255] }));
+    let res = trace(&square, &TraceParams { logo_colors: vec!["#ff0000".into(), "#0000ff".into()], logo_white: false, ..logo_params() });
+    for (inside, outside) in [(30.3, 29.7), (69.7, 70.3)] {
+        assert_eq!(top_color(&res, Point::new(inside, 50.0)), Some([255, 0, 0]), "at x {inside}");
+        assert_eq!(top_color(&res, Point::new(outside, 50.0)), Some([0, 0, 255]), "at x {outside}");
+    }
+}
+
 #[test]
 fn a_large_image_is_traced_at_reduced_size_and_scaled_back() {
     let (cx, cy, r) = (1200.0, 600.0, 400.0);
@@ -273,6 +369,144 @@ fn named_colors_a_few_levels_off_trace_an_image_up_to_1024_px_at_full_size() {
         assert_eq!(color_at(Point::new(402.0, 202.0)), Some(dark), "names {off} levels off");
         assert_eq!(color_at(Point::new(450.0, 450.0)), Some(blue), "names {off} levels off");
         assert_eq!(color_at(Point::new(200.0, 400.0)), Some(cream), "names {off} levels off");
+    }
+}
+
+/// A dark ring around a tan disc with a blue square on it, hard edges, on a transparent background.
+fn hard_badge() -> Raster {
+    Raster::from_fn(160, 160, |x, y| {
+        let (fx, fy) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+        let d = (fx - 80.0).hypot(fy - 80.0);
+        if (60.0..=100.0).contains(&fx) && (60.0..=100.0).contains(&fy) {
+            [34, 124, 250, 255]
+        } else if d <= 60.0 {
+            [200, 170, 120, 255]
+        } else if d <= 68.0 {
+            [4, 4, 3, 255]
+        } else {
+            [0, 0, 0, 0]
+        }
+    })
+}
+
+#[test]
+fn flat_art_is_traced_with_named_colors_far_from_its_own() {
+    // Every named color is 20 levels off the image's in each channel: the image is still flat art,
+    // and each area takes the named color nearest it.
+    let names = ["#181817", "#B49664", "#0E68E6"];
+    let res = trace(&hard_badge(), &TraceParams { logo_colors: names.iter().map(|s| s.to_string()).collect(), ..logo_params() });
+    assert_eq!(res.paths.len(), 3, "{:?}", res.paths.iter().map(|p| p.color).collect::<Vec<_>>());
+    assert_eq!(top_color(&res, Point::new(80.0, 80.0)), Some([14, 104, 230]));
+    assert_eq!(top_color(&res, Point::new(80.0, 30.0)), Some([180, 150, 100]));
+    assert_eq!(top_color(&res, Point::new(80.0, 15.0)), Some([24, 24, 23]));
+}
+
+#[test]
+fn art_that_is_not_flat_is_refused_by_its_own_colors_whatever_is_named() {
+    let img = Raster::from_fn(64, 32, |x, y| [(x * 4) as u8, 255 - (x * 4) as u8, (y * 6) as u8, 255]);
+    let refused = |p: &TraceParams| match trace_within(&img, p, 100_000) {
+        Err(TraceError::NotFlat { fraction }) => fraction,
+        other => panic!("expected NotFlat, got {other:?}"),
+    };
+    let own = refused(&logo_params());
+    // Names close to some of the gradient's colors, and names far from all of them.
+    for names in [["#08F710", "#80807F", "#F00C60"], ["#FF00FF", "#00FFFF", "#FFFF00"]] {
+        let named = TraceParams { logo_colors: names.iter().map(|s| s.to_string()).collect(), ..logo_params() };
+        assert_eq!(refused(&named), own, "names {names:?}");
+        assert_eq!(refused(&TraceParams { logo_white: false, ..named }), own, "names {names:?} without white");
+    }
+}
+
+#[test]
+fn a_hatch_gives_the_same_result_with_close_and_far_named_colors() {
+    // Black lines one pixel wide across, blue lines down, on a cream ground.
+    let img = render(120, 120, 0.5, |x, y| {
+        Some(if y.rem_euclid(8.0) < 1.0 {
+            [12, 12, 12]
+        } else if x.rem_euclid(8.0) < 1.0 {
+            [30, 70, 200]
+        } else {
+            [236, 226, 196]
+        })
+    });
+    let outcome = |names: [&str; 3]| match trace_within(
+        &img,
+        &TraceParams { logo_colors: names.iter().map(|s| s.to_string()).collect(), ..logo_params() },
+        100_000,
+    ) {
+        Ok(res) => Ok(res.paths.len()),
+        Err(TraceError::NotFlat { fraction }) => Err(fraction),
+        Err(e) => panic!("{e:?}"),
+    };
+    let close = outcome(["#0C0C0C", "#1E46C8", "#ECE2C4"]);
+    // Every channel 20 levels off.
+    assert_eq!(outcome(["#202020", "#325ADC", "#D8CEB0"]), close);
+}
+
+#[test]
+fn more_named_colors_than_the_colors_setting_do_not_make_the_refusal_depend_on_the_names() {
+    let img = Raster::from_fn(64, 32, |x, y| [(x * 4) as u8, 255 - (x * 4) as u8, (y * 6) as u8, 255]);
+    let refused = |p: &TraceParams| match trace_within(&img, p, 100_000) {
+        Err(TraceError::NotFlat { fraction }) => fraction,
+        other => panic!("expected NotFlat, got {other:?}"),
+    };
+    // Six names with Colors at 2: seven of the image's own colors are looked for (six and white), as
+    // with Colors at 7.
+    let own = refused(&TraceParams { colors: 7, ..logo_params() });
+    for names in
+        [["#00FF00", "#40BF3C", "#807F78", "#C03FB4", "#FC03BA", "#649B1E"], ["#FF00FF", "#00FFFF", "#FFFF00", "#000000", "#FF0000", "#0000FF"]]
+    {
+        let named = TraceParams { logo_colors: names.iter().map(|s| s.to_string()).collect(), colors: 2, ..logo_params() };
+        assert_eq!(refused(&named), own, "names {names:?}");
+    }
+}
+
+#[test]
+fn areas_of_colors_that_are_not_named_are_traced_in_the_named_colors() {
+    // Red, green, blue and yellow bands; only red and blue are named.
+    const BANDS: [[u8; 3]; 4] = [[200, 30, 30], [30, 160, 60], [60, 70, 180], [230, 200, 40]];
+    let img = Raster::from_fn(160, 40, |x, _| {
+        let c = BANDS[(x / 40) as usize];
+        [c[0], c[1], c[2], 255]
+    });
+    let res = trace(&img, &TraceParams { logo_colors: vec!["#C81E1E".into(), "#3C46B4".into()], ..logo_params() });
+    for p in &res.paths {
+        assert!([BANDS[0], BANDS[2], [255, 255, 255]].contains(&p.color), "{:?}", p.color);
+    }
+    assert_eq!(top_color(&res, Point::new(20.0, 20.0)), Some(BANDS[0]));
+    assert_eq!(top_color(&res, Point::new(100.0, 20.0)), Some(BANDS[2]));
+}
+
+#[test]
+fn flat_art_on_white_with_more_named_colors_than_the_colors_setting_is_flat() {
+    // Red, green and blue bands and a white one, the three colors named, with Colors at 2: white
+    // does not take the place of a named color while the image's colors are found.
+    const BANDS: [[u8; 3]; 4] = [[220, 30, 30], [30, 180, 60], [40, 60, 210], [255, 255, 255]];
+    let img = Raster::from_fn(160, 40, |x, _| {
+        let c = BANDS[(x / 40) as usize];
+        [c[0], c[1], c[2], 255]
+    });
+    let names = vec!["#DC1E1E".to_string(), "#1EB43C".to_string(), "#283CD2".to_string()];
+    let res = trace(&img, &TraceParams { logo_colors: names, colors: 2, ..logo_params() });
+    for (i, c) in BANDS.iter().enumerate() {
+        assert_eq!(top_color(&res, Point::new(20.0 + 40.0 * i as f64, 20.0)), Some(*c), "band {i}");
+    }
+}
+
+#[test]
+fn flat_art_with_more_named_colors_than_the_colors_setting_is_flat() {
+    // Eight flat bands, each color named, with Colors at 2: as many of the image's own colors are
+    // looked for as are named, with white, so the art is still flat.
+    const BANDS: [[u8; 3]; 8] =
+        [[200, 30, 30], [30, 160, 60], [60, 70, 180], [230, 200, 40], [120, 40, 160], [20, 20, 20], [240, 130, 30], [40, 190, 200]];
+    let img = Raster::from_fn(160, 40, |x, _| {
+        let c = BANDS[(x / 20) as usize];
+        [c[0], c[1], c[2], 255]
+    });
+    let names: Vec<String> = BANDS.iter().map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])).collect();
+    let res = trace(&img, &TraceParams { logo_colors: names, colors: 2, ..logo_params() });
+    for (i, c) in BANDS.iter().enumerate() {
+        assert_eq!(top_color(&res, Point::new(10.0 + 20.0 * i as f64, 20.0)), Some(*c), "band {i}");
     }
 }
 

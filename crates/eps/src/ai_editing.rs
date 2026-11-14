@@ -28,6 +28,27 @@
 //!   `0 (name) count Pg` before its swatches, `PB`), then the artboards as the `ArtboardArray` of the
 //!   `/Document` dictionary's `/Recorded` part and the canvas size as its `AIDocumentCanvasSize`, on
 //!   `%_` lines.
+//! - Variables (`writer::variables`): after the canvas size, the variable library as XML nodes
+//!   (`/XMLNode`: `xmlnode-nodename`, `xmlnode-nodevalue`, `xmlnode-nodetype`, `xmlnode-children`,
+//!   `xmlnode-attributes`) of an XML document `#document`: a `metadata` element holding
+//!   `variableSets`, one `variableSet` (`locked`: `none`, or `variableAndTypes` when the variables
+//!   are locked), its `variables` (a `variable` element with `varName` and `trait`: `textcontent`,
+//!   `visibility`, `fileref` or `graphdata`, none for a variable of unknown kind; a variable bound to
+//!   objects declared once for each, its `docRef` the object's XML id, `/XMLUIDREF`) and its
+//!   `v:sampleDataSets` (`i:activeDataSet`, the data set shown) of `v:sampleDataSet` elements
+//!   (`dataSetName`), each holding an element named after each variable it gives a value: a `p`
+//!   element for each line of a text value, a `/Bool` text whether the objects show, a linked file's
+//!   `file://` URL or path. An object bound to a variable without a name gets an XML id and an empty
+//!   `AIArtName`. Bindings to layers, to type written as outlines, to graphs and to linked images
+//!   written as other objects, and graph values, values that don't fit their variable, linked files
+//!   that aren't absolute paths, paths from the root that the reader reads as other paths (`/`
+//!   alone, `/C:…`), drive and network paths with white space at either end, values of variables
+//!   whose names have a colon, and a data set shown that isn't written, are left out, as is what
+//!   the reader leaves out
+//!   (variables and data sets whose names are empty, repeated, longer than 255 characters or start
+//!   or end with white space, variables past 256, data sets past 1,000, bindings past 100,000 or to XML ids longer than
+//!   255 characters, names and values past 8,388,608 bytes in all), and values past 200,000 text
+//!   lines and values in all.
 //! - Layers: `%AI5_BeginLayer`, `visible preview unlocked printing dimmed 0 1 colorIndex r g b 0
 //!   dimPercent clipping Lb` (14 operands; a color that isn't one of the preset layer colors has the
 //!   index -1; `clipping` is 1 for a clipping layer), `(name) Ln`, the layer's name as an XML id in an
@@ -77,7 +98,8 @@
 //!   a preview of at most 256 pixels a side between `%AI26_BeginPlacedObjectPreview` and its end
 //!   (`w h rowBytes 32 17 `, then rows of premultiplied ARGB), each in versioned content, `~`,
 //!   `%AI5_EndPlace`. The box is the file's pixels at art space's origin on the canvas; the matrix
-//!   takes it into art space. In opacity masks and pattern tiles, linked images are embedded.
+//!   takes it into art space. In opacity masks, pattern tiles and symbols, linked images are
+//!   embedded.
 //! - Type: a text object `/AI11Text :` naming its story and frame (`/StoryIndex`, `/FrameIndex`),
 //!   for area type and type on a path with its frame's path (`/Art :` … `; /ConfiningPath ,`), and
 //!   the text document after the document data (`%AI11_BeginTextDocument`, see
@@ -86,34 +108,85 @@
 //!   the alignment, indents, spacing, hyphenation and direction of each paragraph, and the frame:
 //!   point type's point and matrix, area type's frame, rows, columns, gutters and first baseline,
 //!   type on a path's path and span, vertical type, and the frames a threaded story flows through.
+//! - Symbols, as the reader reads them ([`crate::import`]'s `.ai` reader, `read.rs`): every symbol
+//!   of the document defined in the setup after the patterns, in a non-printing block
+//!   (`%AI14_BeginSymbol`, `(name)`, `0 A`, `0 Xw`, `0 Ae`, the art in the symbol's space with y
+//!   down, the registration point as `AI13PatternRegistrationType` 1 to 9 from the top left, row by
+//!   row (VectorCraft's numbering, in the order the scripting reference lists the points), in the
+//!   art's dictionary, `%AI10_EndSymbol`), each after those its art uses; the symbol
+//!   list after the palette (`%AI24_BeginSymbolList`, the names in the Symbols panel's order,
+//!   `%AI24_EndSymbolList`); each instance as `/SymbolInstance :`, `(name) /SymbolRef ,`, the
+//!   matrix taking the art to art space as `a b c d tx ty /RTransformMatrix`, `;`, then its name
+//!   and opacity mask and a state block as a group's with its opacity and blending mode (an
+//!   instance with isolation, knockout or knockout shape of its own is written as its art). The
+//!   definitions are at most the reader's 4,096. In a symbol's art, an instance's matrix and
+//!   a gradient's take the art to the canvas's space turned y up about art space's origin there.
+//! - Art styles, as the reader reads them (`style.rs`, `read/ops.rs`): a path, compound path or
+//!   group with live effects or linked to a graphic style is written as its drawn look (`u`, its
+//!   vector art as its geometry effects leave it, without shadows, glows or feathers, `U`, its
+//!   transparency, `0 0 Xd`, `6 () XW`), then the object itself on `%_` lines (its points painted
+//!   with nothing, or with its gradient fill; a group with its members) with its name and opacity
+//!   mask, then `1 (style) XW`. The styles are written in a non-printing block after the symbols
+//!   (`%AI9_BeginArtStyles`, each `/KnownStyle :` with its name and a filter tree: a chain of the
+//!   stack of fills and strokes with the contents among them, the effects and the blend filter), the
+//!   Graphic Styles panel's first; the panel's order follows the palette (`%AI9_BeginArtStyleList`).
+//!   A fill filter fills by the non-zero rule (`0 /Bool (UseEvenOdd)`), so a filled object that
+//!   fills by the even-odd rule is written as its drawn look. A style is written only when the
+//!   reader reads it back as the object's appearance (or the graphic style's).
+//! - Brushes, as the reader reads them (`brush.rs`, `style.rs`): the Brushes panel's brushes as
+//!   plug-in objects in a non-printing block after the symbols (`%AI8_BeginPluginObject`, the
+//!   plug-in's name, the brush's name, its parameters in strings that `-` continues and `.` ends),
+//!   after the brush manager's order of them; the art of Scatter and Art brushes in a non-printing
+//!   block before the symbols (`%AI8_BeginBrushPattern`, its name, a group of an unpainted frame at
+//!   the art's bounds and the art, or the art alone when it has no width or height), when the
+//!   document has brushes of its own or an object is written with one.
+//!   A path or compound path with a brush the reader reads live is written with an art style whose
+//!   stroke is the brush's filter (`writer::brushes`). A brush is written only when the reader reads
+//!   it back with its settings.
 //!
 //! Lines end in CR LF. Strings are written in UTF-8. Art space is ruler space: y up, its origin at
 //! the first artboard's top-left corner. On the canvas ([`CANVAS_SIZE`] points square, y down) the
 //! artboards together are centered; each artboard's `RulerOrigin` is its top-left corner there, and
 //! `%AI3_TemplateBox` holds the canvas's center in art space. What the form above can't hold is written as plain filled and stroked paths, each such
-//! loss a warning: type the text document can't hold (in opacity masks, pattern tiles and art cut to
-//! a clipping object, mirrored, turned or unevenly scaled area type and type on a path, inline graphics, ruby,
+//! loss a warning: type the text document can't hold (in opacity masks, pattern tiles, symbols and
+//! art cut to a clipping object, mirrored, turned or unevenly scaled area type and type on a path, inline graphics, ruby,
 //! gradient or pattern paint, an appearance of its own) as its outlines and its inline graphics'
 //! art, the character and paragraph attributes the text document doesn't hold, freeform gradients, gradients
 //! along or across a stroke and gradients without stops, with more than 256 stops or without extent
 //! as their average color
 //! (gradients that dither or mix perceptually are written as classic ones, and gradient stops linked
 //! to global process colors as their colors), pattern fills whose tiles aren't a grid, whose art reaches past
-//! the tile or is painted with patterns as their tiles cut to the shape, clipping groups and clipping layers whose clipping object isn't a path,
+//! the tile or is painted with patterns, and pattern fills in symbols, as their tiles cut
+//! to the shape, clipping groups and clipping layers whose clipping object isn't a path,
 //! and the clipping groups inside them, as their art cut to that object (its fill cut too, its
 //! stroke not; an image in a clipping group of the region it is cut to), images that can't be
 //! decoded or have more than 33,554,432 pixels as their outlines filled mid gray, images of 16 bits
-//! a channel at 8 bits, linked images in opacity masks and pattern tiles as embedded images,
-//! symbols and live objects (placed documents included) as their art (symbol art past
-//! [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects in all left out), strokes a plain line can't draw
+//! a channel at 8 bits, linked images in opacity masks, pattern tiles and symbols as embedded images,
+//! symbol instances with a fill, appearance changes, isolation, knockout or knockout shape of their
+//! own, instances of symbols with 9-slice guides or pattern paint, instances in pattern tiles or in art cut to a
+//! clipping object, instances scaled almost flat, instances that turn, mirror or scale symbols holding
+//! type, live objects, instances written as their art, shapes with rounded live corners or strokes
+//! written as outlines or brush art,
+//! instances that scale their symbol more than 100 times, instances on the layers of a large canvas
+//! and instances of
+//! symbols past 4,096 as their art (symbol art past [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects
+//! in all left out), instances of symbols the document doesn't have as empty groups, symbols' 9-slice
+//! guides, export types and dynamic type left out, live objects (placed documents included) as their art,
+//! strokes a plain line can't draw and the object's art style doesn't hold
 //! as their filled outlines, several fills or strokes as a group of a path for each, freeform
 //! gradient swatches, gradient swatches of more than 256 stops, swatches of patterns written as
 //! tiles and the placement of pattern swatches that move, turn or scale their pattern, the opacity and blending modes of single fills and strokes, opacity masks on
-//! layers and opacity masks nested too deep, and live effects other than geometry effects left out.
+//! layers and opacity masks nested too deep, and, on objects written without an art style, live
+//! effects other than geometry effects left out; graphic styles the reader wouldn't read, links to
+//! graphic styles on objects not written with them, brushes the reader wouldn't read back, and every
+//! art style and brush on a large canvas, are left out; art past
+//! [`crate::import::MAX_EDITING_OBJECTS`] objects in all (the most the reader reads), counted as the
+//! reader counts them, is left out.
 //!
 //! The data streams hold the program compressed with Zstandard after `%AI24_ZStandard_Data`, with
 //! the version numbers of the newest files users sent ([`private_data`]).
 
+use std::collections::HashSet;
 use std::fmt::Write;
 use std::sync::Arc;
 
@@ -182,15 +255,25 @@ pub struct AiEditingOutput {
 
 /// Write `doc` as the editing data of a `.ai` file: every artboard and layer.
 pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditingOutput, String> {
+    export_within(doc, o, crate::import::MAX_EDITING_OBJECTS)
+}
+
+/// [`export_ai_editing`] writing at most `max_objects` objects, counted as the reader counts them.
+fn export_within(doc: &Document, o: &AiEditingOptions, max_objects: usize) -> Result<AiEditingOutput, String> {
     let board = doc.artboards.first().ok_or("the document has no artboard")?.rect;
     if !(board.is_finite() && board.width() > 0.0 && board.height() > 0.0) {
         return Err("the document has no artboard".into());
     }
+    // Artboards that don't fit on the canvas are written on a large canvas, at 1/scale.
+    let scale = canvas_scale(doc);
+    // The objects that may keep their effects in an art style, as they are before baking (not on
+    // a large canvas, whose scale the styles' strokes and effects would need).
+    let styled = writer::styled_objects(doc);
+    let own_styles = doc.graphic_styles != Document::new(1.0, 1.0).graphic_styles;
+    let links = writer::style_links(doc);
     // Live geometry effects as their result, as the PDF part draws them.
     let baked = baked(doc);
     let doc = baked.as_ref().unwrap_or(doc);
-    // Artboards that don't fit on the canvas are written on a large canvas, at 1/scale.
-    let scale = canvas_scale(doc);
     let reduced = (scale != 1.0).then(|| {
         let mut d = doc.clone();
         crate::import::scale_document(&mut d, 1.0 / scale, true);
@@ -206,6 +289,8 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
         }
         d
     });
+    // Symbols are defined at their own size, whatever the canvas.
+    let symbol_doc = doc;
     let doc = reduced.as_ref().unwrap_or(doc);
     let board = doc.artboards.first().map_or(board, |a| a.rect);
     // The document is y down; art space is ruler space: y up, its origin the first artboard's
@@ -213,13 +298,32 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     let to_art = Affine::new([1.0, 0.0, 0.0, -1.0, -board.x0, board.y0]);
     let origin = ruler_origin(doc, to_art);
     let mut w = Writer::new(doc, to_art, origin);
+    // On a large canvas the layers' symbol instances are written as their art.
+    w.symbols_live = scale == 1.0;
+    w.brushes_live = scale == 1.0;
+    w.symbol_doc = symbol_doc;
+    w.max_objects = max_objects;
     w.reserve_swatch_gradients();
+    if scale == 1.0 {
+        w.styled = styled;
+        w.panel_styles();
+    } else if !styled.is_empty() || own_styles || links > 0 {
+        w.warnings.push(writer::LARGE_CANVAS_STYLES.to_string());
+    }
     for layer in &doc.layers {
         w.layer(layer);
     }
+    if scale == 1.0 {
+        w.lost_links(links);
+    }
+    // The symbols no instance uses too; their art adds definitions.
+    w.symbols();
+    // The brushes, once the layers have said whether an object is written with one.
+    let (brush_art, brush_objects) = w.brush_blocks();
     // The palette first: its gradient and pattern swatches add definitions.
     let mut palette = String::new();
     w.palette(&mut palette);
+    let library = w.variable_library();
     let first = to_art.transform_rect_bbox(board);
     let art = doc
         .layers
@@ -234,8 +338,14 @@ pub fn export_ai_editing(doc: &Document, o: &AiEditingOptions) -> Result<AiEditi
     let mut s = header.clone();
     s.push_str("%%BeginProlog\n%%EndProlog\n%%BeginSetup\n");
     w.definitions(&mut s);
+    s.push_str(&brush_art);
+    w.symbol_definitions(&mut s);
+    s.push_str(&brush_objects);
+    w.art_styles(&mut s);
     s.push_str(&palette);
-    artboards(&mut s, doc, to_art, origin);
+    w.art_style_list(&mut s);
+    w.symbol_list(&mut s);
+    artboards(&mut s, doc, to_art, origin, &library);
     if !w.texts.is_empty() {
         s.push_str(&w.texts.section(doc));
     }
@@ -276,9 +386,15 @@ fn splice(text: &[u8], payloads: &[Vec<u8>]) -> Vec<u8> {
 }
 
 /// `doc` with its geometry effects and group paint baked ([`vectorcraft_effects::bake_document`]),
-/// in its symbols' art and its patterns' tile art too (which instances and pattern fills are
-/// written as); `None` when nothing changes.
+/// in its symbols' art, its patterns' tile art (which instances and pattern fills are written as)
+/// and its opacity masks' art too ([`baked_masks`]); `None` when nothing changes.
 fn baked(doc: &Document) -> Option<Document> {
+    let art = baked_art(doc);
+    baked_masks(art.as_ref().unwrap_or(doc)).or(art)
+}
+
+/// [`baked`] for the layers, symbols and patterns, leaving opacity masks' art as it is.
+fn baked_art(doc: &Document) -> Option<Document> {
     let baked = vectorcraft_effects::bake_document(doc);
     let d = baked.as_ref().unwrap_or(doc);
     let needs = vectorcraft_effects::needs_bake;
@@ -305,6 +421,100 @@ fn baked(doc: &Document) -> Option<Document> {
         }
     }
     Some(out)
+}
+
+/// `doc` with the art of the opacity masks in its layers', symbols' and patterns' art baked as
+/// [`baked_art`] bakes the layers. Each round bakes the art of the outermost masks whose art needs
+/// it, and the next round the masks inside that art, at most [`writer::MAX_NEST`] rounds (the
+/// writer leaves masks nested deeper out). Baked art keeps its id, by which the writer finds the
+/// art as it was before baking ([`writer::styled_objects`]). `None` when no mask's art needs baking.
+fn baked_masks(doc: &Document) -> Option<Document> {
+    let mut out: Option<Document> = None;
+    // The masks' art baked so far, by id: it isn't baked again.
+    let mut done = HashSet::new();
+    for _ in 0..writer::MAX_NEST {
+        let d = out.as_ref().unwrap_or(doc);
+        let roots = || d.layers.iter().chain(d.symbols.iter().map(|s| &s.art)).chain(d.patterns.iter().flat_map(|p| p.art.iter()));
+        let mut arts = vec![];
+        for n in roots() {
+            mask_arts(n, &done, &mut arts);
+        }
+        if arts.is_empty() {
+            break;
+        }
+        // Each art baked as a layer of a copy of the document, as [`baked_art`] bakes symbols.
+        let mut copy = d.clone();
+        copy.layers = arts.iter().map(|a| Arc::new(Node::group(vectorcraft_doc::NodeId(0), vec![a.clone()]))).collect();
+        let Some(mut next) = vectorcraft_effects::bake_document(&copy) else { break };
+        let layers = std::mem::replace(&mut next.layers, d.layers.clone());
+        let mut baked = layers.iter().map(|l| l.children().and_then(|c| c.first().cloned()));
+        for l in next.layers.iter_mut() {
+            if let Some(n) = with_baked_masks(l, &done, &mut baked) {
+                *l = n;
+            }
+        }
+        for s in next.symbols.iter_mut() {
+            if let Some(n) = with_baked_masks(&s.art, &done, &mut baked) {
+                s.art = n;
+            }
+        }
+        for p in next.patterns.iter_mut() {
+            for a in p.art.iter_mut() {
+                if let Some(n) = with_baked_masks(a, &done, &mut baked) {
+                    *a = n;
+                }
+            }
+        }
+        done.extend(arts.iter().map(|a| a.id));
+        out = Some(next);
+    }
+    out
+}
+
+/// Does [`baked_masks`] bake the art of mask `m` in this round?
+fn bakes_mask_art(m: &vectorcraft_doc::OpacityMask, done: &HashSet<vectorcraft_doc::NodeId>) -> bool {
+    !done.contains(&m.art.id) && vectorcraft_effects::needs_bake(&m.art)
+}
+
+/// The art of the opacity masks in `n` that [`baked_masks`] bakes in this round, in the order
+/// [`with_baked_masks`] puts them back: a mask's art before the object's members, and the masks
+/// inside art that isn't baked.
+fn mask_arts(n: &Node, done: &HashSet<vectorcraft_doc::NodeId>, out: &mut Vec<Arc<Node>>) {
+    if let Some(m) = n.extras().mask.as_ref() {
+        if bakes_mask_art(m, done) {
+            out.push(m.art.clone());
+        } else {
+            mask_arts(&m.art, done, out);
+        }
+    }
+    for c in n.children().into_iter().flatten() {
+        mask_arts(c, done, out);
+    }
+}
+
+/// `n` with the art of its opacity masks taken from `baked` in the order [`mask_arts`] lists it;
+/// `None` when nothing in it changes.
+fn with_baked_masks(n: &Arc<Node>, done: &HashSet<vectorcraft_doc::NodeId>, baked: &mut dyn Iterator<Item = Option<Arc<Node>>>) -> Option<Arc<Node>> {
+    let art =
+        n.extras().mask.as_ref().and_then(|m| if bakes_mask_art(m, done) { baked.next().flatten() } else { with_baked_masks(&m.art, done, baked) });
+    let members: Vec<Option<Arc<Node>>> = n.children().map(|c| c.iter().map(|c| with_baked_masks(c, done, baked)).collect()).unwrap_or_default();
+    if art.is_none() && members.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut m = (**n).clone();
+    if let Some(a) = art
+        && let Some(mask) = m.extras_if_any().and_then(|e| e.mask.as_mut())
+    {
+        mask.art = a;
+    }
+    if let Some(children) = m.children_mut() {
+        for (c, new) in children.iter_mut().zip(members) {
+            if let Some(new) = new {
+                *c = new;
+            }
+        }
+    }
+    Some(Arc::new(m))
 }
 
 /// The editing data of `doc` as a `.ai` file's pages carry it: the program compressed with
@@ -449,7 +659,7 @@ fn ruler_units(u: Unit) -> u8 {
 /// [`Document::opened_artboard`] names, else the first) and the canvas's size. Every record holds
 /// all of these entries. The artboards, the active artboard and the canvas size are written in the
 /// `/Recorded` part of the `/Document` dictionary, followed by an empty `/NotRecorded` part.
-fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64)) {
+fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64), library: &str) {
     let active = doc.opened_artboard.and_then(|id| doc.artboards.iter().position(|a| a.id == id)).unwrap_or(0);
     s.push_str("%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n%_/Array :\n");
     for (i, ab) in doc.artboards.iter().enumerate() {
@@ -471,6 +681,8 @@ fn artboards(s: &mut String, doc: &Document, to_art: Affine, origin: (f64, f64))
     s.push_str("%_; (ArtboardArray) ,\n");
     let _ = writeln!(s, "%_{active} /Int (CropAreaActive) ,");
     let _ = writeln!(s, "%_{CANVAS_SIZE} /Int (AIDocumentCanvasSize) ,");
+    // The variable library, after the canvas size.
+    s.push_str(library);
     s.push_str("%_; /Recorded ,\n%_/Dictionary : /NotRecorded ,\n%_; /NotRecorded ,\n%_;\n%AI9_EndDocumentData\n");
 }
 

@@ -11,7 +11,7 @@ use crate::images;
 pub(super) fn image_tint(doc: &Document, n: &Node, ink: Ink) -> Option<[u8; 3]> {
     let c = n.extras().colorize.as_deref()?.color()?;
     if let NodeKind::Image(im) = &n.kind
-        && doc.image_blob(im).is_some_and(|b| !b.takes_colorize())
+        && doc.image_blob(&doc.shown_image(n, im)).is_some_and(|b| !b.takes_colorize())
     {
         return None;
     }

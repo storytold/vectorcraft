@@ -15,9 +15,8 @@ fn open(s: &mut Session, name: &str, bytes: &[u8]) -> Value {
     s.execute("document.open", &json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(bytes)})).unwrap()
 }
 
-fn tmp(name: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("vc-pdfedit-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+/// The path of `name` in the test's folder `dir`.
+fn tmp(dir: &std::path::Path, name: &str) -> String {
     dir.join(name).to_string_lossy().to_string()
 }
 
@@ -114,8 +113,9 @@ fn the_legacy_payload_name_is_accepted() {
 
 #[test]
 fn ai_files_are_pdfs_that_save_and_reopen_editable() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = rich();
-    let path = tmp("art.ai");
+    let path = tmp(&scratch, "art.ai");
     let r = s.execute("document.save", &json!({"path": path, "preserveEditing": false, "range": "1"})).unwrap();
     assert_eq!(r["path"], path.as_str());
     // As saved (Save stamps the File Info dates).
@@ -134,11 +134,11 @@ fn ai_files_are_pdfs_that_save_and_reopen_editable() {
     let again = vectorcraft_pdf::editing(&std::fs::read(&path).unwrap()).unwrap();
     assert_eq!(vectorcraft_format::load(&again.data).unwrap().layers, s.doc().unwrap().doc.layers);
     // Save As also writes a plain PDF (the document then saves back as PDF); PNG stays an export.
-    assert_eq!(s.execute("document.save", &json!({"path": tmp("x.pdf")})).unwrap()["format"], "pdf");
-    assert!(s.execute("document.save", &json!({"path": tmp("x.png")})).is_err(), "PNG is written with document.export");
+    assert_eq!(s.execute("document.save", &json!({"path": tmp(&scratch, "x.pdf")})).unwrap()["format"], "pdf");
+    assert!(s.execute("document.save", &json!({"path": tmp(&scratch, "x.png")})).is_err(), "PNG is written with document.export");
     // A plain PDF named .ai opens as artwork, without a path to save over.
     let plain = b64(&s.execute("document.exportPdf", &json!({"preserveEditing": false})).unwrap());
-    let plain_path = tmp("plain.ai");
+    let plain_path = tmp(&scratch, "plain.ai");
     std::fs::write(&plain_path, plain).unwrap();
     let r = s.execute("document.open", &json!({"path": plain_path})).unwrap();
     assert_eq!(r["restored"], false);
@@ -149,9 +149,10 @@ fn ai_files_are_pdfs_that_save_and_reopen_editable() {
 /// As does, leaving the document's own path alone.
 #[test]
 fn exports_write_ai_as_save_as_does() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = rich();
     let before = comparable(&s.doc().unwrap().doc);
-    let path = tmp("exported.ai");
+    let path = tmp(&scratch, "exported.ai");
     let r = s.execute("document.export", &json!({"path": path})).unwrap();
     assert_eq!(r["format"], "ai", "{r}");
     let bytes = std::fs::read(&path).unwrap();
@@ -187,6 +188,26 @@ fn an_ai_with_an_artboard_past_14400_pt_reopens_at_its_size() {
     assert_eq!(size(&s), (20_000.0, 10_000.0));
 }
 
+/// A page that a PDF 1.3 file can't hold (a side past 32,767 pt that isn't a whole number of
+/// points) fails the export before the thumbnails, the editing data and the flattening: the editing data is never asked for, and the flattener options, which the
+/// flattening would refuse, are never read.
+#[test]
+fn a_page_too_long_for_pdf_1_3_fails_before_the_flattening() {
+    let doc = vectorcraft_doc::Document::new(40_000.5, 300.0);
+    let p = json!({"compatibility": "1.3", "thumbnails": true, "preserveEditing": true, "flattener": {"balance": 500}});
+    let asked = std::cell::Cell::new(false);
+    let native = || {
+        asked.set(true);
+        Ok(vec![])
+    };
+    let e = super::pdf::encode_carrying("document.exportPdf", &doc, &p, native, || Ok(None)).unwrap_err();
+    assert!(
+        e.to_string().contains("PDF 1.3 files hold real numbers up to 32,767, and the page of artboard 1, 40001 pt long, needs larger ones"),
+        "{e}"
+    );
+    assert!(!asked.get(), "the editing data is not made");
+}
+
 #[test]
 fn ait_templates_open_their_document_untitled() {
     let mut s = rich();
@@ -205,12 +226,13 @@ fn ait_templates_open_their_document_untitled() {
 /// from Template opens it as an untitled copy of the document, layers and art included.
 #[test]
 fn save_as_template_writes_an_ait_that_new_from_template_opens_untitled() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = rich();
     s.execute("layer.new", &json!({"name": "Notes"})).unwrap();
     s.execute("shape.ellipse", &json!({"x": 20, "y": 120, "width": 40, "height": 30})).unwrap();
     let before = comparable(&s.doc().unwrap().doc);
     assert_eq!(before.layers.len(), 2);
-    let path = tmp("brochure template.ait");
+    let path = tmp(&scratch, "brochure template.ait");
     let r = s.execute("file.saveAsTemplate", &json!({"path": path})).unwrap();
     assert_eq!(r["format"], "ait", "{r}");
     let bytes = std::fs::read(&path).unwrap();
@@ -233,6 +255,7 @@ fn save_as_template_writes_an_ait_that_new_from_template_opens_untitled() {
 /// writes a `.ait`.
 #[test]
 fn save_as_template_names_its_file_after_the_template_format() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = rich();
     for (name, format, saved) in [
         ("card.png", None, "card.vctemplate"),
@@ -241,7 +264,7 @@ fn save_as_template_names_its_file_after_the_template_format() {
         ("card.pdf", Some("ait"), "card.ait"),
         ("card v1.2", None, "card v1.2.vctemplate"),
     ] {
-        let (typed, want) = (tmp(&format!("named/{name}")), tmp(&format!("named/{saved}")));
+        let (typed, want) = (tmp(&scratch, &format!("named/{name}")), tmp(&scratch, &format!("named/{saved}")));
         let _ = std::fs::create_dir_all(std::path::Path::new(&typed).parent().unwrap());
         let _ = std::fs::remove_file(&typed);
         let _ = std::fs::remove_file(&want);
@@ -253,7 +276,7 @@ fn save_as_template_names_its_file_after_the_template_format() {
         assert!(ait || vectorcraft_format::load(&bytes).is_ok_and(|d| d.template), "{name}: a native template");
         assert!(!std::path::Path::new(&typed).exists(), "{name}: nothing written under the typed name");
     }
-    for (cmd, p) in [("file.saveAs", json!({"format": "ait"})), ("document.save", json!({"path": tmp("card.ait")}))] {
+    for (cmd, p) in [("file.saveAs", json!({"format": "ait"})), ("document.save", json!({"path": tmp(&scratch, "card.ait")}))] {
         let e = s.execute(cmd, &p).unwrap_err().to_string();
         assert!(e.contains("file.saveAsTemplate") && !e.contains("document.export"), "{cmd}: {e}");
     }
@@ -264,8 +287,9 @@ fn save_as_template_names_its_file_after_the_template_format() {
 /// nothing writes keeps its own error.
 #[test]
 fn exports_of_an_ait_name_save_as_template() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = rich();
-    let path = tmp("exported.ait");
+    let path = tmp(&scratch, "exported.ait");
     let _ = std::fs::remove_file(&path);
     for (cmd, p) in [
         ("document.export", json!({"path": path})),
@@ -285,8 +309,9 @@ fn exports_of_an_ait_name_save_as_template() {
 /// file; `aiVersion` "pdf" writes the PDF-compatible template.
 #[test]
 fn save_as_template_refuses_a_legacy_ait() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = rich();
-    let path = tmp("legacy-ait/card.ait");
+    let path = tmp(&scratch, "legacy-ait/card.ait");
     let dir = std::path::Path::new(&path).parent().unwrap().to_path_buf();
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -382,26 +407,74 @@ fn ai_export_validates_options_even_when_editing_data_is_omitted() {
     }
 }
 
-#[test]
-fn ai_export_without_artboards_keeps_art_outside_the_original_pages() {
+/// Two artboards, a visible 30 × 20 pt rectangle outside them at (180, 100) and a hidden one.
+fn art_outside_the_artboards() -> Session {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 100, "height": 80, "artboards": 2})).unwrap();
     s.execute("paint.setStroke", &json!({"none": true})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 180, "y": 100, "width": 30, "height": 20})).unwrap();
     s.execute("shape.rectangle", &json!({"x": 1000, "y": 1000, "width": 50, "height": 40})).unwrap();
     s.execute("object.hide", &json!({})).unwrap();
+    s
+}
+
+/// Whether the `.ai` file `bytes` carries the editing copy of its art for other apps.
+fn carries_private_data(bytes: &[u8]) -> bool {
+    let opts = LoadOptions { native: false, ..Default::default() };
+    load::load_with("a.ai", bytes, &opts).unwrap().editing_data
+}
+
+#[test]
+fn an_ai_of_the_arts_bounds_carries_no_editing_data() {
+    let mut s = art_outside_the_artboards();
     let before = comparable(&s.doc().unwrap().doc);
-    let r = s.execute("document.export", &json!({"format": "ai", "useArtboards": false, "range": "2"})).unwrap();
-    let bytes = b64(&r);
-    let pages = vectorcraft_pdf::import(&bytes).unwrap();
-    assert_eq!(pages.artboards.len(), 1);
-    assert_eq!((pages.artboards[0].rect.width(), pages.artboards[0].rect.height()), (30.0, 20.0));
-    let editing = vectorcraft_pdf::editing(&bytes).unwrap();
-    let exported = vectorcraft_format::load(&editing.data).unwrap();
-    assert_eq!(exported.artboards.len(), 1);
-    assert_eq!(exported.artboards[0].rect, vectorcraft_geom::Rect::new(180.0, 100.0, 210.0, 120.0));
-    assert_eq!(comparable(&s.doc().unwrap().doc), before);
+    let left_out = |v: &Value| v["warnings"].as_array().unwrap().iter().any(|w| w == super::save::AI_EDITING_NEEDS_THE_ARTBOARDS);
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
+    let path = tmp(&scratch, "art-bounds.ai");
+    for extra in [json!({}), json!({"range": "2"}), json!({"editingData": false}), json!({"path": path})] {
+        let mut params = json!({"format": "ai", "useArtboards": false});
+        params.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let r = s.execute("document.export", &params).unwrap();
+        let bytes = if params.get("path").is_some() { std::fs::read(&path).unwrap() } else { b64(&r) };
+        // One page, the visible art's bounds, whatever range names.
+        let pages = vectorcraft_pdf::import(&bytes).unwrap();
+        assert_eq!(pages.artboards.len(), 1, "{params}");
+        assert_eq!((pages.artboards[0].rect.width(), pages.artboards[0].rect.height()), (30.0, 20.0), "{params}");
+        assert!(vectorcraft_pdf::editing(&bytes).is_none(), "{params}");
+        assert!(!carries_private_data(&bytes), "{params}");
+        assert!(left_out(&r), "{params}: {r}");
+        assert_eq!(comparable(&s.doc().unwrap().doc), before);
+    }
+    // The artboards keep both editing copies, without the warning.
+    for params in [json!({"format": "ai"}), json!({"format": "ai", "useArtboards": true})] {
+        let r = s.execute("document.export", &params).unwrap();
+        let bytes = b64(&r);
+        let editing = vectorcraft_pdf::editing(&bytes).expect("editing data");
+        assert_eq!(vectorcraft_format::load(&editing.data).unwrap().artboards.len(), 2, "{params}");
+        assert!(carries_private_data(&bytes), "{params}");
+        assert!(!left_out(&r), "{params}: {r}");
+    }
     assert!(s.execute("document.export", &json!({"format": "ai", "useArtboards": "yes"})).is_err());
+}
+
+#[test]
+fn an_ai_of_the_arts_bounds_without_pdf_is_refused() {
+    let mut s = art_outside_the_artboards();
+    let before = comparable(&s.doc().unwrap().doc);
+    for extra in [json!({}), json!({"editingData": false}), json!({"editingData": true})] {
+        for command in ["document.export", "document.serialize"] {
+            let mut params = json!({"format": "ai", "useArtboards": false, "pdfCompatible": false});
+            params.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            let e = s.execute(command, &params).unwrap_err().to_string();
+            assert!(e.contains(super::save::ART_PAGE_NEEDS_PDF), "{command} {params}: {e}");
+            assert_eq!(comparable(&s.doc().unwrap().doc), before);
+        }
+    }
+    // A document with no visible art is still refused for that.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 80})).unwrap();
+    let e = s.execute("document.export", &json!({"format": "ai", "useArtboards": false})).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
 }
 
 /// Color Halftone's Max Radius is in pixels of the raster effects resolution since document
@@ -488,7 +561,7 @@ fn an_ai_file_opens_from_its_vectorcraft_document_when_the_editing_copy_differs(
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
     let id = s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
-    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [id]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "blur.gaussian", "ids": [id]})).unwrap();
     let r = s.execute("document.export", &json!({"format": "ai"})).unwrap();
     assert!(r["warnings"].to_string().contains("live effects"), "{r}");
     let bytes = b64(&r);
@@ -603,6 +676,7 @@ fn editing_copy(bytes: &[u8]) -> vectorcraft_doc::Document {
 /// writes the copy; the version 7 `.ai` keeps the compound path and the clipping group.
 #[test]
 fn transparency_clipping_and_opacity_masks_come_back_from_the_editing_copy() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = see_through_session();
     let before = (*s.doc().unwrap().doc).clone();
     // The mask's art is one path, and it reads back as that path.
@@ -615,7 +689,7 @@ fn transparency_clipping_and_opacity_masks_come_back_from_the_editing_copy() {
         assert_eq!(see_through_outline(&editing_copy(&bytes)), want, "{opts}");
     }
     // Each artboard in a file of its own: the first holds all the art.
-    let path = tmp("see-through.ai");
+    let path = tmp(&scratch, "see-through.ai");
     let r = s.execute("document.save", &json!({"path": path, "separateArtboards": true})).unwrap();
     let files: Vec<String> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
     assert_eq!(files.len(), 3, "{r}");
@@ -745,7 +819,8 @@ fn image_outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
 /// the linked image keeps its path and its path relative to the document's folder.
 #[test]
 fn images_come_back_from_the_editing_copy() {
-    let dir = tmp("ai-images");
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
+    let dir = tmp(&scratch, "ai-images");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(format!("{dir}/art")).unwrap();
     let png = |w: u32, h: u32, f: &dyn Fn(u32, u32) -> [u8; 4]| {
@@ -815,6 +890,7 @@ fn type_outline(doc: &vectorcraft_doc::Document) -> Vec<String> {
 /// for other apps alone as type, with every save option that writes the copy.
 #[test]
 fn type_comes_back_from_the_editing_copy() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
     s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Hello\nWorld", "size": 24})).unwrap();
@@ -822,7 +898,7 @@ fn type_comes_back_from_the_editing_copy() {
     // The new type is selected.
     s.execute("object.rotate", &json!({"angle": 30})).unwrap();
     s.execute("text.create", &json!({"x": 20, "y": 120, "text": "Area type in a frame", "area": {"width": 120, "height": 60}})).unwrap();
-    let path = tmp("type.ai");
+    let path = tmp(&scratch, "type.ai");
     s.execute("document.save", &json!({"path": path})).unwrap();
     let before = type_outline(&s.doc().unwrap().doc);
     assert_eq!(before.len(), 3, "{before:#?}");
@@ -904,6 +980,7 @@ fn gradient_session() -> Session {
 /// gradient.
 #[test]
 fn gradients_and_patterns_come_back_from_the_editing_copy() {
+    let scratch = vectorcraft_testkit::TempDir::new("pdfedit");
     let mut s = gradient_session();
     let before = (*s.doc().unwrap().doc).clone();
     let want = paint_outline(&before);
@@ -923,7 +1000,7 @@ fn gradients_and_patterns_come_back_from_the_editing_copy() {
         let copy = editing_copy(&b64(&r));
         assert_eq!(paint_outline(&copy), want, "{opts}");
     }
-    let path = tmp("gradients.ai");
+    let path = tmp(&scratch, "gradients.ai");
     let r = s.execute("document.save", &json!({"path": path, "separateArtboards": true})).unwrap();
     let files: Vec<String> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect();
     assert_eq!(files.len(), 3, "{r}");
@@ -932,25 +1009,31 @@ fn gradients_and_patterns_come_back_from_the_editing_copy() {
     }
     let r = s.execute("document.export", &json!({"format": "ai", "aiVersion": 7})).unwrap();
     let legacy = load::load_with("art.ai", &b64(&r), &LoadOptions::default()).unwrap();
-    // Each gradient the art paints with, by its kind and its stops' places and colors to 5% (version
-    // 7 writes a gradient stroke as its filled outline, so the objects differ, and a spot color's
-    // tint through its CMYK equivalent, 2% off here).
+    // Each gradient the art paints with, by its kind and its stops' places, and its stops' colors
+    // within 5% (version 7 writes a gradient stroke as its filled outline, so the objects differ),
+    // except a spot color's tint, which version 7 writes through its CMYK equivalent: 70% of that
+    // equivalent displays about 7% off the tint of the spot color.
     let gradients = |doc: &vectorcraft_doc::Document| {
-        let mut all = std::collections::BTreeSet::new();
+        let mut all = std::collections::BTreeMap::new();
         doc.walk(|node| {
             for it in node.appearance.items.iter() {
                 if let vectorcraft_color::Paint::Gradient(g) = it.paint() {
-                    let stops: Vec<String> = g
-                        .gradient
-                        .stops
-                        .iter()
-                        .map(|s| format!("{:.3} {:?}", s.offset, s.color.to_rgb().map(|v| (v * 20.0).round() * 5.0)))
-                        .collect();
-                    all.insert(format!("{:?} {stops:?}", g.gradient.kind));
+                    let places: Vec<String> = g.gradient.stops.iter().map(|s| format!("{:.3}", s.offset)).collect();
+                    let colors: Vec<([f32; 3], bool)> =
+                        g.gradient.stops.iter().map(|s| (s.color.to_rgb(), s.swatch.is_some() && s.tint < 1.0)).collect();
+                    all.insert(format!("{:?} {places:?}", g.gradient.kind), colors);
                 }
             }
         });
         all
     };
-    assert_eq!(gradients(&legacy.doc), gradients(&before));
+    let (got, want) = (gradients(&legacy.doc), gradients(&before));
+    assert_eq!(got.keys().collect::<Vec<_>>(), want.keys().collect::<Vec<_>>());
+    for (key, stops) in &want {
+        for (i, (rgb, spot)) in stops.iter().enumerate() {
+            let back = got[key][i].0;
+            let most = if *spot { 0.1 } else { 0.05 };
+            assert!((0..3).all(|c| (back[c] - rgb[c]).abs() < most), "{key} stop {i}: {back:?} for {rgb:?}");
+        }
+    }
 }

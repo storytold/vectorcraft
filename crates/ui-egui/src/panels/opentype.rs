@@ -44,8 +44,7 @@ impl Flag {
     fn put(self, f: &mut OtFeatures, on: bool) {
         match self {
             Flag::Field(field) => *field(f) = on,
-            Flag::Extra(tag) if on => f.extra |= extra_bit(tag),
-            Flag::Extra(tag) => f.extra &= !extra_bit(tag),
+            Flag::Extra(tag) => f.set_extra(extra_bit(tag), on),
         }
     }
 }
@@ -69,13 +68,16 @@ pub(crate) fn figure(f: &OtFeatures) -> usize {
 fn set_figure(f: &mut OtFeatures, i: usize) {
     f.tabular_figures = i == 1 || i == 4;
     f.oldstyle_figures = i >= 3;
-    f.extra &= !match i {
-        1 => extra_bit("pnum"),
-        3 => extra_bit("lnum"),
-        _ => extra_bit("pnum") | extra_bit("lnum"),
-    };
+    f.set_extra(
+        match i {
+            1 => extra_bit("pnum"),
+            3 => extra_bit("lnum"),
+            _ => extra_bit("pnum") | extra_bit("lnum"),
+        },
+        false,
+    );
     if i == 2 {
-        f.extra |= extra_bit("pnum") | extra_bit("lnum");
+        f.set_extra(extra_bit("pnum") | extra_bit("lnum"), true);
     }
 }
 
@@ -95,11 +97,7 @@ pub(crate) fn position(f: &OtFeatures) -> Option<usize> {
 /// Default Position turns all four off.
 fn set_position(f: &mut OtFeatures, i: usize) {
     for (k, tag) in POSITION_TAGS.iter().enumerate() {
-        if k + 1 == i {
-            f.extra |= extra_bit(tag);
-        } else {
-            f.extra &= !extra_bit(tag);
-        }
+        f.set_extra(extra_bit(tag), k + 1 == i);
     }
 }
 
@@ -217,13 +215,15 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let sets = offered_sets(&st);
     ui.add_enabled_ui(!sets.is_empty(), |ui| {
         ui.menu_button(tl!("Stylistic Sets"), |ui| {
-            for set in &sets {
-                let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
-                let on = flag.get(&next);
-                if widgets::check_name(ui, &set_label(set), on) {
-                    change = Some(Change::Toggle(flag, !on));
+            widgets::menu_scroll(ui, |ui| {
+                for set in &sets {
+                    let flag = Flag::Extra(EXTRA_FEATURES[usize::from(set.number - 1)]);
+                    let on = flag.get(&next);
+                    if widgets::check_name(ui, &set_label(set), on) {
+                        change = Some(Change::Toggle(flag, !on));
+                    }
                 }
-            }
+            });
         });
     });
     if cur.ligatures && vectorcraft_text::ligatures_suppressed_by(st.tracking) && !vectorcraft_text::explicit_ligatures(&st.features) {

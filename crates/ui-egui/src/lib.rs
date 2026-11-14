@@ -34,6 +34,7 @@ pub mod credits;
 pub mod cursors;
 mod custom_toolbars;
 pub mod dialogs;
+pub mod display_profile;
 pub mod doc_windows;
 pub mod dock;
 mod edit_toolbar;
@@ -43,6 +44,7 @@ pub mod font_menu;
 mod frame_rate;
 mod free_transform;
 pub mod graphics;
+pub mod hang_beacon;
 pub mod i18n;
 pub mod icon_data;
 pub mod icons;
@@ -65,6 +67,8 @@ pub mod print;
 pub mod recovery;
 pub mod render_worker;
 pub mod screen_color;
+pub mod script_runs;
+pub mod scripts_menu;
 mod scrub;
 pub mod shortcut_editor;
 pub mod shortcuts;
@@ -78,6 +82,7 @@ pub mod toolbar;
 mod tools_float;
 pub mod touch;
 pub mod trace_runs;
+pub mod troubleshooting;
 mod ui_fonts;
 pub mod unsaved;
 pub mod updates_ui;
@@ -87,14 +92,14 @@ pub mod workspaces;
 mod document_drag;
 #[cfg(test)]
 use tests::{
-    background as tests_background, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors, svg as tests_svg,
-    synthetic as tests_synthetic, sysclip as tests_sysclip,
+    background as tests_background, folder as tests_folder, labels as tests_labels, picks as tests_picks, removeanchors as tests_removeanchors,
+    svg as tests_svg, synthetic as tests_synthetic, sysclip as tests_sysclip,
 };
 #[cfg(test)]
 mod tests;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
@@ -104,7 +109,7 @@ use vectorcraft_engine::{Session, ViewInfo};
 
 pub use control::{ControlRequest, ControlResponse, Ticket as ControlTicket};
 pub use state::{UiState, View};
-pub use sysclip::{ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
+pub use sysclip::{CLIPBOARD_PROBE_STOP_WAIT, ClipboardProbeFactory, ClipboardRead, MakeFlavour, SystemClipboard};
 
 mod app;
 mod caches;
@@ -112,12 +117,14 @@ mod clock;
 mod services;
 
 pub use app::MAX_RECENT_FONTS;
-pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PrintTilingCache, SliceCache};
+pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PlacedKey, PrintTilingCache, SliceCache};
 pub use clock::{now_ms, now_secs};
+pub use craft_ui::docking::Monitor as DockMonitor;
 #[cfg(test)]
 pub(crate) use services::browsable_url;
 pub use services::{
-    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, ReadFn, RevealFn, Services, WriteFn,
+    DownloadFn, ExistsFn, FileFilter, FilePick, Inbox, NativeInputHook, OpenUrlFn, PickOpen, PickSave, PickedInbox, ReadFn, RevealFn, SaveStreamFn,
+    SaveWriteFn, Services, WriteFn,
 };
 use state::{GeometryStamp, InputGeneration, PendingScreenshot, QueuedScreenshot};
 pub(crate) use state::{InputFrame, take_frame_once};
@@ -130,8 +137,18 @@ pub struct VectorcraftApp {
     /// [`VectorcraftApp::sync_views`], which puts the views back with their documents after
     /// `document.move` reorders them (#5663).
     pub(crate) view_uids: Vec<u64>,
+    /// The thread that checks the system clipboard for `system_paste` instead
+    /// ([`Services::clipboard_probe`]). It is declared before `services` so that it is dropped
+    /// first, waiting up to [`CLIPBOARD_PROBE_STOP_WAIT`] for its thread to let go of its handle: on
+    /// X11 the last clipboard handle alive hands what the app copied to the clipboard manager, and
+    /// that should be the app's own handle in `services`, dropped on the UI thread before the
+    /// process exits.
+    clipboard_probe: Option<clipboard_probe::Probe>,
     pub services: Services,
     pub canvas: CanvasCache,
+    /// The main window's display profile, which the canvas is drawn through
+    /// ([`display_profile`]); the desktop app reports what it reads into it.
+    pub display_profile: display_profile::DisplayProfile,
     pub perf: Perf,
     /// Docking state that lives for the session only.
     pub(crate) dock_rt: panel_docking::Runtime,
@@ -160,6 +177,9 @@ pub struct VectorcraftApp {
     synthetic_dropped_before: u64,
     /// Window captures asked for and not answered yet.
     pending_screenshots: Vec<PendingScreenshot>,
+    /// `ui.pointer` replies waiting for their events and the edit the tool computes on another
+    /// thread ([`control::Outcome::AfterToolEdit`]), with the numbers of those events.
+    pointer_replies: Vec<control::PendingPointerReply>,
     /// Admitted captures whose settled frame has not come yet (issued one at a time).
     queued_screenshots: Vec<QueuedScreenshot>,
     screenshot_token: u64,
@@ -182,6 +202,12 @@ pub struct VectorcraftApp {
     frame_rate: frame_rate::FrameRate,
     /// Canvas rect of the last frame (screen points), for control-channel coordinate mapping.
     pub canvas_rect: Option<egui::Rect>,
+    /// The UI zoom (egui's zoom factor, set by Preferences › User Interface › UI Scaling) of the
+    /// frame that laid out [`Self::canvas_rect`]; 1.0 before the first one. [`Self::canvas_xf`]
+    /// maps the document to that rect with it.
+    pub(crate) canvas_ui_zoom: f32,
+    /// An unfinished control-channel Rotate View gesture, kept only for this app instance.
+    pub(crate) control_rotate_press: Option<control::RotateViewPress>,
     /// Hover position in document coordinates.
     pub hover_doc: Option<vectorcraft_geom::Point>,
     /// System clipboard: SVG to publish next frame, the last SVG we published (so pasting it back
@@ -194,9 +220,21 @@ pub struct VectorcraftApp {
     clipboard_publishing: sysclip::Publishing,
     /// A URL to open through egui next frame (when the host has no `open_url` service).
     pending_url: Option<String>,
+    /// `VECTORCRAFT_TITLEBAR` chose this window's frame (Linux and the BSDs), so Preferences › User
+    /// Interface › System Title Bar and VectorCraft Title Bar on Every Desktop do not apply while
+    /// it is set. `false` unless the host sets it.
+    pub titlebar_from_env: bool,
     /// Windows and Linux: the window has no OS decorations, so the app bar is the title bar (drag,
     /// double-click to maximize, caption buttons) and invisible edge zones resize the window.
     pub custom_titlebar: bool,
+    /// Where the caption buttons go on the app bar while [`Self::custom_titlebar`] is on: the
+    /// desktop's window-button layout on Linux and the BSDs where the desktop leaves the frame to the
+    /// app, all three at the right otherwise.
+    pub caption_layout: titlebar::CaptionLayout,
+    /// The window has the desktop's own title bar: the OS or the window manager draws its frame,
+    /// icon and title. Set by the desktop app when it opens the window; `false` for embedders
+    /// without a window of their own.
+    pub desktop_frame: bool,
     /// Last window title sent to the OS (`ViewportCommand::Title`, see `chrome::sync_window_title`):
     /// sent again only when it changes, so idle frames don't spam the backend.
     pub(crate) last_window_title: String,
@@ -206,6 +244,9 @@ pub struct VectorcraftApp {
     /// The graphics adapter the window renders with ("name (backend)"), as the host reports it:
     /// shown in Help › About and `ui.inspect` for GPU bug reports. `None` when unknown.
     pub graphics_adapter: Option<String>,
+    /// Where [`Self::run`] marks each command for the desktop app's hang report:
+    /// [`hang_beacon::BEACON`], or a test's own.
+    pub(crate) beacon: &'static hang_beacon::Beacon,
     /// File → Place: picked files, the place cursor's thumbnails, the Control bar's image details.
     pub place: place::PlaceState,
     /// The Paste commands can paste from the system clipboard alone: it holds something to paste
@@ -218,9 +259,6 @@ pub struct VectorcraftApp {
     pub(crate) clipboard_image_request: Option<egui::Modifiers>,
     /// When `system_paste` was last checked in line (app time, s; at most once per frame).
     system_paste_at: f64,
-    /// The thread that checks the system clipboard for `system_paste` instead
-    /// ([`Services::clipboard_probe`]).
-    clipboard_probe: Option<clipboard_probe::Probe>,
     /// File dialogs shown off the UI thread and what runs again with their answers.
     pub(crate) picks: picks::Picks,
     /// The screen color sampler shown and not answered yet, and where its color goes.
@@ -297,6 +335,9 @@ pub struct VectorcraftApp {
     /// This frame carries input the control channel injected ([`Self::raw_input_hook`]): it runs
     /// confined to [`Self::automation_roots`].
     synthetic_frame: bool,
+    /// The plug-in install the approval dialog asks about, kept out of the dialog's fields, which
+    /// `ui.dialog.set` writes.
+    pub(crate) pending_plugin_install: Option<dialogs::plugin::PendingInstall>,
     /// The pen end the canvas saw last and the tool its eraser end stands in for
     /// ([`stylus::sync_eraser_tool`]).
     pub(crate) pen_end: stylus::PenEnd,
@@ -314,6 +355,9 @@ pub struct VectorcraftApp {
     /// The context, viewport and frame `shortcuts::handle` already took in this host iteration.
     /// Interleaving root and auxiliary viewport passes cannot make an older frame look new again.
     pub(crate) shortcuts_frames: Vec<InputFrame>,
+    /// The single-key tool shortcuts held down, the last held last, and the tool each goes back to
+    /// when it is let go ([`shortcuts::HeldTool`]).
+    pub(crate) held_tool: Vec<shortcuts::HeldTool>,
     /// A synthetic batch is in the host's raw input and no settled UI pass has taken it yet.
     synthetic_injected: bool,
     /// The exact events of [`Self::synthetic_injected`], to remove them if the state they belong

@@ -182,7 +182,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Load Image into Clipboard",
             [],
             None,
-            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF or BMP bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centred on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error",
+            "{dataBase64 (PNG, JPEG, GIF, WebP, TIFF, BMP, Targa, PCX, PSD, PSB or JPEG XL bytes), mime?: the type the system clipboard gave (an image/… type; the format is read from the bytes), center?: [x, y]} replace the clipboard with the image, embedded at 100% of its physical size (its resolution, else 72 ppi), centered on `center` (default: the first artboard) → {count, width, height (pt), pixelWidth, pixelHeight}; then run edit.paste. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error",
             has_doc,
             import_image
         ),
@@ -491,7 +491,7 @@ fn import_text(s: &mut Session, p: &Value) -> Result<Value> {
     if text.trim().is_empty() {
         return Err(bad(C, "the text is empty"));
     }
-    let style = super::super::create::new_type_style(s, &Value::Null);
+    let style = super::super::create::new_type_style(s, &Value::Null, C)?;
     let system_layout = s.doc()?.doc.setup.system_layout;
     let layout = |t: &mut TextObject| {
         t.system_layout = system_layout;

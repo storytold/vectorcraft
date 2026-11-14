@@ -7,7 +7,7 @@
 //!   Warp) rewrite a path: [`apply_geometry`] evaluates them in stack order.
 //! - **Raster effects** (Drop Shadow, Inner/Outer Glow, Feather, Gaussian Blur, Rasterize, and the
 //!   Photoshop-style filters of [`pixel`]: Radial Blur, Smart Blur, Color Halftone, Crystallize, Mezzotint, Pointillize, Halftone Pattern,
-//!   Unsharp Mask and Glowing Edges) are described by
+//!   Unsharp Mask and Glowing Edges, and the SVG filters of [`svg_filter`]) are described by
 //!   [`raster_effects`] and painted by the renderer; [`outset`] says how far they reach beyond
 //!   the geometry.
 //! - **Stroke geometry** ([`stroke`]): arrowheads, dash patterns and width profiles, shared by the
@@ -52,6 +52,7 @@ mod revolve;
 mod solids;
 pub mod stroke;
 mod stylize;
+pub mod svg_filter;
 pub mod trap;
 mod util;
 mod warp;
@@ -67,8 +68,8 @@ pub use adjust::{
     ADJUSTMENTS, CHANNELS, ColorMap, ImageHook, adjust, adjust_in_document, color_map, curve_at, curve_points, has_adjustment, is_adjustment,
     is_channel,
 };
-pub use bake::{StrokeArt, bake_appearance, bake_document, expand_art, expand_leaf, fresh_ids, needs_bake};
-pub use clip::clip_outline;
+pub use bake::{StrokeArt, bake_appearance, bake_document, bake_type_appearance, expand_art, expand_leaf, fresh_ids, needs_bake};
+pub use clip::{WarpSeams, clip_outline, knockout_silhouette, warp_pieces_translucent};
 pub use group::{
     OutlineHook, PATHFINDER_EFFECTS, compound_shape_area, compound_shape_art, evaluate_container, has_container_appearance, has_pathfinder,
     is_pathfinder, member_leaves, member_shapes, paints, pathfinder_children, shape_art,
@@ -77,19 +78,32 @@ pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_par
 pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_object, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
-pub use raster::{RASTERIZE, RasterFx, Rasterize, color_param, outset, raster_effects};
+pub use raster::{RASTERIZE, RasterFx, Rasterize, color_param, follow_items, item_effects_in, outset, raster_effects, without_geometry};
 pub use reshape::{
-    SYMBOL_ART_MAX_NODES, expand_outlined, has_gradient_copies, has_item_geometry, has_transform_art, has_transform_copies, has_transform_options,
-    image_paint, needs_outline, outline_art, outline_text, reshape,
+    SYMBOL_ART_MAX_NODES, expand_outlined, follows_image_pixels, gives_image_shape, has_gradient_copies, has_item_geometry, has_painted_effects,
+    has_transform_art, has_transform_copies, has_transform_options, image_paint, needs_outline, outline_art, outline_text, reshape,
 };
-pub use revolve::{REVOLVE, has_revolve, revolve_art, revolve_options, validate_revolve};
+pub use revolve::{
+    CLASSIC_REVOLVE, REVOLVE, has_revolve, is_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in,
+};
 pub use solids::{
-    EXTRUDE, INFLATE, ROTATE, ROTATION_PRESETS, SOLIDS, extrude_options, has_solid, inflate_options, is_three_d, solid_art, validate_solid,
-    validate_three_d, view_options,
+    CLASSIC_EXTRUDE, CLASSIC_ROTATE, EXTRUDE, GRAPHICS, GraphicFrame, INFLATE, MAX_GRAPHICS, MappedGraphic, ROTATE, ROTATE_SURFACES,
+    ROTATION_PRESETS, SHADING_COLORS, SOLIDS, SolidMesh, THREE_D_TYPES, classic_extrude_options, classic_shading, extrude_options, graphic_bounds,
+    graphic_frame, graphic_symbols, has_solid, inflate_options, is_classic_three_d, is_three_d, mapped_graphics, missing_symbol,
+    names_graphic_symbol, rename_graphic_symbol, rename_graphic_symbol_in, solid_art, solid_art_in, takes_graphics, three_d_meshes,
+    three_d_meshes_in, three_d_meshes_of, three_d_meshes_of_in, three_d_params_as, three_d_wireframe_in, validate_solid, validate_solid_in,
+    validate_three_d, validate_three_d_at, validate_three_d_at_in, validate_three_d_in, validate_three_d_params, view_options, with_graphic,
+};
+pub use solids::{
+    GRAPHIC_MAX_OFFSET, GRAPHIC_SCALE_RANGE, GRAPHICS_NOT_TAKEN, appearance_graphic_symbols, graphic_frame_at, graphics_reshaped_after,
+    rename_appearance_graphic_symbol,
 };
 pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
+pub use svg_filter::SVG_FILTER;
 pub use trap::TRAP;
-pub use warp::{WarpStyle, warp_point};
+pub use vectorcraft_three_d::Mesh;
+pub use vectorcraft_three_d::PlanarFace;
+pub use warp::{WARP_NET, WarpNet, WarpStyle, map_version, warp_point, warp_version};
 
 mod catalog;
 mod geometry;
@@ -97,9 +111,12 @@ mod params;
 
 pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range};
 pub(crate) use geometry::{Budget, apply_one};
-pub use geometry::{GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_with};
+pub use geometry::{
+    Carry, GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_bez_carrying, apply_geometry_carrying, apply_geometry_with,
+};
 #[cfg(test)]
 pub(crate) use geometry::{MAX_EFFECT_LINES, apply_geometry_within};
 pub use params::{
-    default_params, has_geometry, has_plugin_effect, is_geometry, is_raster, merged_params, new_effect, plugin_revision, scale_effect, upgrade_params,
+    any_plugin_paints_output, default_params, has_geometry, has_painted_plugin_effect, has_plugin_effect, is_geometry, is_raster, merged_params,
+    new_effect, plugin_revision, scale_effect, upgrade_params,
 };

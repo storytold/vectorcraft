@@ -54,6 +54,9 @@ impl Serialize for Node {
             is_default(&e.shape_mode),
             e.symbol_overrides.is_empty(),
             e.envelope_edit_margin.is_none(),
+            is_default(&e.pixel_aligned),
+            e.color_mask.is_none(),
+            is_default(&e.warp_piece),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -96,6 +99,9 @@ impl Serialize for Node {
         field!("shape_mode", &e.shape_mode);
         field!("symbol_overrides", &e.symbol_overrides);
         field!("envelope_edit_margin", &e.envelope_edit_margin);
+        field!("pixel_aligned", &e.pixel_aligned);
+        field!("color_mask", &e.color_mask);
+        field!("warp_piece", &e.warp_piece);
         st.end()
     }
 }
@@ -143,9 +149,10 @@ fn count_one<E: serde::de::Error>() -> Result<(), E> {
 }
 
 /// A list read from a file (a member's Intertwine areas of tier 2 and up, an instance's symbol
-/// overrides), each item counting against [`with_node_budget`] as an object does: a compressed
-/// file of repeated empty items stays small while they take memory once read.
-fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
+/// overrides, a document's saved ruler guides), each item counting against [`with_node_budget`]
+/// as an object does: a compressed file of repeated empty items stays small while they take
+/// memory once read.
+pub(crate) fn counted_list<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
     struct Items<T>(std::marker::PhantomData<T>);
     impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for Items<T> {
         type Value = Vec<T>;
@@ -236,6 +243,12 @@ pub(super) struct NodeWire {
     symbol_overrides: Vec<crate::SymbolOverride>,
     #[serde(default)]
     envelope_edit_margin: Option<[f32; 4]>,
+    #[serde(default)]
+    pixel_aligned: bool,
+    #[serde(default)]
+    color_mask: Option<Box<crate::color_mask::ColorMask>>,
+    #[serde(default)]
+    warp_piece: bool,
 }
 
 impl From<NodeWire> for Node {
@@ -263,6 +276,9 @@ impl From<NodeWire> for Node {
             shape_mode: w.shape_mode,
             symbol_overrides: w.symbol_overrides,
             envelope_edit_margin: w.envelope_edit_margin,
+            pixel_aligned: w.pixel_aligned,
+            color_mask: w.color_mask,
+            warp_piece: w.warp_piece,
         };
         Node {
             id: w.id,

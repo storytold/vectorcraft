@@ -31,6 +31,8 @@ pub struct Prefs {
     pub disable_auto_add_delete: bool,
     pub use_precise_cursors: bool,
     pub show_tool_tips: bool,
+    /// Other Script… warns before it runs a chosen script.
+    pub show_external_script_warning: bool,
     pub anti_aliased_artwork: bool,
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
@@ -41,6 +43,18 @@ pub struct Prefs {
     /// Align panel menu › Align to Glyph Bounds › Area Text: the same for area type, instead of
     /// its frame.
     pub align_glyph_bounds_area: bool,
+    /// Preferences › Type › Glyph Bounds › Measure Type by Glyph Bounds (also in the Transform
+    /// panel menu): the bounding box, the Transform panel's, Control bar's and Properties panel's X,
+    /// Y, W and H, and `object.setBounds` measure each point type object selected as an object (not
+    /// inside a selected group) by the ink of its glyphs instead of its em box
+    /// ([`crate::Session::bounds_measure`]).
+    pub type_glyph_bounds: bool,
+    /// Artboard Options › Fade Region Outside Artboard: while the Artboard tool is active, the
+    /// canvas draws everything outside the artboards darker, the pasteboard and the art on it.
+    pub fade_region_outside_artboard: bool,
+    /// Artboard Options › Update While Dragging: the area outside the artboards stays darker while
+    /// the Artboard tool moves or resizes an artboard; off, it draws as usual until the drag ends.
+    pub artboard_update_while_dragging: bool,
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -48,14 +62,26 @@ pub struct Prefs {
     /// Scale Strokes & Effects.
     pub scale_strokes: bool,
     pub zoom_with_mouse_wheel: bool,
+    /// While Zoom with Mouse Wheel is off, Cmd/Ctrl-wheel scrolls sideways instead of zooming.
+    pub ctrl_wheel_scrolls_sideways: bool,
     /// A horizontal drag on a numeric field or its label steps its value (#400).
     pub scrub_numeric_fields: bool,
     /// A two-finger rotation on a Mac trackpad turns the view about the pointer once it reaches 5°.
     pub trackpad_rotate_view: bool,
+    /// A single-key tool shortcut held down chooses its tool until the key is let go, and then the
+    /// tool active before comes back; a quick press chooses the tool for good.
+    pub hold_tool_keys: bool,
+    /// With View › Show Bounding Box on, the bounding box stays visible while a drag moves the
+    /// selection, and the shape tools that show it draw it around the shape being drawn. Off (the
+    /// default), it hides during a move and while a shape is drawn, except that a Selection tool
+    /// move with Real-time Drawing off still moves the box.
+    pub bounding_box_while_moving_and_drawing: bool,
     /// Offset for Paste / duplicate (Illustrator pastes to the view centre; we offset by this).
     pub paste_offset: f64,
     // Selection & Anchor Display
     pub selection_tolerance: f64,
+    /// Selection-tool marquee: touching (default), enclosed, or screen drag direction.
+    pub marquee_selection: String,
     pub object_selection_by_path_only: bool,
     pub snap_to_point_tolerance: f64,
     pub ctrl_click_selects_behind: bool,
@@ -78,6 +104,9 @@ pub struct Prefs {
     pub font_names_in_english: bool,
     pub auto_size_area_type: bool,
     pub font_preview: bool,
+    /// Type › Show samples on white: the font menus draw each family's sample in dark type on a
+    /// white area in every brightness (off by default).
+    pub font_samples_on_white: bool,
     pub font_preview_size: String,
     pub recent_fonts_count: u32,
     pub missing_glyph_protection: bool,
@@ -86,6 +115,9 @@ pub struct Prefs {
     /// font is highlighted, in every document (on by default).
     pub highlight_substituted_fonts: bool,
     pub placeholder_text: bool,
+    /// Type › Start Lists From Typed Markers: a list marker and a space typed at the start of a
+    /// paragraph start a list (on by default). Off, they stay as typed text.
+    pub typed_lists: bool,
     // Units
     pub units_general: String,
     pub units_stroke: String,
@@ -98,6 +130,11 @@ pub struct Prefs {
     // Guides & Grid
     pub guide_color: String,
     pub guide_style: String,
+    /// Lock Guides by Default: the app starts with View › Guides › Lock Guides on.
+    pub lock_guides_by_default: bool,
+    /// Artboard Guides with Cmd/Ctrl + Ruler Drag: Cmd/Ctrl held when a guide is dragged out of a
+    /// ruler makes it a guide of the active artboard, or with the Artboard tool a canvas guide.
+    pub cmd_ruler_drag_artboard_guides: bool,
     pub grid_color: String,
     pub grid_style: String,
     pub gridline_every: f64,
@@ -115,6 +152,7 @@ pub struct Prefs {
     pub measurement_labels: bool,
     pub spacing_guides: bool,
     pub distance_guides: bool,
+    pub snap_to_last_location: bool,
     pub snapping_tolerance: f64,
     pub snap_tangent: bool,
     pub snap_perpendicular: bool,
@@ -157,6 +195,10 @@ pub struct Prefs {
     /// acting as the title bar (tiling window managers, desktops that draw their own decorations).
     /// Read when the app starts. macOS always uses the system's.
     pub system_title_bar: bool,
+    /// Linux and the BSDs: draw the app bar as the title bar in sessions where the desktop draws
+    /// the frame (X11, Wayland compositors with server-side decorations, XWayland), as on GNOME.
+    /// Read when the app starts; System Title Bar and `VECTORCRAFT_TITLEBAR` set to `app`, `system` or `desktop` take precedence over it.
+    pub app_title_bar: bool,
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
@@ -178,6 +220,10 @@ pub struct Prefs {
     /// Wayland session, where dropped files arrive (#1151); `x11WithPen` opens it through XWayland
     /// only when a pen is attached (#2028). Read when the app starts.
     pub linux_display_server: String,
+    /// The desktop canvas converts its sRGB into the ICC profile of the display that shows the
+    /// window, where the system doesn't (Windows without Advanced Color, X11). Display only: it
+    /// changes no document, proof or export.
+    pub monitor_profile_display: bool,
     // File Handling
     pub background_save: bool,
     pub background_export: bool,
@@ -218,6 +264,9 @@ pub struct Prefs {
     /// Character panel › Show Snap to Glyph Options: which guides View › Snap to Glyph gives
     /// (`view.snapToGlyph.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
     pub glyph_snap: vectorcraft_tools::GlyphSnap,
+    /// Pixel Snapping Options: whether View › Snap to Pixel snaps drawing, moving and scaling
+    /// (`view.snapToPixel.options`; a preference group, see [`cmd::prefscmds::PREF_GROUPS`]).
+    pub pixel_snap: vectorcraft_tools::PixelSnap,
     /// Edit → Transparency Flattener Presets: the user's presets (the built-in ones aren't stored).
     /// Not a `prefs.set` key or group (resetting the preferences keeps them): `flattener.presets.*`
     /// edit it.
@@ -343,22 +392,30 @@ impl Default for Prefs {
             disable_auto_add_delete: false,
             use_precise_cursors: false,
             show_tool_tips: true,
+            show_external_script_warning: true,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
             show_home_screen: true,
             use_preview_bounds: false,
             align_glyph_bounds_point: false,
             align_glyph_bounds_area: false,
+            type_glyph_bounds: false,
+            fade_region_outside_artboard: true,
+            artboard_update_while_dragging: true,
             display_print_size: false,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
             scale_corners: false,
             scale_strokes: false,
             zoom_with_mouse_wheel: false,
+            ctrl_wheel_scrolls_sideways: true,
             scrub_numeric_fields: true,
             trackpad_rotate_view: true,
+            hold_tool_keys: true,
+            bounding_box_while_moving_and_drawing: false,
             paste_offset: 10.0,
             selection_tolerance: 3.0,
+            marquee_selection: "touching".into(),
             object_selection_by_path_only: false,
             snap_to_point_tolerance: 2.0,
             ctrl_click_selects_behind: true,
@@ -380,12 +437,14 @@ impl Default for Prefs {
             font_names_in_english: true,
             auto_size_area_type: false,
             font_preview: true,
+            font_samples_on_white: false,
             font_preview_size: s("medium"),
             recent_fonts_count: 10,
             missing_glyph_protection: true,
             highlight_alternate_glyphs: false,
             highlight_substituted_fonts: true,
             placeholder_text: true,
+            typed_lists: true,
             units_general: s("points"),
             units_stroke: s("points"),
             units_type: s("points"),
@@ -394,6 +453,8 @@ impl Default for Prefs {
             identify_objects_by: s("objectName"),
             guide_color: s("#4affff"),
             guide_style: s("lines"),
+            lock_guides_by_default: false,
+            cmd_ruler_drag_artboard_guides: false,
             grid_color: s("#c8c8c8"),
             grid_style: s("lines"),
             gridline_every: 72.0,
@@ -410,6 +471,7 @@ impl Default for Prefs {
             measurement_labels: true,
             spacing_guides: true,
             distance_guides: true,
+            snap_to_last_location: false,
             snapping_tolerance: 4.0,
             snap_tangent: true,
             snap_perpendicular: true,
@@ -433,6 +495,7 @@ impl Default for Prefs {
             scale_cursor_with_ui: false,
             interface_language: s("auto"),
             system_title_bar: false,
+            app_title_bar: false,
             gpu_performance: true,
             animated_zoom: true,
             gpu_preference: s("automatic"),
@@ -440,6 +503,7 @@ impl Default for Prefs {
             real_time_drawing: true,
             render_threads: -1,
             linux_display_server: s("automatic"),
+            monitor_profile_display: true,
             background_save: true,
             background_export: true,
             autosave_recovery: true,
@@ -467,6 +531,7 @@ impl Default for Prefs {
             eyedropper: Default::default(),
             pathfinder: Default::default(),
             glyph_snap: Default::default(),
+            pixel_snap: Default::default(),
             flattener_presets: vec![],
             trace_presets: vec![],
             gradient_presets: vec![],

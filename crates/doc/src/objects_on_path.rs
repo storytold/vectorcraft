@@ -121,19 +121,22 @@ impl ObjectsOnPath {
         if a.determinant() < 0.0 && self.rotate != 0.0 {
             self.rotate = -self.rotate;
         }
-        let along = paths.and_then(|(old, new)| {
-            let s = path_length(new)?.0 / path_length(old)?.0;
-            (s.is_finite() && s > 0.0).then_some(s)
-        });
-        let scale = along.unwrap_or_else(|| a.determinant().abs().sqrt());
         // A move leaves the distances along the path as they are.
         let moves = a0 == 1.0 && a1 == 0.0 && a2 == 0.0 && a3 == 1.0;
-        if !moves && scale.is_finite() && scale > 0.0 {
-            let scaled = |v: f64| Some(v * scale).filter(|s| s.is_finite()).unwrap_or(v);
-            let moved = paths.and_then(|(old, new)| self.moved_along(a, old, new, scale));
-            let (spacing, start) = moved.unwrap_or((None, None));
-            self.spacing = self.spacing.map(|g| spacing.unwrap_or_else(|| scaled(g)));
-            self.start = start.unwrap_or_else(|| scaled(self.start));
+        if !moves {
+            let measured = paths.and_then(|(old, new)| Some((Measured::new(old)?, Measured::new(new)?)));
+            let along = measured.as_ref().and_then(|(was, is)| {
+                let s = is.len / was.len;
+                (s.is_finite() && s > 0.0).then_some(s)
+            });
+            let scale = along.unwrap_or_else(|| a.determinant().abs().sqrt());
+            if scale.is_finite() && scale > 0.0 {
+                let scaled = |v: f64| Some(v * scale).filter(|s| s.is_finite()).unwrap_or(v);
+                let moved = measured.as_ref().and_then(|(was, is)| self.moved_along(a, was, is, scale));
+                let (spacing, start) = moved.unwrap_or((None, None));
+                self.spacing = self.spacing.map(|g| spacing.unwrap_or_else(|| scaled(g)));
+                self.start = start.unwrap_or_else(|| scaled(self.start));
+            }
         }
         let after = tilt(self.rotate);
         for m in &mut self.members {
@@ -150,11 +153,10 @@ impl ObjectsOnPath {
     /// point on `old`, mapped by `a`, measured along `new` near `scale` times its distance along
     /// `old`. Either one is `None` when it cannot be followed that way: a start before or beyond the
     /// ends of an open path, or a Space value of 0, one the path has no room for, or one with fewer
-    /// than two objects. `None` for a path without length or a start that is not finite.
-    fn moved_along(&self, a: Affine, old: &PathData, new: &PathData, scale: f64) -> Option<(Option<f64>, Option<f64>)> {
-        let (was, is) = (Spine::new(old)?, Spine::new(new)?);
-        let (len, closed) = path_length(old)?;
-        let (new_len, _) = path_length(new)?;
+    /// than two objects. `None` for a start that is not finite.
+    fn moved_along(&self, a: Affine, old: &Measured, new: &Measured, scale: f64) -> Option<(Option<f64>, Option<f64>)> {
+        let (was, is) = (&old.spine, &new.spine);
+        let (len, closed, new_len) = (old.len, old.closed, new.len);
         if !self.start.is_finite() {
             return None;
         }
@@ -179,6 +181,24 @@ impl ObjectsOnPath {
             (g.is_finite() && g >= 0.0).then_some(g)
         });
         Some((spacing, start))
+    }
+    /// Move the object `member` to the place on the path of the object `target`: the objects
+    /// between them each move one place toward where `member` was, except the objects for which
+    /// `fixed` is true, which keep their places and are passed over. Only the order changes, not the
+    /// Space or the start. Returns `member`'s new index, or `None` when either one is not an object
+    /// of the group.
+    pub fn move_member(&mut self, member: NodeId, target: NodeId, fixed: impl Fn(NodeId) -> bool) -> Option<usize> {
+        let moves = |id: NodeId| id == member || id == target || !fixed(id);
+        let slots: Vec<usize> = (0..self.members.len()).filter(|&i| moves(self.members[i].id)).collect();
+        let from = slots.iter().position(|&i| self.members[i].id == member)?;
+        let to = slots.iter().position(|&i| self.members[i].id == target)?;
+        let mut moving: Vec<_> = slots.iter().map(|&i| self.members[i]).collect();
+        let m = moving.remove(from);
+        moving.insert(to, m);
+        for (&i, m) in slots.iter().zip(moving) {
+            self.members[i] = m;
+        }
+        Some(slots[to])
     }
     /// The children given new ids (a copy of the group): the path and the objects by their new ids.
     pub fn rename(&mut self, ids: &HashMap<NodeId, NodeId>) {
@@ -212,10 +232,10 @@ pub fn is_objects_on_path(n: &Node) -> bool {
 }
 
 /// The path of `n` if it is a path object an Objects on Path group can attach objects to: a path
-/// (not a guide) whose first subpath has some length.
+/// (not a guide) whose first subpath has a length ([`path_length`]).
 pub fn attachable_path(n: &Node) -> Option<&PathData> {
     match &n.kind {
-        NodeKind::Path { path, guide: false, .. } if Spine::new(path).is_some_and(|s| s.length() > 1e-9) => Some(path),
+        NodeKind::Path { path, guide: false, .. } if path_length(path).is_some() => Some(path),
         _ => None,
     }
 }
@@ -274,11 +294,27 @@ pub fn upright_frame(n: &Node) -> Affine {
 }
 
 /// The length of `path`'s first subpath and whether it is closed. `None` for a path without
-/// length.
+/// length, or with a length too large to be finite.
 pub fn path_length(path: &PathData) -> Option<(f64, bool)> {
-    let len = Spine::new(path)?.length();
-    let closed = path.subpaths.first().is_some_and(|s| s.closed);
-    (len.is_finite() && len > 1e-9).then_some((len, closed))
+    Measured::new(path).map(|m| (m.len, m.closed))
+}
+
+/// A path's first subpath flattened ([`Spine`]), with its length and whether it is closed, so that
+/// one flattening serves both measuring the path and finding points along it.
+struct Measured {
+    spine: Spine,
+    len: f64,
+    closed: bool,
+}
+
+impl Measured {
+    /// `None` for a path without length, or with a length too large to be finite.
+    fn new(path: &PathData) -> Option<Self> {
+        let spine = Spine::new(path)?;
+        let len = spine.length();
+        let closed = path.subpaths.first().is_some_and(|s| s.closed);
+        (len.is_finite() && len > 1e-9).then_some(Self { spine, len, closed })
+    }
 }
 
 /// Where the first of `n` objects attaches along a path of length `len` (closed or not), and the
@@ -323,18 +359,20 @@ fn wrap(s: f64, len: f64) -> f64 {
 /// (radians, as `atan2` gives in the document's axes). They go along it as [`layout`] spaces them
 /// for Space `spacing` (`None`: Auto) from `start`. `None` for a path without length.
 pub fn stops(path: &PathData, n: usize, spacing: Option<f64>, start: f64) -> Option<Vec<(Point, f64)>> {
-    let spine = Spine::new(path)?;
-    let (len, closed) = path_length(path)?;
+    let Measured { spine, len, closed } = Measured::new(path)?;
     let (start, gap) = layout(len, closed, n, spacing, start);
     Some((0..n).map(|i| spine.at_length(nth_length(len, closed, start, gap, i))).collect())
 }
 
 /// Where object `i` of `n` attaches along `path`, as [`stops`] places it, without the others.
+/// `None` for an `i` of `n` or more, without measuring the path.
 pub fn stop(path: &PathData, n: usize, spacing: Option<f64>, start: f64, i: usize) -> Option<(Point, f64)> {
-    let spine = Spine::new(path)?;
-    let (len, closed) = path_length(path)?;
+    if i >= n {
+        return None;
+    }
+    let Measured { spine, len, closed } = Measured::new(path)?;
     let (start, gap) = layout(len, closed, n, spacing, start);
-    (i < n).then(|| spine.at_length(nth_length(len, closed, start, gap, i)))
+    Some(spine.at_length(nth_length(len, closed, start, gap, i)))
 }
 
 /// The distance along a path of length `len` (closed or not) to object `i`, from `start` and
@@ -382,11 +420,15 @@ pub fn place(g: &mut Node, symbols: &SymbolBoxes) -> bool {
     let old = rec.clone();
     let NodeKind::Group { children, .. } = &mut g.kind else { return false };
     let path_id = rec.path;
-    let Some(path) = children.iter().find(|c| c.id == path_id).filter(|c| matches!(c.kind, NodeKind::Path { .. })) else {
+    let Some(path) = children.iter().find(|c| c.id == path_id).filter(|c| matches!(c.kind, NodeKind::Path { .. })).cloned() else {
         g.extras_mut().objects_on_path = None;
         return true;
     };
-    let path = attachable_path(path).cloned();
+    // `stops` measures the path: on a path without length no object moves.
+    let path = match &path.kind {
+        NodeKind::Path { path, guide: false, .. } => Some(path),
+        _ => None,
+    };
     let at: HashMap<NodeId, usize> = children.iter().enumerate().map(|(i, c)| (c.id, i)).collect();
     rec.members.retain(|m| m.id != path_id && at.contains_key(&m.id));
     let mut listed: HashSet<NodeId> = rec.members.iter().map(|m| m.id).collect();
@@ -396,7 +438,7 @@ pub fn place(g: &mut Node, symbols: &SymbolBoxes) -> bool {
         }
     }
     let mut moved = false;
-    if let Some(stops) = path.and_then(|p| stops(&p, rec.members.len(), rec.spacing, rec.start)) {
+    if let Some(stops) = path.and_then(|p| stops(p, rec.members.len(), rec.spacing, rec.start)) {
         let turn = tilt(rec.rotate);
         for (m, (p, dir)) in rec.members.iter_mut().zip(stops) {
             let Some(c) = at.get(&m.id).and_then(|i| children.get_mut(*i)) else { continue };
@@ -488,6 +530,36 @@ mod tests {
     }
 
     #[test]
+    fn moving_an_object_shifts_the_ones_between_it_and_its_new_place() {
+        let (a, b, c) =
+            (rect(2, Rect::new(0.0, 0.0, 10.0, 10.0)), rect(3, Rect::new(20.0, 0.0, 30.0, 10.0)), rect(4, Rect::new(40.0, 0.0, 50.0, 10.0)));
+        let rec = ObjectsOnPath { spacing: Some(30.0), start: 5.0, ..ObjectsOnPath::new(NodeId(1), &[&a, &b, &c], CENTER, 15.0) };
+        let order = |r: &ObjectsOnPath| r.members.iter().map(|m| m.id.0).collect::<Vec<_>>();
+        let free = |_: NodeId| false;
+        let mut fwd = rec.clone();
+        assert_eq!(fwd.move_member(NodeId(2), NodeId(4), free), Some(2));
+        assert_eq!(order(&fwd), [3, 4, 2], "the first to the last place");
+        assert_eq!((fwd.spacing, fwd.start, fwd.pivot, fwd.rotate), (rec.spacing, rec.start, rec.pivot, rec.rotate));
+        let mut back = rec.clone();
+        assert_eq!(back.move_member(NodeId(4), NodeId(2), free), Some(0));
+        assert_eq!(order(&back), [4, 2, 3], "the last to the first place");
+        let mut same = rec.clone();
+        assert_eq!(same.move_member(NodeId(3), NodeId(3), free), Some(1));
+        assert_eq!(same, rec, "onto its own place");
+        let mut other = rec.clone();
+        assert_eq!(other.move_member(NodeId(1), NodeId(3), free), None, "the path is not one of the objects");
+        assert_eq!(other.move_member(NodeId(3), NodeId(9), free), None);
+        assert_eq!(other, rec);
+        // A fixed object between them keeps its place; the others pass over it.
+        let mut over = rec.clone();
+        assert_eq!(over.move_member(NodeId(2), NodeId(4), |id| id == NodeId(3)), Some(2));
+        assert_eq!(order(&over), [4, 3, 2], "the first and last trade places round the fixed one");
+        let mut back_over = rec.clone();
+        assert_eq!(back_over.move_member(NodeId(4), NodeId(2), |id| id == NodeId(3)), Some(0));
+        assert_eq!(order(&back_over), [4, 3, 2]);
+    }
+
+    #[test]
     fn a_group_saved_without_space_reads_as_auto() {
         let a = rect(2, Rect::new(0.0, 0.0, 10.0, 10.0));
         let rec = ObjectsOnPath::new(NodeId(1), &[&a], CENTER, 0.0);
@@ -572,7 +644,8 @@ mod tests {
         place(&mut g, &symbols);
         g.transform(Affine::new([2.0, 0.0, 0.0, 1.0, 0.0, 0.0]), false);
         let rec = g.extras().objects_on_path.as_deref().cloned().unwrap();
-        assert_eq!((rec.spacing, rec.start), (Some(40.0), 20.0));
+        // The spine measures arc length along the curve, so within rounding of the exact values.
+        assert!(rec.spacing.is_some_and(|d| (d - 40.0).abs() < 1e-9) && (rec.start - 20.0).abs() < 1e-9, "{rec:?}");
         place(&mut g, &symbols);
         let x = |id| g.children().and_then(|c| c.iter().find(|c| c.id == id).cloned()).unwrap().geometric_bounds().unwrap().center().x;
         assert!((x(NodeId(2)) - 20.0).abs() < 1e-9 && (x(NodeId(3)) - 60.0).abs() < 1e-9, "{} {}", x(NodeId(2)), x(NodeId(3)));
@@ -658,6 +731,72 @@ mod tests {
         v.as_object_mut().unwrap().remove("angle");
         let back: Member = serde_json::from_value(v).unwrap();
         assert!((back.angle - 0.5).abs() < 1e-12, "{back:?}");
+    }
+
+    /// What `f` returns, and how many times it flattened a path ([`Spine::new`]).
+    fn flattenings<T>(f: impl FnOnce() -> T) -> (T, usize) {
+        crate::blend::SPINES_BUILT.with(|n| n.set(0));
+        let out = f();
+        (out, crate::blend::SPINES_BUILT.with(|n| n.get()))
+    }
+
+    #[test]
+    fn stops_and_stop_flatten_the_path_once() {
+        let open = shapes::line(Point::new(0.0, 0.0), Point::new(300.0, 0.0));
+        let closed = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
+        for path in [&open, &closed] {
+            let (all, count) = flattenings(|| stops(path, 4, Some(40.0), 25.0));
+            let all = all.unwrap();
+            assert_eq!((all.len(), count), (4, 1));
+            for (i, s) in all.iter().enumerate() {
+                assert_eq!(flattenings(|| stop(path, 4, Some(40.0), 25.0, i)), (Some(*s), 1), "object {i}");
+            }
+            assert_eq!(flattenings(|| stop(path, 4, Some(40.0), 25.0, 4)), (None, 0), "an index past the last object");
+            assert_eq!(flattenings(|| stop(path, 0, None, 0.0, 0)), (None, 0), "no objects");
+        }
+        let point = shapes::line(Point::ZERO, Point::ZERO);
+        assert!(stops(&point, 2, None, 0.0).is_none() && stop(&point, 2, None, 0.0, 0).is_none());
+    }
+
+    #[test]
+    fn transforming_the_group_flattens_each_path_once() {
+        let a = rect(2, Rect::new(0.0, 0.0, 10.0, 10.0));
+        let b = rect(3, Rect::new(20.0, 0.0, 30.0, 10.0));
+        let level = shapes::line(Point::new(0.0, 0.0), Point::new(300.0, 0.0));
+        let stretch = Affine::scale_non_uniform(2.0, 1.0);
+        let wide = level.transformed(stretch);
+        let mut rec = ObjectsOnPath { spacing: Some(40.0), start: 10.0, ..ObjectsOnPath::new(NodeId(1), &[&a, &b], CENTER, 0.0) };
+        let ((), count) = flattenings(|| rec.transform(stretch, Some((&level, &wide))));
+        assert_eq!(count, 2, "the path before the transform and after it");
+        assert!((rec.start - 20.0).abs() < 1e-9 && (rec.spacing.unwrap() - 80.0).abs() < 1e-9, "{rec:?}");
+        let moved = level.transformed(Affine::translate((5.0, 5.0)));
+        let ((), count) = flattenings(|| rec.transform(Affine::translate((5.0, 5.0)), Some((&level, &moved))));
+        assert_eq!(count, 0, "a move leaves the distances along the path as they are");
+    }
+
+    #[test]
+    fn placing_the_objects_flattens_the_path_once() {
+        let line = Node::path(NodeId(1), shapes::line(Point::new(0.0, 100.0), Point::new(300.0, 100.0)), Default::default());
+        let (a, b) = (rect(2, Rect::new(0.0, 0.0, 10.0, 10.0)), rect(3, Rect::new(20.0, 0.0, 30.0, 10.0)));
+        let mut g = Node::new(NodeId(4), NodeKind::Group { children: vec![Arc::new(line), Arc::new(a.clone()), Arc::new(b.clone())], clip: false });
+        g.extras_mut().objects_on_path = Some(Box::new(ObjectsOnPath::new(NodeId(1), &[&a, &b], CENTER, 0.0)));
+        let empty = crate::Document::new(1.0, 1.0);
+        let symbols = empty.symbol_boxes();
+        assert_eq!(flattenings(|| place(&mut g, &symbols)), (true, 1));
+        let x = |id| g.children().and_then(|c| c.iter().find(|c| c.id == id).cloned()).unwrap().geometric_bounds().unwrap().center().x;
+        assert!((x(NodeId(2))).abs() < 1e-9 && (x(NodeId(3)) - 300.0).abs() < 1e-9, "{} {}", x(NodeId(2)), x(NodeId(3)));
+    }
+
+    /// A path whose length adds up past the largest finite number cannot be measured, so nothing
+    /// attaches to it.
+    #[test]
+    fn a_path_too_long_to_measure_is_not_attachable() {
+        let huge = Node::path(NodeId(1), shapes::line(Point::new(-1e308, 0.0), Point::new(1e308, 0.0)), Default::default());
+        let NodeKind::Path { path, .. } = &huge.kind else { panic!("a path") };
+        assert!(path_length(path).is_none() && stops(path, 2, None, 0.0).is_none());
+        assert!(attachable_path(&huge).is_none());
+        let square = rect(2, Rect::new(0.0, 0.0, 10.0, 10.0));
+        assert!(attachable_path(&square).is_some());
     }
 
     #[test]

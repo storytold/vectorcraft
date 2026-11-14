@@ -168,6 +168,8 @@ fn lines_of_clusters(lines: &[&[(usize, usize, f64)]], rtl: bool) -> TextLayout 
                 carets: Vec::new(),
                 width: advance,
                 width_start: 0.0,
+                warichu: None,
+                warichu_line: 0.0,
             });
             x += advance;
         }
@@ -176,6 +178,7 @@ fn lines_of_clusters(lines: &[&[(usize, usize, f64)]], rtl: bool) -> TextLayout 
             baseline,
             x0: 0.0,
             x1: x,
+            trailing: 0.0,
             ascent: 10.0,
             descent: 3.0,
             first_baseline: 0.0,
@@ -694,4 +697,171 @@ fn mixed_type_on_a_path_hangs_its_final_period() {
     let l = layout(FontDb::global(), &t);
     assert!(l.glyphs.iter().any(|g| g.byte == s.len() - 1), "the period shows");
     assert!(!l.overflow, "all of it fits");
+}
+
+/// `n` Hebrew letters on `path` from `start` to `end` (fractions of its length), one run each, the
+/// letter at `i` tracked so that it takes `steps[i % steps.len()]` points: what each takes with no
+/// tracking is measured first, and what each takes when tracked is checked.
+fn stepped_hebrew(db: &FontDb, n: usize, steps: &[f64], path: &BezPath, (start, end): (f64, Option<f64>)) -> TextObject {
+    let letters = ['א', 'ב', 'ג', 'ד'];
+    let style = CharStyle::default();
+    let mut t = TextObject::point(Point::ZERO, "", style.clone());
+    t.runs = (0..n).map(|i| TextRun { text: letters[i % letters.len()].to_string(), style: style.clone(), inline: None }).collect();
+    let long = kurbo::Line::new((0.0, 0.0), (100_000.0, 0.0)).to_path(0.1);
+    t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&long), start: 0.0, end: None };
+    let advances = |t: &TextObject| {
+        let l = layout(db, t);
+        assert!(!l.overflow);
+        let mut a: Vec<(usize, f64)> = l.glyphs.iter().map(|g| (g.byte, g.advance)).collect();
+        a.sort_by_key(|&(byte, _)| byte);
+        assert_eq!(a.len(), n, "one glyph per letter");
+        a.into_iter().map(|(_, adv)| adv).collect::<Vec<_>>()
+    };
+    let plain = advances(&t);
+    for (i, (run, adv)) in t.runs.iter_mut().zip(&plain).enumerate() {
+        run.style.tracking = (steps[i % steps.len()] - adv) / style.size * 1000.0;
+        assert!((-1000.0..=10000.0).contains(&run.style.tracking), "tracking {} is in the range commands allow", run.style.tracking);
+    }
+    for (i, adv) in advances(&t).into_iter().enumerate() {
+        assert!((adv - steps[i % steps.len()]).abs() < 1e-9, "letter {i} takes {adv}");
+    }
+    t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(path), start, end };
+    t
+}
+
+/// Right-to-left type on a path that overflows shows the longest start of its text whose glyphs
+/// fit, even where a shorter start doesn't fit: a letter tracked to take the line back (a negative
+/// step) lets a longer start fit than the one before it.
+#[test]
+fn overflowing_rtl_type_on_a_path_shows_the_longest_start_that_fits() {
+    use vectorcraft_doc::Justify;
+    let db = FontDb::with_font_dirs(vec![]);
+    // The span runs from x = 0 to x = 10, with path on both sides of it.
+    let line = kurbo::Line::new((-100.0, 0.0), (100.0, 0.0)).to_path(0.1);
+    let t = stepped_hebrew(&db, 4, &[6.0, 6.0, -3.0, 6.0], &line, (0.5, Some(0.55)));
+    // Letters 0 and 1 take 12 points, more than the span holds; letters 0 to 2 take 9 and fit:
+    // in visual order letter 2 (-3), then 1 and 0 (6 each). All four take 15.
+    for (justify, s0) in [(Justify::Right, 1.0), (Justify::Auto, 1.0), (Justify::Center, 0.5), (Justify::Left, 0.0)] {
+        let mut t = t.clone();
+        t.para.justify = justify;
+        let l = layout(&db, &t);
+        assert!(l.overflow, "{justify:?}");
+        assert_eq!(l.lines.first().map(|line| line.end), Some(6), "{justify:?}: the first three letters show");
+        assert_eq!(l.glyphs.len(), 3, "{justify:?}");
+        let x = |byte: usize| l.glyphs.iter().find(|g| g.byte == byte).map(|g| g.origin.x);
+        for (byte, at) in [(4, s0), (2, s0 - 3.0), (0, s0 + 3.0)] {
+            assert!(x(byte).is_some_and(|x| (x - at).abs() < 1e-6), "{justify:?}: letter at byte {byte} at {:?}, not {at}", x(byte));
+        }
+    }
+}
+
+/// The longest start that fits is the one found by arranging every start in turn, in mixed text
+/// whose letters take the line forward and back: with spaces and controls at the end of a start
+/// (UAX #9 L1), isolates, embeddings, several paragraphs and either base direction.
+#[test]
+fn the_longest_rtl_start_on_a_path_is_the_one_each_start_gives() {
+    use vectorcraft_doc::Justify;
+    let db = FontDb::with_font_dirs(vec![]);
+    let texts = [
+        "abc אבג de  שלום  ",
+        "שלום עולם, hello world 123 שלום  ",
+        "a \u{2067}אב \u{2069} cd אב  \u{2066}x ",
+        "אב גד\nef גה  \nשלום ab ",
+        "\u{202B}abc \u{202C} אב \u{200B} cd\u{0301} ",
+    ];
+    let tracking = [-900.0, 300.0, -400.0, 0.0, 800.0, -1000.0, 150.0];
+    let line = kurbo::Line::new((0.0, 0.0), (200.0, 0.0)).to_path(0.1);
+    let mut overflowed = 0;
+    for s in texts {
+        let style = CharStyle::default();
+        let mut t = TextObject::point(Point::ZERO, "", style.clone());
+        t.runs = s
+            .chars()
+            .enumerate()
+            .map(|(i, c)| TextRun { text: c.to_string(), style: CharStyle { tracking: tracking[i % tracking.len()], ..style.clone() }, inline: None })
+            .collect();
+        for direction in [None, Some(ParaDirection::RightToLeft), Some(ParaDirection::LeftToRight)] {
+            for justify in [Justify::Right, Justify::Center, Justify::Left, Justify::Auto] {
+                for end in (1..=25).map(|i| f64::from(i) * 0.02) {
+                    t.para.direction = direction;
+                    t.para.justify = justify;
+                    t.kind = TextKind::OnPath { path: vectorcraft_geom::PathData::from_bezpath(&line), start: 0.0, end: Some(end) };
+                    let (found, each) = (layout(&db, &t), crate::layout::layout_trying_each_start(&db, &t));
+                    let case = format!("{s:?} {direction:?} {justify:?} {end}");
+                    overflowed += usize::from(found.overflow);
+                    assert_eq!(found.overflow, each.overflow, "{case}");
+                    assert_eq!(found.lines.first().map(|l| l.end), each.lines.first().map(|l| l.end), "{case}");
+                    let placed = |l: &TextLayout| l.glyphs.iter().map(|g| (g.byte, g.origin.x)).collect::<Vec<_>>();
+                    assert_eq!(placed(&found), placed(&each), "{case}");
+                }
+            }
+        }
+    }
+    assert!(overflowed > 500, "{overflowed} of the layouts overflow");
+}
+
+/// Finding the longest start that fits in a long right-to-left text whose letters take the line
+/// back does not arrange the glyphs again for every start, nor for a search over them.
+#[test]
+fn the_longest_rtl_start_on_a_path_is_found_without_arranging_each_start() {
+    use vectorcraft_doc::Justify;
+    let db = FontDb::with_font_dirs(vec![]);
+    // Every 4 letters take 15 points, but 2 letters into a group the line is 3 points longer than
+    // after 3: with 940 points, 251 letters (939 points) fit and 250 (942) don't.
+    let line = kurbo::Line::new((0.0, 0.0), (940.0, 0.0)).to_path(0.1);
+    let t = stepped_hebrew(&db, 2000, &[6.0, 6.0, -3.0, 6.0], &line, (0.0, None));
+    let mut cases = Vec::new();
+    for justify in [Justify::Right, Justify::Center, Justify::Left] {
+        let mut t = t.clone();
+        t.para.justify = justify;
+        cases.push((format!("{justify:?}"), t.clone(), 2));
+        // Spacing on a straight path changes no step.
+        t.path_spacing = 5.0;
+        cases.push((format!("{justify:?} spaced"), t.clone(), 2));
+        // Hanging punctuation: starts are arranged one by one, from the longest that could fit.
+        t.path_spacing = 0.0;
+        t.para.roman_hanging = true;
+        cases.push((format!("{justify:?} hanging"), t, 3));
+    }
+    for (case, t, most) in cases {
+        let before = crate::layout::path_arrangements();
+        let l = layout(&db, &t);
+        let arrangements = crate::layout::path_arrangements() - before;
+        assert!(l.overflow, "{case}");
+        assert_eq!(l.lines.first().map(|line| line.end), Some(251 * 'א'.len_utf8()), "{case}: 251 letters show");
+        assert_eq!(l.glyphs.len(), 251, "{case}");
+        assert!(arrangements <= most, "{case}: {arrangements} arrangements");
+    }
+}
+
+/// Long right-to-left type on a curved, spaced path with hanging punctuation, whose letters take the
+/// line forward and back in turn, is arranged a bounded number of times however long the text is,
+/// and the start it shows fits.
+#[test]
+fn rtl_type_on_a_curve_whose_letters_take_the_line_back_is_arranged_a_bounded_number_of_times() {
+    use vectorcraft_doc::Justify;
+    let db = FontDb::with_font_dirs(vec![]);
+    let n = 600;
+    let circle = kurbo::Circle::new((0.0, 0.0), 200.0).to_path(0.1);
+    let t = stepped_hebrew(&db, n, &[6.0, -4.0], &circle, (0.0, Some(0.05)));
+    for justify in [Justify::Right, Justify::Left] {
+        for spacing in [20.0, -20.0] {
+            let mut t = t.clone();
+            t.para.justify = justify;
+            t.para.roman_hanging = true;
+            t.path_spacing = spacing;
+            let case = format!("{justify:?} spacing {spacing}");
+            let before = crate::layout::path_arrangements();
+            let l = layout(&db, &t);
+            let arrangements = crate::layout::path_arrangements() - before;
+            let end = l.lines.first().map_or(0, |line| line.end);
+            // The whole text, at most 32 starts one by one, a binary search over 600, and the start shown.
+            assert!(arrangements <= 44, "{case}: {arrangements} arrangements, overflow {}, end {end}", l.overflow);
+            assert!(l.overflow, "{case}");
+            assert!(end > 0, "{case}: some letters show");
+            assert_eq!(l.glyphs.len(), end / 'א'.len_utf8(), "{case}: every letter of the start shows");
+            let each = crate::layout::layout_trying_each_start(&db, &t);
+            assert!(end <= each.lines.first().map_or(0, |line| line.end), "{case}: no start longer than the longest that fits");
+        }
+    }
 }

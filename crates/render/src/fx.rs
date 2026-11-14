@@ -70,16 +70,20 @@ mod renderer;
 
 #[cfg(test)]
 pub(crate) use bounds::visual_bounds;
-pub(crate) use bounds::{cull_bounds, drawn_outline, painted_reach, path_cull_bounds};
+pub(crate) use bounds::{
+    brushed_cull_bounds, cull_bounds, drawn_outline, drawn_outlines, painted_brush_width, painted_cull_bounds, painted_reach, path_cull_bounds,
+    three_d_art_bounds, with_own_raster_reach,
+};
 #[cfg(test)]
 pub(crate) use entries::Drawn;
-pub(crate) use entries::{DocInputs, FxGeom, Reads, ShadowEntry};
+pub(crate) use entries::{DocInputs, FxGeom, Inputs, Reads, ShadowEntry};
+pub(crate) use pixels::paint_names;
 pub(crate) use predicates::{has_fx, has_object_fx};
-pub(crate) use raster::PixelEntry;
 #[cfg(test)]
 pub(crate) use raster::RASTERIZED;
 #[cfg(test)]
-use raster::{DRAG_PIXEL_BUDGET, PIXEL_BUDGET, drag_scale, filter_region, filter_region_within, pan_margin};
+use raster::{DRAG_PIXEL_BUDGET, drag_scale, filter_region, filter_region_within, pan_margin};
+pub(crate) use raster::{PIXEL_BUDGET, PixelEntry, linear_key};
 
 #[cfg(test)]
 mod tests;

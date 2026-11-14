@@ -1,7 +1,7 @@
 use super::{
     Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, Paint, PathData, Point,
-    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, id_param, ids_json,
-    is_live_paint, json, number_or, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint,
+    json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -52,8 +52,34 @@ fn make_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result<
     Ok((gid, nf, ne))
 }
 
+/// Select `ids` alone, without an undo step, when they are not selected that way already.
+fn select_only(s: &mut Session, ids: &[NodeId]) -> Result<()> {
+    let st = s.doc()?;
+    let mut sel = st.selection.clone();
+    sel.set(ids.iter().copied());
+    if sel != st.selection {
+        s.select(|_, selection| *selection = sel)?;
+    }
+    Ok(())
+}
+
+/// Make or Merge given one Live Paint group and nothing else has nothing to add to it, so it leaves
+/// the document as it is, records no undo step and selects the group: → its reply. `None` for any
+/// other `roots`.
+fn lone_live_group(s: &mut Session, roots: &[NodeId]) -> Result<Option<Value>> {
+    let d = &s.doc()?.doc;
+    let Some(&g) = roots.first().filter(|g| roots.iter().all(|r| r == *g)) else { return Ok(None) };
+    let Some(n) = d.node(g).filter(|n| is_live_paint(n)) else { return Ok(None) };
+    let reply = json!({ "id": g.0, "faces": b::faces(n).len(), "edges": b::edges(n).len() });
+    select_only(s, &[g])?;
+    Ok(Some(reply))
+}
+
 pub(super) fn lp_make(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = root_ids(s, p)?;
+    if let Some(reply) = lone_live_group(s, &roots)? {
+        return Ok(reply);
+    }
     let (id, faces, edges) = s.edit("Make Live Paint", |d, sel| make_live(d, sel, &roots))?;
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
@@ -130,6 +156,9 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
 
 pub(super) fn lp_merge(s: &mut Session, p: &Value) -> Result<Value> {
     let roots = root_ids(s, p)?;
+    if let Some(reply) = lone_live_group(s, &roots)? {
+        return Ok(reply);
+    }
     let (id, faces, edges) = s.edit("Merge Live Paint", |d, sel| merge_live(d, sel, &roots))?;
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
@@ -230,27 +259,58 @@ pub(super) fn lp_gap_options(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let close = switch_or(p, "closeGaps", false, C)?;
     let targets = live_targets(s, p)?;
+    let with_params = |mut options: GapOptions| {
+        options.detect = detect.unwrap_or(options.detect);
+        options.size = size.unwrap_or(options.size);
+        options.color = color.unwrap_or(options.color);
+        options
+    };
+    // When every group already has these options and Close Gaps With Paths has no gap to close,
+    // nothing changes: no undo step, and the reply is the same.
+    let unchanged = {
+        let d = &s.doc()?.doc;
+        let (mut faces, mut gaps, mut same) = (0, vec![], true);
+        for g in &targets {
+            let old = d.node(*g).ok_or(EngineError::NoNode(*g))?;
+            let options = old.gap_options();
+            if with_params(options) != options {
+                same = false;
+                break;
+            }
+            let open = open_gaps(old, options);
+            if close && !open.is_empty() {
+                same = false;
+                break;
+            }
+            faces += b::faces(old).len();
+            gaps.extend(open);
+        }
+        same.then_some((faces, gaps))
+    };
+    if let Some((faces, gaps)) = unchanged {
+        select_only(s, &targets)?;
+        return Ok(json!({ "ids": ids_json(&targets), "faces": faces, "gaps": gaps_json(&gaps), "closed": 0 }));
+    }
     let (faces, gaps, closed) = s.edit("Gap Options", |d, sel| {
         let (mut faces, mut gaps, mut closed) = (0, vec![], 0);
         let mut changed = Beside::replacing(d, &targets);
         for g in &targets {
             let old = d.node(*g).cloned().ok_or(EngineError::NoNode(*g))?;
-            let mut options = old.gap_options();
-            options.detect = detect.unwrap_or(options.detect);
-            options.size = size.unwrap_or(options.size);
-            options.color = color.unwrap_or(options.color);
+            let options = with_params(old.gap_options());
             let mut sources = source_nodes(&old);
+            let mut added = 0;
             if close {
                 // Close Gaps With Paths adds an unpainted line across each gap to the group's paths.
                 for gap in po::find_gaps(&source_shapes(&sources).0, options.size.points()) {
                     let line = PathData::single(SubPath::polyline(&gap, false));
                     sources.push(Arc::new(Node::path(d.alloc_id(), line, Appearance::default())));
-                    closed += 1;
+                    added += 1;
                 }
             }
+            closed += added;
             let mut n = old.clone();
             // The faces change only with what paint stops at, or with new paths.
-            if close || options.max_gap() != old.gap_options().max_gap() {
+            if added > 0 || options.max_gap() != old.gap_options().max_gap() {
                 let (children, _, _) = build_children(d, sources, options.max_gap())?;
                 if let Some(ch) = n.children_mut() {
                     *ch = children;
@@ -272,39 +332,123 @@ pub(super) fn lp_gap_options(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "livePaint.fill";
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
+    let parse_chunk = |input: &Value, start: Point| -> Result<Vec<Point>> {
+        let values = input
+            .as_array()
+            .filter(|points| !points.is_empty() && points.len() <= b::LP_FILL_CHUNK_POINTS)
+            .ok_or_else(|| bad(C, "each path chunk must contain 1 to 4096 points"))?;
+        let points: Vec<_> = values
+            .iter()
+            .map(|point| {
+                let pair = point.as_array().filter(|pair| pair.len() == 2).ok_or_else(|| bad(C, "points must be [x,y] pairs"))?;
+                let x = pair.first().and_then(Value::as_f64).ok_or_else(|| bad(C, "point x must be a number"))?;
+                let y = pair.get(1).and_then(Value::as_f64).ok_or_else(|| bad(C, "point y must be a number"))?;
+                let point = Point::new(x, y);
+                if !finite(point) {
+                    return Err(bad(C, "points must be finite canvas points"));
+                }
+                Ok(point)
+            })
+            .collect::<Result<_>>()?;
+        if points.first() != Some(&start) {
+            return Err(bad(C, "path chunks must share their boundary point"));
+        }
+        Ok(points)
+    };
+    let points = p.get("points");
+    let continuation = match p.get("continuation") {
+        None => &[][..],
+        Some(input) if points.is_some() => input.as_array().ok_or_else(|| bad(C, "continuation must be an array of path chunks"))?.as_slice(),
+        Some(_) => return Err(bad(C, "continuation requires points")),
+    };
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.fill.clone());
-    let group = id_param(p, "group");
+    let group = object_param(p, "group", C)?;
     let roots = if group.is_none() { root_ids(s, p)? } else { vec![] };
-    let (g, face) = s.edit("Live Paint Bucket", |d, sel| {
-        let gid = match group {
+    // The faces the click or drag paints in Live Paint group `gid`: the visible face at the point,
+    // and every visible face the drag crosses; → (the face at the point, the faces).
+    let targets_in = |d: &Document, gid: NodeId| -> Result<(NodeId, std::collections::BTreeSet<NodeId>)> {
+        let fid = d
+            .node(gid)
+            .and_then(|n| b::visible_face_at(n, pt))
+            .map(|f| f.id)
+            .ok_or_else(|| EngineError::Other("no Live Paint face at that point".into()))?;
+        let mut targets = std::collections::BTreeSet::from([fid]);
+        if let Some(points) = points {
+            let n = d.node(gid).ok_or(EngineError::NoNode(gid))?;
+            // Use the existing region-crossing probes, so even a face narrower than the distance
+            // between pointer events is filled. Reversing matches visible_face_at's front first.
+            let faces: Vec<_> = b::faces(n).into_iter().rev().filter(|f| f.visible).collect();
+            let mut face_ids = vec![];
+            let mut regions = vec![];
+            for f in faces {
+                if let Some(path) = f.path_data()
+                    && let Some(bounds) = path.bounds()
+                {
+                    face_ids.push(f.id);
+                    regions.push((po::Region { path: path.clone(), sources: vec![] }, path.to_bezpath(), bounds));
+                }
+            }
+            let map = b::BuilderMap { regions, ..Default::default() };
+            let mut last = pt;
+            for input in std::iter::once(points).chain(continuation) {
+                let chunk = parse_chunk(input, last)?;
+                last = chunk.last().copied().unwrap_or(last);
+                targets.extend(map.hits_along(&chunk, None).regions.iter().filter_map(|i| face_ids.get(*i).copied()));
+            }
+        }
+        Ok((fid, targets))
+    };
+    // The Live Paint group the fill paints; `None` when the objects are made into one first.
+    let live = {
+        let d = &s.doc()?.doc;
+        match group {
             Some(g) => {
                 if !d.node(g).is_some_and(is_live_paint) {
                     return Err(bad(C, format!("{g} is not a Live Paint group")));
                 }
-                g
+                Some(g)
             }
             None => {
                 let live_at = |face: fn(&Node, Point) -> Option<&Arc<Node>>| {
                     roots.iter().copied().find(|r| d.node(*r).is_some_and(|n| is_live_paint(n) && face(n, pt).is_some()))
                 };
                 match (live_at(b::visible_face_at), live_at(face_at)) {
-                    (Some(g), _) => g,
+                    (Some(g), _) => Some(g),
                     // At a point on a hidden face of a Live Paint group among the objects, the command returns an error
                     // and does not merge the objects.
                     (None, Some(_)) => return Err(EngineError::Other("no Live Paint face at that point".into())),
-                    (None, None) => make_live(d, sel, &roots)?.0,
+                    (None, None) => None,
                 }
             }
-        };
-        let fid = d
-            .node(gid)
-            .and_then(|n| b::visible_face_at(n, pt))
-            .map(|f| f.id)
-            .ok_or_else(|| EngineError::Other("no Live Paint face at that point".into()))?;
-        d.node_mut(fid).ok_or(EngineError::NoNode(fid))?.appearance.set_fill(paint.clone());
-        Ok((gid, fid))
-    })?;
+        }
+    };
+    let (g, face) = match live {
+        Some(gid) => {
+            let (fid, targets) = targets_in(&s.doc()?.doc, gid)?;
+            // Faces that already have the paint stay as they are: when every face has it, nothing
+            // changes and no undo step is recorded.
+            let d = &s.doc()?.doc;
+            let unpainted: Vec<NodeId> = targets.into_iter().filter(|t| d.node(*t).is_none_or(|f| f.appearance.fill_paint() != paint)).collect();
+            if unpainted.is_empty() {
+                return Ok(json!({ "group": gid.0, "face": fid.0 }));
+            }
+            s.edit("Live Paint Bucket", |d, _| {
+                for target in unpainted {
+                    d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance.set_fill(paint.clone());
+                }
+                Ok((gid, fid))
+            })?
+        }
+        None => s.edit("Live Paint Bucket", |d, sel| {
+            let gid = make_live(d, sel, &roots)?.0;
+            let (fid, targets) = targets_in(d, gid)?;
+            for target in targets {
+                d.node_mut(target).ok_or(EngineError::NoNode(target))?.appearance.set_fill(paint.clone());
+            }
+            Ok((gid, fid))
+        })?,
+    };
     s.remember_paint(&paint);
     Ok(json!({ "group": g.0, "face": face.0 }))
 }
@@ -312,7 +456,7 @@ pub(super) fn lp_fill(s: &mut Session, p: &Value) -> Result<Value> {
 pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "livePaint.strokeEdge";
     let pt = point_param(p, "point").filter(|q| finite(*q)).ok_or_else(|| bad(C, "missing point [x,y]"))?;
-    let g = id_param(p, "group").ok_or_else(|| bad(C, "missing group"))?;
+    let g = object_param(p, "group", C)?.ok_or_else(|| bad(C, "missing group"))?;
     crate::cmd::paint::check_keep_model(p, C)?;
     let paint = paint_from(s, p)?.unwrap_or_else(|| s.paint.stroke.clone());
     let width = number_or(p, "width", s.paint.stroke_width.max(0.0), C)?;
@@ -320,9 +464,22 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "width out of range"));
     }
     let tol = number_or(p, "tolerance", 4.0, C)?.clamp(0.0, 1000.0);
-    let edge = s.edit("Live Paint Bucket", |d, _| {
+    let (eid, unchanged) = {
+        let d = &s.doc()?.doc;
         let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad(C, format!("{g} is not a Live Paint group")))?;
-        let eid = b::visible_edge_near(n, pt, tol).map(|e| e.id).ok_or_else(|| EngineError::Other("no Live Paint edge near that point".into()))?;
+        let e = b::visible_edge_near(n, pt, tol).ok_or_else(|| EngineError::Other("no Live Paint edge near that point".into()))?;
+        // An edge that already has the paint and the width (or has no stroke and gets none) stays as
+        // it is, and no undo step is recorded.
+        let unchanged = match e.appearance.stroke() {
+            Some(st) => st.paint == paint && st.width == width,
+            None => paint.is_none(),
+        };
+        (e.id, unchanged)
+    };
+    if unchanged {
+        return Ok(json!({ "group": g.0, "edge": eid.0 }));
+    }
+    let edge = s.edit("Live Paint Bucket", |d, _| {
         let e = d.node_mut(eid).ok_or(EngineError::NoNode(eid))?;
         e.appearance.set_stroke(paint.clone());
         if let Some(st) = e.appearance.stroke_mut() {
@@ -335,7 +492,10 @@ pub(super) fn lp_stroke_edge(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 pub(super) fn lp_info(s: &mut Session, p: &Value) -> Result<Value> {
-    let g = id_param(p, "group").or_else(|| id_param(p, "id")).ok_or_else(|| bad("livePaint.info", "missing group"))?;
+    let g = match object_param(p, "group", "livePaint.info")? {
+        Some(g) => g,
+        None => object_param(p, "id", "livePaint.info")?.ok_or_else(|| bad("livePaint.info", "missing group"))?,
+    };
     let d = &s.doc()?.doc;
     let n = d.node(g).filter(|n| is_live_paint(n)).ok_or_else(|| bad("livePaint.info", format!("{g} is not a Live Paint group")))?;
     let faces: Vec<Value> = b::faces(n)

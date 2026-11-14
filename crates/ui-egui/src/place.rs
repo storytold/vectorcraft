@@ -33,6 +33,9 @@ pub type PlaceInbox = Arc<Mutex<Vec<PlaceArrival>>>;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DropAt {
     pub doc: u64,
+    /// The document's [`vectorcraft_engine::DocState::reverts`] at the drop: files that arrive
+    /// after File → Revert threw that content away are not placed.
+    pub reverts: u64,
     pub at: Point,
     pub embed: bool,
 }
@@ -444,18 +447,18 @@ impl VectorcraftApp {
     /// onto the canvas of the open document (Shift embeds it), else opened. Where the platform
     /// doesn't say (`None`: desktop drags carry no position), a document opens as a tab of its
     /// own and a picture or text is placed in the middle of the view. A library, a presets file, a
-    /// plug-in, a shortcut set or a script opens wherever it is dropped, as File → Open opens it
-    /// ([`io::opens_as`]).
+    /// plug-in, a shortcut set, a script or a file only an importer plug-in reads opens wherever it
+    /// is dropped, as File → Open opens it ([`io::opens_as`], [`fileio::opens_with_importer`]).
     pub fn drop_target(&self, name: &str, pos: Option<egui::Pos2>, shift: bool) -> DropTarget {
         let (Some(rect), Some(st), Some(v)) = (self.canvas_rect, self.session.active(), self.view()) else { return DropTarget::Open };
         let at = match pos {
-            _ if io::opens_as(name).is_some() => return DropTarget::Open,
+            _ if io::opens_as(name).is_some() || fileio::opens_with_importer(name) => return DropTarget::Open,
             Some(p) if !rect.contains(p) => return DropTarget::Open,
-            Some(p) => crate::canvas::Xf::new(rect, v).to_doc(p),
+            Some(p) => crate::canvas::Xf::at(rect, v, self.canvas_ui_zoom).to_doc(p),
             None if is_document(name) => return DropTarget::Open,
             None => v.center,
         };
-        DropTarget::Place(DropAt { doc: st.uid, at, embed: shift })
+        DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift })
     }
 }
 
@@ -473,7 +476,7 @@ pub type DropFile = (String, Option<String>, Vec<u8>);
 /// Files dropped on the window, each placed on a canvas or opened (and added to Open Recent
 /// Files) as its target says: the placed ones first, so the last document opened is the one
 /// shown. A file for a canvas goes to the document it was dropped on, which becomes active again;
-/// it isn't placed when that document has closed since.
+/// it isn't placed when that document has closed or been reverted since.
 pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile)>) {
     files.sort_by_key(|(target, _)| *target == DropTarget::Open);
     for (target, (name, path, bytes)) in files {
@@ -482,6 +485,10 @@ pub fn drop_files(app: &mut VectorcraftApp, mut files: Vec<(DropTarget, DropFile
                 app.status(format!("Couldn't place {name}: the document it was dropped on was closed"));
                 continue;
             };
+            if app.session.documents().get(i).is_some_and(|st| st.reverts != d.reverts) {
+                app.status(format!("Couldn't place {name}: the document it was dropped on was reverted"));
+                continue;
+            }
             app.session.set_active(i);
         }
         let r = match target {
@@ -577,8 +584,8 @@ pub fn image_summary(i: &Value) -> (String, String) {
 }
 
 /// The Control bar for the one selected image: Linked File or Embedded, its file name, colour mode
-/// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask and
-/// Crop Image. Whether one image is selected.
+/// and effective resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask,
+/// Crop Image and Remove Background. Whether one image is selected.
 pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
@@ -595,12 +602,16 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
     ui.separator();
     link_buttons(app, ui, id, linked, &name, None);
     crate::panels::image_trace::trace_button(app, ui, crate::panels::image_trace::TRACE_BUTTON_W);
-    for (label, cmd, w) in [(tl!("Mask"), "object.maskImage", 52.0), (tl!("Crop Image"), "ui.cropImage", 84.0)] {
+    for (label, cmd, w) in [
+        (tl!("Mask"), "object.maskImage", 52.0),
+        (tl!("Crop Image"), "ui.cropImage", 84.0),
+        (tl!("Remove Background"), crate::addons::image::REMOVE_BACKGROUND, 128.0),
+    ] {
         if widgets::flat_button(ui, label, w).clicked() {
             crate::menus::invoke(app, cmd, json!({}));
         }
     }
-    ui.separator();
+    crate::chrome::group_separator(ui);
     true
 }
 

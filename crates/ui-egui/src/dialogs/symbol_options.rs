@@ -4,7 +4,8 @@
 //! (`symbol.options`).
 //!
 //! Fields: `name`, `nineSlice` (bool) with `sliceLeft` / `sliceTop` / `sliceRight` / `sliceBottom`
-//! (percent of the symbol's size), `exportType` (`movieClip` | `graphic`), `type` (`dynamic` |
+//! (percent of the symbol's size, -1600..1600: below 0 or above 100 for a guide outside the art),
+//! `exportType` (`movieClip` | `graphic`), `type` (`dynamic` |
 //! `static`; a new symbol is dynamic), `registration` (0..8, the 9-point grid;
 //! 4 = centre), `__edit` (true when editing an existing symbol). Help:
 //! <https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-and-place-symbols.html>.
@@ -26,20 +27,39 @@ const SLICE_KEYS: [&str; 4] = ["sliceLeft", "sliceTop", "sliceRight", "sliceBott
 /// A guide field's value when the dialog has none: a quarter of the symbol's size, in percent.
 const DEFAULT_SLICE_PERCENT: f64 = 25.0;
 
-/// The 9-slice dialog fields for `guides` (percent of the symbol's size; a quarter each when off).
+/// The field that keeps the guides the dialog opened with, as fractions, in `[left, top, right,
+/// bottom]` order.
+const SLICE_OPENED: &str = "__sliceOpened";
+
+/// The range of a guide field, in percent: a guide may lie outside the art, up to
+/// [`vectorcraft_doc::MAX_GUIDE_FRACTION`] times its size from its edge.
+const SLICE_PERCENT_RANGE: std::ops::RangeInclusive<f64> = -vectorcraft_doc::MAX_GUIDE_FRACTION * 100.0..=vectorcraft_doc::MAX_GUIDE_FRACTION * 100.0;
+
+/// The 9-slice dialog fields for `guides` (percent of the symbol's size, unrounded; a quarter each
+/// when off).
 fn slice_fields(guides: Option<vectorcraft_doc::SymbolNineSlice>) -> Map<String, Value> {
     let g = guides.unwrap_or_default();
     let mut m = Map::new();
     m.insert("nineSlice".into(), json!(guides.is_some()));
-    for (key, v) in SLICE_KEYS.iter().zip([g.left, g.top, g.right, g.bottom]) {
-        m.insert((*key).to_string(), json!((v * 100.0).round()));
+    let opened = [g.left, g.top, g.right, g.bottom];
+    for (key, v) in SLICE_KEYS.iter().zip(opened) {
+        m.insert((*key).to_string(), json!(v * 100.0));
     }
+    m.insert(SLICE_OPENED.into(), json!(opened));
     m
 }
 
-/// The guides the dialog's fields describe, as the `nineSlice` / `nineSliceGuides` params.
+/// The guides the dialog's fields describe, as the `nineSlice` / `nineSliceGuides` params. A field
+/// still showing the guide it opened with gives that guide exactly.
 fn slice_params(d: &Dialog) -> Value {
-    let [l, t, r, b] = SLICE_KEYS.map(|key| d.f64(key, DEFAULT_SLICE_PERCENT) / 100.0);
+    let opened = d.fields.get(SLICE_OPENED).and_then(Value::as_array);
+    let [l, t, r, b] = std::array::from_fn(|i| {
+        let percent = d.f64(SLICE_KEYS[i], DEFAULT_SLICE_PERCENT);
+        match opened.and_then(|a| a.get(i)).and_then(Value::as_f64) {
+            Some(g) if g * 100.0 == percent => g,
+            _ => percent / 100.0,
+        }
+    });
     if d.bool("nineSlice") { json!({ "nineSlice": true, "nineSliceGuides": [l, t, r, b] }) } else { json!({ "nineSlice": false }) }
 }
 
@@ -123,7 +143,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
         ui.end_row();
         label(ui, tl!("Registration:"));
         let cur = d.fields.get("registration").and_then(Value::as_u64).unwrap_or(4) as usize;
-        if let Some(i) = widgets::reference_point(ui, cur) {
+        if let Some(i) = widgets::reference_point_named(ui, cur, tl!("Registration:")) {
             d.fields.insert("registration".into(), json!(i));
         }
         ui.end_row();
@@ -134,7 +154,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
             for (key, text) in SLICE_KEYS.into_iter().zip([tl!("Left:"), tl!("Top:"), tl!("Right:"), tl!("Bottom:")]) {
                 label(ui, text);
                 let v = d.f64(key, DEFAULT_SLICE_PERCENT);
-                if let Some(n) = widgets::range_field(ui, ("dlg-field", key), v, 0.0..=100.0, "%", 0, 64.0) {
+                if let Some(n) = widgets::range_field(ui, ("dlg-field", key), v, SLICE_PERCENT_RANGE, "%", 3, 64.0) {
                     d.fields.insert(key.into(), json!(n));
                 }
                 ui.end_row();

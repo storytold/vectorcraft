@@ -80,6 +80,14 @@ fn in_screen_mode(ctx: &egui::Context, mode: u8) -> VectorcraftApp {
     app
 }
 
+/// A point on the empty canvas, low enough to miss the Contextual Task Bar under the selection
+/// (on a narrow canvas its actions wrap onto more rows and can reach the canvas's center).
+fn open_canvas_point(app: &VectorcraftApp, ctx: &egui::Context) -> egui::Pos2 {
+    let p = app.canvas_rect.unwrap().lerp_inside(egui::vec2(0.5, 0.85));
+    assert!(crate::canvas::task_bar_rect(ctx).is_none_or(|bar| !bar.expand(40.0).contains(p)), "the task bar covers {p:?}");
+    p
+}
+
 fn begin_tools_move(app: &mut VectorcraftApp, ctx: &egui::Context) -> (Option<[f32; 2]>, egui::Pos2) {
     app.run("window.panel.float", json!({"panel": "tools", "x": 120, "y": 140})).unwrap();
     frame(app, ctx, vec![]);
@@ -241,7 +249,7 @@ fn navigation_drag_keeps_screen_mode(kind: &str) {
             _ => panic!("unknown navigation drag"),
         };
         frame(&mut app, &ctx, vec![]);
-        let start = app.canvas_rect.unwrap().center();
+        let start = open_canvas_point(&app, &ctx);
         let end = start + egui::vec2(35.0, 20.0);
         let pointer = |pos, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
         frame(&mut app, &ctx, vec![egui::Event::PointerMoved(start), pointer(start, true)]);
@@ -551,7 +559,7 @@ fn held_escape_that_cancels_a_dialog_or_leaves_presentation_skips_a_command_boun
 fn a_popup_takes_escape_before_full_screen_exits() {
     let ctx = egui::Context::default();
     let mut app = in_screen_mode(&ctx, 2);
-    let pos = app.canvas_rect.unwrap().center();
+    let pos = open_canvas_point(&app, &ctx);
     let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos), button(true)]);
     frame(&mut app, &ctx, vec![button(false)]);
@@ -677,7 +685,7 @@ fn a_tool_flyout_takes_escape_before_full_screen() {
 }
 
 #[test]
-fn a_rotation_pair_exits_full_screen_then_resets_with_selection_tool() {
+fn escape_exits_full_screen_then_resets_the_rotation_with_selection_tool() {
     for mode in [1, 2] {
         let ctx = egui::Context::default();
         let mut app = in_screen_mode(&ctx, mode);
@@ -686,7 +694,7 @@ fn a_rotation_pair_exits_full_screen_then_resets_with_selection_tool() {
         assert_eq!(app.ui.screen_mode, 0, "first Escape in mode {mode}");
         assert_eq!(app.view().unwrap().rotation, 30.0);
         frame(&mut app, &ctx, escape());
-        assert_eq!(app.view().unwrap().rotation, 0.0, "second Escape after mode {mode}");
+        assert_eq!(app.view().unwrap().rotation, 0.0, "the next Escape after mode {mode}");
     }
 }
 

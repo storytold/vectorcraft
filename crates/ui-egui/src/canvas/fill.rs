@@ -95,6 +95,8 @@ pub(super) fn fill_uncovered(
         let (_, _, view) = fill_view(&done.key);
         app.canvas.fill = Some(Fill { key: done.key, view, size: (fw, fh), tex });
     }
+    let effects = app.session.documents().iter().find(|d| d.uid as usize == key.doc).map(|d| d.plugin_effects.clone()).unwrap_or_default();
+    let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
     let Some(worker) = app.canvas.fill_worker.as_mut().filter(|_| !gaps.is_empty()) else { return };
     if !app.canvas.fill.as_ref().is_some_and(|f| covers(&f.key)) && !worker.pending.as_ref().is_some_and(covers) {
         let (w, h, view) = fill_view(key);
@@ -106,6 +108,10 @@ pub(super) fn fill_uncovered(
             view,
             opts,
             scope: vectorcraft_engine::file_access::ScopeHandle::capture(),
+            effects,
+            may_copy: false,
+            may_keep: false,
+            display,
         });
     }
     let Some(f) = app.canvas.fill.as_ref().filter(|f| usable(&f.key)) else { return };

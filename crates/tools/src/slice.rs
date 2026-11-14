@@ -41,9 +41,9 @@ fn has_area(r: Rect) -> bool {
 fn snap(cx: &ToolContext, p: Point) -> (Point, Vec<Overlay>) {
     let (mut q, ov) = crate::guides::snap_draw(cx, p, &[]);
     let tol = cx.tol(5.0);
+    let guides = cx.doc.ruler_guides();
     let nearest = |vertical: bool, v: f64| {
-        cx.doc
-            .guides
+        guides
             .iter()
             .filter(|g| g.vertical == vertical && (g.pos - v).abs() <= tol && cx.doc.guide_shown(g) && cx.doc.guide_passes(g, p, tol))
             .min_by(|a, b| (a.pos - v).abs().total_cmp(&(b.pos - v).abs()))
@@ -161,7 +161,7 @@ struct ResizeSnap {
 
 impl ResizeSnap {
     fn new(cx: &ToolContext) -> Self {
-        Self { art: PointSnap::new(cx, || Targets::collect(cx.doc, &[], None)), rulers: Targets::rulers(cx) }
+        Self { art: PointSnap::scaling(cx, || Targets::collect(cx.doc, &[], None)), rulers: Targets::rulers(cx) }
     }
 
     /// Snap the resize `a` ([`scale_for_drag`]) of the slice `rect` by `handle` as [`snap`] snaps
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn the_slice_tool_drags_out_a_slice_in_one_undo_step() {
         let (mut d, _) = doc_with_rect();
-        d.guides.push(Guide::new(true, 403.0));
+        d.add_ruler_guide(&Guide::new(true, 403.0));
         let s = Selection::default();
         let p = paint();
         let mut c = cx(&d, &s, &p);
@@ -557,7 +557,7 @@ mod tests {
         assert!(near(resize(&neither, (60.0, 25.0), (97.0, 25.0), none), Rect::new(10.0, 10.0, 97.0, 40.0)));
         // A ruler guide at x = 98 takes the side dragged 1 px from it, over the rectangle's edge
         // 1 px the other way, with Smart Guides on or off.
-        d.guides.push(Guide::new(true, 98.0));
+        d.add_ruler_guide(&Guide::new(true, 98.0));
         for c in [cx(&d, &sel, &p), ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &sel, &p) }] {
             assert!(near(resize(&c, (60.0, 25.0), (99.0, 25.0), none), Rect::new(10.0, 10.0, 98.0, 40.0)));
         }

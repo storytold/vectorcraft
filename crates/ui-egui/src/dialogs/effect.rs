@@ -24,8 +24,39 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
     preview: true,
     // Load Texture… adds the texture it reads.
     passes: |d, field| field == vectorcraft_effects::pixel::TEXTURE_IMAGE && matches!(d.str("__effect").as_str(), GLASS | TEXTURIZER),
+    // OK could only fail the same way: off, beside the reason the dialog shows (#6140).
+    ok_enabled: Some(|_, d| !(vectorcraft_effects::is_three_d(&d.str("__effect")) && d.fields.contains_key(form::REFUSED))),
     ..DialogSpec::FORM
 };
+
+/// The field holding the values a 3D effect's dialog last tried with Preview off.
+const TRIED: &str = "__tried";
+
+/// A 3D effect refuses objects it can't build from and values it can't draw, in the dialog as OK
+/// would: shows why under Preview (#6140). With Preview off no preview has tried `params`, so they
+/// are tried here, when they change, and rolled back at once.
+fn three_d_refusal(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog, cmd: &str, params: Value) {
+    if d.bool("preview") {
+        d.fields.remove(TRIED);
+    } else if !app.session.in_interaction() && d.fields.get(TRIED) != Some(&params) {
+        // Waits for another interaction to end: trying inside it would replace its preview and
+        // cancel it. A failure to begin leaves no interaction: the preview below then reports it.
+        let _ = app.session.begin_interaction(&d.str("__label"));
+        match app.session.preview(cmd, &params) {
+            Ok(_) => {
+                d.fields.remove(form::REFUSED);
+            }
+            Err(e) => form::note_refusal(d, &e),
+        }
+        // Only a try: without an interaction there is nothing to roll back.
+        let _ = app.session.cancel_interaction();
+        d.fields.insert(TRIED.into(), params);
+    }
+    if let Some(why) = d.fields.get(form::REFUSED).and_then(Value::as_str) {
+        ui.add_space(6.0);
+        ui.add(egui::Label::new(egui::RichText::new(why).color(Tokens::get(ui.ctx()).warning)).wrap());
+    }
+}
 
 /// The effect's name (`__label`, English) in the UI language: the catalog may carry it with or
 /// without its trailing ellipsis. A plug-in effect's name is shown as it is.
@@ -64,6 +95,10 @@ pub(super) const EXISTS_SPEC: DialogSpec = DialogSpec {
 /// or add `effect`, first asking when that list already has it.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("effect").and_then(Value::as_str).unwrap_or_default();
+    // An SVG filter is chosen and edited in Apply SVG Filter.
+    if id == vectorcraft_effects::SVG_FILTER {
+        return super::svg_filter::open(app, p);
+    }
     let info = vectorcraft_effects::effect_info(id).ok_or_else(|| format!("unknown effect `{id}`"))?;
     // The list the effect goes to: `item` as given, else the active item's (the object's without
     // one). A new effect keeps `item` unresolved, so `effect.apply` targets each object as usual.
@@ -166,7 +201,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     if vectorcraft_effects::is_three_d(&id) {
         super::revolve::body(app, ui, d);
         let (cmd, params) = command(d);
-        form::preview(app, ui, d, &d.str("__label"), cmd, params);
+        form::preview(app, ui, d, &d.str("__label"), cmd, params.clone());
+        three_d_refusal(app, ui, d, cmd, params);
         return false;
     }
     // Plug-in effects get fields from their parameter schema; colour adjustments their sliders.
@@ -346,15 +382,29 @@ fn choices(effect: &str, key: &str) -> Option<form::Choices> {
 
 /// The parameters whose dialogs list their values in their own bodies, as (label, value), each
 /// label as that dialog passes it to its dropdown or radio buttons, which translate it into the UI
-/// language: Revolve's edge, Extrude & Bevel's bevel (Rounded translated in the "3d" context
-/// first), every Warp style's orientation, Rasterize's Color Model (its `document` value labeled
+/// language: the edge of both Revolves, the bevel of both Extrude & Bevels (Rounded translated in
+/// the "3d" context first), the surface and shading color of the classic 3D effects, every Warp style's
+/// orientation, Rasterize's Color Model (its `document` value labeled
 /// CMYK when `cmyk`, for a document in CMYK, and RGB otherwise), Background and Anti-aliasing, and
 /// the channel of Levels and Curves.
 pub(super) fn own_choices(effect: &str, key: &str, cmyk: bool) -> Option<Vec<(&'static str, &'static str)>> {
     let c3 = |s: &'static str| crate::i18n::tr_ctx(crate::i18n::current(), "3d", s);
     Some(match (effect, key) {
-        (vectorcraft_effects::REVOLVE, "edge") => vec![(tl!("Left"), "left"), (tl!("Right"), "right")],
-        (vectorcraft_effects::EXTRUDE, "bevel") => vec![
+        (vectorcraft_effects::REVOLVE | vectorcraft_effects::CLASSIC_REVOLVE, "edge") => vec![(tl!("Left"), "left"), (tl!("Right"), "right")],
+        (
+            vectorcraft_effects::REVOLVE | vectorcraft_effects::EXTRUDE | vectorcraft_effects::INFLATE | vectorcraft_effects::ROTATE,
+            "shadowPosition",
+        ) => {
+            vec![(tl!("Behind Object"), "behind"), (tl!("Below Object"), "below")]
+        }
+        (vectorcraft_effects::CLASSIC_EXTRUDE | vectorcraft_effects::CLASSIC_REVOLVE, "surface") => {
+            vec![(tl!("Wireframe"), "wireframe"), (tl!("No Shading"), "none"), (tl!("Diffuse"), "diffuse"), (tl!("Plastic"), "plastic")]
+        }
+        (vectorcraft_effects::CLASSIC_ROTATE, "surface") => vec![(tl!("No Shading"), "none"), (tl!("Diffuse"), "diffuse")],
+        (vectorcraft_effects::CLASSIC_EXTRUDE | vectorcraft_effects::CLASSIC_REVOLVE | vectorcraft_effects::CLASSIC_ROTATE, "shadingColor") => {
+            vec![(tl!("Black"), "black"), (tl!("Custom"), "custom"), (tl!("None"), "none")]
+        }
+        (vectorcraft_effects::EXTRUDE | vectorcraft_effects::CLASSIC_EXTRUDE, "bevel") => vec![
             (tl!("None"), "none"),
             (tl!("Classic"), "classic"),
             (c3("Rounded"), "rounded"),
@@ -832,6 +882,13 @@ fn command(d: &Dialog) -> (&'static str, Value) {
         p["item"] = item.unwrap_or(Value::Null);
         p["params"] = params;
         let id = d.str("__effect");
+        // Each target keeps the map its own Warp draws with: the dialog's `version` is the first
+        // target's.
+        if super::warp_effect::is_warp(&id)
+            && let Some(Value::Object(m)) = p.get_mut("params")
+        {
+            m.remove("version");
+        }
         // The displayed style comes from the first target. Preserve other targets' Warp IDs
         // unless the user deliberately chooses Style, including after a preview rollback.
         if super::warp_effect::is_warp(&id) && d.bool("__warp_style_changed") {
@@ -915,6 +972,14 @@ mod tests {
         for (effect, key) in [
             (vectorcraft_effects::REVOLVE, "edge"),
             (vectorcraft_effects::EXTRUDE, "bevel"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "bevel"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "surface"),
+            (vectorcraft_effects::CLASSIC_EXTRUDE, "shadingColor"),
+            (vectorcraft_effects::CLASSIC_REVOLVE, "edge"),
+            (vectorcraft_effects::CLASSIC_REVOLVE, "surface"),
+            (vectorcraft_effects::CLASSIC_REVOLVE, "shadingColor"),
+            (vectorcraft_effects::CLASSIC_ROTATE, "surface"),
+            (vectorcraft_effects::CLASSIC_ROTATE, "shadingColor"),
             ("warp.arc", "orientation"),
             ("warp.twist", "orientation"),
             (vectorcraft_effects::RASTERIZE, "background"),

@@ -133,7 +133,7 @@ pub(crate) fn document_art(
     // A document already being read further up, or past [`MAX_NESTED_READS`] of them, has its links
     // left as stored.
     if let Some(_reading) = Reading::enter(bytes) {
-        super::super::links::resolve(&mut l.doc, path, false, false);
+        super::super::links::resolve(&mut l.doc, super::super::links::LinkBase::file(path), false, false);
     }
     l.doc.drop_edit_modes();
     let n = l.doc.artboards.len();
@@ -157,11 +157,11 @@ std::thread_local! {
 }
 
 /// A document's links being resolved ([`READING`]): the entry goes when this does.
-struct Reading;
+pub(super) struct Reading;
 
 impl Reading {
     /// `None` when the document of `bytes` is already being read, or [`MAX_NESTED_READS`] are.
-    fn enter(bytes: &[u8]) -> Option<Self> {
+    pub(super) fn enter(bytes: &[u8]) -> Option<Self> {
         let hash = hash_bytes(bytes);
         READING.with_borrow_mut(|r| (r.len() < MAX_NESTED_READS && !r.contains(&hash)).then(|| r.push(hash))).map(|()| Reading)
     }
@@ -332,7 +332,7 @@ pub(crate) fn node(d: &mut Document, s: &Source, link: LinkInfo, bounding: bool)
 /// `d` for output: linked images and placed documents that keep only their previews get their
 /// files back, else output as their previews, with a warning.
 pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
-    let (d, mut warnings) = super::super::links::full_linked_images(d, None);
+    let (d, mut warnings) = super::super::links::full_linked_images(d, Default::default());
     let doc = match &d {
         Cow::Borrowed(doc) => doc,
         Cow::Owned(doc) => doc,
@@ -378,8 +378,10 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
 /// Placed document `id` of `d` replaced by an editable copy of its art, as placing its file
 /// without Link gives (its resources joining `d`, renamed where `d` uses a name for something
 /// else), keeping the object's id, place, name and transparency: Break Link and Object › Expand.
+/// A placed document in opacity-mask art or in the art of a symbol, graph design or pattern is
+/// replaced where it is stored.
 pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
-    let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let n = d.stored_node(id).map(|(n, _)| Node::clone(n)).ok_or(EngineError::NoNode(id))?;
     let NodeKind::PlacedDocument(p) = &n.kind else { return Err(bad(cmd, format!("object {} is not a placed document", id.0))) };
     let blob = d.images.get(&p.key).ok_or_else(|| bad(cmd, format!("object {} has lost its file's contents: relink it", id.0)))?;
     let bytes = vectorcraft_doc::placed_document::full_bytes(p, blob)
@@ -395,6 +397,10 @@ pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
     let art = super::transformed(Node::new(d.alloc_id(), NodeKind::Group { children, clip: a.clip.is_some() }), m);
     let mut out = n.clone();
     out.kind = art.kind;
+    if d.node(id).is_none() {
+        *d.stored_node_mut(id).ok_or(EngineError::NoNode(id))? = out;
+        return Ok(());
+    }
     let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
     d.remove(id)?;
     d.insert(par, index, out)?;

@@ -147,10 +147,19 @@ impl<'a> Reader<'a> {
                 self.new_node(NodeKind::Group { children, clip }, &gs)
             }
             Kind::Compound => {
-                // A group in a compound path (`*u u … U *U`) only holds its paths. Clipping subpaths'
-                // painted copies make a compound of their own, under what it clips.
-                let (fills, kids): (Vec<Node>, Vec<Node>) = ungrouped(kids).into_iter().partition(|n| self.clip_fills.contains(&n.id));
-                painted = self.compound(fills, &gs);
+                // A group in a compound path (`*u u … U *U`) only holds its paths.
+                let mut kids = ungrouped(kids);
+                // A compound clipping path keeps its subpaths' fill when they all paint alike. When they paint
+                // differently, the fills of the filled clipping ones are a compound path of their own, under what it clips.
+                let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
+                if clipping && kids.windows(2).any(|w| look(&w[0]) != look(&w[1])) {
+                    let fills: Vec<Node> = kids
+                        .iter_mut()
+                        .filter(|k| matches!(k.kind, NodeKind::Path { clipping: true, .. }))
+                        .filter_map(|k| self.fill_apart(k))
+                        .collect();
+                    painted = self.compound(fills, &gs);
+                }
                 let Some(n) = self.compound(kids, &gs) else {
                     if gs.hidden || !self.shown() {
                         self.hidden_unread.extend(unread);
@@ -228,9 +237,9 @@ impl<'a> Reader<'a> {
     /// Several clipping paths in a clipping group or a layer clip to their intersection, as each `W` reduces the clip
     /// set by the ones before it: each clipping path after the first clips a clipping group nested in the one before
     /// it, and the innermost one holds the art. As with one clipping path, every object in the group is clipped by all
-    /// of them, wherever it is written. A clipping path's painted fill stays at its path's level. In a compound path
-    /// (`union`), several clipping paths are one compound path. `at`: how deep the group or layer made of them is in the
-    /// document.
+    /// of them, wherever it is written. The fill of a compound clipping path read apart from it (`clip_fills`) stays at
+    /// its path's level. In a compound path (`union`), several clipping paths are one compound path. `at`: how deep the
+    /// group or layer made of them is in the document.
     fn clip_first(&mut self, kids: Vec<Node>, clips: &[usize], union: bool, at: usize) -> Result<(Vec<Arc<Node>>, bool), String> {
         if union || clips.len() < 2 {
             return Ok(self.clip_union(kids, clips));
@@ -238,7 +247,7 @@ impl<'a> Reader<'a> {
         let clips: std::collections::HashSet<usize> = clips.iter().copied().collect();
         let (clip, rest): (Vec<Indexed>, Vec<Indexed>) = kids.into_iter().enumerate().partition(|(i, _)| clips.contains(i));
         let innermost = clip.len() - 1;
-        // A painted fill follows its clipping path; the art goes in the innermost level.
+        // A fill read apart follows its clipping path; the art goes in the innermost level.
         let level = |i: usize, n: &Node| {
             if self.clip_fills.contains(&n.id) { clip.iter().rposition(|(c, _)| *c < i).unwrap_or(0) } else { innermost }
         };
@@ -251,8 +260,7 @@ impl<'a> Reader<'a> {
         if at + deepest > MAX_DEPTH || (at + deepest > vectorcraft_doc::MAX_DEPTH && at + flat <= vectorcraft_doc::MAX_DEPTH) {
             return Err("its clipping masks are nested too deeply".into());
         }
-        // Each level: its clipping path, the clipping paths' own fills, which paint under the art they clip, then the
-        // art.
+        // Each level: its clipping path, the fills read apart from it, which paint under the art they clip, then the art.
         let mut fills_at: Vec<Vec<Node>> = clip.iter().map(|_| Vec::new()).collect();
         let mut art_at: Vec<Vec<Node>> = clip.iter().map(|_| Vec::new()).collect();
         for (i, n) in rest {
@@ -282,13 +290,18 @@ impl<'a> Reader<'a> {
     fn clip_union(&mut self, kids: Vec<Node>, clips: &[usize]) -> (Vec<Arc<Node>>, bool) {
         let clips: std::collections::HashSet<usize> = clips.iter().copied().collect();
         let (mut clip, rest): (Vec<Indexed>, Vec<Indexed>) = kids.into_iter().enumerate().partition(|(i, _)| clips.contains(i));
+        let mut fills = Vec::new();
         let clip_node = match clip.len() {
             0 => None,
             1 => clip.pop().map(|(_, n)| n),
             _ => {
                 let rule = clip.first().map_or(FillRule::NonZero, |(_, n)| path_rule(n));
-                // The compound path keeps the clipping paths' stroke, opacity and blend mode when they all have the same
-                // ones, and the knockout shape flag when they all have it: it has one appearance for all its paths.
+                // Each clipping path's fill is a path of its own, under the art it clips, as each one paints it. The
+                // compound path keeps the clipping paths' stroke, opacity and blend mode when they all have the same ones,
+                // and the knockout shape flag when they all have it: it has one appearance for all its paths.
+                for (_, n) in &mut clip {
+                    fills.extend(self.fill_apart(n));
+                }
                 let shape = clip.iter().all(|(_, n)| n.knockout_shape);
                 let look = |n: &Node| (n.appearance.clone(), n.opacity, n.blend);
                 let shared =
@@ -305,10 +318,64 @@ impl<'a> Reader<'a> {
             }
         };
         let clips = clip_node.is_some();
-        // A clipping path's own fill paints under the art it clips.
-        let (fills, rest): (Vec<Indexed>, Vec<Indexed>) = rest.into_iter().partition(|(_, n)| self.clip_fills.contains(&n.id));
-        let children = clip_node.into_iter().chain(fills.into_iter().chain(rest).map(|(_, n)| n)).map(Arc::new).collect();
+        // A fill read apart paints under the art it clips.
+        let (apart, rest): (Vec<Indexed>, Vec<Indexed>) = rest.into_iter().partition(|(_, n)| self.clip_fills.contains(&n.id));
+        let children = clip_node.into_iter().chain(fills).chain(apart.into_iter().chain(rest).map(|(_, n)| n)).map(Arc::new).collect();
         (children, clips)
+    }
+
+    /// Clipping path `n`'s fills as a path of their own, taken off `n`; `None` when it has no fill. The path keeps `n`'s
+    /// transparency, visibility, lock and opacity mask, and none of its other attributes.
+    pub(super) fn fill_apart(&mut self, n: &mut Node) -> Option<Node> {
+        let is_fill = |i: &AppearanceItem| matches!(i, AppearanceItem::Fill(_));
+        if !n.appearance.items.iter().any(is_fill) {
+            return None;
+        }
+        let mut kind = n.kind.clone();
+        if let NodeKind::Path { clipping, .. } = &mut kind {
+            *clipping = false;
+        }
+        let mut fill = Node::new(self.doc.alloc_id(), kind);
+        // The copies of a path read on `%_` lines are on those lines too, as `add` records them.
+        let hidden = self.hidden_ids.contains(&n.id);
+        if hidden {
+            self.hidden_ids.insert(fill.id);
+        }
+        // A compound clipping path's subpaths: copies with ids of their own, linked to the same swatches, that don't clip.
+        for c in fill.children_mut().into_iter().flatten() {
+            let mut copy = self.doc.reid(c);
+            self.reid_masks(&mut copy, 0);
+            if let NodeKind::Path { clipping, .. } = &mut copy.kind {
+                *clipping = false;
+            }
+            if hidden {
+                self.hidden_ids.insert(copy.id);
+            }
+            *c = Arc::new(copy);
+        }
+        (fill.opacity, fill.blend, fill.isolate, fill.knockout, fill.knockout_shape, fill.visible, fill.locked) =
+            (n.opacity, n.blend, n.isolate, n.knockout, n.knockout_shape, n.visible, n.locked);
+        // The opacity mask's art is a copy with ids of its own, linked to the same swatches.
+        if let Some(mut mask) = n.extras().mask.clone() {
+            let mut art = self.doc.reid(&mask.art);
+            self.reid_masks(&mut art, 0);
+            mask.art = Arc::new(art);
+            fill.extras_mut().mask = Some(mask);
+        }
+        let (mut fills, mut rest) = ((*n.appearance).clone(), (*n.appearance).clone());
+        fills.items.retain(is_fill);
+        rest.items.retain(|i| !is_fill(i));
+        fill.appearance = fills.into();
+        n.appearance = rest.into();
+        // The new path, its subpaths and their points count toward the objects read, as a multi-layer mask's copies do.
+        let mut weight = fill.count_with_masks();
+        fill.walk(&mut |p| {
+            if let NodeKind::Path { path, .. } = &p.kind {
+                weight = weight.saturating_add(path.anchor_count());
+            }
+        });
+        self.nodes = self.nodes.saturating_add(weight);
+        Some(fill)
     }
 
     pub(super) fn end_layer(&mut self) -> Result<(), String> {
@@ -449,16 +516,17 @@ impl<'a> Reader<'a> {
                         slot.visible = false;
                         self.add(slot, false)?;
                     }
-                    // An envelope of type keeps its drawn art and its type, hidden, as above: the
-                    // type is filled in after reading, which the envelope can't wait for.
-                    if typed {
-                        return Ok(());
-                    }
-                    if self.envelopes.len() >= crate::import::ai::envelope::MAX_PENDING {
-                        self.warn(crate::import::ai::envelope::DRAWN);
+                    // An envelope of type keeps its drawn art and its type, hidden, as above, until
+                    // the type is filled in after reading: then it opens live where it draws as its
+                    // drawn art ([`crate::import::ai::envelope::TypedEnvelope`]). In a symbol's or a
+                    // pattern's art it keeps them.
+                    let waits = !typed || (self.symbol.is_none() && self.pattern.is_none());
+                    if !waits || self.envelopes.len() >= crate::import::ai::envelope::MAX_PENDING {
+                        self.warn(crate::import::ai::envelope::drawn_note(typed));
                     } else {
                         let siblings = self.frames.last().map_or(0, |f| f.children.len());
-                        self.envelopes.push(PendingEnvelope { obj: *o, before, inner: children, depth: self.frames.len(), siblings });
+                        let depth = self.frames.len();
+                        self.envelopes.push(PendingEnvelope { obj: *o, before, inner: children, depth, siblings, typed });
                     }
                 }
             }
@@ -573,7 +641,7 @@ impl<'a> Reader<'a> {
     /// comes in as the page draws it, within the symbol's box placed by the matrix when the box is
     /// known.
     fn symbol_instance(&mut self, o: &Obj) -> Result<(), String> {
-        let name = o.text("SymbolRef");
+        let name = self.names.entry(o, "SymbolRef");
         let affine = |n: &[f64]| match n {
             [a, b, c, d, e, f] if [a, b, c, d, e, f].iter().all(|v| v.is_finite()) => Some(super::Affine::new([*a, *b, *c, *d, *e, *f])),
             _ => None,
@@ -795,9 +863,8 @@ impl<'a> Reader<'a> {
     /// in containers that closed keep their drawn art.
     pub(super) fn end_envelope(&mut self) {
         let depth = self.frames.len();
-        while self.envelopes.last().is_some_and(|p| p.depth > depth) {
-            self.envelopes.pop();
-            self.warn(crate::import::ai::envelope::DRAWN);
+        while let Some(p) = self.envelopes.pop_if(|p| p.depth > depth) {
+            self.warn(crate::import::ai::envelope::drawn_note(p.typed));
         }
         if self.envelopes.last().is_none_or(|p| p.depth != depth) {
             return;
@@ -805,9 +872,13 @@ impl<'a> Reader<'a> {
         let Some(p) = self.envelopes.pop() else { return };
         let drawn = self.frames.last().filter(|f| f.children.len() == p.siblings + 1).and_then(|f| f.children.last());
         let Some(drawn) = drawn else {
-            self.warn(crate::import::ai::envelope::DRAWN);
+            self.warn(crate::import::ai::envelope::drawn_note(p.typed));
             return;
         };
+        if p.typed {
+            self.wait_for_type(p);
+            return;
+        }
         let live = (self.envelope_checks > 0).then(|| crate::import::ai::envelope::live(&p.obj, p.before, p.inner)).flatten();
         let Some(kind) = live else {
             self.warn(crate::import::ai::envelope::DRAWN);
@@ -842,7 +913,18 @@ impl<'a> Reader<'a> {
         let mut plain = drawn.clone();
         (plain.visible, plain.opacity) = (true, 1.0);
         let page = self.page_in_doc();
-        if !crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent) {
+        let mut alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+        // In Edit Contents, a grid that draws the contents elsewhere than the drawn art is checked
+        // again moved onto that art.
+        if !alike
+            && self.envelope_checks > 0
+            && let Some(kind) = crate::import::ai::envelope::moved_onto(&shown, &plain)
+        {
+            self.envelope_checks -= 1;
+            (envelope.kind, shown.kind) = (kind.clone(), kind);
+            alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+        }
+        if !alike {
             self.warn(crate::import::ai::envelope::DRAWN);
             return;
         }
@@ -861,6 +943,32 @@ impl<'a> Reader<'a> {
             let drawn = std::mem::replace(slot, envelope);
             self.envelopes_drawn.push((id, drawn));
         }
+    }
+}
+
+impl Reader<'_> {
+    /// An envelope of type `p` whose drawn art was just read (the last object of this container):
+    /// it waits for its type to be laid out ([`crate::import::ai::envelope::TypedEnvelope`]), unless
+    /// objects the reader couldn't read are in it, or too many already wait. Then it keeps its
+    /// drawn art and its type, hidden.
+    fn wait_for_type(&mut self, p: PendingEnvelope) {
+        let Some(drawn) = self.frames.last().and_then(|f| f.children.last()) else { return };
+        let mut ids = HashSet::new();
+        fn collect(n: &Node, ids: &mut HashSet<NodeId>) {
+            ids.insert(n.id);
+            for c in n.children().into_iter().flatten() {
+                collect(c, ids);
+            }
+        }
+        collect(drawn, &mut ids);
+        p.before.iter().chain(&p.inner).for_each(|n| collect(n, &mut ids));
+        let unread = self.unread.iter().any(|(id, _)| ids.contains(id));
+        if unread || self.typed_envelopes.len() >= crate::import::ai::envelope::MAX_CHECKED {
+            self.warn(crate::import::ai::envelope::TYPE_DRAWN);
+            return;
+        }
+        let drawn = drawn.id;
+        self.typed_envelopes.push(crate::import::ai::envelope::TypedEnvelope { obj: p.obj, before: p.before, inner: p.inner, drawn });
     }
 }
 

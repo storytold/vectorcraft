@@ -1,14 +1,34 @@
-use super::bounds::{cull_bounds, effected_path};
-use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, Kept, Made, Reads, Shadow, ShadowEntry};
+use super::bounds::{cull_bounds, effected_path_carrying};
+use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, Made, Reads, Shadow, ShadowEntry};
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
     DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor,
     shade_filter, shadow_filter, silhouette,
 };
 use super::{
-    Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, Vec2, blend_mode,
-    effects, fill_rule, peniko,
+    Affine, Arc, BezPath, FillRule, Frame, GeomContext, Ink, Node, NodeKind, RasterFx, Rect, RenderContext, Renderer, Shape, SymbolBoxes, Vec2,
+    blend_mode, effects, fill_rule, peniko,
 };
+
+#[cfg(test)]
+thread_local! {
+    /// How many silhouettes of drop shadows and outer glows renderers on this thread have drawn:
+    /// one per shadow or glow raster made ([`Renderer::shadow_raster`]) and per one drawn through a
+    /// filter layer ([`Renderer::draw_shadow_filter`]).
+    static SILHOUETTES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`SILHOUETTES`] of this thread.
+#[cfg(test)]
+pub(super) fn silhouettes() -> u64 {
+    SILHOUETTES.get()
+}
+
+/// Adds one to [`SILHOUETTES`].
+#[cfg(test)]
+fn note_silhouette() {
+    SILHOUETTES.set(SILHOUETTES.get().saturating_add(1));
+}
 
 impl Renderer {
     /// Drop shadow / outer glow `fx` (shadow-cache slot `i` of `n`) as a cached raster: the
@@ -125,6 +145,8 @@ impl Renderer {
                 let decoded = crate::paint::decode_failures();
                 let outer_image_left_out = self.image_left_out.replace(false);
                 let pattern_images_left_out = crate::pattern::images_left_out();
+                #[cfg(test)]
+                note_silhouette();
                 self.inside_layer(|r| paint(r, &mut off, &shifted(&crop, dx, dy)));
                 let failed = crate::paint::decode_failures() - decoded;
                 let image_left_out = self.image_left_out.unwrap_or(false) || crate::pattern::images_left_out() > pattern_images_left_out;
@@ -183,6 +205,7 @@ impl Renderer {
                 (image, x0, y0, scale, moved, cropped)
             }
         };
+        self.stats.view_sized += usize::from(cropped.is_some() || scale != 1.0);
         Some(Shadow { image, at: Affine::translate((x, y)) * Affine::scale(scale), mode, moved, cropped })
     }
 
@@ -229,6 +252,8 @@ impl Renderer {
         // The offset moves the content rather than the filter: vello_cpu drops layer content
         // that lies entirely outside the viewport before filtering.
         let reach = reach + Vec2::new(dx, dy);
+        #[cfg(test)]
+        note_silhouette();
         self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
             c.set_transform(fr.view);
             c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
@@ -314,29 +339,39 @@ impl Renderer {
             let stamp = self.stamp;
             let e = match self.fx_geom.remove(&key) {
                 Some(e) if Arc::ptr_eq(&e.node, &o) => e,
-                _ => FxGeom { g: Arc::new(effected_path(n, bp)), items: vec![None; n.appearance.items.len()], node: o, stamp },
+                _ => {
+                    let (g, carry) = effected_path_carrying(f.symbols.document(), n, bp);
+                    FxGeom { g: Arc::new(g), carried: carried(n, &carry), items: vec![None; n.appearance.items.len()], node: o, stamp }
+                }
             };
             (key, FxGeom { stamp, ..e })
         });
-        let g = match &cached {
-            Some((_, e)) => e.g.clone(),
-            None => Arc::new(effected_path(n, bp)),
+        let (g, carried) = match &cached {
+            Some((_, e)) => (e.g.clone(), e.carried.clone()),
+            None => {
+                let (g, carry) = effected_path_carrying(f.symbols.document(), n, bp);
+                (Arc::new(g), carried(n, &carry))
+            }
         };
-        self.draw_shape_fx_geom(ctx, f, n, &g, rule, cached.as_mut().map(|(_, e)| &mut e.items));
+        let paints = carried.as_deref().unwrap_or(n);
+        self.draw_shape_fx_geom(ctx, f, n, paints, &g, rule, cached.as_mut().map(|(_, e)| &mut e.items));
         if let Some((key, e)) = cached {
             self.fx_geom.insert(key, e);
         }
     }
 
-    /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry.
+    /// [`Self::draw_shape_fx`] on the effected geometry `g`, with the items' cached geometry:
+    /// `paints` is `n` with the fills and strokes it paints.
+    #[allow(clippy::too_many_arguments)]
     fn draw_shape_fx_geom(
         &mut self,
         ctx: &mut RenderContext,
         f: &Frame,
         n: &Node,
+        paints: &Node,
         g: &BezPath,
         rule: FillRule,
-        items: Option<&mut Vec<Option<Arc<BezPath>>>>,
+        items: Option<&mut Vec<Option<ItemGeom>>>,
     ) {
         if g.elements().is_empty() {
             return;
@@ -345,8 +380,9 @@ impl Renderer {
             self.hairline(ctx, f, g, [0, 0, 0, 255]);
             return;
         }
-        let gctx = GeomContext::of(n);
-        let rfx = effects::raster_effects(&n.appearance.effects);
+        let gctx = GeomContext { doc: Some(f.symbols.document()), ..GeomContext::of(paints) };
+        // `paints` hides the Transform effects that did not move `g`.
+        let rfx = effects::raster_effects(&paints.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
         let reach = g.bounding_box().inflate(outset, outset);
@@ -355,7 +391,7 @@ impl Renderer {
         let reach = bounds.map_or(reach, |b| reach.union(b));
         let content = Content { node: n, owner: None, cache: Some(0), reach, outline: Some((g, rule)), bounds, kept: None };
         let mut items = items;
-        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, n, g, rule, &gctx, items.as_deref_mut()));
+        self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
     }
 
@@ -402,7 +438,13 @@ impl Renderer {
                 let region = if clipped { self.clip_of(&art) } else { None };
                 // A symbol's art can change while the instance doesn't: no cached shadows.
                 let cache = (cache && !matches!(a.kind, NodeKind::SymbolInstance { .. })).then_some(0);
-                let bounds = rasterize_bounds(f.symbols, a, &rfx);
+                // A 3D effect's art is in hand: Rasterize takes its bounds, measured once while it is
+                // kept, without building it again.
+                let rasterizes = rfx.iter().any(|x| matches!(x, RasterFx::Rasterize(_)));
+                let bounds = match rasterizes.then(|| self.three_d_art_bounds(f.symbols, &art)).flatten() {
+                    Some(b) => b,
+                    None => rasterize_bounds(f.symbols, a, &rfx),
+                };
                 let reach = bounds.map_or(reach, |b| reach.union(b));
                 let content = Content { node: a, owner: Some(a), cache, reach, outline: region.as_deref().map(|r| (&r.0, r.1)), bounds, kept: None };
                 self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_fx_art(c, fr, a, &art));
@@ -452,6 +494,91 @@ impl Renderer {
         {
             return art;
         }
+        // Made to measure it ([`Self::measured_fx_art`]): taken out, and kept in `fx_arts` from now
+        // on if made from what it reads now, else made again.
+        let measured = self.measured.remove(&key).filter(|m| Arc::ptr_eq(&m.0, a)).map(|m| {
+            self.measured_bytes = self.measured_bytes.saturating_sub(crate::lru::node_bytes(&m.1));
+            (m.1, m.2)
+        });
+        let art = match measured {
+            Some((art, was)) => {
+                let now = match &found {
+                    Some(f) => Some(f.0),
+                    None => self.outside_key(doc, a),
+                };
+                if was == now { art } else { self.make_fx_art(doc, a) }
+            }
+            None => self.make_fx_art(doc, a),
+        };
+        if cache {
+            let bytes = crate::lru::node_bytes(&art);
+            self.fx_arts.insert(key, (a.clone(), art.clone(), found), bytes, self.stamp);
+        }
+        art
+    }
+
+    /// The art [`Self::fx_art`] draws for `a`, to measure it: the art kept for it, else made now and
+    /// held until the frame ends ([`Renderer::measured`]), for [`Self::fx_art`] to keep if `a` is
+    /// drawn. What is measured but never drawn (culled, off the view) is let go, and isn't kept in
+    /// place of what is drawn.
+    pub(crate) fn measured_fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Arc<Node> {
+        let key = Arc::as_ptr(a) as usize;
+        if let Some((node, art, found)) = self.fx_arts.get(&key, self.stamp)
+            && Arc::ptr_eq(node, a)
+        {
+            let (art, was) = (art.clone(), found.as_ref().map(|f| f.0));
+            if was.is_none_or(|was| self.live_found(doc, a).0 == was) {
+                return art;
+            }
+        }
+        let now = self.outside_key(doc, a);
+        if let Some((node, art, was)) = self.measured.get(&key)
+            && Arc::ptr_eq(node, a)
+            && *was == now
+        {
+            return art.clone();
+        }
+        let art = self.make_fx_art(doc, a);
+        // Art held for an object before (made from what it read then) gives way.
+        if let Some(old) = self.measured.remove(&key) {
+            self.measured_bytes = self.measured_bytes.saturating_sub(crate::lru::node_bytes(&old.1));
+        }
+        let bytes = crate::lru::node_bytes(&art);
+        // Within a budget: past it, what is measured is made again to draw it.
+        if self.measured_bytes + bytes <= self.measured_budget {
+            self.measured_bytes += bytes;
+            self.measured.insert(key, (a.clone(), art.clone(), now));
+        }
+        art
+    }
+
+    /// The bounds of `art`, art [`Self::fx_art`] made for an object, when it is a 3D effect's art
+    /// ([`super::three_d_art_bounds`]), measured once while it is kept; `None` for any other art.
+    pub(crate) fn three_d_art_bounds(&mut self, symbols: &SymbolBoxes, art: &Arc<Node>) -> Option<Option<Rect>> {
+        let key = Arc::as_ptr(art) as usize;
+        // Raster effects in the art spread by the resolution; brushed strokes in it draw from the
+        // brushes.
+        let at = (super::raster::doc_raster_ppi(symbols.document()).to_bits(), self.brushes.library_key(symbols.document(), self.stamp));
+        let (kept, measured) =
+            self.three_d_bounds.get(&key).filter(|e| std::ptr::eq(e.0.as_ptr(), Arc::as_ptr(art))).map(|e| (true, e.1.filter(|m| m.0 == at)))?;
+        if let (true, Some((_, b))) = (kept, measured) {
+            return Some(b);
+        }
+        let b = super::three_d_art_bounds(symbols, art);
+        self.three_d_bounds.insert(key, (Arc::downgrade(art), Some((at, b))));
+        Some(b)
+    }
+
+    /// The key of what `a`'s art reads from outside it ([`Self::live_found`]), `None` when it reads
+    /// nothing.
+    fn outside_key(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Option<u64> {
+        (evaluates_live(a) || reads_outside(a)).then(|| self.live_found(doc, a).0)
+    }
+
+    /// The art [`Self::fx_art`] draws for `a`, made now.
+    fn make_fx_art(&mut self, doc: &vectorcraft_doc::Document, a: &Arc<Node>) -> Arc<Node> {
+        // Whether the art is a 3D effect's ([`Self::three_d_art_bounds`]).
+        let mut three_d = false;
         let symbol = match &a.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
                 doc.symbols.iter().find(|s| s.name == *symbol).map(|s| crate::brush_fx::instance_art(&s.art, a))
@@ -461,8 +588,12 @@ impl Renderer {
         let container = is_container(a);
         let art = match effects::crop_marks_art(a)
             .or_else(|| crate::addons::halftone::art(doc, a))
-            .or_else(|| effects::revolve_art(a))
-            .or_else(|| effects::solid_art(a))
+            .or_else(|| {
+                let art = effects::revolve_art_in(Some(doc), a).or_else(|| effects::solid_art_in(Some(doc), a));
+                self.stats.three_d_built += usize::from(art.is_some());
+                three_d |= art.is_some();
+                art
+            })
             .or_else(|| effects::reshape(Some(doc), a, symbol.as_ref()))
         {
             Some(r) => r,
@@ -470,7 +601,16 @@ impl Renderer {
             None if matches!(a.kind, NodeKind::Text(_) | NodeKind::Image(_) | NodeKind::Path { .. } | NodeKind::Compound { .. }) => (**a).clone(),
             None => effects::outline_art(Some(doc), a, symbol.as_ref()).unwrap_or_else(|| Node::group(a.id, vec![])),
         };
-        let art = if effects::has_revolve(a) || effects::has_solid(a) { effects::evaluate_container(Some(doc), &art).unwrap_or(art) } else { art };
+        let has_three_d = effects::has_revolve(a) || effects::has_solid(a);
+        let mut art = if has_three_d { effects::evaluate_container(Some(doc), &art).unwrap_or(art) } else { art };
+        // A 3D effect on a fill or stroke that built nothing (Revolve after Roughen, a solid too
+        // complex) draws the item as without it: left in the art, it would draw the art as an
+        // object with effects again, and that art again, without end.
+        if has_three_d && !three_d && !container {
+            for item in &mut art.appearance.items {
+                item.effects_mut().retain(|e| !effects::is_three_d(&e.id));
+            }
+        }
         // Vector Halftone samples the object with its colour adjustments: its dots keep their inks.
         let outer = if effects::addons::halftone::has_halftone(a) { None } else { effects::color_map(&a.appearance.effects) };
         let mut art = self.adjusted_art(doc, art, outer.as_ref());
@@ -485,9 +625,18 @@ impl Renderer {
         // knockout setting says).
         art.knockout = if container { a.knockout } else { vectorcraft_doc::Knockout::Off };
         let art = Arc::new(art);
-        if cache {
-            let bytes = crate::lru::node_bytes(&art);
-            self.fx_arts.insert(key, (a.clone(), art.clone(), found), bytes, self.stamp);
+        if three_d {
+            // A renderer that only measures (an export, Fit to Artwork Bounds) ends no frame: what
+            // it no longer holds is let go here too.
+            if self.three_d_bounds.len() >= (2 * self.three_d_kept).max(1024) {
+                self.three_d_bounds.retain(|_, e| e.0.strong_count() > 0);
+                self.three_d_kept = self.three_d_bounds.len();
+                #[cfg(test)]
+                {
+                    self.three_d_sweeps += 1;
+                }
+            }
+            self.three_d_bounds.insert(Arc::as_ptr(&art) as usize, (Arc::downgrade(&art), None));
         }
         art
     }
@@ -514,14 +663,20 @@ impl Renderer {
         // shortcut: art kept by `fx_arts` isn't made again when only a swatch's kind (spot or
         // process) changes, which Duotone reads; editing the object makes it again.
         let swatches = |name: &str| effects::addons::duotone::swatch_kind(doc, name);
-        let adjusted = effects::adjust(&art, outer, &swatches, &mut |key, map| {
-            let mut h = std::hash::DefaultHasher::new();
-            std::hash::Hash::hash(&format!("{map:?}"), &mut h);
-            let hash = std::hash::Hasher::finish(&h);
-            let derived = format!("{key}\u{0}adjust\u{0}{hash:016x}");
-            wanted.push((key.to_string(), derived.clone(), hash, map.clone()));
-            Some(derived)
-        });
+        let adjusted = effects::adjust(
+            &art,
+            outer,
+            &swatches,
+            &mut |key, map| {
+                let mut h = std::hash::DefaultHasher::new();
+                std::hash::Hash::hash(&format!("{map:?}"), &mut h);
+                let hash = std::hash::Hasher::finish(&h);
+                let derived = format!("{key}\u{0}adjust\u{0}{hash:016x}");
+                wanted.push((key.to_string(), derived.clone(), hash, map.clone()));
+                Some(derived)
+            },
+            &|key| doc.images.contains_key(key),
+        );
         for (key, derived, hash, map) in wanted {
             self.adjusted_image(&key, derived, hash, &map);
         }
@@ -772,12 +927,64 @@ impl Renderer {
     }
 }
 
+/// `n` with the gradients of its fills and strokes moved along with its effects by `carry`, and
+/// the Transform effects the geometry pass left out hidden ([`effects::Carry::hide_skipped`]), so
+/// its raster effects and those of its fills and strokes stay with its art; `None` when it stays
+/// as it is.
+fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
+    let moves = carry.moves(&n.appearance);
+    (moves || carry.skipped()).then(|| {
+        let mut m = n.clone();
+        if moves {
+            carry.apply(&mut m.appearance);
+        }
+        carry.hide_skipped(&mut m.appearance.effects);
+        Arc::new(m)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::RenderOptions;
     use vectorcraft_color::Color;
     use vectorcraft_doc::{Document, color::BlendMode};
+
+    /// The node a path is painted from hides a Transform effect left out past the effect budget,
+    /// so the drop shadow before it is drawn with its own offset and blur, as the art stays.
+    #[test]
+    fn a_path_paints_from_the_transforms_that_moved_it() {
+        use vectorcraft_geom::{Anchor, PathData, Point, SubPath};
+        let anchors = (0..=30_000)
+            .map(|i| {
+                let x = 2.0 * f64::from(i);
+                Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+            })
+            .collect();
+        let path = PathData::single(SubPath::new(anchors, true));
+        let mut n = Node::path(
+            vectorcraft_doc::NodeId(1),
+            path.clone(),
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vectorcraft_color::Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![
+            vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 10, "y": 5, "blur": 4}), visible: true },
+            vectorcraft_doc::Effect {
+                id: "distort.transform".into(),
+                params: serde_json::json!({"scaleH": 100000, "scaleV": 100000}),
+                visible: true,
+            },
+        ];
+        let doc = Document::new(100.0, 100.0);
+        let bp = path.to_bezpath();
+        let (g, carry) = effected_path_carrying(&doc, &n, &bp);
+        assert_eq!(g.bounding_box(), bp.bounding_box(), "the art stays where it is");
+        let paints = carried(&n, &carry).expect("the Transform effect is hidden");
+        match effects::raster_effects(&paints.appearance.effects).first() {
+            Some(RasterFx::DropShadow { dx, dy, blur, .. }) => assert!((*dx, *dy, *blur) == (10.0, 5.0, 4.0), "{dx} {dy} {blur}"),
+            other => panic!("expected a drop shadow, got {other:?}"),
+        }
+    }
 
     #[test]
     fn uncached_darkness_shadow_subtracts_before_separate_opacity() {
@@ -793,6 +1000,7 @@ mod tests {
             px: 1.0,
             opts: &opts,
             ink: Ink::Display,
+            output: Affine::IDENTITY,
             plates: None,
         };
         let mut ctx = frame.offscreen_context(100, 100);
