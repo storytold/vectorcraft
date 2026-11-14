@@ -242,7 +242,13 @@ the suite) keep the agent to the folders you give it:
   `export`), `document.exportSelection`, `document.exportForScreens` and `assets.export` (before the folder is
   made or any row is written), `document.save`, `file.save`, `file.saveAs` and `file.saveCopy` (also a save
   without a path of a document whose own format is SVG or SVGZ), `file.exportAs`, and the SVG Options dialog's
-  Show Code. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
+  Show Code. The same error refuses, before any file is written, every output that carries the native document,
+  which holds the link: a native file or template, an EPS file, a `.ai` or `.ait` file of every artboard (not a
+  legacy version 7 `.ai` file; a save of a `.ai` file always has every artboard), a PDF of every artboard with
+  Preserve Editing on (also from `document.exportPdf`), and `file.package` (also when a linked native document,
+  or the native document a linked PDF, `.ai` or EPS file carries, links such a file). A PDF or `.ai` file of
+  some of the artboards or of the art's bounds (`useArtboards: false`), a PDF without Preserve Editing, and an
+  image are written as before. A file given as another URL (`https://…`) is not checked. The document keeps the link, and the
   person at the keyboard exports it as stored.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
@@ -1282,7 +1288,9 @@ Preserve Editing (`preserveEditing`, on in the `VectorCraft Default` preset) emb
 an embedded file (`vectorcraft-editing.vectorcraft`; files named `drawcraft-editing.drawcraft` are read too) with a
 hash of the pages it was written with. `open_file` / `document.open` of such a PDF, `.ai` or `.ait` (no `pages` picked) restores the
 document exactly (`restored: true`); when another app changed the pages, or the data can't be read, the artwork is
-imported instead and the first warning says why. Choosing a standard turns it off (PDF/A refuses it). Save to a `.ai`
+imported instead and the first warning says why. Choosing a standard turns it off (PDF/A refuses it). Under automation
+read roots, a PDF that carries the native document is refused while the document links a JavaScript file outside them
+(see [Confining file access](#confining-file-access)). Save to a `.ai`
 path (`document.save {path: "art.ai"}` or `{format: "ai"}`) writes a PDF-compatible file that always carries the
 document, takes the PDF options and keeps its path when reopened, so Save writes `.ai` again; a `.ait` opens untitled.
 The restored document opens on the artboard its editing copy names as active. A file saved with `editingData: false` has
@@ -7362,7 +7370,9 @@ type uses in `Fonts/` (fonts whose licence doesn't allow embedding are listed in
 the copies (each file copied once); one that can't be read is copied as it is, and a cycle of placed documents or one
 past the nesting limit stops there, each with a line in `warnings` and the report. A `folder/name` where a packaged file
 would replace the document or one of its linked files (the document's own folder, say) is an error, and nothing is
-written. Every option defaults to true. An option that is not true or false, or a `folder` or `name` that is not a
+written. Under automation read roots, the package is refused, and nothing is written, while the document, a linked
+native document or the native document a linked PDF, `.ai` or EPS file carries links a JavaScript file outside them
+(see [Confining file access](#confining-file-access)). Every option defaults to true. An option that is not true or false, or a `folder` or `name` that is not a
 string, is an error naming the key, and nothing is written; null is the same as leaving the key out. Without `folder` (the web, or an agent that wants the bytes) the
 result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entries under `<name>/`).
 

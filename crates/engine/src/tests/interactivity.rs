@@ -341,3 +341,139 @@ fn svg_output_keeps_linked_javascript_files_a_caller_may_read() {
     let text = run(&mut s, "document.serialize", json!({"format": "svg"}))["text"].as_str().unwrap().to_string();
     assert!(text.contains(&format!("<script xlink:href=\"{outside}\"/>")), "{text}");
 }
+
+/// The JavaScript files that the native document a `document.serialize` reply carries links.
+fn carried_scripts(r: &Value) -> Vec<String> {
+    let bytes = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
+    let native = if bytes.starts_with(b"%PDF") { vectorcraft_pdf::editing(&bytes).expect("editing data").data } else { bytes };
+    vectorcraft_format::load(&native).unwrap().svg_scripts
+}
+
+/// A caller confined to read roots: every output that carries the native document (a native file
+/// or template, a `.ai` or EPS file, a PDF with Preserve Editing, a package) of a document that
+/// links a JavaScript file outside them is refused before a file or folder is written, with an
+/// error that names no file or folder, and the document keeps the link.
+#[test]
+fn confined_native_output_refuses_a_linked_javascript_file_outside_the_read_roots() {
+    let away = Folder::new("native-script-away");
+    let home = Folder::new("native-script-home");
+    let script = away.file("menu.js");
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "svgInteractivity.addFile", json!({"file": script}));
+    run(&mut s, "assets.add", json!({"ids": [a.0]}));
+    let own = home.file("own.vectorcraft");
+    run(&mut s, "file.saveAs", json!({"path": own}));
+    let before = std::fs::read(&own).unwrap();
+    rect(&mut s, 50.0);
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let hidden = [away.0.to_string_lossy().into_owned(), home.0.to_string_lossy().into_owned(), "menu.js".to_string()];
+    let refused = |s: &mut Session, cmd: &str, p: Value| {
+        let e = crate::file_access::confine(Some(&roots), || s.execute(cmd, &p)).expect_err(cmd);
+        assert!(matches!(e, EngineError::BadParams { .. }), "{cmd} {p}: {e:?}");
+        let e = e.to_string();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{cmd} {p}: {e}");
+        for h in &hidden {
+            assert!(!e.contains(h.as_str()), "{cmd} {p} names {h}: {e}");
+        }
+    };
+    let file = |name: &str| home.file(name);
+    let out = file("out");
+    refused(&mut s, "document.serialize", json!({}));
+    for format in ["vectorcraft", "template", "pdf", "ai", "eps"] {
+        refused(&mut s, "document.serialize", json!({"format": format}));
+        refused(&mut s, "document.export", json!({"format": format}));
+        refused(&mut s, "document.export", json!({"format": format, "selectedOnly": true}));
+        refused(&mut s, "document.exportSelection", json!({"format": format}));
+    }
+    // Every artboard picked, and Preserve Editing asked for.
+    refused(&mut s, "document.serialize", json!({"format": "pdf", "range": "1", "preserveEditing": true}));
+    refused(&mut s, "document.serialize", json!({"format": "ai", "artboards": [0], "pdfCompatible": false}));
+    refused(&mut s, "document.export", json!({"format": "pdf", "path": file("export.pdf")}));
+    refused(&mut s, "document.export", json!({"format": "ai", "path": file("export.ai")}));
+    refused(&mut s, "document.export", json!({"format": "eps", "path": file("export.eps")}));
+    refused(&mut s, "document.export", json!({"format": "vectorcraft", "path": file("export.vectorcraft")}));
+    refused(&mut s, "document.exportPdf", json!({}));
+    refused(&mut s, "document.exportPdf", json!({"path": file("direct.pdf")}));
+    refused(&mut s, "document.exportEps", json!({"path": file("direct.eps")}));
+    refused(&mut s, "document.save", json!({}));
+    refused(&mut s, "document.save", json!({"path": file("save.pdf")}));
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as.ai")}));
+    // A saved `.ai` file has the artboards as its pages, whatever `useArtboards` says.
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as-art.ai"), "useArtboards": false}));
+    refused(&mut s, "file.saveAs", json!({"path": file("save-as.eps")}));
+    refused(&mut s, "file.saveCopy", json!({"path": file("copy.vectorcraft")}));
+    refused(&mut s, "file.saveAsTemplate", json!({}));
+    refused(&mut s, "file.saveAsTemplate", json!({"format": "ait"}));
+    refused(&mut s, "document.exportForScreens", json!({"folder": out, "formats": [{"format": "png"}, {"format": "vectorcraft"}]}));
+    refused(&mut s, "document.exportForScreens", json!({"zip": true, "formats": [{"format": "pdf", "preserveEditing": true}]}));
+    refused(&mut s, "assets.export", json!({"folder": out, "formats": [{"format": "ai"}]}));
+    refused(&mut s, "assets.export", json!({"folder": out, "formats": [{"format": "eps"}]}));
+    refused(&mut s, "file.package", json!({"folder": out}));
+    refused(&mut s, "file.package", json!({}));
+    assert_eq!(std::fs::read(&own).unwrap(), before, "the document's own file is left as it was");
+    let written: Vec<_> = std::fs::read_dir(&home.0).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(written, ["own.vectorcraft"]);
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [script]);
+}
+
+/// A confined caller still writes the outputs that carry no native document (a PDF without
+/// Preserve Editing, a PDF or `.ai` file of the art's bounds or of some artboards, a legacy `.ai`
+/// file, an image), and
+/// native outputs that link only JavaScript files it may read keep them as stored. A caller without
+/// roots writes a file outside them too.
+#[test]
+fn confined_output_without_the_document_or_with_scripts_the_caller_may_read_is_written() {
+    let away = Folder::new("native-script-kept-away");
+    let home = Folder::new("native-script-kept-home");
+    let outside = away.file("menu.js");
+    let mut s = session();
+    rect(&mut s, 10.0);
+    run(&mut s, "artboard.new", json!({"x": 200, "y": 0, "width": 100, "height": 100}));
+    run(&mut s, "svgInteractivity.addFile", json!({"file": outside}));
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[&home.0]).unwrap().unwrap();
+    let written = |s: &mut Session, cmd: &str, p: Value| {
+        crate::file_access::confine(Some(&roots), || s.execute(cmd, &p)).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"))
+    };
+    for p in [
+        json!({"format": "pdf", "preserveEditing": false}),
+        json!({"format": "pdf", "useArtboards": false}),
+        json!({"format": "pdf", "range": "2"}),
+        json!({"format": "ai", "artboards": [1]}),
+        json!({"format": "ai", "useArtboards": false}),
+        json!({"format": "ai", "aiVersion": "7"}),
+        json!({"format": "png"}),
+    ] {
+        written(&mut s, "document.serialize", p);
+    }
+    written(&mut s, "document.exportPdf", json!({"preserveEditing": false}));
+    written(&mut s, "document.exportForScreens", json!({"zip": true, "formats": [{"format": "pdf"}]}));
+    // A PDF of each artboard leaves the editing data out: it holds one of the two.
+    written(&mut s, "document.exportForScreens", json!({"zip": true, "formats": [{"format": "pdf", "preserveEditing": true}]}));
+    let refused = |s: &mut Session, p: Value| {
+        let e = crate::file_access::confine(Some(&roots), || s.execute("document.exportForScreens", &p)).expect_err("refused").to_string();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{p}: {e}");
+    };
+    // One PDF of both artboards, and Full Document's PDF of every artboard, carry it.
+    refused(&mut s, json!({"zip": true, "pdfs": "single", "formats": [{"format": "pdf", "preserveEditing": true}]}));
+    refused(&mut s, json!({"zip": true, "fullDocument": true, "formats": [{"format": "pdf", "preserveEditing": true}]}));
+    // Without roots, the native document keeps a file outside them.
+    let r = run(&mut s, "document.serialize", json!({}));
+    assert_eq!(carried_scripts(&r), [outside.as_str()]);
+    // Files the caller may read: inside the read roots, relative to the document's folder, a URL.
+    let inside = home.file("menu.js");
+    let url = "https://example.com/scripts/menu.js";
+    let kept = [inside.as_str(), "lib/tools.js", url];
+    let mut s = session();
+    rect(&mut s, 10.0);
+    for file in kept {
+        run(&mut s, "svgInteractivity.addFile", json!({"file": file}));
+    }
+    run(&mut s, "file.saveAs", json!({"path": home.file("doc.vectorcraft")}));
+    for format in ["vectorcraft", "pdf"] {
+        let r = written(&mut s, "document.serialize", json!({"format": format}));
+        assert_eq!(carried_scripts(&r), kept, "{format}");
+    }
+    written(&mut s, "document.exportPdf", json!({"path": home.file("doc.pdf")}));
+    written(&mut s, "file.package", json!({}));
+}
