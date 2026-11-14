@@ -2106,6 +2106,15 @@ stored data), `cmd::addons::pathtools::tests` in `vectorcraft-engine` (each comm
 anchor edits and transforms, the SVG export filter, the tool's gestures), `addons::pathtools::tests` in
 `vectorcraft-ui-egui` (submenu and panel) and `command_sweep`.
 
+The 3D Box and shapes add-on's commands (`addon.shapes.*`, 2026-11-13) refuse a value outside its range with an error
+that names the parameter and the range, and draw or change nothing: polygon sides and star points are whole numbers
+from 3 to 1,000 ([the help page](https://helpx.adobe.com/illustrator/desktop/draw-shapes-and-paths/modify-live-shapes/live-shape-properties.html)),
+sizes and corner radii are not negative, a star's inner radius is 0.01 to 1 times its outer radius, and rounding,
+randomizing, spoke ratio, spiral turns, divergence and inner radius keep VectorCraft's own ranges; `arcMode` takes
+only the names it lists. `addon.shapes.configure` checks every value before it changes any selected shape and records
+no undo step when nothing changes. Tests: `cmd::addons::shapes::tests` in `vectorcraft-engine`. Commands:
+`docs/mcp.md` › 3D Box and shapes add-on.
+
 The add-on's Corner Tool (2026-10-31) edits the Live Corners every path already keeps (no second corner store): hover
 shows an anchor that can take a corner, a click cuts one with the tool's radius and kind (round, inverted, chamfer), a
 drag sizes it (Shift: whole values), a cut corner's marker selects it and loads its values, resizes it, and removes it

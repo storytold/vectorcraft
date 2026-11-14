@@ -4938,6 +4938,7 @@ theme	Appearance	외관
 @msg	`select` must be true or false	`select`은(는) true 또는 false여야 합니다
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors`와 `maxAnchors`는 정수여야 합니다
 @msg	`{key}` must be a number not below 0	`{key}`은(는) 0 이상의 숫자여야 합니다
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}`은(는) 0 이상의 숫자 네 개여야 합니다: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}`은(는) [x, y, width, height]여야 합니다: 유한한 숫자 네 개이며 너비와 높이는 음수가 아니어야 합니다
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}`이(가) `{max_key}`보다 큽니다
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	다음 중 하나 이상을 지정하세요: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`

@@ -11051,6 +11051,33 @@ whole points and Escape cancels. A drag keeps a Contour's own corners and miter 
 options `corners` and `miterLimit` (`tool.setOption`). A border with a gap is two Contours of one shape (the gap first, so
 it ends up in front), baked with `effect.expandAppearance`, then `object.pathfinder.minusFront`.
 
+## 3D Box and shapes add-on
+
+The `addon.shapes.*` commands draw rotatable 3D boxes (`addon.shapes.box3d`) and rectangles, ellipses, polygons, stars and
+spirals that keep their settings (`addon.shapes.rectangle`, `ellipse`, `polygon`, `star`, `spiral`), and
+`addon.shapes.configure` changes those settings on the selected shapes (or `ids`). In a drawing command, an omitted or
+null value takes the default in the table. In `configure`, an omitted or null value keeps each shape's setting. A value
+outside its range is an error that names the parameter and the range, and the command then draws or changes nothing.
+The ranges are VectorCraft's own:
+
+| Parameter | Commands | Range (default) |
+|---|---|---|
+| `width`, `height` | `rectangle`, `ellipse`, `box3d` | pt, 0 or more |
+| `radius` | `polygon`, `spiral` | pt, 0 or more |
+| `radius` (corners) | `rectangle`, `configure` | pt, 0 or more (0); `configure` fits a larger radius to half each rectangle's shorter side |
+| `radii` | `rectangle`, `configure` | four numbers, 0 or more: `[tl, tr, br, bl]` |
+| `radius1` | `star` | pt, 0 or more |
+| `radius2` | `star` | 0.01 to 1 times `radius1` (half of it) |
+| `sides`, `points` | `polygon`, `star`, `configure` (`sides`) | a whole number from 3 to 1000 (6 sides, 5 points) |
+| `rounded`, `randomized` | `polygon`, `star`, `configure` | −10 to 10 (0) |
+| `spokeRatio` | `configure` | 0.01 to 1 |
+| `turns` | `spiral`, `configure` | 0.01 to 1024 (3) |
+| `divergence` | `spiral`, `configure` | 0 to 1000 (1) |
+| `innerRadius` | `spiral`, `configure` | 0 to 0.999 of the radius (0) |
+| `arcMode` | `rectangle`, `ellipse`, `polygon`, `star`, `configure` | `whole`, `pie` (or `slice`), `chord`, `arc` (or `open`) (`whole`) |
+
+A `configure` call that changes no shape records no undo step and returns `{updated: 0}`.
+
 ## Cutting Tools add-on
 
 Cutting Tools is a built-in add-on that prepares art for cutting. Its commands are `addon.cutting.bridges`,
