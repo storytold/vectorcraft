@@ -433,6 +433,51 @@ fn blocks_the_bidi_order_interleaves_keep_their_places() {
     assert!(c.x < bet.x && bet.x < z.x, "{c:?} {bet:?} {z:?}");
 }
 
+/// A justified line spreads its letters with the same gap before a right-to-left block as before a
+/// left-to-right one: the block starts at the first of its glyphs the line draws.
+#[test]
+fn justification_opens_the_same_gap_before_a_right_to_left_block() {
+    for inside in ["cd", "אב"] {
+        let at = |justify: Justify| {
+            let mut t = area("", style(20.0), Rect::new(0.0, 0.0, 200.0, 400.0), justify);
+            t.runs = vec![TextRun::new("ab", style(20.0)), TextRun::new(inside, marked(20.0)), TextRun::new("z", style(20.0))];
+            let l = layout(db(), &t);
+            let x = |byte: usize| l.glyphs.iter().filter(|g| g.byte == byte).map(|g| g.origin.x).fold(f64::INFINITY, f64::min);
+            let block = l.glyphs.iter().filter(|g| g.warichu.is_some()).map(|g| g.origin.x).fold(f64::INFINITY, f64::min);
+            (x(0), x(1), block, x(2 + inside.len()))
+        };
+        let (a, b, block, z) = at(Justify::Left);
+        let (a2, b2, block2, z2) = at(Justify::JustifyAll);
+        let gap = (b2 - a2) - (b - a);
+        assert!(gap > 1.0, "{inside}: the line is spread: {gap}");
+        assert!(((block2 - b2) - (block - b) - gap).abs() < 1e-6, "{inside}: the gap before the block: {} {gap}", (block2 - b2) - (block - b));
+        assert!(((z2 - block2) - (z - block) - gap).abs() < 1e-6, "{inside}: the gap after the block: {} {gap}", (z2 - block2) - (z - block));
+    }
+}
+
+/// The caret next to a character of a block spans the band of the character's block line, not
+/// the whole line.
+#[test]
+fn the_caret_in_a_block_spans_its_block_line() {
+    let l = layout(db(), &with_block("cdef", marked(20.0)));
+    let (c, e) = (&l.glyphs[2], &l.glyphs[4]);
+    let middle = (c.origin.y + e.origin.y) * 0.5;
+    let line = &l.lines[0];
+    // "c" and "d", on the upper line.
+    for byte in [2, 3] {
+        let (top, bottom) = caret_position(&l, byte);
+        assert!((top.y - (line.baseline - line.ascent)).abs() < 1e-6 && (bottom.y - middle).abs() < 1e-6, "{byte}: {top:?} {bottom:?} {middle}");
+    }
+    // "e" and "f", on the lower line.
+    for byte in [4, 5] {
+        let (top, bottom) = caret_position(&l, byte);
+        assert!((top.y - middle).abs() < 1e-6 && (bottom.y - (line.baseline + line.descent)).abs() < 1e-6, "{byte}: {top:?} {bottom:?} {middle}");
+    }
+    // Outside the block the caret spans the line.
+    let (top, bottom) = caret_position(&l, 0);
+    assert!((top.y - (line.baseline - line.ascent)).abs() < 1e-6 && (bottom.y - (line.baseline + line.descent)).abs() < 1e-6);
+}
+
 /// A click on a block's lower line goes to that line's characters, not to the character of the
 /// upper line at the same place along the block.
 #[test]
