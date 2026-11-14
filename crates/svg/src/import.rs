@@ -137,10 +137,14 @@ pub(crate) fn import_finding(
         return Err(too_deep());
     }
     let xml = parse(svg)?;
+    // Before the style cascade of `depth::height` and the prepass, which keeps the declarations of
+    // each element it reads; measured again below on the text usvg reads when that differs.
+    let styles = budget::check(&xml, budget::MAX_COPIED_STYLES, depth::MAX_ELEMENT_DEPTH)?;
     let Some(height) = depth::height(&xml, depth::MAX_ELEMENT_DEPTH) else {
         return Err(too_deep());
     };
     let (svg, found) = prepass(svg, &scan.markers, &xml, opts)?;
+    let rewritten = matches!(svg, Cow::Owned(_));
     // The prepass's edits are in the text: the XML is read again only when it made any.
     let xml = match &svg {
         Cow::Borrowed(_) => xml,
@@ -157,8 +161,9 @@ pub(crate) fn import_finding(
     let (src, slots) = text::prepare(svg, &xml, text_xml.as_ref(), units.dpi, &mut warnings);
     // Before usvg copies what `<use>`s show and the style values of each copy: the text usvg reads.
     let styles = match &src {
-        Cow::Borrowed(_) => budget::check(&xml, budget::MAX_COPIED_STYLES)?,
-        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::MAX_COPIED_STYLES)?,
+        Cow::Borrowed(_) if !rewritten => styles,
+        Cow::Borrowed(_) => budget::check(&xml, budget::MAX_COPIED_STYLES, usize::MAX)?,
+        Cow::Owned(prepared) => budget::check(&parse(prepared)?, budget::MAX_COPIED_STYLES, usize::MAX)?,
     };
     let files = found.files;
     files.copied_styles(styles);

@@ -27,7 +27,7 @@ use std::collections::{HashMap, HashSet};
 use usvg::roxmltree;
 
 use super::{MAX_NODES, SVG_NS, XNode};
-use crate::SvgError;
+use crate::{MAX_ELEMENT_DEPTH, SvgError};
 
 /// Most elements usvg may make of an SVG: [`MAX_NODES`], and below the 1,000,000 elements past
 /// which usvg stops (its count includes a root of its own).
@@ -287,12 +287,14 @@ impl<'a, 'i> Measure<'a, 'i> {
 }
 
 /// The bytes of style values usvg would copy into the elements of `xml`, when that is no more
-/// than `bytes_left` and it makes no more than [`MAX_SVG_ELEMENTS`] elements of it.
-pub(super) fn check(xml: &roxmltree::Document, bytes_left: u64) -> Result<u64, SvgError> {
-    match measure(xml, MAX_SVG_ELEMENTS as u64, bytes_left) {
+/// than `bytes_left` and it makes no more than [`MAX_SVG_ELEMENTS`] elements of it, nested no
+/// deeper than `depth` (counted as `depth::height` counts, which finds at least as much).
+pub(super) fn check(xml: &roxmltree::Document, bytes_left: u64, depth: usize) -> Result<u64, SvgError> {
+    match measure(xml, MAX_SVG_ELEMENTS as u64, bytes_left, depth) {
         Ok(cost) => Ok(cost.bytes),
         Err(Past::Elements) => Err(SvgError::TooLarge(MAX_SVG_ELEMENTS)),
         Err(Past::Bytes) => Err(SvgError::StylesTooLarge((MAX_COPIED_STYLES >> 20) as usize)),
+        Err(Past::Depth) => Err(SvgError::TooDeep(MAX_ELEMENT_DEPTH)),
     }
 }
 
@@ -301,11 +303,13 @@ pub(super) fn check(xml: &roxmltree::Document, bytes_left: u64) -> Result<u64, S
 enum Past {
     Elements,
     Bytes,
+    Depth,
 }
 
-/// What usvg makes of `xml`, up to `elements` elements and `bytes` bytes of copied styles. Without
-/// recursion; each element is measured once.
-fn measure(xml: &roxmltree::Document, elements: u64, bytes: u64) -> Result<Cost, Past> {
+/// What usvg makes of `xml`, up to `elements` elements and `bytes` bytes of copied styles, its
+/// elements and the copies `<use>`s show nested up to `depth` deep. Without recursion; each
+/// element is measured once.
+fn measure(xml: &roxmltree::Document, elements: u64, bytes: u64, depth: usize) -> Result<Cost, Past> {
     let mut m = Measure::new(xml);
     let mut costs: HashMap<roxmltree::NodeId, Cost> = HashMap::new();
     // The elements entered and not yet left: one entered again is a loop.
@@ -326,7 +330,11 @@ fn measure(xml: &roxmltree::Document, elements: u64, bytes: u64) -> Result<Cost,
                 }
                 if !open.insert(n.id()) {
                     // usvg copies a loop until it nests past what it reads.
-                    return Err(Past::Elements);
+                    return Err(Past::Depth);
+                }
+                // The elements entered and not yet left are the ones it is nested in.
+                if open.len() > depth {
+                    return Err(Past::Depth);
                 }
                 let (parts, bare) = match svg_name(n) {
                     Some("text") => (vec![], None),
@@ -376,12 +384,12 @@ mod tests {
     /// What [`measure`] makes of `text` with no limits, as (elements, bytes).
     fn cost(text: &str) -> (u64, u64) {
         let xml = roxmltree::Document::parse(text).unwrap();
-        let c = measure(&xml, u64::MAX, u64::MAX).unwrap_or_else(|p| panic!("{p:?}"));
+        let c = measure(&xml, u64::MAX, u64::MAX, usize::MAX).unwrap_or_else(|p| panic!("{p:?}"));
         (c.elements, c.bytes)
     }
 
     fn past(text: &str, elements: u64, bytes: u64) -> Option<Past> {
-        measure(&roxmltree::Document::parse(text).unwrap(), elements, bytes).err()
+        measure(&roxmltree::Document::parse(text).unwrap(), elements, bytes, usize::MAX).err()
     }
 
     /// Groups `g0` to `g{levels}`: `g0` a rectangle styled `style`, each other two `<use>`s of the
@@ -445,11 +453,28 @@ mod tests {
     #[test]
     fn a_loop_usvg_copies_without_end_is_refused_as_usvg_refuses_it() {
         let looped = svg("<g id='a'><use href='#b'/></g><g id='b'><use href='#a'/></g>");
-        assert_eq!(past(&looped, u64::MAX, u64::MAX), Some(Past::Elements));
+        assert_eq!(past(&looped, u64::MAX, u64::MAX), Some(Past::Depth));
         assert!(usvg::Tree::from_str(&looped, &usvg::Options::default()).is_err());
         // Without the loop, usvg reads it.
         let open = svg("<g id='a'><use href='#b'/></g><g id='b'><rect width='1' height='1'/></g>");
         assert!(past(&open, u64::MAX, u64::MAX).is_none() && usvg::Tree::from_str(&open, &usvg::Options::default()).is_ok());
+    }
+
+    /// A chain of `<use>`s nested past the depth is too deep, as `depth::height` finds it, before
+    /// what the chain makes is added up; one within the depth `depth::height` gives is not.
+    #[test]
+    fn copies_nested_past_the_depth_are_too_deep() {
+        let links: String = (0..3000).map(|i| format!("<g id='u{i}'><use href='#u{}'/></g>", i + 1)).collect();
+        let deep = svg(&format!("<defs>{links}<rect id='u3000' width='1' height='1'/></defs><use href='#u0'/>"));
+        let xml = roxmltree::Document::parse(&deep).unwrap();
+        assert_eq!(measure(&xml, u64::MAX, u64::MAX, MAX_ELEMENT_DEPTH).err(), Some(Past::Depth));
+        assert!(super::super::depth::height(&xml, MAX_ELEMENT_DEPTH).is_none());
+        assert!(matches!(check(&xml, MAX_COPIED_STYLES, MAX_ELEMENT_DEPTH), Err(SvgError::TooDeep(_))));
+        for text in [chain(5, ""), svg("<g><g><use href='#r'/></g></g><rect id='r'/>")] {
+            let xml = roxmltree::Document::parse(&text).unwrap();
+            let height = super::super::depth::height(&xml, usize::MAX).unwrap_or(0);
+            assert!(measure(&xml, u64::MAX, u64::MAX, height).is_ok(), "{height} {text}");
+        }
     }
 
     #[test]
@@ -458,5 +483,20 @@ mod tests {
         // svg, g (its text is not counted outside a text), text, its runs "xy" and "z", tspan, tref and its text.
         assert_eq!(n, 1 + 1 + 1 + 2 + 1 + 1 + 1);
         assert_eq!(bytes, (16 + 2) + (16 + 1) + (16 + 4));
+    }
+
+    /// A long style sheet rule that matches many elements is refused before the import's own style
+    /// cascade (which keeps the declarations of each element) reads them, in an SVG and in an SVG
+    /// image it shows.
+    #[test]
+    fn a_long_rule_on_many_elements_is_refused_before_the_cascade_reads_it() {
+        let groups = svg(&format!("<style>g{{font-family:{}}}</style>{}", "a".repeat(100_000), "<g/>".repeat(1000)));
+        let image = svg(&format!(r#"<image href="data:image/svg+xml;base64,{}" width="10" height="10"/>"#, crate::base64_encode(groups.as_bytes())));
+        for text in [groups, image] {
+            let before = super::super::css::selector_tests();
+            let err = super::super::import(&text, &crate::ImportOptions::default(), MAX_NODES).err();
+            assert!(matches!(err, Some(SvgError::StylesTooLarge(64))), "{err:?}");
+            assert_eq!(super::super::css::selector_tests(), before);
+        }
     }
 }

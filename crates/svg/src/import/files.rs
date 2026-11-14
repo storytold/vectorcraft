@@ -587,22 +587,25 @@ impl Files {
             return leave_out(&self.too_deep, true);
         }
         let xml = super::parse(text).ok()?;
-        let Some(height) = depth::height(&xml, left) else { return leave_out(&self.too_deep, true) };
-        // usvg's parser would overflow on it, as on the SVG holding it (`import`).
-        super::convolve_matrices_ok(&xml).ok()?;
-        // What usvg would make of it, measured as the SVG holding it is (`import`), its copied
-        // styles counted with theirs while usvg reads it, and kept only when it decodes: past the
-        // limits, the whole SVG is refused.
+        // What usvg would make of it, measured as the SVG holding it is (`import`), before the
+        // style cascade of `depth::height`; its copied styles count with theirs while usvg reads
+        // it, and only when it decodes. Too deep, it is left out; past the other limits, the whole
+        // SVG is refused.
         let spent = self.styles.load(Ordering::Relaxed);
-        match budget::check(&xml, budget::MAX_COPIED_STYLES.saturating_sub(spent)) {
-            Ok(bytes) => self.styles.store(spent.saturating_add(bytes), Ordering::Relaxed),
+        let bytes = match budget::check(&xml, budget::MAX_COPIED_STYLES.saturating_sub(spent), left) {
+            Ok(bytes) => bytes,
+            Err(SvgError::TooDeep(_)) => return leave_out(&self.too_deep, true),
             Err(e) => {
                 if let Ok(mut refused) = self.refused.lock() {
                     refused.get_or_insert(e);
                 }
                 return None;
             }
-        }
+        };
+        let Some(height) = depth::height(&xml, left) else { return leave_out(&self.too_deep, true) };
+        // usvg's parser would overflow on it, as on the SVG holding it (`import`).
+        super::convolve_matrices_ok(&xml).ok()?;
+        self.styles.store(spent.saturating_add(bytes), Ordering::Relaxed);
         self.depth.store(used + height, Ordering::Relaxed);
         let within = self.within.lock().ok().map(|mut w| w.push(file)).is_some();
         // usvg's `Tree::from_data_nested`, except that hrefs to files go to the resolver.
