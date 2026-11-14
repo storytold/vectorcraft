@@ -7588,6 +7588,1826 @@ shape	Open	Открытый
 	Grommet Inset	Отступ люверсов от края
 	Diameter	Диаметр
 
+# Status and error messages (`@msg`) of commands, scripts, and file import and export, sorted by
+# their English text. Messages that begin with a feature name.
+@msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	'caller', 'callee' и 'arguments' нельзя использовать с функциями строгого режима
+@msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	Профиль поддерживает один эффект «Вращение». Измените параметры существующего эффекта.
+@msg	Add Points at Crossings: a path went missing	Добавить точки на пересечениях: контур пропал
+@msg	Alignment must be one of the choices	Выравнивание должно быть одним из предложенных вариантов
+@msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Boolean.prototype.{name} вызван для значения, которое не является Boolean
+@msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	изображения CMYK, отсчёты которых не удалось прочитать в CMYK, импортированы в RGB
+@msg	CSS options: {e}	Параметры CSS: {e}
+@msg	CSV has a header but no data rows	в CSV есть заголовок, но нет строк данных
+@msg	CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark	CSV содержит байты NUL: сохраните его в UTF-8 или в UTF-16 с меткой порядка байтов
+@msg	CSV is empty	CSV пуст
+@msg	CSV is larger than {MAX_CSV_BYTES} bytes	CSV больше {MAX_CSV_BYTES} байт
+@msg	CSV is not UTF-16	CSV не в кодировке UTF-16
+@msg	CSV is not UTF-8	CSV не в кодировке UTF-8
+@msg	CSV would be larger than {MAX_CSV_BYTES} bytes	CSV был бы больше {MAX_CSV_BYTES} байт
+@msg	Cannot write to the location of “{name}”; choose where to save it	Невозможно записать в расположение «{name}»; выберите, куда сохранить файл
+@msg	Choose original artwork, not a dimension's generated paths	Выберите исходную графику, а не контуры, созданные размером
+@msg	Contour: select paths or shapes	Эквидистанта: выделите контуры или фигуры
+@msg	Contour: the Offset Path effect is not available	Эквидистанта: эффект «Смещение контура» недоступен
+@msg	Create needs fills, strokes or both	Для создания нужны заливки, обводки или и то и другое
+@msg	DCS files can only be placed linked: use File › Place with Link on	Файлы DCS можно помещать только как связанные: используйте «Файл › Поместить» с включённым параметром «Связать»
+@msg	DXF options: {e}	Параметры DXF: {e}
+@msg	DXF scale must be a positive number up to {_1}, not {scale}	Масштаб DXF должен быть положительным числом не больше {_1}, а не {scale}
+@msg	DXF {field} `{s}`: {allowed}	DXF, {field} `{s}`: {allowed}
+@msg	Date.prototype method called on a value that is not a Date object	метод Date.prototype вызван для значения, которое не является объектом Date
+@msg	Dimension is locked or hidden	Размер заблокирован или скрыт
+@msg	Dimension mode does not match its source	Режим размера не соответствует его источнику
+@msg	Draw Inside needs exactly one selected path, compound path or text	Для режима «Рисовать внутри» нужен ровно один выделенный контур, составной контур или текст
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	Сохранение в EPS записывает всю графику: чтобы записать в EPS только выделенное, используйте document.export
+@msg	EPS flattener: {e}	Объединение EPS: {e}
+@msg	EPS options: {e}	Параметры EPS: {e}
+@msg	EPS {field} `{s}`: {allowed}	EPS, {field} `{s}`: {allowed}
+@msg	Error.prototype.toString was called on a value that is not an object	Error.prototype.toString вызван для значения, которое не является объектом
+@msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	«Экспортировать для экранов» записывает png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai или vectorcraft
+@msg	Flare click coordinates must be finite numbers	Координаты щелчка для блика должны быть конечными числами
+@msg	Function.prototype.toString was called on a value that is not a function	Function.prototype.toString вызван для значения, которое не является функцией
+@msg	HTML Text applies to object slices of type only	«Текст HTML» применяется только к фрагментам текстовых объектов
+@msg	Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)	Для параметра «Определять объекты по» выбрано XML ID: имя должно быть допустимым XML ID (начинается с буквы, подчёркивания или двоеточия; без пробелов)
+@msg	Image Trace failed: internal error: its thread stopped (please report this bug)	Трассировка изображения не выполнена: внутренняя ошибка: её поток остановился (сообщите об этой ошибке)
+@msg	Image Trace failed: {e}	Трассировка изображения не выполнена: {e}
+@msg	Image Trace finished, but its document was closed	Трассировка изображения завершена, но её документ был закрыт
+@msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	Трассировка изображения завершена, но изображение или его настройки за это время изменились: выполните трассировку снова
+@msg	Import SVG Filter reads SVG files, not SVGZ	Импорт фильтра SVG читает файлы SVG, а не SVGZ
+@msg	Invalid dimension offset	Недопустимое смещение размера
+@msg	Invalid point	Недопустимая точка
+@msg	JSON.parse: {why} (at offset {at})	JSON.parse: {why} (смещение {at})
+@msg	JSON.stringify cannot write a structure that contains itself	JSON.stringify не может записать структуру, которая содержит саму себя
+@msg	Join: a subpath went missing	Соединить: вложенный контур пропал
+@msg	Line Gap must be a number	Интервал между строками должен быть числом
+@msg	Lock Workspace is not available in VectorCraft	Закрепление рабочей среды недоступно в VectorCraft
+@msg	Move Panel to New Window is not available: floating panels stay in the main window	Перемещение панели в новое окно недоступно: плавающие панели остаются в главном окне
+@msg	Namespace.prototype.toString needs a Namespace	для Namespace.prototype.toString нужен Namespace
+@msg	New Document profiles need the preferences folder, which this run doesn't have	Профилям нового документа нужна папка настроек, которой нет у этого запуска
+@msg	Number.prototype.{name} was called on a value that is not a number	Number.prototype.{name} вызван для значения, которое не является числом
+@msg	Object.create's prototype must be an object or null	прототип для Object.create должен быть объектом или null
+@msg	Object.{function} was given a value that is not an object	в Object.{function} передано значение, которое не является объектом
+@msg	Offset Path: the path is too complex to offset	Смещение контура: контур слишком сложен для смещения
+@msg	Offset Path: {e}	Смещение контура: {e}
+@msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	Содержимое PDF неполно или превышает ограничения чтения; документ не импортирован
+@msg	PDF flattener: {e}	Объединение PDF: {e}
+@msg	PDF options: {e}	Параметры PDF: {e}
+@msg	QName.prototype.toString needs a QName	для QName.prototype.toString нужен QName
+@msg	Recolor Artwork is no longer open	Окно «Перекрасить рисунок» больше не открыто
+@msg	RegExp.prototype.{name} was called on a value that is not a RegExp object	RegExp.prototype.{name} вызван для значения, которое не является объектом RegExp
+@msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	SVG не в кодировке UTF-8, UTF-16 или ISO 8859-1
+@msg	Save writes one artboard: name one, or export several with document.export	Сохранение записывает одну монтажную область: укажите одну или экспортируйте несколько через document.export
+@msg	Select a dimension first	Сначала выделите размер
+@msg	Select dimensions to update	Выделите размеры для обновления
+@msg	Select only dimensions	Выделите только размеры
+@msg	Select two or more objects, or a group	Выделите два или более объекта либо группу
+@msg	Shaper needs 1–64 source paths	Для Shaper нужно от 1 до 64 исходных контуров
+@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	Мостики трафарета: выделенная графика слишком велика или слишком детальна для мостиков
+@msg	String.prototype.toString was called on a value that is not a string	String.prototype.toString вызван для значения, которое не является строкой
+@msg	Switch x/y is for scatter graphs	«Поменять x/y» применяется к точечным диаграммам
+@msg	Text options: {e}	Параметры текста: {e}
+@msg	The {name} profile could not be read, so the new document has the default settings: {reason}	Профиль {name} не удалось прочитать, поэтому у нового документа настройки по умолчанию: {reason}
+@msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	Треппинг: больше {_1} пар объектов расположены достаточно близко для треппинга, или слишком много объектов занимают один горизонтальный диапазон; применяйте треппинг к меньшему числу объектов за раз
+@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	Рамка и линии выборки: ни одна линия выборки не помещается за пределами графики, а рамка выборки отключена
+@msg	\\ at end of pattern	\\ в конце шаблона
+# Messages that begin with a parameter name.
+@msg	`alignOn` cannot be empty	`alignOn` не может быть пустым
+@msg	`alignOn` must be a string	`alignOn` должно быть строкой
+@msg	`align` is start, center or end	`align` принимает start, center или end
+@msg	`align` must be a string	`align` должно быть строкой
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` должно быть массивом пар [subpath, anchor]
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` должно содержать индексы опорных точек (0, 1, 2…), а не {k}
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` должно содержать индексы опорных точек (0, 1, 2…), а не {v}
+@msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` для этого диалогового окна {kind} должно быть одним из: {_1}
+@msg	`answers` has more than {MAX_ANSWERS} answers	в `answers` больше {MAX_ANSWERS} ответов
+@msg	`answers` is larger than 1 MiB	`answers` больше 1 MiB
+@msg	`answers` must be a list of answers	`answers` должно быть списком ответов
+@msg	`artboard` must be the index of an artboard of the document	`artboard` должно быть индексом монтажной области документа
+@msg	`artboardsAt` must be [x, y]	`artboardsAt` должно быть [x, y]
+@msg	`artboards` must be a list of artboard indices	`artboards` должно быть списком индексов монтажных областей
+@msg	`artboards` names an artboard the document does not have	`artboards` указывает монтажную область, которой нет в документе
+@msg	`artboards` names an artboard twice	`artboards` указывает одну монтажную область дважды
+@msg	`asset` is the asset id (see assets.list)	`asset` — идентификатор ресурса (см. assets.list)
+@msg	`at` must be [x, y] (got {at})	`at` должно быть [x, y] (получено {at})
+@msg	`at` must be a byte offset	`at` должно быть смещением в байтах
+@msg	`at` must be a point [x, y]	`at` должно быть точкой [x, y]
+@msg	`autoLeading` must be a number	`autoLeading` должно быть числом
+@msg	`background` must be "", "matte" or #rrggbb	`background` должно быть "", "matte" или #rrggbb
+@msg	`beside` needs `side`	для `beside` нужно `side`
+@msg	`burasagari` must be "none", "standard" or "forced"	`burasagari` должно быть "none", "standard" или "forced"
+@msg	`center` must be [x, y]	`center` должно быть [x, y]
+@msg	`charAlign` must be "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" or "icfBottom"	`charAlign` должно быть "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" или "icfBottom"
+@msg	`charDirection` must be "default", "leftToRight" or "rightToLeft"	`charDirection` должно быть "default", "leftToRight" или "rightToLeft"
+@msg	`clearStroke` requires `stroke: false`, `ids: []` and no `stop`	для `clearStroke` нужны `stroke: false`, `ids: []` и отсутствие `stop`
+@msg	`clear` must be a list of type object ids, not {v}	`clear` должно быть списком идентификаторов текстовых объектов, а не {v}
+@msg	`clear` must list type objects; {_1} is not one	`clear` должно содержать текстовые объекты; {_1} не является текстовым объектом
+@msg	`clear` must not list `id`	`clear` не должно содержать `id`
+@msg	`code` must be a whole number	`code` должно быть целым числом
+@msg	`colorMode` must be one of rgb, cmyk	`colorMode` должно быть одним из: rgb, cmyk
+@msg	`color` needs a `rule` to make the theme from	для `color` нужно `rule`, по которому создаётся тема
+@msg	`colors` does not apply to the {name} reduction	`colors` не применяется к редукции {name}
+@msg	`colors` is empty	`colors` пусто
+@msg	`colors` must be a whole number from 2 to 256	`colors` должно быть целым числом от 2 до 256
+@msg	`colors` must be at least 9 for the uniform reduction	`colors` должно быть не меньше 9 для редукции uniform
+@msg	`colors` must be between 1 and {MAX_THEME_COLORS} (got {n})	`colors` должно быть от 1 до {MAX_THEME_COLORS} (получено {n})
+@msg	`columnType` is vertical, uniform, repeating or sliding	`columnType` принимает vertical, uniform, repeating или sliding
+@msg	`columns` must be a whole number 1..50	`columns` должно быть целым числом 1..50
+@msg	`commands` must not be empty	`commands` не должно быть пустым
+@msg	`contents` goes with `to`	`contents` указывается вместе с `to`
+@msg	`corners` must be sharp, round or square, not `{other}`	`corners` должно быть sharp, round или square, а не `{other}`
+@msg	`corners` must list anchor indices (0, 1, 2…), not {v}	`corners` должно содержать индексы опорных точек (0, 1, 2…), а не {v}
+@msg	`count` must be a whole number from 0 to {MAX_COUNT}	`count` должно быть целым числом от 0 до {MAX_COUNT}
+@msg	`count` must be a whole number from 1 to 100	`count` должно быть целым числом от 1 до 100
+@msg	`dataBase64` is larger than the module limit	`dataBase64` больше ограничения для модуля
+@msg	`dataBase64` is not valid base64	`dataBase64` не является допустимым base64
+@msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` нельзя сочетать с `ids`, `reverse` или `append`
+@msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` и `childLimit` ограничивают сводку: передайте `summary: true`
+@msg	`design` is a design name, or null for plain columns	`design` — имя дизайна или null для обычных столбцов
+@msg	`design` is a design name, or null for the default marker	`design` — имя дизайна или null для маркера по умолчанию
+@msg	`destinationFolder` is required when destination is `folder`	`destinationFolder` обязательно, когда destination равно `folder`
+@msg	`destination` must be `none`, `saveAndClose` or `folder`	`destination` должно быть `none`, `saveAndClose` или `folder`
+@msg	`diameter` must be from 0.1 to 2500 pt	`diameter` должно быть от 0.1 до 2500 pt
+@msg	`digits` must be one of {_1}	`digits` должно быть одним из: {_1}
+@msg	`dimImages` is a percentage or false	`dimImages` — процент или false
+@msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction` должно быть "auto", "leftToRight" или "rightToLeft"
+@msg	`ditherAmount` must be a number from 0 to 100	`ditherAmount` должно быть числом от 0 до 100
+@msg	`each` is the value one design stands for, more than 0	`each` — значение, которое обозначает один дизайн, больше 0
+@msg	`end` must be "start" or "end"	`end` должно быть "start" или "end"
+@msg	`ends` applies to joining exactly two paths	`ends` применяется при соединении ровно двух контуров
+@msg	`event` must be one of {_1}	`event` должно быть одним из: {_1}
+@msg	`every` must be "all", "odd" or "even", not {v}	`every` должно быть "all", "odd" или "even", а не {v}
+@msg	`expand` must be true or false	`expand` должно быть true или false
+@msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` должно быть от {lo} до {hi} pt
+@msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` должно содержать от 1 до 1000 путей к файлам шрифтов, которые нашёл последний поиск text.findFontFiles
+@msg	`focal` and `radius` cannot be used together	`focal` и `radius` нельзя использовать вместе
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` должно быть массивом пар [subpath, anchor]
+@msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` указывает [{si}, {ai}], а это не опорная точка контура
+@msg	`folder` must be an absolute folder path	`folder` должно быть абсолютным путём к папке
+@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` должно быть объектом из тегов осей и значений, например {"wght"}
+@msg	`format` must be a string	`format` должно быть строкой
+@msg	`format` must be one of {_1}	`format` должно быть одним из: {_1}
+@msg	`fractions` is chop or scale	`fractions` принимает chop или scale
+@msg	`from` and `to` must differ	`from` и `to` должны различаться
+@msg	`from` has an empty frame	у `from` пустая рамка
+@msg	`from` must be a non-negative integer	`from` должно быть неотрицательным целым числом
+@msg	`from` must be area type or type on a path	`from` должно быть текстом в области или текстом по контуру
+@msg	`gid` must be a glyph id, not {v}	`gid` должно быть идентификатором глифа, а не {v}
+@msg	`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)	`glyphAlternate` относится к одному символу, а не к стилю символов (его задаёт text.setGlyphAlternate)
+@msg	`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)	`glyphAlternate` принимает только null, что отменяет выбор глифа (выбор делает text.setGlyphAlternate)
+@msg	`group` must be one of {_1}	`group` должно быть одним из: {_1}
+@msg	`group` must be the Objects on Path group of `member` and `target`	`group` должно быть группой «Объекты на контуре», в которую входят `member` и `target`
+@msg	`guide` must be a guide index (guide.list)	`guide` должно быть индексом направляющей (guide.list)
+@msg	`hAlign` must be default, left, center or right	`hAlign` должно быть default, left, center или right
+@msg	`id` is an object id, not {v}	`id` — идентификатор объекта, а не {v}
+@msg	`id` must be a node id	`id` должно быть идентификатором узла
+@msg	`id` must be an object id, not {v}	`id` должно быть идентификатором объекта, а не {v}
+@msg	`ids` must name Objects on Path groups or objects in them	`ids` должно указывать группы «Объекты на контуре» или объекты в них
+@msg	`ids` takes at most {MAX_INSPECT_IDS} ids	`ids` принимает не более {MAX_INSPECT_IDS} идентификаторов
+@msg	`imageMap` must be none, rectangle or polygon	`imageMap` должно быть none, rectangle или polygon
+@msg	`includeArtboardFill` must be true or false	`includeArtboardFill` должно быть true или false
+@msg	`includeSubdirs` must be true or false	`includeSubdirs` должно быть true или false
+@msg	`index` must be a point index	`index` должно быть индексом точки
+@msg	`index` must be a whole number or null	`index` должно быть целым числом или null
+@msg	`indices` must be a non-empty array of item indices	`indices` должно быть непустым массивом индексов элементов
+@msg	`item` needs `index`	для `item` нужно `index`
+@msg	`items` is a list of {kind, item}	`items` — список {kind, item}
+@msg	`items` is empty	`items` пусто
+@msg	`items` must be a list of {id, points}	`items` должно быть списком {id, points}
+@msg	`items` must be a list of {{id, anchors?}}, not {v}	`items` должно быть списком {{id, anchors?}}, а не {v}
+@msg	`items` must be an array of {id, anchors}	`items` должно быть массивом {id, anchors}
+@msg	`items` must be an array of {{id, corners?}}, not {v}	`items` должно быть массивом {{id, corners?}}, а не {v}
+@msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida` должно быть "none", "short", "medium", "long" или "stylistic"
+@msg	`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)	`kerningBefore` относится к первому символу строки, а не к стилю символов (его задаёт text.setRangeStyle)
+@msg	`kind` is one of {_1}	`kind` — одно из: {_1}
+@msg	`kind` must be "round", "invertedRound" or "chamfer", not {v}	`kind` должно быть "round", "invertedRound" или "chamfer", а не {v}
+@msg	`kind` must be `text`, `visibility`, `image` or `graph`	`kind` должно быть `text`, `visibility`, `image` или `graph`
+@msg	`kind` must be a string	`kind` должно быть строкой
+@msg	`kind` must be image, noImage or htmlText	`kind` должно быть image, noImage или htmlText
+@msg	`kinsokuType` must be "pushInFirst", "pushOutFirst" or "pushOutOnly"	`kinsokuType` должно быть "pushInFirst", "pushOutFirst" или "pushOutOnly"
+@msg	`kinsoku` must be "none", "hard" or "soft"	`kinsoku` должно быть "none", "hard" или "soft"
+@msg	`label` must be a non-empty name of at most 200 characters	`label` должно быть непустым именем длиной не более 200 символов
+@msg	`language` must be a language name or tag, such as "Turkish" or "tr"	`language` должно быть названием или тегом языка, например "Turkish" или "tr"
+@msg	`leader` must be a string	`leader` должно быть строкой
+@msg	`leadingModel` must be "romanBaseline" or "emBoxTop"	`leadingModel` должно быть "romanBaseline" или "emBoxTop"
+@msg	`leading` must be from 0.1 to 5000, or null for Auto	`leading` должно быть от 0.1 до 5000 или null для значения «Авто»
+@msg	`length` must be a number of at most 1000000 pt either way	`length` должно быть числом не больше 1000000 pt в любую сторону
+@msg	`line` must be true or false	`line` должно быть true или false
+@msg	`max` must be 1 to {MAX_SUGGESTIONS}	`max` должно быть от 1 до {MAX_SUGGESTIONS}
+@msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle` ({min_angle}°) не может быть больше `maxAngle` ({max_angle}°)
+@msg	`mode` must be "handles", "straight" or "smooth"	`mode` должно быть "handles", "straight" или "smooth"
+@msg	`mode` must be "straight", "bezier" or "arc"	`mode` должно быть "straight", "bezier" или "arc"
+@msg	`mode` must be one of {_1}	`mode` должно быть одним из: {_1}
+@msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` должно быть "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" или "lineEndHalf"
+@msg	`name` must be a name that is not empty	`name` должно быть непустым именем
+@msg	`name` must not be empty	`name` не должно быть пустым
+@msg	`names` is a list of preset names	`names` — список имён наборов
+@msg	`names` lists preset names	`names` перечисляет имена наборов
+@msg	`names` must be a list of names	`names` должно быть списком имён
+@msg	`names` must be a list of swatch names	`names` должно быть списком имён образцов
+@msg	`names` must be an array of style names	`names` должно быть массивом имён стилей
+@msg	`new` is a design name, or true	`new` — имя дизайна или true
+@msg	`origin` must be [x, y] in points	`origin` должно быть [x, y] в пунктах
+@msg	`path` must be a folder	`path` должно быть папкой
+@msg	`path` must be a path object	`path` должно быть объектом-контуром
+@msg	`picks` must be an array (got {v})	`picks` должно быть массивом (получено {v})
+@msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` должно содержать от 1 до {MAX_PICKS} выборов (получено {_1})
+@msg	`pivot` must be a whole number from 0 to 8	`pivot` должно быть целым числом от 0 до 8
+@msg	`points` must be a list of [x, y] points	`points` должно быть списком точек [x, y]
+@msg	`points` must be a list of point indexes	`points` должно быть списком индексов точек
+@msg	`points` must be an array of point indices	`points` должно быть массивом индексов точек
+@msg	`points` must be point indexes	`points` должно содержать индексы точек
+@msg	`points` must hold from 2 to 100000 points	`points` должно содержать от 2 до 100000 точек
+@msg	`port` must be "in" or "out"	`port` должно быть "in" или "out"
+@msg	`position` is above or below	`position` принимает above или below
+@msg	`preset` must be a string	`preset` должно быть строкой
+@msg	`radius` must be 0 or more	`radius` должно быть 0 или больше
+@msg	`ratio` must be from 0.1 to 0.5	`ratio` должно быть от 0.1 до 0.5
+@msg	`rect` must be [x, y, width, height]	`rect` должно быть [x, y, width, height]
+@msg	`rect` must be [x, y, width, height] with a positive size	`rect` должно быть [x, y, width, height] с положительным размером
+@msg	`rect` must be [x0, y0, x1, y1] (got {r})	`rect` должно быть [x0, y0, x1, y1] (получено {r})
+@msg	`relation` must be overlap, inside or outside	`relation` должно быть overlap, inside или outside
+@msg	`replace` must be a string	`replace` должно быть строкой
+@msg	`reversed` must be true or false	`reversed` должно быть true или false
+@msg	`rotate` must be a finite number	`rotate` должно быть конечным числом
+@msg	`rows` must be lists of numbers or nulls, not {r}	`rows` должно состоять из списков чисел или значений null, а не {r}
+@msg	`rule` must be nonZero or evenOdd	`rule` должно быть nonZero или evenOdd
+@msg	`scale` must be a number from 0.001 to 1000	`scale` должно быть числом от 0.001 до 1000
+@msg	`scale` must be a number in (0, 100]	`scale` должно быть числом в диапазоне (0, 100]
+@msg	`scope.{key}` must be a non-empty array	`scope.{key}` должно быть непустым массивом
+@msg	`scope` must be "document", {artboards} or {layers}	`scope` должно быть "document", {artboards} или {layers}
+@msg	`scope` must be "selection" or "document", not {other}	`scope` должно быть "selection" или "document", а не {other}
+@msg	`script` must be a string	`script` должно быть строкой
+@msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` — непустой список индексов рядов
+@msg	`seriesIndexes` needs a `type` or a `valueAxis`	для `seriesIndexes` нужно `type` или `valueAxis`
+@msg	`shift` must be a number of points	`shift` должно быть числом в пунктах
+@msg	`showCenter` must be true or false	`showCenter` должно быть true или false
+@msg	`side` must be "left", "right", "top" or "bottom"	`side` должно быть "left", "right", "top" или "bottom"
+@msg	`side` places the artboard: leave out x, y, width and height	`side` определяет положение монтажной области: не указывайте x, y, width и height
+@msg	`singleWordJustification` must be "fullJustify", "alignLeft", "alignCenter" or "alignRight"	`singleWordJustification` должно быть "fullJustify", "alignLeft", "alignCenter" или "alignRight"
+@msg	`size` is a percentage of the base text's size, 1 to 100	`size` — процент от размера основного текста, от 1 до 100
+@msg	`source` and `target` are the same object	`source` и `target` — один и тот же объект
+@msg	`source` is the only path in series group `target`	`source` — единственный контур в группе серии `target`
+@msg	`source` must be `folder` or `datasets`	`source` должно быть `folder` или `datasets`
+@msg	`spacing` makes more than {MAX_COUNT} lines across the box	`spacing` даёт больше {MAX_COUNT} линий поперёк рамки
+@msg	`spacing` must be a number	`spacing` должно быть числом
+@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` должно быть числом в пунктах, 0 или больше, либо "auto"
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` должно быть больше 0 и не больше {MAX_DISTANCE} pt
+@msg	`start` must be a finite number	`start` должно быть конечным числом
+@msg	`starts` must be an array of anchor indices (or nulls)	`starts` должно быть массивом индексов опорных точек (или значений null)
+@msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` должно быть linked, embedded, missing или modified либо их списком
+@msg	`stop` must be a stop index	`stop` должно быть индексом точки перехода
+@msg	`story` styles the whole story: give no `start` or `end`	`story` задаёт стиль всего материала: не указывайте `start` и `end`
+@msg	`story` takes the whole story: give no `start` or `end`	`story` охватывает весь материал: не указывайте `start` и `end`
+@msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` применяется к обводкам (stroke: true)
+@msg	`style` must be roman or japanese	`style` должно быть roman или japanese
+@msg	`subpaths` must be two integer indices	`subpaths` должно быть двумя целочисленными индексами
+@msg	`symbol` must be a symbol name	`symbol` должно быть именем символа
+@msg	`target` must be "object" or "contents", not {v}	`target` должно быть "object" или "contents", а не {v}
+@msg	`target` must be an object of the same Objects on Path group as `member`	`target` должно быть объектом той же группы «Объекты на контуре», что и `member`
+@msg	`tint` applies to global and spot colours	`tint` применяется к глобальным и плашечным цветам
+@msg	`tint` goes with a global or spot `swatch`	`tint` указывается вместе с глобальным или плашечным `swatch`
+@msg	`tint` must be a number (%)	`tint` должно быть числом (%)
+@msg	`tint` needs a global or spot colour	для `tint` нужен глобальный или плашечный цвет
+@msg	`to` is already threaded	`to` уже входит в связанный текст
+@msg	`to` is the design's new name	`to` — новое имя дизайна
+@msg	`to` must be [x, y]	`to` должно быть [x, y]
+@msg	`to` must be a closed path, area type or type on a path other than `from`	`to` должно быть замкнутым контуром, текстом в области или текстом по контуру, отличным от `from`
+@msg	`to` must be a whole number	`to` должно быть целым числом
+@msg	`to` takes the rows of one object's stack, not aligned rows	`to` принимает строки стопки одного объекта, а не выровненные строки
+@msg	`tolerance` must be from 0 to 100 pt	`tolerance` должно быть от 0 до 100 pt
+@msg	`useLab` must be true or false	`useLab` должно быть true или false
+@msg	`vAlign` must be default, top, middle, baseline or bottom	`vAlign` должно быть default, top, middle, baseline или bottom
+@msg	`values` must be a list	`values` должно быть списком
+@msg	`values` must be an object	`values` должно быть объектом
+@msg	`values` must name hex, rgb, cmyk, lab or gray	`values` должно указывать hex, rgb, cmyk, lab или gray
+@msg	`values` names a kind twice	`values` указывает один вид дважды
+@msg	`version` must be 0 or {_1}	`version` должно быть 0 или {_1}
+@msg	`version` must be 0 or {newest}	`version` должно быть 0 или {newest}
+@msg	`warichuAlign` must be one of {_1}	`warichuAlign` должно быть одним из: {_1}
+@msg	`warichuLines` must be a whole number from {_1} to {_2}	`warichuLines` должно быть целым числом от {_1} до {_2}
+@msg	`weight` must be from 0.01 to 1000 pt	`weight` должно быть от 0.01 до 1000 pt
+@msg	`weights` must be a list of {_1} numbers, one per row (got {v})	`weights` должно быть списком чисел по одному на строку, всего чисел: {_1} (получено {v})
+@msg	`xml` must be a string	`xml` должно быть строкой
+@msg	`{KEY}` entry {n} gives the paragraph at byte {start} of {_1} other indents than an entry before it	`{KEY}`, запись {n}: задаёт абзацу с байта {start} объекта {_1} другие отступы, чем предыдущая запись
+@msg	`{KEY}` entry {n} must be an object	`{KEY}`, запись {n}: должна быть объектом
+@msg	`{KEY}` entry {n} sets neither `leftIndent` nor `firstLineIndent`	`{KEY}`, запись {n}: не задаёт ни `leftIndent`, ни `firstLineIndent`
+@msg	`{KEY}` entry {n}: `id` must be an object id	`{KEY}`, запись {n}: `id` должно быть идентификатором объекта
+@msg	`{KEY}` entry {n}: `start` must be a byte offset	`{KEY}`, запись {n}: `start` должно быть смещением в байтах
+@msg	`{KEY}` entry {n}: `{k}` must be a number from -{MAX_PARA} to {MAX_PARA} pt	`{KEY}`, запись {n}: `{k}` должно быть числом от -{MAX_PARA} до {MAX_PARA} pt
+@msg	`{KEY}` entry {n}: no paragraph of {_1} starts at byte {start}	`{KEY}`, запись {n}: ни один абзац объекта {_1} не начинается с байта {start}
+@msg	`{KEY}` entry {n}: unknown key `{k}`	`{KEY}`, запись {n}: неизвестный ключ `{k}`
+@msg	`{KEY}` entry {n}: {_1} is not a type object	`{KEY}`, запись {n}: {_1} не является текстовым объектом
+@msg	`{KEY}` is empty	`{KEY}` пусто
+@msg	`{KEY}` must be a list	`{KEY}` должно быть списком
+@msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` принимает не более {MAX_PARAGRAPH_INDENTS} записей (получено {_1})
+@msg	`{KEY}` takes no `{other}` beside it	`{KEY}` не допускает `{other}` рядом с собой
+@msg	`{_1}` can't be edited or removed	`{_1}` нельзя изменить или удалить
+@msg	`{_1}` is built in and always listed	`{_1}` встроен и всегда есть в списке
+@msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` не является файлом шрифта, который нашёл последний поиск text.findFontFiles
+@msg	`{_1}` would be overwritten by the package: choose a different folder or name	пакет перезаписал бы `{_1}`: выберите другую папку или имя
+@msg	`{base}` is larger than {_1} MB	`{base}` больше {_1} МБ
+@msg	`{base}` is not in the DCS file's folder	`{base}` нет в папке файла DCS
+@msg	`{file}` has no art to place	в `{file}` нет графики для помещения
+@msg	`{file}` is over {_1} MB	`{file}` больше {_1} МБ
+@msg	`{f}` belongs to a VectorCraft that is running	`{f}` принадлежит запущенному экземпляру VectorCraft
+@msg	`{f}` is the copy of a document open now	`{f}` — копия документа, открытого сейчас
+@msg	`{id}` is no writable format (see document.formats)	`{id}` не является форматом для записи (см. document.formats)
+@msg	`{id}` isn't a loaded library	`{id}` не является загруженной библиотекой
+@msg	`{key}` has no colours	в `{key}` нет цветов
+@msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` содержит больше {MAX_EDIT_WORDS} слов
+@msg	`{key}` is a design name	`{key}` — имя дизайна
+@msg	`{key}` is a design name or a list of them	`{key}` — имя дизайна или список таких имён
+@msg	`{key}` is longer than {MAX_NAME} characters	`{key}` длиннее {MAX_NAME} символов
+@msg	`{key}` is out of range	`{key}` вне диапазона
+@msg	`{key}` must be 0 or more	`{key}` должно быть 0 или больше
+@msg	`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent	`{key}` должно быть [min, desired, max] или {{min?, desired?, max?}}, в процентах
+@msg	`{key}` must be [x, y] numbers	`{key}` должно быть числами [x, y]
+@msg	`{key}` must be a list of words	`{key}` должно быть списком слов
+@msg	`{key}` must be a list, not {v}	`{key}` должно быть списком, а не {v}
+@msg	`{key}` must be a non-negative integer	`{key}` должно быть неотрицательным целым числом
+@msg	`{key}` must be a number or null, not {v}	`{key}` должно быть числом или null, а не {v}
+@msg	`{key}` must be a number {_1}..{_2}	`{key}` должно быть числом {_1}..{_2}
+@msg	`{key}` must be a whole number of 0 or more	`{key}` должно быть целым числом, 0 или больше
+@msg	`{key}` must be a whole number of at least 0, not {n}	`{key}` должно быть целым числом не меньше 0, а не {n}
+@msg	`{key}` must be an appearance item index (paint order) or null	`{key}` должно быть индексом элемента оформления (в порядке отрисовки) или null
+@msg	`{key}` must be an array of asset ids (see assets.list)	`{key}` должно быть массивом идентификаторов ресурсов (см. assets.list)
+@msg	`{key}` must be from 0 to 180 degrees, not {a}	`{key}` должно быть от 0 до 180 градусов, а не {a}
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` должно быть от 0 до {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` должно быть от 0.01 до 1000 pt
+@msg	`{key}` must be from {_1} to {shift_max}	`{key}` должно быть от {_1} до {shift_max}
+@msg	`{key}` must be from {lo} to {hi}, not {v}	`{key}` должно быть от {lo} до {hi}, а не {v}
+@msg	`{key}` must be one of auto, always, never	`{key}` должно быть одним из: auto, always, never
+@msg	`{key}` must be one of miter, round, bevel	`{key}` должно быть одним из: miter, round, bevel
+@msg	`{key}` must be one word of at most {_1} characters	`{key}` должно быть одним словом длиной не более {_1} символов
+@msg	`{key}` must hold single words of at most {_1} characters	`{key}` должно содержать отдельные слова длиной не более {_1} символов
+@msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}` должно указывать объект, прикреплённый к контуру группы «Объекты на контуре»
+@msg	`{key}` names an object that is hidden or locked	`{key}` указывает скрытый или заблокированный объект
+@msg	`{key}`: not a colour: {v}	`{key}`: не цвет: {v}
+@msg	`{k}.family` is required	`{k}.family` обязательно
+@msg	`{k}` is a number 0..1	`{k}` — число 0..1
+@msg	`{k}` is true or false	`{k}` принимает true или false
+@msg	`{k}` isn't an export setting: {_1}	`{k}` не является параметром экспорта: {_1}
+@msg	`{k}` must be a byte offset	`{k}` должно быть смещением в байтах
+@msg	`{k}` must be a number	`{k}` должно быть числом
+@msg	`{k}` must be a number of points	`{k}` должно быть числом в пунктах
+@msg	`{k}` must be a string	`{k}` должно быть строкой
+@msg	`{k}` must be a whole number	`{k}` должно быть целым числом
+@msg	`{k}` must be from {lo} to {hi} for {key}	`{k}` должно быть от {lo} до {hi} для {key}
+@msg	`{k}` must be {what}, not {v}	`{k}` должно быть {what}, а не {v}
+@msg	`{l}` isn't a global or spot colour	`{l}` не является глобальным или плашечным цветом
+@msg	`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText	`{m}` не является растровым изображением: используйте clipboard.importSvg, importPdf или importText
+@msg	`{name}` can't be deleted	`{name}` нельзя удалить
+@msg	`{name}` can't be duplicated	`{name}` нельзя дублировать
+@msg	`{name}` can't be edited	`{name}` нельзя изменить
+@msg	`{name}` can't be edited this way	`{name}` нельзя изменить таким способом
+@msg	`{name}` can't be renamed	`{name}` нельзя переименовать
+@msg	`{name}` can't name a folder	`{name}` не может быть именем папки
+@msg	`{name}` has no art to place	в `{name}` нет графики для помещения
+@msg	`{name}` has no text to place	в `{name}` нет текста для помещения
+@msg	`{name}` in the Word document is not UTF-8 or UTF-16 text	`{name}` в документе Word не является текстом UTF-8 или UTF-16
+@msg	`{name}` in the Word document is not well-formed XML: {e}	`{name}` в документе Word не является корректным XML: {e}
+@msg	`{name}` in the Word document nests elements more than {MAX_NESTING} deep	в `{name}` в документе Word элементы вложены глубже {MAX_NESTING} уровней
+@msg	`{name}` is a built-in preset and is read-only: save it under another name	`{name}` — встроенный набор, доступный только для чтения: сохраните его под другим именем
+@msg	`{name}` is a built-in preset: save under another name	`{name}` — встроенный набор: сохраните под другим именем
+@msg	`{name}` is a built-in profile and stays	`{name}` — встроенный профиль, он не удаляется
+@msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}` — отдельный файл, который можно найти только рядом с файлом DCS
+@msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` — оттенок `{base}`: изменяйте `{base}` (образцу оттенка можно задать только новое имя)
+@msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` — рабочее пространство: сначала выберите другое через edit.colorSettings
+@msg	`{name}` is built in and stays	`{name}` встроен и не удаляется
+@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` принимает краску только своего вида (цвет, градиент или узор)
+@msg	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
+@msg	`{n}` can't be deleted	`{n}` нельзя удалить
+@msg	`{n}` can't be merged	`{n}` нельзя объединить
+@msg	`{n}` can't be moved	`{n}` нельзя переместить
+@msg	`{n}` is not a colour swatch	`{n}` не является цветовым образцом
+@msg	`{n}` isn't a solid colour	`{n}` не является сплошным цветом
+@msg	`{n}`: colour groups hold solid colours only	`{n}`: цветовые группы содержат только сплошные цвета
+@msg	`{other}` doesn't trace an image	`{other}` не трассирует изображение
+@msg	`{s}`: the step's references copy in more than {_1} MB of values	`{s}`: ссылки шага копируют больше {_1} МБ значений
+@msg	`{tag}` is not an axis tag: a tag is four characters, such as "wght"	`{tag}` не является тегом оси: тег состоит из четырёх символов, например "wght"
+@msg	`{to}` is empty or already used	`{to}` пусто или уже используется
+@msg	`{u}` is no Unicode character	`{u}` не является символом Unicode
+@msg	`{what}` is longer than {MAX_TEXT} bytes	`{what}` длиннее {MAX_TEXT} байт
+@msg	`{what}` must be text	`{what}` должно быть текстом
+@msg	`{word}` isn't in the custom dictionary	`{word}` нет в пользовательском словаре
+# Messages that begin with a lowercase word, a to c.
+@msg	a CMap has too many mappings	в CMap слишком много сопоставлений
+@msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	у чертежа DXF одно начало координат: передайте useArtboards: true, чтобы получить по одному чертежу на монтажную область
+@msg	a PDF presets file with over {_1} presets	файл наборов PDF, в котором больше {_1} наборов
+@msg	a \\u escape needs four hexadecimal digits	после \\u нужны четыре шестнадцатеричные цифры
+@msg	a batch preview cannot switch documents	предварительный просмотр пакета не может переключать документы
+@msg	a brush named `{nn}` exists	кисть с именем `{nn}` уже существует
+@msg	a comma in an XPath expression must separate function arguments	запятая в выражении XPath должна разделять аргументы функции
+@msg	a container of the listed objects is gone	контейнер перечисленных объектов больше не существует
+@msg	a content stream can't be read	поток содержимого невозможно прочитать
+@msg	a content stream isn't a stream	поток содержимого не является потоком
+@msg	a design holds at most {_1} objects	дизайн содержит не более {_1} объектов
+@msg	a design needs a name	дизайну нужно имя
+@msg	a dictionary grew too large	словарь стал слишком большим
+@msg	a document holds at most {_1} SVG filters	документ содержит не более {_1} фильтров SVG
+@msg	a document keeps at most {_1} graph designs	документ хранит не более {_1} дизайнов диаграмм
+@msg	a document keeps at most {_1} saved selections	документ хранит не более {_1} сохранённых выделений
+@msg	a document keeps at most {_1} views	документ хранит не более {_1} видов
+@msg	a document links at most {MAX_SVG_SCRIPTS} JavaScript files	документ связывает не более {MAX_SVG_SCRIPTS} файлов JavaScript
+@msg	a document with unsaved changes has no recovery copy	у документа с несохранёнными изменениями нет копии для восстановления
+@msg	a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes	порядок фильтра feConvolveMatrix равен {x}×{y}, что переполняет произведение размеров ядра, которое вычисляет usvg
+@msg	a font's data is too large	данные шрифта слишком велики
+@msg	a font's subroutines are too large	подпрограммы шрифта слишком велики
+@msg	a function declaration without a name	объявление функции без имени
+@msg	a gradient preset is already called {n}	набор градиента с именем {n} уже существует
+@msg	a graph has at most {_1} series, so it transposes with at most that many categories	в диаграмме не более {_1} рядов, поэтому при транспонировании допускается не больше стольких же категорий
+@msg	a host value has too many entries	в значении хоста слишком много записей
+@msg	a host value is nested too deep	значение хоста вложено слишком глубоко
+@msg	a layer can't be merged into its own sublayer	слой нельзя объединить с его собственным подслоем
+@msg	a layer's form box isn't an array	рамка формы слоя не является массивом
+@msg	a layer's form can't be read	форму слоя невозможно прочитать
+@msg	a layer's form has no box	у формы слоя нет рамки
+@msg	a layer's form has no dictionary	у формы слоя нет словаря
+@msg	a legend draws at most {MAX_CHIPS} swatches	легенда рисует не более {MAX_CHIPS} образцов
+@msg	a name names one asset: give multiple: false, or one object	имя обозначает один ресурс: укажите multiple: false или один объект
+@msg	a namespace declaration uses a reserved prefix or URI	объявление пространства имён использует зарезервированный префикс или URI
+@msg	a namespace qualifier is undefined	квалификатор пространства имён не определён
+@msg	a namespace with an empty URI cannot have a prefix	у пространства имён с пустым URI не может быть префикса
+@msg	a number has no digits	в числе нет цифр
+@msg	a number's exponent has no digits	в показателе степени числа нет цифр
+@msg	a number's fraction has no digits	в дробной части числа нет цифр
+@msg	a page can't be read	страницу невозможно прочитать
+@msg	a page object is used by something else	объект страницы используется чем-то ещё
+@msg	a page thumbnail must be RGB pixels, 1 to {THUMBNAIL_SIZE} a side (got {w} × {h})	миниатюра страницы должна состоять из пикселей RGB, от 1 до {THUMBNAIL_SIZE} по стороне (получено {w} × {h})
+@msg	a pattern layer doesn't end what it starts	слой узора не завершает то, что начинает
+@msg	a pattern layer's colors hold something else	цвета слоя узора содержат что-то другое
+@msg	a pattern named `{n}` exists	узор с именем `{n}` уже существует
+@msg	a plug-in with id {_1} is already installed	модуль с идентификатором {_1} уже установлен
+@msg	a preset named `{n}` exists	набор с именем `{n}` уже существует
+@msg	a print presets file with over {_1} presets	файл наборов печати, в котором больше {_1} наборов
+@msg	a profile is already called {n}	профиль с именем {n} уже существует
+@msg	a property descriptor cannot have both a value or writable and a get or set	дескриптор свойства не может одновременно содержать value или writable и get или set
+@msg	a property descriptor must be an object	дескриптор свойства должен быть объектом
+@msg	a property's {name} must be a function or undefined	{name} свойства должно быть функцией или undefined
+@msg	a row can't go into itself	строку нельзя поместить в саму себя
+@msg	a series goes on the left or the right value axis	ряд размещается на левой или правой оси значений
+@msg	a start must be an anchor index ≥ 0 or null	начало должно быть индексом опорной точки ≥ 0 или null
+@msg	a stream in it would decode to more than 256 MB, or its decode parameters can't be applied	поток в нём при декодировании занял бы больше 256 МБ, или его параметры декодирования невозможно применить
+@msg	a string holds a control character	строка содержит управляющий символ
+@msg	a string holds an escape sequence JSON does not have	строка содержит escape-последовательность, которой нет в JSON
+@msg	a string is not closed	строка не закрыта
+@msg	a style named `{name}` already exists	стиль с именем `{name}` уже существует
+@msg	a style named `{to}` already exists	стиль с именем `{to}` уже существует
+@msg	a swatch needs a colour, gradient or pattern	образцу нужен цвет, градиент или узор
+@msg	a symbol named `{n}` already exists	символ с именем `{n}` уже существует
+@msg	a theme has 1 to {THEME_SIZE} colours	в теме от 1 до {THEME_SIZE} цветов
+@msg	a theme is already called {name} (replace: "{name}" overwrites it)	тема с именем {name} уже существует (replace: "{name}" перезапишет её)
+@msg	a toolbar name has at most {MAX_NAME} characters	имя панели инструментов содержит не более {MAX_NAME} символов
+@msg	a view named `{_1}` exists	вид с именем `{_1}` уже существует
+@msg	a view named `{name}` exists	вид с именем `{name}` уже существует
+@msg	a workspace keeps at most {MAX} toolbars	рабочая среда хранит не более {MAX} панелей инструментов
+@msg	a {_1} series can't go in a {_2} graph	ряд типа {_1} нельзя поместить в диаграмму типа {_2}
+@msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}: "pdf" (совместимый с PDF, по умолчанию) или "7" (устаревший .ai, версия 7)
+@msg	already editing an opacity mask	непрозрачная маска уже редактируется
+@msg	already editing another object's opacity mask	уже редактируется непрозрачная маска другого объекта
+@msg	already in pattern editing mode	режим редактирования узора уже включён
+@msg	an SVG filter is named by its id: give `xml` with `name`	фильтр SVG называется по своему id: укажите `xml` вместе с `name`
+@msg	an XML element has two attributes with the same name	у элемента XML два атрибута с одинаковым именем
+@msg	an XML value cannot be inserted into itself or its descendants	значение XML нельзя вставить в само себя или в его потомков
+@msg	an XML value's children cannot be assigned by position	дочерние элементы значения XML нельзя присваивать по позиции
+@msg	an XML value's children cannot be deleted by position	дочерние элементы значения XML нельзя удалять по позиции
+@msg	an XMLList converts to XML only when it has one item	XMLList преобразуется в XML, только когда содержит один элемент
+@msg	an XPath node test is missing	отсутствует проверка узла XPath
+@msg	an XPath operand is missing	отсутствует операнд XPath
+@msg	an XPath operator is missing	отсутствует оператор XPath
+@msg	an XPath predicate or step cannot follow here	предикат или шаг XPath здесь недопустим
+@msg	an XPath predicate or step follows a value that is not a node-set	предикат или шаг XPath следует за значением, которое не является набором узлов
+@msg	an XPath step is missing	отсутствует шаг XPath
+@msg	an artboard is listed twice	монтажная область указана дважды
+@msg	an empty artboard has no width or height to scale to	у пустой монтажной области нет ширины или высоты для масштабирования
+@msg	an image couldn't be decoded and is missing from the picture	изображение не удалось декодировать, и его нет на рисунке
+@msg	an image is too large for DXF and was left out	изображение слишком велико для DXF и пропущено
+@msg	an image of {_1} MB, at most {_2} MB	изображение размером {_1} МБ при допустимых {_2} МБ
+@msg	an image of {declared_w} × {declared_h} pixels is too large to draw	изображение размером {declared_w} × {declared_h} пикселей слишком велико для отрисовки
+@msg	an image of {width} × {height} pixels is too large to draw	изображение размером {width} × {height} пикселей слишком велико для отрисовки
+@msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	изображение размером {w} × {h} пикселей слишком велико для преобразования (не более {_1} пикселей)
+@msg	an index must be a whole number	индекс должен быть целым числом
+@msg	an inline graphic has no glyphs	у встроенной в строку графики нет глифов
+@msg	an invisible text form can't be read	форму невидимого текста невозможно прочитать
+@msg	an object is missing	объект отсутствует
+@msg	an object's header is missing	отсутствует заголовок объекта
+@msg	an overprinting form can't be read	форму с наложением невозможно прочитать
+@msg	an unread object has no readable bounds	у непрочитанного объекта нет читаемых границ
+@msg	an unread object holds a frame of threaded type	непрочитанный объект содержит рамку связанного текста
+@msg	an unread object is missing from its layer	непрочитанный объект отсутствует в своём слое
+@msg	anchor `smooth` must be true or false	`smooth` опорной точки должно быть true или false
+@msg	anchor `{key}` must be [x, y]	`{key}` опорной точки должно быть [x, y]
+@msg	anchor `{key}` must be a number	`{key}` опорной точки должно быть числом
+@msg	angle and roundness must be finite	angle и roundness должны быть конечными
+@msg	angles must be a list as long as pins (degrees or null)	angles должно быть списком той же длины, что и pins (градусы или null)
+@msg	appearance must be flat|center|edge	appearance должно быть flat|center|edge
+@msg	apply is "fill" or "stroke", not `{other}`	apply принимает "fill" или "stroke", а не `{other}`
+@msg	apply was called on a value that is not a function	apply вызван для значения, которое не является функцией
+@msg	area must be a closed polygon of 3 to 100000 [x, y] points	area должно быть замкнутым многоугольником из 3–100000 точек [x, y]
+@msg	area type in a thread cannot use Dynamic Text: {frames}	текст в области в связанном тексте не может использовать динамический текст: {frames}
+@msg	area type needs a path that encloses an area	тексту в области нужен контур, охватывающий область
+@msg	area type {_1} is named twice	текст в области {_1} указан дважды
+@msg	array literal too long	литерал массива слишком длинный
+@msg	arrowAlign must be extend|tip, got {o}	arrowAlign должно быть extend|tip, получено {o}
+@msg	arrowScale must be [start, end]	arrowScale должно быть [start, end]
+@msg	artboard is a 0-based index	artboard — индекс, отсчитываемый от 0
+@msg	artboard must be a 0-based index	artboard должно быть индексом, отсчитываемым от 0
+@msg	artboard {i} doesn't print	монтажная область {i} не печатается
+@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout должно быть {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout.columns must be 1 or more	artboardLayout.columns должно быть 1 или больше
+@msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout должно быть gridByRow, gridByColumn, row или column
+@msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft должно быть true или false
+@msg	artboardLayout.spacing must be 0–{MAX_SPACING} pt	artboardLayout.spacing должно быть 0–{MAX_SPACING} pt
+@msg	artboards must be a non-empty list	artboards должно быть непустым списком
+@msg	artboards must be a number	artboards должно быть числом
+@msg	asset `{_1}` has no art to export	в ресурсе `{_1}` нет графики для экспорта
+@msg	assignment to a constant binding	присваивание константной привязке
+@msg	at least one row that isn't excluded needs a weight above 0	хотя бы одной неисключённой строке нужен вес больше 0
+@msg	at most {MAX_KEYWORDS} keywords	не более {MAX_KEYWORDS} ключевых слов
+@msg	at most {MAX_MATCHES} matches are kept	сохраняется не более {MAX_MATCHES} совпадений
+@msg	at most {MAX_POINTS} points	не более {MAX_POINTS} точек
+@msg	at most {MAX_QUEUE} files	не более {MAX_QUEUE} файлов
+@msg	at must be [x, y]	at должно быть [x, y]
+@msg	at/rect lie outside the canvas	at/rect находятся за пределами холста
+@msg	attribute must be size|leading|tracking|kerning|baselineShift	attribute должно быть size|leading|tracking|kerning|baselineShift
+@msg	attrs must be an object	attrs должно быть объектом
+@msg	automation path rejected: the folder's name isn't valid text	путь автоматизации отклонён: имя папки не является допустимым текстом
+@msg	automation path rejected: {_1} isn't valid text	путь автоматизации отклонён: {_1} не является допустимым текстом
+@msg	automation path rejected: {why}: {path}	путь автоматизации отклонён: {why}: {path}
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`	axis должно быть "vertical", "horizontal" или углом в градусах, а не `{given}`
+@msg	backgroundContents must be transparent or white	backgroundContents должно быть transparent или white
+@msg	bad AES key	недопустимый ключ AES
+@msg	bad `runs`: {e}	недопустимое `runs`: {e}
+@msg	bad arrowScale	недопустимое arrowScale
+@msg	bad base64	недопустимый base64
+@msg	bad color {c}	недопустимый цвет {c}
+@msg	bad colour	недопустимый цвет
+@msg	bad colour in `colors`	недопустимый цвет в `colors`
+@msg	bad colour {v}	недопустимый цвет {v}
+@msg	bad colour {v} in groupColors	недопустимый цвет {v} в groupColors
+@msg	bad cross-reference entry	недопустимая запись перекрёстных ссылок
+@msg	bad cross-reference table	недопустимая таблица перекрёстных ссылок
+@msg	bad current colour {v}	недопустимый текущий цвет {v}
+@msg	bad dataBase64	недопустимое dataBase64
+@msg	bad edit	недопустимая правка
+@msg	bad fill {v}	недопустимая заливка {v}
+@msg	bad fit: {e}	недопустимое fit: {e}
+@msg	bad model {other} (keep, new or document)	недопустимая модель {other} (keep, new или document)
+@msg	bad new colour {v}	недопустимый новый цвет {v}
+@msg	bad object	недопустимый объект
+@msg	bad object number	недопустимый номер объекта
+@msg	bad offset	недопустимое смещение
+@msg	bad path data: {e}	недопустимые данные контура: {e}
+@msg	bad point {v}: expected [x, y]	недопустимая точка {v}: ожидается [x, y]
+@msg	bad point {v}: expected [x, y] or [x, y, pressure]	недопустимая точка {v}: ожидается [x, y] или [x, y, pressure]
+@msg	bad reference	недопустимая ссылка
+@msg	bad trailer size	недопустимый размер в трейлере
+@msg	bad {k} colour	недопустимый цвет {k}
+@msg	batches cannot nest	пакеты нельзя вкладывать друг в друга
+@msg	bind something to a variable first	сначала привяжите что-нибудь к переменной
+@msg	bleed must be 0–{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}	bleed должно быть 0–{MAX_BLEED} pt: число, [top, bottom, left, right] или {{top, bottom, left, right}}
+@msg	blend must be a mode name	blend должно быть названием режима
+@msg	both sides of an XPath | must select nodes	обе стороны оператора | в XPath должны выбирать узлы
+@msg	brush must be a name or null	brush должно быть именем или null
+@msg	by must be a number	by должно быть числом
+@msg	can't add page thumbnails: {why}	невозможно добавить миниатюры страниц: {why}
+@msg	can't add the editing data for other apps: {why}	невозможно добавить данные редактирования для других приложений: {why}
+@msg	can't edit the written PDF: {why}	невозможно изменить записанный PDF: {why}
+@msg	can't encrypt the PDF: {why}	невозможно зашифровать PDF: {why}
+@msg	can't linearise the PDF: {why}	невозможно линеаризовать PDF: {why}
+@msg	can't open `{_1}`: {_2}	невозможно открыть `{_1}`: {_2}
+@msg	can't open `{_1}`: {e}	невозможно открыть `{_1}`: {e}
+@msg	can't open `{name}`: not a format VectorCraft reads (see document.formats)	невозможно открыть `{name}`: VectorCraft не читает этот формат (см. document.formats)
+@msg	can't place `{name}`: not a format VectorCraft reads (see document.formats)	невозможно поместить `{name}`: VectorCraft не читает этот формат (см. document.formats)
+@msg	can't read back the written PDF: {e}	невозможно прочитать записанный PDF: {e}
+@msg	can't read this Word document: {why}	невозможно прочитать этот документ Word: {why}
+@msg	can't write .{e} images: use .png, .jpg, .gif, .webp, .tif or .bmp	невозможно записать изображения .{e}: используйте .png, .jpg, .gif, .webp, .tif или .bmp
+@msg	can't write PDF layers, overprint or invisible text: {why}	невозможно записать слои PDF, наложение или невидимый текст: {why}
+@msg	can't write the file's copyright: {why}	невозможно записать сведения об авторских правах файла: {why}
+@msg	can't write the file's modification date: {why}	невозможно записать дату изменения файла: {why}
+@msg	can't write the pages' user units: {why}	невозможно записать пользовательские единицы страниц: {why}
+@msg	canceled	отменено
+@msg	cannot convert the object to a primitive value	объект невозможно преобразовать в примитивное значение
+@msg	cannot convert undefined or null to an object	undefined или null невозможно преобразовать в объект
+@msg	cannot distort a zero-size or non-finite bounding box	невозможно исказить ограничивающую рамку нулевого или неконечного размера
+@msg	cannot move an object into itself	объект нельзя переместить в самого себя
+@msg	case must be upper|lower|title|sentence	case должно быть upper|lower|title|sentence
+@msg	category `{c}`: one of {_1}	категория `{c}`: одно из: {_1}
+@msg	center must be [x, y]	center должно быть [x, y]
+@msg	character dimensions cannot be represented with the source text transform	размеры символов невозможно представить с трансформацией исходного текста
+@msg	character dimensions cannot be represented with the target text transform	размеры символов невозможно представить с трансформацией целевого текста
+@msg	choose at least one artboard	выберите хотя бы одну монтажную область
+@msg	choose at least one status	выберите хотя бы одно состояние
+@msg	clip must be true or false	clip должно быть true или false
+@msg	clippingMask must be true or false	clippingMask должно быть true или false
+@msg	closed must be a boolean	closed должно быть логическим значением
+@msg	collapsed must be true or false	collapsed должно быть true или false
+@msg	color.profile: no RGB or CMYK profile is called “{profile}”	color.profile: нет профиля RGB или CMYK с именем «{profile}»
+@msg	colorMode must be rgb or cmyk, not `{m}`	colorMode должно быть rgb или cmyk, а не `{m}`
+@msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel должно быть {own} (режим документа), grayscale или bitmap
+@msg	colour groups can't go into colour groups	цветовые группы нельзя помещать в цветовые группы
+@msg	colour, mode and spot apply to solid-colour swatches only	colour, mode и spot применяются только к образцам сплошного цвета
+@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	столбец {column}: `{cell}` — столбец `%` из файлов данных диаграмм, которые не читаются
+@msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	столбец {column}: `{cell}` указывает `{name}`, а это переменная типа {_1}
+@msg	column {column}: `{cell}` names no variable	столбец {column}: `{cell}` не указывает ни одной переменной
+@msg	column {column}: the variable name is longer than {MAX_NAME} characters	столбец {column}: имя переменной длиннее {MAX_NAME} символов
+@msg	column: true floats the whole column and takes no onto, above or below	column: true делает плавающим весь столбец и не принимает onto, above или below
+@msg	command must be a shape.* command	command должно быть командой shape.*
+@msg	commands[{i}]: missing `command`	commands[{i}]: отсутствует `command`
+@msg	composer must be "singleLine" or "everyLine"	composer должно быть "singleLine" или "everyLine"
+@msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	составные фигуры принимают контуры, составные контуры, группы, составные фигуры, текст, переходы и оболочки
+@msg	compound {_1} must contain exactly one open path to join	составной объект {_1} должен содержать ровно один открытый контур для соединения
+@msg	connect end must be "start" or "end"	end для connect должно быть "start" или "end"
+@msg	connect needs a path other than the one extended	для connect нужен контур, отличный от продлеваемого
+@msg	connect needs id	для connect нужен id
+@msg	connect path has no open end	у контура для connect нет открытого конца
+@msg	continuation must be an array of path chunks	continuation должно быть массивом фрагментов контура
+@msg	continuation requires points	для continuation нужны points
+@msg	copy needs path: the file to copy into the document's folder	для copy нужен path: файл, который копируется в папку документа
+@msg	copy takes images only: relink placed documents where their files are	copy принимает только изображения: восстанавливайте связь помещённых документов там, где находятся их файлы
+@msg	copying a file isn't available on the web	копирование файла недоступно в веб-версии
+@msg	copyrightStatus must be unknown, copyrighted or publicDomain	copyrightStatus должно быть unknown, copyrighted или publicDomain
+@msg	copyrightUrl must be a URL (no spaces, at most 2048 characters)	copyrightUrl должно быть URL-адресом (без пробелов, не более 2048 символов)
+@msg	corners must be 4 [x, y] points (TL, TR, BR, BL)	corners должно быть 4 точками [x, y] (TL, TR, BR, BL)
+@msg	counterPer `{c}`: item or file	counterPer `{c}`: item или file
+@msg	crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"	crop `{_1}`: рамки art, trim, bleed и media есть только у страниц PDF; используйте "crop" или "bounding"
+@msg	crop rectangle doesn't overlap the image	прямоугольник обрезки не пересекается с изображением
+@msg	cross-reference and object streams aren't supported	потоки перекрёстных ссылок и потоки объектов не поддерживаются
+# Messages that begin with a lowercase word, d to m.
+@msg	damaged compressed data: {e}	повреждённые сжатые данные: {e}
+@msg	dash lengths must be numbers, got {v}	длины штрихов должны быть числами, получено {v}
+@msg	dash must be a list of lengths or null, got {v}	dash должно быть списком длин или null, получено {v}
+@msg	data key `{k}`: letters, digits, -, _ and . (not name or vc-…)	ключ данных `{k}`: буквы, цифры, -, _ и . (но не name и не vc-…)
+@msg	data must be an object of key: value, not {v}	data должно быть объектом из пар key: value, а не {v}
+@msg	data set `{name}` holds a value for `{var}`, which the library doesn't declare	набор данных `{name}` содержит значение для `{var}`, а библиотека не объявляет эту переменную
+@msg	data set `{name}` holds two values for `{var}`	набор данных `{name}` содержит два значения для `{var}`
+@msg	data set `{name}` is declared twice	набор данных `{name}` объявлен дважды
+@msg	data takes at most {MAX_DATA} keys at once	data принимает не более {MAX_DATA} ключей за раз
+@msg	dataset `{name}` already exists	набор данных `{name}` уже существует
+@msg	dataset `{to}` already exists	набор данных `{to}` уже существует
+@msg	date `{d}`: YYYY-MM-DD	дата `{d}`: YYYY-MM-DD
+@msg	decoded data is too large	декодированные данные слишком велики
+@msg	define a variable first	сначала определите переменную
+@msg	detect must be true or false	detect должно быть true или false
+@msg	direct-select anchor points of a path	выделите прямым выделением опорные точки контура
+@msg	distance must be > 0	distance должно быть > 0
+@msg	dx and dy give the arrow's direction	dx и dy задают направление стрелки
+@msg	dx and dy must be numbers	dx и dy должны быть числами
+@msg	dxf fitTo must be [width, height], positive	dxf fitTo должно быть [width, height] с положительными значениями
+@msg	dxf must be an object of DXF import options	dxf должно быть объектом с параметрами импорта DXF
+@msg	dxf scale must be a positive number up to {_1}, not {s}	dxf scale должно быть положительным числом не больше {_1}, а не {s}
+@msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf unit `{u}`: единица, например mm, cm, in или pt
+@msg	dxf: {e}	dxf: {e}
+@msg	each format is an object {format, scale?, suffix?}	каждый формат — объект {format, scale?, suffix?}
+@msg	each item needs an id	каждому элементу нужен id
+@msg	each match needs `kind`	каждому совпадению нужно `kind`
+@msg	each match needs a `name`	каждому совпадению нужно `name`
+@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	каждый элемент `fonts` — {family, style?}; от 1 до 1000 элементов
+@msg	each of `items` is {kind, item}	каждый элемент `items` — {kind, item}
+@msg	each of `items` is {{id, corners?}} with an object id, not {it}	каждый элемент `items` — {{id, corners?}} с идентификатором объекта, а не {it}
+@msg	each path chunk must contain 1 to 4096 points	каждый фрагмент контура должен содержать от 1 до 4096 точек
+@msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	каждый выбор — {{at: [x, y]}} или {{rect: [x0, y0, x1, y1]}} (получено {v})
+@msg	each row needs `from`	каждой строке нужно `from`
+@msg	each stop needs a position	каждой точке перехода нужно положение
+@msg	each subpath needs an anchors array	каждому вложенному контуру нужен массив anchors
+@msg	each weight must be a number of 0 or more (got {v})	каждый вес должен быть числом, 0 или больше (получено {v})
+@msg	easingType must be easeIn, easeOut, easeInOut or easeOutIn	easingType должно быть easeIn, easeOut, easeInOut или easeOutIn
+@msg	editingData must be true or false	editingData должно быть true или false
+@msg	editingData must be true, false or "always"	editingData должно быть true, false или "always"
+@msg	edits overlap	правки перекрываются
+@msg	effects of objects whose appearances differ can't be moved together	эффекты объектов с разным оформлением нельзя перемещать вместе
+@msg	empty header in column {_1}	пустой заголовок в столбце {_1}
+@msg	encoding `{_1}`: utf8 or utf16	кодировка `{_1}`: utf8 или utf16
+@msg	ends must be two of "first" and "last"	ends должно быть двумя значениями из "first" и "last"
+@msg	every numbered name for the result is taken	все нумерованные имена для результата заняты
+@msg	expanded SVG styles exceed the import size limit	развёрнутые стили SVG превышают ограничение размера импорта
+@msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	файл наборов настроек экспорта больше {MAX_PRESET_FILE_BYTES} байт
+@msg	exportText must be editable or appearance	exportText должно быть editable или appearance
+@msg	exportType must be movieClip or graphic, not `{s}`	exportType должно быть movieClip или graphic, а не `{s}`
+@msg	extend needs id	для extend нужен id
+@msg	featureChanges lists at most {MAX_FEATURE_CHANGES} tags	featureChanges содержит не более {MAX_FEATURE_CHANGES} тегов
+@msg	featureChanges must be a list of tags	featureChanges должно быть списком тегов
+@msg	features must be a list of tags	features должно быть списком тегов
+@msg	fidelity must be 0..100	fidelity должно быть 0..100
+@msg	files must be {name, dataBase64}	files должно быть {name, dataBase64}
+@msg	finally table {t} out of range	таблица finally {t} вне диапазона
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit должно быть none|autoHeight|shrinkText|block, получено {id}
+@msg	flags cannot be given with a RegExp object	флаги нельзя указывать вместе с объектом RegExp
+@msg	flattener: {e}	объединение: {e}
+@msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`: high, medium, low или сохранённый набор (см. flattener.presets.list)
+@msg	flipProfile must be along|across, got {o}	flipProfile должно быть along|across, получено {o}
+@msg	folders `{f}`: none, rows, format, item or itemFormat	folders `{f}`: none, rows, format, item или itemFormat
+@msg	folders deeper than {MAX_BATCH_DEPTH} levels	папки глубже {MAX_BATCH_DEPTH} уровней
+@msg	folders deeper than {MAX_DEPTH} levels	папки глубже {MAX_DEPTH} уровней
+@msg	font family `{family}` is not available	семейство шрифтов `{family}` недоступно
+@msg	font family `{tf}` is not available	семейство шрифтов `{tf}` недоступно
+@msg	format `{f}`: pdf or postscript	формат `{f}`: pdf или postscript
+@msg	format `{f}`: text or json	формат `{f}`: text или json
+@msg	format is `{format}`	формат: `{format}`
+@msg	formats must be an array of rows, not {v}	formats должно быть массивом строк, а не {v}
+@msg	frequency must be between 1 and 300 lines per inch	frequency должно быть от 1 до 300 линий на дюйм
+@msg	from and to must be finite	from и to должны быть конечными
+@msg	from must be [x0, y0, x1, y1]	from должно быть [x0, y0, x1, y1]
+@msg	function declaration index out of range	индекс объявления функции вне диапазона
+@msg	give `before` or `after`, not both	укажите `before` или `after`, но не оба
+@msg	give `char`, `text`, `code` or `unicode`	укажите `char`, `text`, `code` или `unicode`
+@msg	give `colors`, or `color` and `rule`	укажите `colors` либо `color` и `rule`
+@msg	give `count` or `spacing`, not both	укажите `count` или `spacing`, но не оба
+@msg	give `event`, such as onclick	укажите `event`, например onclick
+@msg	give `file`, the JavaScript file's path or URL	укажите `file` (путь или URL файла JavaScript)
+@msg	give `fill` and/or `stroke`	укажите `fill` и/или `stroke`
+@msg	give `fill`, `stroke` or both	укажите `fill`, `stroke` или оба
+@msg	give `folder`	укажите `folder`
+@msg	give `fonts`, or open a document	укажите `fonts` или откройте документ
+@msg	give `from` or `indices`, not both	укажите `from` или `indices`, но не оба
+@msg	give `id` (no text is being edited)	укажите `id` (текст сейчас не редактируется)
+@msg	give `id` and `anchors`, or `items`, not both	укажите `id` и `anchors` либо `items`, но не то и другое
+@msg	give `id` or `guide`, not both	укажите `id` или `guide`, но не оба
+@msg	give `length` or `to`	укажите `length` или `to`
+@msg	give `matches`: [{kind, name, target}]	укажите `matches`: [{kind, name, target}]
+@msg	give `name` (or edit a pattern)	укажите `name` (или редактируйте узор)
+@msg	give `name` or `names`	укажите `name` или `names`
+@msg	give `name`, an SVG filter's name	укажите `name` (имя фильтра SVG)
+@msg	give `path` (a .wasm file) or `dataBase64` (the module)	укажите `path` (файл .wasm) или `dataBase64` (модуль)
+@msg	give `path`, `data` or `dataBase64`	укажите `path`, `data` или `dataBase64`
+@msg	give `path`, `data`, `dataBase64` or `csv`	укажите `path`, `data`, `dataBase64` или `csv`
+@msg	give `path`, `xml` or `dataBase64`	укажите `path`, `xml` или `dataBase64`
+@msg	give `path`, an SVG file, or `svg`, SVG text	укажите `path` (файл SVG) или `svg` (текст SVG)
+@msg	give `script`, the JavaScript the event runs ("" removes the event)	укажите `script` (код JavaScript, который выполняет событие; "" удаляет событие)
+@msg	give `text` (the reading) or `remove`	укажите `text` (чтение) или `remove`
+@msg	give `x` and `y` (and a `tolerance` of 0 or more)	укажите `x` и `y` (и `tolerance`, 0 или больше)
+@msg	give `xml`, one SVG <filter> element	укажите `xml` (один элемент SVG <filter>)
+@msg	give a mode or r/g/b, c/m/y/k, gray or tint adjustments	укажите режим или коррекции r/g/b, c/m/y/k, gray или tint
+@msg	give a name, or paint the active proxy with a saved preset	укажите имя или закрасьте активный индикатор сохранённым набором
+@msg	give a name, or select a stroke with a saved profile	укажите имя или выделите обводку с сохранённым профилем
+@msg	give a pattern name or select an object painted with a pattern	укажите имя узора или выделите объект, закрашенный узором
+@msg	give at least one of clip, invert, disabled, linked	укажите хотя бы одно из: clip, invert, disabled, linked
+@msg	give color, none, swatch or gradient	укажите color, none, swatch или gradient
+@msg	give dataBase64	укажите dataBase64
+@msg	give either at (a click) or area (a path drawn around the overlaps)	укажите либо at (щелчок), либо area (контур, нарисованный вокруг перекрытий)
+@msg	give exactly one of `at`, `rect` and `points`	укажите ровно одно из: `at`, `rect` и `points`
+@msg	give exactly one of `path`, `data` and `dataBase64`	укажите ровно одно из: `path`, `data` и `dataBase64`
+@msg	give formats or a preset, not both	укажите formats или набор, но не оба
+@msg	give index or indexes, not both	укажите index или indexes, но не оба
+@msg	give newName or delete	укажите newName или delete
+@msg	give offset or by	укажите offset или by
+@msg	give one <filter> element	укажите один элемент <filter>
+@msg	give one of `to`, `rect` or `at`	укажите одно из: `to`, `rect` или `at`
+@msg	give one of assets, layers, selection or fullDocument	укажите одно из: assets, layers, selection или fullDocument
+@msg	give only one of onto, above, below, icon and a column place	укажите только одно из: onto, above, below, icon и место в столбце
+@msg	give opacity or blend	укажите opacity или blend
+@msg	give origin: [x, y], or reset: true	укажите origin: [x, y] или reset: true
+@msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	укажите overprintFill, overprintStroke, showCenter, imageMap, url или note
+@msg	give path (a file) or folder	укажите path (файл) или folder
+@msg	give path, or name and dataBase64	укажите path либо name и dataBase64
+@msg	give paths or files	укажите paths или files
+@msg	give rows, rowHeight, columns or columnWidth	укажите rows, rowHeight, columns или columnWidth
+@msg	give svg, or dataBase64 of an SVG or SVGZ file	укажите svg или dataBase64 файла SVG или SVGZ
+@msg	give text	укажите text
+@msg	give the asset a name	дайте ресурсу имя
+@msg	give the preset a `name`	укажите `name` набора
+@msg	give the preset a name	дайте набору имя
+@msg	give the preset a name (1–64 characters)	дайте набору имя (от 1 до 64 символов)
+@msg	give the settings to change, e.g. {"formats"}]}	укажите изменяемые настройки, например {"formats"}]}
+@msg	give the style a name	дайте стилю имя
+@msg	give two or more style `names`	укажите в `names` два или более стиля
+@msg	give two or more swatches	укажите два или более образца
+@msg	give x, y, or a handle's length or angle	укажите x, y либо длину или угол маркера
+@msg	give {key, value} or {values}	укажите {key, value} или {values}
+@msg	global must be true or false	global должно быть true или false
+@msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	глиф {_1} не рисуется для {ch} при стиле этого символа (например, «Все прописные», «Капитель» или система счисления)
+@msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	глиф {g} не является альтернативой для {ch} в {_1} {_2}
+@msg	gradient must be "objects" or "mesh"	gradient должно быть "objects" или "mesh"
+@msg	grays must be "profile" or "black", not `{g}`	grays должно быть "profile" или "black", а не `{g}`
+@msg	gridColors must be a preset name or two colours	gridColors должно быть именем набора или двумя цветами
+@msg	gridSize must be small, medium or large	gridSize должно быть small, medium или large
+@msg	guide {g} is not selected	направляющая {g} не выделена
+@msg	handle must be 0..3	handle должно быть 0..3
+@msg	handler at {_1} expects {_2} values but its range starts with {d}	обработчик по адресу {_1} ожидает значений: {_2}, но его диапазон начинается с {d}
+@msg	handler depth too large	глубина обработчика слишком велика
+@msg	handler range {_1}..{_2} out of range	диапазон обработчика {_1}..{_2} вне допустимых пределов
+@msg	hiddenLayers must be true or false	hiddenLayers должно быть true или false
+@msg	hiddenObjects {v}: "layer" (the default), "omit" or "visible"	hiddenObjects {v}: "layer" (по умолчанию), "omit" или "visible"
+@msg	highlight a layer to merge into	выделите строку слоя, в который нужно объединить
+@msg	highlight two or more rows in one layer or group	выделите две или более строки в одном слое или группе
+@msg	highlight two or more rows to merge	выделите две или более строки для объединения
+@msg	hvcC	hvcC
+@msg	icon docks a panel in the icon column: use window.panel.dock	icon прикрепляет панель в столбце значков: используйте window.panel.dock
+@msg	id must be a dimension id	id должно быть идентификатором размера
+@msg	image has no bounds	у изображения нет границ
+@msg	image {_1} is linked already	изображение {_1} уже связано
+@msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none, client или server
+@msg	images in a spot ink whose samples couldn't be read were imported in RGB	изображения в плашечной краске, отсчёты которых не удалось прочитать, импортированы в RGB
+@msg	images past the most pixels one file may hold were left out	изображения сверх наибольшего числа пикселей, допустимого для одного файла, пропущены
+@msg	images too large to read were left out	изображения, слишком большие для чтения, пропущены
+@msg	index out of range	индекс вне диапазона
+@msg	indexes may hold at most {MAX_GUIDE_INDEXES} entries	indexes может содержать не более {MAX_GUIDE_INDEXES} записей
+@msg	indexes must be an array of guide indexes	indexes должно быть массивом индексов направляющих
+@msg	instances must be 1..1000	instances должно быть 1..1000
+@msg	instruction out of range	инструкция вне диапазона
+@msg	instruction {pc} ({op}) pops below the stack	инструкция {pc} ({op}) извлекает значения из пустого стека
+@msg	instruction {pc} reached with stack depths {seen} and {d}	инструкция {pc} достигается с глубинами стека {seen} и {d}
+@msg	invalid `color`	недопустимое `color`
+@msg	invalid anchor index {v}: expected a non-negative integer	недопустимый индекс опорной точки {v}: ожидается неотрицательное целое число
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	недопустимая ссылка на опорную точку {v}: ожидается [subpath, anchor]
+@msg	invalid angle	недопустимый угол
+@msg	invalid array length	недопустимая длина массива
+@msg	invalid brush: {e}	недопустимая кисть: {e}
+@msg	invalid color	недопустимый цвет
+@msg	invalid colour {c}	недопустимый цвет {c}
+@msg	invalid delta	недопустимое приращение
+@msg	invalid group	недопустимая группа
+@msg	invalid object id {v}: expected a non-negative integer	недопустимый идентификатор объекта {v}: ожидается неотрицательное целое число
+@msg	invalid point	недопустимая точка
+@msg	invalid regular expression flag '{_1}'	недопустимый флаг регулярного выражения '{_1}'
+@msg	invalid regular expression: {m}	недопустимое регулярное выражение: {m}
+@msg	invalid size	недопустимый размер
+@msg	invalid t	недопустимое t
+@msg	invalid time value	недопустимое значение времени
+@msg	invalid tolerance	недопустимый допуск
+@msg	is a confirm's answer, whose `value` must be true or false	является ответом для confirm, `value` которого должно быть true или false
+@msg	is a prompt's answer, whose `value` must be a string or null	является ответом для prompt, `value` которого должно быть строкой или null
+@msg	is an alert's answer, whose `value` must be "ok"	является ответом для alert, `value` которого должно быть "ok"
+@msg	is longer than 16 KiB	длиннее 16 KiB
+@msg	it draws its image through a clipping path	он рисует своё изображение через контур обрезки
+@msg	it draws no image	он не рисует изображения
+@msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	он больше {MAX_DICTIONARY_FILE_BYTES} байт
+@msg	it isn't a file	это не файл
+@msg	it names {_1} plates, and at most {MAX_PLATES} are read	в нём указано пластин: {_1}, а читается не более {MAX_PLATES}
+@msg	its art is too long or too detailed for a head	его графика слишком длинна или слишком детальна для наконечника
+@msg	its art paints nothing	его графика ничего не закрашивает
+@msg	its artboards all lie beyond the canvas (more than {_1} pt from the origin)	все его монтажные области находятся за пределами холста (дальше {_1} pt от начала координат)
+@msg	its clipping masks are nested too deeply	его маски обрезки вложены слишком глубоко
+@msg	its image is too large to read	его изображение слишком велико для чтения
+@msg	its metadata has no description	в его метаданных нет описания
+@msg	its metadata has no direct length	у его метаданных нет прямо заданной длины
+@msg	its plates are too large: more than {MAX_SAMPLES} pixels together	его пластины слишком велики: вместе больше {MAX_SAMPLES} пикселей
+@msg	its plates are too large: {_1} plates of {w} × {h} pixels	его пластины слишком велики: пластин {_1}, размер каждой {w} × {h} пикселей
+@msg	its plates can't be kept together	его пластины невозможно сохранить вместе
+@msg	its shapes could not be combined into one	его фигуры не удалось объединить в одну
+@msg	join two different paths	соедините два разных контура
+@msg	jump to {pc}, past the end	переход к {pc}, за конец кода
+@msg	justify must be auto|left|center|right|justifyAll	justify должно быть auto|left|center|right|justifyAll
+@msg	kbps must be a positive number, not {kbps}	kbps должно быть положительным числом, а не {kbps}
+@msg	keywords must be a list of words or a comma-separated string	keywords должно быть списком слов или строкой со словами через запятую
+@msg	keywords must be at most {MAX_KEYWORD} characters, without control characters	каждое слово в keywords должно быть не длиннее {MAX_KEYWORD} символов и без управляющих символов
+@msg	kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)	kind должно быть 1, 2 или 3, либо укажите `name` набора (см. perspective.presets.list)
+@msg	kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle	kind должно быть graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle или paraStyle
+@msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout должно быть "on", "off", "neutral" или логическим значением, а не {v}
+@msg	layer `{name}` has no art to export	в слое `{name}` нет графики для экспорта
+@msg	layer must name a layer or sublayer	layer должно указывать слой или подслой
+@msg	layers can't be intertwined: select the objects in them	слои нельзя переплести: выделите объекты в них
+@msg	layers go only at the top level or in layers, objects in layers and groups	слои могут находиться только на верхнем уровне или в слоях, а объекты — в слоях и группах
+@msg	layers must be true or false	layers должно быть true или false
+@msg	layout must be gridByRow, gridByColumn, row or column	layout должно быть gridByRow, gridByColumn, row или column
+@msg	leading must be a number or "auto"	leading должно быть числом или "auto"
+@msg	left/right must be non-negative widths	left/right должны быть неотрицательными значениями ширины
+@msg	legacyNameEncoding must be one of {_1}	legacyNameEncoding должно быть одним из: {_1}
+@msg	level `{t}`: 2 or 3	уровень `{t}`: 2 или 3
+@msg	line {line}: more than {MAX_CSV_COLS} columns	строка {line}: больше {MAX_CSV_COLS} столбцов
+@msg	line {line}: unclosed quote	строка {line}: незакрытая кавычка
+@msg	line {line}: value for `{var}` must match its variable kind	строка {line}: значение `{var}` должно соответствовать типу переменной
+@msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`: lf или crlf
+@msg	loading profiles from disk isn't available in the browser	загрузка профилей с диска недоступна в браузере
+@msg	localize: the first argument must be a localization object or a string	localize: первый аргумент должен быть объектом локализации или строкой
+@msg	margin: a {m} pt margin leaves no imageable area on the paper	margin: поле {m} pt не оставляет на бумаге области печати
+@msg	matrix must be finite and invertible, depth finite	matrix должно быть конечной и обратимой матрицей, а depth — конечным
+@msg	matte: {e}	matte: {e}
+@msg	member is for order front, forward, backward or back	member используется для order front, forward, backward или back
+@msg	missing `artboards`	отсутствует `artboards`
+@msg	missing `at` [x, y]	отсутствует `at` [x, y]
+@msg	missing `attrs`	отсутствует `attrs`
+@msg	missing `color` or `opacity`	отсутствует `color` или `opacity`
+@msg	missing `colors`	отсутствует `colors`
+@msg	missing `commands`	отсутствует `commands`
+@msg	missing `destinationFolder`	отсутствует `destinationFolder`
+@msg	missing `effect` id	отсутствует идентификатор `effect`
+@msg	missing `family`	отсутствует `family`
+@msg	missing `find`	отсутствует `find`
+@msg	missing `gid` (a glyph id, or null for the default glyph)	отсутствует `gid` (идентификатор глифа или null для глифа по умолчанию)
+@msg	missing `group`	отсутствует `group`
+@msg	missing `id`	отсутствует `id`
+@msg	missing `id`: give one, or select one type object	отсутствует `id`: укажите его или выделите один текстовый объект
+@msg	missing `index` (a point index, or null to clear)	отсутствует `index` (индекс точки или null для сброса)
+@msg	missing `index` (a stop index, or null to clear)	отсутствует `index` (индекс точки перехода или null для сброса)
+@msg	missing `index` (an item index or null)	отсутствует `index` (индекс элемента или null)
+@msg	missing `item`	отсутствует `item`
+@msg	missing `library`	отсутствует `library`
+@msg	missing `library` (see graphicStyle.libraries)	отсутствует `library` (см. graphicStyle.libraries)
+@msg	missing `library` (see swatch.library.list)	отсутствует `library` (см. swatch.library.list)
+@msg	missing `map` (rows [{from, to}] or {current})	отсутствует `map` (строки [{from, to}] или {current})
+@msg	missing `matrix` [a,b,c,d,e,f]	отсутствует `matrix` [a,b,c,d,e,f]
+@msg	missing `name` (see gradient.presets.list)	отсутствует `name` (см. gradient.presets.list)
+@msg	missing `offset` (a distance in points)	отсутствует `offset` (расстояние в пунктах)
+@msg	missing `path`	отсутствует `path`
+@msg	missing `path` (a path object id)	отсутствует `path` (идентификатор объекта-контура)
+@msg	missing `picks`	отсутствует `picks`
+@msg	missing `rule`	отсутствует `rule`
+@msg	missing `source` id	отсутствует идентификатор `source`
+@msg	missing `start` (the byte offset of a character)	отсутствует `start` (смещение символа в байтах)
+@msg	missing `status`: linked, embedded, missing or modified	отсутствует `status`: linked, embedded, missing или modified
+@msg	missing `target` id	отсутствует идентификатор `target`
+@msg	missing `text`	отсутствует `text`
+@msg	missing `to`	отсутствует `to`
+@msg	missing `to` (an index)	отсутствует `to` (индекс)
+@msg	missing `to`: a non-negative integer	отсутствует `to`: неотрицательное целое число
+@msg	missing `type`	отсутствует `type`
+@msg	missing `value`	отсутствует `value`
+@msg	missing `word`	отсутствует `word`
+@msg	missing `{key}`	отсутствует `{key}`
+@msg	missing `{k}`	отсутствует `{k}`
+@msg	missing anchor	отсутствует anchor
+@msg	missing anchors	отсутствует anchors
+@msg	missing anchors [[subpath, anchor]…]	отсутствует anchors [[subpath, anchor]…]
+@msg	missing array `{key}`	отсутствует массив `{key}`
+@msg	missing case	отсутствует case
+@msg	missing color	отсутствует color
+@msg	missing commands	отсутствует commands
+@msg	missing destination folder	отсутствует папка назначения
+@msg	missing from	отсутствует from
+@msg	missing group	отсутствует group
+@msg	missing id or ids	отсутствует id или ids
+@msg	missing ids	отсутствует ids
+@msg	missing indexes	отсутствует indexes
+@msg	missing matrix [a,b,c,d,e,f]	отсутствует matrix [a,b,c,d,e,f]
+@msg	missing name	отсутствует name
+@msg	missing op	отсутствует op
+@msg	missing or invalid `color`	`color` отсутствует или недопустимо
+@msg	missing or unknown `tool`	`tool` отсутствует или неизвестно
+@msg	missing point	отсутствует point
+@msg	missing point [x,y]	отсутствует point [x,y]
+@msg	missing point `{key}` ([x, y])	отсутствует точка `{key}` ([x, y])
+@msg	missing points	отсутствует points
+@msg	missing points [[x,y]…]	отсутствует points [[x,y]…]
+@msg	missing segment	отсутствует segment
+@msg	missing stops	отсутствует stops
+@msg	missing subpaths	отсутствует subpaths
+@msg	missing target	отсутствует target
+@msg	missing to	отсутствует to
+@msg	missing x, y	отсутствуют x, y
+@msg	mode is set, add or toggle, not `{other}`	mode принимает set, add или toggle, а не `{other}`
+@msg	mode must be "cmyk" or "rgb"	mode должно быть "cmyk" или "rgb"
+@msg	mode must be area|onPath, got {o}	mode должно быть area|onPath, получено {o}
+@msg	more than 10000 linked files: package dependencies in smaller parts	больше 10000 связанных файлов: упаковывайте зависимости меньшими частями
+@msg	more than 256 commands	больше 256 команд
+@msg	more than {MAX_BATCH_FILES} data sets	больше {MAX_BATCH_FILES} наборов данных
+@msg	more than {MAX_BATCH_FILES} files	больше {MAX_BATCH_FILES} файлов
+@msg	more than {MAX_CSV_ROWS} data rows	больше {MAX_CSV_ROWS} строк данных
+@msg	more than {MAX_FILES} images	больше {MAX_FILES} изображений
+@msg	more than {MAX_IMPORT} presets	больше {MAX_IMPORT} наборов
+@msg	moved must be [[x,y]…]	moved должно быть [[x,y]…]
+@msg	must be an object with `kind` and `value`	должен быть объектом с `kind` и `value`
+@msg	must have `kind` alert, confirm or prompt	должен иметь `kind` alert, confirm или prompt
+@msg	must have exactly `kind` and `value`	должен содержать только `kind` и `value`
+# Messages that begin with a lowercase word, n to s.
+@msg	name (a toolbar's name) is required	требуется name (имя панели инструментов)
+@msg	name (a toolbar's name) must be a string	name (имя панели инструментов) должно быть строкой
+@msg	name must be a toolbar's name	name должно быть именем панели инструментов
+@msg	names is empty	names пусто
+@msg	names must be an array of symbol names	names должно быть массивом имён символов
+@msg	need `anchor` or `segment` + `t`	нужно `anchor` или `segment` + `t`
+@msg	need at least one anchor	нужна хотя бы одна опорная точка
+@msg	need at least one point	нужна хотя бы одна точка
+@msg	need at least two points	нужны хотя бы две точки
+@msg	needs a closing quote after the name	нужна закрывающая кавычка после имени
+@msg	needs a name	нужно имя
+@msg	needs a name of at most 64 bytes	нужно имя длиной не более 64 байт
+@msg	needs a name of letters, digits and _, or a quoted name	нужно имя из букв, цифр и _ либо имя в кавычках
+@msg	needs a name without control characters	нужно имя без управляющих символов
+@msg	needs points	нужны points
+@msg	nesting too deep	слишком глубокая вложенность
+@msg	nineSlice must be true or false	nineSlice должно быть true или false
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides должно быть [left, top, right, bottom], каждое значение -16..16, при этом left + right < 1 и top + bottom < 1
+@msg	no HP-GL format	нет формата HP-GL
+@msg	no New Document profile called `{shown}` ({_1})	нет профиля нового документа с именем `{shown}` ({_1})
+@msg	no PDF preset named `{n}`	нет набора PDF с именем `{n}`
+@msg	no SVG filter at index {k}	нет фильтра SVG с индексом {k}
+@msg	no action set is current	нет текущего набора действий
+@msg	no active data set	нет активного набора данных
+@msg	no appearance item {index}	нет элемента оформления {index}
+@msg	no arrowheads file here	здесь нет файла стрелок
+@msg	no artboard {_1}	нет монтажной области {_1}
+@msg	no artboard {artboard} (0-based; the document has {_1})	нет монтажной области {artboard} (отсчёт от 0; всего в документе: {_1})
+@msg	no asset {id}	нет ресурса {id}
+@msg	no asset {id} (see assets.list)	нет ресурса {id} (см. assets.list)
+@msg	no assets to export	нет ресурсов для экспорта
+@msg	no assets yet: collect art for export first (assets.add)	ресурсов пока нет: сначала соберите графику для экспорта (assets.add)
+@msg	no brush named `{n}`	нет кисти с именем `{n}`
+@msg	no character at byte {start}	нет символа по байту {start}
+@msg	no character has code {code}	нет символа с кодом {code}
+@msg	no colour	нет цвета
+@msg	no colour group `{group}`	нет цветовой группы `{group}`
+@msg	no colour group `{name}`	нет цветовой группы `{name}`
+@msg	no custom arrowhead {name} (see stroke.arrowheads.list)	нет пользовательской стрелки {name} (см. stroke.arrowheads.list)
+@msg	no data sets	нет наборов данных
+@msg	no dataset named `{from}`	нет набора данных с именем `{from}`
+@msg	no dataset named `{name}`	нет набора данных с именем `{name}`
+@msg	no datasets	нет наборов данных
+@msg	no design named `{name}`	нет дизайна с именем `{name}`
+@msg	no design named `{n}`	нет дизайна с именем `{n}`
+@msg	no design named `{old}`	нет дизайна с именем `{old}`
+@msg	no encoder for {_1} yet	кодировщика для {_1} пока нет
+@msg	no export preset `{name}` (see document.exportPresets.list)	нет набора настроек экспорта `{name}` (см. document.exportPresets.list)
+@msg	no file to open	нет файла для открытия
+@msg	no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder	нет папки: передайте `path` или задайте «Настройки › Модули & Рабочие диски › Папка дополнительных модулей»
+@msg	no fonts to look for: they are all available	нет шрифтов для поиска: все они доступны
+@msg	no formats to export	нет форматов для экспорта
+@msg	no gradient preset `{name}` (see gradient.presets.list)	нет набора градиента `{name}` (см. gradient.presets.list)
+@msg	no graphic style `{n}` in `{_1}`	нет графического стиля `{n}` в `{_1}`
+@msg	no graphic style library `{key}` (see graphicStyle.libraries)	нет библиотеки графических стилей `{key}` (см. graphicStyle.libraries)
+@msg	no guide selected	направляющая не выделена
+@msg	no guide selected (or give an index)	направляющая не выделена (или укажите индекс)
+@msg	no guide {i}	нет направляющей {i}
+@msg	no images in the folder	в папке нет изображений
+@msg	no instructions	нет инструкций
+@msg	no item at index {_1}	нет элемента с индексом {_1}
+@msg	no item at index {from}	нет элемента с индексом {from}
+@msg	no item at one of the indices {idx}	нет элемента по одному из индексов {idx}
+@msg	no layer	нет слоя
+@msg	no layer to rename	нет слоя для переименования
+@msg	no layer {id} (see layer.list)	нет слоя {id} (см. layer.list)
+@msg	no layers to export	нет слоёв для экспорта
+@msg	no library `{key}`	нет библиотеки `{key}`
+@msg	no metafile format	нет формата метафайла
+@msg	no object {_1}	нет объекта {_1}
+@msg	no objects	нет объектов
+@msg	no parent layer	нет родительского слоя
+@msg	no perspective grid preset named `{b}` (see perspective.presets.list)	нет набора сетки перспективы с именем `{b}` (см. perspective.presets.list)
+@msg	no perspective grid preset named `{n}`	нет набора сетки перспективы с именем `{n}`
+@msg	no point selected (give `index`)	точка не выделена (укажите `index`)
+@msg	no preset called `{from}` (see file.newPresets)	нет набора с именем `{from}` (см. file.newPresets)
+@msg	no preset called `{name}` (see file.newPresets)	нет набора с именем `{name}` (см. file.newPresets)
+@msg	no preset named `{n}`	нет набора с именем `{n}`
+@msg	no print preset named `{b}` (see print.presets.list)	нет набора печати с именем `{b}` (см. print.presets.list)
+@msg	no print preset named `{name}` (presets: {_1})	нет набора печати с именем `{name}` (наборы: {_1})
+@msg	no print preset named `{n}`	нет набора печати с именем `{n}`
+@msg	no profile named `{name}`	нет профиля с именем `{name}`
+@msg	no random numbers ({e})	нет случайных чисел ({e})
+@msg	no readable files in the folder	в папке нет читаемых файлов
+@msg	no recovery copy `{f}` (see file.recovery.list)	нет копии восстановления `{f}` (см. file.recovery.list)
+@msg	no rows	нет строк
+@msg	no saved PDF preset named `{name}`	нет сохранённого набора PDF с именем `{name}`
+@msg	no saved export preset `{name}`	нет сохранённого набора настроек экспорта `{name}`
+@msg	no saved gradient preset called {name}	нет сохранённого набора градиента с именем {name}
+@msg	no saved gradient presets	нет сохранённых наборов градиента
+@msg	no saved preset called `{name}`	нет сохранённого набора с именем `{name}`
+@msg	no saved presets to export (name [Default] in `names` to export it)	нет сохранённых наборов для экспорта (укажите [Default] в `names`, чтобы экспортировать его)
+@msg	no saved presets to export (name built-in ones in `names`)	нет сохранённых наборов для экспорта (встроенные укажите в `names`)
+@msg	no saved print preset named `{name}`	нет сохранённого набора печати с именем `{name}`
+@msg	no saved profile called {name}	нет сохранённого профиля с именем {name}
+@msg	no saved selection `{name}`	нет сохранённого выделения `{name}`
+@msg	no saved theme called {name} (see colorTheme.list)	нет сохранённой темы с именем {name} (см. colorTheme.list)
+@msg	no saved views	нет сохранённых видов
+@msg	no selected or given object has a visible 3D effect	ни у одного выделенного или указанного объекта нет видимого 3D-эффекта
+@msg	no series {i}	нет ряда {i}
+@msg	no slice {n} in the image (see slice.list)	в изображении нет фрагмента {n} (см. slice.list)
+@msg	no source art	нет исходной графики
+@msg	no stop {i} (the gradient has {n})	нет точки перехода {i} (всего в градиенте: {n})
+@msg	no style `{name}`	нет стиля `{name}`
+@msg	no such artboard {v}	монтажная область {v} не существует
+@msg	no such assets (see assets.list)	таких ресурсов нет (см. assets.list)
+@msg	no such frame anchor, or the frame would reach past the canvas	такой опорной точки рамки нет, или рамка вышла бы за пределы холста
+@msg	no such objects	таких объектов нет
+@msg	no such path anchor, or the path would reach past the canvas	такой опорной точки контура нет, или контур вышел бы за пределы холста
+@msg	no such rows	таких строк нет
+@msg	no swatch `{keep}`	нет образца `{keep}`
+@msg	no swatch `{n}`	нет образца `{n}`
+@msg	no swatch `{n}` (swatches and colour groups move separately)	нет образца `{n}` (образцы и цветовые группы перемещаются отдельно)
+@msg	no swatch library `{key}` (see swatch.library.list)	нет библиотеки образцов `{key}` (см. swatch.library.list)
+@msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	нет библиотеки образцов `{key}` (см. swatch.library.list; "document": образцы документа)
+@msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	нет библиотеки образцов `{key}` (см. swatch.library.list; "{DOCUMENT_SWATCHES}": образцы документа)
+@msg	no swatch named `{n}`	нет образца с именем `{n}`
+@msg	no swatch or colour group `{n}`	нет образца или цветовой группы `{n}`
+@msg	no swatch or colour group `{n}` in `{_1}`	нет образца или цветовой группы `{n}` в `{_1}`
+@msg	no symbol named `{_1}`	нет символа с именем `{_1}`
+@msg	no symbol named `{name}`	нет символа с именем `{name}`
+@msg	no text objects selected	текстовые объекты не выделены
+@msg	no toolbar named `{_1}`	нет панели инструментов с именем `{_1}`
+@msg	no toolbar named `{name}`	нет панели инструментов с именем `{name}`
+@msg	no tracing preset `{preset}` (see imageTrace.presets)	нет набора трассировки `{preset}` (см. imageTrace.presets)
+@msg	no user library folder here (save with a path, or without one to get the data)	здесь нет папки пользовательских библиотек (сохраните с путём или без пути, чтобы получить данные)
+@msg	no variable named `{from}`	нет переменной с именем `{from}`
+@msg	no variable named `{name}`	нет переменной с именем `{name}`
+@msg	no variable named `{var}`	нет переменной с именем `{var}`
+@msg	no variable named `{v}`	нет переменной с именем `{v}`
+@msg	no view named `{name}`	нет вида с именем `{name}`
+@msg	node {_1} already has the text variable `{_2}`	у узла {_1} уже есть текстовая переменная `{_2}`
+@msg	node {_1} is not a graph	узел {_1} не является диаграммой
+@msg	node {_1} is not an image	узел {_1} не является изображением
+@msg	node {_1} is not type	узел {_1} не является текстом
+@msg	not a DCS file	не файл DCS
+@msg	not a PDF presets file (format `{_1}`)	не файл наборов PDF (формат `{_1}`)
+@msg	not a PDF presets file: {e}	не файл наборов PDF: {e}
+@msg	not a RegExp object	не объект RegExp
+@msg	not a Word document: its WordDocument stream doesn't start with a file information block	не документ Word: его поток WordDocument не начинается с блока сведений о файле
+@msg	not a Word document: its compound file has no WordDocument stream	не документ Word: в его составном файле нет потока WordDocument
+@msg	not a Word document: its main part is not a WordprocessingML document	не документ Word: его основная часть не является документом WordprocessingML
+@msg	not a Word document: its package has no main document part	не документ Word: в его пакете нет основной части документа
+@msg	not a closed path	не замкнутый контур
+@msg	not a flattener presets file (format `{_1}`)	не файл наборов объединения (формат `{_1}`)
+@msg	not a flattener presets file: {e}	не файл наборов объединения: {e}
+@msg	not a layer or group	не слой и не группа
+@msg	not a library file: {e}	не файл библиотеки: {e}
+@msg	not a mesh envelope point	не точка сетки оболочки
+@msg	not a perspective grid presets file (format `{_1}`)	не файл наборов сетки перспективы (формат `{_1}`)
+@msg	not a perspective grid presets file: {e}	не файл наборов сетки перспективы: {e}
+@msg	not a print presets file (format `{_1}`)	не файл наборов печати (формат `{_1}`)
+@msg	not a print presets file: {e}	не файл наборов печати: {e}
+@msg	not a regular expression	не регулярное выражение
+@msg	not a stored or deflated central record	центральная запись не сохранена без сжатия и не сжата методом deflate
+@msg	not a valid SVGZ file: {e}	недопустимый файл SVGZ: {e}
+@msg	not an action set: the text doesn't start with /version and a number	не набор действий: текст не начинается с /version и числа
+@msg	not an image VectorCraft reads (see document.formats)	не изображение, которое читает VectorCraft (см. document.formats)
+@msg	not area type (text in a frame) outside perspective	не текст в области (текст в рамке) вне перспективы
+@msg	not editing an opacity mask	непрозрачная маска не редактируется
+@msg	not type on a path outside perspective	не текст по контуру вне перспективы
+@msg	nothing prints	ничего не печатается
+@msg	nothing to bind	нечего привязывать
+@msg	nothing to change	нечего изменять
+@msg	nothing to change: give dx, dy, hScale, vScale or rotation	нечего изменять: укажите dx, dy, hScale, vScale или rotation
+@msg	nothing to crop	нечего обрезать
+@msg	nothing to export	нечего экспортировать
+@msg	nothing to export: the document has no visible art	нечего экспортировать: в документе нет видимой графики
+@msg	nothing to mark	нечего отмечать
+@msg	nothing to print: every artboard picked is blank	нечего печатать: все выбранные монтажные области пусты
+@msg	nothing to print: the document has no art that prints	нечего печатать: в документе нет печатаемой графики
+@msg	nothing to repeat	нечего повторять
+@msg	numbers out of order in {_1} quantifier	числа в квантификаторе {_1} идут в неверном порядке
+@msg	object is not a path	объект не является контуром
+@msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	прозрачность объекта нельзя перенести на выделенные символы; отключите «Прозрачность» в окне «Параметры пипетки» или выделите объект целиком
+@msg	object {_1} can't be set as point type	объект {_1} нельзя преобразовать в текст из точки
+@msg	object {_1} has lost its file's contents: relink it	объект {_1} потерял содержимое своего файла: восстановите связь
+@msg	object {_1} has no path	у объекта {_1} нет контура
+@msg	object {_1} has no size	у объекта {_1} нет размера
+@msg	object {_1} is hidden or locked, or on a locked artboard	объект {_1} скрыт или заблокирован либо находится на заблокированной монтажной области
+@msg	object {_1} is not a placed document	объект {_1} не является помещённым документом
+@msg	object {_1} is not an Intertwine group	объект {_1} не является группой переплетения
+@msg	object {_1} is not an image	объект {_1} не является изображением
+@msg	object {_1} is not an image or a linked file	объект {_1} не является изображением или связанным файлом
+@msg	object {_1} is not an image or a placed document	объект {_1} не является изображением или помещённым документом
+@msg	object {_1} is not in this Intertwine group	объект {_1} не входит в эту группу переплетения
+@msg	object {_1} needs a 3D effect	объекту {_1} нужен 3D-эффект
+@msg	object {_1} needs a 3D effect at index {index}	объекту {_1} нужен 3D-эффект с индексом {index}
+@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	объект {_1}: у полого эффекта «Выдавливание и фаска» нет торцов: включите «Окончание», чтобы наложить графику
+@msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	объект {_1}: при глубине 0 у объекта одна грань: наложите его графику на переднюю сторону
+@msg	object {_1}: {_2}	объект {_1}: {_2}
+@msg	object {_1}: {e}	объект {_1}: {e}
+@msg	object {_1}: {name} at index {index} has no lighting presets; set its lights with effect.setParams	объект {_1}: у {name} с индексом {index} нет наборов освещения; задайте источники света через effect.setParams
+@msg	object {id} has anchors 0–{_1} for `corners`, not {past}	у объекта {id} для `corners` есть опорные точки 0–{_1}, а не {past}
+@msg	object {id} has {n} anchors, so no anchor {past}	у объекта {id} опорных точек: {n}, поэтому опорной точки {past} нет
+@msg	objects must be none, move or copy	objects должно быть none, move или copy
+@msg	objects were left out	объекты пропущены
+@msg	offset out of range	смещение вне диапазона
+@msg	on must be true or false	on должно быть true или false
+@msg	only groups, layers, type and images have a Contents (Characters) row	строка «Содержимое» («Символы») есть только у групп, слоёв, текста и изображений
+@msg	only interior mesh lines can be deleted	удалять можно только внутренние линии сетки
+@msg	only solid colours can be added (not gradients or patterns)	добавлять можно только сплошные цвета (не градиенты и не узоры)
+@msg	only solid-colour swatches can be spot colours	плашечными цветами могут быть только образцы сплошного цвета
+@msg	only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first	удалось прочитать только встроенный предпросмотр этого файла Affinity: используйте «Файл › Открыть», чтобы увидеть его с предупреждением, или сначала экспортируйте SVG или PDF из Affinity
+@msg	only this Affinity file's embedded preview could be read; use File › Open to see it with its warning	удалось прочитать только встроенный предпросмотр этого файла Affinity; используйте «Файл › Открыть», чтобы увидеть его с предупреждением
+@msg	onto, above, below, icon and a column place belong to window.panel.float and window.panel.dock	onto, above, below, icon и место в столбце относятся к window.panel.float и window.panel.dock
+@msg	onto, above, below, icon and a column place take no anchor, side, zone or before	onto, above, below, icon и место в столбце не сочетаются с anchor, side, zone и before
+@msg	onto, above, below, icon and a column place take no x, y, width or height	onto, above, below, icon и место в столбце не сочетаются с x, y, width и height
+@msg	opacity must be a number	opacity должно быть числом
+@msg	open a document to look for its linked files	откройте документ, чтобы искать его связанные файлы
+@msg	operand too large	операнд слишком велик
+@msg	options must be an object (see file.formatOptions)	options должно быть объектом (см. file.formatOptions)
+@msg	order is a whole number from 0 to {others}, not `{v}`	order — целое число от 0 до {others}, а не `{v}`
+@msg	order must be leftToRight or rightToLeft	order должно быть leftToRight или rightToLeft
+@msg	orientation must be portrait or landscape, not `{o}`	orientation должно быть portrait или landscape, а не `{o}`
+@msg	outlineText {v}: true or false	outlineText {v}: true или false
+@msg	output intent profile: {e}	профиль назначения вывода: {e}
+@msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: нет профиля RGB или CMYK с именем «{name}»
+@msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: файлы {_1} используют CMYK, а «{name}» — профиль RGB
+@msg	output.destination: {e}	output.destination: {e}
+@msg	output.inks: no ink is set to print	output.inks: ни одна краска не назначена для печати
+@msg	output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile	output.outputIntent: нет профиля с именем «{name}», а назначение вывода {std} внедряет свой профиль
+@msg	output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)	output.outputIntent: нет профиля с именем «{name}»: назначение вывода {std} внедряет профиль или указывает зарегистрированное условие печати (outputConditionId и registry)
+@msg	output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile	output.outputIntent: файлы {std} печатаются в CMYK, а «{name}» — профиль RGB
+@msg	output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent	output.outputIntent: «{name}» — профиль оттенков серого, он не может быть назначением вывода {std}
+@msg	overlap: {o} pt is half a tile or more	overlap: {o} pt составляет половину плитки или больше
+@msg	overlapping Shaper paths must be in the same layer or group	перекрывающиеся контуры Shaper должны находиться в одном слое или группе
+@msg	overlapping edits	перекрывающиеся правки
+@msg	page art conflicts with image data for {key}	графика страницы конфликтует с данными изображения для {key}
+@msg	page art conflicts with pattern {name}	графика страницы конфликтует с узором {name}
+@msg	page art conflicts with swatch {name}	графика страницы конфликтует с образцом {name}
+@msg	page art is missing image data for {key}	в графике страницы отсутствуют данные изображения для {key}
+@msg	page art is missing pattern {name}	в графике страницы отсутствует узор {name}
+@msg	page art is missing swatch {name}	в графике страницы отсутствует образец {name}
+@msg	page must be a whole number from 1	page должно быть целым числом от 1
+@msg	page thumbnail: {e}	миниатюра страницы: {e}
+@msg	page {page} of the PDF has no objects	на странице {page} файла PDF нет объектов
+@msg	page {page}: `{file}` has {n} {artboards}	страница {page}: в `{file}` {n} {artboards}
+@msg	page {page}: `{name}` has {n} {pages}	страница {page}: в `{name}` {n} {pages}
+@msg	pages must be a range such as "2-3" or a page number, not {v}	pages должно быть диапазоном, например "2-3", или номером страницы, а не {v}
+@msg	pages: {e}	pages: {e}
+@msg	panel position must be finite	положение панели должно быть конечным
+@msg	parameters must be an object	параметры должны быть объектом
+@msg	params must be an object	params должно быть объектом
+@msg	passwords can have up to {MAX_PASSWORD} bytes	пароли могут содержать до {MAX_PASSWORD} байт
+@msg	path chunks must share their boundary point	фрагменты контура должны иметь общую граничную точку
+@msg	path has no open end	у контура нет открытого конца
+@msg	paths must be strings	paths должно состоять из строк
+@msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false требует все монтажные области, чтобы сохранить редактируемую графику
+@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	когда useArtboards равно false, pdfCompatible: false требует монтажные области, чтобы сохранить редактируемую графику
+@msg	pdfs `{m}`: single or multiple	pdfs `{m}`: single или multiple
+@msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom принимает "artwork" или "swatches", а не {v}
+@msg	pins and moved must be non-empty lists of the same length	pins и moved должны быть непустыми списками одинаковой длины
+@msg	pins must be [[x,y]…]	pins должно быть [[x,y]…]
+@msg	pins must be finite	pins должны быть конечными
+@msg	place is above, below or inside, not `{other}`	place принимает above, below или inside, а не `{other}`
+@msg	plane must be left|right|ground	plane должно быть left|right|ground
+@msg	plane must be left|right|ground|none	plane должно быть left|right|ground|none
+@msg	point is outside the mesh	точка находится за пределами сетки
+@msg	point x must be a number	x точки должно быть числом
+@msg	point y must be a number	y точки должно быть числом
+@msg	points must be [t, left, right] with non-negative widths	points должно быть [t, left, right] с неотрицательной шириной
+@msg	points must be [x,y] pairs	points должно состоять из пар [x,y]
+@msg	points must be a non-empty [[x,y,pressure?]…] list	points должно быть непустым списком [[x,y,pressure?]…]
+@msg	points must be a non-empty list of finite [x,y]	points должно быть непустым списком конечных [x,y]
+@msg	points must be an array or null	points должно быть массивом или null
+@msg	points must be finite	points должны быть конечными
+@msg	points must be finite [x,y] pairs	points должно состоять из конечных пар [x,y]
+@msg	points must be finite canvas points	points должно состоять из конечных точек холста
+@msg	points must contain 1–4096 coordinates	points должно содержать от 1 до 4096 координат
+@msg	position must be normal, superscript or subscript	position должно быть normal, superscript или subscript
+@msg	position must be topLeft, topRight, bottomLeft or bottomRight	position должно быть topLeft, topRight, bottomLeft или bottomRight
+@msg	positions must be between 0 and 100000 pt	positions должны быть от 0 до 100000 pt
+@msg	ppi must be a positive number, not {ppi}	ppi должно быть положительным числом, а не {ppi}
+@msg	ppi must be between 1 and 2400	ppi должно быть от 1 до 2400
+@msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` не является одним из transforms|bounds|fileDimensions|fit|fill
+@msg	preserveShape must be clippingMask|transparency	preserveShape должно быть clippingMask|transparency
+@msg	preset `{id}`: mobile or density	набор `{id}`: mobile или density
+@msg	preset must be standard, diffuse, topLeft or right	preset должно быть standard, diffuse, topLeft или right
+@msg	preset must be the name of a print preset	preset должно быть именем набора печати
+@msg	previewMode must be default, pixel or overprint	previewMode должно быть default, pixel или overprint
+@msg	print settings: {e}	параметры печати: {e}
+@msg	procedures nest too deeply	процедуры вложены слишком глубоко
+@msg	procedures nested too deeply	вложенность процедур слишком глубока
+@msg	quotes must be {double?, single?}	quotes должно быть {double?, single?}
+@msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	quotes.{k} должно быть открывающей и закрывающей кавычками, например "“”"
+@msg	range out of order in character class	диапазон в классе символов задан в неверном порядке
+@msg	rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)	rasterEffectsPpi должно быть 1–2400 (72 для экрана, 150 для среднего, 300 для высокого)
+@msg	rating must be a whole number from 0 to {MAX_RATING}	rating должно быть целым числом от 0 до {MAX_RATING}
+@msg	rect and {k} contradict each other: give the area or the artboards	rect и {k} противоречат друг другу: укажите область или монтажные области
+@msg	rect applies to raster formats, not {_1}	rect применяется к растровым форматам, а не к {_1}
+@msg	rect is [x, y, width, height] in points	rect — это [x, y, width, height] в пунктах
+@msg	rect must be [x, y, width, height]	rect должно быть [x, y, width, height]
+@msg	rect must be [x, y, width, height] with a positive width and height	rect должно быть [x, y, width, height] с положительными шириной и высотой
+@msg	rect needs finite numbers and a positive width and height	для rect нужны конечные числа и положительные ширина и высота
+@msg	redraw needs id	для redraw нужен id
+@msg	redraw within must be a finite distance of 0 or more	within для redraw должно быть конечным расстоянием, 0 или больше
+@msg	reduce of an empty array with no initial value	reduce для пустого массива без начального значения
+@msg	registration must be 0..8	registration должно быть 0..8
+@msg	regular expression flag '{_1}' given twice	флаг регулярного выражения '{_1}' указан дважды
+@msg	release a layer or a group	распределять по слоям можно слой или группу
+@msg	replace keeps the replaced object's place and transform: drop template, at and rect	replace сохраняет положение и трансформацию заменяемого объекта: уберите template, at и rect
+@msg	replace: select the one object to replace	replace: выделите один объект для замены
+@msg	resolution must be a number or screen|medium|high	resolution должно быть числом или screen|medium|high
+@msg	resolution must be between 1 and 2400 ppi	resolution должно быть от 1 до 2400 ppi
+@msg	rotation must be a number of degrees	rotation должно быть числом в градусах
+@msg	rotation must be finite	rotation должно быть конечным
+@msg	rows and cols must be 1..50	rows и cols должны быть 1..50
+@msg	rows and columns must be 1..500	rows и columns должны быть 1..500
+@msg	rows of objects whose appearances differ can't be reordered together	строки объектов с разным оформлением нельзя переупорядочивать вместе
+@msg	sampled text would exceed the canvas (coordinates out of range)	текст с перенесёнными атрибутами превысил бы холст (координаты вне диапазона)
+@msg	save the document first: Package collects a saved document	сначала сохраните документ: «Упаковать» собирает сохранённый документ
+@msg	save the document first: copy puts the file in its folder	сначала сохраните документ: copy помещает файл в его папку
+@msg	savedPreset: {e}	savedPreset: {e}
+@msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	scale `{s}`: коэффициент, например 2x, ширина (100w), высота (100h) или разрешение (72ppi)
+@msg	scale must be a number above 0, at most 64	scale должно быть числом больше 0 и не больше 64
+@msg	scale must be non-zero	scale не должно быть нулём
+@msg	scope must be selection or all (got {other})	scope должно быть selection или all (получено {other})
+@msg	scribble is too long	каракули слишком длинные
+@msg	segment does not exist	сегмент не существует
+@msg	select a Shaper group	выделите группу Shaper
+@msg	select a blend to set easing or color shift	выделите переход, чтобы задать сглаживание или сдвиг цвета
+@msg	select a graph	выделите диаграмму
+@msg	select a group or layer with visible, unlocked members	выделите группу или слой с видимыми незаблокированными элементами
+@msg	select a layer	выделите слой
+@msg	select a text object	выделите текстовый объект
+@msg	select an SVG filter	выделите фильтр SVG
+@msg	select an image (or an Image Trace group)	выделите изображение (или группу трассировки изображения)
+@msg	select an image, or pass id	выделите изображение или передайте id
+@msg	select an object (or pass `id`)	выделите объект (или передайте `id`)
+@msg	select an object with a 3D effect	выделите объект с 3D-эффектом
+@msg	select an object with a 3D effect, or give its id in ids	выделите объект с 3D-эффектом или укажите его идентификатор в ids
+@msg	select an object with a freeform gradient	выделите объект с произвольным градиентом
+@msg	select an object with an opacity mask	выделите объект с непрозрачной маской
+@msg	select area type	выделите текст в области
+@msg	select area type (text in a frame)	выделите текст в области (текст в рамке)
+@msg	select area type and closed paths (at least one area type object)	выделите текст в области и замкнутые контуры (хотя бы один объект текста в области)
+@msg	select area type whose first line can fit its frame	выделите текст в области, первая строка которого может поместиться в рамку
+@msg	select artwork to add its colours	выделите рисунок, чтобы добавить его цвета
+@msg	select artwork to make a group of its colours	выделите рисунок, чтобы создать группу из его цветов
+@msg	select artwork to recolour, or give a colour `group`	выделите рисунок для перекрашивания или укажите цветовую группу в `group`
+@msg	select exactly two path ends to join	выделите ровно два конца контуров для соединения
+@msg	select objects or give ids	выделите объекты или укажите ids
+@msg	select objects to align to the guide	выделите объекты для выравнивания по направляющей
+@msg	select one Intertwine group	выделите одну группу переплетения
+@msg	select one image or pass id	выделите одно изображение или передайте id
+@msg	select one layer, group or object to rename	выделите один слой, группу или объект для переименования
+@msg	select paths	выделите контуры
+@msg	select paths or compound paths	выделите контуры или составные контуры
+@msg	select rows or objects to collect	выделите строки или объекты для сбора
+@msg	select something to export	выделите что-нибудь для экспорта
+@msg	select something to export (or turn off selectedOnly)	выделите что-нибудь для экспорта (или отключите selectedOnly)
+@msg	select text to redefine the style from	выделите текст, по которому нужно переопределить стиль
+@msg	select the art and, on top of it, the mask object	выделите графику и расположенный поверх неё объект маски
+@msg	select the art for the design	выделите графику для дизайна
+@msg	select the art for the pattern tile	выделите графику для плитки узора
+@msg	select the art to add first	сначала выделите добавляемую графику
+@msg	select the art to collect (or give its ids)	выделите графику для сбора (или укажите её ids)
+@msg	select the art to weed	выделите графику для выборки
+@msg	select the banner, or mark every artboard	выделите баннер или разметьте все монтажные области
+@msg	select the content and a path on top	выделите содержимое и контур поверх него
+@msg	select the images to relink, or pass ids	выделите изображения для восстановления связи или передайте ids
+@msg	select the images, or pass ids	выделите изображения или передайте ids
+@msg	select the linked images or placed documents, or pass ids	выделите связанные изображения или помещённые документы либо передайте ids
+@msg	select the object to copy from	выделите объект, с которого нужно копировать
+@msg	select the objects (or give their ids)	выделите объекты (или укажите их ids)
+@msg	select the objects to attach to the path	выделите объекты для прикрепления к контуру
+@msg	select the objects to bind	выделите объекты для привязки
+@msg	select two or more objects to intertwine	выделите два или более объекта для переплетения
+@msg	select two or more slices to combine	выделите два или более фрагмента для объединения
+@msg	select type on a path	выделите текст по контуру
+@msg	select type on a path or area type	выделите текст по контуру или текст в области
+@msg	selection `{m}`: one or each	selection `{m}`: one или each
+@msg	settings is an object of document.exportForScreens params	settings — объект с параметрами document.exportForScreens
+@msg	settings must be an object	settings должно быть объектом
+@msg	show `{show}`: all, missing, modified or embedded	show `{show}`: all, missing, modified или embedded
+@msg	show must be true or false	show должно быть true или false
+@msg	side is left or right, not `{v}`	side принимает left или right, а не `{v}`
+@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size должно быть "small", "medium", "large" или числом в пунктах больше 0 и не больше {_1}
+@msg	size must be positive	size должно быть положительным
+@msg	sizeMode is "fixed" or "pressure", not `{other}`	sizeMode принимает "fixed" или "pressure", а не `{other}`
+@msg	sizeMode is "fixed" or "pressure", not {other}	sizeMode принимает "fixed" или "pressure", а не {other}
+@msg	sizeVariation must be 0 or more	sizeVariation должно быть 0 или больше
+@msg	smallCaps must be true or false	smallCaps должно быть true или false
+@msg	sort `{x}`: name, kind or status	sort `{x}`: name, kind или status
+@msg	source paths are too large for Shaper	исходные контуры слишком велики для Shaper
+@msg	source text transform is collapsed or unrepresentable	трансформация исходного текста вырождена или непредставима
+@msg	spot, mode and group apply to solid colours only	spot, mode и group применяются только к сплошным цветам
+@msg	status `{s}`: linked, embedded, missing or modified	status `{s}`: linked, embedded, missing или modified
+@msg	steps must be 1..1000	steps должно быть 1..1000
+@msg	steps must be 1..{MAX_STEPS}	steps должно быть 1..{MAX_STEPS}
+@msg	stop {i}: `plates` must be four numbers from 0 to 1 (C, M, Y, K)	точка перехода {i}: `plates` должно быть четырьмя числами от 0 до 1 (C, M, Y, K)
+@msg	stopped before the archive was finished	остановлено до завершения архива
+@msg	strokeMode must be within|along|across, got {m}	strokeMode должно быть within|along|across, получено {m}
+@msg	strokeOptions must be an object of stroke.set options	strokeOptions должно быть объектом с параметрами stroke.set
+@msg	strokeWidth must be a positive number of pixels	strokeWidth должно быть положительным числом пикселей
+@msg	subpath {si} is not an open subpath	вложенный контур {si} не является открытым
+@msg	subpaths required when joining the same path	при соединении одного и того же контура требуется subpaths
+@msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict должно быть "merge" или "add", а не {v}
+# Messages that begin with a lowercase word, t to z.
+@msg	table must be true or false	table должно быть true или false
+@msg	takes one name	принимает одно имя
+@msg	target text transform is collapsed or unrepresentable	трансформация целевого текста вырождена или непредставима
+@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text должно быть {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}
+@msg	text transform is collapsed or unrepresentable	трансформация текста вырождена или непредставима
+@msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces должно быть целым числом от 2 до 100
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: используйте "{_1}" или "{_2}"
+@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: укажите {path} или {name, dataBase64} файла изображения либо текстуру в том виде, в каком её выдаёт effect.list
+@msg	textureImage: {e}	textureImage: {e}
+@msg	that makes more than {MAX_PIECES} slices	так получится больше {MAX_PIECES} фрагментов
+@msg	that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer	так получится слишком много частей (не более 100000) или шагов штриха: упростите шаблон штрихов или удлините штрихи
+@msg	that object is not in the overlap	этого объекта нет в перекрытии
+@msg	the Affinity document has no page with a size	в документе Affinity нет страницы с заданным размером
+@msg	the CMYK image couldn't be written	изображение CMYK не удалось записать
+@msg	the Layers panel is not shown	панель «Слои» не показана
+@msg	the Layers panel's search, filter or Show Layers Only hides its row	поиск, фильтр или параметр «Показывать только слои» в панели «Слои» скрывает его строку
+@msg	the Objects on Path group is hidden or locked	группа «Объекты на контуре» скрыта или заблокирована
+@msg	the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected	параметры безопасности PDF сохранены без паролей: снова укажите openPassword или permissionsPassword либо security без passwordRequired, чтобы экспортировать без защиты
+@msg	the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)	в файле RTF слишком много абзацев или изменений форматирования, чтобы поместить его как текст (не более {MAX_PARAGRAPHS} абзацев и {MAX_RUNS} фрагментов форматирования)
+@msg	the RTF file is too large to place as type (at most {_1} MB)	файл RTF слишком велик, чтобы поместить его как текст (не более {_1} МБ)
+@msg	the SVG expands to more than {0} nested SVG images	SVG разворачивается более чем в {0} вложенных изображений SVG
+@msg	the SVG expands to more than {0} objects	SVG разворачивается более чем в {0} объектов
+@msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	файл SVG больше {MAX_IMPORT_BYTES} байт
+@msg	the SVG has no drawable objects	в SVG нет отображаемых объектов
+@msg	the SVGZ file unpacks to more than {_1} MB	файл SVGZ распаковывается более чем в {_1} МБ
+@msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	в документе Word больше {MAX_PAGES} страниц свойств, это слишком много для помещения
+@msg	the Word document has more than {MAX_RUNS} runs of character or paragraph properties, too many to place	в документе Word больше {MAX_RUNS} фрагментов свойств символов или абзацев, это слишком много для помещения
+@msg	the Word document has more than {_1} MB of formatting properties, too many to place	в документе Word больше {_1} МБ свойств форматирования, это слишком много для помещения
+@msg	the Word document has too much text or formatting to place as type (at most {MAX_PARAGRAPHS} paragraphs, {MAX_RUNS} runs and {_1} MB of text)	в документе Word слишком много текста или форматирования, чтобы поместить его как текст (не более {MAX_PARAGRAPHS} абзацев, {MAX_RUNS} фрагментов форматирования и {_1} МБ текста)
+@msg	the Word document has too much text to place as type (at most {_1} MB)	в документе Word слишком много текста, чтобы поместить его как текст (не более {_1} МБ)
+@msg	the Word document is encrypted or protected with a password; save it without one to place it	документ Word зашифрован или защищён паролем; сохраните его без пароля, чтобы поместить
+@msg	the Word document is too large to place (its {name} stream holds more than {_1} MB)	документ Word слишком велик для помещения (его поток {name} содержит больше {_1} МБ)
+@msg	the Word document was last saved with fast save, which VectorCraft doesn't read; save it again with fast save turned off	документ Word последний раз сохранён с быстрым сохранением, которое VectorCraft не читает; сохраните его снова, отключив быстрое сохранение
+@msg	the Word document was saved by Word 6.0 or Word 95, which VectorCraft doesn't read; save it as a Word 97-2003 document	документ Word сохранён в Word 6.0 или Word 95, а этот формат VectorCraft не читает; сохраните его как документ Word 97-2003
+@msg	the Word document's text is made of more than {MAX_PIECES} pieces, too many to place	текст документа Word состоит более чем из {MAX_PIECES} частей, это слишком много для помещения
+@msg	the XML operation needs an XML or XMLList value	для операции XML нужно значение XML или XMLList
+@msg	the XPath expression does not evaluate to a node-set	выражение XPath не даёт набор узлов
+@msg	the XPath expression ends early	выражение XPath обрывается
+@msg	the XPath expression has an unmatched )	в выражении XPath есть непарная )
+@msg	the XPath expression has an unmatched ]	в выражении XPath есть непарная ]
+@msg	the XPath expression has an unmatched closing bracket	в выражении XPath есть непарная закрывающая скобка
+@msg	the XPath expression selects a namespace node, which is not an XML value	выражение XPath выбирает узел пространства имён, который не является значением XML
+@msg	the XPath expression selects the root node, which is not an XML value	выражение XPath выбирает корневой узел, который не является значением XML
+@msg	the XPath function {name} needs a node-set	функции XPath {name} нужен набор узлов
+@msg	the XPath function {name} takes the wrong number of arguments	функции XPath {name} передано неверное число аргументов
+@msg	the XPath name functions need a node-set	функциям имён XPath нужен набор узлов
+@msg	the XPath prefix {shown} is not bound to a namespace	префикс XPath {shown} не привязан к пространству имён
+@msg	the XPath variable ${shown} is not bound	переменная XPath ${shown} не привязана
+@msg	the action set ids are not a list	идентификаторы наборов действий не являются списком
+@msg	the active paint is not a gradient	активная краска не является градиентом
+@msg	the argument list is not an object	список аргументов не является объектом
+@msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	монтажные области не помещаются на холсте: уменьшите их число, интервал или размер
+@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	графика слишком велика для EPS: всё, что следует после 256 МБ PostScript, пропущено
+@msg	the banner has no width or height	у баннера нет ширины или высоты
+@msg	the bitmaps hold more pixels than one file may	растровые изображения содержат больше пикселей, чем допустимо для одного файла
+@msg	the character's size can't be measured	размер символа невозможно измерить
+@msg	the code runs past its last instruction	код выполняется дальше своей последней инструкции
+@msg	the compound shape is too complex to expand	составная фигура слишком сложна, чтобы её разобрать
+@msg	the container of the listed objects is gone	контейнер перечисленных объектов больше не существует
+@msg	the copy `{user_id}` can't be read as a library	копию `{user_id}` невозможно прочитать как библиотеку
+@msg	the copy would leave the canvas	копия вышла бы за пределы холста
+@msg	the curve tolerance must be from 0.01 to 10 points	допуск кривой должен быть от 0.01 до 10 пунктов
+@msg	the custom dictionary couldn't be saved to {_1}: {e}	пользовательский словарь не удалось сохранить в {_1}: {e}
+@msg	the custom dictionary {_1} can't be read ({why}), so it is left as it is	пользовательский словарь {_1} невозможно прочитать ({why}), поэтому он оставлен без изменений
+@msg	the cut cannot be made on this art: {e}	разрез невозможно выполнить на этой графике: {e}
+@msg	the data isn't an EMF or WMF picture	данные не являются рисунком EMF или WMF
+@msg	the data isn't an EPS or PostScript picture	данные не являются рисунком EPS или PostScript
+@msg	the deferred paste is no longer available	отложенная вставка больше недоступна
+@msg	the design is too big to draw at every data point of this graph	дизайн слишком велик, чтобы рисовать его в каждой точке данных этой диаграммы
+@msg	the design is too big to draw in every column of this graph	дизайн слишком велик, чтобы рисовать его в каждом столбце этой диаграммы
+@msg	the dialog it was opened over is no longer open	диалоговое окно, поверх которого оно было открыто, больше не открыто
+@msg	the dictionary stack overflowed	стек словарей переполнен
+@msg	the document already has an SVG filter named {name}	в документе уже есть фильтр SVG с именем {name}
+@msg	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it	в документе есть другой фильтр SVG с именем {name}: используйте svgFilter.apply или, чтобы изменить его, svgFilter.define с `replace`
+@msg	the document has no SVG filter named {name}	в документе нет фильтра SVG с именем {name}
+@msg	the document has no SVG filter named {r}	в документе нет фильтра SVG с именем {r}
+@msg	the document has no color swatches	в документе нет цветовых образцов
+@msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	образцы документа содержат цветов: {_1}; редукция document принимает не более 255
+@msg	the editing data's hash has no place	для хеша данных редактирования нет места
+@msg	the entities the document declares expand to too much text	сущности, объявленные в документе, разворачиваются в слишком большой текст
+@msg	the envelope's content has no bounds	у содержимого оболочки нет границ
+@msg	the envelope's mesh is malformed	сетка оболочки повреждена
+@msg	the file holds no `variableSets` element	в файле нет элемента `variableSets`
+@msg	the file is larger than {_1} MB	файл больше {_1} МБ
+@msg	the file is too large	файл слишком велик
+@msg	the file isn't valid SVG: {e}	файл не является допустимым SVG: {e}
+@msg	the file names no plate	файл не указывает ни одной пластины
+@msg	the file was updated or encrypted already	файл уже обновлён или зашифрован
+@msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	перед первым символом строки нет символа для кернинга: он перемещается только вверх и вниз (dy)
+@msg	the font {_1} is not available	шрифт {_1} недоступен
+@msg	the format has no file extension	у формата нет расширения файла
+@msg	the function's prototype is not an object	прототип функции не является объектом
+@msg	the graphic can't be read: {e}	графику невозможно прочитать: {e}
+@msg	the graphic is empty	графика пуста
+@msg	the graphic's data is damaged	данные графики повреждены
+@msg	the graphic's document has no artboard	в документе графики нет монтажной области
+@msg	the grommet inset is too large for the banner	отступ люверсов слишком велик для баннера
+@msg	the guide is hidden or locked	направляющая скрыта или заблокирована
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	заголовок `{cell}` для `{name}` при чтении дал бы переменную `{other}`: переименуйте одну из них
+@msg	the hem is too deep for the banner	подгиб слишком широк для баннера
+@msg	the image `{path}` isn't followed: {r}	переход к изображению `{path}` не выполняется: {r}
+@msg	the image has no embedded pixels	у изображения нет встроенных пикселей
+@msg	the image is empty	изображение пусто
+@msg	the image is fully transparent	изображение полностью прозрачно
+@msg	the image is not on an artboard; pass rect	изображение не находится на монтажной области; передайте rect
+@msg	the image's pixels are missing	пиксели изображения отсутствуют
+@msg	the image's pixels aren't in the document	пикселей изображения нет в документе
+@msg	the image's pixels can't be read: {e}	пиксели изображения невозможно прочитать: {e}
+@msg	the image's transparency doesn't fit it	прозрачность изображения не соответствует ему
+@msg	the job would print more than {MAX_PAGES} pages	задание напечатало бы больше {MAX_PAGES} страниц
+@msg	the job would print more than {_1} pages	задание напечатало бы больше {_1} страниц
+@msg	the layers hold no art to mask	в слоях нет графики для маски
+@msg	the layout moved	расположение изменилось
+@msg	the library has a group `{name}` already	в библиотеке уже есть группа `{name}`
+@msg	the library has no group `{name}`	в библиотеке нет группы `{name}`
+@msg	the library has no item `{item}`	в библиотеке нет элемента `{item}`
+@msg	the library has no item `{other}`	в библиотеке нет элемента `{other}`
+@msg	the library holds {MAX_GROUPS} groups already	в библиотеке уже наибольшее число групп: {MAX_GROUPS}
+@msg	the library holds {MAX_ITEMS} items of this kind already	в библиотеке уже наибольшее число элементов этого вида: {MAX_ITEMS}
+@msg	the library's file is outside the read roots	файл библиотеки находится вне папок, разрешённых для чтения
+@msg	the line is too long, or the paths it passes too many, to check	линия слишком длинна или пересекает слишком много контуров для проверки
+@msg	the method needs an XML value	методу нужно значение XML
+@msg	the name is empty	имя пусто
+@msg	the object has no fill, stroke or effect	у объекта нет заливки, обводки или эффекта
+@msg	the object has no graphic style (pass `name`)	у объекта нет графического стиля (передайте `name`)
+@msg	the objects don't match the plan	объекты не соответствуют плану
+@msg	the open and permissions passwords must differ	пароль для открытия и пароль прав доступа должны различаться
+@msg	the operand stack overflowed	стек операндов переполнен
+@msg	the page has no area	у страницы нет площади
+@msg	the page's type in an unread object's box isn't in its page art	текста страницы в рамке непрочитанного объекта нет в графике этой страницы
+@msg	the paint behind the proxy is not a gradient	краска за индикатором не является градиентом
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	краска не является произвольным градиентом (примените его через paint.editGradient {kind})
+@msg	the parameters or body do not form one function	параметры или тело не образуют одну функцию
+@msg	the parent must be a layer or sublayer	родитель должен быть слоем или подслоем
+@msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	вставленный фильтр SVG {name} рисует иначе, чем фильтр документа с тем же именем, и свободного имени для него не нашлось
+@msg	the path can't be extended	контур невозможно продлить
+@msg	the path can't be inside one of the objects to attach	контур не может находиться внутри одного из прикрепляемых объектов
+@msg	the path has no segments to measure	у контура нет сегментов для измерения
+@msg	the path is empty	контур пуст
+@msg	the path is too short to shorten that much	контур слишком короток, чтобы укоротить его настолько
+@msg	the paths are too many or too tangled to find where they cross	контуров слишком много, или они слишком запутаны, чтобы найти их пересечения
+@msg	the pen table holds more than 255 pens	таблица перьев содержит больше 255 перьев
+@msg	the picture has no objects	в рисунке нет объектов
+@msg	the plates can't be kept	пластины невозможно сохранить
+@msg	the position table does not match the instructions	таблица позиций не соответствует инструкциям
+@msg	the program runs too long	программа выполняется слишком долго
+@msg	the program uses too much memory	программа использует слишком много памяти
+@msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	текст запроса длиннее {MAX_PROMPT_BYTES} байт
+@msg	the radix must be between 2 and 36	основание системы счисления должно быть от 2 до 36
+@msg	the rectangle must have a width and a height	у прямоугольника должны быть ширина и высота
+@msg	the rectangle needs a size and must lie on the canvas	прямоугольнику нужен размер, и он должен находиться на холсте
+@msg	the rectangle or line reaches too many paths to check	прямоугольник или линия затрагивает слишком много контуров для проверки
+@msg	the right side of 'in' is not an object	правая часть 'in' не является объектом
+@msg	the right side of 'instanceof' is not a function	правая часть 'instanceof' не является функцией
+@msg	the selected art has no width	у выделенной графики нет ширины
+@msg	the selected art is nested more than {MAX_DEPTH} levels deep	выделенная графика вложена глубже {MAX_DEPTH} уровней
+@msg	the selected art is too large to measure	выделенная графика слишком велика для измерения
+@msg	the selection draws nothing	выделение ничего не рисует
+@msg	the selection has no area	у выделения нет площади
+@msg	the selection has no art to export	в выделении нет графики для экспорта
+@msg	the selection has no bounds	у выделения нет границ
+@msg	the selection has no graphic style	у выделения нет графического стиля
+@msg	the selection has no outlines to weed around	в выделении нет контуров, вокруг которых делается выборка
+@msg	the slice would leave the canvas	фрагмент вышел бы за пределы холста
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	при таком интервале получается больше {MAX_GROMMETS} люверсов
+@msg	the spot colour couldn't be added	плашечный цвет не удалось добавить
+@msg	the subpath has no ends to extend (it is closed or a single point)	у вложенного контура нет концов для продления (он замкнут или состоит из одной точки)
+@msg	the symbols are nested too deeply to expand their instances	символы вложены слишком глубоко, чтобы разобрать их экземпляры
+@msg	the text file is too large to place as type (at most {_1} MB)	текстовый файл слишком велик, чтобы поместить его как текст (не более {_1} МБ)
+@msg	the text is empty	текст пуст
+@msg	the text is over {_1} MB	текст больше {_1} МБ
+@msg	the top object must be a path	верхний объект должен быть контуром
+@msg	the trace was cancelled	трассировка отменена
+@msg	the trailer has no size	в трейлере нет размера
+@msg	the type object is flattened to nothing	после сведения от текстового объекта ничего не остаётся
+@msg	the value bind was called on is not a function	значение, для которого вызван bind, не является функцией
+@msg	the value is not a constructor	значение не является конструктором
+@msg	the value is not a function	значение не является функцией
+@msg	the value is not a valid XML name	значение не является допустимым именем XML
+@msg	the value is not an XML attribute name	значение не является именем атрибута XML
+@msg	the value is not an XML name	значение не является именем XML
+@msg	the value of axis `{tag}` must be a number or null	значение оси `{tag}` должно быть числом или null
+@msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	библиотека переменных объявляет больше {MAX_LIBRARY_DATASETS} наборов данных
+@msg	the variable library declares more than {MAX_LIBRARY_ENTITIES} entities	библиотека переменных объявляет больше {MAX_LIBRARY_ENTITIES} сущностей
+@msg	the variable library declares more than {MAX_LIBRARY_VARIABLES} variables	библиотека переменных объявляет больше {MAX_LIBRARY_VARIABLES} переменных
+@msg	the variable library declares no variables	библиотека переменных не объявляет ни одной переменной
+@msg	the variable library is larger than {MAX_LIBRARY_BYTES} bytes	библиотека переменных больше {MAX_LIBRARY_BYTES} байт
+@msg	the variable library is not UTF-8	библиотека переменных не в кодировке UTF-8
+@msg	the variable library is not well-formed XML: {e}	библиотека переменных не является корректным XML: {e}
+@msg	the variable library nests elements more than {MAX_LIBRARY_NESTING} deep	в библиотеке переменных элементы вложены глубже {MAX_LIBRARY_NESTING} уровней
+@msg	the variable library's document type declaration holds something other than entities of plain text	объявление типа документа библиотеки переменных содержит что-то кроме сущностей с простым текстом
+@msg	the variable library's entities expand to more than {MAX_LIBRARY_BYTES} bytes	сущности библиотеки переменных разворачиваются более чем в {MAX_LIBRARY_BYTES} байт
+@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	линии выборки пересекают контуры графики слишком много раз для измерения; используйте меньше линий
+@msg	the weeding lines pass too close to too many outline segments to measure; use fewer lines or a smaller gap	линии выборки проходят слишком близко к слишком большому числу сегментов контуров для измерения; используйте меньше линий или меньший зазор
+@msg	the weeding lines would be more than {max_pieces} pieces	линии выборки состояли бы более чем из {max_pieces} частей
+@msg	the window has no dock	у окна нет области прикрепления
+@msg	the written PDF has no catalog	в записанном PDF нет каталога
+@msg	the written PDF has no cross-reference table	в записанном PDF нет таблицы перекрёстных ссылок
+@msg	the written PDF's metadata can't be edited	метаданные записанного PDF невозможно изменить
+@msg	the {_1} plate lies outside the file	пластина {_1} находится за пределами файла
+@msg	there are no colour swatches to draw	нет цветовых образцов для отрисовки
+@msg	there is already a design named `{name}`	дизайн с именем `{name}` уже существует
+@msg	there is already a design named `{to}`	дизайн с именем `{to}` уже существует
+@msg	there is already a toolbar named `{name}`	панель инструментов с именем `{name}` уже существует
+@msg	there is already a toolbar named `{to}`	панель инструментов с именем `{to}` уже существует
+@msg	there is no banner to mark	нет баннера для разметки
+@msg	there is no library: create one first	библиотеки нет: сначала создайте её
+@msg	these paths are too degenerate for Shaper	эти контуры слишком вырождены для Shaper
+@msg	this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that	это двоичный файл DXF, который невозможно прочитать: сохраните его из САПР как ASCII DXF и откройте полученный файл
+@msg	this warp's points can't be edited: use Reset with Mesh first	точки этой деформации нельзя редактировать: сначала используйте «Сбросить с сеткой»
+@msg	thumbnail: no page {v} (the {what} has {count})	thumbnail: страница {v} не существует ({what}, всего страниц: {count})
+@msg	tileRange of {what}: {e}	tileRange для {what}: {e}
+@msg	title can't be empty	title не может быть пустым
+@msg	to (the new name) is required	требуется to (новое имя)
+@msg	to must be fill or stroke	to должно быть fill или stroke
+@msg	to must be smooth or corner	to должно быть smooth или corner
+@msg	toExponential() digits must be between 0 and 20	число цифр для toExponential() должно быть от 0 до 20
+@msg	toFixed() digits must be between 0 and 20	число цифр для toFixed() должно быть от 0 до 20
+@msg	toISOString is not a function	toISOString не является функцией
+@msg	toPrecision() argument must be between 1 and 21	аргумент toPrecision() должен быть от 1 до 21
+@msg	toSource: a getter cannot be written as source	toSource: геттер невозможно записать как исходный код
+@msg	toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source	toSource: массив со свойствами помимо элементов, с неперечислимым свойством или с другим прототипом невозможно записать как исходный код
+@msg	toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source	toSource: объект с неперечислимым свойством или с прототипом, отличным от Object.prototype, невозможно записать как исходный код
+@msg	toSource: the source is too long	toSource: исходный код слишком длинный
+@msg	toSource: the value contains itself	toSource: значение содержит само себя
+@msg	toSource: the value has too many entries	toSource: в значении слишком много записей
+@msg	toSource: the value is nested too deep	toSource: значение вложено слишком глубоко
+@msg	toString is not a function	toString не является функцией
+@msg	too large for a zip archive: package to a folder	слишком велико для архива zip: упакуйте в папку
+@msg	too many Shaper edits	слишком много правок Shaper
+@msg	too many `points` (at most 100000)	слишком много `points` (не более 100000)
+@msg	too many arguments	слишком много аргументов
+@msg	too many characters: at most {MAX_CHARS}	слишком много символов: не более {MAX_CHARS}
+@msg	too many dots for this size: lower the frequency	слишком много точек для этого размера: уменьшите частоту
+@msg	too many filters over one file	слишком много фильтров для одного файла
+@msg	too many overlapping paths for Shaper	слишком много перекрывающихся контуров для Shaper
+@msg	too many quantifiers	слишком много квантификаторов
+@msg	too many saved clips	слишком много сохранённых областей обрезки
+@msg	too many saved graphics states	слишком много сохранённых графических состояний
+@msg	toolbar (a toolbar's name) must be a string	toolbar (имя панели инструментов) должно быть строкой
+@msg	toolbar name can't be empty	имя панели инструментов не может быть пустым
+@msg	transparentImages {v}: "flatten" (the default) or "omit"	transparentImages {v}: "flatten" (по умолчанию) или "omit"
+@msg	turn on at least one side	включите хотя бы одну сторону
+@msg	two saved selections would be named `{_1}`	два сохранённых выделения получили бы имя `{_1}`
+@msg	type dimension cannot be represented with this text transform	размер текста невозможно представить с этой трансформацией текста
+@msg	type dimension must be finite	размер текста должен быть конечным
+@msg	unexpected resources	непредвиденные ресурсы
+@msg	unknown CMYK profile `{name}`	неизвестный профиль CMYK `{name}`
+@msg	unknown File Info field `{k}`	неизвестное поле сведений о файле `{k}`
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	неизвестная функция OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; префикс - отключает функцию; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom и aalt принимают номер альтернативы в виде `tag=N`, где N от 0 до {_1}, например `salt=2`)
+@msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	неизвестная функция OpenType `{t}` в featureChanges (допустимы теги, которые принимает `features`)
+@msg	unknown PDF preset `{name}` (presets: {_1})	неизвестный набор PDF `{name}` (наборы: {_1})
+@msg	unknown Warp style	неизвестный стиль деформации
+@msg	unknown alignToPath `{a}`	неизвестное значение alignToPath `{a}`
+@msg	unknown arrowhead {v}	неизвестная стрелка {v}
+@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	неизвестный ключ artboardLayout `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown attribute `{attribute}`	неизвестный атрибут `{attribute}`
+@msg	unknown attribute `{k}`	неизвестный атрибут `{k}`
+@msg	unknown axis `{other}` (vertical|horizontal|free)	неизвестная ось `{other}` (vertical|horizontal|free)
+@msg	unknown blend mode `{b}`	неизвестный режим наложения `{b}`
+@msg	unknown blend mode {b}	неизвестный режим наложения {b}
+@msg	unknown brush type `{o}`	неизвестный тип кисти `{o}`
+@msg	unknown category `{c}`	неизвестная категория `{c}`
+@msg	unknown category `{c}` ({_1})	неизвестная категория `{c}` ({_1})
+@msg	unknown character `{c}`	неизвестный символ `{c}`
+@msg	unknown character style number field	неизвестное числовое поле стиля символов
+@msg	unknown dither `{d}` (diffusion, pattern, noise or none)	неизвестный дизеринг `{d}` (diffusion, pattern, noise или none)
+@msg	unknown effect `{e}`	неизвестный эффект `{e}`
+@msg	unknown end {e}	неизвестное значение end {e}
+@msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	неизвестный flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution или сохранённый набор: см. flattener.presets.list)
+@msg	unknown format `{f}` (vcswatches, gpl, ase or css)	неизвестный формат `{f}` (vcswatches, gpl, ase или css)
+@msg	unknown from {f}	неизвестное значение from {f}
+@msg	unknown graph type `{t}`	неизвестный тип диаграммы `{t}`
+@msg	unknown grid colours `{name}` (one of {_1})	неизвестные цвета сетки `{name}` (допустимо одно из: {_1})
+@msg	unknown gridType `{t}`	неизвестное значение gridType `{t}`
+@msg	unknown highlight `{v}`	неизвестное значение highlight `{v}`
+@msg	unknown intent `{i}`	неизвестное значение intent `{i}`
+@msg	unknown issue kind {id}	неизвестный вид проблемы {id}
+@msg	unknown issue kind {v}	неизвестный вид проблемы {v}
+@msg	unknown knockout state {k}	неизвестное состояние вырезания {k}
+@msg	unknown language `{language}` (one of {_1})	неизвестный язык `{language}` (допустимо одно из: {_1})
+@msg	unknown language `{l}` (one of {_1})	неизвестный язык `{l}` (допустимо одно из: {_1})
+@msg	unknown method `{m}` ({_1})	неизвестный метод `{m}` ({_1})
+@msg	unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)	неизвестный режим `{other}` (gray, rgb, hsb, lab, cmyk или web)
+@msg	unknown mode `{other}` (mono|cmyk)	неизвестный режим `{other}` (mono|cmyk)
+@msg	unknown mode `{other}` (rgb|cmyk|gray|global)	неизвестный режим `{other}` (rgb|cmyk|gray|global)
+@msg	unknown mode `{other}` (set, add, subtract)	неизвестный режим `{other}` (set, add, subtract)
+@msg	unknown mode `{o}`	неизвестный режим `{o}`
+@msg	unknown mode {m}	неизвестный режим {m}
+@msg	unknown model `{other}`	неизвестная модель `{other}`
+@msg	unknown model `{other}` (keep, new or document)	неизвестная модель `{other}` (keep, new или document)
+@msg	unknown op {o}	неизвестная операция {o}
+@msg	unknown order `{o}`: toggle, front, forward, backward or back	неизвестный порядок `{o}`: toggle, front, forward, backward или back
+@msg	unknown overprints `{v}` (preserve, simulate or discard)	неизвестное значение overprints `{v}` (preserve, simulate или discard)
+@msg	unknown panel	неизвестная панель
+@msg	unknown panel `{panel}`	неизвестная панель `{panel}`
+@msg	unknown parameter `{key}`	неизвестный параметр `{key}`
+@msg	unknown parameter `{within}settings.{format}`; {why}	неизвестный параметр `{within}settings.{format}`; {why}
+@msg	unknown parameter `{within}{key}`; {why}	неизвестный параметр `{within}{key}`; {why}
+@msg	unknown pieLegend `{v}` (none, standard or wedges)	неизвестное значение pieLegend `{v}` (none, standard или wedges)
+@msg	unknown piePosition `{v}` (even, ratio or stacked)	неизвестное значение piePosition `{v}` (even, ratio или stacked)
+@msg	unknown pieSort `{v}` (none, all or first)	неизвестное значение pieSort `{v}` (none, all или first)
+@msg	unknown plate `{n}`	неизвестная пластина `{n}`
+@msg	unknown preference `{k}`	неизвестная настройка `{k}`
+@msg	unknown profile {id} (see stroke.widthProfile.list)	неизвестный профиль {id} (см. stroke.widthProfile.list)
+@msg	unknown proof target `{t}`	неизвестная цель цветопробы `{t}`
+@msg	unknown quotes key `{k}` (double, single)	неизвестный ключ quotes `{k}` (double, single)
+@msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	неизвестная редукция `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform или document)
+@msg	unknown resolution `{v}`	неизвестное разрешение `{v}`
+@msg	unknown rule `{rule}` ({_1})	неизвестное правило `{rule}` ({_1})
+@msg	unknown rule `{r}` (see color.harmony)	неизвестное правило `{r}` (см. color.harmony)
+@msg	unknown setting `{k}`	неизвестный параметр настройки `{k}`
+@msg	unknown shape `{v}` (circle|ellipse|square|diamond|line)	неизвестная фигура `{v}` (circle|ellipse|square|diamond|line)
+@msg	unknown spacing `{o}` (smooth|steps|distance)	неизвестный интервал `{o}` (smooth|steps|distance)
+@msg	unknown tileType `{t}` ({_1})	неизвестное значение tileType `{t}` ({_1})
+@msg	unknown units	неизвестные единицы
+@msg	unknown units `{u}`	неизвестные единицы `{u}`
+@msg	unknown value axis `{v}` (left, right or both)	неизвестная ось значений `{v}` (left, right или both)
+@msg	unknown variation `{v}` (tintsShades|warmCool|vividMuted)	неизвестный вариант `{v}` (tintsShades|warmCool|vividMuted)
+@msg	unknown warp style `{s}`	неизвестный стиль деформации `{s}`
+@msg	unknown {key} `{v}` (none, short or full)	неизвестное значение {key} `{v}` (none, short или full)
+@msg	unknown {key} profile `{n}`	неизвестный профиль {key} `{n}`
+@msg	unknown {k} key `{key}` (size, position)	неизвестный ключ {k} `{key}` (size, position)
+@msg	unmatched ')'	непарная ')'
+@msg	unreadable object	нечитаемый объект
+@msg	unsafe destination file name	небезопасное имя файла назначения
+@msg	unterminated character class	незавершённый класс символов
+@msg	unterminated group	незавершённая группа
+@msg	use paths or compound paths	используйте контуры или составные контуры
+@msg	useArtboards must be true or false, not {v}	useArtboards должно быть true или false, а не {v}
+@msg	value for `{var}` must match its variable kind	значение `{var}` должно соответствовать типу переменной
+@msg	variable `{_1}` is already defined	переменная `{_1}` уже определена
+@msg	variable `{name}` has no `trait`	у переменной `{name}` нет `trait`
+@msg	variable `{name}` is already defined	переменная `{name}` уже определена
+@msg	variable `{name}` is declared twice	переменная `{name}` объявлена дважды
+@msg	variable `{to}` already exists	переменная `{to}` уже существует
+@msg	view is required	требуется view
+@msg	view must be one of {_1}	view должно быть одним из: {_1}
+@msg	warpStyle can only edit an applied Warp effect	warpStyle может изменять только применённый эффект «Деформация»
+@msg	width and height must be more than 0 and at most {limit}	width и height должны быть больше 0 и не больше {limit}
+@msg	width factors must be finite	коэффициенты ширины должны быть конечными
+@msg	width must be positive	width должно быть положительным
+@msg	width out of range	ширина вне диапазона
+@msg	width/height must be > 0	width/height должны быть > 0
+@msg	with no hem and no grommets there is nothing to mark	без подгиба и люверсов размечать нечего
+@msg	wordGap and lineGap need area type in the selection	для wordGap и lineGap в выделении нужен текст в области
+@msg	x and y must be finite numbers	x и y должны быть конечными числами
+@msg	x and y must be given together	x и y нужно указывать вместе
+@msg	xpath needs its variables as an object	для xpath переменные нужны в виде объекта
+@msg	xpath needs the expression as a string	для xpath выражение нужно в виде строки
+@msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	для zone нужен anchor: прикрепите рядом с панелью через anchor или в новом столбце прикрепления через side (Start или End)
+@msg	zoom must be positive	zoom должно быть положительным
+# Messages that begin with a placeholder.
+@msg	{C}: no effect at index {list}	{C}: нет эффекта с индексом {list}
+@msg	{DEFAULT_PRESET} is protected and stays	{DEFAULT_PRESET} защищён и не удаляется
+@msg	{DEFAULT_PRESET} is protected: save the settings under another name	{DEFAULT_PRESET} защищён: сохраните настройки под другим именем
+@msg	{GRANT_NOT_REMOVED}, and its settings and cache can't be moved back from {_1} to {_2}: {e}	{GRANT_NOT_REMOVED}, а его настройки и кэш невозможно переместить обратно из {_1} в {_2}: {e}
+@msg	{LABEL} produced an empty result	{LABEL}: получен пустой результат
+@msg	{_1} MB of document, at most {_2} MB	документ размером {_1} МБ при допустимых {_2} МБ
+@msg	{_1} MB of images, at most {_2} MB	изображения размером {_1} МБ при допустимых {_2} МБ
+@msg	{_1} bytes of RGBA data for a {width} × {height} image	данных RGBA: {_1} байт для изображения {width} × {height}
+@msg	{_1} can't be read, or changed since it was read: relink or update it first	{_1} невозможно прочитать, или файл изменился после чтения: сначала восстановите связь или обновите его
+@msg	{_1} can't go into {into}	{_1} нельзя поместить в {into}
+@msg	{_1} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing	{_1} не может ограничить печать низким разрешением: выберите PDF 1.4 или новее либо разрешите печать с высоким разрешением
+@msg	{_1} files can't be opened yet	файлы {_1} пока нельзя открыть
+@msg	{_1} files can't be password-protected: remove the passwords or choose no standard	файлы {_1} нельзя защитить паролем: уберите пароли или не выбирайте стандарт
+@msg	{_1} files can't be {_2}	файлы {_1} не могут быть {_2}
+@msg	{_1} files can't carry editing data: turn off preserveEditing	файлы {_1} не могут содержать данные редактирования: отключите preserveEditing
+@msg	{_1} files can't have PDF layers: turn off createLayers	файлы {_1} не могут содержать слои PDF: отключите createLayers
+@msg	{_1} files need a creation date, and this platform has no clock to give one	файлам {_1} нужна дата создания, а на этой платформе нет часов, чтобы её получить
+@msg	{_1} is not a folder: {e}	{_1} не является папкой: {e}
+@msg	{_1} isn't a path	{_1} не является контуром
+@msg	{_1} options: {e}	параметры {_1}: {e}
+@msg	{_1} paints nothing to rasterize	{_1} не рисует ничего, что можно растеризовать
+@msg	{_1} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)	пароли {_1} могут содержать до {MAX_LEGACY_PASSWORD} символов ASCII (PDF 1.7 и новее принимают любые)
+@msg	{_1} with linked images or an image map writes several files: use document.export	{_1} со связанными изображениями или картой изображения записывает несколько файлов: используйте document.export
+@msg	{_1} writes one file per artboard here: use document.export, or name one artboard	здесь {_1} записывает по одному файлу на монтажную область: используйте document.export или укажите одну монтажную область
+@msg	{_1} × {_2} pixels is too large for {_3} (at most {max} pixels a side): lower the scale	{_1} × {_2} пикселей слишком много для {_3} (не более {max} пикселей по стороне): уменьшите масштаб
+@msg	{_1}: belongs to another account	{_1}: принадлежит другой учётной записи
+@msg	{_1}: not a folder of its own	{_1}: не отдельная папка
+@msg	{_1}: not a plain file	{_1}: не обычный файл
+@msg	{_1}: {_2} and {_3} are in the way	{_1}: мешают {_2} и {_3}
+@msg	{code}: {0}	{code}: {0}
+@msg	{dest}: {e}	{dest}: {e}
+@msg	{dir}: {e}	{dir}: {e}
+@msg	{doc} has no folder	у {doc} нет папки
+@msg	{file} isn't linked	{file} не связан
+@msg	{file} names more than one linked JavaScript file	{file} обозначает больше одного связанного файла JavaScript
+@msg	{folder} is not a package folder	{folder} не является папкой пакета
+@msg	{folder}: more than {max} files and folders	{folder}: больше {max} файлов и папок
+@msg	{folder}: {e}	{folder}: {e}
+@msg	{g} is not a Live Paint group	{g} не является группой быстрой заливки
+@msg	{id} is not a slice	{id} не является фрагментом
+@msg	{key} must be 0–{MAX_ADD_AROUND} pt	{key} должно быть 0–{MAX_ADD_AROUND} pt
+@msg	{key} must be [x,y]	{key} должно быть [x,y]
+@msg	{key} must be a percentage {min}..100	{key} должно быть процентом {min}..100
+@msg	{key} must be a positive number, not {n}	{key} должно быть положительным числом, а не {n}
+@msg	{key} must be a positive number, not {v}	{key} должно быть положительным числом, а не {v}
+@msg	{key} must be one of {_1}	{key} должно быть одним из: {_1}
+@msg	{key} must be {_1}, got {s}	{key} должно быть {_1}, получено {s}
+@msg	{key} must name a floating panel	{key} должно указывать плавающую панель
+@msg	{key} must name a panel in another group	{key} должно указывать панель в другой группе
+@msg	{key} must name a panel that shows	{key} должно указывать показанную панель
+@msg	{key} must name a registered panel	{key} должно указывать зарегистрированную панель
+@msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	в файлах {kind} нет прозрачности, а в файле оказалось бы {what}: сначала объедините прозрачность (object.flattenTransparency)
+@msg	{kind} images can't be opened (see document.formats)	изображения {kind} невозможно открыть (см. document.formats)
+@msg	{k} `{v}` is not one of the choices	{k} `{v}` не входит в число допустимых вариантов
+@msg	{k} has control characters{_1}	{k} содержит управляющие символы{_1}
+@msg	{k} is too long (at most {MAX_TEXT} characters)	{k} слишком длинно (не более {MAX_TEXT} символов)
+@msg	{k} must be > 0	{k} должно быть > 0
+@msg	{k} must be a number (pt) or a length such as "210 mm"	{k} должно быть числом (pt) или длиной, например "210 mm"
+@msg	{k} must be a number from {min} to {max}	{k} должно быть числом от {min} до {max}
+@msg	{k} must be a number or "auto"	{k} должно быть числом или "auto"
+@msg	{k} must be a string	{k} должно быть строкой
+@msg	{k} must be text	{k} должно быть текстом
+@msg	{k} must be true or false	{k} должно быть true или false
+@msg	{k} must be {{size?, position?}}	{k} должно быть {{size?, position?}}
+@msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}: контуру пользовательской стрелки нужна область для заливки, не более {most} опорных точек и {most} вложенных контуров, причём каждая опорная точка должна быть не дальше {far} единиц наконечника от его острия
+@msg	{k}: bad custom arrowhead path: {e}	{k}: недопустимый контур пользовательской стрелки: {e}
+@msg	{k}: bad custom arrowhead: {e}	{k}: недопустимая пользовательская стрелка: {e}
+@msg	{k}: can't read `{s}` as a length	{k}: `{s}` невозможно прочитать как длину
+@msg	{k}: custom must be a name	{k}: custom должно быть именем
+@msg	{label} must be a number at most {max}	{label} должно быть числом не больше {max}
+@msg	{label} must be a number from -1296 to 1296	{label} должно быть числом от -1296 до 1296
+@msg	{label} must be a number from 1 to 10000	{label} должно быть числом от 1 до 10000
+@msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
+@msg	{name} is built in and can't be deleted	{name} встроен, его нельзя удалить
+@msg	{name} must be a number	{name} должно быть числом
+@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} должно быть {lo}–{hi}{unit} (получено {v})
+@msg	{name}: CRC or size mismatch	{name}: несовпадение CRC или размера
+@msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: удалось прочитать только встроенный предпросмотр этого файла Affinity; используйте «Файл › Открыть», чтобы увидеть его с предупреждением, или перед помещением экспортируйте SVG или PDF из Affinity
+@msg	{name}: {e}	{name}: {e}
+@msg	{native}; its embedded preview can't be read either ({e})	{native}; его встроенный предпросмотр тоже невозможно прочитать ({e})
+@msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}: copy принимает файл DCS, только когда его пластины находятся внутри него; восстановите связь с ним там, где находятся файлы его пластин
+@msg	{path}: larger than {_1} MB	{path}: больше {_1} МБ
+@msg	{saving} failed: {e}	{saving}: ошибка: {e}
+@msg	{shown} is not an XPath 1.0 function	{shown} не является функцией XPath 1.0
+@msg	{std} files are CMYK, and the file would have colours in {_1}	файлы {std} используют CMYK, а в файле оказались бы цвета в {_1}
+@msg	{std} files embed their fonts, and the file would have one that isn't	файлы {std} внедряют свои шрифты, а в файле оказался бы невнедрённый шрифт
+@msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	{target} — файл, из которого прочитан этот документ, и при чтении часть содержимого была пропущена ({what}): при записи поверх него она была бы потеряна навсегда. Запишите другой файл или передайте acknowledgeLoss: true, чтобы всё равно заменить его
+@msg	{ty} brushes need selected art (or params.{k})	кистям {ty} нужна выделенная графика (или params.{k})
+@msg	{v} is not an asset id	{v} не является идентификатором ресурса
+@msg	{v} names no layer or sublayer	{v} не указывает ни слой, ни подслой
+@msg	{what} can't be intertwined	{what} нельзя переплести
+@msg	{what} doesn't fit the paper with its bleed and marks	{what} не помещается на бумаге вместе с вылетом и метками
+@msg	{what} is not a function	{what} не является функцией
+@msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	для {what} на листе печаталось бы больше {MAX_COPIES_PER_SHEET} копий: увеличьте масштаб
+@msg	{what} would print on more than {MAX_TILES} tiles: scale it down	для {what} потребовалось бы больше {MAX_TILES} плиток: уменьшите масштаб
+@msg	{what} {i} out of range	{what} {i} вне диапазона
+
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-эффектам нужны конечные координаты в пределах 100 миллионов пунктов
 @msg	3D effects require one to ten lights	3D-эффектам нужно от одного до десяти источников света
