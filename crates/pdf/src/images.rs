@@ -188,7 +188,7 @@ pub(crate) fn cmyk_icc(blob: &ImageBlob) -> Option<Vec<u8>> {
 /// with: at most [`MAX_ICC`] bytes, the size its header declares, the `acsp` signature, an input,
 /// display, output or colour space profile of `space` colours, and a tag table whose tags lie
 /// within it?
-fn valid_icc(icc: &[u8], space: [u8; 4]) -> bool {
+pub(crate) fn valid_icc(icc: &[u8], space: [u8; 4]) -> bool {
     let be = |at: usize| icc.get(at..at + 4).and_then(|b| b.try_into().ok()).map(u32::from_be_bytes);
     let fits = |at: u32, len: u32| u64::from(at) + u64::from(len) <= icc.len() as u64;
     if icc.len() > MAX_ICC || be(0).and_then(|n| usize::try_from(n).ok()) != Some(icc.len()) {

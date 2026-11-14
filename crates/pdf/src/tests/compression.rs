@@ -365,6 +365,64 @@ fn image_samples(pdf: &[u8]) -> Vec<Vec<u8>> {
     images.iter().filter(|s| !masks.contains(&s.raw_data().to_vec())).map(|s| s.decoded().unwrap().into_owned()).collect()
 }
 
+/// The raw (still encoded) data of each image XObject of `pdf`.
+fn image_data(pdf: &[u8]) -> Vec<Vec<u8>> {
+    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    file.objects()
+        .into_iter()
+        .filter_map(|o| match o {
+            Object::Stream(s) if s.dict().get::<Name<'_>>(b"Subtype").is_some_and(|n| n.as_ref() == b"Image") => Some(s.raw_data().to_vec()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A PNG or JPEG embedded as it is whose gray or RGB profile is malformed is written without it,
+/// the JPEG with its JPEG data unchanged: a profile whose header declares another size, one without
+/// the `acsp` signature, and one whose tag table runs past its end.
+#[test]
+fn a_malformed_profile_is_left_out_of_a_png_or_jpeg_kept_as_it_is() {
+    for (space, img, device) in [(b"RGB ", colour(), "DeviceRGB"), (b"GRAY", colour().grayscale(), "DeviceGray")] {
+        let mut malformed = [icc_profile(space, 600), icc_profile(space, 600), icc_profile(space, 600)];
+        malformed[0][..4].copy_from_slice(&601u32.to_be_bytes());
+        malformed[1][36..40].copy_from_slice(b"xxxx");
+        malformed[2][128..132].copy_from_slice(&100u32.to_be_bytes());
+        for (i, icc) in malformed.iter().enumerate() {
+            for (format, mime, filter) in [(ImageFormat::Png, "image/png", "FlateDecode"), (ImageFormat::Jpeg, "image/jpeg", "DCTDecode")] {
+                let what = format!("{device}, {format:?}, malformed profile {i}");
+                let bytes = tagged(&img, icc, format);
+                let mut settings = PdfSettings::default();
+                settings.compression.compress_text = false;
+                let pdf = export_with_report(&doc(bytes.clone(), mime), &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
+                let spaces = image_spaces(&pdf);
+                let plain = spaces.len() == 1 && spaces[0].space == device && spaces[0].icc.is_none() && spaces[0].filter == filter;
+                assert!(plain, "{what}: {spaces:?}");
+                if format == ImageFormat::Jpeg {
+                    assert!(image_data(&pdf) == [bytes], "{what}: the JPEG data unchanged");
+                }
+            }
+        }
+    }
+}
+
+/// In PDF/X-1a a tagged gray JPEG kept as JPEG is written with its JPEG data, without its profile.
+#[test]
+fn pdf_x1a_keeps_a_tagged_gray_jpeg_as_jpeg() {
+    let jpeg = tagged(&colour().grayscale(), &icc_profile(b"GRAY", 300), ImageFormat::Jpeg);
+    let d = doc(jpeg.clone(), "image/jpeg");
+    for compression in [json!({}), json!({"gray": {"compression": "jpeg"}})] {
+        let mut settings: PdfSettings =
+            serde_json::from_value(json!({"standard": "pdfX1a", "compatibility": "1.3", "compression": compression.clone()})).unwrap();
+        settings.compression.compress_text = false;
+        let bytes = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
+        crate::pdfx::verify(&bytes, Standard::PdfX1a).unwrap_or_else(|e| panic!("{compression}: {e}"));
+        let spaces = image_spaces(&bytes);
+        let dct = spaces.len() == 1 && spaces[0].space == "DeviceGray" && spaces[0].icc.is_none() && spaces[0].filter == "DCTDecode";
+        assert!(dct, "{compression}: {spaces:?}");
+        assert!(image_data(&bytes) == [jpeg.clone()], "{compression}: the JPEG data unchanged");
+    }
+}
+
 /// A gray or RGB TIFF that carries an ICC profile of its colour space is written in an ICC-based
 /// colour space holding the same profile, at 16 bits a sample from PDF 1.5 on, with its alpha as
 /// a soft mask; and so is a tagged TIFF or PNG that is resampled or compressed with JPEG. Pixels

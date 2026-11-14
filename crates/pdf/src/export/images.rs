@@ -319,9 +319,10 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
 /// other formats (a TIFF) decoded with their 16-bit samples and, when `profiles` allows it (not in
 /// PDF/X-1a), the ICC profile they carry ([`crate::images::decoded_image`]). Without `profiles`, an
-/// image of any format that carries a gray or RGB profile is decoded too, and written without it.
-/// Without `sixteen_bit` (a file before PDF 1.5), a PNG or another image of 16 bits a sample is
-/// written at 8 bits ([`png_8_bit`]).
+/// image that carries a gray or RGB profile is written without it, and so is one whose gray or RGB
+/// profile is malformed ([`crate::images::valid_icc`]): a JPEG with its data unchanged, an image of
+/// another format decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG or another image of
+/// 16 bits a sample is written at 8 bits ([`png_8_bit`]).
 pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool, profiles: bool) -> Option<Image> {
     // The header's size first: the writer's decoders allocate what it declares, and the encoded
     // bytes of an image that is far larger than any the app reads may be a few kilobytes.
@@ -330,14 +331,16 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
         return None;
     }
     let bytes = blob.bytes.as_ref().clone();
-    // The PDF writer keeps a gray or RGB image's ICC profile: without `profiles`, such an image is
-    // decoded and written without it.
-    let tagged = || {
-        let space = crate::images::source_icc(&bytes).and_then(|icc| vectorcraft_doc::cmyk::icc_color_space(&icc));
-        matches!(space.as_ref(), Some(b"GRAY" | b"RGB "))
-    };
-    let mime = if !profiles && tagged() { "" } else { blob.mime.as_str() };
-    let direct = match mime {
+    // The PDF writer keeps a gray or RGB image's ICC profile: without `profiles`, or when the
+    // profile is malformed, such a JPEG is written without its profile, and an image of another
+    // format is decoded and written without it.
+    let strip = crate::images::source_icc(&bytes).is_some_and(|icc| match vectorcraft_doc::cmyk::icc_color_space(&icc).as_ref() {
+        Some(space @ (b"GRAY" | b"RGB ")) => !profiles || !crate::images::valid_icc(&icc, *space),
+        _ => false,
+    });
+    let direct = match blob.mime.as_str() {
+        "image/jpeg" | "image/jpg" if strip => Image::from_jpeg_with_icc(bytes.clone().into(), None, interpolate).ok(),
+        _ if strip => None,
         "image/png" if !sixteen_bit && png_16_bit(&bytes) => png_8_bit(&bytes).and_then(|png| Image::from_png(png.into(), interpolate).ok()),
         "image/png" => Image::from_png(bytes.clone().into(), interpolate).ok(),
         "image/jpeg" | "image/jpg" => Image::from_jpeg(bytes.clone().into(), interpolate).ok(),
