@@ -31,3 +31,7 @@ jobs:
       require-craft-fonts: true
       craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
       run-package-check: true
+      # Four rustc processes on this workspace's largest crates (engine, ui-egui and their test
+      # builds) need more than the VM's 12 GB: the build was killed (exit 137) every night.
+      cargo-build-extra-args: "-j 2"
+      cargo-test-extra-args: "-j 2"
