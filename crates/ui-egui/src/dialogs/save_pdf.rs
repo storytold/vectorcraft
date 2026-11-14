@@ -6,7 +6,8 @@
 //! `ui.dialog.set`. OK runs `document.exportPdf` through [`io::export_pdf`]; the Summary is
 //! `document.pdfSettings`. Save Preset… names the settings as a preset (`pdf.preset.save`).
 //! Opened from Export As with Use Artboards off (`__artBounds`), the dialog has no Artboards
-//! section, and OK writes one page of the visible art's bounds through [`io::export`].
+//! section, and OK writes one page of the visible art's bounds through [`io::export`]; opened
+//! from Export Selection (`__selection` too), the page is the selection's crop.
 //!
 //! The same dialog edits a preset (kind `pdfPreset`, from Edit → PDF Presets): a `name` and
 //! `description` instead of the preset and artboards, and OK saves the preset.
@@ -154,7 +155,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     }
     let r = match SaveMode::of(&d.str("__save")) {
         Some(mode) => io::save_pdf(app, mode, params(d)),
-        None if d.bool(ART_BOUNDS) => export_art(app, params(d)),
+        None if d.bool(ART_BOUNDS) => export_art(app, d),
         None => io::export_pdf(app, params(d)),
     };
     // A question the write asked (replace the file the document was opened from?) stays open.
@@ -164,12 +165,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     r
 }
 
-/// A page of the art's bounds (Export As with Use Artboards off): written as Export As writes
-/// other formats ([`io::export`]), with the dialog's options and a saved preset written out.
-fn export_art(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
+/// A page of the art's bounds (Export As with Use Artboards off), or of the selection's crop
+/// (Export Selection): written as Export As writes other formats ([`io::export`]), with the
+/// dialog's options and a saved preset written out.
+fn export_art(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
+    let mut p = params(d);
     let path = p.as_object_mut().and_then(|o| o.remove("path")).and_then(|v| v.as_str().map(str::to_string));
     let p = pdf::expand_preset(&app.session, "file.exportAs", &p).map_err(|e| e.to_string())?.into_owned();
-    io::export(app, Some("pdf"), path, &p)
+    io::export(app, Some("pdf"), path, &super::export_as::exported(d, p))
 }
 
 /// The settings as `pdf.preset.save` params (without the artboards and path).
