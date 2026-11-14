@@ -1,7 +1,7 @@
 use super::{
-    Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, Paint, PathData, Point,
-    Rect, Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint,
-    json, number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
+    Appearance, Arc, Beside, Document, EDGE_NAME, EngineError, FACE_NAME, GapOptions, GapSize, LIVE_PAINT_NAME, Node, NodeId, PathData, Point, Rect,
+    Result, SOURCES_NAME, Selection, Session, SubPath, Value, b, bad, build_children, edge_near, face_at, finite, ids_json, is_live_paint, json,
+    number_or, object_param, paint_from, po, point_param, repaint_from, replace_roots, root_ids, source_nodes, source_shapes, switch_or,
 };
 
 /// `options` as stored on a Live Paint group: none for the defaults.
@@ -84,6 +84,19 @@ pub(super) fn lp_make(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "id": id.0, "faces": faces, "edges": edges }))
 }
 
+/// The appearance of face or edge `n` for the part Merge makes again in its place, another path:
+/// gradients fitted to `n`'s outline keep that fit, and the strokes' pen pressure, tilt, bearing
+/// and rotation stay behind.
+fn carried_appearance(n: &Node) -> Appearance {
+    let mut app = (*n.appearance).clone().without_pressure();
+    if app.has_unplaced_gradient()
+        && let Some(bounds) = n.geometric_bounds()
+    {
+        app.pin_gradients(bounds);
+    }
+    app
+}
+
 /// Add the other `roots` (back → front) to the first Live Paint group among them, which keeps its
 /// id, the paint of its faces and edges, and its own properties apart from the Gap Options, which
 /// are merged; returns (group, faces, edges).
@@ -95,18 +108,16 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         .ok_or_else(|| EngineError::Other("Live Paint Merge: select a Live Paint group and the paths to add".into()))?;
     check_live_paint_takes(d, roots)?;
     let old = d.node(target).cloned().ok_or(EngineError::NoNode(target))?;
-    // Paint to carry over: (point inside face, fill) and (point on edge, stroke).
-    let keep_faces: Vec<(Point, Paint)> = b::faces(&old)
-        .iter()
-        .filter(|f| !f.appearance.fill_paint().is_none())
-        .filter_map(|f| Some((po::interior_point(f.path_data()?)?, f.appearance.fill_paint())))
-        .collect();
+    // Paint to carry over: (point inside face, appearance) for faces that draw, and (point on
+    // edge, appearance) for every edge.
+    let keep_faces: Vec<(Point, Appearance)> =
+        b::faces(&old).iter().filter(|f| draws(f)).filter_map(|f| Some((po::interior_point(f.path_data()?)?, carried_appearance(f)))).collect();
     let keep_edges: Vec<(Point, Appearance)> = b::edges(&old)
         .iter()
         .filter_map(|e| {
             let pd = e.path_data()?;
             let sp = pd.subpaths.first().filter(|sp| sp.segment_count() > 0)?;
-            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), (*e.appearance).clone()))
+            Some((kurbo::ParamCurve::eval(&sp.segment(0), 0.5), carried_appearance(e)))
         })
         .collect();
     let mut sources = source_nodes(&old);
@@ -126,12 +137,12 @@ fn merge_live(d: &mut Document, sel: &mut Selection, roots: &[NodeId]) -> Result
         *ch = children;
     }
     g.extras_mut().live_paint_gaps = stored_gap_options(options);
-    for (pt, paint) in keep_faces {
+    for (pt, app) in keep_faces {
         if let Some(fid) = face_at(&g, pt).map(|f| f.id)
             && let Some(ch) = g.children_mut()
             && let Some(f) = ch.iter_mut().find(|c| c.id == fid)
         {
-            Arc::make_mut(f).appearance.set_fill(paint);
+            Arc::make_mut(f).appearance = app.into();
         }
     }
     for (pt, app) in keep_edges {
@@ -191,6 +202,13 @@ pub(super) fn lp_release(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids_json(&ids) }))
 }
 
+/// Does face or edge `n` draw on the canvas: it is shown, its opacity is above 0, and a fill or
+/// stroke row of its appearance draws (see [`Appearance::has_drawn_fill`] and
+/// [`Appearance::has_drawn_stroke`])?
+fn draws(n: &Node) -> bool {
+    n.visible && n.opacity > 0.0 && (n.appearance.has_drawn_fill() || n.appearance.has_drawn_stroke())
+}
+
 pub(super) fn lp_expand(s: &mut Session, p: &Value) -> Result<Value> {
     let targets = live_targets(s, p)?;
     s.edit("Expand Live Paint", |d, sel| {
@@ -205,8 +223,7 @@ pub(super) fn lp_expand(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(ch) = n.children_mut() {
                 ch.retain(|c| match c.name.as_deref() {
                     Some(SOURCES_NAME) => false,
-                    Some(FACE_NAME) => !c.appearance.fill_paint().is_none(),
-                    Some(EDGE_NAME) => !c.appearance.stroke_paint().is_none() && c.appearance.stroke_width() > 0.0,
+                    Some(FACE_NAME | EDGE_NAME) => draws(c),
                     _ => true,
                 });
             }
