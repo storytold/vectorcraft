@@ -7727,7 +7727,6 @@ breakText	Glyphs	字形
 @msg	unknown panel `{panel}`	未知的面板 `{panel}`
 @msg	unknown parameter `{key}`	未知的参数 `{key}`
 @msg	unknown parameter `{within}settings.{format}`; {why}	未知的参数 `{within}settings.{format}`；{why}
-@msg	unknown parameter `{within}{key}`; {why}	未知的参数 `{within}{key}`；{why}
 @msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	未知的减色方式 `{reduction}` (selective、perceptual、adaptive、web、gray、blackWhite、uniform 或 document)
 @msg	unmatched ')'	不匹配的 ')'
 @msg	unterminated character class	字符类没有结束
@@ -9145,7 +9144,6 @@ breakText	Glyphs	字形
 @msg	{label} must be a number from 1 to 10000	{label} 必须是 1 到 10000 之间的数字
 @msg	{name} `{s}`: {ids}	{name} `{s}`：{ids}
 @msg	{name} is built in and can't be deleted	{name} 是内置项，不能删除
-@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} 必须为 {lo}–{hi}{unit} (实际为 {v})
 @msg	{name}: CRC or size mismatch	{name}：CRC 或大小不匹配
 @msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}：只能读取此 Affinity 文件的嵌入预览；请使用 文件 › 打开 查看预览及其警告，或在置入前先从 Affinity 导出 SVG 或 PDF
 @msg	{name}: {e}	{name}：{e}
