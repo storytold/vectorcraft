@@ -192,9 +192,9 @@ fn color(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     widgets::label_row(ui, label, LABEL, |ui| {
         let (chip, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
         if let Some(Rgb([r, g, b])) = cur {
-            ui.painter().rect_filled(chip, 2.0, egui::Color32::from_rgb(r, g, b));
+            ui.painter().rect_filled(chip, t.cr_small(), egui::Color32::from_rgb(r, g, b));
         }
-        ui.painter().rect_stroke(chip, 2.0, egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(chip, t.cr_small(), egui::Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
         let hex = cur.map(|c| c.hex()).unwrap_or_default();
         if let Some(c) = widgets::hex_field(ui, ("persp-color", key), hex.trim_start_matches('#')).as_deref().and_then(Rgb::parse) {
             d.fields.insert(key.into(), json!(c.hex()));

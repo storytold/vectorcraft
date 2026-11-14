@@ -371,7 +371,7 @@ pub fn show(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 let query = search_box(ui, &mut d);
                 ui.add_space(6.0);
                 // Category list.
-                let list = egui::Frame::NONE.fill(t.panel_darker).corner_radius(egui::CornerRadius::same(4)).inner_margin(egui::Margin::same(6));
+                let list = egui::Frame::NONE.fill(t.panel_darker).corner_radius(t.cr()).inner_margin(egui::Margin::same(6));
                 list.show(ui, |ui| {
                     ui.set_width(196.0);
                     ui.set_min_height(396.0);

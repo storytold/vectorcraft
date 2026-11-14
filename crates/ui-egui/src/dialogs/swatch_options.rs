@@ -257,7 +257,7 @@ fn hex_field(ui: &mut egui::Ui, hex: &str) -> Option<Color> {
         egui::Frame::NONE
             .fill(t.input)
             .stroke(egui::Stroke::new(1.0, if editing { t.accent } else { t.input_border }))
-            .corner_radius(2)
+            .corner_radius(t.cr())
             .inner_margin(egui::Margin::symmetric(6, 4))
             .show(ui, |ui| {
                 crate::theme::strong_selected_text(ui);

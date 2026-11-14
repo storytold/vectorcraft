@@ -123,9 +123,14 @@ fn tiled_documents_fit_their_panes_at_every_ui_scaling() {
     for ui_zoom in [0.75_f32, 1.5, 2.0] {
         let mut app = app_with(3);
         let ctx = egui::Context::default();
+        // egui rescales the previous viewport when applying zoom, not the incoming screen rectangle.
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |_| {});
+        out.textures_delta.clear();
         ctx.set_zoom_factor(ui_zoom);
         let size = vec2(1200.0, 800.0) / ui_zoom;
         frame_in(&mut app, &ctx, vec![], size);
+        assert!((ctx.input(|i| i.content_rect().size()) - size).length() < 0.01, "the initial canvas uses the requested scaled viewport");
         app.run("window.arrange.tile", json!({})).unwrap();
         frame_in(&mut app, &ctx, vec![], size);
         let (docs, rects) = panes(&app);

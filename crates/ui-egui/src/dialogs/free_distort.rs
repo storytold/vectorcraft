@@ -150,7 +150,7 @@ pub(super) fn fields(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
 fn paint(ui: &egui::Ui, pad: Rect, bx: Rect, q: [Pos2; 4], states: [(bool, bool); 4]) {
     let t = Tokens::get(ui.ctx());
     let painter = ui.painter_at(pad);
-    painter.rect_filled(pad, 2.0, t.input);
+    painter.rect_filled(pad, t.cr_small(), t.input);
     painter.rect_stroke(bx, 0.0, Stroke::new(1.0, t.text_dim.gamma_multiply(0.5)), egui::StrokeKind::Middle);
     let at = |u: f32, v: f32| q[0].lerp(q[1], u).lerp(q[3].lerp(q[2], u), v);
     let faint = Stroke::new(1.0, t.text_dim.gamma_multiply(0.6));
@@ -168,5 +168,5 @@ fn paint(ui: &egui::Ui, pad: Rect, bx: Rect, q: [Pos2; 4], states: [(bool, bool)
             painter.rect_stroke(r.expand(3.0), 2.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Outside);
         }
     }
-    painter.rect_stroke(pad, 2.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    painter.rect_stroke(pad, t.cr_small(), Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
 }

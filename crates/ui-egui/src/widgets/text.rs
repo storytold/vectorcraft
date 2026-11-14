@@ -3,7 +3,7 @@ use super::numeric::mixed_field_named;
 use super::panel_chrome::{
     alt_down_in_field, chevron_cell, entry_to_focus, keep_enter_in_presets, open_presets_from_keys, presets_open, return_focus_from_presets,
 };
-use super::{Rect, Response, Stroke, StrokeKind, Tokens, Ui, id_with, vec2};
+use super::{CornerRadius, Rect, Response, Stroke, Tokens, Ui, id_with, vec2};
 
 /// The flag `dialogs::show` raises while it draws the body of a dialog that has just opened; the
 /// first enabled field drawn takes it ([`take_dialog_focus`]).
@@ -217,12 +217,14 @@ pub(super) fn select_all_on_focus(ui: &Ui, resp: &Response, text: &str) {
 /// its text kept under `id` while it has focus. Returns the text (as edited), whether the field
 /// applies it in this frame (it lost the focus, or a single-line field took Shift+Enter and kept
 /// the focus: [`shift_enter_keeps_focus`]), the text edit's response and the box.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn recessed_text(
     ui: &mut Ui,
     id: egui::Id,
     shown: &str,
     width: f32,
     rows: usize,
+    corners: CornerRadius,
     label: Option<PreviousLabel>,
     name: Option<&str>,
 ) -> (String, bool, Response, Rect) {
@@ -259,7 +261,7 @@ pub(super) fn recessed_text(
     // The box is exactly as tall as the other controls of a row (26 points a line), its text
     // centred in it: a frame around the text came out a point taller and stood out next to
     // spinners and dropdowns (#900).
-    let height = 26.0 + 16.0 * (rows.max(1) - 1) as f32;
+    let height = if rows == 1 { super::FIELD_HEIGHT } else { 26.0 + 16.0 * (rows - 1) as f32 };
     let layout = if rows > 1 { egui::Layout::top_down(egui::Align::Min) } else { egui::Layout::left_to_right(egui::Align::Center) };
     let (rect, resp) = ui
         .allocate_ui_with_layout(vec2(width, height), layout, |ui| {
@@ -278,7 +280,7 @@ pub(super) fn recessed_text(
             } else {
                 Stroke::new(1.0, t.input_border)
             };
-            ui.painter().rect(rect, 5.0, t.input, stroke, StrokeKind::Inside);
+            crate::theme::paint_inset(ui.painter(), rect, corners, t.input, stroke, &t);
             let margin = egui::Margin { left: 7, right: 7, top: if rows > 1 { 4 } else { 0 }, bottom: 0 };
             let resp = egui::Frame::NONE
                 .inner_margin(margin)
@@ -314,6 +316,24 @@ pub(super) fn recessed_text(
     (buf, commit, resp, rect)
 }
 
+/// [`text_field`] with explicit `corners` and `name`.
+#[allow(clippy::too_many_arguments)]
+pub fn text_field_with_named(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    name: Option<&str>,
+    value: Option<&str>,
+    width: f32,
+    rows: usize,
+    corners: CornerRadius,
+) -> Option<String> {
+    let label = take_previous_label(ui);
+    let id = id_with(ui.scope_id(), id);
+    let shown = value.unwrap_or_default();
+    let (buf, commit, _, _) = recessed_text(ui, id, shown, width, rows, corners, label, name);
+    (commit && buf.trim() != shown).then(|| buf.trim().to_string())
+}
+
 /// A recessed text field showing `value` (blank when `None`: the selection's values differ),
 /// `rows` lines tall (1: single line, which Enter and Shift+Enter commit). Returns the new text,
 /// trimmed, when a change is committed (Enter, Shift+Enter or focus loss).
@@ -326,7 +346,7 @@ pub fn text_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str
     let label = take_previous_label(ui);
     let id = id_with(ui.scope_id(), id);
     let shown = value.unwrap_or_default();
-    let (buf, commit, _, _) = recessed_text(ui, id, shown, width, rows, label, name);
+    let (buf, commit, _, _) = recessed_text(ui, id, shown, width, rows, Tokens::get(ui.ctx()).cr(), label, name);
     (commit && buf.trim() != shown).then(|| buf.trim().to_string())
 }
 
@@ -340,7 +360,7 @@ pub fn exact_text_field(ui: &mut Ui, id: impl std::hash::Hash, value: &str, widt
 pub fn exact_text_field_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: &str, width: f32) -> Option<String> {
     let label = take_previous_label(ui);
     let id = id_with(ui.scope_id(), id);
-    let (buf, commit, _, _) = recessed_text(ui, id, value, width, 1, label, name);
+    let (buf, commit, _, _) = recessed_text(ui, id, value, width, 1, Tokens::get(ui.ctx()).cr(), label, name);
     (commit && buf != value).then_some(buf)
 }
 
@@ -367,12 +387,9 @@ pub fn plain_field_named(
 pub fn search_field(ui: &mut Ui, id: egui::Id, hint: &str) -> String {
     let t = Tokens::get(ui.ctx());
     let mut query: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
-    egui::Frame::NONE
-        .fill(t.input)
-        .stroke(Stroke::new(1.0, t.input_border))
-        .corner_radius(egui::CornerRadius::same(2))
-        .inner_margin(egui::Margin::symmetric(8, 5))
-        .show(ui, |ui| {
+    egui::Frame::NONE.fill(t.input).stroke(Stroke::new(1.0, t.input_border)).corner_radius(t.cr()).inner_margin(egui::Margin::symmetric(8, 5)).show(
+        ui,
+        |ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut query)
                     .id(id.with("edit"))
@@ -381,7 +398,8 @@ pub fn search_field(ui: &mut Ui, id: egui::Id, hint: &str) -> String {
                     .hint_text(egui::RichText::new(tl!(hint)).italics())
                     .desired_width(ui.available_width()),
             );
-        });
+        },
+    );
     ui.data_mut(|d| d.insert_temp(id, query.clone()));
     query
 }
@@ -394,14 +412,15 @@ pub fn text_presets(ui: &mut Ui, id: impl std::hash::Hash, value: &str, presets:
 
 /// [`text_presets`] for a row whose heading names it instead of an adjacent label widget.
 pub fn text_presets_named(ui: &mut Ui, id: impl std::hash::Hash, name: Option<&str>, value: &str, presets: &[&str], width: f32) -> Option<String> {
+    let t = Tokens::get(ui.ctx());
     let mut out = None;
     ui.scope(|ui| {
-        // The field and the chevron share a border.
+        // The field and the chevron share a border: one box, square where they meet.
         ui.spacing_mut().item_spacing.x = -1.0;
         let at = ui.cursor().min;
-        let keyed = alt_down_in_field(ui, Rect::from_min_size(at, vec2(width - 19.0, 26.0)));
-        out = text_field_named(ui, &id, name, Some(value), width - 19.0, 1);
-        let resp = chevron_cell(ui, 26.0);
+        let keyed = alt_down_in_field(ui, Rect::from_min_size(at, vec2(width - 19.0, super::FIELD_HEIGHT)));
+        out = text_field_with_named(ui, &id, name, Some(value), width - 19.0, 1, super::group_start(&t));
+        let resp = chevron_cell(ui, super::FIELD_HEIGHT);
         let keyed = open_presets_from_keys(ui, &resp, keyed);
         let was_open = presets_open(ui, &resp);
         egui::Popup::menu(&resp).show(|ui| {

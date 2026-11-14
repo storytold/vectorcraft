@@ -1,5 +1,5 @@
 use super::drag::{drag_id, drop_press};
-use super::{CornerRadius, Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, Tokens, Ui, VectorcraftApp, View, Xf, pos2, vec2};
+use super::{Drag, Point, Pos2, Rect, SCROLL_BAR, Sense, Stroke, Tokens, Ui, VectorcraftApp, View, Xf, pos2, vec2};
 
 /// The mouse and control-channel Rotate View gestures use the same angle and Shift snapping.
 pub(crate) fn drag_rotation(center: Pos2, point: Pos2, start_angle: f64, start_rotation: f64, snap: bool) -> f64 {
@@ -342,7 +342,7 @@ pub(super) fn scroll_bars(app: &mut VectorcraftApp, ui: &Ui, rect: egui::Rect, o
             egui::Rect::from_min_size(pos2(track.left(), track.top() + at), vec2(track.width(), size)).shrink2(vec2(3.0, 1.0))
         };
         let hot = drag.is_some() || hover.is_some_and(|p| thumb.contains(p));
-        painter.rect_filled(thumb, CornerRadius::same(3), if hot { t.text_dim } else { t.text_disabled });
+        painter.rect_filled(thumb, t.cr(), if hot { t.text_dim } else { t.text_disabled });
     }
     let ppp = ui.ctx().pixels_per_point();
     if let Some((c, by)) = center
