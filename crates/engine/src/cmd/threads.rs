@@ -400,6 +400,8 @@ thread_local! {
     /// Tests: how many times [`story_of`] and [`ThreadIndex::of`] went through the document's
     /// threads on this thread.
     static THREAD_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many times [`story_in`] went through a thread's frames on this thread.
+    static STORY_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Tests: how many times [`story_of`] and [`ThreadIndex::of`] have gone through the document's
@@ -407,6 +409,12 @@ thread_local! {
 #[cfg(test)]
 pub(crate) fn thread_scans() -> usize {
     THREAD_SCANS.with(std::cell::Cell::get)
+}
+
+/// Tests: how many times [`story_in`] has gone through a thread's frames on this thread.
+#[cfg(test)]
+pub(crate) fn story_builds() -> usize {
+    STORY_BUILDS.with(std::cell::Cell::get)
 }
 
 /// The frames of the thread that `id` is a frame of, in thread order, each area type or type on a
@@ -420,6 +428,8 @@ pub(crate) fn story_of(d: &Document, id: NodeId) -> Vec<NodeId> {
 
 /// [`story_of`] for `id` in `thread`, the first of the document's threads that lists it.
 pub(crate) fn story_in(d: &Document, thread: &[NodeId], id: NodeId) -> Vec<NodeId> {
+    #[cfg(test)]
+    STORY_BUILDS.with(|c| c.set(c.get() + 1));
     let frames: Vec<NodeId> = thread.iter().copied().filter(|f| text_of(d, *f).is_some()).collect();
     if frames.len() >= 2 && frames.contains(&id) { frames } else { vec![] }
 }
