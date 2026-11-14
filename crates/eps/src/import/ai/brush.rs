@@ -36,7 +36,13 @@
 //!   - Scatter: the size (2, 3), spacing (5, 6) and scatter (8, 9) as (low, high) factors of the
 //!     art, the rotation in degrees (11, 12), how each varies (4, 7, 10, 13) and whether the
 //!     rotation follows the path (14), and 1 Tints (1).
-//!   - Art: 1 Tints (2).
+//!   - Art: numbers 2 to 15 are the settings a path's art style holds as entries ([`ArtSettings`]):
+//!     the colorization (2: 0 None, 1 Tints; other codes color the art otherwise), the width as a factor
+//!     (3), `Spacing` (4), `Adjustment` (5), flipped along (6) and across (7), Scale Proportionately
+//!     (8), the lowest and highest width when the width follows the pen (9, 10, not drawn otherwise),
+//!     how the width varies (11, 0 Fixed), Stretch Between Guides (12) and the lengths of the art
+//!     before its first guide and after its second (13, 14, in the art's units, measured before
+//!     the art is flipped along the path), and `FoldAdjustment` (15).
 //!   - Pattern: its scale as a factor (3).
 //! - A Bristle brush's parameters start with 8 numbers: two codes, then the stiffness, bristle
 //!   thickness, density, paint opacity and bristle length as fractions and the size in
@@ -45,14 +51,15 @@
 //!   [`super::read`]), usually in a group after its frame, an unpainted rectangle around it. A frame
 //!   at the art's bounds isn't kept ([`without_frame`]); a wider one is.
 //!
-//! What isn't read keeps its default: the Art brush's other options, the pattern brush's tiles
+//! What isn't read keeps its default: an Art brush's settings that VectorCraft doesn't draw as the
+//! file does ([`art_options`]) apart from its colorization, the pattern brush's tiles
 //! (which slot is which tile isn't known) and the colorization of the other brushes, which is left
 //! at None so the art keeps its own colors.
 
 use std::collections::{HashMap, HashSet};
 
 use kurbo::Affine;
-use vectorcraft_brush::{ArtBrush, Bristle, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
+use vectorcraft_brush::{ArtBrush, ArtScale, Bristle, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{AppearanceItem, Node, NodeKind};
 
@@ -118,13 +125,13 @@ pub(super) enum DraftKind {
         brush: Scatter,
         art: String,
     },
-    /// The art is the section named `art`. `plain`: the brush stretches its art along the path,
-    /// unflipped, at 100% in Tints (see [`art_is_plain`]), so [`Self::Art`]'s `brush` draws as the
-    /// file's brush does.
+    /// The art is the section named `art`. `settings`: the brush's settings when [`art_options`]
+    /// reads them, so [`Self::Art`]'s `brush` draws as the file's brush does (its guides set from
+    /// its art's length by [`finish_brushes`]).
     Art {
         brush: ArtBrush,
         art: String,
-        plain: bool,
+        settings: Option<ArtSettings>,
     },
     /// The five art sections the brush names, in its order (which is which tile isn't known), and
     /// its scale (%).
@@ -226,12 +233,17 @@ pub(super) fn calligraphic(values: [f64; 3], variation: [f64; 3], codes: [f64; 3
     Calligraphic { angle, roundness, size, variation, modes: Some(modes) }
 }
 
+/// An Art brush's settings: its object's numbers 2 to 15, which a path's art style holds as the
+/// entries `Colorization`, `Scaling`, `Spacing`, `Adjustment`, `Counterclockwise`, `UpsideDown`,
+/// `Proportional`, `MinScaling`, `MaxScaling`, `ScaleYDependsOn`, `Segmented`,
+/// `StartSegmentLength`, `EndSegmentLength` and `FoldAdjustment`, in that order.
+pub(super) type ArtSettings = [f64; 14];
+
 /// The settings a path's art style gives its stroke's brush.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum PathBrush {
     Calligraphic(Calligraphic),
-    /// An Art brush whose art stretches along the path, at the brush's own width, in Tints.
-    Art,
+    Art(ArtSettings),
 }
 
 /// Does an Art brush draw `art` as the file does? It bends paths in solid colors: other objects
@@ -250,8 +262,9 @@ pub(super) fn art_bends(art: &Node) -> bool {
     bends
 }
 
-/// The art sections of `drafts`' Art brushes that an Art brush draws as the file does.
-pub(super) fn bending_art(drafts: &[BrushDraft], art: &HashMap<String, Node>) -> HashSet<String> {
+/// The art sections of `drafts`' Art brushes that an Art brush draws as the file does, with the
+/// length of each (its width, the art running left to right).
+pub(super) fn bending_art(drafts: &[BrushDraft], art: &HashMap<String, Node>) -> HashMap<String, f64> {
     let names: HashSet<&String> = drafts
         .iter()
         .filter_map(|d| match &d.kind {
@@ -259,13 +272,15 @@ pub(super) fn bending_art(drafts: &[BrushDraft], art: &HashMap<String, Node>) ->
             _ => None,
         })
         .collect();
-    names.into_iter().filter(|n| art.get(*n).is_some_and(art_bends)).cloned().collect()
+    names.into_iter().filter_map(|n| art.get(n).filter(|a| art_bends(a)).and_then(|a| a.geometric_bounds()).map(|b| (n.clone(), b.width()))).collect()
 }
 
 /// Does the brush `draft` draw as `settings`, the settings a path's art style gives it? A path whose
 /// settings differ (Options of Selected Object) keeps its drawn look: a stroke names a brush, and
-/// has no settings of its own. `bending`: [`bending_art`].
-pub(super) fn draws_as(draft: &BrushDraft, settings: &PathBrush, bending: &HashSet<String>) -> bool {
+/// has no settings of its own. An Art brush's settings that don't draw ([`drawn`]) may differ, and
+/// the path's own settings must be ones the brush would open with ([`art_options`], [`opens_live`]).
+/// `bending`: [`bending_art`].
+pub(super) fn draws_as(draft: &BrushDraft, settings: &PathBrush, bending: &HashMap<String, f64>) -> bool {
     let close = |a: f64, b: f64| (a - b).abs() <= 1e-3 * a.abs().max(b.abs()).max(1.0);
     match (&draft.kind, settings) {
         (DraftKind::Calligraphic(d), PathBrush::Calligraphic(c)) => {
@@ -275,16 +290,90 @@ pub(super) fn draws_as(draft: &BrushDraft, settings: &PathBrush, bending: &HashS
                 && d.variation.iter().zip(&c.variation).all(|(a, b)| close(*a, *b))
                 && d.modes() == c.modes()
         }
-        (DraftKind::Art { plain: true, art: name, .. }, PathBrush::Art) => bending.contains(name),
+        (DraftKind::Art { settings: Some(d), art: name, .. }, PathBrush::Art(s)) => {
+            let (dd, ds) = (drawn(d), drawn(s));
+            art_options(s).is_some()
+                && bending.get(name).is_some_and(|length| {
+                    // The guides match as lengths and as fractions of the art's length, so they differ
+                    // neither on short art nor near the ends of long art.
+                    dd.iter().zip(ds).all(|(a, b)| close(*a, b))
+                        && [11, 12].iter().all(|&i| close(dd[i] / length, ds[i] / length))
+                        && opens_live(d, *length)
+                        && opens_live(s, *length)
+                })
+        }
         _ => false,
     }
 }
 
-/// Are an Art brush's last 15 numbers those of a brush that stretches its art along the path,
-/// unflipped, at 100% in Tints? The numbers aren't read otherwise: any other value keeps its paths'
-/// drawn look.
-fn art_is_plain(numbers: &[f64; 15]) -> bool {
-    *numbers == [1.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+/// Art brush settings `s` with those that don't draw set to 0: the lowest and highest width while the
+/// width is fixed, and the guides' lengths without Stretch Between Guides.
+fn drawn(s: &ArtSettings) -> ArtSettings {
+    let mut out = *s;
+    if s[9] == 0.0 {
+        (out[7], out[8]) = (0.0, 0.0);
+    }
+    if s[10] == 0.0 {
+        (out[11], out[12]) = (0.0, 0.0);
+    }
+    out
+}
+
+/// What an Art brush's settings give VectorCraft's Art brush, its guides apart ([`guides`]): `None`
+/// when VectorCraft doesn't draw them as the file does: a colorization other than None or Tints, a
+/// width outside [`ArtBrush::WIDTH_RANGE`] or one that varies, both Scale Proportionately and Stretch
+/// Between Guides, a flip or scale that isn't 0 or 1, or a `Spacing`, `Adjustment` or
+/// `FoldAdjustment` other than 0, 1 and 1 (what other values change isn't known).
+fn art_options(s: &ArtSettings) -> Option<ArtBrush> {
+    let [colorization, scaling, spacing, adjustment, along, across, proportional, _, _, varies, segmented, _, _, fold] = *s;
+    let switch = |v: f64| match v {
+        0.0 => Some(false),
+        1.0 => Some(true),
+        _ => None,
+    };
+    let colorization = match colorization {
+        0.0 => Colorization::None,
+        1.0 => Colorization::Tints,
+        _ => return None,
+    };
+    let width = scaling * 100.0;
+    let (low, high) = ArtBrush::WIDTH_RANGE;
+    if !(low..=high).contains(&width) || varies != 0.0 || spacing != 0.0 || adjustment != 1.0 || fold != 1.0 {
+        return None;
+    }
+    let scale = match (switch(proportional)?, switch(segmented)?) {
+        (false, false) => ArtScale::Stretch,
+        (true, false) => ArtScale::Proportional,
+        (false, true) => ArtScale::BetweenGuides { start: 0.0, end: 1.0 },
+        (true, true) => return None,
+    };
+    Some(ArtBrush { scale, width, flip_along: switch(along)?, flip_across: switch(across)?, colorization, ..ArtBrush::default() })
+}
+
+/// The guides of Art brush settings `s` (with Stretch Between Guides) for art of length `length`, as
+/// [`ArtScale::BetweenGuides`] fractions of the art as it runs along the path: `None` when they leave
+/// no art between them. The settings measure the art before it is flipped along the path.
+fn guides(s: &ArtSettings, length: f64) -> Option<(f64, f64)> {
+    let (before, after) = (s[11], s[12]);
+    if !(before >= 0.0 && after >= 0.0 && before + after < length) {
+        return None;
+    }
+    let (before, after) = if s[4] == 1.0 { (after, before) } else { (before, after) };
+    Some((before / length, 1.0 - after / length))
+}
+
+/// Do Art brush settings `s` draw art of length `length`: no Stretch Between Guides, or guides with
+/// art between them?
+fn guides_fit(s: &ArtSettings, length: f64) -> bool {
+    s[10] == 0.0 || guides(s, length).is_some()
+}
+
+/// Does a path with Art brush settings `s`, its art of length `length`, open with the brush on its
+/// stroke? Its guides must fit ([`guides_fit`]). Scale Proportionately keeps the drawn look:
+/// VectorCraft's Art brush sizes proportional art by the path's length and not by the stroke's
+/// weight.
+fn opens_live(s: &ArtSettings, length: f64) -> bool {
+    s[6] == 0.0 && guides_fit(s, length)
 }
 
 /// The brush named `name` of kind `kind` from its parameters `params`.
@@ -342,15 +431,22 @@ pub(super) fn parse_tool_object(kind: Tool, name: &str, params: &str) -> Result<
                 Tool::Art => {
                     // The older form's 8 numbers aren't known: its brush keeps the defaults and its
                     // paths their drawn look. The count tells the form, not the first number.
-                    // Any other count isn't a form this reads.
-                    let (colorization, plain) = if let Ok(n15) = <&[f64; 15]>::try_from(n.as_slice()) {
-                        (if n15[1] == 1.0 { Colorization::Tints } else { Colorization::None }, art_is_plain(n15))
+                    // Any other count isn't a form this reads. Settings that aren't read keep the
+                    // defaults but the colorization, and their paths their drawn look.
+                    let (brush, settings) = if let Ok(&[first, ref settings @ ..]) = <&[f64; 15]>::try_from(n.as_slice()) {
+                        match art_options(settings).filter(|_| first == 1.0) {
+                            Some(brush) => (brush, Some(*settings)),
+                            None => {
+                                let colorization = if settings[0] == 1.0 { Colorization::Tints } else { Colorization::None };
+                                (ArtBrush { colorization, ..ArtBrush::default() }, None)
+                            }
+                        }
                     } else if n.len() == 8 {
-                        (ArtBrush::default().colorization, false)
+                        (ArtBrush::default(), None)
                     } else {
                         return Err(BrushError::Values);
                     };
-                    DraftKind::Art { brush: ArtBrush { colorization, ..ArtBrush::default() }, art: art()?, plain }
+                    DraftKind::Art { brush, art: art()?, settings }
                 }
                 _ => {
                     let [_, _, p3, ..] = n.as_slice() else { return Err(BrushError::Values) };
@@ -458,10 +554,15 @@ pub(super) fn finish_brushes_within(
                 a.transform(Affine::scale_non_uniform(1.0, -1.0), false);
                 BrushKind::Scatter(Scatter { art: a, ..brush })
             }),
-            DraftKind::Art { brush, art: name, .. } => copy(&name).map(|mut a| {
+            DraftKind::Art { mut brush, art: name, settings } => copy(&name).map(|mut a| {
                 // The side of the section with y up draws on the right of the path, and a brush
                 // draws art's y (down here) on the left of the path.
                 a.transform(Affine::scale_non_uniform(1.0, -1.0), false);
+                if let ArtScale::BetweenGuides { start, end } = &mut brush.scale {
+                    // Guides that leave no art between them stretch the whole art.
+                    let length = a.geometric_bounds().map_or(0.0, |b| b.width());
+                    (*start, *end) = settings.and_then(|s| guides(&s, length)).unwrap_or((0.0, 1.0));
+                }
                 BrushKind::Art(ArtBrush { art: a, ..brush })
             }),
             DraftKind::Pattern { .. } => None,
@@ -591,8 +692,8 @@ pub(crate) struct BrushRead {
     pub brush: Brush,
     /// A path whose art style names the brush, at the brush's own settings, opens with the brush on
     /// its stroke: a Calligraphic brush, or an Art brush whose art an Art brush draws as the file
-    /// does ([`art_bends`]) and whose numbers are those of a brush that stretches its art along the
-    /// path, unflipped, at 100% in Tints.
+    /// does ([`art_bends`]) and whose settings VectorCraft draws as the file does ([`art_options`],
+    /// with guides that leave art between them and without Scale Proportionately: [`opens_live`]).
     pub live: bool,
 }
 
@@ -609,7 +710,9 @@ pub(crate) fn read_brush_object(plugin: &str, name: &str, params: &str, art: Opt
     let live = kept(&drafts, &sections).first().copied().unwrap_or(false)
         && match &drafts[0].kind {
             DraftKind::Calligraphic(_) => true,
-            DraftKind::Art { plain: true, art: section, .. } => bending_art(&drafts, &sections).contains(section),
+            DraftKind::Art { settings: Some(s), art: section, .. } => {
+                bending_art(&drafts, &sections).get(section).is_some_and(|length| opens_live(s, *length))
+            }
             _ => false,
         };
     let [draft] = drafts;
@@ -648,8 +751,8 @@ pub(crate) struct BrushesRead {
     /// The brush a stroke that names a brush is drawn with, by name: the first one kept
     /// ([`kept`]), as an index in [`Self::drafts`].
     by_name: HashMap<String, usize>,
-    /// The art an Art brush draws as the file does ([`bending_art`]).
-    bending: HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length ([`bending_art`]).
+    bending: HashMap<String, f64>,
 }
 
 impl BrushesRead {
@@ -686,7 +789,7 @@ impl BrushesRead {
         st.items.iter().all(|item| match item {
             StyleItem::Stroke { brush: Some((name, settings)), .. } => {
                 let Some(draft) = self.by_name.get(name).and_then(|i| self.drafts.get(*i)) else { return false };
-                draws_as(draft, settings, &self.bending) && !(matches!(settings, PathBrush::Art) && !st.effects.is_empty())
+                draws_as(draft, settings, &self.bending) && !(matches!(settings, PathBrush::Art(_)) && !st.effects.is_empty())
             }
             _ => true,
         })

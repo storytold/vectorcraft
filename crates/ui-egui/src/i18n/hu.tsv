@@ -906,6 +906,8 @@ font-technology	Variable	Változó
 	Crop Image	Kép körülvágása
 	Image Tools	Képeszközök
 	Remove Background…	Háttér eltávolítása…
+	Draw (Pencil)	Rajzolás (Ceruza)
+	Place Image	Kép elhelyezése
 	Remove Background	Háttér eltávolítása
 	Background	Háttér
 	Edge Color	Szélszín
@@ -4311,6 +4313,7 @@ mark-style	Japanese	Japán
 	VectorCraft Title Bar on Every Desktop	A VectorCraft címsora minden asztali környezetben
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Amíg a VECTORCRAFT_TITLEBAR környezeti változó be van állítva, az választja ki a címsort.
 	System Title Bar takes precedence over this option while it is on.	Amíg a Rendszer címsora be van kapcsolva, elsőbbséget élvez ezzel a beállítással szemben.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Amíg a VectorCraft címsora minden asztali környezetben beállítás ki van kapcsolva, ez az asztali környezet rajzolja az ablak címsorát, akár be van kapcsolva ez a beállítás, akár nem.
 	Tab	Tabulátor
 	Tab Stops	Tabulátorpontok
 	Table	Táblázat
@@ -4913,6 +4916,7 @@ imageTrace	Outline	Körvonal
 @msg	`select` must be true or false	`select`: true vagy false kell
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` és `maxAnchors`: egész szám kell
 @msg	`{key}` must be a number not below 0	`{key}`: legalább 0 értékű szám kell
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}`: négy legalább 0 értékű szám kell: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}`: [x, y, width, height] kell, négy véges szám, a szélesség és a magasság nem negatív
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` nagyobb, mint `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	adj meg legalább egyet ezek közül: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -6186,6 +6190,7 @@ imageTrace	Outline	Körvonal
 @msg	no such color	nincs ilyen szín
 @msg	{_1} cannot be used on Windows	A(z) {_1} nem használható Windows rendszeren
 @msg	more than one action is named “{_1}”	több művelet neve is „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	a(z) „{_1}” művelet beállítja a(z) {_2} mappabeállítást; a készlet mentéséhez törölje ezt a lépést
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
 	Smudge Stick…	Elmosó rúd…
 	Smudge Stick	Elmosó rúd
@@ -6582,6 +6587,8 @@ axis	Y Axis	Y tengely
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
 	Playback Options…	Lejátszási beállítások…
+	Button Mode	Gomb mód
+	No actions.	Nincs művelet.
 	Insert Stop…	Megállás beszúrása…
 	Insert Stop	Megállás beszúrása
 	Record Stop	Megállás rögzítése

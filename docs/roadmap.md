@@ -10,6 +10,10 @@
 >
 > Numeric spinner update (2026-11-10): held mouse arrows repeat past the click timeout; scores and estimates unchanged (#6307).
 
+> **PDF import status (2026-11-14, #6957):** Outlined Indic glyphs retain their full stroke properties; translucent glyphs stay separate, and a soft mask attaches to each glyph separately. Scores and estimates unchanged.
+
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
+
 ## Feature submission evidence
 
 M4: Explicitly requested editing data keeps a single artboard larger than its 14,400 pt capped PDF page (#6865). Scores and estimates unchanged.
@@ -56,6 +60,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 | 2026-11-13 | minor | PDF import: glyphs inside a marked-content span with an empty `ActualText` come in as outlines in their fill and stroke instead of being left out, adding no text (#6971; `empty_actual_text_keeps_the_glyphs_art` in `crates/pdf/src/tests/actual_text.rs`). Scores and estimates unchanged. |
 | 2026-11-13 | minor | Library panels (swatch, Color Book, brush, symbol and graphic style libraries): in a panel made taller the list fills the space above the footer instead of scrolling inside 220 or 280 pt (#2992; `the_list_fills_a_tall_panel_above_its_footer` in `crates/ui-egui/src/panels/library_panel/tests.rs`). Scores and estimates unchanged. |
 | 2026-11-13 | minor | Swatches: in a panel made taller the swatch list fills the space above the footer instead of scrolling inside 150 or 200 pt (#1638; `the_list_fills_a_tall_panel_above_its_footer` in `crates/ui-egui/src/panels/swatches/tests.rs`). Scores and estimates unchanged. |
+| 2026-11-13 | minor | M4: PDF import (#5235, #6906): Indic type keeps its marks on their line, and a line whose type would not draw as the file does keeps the file's glyphs as outlines (opaque, alike-stroked ones share a path except under a soft mask, where each glyph keeps its own path and mask; translucent ones keep their own). Scores and estimates unchanged. Evidence: `crates/pdf/src/tests/reshaped.rs`. |
 | 2026-11-10 | minor | M13 / G6: MCP catalogue (#6460): headless lists UI commands, eight prompts, 33 tools, effect vs command ids; scores and estimates unchanged. |
 | 2026-11-08 | minor | Character Styles panel: a double-click on a user style's row opens its Character Style Options (`ui.charStyleOptions`); the dialog keeps a fixed width and scrolls its sections in a shorter window, so OK and Cancel stay on screen. Tests `panels::text_styles::tests::double_clicking_a_character_style_row_opens_its_options` and `dialogs::char_style_options::tests::the_sections_scroll_in_a_window_shorter_than_the_general_list`. Scores and estimates unchanged. |
 | 2026-11-08 | minor | #3380, deletion only: preserve gradient placement and exact surviving geometry; consume owned subpaths with a shared original-node snapshot; consolidate status/evidence and document command/helper contracts. Compound behavior and the existing M2 status entry are retained. Endpoint highlighting remains open; scores and estimates unchanged. |
@@ -125,6 +130,8 @@ Checked 2026-10-10 from the code, tests and open issues; no workflow fails, so V
 Hindi interface follow-up (2026-11-06): the catalog and zero/one plural rule are implemented;
 native wording review, layout checks and a web Devanagari font remain. [Notes](localization-hi.md).
 
+Gujarati interface follow-up (2026-11-14): the catalog and zero/one plural rule are implemented. The original 4,286 rows remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and a bundled Gujarati web font remains to be supplied.
+
 ## Current focus
 
 1. **Interaction-fidelity pass** (G1) by tool, from [ui-parity.md](ui-parity.md): Pen and Curvature, Direct
@@ -166,6 +173,7 @@ native wording review, layout checks and a web Devanagari font remain. [Notes](l
 | — | Interaction fidelity pass (every tool's modifiers, Properties panel per context, isolation, nuance; width-point creation and adjoining adjustment regression-tested; dialog layout reviewed) | ⬜ (new ruler-guide Alt orientation implemented; existing-guide Escape cancellation regression-tested; broader pass remains) | 60–90 |
 | — | Hardening at scale (big-file corpus, fuzzing, cross-platform + browser QA) | 🟡 PngSuite integrity and bounded fetching verified (#1729); real-world corpus/manual QA remain | 50–80 |
 | M14 follow-up | Color Picker layout (#2008) | ✅ Compact controls, centered header, stacked actions, aligned fields and screen sampling; narrow windows scroll vertically | Included above |
+| M14 follow-up | Gujarati interface (#6613) | 🟡 Zero/one singular plurals and desktop font fallback; 4,673 contributor-reviewed rows, including 387 approved additions with 11 wording corrections; status/error messages remain partial and pinned fonts lack a Gujarati face | Included above |
 | | **Total to full parity** (one agent; from [target-app-parity.md](target-app-parity.md)) | | **~360–590** |
 
 Milestone estimates predate the 2026-10-10 re-measure for M1–M14; the area table in
@@ -199,6 +207,8 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
+| 2026-11-12 | minor | Gujarati (`gu`): 4,286-row machine-assisted catalog reviewed by a native speaker, zero/one singular plurals, desktop font fallback and optional Gujarati craft-fonts fallback; all 72 translation tests pass; a web font and about 2,600 untranslated messages remain; scores and estimates unchanged |
 | 2026-11-12 | minor | Explicit editing-data import keeps a single artboard beyond a capped 14,400 pt PDF page (#6865), with a warning; automatic mode stays unchanged. Scores and estimates unchanged. |
 | 2026-11-12 | minor | M7: Glyphs panel applies feature-valued alternates and unencoded glyphs while keeping Arabic joining (#5514). Scores and estimates unchanged. |
 | 2026-11-12 | minor | M14: numeric fields keep the caret when a focus click is released more than 1 pt from its press; a tap within 1 pt still selects all (#6659, follow-up to #1326); estimates unchanged. |
