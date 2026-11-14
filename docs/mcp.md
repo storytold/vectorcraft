@@ -3531,14 +3531,15 @@ already walks Image Trace. Short agent entry points:
   the pointer is not outlined.
   A double-click runs the command a click there runs with `scope: "connected"`, and a triple-click with
   `scope: "samePaint"`; Alt held runs nothing. With Space held (`mods.space`, the view tools), a press, a
-  double-click or a triple-click runs nothing. On a face, `connected` fills the face and every face reached from it
+  double-click or a triple-click runs nothing, and a move outlines no face or edge. On a face, `connected` fills the face and every face reached from it
   across edges that draw no stroke (hidden, stroke paint none, or weight 0); a stroked edge, a hidden face, a gap
   that Gap Detection closes and the group's outside stop it. `samePaint` fills every face
   of the group, joined to it or not, whose fill is the `match` paint. On an edge, `connected` paints the edge and the
   edges joined to it end to end whose stroke paint is `match`, and `samePaint` paints every edge of the group with
   that stroke paint; the stroke's weight is not compared. Each click of a double-click or triple-click runs as it
   arrives and is its own undo step. `match` is the paint the face or edge had before the first of the double-click's
-  two clicks or the triple-click's three that painted it, so the clicks before the last do not change what it matches. Hidden faces and edges are not painted. These rules
+  two clicks or the triple-click's three that painted it, so the clicks before the last do not change what it matches;
+  a first click that made the Live Paint group counts when the face it filled is the clicked face. Hidden faces and edges are not painted. These rules
   for what faces and edges join and what paints match are VectorCraft's own. The help page describes the gestures:
   https://helpx.adobe.com/illustrator/desktop/paint-and-fill/learn-painting-basics/paint-with-the-live-paint-bucket-tool.html.
   `livePaint.fill {scope}` and `livePaint.strokeEdge {scope}` take `scope` as `"one"` (the default), `"connected"` or

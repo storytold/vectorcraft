@@ -47,3 +47,27 @@ fn a_triple_click_fills_every_face_of_the_same_fill() {
     ok(&mut h, "pointer_gesture", json!({"events": [ev("tripleclick")]}));
     assert_eq!(fills(&mut h, &g), [after_two[0].clone(), after_two[0].clone()], "both faces were red");
 }
+
+/// With Space held (`mods.space`), the Live Paint Bucket's clicks, double-click and triple-click
+/// paint nothing.
+#[test]
+fn clicks_with_space_held_paint_nothing() {
+    let mut h = Headless::new();
+    h.call("engine.execute", json!({"command": "file.new", "params": {"width": 300, "height": 300}})).unwrap();
+    let a = run(&mut h, "shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50}))["id"].clone();
+    let b = run(&mut h, "shape.rectangle", json!({"x": 100, "y": 0, "width": 50, "height": 50}))["id"].clone();
+    let g = run(&mut h, "livePaint.make", json!({"ids": [a, b]}))["id"].clone();
+    for x in [25, 125] {
+        run(&mut h, "livePaint.fill", json!({"group": g, "point": [x, 25], "color": "#ff0000"}));
+    }
+    run(&mut h, "select.none", json!({}));
+    run(&mut h, "paint.setFill", json!({"color": "#00ff00"}));
+    let red = fills(&mut h, &g);
+    let ev = |kind: &str| json!({"kind": kind, "x": 25, "y": 25});
+    let clicks = [ev("down"), ev("up"), ev("down"), ev("up"), ev("doubleclick"), ev("down"), ev("up"), ev("tripleclick")];
+    ok(&mut h, "pointer_gesture", json!({"tool": "livePaintBucket", "mods": {"space": true}, "events": clicks}));
+    assert_eq!(fills(&mut h, &g), red);
+    // Without Space, the same clicks paint.
+    ok(&mut h, "pointer_gesture", json!({"events": [ev("down"), ev("up")]}));
+    assert_ne!(fills(&mut h, &g)[0], red[0]);
+}

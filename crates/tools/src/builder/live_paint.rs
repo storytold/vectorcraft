@@ -178,14 +178,16 @@ enum LpPaint {
 /// A triple-click on a face fills every face of the group with the face's fill, and on an edge it
 /// paints every edge of the group with the edge's stroke (`scope: "samePaint"`). Each click of a
 /// double-click or triple-click paints as it arrives, as its own undo step, and the paint compared
-/// is the one the face or edge had before the first of its clicks. Shift and the options choose a
-/// face or an edge as for a click; with Alt held a double-click or triple-click paints nothing. With
-/// Space held for the view tools, a click, double-click or triple-click paints nothing.
+/// is the one the face or edge had before the first of its clicks that painted it. A first click
+/// that made the Live Paint group counts when the face it filled is the clicked face. Shift and the
+/// options choose a face or an edge as for a click; with Alt held a double-click or triple-click
+/// paints nothing. With Space held for the view tools, a click, double-click or triple-click paints
+/// nothing and no face or edge is highlighted.
 pub struct LivePaintBucketTool {
     pub(super) cache: RegionCache,
     pub(super) hover: LpHover,
-    /// Where the pointer last moved, and whether Shift and Alt were held.
-    at: Option<(Point, bool, bool)>,
+    /// Where the pointer last moved, and the modifiers held there.
+    at: Option<(Point, Mods)>,
     /// The fill command and polyline previewed from the press's snapshot.
     fill_drag: Option<(Value, Vec<Vec<Point>>)>,
     /// The last [`LP_PRESSES`] presses, oldest first: the face or edge each one painted, with its
@@ -304,17 +306,19 @@ impl LivePaintBucketTool {
         self.note_press(Some(LpPress { part: Some(n.id), at, before }));
     }
 
-    /// The paint `part` had before the first of the last presses of a click sequence of `clicks`
-    /// presses that all painted `part` (the sequence's first press may have made the group `part`
-    /// is in, when the face it filled there is `part`); `now` when the last press did not paint it.
+    /// The paint `part` had before the first press of a click sequence of `clicks` presses that
+    /// painted `part` (the sequence's first press counts when it made the group `part` is in and
+    /// the face it filled there is `part`); `now` when the last press did not paint it.
     fn before(&self, cx: &ToolContext, part: NodeId, clicks: usize, now: Paint) -> Paint {
         let Some(run) = self.presses.len().checked_sub(clicks).and_then(|from| self.presses.get(from..)) else { return now };
         let made_part = |q: &LpPress| live_paint_at(cx.doc, q.at).and_then(|g| visible_face_at(cx.doc.node(g)?, q.at)).is_some_and(|f| f.id == part);
         let on_part =
             |(i, q): (usize, &Option<LpPress>)| q.as_ref().is_some_and(|q| q.part == Some(part) || (i == 0 && q.part.is_none() && made_part(q)));
-        let from = run.len().saturating_sub(run.iter().enumerate().rev().take_while(|&iq| on_part(iq)).count());
-        match run.get(from) {
-            Some(Some(first)) => first.before.clone(),
+        if !run.last().is_some_and(|q| on_part((run.len() - 1, q))) {
+            return now;
+        }
+        match run.iter().enumerate().find(|&iq| on_part(iq)) {
+            Some((_, Some(first))) => first.before.clone(),
             _ => now,
         }
     }
@@ -322,7 +326,7 @@ impl LivePaintBucketTool {
     /// What a double-click (`scope` "connected", 2 `clicks`) or a triple-click ("samePaint", 3) at
     /// `p` runs: the command a click there runs, with `scope`, and the paint it compares as `match`.
     fn multi_click(&self, cx: &ToolContext, p: Point, mods: Mods, scope: &str, clicks: usize) -> Vec<Action> {
-        // With Space held the press pans, zooms or rotates the view and does not reach the tool.
+        // With Alt held, or with Space held for the view tools, a double-click or triple-click paints nothing.
         if mods.alt || mods.space {
             return vec![];
         }
@@ -350,14 +354,14 @@ impl LivePaintBucketTool {
         vec![Action::Exec("livePaint.fill".into(), v)]
     }
 
-    /// The highlight at `p` for a pointer with Shift and Alt held as given: none with Alt or with
-    /// Highlight off, else the face or edge a click there paints. With Highlight off the selection's
-    /// map is still made, for the cursor ([`Self::paints_at`]).
-    fn hover_at(&mut self, cx: &ToolContext, p: Point, shift: bool, alt: bool) -> LpHover {
-        if alt {
+    /// The highlight at `p` for a pointer with the modifiers `mods`: none with Alt, with Space held
+    /// for the view tools or with Highlight off, else the face or edge a click there paints. With
+    /// Highlight off the selection's map is still made, for the cursor ([`Self::paints_at`]).
+    fn hover_at(&mut self, cx: &ToolContext, p: Point, mods: Mods) -> LpHover {
+        if mods.alt || mods.space {
             return LpHover::None;
         }
-        let target = self.target_at(cx, p, shift);
+        let target = self.target_at(cx, p, mods.shift);
         if self.highlight { target } else { LpHover::None }
     }
 
@@ -432,13 +436,13 @@ impl Tool for LivePaintBucketTool {
         }
         match ev.kind {
             PointerKind::Move => {
-                self.at = Some((p, ev.mods.shift, ev.mods.alt));
-                self.hover = self.hover_at(cx, p, ev.mods.shift, ev.mods.alt);
+                self.at = Some((p, ev.mods));
+                self.hover = self.hover_at(cx, p, ev.mods);
                 vec![]
             }
             PointerKind::Down => {
                 self.hover = LpHover::None;
-                // With Space held the press pans, zooms or rotates the view.
+                // With Space held for the view tools, a press paints nothing.
                 if ev.mods.space {
                     self.note_press(None);
                     return vec![];
@@ -573,8 +577,8 @@ impl Tool for LivePaintBucketTool {
         // of a Live Paint group the hover takes no map.
         loop {
             self.cache.settle(wait);
-            if let Some((p, shift, alt)) = self.at {
-                self.hover = self.hover_at(cx, p, shift, alt);
+            if let Some((p, mods)) = self.at {
+                self.hover = self.hover_at(cx, p, mods);
             }
             if !wait || !self.cache.waiting() {
                 break;

@@ -2566,6 +2566,42 @@ fn live_paint_stroke_edge_same_paint_and_width_is_no_op() {
     assert_eq!(history_state(&s).0, before.1.0 + 1);
 }
 
+/// With `scope`, faces and edges that already have the paint (and the width) are skipped: when
+/// every face or edge the call reaches has it, nothing changes, and when some do, only the others
+/// are painted, in one undo step. `count` is every face or edge reached.
+#[test]
+fn live_paint_scoped_fill_and_stroke_skip_parts_with_the_paint() {
+    let mut s = session();
+    let g = live(&mut s);
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#00ff00"})).unwrap();
+    let edges =
+        s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100, 50], "scope": "samePaint", "color": "#ff0000", "width": 3})).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let same = json!({"group": g.0, "point": [75, 50], "scope": "samePaint", "color": "#00ff00"});
+    assert_eq!(s.execute("livePaint.fill", &same).unwrap()["count"], 3);
+    assert_unchanged(&mut s, &mut before, "a samePaint fill where every face has the paint");
+    let again = json!({"group": g.0, "point": [100, 50], "scope": "samePaint", "color": "#ff0000", "width": 3});
+    assert_eq!(s.execute("livePaint.strokeEdge", &again).unwrap()["count"], edges["count"]);
+    assert_unchanged(&mut s, &mut before, "a samePaint stroke where every edge has the paint and the width");
+    // One face of the three without the paint: only it is filled, in one undo step.
+    let green = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "color": "#ff0000"})).unwrap();
+    let depth = history_state(&s).0;
+    let like = serde_json::to_value(&green).unwrap();
+    let r = s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "scope": "samePaint", "match": like, "color": "#00ff00"})).unwrap();
+    assert_eq!(r["count"], 3);
+    assert_eq!(history_state(&s).0, depth + 1);
+    let fill_at = |s: &Session, x: f64| vectorcraft_tools::builder::face_at(&node(s, g), Point::new(x, 50.0)).unwrap().appearance.fill_paint();
+    for x in [25.0, 75.0, 125.0] {
+        assert_eq!(fill_at(&s, x), green, "{x}");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(fill_at(&s, 25.0), red);
+    assert_eq!((fill_at(&s, 75.0), fill_at(&s, 125.0)), (green.clone(), green));
+}
+
 #[test]
 fn live_paint_gap_options_same_values_are_no_op() {
     let mut s = session();

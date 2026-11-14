@@ -1254,6 +1254,51 @@ fn bucket_triple_click_after_making_the_group_on_another_face_matches_its_own_fa
     assert_eq!(v["match"], own);
 }
 
+/// A triple-click whose clicks land on one face, another face, then the first face again matches
+/// the fill the first face had before the first click on it, not the fill that click gave it.
+#[test]
+fn bucket_triple_click_with_a_click_on_another_face_between_matches_the_first_fill() {
+    use vectorcraft_color::{Color, Paint};
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let (d, gid, f2, _) = live_group_doc();
+    let mut painted = d.clone();
+    painted.node_mut(f2).unwrap().appearance.set_fill(red.clone());
+    let s = Selection::default();
+    let p = paint();
+    let (cx, later) = (cx(&d, &s, &p), cx(&painted, &s, &p));
+    let mut t = LivePaintBucketTool::default();
+    // The first click paints the face at (75, 25) red; the second fills the face at (25, 25).
+    for (ctx, x) in [(&cx, 75.0), (&later, 25.0), (&later, 75.0)] {
+        t.pointer(ctx, &ev(PointerKind::Down, x, 25.0));
+        t.pointer(ctx, &ev(PointerKind::Up, x, 25.0));
+    }
+    let acts = t.pointer(&later, &ev(PointerKind::TripleClick, 75.0, 25.0));
+    let own = serde_json::to_value(d.node(f2).unwrap().appearance.fill_paint()).unwrap();
+    assert_ne!(own, serde_json::to_value(&red).unwrap());
+    assert_eq!(
+        acts,
+        vec![Action::Exec("livePaint.fill".into(), json!({ "group": gid.0, "point": [75.0, 25.0], "scope": "samePaint", "match": own }))]
+    );
+}
+
+/// With Space held for the view tools, the pointer outlines no face or edge, as a press there
+/// paints nothing.
+#[test]
+fn bucket_highlights_nothing_with_space_held() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintBucketTool::default();
+    let space = Mods { space: true, ..Default::default() };
+    for (x, m) in [(75.0, space), (51.0, Mods { shift: true, ..space })] {
+        t.pointer(&cx, &ev(PointerKind::Move, x, 25.0).with_mods(m));
+        assert!(t.overlays(&cx).is_empty(), "at {x} with {m:?}");
+    }
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    assert!(!t.overlays(&cx).is_empty());
+}
+
 #[test]
 fn bucket_options_choose_what_a_click_paints() {
     let (d, gid, ..) = live_group_doc();
