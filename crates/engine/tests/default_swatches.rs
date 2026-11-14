@@ -721,3 +721,223 @@ fn default_swatches_pattern_composite_family_survives_restart_and_profile_collis
     assert_eq!(db.composite_font_names(), held_names, "failed private capture leaves no temporary registered family");
     assert_eq!(*db.composite_font(&palette_font.name).unwrap(), held_font, "failed private capture restores the source family");
 }
+
+fn write_linked_native_fixture(path: &Path, document: &Document, include_linked: bool) -> Document {
+    let bytes =
+        vectorcraft_format::save_with(document, &vectorcraft_format::SaveOptions { include_linked, precision: None, ..Default::default() }).unwrap();
+    std::fs::write(path, &bytes).unwrap();
+    vectorcraft_format::load(&bytes).unwrap()
+}
+
+fn linked_native_palette(path: &Path, name: &str) -> Session {
+    let mut source = Session::new();
+    source.add_document(raw_palette(), None);
+    let placed = source.execute("file.place", &json!({"path": path, "link": true})).unwrap();
+    assert_eq!(placed["linked"], true, "this is the supported linked-native placement route");
+    let id = placed["ids"][0].as_u64().unwrap();
+    assert!(matches!(&source.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind, NodeKind::PlacedDocument(_)));
+    source.execute("object.pattern.make", &json!({"ids": [id], "name": name, "edit": false})).unwrap();
+    source.execute("select.set", &json!({"ids": [id]})).unwrap();
+    source.execute("edit.clear", &json!({})).unwrap();
+    let mut count = 0;
+    source.doc().unwrap().doc.visit_stored(|node, _| {
+        if let NodeKind::PlacedDocument(placed) = &node.kind {
+            count += 1;
+            let blob = &source.doc().unwrap().doc.images[&placed.key];
+            assert!(!blob.is_proxy(), "the placed native file itself has full stored bytes");
+            assert!(vectorcraft_format::load(&blob.bytes).is_ok());
+        }
+    });
+    assert_eq!(count, 1, "the native placement is stored only in the pattern");
+    source
+}
+
+fn palette_link_ids(document: &Document) -> Vec<u64> {
+    let mut ids = vec![];
+    document.visit_stored(|node, _| {
+        if matches!(&node.kind, NodeKind::PlacedDocument(_)) || matches!(&node.kind, NodeKind::Image(image) if image.link.is_some()) {
+            ids.push(node.id.0);
+        }
+    });
+    ids
+}
+
+fn assert_native_ink_resource(document: &Document) {
+    let mut names = vec![];
+    document.visit_stored(|node, _| {
+        for item in &node.appearance.items {
+            if let vectorcraft_doc::AppearanceItem::Stroke(stroke) = item
+                && let Some(brush) = &stroke.brush
+            {
+                names.push(brush.clone());
+            }
+        }
+    });
+    assert_eq!(names, ["Native ink"], "the expanded pattern still uses its original custom brush");
+    let library = vectorcraft_brush::library(document);
+    let brush = library
+        .iter()
+        .find(|brush| brush.name == names[0])
+        .expect("a brush adopted while embedding the linked native file must remain in the saved palette");
+    let BrushKind::Art(art) = &brush.kind else { panic!("the imported Art brush changed kind") };
+    assert_eq!(art.art.appearance.fill().unwrap().paint, Paint::solid(Color::rgb8(31, 81, 123)));
+}
+
+/// Materialize only for inspection after deleting the originals. This accepts a valid fully
+/// self-contained nested capsule too; it does not require capture to flatten its representation.
+fn materialize_saved_palette_links(source: &mut Session) {
+    for _ in 0..3 {
+        let ids = palette_link_ids(&source.doc().unwrap().doc);
+        if ids.is_empty() {
+            return;
+        }
+        let result = source.execute("links.embed", &json!({"ids": ids})).unwrap();
+        assert!(
+            result["missing"].as_array().unwrap().is_empty(),
+            "a saved default must supply full nested resources after the original files are removed: {result}"
+        );
+    }
+    assert!(palette_link_ids(&source.doc().unwrap().doc).is_empty(), "the two-level fixture was completely inspected");
+}
+
+#[test]
+fn default_swatches_linked_native_imported_brush_survives_capture() {
+    let _cms = color_context();
+    let directory = TestDirectory::new();
+    let native_path = directory.0.join("brushed.vectorcraft");
+    let mut native = Document::new(20.0, 20.0);
+    let brush_art = rectangle(&mut native, Paint::solid(Color::rgb8(31, 81, 123)));
+    vectorcraft_brush::store(
+        &mut native,
+        &[Brush { name: "Native ink".into(), kind: BrushKind::Art(ArtBrush { art: brush_art, ..Default::default() }) }],
+    );
+    let mut stroked = Node::path(
+        native.alloc_id(),
+        shapes::rectangle(Rect::new(2.0, 2.0, 12.0, 10.0)),
+        Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0),
+    );
+    stroked.appearance.stroke_mut().unwrap().brush = Some("Native ink".into());
+    Arc::make_mut(&mut native.layers[0]).children_mut().unwrap().push(Arc::new(stroked));
+    native.fix_next_id();
+    write_linked_native_fixture(&native_path, &native, true);
+    let mut source = linked_native_palette(&native_path, "Native brush tile");
+    let original = source.doc().unwrap().doc.clone();
+    let selection = source.doc().unwrap().selection.clone();
+    let history = source.doc().unwrap().history.undo.len();
+    assert!(
+        !vectorcraft_brush::library(&original).iter().any(|brush| brush.name == "Native ink"),
+        "linked placement has not adopted the custom native brush yet"
+    );
+
+    // Prove the public embed/adopt seam produces the referenced definition before capture.
+    let mut control = Session::new();
+    control.add_document((*original).clone(), None);
+    let ids = palette_link_ids(&control.doc().unwrap().doc);
+    let result = control.execute("links.embed", &json!({"ids": ids})).unwrap();
+    assert!(result["missing"].as_array().unwrap().is_empty());
+    assert_native_ink_resource(&control.doc().unwrap().doc);
+
+    source.execute("swatch.defaults.save", &json!({})).unwrap();
+    assert_eq!(source.doc().unwrap().doc, original);
+    assert_eq!(source.doc().unwrap().selection, selection);
+    assert_eq!(source.doc().unwrap().history.undo.len(), history);
+    std::fs::remove_file(&native_path).unwrap();
+    let mut fresh = restarted(&source);
+    fresh.execute("file.new", &json!({"profile": null})).unwrap();
+    assert_palette(&fresh.doc().unwrap().doc, &original);
+    materialize_saved_palette_links(&mut fresh);
+    assert_native_ink_resource(&fresh.doc().unwrap().doc);
+    assert_eq!(source.doc().unwrap().doc, original);
+}
+
+#[test]
+fn default_swatches_linked_native_nested_image_is_complete_or_capture_fails() {
+    let _cms = color_context();
+    let directory = TestDirectory::new();
+    let image_path = directory.0.join("original-banner.png");
+    let inner_path = directory.0.join("inner.vectorcraft");
+    let outer_path = directory.0.join("outer.vectorcraft");
+    // Just over the normal 256px proxy threshold; a 2x2 image would keep full bytes.
+    let pixels = image::RgbaImage::from_fn(300, 4, |x, y| image::Rgba([(x % 251) as u8, (y * 53) as u8, 137, 255]));
+    let mut encoded = Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(pixels).write_to(&mut encoded, image::ImageFormat::Png).unwrap();
+    let full_png = encoded.into_inner();
+    std::fs::write(&image_path, &full_png).unwrap();
+
+    let mut inner = Session::new();
+    inner.add_document(Document::new(320.0, 20.0), None);
+    inner.execute("file.place", &json!({"path": image_path, "link": true, "at": [150, 2]})).unwrap();
+    let saved_inner = write_linked_native_fixture(&inner_path, &inner.doc().unwrap().doc, false);
+    let mut proxies = 0;
+    saved_inner.visit_stored(|node, _| {
+        if let NodeKind::Image(image) = &node.kind {
+            assert!(image.link.is_some());
+            assert!(saved_inner.images[&image.key].is_proxy(), "the native file genuinely stores only the linked image's proxy");
+            assert_eq!((image.width, image.height), (300, 4));
+            proxies += 1;
+        }
+    });
+    assert_eq!(proxies, 1);
+
+    let mut outer = Session::new();
+    outer.add_document(Document::new(320.0, 20.0), None);
+    outer.execute("file.place", &json!({"path": inner_path, "link": true, "at": [160, 10]})).unwrap();
+    let saved_outer = write_linked_native_fixture(&outer_path, &outer.doc().unwrap().doc, true);
+    let mut nested = 0;
+    saved_outer.visit_stored(|node, _| {
+        if let NodeKind::PlacedDocument(placed) = &node.kind {
+            let blob = &saved_outer.images[&placed.key];
+            assert!(!blob.is_proxy(), "A carries full B native bytes, not just a placement preview");
+            let nested_file = vectorcraft_format::load(&blob.bytes).unwrap();
+            assert!(nested_file.images.values().any(ImageBlob::is_proxy), "B's full native payload still contains the saved proxy-only image");
+            nested += 1;
+        }
+    });
+    assert_eq!(nested, 1);
+
+    let mut good = Session::new();
+    good.add_document(raw_palette(), None);
+    good.execute("swatch.defaults.save", &json!({})).unwrap();
+    let good_prefs = good.prefs.to_json();
+    let mut source = linked_native_palette(&outer_path, "Nested image tile");
+    source.apply_prefs(good.prefs.clone());
+    let original = source.doc().unwrap().doc.clone();
+    let selection = source.doc().unwrap().selection.clone();
+    let history = source.doc().unwrap().history.undo.len();
+
+    std::fs::remove_file(&image_path).unwrap();
+    assert!(
+        source.execute("swatch.defaults.save", &json!({})).is_err(),
+        "full A and B native blobs cannot make a missing proxy-only image a complete saved default"
+    );
+    assert_eq!(source.prefs.to_json(), good_prefs, "missing nested content keeps the previous complete default");
+    assert_eq!(source.doc().unwrap().doc, original);
+    assert_eq!(source.doc().unwrap().selection, selection);
+    assert_eq!(source.doc().unwrap().history.undo.len(), history);
+
+    std::fs::write(&image_path, &full_png).unwrap();
+    source.execute("swatch.defaults.save", &json!({})).unwrap();
+    assert_eq!(source.doc().unwrap().doc, original);
+    assert_eq!(source.doc().unwrap().selection, selection);
+    assert_eq!(source.doc().unwrap().history.undo.len(), history);
+    for path in [&image_path, &inner_path, &outer_path] {
+        std::fs::remove_file(path).unwrap();
+    }
+    let mut fresh = restarted(&source);
+    fresh.execute("file.new", &json!({"profile": null})).unwrap();
+    assert_palette(&fresh.doc().unwrap().doc, &original);
+    materialize_saved_palette_links(&mut fresh);
+    let document = &fresh.doc().unwrap().doc;
+    let mut images = 0;
+    document.visit_stored(|node, _| {
+        if let NodeKind::Image(image) = &node.kind {
+            let blob = &document.images[&image.key];
+            assert!(image.link.is_none());
+            assert!(!blob.is_proxy());
+            assert_eq!(blob.bytes.as_ref(), &full_png, "the saved palette retains the original full PNG, not a preview");
+            images += 1;
+        }
+    });
+    assert_eq!(images, 1, "the original image remains reachable through the pattern");
+    assert_eq!(source.doc().unwrap().doc, original);
+}

@@ -317,14 +317,25 @@ fn stage_brushes(d: &mut Document, brushes: &[Brush]) -> Result<Vec<Vec<NodeId>>
     Ok(ids)
 }
 
-fn restore_brushes(d: &mut Document, brushes: &mut [Brush], ids: Vec<Vec<NodeId>>) -> Result<()> {
-    for (brush, roots) in brushes.iter_mut().zip(ids) {
-        for (art, id) in brush.art_mut().into_iter().zip(roots) {
+fn restore_brushes(d: &mut Document, brushes: &[Brush], ids: Vec<Vec<NodeId>>) -> Result<()> {
+    if brushes.len() != ids.len() {
+        return Err(failure("the staged palette brush count changed"));
+    }
+    // Embedding can adopt new brushes. Restore only the staged art into the current library,
+    // retaining those imported definitions and all post-adoption brush metadata.
+    let mut current = vectorcraft_brush::library(d);
+    for (brush, roots) in brushes.iter().zip(ids) {
+        let restored = current.iter_mut().find(|b| b.name == brush.name).ok_or_else(|| failure("the embedded palette brush is missing"))?;
+        let art = restored.art_mut();
+        if roots.len() != brush.art().len() || art.len() != roots.len() {
+            return Err(failure("the staged palette brush art count changed"));
+        }
+        for (art, id) in art.into_iter().zip(roots) {
             let (copy, _) = d.stored_node(id).ok_or_else(|| failure("the embedded palette brush art is missing"))?;
             *art = (**copy).clone();
         }
     }
-    vectorcraft_brush::store(d, brushes);
+    vectorcraft_brush::store(d, &current);
     d.layers.clear();
     Ok(())
 }
@@ -335,27 +346,47 @@ pub(crate) fn capture(s: &Session) -> Result<String> {
     let source = s.doc()?;
     let _profiles = ProfileScope::enter(&source.doc);
     let palette = Palette::of(&source.doc);
-    let mut d = capsule(&source.doc, &palette)?;
-    let mut brushes = vectorcraft_brush::library(&d);
-    let staged = stage_brushes(&mut d, &brushes)?;
+    let d = capsule(&source.doc, &palette)?;
     let mut private = Session::new();
     private.prefs = s.prefs.clone();
     private.add_document(d, source.path.clone());
     private.doc_mut()?.links_from = source.links_from.clone();
-    let mut linked = Vec::new();
-    private.doc()?.doc.visit_stored(|n, _| {
-        if matches!(&n.kind, NodeKind::Image(im) if im.link.is_some()) || matches!(&n.kind, NodeKind::PlacedDocument(_)) {
-            linked.push(n.id.0);
+    let mut passes = 0;
+    let mut document_passes = 0;
+    loop {
+        // Expansion may import brushes or nested placed art. Stage the current library again
+        // so every newly introduced dependency goes through the same embedding route.
+        let brushes = vectorcraft_brush::library(&private.doc()?.doc);
+        let staged = stage_brushes(Arc::make_mut(&mut private.doc_mut()?.doc), &brushes)?;
+        let mut linked = Vec::new();
+        let mut documents = false;
+        private.doc()?.doc.visit_stored(|n, _| match &n.kind {
+            NodeKind::Image(im) if im.link.is_some() => linked.push(n.id.0),
+            NodeKind::PlacedDocument(_) => {
+                linked.push(n.id.0);
+                documents = true;
+            }
+            _ => {}
+        });
+        if linked.is_empty() {
+            restore_brushes(Arc::make_mut(&mut private.doc_mut()?.doc), &brushes, staged)?;
+            break;
         }
-    });
-    if !linked.is_empty() {
+        // Sequential expansions do not share the native reader's recursion guard. Bound the
+        // document waves by its supported depth, allowing one final image-only leaf wave.
+        let depth = vectorcraft_doc::placed_document::MAX_DEPTH;
+        if passes > depth || (documents && document_passes >= depth) {
+            return Err(failure("the default swatches have cyclic or too deeply nested linked documents"));
+        }
         let result = private.execute("links.embed", &json!({"ids": linked}))?;
         if result.get("missing").and_then(serde_json::Value::as_array).is_some_and(|missing| !missing.is_empty()) {
             return Err(failure("the default swatches need a linked file whose full contents are unavailable"));
         }
+        passes += 1;
+        document_passes += usize::from(documents);
+        restore_brushes(Arc::make_mut(&mut private.doc_mut()?.doc), &brushes, staged)?;
     }
     let mut embedded = (*private.doc()?.doc).clone();
-    restore_brushes(&mut embedded, &mut brushes, staged)?;
     // Embedding a placed document can introduce palette links of its own. Only names in the
     // captured panel remain global: removed definitions follow the normal unlink convention.
     palette.install(&mut embedded);

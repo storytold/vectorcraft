@@ -146,3 +146,77 @@ fn swatch_defaults_failed_command_keeps_the_saved_payload_and_host_flag() {
     assert_eq!(h.state().ui.engine_prefs, saved);
     assert_eq!(h.state().session.prefs.to_json(), prefs);
 }
+
+#[test]
+fn swatch_defaults_batches_persist_the_final_choice_and_request_one_host_save() {
+    let _case = CASE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut app = source_app();
+    let expected = palette(&app);
+    let original = serde_json::to_value(&*app.session.active().unwrap().doc).unwrap();
+    let undo = app.session.active().unwrap().history.undo.len();
+    let mut stock = VectorcraftApp::new(Session::new(), Default::default());
+    stock.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let factory = palette(&stock);
+    assert_ne!(expected, factory);
+    assert!(!app.take_prefs_changed());
+
+    for (commands, custom) in [
+        (json!([{"command": "swatch.defaults.save", "params": {}}]), true),
+        (json!([{"command": "swatch.defaults.reset", "params": {}}]), false),
+        (json!([{"command": "swatch.defaults.save", "params": {}}, {"command": "swatch.defaults.reset", "params": {}}]), false),
+        (json!([{"command": "swatch.defaults.reset", "params": {}}, {"command": "swatch.defaults.save", "params": {}}]), true),
+    ] {
+        app.run("command.batch", json!({"commands": commands})).unwrap();
+        assert_eq!(app.ui.engine_prefs, app.session.prefs.to_json(), "the batch's final preference reaches the host payload");
+        assert!(app.take_prefs_changed(), "a successful defaults batch requests a host save");
+        assert!(!app.take_prefs_changed(), "the host flag remains one-shot");
+        assert_eq!(serde_json::to_value(&*app.session.active().unwrap().doc).unwrap(), original);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        let mut fresh = restored(&app);
+        fresh.run("file.new", json!({"width": 200, "height": 200, "profile": null})).unwrap();
+        assert_eq!(palette(&fresh), if custom { expected.clone() } else { factory.clone() }, "the final batch step survives restart");
+    }
+
+    let saved = app.ui.engine_prefs.clone();
+    let prefs = app.session.prefs.to_json();
+    app.run("command.batch", json!({"commands": []})).unwrap();
+    assert!(!app.take_prefs_changed(), "an unrelated empty batch does not request a preference write");
+    assert_eq!(app.ui.engine_prefs, saved);
+    assert_eq!(app.session.prefs.to_json(), prefs);
+}
+
+#[test]
+fn swatch_defaults_failed_batches_restore_the_choice_without_requesting_a_host_save() {
+    let _case = CASE.lock().unwrap_or_else(|e| e.into_inner());
+    for change in ["swatch.defaults.save", "swatch.defaults.reset"] {
+        for failure in
+            [json!({"command": "document.activate", "params": {"index": 1}}), json!({"command": "command.batch", "params": {"commands": []}})]
+        {
+            let mut app = source_app();
+            // Start from the other choice so the first step really changes the preference.
+            let initial = if change == "swatch.defaults.save" { "swatch.defaults.reset" } else { "swatch.defaults.save" };
+            app.run(initial, json!({})).unwrap();
+            assert!(app.take_prefs_changed());
+            assert!(!app.take_prefs_changed());
+            assert_eq!(app.session.documents().len(), 1, "index 1 names a missing second document");
+            let prefs = app.session.prefs.to_json();
+            let saved = app.ui.engine_prefs.clone();
+            let original = serde_json::to_value(&*app.session.active().unwrap().doc).unwrap();
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut before = restored(&app);
+            before.run("file.new", json!({"width": 200, "height": 200, "profile": null})).unwrap();
+            let expected = palette(&before);
+
+            let result = app.run("command.batch", json!({"commands": [{"command": change, "params": {}}, failure]}));
+            assert!(result.is_err(), "a missing document or forbidden nested batch fails after the defaults step");
+            assert_eq!(app.session.prefs.to_json(), prefs, "a failed batch rolls its defaults step back");
+            assert_eq!(app.ui.engine_prefs, saved, "a failed batch keeps the persisted payload");
+            assert!(!app.take_prefs_changed(), "an error must not request a preference write");
+            assert_eq!(serde_json::to_value(&*app.session.active().unwrap().doc).unwrap(), original);
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+            let mut fresh = restored(&app);
+            fresh.run("file.new", json!({"width": 200, "height": 200, "profile": null})).unwrap();
+            assert_eq!(palette(&fresh), expected, "restart keeps the pre-batch choice");
+        }
+    }
+}

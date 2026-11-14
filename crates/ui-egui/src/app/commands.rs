@@ -13,6 +13,19 @@ fn completed_pathfinder_operation<'a>(id: &'a str, params: &'a Value) -> Option<
     }
 }
 
+/// Does a direct command or one-level batch choose saved swatch defaults?
+fn changes_swatch_defaults(id: &str, params: &Value) -> bool {
+    let changes = |id: &str| matches!(id, "swatch.defaults.save" | "swatch.defaults.reset");
+    if id == "command.batch" {
+        params
+            .get("commands")
+            .and_then(Value::as_array)
+            .is_some_and(|steps| steps.iter().any(|step| step.get("command").and_then(Value::as_str).is_some_and(changes)))
+    } else {
+        changes(id)
+    }
+}
+
 fn substitute_style_description(font: &Value) -> Option<String> {
     if font["status"] != "substitute" {
         return None;
@@ -75,6 +88,7 @@ impl VectorcraftApp {
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
         self.beacon.command(id);
         let touch_workspace = self.session.prefs.touch_workspace;
+        let swatch_defaults = changes_swatch_defaults(id, &params);
         // A file dialog it shows off the UI thread runs it again with the path picked.
         let result = if self.picks.is_entry_free() {
             let entry = picks::Entry::Command(id.to_string(), params.clone());
@@ -85,7 +99,7 @@ impl VectorcraftApp {
         if id == "prefs.import" && result.is_ok() {
             crate::prefs_dialog::imported(self, touch_workspace);
         }
-        if matches!(id, "swatch.defaults.save" | "swatch.defaults.reset") && result.is_ok() {
+        if swatch_defaults && result.is_ok() {
             crate::prefs_dialog::snapshot(self);
             self.prefs_changed = true;
         }
