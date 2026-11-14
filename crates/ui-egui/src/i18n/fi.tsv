@@ -7536,3 +7536,122 @@ breakText	Glyphs	Merkit
 	Grommets	Purjerenkaat
 	Grommet Inset	Purjerenkaiden etäisyys reunasta
 	Diameter	Halkaisija
+
+# Messages of the effects, 3D, image and PDF export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D-tehosteet vaativat äärelliset koordinaatit 100 miljoonan pisteen rajoissa
+@msg	3D effects require one to ten lights	3D-tehosteet vaativat 1–10 valonlähdettä
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP-värisyvyys {_1}: 1, 4, 8, 16, 24 tai 32 bittiä pikseliä kohti
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP-koodaus epäonnistui: {width} × {height} pikseliä ei mahdu tiedostomuotoon tai pikselipuskuriin
+@msg	GIF encoding failed: the palette image is malformed	GIF-koodaus epäonnistui: palettikuva on virheellinen
+@msg	GIF encoding failed: {e}	GIF-koodaus epäonnistui: {e}
+@msg	JPEG colour profile: {e}	JPEG-väriprofiili: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG-koodaus epäonnistui: pikselipuskuri ei vastaa kuvan kokoa
+@msg	JPEG encoding failed: {e}	JPEG-koodaus epäonnistui: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG-koodaus epäonnistui: pikselipuskuri ei vastaa kuvan kokoa
+@msg	PNG encoding failed: the palette image is malformed	PNG-koodaus epäonnistui: palettikuva on virheellinen
+@msg	PNG encoding failed: {e}	PNG-koodaus epäonnistui: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG-koodaus epäonnistui: {width} × {height} pikseliä ei ole kelvollinen kuvakoko
+@msg	PSD colour profile: {e}	PSD-väriprofiili: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD-koodaus epäonnistui: pikselipuskuri ei vastaa kuvan kokoa
+@msg	Revolve profile contains invalid coordinates	Pyöräytä-tehosteen profiilissa on virheellisiä koordinaatteja
+@msg	Revolve profile is too complex	Pyöräytä-tehosteen profiili on liian monimutkainen
+@msg	Revolve projection is not finite	Pyöräytä-tehosteen projektio ei ole äärellinen
+@msg	Revolve requires finite profile coordinates within 100 million points	Pyöräytä vaatii äärelliset profiilin koordinaatit 100 miljoonan pisteen rajoissa
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Pyöräytä-tehosteen pinta on liian monimutkainen; pienennä Segmentit-arvoa tai yksinkertaista profiilia
+@msg	Revolve surface is too complex; simplify the profile	Pyöräytä-tehosteen pinta on liian monimutkainen; yksinkertaista profiilia
+@msg	Revolve visibility cannot split the projected boundary	Pyöräytä-tehosteen näkyvyyslaskenta ei voi jakaa projisoitua reunaa
+@msg	Revolve visibility creates too many fragments	Pyöräytä-tehosteen näkyvyyslaskenta tuottaa liikaa osia
+@msg	Revolve visibility creates too many vector anchors	Pyöräytä-tehosteen näkyvyyslaskenta tuottaa liikaa vektorin ankkuripisteitä
+@msg	Revolve visibility exceeds its geometry work limit	Pyöräytä-tehosteen näkyvyyslaskenta ylittää geometrialaskennan työmäärän rajan
+@msg	Revolve visibility exceeds its spatial index limit	Pyöräytä-tehosteen näkyvyyslaskenta ylittää paikkaindeksin rajan
+@msg	Revolve visibility has too many boundary crossings	Pyöräytä-tehosteen näkyvyyslaskennassa on liikaa reunan ylityksiä
+@msg	Revolve visibility has too many input anchors	Pyöräytä-tehosteen näkyvyyslaskennassa on liikaa syötteen ankkuripisteitä
+@msg	Revolve visibility requires convex cap sectors	Pyöräytä-tehosteen näkyvyyslaskenta vaatii kuperat päätysektorit
+@msg	Revolve visibility requires finite projected faces	Pyöräytä-tehosteen näkyvyyslaskenta vaatii äärelliset projisoidut tahkot
+@msg	SVG options: {e}	SVG-asetukset: {e}
+@msg	Save for Web settings: {e}	Verkkotallennuksen asetukset: {e}
+@msg	TIFF colour profile: {e}	TIFF-väriprofiili: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF-koodaus epäonnistui: pikselipuskuri ei vastaa kuvan kokoa
+@msg	TIFF encoding failed: {e}	TIFF-koodaus epäonnistui: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa-värisyvyys {_1}: 16, 24 tai 32 bittiä pikseliä kohti
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa-koodaus epäonnistui: pikselipuskuri ei vastaa kuvan kokoa
+@msg	The 3D projection is not finite	3D-projektio ei ole äärellinen
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D-varjo on liian monimutkainen; poista Varjot käytöstä tai yksinkertaista kuvitusta
+@msg	The shape contains invalid coordinates	Muodossa on virheellisiä koordinaatteja
+@msg	Too many Revolve faces for visibility evaluation	Pyöräytä-tehosteessa on liian monta tahkoa näkyvyyden arviointiin
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lukee värimallien vaihtotiedostosta enintään {ASE_MAX_ENTRIES} väriä ja ryhmää, ja tässä kirjastossa niitä on {entries}
+@msg	WebP encoding failed: {e}	WebP-koodaus epäonnistui: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`index` must be a whole number	`index` on oltava kokonaisluku
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` on smallThumb, mediumThumb, largeThumb, smallList tai largeList
+@msg	a line can't run from a point to itself	viiva ei voi kulkea pisteestä samaan pisteeseen
+@msg	a line needs at least two points	viiva tarvitsee vähintään kaksi pistettä
+@msg	a number cannot be read	lukua ei voi lukea
+@msg	a swatch exchange block is too long	värimallien vaihtotiedoston lohko on liian pitkä
+@msg	a swatch exchange name is too long	värimallien vaihtotiedoston nimi on liian pitkä
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} -kuvan kokoa ei voi muuttaa kokoon {width} × {height} pikseliä
+@msg	a {width} × {height} image is too large	{width} × {height} -kuva on liian suuri
+@msg	a {width} × {height} image: {e}	{width} × {height} -kuva: {e}
+@msg	an image could not be written: {e}	kuvaa ei voitu kirjoittaa: {e}
+@msg	an image that couldn't be read was left out	kuva, jota ei voitu lukea, jätettiin pois
+@msg	can't open “{name}”: {e}	tiedostoa ”{name}” ei voi avata: {e}
+@msg	cannot align zip entries to {align} bytes	zip-merkintöjä ei voi tasata {align} tavun rajoihin
+@msg	cannot open the automation {kind} root `{_1}`: {e}	automaation {kind}-juurikansiota `{_1}` ei voi avata: {e}
+@msg	cannot read profile: {0}	profiilia ei voi lukea: {0}
+@msg	color book version {version} isn't supported (only 1)	värikirjan versiota {version} ei tueta (vain 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	väriavaruuden {other} värikirjoja ei tueta (vain RGB, CMYK ja Lab)
+@msg	file name too long to zip: {_1}	tiedostonimi on liian pitkä zip-pakettiin: {_1}
+@msg	file name too long to zip: {name}	tiedostonimi on liian pitkä zip-pakettiin: {name}
+@msg	freeform line {i}: {e}	vapaamuotoinen viiva {i}: {e}
+@msg	freeform point {i}: {e}	vapaamuotoinen piste {i}: {e}
+@msg	give `{key}` or `{other}`, not both	anna `{key}` tai `{other}`, ei molempia
+@msg	grayscale profiles can't be working spaces yet	harmaasävyprofiileja ei voi vielä käyttää työväriavaruuksina
+@msg	input contains NaN or infinite coordinates	syötteessä on NaN-arvoja tai äärettömiä koordinaatteja
+@msg	input path could not be closed	syötepolkua ei voitu sulkea
+@msg	invalid ICC profile: {0}	virheellinen ICC-profiili: {0}
+@msg	invalid scale {scale}	virheellinen skaalaus {scale}
+@msg	its localized names take more than {_1} KB	sen lokalisoidut nimet vievät yli {_1} KB
+@msg	its objects are nested too deep ({e})	sen objektit ovat sisäkkäin liian monella tasolla ({e})
+@msg	its tag table lists the `{_1}` tag more than once	sen tunnistetaulukossa `{_1}`-tunniste on useammin kuin kerran
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	poistoryhmät, joissa on liian monta päällekkäistä läpikuultavaa elementtiä, kirjoitetaan PDF-poistoryhminä: niiden läpikuultavat elementit poistavat peittämänsä alueen kokonaan
+@msg	knockout groups with brushed strokes over other translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	poistoryhmät, joissa on sivellinviivoja muiden läpikuultavien elementtien päällä, kirjoitetaan PDF-poistoryhminä: niiden läpikuultavat elementit poistavat peittämänsä alueen kokonaan
+@msg	not a graphic style library: {e}	ei grafiikkatyylikirjasto: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	ei värimallikirjasto (.vcswatches tai .gpl)
+@msg	not a swatch library (format `{_1}`)	ei värimallikirjasto (muoto `{_1}`)
+@msg	not a swatch library: {e}	ei värimallikirjasto: {e}
+@msg	not an action set file ({e})	ei toimintosarjatiedosto ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	profiilin väriavaruus {other} ei ole RGB, CMYK tai Gray
+@msg	regular expression too large	säännöllinen lauseke on liian suuri
+@msg	script file is not UTF-8 text: {value}	komentosarjatiedosto ei ole UTF-8-tekstiä: {value}
+@msg	stop {i}: {e}	väripiste {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	värimallien vaihtotiedoston versiota {major}.{minor} ei tueta (vain 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	värikirjassa on yli {ASE_MAX_ENTRIES} väriä
+@msg	the color book is cut short	värikirja on katkennut
+@msg	the color book's names take more than {_1} MB	värikirjan nimet vievät yli {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	kuvasta tulisi {w} × {h} pikseliä; rasteriviennin raja on {MAX_RASTER_SIDE} pikseliä sivua kohti ja {_1} megapikseliä: pienennä skaalausta tai tarkkuutta
+@msg	the optimised image can't be read back: {e}	optimoitua kuvaa ei voi lukea takaisin: {e}
+@msg	the pixel buffer doesn't match the image size	pikselipuskuri ei vastaa kuvan kokoa
+@msg	the preview: {e}	esikatselu: {e}
+@msg	the request may not read the New Document profiles folder	pyyntö ei saa lukea uuden asiakirjan profiilien kansiota
+@msg	the shapes are too degenerate to combine	muodot ovat liian surkastuneita yhdistettäviksi
+@msg	the shapes cross themselves and each other too often to combine	muodot leikkaavat itseään ja toisiaan liian usein yhdistettäviksi
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	värimallien vaihtotiedostossa on yli {ASE_MAX_ENTRIES} väriä ja ryhmää
+@msg	the swatch exchange file is cut short	värimallien vaihtotiedosto on katkennut
+@msg	the {_1} plate can't be read: {e}	{_1}-painolevyä ei voi lukea: {e}
+@msg	this binary DXF file is damaged or cut short	tämä binäärinen DXF-tiedosto on vioittunut tai katkennut
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	tämä on DWG-piirustus, jota ei voi lukea: tallenna se CAD-sovelluksesta DXF-muodossa ja avaa se
+@msg	too many classes	liikaa luokkia
+@msg	too many groups	liikaa ryhmiä
+@msg	too many layers for PSD (at most 32767)	liikaa tasoja PSD-tiedostoon (enintään 32767)
+@msg	too many swatch exchange blocks	liikaa värimallien vaihtotiedoston lohkoja
+@msg	unknown colour profile: {0}	tuntematon väriprofiili: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} on ristiriidassa sisäisen profiilin nimen kanssa
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pikseliä on liian suuri GIF-kuvalle (enintään 65535 pikseliä sivua kohti): pienennä tarkkuutta
+@msg	{_1}: no usable transform to/from sRGB	{_1}: ei käyttökelpoista muunnosta sRGB:hen tai sRGB:stä
+@msg	{name} is not a CMYK profile	{name} ei ole CMYK-profiili
+@msg	{name} is not an RGB profile	{name} ei ole RGB-profiili
+@msg	{path}: could not be read	{path}: ei voitu lukea
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseliä on liian suuri JPEG-kuvalle (enintään 65535 pikseliä sivua kohti): pienennä tarkkuutta
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseliä on liian suuri Targa-kuvalle (enintään 65535 pikseliä sivua kohti): pienennä tarkkuutta
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pikseliä on liian suuri PSD-kuvalle (enintään {MAX_SIDE} pikseliä sivua kohti): pienennä tarkkuutta
