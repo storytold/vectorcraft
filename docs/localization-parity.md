@@ -7,7 +7,7 @@ Per-language status of VectorCraft's interface. How the catalogs work and how to
 [target-app-parity.md](target-app-parity.md).
 
 **How it is measured:** rows with a translation in each `crates/ui-egui/src/i18n/<code>.tsv`, counted on
-origin/main `01e165af`, except the rows that give a count date: those were counted on the `main` commit named in the row (the other dated rows on `main` at `cb0a7d9`, 2026-10-21; the Portuguese row on `main` at `d26dd933a`, 2026-10-31).
+origin/main `01e165af`, except the rows that give a count date: those were counted on the `main` commit named in the row (the rows dated 2026-10-21 on `main` at `cb0a7d9`).
 The reference is the French catalog, which was complete when counted: 3,416 interface
 strings (menus, command labels, `tl!` literals: panels, dialogs, tooltips, Preferences) plus 604 `@msg` status and
 error messages, 4,020 in all. A language's % is its rows over 4,020 (capped at 100% per part). A missing
@@ -32,7 +32,7 @@ Chinese by `imachus`). Only Georgian is recorded as reviewed by a native speaker
 | Hindi | `hi` | 8,782 rows (2026-11-13): 3,014 `@msg`, 47 `@msgplural`, 41 `@plural`; no gaps in the untranslated report | menus, dialogs, tooltips and scanned messages; contributor-approved loanword terminology; agent wording pass | UI and document text shape with HarfRust; installed desktop Devanagari fallback, or a `Deva` craft-fonts face; web font still needed | contributor terminology review; 2026-11-13 wording pass on messages and longer labels, with a glossary-term test; wider proofread welcome | complete catalog, machine-assisted draft | native review, layout and web font |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
 | French | `fr` | 4,020 / 4,020 (100%) | all | Latin | no | full | — (review) |
-| Portuguese | `pt-br` | 6,106 catalog entries (counted 2026-10-31 on `main` at `d26dd933a`): menus, `tl!` literals and messages complete when counted; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
+| Portuguese | `pt-br` | 9,260 rows, 3,445 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 39 missing messages for it; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
 | Indonesian | `id` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one plural form | dialogs and tooltips all; 750 message rows (French has 796) | Latin | no | full | — (review) |
 | Japanese | `ja` | 4,004 / 4,020 (99.6%) | all | CJK UI font as above; Japanese IME; vertical type partial; Japanese crop marks and composition settings | no | full | — (review) |
 | German | `de` | 3,952 / 4,020 (98%; menus, literals and messages complete when counted) | all (602 of 604 message rows; landed 2026-10-10) | Latin | contributor-written, not reviewed | full | — (review) |
