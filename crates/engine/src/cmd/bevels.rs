@@ -16,7 +16,7 @@ use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol};
 use vectorcraft_geom::{Affine, PathData, PathEl, Point, SubPath};
 use vectorcraft_render::effects::{BEVEL_NAME, BEVEL_PROFILE, BevelProfile};
 
-use super::arrowheads::{read, same_file};
+use super::arrowheads::{may_reach, read, same_file, shown_error};
 use super::{CommandSpec, Result, Session, always, bad, cmd};
 
 /// The bevels file's name, in the folder of the preferences.
@@ -325,11 +325,18 @@ fn skipped(s: &Session) -> Vec<Value> {
 
 fn list(s: &mut Session, _: &Value) -> Result<Value> {
     let bevels: Vec<Value> = s.bevels.bevels.iter().map(|b| json!({"name": b.name, "points": b.profile_json()})).collect();
-    Ok(json!({"bevels": bevels, "file": s.bevels.path, "skipped": skipped(s), "error": s.bevels.error}))
+    // Under automation read roots, a file outside them is not shown and its error names it by its file name.
+    let path = s.bevels.path.as_deref();
+    let file = path.filter(|p| crate::file_access::check_read(p).is_ok());
+    let error = s.bevels.error.as_deref().map(|e| shown_error(e, path));
+    Ok(json!({"bevels": bevels, "file": file, "skipped": skipped(s), "error": error}))
 }
 
 fn reload(s: &mut Session, _: &Value) -> Result<Value> {
     const C: &str = "threeD.bevels.reload";
+    if let Some(path) = &s.bevels.path {
+        may_reach(path)?;
+    }
     s.reload_bevels();
     if let Some(e) = &s.bevels.error {
         return Err(bad(C, e.clone()));
@@ -340,8 +347,11 @@ fn reload(s: &mut Session, _: &Value) -> Result<Value> {
 fn edit(s: &mut Session, _: &Value) -> Result<Value> {
     const C: &str = "threeD.bevels.edit";
     let path = s.bevels.path.clone().ok_or_else(|| bad(C, "no bevels file here"))?;
+    // Checked before anything is made, brought to the front or opened.
+    may_reach(&path)?;
     if let Some(dir) = std::path::Path::new(&path).parent() {
-        std::fs::create_dir_all(dir).map_err(|e| bad(C, format!("{}: {e}", dir.display())))?;
+        let dir = dir.to_string_lossy();
+        std::fs::create_dir_all(&*dir).map_err(|e| super::fileio::naming_in_error(bad(C, format!("{dir}: {e}")), &dir))?;
     }
     // Made only when no file is there, also when another run makes one at the same moment.
     let bytes = vectorcraft_format::save_file(&starter());
@@ -360,7 +370,8 @@ fn edit(s: &mut Session, _: &Value) -> Result<Value> {
             s.set_active(i);
         }
         None => {
-            crate::file_access::unconfined(|| s.execute("document.open", &json!({ "path": path })))?;
+            // Opened in the request's own scope, so the document keeps the roots it was opened under.
+            s.execute("document.open", &json!({ "path": path }))?;
         }
     }
     Ok(json!({"path": path, "created": created}))

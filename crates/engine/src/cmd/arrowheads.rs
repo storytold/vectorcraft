@@ -413,13 +413,13 @@ fn skipped(s: &Session) -> Vec<Value> {
 /// The arrowheads file at `path` checked for reading against the automation roots in force: an agent
 /// confined to read roots reaches the file only inside them. The error names the file by its file
 /// name outside them.
-fn may_reach(path: &str) -> Result<()> {
+pub(super) fn may_reach(path: &str) -> Result<()> {
     crate::file_access::check_read(path).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), path))
 }
 
 /// `msg`, an error about the arrowheads file at `path`, as the request being served may see it: the
 /// file named whole inside the read roots, else by its file name.
-fn shown_error(msg: &str, path: Option<&str>) -> String {
+pub(super) fn shown_error(msg: &str, path: Option<&str>) -> String {
     let Some(path) = path else { return msg.to_string() };
     match super::fileio::naming_in_error(EngineError::Other(msg.to_string()), path) {
         EngineError::Other(m) => m,
