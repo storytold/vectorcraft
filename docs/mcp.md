@@ -8176,6 +8176,16 @@ flattened picture every PSD file carries: Bitmap, Grayscale, Duotone, Indexed, R
 A document with transparency keeps it. `file.place {path}` links the file like any image (`links.update` reads it
 again when it changes); Multichannel files are refused.
 
+A PSD or PSB file that names a clipping path (the saved path its clipping path resource names, in the
+[published PSD file format specification](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/)) places, and
+opens as its merged image (`layers: false`, a file with no layers, or a file whose layers can't be read), inside a clip group whose clipping
+path is that path, under the even-odd rule, so the image shows only inside it. The clipping path is an ordinary path
+that can be edited or released. `file.place` answers `image`, the id of the image in the clip group. The
+[import options help page](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html)
+says that a file imported as one flattened image keeps the document's clipping path when it has one. `links.update`
+and `links.relink` read the file's pixels again and leave the clip group and its clipping path as they are. Files that name no clipping path, or name a path
+they don't have, come in as a plain image.
+
 `document.open` converts a PSD or PSB file's layers to objects. In
 [PSD import options](https://helpx.adobe.com/illustrator/desktop/add-and-import-files/import-from-other-apps/photoshop-import-options.html),
 the option that converts layers to objects keeps as much of the layer structure as it can, merges the layers of a
