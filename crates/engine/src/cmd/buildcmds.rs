@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand",
             ["Object", "Live Paint"],
             None,
-            "{id?, ids?: [id…] (instead of id)} turn Live Paint groups into plain groups of their painted faces and edges → {ids}",
+            "{id?, ids?: [id…] (instead of id)} turn Live Paint groups into plain groups of the faces and edges that draw, with all their fill and stroke rows: a shown face or edge with an opacity above 0 and a shown fill or stroke row that has paint and an opacity above 0 (a stroke also a weight above 0), whichever row is on top → {ids}",
             has_selection_or_ids,
             lp_expand
         ),
@@ -135,7 +135,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Live Paint Info",
             [],
             None,
-            "{group, id?: object id (default: the selection)} → {faces: [{id, fill, bounds}], edges: [{id, stroke, width}], sources, gapOptions: {detect, size: \"small\"|\"medium\"|\"large\"|pt, points, color: #rrggbb} (as livePaint.gapOptions sets them), gaps: [[x0,y0,x1,y1]…] (as livePaint.gapOptions returns them)}",
+            "{group?|id?: Live Paint group id (one required; id is read when group is left out)} → {faces: [{id, fill (top fill), bounds, appearance: [row…]}], edges: [{id, stroke (top stroke), width (top stroke's), appearance: [row…]}], where a row is {index (in the part's fill and stroke stack, bottom first), kind: \"fill\"|\"stroke\", paint, opacity: 0..1, visible, width?: pt (strokes only), drawn (the part is shown with opacity above 0, and the row is shown, has paint and opacity above 0, a stroke also width above 0)}, sources, gapOptions: {detect, size: \"small\"|\"medium\"|\"large\"|pt, points, color: #rrggbb} (as livePaint.gapOptions sets them), gaps: [[x0,y0,x1,y1]…] (as livePaint.gapOptions returns them)}",
             has_doc,
             lp_info
         ),
