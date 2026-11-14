@@ -813,7 +813,12 @@ instance keeps, so instances started side by side for screenshots don't get it).
 saved}]`, from `file.recovery.list`) and `discard`. `ui.dialog.confirm` restores them all (`file.recovery.restore`
 each, opening "<name> [Recovered]" documents), `discard: true` then confirm deletes them, `ui.dialog.cancel` keeps them
 for the next launch. While copies are written in the background `ui.inspect` lists them under `background`
-("Saving recovery data for <name>").
+("Saving recovery data for <name>"). After a restore the status bar shows the count followed by the first of the
+restored documents' notes: each document's lines about its linked files, then its warnings (what reading the copy left
+out first), named with the document's title when more than one was restored. Hovering the message lists them all. The
+questions about each document's missing or modified linked files open one document at a time, with that document made
+the current one. When a copy can't be restored, confirm returns the error and the status bar shows it; its hover lists
+the count and the notes of the documents that were restored.
 
 Native save options: File → Save As to a native or `.ai` file opens the `saveOptions` dialog after the save panel
 (heading "VectorCraft Options" or "PDF-compatible .ai Options"). Fields: `separateArtboards`, `all` (true: every
