@@ -786,7 +786,7 @@ impl Importer {
             None => format!("img-{:016x}", fnv1a(bytes)),
         };
         self.doc.images.entry(key.clone()).or_insert_with(|| {
-            let blob = ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: missing.then(|| bytes.clone()) };
+            let blob = ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: missing.then(|| bytes.clone()), file_font: Default::default() };
             if link.is_some() && !missing { blob.with_proxy() } else { blob }
         });
         let xf = acc * Affine::scale_non_uniform(size.width() as f64 / pw as f64, size.height() as f64 / ph as f64);

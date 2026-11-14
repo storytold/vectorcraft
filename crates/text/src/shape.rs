@@ -977,6 +977,7 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
     let CharStyle {
         font_family,
         font_style,
+        file_font_id,
         font_version,
         font_axes,
         size,
@@ -1037,6 +1038,7 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         && offsets == other_offsets
         && font_family == &b.font_family
         && font_style == &b.font_style
+        && file_font_id == &b.file_font_id
         && font_version == &b.font_version
         && font_axes == &b.font_axes
         && size == &b.size
@@ -1102,6 +1104,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     let CharStyle {
         font_family,
         font_style,
+        file_font_id,
         font_version,
         font_axes,
         size,
@@ -1160,6 +1163,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
     *font_family == b.font_family
         && warichu_alike(a, b)
         && *font_style == b.font_style
+        && *file_font_id == b.file_font_id
         && *font_version == b.font_version
         && *font_axes == b.font_axes
         && *size == b.size

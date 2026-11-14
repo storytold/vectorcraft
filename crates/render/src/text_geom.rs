@@ -166,18 +166,22 @@ pub(crate) fn text_geom_snapped(t: &TextObject, snap: Option<Affine>) -> TextGeo
             _ => spans.push((run, start, end)),
         }
     };
-    // Per run: is its family missing, and the face its glyphs should come from.
+    // Per run: is its family missing, and the face its glyphs should come from. A run drawn in a
+    // font its file carried isn't substituted: its glyphs come from that font.
+    let file = db.file_faces(t);
     let faces: Vec<(bool, Option<u32>)> = t
         .runs
         .iter()
-        .map(|r| match db.resolve(&r.style.font_family, &r.style.font_style) {
+        .enumerate()
+        .map(|(i, r)| match (file.get(i).and_then(Option::as_ref), db.resolve(&r.style.font_family, &r.style.font_style)) {
+            (Some(f), _) => (false, Some(f.id())),
             // The version the type names, when it's installed (see `FontDb::face_version`), at its
             // Variable Font settings (see `FontDb::style_face`).
-            Some((f, m)) => {
+            (None, Some((f, m))) => {
                 let face = db.style_face(&r.style).unwrap_or(f);
                 (m == vectorcraft_text::FontMatch::Missing, Some(face.id()))
             }
-            None => (true, None),
+            (None, None) => (true, None),
         })
         .collect();
     let (mut substituted_fonts, mut substituted_glyphs, mut alternate_candidates) = (BezPath::new(), BezPath::new(), vec![]);

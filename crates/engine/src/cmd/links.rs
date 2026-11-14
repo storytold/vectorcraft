@@ -510,7 +510,7 @@ pub(crate) fn full_linked_images<'a>(d: &'a Document, base: LinkBase) -> (Cow<'a
             Some(f) if img.blob.bytes.as_slice() == bytes.as_slice() => f.mime.to_string(),
             _ => img.blob.mime.clone(),
         };
-        out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview });
+        out.images.insert(key, ImageBlob { mime, bytes: img.blob.bytes, proxy: preview, file_font: Default::default() });
     }
     let mut warnings = vec![];
     match previews.len() {

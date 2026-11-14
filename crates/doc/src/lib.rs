@@ -119,10 +119,10 @@ pub use text::FontHeightReference;
 pub use text::GlyphChoice;
 pub use text::WarichuAlign;
 pub use text::{
-    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FirstBaseline, HyphenationOptions, InlineArt,
-    JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection, ParaStyle, PathAlign, PathEffect, RubyAlign,
-    RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind, TextObject, TextRun, TextStyleDef, TextWrap,
-    VerticalAlign, WrapShape,
+    AreaFit, AreaOptions, Burasagari, CharAlign, CharPosition, CharStyle, Composer, Digits, FILE_FONT_MIME, FileFont, FileFontFace, FileFonts,
+    FirstBaseline, HyphenationOptions, InlineArt, JustificationOptions, Justify, Kinsoku, KinsokuShoriType, LeadingModel, Mojikumi, ParaDirection,
+    ParaStyle, PathAlign, PathEffect, RubyAlign, RubyPosition, RubySpan, ScriptMetrics, SingleWordJustify, TabAlign, TabStop, TextFlow, TextKind,
+    TextObject, TextRun, TextStyleDef, TextWrap, VerticalAlign, WrapShape,
 };
 pub use text::{CharClass, CompositeFont, CompositePart, CompositeParts};
 pub use trace::TraceView;

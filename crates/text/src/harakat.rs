@@ -47,6 +47,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
     let CharStyle {
         font_family,
         font_style,
+        file_font_id,
         font_version,
         font_axes,
         size,
@@ -104,6 +105,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
     original_paint == normalized_paint
         && font_family == &b.font_family
         && font_style == &b.font_style
+        && file_font_id == &b.file_font_id
         && font_version == &b.font_version
         && font_axes == &b.font_axes
         && size == &b.size

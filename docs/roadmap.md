@@ -4,6 +4,8 @@
 >
 > Oversized artboard import update (2026-11-12): Explicit editing-data import retains a single artboard beyond a capped 14,400 pt PDF page (#6865).
 >
+> **M4/M7 file-font hardening status (2026-11-12, #4569):** implementation and synthetic regressions added; compilation and runtime proof pending. Scores and estimates unchanged.
+>
 > Vector Halftone preview update (2026-11-10): temporary dot selection marks are hidden, and the bounding box stays available (#6369).
 >
 > **Flyout update:** 2026-11-06 — resizable icon-strip flyouts and bottom-aligned panel footers (#5713); scores and estimates unchanged.
@@ -207,6 +209,7 @@ separate. Scores and hours unchanged. [Behavior and command details](development
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | M4/M7 / #4569: document-owned file-font identity and reclaimable live-face allowance implementation, with text/renderer/native/clipboard/export regression sources. Format-only verification; compilation and runtime proof pending. Scores and estimates unchanged. |
 | 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
 | 2026-11-12 | minor | Gujarati (`gu`): 4,286-row machine-assisted catalog reviewed by a native speaker, zero/one singular plurals, desktop font fallback and optional Gujarati craft-fonts fallback; all 72 translation tests pass; a web font and about 2,600 untranslated messages remain; scores and estimates unchanged |
 | 2026-11-12 | minor | Explicit editing-data import keeps a single artboard beyond a capped 14,400 pt PDF page (#6865), with a warning; automatic mode stays unchanged. Scores and estimates unchanged. |

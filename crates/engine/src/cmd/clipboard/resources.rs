@@ -150,6 +150,10 @@ fn node_refs(n: &Node, f: Visit) {
                 for s in t.para_styles().filter_map(|pa| pa.style_name.as_ref()) {
                     f(Ref::Name(Res::ParaStyle, s));
                 }
+                // The fonts its file carried travel with it, as images do.
+                for ff in t.file_fonts.iter().flat_map(|ff| &ff.fonts) {
+                    f(Ref::Name(Res::Image, &ff.key));
+                }
             }
             NodeKind::Image(im) => f(Ref::Name(Res::Image, &im.key)),
             NodeKind::PlacedDocument(pl) => f(Ref::Name(Res::Image, &pl.key)),
@@ -717,6 +721,9 @@ impl Relink {
                         self.name(Res::ParaStyle, s);
                     }
                 }
+                if let Some(fonts) = &mut t.file_fonts {
+                    fonts.map_keys(|key| self.name(Res::Image, key));
+                }
             }
             NodeKind::Image(im) => self.name(Res::Image, &mut im.key),
             NodeKind::PlacedDocument(pl) => self.name(Res::Image, &mut pl.key),
@@ -1019,6 +1026,8 @@ pub(crate) struct Imported {
     /// `{kind, from, to}` for every resource the pasted objects now know under another name: added
     /// renamed, or a copy added renamed by an earlier paste.
     pub renamed: Vec<Value>,
+    /// File-font resources refused while binding pasted type.
+    pub warnings: Vec<String>,
 }
 
 impl Imported {
@@ -1032,9 +1041,14 @@ impl Imported {
         }
     }
     /// Point a pasted copy at the document's resources.
-    pub(crate) fn apply(&self, n: &mut Node) {
+    pub(crate) fn apply(&mut self, n: &mut Node, d: &Document) {
         if self.relinks {
             self.relink.node(n);
+        }
+        for note in vectorcraft_text::FontDb::global().bind_node_file_fonts(n, &|key| d.images.get(key)) {
+            if !self.warnings.contains(&note) {
+                self.warnings.push(note);
+            }
         }
     }
 }
@@ -1266,6 +1280,7 @@ impl Clipboard {
             && out.relink.styles.is_empty()
             && out.relink.colors.is_empty()
             && used.styles.is_empty());
+        out.warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(d));
         Ok(out)
     }
 

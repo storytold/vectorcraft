@@ -576,7 +576,7 @@ fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize
     let mut doc = f.document;
     for (k, img) in f.images {
         let bytes = bytes_of(&img).ok_or_else(|| FormatError::BadImage(k.clone()))?;
-        let mut blob = ImageBlob { mime: img.mime, bytes, proxy: None };
+        let mut blob = ImageBlob { mime: img.mime, bytes, proxy: None, file_font: Default::default() };
         // Until the linked file is read, the preview stands in for it.
         if img.proxy {
             blob.proxy = Some(blob.bytes.clone());

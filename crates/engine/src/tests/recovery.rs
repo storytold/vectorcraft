@@ -69,6 +69,77 @@ fn native_recovery_copies_leave_out_the_pdf() {
     assert_eq!(vectorcraft_format::load(&bytes).unwrap().node_count(), s.doc().unwrap().doc.node_count());
 }
 
+const RECOVERY_FONT_FAMILY: &str = "Recovery Carried Font Regression";
+const RECOVERY_FONT_BYTES: &[u8] = include_bytes!("../../../../assets/fonts/Inter-Regular.ttf");
+
+fn carried_font_copy() -> (Arc<MemoryStore>, vectorcraft_doc::NodeId) {
+    use vectorcraft_doc::{CharStyle, FILE_FONT_MIME, FileFont, FileFonts, ImageBlob, Node, NodeKind, TextObject};
+
+    let (mut s, store) = session();
+    let doc = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+    doc.images.insert("recovered-font".into(), ImageBlob::new(FILE_FONT_MIME, RECOVERY_FONT_BYTES.to_vec()));
+    // An uninstalled family ensures the fixture must be read from the recovered resource.
+    let style = CharStyle { font_family: RECOVERY_FONT_FAMILY.into(), size: 20.0, ..Default::default() };
+    let mut text = TextObject::point(kurbo::Point::new(10.0, 40.0), "x", style);
+    text.file_fonts = Some(Box::new(FileFonts::new(
+        vec![FileFont { family: RECOVERY_FONT_FAMILY.into(), style: "Regular".into(), key: "recovered-font".into() }],
+        "x",
+    )));
+    let id = doc.alloc_id();
+    doc.insert(Some(doc.layers[0].id), usize::MAX, Node::new(id, NodeKind::Text(Box::new(text)))).unwrap();
+    let saved = s.execute("file.recovery.save", &json!({})).unwrap();
+    let file = saved["saved"][0]["file"].as_str().unwrap();
+    let lean = vectorcraft_format::load(&store.read(&format!("{file}.vectorcraft")).unwrap()).unwrap();
+    assert!(lean.images.is_empty(), "the font travels in the recovery store, not the document entry");
+    drop(s);
+    (store, id)
+}
+
+#[test]
+fn recovered_carried_fonts_bind_after_their_resources_are_restored() {
+    use vectorcraft_doc::NodeKind;
+    use vectorcraft_text::FontDb;
+
+    let (store, id) = carried_font_copy();
+    let mut s = relaunch(&store);
+    let reply = s.execute("file.recovery.restore", &json!({})).unwrap();
+    assert_eq!(reply["restored"].as_array().unwrap().len(), 1, "{reply}");
+    assert!(reply["failed"].as_array().unwrap().is_empty(), "{reply}");
+    assert!(reply["restored"][0]["warnings"].as_array().unwrap().is_empty(), "{reply}");
+    let doc = &s.doc().unwrap().doc;
+    assert_eq!(doc.images["recovered-font"].bytes.as_slice(), RECOVERY_FONT_BYTES);
+    let NodeKind::Text(text) = &doc.node(id).unwrap().kind else { panic!("text") };
+    let db = FontDb::global();
+    let laid = vectorcraft_text::layout(db, text);
+    assert_eq!(laid.glyphs.len(), 1);
+    let face = db.face_by_id(laid.glyphs[0].font_id).unwrap();
+    assert_eq!(face.file_data(), RECOVERY_FONT_BYTES, "layout uses the recovered font's exact bytes");
+}
+
+#[test]
+fn recovered_missing_or_corrupt_carried_fonts_report_the_actual_refusal() {
+    for missing in [true, false] {
+        let (store, id) = carried_font_copy();
+        let blob = store.list().unwrap().into_iter().find(|name| name.ends_with(".blob")).unwrap();
+        if missing {
+            store.remove(&blob).unwrap();
+        } else {
+            store.write(&blob, b"not a font").unwrap();
+        }
+        let mut s = relaunch(&store);
+        let reply = s.execute("file.recovery.restore", &json!({})).unwrap();
+        assert_eq!(reply["restored"].as_array().unwrap().len(), 1, "{reply}");
+        assert!(reply["failed"].as_array().unwrap().is_empty(), "{reply}");
+        let warnings = reply["restored"][0]["warnings"].as_array().unwrap();
+        assert!(
+            warnings.iter().any(|note| note.as_str().is_some_and(|note| note.contains(RECOVERY_FONT_FAMILY) && note.contains("substitute"))),
+            "missing={missing}: {reply}"
+        );
+        let vectorcraft_doc::NodeKind::Text(text) = &s.doc().unwrap().doc.node(id).unwrap().kind else { panic!("text") };
+        assert!(vectorcraft_text::FontDb::global().file_faces(text).is_empty(), "missing={missing}");
+    }
+}
+
 #[test]
 fn restored_recovery_copies_keep_the_original_pdf_preference() {
     let dir = crate::tests_links::Folder::new("recovered-pdf-preference");

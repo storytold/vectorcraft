@@ -1193,6 +1193,7 @@ are compared with the first page only. An artboard, or the page of an EPS's edit
 a point of its page's is compared on an area of the page's size. A file whose editing data is for a page of another
 size opens the same way, and its warning gives both sizes in points, with the scale of the editing data's page to the
 file's page (1:10 for a tenth of its size) when their sides are in proportion.
+Type in a font a PDF embeds and this machine lacks is drawn in glyphs built from the file's own, kept with the document (#4568); `embeddedFonts: false` (default `true`) sets it in the fallback font with the missing-font warning instead, as before. Preferences › File Handling › Use fonts embedded in imported PDFs (`pdfImportEmbeddedFonts`, on by default) is the choice `document.open` and `file.place` take when they give none; a call's own `embeddedFonts` wins. With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
 With `textAs: "outlines"` a `.ai` file whose type shows opens from its PDF content, which has the type's outlines. A PDF
 saved with Illustrator's editing data holds it in `AIPDFPrivateData` streams and opens from it as a `.ai` file does.
 

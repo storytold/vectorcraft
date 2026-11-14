@@ -5,6 +5,7 @@ use super::{
     ImportReport, InterpreterCache, InterpreterSettings, InterpreterWarning, LayerColor, MAX_NESTING, Mutex, Node, NodeKind, Ocgs, Ordering, Paint,
     PdfError, Rect, Shape, Swatch, all_on, contains, hides_forms, scan_page, white_cover,
 };
+use crate::import_text::keep_file_fonts;
 
 /// Mixed into an image's cache key when it is read white inside an alpha soft mask.
 pub(super) const WHITE_KEY: u128 = 0x7717_e000_a1fa;
@@ -239,6 +240,32 @@ pub fn imports_of(bytes: &[u8]) -> usize {
     IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
 }
 
+/// The notes on the fonts the file draws with that aren't available: type in a font the file
+/// carries keeps its look until it is edited; the rest shows in the fallback font.
+fn warn_missing_fonts(b: &mut Builder, doc: &Document) {
+    let mut bound = std::collections::HashSet::new();
+    doc.walk(|n| {
+        if let NodeKind::Text(t) = &n.kind {
+            for font in t.file_fonts_in_use() {
+                if t.file_fonts.as_ref().and_then(|fonts| fonts.face(&font.key)).is_some() {
+                    bound.insert(font.family.clone());
+                }
+            }
+        }
+    });
+    let (carried, missing): (Vec<String>, Vec<String>) = std::mem::take(&mut b.missing_fonts).into_iter().partition(|family| bound.contains(family));
+    if !carried.is_empty() {
+        b.warn(&format!(
+            "fonts that aren't available show as the file draws them, in the fonts it carries, until their text is edited (then in the fallback font): {}",
+            carried.join(", ")
+        ));
+    }
+    if !missing.is_empty() {
+        let list = missing.join(", ");
+        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
+    }
+}
+
 /// [`read_with_reader_options`] of `original`, the PDF `bytes` read with `reader`.
 fn read_opened(
     bytes: &[u8],
@@ -267,7 +294,7 @@ fn read_opened(
     doc.artboards.clear();
     doc.layers.clear();
     let taken: Vec<String> = doc.swatches_iter().map(|s| s.name.clone()).chain(doc.swatch_groups.iter().map(|g| g.name.clone())).collect();
-    let mut b = Builder::new(doc.peek_next_id(), Colors::new(pdf, taken.clone()), opts.text_as, route);
+    let mut b = Builder::new(doc.peek_next_id(), Colors::new(pdf, taken.clone()), opts.text_as, route).with_embedded_fonts(opts.embedded_fonts);
     // The art of a group that is off (drawn as `all_on` turned it on) or doesn't print mustn't
     // show or print on its page's layer.
     b.unsure = route && ocgs.list.iter().any(|g| (all_on && !g.on) || !g.print);
@@ -423,6 +450,9 @@ fn read_opened(
     // The groups' layers stack as the pages mark them (the art outside them stays where it was
     // drawn): a group that first paints on a later page doesn't go on top of the others.
     stack_groups(&mut slots, &order);
+    // The fonts the file carries for families that aren't available, kept with the document: the
+    // type set in them is drawn in them and spaced from the file's own widths.
+    let kept = std::mem::take(&mut b.file_glyphs).keep(&mut b.images);
     for (n, slot) in slots.into_iter().enumerate() {
         let mut layer = match slot {
             Slot::Page(l) => *l,
@@ -433,6 +463,7 @@ fn read_opened(
             },
         };
         if let Some(art) = layer.children_mut() {
+            keep_file_fonts(art, &b.lines, &kept, &b.images);
             crate::import_lines::rebuild(art, &b.lines);
         }
         doc.layers.push(Arc::new(layer));
@@ -460,10 +491,7 @@ fn read_opened(
     if b.colors.mixed {
         b.warn("colours mixing several inks (DeviceN) were imported as RGB");
     }
-    if !b.missing_fonts.is_empty() {
-        let list = b.missing_fonts.join(", ");
-        b.warn(&format!("fonts that aren't available show in the fallback font until they are: {list}"));
-    }
+    warn_missing_fonts(&mut b, &doc);
     // Before anything walks the tree by recursion (`fix_next_id` does): nested clips can be deeper
     // than the stack goes.
     let mut depth_notes = vec![];
@@ -472,6 +500,7 @@ fn read_opened(
     doc.reserve_ids(b.next);
 
     let mut warnings = b.warnings;
+    warnings.extend(vectorcraft_text::FontDb::global().bind_document_file_fonts(&mut doc));
     if let Ok(v) = sink.lock() {
         for w in v.iter() {
             if !warnings.contains(w) {

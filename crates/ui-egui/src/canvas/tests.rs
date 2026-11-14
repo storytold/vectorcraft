@@ -3687,7 +3687,7 @@ fn a_documents_placed_key_moves_only_for_bitmaps_of_its_own_files() {
     assert_eq!(key(&mut keys, &session, plain, 10, &|_, _| files(&[file.as_str()])), 8, "no images: a file another document holds");
     // The same document holding an image and showing no placed document.
     let mut raster = session.documents().iter().find(|d| d.uid == plain).unwrap().clone();
-    let blob = vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Default::default(), proxy: None };
+    let blob = vectorcraft_doc::ImageBlob { mime: "image/png".into(), bytes: Default::default(), proxy: None, file_font: Default::default() };
     std::sync::Arc::make_mut(&mut raster.doc).images.insert("an image".into(), blob);
     assert_eq!(placed_key_at(&mut keys, &session, &raster, 11, |_, _| None), 8, "an image and no placed document: files no longer known");
     assert_eq!(keys.len(), 2);

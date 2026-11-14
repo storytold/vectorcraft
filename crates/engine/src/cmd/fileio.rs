@@ -71,10 +71,10 @@ pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{EXPORT_PARAMS, export_crop, isolated};
 pub use export::{export_doc, export_source, unused_option_notes};
+pub(crate) use load::decode_native_file;
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::is_placeholder;
-pub(crate) use load::native_file;
 pub(crate) use load::page_or_editing_data;
 pub(crate) use load::source;
 pub use load::{

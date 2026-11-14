@@ -773,7 +773,7 @@ fn gray_freeform_points_are_written_as_black_ink_in_a_cmyk_document() {
 #[test]
 fn press_quality_writes_an_rgb_image_in_a_cmyk_document_as_cmyk() {
     let rgb = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([(x * 60) as u8, (y * 60) as u8, 128]));
-    let blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None };
+    let blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None, file_font: Default::default() };
     let d = image_doc(blob, 4, 4);
     let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
     assert_eq!(press.output.conversion, ColorConversion::PreserveNumbers);
@@ -795,7 +795,7 @@ fn press_quality_writes_cmyk_in_an_rgb_document_too() {
     let ink = [0u8, 102, 255, 0];
     let tiff = ImageBlob::cmyk_tiff(&Inks::new(4, 4, flat(ink, 16)).unwrap()).unwrap();
     let rgb = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([(x * 60) as u8, (y * 60) as u8, 128]));
-    let png_blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None };
+    let png_blob = ImageBlob { mime: "image/png".into(), bytes: Arc::new(png(rgb)), proxy: None, file_font: Default::default() };
     for (what, blob) in [("CMYK image", tiff), ("RGB image", png_blob)] {
         let mut d = image_doc(blob, 4, 4);
         d.color_mode = ColorMode::Rgb;

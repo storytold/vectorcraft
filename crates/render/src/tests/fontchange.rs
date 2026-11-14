@@ -75,6 +75,55 @@ fn type_redraws_when_its_font_becomes_available() {
     assert_eq!(after, Renderer::new().render(&d, 300, 150, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
 }
 
+/// Same serialized text and node ids are not the same glyph geometry when each document owns
+/// different file-font bytes. Both fonts are bound before either render, so generation is steady.
+#[test]
+fn file_font_geometry_is_scoped_to_owned_resources_not_serialized_keys() {
+    use vectorcraft_doc::{FILE_FONT_MIME, FileFont, FileFonts, ImageBlob};
+    use vectorcraft_text::{FileFontInfo, FileGlyph, FontDb, build_file_font};
+
+    let _adding = adding_fonts();
+    let make = |width| {
+        const FAMILY: &str = "Rendered Owned File Font Regression";
+        let info = FileFontInfo { family: FAMILY.into(), style: "Regular".into(), ..Default::default() };
+        let g = FileGlyph { ch: 'x', outline: Rect::new(0.0, 0.0, width, 700.0).to_path(0.1), advance: width + 100.0 };
+        let mut doc = Document::new(100.0, 100.0);
+        doc.images.insert("chosen".into(), ImageBlob::new(FILE_FONT_MIME, build_file_font(&info, &[g]).unwrap()));
+        let style = CharStyle { size: 60.0, font_family: FAMILY.into(), ..Default::default() };
+        let mut t = TextObject::point(Point::new(10.0, 70.0), "x", style);
+        t.file_fonts = Some(Box::new(FileFonts::new(vec![FileFont { family: FAMILY.into(), style: "Regular".into(), key: "chosen".into() }], "x")));
+        let id = doc.alloc_id();
+        let layer = doc.layers[0].id;
+        doc.insert(Some(layer), 0, Node::new(id, NodeKind::Text(Box::new(t)))).unwrap();
+        assert!(FontDb::global().bind_document_file_fonts(&mut doc).is_empty());
+        doc
+    };
+    let (a, b) = (make(200.0), make(800.0));
+    let renderer = with_fonts_unchanged(|| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let mut reused = Renderer::new();
+        let first = reused.render(&a, 100, 100, Affine::IDENTITY, &opts).pixels;
+        let second = reused.render(&b, 100, 100, Affine::IDENTITY, &opts).pixels;
+        let fresh = Renderer::new().render(&b, 100, 100, Affine::IDENTITY, &opts).pixels;
+        assert_ne!(first, second, "B must draw its own wider glyph");
+        assert_eq!(second, fresh, "a renderer must not reuse A's glyph geometry for B");
+        reused
+    });
+    let mut faces = vec![];
+    for doc in [&a, &b] {
+        doc.walk(|n| {
+            if let NodeKind::Text(t) = &n.kind {
+                faces.extend(FontDb::global().file_faces(t).into_iter().flatten().map(|face| Arc::downgrade(&face)));
+            }
+        });
+    }
+    assert_eq!(faces.len(), 2);
+    drop(a);
+    drop(b);
+    assert!(!renderer.texts.is_empty(), "the idle renderer still holds its old text nodes");
+    assert!(faces.iter().all(|face| face.upgrade().is_none()), "geometry-cache nodes must not pin document font allowance");
+}
+
 /// Type with raster effects redraws in a font that becomes available: its drop shadow and its
 /// blurred content are made again.
 #[test]

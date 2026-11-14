@@ -633,7 +633,7 @@ impl<'a> Reader<'a> {
         };
         // The placeholder is all the document has of the file: what a missing link shows.
         let bytes = Arc::new(png);
-        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() };
         let key = linked_key(&blob, &path);
         self.doc.images.entry(key.clone()).or_insert(blob);
         self.warn(LINKED_PLACEHOLDERS);
@@ -873,7 +873,7 @@ impl<'a> Reader<'a> {
         }
         // The preview is all the document has of the file: what a missing link shows.
         let bytes = Arc::new(png);
-        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() };
         let key = linked_key(&blob, &path);
         let fresh = !self.doc.images.contains_key(&key);
         self.doc.images.entry(key.clone()).or_insert(blob);

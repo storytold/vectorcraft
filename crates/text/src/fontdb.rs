@@ -75,6 +75,18 @@ pub use traits::{FontClass, FontMatch, FontTraits};
 pub(crate) use traits::{alias_lists, face_styles, on_faces_published};
 pub use wanted::{WantedFont, WantedFonts};
 
+/// Weak indexes of live file-font resources, by content hash (collisions checked by bytes) and id.
+#[derive(Default)]
+pub(super) struct FileFaces {
+    pub(super) by_key: HashMap<String, Vec<std::sync::Weak<FontFace>>>,
+    pub(super) by_id: HashMap<u32, std::sync::Weak<FontFace>>,
+    /// Only each admitted face's own byte allocation, never an unbounded list of alias owners.
+    pub(super) by_blob: HashMap<usize, std::sync::Weak<FontFace>>,
+}
+
+/// How many live fonts files carried the database admits at most (each shares its document's bytes).
+pub const MAX_FILE_FACES: usize = 4096;
+
 /// Process-wide font database.
 pub struct FontDb {
     faces: RwLock<Vec<Arc<FontFace>>>,
@@ -83,6 +95,9 @@ pub struct FontDb {
     images: Mutex<GlyphImages>,
     colours: Mutex<GlyphColours>,
     catalog: RwLock<Catalog>,
+    /// Fonts files carried for their type ([`vectorcraft_doc::FileFonts`]): apart from the faces,
+    /// so no family name, font menu, fallback or PostScript name lookup finds them.
+    pub(super) file_faces: RwLock<FileFaces>,
     /// The installed faces by PostScript name (documents name fonts so: PDF, EPS, .ai).
     postscript: RwLock<PostScriptNames>,
     /// Where the system font scan looks.

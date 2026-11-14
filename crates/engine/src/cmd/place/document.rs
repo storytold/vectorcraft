@@ -356,7 +356,10 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
         let Some(blob) = out.images.get(&p.key) else { continue };
         match vectorcraft_doc::placed_document::full_bytes(&p, blob) {
             Some(bytes) => {
-                out.images.insert(p.key.clone(), ImageBlob { mime: mime(p.link.name(), &bytes).into(), bytes, proxy: blob.proxy.clone() });
+                out.images.insert(
+                    p.key.clone(),
+                    ImageBlob { mime: mime(p.link.name(), &bytes).into(), bytes, proxy: blob.proxy.clone(), file_font: Default::default() },
+                );
             }
             None => {
                 previews.insert(p.key);

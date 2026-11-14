@@ -7,6 +7,9 @@ pub struct CharStyle {
     pub font_family: String,
     #[serde(default = "regular")]
     pub font_style: String,
+    /// Internal layout selection from a validated file-font binding, never read from a file.
+    #[serde(skip)]
+    pub file_font_id: Option<u32>,
     /// Which installed version of the font (its version string) when several versions of the
     /// family and style are installed and the text was set in one the family and style alone
     /// wouldn't pick (an imported file's type matched to it); None = the one they pick.
@@ -525,6 +528,7 @@ impl Default for CharStyle {
         Self {
             font_family: "Source Sans 3".into(),
             font_style: "Regular".into(),
+            file_font_id: None,
             font_version: None,
             font_axes: std::collections::BTreeMap::new(),
             size: 12.0,

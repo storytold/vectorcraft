@@ -461,7 +461,12 @@ fn a_linked_image_is_embedded_and_one_that_shows_its_preview_is_refused() {
     assert_eq!(im.placement, clip, "its Placement Options kept, as Embed keeps them");
     // Pixels the file wasn't read for: the preview, as an image whose file is missing shows it.
     let preview = Arc::new(bytes);
-    let missing = place_linked(&mut s, "missing", ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) }, (12, 10));
+    let missing = place_linked(
+        &mut s,
+        "missing",
+        ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() },
+        (12, 10),
+    );
     let before = (image_of(&s, missing), undo_len(&s));
     let e = s.execute(C, &json!({})).unwrap_err();
     assert!(e.to_string().contains("the linked image shows its preview: embed or relink it first"), "{e}");

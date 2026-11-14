@@ -6,6 +6,8 @@
 >
 > Glyphs update (#5514): Alternates for Current Selection applies a variant's OpenType feature to that letter alone (`salt=2`) so an Arabic word stays joined; Entire Font lists unencoded glyphs. A positional variant no supported feature draws can be applied as a glyph choice (#6084). Entire Font uses the selection's font version and variable axes, and the default cell remains available after an unlisted choice even without GSUB alternates. Only Arabic presentation-form characters insert their joining base letter. Scores and estimates unchanged.
 >
+> **File-font hardening status (2026-11-12, #4569):** implementation and synthetic regressions added; compilation and runtime checks pending. Type core and file-format scores and estimates unchanged. See [file-font ownership evidence](file-format-parity.md#file-font-ownership-hardening-4569).
+>
 > Live Paint Bucket update (2026-11-12): one drag fills the faces crossed in the same group (#6373).
 >
 > Vector Halftone preview update (2026-11-10): temporary dot selection marks are hidden, and the bounding box stays available (#6369).
@@ -2379,6 +2381,7 @@ Edit › Copy and Cut put the selected ruler guides on the clipboard, with the s
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-12 | minor | #4569: file-font identity, ownership and quota hardening implementation with isolated text/renderer and native/clipboard/export regression sources; integration coverage includes Place, Break Link, older saves, recovery and installed-font removal. Format-only verification; runtime proof pending. Scores and estimates unchanged. |
 | 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
 | 2026-11-12 | minor | Gujarati (`gu`): 4,286-row machine-assisted catalog reviewed by a native speaker, zero/one singular plurals, desktop font fallback and optional Gujarati craft-fonts fallback; all 72 translation tests pass; a web font and about 2,600 untranslated messages remain; scores and estimates unchanged |
 | 2026-11-13 | minor | File formats: in a `.ai` or EPS opened from its editing data whose layers don't draw as the page even with the drawn art of every live envelope put back, and are used all the same (trusted, their objects that differ coming in as the page's art, or opened alone), art that differs away from an envelope of type no longer costs it its editable type: it keeps its drawn art where, in the pixels it and its drawn art ink, the layers with it differ from the page more than its own check allows, or past the envelopes' share of the page check, and where a clip, mask, group appearance, another envelope, a repeat or a blend holds it (#7141); evidence updated; scores and hours unchanged. |

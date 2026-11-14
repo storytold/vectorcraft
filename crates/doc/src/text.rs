@@ -9,6 +9,7 @@ use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, Li
 mod area;
 mod char_style;
 mod composite;
+mod file_fonts;
 mod object;
 mod para_style;
 mod runs;
@@ -25,6 +26,7 @@ pub use composite::{
     COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
     CompositeParts,
 };
+pub use file_fonts::{FILE_FONT_MIME, FileFont, FileFontFace, FileFonts, MAX_FILE_FONTS, text_hash};
 pub use para_style::{
     Burasagari, Composer, FirstBaseline, HyphenationOptions, JustificationOptions, Justify, Kashida, Kinsoku, KinsokuShoriType, LeadingModel,
     Mojikumi, ParaDirection, ParaStyle, SingleWordJustify,
@@ -121,6 +123,10 @@ pub struct TextObject {
     /// file saves the count only when it is not 0.
     #[serde(default, rename = "listCount", skip_serializing_if = "crate::skip::is_default")]
     pub list_count: u32,
+    /// The fonts the file this type came from carried for fonts that aren't available here,
+    /// which draw it until its text is edited ([`FileFonts`]); `None` for other type.
+    #[serde(default, rename = "fileFonts", skip_serializing_if = "Option::is_none")]
+    pub file_fonts: Option<Box<FileFonts>>,
     /// Threaded text: as [`Self::list_count`], the counts the earlier frames carry into this frame
     /// at list levels 2 on, level 2 first ([`ListCounts::from_parts`]). Empty when they are all 0,
     /// and the file saves them only when not empty. A file's longer list opens with the first 8.

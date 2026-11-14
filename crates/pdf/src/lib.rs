@@ -51,6 +51,7 @@ mod forms;
 mod images;
 mod import;
 mod import_color;
+mod import_fonts;
 mod import_image;
 mod import_lines;
 mod import_mask;
@@ -150,6 +151,10 @@ pub struct ImportOptions {
     /// The file is an editor's own document (`.ai`): RGB in its `ICCBased` spaces keeps its numbers
     /// (see `Colors::uncalibrated_rgb`). Off for PDFs, whose profiles stand.
     pub uncalibrated_rgb: bool,
+    /// Type in a font the file embeds and this machine lacks is drawn in glyphs built from the
+    /// file's own, kept with the document (default); off, it is set in the fallback font, with the
+    /// missing-font warning, as before.
+    pub embedded_fonts: bool,
 }
 
 impl Default for ImportOptions {
@@ -163,6 +168,7 @@ impl Default for ImportOptions {
             text_as: TextAs::default(),
             layers: true,
             uncalibrated_rgb: false,
+            embedded_fonts: true,
         }
     }
 }

@@ -71,6 +71,38 @@ fn composite_type_draws_each_class_in_its_font() {
     assert!((l.glyphs[1].advance - alone.glyphs[0].advance).abs() < 1e-9);
 }
 
+/// A file font and a composite font can share one text object without losing either face or the
+/// original run indices when the composite run splits.
+#[test]
+fn file_fonts_and_composite_fonts_draw_together() {
+    use vectorcraft_doc::{FileFont, FileFonts};
+
+    let db = FontDb::with_font_dirs(vec![]);
+    db.set_composite_font(&mixed("Mixed"));
+    let info = FileFontInfo { family: "Carried Test".into(), style: "Regular".into(), ..Default::default() };
+    let glyph = FileGlyph { ch: 'x', outline: Rect::new(0.0, 0.0, 500.0, 700.0).to_path(0.1), advance: 600.0 };
+    let blob = vectorcraft_doc::ImageBlob::new(vectorcraft_doc::FILE_FONT_MIME, build_file_font(&info, &[glyph]).unwrap());
+    let mut t = TextObject::point(Point::ZERO, "x", style("Carried Test", 12.0));
+    t.runs.push(TextRun::new("A1", style("Mixed", 20.0)));
+    t.runs.push(TextRun::new("x", style("Carried Test", 12.0)));
+    t.file_fonts = Some(Box::new(FileFonts::new(
+        vec![FileFont { family: "Carried Test".into(), style: "Regular".into(), key: "carried-test".into() }],
+        &t.plain_text(),
+    )));
+    assert!(db.bind_file_fonts(&mut t, |key| (key == "carried-test").then_some(&blob)));
+    let carried = db.file_faces(&t)[0].as_ref().unwrap().id();
+    let l = layout(&db, &t);
+    let fonts: Vec<(usize, u32)> = l.glyphs.iter().map(|g| (g.run, g.font_id)).collect();
+    assert_eq!(fonts, [(0, carried), (1, face_id(&db, "JetBrains Mono")), (1, face_id(&db, "Inter")), (2, carried)]);
+    assert_eq!(t.runs[0].style.font_family, "Carried Test", "layout does not rename the source runs");
+    // Editing the text drops the file faces, but not the composite font's class-specific faces.
+    t.runs[0].text.push('x');
+    let edited = layout(&db, &t);
+    assert!(edited.glyphs.iter().all(|g| !db.is_file_font(g.font_id)));
+    let composite: Vec<u32> = edited.glyphs.iter().filter(|g| g.run == 1).map(|g| g.font_id).collect();
+    assert_eq!(composite, [face_id(&db, "JetBrains Mono"), face_id(&db, "Inter")]);
+}
+
 /// A ruby reading over type in a composite font is set in the parts its own characters fall in.
 #[test]
 fn ruby_over_composite_type_is_set_in_its_own_parts() {
