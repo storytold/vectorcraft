@@ -173,6 +173,48 @@ fn the_clipping_paths_effects_apply_before_the_clip_groups() {
 }
 
 #[test]
+fn a_clip_group_with_a_fill_or_stroke_of_its_own_clips_as_the_canvas_does() {
+    // A clip group with a fill or a stroke of its own and no effects: the export turns its paint
+    // into art and still clips by the outline the canvas clips by, Transform copies included.
+    let items = [
+        vectorcraft_doc::AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))),
+        vectorcraft_doc::AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::BLACK), 2.0)),
+    ];
+    let copies = || fx("distort.transform", json!({"moveH": 60, "copies": 1}));
+    let roughen = fx("distort.roughen", json!({"size": 10, "detail": 10, "relative": false}));
+    // A ring: a compound path of two squares with effects `own`, its hole with effects `hole_fx`.
+    let ring = |hole_fx: Vec<Effect>, own: Vec<Effect>| {
+        let outer = Node::path(NodeId(3), shapes::rectangle(Rect::new(50.0, 50.0, 150.0, 150.0)), Appearance::default());
+        let mut hole = Node::path(NodeId(4), shapes::rectangle(Rect::new(75.0, 75.0, 125.0, 125.0)), Appearance::default());
+        hole.appearance.effects = hole_fx;
+        let mut c =
+            Node::new(NodeId(2), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(hole)], rule: vectorcraft_geom::FillRule::EvenOdd });
+        c.appearance.effects = own;
+        c
+    };
+    let clips = [
+        ("copies", clipping_path(2, vec![copies()])),
+        ("roughen", clipping_path(2, vec![roughen])),
+        ("a compound path's copies", ring(vec![], vec![copies()])),
+        ("a compound path member's copies", ring(vec![copies()], vec![])),
+    ];
+    for item in &items {
+        for (what, clip) in &clips {
+            let mut d = Document::new(400.0, 400.0);
+            let layer = d.layers[0].id;
+            let live = clip_outline(clip).unwrap();
+            let mut group = clip_group(1, clip.clone());
+            group.appearance.items.push(item.clone());
+            d.insert(Some(layer), 0, group).unwrap();
+            let exported = clip_outline(&baked_clip(&d)).unwrap();
+            assert_eq!(live, exported, "{what} with {item:?}: the canvas clips by the outline the export writes");
+        }
+    }
+    let b = bounds(&clips[0].1);
+    assert!((b.x0 - 50.0).abs() < 1e-6 && (b.x1 - 210.0).abs() < 1e-6, "the clip covers both copies: {b:?}");
+}
+
+#[test]
 fn nested_effects_apply_before_the_clip_groups() {
     // The clip group grows its clipping path by 10 (Offset Path). Inside the clipping path a
     // Transform moves a member 60 pt right: the region grows from the moved member.

@@ -1028,6 +1028,8 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         no_break,
         language,
         glyph_alternate,
+        // An OpenType feature over its own characters, like `features`.
+        glyph_form: _,
     } = a;
     // Keep PartialEq's non-reflexive behavior for ignored numeric fields, without cloning styles.
     let offsets = (standard_vertical_roman, tcy_up_down, tcy_left_right);
@@ -1096,7 +1098,7 @@ pub(crate) fn warichu_alike(a: &CharStyle, b: &CharStyle) -> bool {
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
 /// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
 /// run's, see [`shape_segment`]), the space before a line's first character ([`space_before`]),
-/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the OpenType features (each run's apply to its own characters, as features
+/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the OpenType features and the East Asian glyph form (each run's apply to its own characters, as features
 /// over a range of the one buffer) and the tracking, as long as the tracking keeps or drops
 /// standard ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
@@ -1159,6 +1161,8 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         no_break,
         language,
         glyph_alternate,
+        // Applied as a feature over its run's own characters, with `features`.
+        glyph_form: _,
     } = a;
     *font_family == b.font_family
         && warichu_alike(a, b)
@@ -1442,8 +1446,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let mut ranged = Vec::new();
         for (r, run_style) in runs.get(source_runs.clone()).unwrap_or_default() {
             let (a, b) = (r.start.max(range.start), r.end.min(range.end));
-            if run_style.features != base_style.features && a < b {
-                let own = variant(&CharStyle { features: run_style.features.clone(), ..base_style.clone() });
+            if (run_style.features != base_style.features || run_style.glyph_form != base_style.glyph_form) && a < b {
+                let own = variant(&CharStyle { features: run_style.features.clone(), glyph_form: run_style.glyph_form, ..base_style.clone() });
                 ranged_features(base, &own, a..b, &mut ranged);
             }
         }

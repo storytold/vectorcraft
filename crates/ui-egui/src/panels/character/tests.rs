@@ -651,6 +651,8 @@ fn reset_panel_closes_only_its_own_undo_group() {
     app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
     assert_eq!(app.session.active_index(), Some(1));
     let b = app.run("text.create", json!({"x": 20, "y": 50, "text": "B"})).unwrap()["id"].clone();
+    // A reset that changes nothing records no step, so B starts away from the panel's defaults.
+    app.run("text.setFormat", json!({"id": b, "antiAlias": "crisp"})).unwrap();
     app.session.set_active(0);
     app.run("edit.undoGroup.begin", json!({"label": "Batch"})).unwrap();
     app.run("text.setFormat", json!({"id": a, "antiAlias": "none"})).unwrap();

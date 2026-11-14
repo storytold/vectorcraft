@@ -425,6 +425,18 @@
 	Title Case	Otsikon kirjainkoko
 	Sentence case	Virkkeen kirjainkoko
 	Smart Punctuation…	Älykäs välimerkitys…
+	Smart Punctuation	Älykäs välimerkitys
+	ff, fi, ffi Ligatures	Ligatuurit ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligatuurit ff, fl, ffl
+	Smart Quotes	Älykkäät lainausmerkit
+	Smart Spaces	Älykkäät välilyönnit
+	En, Em Dashes	Lyhyet ja pitkät ajatusviivat
+	Ellipses	Kolme pistettä
+	Expert Fractions	Erikoismurtoluvut
+	Replace In	Korvaa kohteessa
+	Selected Text Only	Vain valittu teksti
+	Entire Document	Koko asiakirja
+	Report Results	Näytä tulokset
 	Create Outlines	Muunna ääriviivoiksi
 	Optical Margin Alignment	Optinen reunustasaus
 	Dynamic Text	Dynaaminen teksti
@@ -1703,6 +1715,9 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Valitun merkin fontti ei ole saatavilla.
 	No alternates for the selected character.	Valitulla merkillä ei ole vaihtoehtoja.
 	Double-click to replace	Korvaa kaksoisnapsauttamalla
+	Click to replace	Korvaa napsauttamalla
+	Show all alternates in the Glyphs panel	Näytä kaikki vaihtoehdot Merkit-paneelissa
+	Show Character Alternates	Näytä merkin vaihtoehdot
 	Select one character with the Type tool first.	Valitse ensin yksi merkki tekstityökalulla.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} on fontin {font} glyfi, ei valitun tekstin fontin ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} kuuluu merkille {base} (U+{base_code}) {place}; valintasi on {sel} (U+{code}).
@@ -2238,6 +2253,7 @@ digits	Malayalam	Malajalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	paths-merkintä {i} tarvitsee path- ja ids-arvot (objektitunnukset, joita millään muulla merkinnällä ei ole)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder ottaa path-arvon: muita puuttuvia linkkejä haetaan tämän tiedoston kansiosta
 	Show Missing	Näytä puuttuvat
+	Sort by Size	Lajittele koon mukaan
 	Sort by Status	Lajittele tilan mukaan
 	Clear Overrides	Tyhjennä ohitukset
 	Create New {kind} Style	Luo uusi tyyli: {kind}
@@ -2488,6 +2504,7 @@ digits	Malayalam	Malajalam
 	Export Asset	Vie resurssi
 	Export to:	Vie kohteeseen:
 	Format Settings	Muotoasetukset
+	Format Settings…	Muotoasetukset…
 	Formats:	Muodot:
 	Full Document	Koko asiakirja
 	Include Bleed	Sisällytä leikkuuvara
@@ -2577,6 +2594,7 @@ digits	Malayalam	Malajalam
 	e.g. 1-3, 5	esim. 1-3, 5
 	First Page	Ensimmäinen sivu
 	Import PDF	Tuo PDF
+	Import PDF pages as links	Tuo PDF-sivut linkkeinä
 	Last Page	Viimeinen sivu
 	Next Page	Seuraava sivu
 	of {count}	/ {count}
@@ -5061,6 +5079,7 @@ imageTrace	Outline	Ääriviiva
 @msg	result would exceed the canvas (coordinates out of range)	tulos ylittäisi kankaan (koordinaatit alueen ulkopuolella)
 @msg	objects can't be nested more than 32 deep	objekteja ei voi sisäkkäistää yli 32 tason syvyyteen
 @msg	the SVG's elements are nested more than {0} deep	elementit ovat SVG-tiedostossa sisäkkäin yli {0} tason syvyydessä
+@msg	the SVG's styles expand to more than {0} MB	SVG-tiedoston tyylit laajenevat yli {0} megatavuksi
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {_3}
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale-arvon on oltava luku väliltä {_1}–{_2}, ei {s}
 @msg	select (or target) objects whose appearance isn't basic	valitse (tai kohdista) objektit, joiden ulkoasu ei ole perusulkoasu
@@ -6707,7 +6726,7 @@ axis	Y Axis	Y-akseli
 @plural	Result: {n}|Results: {n}	Tulos: {n}|Tulokset: {n}
 @msg	select one object	valitse yksi objekti
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Yleismuokkaus toimii poluille, yhdistelmäpoluille, symbolien esiintymille ja niiden ryhmille
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	samankaltaisia objekteja ei löytynyt (kierrettyjä tai peilattuja kopioita ei tunnisteta); muuta yleismuokkauksen asetuksia ja yritä uudelleen
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	samankaltaisia objekteja ei löytynyt (peilattuja kopioita ei tunnisteta); muuta yleismuokkauksen asetuksia ja yritä uudelleen
 @msg	Global Edit is off	Yleismuokkaus ei ole käynnissä
 @msg	only an object of the Global Edit other than the one it started from can be left out	yleismuokkauksesta voi jättää pois vain muun objektin kuin sen, josta se alkoi
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all tai alue, kuten 1, 3-5, ei {v}
@@ -7505,6 +7524,9 @@ breakText	Glyphs	Merkit
 	Open Tutorial Sample	Avaa opetusohjelman harjoitustiedosto
 	Finish Tutorial	Viimeistele opetusohjelma
 	Next Tutorial	Seuraava opetusohjelma
+	Show Learn Tab	Näytä Opi-paneelin välilehti
+	Show Skill	Näytä taito
+	Back One Level	Taso takaisin
 	Back to Skills	Takaisin taitoihin
 @msg	tutorial `{id}` has no practice sample	opetusohjelmalla `{id}` ei ole harjoitustiedostoa
 @msg	open the practice sample of `{id}` first (see learn.openSample)	avaa ensin opetusohjelman `{id}` harjoitustiedosto (ks. learn.openSample)
@@ -7545,6 +7567,9 @@ breakText	Glyphs	Merkit
 	Grommets	Purjerenkaat
 	Grommet Inset	Purjerenkaiden etäisyys reunasta
 	Diameter	Halkaisija
+	Nest Shapes…	Sijoittele muodot…
+	Nest Shapes	Sijoittele muodot
+	Roll	Rulla
 
 # Messages of the effects, 3D, image and PDF export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-tehosteet vaativat äärelliset koordinaatit 100 miljoonan pisteen rajoissa
