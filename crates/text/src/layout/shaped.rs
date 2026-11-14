@@ -5,6 +5,11 @@
 //! line. Each line the composer tries is placed from where the lines above it left the pen, at its
 //! own tallest metrics, as the line loop in [`super::flow`] places a composed line: the span it
 //! gets is the room across its whole height.
+//!
+//! A paragraph the frame cannot hold is still composed whole: a line the frame has no room for,
+//! and every line after it, is measured as wide as the span of the last line set in the frame,
+//! less its own indents. The line loop sets only the lines that fit, and the rest overflows or
+//! goes on in the next threaded frame, which composes it again at its own measures.
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -63,19 +68,33 @@ struct Start<'r> {
     /// The paragraph's first line (it takes the first-line indent).
     first: bool,
     pen: Pen<'r>,
-    /// The line placed at each of the metrics it was tried with: its width and the pen after it,
-    /// or `None` when the frame has no room for it.
-    placed: Vec<(Metrics, Option<(f64, Pen<'r>)>)>,
+    /// The width of the span the line above was set in, `None` for the paragraph's first line.
+    span: Option<f64>,
+    /// The line above was past the frame's end: this line is too, at the width of `span`.
+    past: bool,
+    /// The line placed at each of the metrics it was tried with, or `None` when it can't be set.
+    placed: Vec<(Metrics, Option<Placed<'r>>)>,
     /// The metrics of glyphs `pos..to`, measured so far.
     to: usize,
     m: Option<Metrics>,
 }
 
-/// What a line's placement depends on: its first glyph, whether it is the paragraph's first line,
-/// and the pen's cell, baselines, pending space, narrowest word without room and further spans.
-type Key = (usize, bool, usize, Option<u64>, Option<u64>, u64, u64, Vec<[u64; 3]>);
+/// A line set from a [`Start`]: its width, the pen after it, the width of the span it was set
+/// in, and whether it is past the frame's end (measured, but not in the frame).
+#[derive(Clone)]
+struct Placed<'r> {
+    width: f64,
+    pen: Pen<'r>,
+    span: f64,
+    past: bool,
+}
 
-fn key(pos: usize, first: bool, pen: &Pen<'_>) -> Key {
+/// What a line's placement depends on: its first glyph, whether it is the paragraph's first line,
+/// the pen's cell, baselines, pending space, narrowest word without room and further spans, the
+/// span of the line above and whether the line is past the frame's end.
+type Key = (usize, bool, usize, Option<u64>, Option<u64>, u64, u64, Vec<[u64; 3]>, Option<u64>, bool);
+
+fn key(pos: usize, first: bool, pen: &Pen<'_>, span: Option<f64>, past: bool) -> Key {
     (
         pos,
         first,
@@ -85,6 +104,8 @@ fn key(pos: usize, first: bool, pen: &Pen<'_>) -> Key {
         pen.pending.to_bits(),
         pen.no_room_for.to_bits(),
         pen.queued.iter().map(|&(b, x0, x1)| [b.to_bits(), x0.to_bits(), x1.to_bits()]).collect(),
+        span.map(f64::to_bits),
+        past,
     )
 }
 
@@ -159,13 +180,14 @@ impl<'a, 'r> Shaped<'a, 'r> {
         }
     }
 
-    /// The start of a line at glyph `pos` with `pen`: an existing one when its placement is the same.
-    fn start(&mut self, pos: usize, first: bool, pen: Pen<'r>) -> usize {
-        let k = key(pos, first, &pen);
+    /// The start of a line at glyph `pos` with `pen`, after a line set in a span `span` wide (past
+    /// the frame's end with `past`): an existing one when its placement is the same.
+    fn start(&mut self, pos: usize, first: bool, pen: Pen<'r>, span: Option<f64>, past: bool) -> usize {
+        let k = key(pos, first, &pen, span, past);
         if let Some(&id) = self.known.get(&k) {
             return id;
         }
-        self.starts.push(Start { pos, first, pen, placed: vec![], to: pos, m: None });
+        self.starts.push(Start { pos, first, pen, span, past, placed: vec![], to: pos, m: None });
         let id = self.starts.len() - 1;
         self.known.insert(k, id);
         id
@@ -177,7 +199,7 @@ impl Measure for Shaped<'_, '_> {
 
     fn first(&mut self) -> usize {
         let pen = self.pen.clone();
-        self.start(0, !self.continued, pen)
+        self.start(0, !self.continued, pen, None, false)
     }
 
     fn line(&mut self, &id: &usize, pos: usize, end: usize) -> Result<Option<(f64, usize)>, Exhausted> {
@@ -186,14 +208,14 @@ impl Measure for Shaped<'_, '_> {
         }
         self.probes += 1;
         let Some(start) = self.starts.get_mut(id) else { return Ok(None) };
-        let Some((width, pen)) = line(&self.para, start, pos, end)? else { return Ok(None) };
-        Ok(Some((width, self.start(end, false, pen))))
+        let Some(placed) = line(&self.para, start, pos, end)? else { return Ok(None) };
+        Ok(Some((placed.width, self.start(end, false, placed.pen, Some(placed.span), placed.past))))
     }
 
     /// A longer line is placed as this one is, and gets the same room, unless a glyph after it
-    /// changes the line's tallest metrics.
+    /// changes the line's tallest metrics. Past the frame's end every line is as wide.
     fn may_widen(&mut self, &id: &usize, pos: usize, end: usize) -> bool {
-        let Some(start) = self.starts.get(id) else { return false };
+        let Some(start) = self.starts.get(id).filter(|start| !start.past) else { return false };
         let m = if start.pos == pos && start.to == end { start.m } else { self.para.sg.get(pos..end).and_then(Metrics::max) };
         match (m, self.rest.get(end).copied().flatten()) {
             (Some(m), Some(rest)) => m.union(rest) != m,
@@ -212,11 +234,13 @@ impl Drop for Shaped<'_, '_> {
     }
 }
 
-/// The width of the line of glyphs `pos..end` from `start`, and the pen after it; `None` when
-/// the frame has no room for it.
-fn line<'r>(p: &Para<'_>, start: &mut Start<'r>, pos: usize, end: usize) -> Result<Option<(f64, Pen<'r>)>, Exhausted> {
+/// The line of glyphs `pos..end` from `start`; `None` when it can't be set.
+fn line<'r>(p: &Para<'_>, start: &mut Start<'r>, pos: usize, end: usize) -> Result<Option<Placed<'r>>, Exhausted> {
     if start.pos != pos || end <= pos {
         return Ok(None);
+    }
+    if start.past {
+        return Ok(past_end(p, start));
     }
     // The line's tallest metrics, measured on from the glyphs already measured.
     if end < start.to {
@@ -239,9 +263,18 @@ fn line<'r>(p: &Para<'_>, start: &mut Start<'r>, pos: usize, end: usize) -> Resu
     Ok(placed)
 }
 
-/// The line from `start` placed with metrics `m`: its width and the pen after it, as the line loop
-/// places and settles it; `None` when no frame cell has room for it.
-fn place<'r>(p: &Para<'_>, start: &Start<'r>, m: Metrics) -> Result<Option<(f64, Pen<'r>)>, Exhausted> {
+/// A line from `start` past the frame's end: as wide as the span of the last line set in the frame,
+/// less its indents, and the pen left where the frame ran out. `None` when the paragraph has no line
+/// in the frame to measure it by.
+fn past_end<'r>(p: &Para<'_>, start: &Start<'r>) -> Option<Placed<'r>> {
+    let span = start.span.filter(|span| span.is_finite())?;
+    let (ind_l, ind_r) = line_indents(p.para, start.first, p.mirror);
+    Some(Placed { width: span - ind_l - ind_r, pen: start.pen.clone(), span, past: true })
+}
+
+/// The line from `start` placed with metrics `m`, as the line loop places and settles it; past the
+/// frame's end ([`past_end`]) when no frame cell has room for it.
+fn place<'r>(p: &Para<'_>, start: &Start<'r>, m: Metrics) -> Result<Option<Placed<'r>>, Exhausted> {
     let (ind_l, ind_r) = line_indents(p.para, start.first, p.mirror);
     let word = word_width(p.sg, start.pos, p.line_end, KinsokuRules::of(p.para)) - (p.start_credit)(start.pos);
     let mut pen = start.pen.clone();
@@ -262,12 +295,12 @@ fn place<'r>(p: &Para<'_>, start: &Start<'r>, m: Metrics) -> Result<Option<(f64,
                 for queued in &mut pen.queued {
                     queued.0 = baseline;
                 }
-                return Ok(Some((x1 - x0 - ind_l - ind_r, pen)));
+                return Ok(Some(Placed { width: x1 - x0 - ind_l - ind_r, pen, span: x1 - x0, past: false }));
             }
             Some(_) => return Ok(None),
             // Out of steps: the frame may still have room further down.
             None if p.steps.get() == 0 => return Err(Exhausted),
-            None => return Ok(None),
+            None => return Ok(past_end(p, start)),
         }
     }
 }
