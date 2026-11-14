@@ -985,6 +985,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Ympäristömuuttuja VECTORCRAFT_TITLEBAR valitsee otsikkorivin niin kauan kuin se on asetettu.
 	System Title Bar takes precedence over this option while it is on.	Järjestelmän otsikkorivi ohittaa tämän asetuksen niin kauan kuin se on käytössä.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Niin kauan kuin VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä ei ole käytössä, tämä työpöytäympäristö piirtää ikkunan otsikkorivin, oli tämä asetus käytössä tai ei.
 	Exit	Lopeta
 	Distort	Vääristä
 	Diffuse Glow…	Hajautettu hehku…
@@ -6631,6 +6632,8 @@ axis	Y Axis	Y-akseli
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
 	Playback Options…	Toistoasetukset…
+	Button Mode	Painiketila
+	No actions.	Ei toimintoja.
 	Insert Stop…	Lisää pysäytys…
 	Insert Stop	Lisää pysäytys
 	Record Stop	Nauhoita pysäytys

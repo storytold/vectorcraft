@@ -5360,6 +5360,7 @@ axis	Both	Обидві
 	VectorCraft Title Bar on Every Desktop	Рядок заголовка VectorCraft на будь-якій стільниці
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Поки змінну середовища VECTORCRAFT_TITLEBAR задано, рядок заголовка вибирає вона.
 	System Title Bar takes precedence over this option while it is on.	Поки ввімкнено «Системний рядок заголовка», він має пріоритет над цим параметром.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Поки «Рядок заголовка VectorCraft на будь-якій стільниці» вимкнено, ця стільниця малює рядок заголовка вікна незалежно від того, чи ввімкнено цей параметр.
 	Value Axis	Вісь значень
 	On Left Side	Ліворуч
 	On Right Side	Праворуч
@@ -6207,6 +6208,8 @@ axis	Y Axis	Вісь Y
 	Action Options…	Параметри дії…
 	Action Options	Параметри дії
 	Playback Options…	Параметри відтворення…
+	Button Mode	Режим кнопок
+	No actions.	Нема дій.
 	Insert Stop…	Вставити зупинку…
 	Insert Stop	Вставити зупинку
 	Record Stop	Записати зупинку

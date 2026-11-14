@@ -1777,3 +1777,141 @@ fn story_changes_take_in_locked_and_hidden_frames() {
         assert_eq!(story_sizes(&app, id).iter().filter(|s| (**s - 9.0).abs() > 1e-9).count(), 0, "frame {id} takes the size");
     }
 }
+
+/// [`three_frame_story`] with its second frame locked and its third hidden, a type object of its own
+/// below it, and the first frame selected with the Selection tool → the app, the frames and the
+/// other type object.
+fn story_selected_in_its_first_frame() -> (VectorcraftApp, [u64; 3], u64) {
+    let (mut app, a, b, c) = three_frame_story(60);
+    let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(text_editing(&app), None);
+    (app, [a, b, c], other)
+}
+
+fn undo_steps(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+/// With the Selection tool, a selected frame of a threaded story stands for the whole story: the
+/// panel's changes reach its locked and hidden frames, each in one undo step, and leave other type
+/// alone.
+#[test]
+fn selection_tool_changes_reach_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    assert_eq!(selected_stories(&app), frames.map(NodeId).to_vec());
+
+    let steps = undo_steps(&app);
+    style(&mut app, json!({"size": 9}));
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        assert!(story_sizes(&app, id).iter().all(|s| (*s - 9.0).abs() < 1e-9), "frame {id} takes the size");
+    }
+    assert!(story_sizes(&app, other).iter().all(|s| (*s - 12.0).abs() < 1e-9), "other type keeps its size");
+    app.run("edit.undo", json!({})).unwrap();
+    for id in frames {
+        assert!(story_sizes(&app, id).iter().all(|s| (*s - 12.0).abs() < 1e-9), "undo gives frame {id} its size back");
+    }
+
+    format(&mut app, json!({"underline": true}));
+    for id in frames {
+        assert!(story_frame(&app, id).runs.iter().all(|r| r.style.underline), "frame {id} is underlined");
+    }
+    assert!(story_frame(&app, other).runs.iter().all(|r| !r.style.underline));
+
+    // Tate-chu-yoko Settings and Warichu Settings set their values through `run_format`.
+    run_format(&mut app, json!({"tcyUpDown": 2})).unwrap();
+    for id in frames {
+        assert!(story_frame(&app, id).runs.iter().all(|r| (r.style.tcy_up_down - 2.0).abs() < 1e-9), "frame {id} takes Up/Down");
+    }
+    assert!(story_frame(&app, other).runs.iter().all(|r| r.style.tcy_up_down.abs() < 1e-9));
+}
+
+/// With the Selection tool the anti-aliasing method goes to every frame of the selected story.
+#[test]
+fn selection_tool_anti_aliasing_reaches_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    set_anti_alias(&mut app, TypeAntiAlias::Strong);
+    for id in frames {
+        assert_eq!(story_frame(&app, id).anti_alias, TypeAntiAlias::Strong, "frame {id}");
+    }
+    assert_eq!(story_frame(&app, other).anti_alias, TypeAntiAlias::Sharp);
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Strong));
+}
+
+/// With the Selection tool a Variable Font slider sets the axis on every frame of the selected
+/// story, in one undo step.
+#[test]
+fn selection_tool_font_axes_reach_every_frame_of_the_story() {
+    use vectorcraft_text::test_fonts::{TWO_AXIS_FAMILY, two_axis_font};
+    vectorcraft_text::FontDb::global().add_font(two_axis_font().unwrap());
+    let (mut app, frames, _) = story_selected_in_its_first_frame();
+    app.run("text.setStyle", json!({"ids": frames, "font": TWO_AXIS_FAMILY})).unwrap();
+    app.run("select.set", json!({"ids": [frames[0]]})).unwrap();
+    let steps = undo_steps(&app);
+    axes_cmd(&mut app, json!({"wght": 700}), widgets::Live::Released);
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        let t = story_frame(&app, id);
+        assert!(t.runs.iter().all(|r| r.style.font_axes.get("wght") == Some(&700.0)), "frame {id}: {:?}", t.runs[0].style.font_axes);
+    }
+}
+
+/// With the Selection tool a font family picked in the font menu, and its preview, go to every
+/// frame of the selected story, in one undo step.
+#[test]
+fn selection_tool_font_family_reaches_every_frame_of_the_story() {
+    let (mut app, frames, other) = story_selected_in_its_first_frame();
+    let family = |app: &VectorcraftApp, id: u64| story_frame(app, id).runs.iter().map(|r| r.style.font_family.clone()).collect::<Vec<_>>();
+    let before = family(&app, other);
+    let ctx = egui::Context::default();
+    crate::font_menu::apply(&mut app, &ctx, crate::font_menu::FontPick::Preview("Source Serif 4".into(), None));
+    for id in frames {
+        assert!(family(&app, id).iter().all(|f| f == "Source Serif 4"), "the preview shows on frame {id}");
+    }
+    let steps = undo_steps(&app);
+    crate::font_menu::apply(&mut app, &ctx, crate::font_menu::FontPick::Chosen("Source Serif 4".into(), None));
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in frames {
+        assert!(family(&app, id).iter().all(|f| f == "Source Serif 4"), "frame {id} takes the family");
+    }
+    assert_eq!(family(&app, other), before, "other type keeps its family");
+}
+
+/// The fields show a value only when every frame of the selected story has it: a hidden frame that
+/// differs leaves them blank.
+#[test]
+fn selection_tool_fields_read_every_frame_of_the_story() {
+    let (mut app, [a, b, c], _) = story_selected_in_its_first_frame();
+    assert_eq!(shared(&app, |s| s.size), Some(12.0));
+    assert_eq!(shared_anti_alias(&app), Some(TypeAntiAlias::Sharp));
+    app.run("text.setStyle", json!({"ids": [c], "size": 20})).unwrap();
+    app.run("text.setFormat", json!({"ids": [b], "antiAlias": TypeAntiAlias::Crisp.id()})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(shared(&app, |s| s.size), None, "the hidden frame's size differs");
+    assert_eq!(shared_anti_alias(&app), None, "the locked frame's anti-aliasing differs");
+}
+
+/// Two frames of one story, or a frame in a selected group, count once; an unthreaded type
+/// object is a story of its own.
+#[test]
+fn selected_stories_list_each_frame_once() {
+    let (mut app, [a, b, c], other) = story_selected_in_its_first_frame();
+    app.run("object.unlockAll", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [b, a]})).unwrap();
+    assert_eq!(selected_stories(&app), [a, b, c].map(NodeId).to_vec(), "thread order, each once");
+    app.run("select.set", json!({"ids": [other, a]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    let mut listed = selected_stories(&app);
+    listed.sort_by_key(|id| id.0);
+    let mut expected = [a, b, c, other].map(NodeId).to_vec();
+    expected.sort_by_key(|id| id.0);
+    assert_eq!(listed, expected);
+    app.run("select.set", json!({"ids": []})).unwrap();
+    assert!(selected_stories(&app).is_empty());
+}
