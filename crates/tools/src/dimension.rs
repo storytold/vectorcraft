@@ -350,8 +350,17 @@ impl DimensionTool {
                 _ => Orientation::Aligned,
             };
         }
-        d.place(p);
+        // A dimension dragged out from art starts with placeholder points. Read the art's points
+        // before placing the dimension at the pointer. Clear the offset first: an out-of-range
+        // offset from the last pointer position fails the read.
+        if !matches!(d.mode, DimensionMode::Radius | DimensionMode::Diameter) {
+            d.offset = 0.0;
+        }
         if d.resolve(cx.doc).is_err() {
+            return vec![];
+        }
+        d.place(p);
+        if d.validate().is_err() {
             return vec![];
         }
         let mut actions = vec![];
@@ -679,6 +688,53 @@ mod tests {
         assert!(matches!(dragged.last(), Some(Action::Preview(_, _))), "{dragged:?}");
         let placed = t.pointer(&c, &ev(PointerKind::Up, 490.0, 470.0));
         assert!(matches!(placed.last(), Some(Action::Commit)), "{placed:?}");
+    }
+
+    /// A pointer position too far away to place the dimension shows no preview, and the preview
+    /// comes back where the pointer returns.
+    #[test]
+    fn placement_recovers_after_a_position_out_of_range() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        for (x, y) in [(400.0, 400.0), (450.0, 400.0)] {
+            t.pointer(&c, &PointerEvent::new(PointerKind::Down, x, y));
+            t.pointer(&c, &PointerEvent::new(PointerKind::Up, x, y));
+        }
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Move, 420.0, 3.0e6)).is_empty());
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Move, 420.0, 450.0));
+        let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+        assert_eq!(params["offset"], json!(50.0));
+    }
+
+    /// Dragging out from a segment previews the dimension at the pointer from the first drag on.
+    #[test]
+    fn the_first_preview_of_a_segment_drag_is_at_the_pointer() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 100.0));
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 150.0, 60.0));
+        let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+        assert_eq!(params["offset"], json!(-40.0), "40 pt above the top edge");
+    }
+
+    /// Dragging out from a corner previews the angle at the pointer's distance from the corner
+    /// from the first drag on.
+    #[test]
+    fn the_first_preview_of_a_corner_drag_is_at_the_pointer() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = DimensionTool::default();
+        t.set_option("mode", &json!("angular"));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+        let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 140.0));
+        let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+        assert_eq!(params["vertex"], json!([100.0, 100.0]));
+        assert_eq!(params["offset"], json!(50.0), "50 pt from the corner");
     }
 
     /// A Linear press on an anchor picks that anchor even when the pointer moves a few pixels
