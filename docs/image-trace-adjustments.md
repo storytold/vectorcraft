@@ -18,9 +18,9 @@ its current location. Opening the controls does not add a document undo step.
 | Create | Fills / Strokes | Creates filled areas, stroked lines, or both. |
 | Ignore Color | Color picker | Leaves out the selected color (white by default). |
 
-The built-in presets other than Auto Color and Flat Logo all use Paths 50. Corners is 100 in
-Technical Drawing, 75 in Default, Black and White Logo, Line Art and Outline, and 50 in the others.
-Noise is 1 px in Technical Drawing, 5 in High Fidelity Photo, 10 in Low Fidelity Photo, 15 in 3 Colors,
+The built-in presets other than Auto Color and Flat Logo all use Paths 50, and so do their enhanced
+versions. Among those presets, Corners is 100 in Technical Drawing, 75 in Default, Black and White
+Logo, Line Art and Outline, and 50 in the other eight. Noise is 1 px in Technical Drawing, 5 in High Fidelity Photo, 10 in Low Fidelity Photo, 15 in 3 Colors,
 6 Colors, 16 Colors and Shades of Gray, 20 in Sketched Art, Line Art and Outline, 25 in Default and
 Black and White Logo, and 90 in Silhouettes (see
 [image-trace-quality.md](image-trace-quality.md#preset-paths-corners-and-noise)).

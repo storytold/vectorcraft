@@ -247,7 +247,8 @@ Every built-in preset other than Auto Color and Flat Logo traces at Paths 50. Co
 | Technical Drawing | 50 | 100 | 1 | 95, 90, 4 |
 | Outline | 50 | 75 | 20 | 80, 70, 10 |
 
-The palettes, color counts, thresholds and other options of the presets did not change.
+The palettes, color counts, thresholds and other options of the presets did not change. The enhanced
+versions of these presets use the same Paths, Corners and Noise.
 
 Measured with the harness below (section 1, each preset on the inputs it is meant for), before and after:
 anchors fall in 10 of the 12 changed presets, for example 5,494 to 3,136 (High Fidelity Photo), 33 to 27
@@ -255,14 +256,17 @@ anchors fall in 10 of the 12 changed presets, for example 5,494 to 3,136 (High F
 Sketched Art does not change. Outlines on flat art lie further from the true edge: off mean 0.100 to 0.123
 px (16 Colors), 0.101 to 0.119 (6 Colors), 0.104 to 0.129 (3 Colors), 0.064 to 0.092 (Black and White Logo)
 and 0.056 to 0.074 (Line Art), and off max 1.00 to 1.16 px in 6 Colors and 16 Colors. Technical Drawing
-leaves 1.4 specks (was 0.5), and Outline's stroked centre lines lie 0.095 px off (was 0.086) with 2.7
+leaves 1.4 specks (was 0.5), and Outline's stroked center lines lie 0.095 px off (was 0.086) with 2.7
 anchors a stroke (was 3.0). ΔE changes by 0.01 or less except Line Art and Outline (2.62 and 2.61 to 2.66
 and 2.67); edge ΔE rises in 8 of the 12, for example 4.79 to 5.25 (16 Colors), 3.98 to 4.46 (3 Colors) and 9.46 to 10.03
 (Black and White Logo). On synthetic shapes and photos of 300 to 4,000 px traced outside this harness,
 High Fidelity Photo makes 41% fewer anchors and 16 Colors 20% fewer; the mean pixel difference of each
 trace changes by −0.23 to +0.26 of a level; 16 Colors leaves 41 staircases of steps of 2 px or more where it left 40, High
-Fidelity Photo 440 where it left 391, and Low Fidelity Photo 96 where it left 77. The tables below are the previous
-measurement, not a rerun.
+Fidelity Photo 440 where it left 391, Low Fidelity Photo 96 where it left 77, Line Art 17 where it left 13, Outline 13
+where it left 10 and 3 Colors 14 where it left 12. On the same images Sketched Art makes 4,084 anchors where it made
+3,936 and Silhouettes 1,608 where it made 1,578. The figures for these twelve presets and their enhanced versions in
+the other sections of this file, and in the Image Trace entries of
+[target-app-parity.md](target-app-parity.md), were measured at the earlier values.
 Test: `presets_have_their_paths_corners_and_noise` in `crates/trace/src/tests.rs`.
 
 ## A simpler contour walk
