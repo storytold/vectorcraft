@@ -797,21 +797,46 @@ fn place_of(d: &Document, roots: &[NodeId]) -> Option<NodeId> {
 }
 
 /// The ruler guides of each of `roots` that is a sublayer (in its sublayers too), with the layer
-/// that holds it, in order. Other objects hold none.
+/// that holds it, in order. Other objects hold none. Each root, and each child of it and of its
+/// sublayers, is looked at once.
 fn held_guides(d: &Document, roots: impl IntoIterator<Item = NodeId>) -> Vec<(NodeId, Node)> {
     let mut out = vec![];
     for id in roots {
         let (Some(n), Some(parent)) = (d.node(id), d.parent_of(id)) else { continue };
-        if n.holds_ruler_guides() {
-            n.walk(&mut |c| {
-                if c.is_ruler_guide() {
-                    out.push((parent, c.clone()));
-                }
-            });
+        guide_seen(n);
+        if n.is_layer() {
+            guides_of(n, parent, &mut out);
         }
     }
     out
 }
+
+/// Push each ruler guide of `layer` and of its sublayers onto `out` in paint order, with `parent`.
+fn guides_of(layer: &Node, parent: NodeId, out: &mut Vec<(NodeId, Node)>) {
+    for c in layer.children().into_iter().flatten() {
+        guide_seen(c);
+        if c.is_ruler_guide() {
+            out.push((parent, Node::clone(c)));
+        } else if c.is_layer() {
+            guides_of(c, parent, out);
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The nodes that [`held_guides`] has looked at on this thread, in order.
+    static GUIDES_SEEN: std::cell::RefCell<Vec<NodeId>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Note that [`held_guides`] looked at `n`.
+#[cfg(test)]
+fn guide_seen(n: &Node) {
+    GUIDES_SEEN.with(|s| s.borrow_mut().push(n.id));
+}
+
+#[cfg(not(test))]
+fn guide_seen(_: &Node) {}
 
 /// An image of `r` (in a clip group when it is clipped).
 fn raster_node(d: &mut Document, r: Raster) -> Node {
@@ -920,6 +945,53 @@ mod tests {
         assert!(flat.node(g).is_some_and(Node::is_ruler_guide), "its guide is kept");
         assert_eq!(flat.parent_of(g), Some(layer));
         assert_eq!(flat.children(Some(layer)).and_then(|c| c.last()).map(|c| c.id), Some(g));
+    }
+
+    /// The guides of a sublayer and of its sublayers are gathered in paint order with the layer
+    /// that holds it, looking at the sublayer and each child of it and of its sublayers once.
+    /// Other roots give none.
+    #[test]
+    fn held_guides_look_at_each_node_once() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let layer = s.doc().unwrap().doc.layers[0].id;
+        let sublayer =
+            |s: &mut Session, parent: NodeId| NodeId(s.execute("layer.newSublayer", &json!({"parent": parent.0})).unwrap()["id"].as_u64().unwrap());
+        let rect = |s: &mut Session, on: NodeId| {
+            s.execute("layer.setCurrent", &json!({"id": on.0})).unwrap();
+            NodeId(s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap())
+        };
+        let sub = sublayer(&mut s, layer);
+        let deep = sublayer(&mut s, sub);
+        let empty = sublayer(&mut s, layer);
+        let (a, b, c) = (rect(&mut s, sub), rect(&mut s, deep), rect(&mut s, empty));
+        let d = Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let mut guide = |on: NodeId, pos: f64| {
+            let g = Node::new(d.alloc_id(), NodeKind::RulerGuide { vertical: true, pos, artboard: None });
+            d.insert(Some(on), usize::MAX, g).unwrap()
+        };
+        let (g1, g2, g3) = (guide(sub, 1.0), guide(deep, 2.0), guide(sub, 3.0));
+        let doc = &s.doc().unwrap().doc;
+        let ids = |n: &Node| {
+            let mut v = vec![];
+            n.walk(&mut |c| v.push(c.id));
+            v
+        };
+        assert_eq!(ids(doc.node(sub).unwrap()), vec![sub, deep, b, g2, a, g1, g3]);
+        let run = |roots: &[NodeId]| {
+            GUIDES_SEEN.with(|v| v.borrow_mut().clear());
+            let got: Vec<_> = held_guides(doc, roots.iter().copied()).into_iter().map(|(p, g)| (p, g.id)).collect();
+            (got, GUIDES_SEEN.with(|v| v.take()))
+        };
+        // Every node of the sublayer is looked at once, and the guides keep their paint order.
+        assert_eq!(run(&[sub]), (vec![(layer, g2), (layer, g1), (layer, g3)], vec![sub, deep, b, g2, a, g1, g3]));
+        // A sublayer that holds none gives none; a path holds none; a missing root and a top-level
+        // layer, which has no parent, are skipped.
+        assert_eq!(run(&[empty]), (vec![], vec![empty, c]));
+        assert_eq!(run(&[a]), (vec![], vec![a]));
+        assert_eq!(run(&[NodeId(u64::MAX), layer]), (vec![], vec![]));
+        // A deeper sublayer gives its guides to the sublayer that holds it.
+        assert_eq!(run(&[deep, deep]).0, vec![(sub, g2), (sub, g2)]);
     }
 
     /// In a file without transparency with Clip Complex Regions on, art under a group's opaque
