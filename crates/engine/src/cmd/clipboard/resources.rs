@@ -127,6 +127,17 @@ fn node_refs(n: &Node, f: Visit) {
         if let Some(cm) = Document::color_mask_of(m) {
             f(Ref::Name(Res::Image, &cm.key));
         }
+        // A graph keeps paints and style names for its series and labels, which a redraw gives them.
+        if let Some(g) = m.extras().graph.as_deref() {
+            vectorcraft_doc::swatches::graph_paints(m).for_each(|p| paint_refs(p, f));
+            let l = &g.label_styles;
+            for s in [&l.values, &l.categories, &l.legend].into_iter().flatten().filter_map(|st| st.style_name.as_ref()) {
+                f(Ref::Name(Res::CharStyle, s));
+            }
+            for s in [&l.values_para, &l.categories_para, &l.legend_para].into_iter().flatten().filter_map(|pa| pa.style_name.as_ref()) {
+                f(Ref::Name(Res::ParaStyle, s));
+            }
+        }
         match &m.kind {
             NodeKind::Text(t) => {
                 for r in &t.runs {
@@ -674,6 +685,27 @@ impl Relink {
         if let Some(cm) = n.extras_if_any().and_then(|e| e.color_mask.as_deref_mut()) {
             self.name(Res::Image, &mut cm.key);
             self.name(Res::Image, &mut cm.from);
+        }
+        if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+            for s in &mut g.series_paints {
+                s.fill.iter_mut().chain(s.stroke.iter_mut()).for_each(|p| self.paint(p));
+            }
+            let l = &mut g.label_styles;
+            for st in [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten() {
+                self.paint(&mut st.fill);
+                self.paint(&mut st.stroke);
+                if let Some(s) = &mut st.style_name {
+                    self.name(Res::CharStyle, s);
+                }
+            }
+            for pa in [&mut l.values_para, &mut l.categories_para, &mut l.legend_para].into_iter().flatten() {
+                if let Some(s) = &mut pa.style_name {
+                    self.name(Res::ParaStyle, s);
+                }
+            }
+            for r in [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows].into_iter().flatten() {
+                r.paint.fill.iter_mut().chain(r.paint.stroke.iter_mut()).for_each(|p| self.paint(p));
+            }
         }
         match &mut n.kind {
             NodeKind::Text(t) => {
