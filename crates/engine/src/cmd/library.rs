@@ -21,7 +21,7 @@ use vectorcraft_color::{Color, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, Node, NodeId, TextStyleDef};
 
 use super::clipboard::SwatchChoices;
-use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, color_value, has_doc, ids_param, index, ok, point_param, str_param};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, color_value, has_doc, ids_param, index_opt, ok, point_param, str_param};
 use crate::Clipboard;
 
 /// The extension of a library file.
@@ -1649,11 +1649,11 @@ fn move_group(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "library.moveGroup";
     let id = library_id(s, p, C)?;
     let group = group_param(p, C)?;
-    let to = p.get("to").and_then(Value::as_u64).ok_or_else(|| bad(C, "missing `to` (an index)"))?;
+    let to = index_opt(p, "to", C)?.ok_or_else(|| bad(C, "missing `to` (an index)"))?;
     let (name, at) = s.libraries.change(&id, |lib| {
         let i = group_at(lib, group, C)?;
         let g = lib.groups.remove(i);
-        let at = index(to).min(lib.groups.len());
+        let at = to.min(lib.groups.len());
         let name = g.name.clone();
         lib.groups.insert(at, g);
         Ok((name, at))

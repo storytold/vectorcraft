@@ -3255,7 +3255,8 @@ fn images_are_written_again_as_the_same_bytes() {
 
 /// The program of `doc` with LF line ends, and each image's samples (from after `XI` and its line
 /// end to `%%EndData`, a `%_` before it kept) and each preview's rows (from after `32 17 ` to the
-/// line end before `%AI26_EndPlacedObjectPreview`) shown as `<n bytes>`.
+/// line end before `%AI26_EndPlacedObjectPreview` or `%_%AI26_EndPlacedObjectPreview`) shown as
+/// `<n bytes>`.
 fn program_shown(doc: &Document) -> String {
     shown(&export_ai_editing(doc, &opts()).unwrap().program)
 }
@@ -3267,10 +3268,13 @@ fn shown(p: &[u8]) -> String {
     let mut at = 0;
     loop {
         let xi = find(at, b"\r\nXI\r\n").map(|i| (i + 6, b"%%EndData".as_slice()));
-        let pv = find(at, b" 32 17 ").map(|i| (i + 7, b"\r\n%AI26_EndPlacedObjectPreview".as_slice()));
+        let pv = find(at, b" 32 17 ").map(|i| (i + 7, b"%AI26_EndPlacedObjectPreview".as_slice()));
         let Some((start, end)) = [xi, pv].into_iter().flatten().min_by_key(|(s, _)| *s) else { break };
         let mut stop = find(start, end).unwrap();
-        if end.starts_with(b"%%") && p.get(stop - 2..stop) == Some(b"%_") {
+        if p.get(stop - 2..stop) == Some(b"%_") {
+            stop -= 2;
+        }
+        if end.starts_with(b"%AI26") && p.get(stop - 2..stop) == Some(b"\r\n") {
             stop -= 2;
         }
         out.extend_from_slice(&p[at..start]);
@@ -6538,6 +6542,132 @@ fn effects_in_a_styled_objects_mask_are_warned_about() {
     assert!(shown(&out.program).contains("\n1 (Anon 1) XW\n"));
 }
 
+/// A 200 × 100 document of an image whose opacity mask doesn't clip, of the art `art` makes.
+fn masked_image(art: impl FnOnce(&mut Document) -> Node) -> Document {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let mut im = image_node(&mut doc, ImageBlob::png(rgb_png()), (3, 2), Affine::new([60.0, 0.0, 0.0, 40.0, 10.0, 10.0]), None);
+    let art = art(&mut doc);
+    im.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: false, invert: false, disabled: false, linked: true }.into());
+    doc.insert(Some(layer), usize::MAX, im).unwrap();
+    doc
+}
+
+/// The opacity mask art of the first image in `doc` that has one.
+fn image_mask_art(doc: &Document) -> Arc<Node> {
+    let mut art = None;
+    doc.walk(|n| {
+        if matches!(n.kind, NodeKind::Image(_))
+            && art.is_none()
+            && let Some(m) = n.extras().mask.as_ref()
+        {
+            art = Some(m.art.clone());
+        }
+    });
+    art.expect("an image with an opacity mask")
+}
+
+/// How many of the artboard's pixels `a` and `b` draw differently.
+fn pixels_apart(a: &Document, b: &Document) -> usize {
+    let (a, b) = (vectorcraft_testkit::raster::render_artboard(a), vectorcraft_testkit::raster::render_artboard(b));
+    assert_eq!((a.width, a.height), (b.width, b.height));
+    (0..a.height).flat_map(|y| (0..a.width).map(move |x| (x, y))).filter(|&(x, y)| a.pixel(x, y) != b.pixel(x, y)).count()
+}
+
+/// An opacity mask's art keeps its live effects as an art style: an image masked by a black path
+/// with Offset Path (hiding the image under it) reads back with the effect live on the mask's path,
+/// alone or as a member of a group of two, and draws as it did.
+#[test]
+fn a_masked_image_with_live_offset_path_round_trips() {
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 8.0, "joins": "miter", "miterLimit": 4.0}));
+    let black = solid(Color::rgb(0.0, 0.0, 0.0));
+    for members in [1, 2] {
+        let made = |effects: Vec<vectorcraft_doc::Effect>| {
+            masked_image(|doc| {
+                let grown = styled_rect(doc, "Grown", Rect::new(60.0, 30.0, 110.0, 70.0), black.clone(), Paint::None, effects);
+                if members == 1 {
+                    return grown;
+                }
+                let plain = square(doc, Rect::new(130.0, 30.0, 170.0, 70.0), Color::rgb(0.0, 0.0, 0.0));
+                group(doc, vec![grown, plain], false)
+            })
+        };
+        let doc = made(vec![offset.clone()]);
+        assert!(pixels_apart(&doc, &made(vec![])) > 0, "{members}: the effect draws nothing");
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{members}: {:?}", out.warnings);
+        let back = read_back(&doc);
+        let art = image_mask_art(&back);
+        let grown = if members == 1 {
+            art.clone()
+        } else {
+            assert!(art.appearance.effects.is_empty(), "the group took the effect: {:?}", art.appearance.effects);
+            let children = art.children().expect("a group of the mask's art");
+            assert_eq!(children.len(), 2);
+            assert!(children[1].appearance.effects.is_empty());
+            children[0].clone()
+        };
+        assert!(matches!(grown.kind, NodeKind::Path { .. }), "{members}: {:?}", grown.kind);
+        let [e] = grown.appearance.effects.as_slice() else { panic!("{members}: {:?}", grown.appearance.effects) };
+        assert_eq!(e.id, "path.offsetPath");
+        assert_eq!(e.params.get("offset").and_then(serde_json::Value::as_f64), Some(8.0), "{:?}", e.params);
+        assert_eq!(pixels_apart(&doc, &back), 0, "{members}");
+    }
+}
+
+/// The art of a mask keeps Offset Path live when its root is hidden (the canvas draws it all the
+/// same) and when it is the art of a mask inside another mask's art (that clips).
+#[test]
+fn hidden_and_nested_mask_art_keep_live_offset_path() {
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 6.0}));
+    let grown = |doc: &mut Document, effects, gray: f32| {
+        styled_rect(doc, "Grown", Rect::new(60.0, 30.0, 110.0, 70.0), solid(Color::rgb(gray, gray, gray)), Paint::None, effects)
+    };
+    let hidden = |effects| {
+        masked_image(|doc| {
+            let mut art = grown(doc, effects, 0.0);
+            art.visible = false;
+            art
+        })
+    };
+    let nested = |effects| {
+        masked_image(|doc| {
+            let mut outer = square(doc, Rect::new(20.0, 15.0, 180.0, 85.0), Color::rgb(0.0, 0.0, 0.0));
+            let inner = grown(doc, effects, 1.0);
+            outer.extras_mut().mask = Some(OpacityMask { art: Arc::new(inner), clip: true, invert: false, disabled: false, linked: true }.into());
+            outer
+        })
+    };
+    for (case, made) in [("hidden", &hidden as &dyn Fn(Vec<vectorcraft_doc::Effect>) -> Document), ("nested", &nested)] {
+        let doc = made(vec![offset.clone()]);
+        assert!(pixels_apart(&doc, &made(vec![])) > 0, "{case}: the effect draws nothing");
+        let back = read_back(&doc);
+        let mut art = image_mask_art(&back);
+        if case == "nested" {
+            art = art.extras().mask.as_ref().expect("the mask inside the mask's art").art.clone();
+        }
+        let ids: Vec<&str> = art.appearance.effects.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, ["path.offsetPath"], "{case}");
+        assert_eq!(pixels_apart(&doc, &back), 0, "{case}");
+    }
+}
+
+/// A geometry effect on an opacity mask's art that no art style holds (Roughen) is applied to the
+/// art written, so the mask reads back drawing what it drew, but for pixels on its edge that the
+/// written points' rounding moves.
+#[test]
+fn a_masks_art_with_an_effect_no_style_holds_is_written_as_it_draws() {
+    let rough = fx("distort.roughen", serde_json::json!({"size": 6.0, "relative": false, "points": "corner"}));
+    let black = solid(Color::rgb(0.0, 0.0, 0.0));
+    let rect = |doc: &mut Document, effects| styled_rect(doc, "Rough", Rect::new(60.0, 30.0, 140.0, 70.0), black.clone(), Paint::None, effects);
+    let doc = masked_image(|doc| rect(doc, vec![rough]));
+    assert!(pixels_apart(&doc, &masked_image(|doc| rect(doc, vec![]))) > 0, "the effect draws nothing");
+    let back = read_back(&doc);
+    assert!(image_mask_art(&back).appearance.effects.is_empty());
+    let apart = pixels_apart(&doc, &back);
+    assert!(apart <= 4, "{apart} pixels differ");
+}
+
 /// On a large canvas no art style is written (the reader scales the styles of a large canvas):
 /// objects with effects are written as their vector art with their geometry effects applied, with a
 /// warning.
@@ -7228,18 +7358,147 @@ fn an_image_on_hidden_lines_does_not_come_in_beside_its_look() {
     assert_eq!(art[0].name.as_deref(), Some("Photo"));
 }
 
-/// A linked image, an image with an opacity mask, and an image with a Warp and another effect are
-/// written as their drawn art, with no art style.
+/// [`warped_photo`] linked to `/Users/someone/Job/art/photo.png`, in folder `art` next to the
+/// document's.
+fn linked_warped_photo(doc: &mut Document, effects: Vec<vectorcraft_doc::Effect>) -> Node {
+    let mut n = warped_photo(doc, effects);
+    if let NodeKind::Image(im) = &mut n.kind {
+        let mut link = vectorcraft_doc::LinkInfo::new("/Users/someone/Job/art/photo.png");
+        link.relative = Some("art/photo.png".into());
+        im.link = Some(link);
+    }
+    n
+}
+
+/// A linked image with one Warp is written with an art style of that Warp, its bent pieces as its
+/// drawn look and the image itself as a placed file on `%_` lines, with its path, folder and
+/// preview: it reads back as the linked image, its pixels, placement, name, opacity and link as
+/// they were, with its Warp live and its settings kept.
+#[test]
+fn a_linked_image_with_a_warp_reads_back_linked_with_its_warp_live() {
+    // GUARDS: a linked image with a Warp was written as its drawn pieces alone, and read back
+    // without its Warp or its link.
+    let params = serde_json::json!({"bend": 40.0});
+    let doc = photo_doc(|d| linked_warped_photo(d, vec![fx("warp.arc", params.clone())]));
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let text = program_shown(&doc);
+    assert!(text.contains("\n%_%AI5_BeginPlace\n"), "{text}");
+    assert!(text.contains("\n%_(/Users/someone/Job/art/photo.png)`\n"), "{text}");
+    assert!(text.contains("\n%_(art/)\n"), "{text}");
+    assert!(text.contains("\n%_8 8 32 32 17 <256 bytes>\n"), "{text}");
+    assert!(text.contains("\n%_%AI5_EndPlace\n") && text.contains("\n1 (Anon 1) XW\n"), "{text}");
+    assert!(!text.contains("BeginRaster\n%_"), "no embedded copy: {text}");
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{:#?}", lines(&back));
+    let (mut want, mut got) = (vec![], vec![]);
+    pictures(&doc, doc.layers[0].children().unwrap(), "", &mut want);
+    pictures(&back, art, "", &mut got);
+    assert_eq!(got, want);
+    let [warp] = art[0].appearance.effects.as_slice() else { panic!("{:?}", art[0].appearance) };
+    assert_eq!(warp.id, "warp.arc");
+    let (w, g) = (vectorcraft_effects::merged_params("warp.arc", &params), vectorcraft_effects::merged_params(&warp.id, &warp.params));
+    for key in ["bend", "horizontal", "vertical"] {
+        assert!((g[key].as_f64().unwrap() - w[key].as_f64().unwrap()).abs() < 6e-3, "{key}: {g} for {w}");
+    }
+}
+
+/// A linked image with one Warp larger than a placed file's preview: its copy's preview and its drawn
+/// look's pieces (placed files of the same image) hold the same smaller preview, so fine detail
+/// reads back with the Warp live, the link kept and the preview's pixels, as a linked image without
+/// a Warp does.
+#[test]
+fn a_large_linked_image_with_a_warp_reads_back_from_its_preview() {
+    // GUARDS: a linked image with a Warp was written as its drawn pieces alone.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let checks =
+        image::RgbaImage::from_fn(600, 300, |x, y| if (x + y) % 2 == 0 { image::Rgba([255, 0, 0, 255]) } else { image::Rgba([0, 0, 255, 255]) });
+    let mut link = vectorcraft_doc::LinkInfo::new("/Users/someone/Job/art/checks.png");
+    link.relative = Some("art/checks.png".into());
+    let xf = Affine::new([0.25, 0.0, 0.0, 0.25, 20.0, 10.0]);
+    let mut n = image_node(&mut doc, ImageBlob::png(png_of(checks.into())), (600, 300), xf, Some(link));
+    n.appearance = Appearance { effects: vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))], ..Appearance::default() }.into();
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    let text = program_shown(&doc);
+    assert!(text.contains("\n%_256 128 1024 32 17 <131072 bytes>\n"), "the copy's preview");
+    assert!(text.contains("\n256 128 1024 32 17 <131072 bytes>\n"), "the look's pieces' previews");
+    let back = read_back(&doc);
+    let art = back.layers[0].children().unwrap();
+    assert_eq!(art.len(), 1, "{:#?}", lines(&back));
+    let NodeKind::Image(im) = &art[0].kind else { panic!("{:?}", art[0].kind) };
+    assert_eq!((im.width, im.height), (256, 128));
+    assert_eq!(
+        im.link.as_ref().map(|l| (l.path.as_str(), l.relative.as_deref())),
+        Some(("/Users/someone/Job/art/checks.png", Some("art/checks.png")))
+    );
+    assert_eq!(art[0].appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["warp.arc"]);
+}
+
+/// A hidden or locked image with one Warp, embedded or linked, keeps its state, its link and its
+/// live Warp.
+#[test]
+fn a_hidden_or_locked_image_with_a_warp_keeps_its_state() {
+    // GUARDS: a linked image with a Warp was written as its drawn pieces alone, and a hidden image's
+    // Warp was compared with a look that drew nothing, so it came in as its drawn pieces.
+    for (what, make) in [("embedded", warped_photo as fn(&mut Document, Vec<vectorcraft_doc::Effect>) -> Node), ("linked", linked_warped_photo)] {
+        for (shown, locked) in [(true, true), (false, false), (false, true)] {
+            let doc = photo_doc(|d| {
+                let mut n = make(d, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]);
+                (n.visible, n.locked) = (shown, locked);
+                n
+            });
+            let out = export_ai_editing(&doc, &opts()).unwrap();
+            assert!(out.warnings.is_empty(), "{what} {shown} {locked}: {:?}", out.warnings);
+            let back = read_back(&doc);
+            let art = back.layers[0].children().unwrap();
+            assert_eq!(art.len(), 1, "{what} {shown} {locked}: {:#?}", lines(&back));
+            assert_eq!(images_of(&back).len(), 1, "{what} {shown} {locked}");
+            assert_eq!(images_of(&back), images_of(&doc), "{what} {shown} {locked}");
+            assert_eq!(art[0].appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["warp.arc"]);
+        }
+    }
+}
+
+/// A linked image with one Warp in an opacity mask's art keeps its live Warp; its copy on `%_` lines
+/// is embedded, as linked images in masks are, with that warning.
+#[test]
+fn a_linked_image_with_a_warp_in_a_mask_is_embedded_with_its_warp_live() {
+    // GUARDS: the placed file of a styled image written in an opacity mask's art.
+    let doc = photo_doc(|d| {
+        let art = linked_warped_photo(d, vec![fx("warp.arc", serde_json::json!({"bend": 40.0}))]);
+        let mut square =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 10.0, 100.0, 90.0)), Appearance::basic(solid(Color::BLACK), Paint::None, 0.0));
+        square.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        square
+    });
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert_eq!(out.warnings, [writer::LINKS_EMBEDDED]);
+    let text = program_shown(&doc);
+    assert!(!text.contains("BeginPlace") && text.contains("1 (Anon 1) XW"), "{text}");
+    let back = read_back(&doc);
+    let mask = back.layers[0].children().unwrap()[0].extras().mask.as_ref().map(|m| m.art.clone()).expect("the mask");
+    let NodeKind::Image(im) = &mask.kind else { panic!("{:?}", mask.kind) };
+    assert!(im.link.is_none());
+    assert_eq!(mask.appearance.effects.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["warp.arc"]);
+}
+
+/// An image with an opacity mask and an image with a Warp and another effect are written as their
+/// drawn art, with no art style, linked or embedded.
 #[test]
 fn other_warped_images_are_written_as_their_drawn_art() {
     let arc = || fx("warp.arc", serde_json::json!({"bend": 40.0}));
-    let linked = photo_doc(|d| {
-        let mut n = warped_photo(d, vec![arc()]);
-        if let NodeKind::Image(im) = &mut n.kind {
-            im.link = Some(vectorcraft_doc::LinkInfo::new("/art/photo.png"));
-        }
+    let linked_masked = photo_doc(|d| {
+        let mut n = linked_warped_photo(d, vec![arc()]);
+        let white =
+            Node::path(d.alloc_id(), shapes::rectangle(Rect::new(20.0, 10.0, 100.0, 90.0)), Appearance::basic(solid(Color::WHITE), Paint::None, 0.0));
+        n.extras_mut().mask = Some(Box::new(OpacityMask::new(white, false)));
         n
     });
+    let linked_stacked = photo_doc(|d| linked_warped_photo(d, vec![arc(), fx("stylize.feather", serde_json::json!({"radius": 2.0}))]));
     let masked = photo_doc(|d| {
         let mut n = warped_photo(d, vec![arc()]);
         let white =
@@ -7248,7 +7507,7 @@ fn other_warped_images_are_written_as_their_drawn_art() {
         n
     });
     let stacked = photo_doc(|d| warped_photo(d, vec![arc(), fx("stylize.feather", serde_json::json!({"radius": 2.0}))]));
-    for (what, doc) in [("linked", linked), ("masked", masked), ("stacked", stacked)] {
+    for (what, doc) in [("linked masked", linked_masked), ("linked stacked", linked_stacked), ("masked", masked), ("stacked", stacked)] {
         assert!(!program_shown(&doc).contains("1 (Anon"), "{what}");
         let back = read_back(&doc);
         let art = back.layers[0].children().unwrap();
@@ -7456,9 +7715,10 @@ fn a_linked_object_past_the_object_limit_warns_that_its_link_is_left_out() {
 }
 
 /// A link to a graphic style with Twist is kept where the reader reads Twist: on a curve, a curved
-/// compound path or a group with nothing stroked up to a quarter turn, and on a path with straight
-/// segments at any angle. A stroked curve, a group with a stroked member or a guide, or a curve,
-/// compound path or group twisted further, is written without the link and warns.
+/// compound path or a group with nothing stroked up to a quarter turn, and on a path or compound path
+/// with straight segments up to half a turn. A stroked curve, a group with a stroked member or a
+/// guide, a straight compound path with a guide member that reaches past its other members, or an
+/// object twisted further, is written without the link and warns.
 #[test]
 fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
     // A document with the object `make` builds from its appearance, `ap` with Twist at `angle`,
@@ -7493,6 +7753,17 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
         n.appearance = ap.into();
         n
     };
+    // A compound path of a square and a guide, a rectangle with corners `a` and `b`.
+    let guided = |a: (f64, f64), b: (f64, f64)| {
+        move |doc: &mut Document, ap: Appearance| {
+            let outer = Node::path(doc.alloc_id(), square(), Appearance::default());
+            let path = shapes::rectangle(Rect::new(a.0, a.1, b.0, b.1));
+            let guide = Node::new(doc.alloc_id(), NodeKind::Path { path, rule: FillRule::NonZero, live: None, clipping: false, guide: true });
+            let mut n = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(guide)], rule: FillRule::NonZero });
+            n.appearance = ap.into();
+            n
+        }
+    };
     // A group of a filled square and `second`.
     let group = |second: fn(&mut Document) -> Node| {
         move |doc: &mut Document, ap: Appearance| {
@@ -7523,6 +7794,8 @@ fn a_link_to_a_twist_style_is_kept_where_the_reader_reads_it() {
         ("a square twisted three quarters of a turn back", twisted(-270.0, filled(), path(square())), false),
         ("a straight compound path twisted half a turn", twisted(180.0, filled(), frame), true),
         ("a straight compound path twisted a full turn", twisted(360.0, filled(), frame), false),
+        ("a straight compound path with a guide inside it", twisted(45.0, filled(), guided((30.0, 20.0), (70.0, 50.0))), true),
+        ("a straight compound path with a guide reaching past it", twisted(45.0, filled(), guided((30.0, 20.0), (120.0, 50.0))), false),
         ("a curve twisted past a quarter turn", twisted(120.0, filled(), path(oval())), false),
         ("a stroked curve", twisted(45.0, Appearance::basic(black_fill(), red.clone(), 2.0), path(oval())), false),
         ("a curved compound path", twisted(-60.0, filled(), ring), true),
@@ -7637,8 +7910,8 @@ fn a_style_that_isnt_written_defines_no_gradient() {
     assert!(p.contains("%%BeginSetup\n0 Bn\n"), "{p}");
 }
 
-/// An object in a plain group, a sublayer or a clipping group by a path keeps its style there. One
-/// in a symbol's art, in an opacity mask or in art cut to a clipping object other than a path is
+/// An object in a plain group, a sublayer, a clipping group by a path or an opacity mask keeps its
+/// style there. One in a symbol's art or in art cut to a clipping object other than a path is
 /// written as its drawn look, with a warning.
 #[test]
 fn where_a_styled_object_keeps_its_style() {
@@ -7695,8 +7968,17 @@ fn where_a_styled_object_keeps_its_style() {
     n.extras_mut().mask = Some(OpacityMask { art: Arc::new(art), clip: true, invert: false, disabled: false, linked: true }.into());
     put(&mut doc, n);
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert!(out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
-    assert!(!shown(&out.program).contains("(Anon 1) XW"));
+    assert!(!out.warnings.iter().any(|w| w == writer::EFFECTS), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let mut art = None;
+    back.walk(|n| {
+        if let Some(m) = n.extras().mask.as_ref() {
+            art = Some(m.art.clone());
+        }
+    });
+    let art = art.expect("the opacity mask");
+    assert_eq!(art.name.as_deref(), Some("Inside"));
+    assert_eq!(art.appearance.effects.len(), 1);
     // In art cut to a clipping object other than a path: type.
     let mut doc = Document::new(200.0, 100.0);
     let t = vectorcraft_doc::TextObject::point(
@@ -8039,7 +8321,7 @@ impl ArtBrushOptions {
 
 /// A path with the Calligraphic brush, and one with an Art brush in Tints whose art bends along the
 /// path, come back as those paths with the brush on their stroke at its weight, not as their drawn
-/// look; a path with the Art brush that keeps its art's colors comes back as its drawn look.
+/// look; so does a path with the Art brush that keeps its art's colors.
 #[test]
 fn brushed_paths_are_read_back_brushed() {
     let mut doc = brushes_document();
@@ -8059,8 +8341,63 @@ fn brushed_paths_are_read_back_brushed() {
     assert_eq!(art[1].path_data(), ours[1].path_data());
     brushed(&mut doc, "Plain ribbon", (20.0, 180.0), (280.0, 180.0), 1.0);
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert!(out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
-    assert!(matches!(read_back(&doc).layers[0].children().unwrap()[2].kind, NodeKind::Group { .. }));
+    assert!(!out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[2];
+    assert!(matches!(n.kind, NodeKind::Path { .. }), "{n:#?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("Plain ribbon"));
+}
+
+/// Art brushes at another width, flipped along or across, scaled proportionately or stretched
+/// between guides (flipped along too, or at guides the written numbers round) are written with those
+/// options, and a path with each comes back as the path with the brush on its stroke, except Scale
+/// Proportionately's, which is written as its brush's art.
+#[test]
+fn art_brushes_with_options_are_read_back_with_them() {
+    use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind};
+    let thirds = ArtScale::BetweenGuides { start: 1.0 / 3.0, end: 2.0 / 3.0 };
+    let options: Vec<(&str, ArtBrush)> = vec![
+        ("Wide", ArtBrush { width: 250.0, ..ArtBrush::default() }),
+        ("Along", ArtBrush { flip_along: true, ..ArtBrush::default() }),
+        ("Across", ArtBrush { flip_across: true, ..ArtBrush::default() }),
+        ("Proportional", ArtBrush { scale: ArtScale::Proportional, width: 50.0, ..ArtBrush::default() }),
+        ("Guides", ArtBrush { scale: ArtScale::BetweenGuides { start: 0.25, end: 0.5 }, ..ArtBrush::default() }),
+        ("Guides along", ArtBrush { scale: ArtScale::BetweenGuides { start: 0.25, end: 0.5 }, flip_along: true, ..ArtBrush::default() }),
+        ("Thirds", ArtBrush { scale: thirds, flip_along: true, ..ArtBrush::default() }),
+    ];
+    let lib: Vec<Brush> = options
+        .iter()
+        .map(|(name, a)| Brush { name: (*name).into(), kind: BrushKind::Art(ArtBrush { art: brush_art_node(), ..a.clone() }) })
+        .collect();
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    for (i, b) in lib.iter().enumerate() {
+        let y = 20.0 + 25.0 * i as f64;
+        brushed(&mut doc, &b.name, (20.0, y), (280.0, y), 1.0);
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let got = vectorcraft_brush::library(&back);
+    assert_eq!(got.len(), lib.len());
+    for (g, w) in got.iter().zip(&lib) {
+        let (BrushKind::Art(g), BrushKind::Art(w)) = (&g.kind, &w.kind) else { panic!("art") };
+        if w.scale == thirds {
+            let ArtScale::BetweenGuides { start, end } = g.scale else { panic!("guides: {g:?}") };
+            assert!((start - 1.0 / 3.0).abs() < 1e-6 && (end - 2.0 / 3.0).abs() < 1e-6, "{g:?}");
+            assert_eq!(ArtBrushOptions::of(&ArtBrush { scale: thirds, ..g.clone() }), ArtBrushOptions::of(w));
+        } else {
+            assert_eq!(ArtBrushOptions::of(g), ArtBrushOptions::of(w));
+        }
+    }
+    for (n, b) in back.layers[0].children().unwrap().iter().zip(&lib) {
+        if b.name == "Proportional" {
+            assert!(matches!(n.kind, NodeKind::Group { .. }), "{}: the brush's art: {n:#?}", b.name);
+            continue;
+        }
+        assert!(matches!(n.kind, NodeKind::Path { .. }), "{}: {n:#?}", b.name);
+        assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some(b.name.as_str()));
+    }
 }
 
 /// A compound path with the Calligraphic brush comes back as that compound path with the brush on its
@@ -8364,8 +8701,8 @@ fn brushes_write_the_same_bytes_again() {
 /// beside a brush that comes back, and each changed from a brush that comes back by the one setting
 /// that leaves it out: an Art brush whose art is a group with a fill of its own, a Scatter brush whose
 /// art is a path without points, an Art brush whose art is a group without members, Pattern and Bristle
-/// brushes, Art brushes flipped along or across, overlapping, at another width, with a width that
-/// varies, in another direction or scale, Art and Scatter brushes in Tints and Shades or Hue Shift, a
+/// brushes, Art brushes overlapping, with a width that varies, in another direction or with guides
+/// that leave no art between them, Art and Scatter brushes in Tints and Shades or Hue Shift, a
 /// brush whose name holds a slash and a second brush of a name. A brush left out doesn't take its
 /// name from a later one.
 #[test]
@@ -8389,13 +8726,10 @@ fn brushes_the_reader_cant_read_are_left_out() {
         ("empty group", art_with(&|a| a.art = Node::group(vectorcraft_doc::NodeId(1), vec![]))),
         ("pattern", BrushKind::Pattern(PatternBrush::default())),
         ("bristle", BrushKind::Bristle(Bristle::default())),
-        ("flipped along", art_with(&|a| a.flip_along = true)),
-        ("flipped across", art_with(&|a| a.flip_across = true)),
         ("overlap", art_with(&|a| a.overlap = true)),
-        ("width", art_with(&|a| a.width = 50.0)),
         ("width varies", art_with(&|a| a.width_mode = Some(Variation::Pressure))),
         ("direction", art_with(&|a| a.direction = Direction::RightToLeft)),
-        ("proportional", art_with(&|a| a.scale = ArtScale::Proportional)),
+        ("guides with no art between them", art_with(&|a| a.scale = ArtScale::BetweenGuides { start: 0.5, end: 0.5 })),
         ("art tints and shades", art_with(&|a| a.colorization = Colorization::TintsAndShades)),
         ("art hue shift", art_with(&|a| a.colorization = hue)),
         (
@@ -8605,8 +8939,8 @@ fn an_empty_brushes_panel_comes_back_empty() {
 }
 
 /// A path with one of a new document's brushes writes the brushes the reader reads, and keeps its
-/// brush. The new document's Art brush with other options, its Pattern brushes and its Bristle
-/// brushes are left out with a warning, so the file opens without them.
+/// brush. The new document's Pattern brushes and its Bristle brushes are left out with a warning,
+/// so the file opens without them.
 #[test]
 fn a_new_documents_brush_on_a_path_writes_the_brushes() {
     let mut doc = Document::new(300.0, 200.0);
@@ -8616,7 +8950,7 @@ fn a_new_documents_brush_on_a_path_writes_the_brushes() {
     let back = read_back(&doc);
     let n = &back.layers[0].children().unwrap()[0];
     assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("3 pt. Round"));
-    let left_out = ["Arrow", "Chain", "Stitches", "Diamonds", "Bristle Round", "Bristle Flat Fan"];
+    let left_out = ["Chain", "Stitches", "Diamonds", "Bristle Round", "Bristle Flat Fan"];
     let want: Vec<&str> = vectorcraft_brush::defaults().iter().map(|b| b.name.as_str()).filter(|n| !left_out.contains(n)).collect();
     let lib = vectorcraft_brush::library(&back);
     assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), want);
@@ -9657,4 +9991,234 @@ fn envelopes_document() -> Document {
         doc.insert(Some(layer), usize::MAX, n).unwrap();
     }
     doc
+}
+
+// ---------- text wrap ----------
+
+/// `n` with text wrap options `offset` and `invert`.
+fn wrapped(mut n: Node, offset: f64, invert: bool) -> Node {
+    n.extras_mut().wrap = Some(vectorcraft_doc::TextWrap { offset, invert });
+    n
+}
+
+/// The text wrap options of `nodes` and of the objects they hold, in order, each with its object's
+/// name.
+fn wraps(nodes: &[Arc<Node>]) -> Vec<(Option<String>, f64, bool)> {
+    let mut out = vec![];
+    for n in nodes {
+        n.walk(&mut |m| {
+            if let Some(w) = m.extras().wrap {
+                out.push((m.name.clone(), w.offset, w.invert));
+            }
+        });
+    }
+    out
+}
+
+/// `got` and `want` name the same objects with the same Invert Wrap, and offsets within `1e-6`.
+fn same_wraps(got: &[(Option<String>, f64, bool)], want: &[(Option<String>, f64, bool)]) {
+    let close = got.len() == want.len() && got.iter().zip(want).all(|(g, w)| g.0 == w.0 && g.2 == w.2 && (g.1 - w.1).abs() < 1e-6);
+    assert!(close, "{got:?}\n{want:?}");
+}
+
+/// The dictionary entries of text wrap options `offset` (as written) and `invert`.
+fn wrap_entries(offset: &str, invert: bool) -> String {
+    format!("%_{offset} /Real (AI11TextWrapOffset) ,\n%_{} /Bool (AI11TextWrapInvert) ,\n", u8::from(invert))
+}
+
+/// Text wrap options are written in each object's dictionary and read back: a positive and a
+/// negative offset, Invert Wrap on and off, the default options, an object without them, a named
+/// object with an opacity mask, a group, a compound path and a clipping group's clipping path. An
+/// offset that isn't finite is written as the default 6 pt, and one past the -1000 to 1000 pt the
+/// reader keeps as the nearer end of that range.
+#[test]
+fn text_wrap_options_are_written_and_read_back() {
+    let mut doc = Document::new(400.0, 200.0);
+    let layer = doc.layers[0].id;
+    let plain = |doc: &mut Document, x: f64| square(doc, Rect::new(x, 10.0, x + 20.0, 30.0), Color::gray(0.5));
+    let a = wrapped(plain(&mut doc, 10.0), 12.5, false);
+    let b = wrapped(plain(&mut doc, 40.0), -4.25, true);
+    let c = wrapped(plain(&mut doc, 70.0), 6.0, false);
+    let d = plain(&mut doc, 100.0);
+    let mut e = named(wrapped(plain(&mut doc, 130.0), 3.0, true), "Badge");
+    let mask_art = plain(&mut doc, 130.0);
+    e.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, false)));
+    let members = vec![plain(&mut doc, 160.0), plain(&mut doc, 190.0)];
+    let f = wrapped(group(&mut doc, members, false), -2.0, false);
+    let outer = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(220.0, 10.0, 260.0, 50.0)), Appearance::default());
+    let inner = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(230.0, 20.0, 250.0, 40.0)), Appearance::default());
+    let mut ring = Node::new(doc.alloc_id(), NodeKind::Compound { children: vec![Arc::new(outer), Arc::new(inner)], rule: FillRule::EvenOdd });
+    ring.appearance = Appearance::basic(solid(Color::gray(0.5)), Paint::None, 0.0).into();
+    let g = wrapped(ring, 7.0, true);
+    let clip = wrapped(clipping(&mut doc, shapes::rectangle(Rect::new(280.0, 10.0, 320.0, 50.0))), 5.0, false);
+    let clipped = plain(&mut doc, 290.0);
+    let h = group(&mut doc, vec![clip, clipped], true);
+    for n in [a, b, c, d, e, f, g, h] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    assert_eq!(doc.layers[0].children().unwrap()[2].extras().wrap, Some(vectorcraft_doc::TextWrap::default()));
+    let text = program(&doc);
+    for entries in
+        [wrap_entries("12.5", false), wrap_entries("-4.25", true), wrap_entries("6", false), wrap_entries("-2", false), wrap_entries("7", true)]
+    {
+        assert!(text.contains(&entries), "{entries}\n{text}");
+    }
+    assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 7, "{text}");
+    assert!(!text.contains("AI11TextWrapPath"), "{text}");
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &wraps(doc.layers[0].children().unwrap()));
+    let kept: Vec<_> = back.layers[0].children().unwrap().iter().map(|n| (n.extras().wrap, n.extras().mask.is_some())).collect();
+    let want: Vec<_> = doc.layers[0].children().unwrap().iter().map(|n| (n.extras().wrap, n.extras().mask.is_some())).collect();
+    assert_eq!(kept, want);
+
+    // An offset that isn't finite, and offsets past the range the reader keeps.
+    let mut doc = Document::new(200.0, 100.0);
+    let odd = wrapped(plain(&mut doc, 10.0), f64::NAN, true);
+    let far = wrapped(plain(&mut doc, 40.0), 1e300, false);
+    let far_in = wrapped(plain(&mut doc, 70.0), -1000.5, false);
+    let layer = doc.layers[0].id;
+    for n in [odd, far, far_in] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let text = program(&doc);
+    for entries in [wrap_entries("6", true), wrap_entries("1000", false), wrap_entries("-1000", false)] {
+        assert!(text.contains(&entries), "{entries}\n{text}");
+    }
+    same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 6.0, true), (None, 1000.0, false), (None, -1000.0, false)]);
+}
+
+/// The art drawn for an object (a blend's steps, a stained symbol instance's art) is written
+/// without the text wrap options of the objects it is made from, which wrap no type; the object
+/// keeps its own. A symbol's art and a live instance keep theirs.
+#[test]
+fn drawn_art_keeps_only_its_objects_text_wrap() {
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let keys = vec![
+        Arc::new(wrapped(square(&mut doc, Rect::new(10.0, 10.0, 12.0, 12.0), Color::gray(0.5)), 2.0, true)),
+        Arc::new(wrapped(square(&mut doc, Rect::new(30.0, 10.0, 32.0, 12.0), Color::gray(0.5)), 2.0, true)),
+    ];
+    let spec = vectorcraft_doc::BlendSpec { spacing: vectorcraft_doc::BlendSpacing::Distance(10.0), ..Default::default() };
+    let blend = wrapped(Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) }), 8.0, false);
+    let art = wrapped(square(&mut doc, Rect::new(0.0, 0.0, 10.0, 10.0), LEAF), 4.0, true);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+    let mut stained = instance(&mut doc, "Leaf", Affine::translate((50.0, 10.0)));
+    stained.appearance = Appearance::basic(solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    let live = wrapped(instance(&mut doc, "Leaf", Affine::translate((80.0, 10.0))), -3.0, false);
+    for n in [blend, stained, live] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &[(None, 8.0, false), (None, -3.0, false)]);
+    assert!(matches!(back.layers[0].children().unwrap()[2].kind, NodeKind::SymbolInstance { .. }));
+    same_wraps(&wraps(&[back.symbols[0].art.clone()]), &[(None, 4.0, true)]);
+
+    // An object kept with an art style: its options go with the object, not its drawn look.
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let shadow = fx("stylize.dropShadow", serde_json::json!({"x": 6.0, "y": 4.0, "blur": 8.0}));
+    let shadowed = styled_rect(&mut doc, "Shadowed", Rect::new(10.0, 10.0, 60.0, 50.0), solid(Color::gray(0.5)), Paint::None, vec![shadow]);
+    doc.insert(Some(layer), usize::MAX, wrapped(shadowed, 9.0, true)).unwrap();
+    let text = program(&doc);
+    assert!(text.contains("(Anon 1) XW") && text.matches("(AI11TextWrapOffset)").count() == 1, "{text}");
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &[(Some("Shadowed".into()), 9.0, true)]);
+}
+
+/// On a large canvas the offsets are written at the art's scale (1/10) and read back at their size,
+/// an instance written as its art keeps its own options, and a symbol's art, defined at its own
+/// size, keeps its offset as it is.
+#[test]
+fn text_wrap_offsets_on_a_large_canvas_come_back_at_their_size() {
+    let mut doc = Document::new(20_000.0, 20_000.0);
+    let layer = doc.layers[0].id;
+    let a = wrapped(square(&mut doc, Rect::new(1000.0, 1000.0, 1200.0, 1200.0), Color::gray(0.5)), -12.34, true);
+    let b = wrapped(square(&mut doc, Rect::new(1400.0, 1000.0, 1600.0, 1200.0), Color::gray(0.5)), 250.0, false);
+    let art = wrapped(square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), LEAF), 4.0, true);
+    doc.symbols.push(Symbol { dynamic: false, name: "Leaf".into(), art: Arc::new(art) });
+    let one = wrapped(instance(&mut doc, "Leaf", Affine::translate((2000.0, 1000.0))), -3.0, false);
+    for n in [a, b, one] {
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+    }
+    let text = program(&doc);
+    for entries in [wrap_entries("-1.234", true), wrap_entries("25", false), wrap_entries("-0.3", false), wrap_entries("4", true)] {
+        assert!(text.contains(&entries), "{entries}\n{text}");
+    }
+    let want = [(None, -12.34, true), (None, 250.0, false), (None, -3.0, false)];
+    let symbol = [(None, 4.0, true)];
+    // From the editing data alone.
+    let back = read_back(&doc);
+    same_wraps(&wraps(back.layers[0].children().unwrap()), &want);
+    same_wraps(&wraps(&[back.symbols[0].art.clone()]), &symbol);
+    // Beside a page of the artboard's size in points.
+    let (p, _) = private_data(&doc, &opts()).unwrap();
+    let (read, notes, layers) = crate::layered_ai(&p.data, Document::new(20_000.0, 20_000.0), vec![], false, true, 1.389);
+    assert!(layers, "{notes:?}");
+    same_wraps(&wraps(read.layers[0].children().unwrap()), &want);
+    same_wraps(&wraps(&[read.symbols[0].art.clone()]), &symbol);
+}
+
+/// Type and envelopes keep their own text wrap options: point type, each frame of threaded area
+/// type (one with options, one without, in either order) and an envelope kept live.
+#[test]
+fn text_wrap_options_of_type_and_envelopes_are_read_back() {
+    use vectorcraft_doc::{TextKind, TextObject, TextRun};
+    for first_wraps in [true, false] {
+        let mut doc = Document::new(300.0, 100.0);
+        let layer = doc.layers[0].id;
+        let st = style(10.0, Color::BLACK);
+        let mut first = TextObject::point(vectorcraft_geom::Point::ZERO, "", st.clone());
+        first.runs = vec![TextRun::new("One two three ", st.clone())];
+        first.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(10.0, 10.0, 90.0, 40.0)) };
+        first.xf = Affine::IDENTITY;
+        let mut second = first.clone();
+        second.runs = vec![TextRun::new("four five", st.clone())];
+        second.kind = TextKind::Area { frame: shapes::rectangle(Rect::new(110.0, 10.0, 190.0, 40.0)) };
+        let (mut first, mut second) = (named(text_node(&mut doc, first), "First"), named(text_node(&mut doc, second), "Second"));
+        let frame = if first_wraps { &mut first } else { &mut second };
+        frame.extras_mut().wrap = Some(vectorcraft_doc::TextWrap { offset: 3.5, invert: true });
+        doc.text_threads.push(vec![first.id, second.id]);
+        let label = TextObject::point(vectorcraft_geom::Point::new(210.0, 30.0), "Label", st);
+        let label = wrapped(named(text_node(&mut doc, label), "Label"), -1.5, false);
+        for n in [first, second, label] {
+            doc.insert(Some(layer), usize::MAX, n).unwrap();
+        }
+        let back = read_back(&doc);
+        assert_eq!(back.text_threads.len(), 1, "the frames stay type");
+        let frame = if first_wraps { "First" } else { "Second" };
+        same_wraps(&wraps(back.layers[0].children().unwrap()), &[(Some(frame.into()), 3.5, true), (Some("Label".into()), -1.5, false)]);
+    }
+
+    let mut doc = Document::new(200.0, 100.0);
+    let layer = doc.layers[0].id;
+    let kinds = live_envelope_kinds();
+    let (_, arc) = kinds.iter().find(|(n, _)| *n == "arc").unwrap();
+    let bent = wrapped(envelope_node(&mut doc, arc.clone(), 50.0, false, vectorcraft_doc::live::EnvelopeOptions::NEW), 2.5, true);
+    doc.insert(Some(layer), usize::MAX, bent).unwrap();
+    let back = read_back(&doc);
+    let top = back.layers[0].children().unwrap();
+    assert!(matches!(top[0].kind, NodeKind::Envelope { .. }));
+    same_wraps(&wraps(top), &[(Some("Bent".into()), 2.5, true)]);
+}
+
+/// A clipping path inside art cut to a clipping object is written as its fills and its strokes,
+/// two objects: its text wrap options are written once, whether it has both or only strokes.
+#[test]
+fn a_clipping_path_written_as_its_paint_keeps_one_text_wrap() {
+    for fill in [solid(Color::gray(0.5)), Paint::None] {
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let mut cutter = clipping(&mut doc, shapes::rectangle(Rect::new(20.0, 20.0, 80.0, 80.0)));
+        cutter.appearance = Appearance::basic(fill, solid(Color::BLACK), 2.0).into();
+        let cutter = wrapped(cutter, 5.0, true);
+        let member = square(&mut doc, Rect::new(30.0, 30.0, 120.0, 60.0), Color::rgb(1.0, 0.0, 0.0));
+        let inner = group(&mut doc, vec![cutter, member], true);
+        let frame = square(&mut doc, Rect::new(0.0, 0.0, 100.0, 100.0), Color::gray(0.9));
+        let frame = group(&mut doc, vec![frame], false);
+        let outer = group(&mut doc, vec![frame, inner], true);
+        doc.insert(Some(layer), usize::MAX, outer).unwrap();
+        let text = program(&doc);
+        assert_eq!(text.matches("(AI11TextWrapOffset)").count(), 1, "{text}");
+        same_wraps(&wraps(read_back(&doc).layers[0].children().unwrap()), &[(None, 5.0, true)]);
+    }
 }

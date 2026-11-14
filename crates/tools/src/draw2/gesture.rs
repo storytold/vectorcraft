@@ -72,7 +72,7 @@ const BAND_WORK_PER_CALL: usize = 20_000;
 /// a fit's cost grows as its Fidelity shrinks (at 0.01 pt a long pen stroke lagged, #4565), and
 /// a preview within half a pixel of the stroke looks the same. The release fits it at its Fidelity.
 const PREVIEW_FIDELITY_PX: f64 = 0.5;
-/// The Smooth tool's Fidelity until Smooth Tool Options sets another.
+/// The Smooth tool's Fidelity (screen pixels) until Smooth Tool Options sets another.
 const SMOOTH_FIDELITY: f64 = 2.5;
 
 /// The `fidelity` (points) the Pencil and the Paintbrush send `path.freehand` for `px` screen pixels
@@ -107,8 +107,8 @@ pub struct GestureTool {
     /// Paths' distance in points); the stroke redraws the section it ends on (#2850).
     redraw: Option<(NodeId, f64)>,
     /// Fit tolerance (Pencil/Paintbrush/Smooth/Blob Brush "Fidelity"): in screen pixels for the
-    /// Pencil and the Paintbrush, so a stroke keeps as many points at any zoom (#5729), in points
-    /// for the others.
+    /// Pencil and the Paintbrush, so a stroke keeps as many points at any zoom (#5729), and for the
+    /// Smooth tool, so a drag smooths as much at any zoom; in points for the Blob Brush.
     pub fidelity: f64,
     /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
     pub size: f64,
@@ -139,8 +139,8 @@ pub struct GestureTool {
     /// preview shows the points joined by straight segments and the release fits them (Pencil
     /// only, on by default).
     pub live_fit: bool,
-    /// The Smooth tool's Fidelity, used when Alt switches the Pencil, Paintbrush or Blob Brush to Smooth.
-    /// The engine sets it from Smooth Tool Options (`smoothFidelity`).
+    /// The Smooth tool's Fidelity (screen pixels), used when Alt switches the Pencil, Paintbrush or
+    /// Blob Brush to Smooth. The engine sets it from Smooth Tool Options (`smoothFidelity`).
     smooth_fidelity: f64,
     /// Active drag is smoothing with the Pencil, Paintbrush or Blob Brush (Alt held).
     smoothing: bool,
@@ -777,7 +777,8 @@ fn has_selected_smooth_path(cx: &ToolContext) -> bool {
     cx.selection.objects.iter().filter_map(|id| cx.doc.node(*id)).any(|n| {
         let mut found = false;
         n.walk(&mut |child| {
-            if matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(smoothable))
+            if !found
+                && matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(smoothable))
                 && editable(child.id)
             {
                 found = true;
@@ -785,6 +786,13 @@ fn has_selected_smooth_path(cx: &ToolContext) -> bool {
         });
         found
     })
+}
+
+/// The Smooth tool's cursor: Not Allowed when no selected path can be smoothed, since a drag then
+/// changes nothing. A selected path anywhere on the canvas is enough, so the cursor does not depend
+/// on where the pointer is.
+fn smooth_cursor(cx: &ToolContext) -> Cursor {
+    if has_selected_smooth_path(cx) { Cursor::Smooth } else { Cursor::NotAllowed }
 }
 
 impl GestureTool {
@@ -1173,10 +1181,10 @@ impl GestureTool {
         let tol = cx.tol(self.edit_within);
         let radius = cx.tol(SMOOTH_RADIUS);
         if self.smoothing {
-            if has_sel && pts.len() >= 2 {
+            if pts.len() >= 2 && has_selected_smooth_path(cx) {
                 return vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": self.smooth_fidelity}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.smooth_fidelity)}),
                 )];
             }
             return vec![];
@@ -1225,8 +1233,11 @@ impl GestureTool {
                 }),
             )],
             "knife" if pts.len() >= 2 => vec![Action::Exec("path.knife".into(), json!({"points": points_json(pts)}))],
-            "smooth" if has_sel && pts.len() >= 2 => {
-                vec![Action::Exec("path.smoothRegion".into(), json!({"points": points_json(pts), "radius": radius, "fidelity": self.fidelity}))]
+            "smooth" if pts.len() >= 2 && has_selected_smooth_path(cx) => {
+                vec![Action::Exec(
+                    "path.smoothRegion".into(),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.fidelity)}),
+                )]
             }
             "pathEraser" if has_sel => vec![Action::Exec("path.eraseSegments".into(), json!({"points": points_json(pts), "width": cx.tol(8.0)}))],
             "join" if pts.len() >= 2 => vec![Action::Exec("path.joinScrub".into(), json!({"points": points_json(pts), "tolerance": tol}))],
@@ -1531,13 +1542,15 @@ impl Tool for GestureTool {
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         // An active smoothing drag, or Alt before a press that would switch the Pencil, Paintbrush
-        // or Blob Brush to Smooth. A Paintbrush stroke already drawing keeps drawing with Alt.
+        // or Blob Brush to Smooth. A Paintbrush stroke already drawing keeps drawing with Alt. With
+        // no selected path to smooth, the Pencil and the Blob Brush show Not Allowed, as the Smooth
+        // tool does.
         if self.smoothing
             || (self.id == "pencil" && self.alt_smooth && m.alt && !self.began)
             || (!self.active && self.id == "paintbrush" && m.alt && has_selected_smooth_path(cx))
             || self.blob_alt_smooths(m)
         {
-            return Cursor::Smooth;
+            return smooth_cursor(cx);
         }
         // Before a press that would draw a straight line: over an end of a selected open path,
         // the line continues that path from the end (`PointerKind::Down`).
@@ -1560,7 +1573,7 @@ impl Tool for GestureTool {
             "blobBrush" => Cursor::BlobBrush,
             "eraser" => Cursor::Eraser,
             "knife" => Cursor::Knife,
-            "smooth" => Cursor::Smooth,
+            "smooth" => smooth_cursor(cx),
             "pathEraser" => Cursor::PathEraser,
             "join" => Cursor::Join,
             // Before a press that draws a new path the Pencil shows its star; over a selected path

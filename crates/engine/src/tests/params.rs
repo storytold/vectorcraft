@@ -400,6 +400,43 @@ fn stroke_set_refuses_an_unknown_key() {
     }
 }
 
+/// `object.setLiveShape` names every key it reads, and each of its `items` takes `id` and
+/// `corners` alone: another key, at the top level, in an item or in a batch step, is refused
+/// instead of being ignored.
+#[test]
+fn set_live_shape_refuses_an_unknown_key() {
+    const ID: &str = "object.setLiveShape";
+    assert!(!UNCHECKED.contains(&ID));
+    let e = refusal(ID, json!({"id": 3, "path": [[0, 0], [1, 1]], "radius": 5}));
+    assert!(e.starts_with("unknown parameter `path`; the command takes: ") && e.contains("relativeRadii"), "{e}");
+    let e = refusal(ID, json!({"radiuss": 5}));
+    assert_eq!(e, "unknown parameter `radiuss`; did you mean `radius`?");
+    let e = refusal(ID, json!({"items": [{"id": 3, "corners": [0]}, {"id": 4, "corner": [0]}], "radius": 5}));
+    assert_eq!(e, "unknown parameter `items[1].corner`; did you mean `items[1].corners`?");
+    let e = refusal(ID, json!({"items": [{"id": 3, "radius": 5}]}));
+    assert_eq!(e, "unknown parameter `items[0].radius`; the command takes: items[0].id, items[0].corners");
+    let step = |params| json!({"commands": [{"command": "select.all", "params": {}}, {"command": ID, "params": params}]});
+    for (bad, key) in [(json!({"path": "x"}), "path"), (json!({"items": [{"id": 3, "kind": "chamfer"}]}), "items[0].kind")] {
+        match check_params("command.batch", &step(bad.clone())) {
+            Err(EngineError::BadParams { cmd, msg }) => {
+                assert!(cmd == ID && msg.starts_with(&format!("unknown parameter `{key}`")), "{bad}: {cmd} {msg}")
+            }
+            other => panic!("{bad}: {other:?}"),
+        }
+    }
+    for ok in [
+        json!({"items": [{"id": 3, "corners": [0, 2]}, {"id": 4}], "radius": 5}),
+        json!({"corners": [0], "kind": "chamfer", "radius": 2, "relativeRadii": false}),
+        json!({"id": 3, "radius": 5}),
+        json!({"ids": [3], "sides": 6, "polygonAngle": 15, "polygonRadius": 20, "sideLength": null, "makeSidesEqual": true}),
+        json!({"pieStart": 30, "pieEnd": 90, "invertPie": true}),
+        json!({"items": null}),
+    ] {
+        assert!(check_params(ID, &ok).is_ok(), "{ok}");
+        assert!(check_params("command.batch", &step(ok.clone())).is_ok(), "{ok}");
+    }
+}
+
 /// An object id given as something other than a whole number (`"5"`, `-1`) is refused as such,
 /// naming its key, not as a missing id; an id left out is still a missing one.
 #[test]
@@ -533,6 +570,64 @@ fn a_malformed_required_number_is_not_reported_as_missing() {
     // A whole JSON number is a number for a fractional parameter.
     s.execute("guide.add", &json!({"pos": 40})).unwrap();
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+}
+
+/// A required whole number given as something other than a whole number of 0 or more (`"3"`, `2.5`,
+/// `-1`, `true`, `[]`, `{}`) is refused as the wrong type, naming its key, not as a missing integer; one
+/// left out or given as null is still missing. An optional one left out or null keeps its default.
+/// Neither changes the document or records an undo step.
+#[test]
+fn a_malformed_required_integer_is_not_reported_as_missing() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let with = |base: &serde_json::Value, key: &str, v: Option<serde_json::Value>| {
+        let mut p = base.clone();
+        let o = p.as_object_mut().unwrap();
+        match v {
+            Some(v) => o.insert(key.into(), v),
+            None => o.remove(key),
+        };
+        p
+    };
+    let refused = |s: &mut Session, cmd: &str, p: &serde_json::Value, want: &str| match s.execute(cmd, p) {
+        Err(EngineError::BadParams { cmd: c, msg }) => assert_eq!((c.as_str(), msg.as_str()), (cmd, want), "{p}"),
+        other => panic!("{cmd} {p}: {other:?}"),
+    };
+    let ends = json!({"sourceDocument": 1, "grab": [0, 0], "at": [0, 0], "ids": [1]});
+    let cases = [
+        ("appearance.setItem", json!({"index": 0}), "index", "missing integer `index`"),
+        ("path.removeAnchor", json!({"id": 1, "anchor": 0}), "anchor", "missing integer `anchor`"),
+        ("path.split", json!({"id": 1, "anchor": 0}), "anchor", "need `anchor` or `segment` + `t`"),
+        ("addon.pen.removePoint", json!({"anchor": 0}), "anchor", "missing integer `anchor`"),
+        ("edit.dropSelection", ends, "sourceDocument", "missing integer `sourceDocument`"),
+        ("document.activate", json!({"index": 0}), "index", "missing index"),
+        ("document.move", json!({"to": 0}), "to", "missing `to`: a non-negative integer"),
+    ];
+    let malformed = [json!("3"), json!(2.5), json!(-1), json!(true), json!([]), json!({})];
+    for (cmd, base, key, missing) in &cases {
+        for v in &malformed {
+            refused(&mut s, cmd, &with(base, key, Some(v.clone())), &format!("`{key}` must be a whole number"));
+        }
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            refused(&mut s, cmd, &p, missing);
+        }
+    }
+    // An optional `subpath` given as anything else is refused the same way; left out or null, it is
+    // subpath 0 and the command goes on to read `anchor`.
+    let base = json!({"id": 1, "anchor": "3"});
+    for v in &malformed {
+        refused(&mut s, "path.removeAnchor", &with(&base, "subpath", Some(v.clone())), "`subpath` must be a whole number");
+    }
+    for p in [with(&base, "subpath", None), with(&base, "subpath", Some(json!(null)))] {
+        refused(&mut s, "path.removeAnchor", &p, "`anchor` must be a whole number");
+    }
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // A whole JSON number is a whole number.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
 }
 
 /// A command that takes the keys of one that isn't checked yet isn't checked either.
@@ -752,5 +847,77 @@ fn journal_entries_pass_the_check() {
     assert!(s.journal.iter().count() >= 5);
     for (id, params) in s.journal.iter() {
         assert!(check_params(id, params).is_ok(), "{id} {params}");
+    }
+}
+
+/// An index of a path, type, panel, library, style or ruler command given as something other than a
+/// whole number of 0 or more (`"3"`, `2.5`, `-1`, `true`, `[]`, `{}`) is refused as the wrong type,
+/// naming its key. A required one is not reported as missing, and an optional one (`subpath` of
+/// `path.appendAnchor`, `path.close` and `path.reverse`, `artboard` of the ruler origin commands) is
+/// not read as its default. A required one left out or null is still missing, and an optional one left
+/// out or null keeps its default. Neither changes the document or records an undo step.
+#[test]
+fn a_malformed_index_is_not_missing_or_its_default() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({})).unwrap();
+    let id = s.execute("path.create", &json!({"d": "M0 0 L10 0 M20 0 L30 0"})).unwrap()["id"].clone();
+    s.execute("library.create", &json!({"name": "Brand"})).unwrap();
+    s.execute("library.createGroup", &json!({"name": "Warm"})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let with = |base: &serde_json::Value, key: &str, v: Option<serde_json::Value>| {
+        let mut p = base.clone();
+        let o = p.as_object_mut().unwrap();
+        match v {
+            Some(v) => o.insert(key.into(), v),
+            None => o.remove(key),
+        };
+        p
+    };
+    let refused = |s: &mut Session, cmd: &str, p: &serde_json::Value, want: &str| match s.execute(cmd, p) {
+        Err(EngineError::BadParams { cmd: c, msg }) => assert_eq!((c.as_str(), msg.as_str()), (cmd, want), "{p}"),
+        other => panic!("{cmd} {p}: {other:?}"),
+    };
+    let malformed = [json!("3"), json!(2.5), json!(-1), json!(true), json!([]), json!({})];
+    let handle = json!({"id": id, "x": 5, "y": 5});
+    let required = [
+        ("path.setHandle", handle.clone(), "anchor", "missing anchor"),
+        ("path.moveAnchor", handle.clone(), "anchor", "missing anchor"),
+        ("path.insertAnchor", json!({"id": id}), "segment", "missing segment"),
+        ("text.setPathHandle", handle.clone(), "anchor", "missing anchor"),
+        ("artboard.reorder", json!({"index": 0}), "to", "missing to"),
+        ("library.moveGroup", json!({"group": "Warm"}), "to", "missing `to` (an index)"),
+        ("graphicStyle.move", json!({"name": "Default"}), "to", "missing `to` (an index)"),
+    ];
+    for (cmd, base, key, missing) in &required {
+        for v in &malformed {
+            refused(&mut s, cmd, &with(base, key, Some(v.clone())), &format!("`{key}` must be a whole number"));
+        }
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            refused(&mut s, cmd, &p, missing);
+        }
+    }
+    let optional = [
+        ("path.appendAnchor", handle.clone(), "subpath"),
+        ("path.close", json!({"id": id}), "subpath"),
+        ("path.reverse", json!({"ids": [id]}), "subpath"),
+        ("document.rulerOrigin", json!({}), "artboard"),
+        ("document.setRulerOrigin", json!({"x": 5, "y": 5}), "artboard"),
+        ("document.resetRulerOrigin", json!({}), "artboard"),
+    ];
+    for (cmd, base, key) in &optional {
+        for v in &malformed {
+            refused(&mut s, cmd, &with(base, key, Some(v.clone())), &format!("`{key}` must be a whole number"));
+        }
+    }
+    // A whole number that names no artboard is still out of range.
+    refused(&mut s, "document.resetRulerOrigin", &json!({"artboard": 1}), "index out of range");
+    assert_eq!(s.doc().unwrap().doc, doc);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    // Left out or null, an optional one keeps its default.
+    for (cmd, base, key) in &optional {
+        for p in [with(base, key, None), with(base, key, Some(json!(null)))] {
+            s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+        }
     }
 }

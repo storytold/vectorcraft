@@ -88,7 +88,7 @@ pub fn specs() -> Vec<CommandSpec> {
 fn artboard_reorder(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "artboard.reorder";
     let i = artboard_index(&s.doc()?.doc, p, C)?;
-    let to = p.get("to").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing to"))?;
+    let to = super::index_opt(p, "to", C)?.ok_or_else(|| bad(C, "missing to"))?;
     s.edit("Reorder Artboards", |d, _| {
         if i >= d.artboards.len() {
             return Err(EngineError::Other("no such artboard".into()));
@@ -345,15 +345,7 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
     let copied = clip.nodes.len();
     if cut {
         s.edit("Cut Artboard", |d, sel| {
-            if indices.iter().any(|i| *i >= d.artboards.len()) {
-                return Err(EngineError::Other("no such artboard".into()));
-            }
-            // The last first, so the others keep their places; their guides go with them.
-            for &i in indices.iter().rev() {
-                let gone = d.artboards.remove(i).id;
-                d.retire_artboard_id(gone);
-                d.retain_guides(sel, |g| g.artboard != Some(gone));
-            }
+            super::layer::remove_artboards(d, sel, &indices)?;
             d.remove_many(&art)?;
             sel.prune(d);
             Ok(())

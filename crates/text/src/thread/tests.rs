@@ -27,6 +27,13 @@ fn curved_path_frame() -> TextObject {
     t
 }
 
+/// Type on a closed path, a circle about 314 round.
+fn closed_path_frame() -> TextObject {
+    let mut t = path_frame(300.0);
+    t.kind = TextKind::OnPath { path: shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0)), start: 0.0, end: None };
+    t
+}
+
 /// Type on a path that overflows ends its line where its text stops fitting, as area type's
 /// last line does, so a story flows on from there through area type and type on a path alike.
 #[test]
@@ -390,6 +397,80 @@ fn a_continued_paragraph_fills_the_frame_it_continues_into() {
     assert_eq!(checked, 16);
 }
 
+/// Area type in a frame `w` wide down to `y` and `narrow` wide below it, down to `bottom`.
+fn stepped_frame(w: f64, narrow: f64, y: f64, bottom: f64) -> TextObject {
+    let mut t = frame(0.0);
+    let path = kurbo::BezPath::from_vec(vec![
+        kurbo::PathEl::MoveTo((0.0, 0.0).into()),
+        kurbo::PathEl::LineTo((w, 0.0).into()),
+        kurbo::PathEl::LineTo((w, y).into()),
+        kurbo::PathEl::LineTo((narrow, y).into()),
+        kurbo::PathEl::LineTo((narrow, bottom).into()),
+        kurbo::PathEl::LineTo((0.0, bottom).into()),
+        kurbo::PathEl::ClosePath,
+    ]);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&path) };
+    t
+}
+
+/// A paragraph of mixed type sizes that a stepped frame cannot hold goes on in the next frame. The
+/// every-line composer breaks the lines the first frame holds as one paragraph, as in a frame tall
+/// enough for all of it and not as the single-line composer breaks them, and the first frame
+/// takes the text of those lines. The next frame sets the rest at its own width, without the
+/// first-line indent, and no character is lost or repeated. The frames take the same shares as
+/// when each is measured with the whole rest of the story.
+#[test]
+fn a_mixed_size_paragraph_continued_from_a_shaped_frame_is_composed_in_both() {
+    use vectorcraft_doc::Composer;
+    let db = FontDb::global();
+    let small = CharStyle { size: 12.0, ..CharStyle::default() };
+    let big = CharStyle { size: 36.0, ..CharStyle::default() };
+    let probe = layout(db, &TextObject::point(vectorcraft_geom::Point::ZERO, "Destroy all creatures with toughness X or", small.clone()));
+    let w = probe.lines[0].x1 - probe.lines[0].x0 + 2.0;
+    let story = vec![
+        TextRun { text: "Destroy all creatures with toughness ".into(), style: small.clone(), inline: None },
+        TextRun { text: "X".into(), style: big, inline: None },
+        TextRun { text: " or less. Then draw a card for each creature destroyed this way.\nSecond paragraph.".into(), style: small, inline: None },
+    ];
+    let text: String = story.iter().map(|r| r.text.as_str()).collect();
+    let (a, tall) = (stepped_frame(w, w * 0.5, 40.0, 85.0), stepped_frame(w, w * 0.5, 40.0, 300.0));
+    let b = sized(200.0, w * 0.75, 300.0);
+    let texts = |lay: &crate::TextLayout, shown: &str| lay.lines.iter().map(|l| shown[l.start..l.end].trim_end().to_string()).collect::<Vec<_>>();
+    let shares = |composer: Composer, indent: f64| {
+        let para = ParaStyle { composer, first_line_indent: indent, ..Default::default() };
+        let paras = [para.clone(), para];
+        let parts = distribute(db, &[&a, &b], &story, &paras);
+        assert_eq!(parts.iter().map(|p| p.continues).collect::<Vec<_>>(), [false, true], "{composer:?}");
+        let joined: String = parts.iter().flat_map(|p| &p.runs).map(|r| r.text.as_str()).collect();
+        assert_eq!(joined, text, "{composer:?}: no character lost or repeated");
+        same_as_whole_rest(db, &[&a, &b], &story, &paras, &format!("{composer:?}, indent {indent}"));
+        let shown = |p: &Slice| p.runs.iter().map(|r| r.text.as_str()).collect::<String>();
+        let lays: Vec<_> = [&a, &b].iter().zip(&parts).map(|(f, p)| laid(db, f, p)).collect();
+        assert!(lays.iter().all(|l| !l.overflow), "{composer:?}: each frame holds its share");
+        let whole =
+            laid(db, &tall, &Slice { runs: story.clone(), paras: paras.to_vec(), list_count: 0, list_level_counts: vec![], continues: false });
+        let first = texts(&lays[0], &shown(&parts[0]));
+        // The first frame takes the text of the lines it sets.
+        assert_eq!(shown(&parts[0]).split_whitespace().collect::<Vec<_>>(), first.join(" ").split_whitespace().collect::<Vec<_>>());
+        (first, texts(&whole, &text), lays, parts)
+    };
+    for indent in [0.0, 20.0] {
+        let (every, whole, lays, parts) = shares(Composer::EveryLine, indent);
+        assert!(every.len() >= 2, "{every:?}");
+        assert_eq!(every, whole[..every.len()], "indent {indent}");
+        if indent == 0.0 {
+            assert_eq!(every, ["Destroy all creatures with toughness", "X or less. Then", "draw a card for each"]);
+            let (greedy, ..) = shares(Composer::SingleLine, indent);
+            assert_eq!(greedy, ["Destroy all creatures with toughness X", "or less. Then draw a", "card for each", "creature destroyed"]);
+        }
+        // The next frame starts at its left edge, and its lines keep within it.
+        assert!((line_start(&lays[1], 0) - 200.0).abs() < 1e-6, "{}", line_start(&lays[1], 0));
+        assert!(lays[1].lines.iter().all(|l| l.x1 <= 200.0 + w * 0.75 + 1e-6), "{:?}", lays[1].lines);
+        assert!((line_start(&lays[0], 0) - indent).abs() < 1e-6, "{}", line_start(&lays[0], 0));
+        assert!(parts[1].continues && lays[1].lines.len() >= 2, "{:?}", lays[1].lines);
+    }
+}
+
 /// `frames` holding the runs of `parts`, for [`continued`].
 fn filled(frames: &[&TextObject], parts: &[Slice]) -> Vec<TextObject> {
     frames
@@ -724,7 +805,7 @@ fn frames_take_the_shares_the_whole_rest_gives_them() {
     ]
     .concat();
     type Edit = fn(&mut TextObject);
-    let edits: [(&str, Edit); 15] = [
+    let edits: [(&str, Edit); 18] = [
         ("path", |_| {}),
         ("path, Left", |t| t.para.justify = Justify::Left),
         ("path, Auto", |t| t.para.justify = Justify::Auto),
@@ -732,6 +813,20 @@ fn frames_take_the_shares_the_whole_rest_gives_them() {
         ("path, Center", |t| t.para.justify = Justify::Center),
         ("path, Right", |t| t.para.justify = Justify::Right),
         ("path, Justify All", |t| t.para.justify = Justify::JustifyAll),
+        ("path, Justify All, spacing", |t| {
+            t.para.justify = Justify::JustifyAll;
+            t.path_spacing = 8.0;
+        }),
+        ("path, Justify All, negative spacing", |t| {
+            t.para.justify = Justify::JustifyAll;
+            t.path_spacing = -8.0;
+        }),
+        ("closed path, Justify All", |t| {
+            t.para.justify = Justify::JustifyAll;
+            if let TextKind::OnPath { path, .. } = &mut t.kind {
+                *path = shapes::ellipse(Rect::new(0.0, 0.0, 100.0, 100.0));
+            }
+        }),
         ("path, spacing", |t| t.path_spacing = 8.0),
         ("path, Optical Margin Alignment", |t| t.optical_margin = true),
         ("path, Roman Hanging Punctuation", |t| t.para.roman_hanging = true),
@@ -756,6 +851,35 @@ fn frames_take_the_shares_the_whole_rest_gives_them() {
         took += same_as_whole_rest(db, &refs(&on), &story(&last_long), &[], &format!("{case}, long last paragraph"));
         // The story's last character does not hang, the last one measured does.
         took += same_as_whole_rest(db, &refs(&on), &story(&ends_unhung), &[], &format!("{case}, story ending in a letter"));
+    }
+    // Glyphs whose advance is negative, and punctuation and quotes that end paragraphs, some of
+    // them alone after empty paragraphs.
+    let tight = CharStyle { tracking: -1200.0, ..Default::default() };
+    let text = paragraphs(120);
+    let mut negative: Vec<TextRun> =
+        text.split_inclusive(' ').enumerate().map(|(i, w)| TextRun::new(w, if i % 4 == 0 { tight.clone() } else { plain.clone() })).collect();
+    normalize(&mut negative);
+    let punctuated = (1..=150)
+        .map(|i| match i % 3 {
+            0 => ".".to_string(),
+            1 => format!("Item {i}: the \u{201c}fox.\u{201d}"),
+            _ => String::new(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    for justify in [Justify::Left, Justify::JustifyAll, Justify::Center, Justify::Right] {
+        let mut on = paths(|_| {});
+        on.push(closed_path_frame());
+        for t in &mut on {
+            t.para.justify = justify;
+        }
+        took += same_as_whole_rest(db, &refs(&on), &negative, &[], &format!("path, {justify:?}, negative tracking"));
+        took += same_as_whole_rest(db, &refs(&on), &story(&punctuated), &[], &format!("path, {justify:?}, punctuation at paragraph ends"));
+        let mut spaced = on.clone();
+        for t in &mut spaced {
+            t.path_spacing = -8.0;
+        }
+        took += same_as_whole_rest(db, &refs(&spaced), &negative, &[], &format!("path, {justify:?}, negative tracking and spacing"));
     }
     let on = paths(|_| {});
     took += same_as_whole_rest(db, &refs(&on), &styled, &[], "path, style runs");
@@ -877,7 +1001,7 @@ fn many_frames_measure_about_the_text_they_take() {
         }
         measures_about_the_text_taken(db, &shaped, &format!("{align:?}, ellipses"));
     }
-    for justify in [Justify::Left, Justify::JustifyLeft, Justify::Auto] {
+    for justify in [Justify::Left, Justify::JustifyLeft, Justify::JustifyAll, Justify::Auto] {
         let paths: Vec<TextObject> = (0..40)
             .map(|_| {
                 let mut t = path_frame(300.0);
@@ -886,6 +1010,34 @@ fn many_frames_measure_about_the_text_they_take() {
             })
             .collect();
         measures_about_the_text_taken(db, &paths, &format!("path, {justify:?}"));
+    }
+    // Justify All on curved, bracketed and closed paths, and with Spacing.
+    type Make = fn() -> TextObject;
+    let kinds: [(&str, Make); 4] = [
+        ("curved", curved_path_frame),
+        ("bracketed", || {
+            let mut t = path_frame(300.0);
+            if let TextKind::OnPath { start, end, .. } = &mut t.kind {
+                (*start, *end) = (0.1, Some(0.8));
+            }
+            t
+        }),
+        ("closed", closed_path_frame),
+        ("spaced", || {
+            let mut t = curved_path_frame();
+            t.path_spacing = -20.0;
+            t
+        }),
+    ];
+    for (shape, make) in kinds {
+        let paths: Vec<TextObject> = (0..40)
+            .map(|_| {
+                let mut t = make();
+                t.para.justify = Justify::JustifyAll;
+                t
+            })
+            .collect();
+        measures_about_the_text_taken(db, &paths, &format!("{shape} path, Justify All"));
     }
     let vertical: Vec<TextObject> = (0..40)
         .map(|_| {

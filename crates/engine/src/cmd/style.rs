@@ -21,7 +21,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, Node, NodeId, NodeKind, Shared};
 use vectorcraft_geom::Rect;
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index, object_param, ok, str_param, unique_name};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index_opt, object_param, ok, str_param, unique_name};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions: docs/mcp.md). With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
+            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, the graph stores the label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
             has_doc,
             style_apply
         ),
@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Graphic Style",
             ["Window", "Appearance"],
             None,
-            "{name?, id?} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object (a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own: the topmost path directly in it); the objects still linked to it update, and that object becomes linked. A linked graph series group passes the style to the paths directly in it, other than the source and paths linked to the style whose look was edited, and is left cleared (as appearance.clear) and unlinked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md) → {name}",
+            "{name?, id?} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object (a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own: the topmost path directly in it); the objects still linked to it update, and that object becomes linked. A linked graph series group passes the style to the paths directly in it, other than the source and paths linked to the style whose look was edited, and is left cleared (as appearance.clear) and unlinked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, the graph stores the label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind → {name}",
             has_doc,
             style_redefine
         ),
@@ -332,7 +332,7 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     let i = style_index(&s.doc()?.doc, name)?;
     let add = bool_or(p, "add", false);
     let chars = s.prefs.override_char_color;
-    let own = super::appearance::appearance_targets(s, p)?;
+    let own = super::appearance::edit_targets(s, p)?;
     let ids = super::appearance::rowless_series_marks(&s.doc()?.doc, &own);
     // The series groups their paths stand for: a style that replaces the appearance clears what they hold themselves,
     // and a style added on top unlinks them.
@@ -374,6 +374,8 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             super::appearance::clear_stood_for(d, &groups);
             super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, true);
         }
+        // A label keeps its new rows for its kind of label.
+        super::graph::capture_label_rows(d, &ids);
         Ok(())
     })?;
     ok()
@@ -506,6 +508,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
             apply_style(d, *nid, &g, &mut shared, chars);
         }
         super::appearance::capture_series_writes(&before, d, &follow_marks, (true, true), (true, true), false, true);
+        super::graph::capture_label_rows(d, &follow_marks);
         set_link(d, &[src], Some(id));
         Ok(())
     })?;
@@ -582,10 +585,10 @@ fn style_merge(s: &mut Session, p: &Value) -> Result<Value> {
 fn style_move(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "graphicStyle.move";
     let name = str_param(p, "name").ok_or_else(|| bad(cmd, "missing name"))?;
-    let to = p.get("to").and_then(Value::as_u64).ok_or_else(|| bad(cmd, "missing `to` (an index)"))?;
+    let to = index_opt(p, "to", cmd)?.ok_or_else(|| bad(cmd, "missing `to` (an index)"))?;
     let d = &s.doc()?.doc;
     let from = style_index(d, name)?;
-    let to = index(to).min(d.graphic_styles.len() - 1);
+    let to = to.min(d.graphic_styles.len() - 1);
     if from == to {
         return ok();
     }

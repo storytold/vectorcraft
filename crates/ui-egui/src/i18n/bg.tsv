@@ -691,6 +691,8 @@ font-technology	Variable	Променливи
 	Crop Image	Изрязване на изображение
 	Image Tools	Инструменти за изображения
 	Remove Background…	Премахване на фона…
+	Draw (Pencil)	Рисуване (Молив)
+	Place Image	Вмъкване на изображение
 	Remove Background	Премахване на фона
 	Background	Фон
 	Edge Color	Цвят на ръба
@@ -2122,6 +2124,29 @@ font-technology	Variable	Променливи
 	Bristle Brush	Четка с косъм
 	Pattern Brush	Четка с мостра
 	missing from the Brushes panel	липсва в панела „Четки“
+	built in	вграден
+	embedding not allowed	вграждането не е разрешено
+	embedding for editing	вграждане за редактиране
+	embedding for preview and print	вграждане за преглед и печат
+	embedding allowed	вграждането е разрешено
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	заместен: показан с {family} {style} ({detail})
+	missing: shown in {family} {style}	липсва: показан с {family} {style}
+	missing	липсва
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Линеен градиент
+	Radial gradient	Радиален градиент
+	Conic gradient	Конусен градиент
+	Diamond gradient	Ромбовиден градиент
+	Freeform gradient	Градиент със свободна форма
+@plural	{n} instance|{n} instances	{n} екземпляр|{n} екземпляра
+@plural	{n} row|{n} rows	{n} ред|{n} реда
+@plural	{n} column|{n} columns	{n} колона|{n} колони
 	Select art to make a scatter, art or pattern brush.	Изберете графика, за да създадете разпръсната четка, артистична четка или четка с мостра.
 	Brush Art	Графика на четка
 	New Calligraphic Brush	Нова калиграфска четка
@@ -4149,6 +4174,10 @@ axis	Both	И двете
 @msg	Couldn't paste: the document it was pasted in was reverted	Неуспешно поставяне: документът, в който се поставяше, е върнат към запазеното
 @msg	Couldn't read {name}: {e}	Неуспешно четене на {name}: {e}
 @msg	Couldn't save recovery data: {e}	Неуспешно запазване на данните за възстановяване: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване на {title}: {e}. Копията се записват в {folder}, папката за възстановяване по подразбиране; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване на {title}: {e}. Копията се записват в {folder}, папката, зададена в Предпочитания; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване: {e}. Копията се записват в {folder}, папката за възстановяване по подразбиране; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Неуспешно запазване на данните за възстановяване: {e}. Копията се записват в {folder}, папката, зададена в Предпочитания; за да използвате друга папка, задайте Предпочитания → Работа с файлове → Възстановяване на данни → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Създаване на контури: изберете текстови обекти
 @msg	Create from Guides: the document has no artboard	Създаване от водачи: документът няма работна област
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Създаване от водачи: водачите правят повече от {MAX_PIECES} парчета
@@ -4677,11 +4706,11 @@ axis	Both	И двете
 @msg	unknown effect `{id}`	непознат ефект `{id}`
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (точки, линии)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, ромбовиден, свободна форма)
+@msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	непознат акцент `{h}`
 @msg	unknown option `{path}.{k}`	непозната опция `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	непознат панел `{raw}`
 @msg	unknown preference `{key}`	непозната настройка `{key}`
 @msg	Preferences imported.	Настройките са импортирани.
@@ -4699,7 +4728,7 @@ axis	Both	И двете
 @msg	`{key}` must be an object	`{key}` трябва да бъде обект
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` се изпълнява самостоятелно, а не като стъпка от пакет
 @msg	unknown preset (one of {_1})	непозната предварителна настройка (една от {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (висока, средна, ниска или запазена: вижте flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (high, medium, low или запазена: вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	непозната предварителна настройка `{name}` (вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	непозната предварителна настройка `{name}` (вижте webExport.presets.list)
 @msg	unknown side `{other}` (left|right|top|bottom)	непозната страна `{other}` (left|right|top|bottom)
@@ -4836,6 +4865,8 @@ axis	Both	И двете
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вградено изображение от {_1} × {_2} пиксела беше намалено до {_3} × {_4} пиксела, за да се запазят слоевете
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
+@msg	the Line Breaking setting of legacy type was left out	настройката за прекъсване на редовете на текста в стария формат беше пропусната
+@msg	the Japanese layout rules of legacy type were left out	японските правила за оформление на текста в стария формат бяха пропуснати
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, който сменя посоката на писане в рамките на текстов обект, се отваря в посоката на първия си знак
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, използван като маска в свързани области, обтичащ текст или съставен път, не изрязва
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	свързаните картини без предварителен преглед във файла показват заместител, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
@@ -5000,6 +5031,7 @@ effect	Soft	Меко
 	VectorCraft Title Bar on Every Desktop	Заглавна лента на VectorCraft на всеки работен плот
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Докато е зададена, променливата на средата VECTORCRAFT_TITLEBAR избира заглавната лента.
 	System Title Bar takes precedence over this option while it is on.	Докато е включена, „Заглавна лента на системата“ има предимство пред тази опция.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Докато „Заглавна лента на VectorCraft на всеки работен плот“ е изключена, този работен плот изчертава заглавната лента на прозореца независимо дали тази опция е включена.
 	Value Axis	Ос на стойностите
 	On Left Side	От лявата страна
 	On Right Side	От дясната страна
@@ -5862,6 +5894,7 @@ theme	Appearance	Външен вид
 @msg	no such color	няма такъв цвят
 @msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
 @msg	more than one action is named “{_1}”	повече от едно действие се казва „{_1}“
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	действието „{_1}“ задава предпочитанието за папка {_2}; изтрийте тази стъпка, за да запазите набора
 @msg	no symbol named `{n}`	няма символ с име `{n}`
 	Smudge Stick…	Размазваща пръчка…
 	Smudge Stick	Размазваща пръчка
@@ -6029,6 +6062,8 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Playback Options…	Опции за възпроизвеждане…
+	Button Mode	Режим с бутони
+	No actions.	Няма действия.
 	Insert Stop…	Вмъкване на спиране…
 	Insert Stop	Вмъкване на спиране
 	Record Stop	Записване на спиране
@@ -6847,3 +6882,9 @@ breakText	Glyphs	Глифи
 	Box	Рамка
 	Swatch	Образец
 	Direction	Посока
+	Banner Hems and Grommets…	Подгъви и капси за банер…
+	Banner Hems and Grommets	Подгъви и капси за банер
+	Hem	Подгъв
+	Grommets	Капси
+	Grommet Inset	Отстъп на капсите от ръба
+	Diameter	Диаметър

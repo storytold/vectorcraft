@@ -909,6 +909,11 @@ fn structured_junk() {
         ("addon.cutting.weed", json!({"spacing": 1e-300, "box": "no", "direction": ["both"], "swatch": 5})),
         ("addon.cutting.weed", json!({"spacing": "1 mm", "box": false, "direction": "vertical", "swatch": "no such swatch"})),
         ("addon.cutting.weed", json!({"count": u64::MAX, "margin": "x", "gap": null, "weight": 0})),
+        ("addon.cutting.banner", json!({"hem": 1e5, "grommetInset": 1e5, "spacing": 1e-300, "diameter": 1000})),
+        ("addon.cutting.banner", json!({"hem": -1, "spacing": f64::MAX, "weight": 1e308, "top": "no", "allArtboards": 1})),
+        ("addon.cutting.banner", json!({"hem": 0, "grommetInset": 0, "spacing": 0.01, "allArtboards": true})),
+        ("addon.cutting.banner", json!({"spacing": "1 mm", "grommets": false, "swatch": 5, "left": null})),
+        ("addon.cutting.banner", json!({"top": false, "right": false, "bottom": false, "left": false, "allArtboards": false})),
         // Type Tools add-on.
         ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
         ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),
