@@ -756,8 +756,8 @@ fn reorient_dash(d: &mut Dash, o: Orient, lens: &[f64]) {
 
 /// A key's stroke read along its subpaths turned as `o` says (`lens`: their lengths): its width
 /// profile (whose sides swap when reversed), pen pressure, tilt, bearing and rotation, its dashes,
-/// a gradient along the path or across it (whose sides swap when reversed), and on a reversed
-/// open path its arrowheads.
+/// a gradient along the path or across it (whose sides swap when reversed). Its arrowheads stay as
+/// they are.
 fn reorient_stroke(s: &mut StrokeLayer, o: Orient, lens: &[f64]) {
     if o.is_identity() {
         return;
@@ -819,15 +819,47 @@ fn reorient_stroke(s: &mut StrokeLayer, o: Orient, lens: &[f64]) {
         let out = reoriented(&p.points, o, |f| p.unwrapped_at(f), |v| v + turns, same);
         p.points = out;
     }
-    if o.reversed && !o.closed {
-        std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
-        s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+}
+
+/// `n` with every stroke read along its subpaths turned as `o` says, and on a reversed open path
+/// its arrowheads swapped.
+fn reorient_strokes(n: &mut Node, o: Orient) {
+    if o.is_identity() {
+        return;
+    }
+    let lens: Vec<f64> =
+        node_path(n).map(|(p, ..)| p.subpaths.iter().map(|sp| PathData::new(vec![sp.clone()]).length()).collect()).unwrap_or_default();
+    for it in n.appearance.items.iter_mut() {
+        if let AppearanceItem::Stroke(s) = it {
+            reorient_stroke(s, o, &lens);
+            if o.reversed && !o.closed {
+                std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
+                s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+            }
+        }
     }
 }
 
-/// `n` with every stroke read along its subpaths turned as `o` says.
-fn reorient_strokes(n: &mut Node, o: Orient) {
-    if o.is_identity() {
+/// Turn the strokes of path `n` for Reverse Path Direction, before its subpaths flagged in
+/// `reversed` are reversed with [`SubPath::reverse`] (a closed one then starts at its last
+/// anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing and rotation
+/// then run the new way, so the stroke draws as it did. A stroke reads one profile along every
+/// subpath, so it turns only when all of them turn alike. Arrowheads stay at the path's start and
+/// end.
+pub fn reverse_stroke_records(n: &mut Node, reversed: &[bool]) {
+    let NodeKind::Path { path, .. } = &n.kind else { return };
+    let mut turns = path.subpaths.iter().enumerate().map(|(i, sp)| {
+        let mut o = Orient::of(sp);
+        if reversed.get(i).copied().unwrap_or(false) {
+            if sp.closed {
+                o.start_at(sp, sp.anchors.len().saturating_sub(1));
+            }
+            o.reverse();
+        }
+        o
+    });
+    let Some(o) = turns.next() else { return };
+    if o.is_identity() || !turns.all(|t| t.same_turn(&o)) {
         return;
     }
     let lens: Vec<f64> =
@@ -1378,11 +1410,19 @@ pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> 
 // Spine
 // =====================================================================================
 
-#[cfg(test)]
+#[cfg(any(test, feature = "spine-count"))]
 thread_local! {
     /// How many times [`Spine::new`] has run on this thread, for tests that count how often a path
     /// is flattened.
     pub(crate) static SPINES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times [`Spine::new`] has run on this thread, for other crates' tests that count how
+/// often a path is flattened (the `spine-count` feature, dev-dependencies only).
+#[cfg(any(test, feature = "spine-count"))]
+#[doc(hidden)]
+pub fn spines_built() -> usize {
+    SPINES_BUILT.with(|n| n.get())
 }
 
 /// A spine (the first subpath of a path) flattened to a polyline, with cumulative lengths and the
@@ -1403,7 +1443,7 @@ impl Spine {
     /// arc lengths, and the arc length at each anchor. `None` when `path` has no subpath, or when
     /// the first one flattens to fewer than two points (so it has no length to walk).
     pub fn new(path: &PathData) -> Option<Self> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "spine-count"))]
         SPINES_BUILT.with(|n| n.set(n.get() + 1));
         let sp = path.subpaths.first()?;
         let mut pts: Vec<Point> = Vec::new();

@@ -24,6 +24,10 @@ fn pushes_in(para: &ParaStyle) -> bool {
 /// Paragraphs longer than this (glyphs) are always broken line by line.
 const MAX_COMPOSE_GLYPHS: usize = 200_000;
 
+/// The widths tried, halving the difference each time, for the longest break of a line placed again
+/// at its own metrics in more room than it was broken in ([`place_flow_line`]).
+const REFIT_STEPS: usize = 24;
+
 /// Whether every line of area type in `regions` is as wide however tall it is and wherever it is set:
 /// rectangular cells without text wrap.
 fn constant_width(regions: Option<&[Region]>) -> bool {
@@ -415,25 +419,31 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     let word = word_width(sg, *i, line_end, para.kinsoku);
     // A composed line in a frame whose lines are not all as wide is placed at its own tallest
     // metrics, as the composer placed it (`shaped::Shaped`): its room is the room across its height.
-    let est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+    let composed_line = composed.as_ref().and_then(|lines| lines.get(*para_line)).is_some_and(|&(end, _)| end > *i);
+    let mut est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
         Some(&(end, _)) if end > *i && !constant_width(pen.regions) => sg.get(*i..end).and_then(Metrics::max).unwrap_or(est),
         _ => est,
     };
+    // A line broken here in such a frame is placed again when it turns out taller than it was
+    // placed: its room is the room across its own height.
+    let refit = !composed_line && pen.regions.is_some() && !constant_width(pen.regions);
     // Place, break, then settle the baseline on the line's real metrics (moving on to the
     // next row/column if it no longer fits).
     loop {
+        let before = refit.then(|| pen.clone());
         let first_in_region = pen.prev.is_none();
-        let Some((mut baseline, x0, x1, same_baseline)) = pen.place(est, ind_l, ind_r, word) else {
+        let Some((mut baseline, mut x0, mut x1, same_baseline)) = pen.place(est, ind_l, ind_r, word) else {
             cx.out.overflow = cx.text.len() > if *i < n { sg[*i].byte } else { pr.start };
             return None;
         };
-        let width = x1 - x0 - ind_l - ind_r;
         let hyphenate = (para.hyphenate && (*hyphen_limit == 0 || *hyphen_run < *hyphen_limit)).then_some((&para.hyphenation, *zone));
-        let (end, hyph, pushed_in) = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+        let glyphs: &[SGlyph] = sg;
+        // The line broken in room `width` wide: its end, whether it ends with a hyphen, and whether
+        // it pushed characters in.
+        let break_in = |width: f64| match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
             Some(&(end, hyph)) if end > *i => (end, hyph, false),
             _ if *i < n => {
                 let start = *i;
-                let glyphs: &[SGlyph] = sg;
                 // A horizontal line with right-to-left text is drawn in another order than its
                 // text's, and its tabs take their stops in the order they are drawn: whether the line
                 // ending before glyph `end` fits is measured as it is drawn ([`drawn_width`]).
@@ -449,8 +459,9 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
                         .filter(|&j| j < trimmed)
                         .collect();
                     let hyphen = if hyphenated { end.checked_sub(1).and_then(|k| glyphs.get(k)).map_or(0.0, |g| hyphen_glyph(g).adv) } else { 0.0 };
-                    let credit = trimmed.checked_sub(1).filter(|&k| k >= start).and_then(|k| line_end.get(k)).copied().unwrap_or(0.0);
-                    drawn_width(glyphs, &drawn, &para.tabs, ind_l) + hyphen - credit <= width + EPS
+                    // The last glyph's end trim comes off where it is drawn, before the tabs after it.
+                    let credit = trimmed.checked_sub(1).filter(|&k| k >= start).and_then(|k| line_end.get(k).map(|&trim| (k, trim)));
+                    drawn_width(glyphs, &drawn, &para.tabs, ind_l, credit) + hyphen <= width + EPS
                 };
                 let fits: Option<&dyn Fn(usize, bool) -> bool> = (!cx.vertical && bidi.is_some_and(|b| b.has_rtl())).then_some(&drawn_fits);
                 let line = |ty| {
@@ -478,8 +489,56 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
             }
             _ => (n, false, false),
         };
-        let m = Metrics::max(&sg[*i..end]).unwrap_or(*pm);
-        baseline += if same_baseline || (pen.regions.is_none() && first_in_region) {
+        let (mut end, mut hyph, mut pushed_in) = break_in(x1 - x0 - ind_l - ind_r);
+        let metrics = |end: usize| glyphs.get(*i..end).and_then(Metrics::max).unwrap_or(*pm);
+        let m = metrics(end);
+        // The baseline moves from where `est` placed it to where the line's metrics set it, unless
+        // the line was placed at metrics of its own (below).
+        let mut settle = true;
+        if let Some(before) = before
+            && m != est
+        {
+            if m.union(est) != est {
+                // Taller than it was placed: place it again at metrics that hold both, and break it
+                // again in the room there.
+                *pen = before;
+                est = est.union(m);
+                continue;
+            }
+            // Broken again in the room of a taller line, it no longer holds what made that line
+            // taller. It goes where its own metrics place it when the room there holds the room it
+            // was broken in, and otherwise stays where it was placed, inside the room measured.
+            settle = false;
+            let mut own = before;
+            if let Some((b, a, z, _)) = own.place(m, ind_l, ind_r, word)
+                && a <= x0 + EPS
+                && z >= x1 - EPS
+            {
+                // The room there may hold more of the line, up to what would make it taller than
+                // `m`: the longest break that does not is between the two widths (a line breaks no
+                // earlier in more room).
+                let (mut lo, mut hi) = (x1 - x0 - ind_l - ind_r, z - a - ind_l - ind_r);
+                let wider = break_in(hi);
+                if metrics(wider.0).union(m) == m {
+                    (end, hyph, pushed_in) = wider;
+                } else {
+                    for _ in 0..REFIT_STEPS {
+                        let mid = (lo + hi) / 2.0;
+                        let line = break_in(mid);
+                        if metrics(line.0).union(m) == m {
+                            (end, hyph, pushed_in) = line;
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                }
+                *pen = own;
+                (baseline, x0, x1) = (b, a, z);
+            }
+        }
+        let m = metrics(end);
+        baseline += if !settle || same_baseline || (pen.regions.is_none() && first_in_region) {
             0.0
         } else if pen.model == LeadingModel::EmBoxTop {
             // The em box top is fixed (the frame's top, or the line above's): the baseline
@@ -652,9 +711,11 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     let line_end = sg.get(position.end).map_or(paragraph.pr.end, |g| g.byte);
     let order = visual_order(paragraph.bidi.as_ref().filter(|_| !cx.vertical), paragraph.pr.start, line_start..line_end, &sg[index..position.end]);
     // The line is as wide as it is drawn: its glyphs before its trailing spaces in drawing order,
-    // each tab up to its stop from where the glyphs drawn before it end.
+    // each tab up to its stop from where the glyphs drawn before it end, with the last glyph's end
+    // trim taken off where it is drawn.
     let measured: Vec<usize> = order.iter().map(|&offset| index + offset).filter(|&j| j < trimmed).collect();
-    let measured_width = drawn_width(sg, &measured, &para.tabs, position.ind_l) + hyphen.as_ref().map_or(0.0, |g| g.adv) - end_trim;
+    let trim_at = trimmed.checked_sub(1).filter(|&k| k >= index).map(|k| (k, end_trim));
+    let measured_width = drawn_width(sg, &measured, &para.tabs, position.ind_l, trim_at) + hyphen.as_ref().map_or(0.0, |g| g.adv);
     // The glyphs before `stop` in visual order, each with the advance it is set with. A list
     // marker does not hang: it is counted with no width.
     let visible = |stop: usize| -> (Vec<usize>, Vec<(&SGlyph, f64)>) {
