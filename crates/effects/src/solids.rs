@@ -575,10 +575,8 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         .into_iter()
         .map(|face| {
             // Adjacent facets, antialiased on their own, would leave hairline seams: a narrow
-            // stroke of the same paint closes them. No wider than the facet is thick, though: seen
-            // at a grazing angle a facet can be thinner than the stroke, and its stroke would then
-            // paint over its neighbours.
-            let seam = (face.thickness() / 2.0).clamp(0.05, 0.75);
+            // stroke of the same paint closes them ([`seam_width`]).
+            let seam = seam_width(&face);
             if let Some(g) = face.rgb_gradient
                 && (paint.color().is_some() || matches!(paint, Paint::Gradient(_)))
             {
@@ -606,6 +604,13 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
     }
     group
+}
+
+/// The width of the stroke of a facet's own paint that closes the seams between `face` and its
+/// neighbors. No wider than the facet is thick: seen at a grazing angle a facet can be thinner than
+/// the stroke, and its stroke would then paint over its neighbors.
+pub(crate) fn seam_width(face: &Facet) -> f64 {
+    (face.thickness() / 2.0).clamp(0.05, 0.75)
 }
 
 /// Is a surface of `facets` in `paint` one composite of all its facets when [`surface`] draws it
