@@ -53,7 +53,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Italian | `it` | 4,011 / 4,020 | full |
 | Dutch | `nl` | 7,299 rows, 1,609 of them `@msg` and 47 `@msgplural` (counted 2026-11-13 on `main` at `9a1a158a3`): in `COMPLETE_MESSAGES`, and the untranslated report lists the same missing messages for it as for German; one/other plurals | full |
 | Danish | `da` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
-| Russian | `ru` | 4,009 / 4,020 | full |
+| Russian | `ru` | 9,259 rows, 3,444 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): in `COMPLETE_MESSAGES`; the untranslated report lists 46 menu strings, 21 `tl!` literals and 11 undo labels as missing | full |
 | Ukrainian | `uk` | 4,009 / 4,020 (one/few/many plurals) | full |
 | Hungarian | `hu` | 5,253 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form | full |
 | Polish | `pl` | 5,130 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/few/many plurals | full; native review pending |
