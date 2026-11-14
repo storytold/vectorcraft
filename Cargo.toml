@@ -64,6 +64,9 @@ vectorcraft-affinity = { path = "crates/affinity" }
 vectorcraft-scriptcheck = { path = "crates/scriptcheck" }
 vectorcraft-js = { path = "crates/js" }
 vectorcraft-apischema = { path = "crates/apischema" }
+# The macOS Quick Look extensions' read path (the engine's import fuzzing); without its default
+# `bundled-fonts`, as vectorcraft-text.
+vectorcraft-quicklook = { path = "crates/quicklook", default-features = false }
 
 # foundation
 kurbo = { version = "0.13", features = ["serde"] }

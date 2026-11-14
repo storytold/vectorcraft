@@ -2665,6 +2665,7 @@ antiAlias	Sharp	მკვეთრი
 	{secs} sec	{secs} წმ
 	Create PDF-Compatible File	PDF-თან თავსებადი ფაილის შექმნა
 	Embed ICC Profiles	ICC პროფილების ჩაშენება
+	Embed Preview	წინასწარი ნახვის ჩაშენება
 	File Name:	ფაილის სახელი:
 	Save As	შენახვა როგორც
 	Save as Template	შაბლონად შენახვა

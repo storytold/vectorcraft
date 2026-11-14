@@ -1018,6 +1018,7 @@ font-technology	Variable	Variables
 	Embed Fonts (Glyphs Used)	Incorporer les polices (glyphes utilisés)
 	Embed ICC Profile	Incorporer le profil ICC
 	Embed ICC Profiles	Incorporer les profils ICC
+	Embed Preview	Incorporer l’aperçu
 	Embed Image	Incorporer l’image
 	Embed Image(s)	Incorporer les images
 	Embed page thumbnails	Incorporer les vignettes de page

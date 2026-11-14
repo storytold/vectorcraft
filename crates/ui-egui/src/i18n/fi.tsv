@@ -2915,6 +2915,7 @@ antiAlias	Sharp	Terävä
 	{secs} sec	{secs} s
 	Create PDF-Compatible File	Luo PDF-yhteensopiva tiedosto
 	Embed ICC Profiles	Upota ICC-profiilit
+	Embed Preview	Upota esikatselu
 	File Name:	Tiedostonimi:
 	Save As	Tallenna nimellä
 	Save as Template	Tallenna mallina

@@ -198,7 +198,9 @@ fn save_file_takes_the_native_save_options() {
     assert_eq!(v3["version"], 3);
     let shown = saved_with(&mut h, &dir, "preview.vectorcraft", json!({"preview": true}));
     assert!(vectorcraft_format::preview(&shown).is_some(), "a preview");
-    assert!(vectorcraft_format::preview(&plain).is_none(), "off by default");
+    assert!(vectorcraft_format::preview(&plain).is_some(), "on by default (Embed Preview)");
+    let bare = saved_with(&mut h, &dir, "bare.vectorcraft", json!({"preview": false}));
+    assert!(vectorcraft_format::preview(&bare).is_none(), "turned off");
     // `precision` rounds the path coordinates of that save only.
     let mut p = Headless::new();
     p.call("engine.execute", json!({"command": "file.new", "params": {"width": 100, "height": 100}})).unwrap();
