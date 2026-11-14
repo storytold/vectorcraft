@@ -653,8 +653,8 @@ fn map_effect_colors(a: &mut vectorcraft_doc::Appearance, f: &mut dyn FnMut(&Col
     }
 }
 
-/// `f` applied to the series paints and the label styles that graph `g` keeps, which its marks and
-/// labels take each time it is drawn again.
+/// `f` applied to the series paints, the label styles and the line rows that graph `g` keeps, which
+/// its marks, labels and lines take each time it is drawn again.
 fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color, proof::Link) -> Color) {
     for p in g.series_paints.iter_mut() {
         for paint in [&mut p.fill, &mut p.stroke].into_iter().flatten() {
@@ -666,7 +666,10 @@ fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color
         map_paint_colors(&mut st.fill, f);
         map_paint_colors(&mut st.stroke, f);
     }
-    for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows].into_iter().flatten() {
+    for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows, &mut styles.axis_rows, &mut styles.ring_rows]
+        .into_iter()
+        .flatten()
+    {
         for paint in [&mut r.paint.fill, &mut r.paint.stroke].into_iter().flatten() {
             map_paint_colors(paint, f);
         }

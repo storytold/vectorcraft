@@ -382,14 +382,14 @@ pub fn override_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     n.extras().symbol_overrides.iter().flat_map(|o| [o.fill.as_ref(), o.stroke.as_ref()]).flatten()
 }
 
-/// The paints a graph keeps for its series and its labels ([`crate::graph::GraphSpec`]), which its
-/// marks and labels take each time it is drawn again and which [`node_paints`] leaves out.
+/// The paints a graph keeps for its series, its labels and its lines ([`crate::graph::GraphSpec`]), which
+/// its marks, labels and lines take each time it is drawn again and which [`node_paints`] leaves out.
 pub fn graph_paints(n: &Node) -> impl Iterator<Item = &Paint> {
     let g = n.extras().graph.as_deref();
     let series = g.into_iter().flat_map(|g| &g.series_paints).flat_map(|s| [s.fill.as_ref(), s.stroke.as_ref()]).flatten();
     let labels = g.into_iter().flat_map(|g| [&g.label_styles.values, &g.label_styles.categories, &g.label_styles.legend]).flatten();
     let l = g.map(|g| &g.label_styles);
-    let rows = l.into_iter().flat_map(|l| [&l.values_rows, &l.categories_rows, &l.legend_rows]).flatten();
+    let rows = l.into_iter().flat_map(|l| [&l.values_rows, &l.categories_rows, &l.legend_rows, &l.axis_rows, &l.ring_rows]).flatten();
     series.chain(labels.flat_map(|st| [&st.fill, &st.stroke])).chain(rows.flat_map(|r| [r.paint.fill.as_ref(), r.paint.stroke.as_ref()]).flatten())
 }
 
@@ -398,7 +398,7 @@ fn graph_paints_mut(g: &mut crate::graph::GraphSpec) -> impl Iterator<Item = &mu
     let series = g.series_paints.iter_mut().flat_map(|s| [s.fill.as_mut(), s.stroke.as_mut()]).flatten();
     let l = &mut g.label_styles;
     let labels = [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten();
-    let rows = [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows].into_iter().flatten();
+    let rows = [&mut l.values_rows, &mut l.categories_rows, &mut l.legend_rows, &mut l.axis_rows, &mut l.ring_rows].into_iter().flatten();
     series
         .chain(labels.flat_map(|st| [&mut st.fill, &mut st.stroke]))
         .chain(rows.flat_map(|r| [r.paint.fill.as_mut(), r.paint.stroke.as_mut()]).flatten())
@@ -698,6 +698,14 @@ mod tests {
                     paint: crate::SeriesPaint { fill: Some(red.clone()), ..Default::default() },
                     ..Default::default()
                 }),
+                axis_rows: Some(crate::LabelRows {
+                    paint: crate::SeriesPaint { stroke: Some(red.clone()), ..Default::default() },
+                    ..Default::default()
+                }),
+                ring_rows: Some(crate::LabelRows {
+                    paint: crate::SeriesPaint { stroke: Some(red.clone()), ..Default::default() },
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
             ..Default::default()
@@ -705,18 +713,20 @@ mod tests {
         d.node_mut(a).unwrap().extras_mut().graph = Some(Box::new(spec));
         let mut seen = 0;
         d.visit_paints(&mut |p| seen += usize::from(*p == red));
-        assert_eq!(seen, 5, "the fill and the graph's series fill, series stroke, legend fill and value label fill row");
+        assert_eq!(seen, 7, "the fill and the graph's series fill, series stroke, legend fill, value label fill row and axis and ring stroke rows");
         let blue = Color::rgb(0.0, 0.0, 1.0);
         let mut to_blue = |c: &mut Color, s: &mut Option<String>, _: &mut f32| s.as_deref() == Some("Brand") && std::mem::replace(c, blue) != blue;
-        assert_eq!(d.map_solid_paints(&mut to_blue), 5);
+        assert_eq!(d.map_solid_paints(&mut to_blue), 7);
         let g = d.node(a).unwrap().extras().graph.clone().unwrap();
         assert_eq!(g.series_paints[0].fill, Some(linked(blue, "Brand")));
         assert_eq!(g.series_paints[0].stroke, Some(linked(blue, "Brand")));
         let legend = g.label_styles.legend.unwrap();
         assert_eq!((legend.fill, legend.stroke), (linked(blue, "Brand"), Paint::None));
         assert_eq!(g.label_styles.values_rows.unwrap().paint.fill, Some(linked(blue, "Brand")));
+        assert_eq!(g.label_styles.axis_rows.unwrap().paint.stroke, Some(linked(blue, "Brand")));
+        assert_eq!(g.label_styles.ring_rows.unwrap().paint.stroke, Some(linked(blue, "Brand")));
         let mut cleared = |p: &Paint| (*p == linked(blue, "Brand")).then_some(Paint::None);
-        assert_eq!(d.map_paints(&mut cleared), 5, "the fill and the graph's four");
+        assert_eq!(d.map_paints(&mut cleared), 7, "the fill and the graph's six");
         assert!(graph_paints(d.node(a).unwrap()).all(Paint::is_none));
     }
 

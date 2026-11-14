@@ -140,7 +140,7 @@ impl crate::Document {
 /// the text in graphs): the value axis numbers, the category labels (category axis, radar spokes, pie names) and the
 /// legend labels (beside or across the top, or in pie wedges). `None` draws the default 9 pt black. The `*_para`
 /// fields are the paragraph attributes each kind keeps the same way (`None`: the defaults); the graph still sets each
-/// label's alignment.
+/// label's alignment. [`Self::axis_rows`] and [`Self::ring_rows`] are the rows the graph's lines keep the same way.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct LabelStyles {
@@ -176,6 +176,14 @@ pub struct LabelStyles {
     /// The object fill and stroke rows the legend labels keep, as [`Self::values_rows`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub legend_rows: Option<LabelRows>,
+    /// The object rows the axis lines and tick marks keep once set with the paint, stroke or Appearance controls
+    /// ([`LabelRows`]). They replace the default 0.5 pt black stroke; kept rows without paint draw none. `None`: the
+    /// default stroke.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub axis_rows: Option<LabelRows>,
+    /// The object rows the rings of a radar graph keep, as [`Self::axis_rows`]. `None`: the default 0.25 pt gray stroke.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ring_rows: Option<LabelRows>,
 }
 
 impl LabelStyles {
