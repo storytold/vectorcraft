@@ -126,7 +126,8 @@ fn resolution_tags_and_the_profile() {
     for model in ColorModel::ALL {
         let src = if model == ColorModel::Cmyk { vec![0; 64] } else { px.clone() };
         let file = t::encode_samples(&src, 4, 4, 72.0, &TiffOptions { embed_icc: true, ..opts(model) }).unwrap();
-        let icc = ifd0(&file).bytes(tags::ICC_PROFILE).unwrap();
+        let ifd = ifd0(&file);
+        let icc = ifd.bytes(tags::ICC_PROFILE).unwrap();
         assert_eq!(&icc[36..40], b"acsp", "{model:?}: an ICC profile");
         let space: &[u8; 4] = match model {
             ColorModel::Rgb => b"RGB ",
