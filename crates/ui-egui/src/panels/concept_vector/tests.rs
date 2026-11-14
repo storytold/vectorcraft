@@ -13,6 +13,7 @@ use vectorcraft_geom::{PathData, Point, SubPath};
 
 use super::{
     ID, OPEN, PREVIEW_H, PREVIEW_POINTS, Work, art_rect, cancel, elements, finish, generate, insert, poll, preview, preview_width, show, show_job,
+    within_budget,
 };
 use crate::tests_labels::painted_text;
 use crate::tests_removeanchors::{at, click_control, control_frame, has, properties_frame};
@@ -295,6 +296,31 @@ fn preview_elements_match_the_converted_path() {
     let made: Vec<_> = elements(&path).collect();
     assert_eq!(made, path.to_bezpath().elements().to_vec());
     assert_eq!(elements(&path).take(2).count(), 2);
+}
+
+/// A curve flattened into more points than are left ends the elements taken: those after it are
+/// not flattened, while a closing element still closes the ring.
+#[test]
+fn preview_elements_stop_once_no_point_is_left() {
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((0.0, 0.0));
+    for i in 0..100 {
+        let x = f64::from(i) * 100.0;
+        bp.curve_to((x + 30.0, 400.0), (x + 70.0, -400.0), (x + 100.0, 0.0));
+    }
+    let path = PathData::from_bezpath(&bp);
+    let left = std::cell::Cell::new(10);
+    let taken = std::cell::Cell::new(0);
+    vectorcraft_geom::flatten(within_budget(elements(&path).inspect(|_| taken.set(taken.get() + 1)), &left), 0.25, |el| {
+        if matches!(el, vectorcraft_geom::PathEl::LineTo(_)) && left.get() > 0 {
+            left.set(left.get() - 1);
+        }
+    });
+    assert_eq!(left.get(), 0);
+    assert!(taken.get() <= 3, "{} elements taken", taken.get());
+    let closing = [vectorcraft_geom::PathEl::LineTo((1.0, 1.0).into()), vectorcraft_geom::PathEl::ClosePath];
+    assert_eq!(within_budget(closing.into_iter(), &left).count(), 0, "nothing is taken once none is left");
+    assert_eq!(within_budget(closing[1..].iter().copied(), &left).count(), 1, "but a ring still closes");
 }
 
 /// A preview of an image wider or taller than its box allows keeps the image's proportions, with

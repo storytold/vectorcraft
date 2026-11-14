@@ -408,24 +408,33 @@ fn elements(path: &vectorcraft_geom::PathData) -> impl Iterator<Item = vectorcra
     })
 }
 
+/// `els` until no point is `left` to take, checked as each element is taken; a closing element
+/// still closes its ring.
+fn within_budget<'a>(
+    els: impl Iterator<Item = vectorcraft_geom::PathEl> + 'a,
+    left: &'a std::cell::Cell<usize>,
+) -> impl Iterator<Item = vectorcraft_geom::PathEl> + 'a {
+    els.take_while(move |el| left.get() > 0 || matches!(el, vectorcraft_geom::PathEl::ClosePath))
+}
+
 /// Variation `v` of an image `size` pixels big: its paths painted in order, each path's fill and
 /// then its stroke, stopping after [`PREVIEW_POINTS`] points in all.
 fn preview(v: &Variation, label: String, size: (u32, u32)) -> Preview {
     let (w, h) = (f64::from(size.0.max(1)), f64::from(size.1.max(1)));
     let aspect = (w / h) as f32;
     let mut image = egui::ColorImage::filled(image_size(aspect), Color32::WHITE);
-    let mut left = PREVIEW_POINTS;
+    let left = std::cell::Cell::new(PREVIEW_POINTS);
     let at = |q: vectorcraft_geom::Point| Pos2::new((q.x / w) as f32, (q.y / h) as f32);
     let rgb = |[r, g, b]: [u8; 3]| Color32::from_rgb(r, g, b);
     for p in &v.paths {
-        if left == 0 {
+        if left.get() == 0 {
             break;
         }
         let mut rings: Vec<Vec<Pos2>> = vec![];
         let mut ring: Vec<Pos2> = vec![];
-        // Each element adds at least one point, and `flatten` makes a bounded number of each curve,
-        // so the elements past the points left are neither made nor flattened.
-        vectorcraft_geom::flatten(elements(&p.path).take(left.saturating_add(1)), (w.max(h) / 400.0).max(0.25), |el| {
+        // `flatten` takes an element only after the points of the one before, and makes a bounded
+        // number of each curve, so the elements past the points left are neither made nor flattened.
+        vectorcraft_geom::flatten(within_budget(elements(&p.path), &left), (w.max(h) / 400.0).max(0.25), |el| {
             let q = match el {
                 vectorcraft_geom::PathEl::MoveTo(q) => {
                     if ring.len() > 1 {
@@ -447,8 +456,8 @@ fn preview(v: &Variation, label: String, size: (u32, u32)) -> Preview {
                 }
                 _ => return,
             };
-            if left > 0 {
-                left -= 1;
+            if left.get() > 0 {
+                left.set(left.get() - 1);
                 ring.push(at(q));
             }
         });
