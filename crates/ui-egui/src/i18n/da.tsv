@@ -687,9 +687,6 @@
 	Brushes	Pensler
 	Color	Farve
 	Color Guide	Farveguide
-	Show Harmony	Vis harmoni
-	Harmony Rule	Harmoniregel
-	Harmony color	Harmonifarve
 	Color Themes	Farvetemaer
 	Color Wheel	Farvehjul
 	Hue ring	Ring for farvetone
@@ -701,6 +698,9 @@
 	Box Channel	Kvadratets kanal
 	Color box	Farvekvadrat
 	Color Wheel Options	Indstillinger for farvehjul
+	Show Harmony	Vis harmoni
+	Harmony Rule	Harmoniregel
+	Harmony color	Harmonifarve
 	CSS Properties	CSS-egenskaber
 	Document Info	Dokumentoplysninger
 	Flattener Preview	Udjævningsforhåndsvisning

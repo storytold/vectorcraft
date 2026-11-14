@@ -619,9 +619,6 @@
 	Color Group:	રંગ ગ્રૂપ:
 	Color Group: {name}	રંગ ગ્રૂપ: {name}
 	Color Guide	રંગ ગાઇડ
-	Show Harmony	હાર્મની બતાવો
-	Harmony Rule	હાર્મની નિયમ
-	Harmony color	હાર્મની રંગ
 	Color Guide Options	રંગ ગાઇડ વિકલ્પો
 	Color Guide Options…	રંગ ગાઇડ વિકલ્પો…
 	Color Halftone…	કલર હાફટોન…
@@ -4232,6 +4229,9 @@
 	Box Channel	બૉક્સ ચેનલ
 	Color box	રંગ બૉક્સ
 	Color Wheel Options	રંગ વ્હીલ વિકલ્પો
+	Show Harmony	હાર્મની બતાવો
+	Harmony Rule	હાર્મની નિયમ
+	Harmony color	હાર્મની રંગ
 	{name} (spot)	{name} (સ્પૉટ)
 	{pages} in all, {count} per copy	કુલ {pages}, પ્રતિ નકલ {count}
 	{page} of {count}	{count} માંથી {page}

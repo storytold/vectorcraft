@@ -503,9 +503,6 @@ font-technology	Variable	Μεταβλητές
 	Color Group:	Ομάδα χρωμάτων:
 	Color Group: {name}	Ομάδα χρωμάτων: {name}
 	Color Guide	Οδηγός χρωμάτων
-	Show Harmony	Εμφάνιση αρμονίας
-	Harmony Rule	Κανόνας χρωματικής αρμονίας
-	Harmony color	Χρώμα αρμονίας
 	Color Guide Options	Επιλογές οδηγού χρωμάτων
 	Color Guide Options…	Επιλογές οδηγού χρωμάτων…
 	Color images	Έγχρωμες εικόνες
@@ -540,6 +537,9 @@ font-technology	Variable	Μεταβλητές
 	Box Channel	Κανάλι τετραγώνου
 	Color box	Τετράγωνο χρώματος
 	Color Wheel Options	Επιλογές χρωματικού τροχού
+	Show Harmony	Εμφάνιση αρμονίας
+	Harmony Rule	Κανόνας χρωματικής αρμονίας
+	Harmony color	Χρώμα αρμονίας
 	Color Type:	Τύπος χρώματος:
 	Color:	Χρώμα:
 	Colorize	Χρωματισμός

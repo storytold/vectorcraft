@@ -495,9 +495,6 @@ antiAlias	Sharp	Nítido
 	Color Group:	Grupo de Cores:
 	Color Group: {name}	Grupo de Cores: {name}
 	Color Guide	Guia de Cores
-	Show Harmony	Mostrar Harmonia
-	Harmony Rule	Regra de Harmonia
-	Harmony color	Cor da harmonia
 	Color Guide Options	Opções do Guia de Cores
 	Color Guide Options…	Opções do Guia de Cores…
 	Color Library…	Biblioteca de Cores…
@@ -525,6 +522,9 @@ antiAlias	Sharp	Nítido
 	Box Channel	Canal da Caixa
 	Color box	Caixa de cor
 	Color Wheel Options	Opções da Roda de Cores
+	Show Harmony	Mostrar Harmonia
+	Harmony Rule	Regra de Harmonia
+	Harmony color	Cor da harmonia
 	Color Type:	Tipo de Cor:
 	Color blindness – Deuteranopia-type	Daltonismo – tipo deuteranopia
 	Color blindness – Protanopia-type	Daltonismo – tipo protanopia

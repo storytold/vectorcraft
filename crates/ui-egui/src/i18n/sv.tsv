@@ -530,9 +530,6 @@ font-technology	Variable	Variabla
 	Color Group:	Färggrupp:
 	Color Group: {name}	Färggrupp: {name}
 	Color Guide	Färgguide
-	Show Harmony	Visa harmoni
-	Harmony Rule	Harmoniregel
-	Harmony color	Harmonifärg
 	Color Guide Options	Alternativ för färgguide
 	Color Guide Options…	Alternativ för färgguide…
 	Color images	Färgbilder
@@ -567,6 +564,9 @@ font-technology	Variable	Variabla
 	Box Channel	Rutans kanal
 	Color box	Färgruta
 	Color Wheel Options	Alternativ för färghjulet
+	Show Harmony	Visa harmoni
+	Harmony Rule	Harmoniregel
+	Harmony color	Harmonifärg
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg

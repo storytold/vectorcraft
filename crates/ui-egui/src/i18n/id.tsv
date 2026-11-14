@@ -687,9 +687,6 @@
 	Brushes	Kuas
 	Color	Warna
 	Color Guide	Panduan warna
-	Show Harmony	Tampilkan harmoni
-	Harmony Rule	Aturan harmoni
-	Harmony color	Warna harmoni
 	Color Themes	Tema warna
 	Color Wheel	Roda warna
 	Hue ring	Cincin rona
@@ -701,6 +698,9 @@
 	Box Channel	Saluran kotak
 	Color box	Kotak warna
 	Color Wheel Options	Opsi roda warna
+	Show Harmony	Tampilkan harmoni
+	Harmony Rule	Aturan harmoni
+	Harmony color	Warna harmoni
 	CSS Properties	Properti CSS
 	Document Info	Info dokumen
 	Flattener Preview	Pratinjau perata

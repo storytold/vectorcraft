@@ -742,9 +742,6 @@
 	Brushes	Štětce
 	Color	Barva
 	Color Guide	Průvodce barvami
-	Show Harmony	Zobrazit harmonii
-	Harmony Rule	Pravidlo harmonie
-	Harmony color	Barva harmonie
 	Color Themes	Barevné motivy
 	Color Wheel	Barevné kolo
 	Hue ring	Prstenec odstínů
@@ -756,6 +753,9 @@
 	Box Channel	Kanál čtverce
 	Color box	Barevný čtverec
 	Color Wheel Options	Možnosti barevného kola
+	Show Harmony	Zobrazit harmonii
+	Harmony Rule	Pravidlo harmonie
+	Harmony color	Barva harmonie
 	CSS Properties	Vlastnosti CSS
 	Document Info	Informace o dokumentu
 	Flattener Preview	Náhled sloučení

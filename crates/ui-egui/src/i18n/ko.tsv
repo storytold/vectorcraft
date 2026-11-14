@@ -750,9 +750,6 @@ digits	Malayalam	말라얄람어
 	Brushes	브러시
 	Color	색상
 	Color Guide	색상 가이드
-	Show Harmony	하모니 표시
-	Harmony Rule	하모니 규칙
-	Harmony color	하모니 색상
 	Color Themes	색상 테마
 	Color Wheel	색상환
 	Hue ring	색조 링
@@ -764,6 +761,9 @@ digits	Malayalam	말라얄람어
 	Box Channel	상자 채널
 	Color box	색상 상자
 	Color Wheel Options	색상환 옵션
+	Show Harmony	하모니 표시
+	Harmony Rule	하모니 규칙
+	Harmony color	하모니 색상
 	CSS Properties	CSS 속성
 	Document Info	문서 정보
 	Flattener Preview	병합 미리 보기

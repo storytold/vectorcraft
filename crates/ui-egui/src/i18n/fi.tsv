@@ -733,9 +733,6 @@
 	Brushes	Siveltimet
 	Color	Väri
 	Color Guide	Väriopas
-	Show Harmony	Näytä harmonia
-	Harmony Rule	Harmoniasääntö
-	Harmony color	Harmonian väri
 	Color Themes	Väriteemat
 	Color Wheel	Väriympyrä
 	Hue ring	Sävyrengas
@@ -747,6 +744,9 @@
 	Box Channel	Ruudun kanava
 	Color box	Väriruutu
 	Color Wheel Options	Väriympyrän asetukset
+	Show Harmony	Näytä harmonia
+	Harmony Rule	Harmoniasääntö
+	Harmony color	Harmonian väri
 	CSS Properties	CSS-ominaisuudet
 	Document Info	Asiakirjan tiedot
 	Flattener Preview	Litistyksen esikatselu

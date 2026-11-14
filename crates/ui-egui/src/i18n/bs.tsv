@@ -729,9 +729,6 @@
 	Brushes	Četkice
 	Color	Boja
 	Color Guide	Vodič za boje
-	Show Harmony	Prikaži harmoniju
-	Harmony Rule	Pravilo harmonije
-	Harmony color	Boja harmonije
 	Color Themes	Teme boja
 	Color Wheel	Kotač boja
 	Hue ring	Prsten nijanse
@@ -743,6 +740,9 @@
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
+	Show Harmony	Prikaži harmoniju
+	Harmony Rule	Pravilo harmonije
+	Harmony color	Boja harmonije
 	CSS Properties	CSS svojstva
 	Document Info	Informacije o dokumentu
 	Flattener Preview	Pregled spljoštavanja

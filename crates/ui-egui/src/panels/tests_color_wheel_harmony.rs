@@ -158,6 +158,26 @@ fn a_drag_from_a_marker_moves_the_hue() {
     assert_eq!(undo_len(h.state()), undo + 1);
 }
 
+/// A press held on a High Contrast marker past the length of a click, without moving, applies the
+/// rule's color on release, and the hue under the pointer is not previewed while it is held.
+#[test]
+fn a_press_held_on_a_marker_applies_the_rules_color() {
+    let mut h = harness(app(json!([0.9, 0.8, 0.2]), "highContrast"));
+    let base = hsb(&fill(h.state()));
+    let at = markers(&h);
+    assert_eq!(at.len(), 1);
+    let undo = undo_len(h.state());
+    press(&mut h, at[0], true, Modifiers::NONE);
+    h.run_steps(6);
+    assert_eq!(hsb(&fill(h.state())), base, "nothing changes while the press is held");
+    press(&mut h, at[0], false, Modifiers::NONE);
+    h.run_steps(1);
+    let want = Harmony::HighContrast.apply_hsb(base)[1];
+    let got = hsb(&fill(h.state()));
+    assert!((got[2] - want[2]).abs() < 0.01 && (got[0] - want[0]).abs() < 1.0, "{got:?} {want:?}");
+    assert_eq!(undo_len(h.state()), undo + 1);
+}
+
 /// Alt-click on a marker paints the stroke, and the fill stays in front.
 #[test]
 fn alt_click_on_a_marker_paints_the_stroke() {
@@ -327,4 +347,5 @@ fn the_panel_menu_shows_the_harmony_and_picks_the_rule() {
     h.state_mut().run("ui.colorWheel", json!({"view": "box"})).unwrap();
     h.run_steps(2);
     assert!(h.get_by_label("✓ Show Harmony").accesskit_node().data().is_disabled(), "gray while the box shows");
+    assert!(h.get_by_label("   Harmony Rule").accesskit_node().data().is_disabled(), "gray while the box shows");
 }

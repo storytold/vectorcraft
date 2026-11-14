@@ -1205,9 +1205,6 @@
 	Brushes	Penseel
 	Color	Kleur
 	Color Guide	Kleurhulp
-	Show Harmony	Harmonie tonen
-	Harmony Rule	Harmonieregel
-	Harmony color	Harmoniekleur
 	Color Themes	Kleurthema's
 	Color Wheel	Kleurenwiel
 	Hue ring	Tintring
@@ -1219,6 +1216,9 @@
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
+	Show Harmony	Harmonie tonen
+	Harmony Rule	Harmonieregel
+	Harmony color	Harmoniekleur
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld

@@ -544,9 +544,6 @@ font-technology	Variable	Variables
 	Color Group:	Groupe de couleurs :
 	Color Group: {name}	Groupe de couleurs : {name}
 	Color Guide	Guide des couleurs
-	Show Harmony	Afficher l’harmonie
-	Harmony Rule	Règle d’harmonie
-	Harmony color	Couleur de l’harmonie
 	Color Guide Options	Options du guide des couleurs
 	Color Guide Options…	Options du guide des couleurs…
 	Color images	Images couleur
@@ -581,6 +578,9 @@ font-technology	Variable	Variables
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
+	Show Harmony	Afficher l’harmonie
+	Harmony Rule	Règle d’harmonie
+	Harmony color	Couleur de l’harmonie
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser

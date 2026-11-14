@@ -177,7 +177,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, p: &Value) -> Result<Value, Stri
 }
 
 /// The panel menu: Wheel View and Box View, and Box Channel while the box shows; Show Harmony
-/// while the wheel shows, and Harmony Rule.
+/// and Harmony Rule while the wheel shows.
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let set = app.ui.color_wheel.clone();
     for (label, view) in [(tl!("Wheel View"), View::Wheel), (tl!("Box View"), View::Box)] {
@@ -198,12 +198,14 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Show Harmony"), set.view == View::Wheel, set.harmony) {
         command(app, &json!({ "harmony": !set.harmony })).ok();
     }
-    ui.menu_button(format!("   {}", tl!("Harmony Rule")), |ui| {
-        for rule in harmony_rules() {
-            if menu_item(ui, rule.label(), true, rule == set.harmony_rule) {
-                command(app, &json!({ "harmonyRule": rule.id() })).ok();
+    ui.add_enabled_ui(set.view == View::Wheel, |ui| {
+        ui.menu_button(format!("   {}", tl!("Harmony Rule")), |ui| {
+            for rule in harmony_rules() {
+                if menu_item(ui, rule.label(), true, rule == set.harmony_rule) {
+                    command(app, &json!({ "harmonyRule": rule.id() })).ok();
+                }
             }
-        }
+        });
     });
 }
 
@@ -400,18 +402,25 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let at = |x: f32, y: f32| widgets::hsb32([hsb[0], x, 1.0 - y]);
         let name = tl!("Saturation and brightness");
         let (field, field_phase) = widgets::color_field(&mut field_ui, "field", (name, axes), square.size(), (hsb[1], 1.0 - hsb[2]), marked, &at);
-        if let Some((h, phase)) = ring.hue {
-            pick = Some(([h, hsb[1], hsb[2]], phase));
-        }
-        // Show Harmony: the rule's other colors for the current one, which follow it.
+        // Show Harmony: the rule's other colors for the current one, which follow it. While a press
+        // is held on a marker, the ring's drag under it picks nothing.
         let set = &app.ui.color_wheel;
+        let mut held = false;
         if set.harmony && marked {
             let others: Vec<[f32; 3]> = set.harmony_rule.apply_hsb(hsb).into_iter().skip(1).collect();
-            if let Some(i) = widgets::ring_markers(ui, "color-wheel-harmony", ring.rect, &others, tl!("Harmony color"))
+            let markers = widgets::ring_markers(ui, "color-wheel-harmony", ring.rect, &others, tl!("Harmony color"));
+            held = markers.held;
+            if let Some(i) = markers.picked
                 && let Some(&c) = others.get(i)
             {
                 pick = Some((c, Live::Released));
             }
+        }
+        if let Some((h, phase)) = ring.hue
+            && !held
+            && pick.is_none()
+        {
+            pick = Some(([h, hsb[1], hsb[2]], phase));
         }
         // A press between the square and the ring picks the closest point of the square, which
         // takes the keyboard focus.

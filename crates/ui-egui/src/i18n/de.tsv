@@ -521,9 +521,6 @@ font-technology	Variable	Variabel
 	Color Group:	Farbgruppe:
 	Color Group: {name}	Farbgruppe: {name}
 	Color Guide	Farbhilfe
-	Show Harmony	Harmonie einblenden
-	Harmony Rule	Harmonieregel
-	Harmony color	Harmoniefarbe
 	Color Guide Options	Farbhilfeoptionen
 	Color Guide Options…	Farbhilfeoptionen…
 	Color images	Farbbilder
@@ -558,6 +555,9 @@ font-technology	Variable	Variabel
 	Box Channel	Kanal des Quadrats
 	Color box	Farbquadrat
 	Color Wheel Options	Optionen für den Farbkreis
+	Show Harmony	Harmonie einblenden
+	Harmony Rule	Harmonieregel
+	Harmony color	Harmoniefarbe
 	Color Type:	Farbart:
 	Color:	Farbe:
 	Colorize	Einfärben

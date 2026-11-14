@@ -489,9 +489,6 @@ antiAlias	Sharp	锐利
 	Color Group:	颜色组：
 	Color Group: {name}	颜色组：{name}
 	Color Guide	颜色参考
-	Show Harmony	显示协调
-	Harmony Rule	协调规则
-	Harmony color	协调颜色
 	Color Guide Options	颜色参考选项
 	Color Guide Options…	颜色参考选项…
 	Color images	彩色图像
@@ -526,6 +523,9 @@ antiAlias	Sharp	锐利
 	Box Channel	方块色版
 	Color box	颜色方块
 	Color Wheel Options	色轮选项
+	Show Harmony	显示协调
+	Harmony Rule	协调规则
+	Harmony color	协调颜色
 	Color Type:	颜色类型：
 	Color:	颜色：
 	Colorize	上色

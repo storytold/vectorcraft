@@ -757,9 +757,6 @@ digits	Malayalam	マラヤーラム数字
 	Brushes	ブラシ
 	Color	カラー
 	Color Guide	カラーガイド
-	Show Harmony	ハーモニーを表示
-	Harmony Rule	ハーモニールール
-	Harmony color	ハーモニーカラー
 	Color Themes	カラーテーマ
 	Color Wheel	カラーホイール
 	Hue ring	色相リング
@@ -771,6 +768,9 @@ digits	Malayalam	マラヤーラム数字
 	Box Channel	ボックスのチャンネル
 	Color box	カラーボックス
 	Color Wheel Options	カラーホイールオプション
+	Show Harmony	ハーモニーを表示
+	Harmony Rule	ハーモニールール
+	Harmony color	ハーモニーカラー
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー
