@@ -617,6 +617,7 @@ fn require_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
 /// ([`capture_series_changes`], [`super::graph::capture_label_changes`]). Nothing targeted is not
 /// an edit, and when `f` leaves every target as it was, the document and its undo history stay as
 /// they are.
+///
 /// With `of` (see [`reference_of`]), an explicit aligned `item` is a row of the stack of `of`, which
 /// is not among `ids`: it must be there and of the edited kind, each target edits the row equal to
 /// it, a target without one is left as it is, and no target with one is an error. Returns the

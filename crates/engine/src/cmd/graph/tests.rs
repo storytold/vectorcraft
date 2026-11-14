@@ -890,12 +890,19 @@ fn aligned_paint_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_ob
     assert_eq!(now.items[0].paint(), &green);
     let now = fill(&mut s, "paint.invert", json!({"ids": ids, "item": 1, "aligned": true}));
     assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the inverted color is the last color, not the art's");
+    let now = fill(&mut s, "paint.lastColor", json!({"ids": ids, "item": 1, "aligned": true, "stroke": false}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color());
     // Without `aligned`, the art is left out and the item is a row of the mark.
     let now = fill(&mut s, "paint.invert", json!({"ids": ids, "item": 0}));
     assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the mark's inverted color is the last color, not the art's");
+    s.last_solid = vectorcraft_color::Color::rgb(0.5, 0.5, 0.5);
+    let now = fill(&mut s, "paint.complement", json!({"ids": ids, "item": 0}));
+    assert_eq!(Some(s.last_solid), now.items[0].paint().color(), "the mark's complement is the last color, not the art's");
     let now = fill(&mut s, "paint.editGradient", json!({"ids": ids, "item": 1, "aligned": true, "kind": "linear"}));
     let Paint::Gradient(g) = now.items[0].paint() else { panic!("{:?}", now.items[0].paint()) };
     assert_eq!(&s.last_gradient, &**g, "the mark's new gradient is the last gradient");
+    let now = fill(&mut s, "paint.lastGradient", json!({"ids": ids, "item": 1, "aligned": true, "stroke": false}));
+    assert!(matches!(now.items[0].paint(), Paint::Gradient(_)));
 
     let stroke = |s: &mut Session, cmd: &str, p: serde_json::Value| {
         s.execute(cmd, &p).unwrap();
@@ -931,6 +938,8 @@ fn aligned_paint_rows_of_a_graph_designs_art_edit_the_equal_rows_of_the_other_ob
         ("paint.editGradient", json!({"ids": [art.0], "item": 1, "aligned": true, "kind": "linear"}), "no appearance item 1"),
         // The weight steps take no row: they step each object's active or top stroke.
         ("stroke.weightUp", json!({"ids": ids, "item": 2}), "unknown parameter `item`"),
+        ("stroke.weightUp", json!({"ids": ids, "aligned": true}), "unknown parameter `aligned`"),
+        ("stroke.weightDown", json!({"ids": ids, "item": 2}), "unknown parameter `item`"),
         ("stroke.weightDown", json!({"ids": ids, "aligned": true}), "unknown parameter `aligned`"),
     ] {
         let defaults = format!("{:?}", (&s.paint.fill, &s.paint.stroke, &s.last_gradient));
