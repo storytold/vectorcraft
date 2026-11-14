@@ -200,8 +200,12 @@ pub fn apply_geometry_bez_carrying(effects: &[Effect], path: &BezPath, bounds: R
 /// it unevenly (a map after which a refit would not match the mapped gradient): it is fixed to its
 /// fit on the geometry that effect takes, and then follows that effect and the ones after it as a
 /// placed gradient does.
+///
+/// It also lists the visible Transform effects that move the art once and that the pass left out,
+/// their results past the budget, by their index in the effect list it was given: the raster
+/// effects before such an effect stay as they are, as the art does ([`Self::hide_skipped`]).
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Carry(Vec<CarryStep>);
+pub struct Carry(Vec<CarryStep>, Vec<usize>);
 
 /// Does `m` fix a gradient fitted to the object to its fit before mapping it? It does when a refit
 /// would not reproduce the map (a turn, a reflection or an uneven scale) and `m` keeps area: a map
@@ -265,7 +269,7 @@ impl Carry {
                 _ => None,
             },
         };
-        Carry(step.into_iter().collect())
+        Carry(step.into_iter().collect(), vec![])
     }
 
     /// Does it leave gradients where they are?
@@ -310,6 +314,30 @@ impl Carry {
 
     pub(crate) fn push(&mut self, more: Carry) {
         self.0.extend(more.0);
+        self.1.extend(more.1);
+    }
+
+    /// Did the pass leave out a Transform effect that moves the art once ([`Self::hide_skipped`])?
+    pub fn skipped(&self) -> bool {
+        !self.1.is_empty()
+    }
+
+    /// Hide each Transform effect of `effects`, the list the pass was given, that it left out (its
+    /// result past the budget): the art stays where it was, so the raster effects listed before it
+    /// do not follow it ([`crate::raster::followed`]). Other effects stay as they are.
+    pub fn hide_skipped(&self, effects: &mut [Effect]) {
+        for &i in &self.1 {
+            if let Some(e) = effects.get_mut(i).filter(|e| e.id == "distort.transform") {
+                e.visible = false;
+            }
+        }
+    }
+
+    /// Note that the Transform effect at index `i` of the pass's list was left out.
+    pub(crate) fn skip(&mut self, i: usize) {
+        if !self.1.contains(&i) {
+            self.1.push(i);
+        }
     }
 }
 
@@ -354,6 +382,13 @@ pub(crate) fn apply_geometry_carrying_within(
                 c.push(Carry::of(&e.id, &p, b, cur.bounds(), next.bounds(), ctx.seed));
             }
             cur = next;
+        } else if let Some(c) = carry.as_deref_mut()
+            && e.id == "distort.transform"
+            && !crate::raster::holds_back(e)
+            && let Some(i) = effects.iter().position(|x| std::ptr::eq(x, e))
+        {
+            // The raster effects before it stay as the art does.
+            c.skip(i);
         }
     }
     cur

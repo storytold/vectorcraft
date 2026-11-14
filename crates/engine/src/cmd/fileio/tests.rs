@@ -748,8 +748,8 @@ fn a_native_save_streams_the_bytes_the_encoder_makes() {
 }
 
 /// An option given beside the path (an SVG option flat or in `svg`) and in `options` with different
-/// values is refused before anything is written; `compress`, `version`, `preview` or `precision` beside the path of a format
-/// that doesn't read it is named in the warnings.
+/// values is refused before anything is written; a native option beside the path of a format that doesn't read it is named
+/// in the warnings.
 #[test]
 fn a_save_refuses_disagreeing_options_and_names_unread_native_ones() {
     let d = tmp_dir("save-options");
@@ -1169,6 +1169,216 @@ fn png_webp_and_rgb_tiff_turned_a_quarter_swap_their_resolution() {
             assert_eq!(black, [at], "{what}: the first stored pixel's corner");
         }
     }
+}
+
+/// A made-up ICC profile of `len` bytes (at least a header's 128) whose header names the color
+/// space `space`; the bytes after the header differ from place to place.
+fn icc_profile(space: &[u8; 4], len: usize) -> Vec<u8> {
+    let mut icc: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+    icc[..4].copy_from_slice(&u32::try_from(len).unwrap().to_be_bytes());
+    icc[12..16].copy_from_slice(b"mntr");
+    icc[16..20].copy_from_slice(space);
+    icc[36..40].copy_from_slice(b"acsp");
+    icc
+}
+
+/// `tiff` (little-endian) with an ICCProfile tag (34675, of type UNDEFINED) holding `icc`: its first
+/// directory copied to the end of the file with the tag added in order, as [`tiff_oriented`] adds
+/// its tag.
+fn tiff_with_icc(tiff: &[u8], icc: &[u8]) -> Vec<u8> {
+    let at = usize::try_from(u32::from_le_bytes(tiff[4..8].try_into().unwrap())).unwrap();
+    let n = usize::from(u16::from_le_bytes([tiff[at], tiff[at + 1]]));
+    let mut entries: Vec<Vec<u8>> = tiff[at + 2..at + 2 + 12 * n].chunks(12).map(<[u8]>::to_vec).collect();
+    let mut out = tiff.to_vec();
+    if out.len() % 2 == 1 {
+        out.push(0);
+    }
+    let data = u32::try_from(out.len()).unwrap();
+    out.extend(icc);
+    if out.len() % 2 == 1 {
+        out.push(0);
+    }
+    let i = entries.iter().position(|e| u16::from_le_bytes([e[0], e[1]]) > 34675).unwrap_or(n);
+    let count = u32::try_from(icc.len()).unwrap();
+    entries.insert(i, [&34675u16.to_le_bytes()[..], &7u16.to_le_bytes(), &count.to_le_bytes(), &data.to_le_bytes()].concat());
+    let ifd = u32::try_from(out.len()).unwrap();
+    out[4..8].copy_from_slice(&ifd.to_le_bytes());
+    out.extend(u16::try_from(n + 1).unwrap().to_le_bytes());
+    out.extend(entries.concat());
+    out.extend([0; 4]);
+    out
+}
+
+/// The ICC profile and pixels of a stored image, read by the image decoder for its format.
+fn stored_pixels(what: &str, img: &RasterImage) -> (Option<Vec<u8>>, image::ExtendedColorType, image::DynamicImage) {
+    use image::ImageDecoder as _;
+    let bytes = Cursor::new(img.blob.bytes.as_slice());
+    let mut d: Box<dyn image::ImageDecoder> = match img.blob.mime.as_str() {
+        "image/png" => Box::new(image::codecs::png::PngDecoder::new(bytes).unwrap()),
+        "image/tiff" => Box::new(image::codecs::tiff::TiffDecoder::new(bytes).unwrap()),
+        other => panic!("{what}: stored as {other}"),
+    };
+    let icc = d.icc_profile().unwrap();
+    let color = d.original_color_type();
+    (icc, color, image::DynamicImage::from_decoder(d).unwrap())
+}
+
+/// An image turned by its orientation and stored as PNG keeps the gray or RGB ICC profile its file
+/// carries, and its 16-bit samples at 16 bits, from a PNG, a JPEG, a WebP and a TIFF; a TIFF the
+/// image decoder reads, stored as PNG without a turn, keeps them too. A profile of another color
+/// space than the samples' is left out.
+#[test]
+fn images_stored_as_png_keep_their_icc_profile_and_16_bit_samples() {
+    use image::{DynamicImage, ImageEncoder as _};
+    let (rgb_icc, gray_icc, cmyk_icc) = (icc_profile(b"RGB ", 600), icc_profile(b"GRAY", 300), icc_profile(b"CMYK", 400));
+    // 3 × 2, every sample's low byte different.
+    let rgb16 = image::ImageBuffer::from_fn(3, 2, |x, y| {
+        let v = u16::try_from(x * 0x1111 + y * 0x2345).unwrap();
+        image::Rgb([0x1000 + v, 0x8001 + v, 0xF0F3 - v])
+    });
+    let rgb16 = DynamicImage::ImageRgb16(rgb16);
+    let gray16 = DynamicImage::ImageLuma16(image::ImageBuffer::from_fn(3, 2, |x, y| image::Luma([u16::try_from(x * 0x3001 + y * 0x0107).unwrap()])));
+    let rgb8 = DynamicImage::ImageRgb8(image::RgbImage::from_fn(3, 2, |x, y| image::Rgb([u8::try_from(x * 70 + y * 9).unwrap(), 200, 13])));
+    let png = |img: &DynamicImage, icc: &[u8], orientation: u16| {
+        let mut out = Vec::new();
+        let mut enc = image::codecs::png::PngEncoder::new(&mut out);
+        enc.set_icc_profile(icc.to_vec()).unwrap();
+        enc.set_exif_metadata(exif_block(orientation, (150, 150))).unwrap();
+        img.write_with_encoder(enc).unwrap();
+        out
+    };
+    let webp = {
+        let mut out = Vec::new();
+        let mut enc = image::codecs::webp::WebPEncoder::new_lossless(&mut out);
+        enc.set_icc_profile(rgb_icc.clone()).unwrap();
+        enc.set_exif_metadata(exif_block(6, (150, 150))).unwrap();
+        rgb8.write_with_encoder(enc).unwrap();
+        out
+    };
+    let tiff = |orientation: Option<u16>| {
+        let mut out = Vec::new();
+        let mut enc = image::codecs::tiff::TiffEncoder::new(Cursor::new(&mut out));
+        enc.set_icc_profile(rgb_icc.clone()).unwrap();
+        rgb16.write_with_encoder(enc).unwrap();
+        match orientation {
+            Some(o) => tiff_oriented(&out, o, false, None),
+            None => out,
+        }
+    };
+    // (what, file, the ICC profile to keep, the pixels as they show, 16 bits)
+    type Case<'a> = (&'a str, Vec<u8>, Option<&'a [u8]>, DynamicImage, bool);
+    let cases: Vec<Case> = vec![
+        ("16-bit RGB PNG, orientation 6", png(&rgb16, &rgb_icc, 6), Some(&rgb_icc), rgb16.rotate90(), true),
+        ("16-bit gray PNG, orientation 8", png(&gray16, &gray_icc, 8), Some(&gray_icc), gray16.rotate270(), true),
+        ("8-bit RGB PNG, orientation 3", png(&rgb8, &rgb_icc, 3), Some(&rgb_icc), rgb8.rotate180(), false),
+        ("RGB PNG with a CMYK profile, orientation 6", png(&rgb8, &cmyk_icc, 6), None, rgb8.rotate90(), false),
+        ("WebP, orientation 6", webp, Some(&rgb_icc), rgb8.rotate90(), false),
+        ("16-bit RGB TIFF, not turned", tiff(None), Some(&rgb_icc), rgb16.clone(), true),
+        ("16-bit RGB TIFF, orientation 6", tiff(Some(6)), Some(&rgb_icc), rgb16.rotate90(), true),
+    ];
+    for (what, file, icc, want, wide) in cases {
+        let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
+        assert_eq!((img.width, img.height, img.blob.mime.as_str()), (want.width(), want.height(), "image/png"), "{what}");
+        let (kept, color, px) = stored_pixels(what, &img);
+        assert_eq!(kept.as_deref(), icc, "{what}: the ICC profile");
+        assert_eq!(color.bits_per_pixel() / u16::from(color.channel_count()), if wide { 16 } else { 8 }, "{what}: the sample depth");
+        if wide {
+            assert_eq!(px.to_rgb16(), want.to_rgb16(), "{what}: the samples");
+        } else {
+            assert_eq!(px.to_rgb8(), want.to_rgb8(), "{what}: the samples");
+        }
+    }
+    // A JPEG's samples change in encoding; its profile is kept.
+    let mut jpg = Vec::new();
+    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpg, 95);
+    enc.set_icc_profile(rgb_icc.clone()).unwrap();
+    rgb8.write_with_encoder(enc).unwrap();
+    let exif = [b"Exif\0\0".as_slice(), &exif_block(6, (150, 150))].concat();
+    let mut turned = jpg[..2].to_vec();
+    turned.extend([0xff, 0xe1]);
+    turned.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    turned.extend(&exif);
+    turned.extend(&jpg[2..]);
+    let img = raster_image(&turned).unwrap();
+    assert_eq!((img.width, img.height, img.blob.mime.as_str()), (2, 3, "image/png"), "JPEG");
+    assert_eq!(stored_pixels("JPEG", &img).0, Some(rgb_icc.clone()), "JPEG: the ICC profile");
+    // Not turned, a PNG keeps its own bytes.
+    let plain = png(&rgb16, &rgb_icc, 1);
+    assert_eq!(raster_image(&plain).unwrap().blob.bytes.as_slice(), plain.as_slice(), "a PNG as taken keeps its bytes");
+}
+
+/// A CMYK TIFF stored again, because it stores one plane per ink or because its orientation turns
+/// it, keeps its ICC profile as tag 34675 and its 8 or 16 bits a sample, exactly; one that stores
+/// its inks together and isn't turned keeps its own bytes.
+#[test]
+fn cmyk_tiffs_written_again_keep_their_icc_profile_and_depth() {
+    use image::DynamicImage;
+    let icc = icc_profile(b"CMYK", 900);
+    // 3 × 2, no black, every sample's low byte different.
+    let ink = |c: usize, p: usize| -> u16 { u16::try_from(0x0101 * (c * 5 + p + 1) + 0x10 * p + c).unwrap() };
+    for bits in [8u16, 16] {
+        let sample = |c: usize, p: usize| match (c, bits) {
+            (3, _) => 0,
+            (_, 16) => ink(c, p),
+            _ => ink(c, p) & 0xFF,
+        };
+        let channels: Vec<Vec<u16>> = (0..4).map(|c| (0..6).map(|p| sample(c, p)).collect()).collect();
+        // The image decoder shows a CMYK pixel without black as 1 - C, 1 - M, 1 - Y, exactly.
+        let full = if bits == 16 { 0xFFFF } else { 0xFF };
+        let shown: Vec<u16> = (0..6).flat_map(|p| (0..3).map(|c| full - channels[c][p]).collect::<Vec<_>>()).collect();
+        let shown = if bits == 16 {
+            DynamicImage::ImageRgb16(image::ImageBuffer::from_raw(3, 2, shown).unwrap())
+        } else {
+            DynamicImage::ImageRgb8(image::RgbImage::from_raw(3, 2, shown.iter().map(|v| u8::try_from(*v).unwrap()).collect()).unwrap())
+        };
+        for planar in [false, true] {
+            let file = tiff_with_icc(&hand_tiff(5, bits, &[], planar, &channels), &icc);
+            for (orientation, want) in [(None, shown.clone()), (Some(6), shown.rotate90()), (Some(3), shown.rotate180())] {
+                let what = format!("{bits} bits, planar {planar}, orientation {orientation:?}");
+                let file = orientation.map_or_else(|| file.clone(), |o| tiff_oriented(&file, o, false, Some(150)));
+                let img = raster_image(&file).unwrap_or_else(|e| panic!("{what}: {e}"));
+                if orientation.is_none() && !planar {
+                    assert_eq!(img.blob.bytes.as_slice(), file.as_slice(), "{what}: kept as it is");
+                }
+                let (kept, color, px) = stored_pixels(&what, &img);
+                assert_eq!(kept.as_deref(), Some(icc.as_slice()), "{what}: the ICC profile");
+                let depth = if bits == 16 { image::ExtendedColorType::Cmyk16 } else { image::ExtendedColorType::Cmyk8 };
+                assert_eq!(color, depth, "{what}: the sample depth");
+                assert_eq!(px, want, "{what}: the samples");
+            }
+        }
+    }
+}
+
+/// A CMYK JPEG turned by its orientation and stored as a CMYK TIFF keeps its whole ICC profile,
+/// put together from the two APP2 segments a profile larger than one segment is split into.
+#[test]
+fn a_turned_cmyk_jpeg_keeps_its_icc_profile_from_every_segment() {
+    use vectorcraft_render::encode::jpeg::{self, ColorModel, JpegOptions};
+    let icc = icc_profile(b"CMYK", 70_000);
+    let inks: Vec<u8> = (0..16u32 * 8).flat_map(|i| [u8::try_from(i).unwrap(), 0, 0, 40]).collect();
+    let o = JpegOptions { color_model: ColorModel::Cmyk, embed_icc: false, ..Default::default() };
+    let jpg = jpeg::encode(&inks, 16, 8, 100, None, &o).unwrap();
+    let exif = [b"Exif\0\0".as_slice(), &exif_block(6, (300, 300))].concat();
+    let mut file = jpg[..2].to_vec();
+    file.extend([0xff, 0xe1]);
+    file.extend(u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    file.extend(&exif);
+    let chunks: Vec<&[u8]> = icc.chunks(65_519).collect();
+    assert_eq!(chunks.len(), 2, "the profile takes two segments");
+    for (i, chunk) in chunks.iter().enumerate() {
+        file.extend([0xff, 0xe2]);
+        file.extend(u16::try_from(chunk.len() + 16).unwrap().to_be_bytes());
+        file.extend(b"ICC_PROFILE\0");
+        file.extend([u8::try_from(i + 1).unwrap(), 2]);
+        file.extend(*chunk);
+    }
+    file.extend(&jpg[2..]);
+    let img = raster_image(&file).unwrap();
+    assert_eq!((img.width, img.height, img.blob.mime.as_str()), (8, 16, "image/tiff"));
+    let (kept, color, _) = stored_pixels("CMYK JPEG", &img);
+    assert_eq!(color, image::ExtendedColorType::Cmyk8);
+    assert!(kept.as_deref() == Some(icc.as_slice()), "the whole ICC profile: {:?} bytes", kept.map(|k| k.len()));
 }
 
 /// With `importer` named, a file up to the importer's limit is read whole and a larger one is an

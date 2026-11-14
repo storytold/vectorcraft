@@ -322,7 +322,7 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(unlinked)
     })?;
-    map_default_paints(s, &mut unlink);
+    map_default_paints(s, &mut unlink)?;
     Ok(json!({"deleted": names, "unlinked": unlinked}))
 }
 
@@ -410,6 +410,8 @@ fn gradient_key(g: &Gradient) -> Option<GradientKey<'_>> {
     let method = match g.method {
         GradientMethod::Classic => 0,
         GradientMethod::Perceptual => 1,
+        GradientMethod::HueClockwise => 2,
+        GradientMethod::HueCounterclockwise => 3,
     };
     Some((kind, method, g.dither, g.painted_spread(), g.stops.iter().map(stop_key).collect::<Option<_>>()?))
 }
@@ -658,20 +660,41 @@ impl Relink {
         renamed || recolored
     }
 
-    fn defaults(&self, s: &mut Session) {
-        map_default_paints(s, &mut |c, l, t| self.apply(c, l, t));
+    fn defaults(&self, s: &mut Session) -> Result<()> {
+        map_default_paints(s, &mut |c, l, t| self.apply(c, l, t))
     }
 }
 
-/// Apply a swatch-link rewrite to the default fill and stroke for new art, except during a live
-/// preview (Cancel rolls the document back, not the session).
-pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) {
-    if s.in_interaction() {
-        return;
+/// Apply a swatch-link rewrite to the fill and stroke new art takes and to the paints of its
+/// template appearance, except during a live preview (Cancel rolls the document back, not the
+/// session). A `command.batch` step rewrites them as the command run on its own does: a failed
+/// batch, and a canceled batch preview, put back the paints the batch started with. A change is
+/// recorded with the step just made, so Undo and Redo put these paints back with the document.
+pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) -> Result<()> {
+    if s.in_interaction() && s.batch_stash.is_none() {
+        return Ok(());
     }
-    for p in [&mut s.paint.fill, &mut s.paint.stroke] {
-        p.map_links(f);
+    let start = super::colormgmt::new_art_colors_before(s)?;
+    let pd = &mut s.paint;
+    let template = pd.appearance.iter_mut().flat_map(|a| a.items.iter_mut()).map(|it| match it {
+        vectorcraft_doc::AppearanceItem::Fill(f) => &mut f.paint,
+        vectorcraft_doc::AppearanceItem::Stroke(s) => &mut s.paint,
+    });
+    let mut changed = false;
+    for p in [&mut pd.fill, &mut pd.stroke].into_iter().chain(template) {
+        changed |= p.map_links(f);
     }
+    if changed {
+        super::colormgmt::record_new_art_colors(s, start)?;
+        // The step takes the paints the command finally leaves, after the selection's appearance
+        // is inherited.
+        let st = s.doc()?;
+        if st.interaction.is_none() {
+            let uid = st.uid;
+            s.batch_paint_docs.push(uid);
+        }
+    }
+    Ok(())
 }
 
 /// Apply a swatch-link rewrite to the document ([`Document::map_solid_paints`]) and to the art of
@@ -886,7 +909,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(relinked)
     })?;
-    relink.defaults(s);
+    relink.defaults(s)?;
     Ok(json!({"name": to, "relinked": relinked}))
 }
 
@@ -1082,7 +1105,7 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(relinked)
     })?;
-    map_default_paints(s, &mut relink);
+    map_default_paints(s, &mut relink)?;
     Ok(json!({"name": keep, "merged": merged, "relinked": relinked}))
 }
 
@@ -1139,7 +1162,7 @@ fn swatch_spot_options(s: &mut Session, p: &Value) -> Result<Value> {
         let relinked = map_swatch_links(d, &mut follow_bases(&bases));
         Ok((relinked, bases))
     })?;
-    map_default_paints(s, &mut follow_bases(&bases));
+    map_default_paints(s, &mut follow_bases(&bases))?;
     Ok(json!({"useLab": use_lab, "relinked": relinked}))
 }
 
@@ -1163,8 +1186,11 @@ pub(super) struct GroupEdit {
 
 impl GroupEdit {
     /// Apply the link changes to the default fill and stroke for new art.
-    pub(super) fn defaults(&self, s: &mut Session) {
-        self.relinks.iter().for_each(|r| r.defaults(s));
+    pub(super) fn defaults(&self, s: &mut Session) -> Result<()> {
+        if self.relinks.is_empty() {
+            return Ok(());
+        }
+        map_default_paints(s, &mut |c, l, t| self.relinks.iter().any(|r| r.apply(c, l, t)))
     }
 
     /// How many paints linked to the group's swatches the rewrite changed.
@@ -1240,6 +1266,6 @@ fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
         colors.into_iter().enumerate().map(|(i, c)| if old.get(i) == Some(&Some(c)) { c } else { super::paint::new_color(s, p, c) }).collect();
     let rename = str_param(p, "rename");
     let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, rename, C))?;
-    e.defaults(s);
+    e.defaults(s)?;
     Ok(json!({"name": e.name, "swatches": e.swatches, "relinked": e.relinked}))
 }

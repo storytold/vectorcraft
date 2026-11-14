@@ -2221,6 +2221,15 @@ fn alt_arrows_step_selected_type_object() {
     assert_eq!(r["runs"][0]["style"]["tracking"], json!(20.0));
     assert_eq!(app.session.active().unwrap().selection.objects, [vectorcraft_doc::NodeId(id)]);
 
+    // Alt released within the frame of the press: the press's Alt still steps the spacing.
+    frame(
+        &mut app,
+        vec![egui::Event::ModifiersChanged(Modifiers::ALT), press(Key::ArrowRight, Modifiers::ALT), egui::Event::ModifiersChanged(Modifiers::NONE)],
+    );
+    let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
+    assert_eq!(r["runs"][0]["style"]["tracking"], json!(40.0));
+    assert_eq!(app.session.active().unwrap().selection.objects, [vectorcraft_doc::NodeId(id)], "the text is not copied");
+
     frame(&mut app, vec![egui::Event::ModifiersChanged(Modifiers::ALT), press(Key::ArrowDown, Modifiers::ALT)]);
     let r = app.session.execute("text.getRange", &json!({"id": id})).unwrap();
     assert_eq!(r["runs"][0]["style"]["leading"], json!(26.0));
@@ -2244,6 +2253,65 @@ fn alt_arrows_step_selected_type_object() {
     let selected = &app.session.active().unwrap().selection.objects;
     assert_eq!(selected.len(), 1);
     assert_ne!(selected[0], vectorcraft_doc::NodeId(rect), "a non-type object is still copied by Alt+arrow");
+}
+
+/// With the Live Paint Bucket, a plain Right picks the next color swatch, while Alt+Right keeps
+/// copying and nudging the selection, and a Shift+Right released within the same frame is still a
+/// Shift+Right that picks no swatch.
+#[test]
+fn live_paint_bucket_takes_only_plain_arrows_for_swatches() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.set", &json!({"ids": [rect]})).unwrap();
+    let first = vectorcraft_tools::builder::color_swatches(&app.session.active().unwrap().doc)[0].name.clone();
+    app.session.execute("paint.setFill", &json!({"swatch": first, "ids": []})).unwrap();
+    app.select_tool("livePaintBucket");
+    let fill = app.session.paint.fill.clone();
+
+    frame(&mut app, press(Key::ArrowRight, Modifiers::ALT));
+    assert_eq!(app.session.paint.fill, fill, "Alt+Right picks no swatch");
+    let selected = &app.session.active().unwrap().selection.objects;
+    assert_ne!(selected.as_slice(), [vectorcraft_doc::NodeId(rect)], "Alt+Right copies and nudges the selection");
+
+    let shift_then_released = vec![
+        egui::Event::ModifiersChanged(Modifiers::SHIFT),
+        egui::Event::Key { key: Key::ArrowRight, physical_key: Some(Key::ArrowRight), pressed: true, repeat: false, modifiers: Modifiers::SHIFT },
+        egui::Event::ModifiersChanged(Modifiers::NONE),
+    ];
+    frame(&mut app, shift_then_released);
+    assert_eq!(app.session.paint.fill, fill, "Shift+Right picks no swatch");
+
+    frame(&mut app, press(Key::ArrowRight, Modifiers::NONE));
+    assert_ne!(app.session.paint.fill, fill, "a plain Right picks the next swatch");
+}
+
+/// An arrow nudge takes Shift and Alt from the key press, also when they are released within the
+/// same frame: Shift+Right moves 10 points, and Alt+Right copies.
+#[test]
+fn arrow_nudge_takes_the_modifiers_of_the_key_press() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let rect = app.session.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    let rect = vectorcraft_doc::NodeId(rect);
+    app.select_tool("selection");
+    app.session.execute("select.set", &json!({"ids": [rect.0]})).unwrap();
+    let released = |modifiers| {
+        vec![
+            egui::Event::ModifiersChanged(modifiers),
+            egui::Event::Key { key: Key::ArrowRight, physical_key: Some(Key::ArrowRight), pressed: true, repeat: false, modifiers },
+            egui::Event::ModifiersChanged(Modifiers::NONE),
+        ]
+    };
+    let left = |app: &VectorcraftApp, id| app.session.active().unwrap().doc.bounds_of(&[id], false).unwrap().x0;
+
+    frame(&mut app, released(Modifiers::SHIFT));
+    assert_eq!(left(&app, rect), 10.0, "Shift+Right moves 10 points");
+
+    frame(&mut app, released(Modifiers::ALT));
+    let selected = app.session.active().unwrap().selection.objects.clone();
+    assert_ne!(selected.as_slice(), [rect], "Alt+Right copies");
+    assert_eq!(left(&app, rect), 10.0, "the original stays");
 }
 
 /// #793: with a layout without Latin letters the one-key shortcuts go by the key's position:

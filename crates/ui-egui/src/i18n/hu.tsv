@@ -820,6 +820,8 @@ font-technology	Variable	Változó
 	Convert to destination (preserve numbers)	Átalakítás a célprofilra (az értékek megőrzésével)
 	Convert to Global	Átalakítás globálissá
 	Convert to Grayscale	Átalakítás szürkeárnyalatossá
+	Convert to Indexed Color	Átalakítás indexelt színűvé
+	Convert to Indexed Color…	Átalakítás indexelt színűvé…
 	Convert To Outlines	Átalakítás útvonallá
 	Convert To Point Type	Átalakítás pontszöveggé
 	Convert to RGB	Átalakítás RGB-re
@@ -904,6 +906,8 @@ font-technology	Variable	Változó
 	Crop Image	Kép körülvágása
 	Image Tools	Képeszközök
 	Remove Background…	Háttér eltávolítása…
+	Draw (Pencil)	Rajzolás (Ceruza)
+	Place Image	Kép elhelyezése
 	Remove Background	Háttér eltávolítása
 	Background	Háttér
 	Edge Color	Szélszín
@@ -2003,6 +2007,8 @@ file-filter	Templates	Sablonok
 	Objects on Path Tool	Objektumok útvonalon
 	Attach Objects on Path	Objektumok csatolása útvonalhoz
 	Expand Objects on Path	Objektumok útvonalon kibontása
+	Detach	Leválasztás
+	Detach Object from Path	Objektum leválasztása az útvonalról
 	Release Live Paint	Élő festés megszüntetése
 	Release Repeat	Ismétlés megszüntetése
 	Release Slice	Szelet megszüntetése
@@ -3005,6 +3011,29 @@ file-filter	Templates	Sablonok
 	Pattern	Mintázat
 	Pattern Brush	Mintázatecset
 	missing from the Brushes panel	hiányzik az Ecsetek panelről
+	built in	beépített
+	embedding not allowed	beágyazás nem engedélyezett
+	embedding for editing	beágyazás szerkesztéshez
+	embedding for preview and print	beágyazás előnézethez és nyomtatáshoz
+	embedding allowed	beágyazás engedélyezett
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	helyettesítve: megjelenítés ezzel: {family} {style} ({detail})
+	missing: shown in {family} {style}	hiányzik: megjelenítés ezzel: {family} {style}
+	missing	hiányzik
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineáris színátmenet
+	Radial gradient	Körkörös színátmenet
+	Conic gradient	Kúpos színátmenet
+	Diamond gradient	Rombusz színátmenet
+	Freeform gradient	Szabad formájú színátmenet
+@plural	{n} instance|{n} instances	{n} példány
+@plural	{n} row|{n} rows	{n} sor
+@plural	{n} column|{n} columns	{n} oszlop
 	Pattern Brush Options	Mintázatecset beállításai
 	Pattern Editing	Mintázatszerkesztés
 	Pattern Options	Mintázat beállításai
@@ -3030,6 +3059,8 @@ file-filter	Templates	Sablonok
 	per slice	szeletenként
 	Percent:	Százalék:
 	Perceptual	Észlelési
+	Hue Clockwise	Színárnyalat az óramutató járásával megegyezően
+	Hue Counterclockwise	Színárnyalat az óramutató járásával ellentétesen
 	Perceptual Scales	Észlelési skálák
 	Performance	Teljesítmény
 diagnostics	render	renderelés
@@ -3193,6 +3224,7 @@ mark-style	Japanese	Japán
 	Proportional Metrics	Arányos metrika
 	Insert Aki Left	Aki beszúrása balra
 	Insert Aki Right	Aki beszúrása jobbra
+	Tsume	Tsume
 	Proportional Lining	Arányos modern
 	Position:	Pozíció:
 	Default Position	Alapértelmezett pozíció
@@ -3259,6 +3291,11 @@ mark-style	Japanese	Japán
 	Real name	Valódi név
 	Real World:	Valós méret:
 	Real-time Drawing and Editing	Valós idejű rajzolás és szerkesztés
+	Use Monitor Profile for Canvas	Monitorprofil használata a vászonhoz
+	The canvas is drawn in sRGB.	A vászon sRGB-ben jelenik meg.
+	Canvas display profile:	A vászon kijelzőprofilja:
+	The system matches the window to the display's colors.	A rendszer a kijelző színeihez igazítja az ablakot.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nem található használható kijelzőprofil: a vászon sRGB-ben jelenik meg.
 	Rearrange	Átrendezés
 	Select All Artboards	Összes rajztábla kijelölése
 	Switch Orientation	Tájolás váltása
@@ -4277,6 +4314,7 @@ mark-style	Japanese	Japán
 	VectorCraft Title Bar on Every Desktop	A VectorCraft címsora minden asztali környezetben
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Amíg a VECTORCRAFT_TITLEBAR környezeti változó be van állítva, az választja ki a címsort.
 	System Title Bar takes precedence over this option while it is on.	Amíg a Rendszer címsora be van kapcsolva, elsőbbséget élvez ezzel a beállítással szemben.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Amíg a VectorCraft címsora minden asztali környezetben beállítás ki van kapcsolva, ez az asztali környezet rajzolja az ablak címsorát, akár be van kapcsolva ez a beállítás, akár nem.
 	Tab	Tabulátor
 	Tab Stops	Tabulátorpontok
 	Table	Táblázat
@@ -4299,6 +4337,11 @@ mark-style	Japanese	Japán
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko beállításai…
 	Tate-chu-yoko Settings	Tate-chu-yoko beállításai
+	Warichu	Warichu
+	Warichu Settings…	Warichu beállításai…
+	Warichu Settings	Warichu beállításai
+	Lines:	Sorok:
+	Line Gap:	Sorköz:
 	Composite Fonts…	Összetett betűtípusok…
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
@@ -4860,6 +4903,9 @@ imageTrace	Outline	Körvonal
 @msg	`{keep}` is not a side of this axis	`{keep}` nem ennek a tengelynek az oldala
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}`: `auto` vagy nyelvkód kell, például `en` vagy `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}`: #rrggbb szín kell
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}`: #rrggbb szín vagy rétegszín neve kell
+@msg	unknown Live Paint option `{key}`	ismeretlen élő festés beállítás: `{key}`
+@msg	unknown Shape Builder option `{key}`	ismeretlen alakzatépítő beállítás: `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}`: #rrggbb szín kell
 @msg	`{key}` must be a number	`{key}`: szám kell
 @msg	`{key}` must be a number, not {v}	`{key}`: szám kell, ez nem az: {v}
@@ -4875,6 +4921,7 @@ imageTrace	Outline	Körvonal
 @msg	`select` must be true or false	`select`: true vagy false kell
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` és `maxAnchors`: egész szám kell
 @msg	`{key}` must be a number not below 0	`{key}`: legalább 0 értékű szám kell
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}`: négy legalább 0 értékű szám kell: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}`: [x, y, width, height] kell, négy véges szám, a szélesség és a magasság nem negatív
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` nagyobb, mint `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	adj meg legalább egyet ezek közül: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4961,6 +5008,8 @@ imageTrace	Outline	Körvonal
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	egy {_1} × {_2} képpontos beágyazott kép {_3} × {_4} képpontosra lett kicsinyítve, hogy a rétegek megmaradjanak
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	a csatolt képek a fájlban mentett kis felbontású előnézetet mutatják, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
 @msg	linked type areas past VectorCraft's limits were left out	a VectorCraft korlátain túli csatolt szövegterületek kimaradtak
+@msg	the Line Breaking setting of legacy type was left out	a régi formátumú szöveg sortörési beállítása kimaradt
+@msg	the Japanese layout rules of legacy type were left out	a régi formátumú szöveg japán tördelési szabályai kimaradtak
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	a szövegobjektumon belül írásirányt váltó szöveg az első karakterének irányában nyílik meg
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	a csatolt területeken, körbefuttatott szövegben vagy összetett útvonalban maszkként használt szöveg nem vág ki
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	a fájlban előnézet nélküli csatolt képek helyőrzőt mutatnak, amíg a fájljaik elő nem kerülnek: csatold őket újra a Csatolások panelen
@@ -5149,9 +5198,16 @@ imageTrace	Outline	Körvonal
 @msg	Couldn't paste: the document it was pasted in was closed	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, bezárták
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nem sikerült elhelyezni: {name}; a céldokumentumot bezárták
 @msg	Couldn't place {name}: the document it was placed in was closed	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, bezárták
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nem sikerült elhelyezni: {name}; a céldokumentumot visszaállították a mentett változatra
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nem sikerült elhelyezni: {name}; a dokumentumot, amelybe került volna, visszaállították a mentett változatra
+@msg	Couldn't paste: the document it was pasted in was reverted	Nem sikerült beilleszteni: a dokumentumot, amelybe a beillesztés történt, visszaállították a mentett változatra
 @msg	Couldn't place {name}: {e}	Nem sikerült elhelyezni: {name}: {e}
 @msg	Couldn't read {name}: {e}	Nem sikerült beolvasni: {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nem sikerült menteni a helyreállítási adatokat: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nem sikerült menteni a(z) {title} helyreállítási adatait: {e}. A másolatok helye: {folder}, az alapértelmezett helyreállítási mappa; másik mappa használatához állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nem sikerült menteni a(z) {title} helyreállítási adatait: {e}. A másolatok helye: {folder}, a Beállításokban megadott mappa; másik mappa használatához állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nem sikerült menteni a helyreállítási adatokat: {e}. A másolatok helye: {folder}, az alapértelmezett helyreállítási mappa; másik mappa használatához állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nem sikerült menteni a helyreállítási adatokat: {e}. A másolatok helye: {folder}, a Beállításokban megadott mappa; másik mappa használatához állítsd be a Beállítások → Fájlkezelés → Adat-helyreállítás → Mappa értéket (recoveryFolder)
 @msg	Create from Guides: the document has no artboard	Létrehozás segédvonalakból: a dokumentumban nincs rajztábla
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Létrehozás segédvonalakból: a segédvonalak túl sok szeletet adnak (legfeljebb {MAX_PIECES})
 @msg	Create from Selection: the selection has no area	Létrehozás a kijelölésből: a kijelölésnek nincs területe
@@ -5165,6 +5221,7 @@ imageTrace	Outline	Körvonal
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Elvetett helyreállított dokumentumok: {n}
 @msg	divide into 1 to {MAX_PIECES} slices	a felosztás 1 és {MAX_PIECES} közötti szeletre lehetséges
 @msg	Divide Objects Below: select a path	Alatta lévő objektumok felosztása: jelölj ki egy útvonalat
+@msg	select a path	jelölj ki egy útvonalat
 @msg	Divide Objects Below: select exactly one path	Alatta lévő objektumok felosztása: pontosan egy útvonalat jelölj ki
 @msg	docking action contains an unknown panel or an excessive split path	a dokkolási művelet ismeretlen panelt vagy túl hosszú felosztási útvonalat tartalmaz
 @msg	Downloaded {what}	Letöltve: {what}
@@ -5175,6 +5232,7 @@ imageTrace	Outline	Körvonal
 @msg	every numbered name for it is taken in the Fonts folder	a Fonts mappában minden sorszámozott név foglalt hozzá
 @msg	every numbered name for {name} is taken in the document's folder	a dokumentum mappájában minden sorszámozott név foglalt: {name}
 @msg	No linked files to look for	Nincs keresendő csatolt fájl
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	A csatolás egy szimbólumban, diagrammintában, mintázatban vagy átlátszósági maszkban van, és nincs helye a vásznon
 @msg	every search thread stopped on an internal error (please report this bug)	minden keresési szál belső hibával leállt (kérjük, jelentsd ezt a hibát)
 @msg	Expand Appearance: the selection has a basic appearance	Megjelenés kibontása: a kijelölésnek alapmegjelenése van
 @msg	Expand: no brush strokes selected	Kibontás: nincs kijelölt ecsetvonás
@@ -5227,6 +5285,7 @@ imageTrace	Outline	Körvonal
 @msg	invalid parameters for `{cmd}`: {msg}	érvénytelen paraméterek (`{cmd}`): {msg}
 @msg	invalid PDF setting: {0}	érvénytelen PDF-beállítás: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: {unit} UserUnit értékkel íródik, így a UserUnit-ot figyelmen kívül hagyó alkalmazások ennyiszer kisebbnek mutatják
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: {unit} UserUnit értékkel íródik, így a UserUnit-ot figyelmen kívül hagyó alkalmazások ennyiszer kisebbnek mutatják: kapcsolja be a „200 in-nél hosszabb oldalak írása teljes méretben, pontban” beállítást
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	a(z) {n}. rajztábla oldala {size}, hosszabb a PDF 14 400 pt-os (200 in) oldalkorlátjánál: a(z) {label} oldalak UserUnit nélkül, pontokban íródnak, és a korlátot betartó alkalmazások 200 in-re vágják az oldalt
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	a PDF 1.5-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van a mérete megtartásához: a fájl PDF 1.6-ként íródik
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	a PDF 1.4-ben nincs UserUnit, amelyre egy 14 400 pt-nál (200 in) hosszabb oldalnak szüksége van, hogy a PDF/A-2 14 400 egységes oldalkorlátján belül maradjon: a fájl PDF 1.6-ként íródik
@@ -5468,6 +5527,7 @@ imageTrace	Outline	Körvonal
 @msg	onto must name a floating panel	az onto egy lebegő panelt kell megnevezzen
 @msg	onto must name a panel floating in another group	az onto egy másik csoportban lebegő panelt kell megnevezzen
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Megnyitva; megjegyzések: {n}, az első: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Megnyitva; megjegyzések: {n}, az első: {first}
 @msg	Opened {url}	Megnyitva: {url}
 @msg	Outline Stroke: no stroked paths selected	Körvonal útvonallá alakítása: nincs kijelölt körvonalas útvonal
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	Becsomagolt fájlok: {n}, mappa: {folder} ({note})
@@ -5481,6 +5541,7 @@ imageTrace	Outline	Körvonal
 @msg	paths contain invalid coordinates	az útvonalakban érvénytelen koordináták vannak
 @msg	paths: give at least one file	paths: legalább egy fájlt adj meg
 @msg	replace: the object to replace was changed or deleted	replace: a cserélendő objektumot módosították vagy törölték
+@msg	the document it was prepared for is no longer active	az a dokumentum, amelyhez előkészítették, már nem aktív
 @msg	pattern missing	hiányzik a mintázat
 @msg	patterns nested too deeply are filled with mid-grey	a túl mélyen egymásba ágyazott mintázatok helyén középszürke kitöltés áll
 @msg	PDF settings are not an object	a PDF-beállítások nem objektumot alkotnak
@@ -5563,6 +5624,7 @@ imageTrace	Outline	Körvonal
 @msg	select a repeat	jelölj ki egy ismétlést
 @msg	select an Intertwine group	jelölj ki egy összefonási csoportot
 @msg	select an Objects on Path group	jelölj ki egy Objektumok útvonalon csoportot
+@msg	choose the object to detach with its Select/Move widget	válaszd ki a leválasztandó objektumot a Kijelölés/Mozgatás vezérlőjével
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	összetett útvonalban, összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő útvonalhoz nem csatolhatók objektumok
 @msg	a clipping path can't take objects	vágóútvonalhoz nem csatolhatók objektumok
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	összemosásban, burkolóban, ismétlésben vagy összefonási csoportban lévő objektumok nem csatolhatók útvonalhoz
@@ -5945,7 +6007,9 @@ imageTrace	Outline	Körvonal
 @msg	`{GRAPHICS}` face must be front or back	a `{GRAPHICS}` face értéke front vagy back lehet
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	a `{GRAPHICS}` {key} értéke {lo} és {hi} közötti szám lehet
 @msg	`{GRAPHICS}` must be an array	a `{GRAPHICS}` értéke tömb kell legyen
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	A grafikák sík lapokra kerülnek: használja a Kihúzás vagy a Sík objektumtípust
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	A grafikák a Sík, a Kihúzás és a Forgatás tengely körül objektumtípusra kerülnek
+@msg	Revolve maps graphics onto its side: map them onto the front	A Forgatás tengely körül a grafikákat a palástjára helyezi: az elülső oldalra helyezze őket
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	A grafikák túl összetettek ehhez a felülethez: egyszerűsítse a szimbólumok rajzát, vagy csökkentse a Szakaszok értékét
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	a `{GRAPHICS}` legfeljebb {MAX_GRAPHICS} grafikát fogad
 @msg	A plane has one face: map its graphics onto the front	A síknak egy oldala van: a grafikáit az elülső oldalra helyezze
 @msg	The graphics are too complex: simplify the symbols' art	A grafikák túl összetettek: egyszerűsítse a szimbólumok rajzát
@@ -6131,6 +6195,7 @@ imageTrace	Outline	Körvonal
 @msg	no such color	nincs ilyen szín
 @msg	{_1} cannot be used on Windows	A(z) {_1} nem használható Windows rendszeren
 @msg	more than one action is named “{_1}”	több művelet neve is „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	a(z) „{_1}” művelet beállítja a(z) {_2} mappabeállítást; a készlet mentéséhez törölje ezt a lépést
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
 	Smudge Stick…	Elmosó rúd…
 	Smudge Stick	Elmosó rúd
@@ -6291,7 +6356,7 @@ axis	Y Axis	Y tengely
 @msg	`dither` applies to gradient fills (stroke: false)	A `dither` színátmenetes kitöltésekre vonatkozik (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	A `dither` színátmenetes kitöltésekre vonatkozik (paint.setFill)
 @msg	`dither` must be true or false	`dither`: true vagy false kell
-@msg	`method` must be classic or perceptual	a `method` értéke classic vagy perceptual lehet
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	a `method` értéke classic, perceptual, hue-clockwise vagy hue-counterclockwise lehet
 @msg	`spread` must be pad, repeat or reflect	a `spread` értéke pad, repeat vagy reflect lehet
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	a `repeats` értéke 1 és {MAX_REPEATS} közötti egész szám lehet
 @msg	`spread` applies to linear, radial, conic and diamond gradients	a `spread` a lineáris, sugaras, kúpos és rombusz színátmenetekre vonatkozik
@@ -6316,8 +6381,8 @@ axis	Y Axis	Y tengely
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	az exportáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	csoporton kívül legfeljebb {MAX_UNGROUPED} paraméter lehet: a többinek adj meg `group` értéket
 @msg	can't encode the input	a bemenet nem kódolható
-@msg	expected {"dataBase64"}	várt formátum: {"dataBase64"}
-@msg	expected {"objects"}	várt formátum: {"objects"}
+@msg	expected {{"dataBase64": "…"}}	várt formátum: {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	várt formátum: {{"objects": [...]}}
 @msg	export `{name}`: {e}	`{name}` modulexport: {e}
 @msg	extension {e} is listed twice	a(z) {e} kiterjesztés kétszer szerepel
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	{e} kiterjesztés: 1-16 kisbetűt és számjegyet használj, pont nélkül
@@ -6381,11 +6446,11 @@ axis	Y Axis	Y tengely
 @msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
 @msg	a read-only object was left out	kimaradt egy írásvédett objektum
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {"id"} formában vagy úgy, ahogy megkapta
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
 @msg	a string	karakterlánc
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	a körvonalnak csak `paint`, `width`, `join`, `cap` és `miterLimit` kulcsa van
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	a körvonal formája {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} legyen
-@msg	an effect must be {"id", "params"?, "visible"?}	az effektus formája {"id", "params"?, "visible"?} legyen
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	a körvonal formája {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} legyen
+@msg	an effect must be {{"id", "params"?, "visible"?}}	az effektus formája {{"id", "params"?, "visible"?}} legyen
 @msg	an effect on a fill returns only `fills`	a kitöltésen lévő effektus csak `fills` értéket ad vissza
 @msg	an effect on a stroke returns only `strokes`	a körvonalon lévő effektus csak `strokes` értéket ad vissza
 @msg	an object must be a JSON object	az objektum JSON-objektum legyen
@@ -6527,6 +6592,8 @@ axis	Y Axis	Y tengely
 	Action Options…	Művelet beállításai…
 	Action Options	Művelet beállításai
 	Playback Options…	Lejátszási beállítások…
+	Button Mode	Gomb mód
+	No actions.	Nincs művelet.
 	Insert Stop…	Megállás beszúrása…
 	Insert Stop	Megállás beszúrása
 	Record Stop	Megállás rögzítése
@@ -6534,6 +6601,7 @@ axis	Y Axis	Y tengely
 	Continue	Folytatás
 	Continue Action	Művelet folytatása
 	Delete Action Step	Műveletlépés törlése
+	Move Action Step	Műveletlépés áthelyezése
 	Press Play Current Selection in the Actions panel to go on.	A folytatáshoz nyomja meg a Műveletek panelen a Kijelölt művelet lejátszása gombot.
 	Stop: {message}	Megállás: {message}
 @msg	no action is waiting at a stop	egyetlen művelet sem várakozik megállásnál
@@ -6705,6 +6773,22 @@ axis	Y Axis	Y tengely
 	Graphite Pencil	Grafitceruza
 	Wax Crayon	Zsírkréta
 	Charcoal Dust	Szénpor
+	Notched Ribbon	Csipkézett szalag
+	Double Line	Dupla vonal
+	Wave	Hullám
+	Teardrop	Csepp
+	Striped Ribbon	Csíkos szalag
+	Fine Nib	Finom tollhegy
+	Broad Nib	Széles tollhegy
+	Chisel	Véső
+	Round Pen	Kerek toll
+	Pressure Pen	Nyomásérzékeny toll
+	Beads	Gyöngyök
+	Dash Dot	Pont-vonal
+	Scallops	Hullámos szegély
+	Stars	Csillagok
+	Triangles	Háromszögek
+	Sparkles	Szikrák
 	Save Brush Library…	Ecsetkönyvtár mentése…
 @msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
 @msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)
@@ -6724,6 +6808,13 @@ axis	Y Axis	Y tengely
 	Area Text	Területszöveg
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Szöveg mérése a glifahatárok szerint
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Pixelhez illesztés beállításai
+	Pixel Snapping Options…	Pixelhez illesztés beállításai…
+	Snap to Pixel While Drawing	Illesztés pixelhez rajzoláskor
+	Snap to Pixel While Moving	Illesztés pixelhez mozgatáskor
+	Snap to Pixel While Scaling	Illesztés pixelhez méretezéskor
+	These options take effect when View › Snap to Pixel is on.	Ezek a beállítások akkor érvényesek, ha a Nézet › Illesztés pixelhez be van kapcsolva.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Glifához illesztés beállításainak megjelenítése
 	Hide Snap to Glyph Options	Glifához illesztés beállításainak elrejtése
@@ -6809,6 +6900,8 @@ anchor	Points:	Pontok:
 	Anchor Inspector	Horgonypont-vizsgáló
 	Add Points at Crossings	Pontok hozzáadása a kereszteződésekben
 	Split at Crossings	Felosztás a kereszteződésekben
+	Trim at Crossings Tool	Levágás a kereszteződésekben eszköz
+	Trim at Crossings	Levágás a kereszteződésekben
 	Extend Path	Útvonal meghosszabbítása
 	Measure & Inspect	Mérés és vizsgálat
 	Set Anchor	Horgonypont beállítása
@@ -7388,3 +7481,9 @@ breakText	Glyphs	Glifák
 	Margin	Margó
 	Box	Keret
 	Swatch	Színminta
+	Banner Hems and Grommets…	Molinó szegései és ringlijei…
+	Banner Hems and Grommets	Molinó szegései és ringlijei
+	Hem	Szegés
+	Grommets	Ringlik
+	Grommet Inset	Ringlik távolsága a széltől
+	Diameter	Átmérő

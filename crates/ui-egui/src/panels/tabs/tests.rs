@@ -27,6 +27,83 @@ fn panel_draws_empty_with_text_and_with_stops() {
     assert_eq!(back[1]["align"], json!("decimal"));
 }
 
+/// A rectangle and two area texts, the first with a stop at 40 pt and the second with one at
+/// 90 pt, nothing selected. → the app and the ids of the rectangle and the two texts.
+fn mixed_selection_app() -> (VectorcraftApp, [u64; 3]) {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = |v: serde_json::Value| v["id"].as_u64().unwrap();
+    let rect = id(app.run("shape.rectangle", json!({"x": 10, "y": 200, "width": 40, "height": 40})).unwrap());
+    let a = id(app.run("text.create", json!({"x": 10, "y": 20, "text": "a\tb", "area": {"width": 300, "height": 60}})).unwrap());
+    let b = id(app.run("text.create", json!({"x": 10, "y": 100, "text": "c\td", "area": {"width": 250, "height": 60}})).unwrap());
+    for (text, position) in [(a, 40), (b, 90)] {
+        app.run("select.set", json!({"ids": [text]})).unwrap();
+        app.run("text.tabs.set", json!({"stops": [{"position": position}]})).unwrap();
+    }
+    app.run("select.set", json!({"ids": []})).unwrap();
+    (app, [rect, a, b])
+}
+
+/// With a rectangle selected first and a text after it, the panel shows the text's stops on its
+/// ruler, not the "No text selected" state.
+#[test]
+fn the_ruler_shows_text_selected_after_an_object_that_is_not_text() {
+    let (mut app, [rect, a, _]) = mixed_selection_app();
+    app.run("select.set", json!({"ids": [rect, a]})).unwrap();
+    let (node, stops, span) = current(&app).unwrap();
+    assert_eq!(node.id.0, a);
+    assert_eq!(stops.iter().map(|s| s.position).collect::<Vec<_>>(), [40.0]);
+    assert_eq!(span, 300.0);
+    let ctx = egui::Context::default();
+    assert_eq!(ruler_labels(&ctx, &mut app).first().map(String::as_str), Some("0"));
+}
+
+/// With a group selected first whose text follows a rectangle in it, the panel shows that text's
+/// stops, ahead of a text selected after the group.
+#[test]
+fn the_ruler_shows_text_inside_a_selected_group() {
+    let (mut app, [rect, a, b]) = mixed_selection_app();
+    app.run("select.set", json!({"ids": [rect, b]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group, a]})).unwrap();
+    let (node, stops, span) = current(&app).unwrap();
+    assert_eq!(node.id.0, b);
+    assert_eq!(stops.iter().map(|s| s.position).collect::<Vec<_>>(), [90.0]);
+    assert_eq!(span, 250.0);
+    let ctx = egui::Context::default();
+    assert_eq!(ruler_labels(&ctx, &mut app).first().map(String::as_str), Some("0"));
+}
+
+/// A stop added on the ruler of a mixed selection sets the first text's stops plus the new one on
+/// every selected text, and leaves the rectangle as it was.
+#[test]
+fn a_stop_added_on_a_mixed_selection_sets_every_selected_text() {
+    let (mut app, [rect, a, b]) = mixed_selection_app();
+    let shape = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).unwrap().clone();
+    let before = shape(&app);
+    app.run("select.set", json!({"ids": [rect, a, b]})).unwrap();
+    let ctx = egui::Context::default();
+    drag_on_ruler(&ctx, &mut app, 60.0, 60.0, false);
+    for text in [a, b] {
+        assert_eq!(text_of(&app, text).para_at(0).tabs.iter().map(|s| s.position).collect::<Vec<_>>(), [40.0, 60.0], "text {text}");
+    }
+    assert_eq!(shape(&app), before);
+}
+
+/// A selection without text keeps the "No text selected" state and draws no ruler.
+#[test]
+fn a_selection_without_text_shows_no_ruler() {
+    let (mut app, [rect, ..]) = mixed_selection_app();
+    let id = app.run("shape.rectangle", json!({"x": 100, "y": 200, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [rect, id]})).unwrap();
+    let group = app.run("object.group", json!({})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [group]})).unwrap();
+    assert!(current(&app).is_none());
+    let ctx = egui::Context::default();
+    assert!(ruler_labels(&ctx, &mut app).is_empty());
+    assert!(crate::tests_labels::painted_text(&mut app, show).contains("No text selected"));
+}
+
 /// In vertical type the Left and Right alignment buttons are named Top-Justified Tab and
 /// Bottom-Justified Tab, in their tool tips and for screen readers, and the position field is
 /// labeled Y. Horizontal type keeps Left-Justified Tab, Right-Justified Tab and X.
@@ -563,6 +640,43 @@ fn text_of(app: &VectorcraftApp, id: u64) -> vectorcraft_doc::TextObject {
         NodeKind::Text(t) => (**t).clone(),
         _ => panic!("not text"),
     }
+}
+
+/// With the Selection tool, tab stops set in the panel go to every paragraph of every frame of a
+/// selected threaded story, its locked and hidden frames included.
+#[test]
+fn selection_tool_tab_stops_reach_every_frame_of_the_story() {
+    let (mut app, frames) = split_story_app();
+    app.run("select.set", json!({"ids": [frames[1]]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [frames[2]]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [frames[0]]})).unwrap();
+    let stop = TabStop { position: 36.0, align: Default::default(), leader: String::new(), align_on: '.' };
+    assert!(apply(&mut app, std::slice::from_ref(&stop)));
+    for id in frames {
+        let t = text_of(&app, id);
+        assert!((0..t.paragraph_count()).all(|i| t.para_at(i).tabs == [stop.clone()]), "frame {id} takes the stop");
+    }
+}
+
+/// With the Selection tool, Clear All Tabs is on when only another frame of the selected story has
+/// tab stops, and clears them there.
+#[test]
+fn clear_all_tabs_is_on_when_another_frame_of_the_story_has_stops() {
+    let (mut app, [a, b, c]) = split_story_app();
+    app.run("text.tabs.set", json!({"ids": [c], "stops": [{"position": 36}]})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert!(current(&app).unwrap().1.is_empty(), "the selected frame has no stops");
+    assert!(story_has_tabs(&app));
+    super::super::paragraph::run_on_paragraphs(&mut app, "text.tabs.clear", json!({})).unwrap();
+    for id in [a, b, c] {
+        let t = text_of(&app, id);
+        assert!((0..t.paragraph_count()).all(|i| t.para_at(i).tabs.is_empty()), "frame {id} has no stops");
+    }
+    assert!(!story_has_tabs(&app));
 }
 
 /// Each paragraph of the story of `frames` by its first word, with its left indent and first-line

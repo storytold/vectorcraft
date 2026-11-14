@@ -302,6 +302,8 @@ mod tests {
             outline: None,
             cap: false,
             visibility_pieces: None,
+            surface: None,
+            plane: None,
         }
     }
 

@@ -46,7 +46,7 @@ pub mod importmatches;
 pub(crate) mod inline;
 mod interactivity;
 mod intertwine;
-mod layer;
+pub(crate) mod layer;
 mod layerpanel;
 pub mod library;
 pub mod linkfiles;
@@ -245,6 +245,12 @@ pub fn has_selected_member(s: &Session) -> std::result::Result<(), String> {
     let Some(root) = ordinary_isolation(st) else { return has_selection(s) };
     if st.selection.objects.iter().any(|id| inside_isolation(&st.doc, root, *id)) { Ok(()) } else { Err("nothing selected".into()) }
 }
+/// [`has_selected_member`], or a ruler guide is selected outside isolation mode: Object › Lock ›
+/// Selection and Object › Hide › Selection.
+pub fn has_selected_member_or_guide(s: &Session) -> std::result::Result<(), String> {
+    let st = s.active().ok_or("no document open")?;
+    if ordinary_isolation(st).is_none() && !st.selection.guides.is_empty() { Ok(()) } else { has_selected_member(s) }
+}
 /// Whether `id` lies inside the isolated object `root` (the root itself does not).
 pub(crate) fn inside_isolation(d: &vectorcraft_doc::Document, root: vectorcraft_doc::NodeId, id: vectorcraft_doc::NodeId) -> bool {
     id != root && d.ancestry(id).is_some_and(|a| a.contains(&root))
@@ -434,6 +440,15 @@ pub(crate) fn f64_req(p: &Value, key: &str, cmd: &str) -> Result<f64> {
         Some(v) => v.as_f64().ok_or_else(|| bad(cmd, format!("`{key}` must be a number, not {v}"))),
     }
 }
+/// The whole number of 0 or more that `p` gives for `key`. A missing key or null is "missing integer
+/// `{key}`"; any other value, such as `"3"`, `2.5`, `-1` or `true`, is "`{key}` must be a whole
+/// number", as [`object_param`] words it.
+pub(crate) fn u64_req(p: &Value, key: &str, cmd: &str) -> Result<u64> {
+    match p.get(key) {
+        None | Some(Value::Null) => Err(bad(cmd, format!("missing integer `{key}`"))),
+        Some(v) => v.as_u64().ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
+    }
+}
 /// The number `p` gives for `key`, or `default` when `p` leaves it out or gives null. Any other
 /// value, such as `"40"`, is an error: "`{key}` must be a number, not {v}".
 pub(crate) fn number_or(p: &Value, key: &str, default: f64, cmd: &str) -> Result<f64> {
@@ -506,8 +521,13 @@ fn id_entry(value: &Value, key: &str, index: usize, cmd: &str) -> Result<NodeId>
 /// them), each checked ([`checked_id`]): a malformed one, or one naming no object, is an error,
 /// never the selection. `None` when it gives neither (or gives them as `null`).
 pub(crate) fn given_objects(s: &Session, p: &Value, command: &str) -> Result<Option<Vec<NodeId>>> {
+    given_nodes(s, p, command, false)
+}
+/// The nodes `p` gives `command`, as [`given_objects`] reads them; ruler guide nodes are taken
+/// too when `guides`, else refused.
+pub(crate) fn given_nodes(s: &Session, p: &Value, command: &str, guides: bool) -> Result<Option<Vec<NodeId>>> {
     if p.get("ids").is_some_and(|v| !v.is_null()) {
-        return checked_ids_param(s, p, "ids", command).map(Some);
+        return checked_nodes_param(s, p, "ids", command, guides).map(Some);
     }
     match p.get("id").filter(|v| !v.is_null()) {
         None => Ok(None),
@@ -515,7 +535,7 @@ pub(crate) fn given_objects(s: &Session, p: &Value, command: &str) -> Result<Opt
         Some(Value::String(r)) if r.starts_with('$') => {
             Err(bad(command, format!("`id` is the step reference {r:?}, which only `run` and `command_batch` resolve")))
         }
-        Some(v) => Ok(Some(vec![checked_id(s, v, command)?])),
+        Some(v) => Ok(Some(vec![checked_node(s, v, command, guides)?])),
     }
 }
 /// The objects `p` gives `command`, as [`given_objects`] reads them, checked only for their form:
@@ -539,11 +559,29 @@ pub(crate) fn given_object_ids(p: &Value, command: &str) -> Result<Option<Vec<No
 pub(crate) fn index(v: u64) -> usize {
     usize::try_from(v).unwrap_or(usize::MAX)
 }
+/// The whole number of 0 or more that `p` gives for `key`, read with [`index`], or `None` when `p`
+/// leaves it out or gives null. Any other value, such as `"3"`, `2.5`, `-1` or `true`, is an error
+/// under `cmd`: "`{key}` must be a whole number".
+pub(crate) fn index_opt(p: &Value, key: &str, cmd: &str) -> Result<Option<usize>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(|n| Some(index(n))).ok_or_else(|| bad(cmd, format!("`{key}` must be a whole number"))),
+    }
+}
 /// Validate all explicit targets before a command changes the document or selection.
 pub(crate) fn checked_ids_param(s: &Session, p: &Value, key: &str, command: &str) -> Result<Vec<NodeId>> {
+    checked_nodes_param(s, p, key, command, false)
+}
+/// The `key` list as [`checked_ids_param`] checks it; ruler guide nodes are taken too when
+/// `guides`, else refused.
+pub(crate) fn checked_nodes_param(s: &Session, p: &Value, key: &str, command: &str, guides: bool) -> Result<Vec<NodeId>> {
     let values =
         p.get(key).and_then(Value::as_array).ok_or_else(|| bad(command, format!("{key} must be an array of non-negative integer object ids")))?;
-    values.iter().enumerate().map(|(index, value)| id_entry(value, key, index, command).and_then(|_| checked_id(s, value, command))).collect()
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| id_entry(value, key, index, command).and_then(|_| checked_node(s, value, command, guides)))
+        .collect()
 }
 
 /// The objects a command acts on: `ids` when given (every one checked, and those inside another
@@ -557,11 +595,16 @@ pub(crate) fn checked_ids_or_selection(s: &Session, p: &Value, command: &str) ->
 }
 
 pub(crate) fn checked_id(s: &Session, value: &Value, command: &str) -> Result<NodeId> {
+    checked_node(s, value, command, false)
+}
+/// `value` as the id of a node of the active document; a ruler guide's is taken only when
+/// `guides`.
+pub(crate) fn checked_node(s: &Session, value: &Value, command: &str, guides: bool) -> Result<NodeId> {
     let id = value.as_u64().map(NodeId).ok_or_else(|| bad(command, format!("invalid object id {value}: expected a non-negative integer")))?;
     match s.doc()?.doc.node(id) {
         None => Err(bad(command, format!("no such object id {value}"))),
         // The guide commands take ruler guides by index.
-        Some(n) if n.is_ruler_guide() => Err(bad(command, format!("id {value} is a ruler guide, not an object"))),
+        Some(n) if n.is_ruler_guide() && !guides => Err(bad(command, format!("id {value} is a ruler guide, not an object"))),
         Some(_) => Ok(id),
     }
 }

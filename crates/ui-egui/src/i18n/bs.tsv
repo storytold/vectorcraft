@@ -103,6 +103,8 @@
 	Blend Vertically	Stopi okomito
 	Convert to CMYK	Pretvori u CMYK
 	Convert to Grayscale	Pretvori u nijanse sive
+	Convert to Indexed Color	Pretvori u indeksirane boje
+	Convert to Indexed Color…	Pretvori u indeksirane boje…
 	Convert to RGB	Pretvori u RGB
 	Invert Colors	Obrni boje
 	Overprint Black…	Pretisak crne…
@@ -199,6 +201,8 @@
 	Crop Image	Izreži sliku
 	Image Tools	Alati za slike
 	Remove Background…	Ukloni pozadinu…
+	Draw (Pencil)	Crtaj (olovka)
+	Place Image	Postavi sliku
 	Remove Background	Ukloni pozadinu
 	Background	Pozadina
 	Edge Color	Boja ruba
@@ -980,6 +984,7 @@
 	VectorCraft Title Bar on Every Desktop	Naslovna traka VectorCrafta na svakoj radnoj površini
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dok je varijabla okruženja VECTORCRAFT_TITLEBAR postavljena, ona bira naslovnu traku.
 	System Title Bar takes precedence over this option while it is on.	Dok je uključena, Sistemska naslovna traka ima prednost pred ovom opcijom.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Dok je Naslovna traka VectorCrafta na svakoj radnoj površini isključena, ova radna površina crta naslovnu traku prozora bez obzira na to je li ova opcija uključena.
 	Exit	Izlaz
 	Distort	Izobliči
 	Diffuse Glow…	Difuzni sjaj…
@@ -1568,6 +1573,7 @@ lighting	Light	Svjetlo
 	Proportional Metrics	Proporcionalna metrika
 	Insert Aki Left	Umetni aki lijevo
 	Insert Aki Right	Umetni aki desno
+	Tsume	Tsume
 	Character Direction	Smjer znakova
 	Digits	Cifre
 	Arabic	Arapski
@@ -1605,6 +1611,11 @@ digits	Malayalam	Malajalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Postavke za Tate-chu-yoko…
 	Tate-chu-yoko Settings	Postavke za Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Postavke za Warichu…
+	Warichu Settings	Postavke za Warichu
+	Lines:	Redovi:
+	Line Gap:	Razmak između redova:
 	Composite Fonts…	Kompozitni fontovi…
 	Composite Fonts	Kompozitni fontovi
 	Export Composite Fonts	Izvezi kompozitne fontove
@@ -1813,6 +1824,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Alat objekti na putanji
 	Attach Objects on Path	Priloži objekte na putanju
 	Expand Objects on Path	Proširi objekte na putanji
+	Detach	Odvoji
+	Detach Object from Path	Odvoji objekat s putanje
 	Release Live Paint	Oslobodi živo bojenje
 	Release Repeat	Oslobodi ponavljanje
 	Release Slice	Oslobodi isječak
@@ -3351,6 +3364,29 @@ theme	Appearance	Izgled
 	Bristle Brush	Četkica s čekinjama
 	Pattern Brush	Četkica uzorka
 	missing from the Brushes panel	nedostaje u panelu Četkice
+	built in	ugrađen
+	embedding not allowed	ugrađivanje nije dozvoljeno
+	embedding for editing	ugrađivanje za uređivanje
+	embedding for preview and print	ugrađivanje za pregled i štampu
+	embedding allowed	ugrađivanje dozvoljeno
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	zamijenjen: prikazan fontom {family} {style} ({detail})
+	missing: shown in {family} {style}	nedostaje: prikazan fontom {family} {style}
+	missing	nedostaje
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linearni gradijent
+	Radial gradient	Radijalni gradijent
+	Conic gradient	Konusni gradijent
+	Diamond gradient	Rombni gradijent
+	Freeform gradient	Gradijent slobodnog oblika
+@plural	{n} instance|{n} instances	{n} instanca|{n} instance|{n} instanci
+@plural	{n} row|{n} rows	{n} red|{n} reda|{n} redova
+@plural	{n} column|{n} columns	{n} kolona|{n} kolone|{n} kolona
 	Select art to make a scatter, art or pattern brush.	Odaberite crtež da napravite raspršenu, umjetničku četkicu ili četkicu uzorka.
 	Brush Art	Crtež četkice
 	New Symbol	Novi simbol
@@ -3835,6 +3871,11 @@ theme	Appearance	Izgled
 	Primary	Primarno
 	Printing / Exporting	Štampanje / izvoz
 	Real-time Drawing and Editing	Crtanje i uređivanje u stvarnom vremenu
+	Use Monitor Profile for Canvas	Koristi profil monitora za platno
+	The canvas is drawn in sRGB.	Platno se iscrtava u sRGB-u.
+	Canvas display profile:	Profil ekrana za platno:
+	The system matches the window to the display's colors.	Sistem prilagođava boje prozora ekranu.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nije pronađen upotrebljiv profil ekrana: platno se iscrtava u sRGB-u.
 	Render Threads (-1 = Automatic)	Niti iscrtavanja (-1 = automatski)
 	Reset Preferences	Vrati postavke na početne
 	Export Preferences…	Izvezi postavke…
@@ -4496,8 +4537,15 @@ imageTrace	Outline	Obris
 @msg	Couldn't open {name}: {e}	Nije moguće otvoriti {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nije moguće postaviti {name}: dokument na koji je ispušten je zatvoren
 @msg	Couldn't place {name}: the document it was placed in was closed	Nije moguće postaviti {name}: dokument u koji je postavljen je zatvoren
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nije moguće postaviti {name}: dokument na koji je ispušten je vraćen na sačuvano
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nije moguće postaviti {name}: dokument u koji je postavljen je vraćen na sačuvano
+@msg	Couldn't paste: the document it was pasted in was reverted	Nije moguće zalijepiti: dokument u koji se lijepilo je vraćen na sačuvano
 @msg	Couldn't read {name}: {e}	Nije moguće pročitati {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nije moguće sačuvati podatke za oporavak: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak za {title}: {e}. Kopije se čuvaju u {folder}, zadanom folderu za oporavak; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak za {title}: {e}. Kopije se čuvaju u {folder}, folderu postavljenom u Postavkama; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak: {e}. Kopije se čuvaju u {folder}, zadanom folderu za oporavak; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nije moguće sačuvati podatke za oporavak: {e}. Kopije se čuvaju u {folder}, folderu postavljenom u Postavkama; da biste koristili drugi folder, postavite Postavke → Rukovanje datotekama → Oporavak podataka → Folder (recoveryFolder)
 @msg	Create Outlines: select text objects	Kreiraj obrise: odaberite tekstualne objekte
 @msg	Create from Guides: the document has no artboard	Kreiraj iz vodilica: dokument nema radnu ploču
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Kreiraj iz vodilica: vodilice prave više od {MAX_PIECES} isječaka
@@ -4913,6 +4961,7 @@ imageTrace	Outline	Obris
 @msg	paths contain invalid coordinates	putanje sadrže nevažeće koordinate
 @msg	paths: give at least one file	paths: navedite barem jednu datoteku
 @msg	replace: the object to replace was changed or deleted	replace: objekat za zamjenu je promijenjen ili izbrisan
+@msg	the document it was prepared for is no longer active	dokument za koji je pripremljeno više nije aktivan
 @msg	pattern missing	uzorak nedostaje
 @msg	patterns nested too deeply are filled with mid-grey	previše duboko ugniježđeni uzorci ispunjavaju se srednje sivom
 @msg	percent must be above 0 and at most 6400, not {p}	percent mora biti iznad 0 i najviše 6400, a ne {p}
@@ -4948,6 +4997,7 @@ imageTrace	Outline	Obris
 @msg	select a repeat	odaberite ponavljanje
 @msg	select an Intertwine group	odaberite Intertwine grupu
 @msg	select an Objects on Path group	odaberite grupu objekata na putanji
+@msg	choose the object to detach with its Select/Move widget	odaberite objekat koji želite odvojiti njegovom ručicom Odaberi/Pomjeri
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	putanja unutar složene putanje, stapanja, omotnice, ponavljanja ili Intertwine grupe ne može primiti objekte
 @msg	a clipping path can't take objects	putanja isijecanja ne može primiti objekte
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	objekti unutar stapanja, omotnice, ponavljanja ili Intertwine grupe ne mogu se priložiti putanji
@@ -5146,6 +5196,7 @@ imageTrace	Outline	Obris
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Odbačen {n} oporavljeni dokument|Odbačena {n} oporavljena dokumenta|Odbačeno {n} oporavljenih dokumenata
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Vraćen {n} oporavljeni dokument; sačuvajte ga da ga zadržite|Vraćena {n} oporavljena dokumenta; sačuvajte ih da ih zadržite|Vraćeno {n} oporavljenih dokumenata; sačuvajte ih da ih zadržite
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Otvoreno s {n} bilješkom: {first}|Otvoreno s {n} bilješke: {first}|Otvoreno s {n} bilješki: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otvoreno s {n} bilješkom: {first}|{notice}. Otvoreno s {n} bilješke: {first}|{notice}. Otvoreno s {n} bilješki: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Sačuvano {path} s {n} bilješkom: {first}|Sačuvano {path} s {n} bilješke: {first}|Sačuvano {path} s {n} bilješki: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ugrađena je {n} slika; nedostaje {missing}: prvo ih ponovo povežite|Ugrađene su {n} slike; nedostaje {missing}: prvo ih ponovo povežite|Ugrađeno je {n} slika; nedostaje {missing}: prvo ih ponovo povežite
 @msgplural	Embedded {n} image|Embedded {n} images	Ugrađena je {n} slika|Ugrađene su {n} slike|Ugrađeno je {n} slika
@@ -5216,6 +5267,8 @@ imageTrace	Outline	Obris
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ugrađena slika od {_1} × {_2} piksela smanjena je na {_3} × {_4} piksela kako bi se zadržali slojevi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	linked type areas past VectorCraft's limits were left out	povezana područja teksta izvan ograničenja programa VectorCraft su izostavljena
+@msg	the Line Breaking setting of legacy type was left out	postavka prijeloma redova teksta u starom formatu je izostavljena
+@msg	the Japanese layout rules of legacy type were left out	japanska pravila rasporeda teksta u starom formatu su izostavljena
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst koji mijenja smjer pisanja unutar tekstualnog objekta otvara se u smjeru svog prvog znaka
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst korišten kao maska u povezanim područjima, omotanom tekstu ili složenoj putanji ne odsijeca
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	povezane slike bez pregleda u datoteci prikazuju čuvar mjesta dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
@@ -5503,6 +5556,8 @@ imageTrace	Outline	Obris
 	Vivid	Živo
 	Spectrum	Spektar
 	Perceptual	Perceptivno
+	Hue Clockwise	Nijansa u smjeru kazaljke na satu
+	Hue Counterclockwise	Nijansa suprotno od kazaljke na satu
 	Relative Colorimetric	Relativna kolorimetrija
 	Absolute Colorimetric	Apsolutna kolorimetrija
 	Exact	Tačno
@@ -5845,6 +5900,7 @@ mark-style	Japanese	Japanski
 @msg	no such color	nema takve boje
 @msg	{_1} cannot be used on Windows	{_1} se ne može koristiti na Windowsu
 @msg	more than one action is named “{_1}”	više od jedne akcije ima naziv „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	akcija „{_1}” postavlja postavku foldera {_2}; izbrišite taj korak da biste sačuvali skup
 @msg	no symbol named `{n}`	nema simbola pod nazivom `{n}`
 	Smudge Stick…	Štapić za razmazivanje…
 	Smudge Stick	Štapić za razmazivanje
@@ -5994,7 +6050,7 @@ axis	Y Axis	Y osa
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se primjenjuje na gradijentne ispune (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se primjenjuje na gradijentne ispune (paint.setFill)
 @msg	`dither` must be true or false	`dither` mora biti true ili false
-@msg	`method` must be classic or perceptual	`method` mora biti classic ili perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` mora biti classic, perceptual, hue-clockwise ili hue-counterclockwise
 	Install “{name}”, which asks for a heavy budget?	Instalirati „{name}”, koji traži veliki budžet?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Svako pokretanje može trajati do {minutes} minuta i obaviti {times} puta više posla nego drugi dodaci. Radi u pozadini i možete ga otkazati.
 	It may take minutes, so it runs in the background, where you can cancel it.	Može trajati minutama, pa radi u pozadini, gdje ga možete otkazati.
@@ -6051,6 +6107,8 @@ axis	Y Axis	Y osa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
 	Playback Options…	Opcije reprodukcije…
+	Button Mode	Način dugmadi
+	No actions.	Nema akcija.
 	Insert Stop…	Umetni zaustavljanje…
 	Insert Stop	Umetni zaustavljanje
 	Record Stop	Snimi zaustavljanje
@@ -6058,6 +6116,7 @@ axis	Y Axis	Y osa
 	Continue	Nastavi
 	Continue Action	Nastavi akciju
 	Delete Action Step	Izbriši korak akcije
+	Move Action Step	Premjesti korak akcije
 	Press Play Current Selection in the Actions panel to go on.	Za nastavak pritisnite „Reprodukuj trenutni odabir“ na panelu Akcije.
 	Stop: {message}	Zaustavljanje: {message}
 @msg	no action is waiting at a stop	nijedna akcija ne čeka na zaustavljanju
@@ -6229,6 +6288,22 @@ axis	Y Axis	Y osa
 	Graphite Pencil	Grafitna olovka
 	Wax Crayon	Voštana bojica
 	Charcoal Dust	Ugljena prašina
+	Notched Ribbon	Zarezana traka
+	Double Line	Dvostruka linija
+	Wave	Talas
+	Teardrop	Suza
+	Striped Ribbon	Prugasta traka
+	Fine Nib	Tanki vrh
+	Broad Nib	Široki vrh
+	Chisel	Dlijeto
+	Round Pen	Okruglo pero
+	Pressure Pen	Pero na pritisak
+	Beads	Perle
+	Dash Dot	Crta-tačka
+	Scallops	Festoni
+	Stars	Zvijezde
+	Triangles	Trouglovi
+	Sparkles	Iskrice
 	Save Brush Library…	Sačuvaj biblioteku četkica…
 @msg	`{_1}` has no brushes to apply	`{_1}` nema četkica za primjenu
 @msg	missing `library` (see brush.libraries)	nedostaje `library` (pogledajte brush.libraries)
@@ -6246,6 +6321,12 @@ axis	Y Axis	Y osa
 	Area Text	Tekst u oblasti
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mjeri tekst po granicama glifa
+	Pixel Snapping Options	Opcije prianjanja uz piksel
+	Pixel Snapping Options…	Opcije prianjanja uz piksel…
+	Snap to Pixel While Drawing	Prilijepi uz piksel pri crtanju
+	Snap to Pixel While Moving	Prilijepi uz piksel pri pomjeranju
+	Snap to Pixel While Scaling	Prilijepi uz piksel pri skaliranju
+	These options take effect when View › Snap to Pixel is on.	Ove opcije djeluju kada je uključeno Prikaz › Prilijepi uz piksel.
 	Show Snap to Glyph Options	Prikaži opcije prianjanja uz glif
 	Hide Snap to Glyph Options	Sakrij opcije prianjanja uz glif
 	Snap to Glyph Options	Opcije prianjanja uz glif
@@ -6324,6 +6405,8 @@ anchor	Points:	Tačke:
 	Anchor Inspector	Pregled sidara
 	Add Points at Crossings	Dodaj tačke na presjecima
 	Split at Crossings	Razdvoji na presjecima
+	Trim at Crossings Tool	Alat obreži na presjecima
+	Trim at Crossings	Obreži na presjecima
 	Extend Path	Produži putanju
 	Measure & Inspect	Mjeri i pregledaj
 	Set Anchor	Postavi sidro
@@ -6412,7 +6495,7 @@ anchor	Points:	Tačke:
 	Stop on Errors	Zaustavi pri greškama
 	Yonroku-ban	Yonroku-ban
 @msg	image '{key}' has no pixels and was left out	slika '{key}' nema piksela i izostavljena je
-@msg	not an RTF file: it doesn't start with {\\rtf	nije RTF datoteka: ne počinje s {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	nije RTF datoteka: ne počinje s {{\\rtf
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	ovo je PostScript datoteka (.ai sačuvan u starijem formatu ili bez PDF kompatibilnosti, ili EPS datoteka), koja se još ne može otvoriti: sačuvajte je kao PDF, .ai kompatibilan s PDF-om ili SVG
 font-script	Japanese	Japansko
 swatch	[None]	[Nijedna]
@@ -6855,3 +6938,9 @@ shape	Open	Otvoren
 	Box	Okvir
 	Swatch	Uzorak boje
 	Direction	Smjer
+	Banner Hems and Grommets…	Porubi i ušice za baner…
+	Banner Hems and Grommets	Porubi i ušice za baner
+	Hem	Porub
+	Grommets	Ušice
+	Grommet Inset	Udaljenost ušica od ruba
+	Diameter	Prečnik

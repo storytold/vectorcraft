@@ -28,11 +28,26 @@ pub struct SimplifyOptions {
     /// keeps its shape. The limit is the same along the whole stretch, so where smoothing moves some of
     /// its points far, all of it is refitted within up to `tolerance`, as without this option.
     pub smooth_moved_only: bool,
+    /// With [`smooth`](Self::smooth), the curve at an open subpath's first anchor leaves it along the
+    /// direction of the smoothed path over the 3 spreads next to it rather than along its first
+    /// segment. The anchor stays where it is. A closed subpath has no such end, and [`simplify_part`]
+    /// ignores this.
+    pub free_start: bool,
+    /// [`free_start`](Self::free_start) for an open subpath's last anchor.
+    pub free_end: bool,
 }
 
 impl Default for SimplifyOptions {
     fn default() -> Self {
-        Self { tolerance: 0.5, corner_angle_deg: 30.0, straight_lines: false, smooth: 0.0, smooth_moved_only: false }
+        Self {
+            tolerance: 0.5,
+            corner_angle_deg: 30.0,
+            straight_lines: false,
+            smooth: 0.0,
+            smooth_moved_only: false,
+            free_start: false,
+            free_end: false,
+        }
     }
 }
 
@@ -107,6 +122,8 @@ fn simplify_subpath(sp: &SubPath, opts: &SimplifyOptions) -> Option<SubPath> {
     if n == 0 || sp.closed && n < 2 {
         return Some(sp.clone());
     }
+    let closed_opts = SimplifyOptions { free_start: false, free_end: false, ..*opts };
+    let opts = if sp.closed { &closed_opts } else { opts };
     if sp.closed {
         // Start the loop at its first corner, so no fit runs across one.
         let k = (0..n).find(|&i| turn_deg(&segs[(i + n - 1) % n], &segs[i]) > opts.corner_angle_deg).unwrap_or(0);
@@ -282,6 +299,12 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
     cuts.insert(0, 0);
     cuts.push(run.len());
     let mut result: Vec<Seg> = Vec::new();
+    // Whether `part` starts where `run` does and whether it ends where `run` does, for the free ends.
+    let free = |part: &[(&Seg, usize)]| {
+        let starts = part.first().zip(run.first()).is_some_and(|((s, _), r)| std::ptr::eq(*s, r));
+        let ends = part.last().zip(run.last()).is_some_and(|((s, _), r)| std::ptr::eq(*s, r));
+        [opts.free_start && starts, opts.free_end && ends]
+    };
     for w in cuts.windows(2) {
         let piece = &run[w[0]..w[1]];
         let mut part: Vec<(&Seg, usize)> = Vec::new();
@@ -290,7 +313,7 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
             let steps = sample_steps(&s.c, tol);
             if steps <= budget.min(MAX_SEGMENT_SAMPLES) && result.len() < MAX_RUN_RESULT {
                 if part_samples + steps > MAX_FIT_SAMPLES {
-                    refit_part(&part, opts, tol, None, &mut result);
+                    refit_part(&part, opts, tol, None, free(&part), &mut result);
                     part.clear();
                     part_samples = 0;
                 }
@@ -299,7 +322,7 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
                 part.push((s, steps));
             } else {
                 part_samples = 0;
-                refit_part(&part, opts, tol, None, &mut result);
+                refit_part(&part, opts, tol, None, free(&part), &mut result);
                 part.clear();
                 if opts.straight_lines {
                     let room = MAX_RUN_RESULT.saturating_sub(result.len());
@@ -313,7 +336,7 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
                 }
             }
         }
-        refit_part(&part, opts, tol, ends.filter(|_| part.len() == run.len()), &mut result);
+        refit_part(&part, opts, tol, ends.filter(|_| part.len() == run.len()), free(&part), &mut result);
     }
     result
 }
@@ -321,20 +344,36 @@ pub(crate) fn simplify_run_within(run: &[Seg], opts: &SimplifyOptions, mut budge
 /// Adds the refit of `part`, consecutive segments with no corner between them and the steps to
 /// sample each one with, to `result`. `ends`, given only when `part` is a whole closed loop, is the
 /// direction it leaves and arrives along; when the loop is smoothed, the smoothing runs across its
-/// start and the direction comes from the smoothed samples there.
-fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, mut ends: Option<Vec2>, result: &mut Vec<Seg>) {
+/// start and the direction comes from the smoothed samples there. `free` says whether the start and
+/// the end of `part` are free ends of an open subpath: when it is smoothed, the refit leaves such a
+/// start and arrives at such an end along [`free_end_direction`], or along its first or last segment
+/// when that gives none or turns from the segment by 90° or more.
+fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, mut ends: Option<Vec2>, free: [bool; 2], result: &mut Vec<Seg>) {
     let (Some((first, _)), Some((last, _))) = (part.first(), part.last()) else { return };
     let mut pts = Vec::new();
     for (k, (s, steps)) in part.iter().enumerate() {
         sample(&s.c, *steps, &mut pts, k == 0);
     }
     let mut tol = tol;
+    let (mut t0, mut t1) = (start_tangent(&first.c), end_tangent(&last.c));
     if opts.smooth > 0.0 {
         let smoothed = if ends.is_some() { smooth_loop_points(&pts, opts.smooth) } else { smooth_points(&pts, opts.smooth) };
         if ends.is_some()
             && let (Some(&next), Some(&prev)) = (smoothed.get(1), smoothed.len().checked_sub(2).and_then(|i| smoothed.get(i)))
         {
             ends = unit(next - prev).or(ends);
+        }
+        if ends.is_none() {
+            if free[0]
+                && let Some(d) = free_end_direction(&smoothed, opts.smooth, false).filter(|d| d.dot(t0) > 0.0)
+            {
+                t0 = d;
+            }
+            if free[1]
+                && let Some(d) = free_end_direction(&smoothed, opts.smooth, true).filter(|d| d.dot(t1) > 0.0)
+            {
+                t1 = d;
+            }
         }
         if opts.smooth_moved_only {
             tol = tol.min((2.0 * smoothing_moved(&pts, &smoothed)).max(tol * SMOOTH_MOVED_FLOOR));
@@ -351,7 +390,7 @@ fn refit_part(part: &[(&Seg, usize)], opts: &SimplifyOptions, tol: f64, mut ends
     // to 1.5% of `tol`: 3/4 of how far its handles may be from the line. The fitted curves join
     // smoothly, so a curve becomes a line only when the line keeps both of its joins smooth. The last
     // curve of a loop fitted across its start leaves along the loop's first segment.
-    let (t0, t1) = ends.map_or((start_tangent(&first.c), end_tangent(&last.c)), |d| (d, d));
+    let (t0, t1) = ends.map_or((t0, t1), |d| (d, d));
     let fitted = fit_cubics(&pts, t0, t1, tol * 0.98);
     let from = result.len();
     let mut arrive = t0;
@@ -449,6 +488,66 @@ fn smoothing_moved(pts: &[Point], smoothed: &[Point]) -> f64 {
             (lo..hi).filter_map(|j| Some(Line::new(*pts.get(j)?, *pts.get(j + 1)?).nearest(q, 1e-9).distance_sq.sqrt())).fold(own, f64::min)
         })
         .fold(0.0, f64::max)
+}
+
+/// How far along the path, in spreads of the smoothing, [`free_end_direction`] looks from the end:
+/// as far as the Gaussian reaches. VectorCraft's own value.
+const FREE_END_SPREADS: f64 = 3.0;
+
+/// [`free_end_direction`] gives no direction when the path near the end spreads out from it more
+/// evenly than this: the ratio of the least to the most squared distance from a line through the end,
+/// over all such lines. VectorCraft's own value.
+const FREE_END_MAX_SPREAD: f64 = 1.0 / 3.0;
+
+/// The direction the samples `pts` of an open run leave their first point along, or with `at_end`
+/// arrive at their last point along: the direction of the line through that point that the path
+/// within [`FREE_END_SPREADS`] spreads `sigma` of it along its length, and at most half its length,
+/// lies closest to by the least sum of squared distances, pointing along the path. `None` when the
+/// path there has no length or is not finite, when its mean point is within a tenth of its length
+/// there of that point (it doubles back), or when it spreads from that point more evenly than
+/// [`FREE_END_MAX_SPREAD`].
+fn free_end_direction(pts: &[Point], sigma: f64, at_end: bool) -> Option<Vec2> {
+    let n = pts.len();
+    let total: f64 = pts.windows(2).map(|w| w[0].distance(w[1])).sum();
+    let reach = (FREE_END_SPREADS * sigma).min(total / 2.0);
+    if !(reach.is_finite() && reach > 0.0) {
+        return None;
+    }
+    let at = |i: usize| pts.get(if at_end { n - 1 - i } else { i }).copied();
+    let origin = at(0)?;
+    // The integrals along the path of v vᵀ and of v, for v from the end to each point.
+    let (mut sxx, mut sxy, mut syy, mut sum, mut along) = (0.0, 0.0, 0.0, Vec2::ZERO, 0.0);
+    let mut a = Vec2::ZERO;
+    for i in 1..n {
+        let Some(p) = at(i) else { break };
+        let mut b = p - origin;
+        let mut len = (b - a).hypot();
+        if along + len > reach {
+            b = a.lerp(b, (reach - along) / len);
+            len = reach - along;
+        }
+        sxx += len * (a.x * a.x + a.x * b.x + b.x * b.x) / 3.0;
+        syy += len * (a.y * a.y + a.y * b.y + b.y * b.y) / 3.0;
+        sxy += len * (2.0 * a.x * a.y + a.x * b.y + b.x * a.y + 2.0 * b.x * b.y) / 6.0;
+        sum += (a + b) * (len / 2.0);
+        along += len;
+        a = b;
+        if along >= reach {
+            break;
+        }
+    }
+    let (trace, apart) = (sxx + syy, (sxx - syy).hypot(2.0 * sxy));
+    // The two principal values are (trace ± apart) / 2.
+    if !(trace.is_finite() && apart.is_finite() && trace > 0.0) || trace - apart > FREE_END_MAX_SPREAD * (trace + apart) {
+        return None;
+    }
+    let mean = sum / along;
+    if !mean.hypot().is_finite() || mean.hypot() < 0.1 * along {
+        return None;
+    }
+    let d = Vec2::from_angle(0.5 * (2.0 * sxy).atan2(sxx - syy));
+    let d = if d.dot(mean) >= 0.0 { d } else { -d };
+    unit(if at_end { -d } else { d })
 }
 
 /// How many groups of samples a spread holds at most in [`smooth_points`]. Weighing them in groups
@@ -597,6 +696,7 @@ pub struct SimplifiedPart {
 /// `segments` is simplified whole, as [`simplify_with`] does. A run whose refit would have more
 /// segments than it had is left as it is (except with Convert to Straight Lines).
 pub fn simplify_part(path: &PathData, segments: &BTreeSet<(usize, usize)>, opts: &SimplifyOptions) -> SimplifiedPart {
+    let opts = &SimplifyOptions { free_start: false, free_end: false, ..*opts };
     let (mut runs, mut anchors) = (BTreeSet::new(), BTreeMap::new());
     let mut subpaths = Vec::with_capacity(path.subpaths.len());
     for (si, sp) in path.subpaths.iter().enumerate() {
@@ -784,6 +884,8 @@ pub fn smooth_options(path: &PathData, level: f64) -> SimplifyOptions {
         straight_lines: false,
         smooth: size * 0.05 * level / 100.0,
         smooth_moved_only: false,
+        free_start: false,
+        free_end: false,
     }
 }
 

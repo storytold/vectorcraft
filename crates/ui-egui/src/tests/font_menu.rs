@@ -522,7 +522,9 @@ fn the_wheel_steps_the_families_in_properties_and_the_control_bar() {
     type Draw = fn(&mut VectorcraftApp, &mut egui::Ui);
     let places: [(&str, Draw); 2] = [
         ("Properties", |app, ui| crate::panels::properties::type_sections(app, ui)),
-        ("Control bar", |app, ui| crate::panels::character::control_bar(app, ui)),
+        ("Control bar", |app, ui| {
+            crate::panels::character::control_bar(app, ui, 0.0);
+        }),
     ];
     let at = |f: &str| FontDb::global().menu_family_list().iter().position(|x| x == f);
     for (place, draw) in places {
@@ -1031,8 +1033,31 @@ fn open_menu_with(id: &str, left: f32, width: f32, screen: egui::Vec2, look: Men
     for _ in 0..if tokens.is_some() { 15 } else { 5 } {
         frame(vec![]);
     }
-    crate::font_menu::wait_for_samples(&ctx);
-    let shapes = frame(vec![]);
+    // A frame starts only a few samples, and none while several are rendering: draw until a frame
+    // leaves none rendering, so that frame drew every shown row's sample.
+    let mut shapes = frame(vec![]);
+    let mut frames = 0;
+    while crate::font_menu::wait_for_samples(&ctx) {
+        frames += 1;
+        assert!(frames < 1000, "the menu's samples are still rendering after {frames} frames");
+        shapes = frame(vec![]);
+    }
+    // egui places the menu by the size it had the frame before. When a name measured late (a face
+    // added for its script, a font found in the background) widens it on that frame, the menu sits
+    // where the narrower one fit until the next: draw until it stays put.
+    let filter_at = |shapes: &[egui::epaint::ClippedShape]| {
+        shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == crate::i18n::t("Any Kind") => Some(t.pos),
+            _ => None,
+        })
+    };
+    for _ in 0..100 {
+        let before = filter_at(&shapes);
+        shapes = frame(vec![]);
+        if filter_at(&shapes) == before && !crate::font_menu::wait_for_samples(&ctx) {
+            break;
+        }
+    }
     let mut texts = vec![];
     let mut samples = vec![];
     let mut tints = vec![];
@@ -1056,6 +1081,54 @@ fn open_menu_with(id: &str, left: f32, width: f32, screen: egui::Vec2, look: Men
     let filter = drawn.text(crate::i18n::t("Any Kind")).center();
     drawn.menu = ctx.layer_id_at(filter).and_then(|l| ctx.memory(|m| m.area_rect(l.id))).expect("the menu is open");
     drawn
+}
+
+/// The field is drawn while other threads ask the context for repaints, as the threads that
+/// render the samples do when they finish. A read of the context made while the menu already
+/// holds one waits behind such a request, and a debug build of egui panics after ten seconds.
+#[test]
+fn the_field_draws_while_other_threads_request_repaints() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    /// Stops the threads when the test ends, failed or not.
+    struct Stop(Arc<AtomicBool>);
+    impl Drop for Stop {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Relaxed);
+        }
+    }
+
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    let stop = Stop(Arc::default());
+    let (started, running) = std::sync::mpsc::channel();
+    let threads: Vec<_> = (0..4)
+        .map(|_| {
+            let (ctx, stop, started) = (ctx.clone(), stop.0.clone(), started.clone());
+            std::thread::spawn(move || {
+                let _ = started.send(());
+                while !stop.load(Ordering::Relaxed) {
+                    ctx.request_repaint();
+                }
+            })
+        })
+        .collect();
+    for _ in &threads {
+        running.recv().expect("the thread started");
+    }
+    // The wheel on: the field also looks up its queued wheel input.
+    let look = MenuLook { wheel: true, ..Default::default() };
+    for _ in 0..2000 {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            font_menu(ui, "test-repaints", "Inter", 200.0, None, look);
+        });
+        out.textures_delta.clear();
+    }
+    drop(stop);
+    for thread in threads {
+        thread.join().expect("the thread ended");
+    }
 }
 
 /// A narrow field, such as the Control bar's, opens a menu wide enough for the filters on their

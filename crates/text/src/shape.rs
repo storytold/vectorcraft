@@ -13,7 +13,7 @@ use kurbo::Shape;
 use skrifa::MetadataProvider;
 use skrifa::charmap::Charmap;
 use skrifa::instance::Size;
-use vectorcraft_doc::text::{INLINE_CHAR, MAX_AKI};
+use vectorcraft_doc::text::{INLINE_CHAR, MAX_AKI, MAX_TSUME};
 use vectorcraft_doc::{CharStyle, Digits, InlineArt};
 
 use crate::features::{OtFeatures, ligatures_suppressed_by};
@@ -66,6 +66,8 @@ pub(crate) struct SGlyph {
     pub ch: char,
     /// Vertical type: part of a tate-chu-yoko block (set across the column, upright).
     pub tcy: Option<Tcy>,
+    /// Part of a warichu block (stacked on several lines inside its line, see [`crate::layout`]).
+    pub wari: Option<Wari>,
     /// Japanese composition: the space taken off before the glyph (an opening bracket after
     /// another, see [`crate::layout`]); the glyph is drawn that much earlier on the line.
     pub lead: f64,
@@ -161,9 +163,32 @@ pub(crate) struct Tcy {
     pub right: f64,
 }
 
+/// A glyph's place in a warichu block: the block takes the length of its longest line along its
+/// line, and its glyphs are set on its lines inside that length. The block's first glyph
+/// advances by the whole length and the others by none, as a tate-chu-yoko block's do.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Wari {
+    /// The byte of the block's first glyph, which names the block.
+    pub start: usize,
+    /// Laid-out distance from the block's start to this glyph's pen position (0 for the block's
+    /// first glyph, the block's length for the others).
+    pub pen: f64,
+    /// Where the glyph is drawn, from the block's start along the line.
+    pub along: f64,
+    /// Where the glyph is drawn across the line, from the line's baseline (y down): the
+    /// baseline of the block's line the glyph is on.
+    pub across: f64,
+    /// The glyph's own advance on its block line, in points.
+    pub advance: f64,
+    /// The em of the line the block sits in: the glyph's em without its Warichu Settings Scale.
+    pub em: f64,
+}
+
 impl SGlyph {
+    /// A space between words. Not a space inside a warichu block, which is set with its block and
+    /// takes no part in justifying or breaking its line.
     pub fn is_space(&self) -> bool {
-        self.inline.is_none() && matches!(self.ch, ' ' | '\t' | '\u{3000}' | '\u{2002}'..='\u{200B}')
+        self.inline.is_none() && self.wari.is_none() && matches!(self.ch, ' ' | '\t' | '\u{3000}' | '\u{2002}'..='\u{200B}')
     }
     /// A line may break after this glyph.
     pub fn break_after(&self) -> bool {
@@ -183,6 +208,12 @@ impl SGlyph {
     /// Vertical type: a tate-chu-yoko glyph after its block's first, sharing that glyph's cell.
     pub fn continues_tcy(&self) -> bool {
         self.tcy.is_some_and(|t| t.pen > 0.0)
+    }
+    /// A tate-chu-yoko glyph after its block's first ([`Self::continues_tcy`]), or a warichu
+    /// glyph after its block's first: justification and Japanese composition add or take no
+    /// space before it, since its block is set as one piece.
+    pub fn continues_block(&self) -> bool {
+        self.continues_tcy() || self.wari.is_some_and(|w| w.pen > 0.0)
     }
 }
 
@@ -938,9 +969,9 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 /// Can one glyph draw characters in styles `a` and `b`? OpenType features already apply to their
 /// own character ranges during shaping, so feature-only differences do not split a cluster.
 /// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets.
-/// The space before a line's first character ([`space_before`]) and Insert Aki ([`aki`]) come
-/// from the cluster's first character, so they do not split a ligature or a letter from its marks
-/// either.
+/// The space before a line's first character ([`space_before`]), Insert Aki ([`aki`]) and Tsume
+/// ([`tighten`]) come from the cluster's first character, so they do not split a ligature or a
+/// letter from its marks either. Warichu Settings count only on characters marked Warichu ([`warichu_alike`]).
 fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
     // Exhaustive, like `shapes_alike`: compare borrowed fields without copying feature lists.
     let CharStyle {
@@ -955,6 +986,7 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         kerning_before,
         aki_left,
         aki_right,
+        tsume,
         optical_kerning,
         baseline_shift,
         h_scale,
@@ -985,6 +1017,12 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         tcy_up_down,
         tcy_left_right,
         standard_vertical_roman,
+        // Compared by `warichu_alike`.
+        warichu: _,
+        warichu_lines: _,
+        warichu_gap: _,
+        warichu_scale: _,
+        warichu_align: _,
         digits,
         font_height_reference,
         no_break,
@@ -997,6 +1035,7 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
     kerning_before == &a.kerning_before
         && aki_left == &a.aki_left
         && aki_right == &a.aki_right
+        && tsume == &a.tsume
         && offsets == other_offsets
         && font_family == &b.font_family
         && font_style == &b.font_style
@@ -1032,6 +1071,7 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         && kashidas == &b.kashidas
         && proportional_metrics == &b.proportional_metrics
         && tate_chu_yoko == &b.tate_chu_yoko
+        && warichu_alike(a, b)
         && digits == &b.digits
         && font_height_reference == &b.font_height_reference
         && no_break == &b.no_break
@@ -1039,12 +1079,24 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         && glyph_alternate == &b.glyph_alternate
 }
 
+/// Do characters in styles `a` and `b` set warichu alike: neither marked Warichu, whatever their
+/// Warichu Settings (which then take no part in setting them), or both marked with the same
+/// Warichu Settings?
+pub(crate) fn warichu_alike(a: &CharStyle, b: &CharStyle) -> bool {
+    a.warichu == b.warichu
+        && (!a.warichu
+            || (a.warichu_lines == b.warichu_lines
+                && a.warichu_gap == b.warichu_gap
+                && a.warichu_scale == b.warichu_scale
+                && a.warichu_align == b.warichu_align))
+}
+
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
 /// They do when they differ only in paint and stroke, underline and strikethrough, overprint, the
 /// character style's name, leading, baseline shift, rotation, Character Alignment, Character
 /// Direction (text is shaped apart where its bidi level changes), Kashidas, the kerning (each glyph takes its
 /// run's, see [`shape_segment`]), the space before a line's first character ([`space_before`]),
-/// Insert Aki ([`aki`]), the OpenType features (each run's apply to its own characters, as features
+/// Insert Aki ([`aki`]), Tsume ([`tighten`]), the OpenType features (each run's apply to its own characters, as features
 /// over a range of the one buffer) and the tracking, as long as the tracking keeps or drops
 /// standard ligatures alike ([`crate::features::ligatures_suppressed_by`]).
 fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
@@ -1061,6 +1113,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         kerning_before: _,
         aki_left: _,
         aki_right: _,
+        tsume: _,
         optical_kerning: _,
         baseline_shift: _,
         h_scale,
@@ -1093,6 +1146,14 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         tcy_up_down: _,
         tcy_left_right: _,
         standard_vertical_roman: _,
+        // A warichu block is shaped apart from the text around it and from a block with other
+        // settings: its characters are set at their own size and stacked by its settings
+        // ([`warichu_alike`]).
+        warichu: _,
+        warichu_lines: _,
+        warichu_gap: _,
+        warichu_scale: _,
+        warichu_align: _,
         digits,
         font_height_reference,
         no_break,
@@ -1100,6 +1161,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         glyph_alternate,
     } = a;
     *font_family == b.font_family
+        && warichu_alike(a, b)
         && *font_style == b.font_style
         && *font_version == b.font_version
         && *font_axes == b.font_axes
@@ -1228,6 +1290,7 @@ fn inline_glyph(
         xh,
         ch: text.get(range.clone()).and_then(|s| s.chars().next()).unwrap_or(INLINE_CHAR),
         tcy: None,
+        wari: None,
         lead: 0.0,
         proportional: false,
         vpal: None,
@@ -1272,6 +1335,9 @@ struct Shaped {
     /// from their letters and the character-level pass matches ([`crate::harakat`]); empty
     /// otherwise (glyphs keep their shaping-cluster start).
     chars: Vec<u32>,
+    /// Each glyph's x advance without the font's pair kerning, the width Tsume measures, when
+    /// horizontal type with Tsume sets the same glyphs without it; empty otherwise.
+    unkerned: Vec<i32>,
 }
 
 /// The features that turn the whole-text features `base` into `own` over the clusters `range`, put
@@ -1383,6 +1449,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         }
         ranged
     };
+    // Horizontal type with Tsume on any of the segment's characters.
+    let tsume_here = !feats.vertical && runs.get(source_runs.clone()).unwrap_or_default().iter().any(|(_, s)| s.tsume > 0.0);
     // Shape the segment as if all of it were in `st`, with the features `more` on top.
     let shape_in = |st: &CharStyle, more: &[Feature]| {
         // A BCP 47 tag is short ASCII; anything else (a file may hold anything) is shaped without one.
@@ -1392,7 +1460,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             .filter(|l| l.len() <= 35 && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
             .and_then(|l| l.parse::<harfrust::Language>().ok());
         let mut shaped = Shaped::default();
-        let Shaped { raw, proportional, vpal, chars } = &mut shaped;
+        let Shaped { raw, proportional, vpal, chars, unkerned } = &mut shaped;
         let hb_shaped = face.hb().map(|hb| {
             let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
             // The baseline and character-level pass use exactly the same resolved features.
@@ -1471,6 +1539,16 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
                     *proportional = full.iter().zip(raw).map(|(a, b)| a.2 != b.2).collect();
                 }
             }
+            if tsume_here {
+                // Tsume measures each glyph on its own width: the same glyphs set without the
+                // font's pair kerning (`kern` and `apkn`) give it.
+                let mut bare = along_features.clone();
+                bare.extend([b"kern", b"apkn"].map(|t| Feature::new(Tag::new(t), 0, range.start..=range.end)));
+                let bare = shape(&bare, along);
+                if same_glyphs(&bare) {
+                    *unkerned = bare.iter().map(|g| g.2).collect();
+                }
+            }
             if feats.proportional_vertical(st) {
                 // `vpal` adjusts heights, which only top-to-bottom shaping applies: the same glyphs set
                 // top to bottom with it (and the vertical kerning that goes with it, `vkrn` and `vapk`)
@@ -1517,7 +1595,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         shaped
     };
     let first_optical = if optical(range.start) { Some(range.start) } else { boundaries().find(|&b| optical(b)) };
-    let Shaped { raw, proportional, vpal, chars } = if let Some(first) = first_optical.filter(|_| !feats.vertical) {
+    let Shaped { raw, proportional, vpal, chars, unkerned } = if let Some(first) = first_optical.filter(|_| !feats.vertical) {
         // The pair entering Optical keeps the left character's font kerning. Subsequent
         // Optical pairs use outline spacing, so font pair features stop at its second character.
         let optical_off = if first == range.start {
@@ -1651,11 +1729,16 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let last_in_cluster = gi + 1 == n || raw[gi + 1].1 as usize != cl;
         let ch = first_char(cl);
         let mut adv = xa as f64 * k * hs;
+        // The glyph's own width, without the font's pair kerning and before the tracking, manual
+        // kerning and Insert Aki after it: what Tsume measures.
+        let mut own = unkerned.get(gi).map_or(adv, |&u| f64::from(u) * k * hs);
         // The chosen glyph takes its own advance.
         let chosen = chosen_at(gi);
         let gid = match chosen {
             Some(c) => {
-                adv += (face.advance(c.gid) - face.advance(gid)) * k * hs;
+                let wider = (face.advance(c.gid) - face.advance(gid)) * k * hs;
+                adv += wider;
+                own += wider;
                 c.gid
             }
             None => gid,
@@ -1663,7 +1746,8 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
         let mut kern_shift = 0.0;
         let mut tracked = 0.0;
         let (mut aki_shift, mut aki_in_adv) = (0.0, 0.0);
-        if ch == SOFT_HYPHEN || ch == '\u{2028}' {
+        let invisible = ch == SOFT_HYPHEN || ch == '\u{2028}';
+        if invisible {
             adv = 0.0;
         } else {
             let manual_kern = gst.kerning.map(|v| v / 1000.0 * spacing_em).unwrap_or(0.0);
@@ -1711,6 +1795,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             xh,
             ch,
             tcy: None,
+            wari: None,
             lead: 0.0,
             proportional: proportional.get(gi).copied().unwrap_or(false),
             vpal: vpal.get(gi).copied().flatten(),
@@ -1724,7 +1809,59 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             cursive,
             hyphen_language: crate::hyphen::Language::from_tag(gst.language.as_deref()),
         });
+        // Tsume takes its share of the blank space beside the cluster's ink once the cluster is
+        // complete, in horizontal type.
+        if last_in_cluster && !invisible && !feats.vertical && gst.tsume > 0.0 {
+            let first = out.iter().rposition(|g| g.byte != cl).map_or(0, |i| i + 1);
+            tighten(out.get_mut(first..).unwrap_or_default(), own, gst.tsume);
+        }
     }
+}
+
+/// Tsume ([`CharStyle::tsume`]) on one cluster: `glyphs` are its glyphs in the order they are
+/// drawn along the line, the last one with `own` as its width before the tracking, kerning and
+/// Insert Aki its advance holds. `tsume` percent of the blank space between the cluster's own width
+/// and its ink, on each side, comes out of the cluster's advance, and its glyphs are drawn the
+/// left side's share earlier. A cluster without ink, such as a space, or with a width that is not
+/// positive, keeps its place and width.
+fn tighten(glyphs: &mut [SGlyph], own: f64, tsume: f64) {
+    let Some(last) = glyphs.len().checked_sub(1) else { return };
+    let share = if tsume.is_nan() { 0.0 } else { tsume.clamp(0.0, MAX_TSUME) / 100.0 };
+    let (mut pen, mut ink): (f64, Option<(f64, f64)>) = (0.0, None);
+    for (i, g) in glyphs.iter().enumerate() {
+        if let Some((a, b)) = ink_across(&g.face, g.gid) {
+            let (a, b) = (pen + g.dx + a * g.sx, pen + g.dx + b * g.sx);
+            let (lo, hi) = (a.min(b), a.max(b));
+            ink = Some(ink.map_or((lo, hi), |(l, h)| (l.min(lo), h.max(hi))));
+        }
+        pen += if i == last { own } else { g.adv };
+    }
+    let Some((lo, hi)) = ink.filter(|(lo, hi)| lo.is_finite() && hi.is_finite()) else { return };
+    if !(pen.is_finite() && pen > 0.0) {
+        return;
+    }
+    let left = lo.clamp(0.0, pen) * share;
+    let right = (pen - hi).clamp(0.0, pen) * share;
+    for g in glyphs.iter_mut() {
+        g.dx -= left;
+    }
+    if let Some(g) = glyphs.get_mut(last) {
+        g.adv -= left + right;
+    }
+}
+
+/// The left and right edges of glyph `gid`'s outline in `face`, in font units; `None` for a glyph
+/// without an outline (a space, or a bitmap or color glyph without one).
+fn ink_across(face: &FontFace, gid: u32) -> Option<(f64, f64)> {
+    let font = face.skrifa()?;
+    let glyph = font.outline_glyphs().get(skrifa::GlyphId::new(gid))?;
+    let mut pen = crate::fontdb::FlipPen(kurbo::BezPath::new());
+    glyph.draw(skrifa::outline::DrawSettings::unhinted(Size::unscaled(), face.location()), &mut pen).ok()?;
+    if pen.0.elements().is_empty() {
+        return None;
+    }
+    let b = pen.0.bounding_box();
+    Some((b.x0, b.x1))
 }
 
 #[cfg(test)]

@@ -9,6 +9,7 @@ description = "VectorCraft SVG import and export"
 workspace = true
 
 [dependencies]
+craft-svg = { workspace = true }
 # Which paths stored in documents may be opened.
 craft-docpath = { workspace = true }
 vectorcraft-geom = { workspace = true }
@@ -30,6 +31,8 @@ image = { workspace = true }
 # Colour / transform / length parsing for the <text> fallback (MIT OR Apache-2.0; already used by usvg).
 svgtypes = "0.16"
 simplecss = "0.2.2"
+# Bidi classes for the first strong character of `unicode-bidi: plaintext` text (MIT OR Apache-2.0; already used by vectorcraft-text).
+unicode-bidi = "0.3.18"
 
 [dev-dependencies]
 # Reading embedded font subsets back.

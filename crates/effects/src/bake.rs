@@ -29,7 +29,7 @@ use crate::group::{has_own_paint, paints};
 use crate::reshape::{as_art, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
-    has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
+    has_instance_row_raster, has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
 };
 
 fn item_effects(item: &AppearanceItem) -> &[vectorcraft_doc::Effect] {
@@ -58,6 +58,7 @@ pub fn needs_bake(n: &Node) -> bool {
         || has_geometry(&n.appearance.effects)
         || n.projection().is_some()
         || n.appearance.items.iter().any(|i| has_geometry(item_effects(i)))
+        || has_instance_row_raster(n)
         || n.children().is_some_and(|ch| ch.iter().any(|c| needs_bake(c)))
 }
 
@@ -83,15 +84,17 @@ fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext
 
 /// The geometry `g` with the own effects of `item` (one of the fills and strokes `ctx` is the
 /// context of) applied, and `carried` (`item` as the object's effects left it) with its gradient
-/// moved along with them.
+/// moved along with them and the Transform effects the geometry pass left out hidden
+/// ([`crate::Carry::hide_skipped`]).
 fn apply_item(item: &AppearanceItem, carried: &AppearanceItem, g: &PathData, ctx: &GeomContext) -> (PathData, AppearanceItem) {
     let (ig, carry) = apply(item_effects(item), g, &ctx.item(item));
     let mut ap = Appearance { items: vec![carried.clone()], ..Default::default() };
-    if !carry.moves(&ap) {
-        return (ig, carried.clone());
+    if carry.moves(&ap) {
+        carry.apply(&mut ap);
     }
-    carry.apply(&mut ap);
-    (ig, ap.items.pop().unwrap_or_else(|| carried.clone()))
+    let mut out = ap.items.pop().unwrap_or_else(|| carried.clone());
+    carry.hide_skipped(out.effects_mut());
+    (ig, out)
 }
 
 /// A path node of `kind`'s flavour (compound when the result has several subpaths).
@@ -140,15 +143,19 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     }
     // Type, images, symbol instances and live objects: reshaped through their outlines, and so are
     // type whose own fills or strokes have geometry effects and images whose own fills or strokes
-    // paint a shape ([`has_item_geometry`]). Type that Transform effects only move and copy stays
-    // type, moved to each place.
-    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n)) {
+    // paint a shape ([`has_item_geometry`]), and symbol instances whose active fill or stroke has a
+    // raster effect, which the fills and strokes of their art then carry
+    // ([`has_instance_row_raster`]). Type that Transform effects only move and copy stays type,
+    // moved to each place.
+    if needs_outline(n) && (has_geometry(&n.appearance.effects) || n.projection().is_some() || has_item_geometry(n) || has_instance_row_raster(n)) {
         if let Some(m) = moved_type_group(n) {
             return Some(bake_pieces(d, m));
         }
+        // A symbol instance's art as the canvas draws it: with its own appearance changes, stained
+        // by its fill.
         let symbol = match &n.kind {
             NodeKind::SymbolInstance { symbol, .. } => {
-                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::dynamic_art(&s.art, n))
+                d.symbols.iter().find(|s| s.name == *symbol).map(|s| vectorcraft_doc::symbol_overrides::instance_art(&s.art, n))
             }
             _ => None,
         };
@@ -470,6 +477,7 @@ fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
+    carry.hide_skipped(&mut m.appearance.effects);
     // The raster effects of its fills and strokes follow its Transform effects, as on the canvas.
     crate::raster::follow_items(&mut m);
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
