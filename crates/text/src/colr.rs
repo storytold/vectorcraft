@@ -12,7 +12,7 @@ use skrifa::outline::DrawSettings;
 use skrifa::raw::TableProvider;
 use skrifa::raw::types::BoundingBox;
 use skrifa::{GlyphId, MetadataProvider};
-use vectorcraft_doc::color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_doc::color::{BlendMode, Color, Gradient, GradientGeom, GradientKind, GradientPaint, GradientSpread, GradientStop, Paint};
 use vectorcraft_doc::{Appearance, FillLayer, ImageBlob, Node, NodeId, NodeKind};
 use vectorcraft_geom::PathData;
 use vello_cpu::peniko;
@@ -279,8 +279,10 @@ impl<'a> Tree<'a> {
                 })
                 .collect()
         };
-        let gradient = |kind, stops: Vec<GradientStop>, geom| {
-            let mut paint = GradientPaint::new(Gradient { kind, stops, ..Gradient::default() });
+        let gradient = |kind, stops: Vec<GradientStop>, spread, geom| {
+            // COLR repeats the interval from the first stop to the last, and one run of the
+            // stops spans the gradient's vector.
+            let mut paint = GradientPaint::new(Gradient { kind, stops, spread, ..Gradient::default() });
             paint.geom = Some(geom);
             Paint::Gradient(Box::new(paint))
         };
@@ -290,22 +292,22 @@ impl<'a> Tree<'a> {
                 Some((Paint::solid(c), a))
             }
             Brush::LinearGradient { p0, p1, color_stops, extend } => {
-                if *extend != Extend::Pad {
-                    self.unsupported.get_or_insert("a repeating or reflecting gradient");
+                let spread = spread(*extend);
+                let (p0, p1) = (point(*p0), point(*p1));
+                let stops = stops(color_stops, self);
+                // Without a stop, the others would repeat over a different interval.
+                if !spread.is_pad() && stops.len() < color_stops.len() {
+                    self.unsupported.get_or_insert("a repeating or reflecting gradient with a stop missing from the palette");
                     return None;
                 }
-                let (p0, p1) = (point(*p0), point(*p1));
-                let (stops, first, last) = normalized(stops(color_stops, self))?;
+                let (stops, first, last) = normalized(stops)?;
                 // Stops past 0 and 1 move the ends instead.
                 let mut geom = GradientGeom { start: p0.lerp(p1, f64::from(first)), end: p0.lerp(p1, f64::from(last)), aspect: 1.0, focal: None };
                 geom.transform(xf, GradientKind::Linear);
-                Some((gradient(GradientKind::Linear, stops, geom), 1.0))
+                Some((gradient(GradientKind::Linear, stops, spread, geom), 1.0))
             }
             Brush::RadialGradient { c0, r0, c1, r1, color_stops, extend } => {
-                if *extend != Extend::Pad {
-                    self.unsupported.get_or_insert("a repeating or reflecting gradient");
-                    return None;
-                }
+                let spread = spread(*extend);
                 let (c0, c1, r0, r1) = (point(*c0), point(*c1), f64::from(*r0), f64::from(*r1));
                 let concentric = (c0 - c1).hypot() < 1e-6;
                 if (r0 > 1e-6 && !concentric) || r1 <= r0 || (c0 - c1).hypot() >= r1 {
@@ -317,13 +319,27 @@ impl<'a> Tree<'a> {
                     self.unsupported.get_or_insert("a radial gradient with stops past its circles");
                     return None;
                 }
+                if !spread.is_pad() {
+                    if stops.len() < color_stops.len() {
+                        self.unsupported.get_or_insert("a repeating or reflecting gradient with a stop missing from the palette");
+                        return None;
+                    }
+                    // A run of the stops is the whole way from the center to the circle: one that
+                    // starts at a circle (a first stop past the center comes as one) repeats over
+                    // less of it. The normalized ends can be a rounding error off 0 and 1.
+                    let (lo, hi) = stops.iter().fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), s| (lo.min(s.offset), hi.max(s.offset)));
+                    if r0.abs() > 1e-6 || lo.abs() > 1e-4 || (hi - 1.0).abs() > 1e-4 {
+                        self.unsupported.get_or_insert("a repeating or reflecting radial gradient that doesn't start at its center");
+                        return None;
+                    }
+                }
                 // A start circle around the centre starts the stops further out.
                 for s in &mut stops {
                     s.offset = ((r0 + f64::from(s.offset) * (r1 - r0)) / r1) as f32;
                 }
                 let mut geom = GradientGeom { start: c1, end: c1 + Vec2::new(r1, 0.0), aspect: 1.0, focal: (!concentric).then_some(c0) };
                 geom.transform(xf, GradientKind::Radial);
-                Some((gradient(GradientKind::Radial, stops, geom), 1.0))
+                Some((gradient(GradientKind::Radial, stops, spread, geom), 1.0))
             }
             Brush::SweepGradient { .. } => {
                 self.unsupported.get_or_insert("a sweep gradient");
@@ -342,6 +358,16 @@ impl<'a> Tree<'a> {
         let Some((paint, opacity)) = self.paint(brush) else { return };
         let fill = vectorcraft_doc::AppearanceItem::Fill(FillLayer { opacity, ..FillLayer::new(paint) });
         self.add(Node::path(NO_ID, PathData::from_bezpath(path), Appearance { items: vec![fill], ..Appearance::default() }));
+    }
+}
+
+/// A COLR extend mode as the gradient's spread; an unknown one pads, as the COLR specification
+/// says.
+fn spread(extend: Extend) -> GradientSpread {
+    match extend {
+        Extend::Repeat => GradientSpread::Repeat,
+        Extend::Reflect => GradientSpread::Reflect,
+        _ => GradientSpread::Pad,
     }
 }
 
