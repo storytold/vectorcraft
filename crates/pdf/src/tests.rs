@@ -246,6 +246,26 @@ fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(-15.0, 30.0, 5.0, 70.0), 0.01), "{:?}", l[0].geometric_bounds());
 }
 
+/// The live effects in a symbol's art apply where the instance places the art, as on the canvas:
+/// the symbol's square at (10, 40), which a Transform effect moves 100 pt right, is written at
+/// (110, 40).
+#[test]
+fn symbol_art_effects_are_written_where_they_draw() {
+    let mut d = doc(200.0, 100.0);
+    let mut square = rect_node(Rect::new(10.0, 40.0, 20.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    square.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(square) });
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY }));
+    let out = roundtrip(&d);
+    let l = leaves(&out);
+    assert_eq!(l.len(), 1);
+    assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(110.0, 40.0, 120.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
+}
+
 /// An instance of a symbol with 9-slice guides, scaled to 200 × 150, is written as the canvas
 /// draws it: its 10 × 10 corner square stays 10 × 10 and its 10 × 10 center square becomes 30 × 20.
 #[test]
@@ -269,6 +289,96 @@ fn a_scaled_nine_slice_instance_keeps_its_corners() {
     assert!(close(boxes[0], Rect::new(20.0, 20.0, 220.0, 170.0), 0.01), "{boxes:?}");
     assert!(close(boxes[1], Rect::new(20.0, 20.0, 30.0, 30.0), 0.01), "{boxes:?}");
     assert!(close(boxes[2], Rect::new(105.0, 85.0, 135.0, 105.0), 0.01), "{boxes:?}");
+}
+
+/// An instance of symbol `name` placed by `xf`, its fill red at `opacity` (shown when `visible`).
+fn stained_instance(name: &str, xf: Affine, opacity: f32, visible: bool) -> Node {
+    let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: name.into(), xf });
+    n.appearance = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0).into();
+    n.appearance.items.retain(AppearanceItem::is_fill);
+    if let AppearanceItem::Fill(f) = &mut n.appearance.items[0] {
+        (f.opacity, f.visible) = (opacity, visible);
+    }
+    n
+}
+
+/// The fill colors of `d`'s leaves, in paint order.
+fn leaf_fills(d: &Document) -> Vec<String> {
+    leaves(d).iter().filter_map(|n| n.appearance.fill_paint().color()).map(|c| c.to_hex()).collect()
+}
+
+/// A stained instance is written in the colors the canvas draws it in
+/// ([`vectorcraft_brush::instance_art`]): on its own, with a Transform effect that moves it, inside
+/// a group, after a dynamic symbol's own fill change, and placed through 9-slice guides. A hidden
+/// fill or one at 0% opacity leaves the art's colors as they are.
+#[test]
+fn a_stained_instance_keeps_its_stain() {
+    let blue = Color::rgb8(30, 90, 220);
+    let art = || Node::group(NodeId(0), vec![Arc::new(rect_node(Rect::new(0.0, 0.0, 100.0, 100.0), blue))]);
+    let canvas = |n: &Node| leaf_fills_of(&vectorcraft_brush::instance_art(&art(), n));
+    fn leaf_fills_of(n: &Node) -> Vec<String> {
+        let mut d = doc(10.0, 10.0);
+        add(&mut d, n.clone());
+        leaf_fills(&d)
+    }
+    let write = |n: Node, nine_slice: bool| {
+        let mut d = doc(300.0, 200.0);
+        d.symbols.push(vectorcraft_doc::Symbol { dynamic: true, name: "Panel".into(), art: Arc::new(art()) });
+        if nine_slice {
+            d.set_symbol_nine_slice("Panel", Some(vectorcraft_doc::SymbolNineSlice::default()));
+        }
+        add(&mut d, n);
+        leaf_fills(&roundtrip(&d))
+    };
+    let half = stained_instance("Panel", Affine::translate((20.0, 20.0)), 0.5, true);
+    let want = canvas(&half);
+    assert_ne!(want, [blue.to_hex()], "the stain changes the color");
+    assert_eq!(write(half.clone(), false), want, "on its own");
+    let mut moved = half.clone();
+    moved.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 30.0}),
+        visible: true,
+    });
+    assert_eq!(write(moved, false), want, "with a geometry effect");
+    assert_eq!(write(Node::group(NodeId(0), vec![Arc::new(half.clone())]), false), want, "in a group");
+    let mut scaled = half.clone();
+    scaled.kind = NodeKind::SymbolInstance { symbol: "Panel".into(), xf: Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.5) };
+    assert_eq!(write(scaled, true), want, "through 9-slice guides");
+    let mut changed = half.clone();
+    changed.extras_mut().symbol_overrides =
+        vec![vectorcraft_doc::SymbolOverride { path: vec![0], fill: Some(Paint::solid(Color::rgb(0.0, 1.0, 0.0))), ..Default::default() }];
+    let changed_want = canvas(&changed);
+    assert_ne!(changed_want, want, "the part's own fill is stained");
+    assert_eq!(write(changed, false), changed_want, "after a dynamic symbol's change");
+    for (opacity, visible) in [(0.0, true), (0.5, false)] {
+        assert_eq!(write(stained_instance("Panel", Affine::IDENTITY, opacity, visible), false), [blue.to_hex()], "unstained");
+    }
+}
+
+/// A stained instance of a symbol whose art has a live effect is written in its stained colors,
+/// where the effect draws the art.
+#[test]
+fn a_stained_instance_keeps_its_stain_when_its_art_has_effects() {
+    let blue = Color::rgb8(30, 90, 220);
+    let square = rect_node(Rect::new(10.0, 40.0, 20.0, 50.0), blue);
+    let half = stained_instance("Moved", Affine::IDENTITY, 0.5, true);
+    let want = vectorcraft_brush::instance_art(&square, &half).appearance.fill_paint().color().unwrap().to_hex();
+    assert_ne!(want, blue.to_hex(), "the stain changes the color");
+    let mut art = square;
+    art.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    let mut d = doc(200.0, 100.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(art) });
+    add(&mut d, half);
+    let out = roundtrip(&d);
+    let l = leaves(&out);
+    assert_eq!(l.len(), 1);
+    assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(110.0, 40.0, 120.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
+    assert_eq!(leaf_fills(&out), [want]);
 }
 
 /// The placed art of all the 9-slice instances in one export holds at most `MAX_SYMBOL_NODES`

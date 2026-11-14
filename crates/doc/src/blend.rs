@@ -45,7 +45,24 @@ fn lerp_f64(x: f64, y: f64, t: f64) -> f64 {
     x + (y - x) * t
 }
 
-/// `like` with every stop painting `c`, linked as the solid is (`swatch` at `tint`).
+/// The process plates between two stops linked to one spot swatch: each of C, M, Y and K in turn,
+/// a stop without plates counting as none of each. The ends keep their own plates.
+fn lerp_plates(a: Option<[f32; 4]>, b: Option<[f32; 4]>, t: f32) -> Option<[f32; 4]> {
+    if t <= 0.0 {
+        return a;
+    }
+    if t >= 1.0 {
+        return b;
+    }
+    if a.is_none() && b.is_none() {
+        return None;
+    }
+    let (a, b) = (a.unwrap_or_default(), b.unwrap_or_default());
+    Some(std::array::from_fn(|i| lerp_f32(a[i], b[i], t)))
+}
+
+/// `like` with every stop painting `c`, linked as the solid is (`swatch` at `tint`), with no
+/// process plates (a solid has none).
 fn solid_gradient(c: Color, swatch: Option<&str>, tint: f32, like: &Gradient) -> Gradient {
     let mut g = like.clone();
     for s in &mut g.stops {
@@ -53,16 +70,18 @@ fn solid_gradient(c: Color, swatch: Option<&str>, tint: f32, like: &Gradient) ->
         s.opacity = 1.0;
         s.swatch = swatch.map(str::to_string);
         s.tint = tint;
+        s.plates = None;
     }
     g
 }
 
-/// The swatch and tint `g` paints at `t`: a stop's own link, or the shared swatch of the two stops
-/// around `t` at the tint between theirs (unlinked when they differ), as [`Gradient::sample_with`] walks.
-fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32) {
+/// The swatch, tint and process plates `g` paints at `t`: a stop's own link, or the shared swatch
+/// of the two stops around `t` at the tint and plates between theirs (unlinked when they differ),
+/// as [`Gradient::sample_with`] walks.
+fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32, Option<[f32; 4]>) {
     let stops = &g.stops;
-    let link = |s: &GradientStop| (s.swatch.clone(), s.tint);
-    let Some(first) = stops.first() else { return (None, 1.0) };
+    let link = |s: &GradientStop| (s.swatch.clone(), s.tint, s.plates);
+    let Some(first) = stops.first() else { return (None, 1.0, None) };
     if t <= first.offset {
         return link(first);
     }
@@ -74,14 +93,14 @@ fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32) {
             let m = a.midpoint.clamp(0.01, 0.99);
             let v = if u < m { 0.5 * u / m } else { 0.5 + 0.5 * (u - m) / (1.0 - m) };
             return match (&a.swatch, &b.swatch) {
-                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(a.tint, b.tint, v)),
                 _ if v <= 0.0 => link(a),
                 _ if v >= 1.0 => link(b),
-                _ => (None, 1.0),
+                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(a.tint, b.tint, v), lerp_plates(a.plates, b.plates, v)),
+                _ => (None, 1.0, None),
             };
         }
     }
-    stops.last().map_or((None, 1.0), link)
+    stops.last().map_or((None, 1.0, None), link)
 }
 
 /// `g` with its stops at `offsets`, each painting what `g` paints there (midpoints centred).
@@ -91,8 +110,8 @@ fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
         .iter()
         .map(|&o| {
             let (color, opacity) = g.sample_keep_model(o);
-            let (swatch, tint) = link_at(g, o);
-            GradientStop { opacity, swatch, tint, ..GradientStop::new(o, color) }
+            let (swatch, tint, plates) = link_at(g, o);
+            GradientStop { opacity, swatch, tint, plates, ..GradientStop::new(o, color) }
         })
         .collect();
     out
@@ -139,16 +158,18 @@ fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<Gradien
         .iter()
         .zip(&gb.stops)
         .map(|(sa, sb)| {
-            // Stops on two tints of one swatch stay linked to it, as solids do (#3234).
-            let (swatch, tint) = match (&sa.swatch, &sb.swatch) {
-                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(sa.tint, sb.tint, t)),
-                _ => (None, 1.0),
+            // Stops on two tints of one swatch stay linked to it, as solids do (#3234), and keep
+            // the process plates printed with it.
+            let (swatch, tint, plates) = match (&sa.swatch, &sb.swatch) {
+                (Some(x), Some(y)) if x == y => (Some(x.clone()), lerp_f32(sa.tint, sb.tint, t), lerp_plates(sa.plates, sb.plates, t)),
+                _ => (None, 1.0, None),
             };
             GradientStop {
                 opacity: lerp_f32(sa.opacity, sb.opacity, t),
                 midpoint: lerp_f32(sa.midpoint, sb.midpoint, t),
                 swatch,
                 tint,
+                plates,
                 ..GradientStop::new(lerp_f32(sa.offset, sb.offset, t), lerp_color(&sa.color, &sb.color, t))
             }
         })
@@ -606,9 +627,8 @@ fn reoriented<V: Copy>(points: &[(f64, V)], o: Orient, at: impl Fn(f64) -> V, wr
     out
 }
 
-/// A key's stroke read along its subpath turned as `o` says: its width profile (whose sides swap
-/// when reversed), pen pressure, tilt, bearing and rotation, and on a reversed open path its
-/// arrowheads.
+/// A stroke read along its subpath turned as `o` says: its width profile (whose sides swap when
+/// reversed), pen pressure, tilt, bearing and rotation. Its arrowheads stay as they are.
 fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
     if o.is_identity() {
         return;
@@ -648,15 +668,45 @@ fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
         let out = reoriented(&p.points, o, |f| p.unwrapped_at(f), |v| v + turns, same);
         p.points = out;
     }
-    if o.reversed && !o.closed {
-        std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
-        s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+}
+
+/// `n` with every stroke read along its subpaths turned as `o` says, and on a reversed open path
+/// its arrowheads swapped.
+fn reorient_strokes(n: &mut Node, o: Orient) {
+    if o.is_identity() {
+        return;
+    }
+    for it in n.appearance.items.iter_mut() {
+        if let AppearanceItem::Stroke(s) = it {
+            reorient_stroke(s, o);
+            if o.reversed && !o.closed {
+                std::mem::swap(&mut s.start_arrow, &mut s.end_arrow);
+                s.arrow_scale = (s.arrow_scale.1, s.arrow_scale.0);
+            }
+        }
     }
 }
 
-/// `n` with every stroke read along its subpaths turned as `o` says.
-fn reorient_strokes(n: &mut Node, o: Orient) {
-    if o.is_identity() {
+/// Turn the strokes of path `n` for Reverse Path Direction, before its subpaths flagged in
+/// `reversed` are reversed with [`SubPath::reverse`] (a closed one then starts at its last
+/// anchor): each stroke's width profile (sides swapped), pen pressure, tilt, bearing and rotation
+/// then run the new way, so the stroke draws as it did. A stroke reads one profile along every
+/// subpath, so it turns only when all of them turn alike. Arrowheads stay at the path's start and
+/// end.
+pub fn reverse_stroke_records(n: &mut Node, reversed: &[bool]) {
+    let NodeKind::Path { path, .. } = &n.kind else { return };
+    let mut turns = path.subpaths.iter().enumerate().map(|(i, sp)| {
+        let mut o = Orient::of(sp);
+        if reversed.get(i).copied().unwrap_or(false) {
+            if sp.closed {
+                o.start_at(sp, sp.anchors.len().saturating_sub(1));
+            }
+            o.reverse();
+        }
+        o
+    });
+    let Some(o) = turns.next() else { return };
+    if o.is_identity() || !turns.all(|t| t.same_turn(&o)) {
         return;
     }
     for it in n.appearance.items.iter_mut() {
@@ -1205,6 +1255,21 @@ pub fn blend_step_count(a: &Node, b: &Node, spacing: BlendSpacing, len: f64) -> 
 // Spine
 // =====================================================================================
 
+#[cfg(any(test, feature = "spine-count"))]
+thread_local! {
+    /// How many times [`Spine::new`] has run on this thread, for tests that count how often a path
+    /// is flattened.
+    pub(crate) static SPINES_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times [`Spine::new`] has run on this thread, for other crates' tests that count how
+/// often a path is flattened (the `spine-count` feature, dev-dependencies only).
+#[cfg(any(test, feature = "spine-count"))]
+#[doc(hidden)]
+pub fn spines_built() -> usize {
+    SPINES_BUILT.with(|n| n.get())
+}
+
 /// A spine (the first subpath of a path) flattened to a polyline, with cumulative lengths and the
 /// arc length at each of its anchors.
 pub struct Spine {
@@ -1223,6 +1288,8 @@ impl Spine {
     /// arc lengths, and the arc length at each anchor. `None` when `path` has no subpath, or when
     /// the first one flattens to fewer than two points (so it has no length to walk).
     pub fn new(path: &PathData) -> Option<Self> {
+        #[cfg(any(test, feature = "spine-count"))]
+        SPINES_BUILT.with(|n| n.set(n.get() + 1));
         let sp = path.subpaths.first()?;
         let mut pts: Vec<Point> = Vec::new();
         let mut cum: Vec<f64> = Vec::new();
@@ -1455,7 +1522,7 @@ pub fn pin_spine(keys: &[Arc<Node>], spec: &BlendSpec) -> Option<(PathData, Vec<
 }
 
 /// Do `keys` sit where a spine from Replace Spine spreads them: evenly along `spine` by arc length
-/// (within a hundredth of a point, as [`anchor_at_length`] matches anchors)?
+/// (within a hundredth of a point, as [`SpreadLengths::anchor_at_length`] matches anchors)?
 fn keys_spread_along(keys: &[Arc<Node>], spine: &Spine) -> bool {
     let k = keys.len();
     keys.iter().enumerate().all(|(i, key)| {
@@ -1480,40 +1547,204 @@ fn open_at_start(sp: &mut SubPath, ka: &mut [usize]) {
 }
 
 /// The anchors of `path`'s first subpath that `k` keys spread evenly along it by arc length sit
-/// on, splitting segments where none is.
+/// on, splitting segments where none is. `None`, leaving `path` as it was, when the subpath has no
+/// length to spread along, when its length is not finite (a path so large its length overflows),
+/// or when an arc length it would split at is not finite.
 fn spread_anchors(path: &mut PathData, k: usize) -> Option<Vec<usize>> {
-    let total = Spine::new(path)?.length();
-    let closed = path.subpaths.first().is_some_and(|s| s.closed);
+    spread_anchors_with(path, k, |_| {})
+}
+
+/// [`spread_anchors`], calling `work` for each step of work it does.
+fn spread_anchors_with(path: &mut PathData, k: usize, mut work: impl FnMut(SpreadWork)) -> Option<Vec<usize>> {
+    let sp = path.subpaths.first_mut()?;
+    let lengths = SpreadLengths::new(sp, &mut work);
+    let total = lengths.total().filter(|t| t.is_finite())?;
+    let targets = (1..k.saturating_sub(1)).map(|i| total * i as f64 / (k - 1) as f64);
     let mut out = vec![0usize];
-    for i in 1..k.saturating_sub(1) {
-        let s = total * i as f64 / (k - 1) as f64;
-        out.push(anchor_at_length(path, s)?);
-    }
-    let last = path.subpaths.first().map_or(0, |sp| if closed { 0 } else { sp.anchors.len().saturating_sub(1) });
-    out.push(last);
+    out.extend(anchors_at_lengths(sp, lengths, targets, &mut work)?);
+    out.push(if sp.closed { 0 } else { sp.anchors.len().saturating_sub(1) });
     Some(out)
 }
 
-/// The anchor of the first subpath at arc length `s`: an existing one within a hundredth of a
-/// point, else a new one splitting the segment there.
-fn anchor_at_length(path: &mut PathData, s: f64) -> Option<usize> {
-    let spine = Spine::new(path)?;
-    let sp = path.subpaths.first_mut()?;
-    let n = sp.segment_count();
-    let seg = (0..n).rev().find(|i| spine.anchor_length(*i).is_some_and(|l| l <= s)).unwrap_or(0);
-    let from = spine.anchor_length(seg).unwrap_or(0.0);
-    let to = spine.anchor_length(seg + 1).unwrap_or(spine.length());
-    if s - from < 0.01 {
-        return Some(seg);
+/// The anchors of `sp` at each arc length in `targets`, in order, splitting segments where none is
+/// (see [`SpreadLengths::anchor_at_length`]); `lengths` measures `sp`. The splits are made on a copy
+/// of `sp`, which replaces it only when every target has its anchor: `None` leaves `sp` as it was.
+fn anchors_at_lengths(
+    sp: &mut SubPath,
+    mut lengths: SpreadLengths,
+    targets: impl IntoIterator<Item = f64>,
+    work: &mut impl FnMut(SpreadWork),
+) -> Option<Vec<usize>> {
+    let mut split = sp.clone();
+    let mut out = Vec::new();
+    for s in targets {
+        out.push(lengths.anchor_at_length(&mut split, s, work)?);
     }
-    if to - s < 0.01 {
-        return Some((seg + 1) % sp.anchors.len().max(1));
+    *sp = split;
+    Some(out)
+}
+
+/// A step of the work [`spread_anchors_with`] does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SpreadWork {
+    /// Flattening every segment of the subpath.
+    WholePath,
+    /// Flattening one segment after a split.
+    Segment,
+    /// Adding one segment's flattened points to the arc lengths.
+    Measure,
+    /// Comparing an anchor's arc length with the one looked for.
+    Compare,
+}
+
+/// Where the measurement of a subpath's flattened points stands at the start of a segment: the last
+/// point kept, the arc length there (0 before any point), and how many points were kept.
+#[derive(Clone, Copy)]
+struct Measured {
+    last: Option<Point>,
+    len: f64,
+    kept: usize,
+}
+
+impl Measured {
+    const START: Self = Self { last: None, len: 0.0, kept: 0 };
+
+    /// The measurement after `pts`, keeping each point more than 1e-9 from the last one kept, as
+    /// [`Spine::new`] does.
+    fn then(mut self, pts: &[Point]) -> Self {
+        for &p in pts {
+            if self.last.is_none_or(|q| q.distance(p) > 1e-9) {
+                self.len = match self.last {
+                    Some(q) => self.len + q.distance(p),
+                    None => 0.0,
+                };
+                self.last = Some(p);
+                self.kept += 1;
+            }
+        }
+        self
     }
-    let c = sp.segment(seg);
-    // The flattened length and the curve's own differ slightly: scale into the curve's.
-    let arc = c.arclen(1e-4).max(1e-12);
-    let t = c.inv_arclen((s - from) / (to - from).max(1e-12) * arc, 1e-4).clamp(1e-4, 1.0 - 1e-4);
-    Some(sp.insert_anchor(seg, t))
+}
+
+/// The arc lengths of a subpath's anchors, as [`Spine::new`] measures them, kept up to date while
+/// [`spread_anchors`] splits its segments. Each segment is flattened once, and again only when it
+/// is split. A split leaves the arc lengths of the anchors before it as they are; those after it
+/// are measured again, in order from the split, only as far as the next arc length looked for, so
+/// the sums are the same as [`Spine::new`]'s on the split subpath.
+struct SpreadLengths {
+    /// The finite points the segments flatten to, each segment's in one run.
+    pts: Vec<Point>,
+    /// Where each segment's run is in `pts`. A split segment's halves get runs at the end, and its
+    /// old run is not used again.
+    flat: Vec<std::ops::Range<usize>>,
+    /// The measurement at the start of each segment, up to the first one not measured since the
+    /// last split; after the last segment too once every segment is measured.
+    marks: Vec<Measured>,
+}
+
+impl SpreadLengths {
+    /// Flatten and measure every segment of `sp`.
+    fn new(sp: &SubPath, work: &mut impl FnMut(SpreadWork)) -> Self {
+        work(SpreadWork::WholePath);
+        let n = sp.segment_count();
+        let mut lengths = Self { pts: Vec::new(), flat: Vec::with_capacity(n), marks: Vec::with_capacity(n + 1) };
+        for i in 0..n {
+            let run = lengths.flatten(sp, i);
+            lengths.flat.push(run);
+        }
+        lengths.marks.push(Measured::START);
+        lengths.measure_to(f64::INFINITY, work);
+        lengths
+    }
+
+    /// Flatten segment `i` of `sp` as [`Spine::new`] does, adding its finite points to `pts`, and
+    /// return where they are.
+    fn flatten(&mut self, sp: &SubPath, i: usize) -> std::ops::Range<usize> {
+        let start = self.pts.len();
+        let c = sp.segment(i);
+        let mut bp = BezPath::new();
+        bp.move_to(c.p0);
+        if sp.segment_is_line(i) {
+            bp.line_to(c.p3);
+        } else {
+            bp.curve_to(c.p1, c.p2, c.p3);
+        }
+        vectorcraft_geom::kurbo::flatten(bp.iter(), 0.1, |el| {
+            if let vectorcraft_geom::PathEl::MoveTo(p) | vectorcraft_geom::PathEl::LineTo(p) = el
+                && p.x.is_finite()
+                && p.y.is_finite()
+            {
+                self.pts.push(p);
+            }
+        });
+        start..self.pts.len()
+    }
+
+    /// The subpath's flattened length, `None` when it flattens to fewer than two points.
+    fn total(&self) -> Option<f64> {
+        self.marks.last().filter(|m| self.marks.len() > self.flat.len() && m.kept >= 2).map(|m| m.len)
+    }
+
+    /// Measure the segments that are not measured, from the first, until one starts past `s` (with
+    /// two points kept before it) or every one is measured.
+    fn measure_to(&mut self, s: f64, work: &mut impl FnMut(SpreadWork)) {
+        while let Some(run) = self.flat.get(self.marks.len() - 1) {
+            let Some(&m) = self.marks.last() else { return };
+            if self.marks.len() >= 2 && m.kept >= 2 && m.len > s {
+                return;
+            }
+            work(SpreadWork::Measure);
+            self.marks.push(m.then(self.pts.get(run.clone()).unwrap_or_default()));
+        }
+    }
+
+    /// The anchor of `sp` at arc length `s`: an existing one within a hundredth of a point, else a
+    /// new one splitting the segment there. The segment is the last one starting at or before `s`
+    /// (the first one when none does), found by a binary search. `None`, leaving `sp` as it was,
+    /// when `s` or the arc length at the end of the segment is not finite, or when `sp` flattens
+    /// to fewer than two points.
+    fn anchor_at_length(&mut self, sp: &mut SubPath, s: f64, work: &mut impl FnMut(SpreadWork)) -> Option<usize> {
+        if !s.is_finite() {
+            return None;
+        }
+        self.measure_to(s, work);
+        let n = self.flat.len();
+        if self.marks.last().is_none_or(|m| m.kept < 2) {
+            return None;
+        }
+        let starts = &self.marks[..self.marks.len().min(n)];
+        let seg = starts
+            .partition_point(|m| {
+                work(SpreadWork::Compare);
+                m.len <= s
+            })
+            .saturating_sub(1);
+        let from = self.marks.get(seg)?.len;
+        let to = self.marks.get(seg + 1)?.len;
+        if s - from < 0.01 {
+            return Some(seg);
+        }
+        if to - s < 0.01 {
+            return Some((seg + 1) % sp.anchors.len().max(1));
+        }
+        if !from.is_finite() || !to.is_finite() {
+            return None;
+        }
+        let c = sp.segment(seg);
+        // The flattened length and the curve's own differ slightly: scale into the curve's.
+        let arc = c.arclen(1e-4).max(1e-12);
+        let t = c.inv_arclen((s - from) / (to - from).max(1e-12) * arc, 1e-4).clamp(1e-4, 1.0 - 1e-4);
+        if !t.is_finite() {
+            return None;
+        }
+        let at = sp.insert_anchor(seg, t);
+        work(SpreadWork::Segment);
+        work(SpreadWork::Segment);
+        let halves = [self.flatten(sp, seg), self.flatten(sp, seg + 1)];
+        self.flat.splice(seg..=seg, halves);
+        self.marks.truncate(seg + 1);
+        Some(at)
+    }
 }
 
 /// Where a blend's keys and steps go along its spine (see [`blend_spine`]).
@@ -2003,6 +2234,150 @@ mod tests {
         }
     }
 
+    /// [`spread_anchors`] by measuring the whole spine again for each key and walking its segments
+    /// from the last, as a reference for the measurement kept up to date between keys.
+    fn rebuilt_spread_anchors(path: &mut PathData, k: usize) -> Option<Vec<usize>> {
+        let total = Spine::new(path)?.length();
+        let closed = path.subpaths.first().is_some_and(|s| s.closed);
+        let mut out = vec![0usize];
+        for i in 1..k.saturating_sub(1) {
+            let s = total * i as f64 / (k - 1) as f64;
+            let spine = Spine::new(path)?;
+            let sp = path.subpaths.first_mut()?;
+            let n = sp.segment_count();
+            let seg = (0..n).rev().find(|i| spine.anchor_length(*i).is_some_and(|l| l <= s)).unwrap_or(0);
+            let from = spine.anchor_length(seg).unwrap_or(0.0);
+            let to = spine.anchor_length(seg + 1).unwrap_or(spine.length());
+            out.push(if s - from < 0.01 {
+                seg
+            } else if to - s < 0.01 {
+                (seg + 1) % sp.anchors.len().max(1)
+            } else {
+                let c = sp.segment(seg);
+                let arc = c.arclen(1e-4).max(1e-12);
+                let t = c.inv_arclen((s - from) / (to - from).max(1e-12) * arc, 1e-4).clamp(1e-4, 1.0 - 1e-4);
+                sp.insert_anchor(seg, t)
+            });
+        }
+        let last = path.subpaths.first().map_or(0, |sp| if closed { 0 } else { sp.anchors.len().saturating_sub(1) });
+        out.push(last);
+        Some(out)
+    }
+
+    /// Spreading keys along a spine measured once and kept up to date gives the same anchors and
+    /// the same spine as measuring it again for each key: on open and closed polylines and curves,
+    /// zero-length segments, keys exactly on anchors, keys within, at and just past a hundredth of
+    /// a point from an anchor, a closed curve whose keys go round past its first anchor, many keys
+    /// in one segment, and paths with no segment. The closed spines open as [`pin_spine`] opens
+    /// them.
+    #[test]
+    fn spreading_keys_matches_measuring_the_spine_for_each_key() {
+        let p = Point::new;
+        let bow = SubPath::new(
+            vec![Anchor::smooth(p(0.0, 0.0), p(50.0, 50.0)), Anchor::smooth(p(100.0, 0.0), p(150.0, -50.0)), Anchor::corner(p(200.0, 0.0))],
+            false,
+        );
+        let mut spines = vec![
+            PathData::default(),
+            PathData::single(SubPath::default()),
+            PathData::single(SubPath::polyline(&[p(5.0, 5.0)], false)),
+            PathData::single(SubPath::polyline(&[p(5.0, 5.0), p(5.0, 5.0)], false)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(100.0, 0.0)], false)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(100.0, 0.0)], true)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(10.0, 0.0), p(20.0, 0.0), p(30.0, 0.0)], false)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 0.0), p(10.0, 0.0), p(30.0, 5.0), p(30.0, 5.0)], false)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(0.0, 0.0), p(40.0, 0.0), p(40.0, 30.0)], true)),
+            PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(40.0, 0.0), p(40.0, 30.0), p(0.0, 0.0)], true)),
+            PathData::single(bow.clone()),
+            PathData::single(SubPath { closed: true, ..bow }),
+            shapes::ellipse(Rect::new(0.0, 0.0, 120.0, 80.0)),
+        ];
+        // An anchor near where the middle of three keys goes, 10 along a spine 20 long.
+        for d in [0.0, 0.005, 0.0099, 0.01, 0.0101, 0.02] {
+            for x in [10.0 - d, 10.0 + d] {
+                spines.push(PathData::single(SubPath::polyline(&[p(0.0, 0.0), p(x, 0.0), p(20.0, 0.0)], false)));
+            }
+        }
+        let mut compared = 0;
+        for spine in &spines {
+            for k in (0..=12).chain([17, 50, 200]) {
+                let (mut a, mut b) = (spine.clone(), spine.clone());
+                let (ka, kb) = (spread_anchors(&mut a, k), rebuilt_spread_anchors(&mut b, k));
+                assert_eq!(ka, kb, "{k} keys on {spine:?}");
+                assert_eq!(a, b, "{k} keys on {spine:?}");
+                if let (Some(mut ka), Some(mut kb)) = (ka, kb) {
+                    let (mut sa, mut sb) = (a.subpaths[0].clone(), b.subpaths[0].clone());
+                    open_at_start(&mut sa, &mut ka);
+                    open_at_start(&mut sb, &mut kb);
+                    assert_eq!((sa, ka), (sb, kb), "{k} keys on {spine:?}, opened");
+                    compared += 1;
+                }
+            }
+        }
+        assert!(compared > 200, "{compared} spreads compared");
+    }
+
+    /// Spreading 1,000 keys along a spine of 4,096 segments flattens the spine once and then only
+    /// the two halves of each split segment, finds each key's segment in a few comparisons, and
+    /// measures about as many segments as the spine ends up with, not the whole spine per key.
+    #[test]
+    fn spreading_keys_measures_the_spine_once() {
+        let pts: Vec<Point> = (0..=4096).map(|i| Point::new(i as f64, if i % 2 == 0 { 0.0 } else { 1.0 })).collect();
+        let mut path = PathData::single(SubPath::polyline(&pts, false));
+        let (mut whole, mut segments, mut measured, mut compared) = (0, 0, 0, 0);
+        let ka = spread_anchors_with(&mut path, 1000, |w| match w {
+            SpreadWork::WholePath => whole += 1,
+            SpreadWork::Segment => segments += 1,
+            SpreadWork::Measure => measured += 1,
+            SpreadWork::Compare => compared += 1,
+        })
+        .unwrap();
+        assert_eq!(ka.len(), 1000);
+        let n = path.subpaths[0].segment_count();
+        assert!(n > 4096 + 900, "{n} segments");
+        assert_eq!(whole, 1);
+        assert!(segments <= 2 * 998, "{segments} segments flattened");
+        assert!(compared <= 998 * 14, "{compared} comparisons");
+        assert!(measured <= 4096 + n + 3 * 1000, "{measured} segments measured for {n}");
+        let mut reference = PathData::single(SubPath::polyline(&pts, false));
+        assert_eq!(rebuilt_spread_anchors(&mut reference, 1000), Some(ka));
+        assert_eq!(reference, path);
+    }
+
+    /// A spine so large that its length overflows spreads no keys, and is left as it was, rather
+    /// than getting an anchor split at a parameter that is not a number. Two keys, which split
+    /// nothing, get no anchors either.
+    #[test]
+    fn spreading_keys_along_a_spine_whose_length_overflows_changes_nothing() {
+        let p = Point::new;
+        for closed in [false, true] {
+            for k in [2, 3, 5] {
+                let spine = PathData::single(SubPath::polyline(&[p(-1e308, 0.0), p(0.0, 0.0), p(1e308, 0.0)], closed));
+                let mut path = spine.clone();
+                assert_eq!(spread_anchors(&mut path, k), None, "closed {closed}, {k} keys");
+                assert_eq!(path, spine);
+                assert!(path.subpaths[0].anchors.iter().all(|a| a.p.x.is_finite() && a.h_in.x.is_finite() && a.h_out.x.is_finite()));
+            }
+        }
+    }
+
+    /// When a later arc length has no anchor (here one that is not finite, as when a spine's length
+    /// overflows only after earlier splits), the splits already made are dropped with it.
+    #[test]
+    fn a_failed_anchor_keeps_none_of_the_earlier_splits() {
+        let sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(100.0, 0.0)], false);
+        for bad in [f64::NAN, f64::INFINITY] {
+            let mut split = sp.clone();
+            let lengths = SpreadLengths::new(&split, &mut |_| {});
+            assert_eq!(anchors_at_lengths(&mut split, lengths, [25.0, 50.0, bad], &mut |_| {}), None);
+            assert_eq!(split, sp);
+        }
+        let mut split = sp.clone();
+        let lengths = SpreadLengths::new(&split, &mut |_| {});
+        assert_eq!(anchors_at_lengths(&mut split, lengths, [25.0, 50.0], &mut |_| {}), Some(vec![1, 2]));
+        assert_eq!(split.anchors.len(), 4);
+    }
+
     #[test]
     fn easing_keeps_the_ends_and_stays_monotone() {
         use crate::live::{BlendEase, BlendEaseType as K};
@@ -2143,6 +2518,112 @@ mod tests {
         let mixed = paint(vec![spot(0.0, 1.0), plain, spot(1.0, 1.0)]);
         let Paint::Gradient(m) = lerp_paint(&two, &mixed, 0.5) else { panic!() };
         assert!(m.gradient.stops.iter().any(|s| s.swatch.is_none()), "{:?}", m.gradient.stops);
+    }
+
+    /// A stop linked to the spot swatch "Spot" at `tint`, printed with process `plates`.
+    fn spot_stop(offset: f32, tint: f32, plates: Option<[f32; 4]>) -> GradientStop {
+        let mut stop = GradientStop::new(offset, Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(tint));
+        stop.swatch = Some("Spot".into());
+        stop.tint = tint;
+        stop.plates = plates;
+        stop
+    }
+
+    fn gradient_paint(stops: Vec<GradientStop>) -> Paint {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient { stops, ..Gradient::default() })))
+    }
+
+    fn assert_plates(got: Option<[f32; 4]>, want: [f32; 4]) {
+        let got = got.unwrap_or_else(|| panic!("plates {want:?}, not none"));
+        assert!(got.iter().zip(&want).all(|(g, w)| (g - w).abs() < 1e-5), "{got:?} != {want:?}");
+    }
+
+    #[test]
+    fn blend_gradient_spot_process_plates_interpolate() {
+        let (p, q) = ([0.2, 0.4, 0.0, 0.0], [0.6, 0.0, 0.8, 1.0]);
+        let a = gradient_paint(vec![spot_stop(0.0, 0.2, Some(p)), spot_stop(1.0, 0.2, Some(p))]);
+        let b = gradient_paint(vec![spot_stop(0.0, 1.0, Some(q)), spot_stop(1.0, 1.0, Some(q))]);
+        let Paint::Gradient(m) = lerp_paint(&a, &b, 0.25) else { panic!() };
+        for s in &m.gradient.stops {
+            assert_eq!(s.swatch.as_deref(), Some("Spot"));
+            assert!((s.tint - 0.4).abs() < 1e-6, "{}", s.tint);
+            assert_plates(s.plates, [0.3, 0.3, 0.2, 0.25]);
+        }
+        // Without plates on either side the steps print the spot ink alone, as before.
+        let bare = |tint| gradient_paint(vec![spot_stop(0.0, tint, None), spot_stop(1.0, tint, None)]);
+        let Paint::Gradient(m) = lerp_paint(&bare(0.2), &bare(1.0), 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.plates.is_none()), "{:?}", m.gradient.stops);
+    }
+
+    #[test]
+    fn resampled_gradient_spot_process_plates_interpolate() {
+        let (p, q, r) = ([0.0, 0.4, 0.0, 0.0], [0.6, 0.4, 0.3, 0.0], [0.2, 0.2, 0.2, 0.2]);
+        let mut first = spot_stop(0.0, 0.2, Some(p));
+        first.midpoint = 0.25;
+        let two = Gradient { stops: vec![first, spot_stop(1.0, 0.8, Some(q))], ..Gradient::default() };
+        let three =
+            Gradient { stops: vec![spot_stop(0.0, 1.0, Some(r)), spot_stop(0.5, 1.0, Some(r)), spot_stop(1.0, 1.0, Some(r))], ..Gradient::default() };
+        let Some((ra, rb)) = common_stops(&two, &three) else { panic!() };
+        let offsets: Vec<f32> = ra.stops.iter().map(|s| s.offset).collect();
+        assert_eq!(offsets, [0.0, 0.25, 0.5, 1.0]);
+        // The original stops keep their plates; between them, the midpoint at 0.25 puts 0.5 two
+        // thirds of the way along the inks.
+        assert_eq!((ra.stops[0].plates, ra.stops[3].plates), (Some(p), Some(q)));
+        assert_plates(ra.stops[1].plates, [0.3, 0.4, 0.15, 0.0]);
+        assert_plates(ra.stops[2].plates, [0.4, 0.4, 0.2, 0.0]);
+        assert!((ra.stops[2].tint - 0.6).abs() < 1e-5, "{}", ra.stops[2].tint);
+        assert!(rb.stops.iter().all(|s| s.plates == Some(r)), "{:?}", rb.stops);
+
+        let Paint::Gradient(m) = lerp_paint(&gradient_paint(two.stops), &gradient_paint(three.stops), 0.5) else { panic!() };
+        assert_eq!(m.gradient.stops.len(), 4);
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot")), "{:?}", m.gradient.stops);
+        assert_plates(m.gradient.stops[2].plates, [0.3, 0.3, 0.2, 0.1]);
+    }
+
+    #[test]
+    fn blend_gradient_missing_plates_mean_zero() {
+        let p = [0.4, 0.8, 0.0, 0.2];
+        let with = gradient_paint(vec![spot_stop(0.0, 1.0, Some(p)), spot_stop(1.0, 1.0, Some(p))]);
+        let without = gradient_paint(vec![spot_stop(0.0, 1.0, None), spot_stop(1.0, 1.0, None)]);
+        let Paint::Gradient(m) = lerp_paint(&without, &with, 0.25) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.as_deref() == Some("Spot")), "{:?}", m.gradient.stops);
+        m.gradient.stops.iter().for_each(|s| assert_plates(s.plates, [0.1, 0.2, 0.0, 0.05]));
+        // The ends keep their own plates.
+        let Paint::Gradient(m) = lerp_paint(&without, &with, 0.0) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.plates.is_none()), "{:?}", m.gradient.stops);
+
+        // Another swatch, or an unlinked stop: process steps with no plates, as before.
+        let mut other = spot_stop(0.0, 1.0, Some(p));
+        other.swatch = Some("Other".into());
+        let other = gradient_paint(vec![other.clone(), GradientStop { offset: 1.0, ..other }]);
+        let mut plain = spot_stop(0.0, 1.0, None);
+        plain.swatch = None;
+        let plain = gradient_paint(vec![plain.clone(), GradientStop { offset: 1.0, ..plain }]);
+        for b in [&other, &plain] {
+            let Paint::Gradient(m) = lerp_paint(&with, b, 0.5) else { panic!() };
+            assert!(m.gradient.stops.iter().all(|s| s.swatch.is_none() && s.plates.is_none()), "{:?}", m.gradient.stops);
+        }
+    }
+
+    #[test]
+    fn blend_solid_to_spot_gradient_does_not_copy_plates() {
+        let p = [0.4, 0.8, 0.0, 0.2];
+        let gradient = gradient_paint(vec![spot_stop(0.0, 1.0, Some(p)), spot_stop(1.0, 1.0, Some(p))]);
+        let Paint::Gradient(g) = &gradient else { panic!() };
+        assert!(solid_gradient(Color::BLACK, Some("Spot"), 0.2, &g.gradient).stops.iter().all(|s| s.plates.is_none()));
+        let solid = Paint::Solid { color: Color::cmyk(1.0, 0.7, 0.0, 0.4).tinted(0.2), swatch: Some("Spot".into()), tint: 0.2 };
+        // The solid's end has no plates: they grow from none toward the gradient's, both ways round.
+        for (a, b, t) in [(&solid, &gradient, 0.25), (&gradient, &solid, 0.75)] {
+            let Paint::Gradient(m) = lerp_paint(a, b, t) else { panic!() };
+            for s in &m.gradient.stops {
+                assert_eq!(s.swatch.as_deref(), Some("Spot"));
+                assert!((s.tint - 0.4).abs() < 1e-6, "{}", s.tint);
+                assert_plates(s.plates, [0.1, 0.2, 0.0, 0.05]);
+            }
+        }
+        // A process solid unlinks the steps, and they take no plates.
+        let Paint::Gradient(m) = lerp_paint(&Paint::solid(Color::BLACK), &gradient, 0.5) else { panic!() };
+        assert!(m.gradient.stops.iter().all(|s| s.swatch.is_none() && s.plates.is_none()), "{:?}", m.gradient.stops);
     }
 
     #[test]

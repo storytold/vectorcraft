@@ -648,6 +648,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
             "cornerTool",
             "slideAnchor",
             "sharedEdge",
+            "trimAtCrossings",
             "smartPen",
             enclosing,
             contour,
@@ -663,7 +664,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let listed = |id: &str| {
         sections().iter().find(|(_, tools)| tools.iter().any(|t| t.id == id)).map(|(h, tools)| (*h, tools.iter().map(|t| t.id).collect::<Vec<_>>()))
     };
-    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..7].to_vec())));
+    assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..8].to_vec())));
     assert_eq!(listed("smartPen"), Some(("Smart Pen", vec!["smartPen"])));
     assert_eq!(listed(enclosing), Some(("Enclosing Lasso", vec![enclosing])));
     assert_eq!(listed(contour), Some(("Contour", vec![contour])));

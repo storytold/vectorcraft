@@ -43,7 +43,8 @@ pub(super) fn whole_character_widths(glyphs: &mut [SGlyph]) {
 /// set in whole points ([`whole_character_widths`]).
 pub(super) fn tate_chu_yoko(g: &mut [SGlyph], whole: bool, style: impl Fn(&SGlyph) -> TcyStyle) {
     let manual: Vec<bool> = g.iter().map(|gl| gl.ch != '\u{2028}' && style(gl).marked).collect();
-    let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit()).collect();
+    // Digits marked Warichu are stacked with their block, not set across the column.
+    let digits: Vec<bool> = g.iter().map(|gl| gl.inline.is_none() && gl.ch.is_ascii_digit() && !style(gl).warichu).collect();
     let mut i = 0;
     while i < g.len() {
         if manual.get(i).copied().unwrap_or(false) {
@@ -73,12 +74,14 @@ pub(super) fn tate_chu_yoko(g: &mut [SGlyph], whole: bool, style: impl Fn(&SGlyp
 }
 
 /// What [`tate_chu_yoko`] reads from a glyph's character style: its size, whether it is marked
-/// Tate-chu-yoko, and its Tate-chu-yoko Settings Up/Down and Left/Right in points.
+/// Tate-chu-yoko, its Tate-chu-yoko Settings Up/Down and Left/Right in points, and whether it is
+/// set as warichu (marked Warichu, and not on a path).
 pub(super) struct TcyStyle {
     pub size: f64,
     pub marked: bool,
     pub up: f64,
     pub right: f64,
+    pub warichu: bool,
 }
 
 /// Lay `g` across one em of the column, moved by `(up, right)` points. The first glyph takes the
@@ -116,10 +119,11 @@ fn place_tcy_block(g: &mut [SGlyph], em: f64, (up, right): (f64, f64), whole: bo
 }
 
 /// Half an em of `g`'s size when it is full-width Japanese punctuation of kind `kind` (its
-/// advance an em, give or take a tenth), the space that mojikumi can take off.
+/// advance an em, give or take a tenth), the space that mojikumi can take off. Not inside a
+/// tate-chu-yoko or warichu block, which is set as one piece.
 pub(super) fn punct_half(g: &SGlyph, kind: Punct) -> Option<f64> {
     // A glyph Proportional Metrics re-spaced has no empty half left to take off (#966).
-    if punct(g.ch)? != kind || g.tcy.is_some() || g.proportional {
+    if punct(g.ch)? != kind || g.tcy.is_some() || g.wari.is_some() || g.proportional {
         return None;
     }
     let em = g.face.units_per_em();
@@ -275,7 +279,7 @@ pub(super) fn space_japanese_and_latin(sg: &mut [SGlyph]) -> Vec<f64> {
     for j in 1..sg.len() {
         let (before, after) = sg.split_at_mut(j);
         let (Some(a), Some(b)) = (before.last_mut(), after.first()) else { continue };
-        if a.tcy.is_some() || b.tcy.is_some() {
+        if a.tcy.is_some() || b.tcy.is_some() || a.wari.is_some() || b.wari.is_some() {
             continue;
         }
         let japanese = if is_japanese_letter(a.ch) && is_latin_letter(b.ch) {
@@ -296,9 +300,9 @@ pub(super) fn space_japanese_and_latin(sg: &mut [SGlyph]) -> Vec<f64> {
     added
 }
 
-/// The size of `g`'s em, in points.
+/// The size of `g`'s em, in points. A warichu glyph has the em of the line its block sits in.
 pub(super) fn glyph_em(g: &SGlyph) -> f64 {
-    g.face.units_per_em() * g.sy
+    g.wari.map_or(g.face.units_per_em() * g.sy, |w| w.em)
 }
 
 /// How far up (line space) Character Alignment `a` moves glyph `g` on a line whose largest em is

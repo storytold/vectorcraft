@@ -17,7 +17,10 @@ mod wrap;
 
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
 use char_style::yes;
-pub use char_style::{CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, MAX_AKI, ScriptMetrics};
+pub use char_style::{
+    CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, MAX_AKI, MAX_TSUME, MAX_WARICHU_GAP, ScriptMetrics, WARICHU_LINES,
+    WARICHU_SCALE, WarichuAlign,
+};
 pub use composite::{
     COMPOSITE_BASELINE, COMPOSITE_FONTS_MAX, COMPOSITE_NAME_MAX, COMPOSITE_SCALE, COMPOSITE_SIZE, CharClass, CompositeFont, CompositePart,
     CompositeParts,

@@ -13,6 +13,7 @@
 mod calli;
 mod colorize;
 mod defaults;
+pub mod stored_art;
 pub mod track;
 mod warp;
 
@@ -351,7 +352,8 @@ pub enum Direction {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "mode")]
 pub enum ArtScale {
-    /// Keep the art's proportions (length follows the path; width scales with it).
+    /// Keep the art's proportions (length follows the path; width scales with it, times the
+    /// stroke weight and the brush width).
     Proportional,
     /// Stretch the art to the path length.
     #[default]
@@ -762,14 +764,51 @@ pub fn library(doc: &Document) -> Vec<Brush> {
 }
 
 /// Parse a stored library value (malformed entries are skipped, values kept within their
-/// ranges; see [`Brush::from_json`]).
+/// ranges; see [`Brush::from_json`]). A name that repeats is kept by its first brush, and each
+/// later brush of that name is numbered ([`number_repeated_names`]).
 pub fn parse_library(v: &serde_json::Value) -> Vec<Brush> {
-    v.as_array().map(|a| a.iter().filter_map(|b| Brush::from_json(b.clone()).ok()).collect()).unwrap_or_default()
+    let mut lib: Vec<Brush> = v.as_array().map(|a| a.iter().filter_map(|b| Brush::from_json(b.clone()).ok()).collect()).unwrap_or_default();
+    number_repeated_names(&mut lib);
+    lib
 }
 
-/// Store `lib` as the document's brush library.
+/// Renames the second and later brushes of each repeated name in `lib` to the first "Name 2",
+/// "Name 3"… that no brush in `lib` has. The first brush of a name keeps it, so a stroke that names
+/// it draws the brush [`find`] gave it before.
+fn number_repeated_names(lib: &mut [Brush]) {
+    let mut seen = std::collections::HashSet::new();
+    if lib.iter().all(|b| seen.insert(b.name.as_str())) {
+        return;
+    }
+    let mut taken: std::collections::HashSet<String> = lib.iter().map(|b| b.name.clone()).collect();
+    let mut kept = std::collections::HashSet::new();
+    // The next number to try for each repeated name, so the brushes of one name try each number
+    // once between them.
+    let mut next: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    for b in lib.iter_mut() {
+        if kept.insert(b.name.clone()) {
+            continue;
+        }
+        let from = next.entry(b.name.clone()).or_insert(2);
+        // `taken` is finite, so one of the numbers is free.
+        if let Some((i, name)) = (*from..).map(|i| (i, format!("{} {i}", b.name))).find(|(_, n)| !taken.contains(n)) {
+            *from = i.saturating_add(1);
+            taken.insert(name.clone());
+            kept.insert(name.clone());
+            b.name = name;
+        }
+    }
+}
+
+/// Store `lib` as the document's brush library. When the art of a brush holds images or placed
+/// documents, each object in that art whose id is 0 or repeats another object's is given a new
+/// id ([`stored_art::StoredArt::persist_ids`]), so the Links panel lists it by the same id until it
+/// changes.
 pub fn store(doc: &mut Document, lib: &[Brush]) {
     doc.unknown.insert(DOC_KEY.into(), serde_json::to_value(lib).unwrap_or_default());
+    if lib.iter().any(|b| b.art().into_iter().any(stored_art::holds_files)) {
+        stored_art::StoredArt::persist_ids(doc);
+    }
 }
 
 /// Find a brush by name.

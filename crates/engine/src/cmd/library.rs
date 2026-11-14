@@ -21,7 +21,7 @@ use vectorcraft_color::{Color, GradientPaint, Paint};
 use vectorcraft_doc::{Appearance, Node, NodeId, TextStyleDef};
 
 use super::clipboard::SwatchChoices;
-use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, color_value, has_doc, ids_param, index, ok, point_param, str_param};
+use super::{CommandSpec, EngineError, Result, Session, always, bad, cmd, color_value, has_doc, ids_param, index_opt, ok, point_param, str_param};
 use crate::Clipboard;
 
 /// The extension of a library file.
@@ -470,8 +470,8 @@ impl Library {
     }
 }
 
-/// Make `g` a library gradient: no placement, freeform points or swatch links (a linked stop keeps
-/// the color it shows), the angle its placement showed (a finite one), and stops in order with
+/// Make `g` a library gradient: no placement, freeform points, swatch links or process plates (a
+/// linked stop keeps the color it shows), the angle its placement showed (a finite one), and stops in order with
 /// offsets, opacities and midpoints in range. False when it has fewer than 2 or more than
 /// [`MAX_STOPS`] stops.
 fn clean_gradient(g: &mut GradientPaint) -> bool {
@@ -490,8 +490,8 @@ fn clean_gradient(g: &mut GradientPaint) -> bool {
         st.offset = within(st.offset, 0.0, 1.0, 0.0);
         st.opacity = within(st.opacity, 0.0, 1.0, 1.0);
         st.midpoint = within(st.midpoint, 0.13, 0.87, 0.5);
-        st.swatch = None;
-        st.tint = 1.0;
+        let color = st.color;
+        st.set_color(color, None);
     }
     g.gradient.stops.sort_by(|a, b| a.offset.total_cmp(&b.offset));
     true
@@ -1488,29 +1488,15 @@ fn add_to_char_styles(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Unlink a library character style's `fill` and `stroke` colors (solid, and each gradient stop)
 /// from swatches that are not global or spot swatches of `doc`: an unlinked color keeps the color
-/// it shows at full tint, as [`clean_gradient`] keeps a library gradient's stops. A link to a
+/// it shows at full tint, and an unlinked stop has no process plates, as [`clean_gradient`] keeps
+/// a library gradient's stops. A link to a
 /// global or spot swatch `doc` has stays, and takes that swatch's color.
 fn unlink_missing_swatches(doc: &vectorcraft_doc::Document, attrs: &mut Map<String, Value>) {
     let keep = |name: &str| doc.global_color(name).is_some();
     for key in ["fill", "stroke"] {
         let Some(mut paint) = attrs.get(key).and_then(|v| serde_json::from_value::<Paint>(v.clone()).ok()) else { continue };
-        let mut changed = false;
-        let mut unlink = |swatch: &mut Option<String>, tint: &mut f32| {
-            if swatch.as_deref().is_some_and(|n| !keep(n)) {
-                *swatch = None;
-                *tint = 1.0;
-                changed = true;
-            }
-        };
-        match &mut paint {
-            Paint::Solid { swatch, tint, .. } => unlink(swatch, tint),
-            Paint::Gradient(g) => {
-                for st in &mut g.gradient.stops {
-                    unlink(&mut st.swatch, &mut st.tint);
-                }
-            }
-            _ => {}
-        }
+        // `map_links` gives an unlinked color full tint, and an unlinked stop no process plates.
+        let changed = paint.map_links(&mut |_, swatch, _| swatch.take_if(|n| !keep(n.as_str())).is_some());
         if changed && let Ok(v) = serde_json::to_value(&paint) {
             attrs.insert(key.to_string(), v);
         }
@@ -1649,11 +1635,11 @@ fn move_group(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "library.moveGroup";
     let id = library_id(s, p, C)?;
     let group = group_param(p, C)?;
-    let to = p.get("to").and_then(Value::as_u64).ok_or_else(|| bad(C, "missing `to` (an index)"))?;
+    let to = index_opt(p, "to", C)?.ok_or_else(|| bad(C, "missing `to` (an index)"))?;
     let (name, at) = s.libraries.change(&id, |lib| {
         let i = group_at(lib, group, C)?;
         let g = lib.groups.remove(i);
-        let at = index(to).min(lib.groups.len());
+        let at = to.min(lib.groups.len());
         let name = g.name.clone();
         lib.groups.insert(at, g);
         Ok((name, at))

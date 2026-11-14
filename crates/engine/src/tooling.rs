@@ -1164,6 +1164,12 @@ impl Session {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
     }
 
+    /// Does the active tool take `key`, pressed with `mods` held, ahead of the shortcuts bound to it
+    /// (see `Tool::claims_key_with`)?
+    pub fn tool_claims_key_with(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> bool {
+        self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key_with(cx, key, mods))
+    }
+
     /// Has the active tool started something that Escape ends while no button is pressed (see
     /// `Tool::ends_on_escape`)?
     pub fn tool_ends_on_escape(&mut self, view: ViewInfo) -> bool {
@@ -1311,14 +1317,12 @@ impl Session {
         {
             return Err(format!("unknown tool `{t}`"));
         }
-        // The active tool's merge being computed is applied with the options it was started with.
-        if tool.is_none_or(|t| t == self.tool.id()) {
-            self.finish_tool_edit_later().map_err(|e| e.to_string())?;
-        }
         let mut values = p.get("values").and_then(Value::as_object).cloned().unwrap_or_default();
         if let Some(k) = p.get("key").and_then(Value::as_str) {
             values.insert(k.to_string(), p.get("value").cloned().unwrap_or(Value::Null));
         }
+        // Every value is checked before any is set, so an invalid one changes nothing.
+        vectorcraft_tools::builder::check_builder_options(tool.unwrap_or(self.tool.id()), &values)?;
         // The Place queue is read later, by a click outside any automation scope: its files must
         // be readable now, under the roots of whoever sets it.
         if let Some(entries) = values.get("queue").and_then(|q| q.get("entries")).and_then(Value::as_array) {
@@ -1335,6 +1339,10 @@ impl Session {
             {
                 return Err("Unknown dimension mode".into());
             }
+        }
+        // The active tool's merge being computed is applied with the options it was started with.
+        if tool.is_none_or(|t| t == self.tool.id()) {
+            self.finish_tool_edit_later().map_err(|e| e.to_string())?;
         }
         Ok(self.set_tool_options(tool, &values))
     }

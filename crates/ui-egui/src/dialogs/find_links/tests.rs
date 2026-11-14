@@ -126,7 +126,8 @@ fn find_in_folder_relinks_the_missing_files_to_the_files_found() {
 }
 
 /// The files left without a file, or whose file fails to relink, go back to Linked File Not
-/// Found; the failure is named in the status line, and the other files still relink.
+/// Found, with the open's notes; the failure is named in the status line, and the other files
+/// still relink.
 #[test]
 fn files_not_relinked_go_back_to_linked_file_not_found() {
     let root = folder("back");
@@ -134,10 +135,13 @@ fn files_not_relinked_go_back_to_linked_file_not_found() {
     let bytes = opened_without(&mut app, &root, &["a.png", "b.png", "c.png"]);
     write(&at(&root, "found/a.png"), &bytes[0]);
     write(&at(&root, "found/b.png"), b"not an image");
-    app.ui.dialog.as_mut().unwrap().fields.insert("searchFolder".into(), json!(root.join("found")));
+    let missing_links = app.ui.dialog.as_mut().unwrap();
+    missing_links.fields.insert("notes".into(), json!(["a note"]));
+    missing_links.fields.insert("searchFolder".into(), json!(root.join("found")));
     super::super::confirm(&mut app).unwrap();
     searched(&mut app);
     let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["notes"], json!(["a note"]));
     // b.png's only file is chosen, c.png has none.
     assert_eq!((pick(d, "b.png"), pick(d, "c.png")), (&json!(at(&root, "found/b.png")), &Value::Null));
     assert!(frame(&mut app).contains("Not found"));
@@ -147,6 +151,7 @@ fn files_not_relinked_go_back_to_linked_file_not_found() {
     let names: Vec<&str> = d.fields["missing"].as_array().unwrap().iter().map(|r| r["name"].as_str().unwrap()).collect();
     assert_eq!((d.kind.as_str(), names.len()), (super::super::missing_links::KIND, 2));
     assert!(names.contains(&"b.png") && names.contains(&"c.png"), "{names:?}");
+    assert_eq!(d.fields["notes"], json!(["a note"]));
     super::super::cancel(&mut app);
     assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 2);
 }

@@ -448,7 +448,7 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
     let mut set = None;
     egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         widgets::dim_label(ui, tl!("Sides:"));
-        if let Some(s) = widgets::range_field_named(ui, (id, "sides"), Some(tl!("Sides:")), f64::from(*sides), 3.0..=f64::INFINITY, "", 0, fw) {
+        if let Some(s) = widgets::range_field_named(ui, (id, "sides"), Some(tl!("Sides:")), f64::from(*sides), 3.0..=1000.0, "", 0, fw) {
             set = Some(("sides", json!(s as u64)));
         }
         ui.end_row();

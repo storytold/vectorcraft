@@ -25,6 +25,7 @@ mod knockout;
 mod layeropts;
 mod longstroke;
 mod memory;
+mod meshwarp;
 mod movedstroke;
 mod objectfx;
 mod paintedbrush;

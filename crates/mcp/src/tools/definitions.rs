@@ -511,7 +511,7 @@ pub fn tool_definitions() -> Vec<Value> {
             obj(
                 json!({
                     "ids": {"type": "array", "items": {"type": "integer"}},
-                    "offset": num("Gap between text and object (default 6 pt)"),
+                    "offset": num("Gap between text and object in pt, -1000 to 1000 (default 6 pt); a negative gap lets text that far into the object"),
                     "invert": {"type": "boolean"},
                     "release": {"type": "boolean"},
                 }),

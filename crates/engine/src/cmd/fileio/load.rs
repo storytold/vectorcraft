@@ -550,9 +550,10 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
     // Optical Margin Alignment setting and writing direction. When that changes the direction of a
     // frame of a restored document, the story flows through that frame's thread again. Threaded
     // frames keep their size: Auto Size is off for them. The story is laid out in the document's
-    // own composite fonts.
+    // own composite fonts, and type naming one the document does not define flows as in a missing
+    // font, also when the document defines none.
     let fonts = if doc.text_threads.is_empty() { Default::default() } else { doc.composite_fonts.clone() };
-    let lent = vectorcraft_text::FontDb::global().lend_composite_fonts(&fonts);
+    let lent = vectorcraft_text::FontDb::global().lend_document_composite_fonts(&fonts);
     if !doc.text_threads.is_empty() && !restored {
         crate::cmd::threads::reflow(&Document::new(1.0, 1.0), &mut doc);
     } else if !doc.text_threads.is_empty() {

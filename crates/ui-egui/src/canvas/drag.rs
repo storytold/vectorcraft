@@ -265,6 +265,12 @@ pub fn mods(m: egui::Modifiers, space: bool) -> Mods {
     Mods { shift: m.shift, alt: m.alt, cmd: m.command, ctrl: m.ctrl, space }
 }
 
+/// Whether Space, held with the modifiers `m`, lends the Hand, Rotate View or Zoom tool. While the
+/// Type tool edits text, Space types a space, and only Cmd+Space still lends the Zoom tool.
+pub(super) fn space_lends_view_tools(app: &VectorcraftApp, m: egui::Modifiers, space: bool) -> bool {
+    space && (m.command || !app.session.tool_wants_text())
+}
+
 /// Drop the tool press in progress, if any: nothing it began is kept, and the rest of the press
 /// does nothing ([`Drag::Gesture`]).
 pub(super) fn drop_press(app: &mut VectorcraftApp, ui: &Ui, view: vectorcraft_engine::ViewInfo) {

@@ -21,7 +21,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Free Distort",
             [],
             None,
-            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), angle?: degrees (counter-clockwise; `from`, or the selection bounds, is then a box in the frame turned by it, as a rotated bounding box is; default 0), ids?} projective warp of anchors and handles; a linked opacity mask's art is warped with its object, an unlinked one stays",
+            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), angle?: degrees (counter-clockwise; `from`, or the selection bounds, is then a box in the frame turned by it, as a rotated bounding box is; default 0), ids?} projective warp of anchors and handles; a linked opacity mask's art is warped with its object, an unlinked one stays; each warped object's bounding box (the objects inside groups and the art of linked masks too) turns as the warp turns the art at its center (object.resetBoundingBox squares it again); corners where the box already stands change nothing and add no undo step",
             has_doc,
             distort
         ),
@@ -109,11 +109,18 @@ impl Projective {
 
 /// Warp `n`'s anchors and handles; gradients (pinned first if unplaced) follow the warp's affine
 /// approximation at their center. The art of a linked opacity mask is warped with the object it
-/// masks; an unlinked one stays where it is.
-fn warp_node(n: &mut Node, pr: &Projective) {
+/// masks; an unlinked one stays where it is. Each warped object's bounding-box angle follows the
+/// warp's affine approximation at that object's own center before the warp (as for the objects
+/// with no editable points); an object with no bounds keeps its angle, and a layer has none.
+/// Returns `n`'s geometric bounds before the warp ([`Node::geometric_bounds`]; none for a layer),
+/// gathered from its children's so that each subtree is measured once.
+fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
     n.pin_gradients();
-    match &mut n.kind {
+    // The children before these are left out of a group's or compound path's bounds.
+    let skip = n.children().map_or(0, Vec::len) - n.editing_children().len();
+    let before = match &mut n.kind {
         NodeKind::Path { path, live, .. } => {
+            let b = path.bounds();
             *live = None;
             for sp in &mut path.subpaths {
                 for a in &mut sp.anchors {
@@ -122,24 +129,41 @@ fn warp_node(n: &mut Node, pr: &Projective) {
                     a.h_out = pr.apply(a.h_out);
                 }
             }
+            b
         }
-        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
-            for c in children.iter_mut() {
-                warp_node(Arc::make_mut(c), pr);
-            }
+        NodeKind::Layer { children, .. } => {
+            warp_children(children, pr, |_| false);
+            None
         }
+        // A clip group is bounded by its clip path.
+        NodeKind::Group { children, clip: true } => warp_children(children, pr, |i| i == 0),
+        NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => warp_children(children, pr, |i| i >= skip),
         _ => {
             // No editable points: the affine approximation (which maps the gradients too).
-            if let Some(b) = n.geometric_bounds() {
+            let b = n.geometric_bounds();
+            if let Some(b) = b {
                 n.transform(pr.affine_near(b.center()), false);
             }
-            return;
+            return b;
         }
+    };
+    if let Some(b) = before {
+        n.bbox_angle = vectorcraft_doc::orient::transformed_angle(n.bbox_angle, pr.affine_near(b.center()));
     }
     if let Some(m) = n.extras_if_any().and_then(|x| x.mask.as_mut()).filter(|m| m.linked) {
         warp_node(Arc::make_mut(&mut m.art), pr);
     }
     n.appearance.warp_gradients(&|p| pr.affine_near(p));
+    before
+}
+
+/// Warps each of `children` and returns the union of the pre-warp bounds of those `counts` picks
+/// by index.
+fn warp_children(children: &mut [Arc<Node>], pr: &Projective, counts: impl Fn(usize) -> bool) -> Option<Rect> {
+    children.iter_mut().enumerate().fold(None, |acc, (i, c)| {
+        let b = warp_node(Arc::make_mut(c), pr);
+        if counts(i) { vectorcraft_geom::union_opt(acc, b) } else { acc }
+    })
 }
 
 fn distort(s: &mut Session, p: &Value) -> Result<Value> {
@@ -178,6 +202,11 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
     if !r.width().is_finite() || !r.height().is_finite() || r.width().abs() < 1e-9 || r.height().abs() < 1e-9 {
         return Err(bad(C, "cannot distort a zero-size or non-finite bounding box"));
     }
+    let ids_json = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() });
+    // Corners that stay where they are change nothing: no edit and no undo step.
+    if [tl, tr, br, bl] == src.corners() {
+        return Ok(ids_json);
+    }
     let pr = Projective::from_box(src, [tl, tr, br, bl]);
     s.edit("Free Distort", |d, _| {
         for id in &ids {
@@ -187,7 +216,7 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(ids_json)
 }
 
 // ---------- eyedropper ----------

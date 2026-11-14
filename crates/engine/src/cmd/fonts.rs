@@ -1136,37 +1136,6 @@ fn font_list(_: &mut Session, p: &Value) -> Result<Value> {
     }
 }
 
-/// Gives the inline graphics in the type of [`art_texts_of`] the current bounds of their symbols'
-/// art, and lays out again the type whose inline graphics changed. A symbol drawn inline in the
-/// art of another symbol takes one more round, so there is at most one round per symbol.
-fn resolve_art_inline(doc: &mut Document) {
-    for _ in 0..=doc.symbols.len() {
-        let names: BTreeSet<String> =
-            art_texts_of(doc).iter().flat_map(|(_, t, _)| t.runs.iter().filter_map(|r| r.inline.as_ref().map(|a| a.symbol.clone()))).collect();
-        let bounds: BTreeMap<String, Option<Rect>> = names
-            .into_iter()
-            .map(|name| {
-                let b = doc.symbol_art_bounds(&name);
-                (name, b)
-            })
-            .collect();
-        let stale = |t: &TextObject| t.runs.iter().any(|r| r.inline.as_ref().is_some_and(|a| bounds.get(&a.symbol).is_some_and(|b| *b != a.bounds)));
-        let mut changed = false;
-        edit_art_texts_of(doc, &stale, &mut |t| {
-            for a in t.runs.iter_mut().filter_map(|r| r.inline.as_mut()) {
-                if let Some(b) = bounds.get(&a.symbol) {
-                    a.bounds = *b;
-                }
-            }
-            refresh_bounds(t);
-            changed = true;
-        });
-        if !changed {
-            break;
-        }
-    }
-}
-
 pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
     let db = vectorcraft_text::FontDb::global();
     #[cfg(not(target_arch = "wasm32"))]
@@ -1188,8 +1157,7 @@ pub(crate) fn rescan(s: &mut Session, _: &Value) -> Result<Value> {
             d.change_unsaved(|doc| {
                 let doc = std::sync::Arc::make_mut(doc);
                 edit_art_texts_of(doc, &|_| true, &mut refresh_bounds);
-                resolve_art_inline(doc);
-                doc.resolve_inline_art();
+                doc.resolve_inline_art_with(&mut refresh_bounds);
                 for id in texts {
                     if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
                         refresh_bounds(t);

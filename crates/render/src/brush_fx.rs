@@ -107,7 +107,12 @@ impl BrushCache {
             vectorcraft_brush::serde_json::to_string(v).unwrap_or_default().hash(&mut h);
             h.finish()
         });
-        self.lib = vectorcraft_brush::library(doc).into_iter().map(|b| (b.name.clone(), Arc::new(b))).collect();
+        // Of two brushes with one name, a stroke that names it draws with the first, as
+        // `vectorcraft_brush::find` and the exports take it.
+        self.lib.clear();
+        for b in vectorcraft_brush::library(doc) {
+            self.lib.entry(b.name.clone()).or_insert_with(|| Arc::new(b));
+        }
     }
 
     /// [`Self::key`] for the brush library `doc` holds (checked once a frame, `stamp`).
@@ -386,6 +391,24 @@ mod tests {
         vectorcraft_brush::store(&mut d, &lib);
         let b = render(&mut r, &d);
         assert!(!dark(a.pixel(100, 58)) && dark(b.pixel(100, 58)));
+    }
+
+    /// Of two brushes with one name, a stroke that names it draws with the first.
+    #[test]
+    fn a_stroke_draws_with_the_first_of_two_brushes_with_its_name() {
+        use vectorcraft_brush::{Brush, BrushKind, Calligraphic};
+        let nib = |size: f64| Brush { name: "Twin".into(), kind: BrushKind::Calligraphic(Calligraphic { size, ..Default::default() }) };
+        let doc = |lib: &[Brush]| {
+            let mut d = doc_with_line(Some("Twin"), 1.0);
+            vectorcraft_brush::store(&mut d, lib);
+            d
+        };
+        let (thin, wide) = (nib(1.0), nib(20.0));
+        let first = render(&mut Renderer::new(), &doc(std::slice::from_ref(&thin))).pixels;
+        let second = render(&mut Renderer::new(), &doc(std::slice::from_ref(&wide))).pixels;
+        assert_ne!(first, second, "the two nibs paint differently");
+        let both = render(&mut Renderer::new(), &doc(&[thin, wide])).pixels;
+        assert!(both == first, "the stroke draws with the first brush named Twin");
     }
 
     #[test]

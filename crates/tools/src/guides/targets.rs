@@ -36,7 +36,8 @@ pub struct Targets {
     pub(super) xs: Vec<(f64, Point, Kind)>,
     pub(super) ys: Vec<(f64, Point, Kind)>,
     /// Path segments and their control bounds, which a point lands on ("path"): gathered only for
-    /// dragged anchors ([`Self::for_anchor_drag`]).
+    /// dragged anchors ([`Self::for_anchor_drag`]) and selections moved by an anchor
+    /// ([`Self::for_move_by_anchor`]).
     pub(super) segments: Vec<(Rect, PathSeg)>,
     /// Ruler guides, which pull a point into line where they run (Snap to Point).
     pub(super) rulers: Vec<Ruler>,
@@ -170,7 +171,18 @@ impl Targets {
     /// Guides › Snap to Last Location, a move (not a copy, which has nothing in `exclude`) goes back
     /// to where it began when it comes near ([`Self::snap_back`]), unless Snap to Pixel snaps moves.
     pub fn for_move(cx: &ToolContext, exclude: &[NodeId]) -> Self {
-        let mut t = Self::collect(cx.doc, exclude, None).styled(cx);
+        Self::moving(cx, exclude, Gather::Bounds)
+    }
+
+    /// [`Self::for_move`]'s targets for a selection moved by one of its anchors (#7411): the path
+    /// segments of the art but `exclude` too, which that anchor lands on ([`Self::snap_onto_path`]),
+    /// as a dragged anchor does with Direct Selection.
+    pub fn for_move_by_anchor(cx: &ToolContext, exclude: &[NodeId]) -> Self {
+        Self::moving(cx, exclude, Gather::Segments)
+    }
+
+    fn moving(cx: &ToolContext, exclude: &[NodeId], gather: Gather) -> Self {
+        let mut t = Self::collect_inner(cx.doc, exclude, None, None, gather).styled(cx);
         if cx.spacing_guides {
             t.boxes = object_boxes(cx.doc, &cx.selection.objects);
         }
@@ -568,8 +580,10 @@ impl Targets {
     }
 
     /// View → Snap to Point: only these targets' anchors pull, and the ruler guides (shown and
-    /// unlocked, as the selection tools pick them) pull the pointer into line where they run.
-    pub(super) fn for_snap_to_point(self, cx: &ToolContext) -> Self {
+    /// unlocked, as the selection tools pick them) pull the pointer into line where they run. It
+    /// snaps without Smart Guides, so it draws none of their labels and lines.
+    pub(super) fn for_snap_to_point(mut self, cx: &ToolContext) -> Self {
+        self.style = GuideStyle { lines: false, labels: false, ..GuideStyle::of(cx) };
         self.anchors_only().with_rulers(cx)
     }
 
@@ -856,6 +870,21 @@ impl Targets {
         self.line(from, q).into_iter().chain(self.label(q, "align")).collect()
     }
 
+    /// A point `p` near no target anchor or center landed where two target paths cross
+    /// ("intersect"), else on the nearest target path ("path"), within `tol`: the point and its
+    /// label, as [`Self::snap_point`] lands it. The ruler guides of `rulers` count as paths that
+    /// cross ([`Self::rulers`]). None when no path is in reach, or the targets hold no segments.
+    pub(crate) fn snap_onto_path(&self, p: Point, tol: f64, rulers: Option<&Targets>) -> Option<(Point, Vec<Overlay>)> {
+        if self.segments.is_empty() {
+            return None;
+        }
+        if let Some(q) = self.crossing_with(p, tol, rulers.map_or(&self.rulers, |r| &r.rulers)) {
+            return Some((q, self.label(q, "intersect").into_iter().collect()));
+        }
+        let q = self.on_segment(p, tol)?;
+        Some((q, self.label(q, Kind::Edge.label()).into_iter().collect()))
+    }
+
     /// The nearest point within `tol` of `p` on a target segment.
     fn on_segment(&self, p: Point, tol: f64) -> Option<Point> {
         self.segments
@@ -870,6 +899,11 @@ impl Targets {
     /// Where two target paths, a path and a ruler guide, or two ruler guides cross, the crossing
     /// nearest `p` within `tol` ("intersect", #1602).
     fn crossing(&self, p: Point, tol: f64) -> Option<Point> {
+        self.crossing_with(p, tol, &self.rulers)
+    }
+
+    /// [`Self::crossing`] with the ruler guides `rulers`.
+    fn crossing_with(&self, p: Point, tol: f64, rulers: &[Ruler]) -> Option<Point> {
         // A ruler guide running past, as a short line through the reach of `p`.
         let ruler = |r: &Ruler| {
             let (pos, ..) = r.line_at(p, tol)?;
@@ -883,7 +917,7 @@ impl Targets {
             .iter()
             .filter(|(b, c)| b.inflate(tol, tol).contains(p) && c.nearest(p, 1e-6).distance_sq <= tol * tol)
             .map(|(_, c)| *c)
-            .chain(self.rulers.iter().filter_map(ruler))
+            .chain(rulers.iter().filter_map(ruler))
             // shortcut: the first 32 lines in reach are paired, raise it if busier crossings matter
             .take(32)
             .collect();

@@ -665,6 +665,8 @@ font-technology	Variable	Μεταβλητές
 	Crop Image	Περικοπή εικόνας
 	Image Tools	Εργαλεία εικόνας
 	Remove Background…	Αφαίρεση φόντου…
+	Draw (Pencil)	Σχεδίαση (μολύβι)
+	Place Image	Τοποθέτηση εικόνας
 	Remove Background	Αφαίρεση φόντου
 	Background	Φόντο
 	Edge Color	Χρώμα άκρης
@@ -860,6 +862,9 @@ font-technology	Variable	Μεταβλητές
 	The selected character's font is not available.	Η γραμματοσειρά του επιλεγμένου χαρακτήρα δεν είναι διαθέσιμη.
 	No alternates for the selected character.	Δεν υπάρχουν εναλλακτικοί για τον επιλεγμένο χαρακτήρα.
 	Double-click to replace	Διπλό κλικ για αντικατάσταση
+	Click to replace	Κλικ για αντικατάσταση
+	Show all alternates in the Glyphs panel	Εμφάνιση όλων των εναλλακτικών στον πίνακα Γλύφοι
+	Show Character Alternates	Εμφάνιση εναλλακτικών χαρακτήρα
 	Select one character with the Type tool first.	Επιλέξτε πρώτα έναν χαρακτήρα με το εργαλείο κειμένου.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	Ο γλύφος {glyph} ανήκει στη γραμματοσειρά {font}, όχι σε αυτήν του επιλεγμένου κειμένου ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	Ο γλύφος {glyph} ανήκει στο {base} (U+{base_code}) {place}· η επιλογή σας είναι {sel} (U+{code}).
@@ -1260,6 +1265,7 @@ font-technology	Variable	Μεταβλητές
 	Format	Μορφή
 	Format Options	Επιλογές μορφής
 	Format Settings	Ρυθμίσεις μορφής
+	Format Settings…	Ρυθμίσεις μορφής…
 	Format:	Μορφή:
 	Formats:	Μορφές:
 	Fractional Widths	Κλασματικά πλάτη
@@ -1827,6 +1833,29 @@ font-technology	Variable	Μεταβλητές
 	Bristle Brush	Πινέλο με τρίχες
 	Pattern Brush	Πινέλο μοτίβου
 	missing from the Brushes panel	λείπει από τον πίνακα Πινέλα
+	built in	ενσωματωμένη
+	embedding not allowed	η ενσωμάτωση δεν επιτρέπεται
+	embedding for editing	ενσωμάτωση για επεξεργασία
+	embedding for preview and print	ενσωμάτωση για προεπισκόπηση και εκτύπωση
+	embedding allowed	η ενσωμάτωση επιτρέπεται
+	{file}; {embedding}	{file}· {embedding}
+	substituted: shown in {family} {style} ({detail})	αντικαταστάθηκε: εμφανίζεται με {family} {style} ({detail})
+	missing: shown in {family} {style}	λείπει: εμφανίζεται με {family} {style}
+	missing	λείπει
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Γραμμικό ντεγκραντέ
+	Radial gradient	Ακτινικό ντεγκραντέ
+	Conic gradient	Κωνικό ντεγκραντέ
+	Diamond gradient	Ρομβοειδές ντεγκραντέ
+	Freeform gradient	Ντεγκραντέ ελεύθερης μορφής
+@plural	{n} instance|{n} instances	{n} παρουσία|{n} παρουσίες
+@plural	{n} row|{n} rows	{n} γραμμή|{n} γραμμές
+@plural	{n} column|{n} columns	{n} στήλη|{n} στήλες
 	Select art to make a scatter, art or pattern brush.	Επιλέξτε σχέδιο για να δημιουργήσετε πινέλο διασποράς, σχεδίου ή μοτίβου.
 	Brush Art	Σχέδιο πινέλου
 	New Layer…	Νέο επίπεδο…
@@ -2428,6 +2457,10 @@ axis	Both	Και τα δύο
 @msg	Couldn't paste: the document it was pasted in was reverted	Δεν ήταν δυνατή η επικόλληση: το έγγραφο στο οποίο γινόταν η επικόλληση επανήλθε στην αποθηκευμένη έκδοση
 @msg	Couldn't read {name}: {e}	Δεν ήταν δυνατή η ανάγνωση του {name}: {e}
 @msg	Couldn't save recovery data: {e}	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης για το {title}: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον προεπιλεγμένο φάκελο ανάκτησης. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης για το {title}: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον φάκελο που ορίστηκε στις Προτιμήσεις. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον προεπιλεγμένο φάκελο ανάκτησης. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Δεν ήταν δυνατή η αποθήκευση δεδομένων ανάκτησης: {e}. Τα αντίγραφα αποθηκεύονται στο {folder}, τον φάκελο που ορίστηκε στις Προτιμήσεις. Για να χρησιμοποιήσετε άλλο φάκελο, ορίστε Προτιμήσεις → Χειρισμός αρχείων → Ανάκτηση δεδομένων → Φάκελος (recoveryFolder)
 @msg	Create Outlines: select text objects	Δημιουργία περιγραμμάτων: επιλέξτε αντικείμενα κειμένου
 @msg	Create from Guides: the document has no artboard	Δημιουργία από οδηγούς: το έγγραφο δεν έχει πίνακα σχεδίασης
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Δημιουργία από οδηγούς: οι οδηγοί σχηματίζουν περισσότερες από {MAX_PIECES} τομές
@@ -2437,6 +2470,7 @@ axis	Both	Και τα δύο
 @msg	Plug-ins can't be loaded from {path}: {e}	Δεν είναι δυνατή η φόρτωση πρόσθετων από το {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	Επιλέξτε άμεσα τα σημεία αγκύρωσης όπου θα γίνει η αποκοπή (όχι τα τελικά σημεία ανοιχτών διαδρομών)
 @msg	Divide Objects Below: select a path	Διαίρεση αντικειμένων από κάτω: επιλέξτε μια διαδρομή
+@msg	select a path	επιλέξτε μια διαδρομή
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
 @msg	Downloaded {what}	Έγινε λήψη του {what}
 @msg	Expand Appearance: the selection has a basic appearance	Επέκταση εμφάνισης: η επιλογή έχει βασική εμφάνιση
@@ -2513,6 +2547,9 @@ axis	Both	Και τα δύο
 @msg	`{keep}` is not a side of this axis	Το `{keep}` δεν είναι πλευρά αυτού του άξονα
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	Το `{key}` πρέπει να είναι `auto` ή κωδικός γλώσσας όπως `en` ή `zh-hant`
 @msg	`{key}` must be a #rrggbb color	Το `{key}` πρέπει να είναι χρώμα #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	Το `{key}` πρέπει να είναι χρώμα #rrggbb ή όνομα χρώματος επιπέδου
+@msg	unknown Live Paint option `{key}`	άγνωστη επιλογή δυναμικής βαφής `{key}`
+@msg	unknown Shape Builder option `{key}`	άγνωστη επιλογή δημιουργίας σχημάτων `{key}`
 @msg	`{key}` must be a #rrggbb colour	Το `{key}` πρέπει να είναι χρώμα #rrggbb
 @msg	`{key}` must be a number	Το `{key}` πρέπει να είναι αριθμός
 @msg	`{key}` must be a number, not {v}	Το `{key}` πρέπει να είναι αριθμός, όχι {v}
@@ -2528,6 +2565,7 @@ axis	Both	Και τα δύο
 @msg	`select` must be true or false	Το `select` πρέπει να είναι true ή false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	Τα `minAnchors` και `maxAnchors` πρέπει να είναι ακέραιοι αριθμοί
 @msg	`{key}` must be a number not below 0	Το `{key}` πρέπει να είναι αριθμός όχι μικρότερος από 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	Το `{key}` πρέπει να είναι τέσσερις αριθμοί όχι μικρότεροι από 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	Το `{key}` πρέπει να είναι [x, y, width, height]: τέσσερις πεπερασμένοι αριθμοί, με πλάτος και ύψος όχι αρνητικά
 @msg	`{min_key}` is greater than `{max_key}`	Το `{min_key}` είναι μεγαλύτερο από το `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	δώστε τουλάχιστον ένα από τα `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -3394,6 +3432,7 @@ theme	Appearance	Εμφάνιση
 	Proportional Metrics	Αναλογικές μετρικές
 	Insert Aki Left	Εισαγωγή aki αριστερά
 	Insert Aki Right	Εισαγωγή aki δεξιά
+	Tsume	Tsume
 	Arabic	Αραβικά
 	Hindi	Χίντι
 	Farsi	Περσικά
@@ -3442,6 +3481,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Rating:	Αξιολόγηση:
 	Real World:	Πραγματικός κόσμος:
 	Real-time Drawing and Editing	Σχεδίαση και επεξεργασία σε πραγματικό χρόνο
+	Use Monitor Profile for Canvas	Χρήση προφίλ οθόνης για τον καμβά
+	The canvas is drawn in sRGB.	Ο καμβάς σχεδιάζεται σε sRGB.
+	Canvas display profile:	Προφίλ οθόνης καμβά:
+	The system matches the window to the display's colors.	Το σύστημα προσαρμόζει το παράθυρο στα χρώματα της οθόνης.
+	No usable display profile was found: the canvas is drawn in sRGB.	Δεν βρέθηκε κατάλληλο προφίλ οθόνης: ο καμβάς σχεδιάζεται σε sRGB.
 	Rearrange All Artboards	Αναδιάταξη όλων των πινάκων σχεδίασης
 	Rearrange	Αναδιάταξη
 	Select All Artboards	Επιλογή όλων των πινάκων σχεδίασης
@@ -4114,6 +4158,11 @@ digits	Malayalam	Μαλαγιάλαμ
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ρυθμίσεις Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ρυθμίσεις Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Ρυθμίσεις Warichu…
+	Warichu Settings	Ρυθμίσεις Warichu
+	Lines:	Γραμμές:
+	Line Gap:	Απόσταση γραμμών:
 	Composite Fonts…	Σύνθετες γραμματοσειρές…
 	Composite Fonts	Σύνθετες γραμματοσειρές
 	Export Composite Fonts	Εξαγωγή σύνθετων γραμματοσειρών
@@ -4548,6 +4597,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	internal error: {msg} (please report this bug)	εσωτερικό σφάλμα: {msg} (αναφέρετε το σφάλμα)
 @msg	invalid PDF setting: {0}	μη έγκυρη ρύθμιση PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): γράφεται με UserUnit {unit}, οπότε οι εφαρμογές που αγνοούν το UserUnit την εμφανίζουν τόσες φορές μικρότερη: ενεργοποιήστε την «Εγγραφή σελίδων μεγαλύτερων από 200 in σε πλήρες μέγεθος, σε στιγμές»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	η σελίδα του πίνακα σχεδίασης {n} είναι {size}, μεγαλύτερη από το όριο σελίδας PDF των 14.400 pt (200 in): οι σελίδες {label} γράφονται χωρίς UserUnit, σε στιγμές, και οι εφαρμογές που τηρούν το όριο κόβουν τη σελίδα στις 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	το PDF 1.5 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να κρατήσει το μέγεθός της: το αρχείο γράφεται ως PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	το PDF 1.4 δεν έχει UserUnit, που χρειάζεται μια σελίδα μεγαλύτερη από 14.400 pt (200 in) για να μείνει εντός του ορίου σελίδας του PDF/A-2, 14.400 μονάδων: το αρχείο γράφεται ως PDF 1.6
@@ -4655,6 +4705,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	no action set to save	δεν υπάρχει σύνολο ενεργειών για αποθήκευση
 @msg	the action set file can't be read in full	το αρχείο συνόλου ενεργειών δεν μπορεί να διαβαστεί ολόκληρο
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Φορτώθηκε το «{name}»: παραλείφθηκε {n} βήμα|Φορτώθηκε το «{name}»: παραλείφθηκαν {n} βήματα
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Φορτώθηκε το «{name}»: {n} βήμα έχει άγνωστη εντολή και διατηρήθηκε: «{action}», βήμα {step}, `{command}`|Φορτώθηκε το «{name}»: {n} βήματα έχουν άγνωστες εντολές και διατηρήθηκαν· το πρώτο: «{action}», βήμα {step}, `{command}`
 @msg	not an action set file	δεν είναι αρχείο συνόλου ενεργειών
 @msg	the action set file is larger than 8 MiB	το αρχείο συνόλου ενεργειών είναι μεγαλύτερο από 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: η αναφορά θα ήταν μεγαλύτερη από {MAX_BYTES} byte
@@ -4889,6 +4940,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	tool shortcuts must be a single key (optionally with Shift)	οι συντομεύσεις εργαλείων πρέπει να περιλαμβάνουν ένα πλήκτρο (προαιρετικά με Shift)
 @msg	truncated	περικομμένο
 @msg	unknown command `{0}`	άγνωστη εντολή `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	το βήμα {step} της ενέργειας «{action}» εκτελεί την άγνωστη εντολή `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	άγνωστη εντολή `{0}`· μήπως εννοείτε `{1}`;
 @msg	unknown effect `{id}`	άγνωστο εφέ `{id}`
 @msg	unknown format	άγνωστη μορφή
@@ -4981,6 +5033,7 @@ digits	Malayalam	Μαλαγιάλαμ
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Απορρίφθηκε {n} ανακτημένο έγγραφο|Απορρίφθηκαν {n} ανακτημένα έγγραφα
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Επαναφέρθηκε {n} ανακτημένο έγγραφο: αποθηκεύστε το για να διατηρηθεί|Επαναφέρθηκαν {n} ανακτημένα έγγραφα: αποθηκεύστε τα για να διατηρηθούν
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Άνοιξε με {n} σημείωση: {first}|Άνοιξε με {n} σημειώσεις: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Άνοιξε με {n} σημείωση: {first}|{notice}. Άνοιξε με {n} σημειώσεις: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Αποθηκεύτηκε το {path} με {n} σημείωση: {first}|Αποθηκεύτηκε το {path} με {n} σημειώσεις: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Ενσωματώθηκε {n} εικόνα· λείπουν {missing}: επανασυνδέστε τις πρώτα|Ενσωματώθηκαν {n} εικόνες· λείπουν {missing}: επανασυνδέστε τις πρώτα
 @msgplural	Embedded {n} image|Embedded {n} images	Ενσωματώθηκε {n} εικόνα|Ενσωματώθηκαν {n} εικόνες
@@ -5060,6 +5113,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	μια ενσωματωμένη εικόνα {_1} × {_2} pixel μειώθηκε σε {_3} × {_4} pixel για να διατηρηθούν τα επίπεδα
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες εμφανίζουν την προεπισκόπηση χαμηλής ανάλυσης που έχει αποθηκευτεί, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	linked type areas past VectorCraft's limits were left out	οι συνδεδεμένες περιοχές κειμένου πέρα από τα όρια του VectorCraft παραλείφθηκαν
+@msg	the Line Breaking setting of legacy type was left out	η ρύθμιση αλλαγής γραμμής του κειμένου παλιάς μορφής παραλείφθηκε
+@msg	the Japanese layout rules of legacy type were left out	οι ιαπωνικοί κανόνες διάταξης του κειμένου παλιάς μορφής παραλείφθηκαν
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	το κείμενο που αλλάζει κατεύθυνση γραφής μέσα σε ένα αντικείμενο κειμένου ανοίγει με την κατεύθυνση του πρώτου χαρακτήρα του
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	το κείμενο που χρησιμοποιείται ως μάσκα σε συνδεδεμένες περιοχές, σε κείμενο με αναδίπλωση ή σε σύνθετη διαδρομή δεν αποκόπτει
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες χωρίς προεπισκόπηση στο αρχείο εμφανίζουν ένα σύμβολο κράτησης θέσης, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
@@ -5189,6 +5244,7 @@ digits	Malayalam	Μαλαγιάλαμ
 	VectorCraft Title Bar on Every Desktop	Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Όσο είναι ορισμένη, η μεταβλητή περιβάλλοντος VECTORCRAFT_TITLEBAR επιλέγει τη γραμμή τίτλου.
 	System Title Bar takes precedence over this option while it is on.	Όσο είναι ενεργή, η Γραμμή τίτλου συστήματος υπερισχύει αυτής της επιλογής.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Όσο η Γραμμή τίτλου του VectorCraft σε κάθε επιφάνεια εργασίας είναι ανενεργή, αυτή η επιφάνεια εργασίας σχεδιάζει τη γραμμή τίτλου του παραθύρου, είτε αυτή η επιλογή είναι ενεργή είτε όχι.
 	Value Axis	Άξονας τιμών
 	On Left Side	Στην αριστερή πλευρά
 	On Right Side	Στη δεξιά πλευρά
@@ -6110,6 +6166,7 @@ effect	Points	Σημεία
 @msg	no such color	δεν υπάρχει τέτοιο χρώμα
 @msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
 @msg	more than one action is named “{_1}”	περισσότερες από μία ενέργειες ονομάζονται «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	η ενέργεια «{_1}» ορίζει την προτίμηση φακέλου {_2}· διαγράψτε αυτό το βήμα για να αποθηκεύσετε το σύνολο
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
 	Smudge Stick…	Μουτζούρα…
 	Smudge Stick	Μουτζούρα
@@ -6295,8 +6352,8 @@ axis	Y Axis	Άξονας Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	ένα πρόσθετο εξαγωγής δηλώνει 1 έως {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	το πολύ {MAX_UNGROUPED} παράμετροι εκτός ομάδων: δώστε στις υπόλοιπες ένα `group`
 @msg	can't encode the input	η είσοδος δεν μπορεί να κωδικοποιηθεί
-@msg	expected {"dataBase64"}	αναμενόταν {"dataBase64"}
-@msg	expected {"objects"}	αναμενόταν {"objects"}
+@msg	expected {{"dataBase64": "…"}}	αναμενόταν {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	αναμενόταν {{"objects": [...]}}
 @msg	export `{name}`: {e}	εξαγωγή `{name}`: {e}
 @msg	extension {e} is listed twice	η επέκταση {e} αναφέρεται δύο φορές
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	επέκταση {e}: χρησιμοποιήστε 1-16 πεζά γράμματα και ψηφία, χωρίς την τελεία
@@ -6360,11 +6417,11 @@ axis	Y Axis	Άξονας Y
 @msg	a painted live effect returns only `objects`	ένα ζωντανό εφέ βαφής επιστρέφει μόνο `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills` και `strokes`
 @msg	a read-only object was left out	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {"id"} μόνο ή όπως δόθηκε
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
 @msg	a string	συμβολοσειρά
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap` και `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	ένα περίγραμμα πρέπει να είναι {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ένα εφέ πρέπει να είναι {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	ένα περίγραμμα πρέπει να είναι {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ένα εφέ πρέπει να είναι {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ένα εφέ σε γέμισμα επιστρέφει μόνο `fills`
 @msg	an effect on a stroke returns only `strokes`	ένα εφέ σε περίγραμμα επιστρέφει μόνο `strokes`
 @msg	an object must be a JSON object	ένα αντικείμενο πρέπει να είναι αντικείμενο JSON
@@ -6506,6 +6563,8 @@ axis	Y Axis	Άξονας Y
 	Action Options…	Επιλογές ενέργειας…
 	Action Options	Επιλογές ενέργειας
 	Playback Options…	Επιλογές αναπαραγωγής…
+	Button Mode	Λειτουργία κουμπιών
+	No actions.	Δεν υπάρχουν ενέργειες.
 	Insert Stop…	Εισαγωγή διακοπής…
 	Insert Stop	Εισαγωγή διακοπής
 	Record Stop	Καταγραφή διακοπής
@@ -6571,7 +6630,7 @@ axis	Y Axis	Άξονας Y
 @plural	Result: {n}|Results: {n}	Αποτέλεσμα: {n}|Αποτελέσματα: {n}
 @msg	select one object	επιλέξτε ένα αντικείμενο
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Η καθολική επεξεργασία λειτουργεί σε διαδρομές, σύνθετες διαδρομές, παρουσίες συμβόλων και ομάδες τους
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα περιστραμμένα ή κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	δεν βρέθηκαν παρόμοια αντικείμενα (τα κατοπτρισμένα αντίγραφα δεν εντοπίζονται)· αλλάξτε τις επιλογές καθολικής επεξεργασίας και δοκιμάστε ξανά
 @msg	Global Edit is off	Η καθολική επεξεργασία δεν είναι ενεργή
 @msg	only an object of the Global Edit other than the one it started from can be left out	μπορεί να εξαιρεθεί μόνο ένα αντικείμενο της καθολικής επεξεργασίας εκτός από εκείνο με το οποίο ξεκίνησε
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ή ένα εύρος όπως 1, 3-5, όχι {v}
@@ -6812,6 +6871,8 @@ anchor	Points:	Σημεία:
 	Anchor Inspector	Επιθεωρητής σημείων αγκύρωσης
 	Add Points at Crossings	Προσθήκη σημείων στις διασταυρώσεις
 	Split at Crossings	Διαχωρισμός στις διασταυρώσεις
+	Trim at Crossings Tool	Εργαλείο περικοπής στις διασταυρώσεις
+	Trim at Crossings	Περικοπή στις διασταυρώσεις
 	Extend Path	Επέκταση διαδρομής
 	Measure & Inspect	Μέτρηση και επιθεώρηση
 	Set Anchor	Ορισμός σημείου αγκύρωσης
@@ -7363,11 +7424,20 @@ breakText	Glyphs	Γλύφοι
 	Open Tutorial Sample	Άνοιγμα δείγματος οδηγού εκμάθησης
 	Finish Tutorial	Ολοκλήρωση οδηγού εκμάθησης
 	Next Tutorial	Επόμενος οδηγός εκμάθησης
+	Show Learn Tab	Εμφάνιση καρτέλας της Εκμάθησης
+	Show Skill	Εμφάνιση δεξιότητας
+	Back One Level	Ένα επίπεδο πίσω
 	Back to Skills	Πίσω στις δεξιότητες
 @msg	tutorial `{id}` has no practice sample	ο οδηγός εκμάθησης `{id}` δεν έχει δείγμα εξάσκησης
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ανοίξτε πρώτα το δείγμα εξάσκησης του `{id}` (δείτε learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	ολοκληρώστε πρώτα το `{id}` (δείτε learn.finish)
 @msg	`{id}` is the last tutorial in its skill	το `{id}` είναι ο τελευταίος οδηγός εκμάθησης της δεξιότητάς του
+	Reset progress	Επαναφορά προόδου
+	Mark Tutorial Step	Σήμανση βήματος οδηγού εκμάθησης
+	Reset Learn Progress	Επαναφορά προόδου εκμάθησης
+@msg	missing `step` (see learn.show)	λείπει το `step` (δείτε learn.show)
+@msg	`step` must be a step number from 0 to {last}	το `step` πρέπει να είναι αριθμός βήματος από 0 έως {last}
+@msg	`{id}` is finished (see learn.resetProgress)	το `{id}` έχει ολοκληρωθεί (δείτε learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ανανέωση εφέ σε αναμονή
@@ -7391,3 +7461,129 @@ breakText	Glyphs	Γλύφοι
 	Margin	Περιθώριο
 	Box	Πλαίσιο
 	Swatch	Δείγμα χρώματος
+	Banner Hems and Grommets…	Στριφώματα και τρουκς πανό…
+	Banner Hems and Grommets	Στριφώματα και τρουκς πανό
+	Hem	Στρίφωμα
+	Grommets	Τρουκς
+	Grommet Inset	Απόσταση τρουκς από την άκρη
+	Diameter	Διάμετρος
+	Nest Shapes…	Ένθεση σχημάτων…
+	Nest Shapes	Ένθεση σχημάτων
+	Roll	Ρολό
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books, DXF import and PDF export.
+@msg	3D effects require finite coordinates within 100 million points	Τα εφέ 3D απαιτούν πεπερασμένες συντεταγμένες εντός 100 εκατομμυρίων τυπογραφικών στιγμών
+@msg	3D effects require one to ten lights	Τα εφέ 3D απαιτούν από ένα έως δέκα φώτα
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Βάθος BMP {_1}: 1, 4, 8, 16, 24 ή 32 bit ανά εικονοστοιχείο
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Η κωδικοποίηση BMP απέτυχε: τα {width} × {height} εικονοστοιχεία δεν ταιριάζουν στη μορφή ή στην προσωρινή μνήμη εικονοστοιχείων
+@msg	GIF encoding failed: the palette image is malformed	Η κωδικοποίηση GIF απέτυχε: η εικόνα παλέτας είναι κακοσχηματισμένη
+@msg	GIF encoding failed: {e}	Η κωδικοποίηση GIF απέτυχε: {e}
+@msg	JPEG colour profile: {e}	Προφίλ χρώματος JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Η κωδικοποίηση JPEG απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	JPEG encoding failed: {e}	Η κωδικοποίηση JPEG απέτυχε: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Η κωδικοποίηση PNG απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	PNG encoding failed: the palette image is malformed	Η κωδικοποίηση PNG απέτυχε: η εικόνα παλέτας είναι κακοσχηματισμένη
+@msg	PNG encoding failed: {e}	Η κωδικοποίηση PNG απέτυχε: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Η κωδικοποίηση PNG απέτυχε: τα {width} × {height} εικονοστοιχεία δεν είναι έγκυρο μέγεθος εικόνας
+@msg	PSD colour profile: {e}	Προφίλ χρώματος PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Η κωδικοποίηση PSD απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	Revolve profile contains invalid coordinates	Το προφίλ της περιστροφής γύρω από άξονα περιέχει μη έγκυρες συντεταγμένες
+@msg	Revolve profile is too complex	Το προφίλ της περιστροφής γύρω από άξονα είναι πολύ σύνθετο
+@msg	Revolve projection is not finite	Η προβολή της περιστροφής γύρω από άξονα δεν είναι πεπερασμένη
+@msg	Revolve requires finite profile coordinates within 100 million points	Η περιστροφή γύρω από άξονα απαιτεί πεπερασμένες συντεταγμένες προφίλ εντός 100 εκατομμυρίων τυπογραφικών στιγμών
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Η επιφάνεια περιστροφής είναι πολύ σύνθετη· μειώστε τα «Τμήματα» ή απλοποιήστε το προφίλ
+@msg	Revolve surface is too complex; simplify the profile	Η επιφάνεια περιστροφής είναι πολύ σύνθετη· απλοποιήστε το προφίλ
+@msg	Revolve visibility cannot split the projected boundary	Ο έλεγχος ορατότητας της περιστροφής δεν μπορεί να διαιρέσει το προβαλλόμενο όριο
+@msg	Revolve visibility creates too many fragments	Ο έλεγχος ορατότητας της περιστροφής δημιουργεί πάρα πολλά κομμάτια
+@msg	Revolve visibility creates too many vector anchors	Ο έλεγχος ορατότητας της περιστροφής δημιουργεί πάρα πολλά διανυσματικά σημεία αγκύρωσης
+@msg	Revolve visibility exceeds its geometry work limit	Ο έλεγχος ορατότητας της περιστροφής υπερβαίνει το όριο γεωμετρικών υπολογισμών του
+@msg	Revolve visibility exceeds its spatial index limit	Ο έλεγχος ορατότητας της περιστροφής υπερβαίνει το όριο του χωρικού ευρετηρίου του
+@msg	Revolve visibility has too many boundary crossings	Ο έλεγχος ορατότητας της περιστροφής έχει πάρα πολλές διασταυρώσεις ορίων
+@msg	Revolve visibility has too many input anchors	Ο έλεγχος ορατότητας της περιστροφής έχει πάρα πολλά σημεία αγκύρωσης εισόδου
+@msg	Revolve visibility requires convex cap sectors	Ο έλεγχος ορατότητας της περιστροφής απαιτεί κυρτούς τομείς καλυμμάτων
+@msg	Revolve visibility requires finite projected faces	Ο έλεγχος ορατότητας της περιστροφής απαιτεί πεπερασμένες προβαλλόμενες έδρες
+@msg	SVG options: {e}	Επιλογές SVG: {e}
+@msg	Save for Web settings: {e}	Ρυθμίσεις αποθήκευσης για ιστό: {e}
+@msg	TIFF colour profile: {e}	Προφίλ χρώματος TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Η κωδικοποίηση TIFF απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	TIFF encoding failed: {e}	Η κωδικοποίηση TIFF απέτυχε: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Βάθος Targa {_1}: 16, 24 ή 32 bit ανά εικονοστοιχείο
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Η κωδικοποίηση Targa απέτυχε: η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	The 3D projection is not finite	Η προβολή 3D δεν είναι πεπερασμένη
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Η σκιά 3D είναι πολύ σύνθετη· απενεργοποιήστε τις «Σκιές» ή απλοποιήστε το σχέδιο
+@msg	The shape contains invalid coordinates	Το σχήμα περιέχει μη έγκυρες συντεταγμένες
+@msg	Too many Revolve faces for visibility evaluation	Πάρα πολλές έδρες περιστροφής για τον έλεγχο ορατότητας
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	Το VectorCraft διαβάζει το πολύ {ASE_MAX_ENTRIES} χρώματα και ομάδες από ένα αρχείο ανταλλαγής δειγμάτων, και αυτή η βιβλιοθήκη έχει {entries}
+@msg	WebP encoding failed: {e}	Η κωδικοποίηση WebP απέτυχε: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`index` must be a whole number	Το `index` πρέπει να είναι ακέραιος αριθμός
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	Το `view` είναι smallThumb, mediumThumb, largeThumb, smallList ή largeList
+@msg	a line can't run from a point to itself	μια γραμμή δεν μπορεί να ξεκινά και να καταλήγει στο ίδιο σημείο
+@msg	a line needs at least two points	μια γραμμή χρειάζεται τουλάχιστον δύο σημεία
+@msg	a number cannot be read	ένας αριθμός δεν μπορεί να διαβαστεί
+@msg	a swatch exchange block is too long	ένα μπλοκ του αρχείου ανταλλαγής δειγμάτων είναι πολύ μεγάλο
+@msg	a swatch exchange name is too long	ένα όνομα του αρχείου ανταλλαγής δειγμάτων είναι πολύ μεγάλο
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	μια εικόνα {sw} × {sh} δεν μπορεί να αλλάξει μέγεθος σε {width} × {height} εικονοστοιχεία
+@msg	a {width} × {height} image is too large	μια εικόνα {width} × {height} είναι πολύ μεγάλη
+@msg	a {width} × {height} image: {e}	μια εικόνα {width} × {height}: {e}
+@msg	an image could not be written: {e}	μια εικόνα δεν μπόρεσε να γραφτεί: {e}
+@msg	an image that couldn't be read was left out	παραλείφθηκε μια εικόνα που δεν μπόρεσε να διαβαστεί
+@msg	can't open “{name}”: {e}	δεν είναι δυνατό το άνοιγμα του «{name}»: {e}
+@msg	cannot align zip entries to {align} bytes	δεν είναι δυνατή η στοίχιση των καταχωρίσεων zip σε {align} byte
+@msg	cannot open the automation {kind} root `{_1}`: {e}	δεν είναι δυνατό το άνοιγμα της ρίζας αυτοματισμού ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	δεν είναι δυνατή η ανάγνωση του προφίλ: {0}
+@msg	color book version {version} isn't supported (only 1)	η έκδοση {version} του βιβλίου χρωμάτων δεν υποστηρίζεται (μόνο 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	τα βιβλία χρωμάτων στον χρωματικό χώρο {other} δεν υποστηρίζονται (μόνο RGB, CMYK και Lab)
+@msg	file name too long to zip: {_1}	το όνομα αρχείου είναι πολύ μεγάλο για συμπίεση zip: {_1}
+@msg	file name too long to zip: {name}	το όνομα αρχείου είναι πολύ μεγάλο για συμπίεση zip: {name}
+@msg	freeform line {i}: {e}	γραμμή ελεύθερης μορφής {i}: {e}
+@msg	freeform point {i}: {e}	σημείο ελεύθερης μορφής {i}: {e}
+@msg	give `{key}` or `{other}`, not both	δώστε `{key}` ή `{other}`, όχι και τα δύο
+@msg	grayscale profiles can't be working spaces yet	τα προφίλ κλίμακας του γκρι δεν μπορούν ακόμη να είναι χρωματικοί χώροι εργασίας
+@msg	input contains NaN or infinite coordinates	η είσοδος περιέχει συντεταγμένες NaN ή άπειρες συντεταγμένες
+@msg	input path could not be closed	η διαδρομή εισόδου δεν μπόρεσε να κλείσει
+@msg	invalid ICC profile: {0}	μη έγκυρο προφίλ ICC: {0}
+@msg	invalid scale {scale}	μη έγκυρη κλίμακα {scale}
+@msg	its localized names take more than {_1} KB	τα τοπικοποιημένα ονόματά του καταλαμβάνουν περισσότερα από {_1} KB
+@msg	its objects are nested too deep ({e})	τα αντικείμενά του είναι ένθετα σε πολύ μεγάλο βάθος ({e})
+@msg	its tag table lists the `{_1}` tag more than once	ο πίνακας ετικετών του περιέχει την ετικέτα `{_1}` περισσότερες από μία φορές
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	οι ομάδες διάτρησης με πάρα πολλά επικαλυπτόμενα ημιδιαφανή στοιχεία γράφονται ως ομάδες διάτρησης PDF: τα ημιδιαφανή στοιχεία τους διατρυπούν πλήρως ό,τι καλύπτουν
+@msg	not a graphic style library: {e}	δεν είναι βιβλιοθήκη στυλ γραφικών: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	δεν είναι βιβλιοθήκη δειγμάτων (.vcswatches ή .gpl)
+@msg	not a swatch library (format `{_1}`)	δεν είναι βιβλιοθήκη δειγμάτων (μορφή `{_1}`)
+@msg	not a swatch library: {e}	δεν είναι βιβλιοθήκη δειγμάτων: {e}
+@msg	not an action set file ({e})	δεν είναι αρχείο συνόλου ενεργειών ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	ο χρωματικός χώρος {other} του προφίλ δεν είναι RGB, CMYK ή Gray
+@msg	regular expression too large	η κανονική έκφραση είναι πολύ μεγάλη
+@msg	script file is not UTF-8 text: {value}	το αρχείο σεναρίου δεν είναι κείμενο UTF-8: {value}
+@msg	stop {i}: {e}	σημείο χρώματος {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	η έκδοση {major}.{minor} του αρχείου ανταλλαγής δειγμάτων δεν υποστηρίζεται (μόνο 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	το βιβλίο χρωμάτων περιέχει περισσότερα από {ASE_MAX_ENTRIES} χρώματα
+@msg	the color book is cut short	το βιβλίο χρωμάτων είναι περικομμένο
+@msg	the color book's names take more than {_1} MB	τα ονόματα του βιβλίου χρωμάτων καταλαμβάνουν περισσότερα από {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	η εικόνα θα ήταν {w} × {h} εικονοστοιχεία· οι εξαγωγές raster περιορίζονται σε {MAX_RASTER_SIDE} εικονοστοιχεία ανά πλευρά και {_1} μεγαεικονοστοιχεία: μειώστε την κλίμακα ή την ανάλυση
+@msg	the optimised image can't be read back: {e}	η βελτιστοποιημένη εικόνα δεν μπορεί να διαβαστεί ξανά: {e}
+@msg	the pixel buffer doesn't match the image size	η προσωρινή μνήμη εικονοστοιχείων δεν αντιστοιχεί στο μέγεθος της εικόνας
+@msg	the preview: {e}	η προεπισκόπηση: {e}
+@msg	the request may not read the New Document profiles folder	το αίτημα δεν επιτρέπεται να διαβάσει τον φάκελο προφίλ νέου εγγράφου
+@msg	the shapes are too degenerate to combine	τα σχήματα είναι πολύ εκφυλισμένα για να συνδυαστούν
+@msg	the shapes cross themselves and each other too often to combine	τα σχήματα τέμνουν τον εαυτό τους και το ένα το άλλο πάρα πολλές φορές για να συνδυαστούν
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	το αρχείο ανταλλαγής δειγμάτων περιέχει περισσότερα από {ASE_MAX_ENTRIES} χρώματα και ομάδες
+@msg	the swatch exchange file is cut short	το αρχείο ανταλλαγής δειγμάτων είναι περικομμένο
+@msg	the {_1} plate can't be read: {e}	η πλάκα {_1} δεν μπορεί να διαβαστεί: {e}
+@msg	this binary DXF file is damaged or cut short	αυτό το δυαδικό αρχείο DXF είναι κατεστραμμένο ή περικομμένο
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	αυτό είναι σχέδιο DWG και δεν μπορεί να διαβαστεί: αποθηκεύστε το ως DXF από την εφαρμογή CAD και ανοίξτε το
+@msg	too many classes	υπερβολικά πολλές κλάσεις
+@msg	too many groups	υπερβολικά πολλές ομάδες
+@msg	too many layers for PSD (at most 32767)	πάρα πολλά επίπεδα για PSD (το πολύ 32767)
+@msg	too many swatch exchange blocks	πάρα πολλά μπλοκ στο αρχείο ανταλλαγής δειγμάτων
+@msg	unknown colour profile: {0}	άγνωστο προφίλ χρώματος: {0}
+@msg	{_1} clashes with a built-in profile name	το {_1} συγκρούεται με το όνομα ενός ενσωματωμένου προφίλ
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	τα {_1} × {_2} εικονοστοιχεία είναι υπερβολικό μέγεθος για GIF (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+@msg	{_1}: no usable transform to/from sRGB	{_1}: δεν υπάρχει χρησιμοποιήσιμος μετασχηματισμός προς/από sRGB
+@msg	{name} is not a CMYK profile	το {name} δεν είναι προφίλ CMYK
+@msg	{name} is not an RGB profile	το {name} δεν είναι προφίλ RGB
+@msg	{path}: could not be read	{path}: δεν ήταν δυνατή η ανάγνωση
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για JPEG (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	τα {width} × {height} εικονοστοιχεία είναι υπερβολικό μέγεθος για Targa (το πολύ 65535 εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	τα {w} × {h} εικονοστοιχεία είναι υπερβολικό μέγεθος για PSD (το πολύ {MAX_SIDE} εικονοστοιχεία ανά πλευρά): μειώστε την ανάλυση

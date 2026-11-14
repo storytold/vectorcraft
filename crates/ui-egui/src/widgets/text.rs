@@ -94,9 +94,20 @@ pub(crate) fn dialog_reject_commit_flag() -> egui::Id {
     egui::Id::unique("dialog-reject-commit")
 }
 
-/// Suppress confirming an open dialog on Enter during this frame when an invalid value was committed.
+/// The pass (`cumulative_pass_nr`) in which a field last rejected an invalid commit: a click on a
+/// dialog's OK whose press came at or before it doesn't confirm the dialog.
+pub(crate) fn dialog_reject_pass() -> egui::Id {
+    egui::Id::unique("dialog-reject-pass")
+}
+
+/// Suppress confirming an open dialog on Enter during this frame, or by the click on OK that took
+/// the focus from the field, when an invalid value was committed.
 pub(crate) fn reject_dialog_commit(ctx: &egui::Context) {
-    ctx.data_mut(|d| d.insert_temp(dialog_reject_commit_flag(), true));
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data_mut(|d| {
+        d.insert_temp(dialog_reject_commit_flag(), true);
+        d.insert_temp(dialog_reject_pass(), pass);
+    });
 }
 
 /// The app sets this at the start of each frame: while a dialog is open, Shift+Enter in a field

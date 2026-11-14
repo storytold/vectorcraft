@@ -103,6 +103,112 @@ fn use_artboards_false_writes_one_page_of_the_arts_bounds() {
     }
 }
 
+/// A page of the art's bounds is measured on the layers the PDF draws: a non-printing layer that
+/// the PDF leaves out doesn't make it larger, unless `includeNonPrinting` or `createLayers` keeps
+/// the layer. A `.ai` file of the art's bounds, which keeps layers by default, measures it unless
+/// `createLayers` is off. A document whose only visible art doesn't print is refused.
+#[test]
+fn a_page_of_the_arts_bounds_leaves_out_non_printing_layers() {
+    let mut s = session(1);
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    let notes = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+    s.execute("layer.setProps", &json!({"id": notes, "printable": false})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
+    let size = |bytes: &[u8]| vectorcraft_pdf::import(bytes).unwrap().artboards[0].rect.size();
+    let printed = size(&b64(&export(&mut s, json!({"useArtboards": false}))));
+    assert!(printed.width < 50.0 && printed.height < 40.0, "{printed:?}");
+    let through_export = s.execute("document.export", &as_export(&json!({"useArtboards": false}))).unwrap();
+    assert_eq!(size(&b64(&through_export)), printed);
+    let ai = |s: &mut Session, extra: Value| {
+        let mut p = json!({"format": "ai", "useArtboards": false});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        size(&b64(&s.execute("document.export", &p).unwrap_or_else(|e| panic!("{p}: {e}"))))
+    };
+    assert_eq!(ai(&mut s, json!({"createLayers": false})), printed);
+    let kept = [
+        size(&b64(&export(&mut s, json!({"useArtboards": false, "includeNonPrinting": true})))),
+        size(&b64(&export(&mut s, json!({"useArtboards": false, "createLayers": true})))),
+        ai(&mut s, json!({})),
+    ];
+    for all in kept {
+        assert!(all.width > 200.0 && all.height > 200.0, "{all:?}");
+    }
+
+    // Only the non-printing layer shows: the PDF would draw nothing.
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+    for p in [json!({"useArtboards": false}), json!({"useArtboards": false, "includeNonPrinting": false})] {
+        let e = s.execute("document.exportPdf", &p).unwrap_err().to_string();
+        assert!(e.contains("no visible art"), "{p}: {e}");
+    }
+    let e = s.execute("document.export", &json!({"format": "ai", "useArtboards": false, "createLayers": false})).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+    assert!(size(&b64(&export(&mut s, json!({"useArtboards": false, "includeNonPrinting": true})))).width < 25.0);
+}
+
+/// In a PDF without a standard, the warning for a page longer than 14,400 pt written with a
+/// `UserUnit` above 1 names "Write pages longer than 200 in at full size in points": at PDF 1.5
+/// (written as 1.6) and later, through `document.exportPdf`, `document.export`, a page of the
+/// art's bounds and the Summary's export, with one such warning per page. PDF/A files and `.ai`
+/// saves keep the warning without the option's name. Pages written in points (the option on, PDF
+/// 1.4, PDF/X, a page too narrow for a `UserUnit` above 1) and a page too long and narrow for
+/// 14,400 units have other warnings, which don't name it.
+#[test]
+fn a_page_with_a_user_unit_names_the_option_that_writes_it_in_points() {
+    use super::pdf::LONG_PAGES_IN_POINTS;
+    const SMALLER: &str = "so apps that ignore UserUnit show it that many times smaller";
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 20_000, "height": 1_000})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 19_000, "height": 500})).unwrap();
+    let warnings = |v: &Value| -> Vec<String> {
+        v["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str()).filter(|w| w.contains("UserUnit")).map(str::to_string).collect()
+    };
+    let named = |v: &Value| warnings(v).iter().any(|w| w.contains(LONG_PAGES_IN_POINTS));
+    for p in [
+        json!({"longPagesInPoints": false}),
+        json!({"longPagesInPoints": false, "compatibility": "1.5"}),
+        json!({"longPagesInPoints": false, "compatibility": "2.0"}),
+        json!({"longPagesInPoints": false, "useArtboards": false}),
+    ] {
+        let mut q = p.clone();
+        q["includeDocument"] = json!(true);
+        for v in [export(&mut s, p.clone()), s.execute("document.export", &as_export(&p)).unwrap(), s.execute("document.pdfSettings", &q).unwrap()] {
+            let page: Vec<String> = warnings(&v).into_iter().filter(|w| w.starts_with("the page of artboard")).collect();
+            assert_eq!(page.len(), 1, "{p}: {v}");
+            assert!(page[0].ends_with(&format!("{SMALLER}{LONG_PAGES_IN_POINTS}")), "{p}: {page:?}");
+            assert_eq!(warnings(&v).iter().filter(|w| w.contains("apps that ignore UserUnit")).count(), 1, "{p}: {v}");
+        }
+    }
+    for p in [
+        json!({"longPagesInPoints": true}),
+        json!({"longPagesInPoints": false, "compatibility": "1.4"}),
+        json!({"longPagesInPoints": false, "preset": "PDF/X-4:2010"}),
+    ] {
+        assert!(!named(&export(&mut s, p.clone())), "{p}");
+    }
+    for p in
+        [json!({"longPagesInPoints": false, "standard": "pdfA2b"}), json!({"longPagesInPoints": false, "standard": "pdfA2b", "compatibility": "1.4"})]
+    {
+        let v = export(&mut s, p.clone());
+        assert!(warnings(&v).iter().any(|w| w.ends_with(SMALLER)) && !named(&v), "{p}: {v}");
+    }
+    let ai = s.execute("document.export", &json!({"format": "ai", "longPagesInPoints": false})).unwrap();
+    assert!(warnings(&ai).iter().any(|w| w.ends_with(SMALLER)) && !named(&ai), "{ai}");
+    // The art's bounds are within 14,400 pt.
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("edit.clear", &json!({})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 100, "y": 100, "width": 500, "height": 500})).unwrap();
+    assert!(!named(&export(&mut s, json!({"longPagesInPoints": false, "useArtboards": false}))));
+    // A page 3 pt high keeps a UserUnit of 1, so it is written in points either way; a page
+    // 85,040 × 17 pt gets a UserUnit above 1 that leaves its long side past 14,400 units.
+    for (w, h) in [(20_000, 3), (85_040, 17)] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": w, "height": h})).unwrap();
+        s.execute("shape.rectangle", &json!({"x": 100, "y": 0, "width": w - 1_000, "height": h})).unwrap();
+        let v = export(&mut s, json!({"longPagesInPoints": false}));
+        assert!(!named(&v), "{w} × {h}: {v}");
+    }
+}
+
 /// A PDF of the art's bounds carries no Preserve Editing data, through `document.exportPdf`,
 /// `document.export` and the Summary's export in memory, and says so in a warning: reopened, its
 /// editing data would replace the document's artboards with the one around the art. A PDF of the
@@ -240,11 +346,22 @@ fn options_not_applied_yet_and_document_features_warn() {
     let frame = s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 50, "height": 40})).unwrap()["id"].as_u64().unwrap();
     s.execute("paint.setStroke", &json!({"ids": [frame], "swatch": "Dots"})).unwrap();
     assert_eq!(warnings(&export(&mut s, json!({}))).len(), 0);
-    // A knockout group is approximated: its warning comes back from every PDF path.
+    // A knockout group is written as a PDF knockout group: nothing to report.
     s.execute("select.set", &json!({"ids": [frame]})).unwrap();
     s.execute("object.group", &json!({})).unwrap();
     s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     let knockout = |w: Vec<String>| w.iter().any(|w| w.contains("knockout groups"));
+    assert!(!knockout(warnings(&export(&mut s, json!({})))));
+    // One whose soft masks would draw a brushed stroke is approximated: its warning comes back
+    // from every PDF path.
+    let rect =
+        |s: &mut Session, x: i32| s.execute("shape.rectangle", &json!({"x": x, "y": 45, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let (lower, upper) = (rect(&mut s, 20), rect(&mut s, 40));
+    s.execute("brush.apply", &json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [lower, upper]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     assert!(knockout(warnings(&export(&mut s, json!({})))));
     assert!(knockout(warnings(&s.execute("document.export", &as_export(&json!({}))).unwrap())));
     // Other formats have none.
@@ -367,6 +484,17 @@ fn pdf_settings_summarise_changes_and_warnings() {
     // Raster effects are written as images: nothing to report.
     s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [g]})).unwrap();
     assert_eq!(s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap()["warnings"], json!([]));
+    s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
+    // A knockout group is written as a PDF knockout group: nothing to report.
+    assert_eq!(s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap()["warnings"], json!([]));
+    // One whose soft masks would draw a brushed stroke is approximated.
+    let rect =
+        |s: &mut Session, x: i32| s.execute("shape.rectangle", &json!({"x": x, "y": 45, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    let (lower, upper) = (rect(&mut s, 20), rect(&mut s, 40));
+    s.execute("brush.apply", &json!({"ids": [upper], "name": "3 pt. Round"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [lower, upper], "opacity": 50, "knockoutShape": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [lower, upper]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
     s.execute("transparency.set", &json!({"knockout": "on"})).unwrap();
     assert_eq!(s.execute("document.pdfSettings", &json!({})).unwrap()["warnings"], json!([]));
     let full = s.execute("document.pdfSettings", &json!({"includeDocument": true})).unwrap();

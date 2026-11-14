@@ -272,6 +272,33 @@ fn instances_the_def_cant_stand_for_get_their_own_art() {
     assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 24.0, 0.002);
 }
 
+/// An instance half stained red whose Transform effect moves it 60 pt right is written in its
+/// stained colors where the canvas draws it, on its own and inside a group.
+#[test]
+fn a_stained_instance_with_a_geometry_effect_keeps_its_stain() {
+    for grouped in [false, true] {
+        let mut d = symbol_doc(0.0, &[]);
+        let mut stained = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "My Mark".into(), xf: Affine::translate((40.0, 60.0)) });
+        stained.appearance = Appearance::basic(Paint::solid(Color::rgb8(255, 0, 0)), Paint::None, 0.0).into();
+        stained.appearance.items.retain(|i| i.is_fill());
+        if let vectorcraft_doc::AppearanceItem::Fill(f) = &mut stained.appearance.items[0] {
+            f.opacity = 0.5;
+        }
+        stained.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "distort.transform".into(),
+            params: serde_json::json!({"moveH": 60.0}),
+            visible: true,
+        });
+        let n = if grouped { Node::group(d.alloc_id(), vec![Arc::new(stained)]) } else { stained };
+        let l = d.layers[0].id;
+        d.insert(Some(l), usize::MAX, n).unwrap();
+        let svg = export(&d, &ExportOptions::default());
+        let blue = Color::rgb8(30, 90, 220).to_hex().to_ascii_lowercase();
+        assert!(!svg.to_ascii_lowercase().contains(&blue), "the symbol's own blue is stained: {svg}");
+        assert_similar(&render_artboard(&d), &resvg_render(&svg, 200, 120), 24.0, 0.003);
+    }
+}
+
 #[test]
 fn pattern_paints_in_symbols_stay_on_the_page() {
     let mut d = Document::new(200.0, 120.0);

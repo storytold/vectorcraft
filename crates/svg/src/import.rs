@@ -20,7 +20,7 @@ use text::TextSlots;
 
 pub use depth::MAX_ELEMENT_DEPTH;
 pub(crate) use depth::xml_too_deep;
-pub use files::MAX_NESTED_SVG_IMAGES;
+pub use files::{MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, MAX_NESTED_SVG_TEXT};
 pub(crate) use fx::BLEND;
 
 /// Most objects an imported SVG may expand to: a guard against `<use>` and nested-image

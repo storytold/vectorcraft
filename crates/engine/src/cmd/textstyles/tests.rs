@@ -397,6 +397,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
         json!({"tcyLeftRight": -1296.1}),
         json!({"akiLeft": -0.1}),
         json!({"akiRight": 1000.1}),
+        json!({"tsume": -0.1}),
+        json!({"tsume": 100.1}),
     ] {
         let key = attrs.as_object().unwrap().keys().next().unwrap();
         for cmd in ["charStyle.edit", "charStyle.setAttrs", "charStyle.new"] {
@@ -419,7 +421,8 @@ fn character_style_dimensions_are_checked_before_a_definition_changes() {
             "h_scale": 1.0, "v_scale": 10000.0,
             "baseline_shift": -1296.0,
             "tcyUpDown": 1296.0, "tcyLeftRight": -1296.0,
-            "akiLeft": 0.0, "akiRight": 1000.0
+            "akiLeft": 0.0, "akiRight": 1000.0,
+            "tsume": 100.0
         }}),
     )
     .unwrap();
@@ -824,8 +827,8 @@ fn load_all_styles_loads_both_kinds_in_one_step() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
-/// A loaded character style whose size, scale, leading, shift or stroke width is out of the range
-/// `charStyle.new` takes is skipped.
+/// A loaded character style whose size, scale, leading, shift, warichu Line Gap or stroke width is
+/// out of the range `charStyle.new` takes is skipped.
 #[test]
 fn loaded_styles_out_of_range_are_skipped() {
     let (mut s, _) = session_with_text("Title");
@@ -834,11 +837,12 @@ fn loaded_styles_out_of_range_are_skipped() {
         ("Flat", json!({"h_scale": 0.5})),
         ("Shifted", json!({"baseline_shift": 5000.0})),
         ("Thick", json!({"stroke_width": -2.0})),
+        ("Gapped", json!({"warichuGap": 500.0})),
         ("Fine", json!({"size": 12.0, "h_scale": 50.0})),
     ];
     let data = styles_file(&file, &[]);
     let r = s.execute("charStyle.load", &json!({"dataBase64": data, "name": "Other.vectorcraft"})).unwrap();
-    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": ["Huge", "Flat", "Shifted", "Thick"]}));
+    assert_eq!(r, json!({"added": ["Fine"], "existing": [], "skipped": ["Huge", "Flat", "Shifted", "Thick", "Gapped"]}));
     assert_eq!(listed(&mut s, "charStyle"), [NORMAL_CHAR, "Fine"]);
 }
 

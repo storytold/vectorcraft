@@ -13,6 +13,7 @@ pub mod parametric_shape;
 pub mod shared_edge;
 pub mod slide_anchor;
 pub mod smart_pen;
+pub mod trim;
 
 use crate::{Tool, ToolInfo};
 
@@ -25,6 +26,7 @@ pub const PATH_TOOLS: &[ToolInfo] = &[
     ToolInfo { id: corner_tool::ID, label: "Corner Tool", shortcut: None, icon: "dc-rounded-rect" },
     ToolInfo { id: slide_anchor::ID, label: "Slide Anchor Along Path", shortcut: None, icon: "dc-anchor" },
     ToolInfo { id: shared_edge::ID, label: "Shared Edge Merge Tool", shortcut: None, icon: "dc-join" },
+    ToolInfo { id: trim::ID, label: "Trim at Crossings Tool", shortcut: None, icon: "dc-pf-trim" },
 ];
 
 /// Smart Pen's tool, a flyout group of its own.
@@ -60,6 +62,7 @@ pub fn create(id: &str) -> Option<Box<dyn Tool>> {
         shared_edge::ID => Box::new(shared_edge::SharedEdgeTool::default()),
         slide_anchor::ID => Box::new(slide_anchor::SlideAnchorTool::default()),
         smart_pen::ID => Box::new(smart_pen::SmartPenTool::default()),
+        trim::ID => Box::new(trim::TrimTool::default()),
         enclosing_lasso::ID => Box::new(enclosing_lasso::EnclosingLassoTool::default()),
         contour::ID => Box::new(contour::ContourTool::default()),
         box3d::ID => Box::new(box3d::Box3dTool::default()),

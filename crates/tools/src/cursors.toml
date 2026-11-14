@@ -453,6 +453,7 @@ group = "Navigation"
 shown_when = [
     "The Rotate, Reflect, Scale and Shear tools with nothing selected.",
     "Puppet Warp off the mesh, where no pin can go.",
+    "The Smooth tool, and the Pencil or Blob Brush where Alt gives the Smooth tool, when no path is selected that the Smooth tool can act on: a drag changes nothing.",
 ]
 hotspot = "The centre."
 designer = false
@@ -628,7 +629,9 @@ hotspot = "The lead tip."
 [[cursor]]
 id = "PencilNew"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool before a press that draws a new freehand path: the pointer is not within Edit Selected Paths of a selected path that the press would continue from an end or redraw. Over such a path, and while a stroke is drawn, the Pencil cursor has no star."]
+shown_when = [
+    "The Pencil tool before a press that draws a new freehand path: the pointer is not within Edit Selected Paths of a selected path that the press would continue from an end or redraw. Over such a path, and while a stroke is drawn, the Pencil cursor has no star.",
+]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a small star badge, where PencilClose has its ring."
 
@@ -638,6 +641,7 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Pencil tool with Alt pressed after the drag starts, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path. A drag started with Shift or Alt held draws an open straight line and does not show this cursor.",
     "The Pencil tool while a freehand stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+    "The Pencil tool while a stroke continuing a selected open path, freehand or a straight line, is drawn to within Close Paths When Ends Are Within of that path's other end: releasing the mouse button there closes the path.",
 ]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
@@ -645,16 +649,21 @@ look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
 [[cursor]]
 id = "PencilStraight"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone."]
+shown_when = [
+    "The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone.",
+]
 hotspot = "The lead tip."
-look = "The Pencil cursor with a short straight-line badge, where PencilClose has its ring."
+look = "The Pencil cursor with a short level-line badge, where PencilClose has its ring."
 
 [[cursor]]
 id = "PencilContinue"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool over an end of a selected open path, within Edit Selected Paths, with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line that continues the path from that end."]
+shown_when = [
+    "The Pencil tool over an end of a selected open path, within Edit Selected Paths, before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press continues the path from that end, freehand, or with a straight line when Shift or Alt is held.",
+    "The Pencil tool while a stroke continuing a selected path ends within Edit Selected Paths of an open end of another path selected at the press: releasing the mouse button connects the two.",
+]
 hotspot = "The lead tip."
-look = "PencilStraight's badge with a small filled square at the line's lower end (the end point the line continues from)."
+look = "The Pencil cursor with a short badge line rising to the right, where PencilClose has its ring (the stroke carries on from the path)."
 
 [[cursor]]
 id = "Paintbrush"
@@ -690,10 +699,10 @@ look = "Only a small dot at the centre, as the Blob Brush's: the tip outline dra
 id = "Smooth"
 group = "Drawing and editing tools"
 shown_when = [
-    "The Smooth tool: a drag along a selected path smooths it.",
-    "The Pencil tool with Alt key toggles to Smooth Tool on: with Alt held before a stroke begins to draw, and through a drag that smooths.",
-    "The Paintbrush tool with Alt held before a press while a path is selected that the Smooth tool can act on (an editable path, not a guide, with three or more anchors on one of its subpaths), and through a drag that smooths.",
-    "The Blob Brush tool with Alt held before a press, or before the drag has moved from the press point, and through a drag that smooths.",
+    "The Smooth tool while a path is selected that it can act on (an editable path, not a guide, with three or more anchors on one of its subpaths), wherever the pointer is: a drag along the path smooths it. With no such path selected, Not Allowed shows.",
+    "The Pencil tool with Alt key toggles to Smooth Tool on and such a path selected: with Alt held before a stroke begins to draw, and through a drag that smooths.",
+    "The Paintbrush tool with Alt held before a press while such a path is selected, and through a drag that smooths.",
+    "The Blob Brush tool with such a path selected: with Alt held before a press, or before the drag has moved from the press point, and through a drag that smooths.",
 ]
 hotspot = "The tip."
 

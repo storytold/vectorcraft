@@ -164,7 +164,13 @@ fn long_pages_in_points_round_trips_through_presets_and_reopens_at_full_size() {
     let v = s.execute("document.exportPdf", &json!({"preset": "Banner"})).unwrap();
     let bytes = pdf(&v);
     assert!(String::from_utf8_lossy(&bytes).contains("/UserUnit 1.969"));
-    assert!(warned(&v, "it is written with a UserUnit of 1.969, so apps that ignore UserUnit show it that many times smaller"), "{v}");
+    assert!(
+        warned(
+            &v,
+            "it is written with a UserUnit of 1.969, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points"
+        ),
+        "{v}"
+    );
     reopened(&bytes);
     for bad in [json!("yes"), json!(1)] {
         assert!(is_bad_params(s.execute("document.exportPdf", &json!({"longPagesInPoints": bad}))), "{bad}");

@@ -244,8 +244,9 @@ fn summary_warnings_are_translated() {
 }
 
 /// The warnings and the error for a page longer than 14,400 pt are translated: a PDF 1.5 file
-/// written as PDF 1.6, a page with a `UserUnit`, a PDF/X-4 page in points, a refused PDF/X-1a
-/// file and a page too narrow for the `UserUnit` its long side needs.
+/// written as PDF 1.6, a page with a `UserUnit` with the option that writes it in points, a
+/// PDF/X-4 page in points, a refused PDF/X-1a file and a page too narrow for the `UserUnit` its
+/// long side needs.
 #[test]
 fn long_page_notes_are_translated() {
     let mut s = Session::new();
@@ -262,7 +263,14 @@ fn long_page_notes_are_translated() {
     let warnings = r["warnings"].as_array().unwrap().iter().filter_map(|w| w.as_str());
     notes.extend(warnings.filter(|w| w.contains("too long and narrow")).map(str::to_string));
     assert_eq!(notes.len(), 5, "{notes:?}");
-    let english = ["has no UserUnit, which", "apps that ignore UserUnit", "apps that keep to the limit", "real numbers up to", "too long and narrow"];
+    let english = [
+        "has no UserUnit, which",
+        "apps that ignore UserUnit",
+        "apps that keep to the limit",
+        "real numbers up to",
+        "too long and narrow",
+        "turn on",
+    ];
     for code in ["de", "fr", "ja", "zh-hans"] {
         let lang = crate::i18n::Lang::from_code(code).unwrap();
         for note in &notes {

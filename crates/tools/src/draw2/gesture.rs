@@ -23,6 +23,8 @@
 //! pointer, even if Alt is released during the drag. Shift on each drag or release constrains that
 //! line to 45° steps from the canvas axes.
 
+mod area;
+
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -31,9 +33,10 @@ use vectorcraft_doc::{NodeId, NodeKind};
 use vectorcraft_geom::{Affine, BezPath, FillRule, ParamCurve, PathData, PathSeg, Point, Rect, Vec2, shapes};
 use vectorcraft_pathops as po;
 
-use super::{FEEDBACK, blob_area, blob_tip, eraser_area, eraser_tip, points_json, polyline};
+use super::{FEEDBACK, blob_area, blob_tip, eraser_tip, points_json, polyline};
 use crate::guides::DrawSnap;
 use crate::{Action, Cursor, Mods, Overlay, PenPose, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
+use area::{AreaKey, AreaPreview};
 
 /// How far from its drag the Smooth tool smooths, in screen pixels. Alt smoothing with the
 /// Pencil, Paintbrush or Blob Brush uses the same radius.
@@ -69,7 +72,7 @@ const BAND_WORK_PER_CALL: usize = 20_000;
 /// a fit's cost grows as its Fidelity shrinks (at 0.01 pt a long pen stroke lagged, #4565), and
 /// a preview within half a pixel of the stroke looks the same. The release fits it at its Fidelity.
 const PREVIEW_FIDELITY_PX: f64 = 0.5;
-/// The Smooth tool's Fidelity until Smooth Tool Options sets another.
+/// The Smooth tool's Fidelity (screen pixels) until Smooth Tool Options sets another.
 const SMOOTH_FIDELITY: f64 = 2.5;
 
 /// The `fidelity` (points) the Pencil and the Paintbrush send `path.freehand` for `px` screen pixels
@@ -95,8 +98,13 @@ pub struct GestureTool {
     /// A release where the pointer last dragged to would close the stroke because it ends near
     /// its start (Close Paths When Ends Are Within): the cursor shows the closing ring.
     near_start: bool,
+    /// A release where the pointer last dragged to would connect the continued path to another
+    /// selected path's open end (`finish`): the cursor shows the continuation cursor.
+    connects: bool,
     /// Pencil/Paintbrush continuing a selected open path: (path, continue from its start).
     extend: Option<(NodeId, bool)>,
+    /// The other end of the path `extend` continues: a release near it closes the path.
+    close_to: Option<Point>,
     /// A Pencil stroke continuing a selected open path: the other paths selected at the press,
     /// whose open ends it connects to.
     connect_to: Vec<NodeId>,
@@ -104,8 +112,8 @@ pub struct GestureTool {
     /// Paths' distance in points); the stroke redraws the section it ends on (#2850).
     redraw: Option<(NodeId, f64)>,
     /// Fit tolerance (Pencil/Paintbrush/Smooth/Blob Brush "Fidelity"): in screen pixels for the
-    /// Pencil and the Paintbrush, so a stroke keeps as many points at any zoom (#5729), in points
-    /// for the others.
+    /// Pencil and the Paintbrush, so a stroke keeps as many points at any zoom (#5729), and for the
+    /// Smooth tool, so a drag smooths as much at any zoom; in points for the Blob Brush.
     pub fidelity: f64,
     /// Brush / eraser diameter in points (the Eraser's across its tip's long axis).
     pub size: f64,
@@ -136,8 +144,8 @@ pub struct GestureTool {
     /// preview shows the points joined by straight segments and the release fits them (Pencil
     /// only, on by default).
     pub live_fit: bool,
-    /// The Smooth tool's Fidelity, used when Alt switches the Pencil, Paintbrush or Blob Brush to Smooth.
-    /// The engine sets it from Smooth Tool Options (`smoothFidelity`).
+    /// The Smooth tool's Fidelity (screen pixels), used when Alt switches the Pencil, Paintbrush or
+    /// Blob Brush to Smooth. The engine sets it from Smooth Tool Options (`smoothFidelity`).
     smooth_fidelity: f64,
     /// Active drag is smoothing with the Pencil, Paintbrush or Blob Brush (Alt held).
     smoothing: bool,
@@ -166,6 +174,15 @@ pub struct GestureTool {
     /// Where the Blob Brush's or the Eraser's tip outline shows: the pointer over the canvas,
     /// unless Cmd/Ctrl lends a selection tool or Alt the Smooth tool.
     tip_at: Option<Point>,
+    /// A pen pressed less than fully at a point of the stroke whose pressure is kept.
+    light: bool,
+    /// The length of the stroke, in points.
+    length: f64,
+    /// The outline of the area a Blob Brush or Eraser drag covers, as far as it is built
+    /// ([`AreaPreview`]).
+    area: Cell<Option<AreaPreview>>,
+    /// The last [`Tool::overlays`] left part of that outline for later calls.
+    area_pending: Cell<bool>,
     /// The band the smoothing drag has shown so far ([`GestureTool::smooth_band`]).
     band: Cell<Option<SmoothBand>>,
     /// The band last shown does not cover the whole drag yet; the next call adds to it.
@@ -757,13 +774,16 @@ fn redraw_targets(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
     }
 }
 
-/// Whether the selection contains a path the Smooth command can act on.
+/// Whether the selection contains a path the Smooth command can act on: one with a subpath of three
+/// or more anchors, or of two anchors joined by a curve.
 fn has_selected_smooth_path(cx: &ToolContext) -> bool {
     let editable = cx.doc.editable();
+    let smoothable = |sp: &vectorcraft_geom::SubPath| sp.anchors.len() >= 3 || (0..sp.segment_count()).any(|i| !super::segment_is_straight(sp, i));
     cx.selection.objects.iter().filter_map(|id| cx.doc.node(*id)).any(|n| {
         let mut found = false;
         n.walk(&mut |child| {
-            if matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(|sp| sp.anchors.len() >= 3))
+            if !found
+                && matches!(&child.kind, NodeKind::Path { guide: false, path, .. } if path.control_bounds().is_some() && path.subpaths.iter().any(smoothable))
                 && editable(child.id)
             {
                 found = true;
@@ -771,6 +791,13 @@ fn has_selected_smooth_path(cx: &ToolContext) -> bool {
         });
         found
     })
+}
+
+/// The Smooth tool's cursor: Not Allowed when no selected path can be smoothed, since a drag then
+/// changes nothing. A selected path anywhere on the canvas is enough, so the cursor does not depend
+/// on where the pointer is.
+fn smooth_cursor(cx: &ToolContext) -> Cursor {
+    if has_selected_smooth_path(cx) { Cursor::Smooth } else { Cursor::NotAllowed }
 }
 
 impl GestureTool {
@@ -795,7 +822,9 @@ impl GestureTool {
             active: false,
             began: false,
             near_start: false,
+            connects: false,
             extend: None,
+            close_to: None,
             connect_to: vec![],
             redraw: None,
             fidelity,
@@ -822,6 +851,10 @@ impl GestureTool {
             snap: DrawSnap::default(),
             pressed: Point::ZERO,
             tip_at: None,
+            light: false,
+            length: 0.0,
+            area: Cell::new(None),
+            area_pending: Cell::new(false),
             band: Cell::new(None),
             band_pending: Cell::new(false),
         }
@@ -869,9 +902,13 @@ impl GestureTool {
 
     /// Add a stroke sample, with the pen's pressure, tilt and rotation of the event `ev` there.
     fn push(&mut self, p: Point, ev: &PointerEvent) {
+        if let Some(last) = self.points.last() {
+            self.length += last.distance(p);
+        }
         self.points.push(p);
         if self.id == "paintbrush" || (self.varies_size() && self.size_pressure) {
             self.pressures.push(ev.pressure);
+            self.light |= ev.pressure < 1.0;
         }
         if self.id == "paintbrush" {
             self.poses.push(ev.pen.map(PenPose::sanitized));
@@ -959,6 +996,10 @@ impl GestureTool {
         self.poses.clear();
         self.previewed = 0;
         self.shift_line = None;
+        self.light = false;
+        self.length = 0.0;
+        self.area.set(None);
+        self.area_pending.set(false);
         self.band.set(None);
         self.band_pending.set(false);
     }
@@ -1020,7 +1061,7 @@ impl GestureTool {
     /// Pressure, when a pen pressed less than fully anywhere along it (a stroke without pressure
     /// keeps its Size).
     fn size_pressures(&self) -> Option<&[f32]> {
-        let pressed = self.pressures.len() == self.points.len() && self.pressures.iter().any(|p| *p < 1.0);
+        let pressed = self.pressures.len() == self.points.len() && self.light;
         (self.varies_size() && self.size_pressure && !self.smoothing && pressed).then_some(self.pressures.as_slice())
     }
 
@@ -1064,6 +1105,21 @@ impl GestureTool {
     /// that end.
     fn find_extend(&self, cx: &ToolContext, p: Point) -> Option<(NodeId, bool, Point)> {
         self.find_end(cx, p, &cx.selection.objects)
+    }
+
+    /// The other end of the open end `find_end` found: the opposite end of `id`'s last open
+    /// subpath.
+    fn other_end(cx: &ToolContext, id: NodeId, at_start: bool) -> Option<Point> {
+        let pd = cx.doc.node(id)?.path_data()?;
+        let sp = pd.subpaths.iter().rev().find(|s| !s.closed && !s.anchors.is_empty())?;
+        let a = if at_start { sp.anchors.last() } else { sp.anchors.first() };
+        a.map(|a| a.p)
+    }
+
+    /// Continues the path at the open end `find_extend` found, if any, noting its other end.
+    fn set_extend(&mut self, cx: &ToolContext, found: Option<(NodeId, bool, Point)>) {
+        self.extend = found.map(|(id, at_start, _)| (id, at_start));
+        self.close_to = found.and_then(|(id, at_start, _)| Self::other_end(cx, id, at_start));
     }
 
     /// [`Self::find_extend`] among `ids`.
@@ -1110,16 +1166,32 @@ impl GestureTool {
     }
 
     /// Does a stroke that ends at `end` end near its start (Close Paths When Ends Are Within, off
-    /// at 0 pixels)?
+    /// at 0 pixels)? A stroke continuing a selected path ends near that path's other end, a
+    /// straight line too; a new straight line never closes, as it would run back over itself.
     fn ends_near_start(&self, cx: &ToolContext, end: Point) -> bool {
-        self.close_within > 0.0 && self.points.len() > 2 && self.points[0].distance(end) <= cx.tol(self.close_within)
+        if self.close_within <= 0.0 {
+            return false;
+        }
+        let tol = cx.tol(self.close_within);
+        match (self.extend, self.close_to) {
+            (Some(_), Some(to)) => self.points.len() >= 2 && to.distance(end) <= tol,
+            (Some(_), None) => false,
+            (None, _) => !self.straight && self.points.len() > 2 && self.points.first().is_some_and(|s| s.distance(end) <= tol),
+        }
     }
 
-    /// Does a release now, with the stroke ending at `end`, close a freehand stroke because it ends
-    /// near its start (`finish`)? A stroke that redraws a selected path closes only when the engine
-    /// finds it does not end on that path, so it counts as not closing.
+    /// The open end of another path selected at the press that a continuing Pencil stroke ending
+    /// at `end` connects to (`finish`).
+    fn connects_at(&self, cx: &ToolContext, end: Point) -> Option<(NodeId, bool, Point)> {
+        self.extend.and_then(|_| self.find_end(cx, end, &self.connect_to))
+    }
+
+    /// Does a release now, with the stroke ending at `end`, close the stroke because it ends near
+    /// its start, or near the other end of the path it continues (`finish`)? A stroke that redraws
+    /// a selected path closes only when the engine finds it does not end on that path, so it counts
+    /// as not closing, and a stroke that connects to another path doesn't close.
     fn release_closes_near_start(&self, cx: &ToolContext, end: Point) -> bool {
-        self.draws_path() && !self.smoothing && !self.straight && self.extend.is_none() && self.redraw.is_none() && self.ends_near_start(cx, end)
+        self.draws_path() && !self.smoothing && self.redraw.is_none() && self.ends_near_start(cx, end) && self.connects_at(cx, end).is_none()
     }
 
     /// Parameters of `path.freehand` for the current stroke, fitted at Fidelity on screen. Only the
@@ -1147,10 +1219,10 @@ impl GestureTool {
         let tol = cx.tol(self.edit_within);
         let radius = cx.tol(SMOOTH_RADIUS);
         if self.smoothing {
-            if has_sel && pts.len() >= 2 {
+            if pts.len() >= 2 && has_selected_smooth_path(cx) {
                 return vec![Action::Exec(
                     "path.smoothRegion".into(),
-                    json!({"points": points_json(pts), "radius": radius, "fidelity": self.smooth_fidelity}),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.smooth_fidelity)}),
                 )];
             }
             return vec![];
@@ -1160,14 +1232,16 @@ impl GestureTool {
                 if !self.began {
                     return vec![];
                 }
-                // Close Paths When Ends Are Within is off at 0 pixels.
+                // Close Paths When Ends Are Within is off at 0 pixels. A stroke continuing a
+                // selected path closes it near its other end, a straight line too.
                 let near = pts.last().is_some_and(|&end| self.ends_near_start(cx, end));
-                // A straight line has two points: closing it would draw it back over itself.
-                let closed = !self.straight && ((m.alt && (self.id == "paintbrush" || !self.alt_smooth)) || (self.extend.is_none() && near));
-                let mut params = self.freehand_params(cx, closed);
+                // Alt at the release closes a freehand stroke; a new straight line has two points:
+                // closing it would draw it back over itself.
+                let closed = (!self.straight && m.alt && (self.id == "paintbrush" || !self.alt_smooth)) || near;
                 // A Pencil stroke that continues a selected path and ends on an open end of another
-                // path selected at the press connects the two.
-                let connect = pts.last().and_then(|&end| self.find_end(cx, end, &self.connect_to));
+                // path selected at the press connects the two, and doesn't close.
+                let connect = pts.last().and_then(|&end| self.connects_at(cx, end));
+                let mut params = self.freehand_params(cx, closed && connect.is_none());
                 if let Some((other, at_start, _)) = connect {
                     params["connect"] = json!({"id": other.0, "end": if at_start { "start" } else { "end" }});
                 }
@@ -1199,8 +1273,11 @@ impl GestureTool {
                 }),
             )],
             "knife" if pts.len() >= 2 => vec![Action::Exec("path.knife".into(), json!({"points": points_json(pts)}))],
-            "smooth" if has_sel && pts.len() >= 2 => {
-                vec![Action::Exec("path.smoothRegion".into(), json!({"points": points_json(pts), "radius": radius, "fidelity": self.fidelity}))]
+            "smooth" if pts.len() >= 2 && has_selected_smooth_path(cx) => {
+                vec![Action::Exec(
+                    "path.smoothRegion".into(),
+                    json!({"points": points_json(pts), "radius": radius, "fidelity": cx.tol(self.fidelity)}),
+                )]
             }
             "pathEraser" if has_sel => vec![Action::Exec("path.eraseSegments".into(), json!({"points": points_json(pts), "width": cx.tol(8.0)}))],
             "join" if pts.len() >= 2 => vec![Action::Exec("path.joinScrub".into(), json!({"points": points_json(pts), "tolerance": tol}))],
@@ -1230,6 +1307,7 @@ impl Tool for GestureTool {
                 self.active = true;
                 self.began = false;
                 self.near_start = false;
+                self.connects = false;
                 // Alt switches the Pencil when its toggle is on, the Blob Brush always, and the
                 // Paintbrush when the press has a selected path.
                 self.smoothing = ev.mods.alt
@@ -1241,7 +1319,7 @@ impl Tool for GestureTool {
                 self.straight = (self.id == "pencil" && !self.smoothing && (ev.mods.shift || ev.mods.alt)) || (self.id == "knife" && ev.mods.alt);
                 self.unconstrained = self.straight && !ev.mods.shift;
                 let extend = if self.draws_path() && !self.smoothing { self.find_extend(cx, p) } else { None };
-                self.extend = extend.map(|(id, at_start, _)| (id, at_start));
+                self.set_extend(cx, extend);
                 // The stroke's previews select the path it continues, so the others are kept now.
                 self.connect_to = match self.extend {
                     Some((id, _)) if self.id == "pencil" => cx.selection.objects.iter().copied().filter(|o| *o != id).collect(),
@@ -1299,16 +1377,20 @@ impl Tool for GestureTool {
                         return if std::mem::take(&mut self.began) { vec![Action::Cancel] } else { vec![] };
                     }
                     self.points.truncate(1);
+                    // The line ends at `p`, where its end snaps.
+                    end = p;
                 } else if self.points.last().is_some_and(|l| l.distance(p) < cx.tol(1.0)) || self.points.len() >= crate::MAX_STROKE_SAMPLES {
                     // A release here keeps the last point unless it snaps (`Up`), so the ring
                     // follows the point `finish` will test.
                     let kept = self.points.last().copied().filter(|l| l.distance(p) < cx.tol(1.0) && !self.snaps());
                     let release_end = kept.unwrap_or(end);
                     self.near_start = self.release_closes_near_start(cx, release_end);
+                    self.connects = self.connects_at(cx, release_end).is_some();
                     return vec![];
                 }
                 self.push(p, ev);
                 self.near_start = self.release_closes_near_start(cx, end);
+                self.connects = self.connects_at(cx, end).is_some();
                 if !self.draws_path() || self.smoothing {
                     return vec![];
                 }
@@ -1369,11 +1451,13 @@ impl Tool for GestureTool {
                 self.active = false;
                 self.began = false;
                 self.near_start = false;
+                self.connects = false;
                 self.smoothing = false;
                 self.straight = false;
                 self.unconstrained = false;
                 self.clear();
                 self.extend = None;
+                self.close_to = None;
                 self.connect_to.clear();
                 self.redraw = None;
                 out
@@ -1386,10 +1470,10 @@ impl Tool for GestureTool {
     fn wants_samples(&self) -> bool {
         matches!(self.id, "pencil" | "paintbrush" | "blobBrush" | "eraser" | "knife" | "smooth" | "pathEraser")
     }
-    /// A smoothing drag's band outlined again after a zoom change reaches the whole drag over
-    /// several frames.
+    /// The outline of a long Blob Brush or Eraser drag, and a smoothing drag's band outlined again
+    /// after a zoom change, reach the whole drag over several frames.
     fn overlays_pending(&self) -> bool {
-        self.band_pending.get()
+        self.area_pending.get() || self.band_pending.get()
     }
     /// `[` and `]` are the Blob Brush's and the Eraser's: their size (#1661).
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
@@ -1403,6 +1487,7 @@ impl Tool for GestureTool {
                 self.active = false;
                 self.began = false;
                 self.near_start = false;
+                self.connects = false;
                 self.smoothing = false;
                 self.straight = false;
                 self.unconstrained = false;
@@ -1433,6 +1518,7 @@ impl Tool for GestureTool {
         self.snap.clear();
         self.active = false;
         self.near_start = false;
+        self.connects = false;
         self.began = false;
         self.smoothing = false;
         self.straight = false;
@@ -1441,6 +1527,7 @@ impl Tool for GestureTool {
         if began { stale.into_iter().chain([Action::Commit]).collect() } else { vec![] }
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
+        self.area_pending.set(false);
         self.band_pending.set(false);
         let mut o = self.snap.guides().to_vec();
         // A path being drawn shows itself, except with the Pencil's Live preview off.
@@ -1465,24 +1552,24 @@ impl Tool for GestureTool {
         // A tip that is not round shows the outline of the area it covers, each step of the drag
         // as wide as the pen pressed there with Size set to Pressure. So does a round Blob Brush
         // tip: a line as wide as the brush would end square, where the stroke it adds is round at
-        // both ends (#4343).
+        // both ends (#4343). The outline is built a bounded amount per call ([`AreaPreview`]).
         if matches!(self.id, "eraser" | "blobBrush") && (self.roundness < 100.0 || self.id == "blobBrush") && !self.smoothing {
-            let area = |pts: &[Point], size| {
-                if self.id == "blobBrush" {
-                    blob_area(pts, size, self.angle, self.roundness)
-                } else {
-                    eraser_area(pts, size, self.angle, self.roundness)
-                }
+            let pressures = self.size_pressures();
+            let key = AreaKey {
+                blob: self.id == "blobBrush",
+                size: self.size,
+                variation: self.size_variation,
+                angle: self.angle,
+                roundness: self.roundness,
+                pressure: pressures.is_some(),
             };
-            if let Some(pressures) = self.size_pressures() {
-                for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
-                    let pressure = f64::from(p[0] + p[1]) / 2.0;
-                    let size = super::pressure_size(self.size, self.size_variation, pressure);
-                    o.push(Overlay::Path { path: area(seg, size).to_bezpath(), color, width: 1.0, dashed: false });
-                }
-            } else {
-                o.push(Overlay::Path { path: area(&self.points, self.size).to_bezpath(), color, width: 1.0, dashed: false });
+            let mut area = self.area.take().filter(|a| a.fits(key, &self.points)).unwrap_or_else(|| AreaPreview::new(key, self.points[0]));
+            area.step(&self.points, pressures);
+            for path in area.paths(&self.points) {
+                o.push(Overlay::Path { path, color, width: 1.0, dashed: false });
             }
+            self.area_pending.set(area.pending(&self.points));
+            self.area.set(Some(area));
         } else if let Some(pressures) = self.size_pressures() {
             // With Size set to Pressure, each step of the drag shows as wide as the pen pressed there.
             for (seg, p) in self.points.windows(2).zip(pressures.windows(2)) {
@@ -1495,7 +1582,7 @@ impl Tool for GestureTool {
         }
         if cx.measurement_labels && self.id == "blobBrush" && !self.smoothing {
             let last = self.points[self.points.len() - 1];
-            let length = self.points.windows(2).map(|w| w[0].distance(w[1])).sum();
+            let length = self.length;
             o.push(Overlay::Measure { p: last + vectorcraft_geom::Vec2::new(cx.tol(12.0), cx.tol(12.0)), text: format!("L: {}", cx.len(length)) });
         }
         // Over the stroke's footprint, which reaches the tip's edge at the pointer.
@@ -1504,18 +1591,25 @@ impl Tool for GestureTool {
     }
     fn cursor(&self, cx: &ToolContext, p: Point, m: Mods) -> Cursor {
         // An active smoothing drag, or Alt before a press that would switch the Pencil, Paintbrush
-        // or Blob Brush to Smooth. A Paintbrush stroke already drawing keeps drawing with Alt.
+        // or Blob Brush to Smooth. A Paintbrush stroke already drawing keeps drawing with Alt. With
+        // no selected path to smooth, the Pencil and the Blob Brush show Not Allowed, as the Smooth
+        // tool does.
         if self.smoothing
             || (self.id == "pencil" && self.alt_smooth && m.alt && !self.began)
             || (!self.active && self.id == "paintbrush" && m.alt && has_selected_smooth_path(cx))
             || self.blob_alt_smooths(m)
         {
-            return Cursor::Smooth;
+            return smooth_cursor(cx);
         }
         // Before a press that would draw a straight line: over an end of a selected open path,
         // the line continues that path from the end (`PointerKind::Down`).
         if !self.active && self.straight_at_press(m) {
             return if self.find_extend(cx, p).is_some() { Cursor::PencilContinue } else { Cursor::PencilStraight };
+        }
+        // A continuing Pencil stroke that a release would connect to another selected path's open
+        // end (`finish`) shows that it continues on; `connects` tests the point the release keeps.
+        if self.id == "pencil" && self.active && self.connects {
+            return Cursor::PencilContinue;
         }
         // Alt held at the release closes the path (`finish`).
         // A straight line stays open, so its release has nothing to close, and before a press Alt
@@ -1533,12 +1627,15 @@ impl Tool for GestureTool {
             "blobBrush" => Cursor::BlobBrush,
             "eraser" => Cursor::Eraser,
             "knife" => Cursor::Knife,
-            "smooth" => Cursor::Smooth,
+            "smooth" => smooth_cursor(cx),
             "pathEraser" => Cursor::PathEraser,
             "join" => Cursor::Join,
+            // Before a press over an open end of a selected path the Pencil shows that the stroke
+            // continues it (`PointerKind::Down`).
+            _ if !self.active && self.find_extend(cx, p).is_some() => Cursor::PencilContinue,
             // Before a press that draws a new path the Pencil shows its star; over a selected path
-            // that the press continues from an end or redraws (`PointerKind::Down`), it does not.
-            _ if !self.active && self.find_extend(cx, p).is_none() && self.find_redraw(cx, p).is_none() => Cursor::PencilNew,
+            // that the press redraws (`PointerKind::Down`), it does not.
+            _ if !self.active && self.find_redraw(cx, p).is_none() => Cursor::PencilNew,
             _ => Cursor::Pencil,
         }
     }

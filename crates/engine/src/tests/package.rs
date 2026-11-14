@@ -90,6 +90,38 @@ fn two_links_and_a_font_are_collected_and_relinked() {
     assert!(s.doc().unwrap().doc.images.values().all(|b| !b.is_proxy()), "the copies' pixels");
 }
 
+/// A file linked only from a stored brush's art is copied, and the packaged document's brush
+/// links to the copy.
+#[test]
+fn a_file_linked_from_a_stored_brush_is_collected_and_relinked() {
+    let dir = Folder::new("package-brush");
+    let file = dir.file("art/leaf.png");
+    write(&file, &png(40, 20, RED));
+    let mut s = session();
+    let id = place(&mut s, &file);
+    run(&mut s, "brush.new", json!({"type": "scatter", "name": "Leaves Here", "ids": [id.0]}));
+    run(&mut s, "edit.clear", json!({"ids": [id.0]}));
+    save(&mut s, &dir.file("poster.vectorcraft"));
+    let out = dir.file("out");
+    let r = run(&mut s, "file.package", json!({"folder": out, "copyFonts": false}));
+    let files: Vec<&str> = r["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap()).collect();
+    assert!(files.contains(&"Links/leaf.png"), "{r}");
+    let root = std::path::Path::new(&out).join("poster Folder");
+    std::fs::remove_dir_all(dir.0.join("art")).unwrap();
+    let r = open(&mut s, &root.join("poster.vectorcraft").to_string_lossy());
+    assert_eq!(r["missingLinks"], json!([]), "{r}");
+    let brush = vectorcraft_brush::find(&s.doc().unwrap().doc, "Leaves Here").unwrap();
+    let mut paths = vec![];
+    brush.art()[0].walk(&mut |n| {
+        if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+            paths.push(im.link.as_ref().map(|l| (l.path.clone(), l.relative.clone())));
+        }
+    });
+    let [Some((path, relative))] = paths.as_slice() else { panic!("{paths:?}") };
+    assert!(std::path::Path::new(path).starts_with(root.join("Links")), "{path}");
+    assert_eq!(relative.as_deref(), Some("Links/leaf.png"));
+}
+
 #[test]
 fn an_unsaved_document_cant_be_packaged() {
     let mut s = session();
@@ -534,6 +566,16 @@ fn the_document_info_report_has_every_category() {
     let i = run(&mut s, "document.info", json!({"category": "linkedImages"}));
     assert_eq!((i["sections"].as_array().unwrap().len(), i["sections"][0]["id"].as_str()), (1, Some("linkedImages")));
     assert_eq!(i["sections"][0]["rows"].as_array().unwrap().len(), 2);
+    // `imageObjects` lists the linked images in the rows' order with the files they show, and the
+    // embedded one with no file.
+    let linked: Vec<Value> = i["imageObjects"].as_array().unwrap().iter().filter(|o| o["linked"] == true).cloned().collect();
+    for (o, r) in linked.iter().zip(i["sections"][0]["rows"].as_array().unwrap()) {
+        let shown = format!("{} × {} px — {}", o["width"], o["height"], o["file"].as_str().unwrap());
+        assert_eq!((&o["name"], shown.as_str()), (&r[0], r[1].as_str().unwrap()));
+    }
+    assert_eq!(linked.len(), 2);
+    let embedded: Vec<&Value> = i["imageObjects"].as_array().unwrap().iter().filter(|o| o["linked"] == false).collect();
+    assert_eq!((embedded.len(), &embedded[0]["file"], &embedded[0]["width"]), (1, &Value::Null, &json!(600)));
     let all = run(&mut s, "document.info", json!({}));
     assert_eq!(all["sections"].as_array().unwrap().len(), 13);
     let i = run(&mut s, "document.info", json!({"category": "brushes"}));

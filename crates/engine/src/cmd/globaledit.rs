@@ -6,20 +6,34 @@
 //! (<https://helpx.adobe.com/ph_fil/illustrator/how-to/global-editing-sensei.html>), in our words:
 //!
 //! - With one object selected, Start Global Edit finds the objects that repeat its shape: the
-//!   same outline, wherever it lies and at whatever size. Two options narrow the match: Appearance
-//!   (the same fill and stroke too) and Size (the same width and height too). The search covers
-//!   every artboard and the canvas around them by default; it can be limited to a range of
-//!   artboards (`1, 3-5`) and can leave out the objects that lie on no artboard. Images, type,
-//!   masks, linked files and selections of more than one object are not supported.
+//!   same outline, wherever it lies, at whatever size and at whatever angle. Two options narrow
+//!   the match: Appearance (the same fill and stroke too) and Size (the same width and height
+//!   too). The search covers every artboard and the canvas around them by default; it can be
+//!   limited to a range of artboards (`1, 3-5`) and can leave out the objects that lie on no
+//!   artboard. Images, type, masks, linked files and selections of more than one object are not
+//!   supported.
 //! - The help page "Edit groups with similar objects"
 //!   (<https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-groups-with-similar-objects.html>):
 //!   with a group selected, Start Global Edit finds the groups like it, and an edit made to an
 //!   object inside one of them is made to the matching object in each of the others. Here a group
 //!   is like another when it holds as many objects, in the same order, each like the one at its
 //!   place (paths, compound paths, symbol instances and groups of them, clipping paths included),
-//!   and they lie the same way relative to each other: the group as a whole is moved or scaled.
-//!   With Appearance on, each of those objects must have the same fill and stroke too; with Size,
-//!   the groups the same width and height.
+//!   and they lie the same way relative to each other: the group as a whole is moved, scaled or
+//!   rotated. With Appearance on, each of those objects must have the same fill and stroke too;
+//!   with Size, the groups the same width and height.
+//! - The how-to "Design a modern geometric logo"
+//!   (<https://helpx.adobe.com/vn_vi/illustrator/how-to/modern-logo-design.html>) makes rotated
+//!   copies of a group of shapes around a point, then starts Global Edit on one object and edits
+//!   every copy of it at once. Here a rotated copy is found as a moved or scaled one is, and an
+//!   edit reaches it turned by its own angle: an anchor moved to the right on the selected object
+//!   moves downward on a copy turned a quarter turn clockwise. The rules below for rotated copies
+//!   are VectorCraft's own. The angle is the one that lays each anchor and handle of the selected
+//!   object on the copy's of the same order, so a square whose anchors were turned a quarter turn
+//!   is a copy turned a quarter turn. A copy is the same shape when, laid so, every anchor and
+//!   handle lies within a millionth of the larger side of the copy's box of its own ([`SAME`]).
+//!   A reflected copy is another shape. With Size, a rotated copy has the same size when it is the
+//!   selected object rotated without scaling: its width and height are compared as they were
+//!   before the rotation.
 //! - Selecting one of the repeated objects with the Selection tool highlights the similar objects
 //!   at once, before Global Edit starts. Here they are the objects Start Global Edit would take
 //!   with the current Global Edit Options ([`similar`]).
@@ -29,15 +43,16 @@
 //!
 //! Here the found objects ([`GlobalEdit::members`]) stay highlighted while the selection keeps the
 //! object that was selected, so that the Transform panel and the bounding box measure that object
-//! and not the whole set. Each member keeps the transform (a move and a uniform scale) that maps
-//! the first object's outline onto its own. After every edit ([`propagate`], run inside
-//! [`Session::edit`], so the whole change is one undo step), the first selected member the edit
-//! changed is the model: what changed about it is given to every other member, and nothing else,
-//! so members found by shape alone keep their own fills and strokes where the edit didn't touch
-//! them:
+//! and not the whole set. Each member keeps the transform (a move, a uniform scale and, for a
+//! rotated copy, a turn) that maps the first object's outline onto its own. After every edit
+//! ([`propagate`], run inside [`Session::edit`], so the whole change is one undo step), the first
+//! selected member the edit changed is the model: what changed about it is given to every other
+//! member, and nothing else, so members found by shape alone keep their own fills and strokes
+//! where the edit didn't touch them:
 //!
 //! - its outline (and anchors), placed through that transform, so in proportion to each member's
-//!   size. Only geometry is placed so: no stroke weight is scaled to a member's size;
+//!   size and turned by its angle. Only geometry is placed so: no stroke weight is scaled to a
+//!   member's size;
 //! - its opacity, blending, knockout and the object's effects, each when it changed;
 //! - of its fills and strokes, each setting that changed (paint, weight, opacity, blending,
 //!   effects, caps, dashes, arrowheads …), as it is: it goes to the member's fill or stroke of the
@@ -48,6 +63,10 @@
 //!   former order gains the same item at the same place (or loses the one at that place). A
 //!   member with another order, and any other change to the list (items moved, or several added
 //!   or removed at once), takes the model's whole list of fills and strokes.
+//!
+//! A path directly in a graph series that takes an edit from another member (a graph's paths are
+//! members only while the graph is isolated) also has what changed stored on its graph, so that
+//! every path of the series takes it when the graph is drawn again (docs/mcp.md).
 //!
 //! Members that are hidden or locked at the time are left as they are. An edit that would take any
 //! member past the canvas (beyond [`vectorcraft_doc::MAX_COORD`]) is refused whole, as one that
@@ -70,12 +89,12 @@
 //! and later edits leave it as it is.
 //! The object the edit started from can't be left out (a Shift-click on it selects it or
 //! deselects it as before), Global Edit ends when fewer than two members are left, and leaving
-//! one out is not an undo step. Rotated copies are not covered.
+//! one out is not an undo step.
 
 use serde::Serialize;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, FillLayer, Node, NodeId, NodeKind, Scaling, Shared, StrokeLayer};
-use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, Shape};
+use vectorcraft_geom::{Affine, BezPath, PathData, Point, Rect, Shape, Vec2};
 
 use super::wand::{fill_of, stroke_of};
 use super::{CommandSpec, Result, Session, bad, bool_or, checked_id, cmd, has_doc};
@@ -94,7 +113,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Start Global Edit",
             ["Select"],
             None,
-            "{appearance?: bool, size?: bool, artboards?: \"all\" | range such as \"1, 3-5\", includeCanvas?: bool} (each defaults to the Global Edit Options) while Global Edit is off: start it on the one selected object (a path, compound path, symbol instance or group of them), with the objects of the same shape (for a group: the groups holding objects like its own, at the same places) (and, with `appearance`, the same fill and stroke; with `size`, the same width and height) on the artboards given (and, with `includeCanvas`, off every artboard), at most 10000 → {active: true, count, ids}; while on: stop it (Escape does the same) → {active: false}",
+            "{appearance?: bool, size?: bool, artboards?: \"all\" | range such as \"1, 3-5\", includeCanvas?: bool} (each defaults to the Global Edit Options) while Global Edit is off: start it on the one selected object (a path, compound path, symbol instance or group of them), with the objects of the same shape, moved, scaled or rotated copies of it and not reflected ones (for a group: the groups holding objects like its own, at the same places) (and, with `appearance`, the same fill and stroke; with `size`, the same width and height, for a rotated copy before its rotation) on the artboards given (and, with `includeCanvas`, off every artboard), at most 10000 → {active: true, count, ids}; while on: stop it (Escape does the same) → {active: false}",
             can_toggle,
             toggle
         ),
@@ -177,7 +196,8 @@ pub type Outlines = Vec<(BezPath, [u8; 3])>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct GlobalEdit {
     /// The objects edited together, the one selected at the start first, each with the transform
-    /// (a move and a uniform scale) that maps that first object's outline onto its own.
+    /// (a move, a uniform scale and, for a turned copy, a turn) that maps that first object's
+    /// outline onto its own.
     pub members: Vec<(NodeId, Affine)>,
     /// [`highlights`] as of a document revision: the canvas asks every frame.
     outlines: std::cell::RefCell<Option<(u64, Outlines)>>,
@@ -253,13 +273,59 @@ impl Form {
         }
     }
 
-    fn same(&self, o: &Form) -> bool {
-        self.tag == o.tag
-            && self.symbols == o.symbols
-            && self.points.len() == o.points.len()
-            && self.points.iter().zip(&o.points).all(|(a, b)| a.distance(*b) < 1e-6)
+    /// The transform that lays this form's object on `o`'s, point for point in order, and whether
+    /// it turns the object: a move and a uniform scale when the two lie the same way, otherwise a
+    /// turn too. `None` when `o` is another shape, a reflected copy included.
+    fn onto(&self, o: &Form) -> Option<(Affine, bool)> {
+        if self.tag != o.tag || self.symbols != o.symbols || self.points.len() != o.points.len() {
+            return None;
+        }
+        let near = |xf: Affine| self.points.iter().zip(&o.points).all(|(a, b)| (xf * *a).distance(*b) < SAME);
+        let back = self.frame.inverse();
+        if near(Affine::IDENTITY) {
+            return Some((o.frame * back, false));
+        }
+        let turn = self.turn_onto(o)?;
+        near(turn).then(|| (o.frame * turn * back, true))
+    }
+
+    /// The turn, uniform scale and move (both forms in their unit boxes) that best lays this
+    /// form's points on `o`'s in order, by least squares. A turn within [`SQUARE`] of a quarter
+    /// turn is that quarter turn exactly.
+    fn turn_onto(&self, o: &Form) -> Option<Affine> {
+        let n = self.points.len() as f64;
+        let middle = |f: &Form| f.points.iter().fold(Vec2::ZERO, |s, p| s + p.to_vec2()) / n;
+        let (from, to) = (middle(self), middle(o));
+        // With the points as complex numbers about their middles, the fit is `Σ conj(p) q / Σ |p|²`.
+        let (mut re, mut im, mut spread) = (0.0, 0.0, 0.0);
+        for (a, b) in self.points.iter().zip(&o.points) {
+            let (p, q) = (a.to_vec2() - from, b.to_vec2() - to);
+            re += p.dot(q);
+            im += p.cross(q);
+            spread += p.hypot2();
+        }
+        let len = re.hypot(im);
+        let scale = len / spread;
+        if !(scale.is_finite() && scale > 0.0) {
+            return None;
+        }
+        let (mut cos, mut sin) = (re / len, im / len);
+        if cos.abs() < SQUARE {
+            (cos, sin) = (0.0, sin.signum());
+        } else if sin.abs() < SQUARE {
+            (cos, sin) = (cos.signum(), 0.0);
+        }
+        let (a, b) = (scale * cos, scale * sin);
+        Some(Affine::translate(to) * Affine::new([a, b, -b, a, 0.0, 0.0]) * Affine::translate(-from))
     }
 }
+
+/// How far apart two forms' points may lie, each form in its unit box, for the forms to be the
+/// same. For a turned copy this bounds the angle too: a copy turned and then changed by more than
+/// a millionth of its larger side is another shape.
+const SAME: f64 = 1e-6;
+/// A turn whose sine or cosine is below this is taken as a whole number of quarter turns.
+const SQUARE: f64 = 1e-9;
 
 /// Global Edit supports paths, compound paths, symbol instances and groups of them; not images,
 /// type, linked files, objects with an opacity mask, clipping paths or guides (the help page lists
@@ -391,8 +457,16 @@ fn matches(s: &Session, o: &Options) -> Result<Vec<(NodeId, Affine)>> {
         }
         boards.as_ref().is_none_or(|rs| rs.iter().any(|r| on(*r, b)))
     };
+    // A copy that lies the same way has the size of the selected object when their boxes are as
+    // wide and as high; a turned copy, when the transform that lays the object on it doesn't scale.
+    let same_size = |n: &Node, xf: Affine, turned: bool| {
+        if turned {
+            close(xf.determinant().abs().sqrt(), 1.0)
+        } else {
+            matches!((key_size, size(n)), (Some((w, h)), Some((w2, h2))) if close(w, w2) && close(h, h2))
+        }
+    };
     let mut out = vec![(*id, Affine::IDENTITY)];
-    let back = form.frame.inverse();
     super::select::walk_selectable(d, st.isolation, |n| {
         if n.id == *id || out.len() >= MAX_MEMBERS {
             return false;
@@ -409,12 +483,12 @@ fn matches(s: &Session, o: &Options) -> Result<Vec<(NodeId, Affine)>> {
         };
         // The object count first: it turns most objects down before their form is made.
         if n.children().map(Vec::len) == count
-            && let Some(f) = Form::of(n).filter(|f| f.same(&form) && supported(n))
-            && (!o.size || matches!((key_size, size(n)), (Some((w, h)), Some((w2, h2))) if close(w, w2) && close(h, h2)))
+            && let Some((xf, turned)) = Form::of(n).and_then(|f| form.onto(&f)).filter(|_| supported(n))
+            && (!o.size || same_size(n, xf, turned))
             && (!o.appearance || same_look(key, n))
             && in_scope(n)
         {
-            out.push((n.id, f.frame * back));
+            out.push((n.id, xf));
             // A group taken is taken whole, as compound paths, symbol instances and the others are.
             return false;
         }
@@ -432,15 +506,23 @@ fn can_toggle(s: &Session) -> std::result::Result<(), String> {
     let [id] = st.selection.objects.as_slice() else {
         return Err(if st.selection.is_empty() { "nothing selected" } else { "select one object" }.into());
     };
-    // A group's contents are checked when Global Edit starts: measuring them here would walk
-    // every object in it each time the menu or the Properties panel asks. Other objects are
-    // measured ([`supported`]), not reduced to their form: the Control bar asks every frame.
-    match st.doc.node(*id) {
-        Some(n) if n.extras().mask.is_none() && plain_group(n) => Ok(()),
-        Some(n) if supported(n) => Ok(()),
-        _ => Err(UNSUPPORTED.into()),
-    }
+    // The object, a group's contents included, is measured ([`supported`]), not reduced to its
+    // form, and the answer is kept until the document's revision moves: the Control bar asks
+    // every frame, and a group's walk takes time with the anchors in it.
+    let ok = match st.global_edit_support.get() {
+        Some((rev, key, ok)) if rev == st.revision && key == *id => ok,
+        _ => {
+            let ok = st.doc.node(*id).is_some_and(supported);
+            st.global_edit_support.set(Some((st.revision, *id, ok)));
+            ok
+        }
+    };
+    if ok { Ok(()) } else { Err(UNSUPPORTED.into()) }
 }
+
+/// [`can_toggle`]'s answer for the one selected object: the revision and the object it was found
+/// for, and whether Global Edit supports it.
+pub type SupportCache = std::cell::Cell<Option<(u64, NodeId, bool)>>;
 
 fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.global_edit.is_some() {
@@ -452,7 +534,7 @@ fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     let o = s.global_edit_options.with(p, &s.doc()?.doc, C)?;
     let members = matches(s, &o)?;
     if members.len() < 2 {
-        return Err(bad(C, "no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again"));
+        return Err(bad(C, "no similar objects found (reflected copies are not matched); change the Global Edit Options and try again"));
     }
     let ids: Vec<u64> = members.iter().map(|(id, _)| id.0).collect();
     let st = s.doc_mut()?;
@@ -778,7 +860,20 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
         }
         super::object::keep_compound_aligned(d, *id, Scaling::default());
     }
+    keep_series_changes(before, d, &edited);
     edited
+}
+
+/// Store on their graphs what the members `edited`, and the objects in them, took on the paths directly in a graph
+/// series, for the graph's next redraw. The edited member is left to the edit's own command.
+fn keep_series_changes(before: &Document, d: &mut Document, edited: &[NodeId]) {
+    let mut taken = vec![];
+    for id in edited {
+        if let Some(n) = d.node(*id) {
+            n.walk(&mut |c: &Node| taken.push(c.id));
+        }
+    }
+    super::appearance::capture_series_changes(before, d, &taken);
 }
 
 /// The outlines of the members of the active document's Global Edit that are not selected, hold
@@ -989,8 +1084,7 @@ mod tests {
                 continue;
             }
             asked += 1;
-            let today = n.extras().mask.is_none() && plain_group(&n) || by_form(&n);
-            assert_eq!(can_toggle(&s).is_ok(), today, "seed {seed}");
+            assert_eq!(can_toggle(&s).is_ok(), by_form(&n), "seed {seed}");
             match s.execute(C, &json!({})) {
                 Ok(_) => {
                     assert!(by_form(&n), "seed {seed}");
@@ -1001,6 +1095,38 @@ mod tests {
         }
         // Both answers came up often, and most objects could be selected alone.
         assert!(taken > 100 && checked - taken > 100 && asked > 200, "{taken} of {checked}, {asked} selected");
+    }
+
+    #[test]
+    fn a_form_is_laid_on_a_turned_copy_and_on_no_reflected_or_unmeasurable_one() {
+        let mut d = Document::new(800.0, 600.0);
+        let mut path = |points: &[(f64, f64)]| {
+            let anchors = points.iter().map(|(x, y)| Anchor::corner(Point::new(*x, *y))).collect();
+            Node::path(d.alloc_id(), PathData::new(vec![SubPath::new(anchors, true)]), Appearance::default())
+        };
+        let form = Form::of(&path(&[(0.0, 0.0), (30.0, 0.0), (30.0, 70.0)])).unwrap();
+        let mut onto = |points: &[(f64, f64)]| Form::of(&path(points)).and_then(|f| form.onto(&f));
+        let near = |xf: Affine, want: [f64; 6]| xf.as_coeffs().iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-9);
+        // The same way at twice the size: a move and a scale, no turn.
+        let (xf, turned) = onto(&[(100.0, 0.0), (160.0, 0.0), (160.0, 140.0)]).unwrap();
+        assert!(!turned && near(xf, [2.0, 0.0, 0.0, 2.0, 100.0, 0.0]), "{xf:?}");
+        // A quarter turn, (x, y) → (−y, x), moved by (100, 0); and a turn by 30° at half the size.
+        let (xf, turned) = onto(&[(100.0, 0.0), (100.0, 30.0), (30.0, 30.0)]).unwrap();
+        assert!(turned && near(xf, [0.0, 1.0, -1.0, 0.0, 100.0, 0.0]), "{xf:?}");
+        let by = Affine::rotate(30f64.to_radians()) * Affine::scale(0.5);
+        let at = |x: f64, y: f64| {
+            let p = by * Point::new(x, y);
+            (p.x, p.y)
+        };
+        let (xf, turned) = onto(&[at(0.0, 0.0), at(30.0, 0.0), at(30.0, 70.0)]).unwrap();
+        assert!(turned && near(xf, by.as_coeffs()), "{xf:?}");
+        // A reflected copy, a copy with an anchor a thousandth of its size away, and points that
+        // are not numbers or not finite.
+        assert!(onto(&[(0.0, 0.0), (-30.0, 0.0), (-30.0, 70.0)]).is_none());
+        assert!(onto(&[at(0.0, 0.0), at(30.0, 0.0), at(30.0, 70.07)]).is_none());
+        assert!(onto(&[(f64::NAN, 0.0), (30.0, 0.0), (30.0, 70.0)]).is_none());
+        assert!(onto(&[(0.0, 0.0), (f64::INFINITY, 0.0), (30.0, 70.0)]).is_none());
+        assert!(onto(&[(0.0, 0.0), (30.0, 0.0)]).is_none(), "another count of anchors");
     }
 
     #[test]

@@ -2,11 +2,13 @@
 //! (unknown keys are ignored, so one params object can carry the options of several formats).
 
 use std::borrow::Cow;
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use vectorcraft_doc::{Artboard, Document};
+use vectorcraft_doc::{Artboard, Document, Node, NodeKind};
 use vectorcraft_geom::Rect;
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
@@ -419,18 +421,121 @@ pub(super) fn use_artboards(cmd: &str, p: &Value) -> Result<Option<bool>> {
 
 /// With `useArtboards: false` in `p`: `doc` without its opacity-mask or symbol editing layer and
 /// with one artboard, the bounds of its visible art, and `p` without the artboard choice. `None`
-/// when `useArtboards` is absent, null or true. A document with no visible art is refused.
-pub(super) fn art_page(cmd: &str, doc: &Document, p: &Value) -> Result<Option<(Document, Value)>> {
+/// when `useArtboards` is absent, null or true. The objects that `left_out` picks (layers or
+/// objects the format leaves out, see [`hidden_nodes`]) are not measured, and a document with no
+/// other visible art is refused.
+pub(super) fn art_page(cmd: &str, doc: &Document, p: &Value, left_out: impl Fn(&Node) -> bool) -> Result<Option<(Document, Value)>> {
     if use_artboards(cmd, p)? != Some(false) {
         return Ok(None);
     }
     let doc = &*doc.without_edit_modes();
-    let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(cmd, "nothing to export: the document has no visible art"))?;
+    let bounds = bounds_without(doc, &left_out).ok_or_else(|| bad(cmd, "nothing to export: the document has no visible art"))?;
     let mut q = super::export::without_artboards(p);
     if let Some(o) = q.as_object_mut() {
         o.remove("useArtboards");
     }
     Ok(Some((single_artboard(doc, bounds, "Art"), q)))
+}
+
+/// The bounds of the visible art of `doc` that a `format` file of the art's bounds draws, as
+/// [`art_page`] measures it with that format's default options: for HP-GL without what a plot
+/// leaves out ([`vectorcraft_cad::hpgl::write::plots_nothing`]), for other formats all of it (the
+/// non-printing layers a PDF leaves out depend on options chosen after the save panel). `None`
+/// when there is none, which such an export refuses.
+pub fn export_art_bounds(doc: &Document, format: &str) -> Option<Rect> {
+    let doc = &*doc.without_edit_modes();
+    bounds_without(doc, &|n| format == "hpgl" && vectorcraft_cad::hpgl::write::plots_nothing(doc, n))
+}
+
+/// The bounds of the visible art of `doc` with the objects that `left_out` picks hidden
+/// ([`hidden_nodes`]) and the ones in the art of the symbols that instances show taken out
+/// ([`without_nodes`]: symbol art is measured with its hidden objects). An instance of a symbol
+/// whose art is all picked or hidden is hidden too. The art of a dynamic symbol is measured whole:
+/// an instance can paint its objects, and finds them by their places in the art.
+fn bounds_without(doc: &Document, left_out: &dyn Fn(&Node) -> bool) -> Option<Rect> {
+    // The symbols instances show (the first of each name) that aren't dynamic.
+    let mut names = HashSet::new();
+    let shown: Vec<(usize, &vectorcraft_doc::Symbol)> =
+        doc.symbols.iter().enumerate().filter(|(_, s)| names.insert(s.name.as_str())).filter(|(_, s)| !s.dynamic).collect();
+    // The symbols whose art `left_out` leaves nothing of, those that only hold instances of such
+    // symbols included.
+    let mut empty: HashSet<&str> = HashSet::new();
+    while let Some((_, s)) = shown.iter().find(|(_, s)| !empty.contains(s.name.as_str()) && all_left_out(&s.art, left_out, &empty)) {
+        empty.insert(&s.name);
+    }
+    let left_out =
+        &|n: &Node| left_out(n) || matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if empty.contains(symbol.as_str()) && !has_effects(n));
+    let layers = hidden_nodes(&doc.layers, left_out);
+    let symbols: Vec<(usize, Arc<Node>)> = shown
+        .iter()
+        .filter(|(_, s)| !empty.contains(s.name.as_str()))
+        .filter_map(|(i, s)| without_nodes(&s.art, left_out).map(|art| (*i, art)))
+        .collect();
+    if layers.is_none() && symbols.is_empty() {
+        return vectorcraft_render::encode::art_bounds(doc);
+    }
+    let mut d = doc.clone();
+    if let Some(layers) = layers {
+        d.layers = layers;
+    }
+    for (i, art) in symbols {
+        if let Some(s) = d.symbols.get_mut(i) {
+            s.art = art;
+        }
+    }
+    vectorcraft_render::encode::art_bounds(&d)
+}
+
+/// Whether `n` is hidden, picked by `left_out`, an instance of one of the `empty` symbols, or a
+/// layer or a group holding only such objects (its clipping path among them when it clips). A
+/// Shaper group, or a layer, group or instance with effects, fills or strokes of its own, is none
+/// of these unless it is hidden or picked.
+fn all_left_out(n: &Node, left_out: &dyn Fn(&Node) -> bool, empty: &HashSet<&str>) -> bool {
+    !n.visible
+        || left_out(n)
+        || !has_effects(n)
+            && n.extras().shaper.is_none()
+            && match &n.kind {
+                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().all(|c| all_left_out(c, left_out, empty)),
+                NodeKind::SymbolInstance { symbol, .. } => empty.contains(symbol.as_str()),
+                _ => false,
+            }
+}
+
+/// Whether `n` has a visible effect, fill or stroke of its own, which the objects it holds can
+/// take part in.
+fn has_effects(n: &Node) -> bool {
+    n.appearance.effects.iter().any(|e| e.visible) || n.appearance.items.iter().any(|i| i.visible())
+}
+
+/// `n` without the objects that `left_out` picks in it, when it is a layer or a group, and in the
+/// layers and groups in it at any depth; `None` when it picks none of them. A clipping layer or
+/// group keeps its clipping path, its first object, and a Shaper group and a layer or group with
+/// effects, fills or strokes of its own keep all they hold.
+fn without_nodes(n: &Arc<Node>, left_out: &dyn Fn(&Node) -> bool) -> Option<Arc<Node>> {
+    let (NodeKind::Layer { children, clip, .. } | NodeKind::Group { children, clip }) = &n.kind else { return None };
+    if has_effects(n) || n.extras().shaper.is_some() {
+        return None;
+    }
+    let mut changed = false;
+    let kept: Vec<Arc<Node>> = children
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            if left_out(c) && !(*clip && i == 0) {
+                changed = true;
+                return None;
+            }
+            Some(without_nodes(c, left_out).inspect(|_| changed = true).unwrap_or_else(|| c.clone()))
+        })
+        .collect();
+    changed.then(|| {
+        let mut new = (**n).clone();
+        if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &mut new.kind {
+            *children = kept;
+        }
+        Arc::new(new)
+    })
 }
 
 /// The `rect` param of a raster export: `[x, y, width, height]` in points, y down. `None` when
@@ -479,6 +584,35 @@ pub(crate) fn with_single_artboard(mut d: Document, rect: Rect, name: &str) -> D
         guide_label: None,
     }];
     d
+}
+
+/// `nodes` with the visible objects that `left_out` picks hidden, in layers, sublayers and groups
+/// that don't clip, at any depth (what an object it picks holds is not looked at); `None` when it
+/// picks none of them. Clipping layers are looked in too, as their sublayers can be picked.
+pub(super) fn hidden_nodes(nodes: &[Arc<Node>], left_out: &dyn Fn(&Node) -> bool) -> Option<Vec<Arc<Node>>> {
+    let mut out: Option<Vec<Arc<Node>>> = None;
+    for (i, l) in nodes.iter().enumerate() {
+        let new = if left_out(l) {
+            l.visible.then(|| {
+                let mut n = (**l).clone();
+                n.visible = false;
+                Arc::new(n)
+            })
+        } else {
+            let (NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false }) = &l.kind else { continue };
+            hidden_nodes(children, left_out).map(|c| {
+                let mut n = (**l).clone();
+                if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &mut n.kind {
+                    *children = c;
+                }
+                Arc::new(n)
+            })
+        };
+        if let Some(slot) = new.and_then(|new| Some((out.get_or_insert_with(|| nodes.to_vec()).get_mut(i)?, new))) {
+            *slot.0 = slot.1;
+        }
+    }
+    out
 }
 
 fn boards<T>(r: std::result::Result<T, String>) -> Result<T> {
@@ -636,8 +770,9 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
     {
         return Ok(enc);
     }
+    let left_out = |n: &Node| f.id == "hpgl" && vectorcraft_cad::hpgl::write::plots_nothing(doc, n);
     if use_artboards == Some(false)
-        && let Some((art, q)) = art_page(C, doc, p)?
+        && let Some((art, q)) = art_page(C, doc, p, left_out)?
     {
         return encode_files(&art, f, &q);
     }

@@ -38,8 +38,9 @@ impl Exporter<'_> {
         // stroke overprints.
         let text_space = xf(t.xf);
         // Ruby can't be real text in one run (it isn't characters of the base text): the type's
-        // characters go out as outlines where ruby is present, ruby included.
-        let plain = (!self.outline_text && t.ruby.is_empty()).then(|| t.plain_text());
+        // characters go out as outlines where ruby is present, ruby included. Warichu's stacked
+        // lines go out as outlines too.
+        let plain = (!self.outline_text && t.ruby.is_empty() && !t.stacks_warichu()).then(|| t.plain_text());
         let bars = vectorcraft_text::decorations(&layout, vectorcraft_text::FontDb::global(), t);
         for (i, run) in t.runs.iter().enumerate() {
             let mut bp = BezPath::new();

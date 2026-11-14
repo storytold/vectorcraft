@@ -55,6 +55,29 @@ fn start_lists_from_typed_markers_is_a_saved_type_preference() {
     }
 }
 
+/// Type › Show Character Alternates is a checkbox in the Type panel, on by default; turning it
+/// off is saved, and every bundled language translates its label and the row's two tooltips.
+#[test]
+fn show_character_alternates_is_a_saved_type_preference() {
+    const LABEL: &str = "Show Character Alternates";
+    let mut a = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    assert!(a.session.prefs.show_character_alternates);
+    open(&mut a, Some("Type"));
+    let text = crate::tests_labels::painted_text(&mut a, |a, ui| show(a, ui.ctx()));
+    assert!(text.contains(LABEL), "{text}");
+    assert_eq!(a.ui.dialog.as_ref().unwrap().fields.get("showCharacterAlternates"), Some(&json!(true)));
+    a.ui.dialog.as_mut().unwrap().fields.insert("showCharacterAlternates".into(), json!(false));
+    confirm(&mut a).unwrap();
+    assert!(!a.session.prefs.show_character_alternates);
+    let saved: Prefs = serde_json::from_value(a.ui.engine_prefs.clone()).unwrap();
+    assert!(!saved.show_character_alternates);
+    for lang in crate::i18n::Lang::all().filter(|l| l.code() != crate::i18n::Lang::EN.code()) {
+        for source in [LABEL, "Click to replace", "Show all alternates in the Glyphs panel"] {
+            assert!(crate::i18n::has(lang, source), "{}: {source}", lang.code());
+        }
+    }
+}
+
 /// A resting checkbox must have a visible outline in both states and every brightness.
 #[test]
 fn preference_checkboxes_draw_outlines_without_hover() {
@@ -577,6 +600,46 @@ fn system_title_bar_is_dimmed_while_the_environment_variable_chooses_the_frame()
                 out.textures_delta.clear();
             }
             assert_eq!(a.ui.dialog.as_ref().unwrap().bool("systemTitleBar"), !from_env, "clicked with the variable {from_env}");
+        }
+    }
+}
+
+/// Where the desktop draws the frame with System Title Bar on or off (KDE, Sway, X11, a window
+/// opened through XWayland), a note under System Title Bar says so while VectorCraft Title Bar on
+/// Every Desktop is off and VECTORCRAFT_TITLEBAR is unset. Linux and the BSDs only.
+#[test]
+fn system_title_bar_says_when_the_desktop_keeps_the_frame() {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let note = "This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.";
+    let supported = cfg!(not(any(target_arch = "wasm32", target_os = "macos", target_os = "windows")));
+    for keeps in [false, true] {
+        for from_env in [false, true] {
+            for (app_title_bar, system) in [(false, false), (false, true), (true, false), (true, true)] {
+                let mut a = app();
+                a.desktop_keeps_frame = keeps;
+                a.titlebar_from_env = from_env;
+                open(&mut a, Some("User Interface"));
+                let fields = &mut a.ui.dialog.as_mut().unwrap().fields;
+                fields.insert("appTitleBar".into(), json!(app_title_bar));
+                fields.insert("systemTitleBar".into(), json!(system));
+                let ctx = egui::Context::default();
+                crate::theme::install_fonts(&ctx);
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut a, ui.ctx()));
+                out.textures_delta.clear();
+                let mut shown = vec![];
+                out.shapes.iter().for_each(|c| texts(&c.shape, &mut shown));
+                let expected = supported && keeps && !from_env && !app_title_bar;
+                let label = format!("keeps {keeps}, variable {from_env}, app title bar {app_title_bar}, system {system}: {shown:?}");
+                assert_eq!(shown.iter().any(|t| t == note), expected, "{label}");
+            }
         }
     }
 }

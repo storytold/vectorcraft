@@ -1,7 +1,7 @@
 use super::bidi::{is_rtl, para_bidi_with, visual_order};
 use super::breaking::{
-    Metrics, PUSH_IN_SQUEEZE, Pen, break_line, candidates, hangs, leader_outline, optical_hangs, optical_hangs_rtl, optical_punct, optical_share,
-    roman_share, set_width, squeeze_em, tab_advance, word_width,
+    Metrics, PUSH_IN_SQUEEZE, Pen, break_line, candidates, drawn_after_tab, drawn_width, hangs, leader_outline, optical_hangs, optical_hangs_rtl,
+    optical_punct, optical_share, roman_share, squeeze_em, tab_advance, word_width,
 };
 use super::region::Region;
 use super::vertical::{
@@ -23,6 +23,10 @@ fn pushes_in(para: &ParaStyle) -> bool {
 
 /// Paragraphs longer than this (glyphs) are always broken line by line.
 const MAX_COMPOSE_GLYPHS: usize = 200_000;
+
+/// The widths tried, halving the difference each time, for the longest break of a line placed again
+/// at its own metrics in more room than it was broken in ([`place_flow_line`]).
+const REFIT_STEPS: usize = 24;
 
 /// Whether every line of area type in `regions` is as wide however tall it is and wherever it is set:
 /// rectangular cells without text wrap.
@@ -173,6 +177,7 @@ pub(super) fn flow(cx: &mut Ctx<'_>, paras: &[Range<usize>], t: &TextObject, reg
         fb: cx.opts.first_baseline,
         fb_min: cx.opts.first_baseline_min,
         queued: vec![],
+        above: Default::default(),
         model: t.para_at(0).leading_model,
         next_top: None,
         no_room_for: f64::INFINITY,
@@ -288,8 +293,10 @@ fn prepare_paragraph<'a, 'text>(
             wakan.splice(0..0, vec![0.0; marker]);
         }
     }
-    // …and Auto Leading: characters whose leading is Auto take this paragraph's share of their size.
-    let auto_leading = |style: &CharStyle| style.leading.unwrap_or_else(|| para.justification.auto_leading_for(style.size));
+    // …and Auto Leading: characters whose leading is Auto take this paragraph's share of their size
+    // (a warichu character, of the size of the line its block sits in).
+    let auto_leading =
+        |style: &CharStyle| style.leading.unwrap_or_else(|| para.justification.auto_leading_for(super::warichu::line_size(style, cx.vertical)));
     if para.justification.auto_leading != vectorcraft_doc::JustificationOptions::default().auto_leading {
         for glyph in sg.iter_mut().filter(|glyph| glyph.inline.is_none()) {
             glyph.leading = auto_leading(cx.style_at(glyph.byte));
@@ -342,6 +349,8 @@ fn prepare_paragraph<'a, 'text>(
 struct PlacementContext<'a> {
     para: &'a ParaStyle,
     pr: &'a Range<usize>,
+    /// [`ParagraphData::bidi`].
+    bidi: Option<&'a BidiInfo<'a>>,
     sg: &'a mut [SGlyph],
     /// [`ParagraphData::line_end`].
     line_end: &'a [f64],
@@ -376,6 +385,7 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     let PlacementContext {
         para,
         pr,
+        bidi,
         sg,
         line_end,
         continued,
@@ -410,28 +420,56 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
     let word = word_width(sg, *i, line_end, para.kinsoku);
     // A composed line in a frame whose lines are not all as wide is placed at its own tallest
     // metrics, as the composer placed it (`shaped::Shaped`): its room is the room across its height.
-    let est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+    let composed_line = composed.as_ref().and_then(|lines| lines.get(*para_line)).is_some_and(|&(end, _)| end > *i);
+    let mut est = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
         Some(&(end, _)) if end > *i && !constant_width(pen.regions) => sg.get(*i..end).and_then(Metrics::max).unwrap_or(est),
         _ => est,
     };
+    // A line broken here in such a frame is placed again when it turns out taller than it was
+    // placed: its room is the room across its own height.
+    let refit = !composed_line && pen.regions.is_some() && !constant_width(pen.regions);
     // Place, break, then settle the baseline on the line's real metrics (moving on to the
     // next row/column if it no longer fits).
     loop {
+        let before = refit.then(|| pen.clone());
         let first_in_region = pen.prev.is_none();
-        let Some((mut baseline, x0, x1, same_baseline)) = pen.place(est, ind_l, ind_r, word) else {
+        let Some((mut baseline, mut x0, mut x1, same_baseline)) = pen.place(est, ind_l, ind_r, word) else {
             cx.out.overflow = cx.text.len() > if *i < n { sg[*i].byte } else { pr.start };
             return None;
         };
-        let width = x1 - x0 - ind_l - ind_r;
         let hyphenate = (para.hyphenate && (*hyphen_limit == 0 || *hyphen_run < *hyphen_limit)).then_some((&para.hyphenation, *zone));
-        let (end, hyph, pushed_in) = match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
+        let glyphs: &[SGlyph] = sg;
+        // The line broken in room `width` wide: its end, whether it ends with a hyphen, and whether
+        // it pushed characters in.
+        let break_in = |width: f64| match composed.as_ref().and_then(|lines| lines.get(*para_line)) {
             Some(&(end, hyph)) if end > *i => (end, hyph, false),
             _ if *i < n => {
+                let start = *i;
+                // A horizontal line with right-to-left text is drawn in another order than its
+                // text's, and its tabs take their stops in the order they are drawn: whether the line
+                // ending before glyph `end` fits is measured as it is drawn ([`drawn_width`]).
+                let drawn_fits = |end: usize, hyphenated: bool| {
+                    let mut trimmed = end;
+                    while trimmed > start && glyphs.get(trimmed - 1).is_some_and(|g| g.is_space() || g.ch == '\u{2028}') {
+                        trimmed -= 1;
+                    }
+                    let bytes = glyphs.get(start).map_or(pr.start, |g| g.byte)..glyphs.get(end).map_or(pr.end, |g| g.byte);
+                    let drawn: Vec<usize> = visual_order(*bidi, pr.start, bytes, glyphs.get(start..end).unwrap_or_default())
+                        .into_iter()
+                        .map(|offset| start + offset)
+                        .filter(|&j| j < trimmed)
+                        .collect();
+                    let hyphen = if hyphenated { end.checked_sub(1).and_then(|k| glyphs.get(k)).map_or(0.0, |g| hyphen_glyph(g).adv) } else { 0.0 };
+                    // The last glyph's end trim comes off where it is drawn, before the tabs after it.
+                    let credit = trimmed.checked_sub(1).filter(|&k| k >= start).and_then(|k| line_end.get(k).map(|&trim| (k, trim)));
+                    drawn_width(glyphs, &drawn, &para.tabs, ind_l, credit) + hyphen <= width + EPS
+                };
+                let fits: Option<&dyn Fn(usize, bool) -> bool> = (!cx.vertical && bidi.is_some_and(|b| b.has_rtl())).then_some(&drawn_fits);
                 let line = |ty| {
                     break_line(
                         cx.text,
-                        sg,
-                        *i,
+                        glyphs,
+                        start,
                         width,
                         &para.tabs,
                         ind_l,
@@ -442,6 +480,7 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
                         *hanging,
                         cx.vertical,
                         line_end,
+                        fits,
                     )
                 };
                 let (end, hyph) = line(para.kinsoku_type);
@@ -451,8 +490,61 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
             }
             _ => (n, false, false),
         };
-        let m = Metrics::max(&sg[*i..end]).unwrap_or(*pm);
-        baseline += if same_baseline || (pen.regions.is_none() && first_in_region) {
+        let (mut end, mut hyph, mut pushed_in) = break_in(x1 - x0 - ind_l - ind_r);
+        let metrics = |end: usize| glyphs.get(*i..end).and_then(Metrics::max).unwrap_or(*pm);
+        let m = metrics(end);
+        // The baseline moves from where `est` placed it to where the line's metrics set it, unless
+        // the line was placed at metrics of its own (below).
+        let mut settle = true;
+        if let Some(before) = before
+            && m != est
+        {
+            if m.union(est) != est {
+                // Taller than it was placed: place it again at metrics that hold both, and break it
+                // again in the room there.
+                *pen = before;
+                est = est.union(m);
+                continue;
+            }
+            // Broken again in the room of a taller line, it no longer holds what made that line
+            // taller. It goes where its own metrics place it when the room there holds the room it
+            // was broken in, and otherwise stays where it was placed, inside the room measured.
+            settle = false;
+            let mut own = before;
+            if let Some((b, a, z, _)) = own.place(m, ind_l, ind_r, word)
+                && a <= x0 + EPS
+                && z >= x1 - EPS
+            {
+                // The room there may hold more of the line, up to what would make it taller than
+                // `m`: the longest break that does not is between the two widths (a line breaks no
+                // earlier in more room).
+                let (mut lo, mut hi) = (x1 - x0 - ind_l - ind_r, z - a - ind_l - ind_r);
+                let wider = break_in(hi);
+                if metrics(wider.0).union(m) == m {
+                    (end, hyph, pushed_in) = wider;
+                } else {
+                    for _ in 0..REFIT_STEPS {
+                        let mid = (lo + hi) / 2.0;
+                        let line = break_in(mid);
+                        if metrics(line.0).union(m) == m {
+                            (end, hyph, pushed_in) = line;
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                }
+                *pen = own;
+                (baseline, x0, x1) = (b, a, z);
+            }
+        }
+        let m = metrics(end);
+        if same_baseline && !pen.clears_above(baseline, m) {
+            // A glyph taller than the first one sets the line lower than the span's baseline: the
+            // span is left empty, and the line goes in the next span or on the next baseline.
+            continue;
+        }
+        baseline += if !settle || same_baseline || (pen.regions.is_none() && first_in_region) {
             0.0
         } else if pen.model == LeadingModel::EmBoxTop {
             // The em box top is fixed (the frame's top, or the line above's): the baseline
@@ -498,6 +590,14 @@ struct LineGeometry {
     last_of_para: bool,
 }
 
+impl LineGeometry {
+    /// The line's glyphs before its trailing spaces (indices into the paragraph's glyphs), in the
+    /// order they are drawn: the glyphs its tabs are measured over.
+    fn measured(&self) -> Vec<usize> {
+        self.order.iter().map(|&offset| self.index + offset).filter(|&j| j < self.trimmed).collect()
+    }
+}
+
 struct LineJustification {
     per_space: f64,
     per_gap: f64,
@@ -509,6 +609,9 @@ struct LineJustification {
     fit: LineFit,
     start_x: f64,
     after: Vec<Option<usize>>,
+    /// The warichu glyphs drawn inside a block already started, by offset from the line's first
+    /// glyph ([`blocks_begun`]).
+    begun: Vec<bool>,
     kashidas: Vec<(usize, f64)>,
     /// Right-aligned area type: the line's last tab, which takes the text after it to the right
     /// edge (the text before it sits at its stops, from the left edge).
@@ -538,6 +641,7 @@ fn run_paragraph_lines(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, t: &TextObject, mut 
         let mut placement = PlacementContext {
             para: paragraph.para,
             pr: &paragraph.pr,
+            bidi: paragraph.bidi.as_ref(),
             sg: &mut paragraph.sg,
             line_end: &paragraph.line_end,
             continued: paragraph.continued,
@@ -609,10 +713,15 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
         .checked_sub(1)
         .filter(|&k| k >= index && rules.trims_line_end())
         .map_or(0.0, |k| line_end_trim(sg, &paragraph.compressed, &paragraph.wakan, rules, k));
-    let measured_width = set_width(sg, index, trimmed, &para.tabs, position.ind_l) + hyphen.as_ref().map_or(0.0, |g| g.adv) - end_trim;
     let line_start = sg.get(index).map_or(paragraph.pr.start, |g| g.byte);
     let line_end = sg.get(position.end).map_or(paragraph.pr.end, |g| g.byte);
     let order = visual_order(paragraph.bidi.as_ref().filter(|_| !cx.vertical), paragraph.pr.start, line_start..line_end, &sg[index..position.end]);
+    // The line is as wide as it is drawn: its glyphs before its trailing spaces in drawing order,
+    // each tab up to its stop from where the glyphs drawn before it end, with the last glyph's end
+    // trim taken off where it is drawn.
+    let measured: Vec<usize> = order.iter().map(|&offset| index + offset).filter(|&j| j < trimmed).collect();
+    let trim_at = trimmed.checked_sub(1).filter(|&k| k >= index).map(|k| (k, end_trim));
+    let measured_width = drawn_width(sg, &measured, &para.tabs, position.ind_l, trim_at) + hyphen.as_ref().map_or(0.0, |g| g.adv);
     // The glyphs before `stop` in visual order, each with the advance it is set with. A list
     // marker does not hang: it is counted with no width.
     let visible = |stop: usize| -> (Vec<usize>, Vec<(&SGlyph, f64)>) {
@@ -766,22 +875,77 @@ fn visible_after(index: usize, glyph: usize, after: &[Option<usize>], sg: &[SGly
     next
 }
 
-// The glyph after which a gap between drawn glyphs opens, and the visible glyph that follows it:
-// not a held glyph, and never a zero-width format control on either side.
-fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &'a [SGlyph]) -> Option<(&'a SGlyph, &'a SGlyph)> {
+// The glyph after which a gap between drawn glyphs opens, and the visible glyph that follows it
+// with its index: not a held glyph, and never a zero-width format control on either side.
+fn gap_pair<'a>(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &'a [SGlyph]) -> Option<(&'a SGlyph, &'a SGlyph, usize)> {
     if held.contains(&glyph) {
         return None;
     }
     let a = sg.get(glyph).filter(|a| !is_format_control(a.ch))?;
-    visible_after(index, glyph, after, sg).and_then(|next| sg.get(next)).map(|b| (a, b))
+    visible_after(index, glyph, after, sg).and_then(|next| sg.get(next).map(|b| (a, b, next)))
+}
+
+// Are `a` and `b` glyphs of the same warichu block? Right to left, the bidi order can draw a
+// block's first glyph after the others, so the glyph drawn second need not continue the block.
+fn same_warichu_block(a: &SGlyph, b: &SGlyph) -> bool {
+    a.wari.zip(b.wari).is_some_and(|(first, second)| first.start == second.start)
+}
+
+// Is glyph `next` drawn inside a block the line has already started: a tate-chu-yoko glyph after
+// its block's first, or a warichu glyph drawn after another glyph of its block (`begun`, by offset
+// from the line's first glyph, from [`blocks_begun`])? A warichu block starts at the first of its
+// glyphs drawn on the line, which right to left is not the block's first glyph.
+fn continues_drawn_block(next: usize, index: usize, begun: &[bool], sg: &[SGlyph]) -> bool {
+    let Some(b) = sg.get(next) else { return false };
+    match (b.wari, next.checked_sub(index).and_then(|k| begun.get(k))) {
+        (Some(_), Some(&begun)) => begun,
+        _ => b.continues_block(),
+    }
+}
+
+// The warichu glyphs of `line` drawn after another glyph of their block, by offset from the line's
+// first glyph. A block the bidi order interleaves with another keeps its start.
+fn blocks_begun(line: &LineGeometry, sg: &[SGlyph]) -> Vec<bool> {
+    let len = line.body.saturating_sub(line.index);
+    // Each glyph's block, as the offset of the block's first glyph: a block's glyphs are neighbors
+    // in `sg`, and a block stays on one line.
+    let mut first: Vec<usize> = Vec::with_capacity(len);
+    for k in 0..len {
+        let pair = k.checked_sub(1).and_then(|p| sg.get(line.index + p)).zip(sg.get(line.index + k));
+        let block = match first.last() {
+            Some(&f) if pair.is_some_and(|(a, b)| same_warichu_block(a, b)) => f,
+            _ => k,
+        };
+        first.push(block);
+    }
+    let mut started = vec![false; len];
+    let mut begun = vec![false; len];
+    for &j in &line.drawn {
+        let Some(k) = j.checked_sub(line.index).filter(|_| sg.get(j).is_some_and(|g| g.wari.is_some())) else { continue };
+        let Some(&f) = first.get(k) else { continue };
+        if let (Some(seen), Some(slot)) = (started.get(f).copied(), begun.get_mut(k)) {
+            *slot = seen;
+        }
+        if let Some(seen) = started.get_mut(f) {
+            *seen = true;
+        }
+    }
+    begun
 }
 
 // Japanese (and Chinese) lines are justified between their characters (JLREQ 3.8): the
-// gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko block or a shaped
-// cluster.
-fn is_cjk_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph]) -> bool {
-    gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b)| {
-        a.byte != b.byte && !a.is_space() && !b.is_space() && !b.continues_tcy() && a.ch != '\t' && (is_cjk(a.ch) || is_cjk(b.ch))
+// gaps next to a CJK character, not inside a Latin word, a tate-chu-yoko or warichu block or a
+// shaped cluster. `begun` holds the warichu glyphs drawn inside a block already started
+// ([`blocks_begun`]).
+pub(super) fn is_cjk_gap(glyph: usize, held: &[usize], (after, begun): (&[Option<usize>], &[bool]), index: usize, sg: &[SGlyph]) -> bool {
+    gap_pair(glyph, held, after, index, sg).is_some_and(|(a, b, next)| {
+        a.byte != b.byte
+            && !a.is_space()
+            && !b.is_space()
+            && !same_warichu_block(a, b)
+            && a.ch != '\t'
+            && (is_cjk(a.ch) || is_cjk(b.ch))
+            && !continues_drawn_block(next, index, begun, sg)
     }) && !in_pair(glyph, index, after, sg)
 }
 
@@ -807,16 +971,23 @@ fn in_pair(glyph: usize, index: usize, after: &[Option<usize>], sg: &[SGlyph]) -
 }
 
 // Single Word Justification's Full Justify spreads a line's leftover room over the gaps between
-// its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell), a shaped
-// cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
+// its drawn glyphs: not after a held glyph, nor inside a tate-chu-yoko block (one cell) or a
+// warichu block (set as one piece), a shaped cluster, whose glyphs (a letter and its combining marks, a conjunct and its matra) stay
 // together, or an inseparable pair. On a line that ends in a drawn hyphen, the gap before the
-// hyphen counts too: it follows the line's last visible glyph.
-fn is_letter_gap(glyph: usize, held: &[usize], after: &[Option<usize>], index: usize, sg: &[SGlyph], hyphen: bool) -> bool {
+// hyphen counts too: it follows the line's last visible glyph. `begun` is as for [`is_cjk_gap`].
+pub(super) fn is_letter_gap(
+    glyph: usize,
+    held: &[usize],
+    (after, begun): (&[Option<usize>], &[bool]),
+    index: usize,
+    sg: &[SGlyph],
+    hyphen: bool,
+) -> bool {
     if held.contains(&glyph) || sg.get(glyph).is_none_or(|a| is_format_control(a.ch)) || in_pair(glyph, index, after, sg) {
         return false;
     }
     match gap_pair(glyph, held, after, index, sg) {
-        Some((a, b)) => a.byte != b.byte && !b.continues_tcy(),
+        Some((a, b, next)) => a.byte != b.byte && !same_warichu_block(a, b) && !continues_drawn_block(next, index, begun, sg),
         None => hyphen,
     }
 }
@@ -847,15 +1018,16 @@ fn is_tab_fixed(fixed: &[bool], index: usize, glyph: usize) -> bool {
 
 // The natural width of justified area type `line` with a tab, as [`emit_flow_line`] draws it from
 // the line's start: its glyphs in drawing order, each tab up to its stop from where the glyphs
-// drawn before it end, then the line's hyphen.
+// drawn before it end, aligning the glyphs drawn after it, then the line's hyphen.
 fn tabbed_natural_width(paragraph: &ParagraphData<'_, '_>, line: &LineGeometry, fixed: &[bool]) -> f64 {
     let sg = &paragraph.sg;
     let start = line.ax0 - line.opt_l;
     let mut x = start;
-    for &j in &line.drawn {
+    let measured = line.measured();
+    for (k, &j) in measured.iter().enumerate().filter(|&(_, &j)| j < line.body) {
         let Some(g) = sg.get(j) else { continue };
         x += if g.ch == '\t' && g.len > 0 && is_tab_fixed(fixed, line.index, j) {
-            tab_advance(&paragraph.para.tabs, line.position.x0, x + line.opt_l, sg.get(j + 1..line.trimmed).unwrap_or_default()).0
+            tab_advance(&paragraph.para.tabs, line.position.x0, x + line.opt_l, drawn_after_tab(sg, &measured, k)).0
         } else if j + 1 == line.trimmed {
             g.adv - line.end_trim
         } else {
@@ -922,7 +1094,8 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             *slot = Some(b);
         }
     }
-    let cjk_gaps = (line.index..line.body).filter(|&j| free(j) && is_cjk_gap(j, held, &after, line.index, sg)).count();
+    let begun = blocks_begun(line, sg);
+    let cjk_gaps = (line.index..line.body).filter(|&j| free(j) && is_cjk_gap(j, held, (&after, &begun), line.index, sg)).count();
     // Single Word Justification: a justified line holding one word (no word space) is
     // spread between its letters (Full Justify) or aligned. A tab separates two words.
     let single_word = justify && fixed.is_empty() && spaces == 0 && cjk_gaps == 0;
@@ -961,7 +1134,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
     let pushed_in = line.position.pushed_in && paragraph.regions.is_some() && cjk_gaps > 0 && width > room + EPS;
     if pushed_in {
         let ems: f64 = (line.index..line.body)
-            .filter(|&j| free(j) && is_cjk_gap(j, held, &after, line.index, sg) && may_squeeze(&sg[j]))
+            .filter(|&j| free(j) && is_cjk_gap(j, held, (&after, &begun), line.index, sg) && may_squeeze(&sg[j]))
             .map(|j| squeeze_em(&sg[j], cx.vertical))
             .sum();
         if ems > EPS {
@@ -992,7 +1165,7 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             let used: f64 = flex.iter().map(|f| fit.letter(f) + fit.glyph(f)).sum();
             let rest = room - width - used;
             let hyphen = line.hyphen.is_some();
-            let gaps = (line.index..line.body).filter(|&j| free(j) && is_letter_gap(j, held, &after, line.index, sg, hyphen)).count();
+            let gaps = (line.index..line.body).filter(|&j| free(j) && is_letter_gap(j, held, (&after, &begun), line.index, sg, hyphen)).count();
             if gaps > 0 && rest > EPS {
                 per_gap = rest / gaps as f64;
             }
@@ -1024,11 +1197,12 @@ fn justify_flow_line(cx: &Ctx<'_>, paragraph: &ParagraphData<'_, '_>, line: &Lin
             _ => line.ax1 + line.opt_r - width,
         }
     };
-    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, kashidas, last_tab, trailing, fixed }
+    LineJustification { per_space, per_gap, per_cjk, squeeze, fit, start_x, after, begun, kashidas, last_tab, trailing, fixed }
 }
 
-/// The advance and leader of tab `glyph_index` of `line`, at pen position `x`: up to its stop
-/// ([`tab_advance`], measured from `tab_origin` less `tab_shift`), or, for the last tab of
+/// The advance and leader of tab `glyph_index` of `line`, drawn at `order_index` of
+/// [`LineGeometry::order`], at pen position `x`: up to its stop ([`tab_advance`], measured from
+/// `tab_origin` less `tab_shift`, aligning the glyphs drawn after it), or, for the last tab of
 /// right-aligned area type ([`LineJustification::last_tab`]), up to where the rest of the line
 /// ends on the right edge. The tab after a list marker keeps the width `prepend_marker` gave it
 /// (`advance`).
@@ -1036,7 +1210,7 @@ fn tab_glyph<'p>(
     paragraph: &'p ParagraphData<'_, '_>,
     line: &LineGeometry,
     justification: &LineJustification,
-    glyph_index: usize,
+    (glyph_index, order_index): (usize, usize),
     x: f64,
     (tab_origin, tab_shift): (f64, f64),
     advance: f64,
@@ -1046,7 +1220,8 @@ fn tab_glyph<'p>(
     if !sg.get(glyph_index).is_some_and(|g| g.len > 0) {
         return (advance, "");
     }
-    let (advance, leader) = tab_advance(&paragraph.para.tabs, tab_origin, x - tab_shift, sg.get(glyph_index + 1..line.trimmed).unwrap_or_default());
+    let rest = line.order.iter().skip(order_index + 1).map(|&offset| line.index + offset).filter(|&j| j < line.trimmed).filter_map(|j| sg.get(j));
+    let (advance, leader) = tab_advance(&paragraph.para.tabs, tab_origin, x - tab_shift, rest);
     if justification.last_tab != Some(glyph_index) {
         return (advance, leader);
     }
@@ -1057,6 +1232,42 @@ fn tab_glyph<'p>(
     let hyphen = line.hyphen.as_ref().map_or(0.0, |g| g.adv);
     let rest = if after.is_empty() { 0.0 } else { after.iter().map(|g| g.adv).sum::<f64>() - line.end_trim + hyphen - justification.trailing };
     ((line.ax1 + line.opt_r - rest - x).max(0.0), leader)
+}
+
+/// Emit `glyph` of a line placed by `transform` at `origin` with `advance` along the line, its
+/// Insert Aki before it `aki` and the glyph scaling a justified line adds to it `scale`. A warichu
+/// glyph is drawn at its place in its block instead: the block starts where the first of its glyphs
+/// drawn on the line is placed (`blocks` holds the byte naming each block of the line and where it
+/// starts, kept when the bidi order draws another block's glyphs between two of its own), and the
+/// glyph sits on the baseline of its block line, measured from where Character Alignment sets the
+/// block on the line (`origin`), with its own advance for the caret, selection and hit testing.
+fn emit_line_glyph(
+    cx: &mut Ctx<'_>,
+    glyph: &SGlyph,
+    (transform, origin, advance): (Affine, Point, f64),
+    blocks: &mut Vec<(usize, f64)>,
+    line_index: usize,
+    (aki, scale): (f64, f64),
+) {
+    let Some(w) = glyph.wari else {
+        cx.emit(glyph, transform, origin, 0.0, advance, line_index);
+        // Its own width starts where the glyph is drawn, with the Aki kept at its width.
+        let own_shift = cx.own_width_shift(glyph, aki);
+        if let Some(out) = cx.out.glyphs.last_mut() {
+            out.scale = scale;
+            out.width_start += own_shift;
+        }
+        return;
+    };
+    let start = match blocks.iter().find(|(byte, _)| *byte == w.start) {
+        Some(&(_, at)) => at,
+        None => {
+            blocks.push((w.start, origin.x));
+            origin.x
+        }
+    };
+    let at = Point::new(start + w.along, origin.y + w.across);
+    cx.emit(glyph, Affine::translate(at.to_vec2()), at, 0.0, w.advance, line_index);
 }
 
 /// Lay out `line` of `paragraph` as `justification` aligns it: each glyph placed along the
@@ -1078,18 +1289,21 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
     let line_em = sg.get(index..position.end).map_or(0.0, |glyphs| glyphs.iter().map(glyph_em).fold(0.0, f64::max));
     // Tab stops are measured from the frame's left edge (point type: the origin).
     let tab_origin = if paragraph.regions.is_some() { position.x0 } else { 0.0 };
-    // A line with tabs is measured as if it started at the left (see `set_width`), then
+    // A line with tabs is measured as if it started at the left (see `drawn_width`), then
     // aligned as a whole: its tabs stop where they were measured, however it is aligned.
     let tab_shift = start_x - if paragraph.regions.is_some() { ax0 } else { position.ind_l };
     // RTL's logical trailing spaces precede the visible content. Keep them outside
-    // the aligned content extent, just as LTR trailing spaces extend to its right.
-    let leading_space_width: f64 =
-        order.iter().take_while(|&&offset| index + offset >= trimmed).filter_map(|&offset| sg.get(index + offset)).map(|glyph| glyph.adv).sum();
+    // the aligned content extent, just as LTR trailing spaces extend to its right. A tab among
+    // them keeps its own width.
+    let leading = order.iter().take_while(|&&offset| index + offset >= trimmed).count();
+    let leading_space_width: f64 = order.iter().take(leading).filter_map(|&offset| sg.get(index + offset)).map(|glyph| glyph.adv).sum();
     let mut x = start_x - leading_space_width;
     let mut x_end = start_x;
     // The glyphs drawn for the list marker, and the index of its tab's glyph, when the line starts the paragraph.
     let mut marker_glyphs: Option<Range<usize>> = None;
     let mut marker_tab = 0;
+    // The warichu blocks drawn on the line: the byte that names each and where it starts.
+    let mut wari_blocks: Vec<(usize, f64)> = Vec::new();
     for (order_index, &offset) in order.iter().enumerate() {
         let glyph_index = index + offset;
         let Some(glyph) = sg.get(glyph_index) else { continue };
@@ -1100,8 +1314,8 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
         // Glyph scaling a justified line adds to the glyph (1: none).
         let mut scale = 1.0;
         let mut leader = "";
-        if glyph.ch == '\t' {
-            (advance, leader) = tab_glyph(paragraph, line, justification, glyph_index, x, (tab_origin, tab_shift), advance);
+        if glyph.ch == '\t' && order_index >= leading {
+            (advance, leader) = tab_glyph(paragraph, line, justification, (glyph_index, order_index), x, (tab_origin, tab_shift), advance);
         } else if glyph_index < body && !is_tab_fixed(&justification.fixed, index, glyph_index) {
             let flex = flow_line_flex(glyph_index, &paragraph.flex, &line.held, &line.hung);
             if is_word_space(glyph) {
@@ -1110,10 +1324,10 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 advance += justification.fit.letter(&flex) + justification.fit.glyph(&flex);
                 scale = justification.fit.glyph_scale(&flex);
                 if justification.per_cjk != 0.0 || justification.squeeze != 0.0 {
-                    if is_cjk_gap(glyph_index, &line.held, &justification.after, index, sg) {
+                    if is_cjk_gap(glyph_index, &line.held, (&justification.after, &justification.begun), index, sg) {
                         advance += justification.per_cjk + squeeze_after(glyph, justification.squeeze, cx.vertical);
                     }
-                } else if is_letter_gap(glyph_index, &line.held, &justification.after, index, sg, line.hyphen.is_some()) {
+                } else if is_letter_gap(glyph_index, &line.held, (&justification.after, &justification.begun), index, sg, line.hyphen.is_some()) {
                     advance += justification.per_gap;
                 }
             }
@@ -1141,13 +1355,8 @@ fn emit_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, paragraph: &ParagraphData
                 marker_tab = at;
             }
         }
-        cx.emit(glyph, transform, Point::new(x, y), 0.0, advance, line_index);
-        // Its own width starts where the glyph is drawn, with the Aki kept at its width.
-        let own_shift = cx.own_width_shift(glyph, aki);
-        if let Some(out) = cx.out.glyphs.last_mut() {
-            out.scale = paragraph.flex.get(glyph_index).map_or(1.0, |flex| flex.scale) * scale;
-            out.width_start += own_shift;
-        }
+        let glyph_scale = paragraph.flex.get(glyph_index).map_or(1.0, |flex| flex.scale) * scale;
+        emit_line_glyph(cx, glyph, (transform, Point::new(x, y), advance), &mut wari_blocks, line_index, (aki, glyph_scale));
         if !leader.is_empty() {
             // The leader belongs to the tab's glyph: the gap stays one character for the
             // caret, selection and hit testing.

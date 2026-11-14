@@ -208,15 +208,15 @@ fn a_postscript_ai_with_a_multi_layer_mask_opens_with_its_layers() {
     assert!(r.warnings.iter().any(|w| w.contains("clipping group in each layer")), "{:?}", r.warnings);
 }
 
-/// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation and
-/// tab-ruler attributes: `XL` (hyphenation language), `Xb`/`Xe`/`XB` (a tab definition) and `Th`
-/// (hyphen control). The reader drops `XL` and keeps the tab definition as the paragraph's tab
-/// stops rather than failing the file the way it did before (the symptom seen on Illustrator 6/8
-/// EPS files whose `Adobe_level2_AI5` program can't be run).
+/// A `.ai` in PostScript form (read through its layers) whose text carries hyphenation, tab-ruler
+/// and kerning attributes: `XL` (hyphenation language), `Xb`/`Xe`/`XB` (a tab definition), `Th`
+/// (hyphen control), `Tk` (a manual kerning pair) and `T+` (a discretionary hyphen). The reader
+/// keeps the language, the tab definition as the paragraph's tab stops, the pair's kerning and the
+/// soft hyphen.
 #[test]
 fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let text = "0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 9 Tf\n\
-        %_ 0 XL\n36 1 Xb\n0 0 3 72 Xe\nXB\n0 1 2 2 99 Th\n0 Ta\n(hi) Tx\nTO\n";
+        %_ 3 XL\n36 1 Xb\n0 0 3 72 Xe\nXB\n0 1 2 2 99 Th\n0 Ta\n(h) Tx\n0 -40 Tk\n(i) Tx\nT+\n(ho) Tx\nTO\n";
     // The operators sit on a visible layer (so they'd be reported as unknown, not quietly skipped
     // on a hidden one), beside the square so the layer is never empty.
     let src = NAMED_PROLOG.replace("S\nLB\n%AI5_EndLayer--\n%AI5_BeginLayer", &format!("S\n{text}LB\n%AI5_EndLayer--\n%AI5_BeginLayer"));
@@ -228,10 +228,14 @@ fn text_with_hyphenation_and_tab_attributes_opens_instead_of_failing() {
     let mut texts = vec![];
     r.document.walk(|n| {
         if let NodeKind::Text(t) = &n.kind {
-            texts.push(t.para_at(0).clone());
+            texts.push((**t).clone());
         }
     });
-    let [p] = texts.as_slice() else { panic!("{texts:?}") };
+    let [t] = texts.as_slice() else { panic!("{texts:?}") };
+    assert_eq!(t.plain_text(), "hi\u{ad}ho");
+    let runs: Vec<_> = t.runs.iter().map(|r| (r.text.as_str(), r.style.kerning, r.style.language.as_deref())).collect();
+    assert_eq!(runs, [("h", Some(-40.0), Some("de")), ("i\u{ad}ho", None, Some("de"))]);
+    let p = t.para_at(0);
     assert!(!p.hyphenate);
     assert_eq!((p.hyphenation.after_first, p.hyphenation.before_last, p.hyphenation.hyphen_limit), (2, 2, 25));
     let tabs: Vec<_> = p.tabs.iter().map(|t| (t.position, t.align)).collect();

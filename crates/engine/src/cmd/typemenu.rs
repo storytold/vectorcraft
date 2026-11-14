@@ -7,6 +7,7 @@ use vectorcraft_doc::{AreaFit, CharStyle, Document, Justify, LockedArtboards, No
 use vectorcraft_geom::{Affine, Rect, shapes};
 
 use super::object::choice;
+use super::threads::ThreadIndex;
 use super::typecmd::{area_text, block_gaps, needed_room, refresh_bounds};
 use super::{
     CommandSpec, EngineError, Result, Session, bad, checked_ids_param, cmd, find_command, has_clipboard, has_doc, has_selection, number_or,
@@ -137,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste without Formatting",
             ["Edit"],
             Some("Cmd+Alt+V"),
-            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind → {ids, added, merged, renamed}",
+            "{center?, dx?, dy?, swatchConflict?} paste as edit.paste; pasted text takes the default character style (one run) and leaves its character and paragraph styles behind, as do the labels of pasted graphs → {ids, added, merged, renamed}",
             has_clipboard,
             paste_plain
         ),
@@ -556,7 +557,7 @@ fn path_center_refusal(d: &Document, ids: &[NodeId]) -> Option<String> {
         let open = open.join(", ");
         return Some(format!("type on an open or compound path cannot be centered on its top or bottom: {open}"));
     }
-    let frames = threaded_ids(d, ids);
+    let frames = threaded_ids(&ThreadIndex::of(d), ids);
     (!frames.is_empty()).then(|| format!("type on a path in a thread cannot be centered on its top or bottom: {frames}"))
 }
 
@@ -783,11 +784,6 @@ fn path_options(s: &mut Session, p: &Value) -> Result<Value> {
     options(s)
 }
 
-/// Whether type `id` is a frame of a thread.
-fn threaded(d: &Document, id: NodeId) -> bool {
-    !super::threads::story_of(d, id).is_empty()
-}
-
 /// Type on a path or area type: the type Dynamic Text works on.
 fn dynamic_type(n: Option<&Node>) -> Option<&TextObject> {
     path_text(n).or_else(|| area_text(n))
@@ -820,17 +816,18 @@ fn has_dynamic_type(s: &Session) -> std::result::Result<(), String> {
 /// path first; None when none is.
 fn threaded_refusal(d: &Document, ids: &[NodeId]) -> Option<String> {
     let (paths, areas): (Vec<NodeId>, Vec<NodeId>) = ids.iter().copied().partition(|id| path_text(d.node(*id)).is_some());
-    let frames = threaded_ids(d, &paths);
+    let threads = ThreadIndex::of(d);
+    let frames = threaded_ids(&threads, &paths);
     if !frames.is_empty() {
         return Some(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
     }
-    let frames = threaded_ids(d, &areas);
+    let frames = threaded_ids(&threads, &areas);
     (!frames.is_empty()).then(|| format!("area type in a thread cannot use Dynamic Text: {frames}"))
 }
 
-/// The ids among `ids` of frames of threads, as a list for a message; empty when there are none.
-fn threaded_ids(d: &Document, ids: &[NodeId]) -> String {
-    ids.iter().filter(|id| threaded(d, **id)).map(|id| id.0.to_string()).collect::<Vec<_>>().join(", ")
+/// The ids among `ids` of frames of `threads`, as a list for a message; empty when there are none.
+fn threaded_ids(threads: &ThreadIndex, ids: &[NodeId]) -> String {
+    ids.iter().filter(|id| threads.threaded(**id)).map(|id| id.0.to_string()).collect::<Vec<_>>().join(", ")
 }
 
 /// Type › Dynamic Text: set `on` (without it, the opposite of the first object's setting, or on
@@ -969,7 +966,7 @@ fn has_preset_type(s: &Session) -> std::result::Result<(), String> {
     if ids.is_empty() {
         return Err("select point type or type on a path".into());
     }
-    let frames = threaded_ids(d, &ids);
+    let frames = threaded_ids(&ThreadIndex::of(d), &ids);
     if !frames.is_empty() {
         return Err(format!("type on a path in a thread cannot use Dynamic Text: {frames}"));
     }
@@ -1108,7 +1105,7 @@ fn dynamic_text_preset(s: &mut Session, p: &Value) -> Result<Value> {
         if ids.is_empty() {
             return Err(bad(C, "select point type or type on a path"));
         }
-        let frames = threaded_ids(d, &ids);
+        let frames = threaded_ids(&ThreadIndex::of(d), &ids);
         if !frames.is_empty() {
             return Err(bad(C, format!("type on a path in a thread cannot use Dynamic Text: {frames}")));
         }
@@ -1462,6 +1459,16 @@ fn strip_formatting(n: &mut vectorcraft_doc::Node) {
         t.runs = vec![TextRun { text, style: CharStyle::default(), inline: None }];
         t.set_all_paras(Default::default());
         refresh_bounds(t);
+    }
+    // A graph keeps the names of its labels' character and paragraph styles for each redraw.
+    if let Some(g) = n.extras_if_any().and_then(|e| e.graph.as_deref_mut()) {
+        let l = &mut g.label_styles;
+        for st in [&mut l.values, &mut l.categories, &mut l.legend].into_iter().flatten() {
+            st.style_name = None;
+        }
+        for pa in [&mut l.values_para, &mut l.categories_para, &mut l.legend_para].into_iter().flatten() {
+            pa.style_name = None;
+        }
     }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {

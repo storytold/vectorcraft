@@ -24,7 +24,8 @@ pub enum Method {
     #[default]
     Abutting,
     /// Stacked: every layer extends under the layers above it, within the areas that hold its own
-    /// color.
+    /// color. With Fills (without Create Strokes) each shape is filled whole, and what it encloses
+    /// is stacked above it.
     Overlapping,
 }
 

@@ -77,7 +77,7 @@ object is where the art was.
 |---|---|
 | Depth | 0–2,000 pt. At 0 the object is flat (the art turned like Rotate). |
 | Twist | 0° to 360°: the back face turned against the front, the walls following in slices. |
-| Taper | 1–100 %: the back face's size against the front's. |
+| Taper | 1–100 %: the back face's size against the front's. Without a twist, each wall (and each bevel band) stays flat, so it is one face, not cut into slices. |
 | Cap | **Solid** closes the front and back; **Hollow** leaves them open, showing the insides of the walls. |
 | Bevel Shape | **None**, **Classic** (a straight chamfer), **Rounded** (convex quarter round), **Cove** (concave), **Step** (two steps) or **Ogee** (an S curve). Our own cross-sections. |
 | Width, Height | How far the bevel reaches across the face and along the depth (0–1,000 pt each). The height is limited to the depth (half of it on each side with Bevel both sides). |
@@ -85,8 +85,10 @@ object is where the art was.
 | Bevel Inside | The bevel carved into the shape (the front face shrinks) instead of added around it (the walls stand outside the art). |
 | Bevel both sides | The back is bevelled too. |
 
-Holes stay holes, with walls of their own. Bevels move each corner along its bisector (mitres are limited to four
-times the width), so a bevel wider than a narrow part of the shape folds over itself.
+Holes stay holes, with walls of their own. Bevels move each corner along its bisector. A corner the bevel opens (a
+sharp point with the bevel outside, a narrow notch with it inside) whose miter would reach past four times the width is
+cut square across instead; at the other corners the miter is limited to four times the width. A bevel wider than a
+narrow part of the shape folds over itself. Each facet has a seam ([Seams](#seams)).
 
 ## Inflate
 
@@ -102,7 +104,42 @@ middle.
 | Volume | 0–100 %. The surface is a membrane under even pressure, held along the outline (and around holes): it rises vertically from the edge and rounds smoothly inside, without creases along the shape's middle. At 50 % a circle becomes a half sphere; 100 % puffs twice as high, 0 % is flat. |
 | Both sides | The back puffs out too; otherwise it is flat. |
 
-The surface starts with a grid of 48 cells across the larger side, halved or quartered where it rises steeply near the outline. White-light Inflate retains the existing clipped polygon cells, shading, paint composition and seam joins. With colored lights, simple cells are triangulated with shared border samples, and lighting interpolates shared membrane normals through ordinary RGB vector gradients, including on a puffed back. Solid fills batch those triangles into three channel groups and one coverage clip for the whole surface. Source gradients retain per-facet vector composition and apply transparent coverage once. Seam widths retain the 0.05 to 0.75 pt bounds; colored facets use round joins. Shading is automatic, with no additional dialog option.
+The surface starts with a grid of 48 cells across the larger side, halved or quartered where it rises steeply near the outline. White-light Inflate retains the existing clipped polygon cells, shading and paint composition. With colored lights, simple cells are triangulated with shared border samples, and lighting interpolates shared membrane normals through ordinary RGB vector gradients, including on a puffed back. A solid fill or stroke drawn alone, or drawn whole because a fill or stroke of the object is translucent or blended, batches those triangles into three channel groups and one coverage clip for the whole surface; when its faces share one depth order with another solid's, each triangle has its own clip and channel ramps. Source gradients retain per-facet vector composition and apply transparent coverage once. Seam widths retain the 0.05 to 0.75 pt bounds, and every facet's seam has round joins ([Seams](#seams)). Shading is automatic, with no additional dialog option.
+
+## Seams
+
+Facets side by side, each antialiased on its own, would leave hairlines between them, so 3D facets are drawn with
+a seam of their own paint, with round joins. In Extrude & Bevel, Inflate, Rotate and the three 3D (Classic) effects a
+facet's seam is half as wide as the facet is thick, from 0.05 to 0.75 pt; Revolve's seam is always 0.75 pt.
+
+How a facet carries its seam depends on the lights and the paint:
+
+- Extrude & Bevel, Inflate and Rotate, when no light is colored (one white light or several): a path filled with
+  the facet's shading and stroked with its seam. With a colored light, Extrude & Bevel and Rotate (planar shading)
+  are drawn the same way.
+- Inflate with a colored light and shading on: a solid-color fill or stroke drawn as one composite draws each facet's light ramps with its seam in three channel
+  groups clipped to the union of its facets, so no seam reaches past the surface; a gradient fill, and a solid-color
+  fill or stroke whose faces share one depth order with another solid's, fills each facet's ramps through a clip of
+  the facet and its seam, outlined with round joins.
+  The facets of a surface drawn this way lie over an underlay
+  of themselves whose seams are 2 pt wide, reaching 1 pt past each edge, and one clip to the union of the facets and
+  their seams removes what the underlay paints past the surface. Where two facets' antialiased edges meet, the
+  underlay fills the pixels they leave partly uncovered with the neighbors' own light, so no black channel backdrop
+  or background shows there. Compared with the same art drawn at 3x and averaged down, away from the surface's outline
+  and from places where the light changes sharply, a pixel drawn at 1:1 is opaque where the 3x art is opaque, and
+  otherwise its alpha is within 3 levels. Inflate seen straight on with an opaque fill also has each color channel
+  within 3 levels (VectorCraft's own measure).
+- Extrude & Bevel (Classic), Rotate (Classic) and Revolve (Classic): a path and a seam for every face; gradient and
+  pattern faces seam only the base paint, and the shading and highlight layers cover the face alone. The Wireframe
+  surface draws edges only, with no seam.
+- Revolve, with shading on: when a `lights` list is given (even one of white lights), a solid-color or gradient face fills its light
+  ramps through a clip of the face and its 0.75 pt seam, outlined with round joins. With the single legacy light,
+  a face is a path and a seam; with a colored `lightColor` a gradient face fills through the same kind of clip.
+
+A facet seen almost edge-on is a sliver, and a seam with mitered joins would reach past the solid as a thorn; a round
+one reaches no more than half its width past its facet. So where a facet has no neighbor (Rotate's plane, every
+silhouette corner) its convex corners are drawn rounded by up to 0.375 pt (half the largest seam), except a
+solid-color Inflate surface under a colored light drawn as one composite, whose clip keeps its corners sharp.
 
 ## Fills and strokes
 
@@ -126,11 +163,13 @@ The rest is our reading:
   depths where they overlap, with caps on or off. A fill wall in a gap stays in its own depth order. Inflate's
   curved surfaces follow this only as closely as their flat facets do. A solid painted with a gradient that has
   transparent stops under a light that is not white is drawn with an opacity mask: its faces keep their places in
-  this order, in runs that each carry the mask, and so do its graphics. A member of a 3D group with its own opacity
+  this order, in runs that each carry the mask, and a graphic drawn after one of its faces carries the mask too
+  ([Graphics](#graphics)). A member of a 3D group with its own opacity
   mask or blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when
   they are opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the
-  lower item's first. With a light that is not white, each solid is also drawn on its own when one of them is a
-  puffed, shaded Inflate surface in a solid color (drawn as one composite).
+  lower item's first. With a light that is not white, a puffed, shaded Inflate surface in a solid color takes its
+  place in this order too, each of its faces drawn with its own light ramps; a lone solid of that kind is still
+  drawn as one composite, and so is each such solid when they hold more than 30,720 faces together.
 - The solids turn, twist and taper about the center of the bounds of all their shapes, Inflate's grid covers
   those bounds, and with Perspective one eye sees every solid. A stroke too narrow to hold a point of Inflate's
   grid stays flat.
@@ -141,6 +180,10 @@ The rest is our reading:
   once their faces pass it no later solid is built: the object draws its source art, and applying or editing the
   effect, Export 3D Object and **Expand as Wireframes** report that the 3D surface is too complex. A stroke left
   out for its own limits does not count.
+- Inflate works out how high every shape puffs before it builds the first solid, because the highest puff sets
+  how far away the eye is. At a Volume of 0 % no shape puffs, so each shape's puff is worked out only when its
+  solid is built, and none is worked out for the solids after the limit stops. The shadow builds no solid for a
+  fill or stroke that is fully transparent.
 
 ## Groups
 
@@ -206,7 +249,7 @@ solids are ([Groups](#groups)), turned about one shared axis.
 
 The flat art turned in 3D about the centre of its bounds. Every fill and stroke is turned with its own paint (a
 stroke as its outline, so it foreshortens with the art) and shaded as one plane; a plane has two sides, so its
-back shows when it is turned past 90°.
+back shows when it is turned past 90°. The plane has a seam ([Seams](#seams)).
 
 ## Rotation presets
 
@@ -347,8 +390,11 @@ These rules are VectorCraft's own:
   turned, foreshortened by the perspective and twisted and tapered with the face, and clipped to it. It is shaded
   with the face's light: each color is multiplied by the light that falls on the face, except in pattern tiles,
   which keep their own colors. It is drawn with the
-  opacity and blending mode of the fill or stroke the face is painted with. A graphic on a face turned away from
-  the viewer is not drawn.
+  opacity and blending mode of the fill or stroke the face is painted with. Solids whose fills and strokes have the
+  same opacity and blending mode share one graphic on each face, clipped to their faces there and drawn after the
+  last of them. An object's fill and stroke share it when the fill is drawn with an opacity mask too, and the
+  graphic takes the mask of the solid it is drawn after; members of a 3D group drawn with a mask keep graphics of
+  their own. A graphic on a face turned away from the viewer is not drawn.
 - On the back cap, X runs to the right as the back is seen from behind, so the graphic reads the right way round
   there.
 - On Revolve a graphic lies on the swept side, which has one face (Front), unrolled flat. X runs around the axis:
@@ -465,6 +511,8 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-13 | Extrude & Bevel cuts its walls into slices only for a twist. A taper alone keeps each wall flat, so it is one face, without the light ticks at the joints between slices or the light line down a wall (#7019). Inflate still slices its sides for a taper. |
+| 2026-11-12 | The seams of Extrude & Bevel, Inflate and Rotate under a white light, and of the faces of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), went from miter to round joins (the seams of Revolve and of colored lights, and 3D (Classic) Wireframe edges, were already round): no thorns on edge-on facets, and facets with no neighbor now have rounded convex corners ([Seams](#seams)). |
 | 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |
 | 2026-11-06 | Extrude & Bevel, Inflate and Rotate apply to groups and layers: every path, compound path and type in them turns about one shared axis (#4506). |
 | 2026-10-21 | Four original lighting presets, shared by all four 3D effects and commands, with effective-setting recognition and existing preview/history behavior. |
