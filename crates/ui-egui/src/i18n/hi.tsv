@@ -7520,6 +7520,7 @@ antiAlias	Sharp	शार्प
 @msg	not a Word document: its WordDocument stream doesn't start with a file information block	वर्ड डॉक्यूमेंट नहीं: इसकी WordDocument धारा फ़ाइल सूचना ब्लॉक के साथ शुरू नहीं होती है
 @msg	the action set file can't be read in full	एक्शन सेट फ़ाइल पूरी तरह नहीं पढ़ी जा सकती
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” लोड किया गया: {n} चरण छोड़ा गया|“{name}” लोड किया गया: {n} चरण छोड़े गए
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” लोड किया गया: {n} चरण में अज्ञात आदेश है और उसे रखा गया: “{action}”, चरण {step}, `{command}`|“{name}” लोड किया गया: {n} चरणों में अज्ञात आदेश हैं और उन्हें रखा गया; पहला: “{action}”, चरण {step}, `{command}`
 @msg	not an action set file	एक एक्शन सेट फ़ाइल नहीं
 @msg	not an EMF or WMF file	नहीं एक EMF या WMF फ़ाइल
 @msg	not an HP-GL file	HP-GL फ़ाइल नहीं है
@@ -8410,6 +8411,7 @@ antiAlias	Sharp	शार्प
 @msg	unknown character style number field	अज्ञात चरित्र स्टाइल संख्या क्षेत्र
 @msg	unknown CMYK profile `{name}`	अज्ञात CMYK प्रोफ़ाइल `{name}`
 @msg	unknown command `{0}`	अज्ञात आदेश `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	“{action}” का चरण {step} अज्ञात आदेश `{command}` चलाता है
 @msg	unknown command `{0}`; did you mean `{1}`?	अज्ञात आदेश `{0}`; क्या आपको `{1}` का मतलब है?
 @msg	unknown control `{name}`: fillStroke, coloring, drawMode or screenMode	अज्ञात नियंत्रण `{name}`: fillStroke, रंग, drawMode या screenMode
 @msg	Unknown dimension mode	अज्ञात आयाम मोड
