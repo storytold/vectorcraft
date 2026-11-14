@@ -75,14 +75,33 @@
 @msg	Script file could not be read	Scriptfilen kunne ikke læses
 @msg	Script folder has more than 2,048 entries	Scriptmappen har mere end 2.048 elementer
 @msg	Script file open mode must be r, w, e or a	Scriptfilens åbningstilstand skal være r, w, e eller a
-@msg	Script file writing is not available	Skrivning af scriptfiler er ikke tilgængelig
-@msg	Script file dialogs are not available	Scriptfildialoger er ikke tilgængelige
 @msg	Script files cannot be opened in another application	Scriptfiler kan ikke åbnes i et andet program
 @msg	Script file access is unavailable on the web	Scriptets filadgang er ikke tilgængelig på nettet
 @msg	Script has 256 files open	Scriptet har 256 filer åbne
 @msg	Script file path exceeds 32,767 characters	Scriptfilens sti er længere end 32.767 tegn
 @msg	Script folder mask takes too many steps to match	Scriptmappens maske kræver for mange trin at matche
 @msg	the script opened more file data than one run may open (32 MiB)	scriptet åbnede flere fildata, end én kørsel må åbne (32 MiB)
+@msg	Script file access denied: {path}	Scriptets filadgang blev nægtet: {path}
+@msg	Script file access to the app's own folders is not allowed	Scripts må ikke få adgang til programmets egne mapper
+@msg	Script file cannot encode the text	Scriptfilen kan ikke kode teksten
+@msg	Script file could not be written	Scriptfilen kunne ikke skrives
+@msg	Script file dialogs need a person to answer them	Scriptets fildialoger skal besvares af en person
+@msg	Script file is not open for writing	Scriptfilen er ikke åben for skrivning
+@msg	Script file name is already in use	Scriptfilens navn er allerede i brug
+@msg	Script file name must be a name without a folder	Scriptfilens navn skal være et navn uden en mappe
+@msg	Script file permission can be kept only for a script run from a file	Filtilladelsen kan kun beholdes for et script, der køres fra en fil
+@msg	Script file permission could not be saved	Scriptets filtilladelse kunne ikke gemmes
+@msg	Script folder is not empty	Scriptmappen er ikke tom
+@msg	Script files cannot make aliases	Scriptfiler kan ikke oprette aliasser
+@msg	Script file hidden setting cannot be changed	Scriptfilens indstilling for skjult kan ikke ændres
+@msg	{name}: a file dialog cannot open inside a callback of a built-in function, a getter, a conversion or a file $.evalFile runs; call it from the script's own code	{name}: en fildialog kan ikke åbnes i et callback fra en indbygget funktion, en getter, en konvertering eller en fil, som $.evalFile kører; kald den fra scriptets egen kode
+@msg	the script wrote more file data than one run may write (32 MiB)	scriptet skrev flere fildata, end én kørsel må skrive (32 MiB)
+@msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` for et scripts fildialog skal være en af: once, always, deny, stop
+@msg	choose a file or folder first, or deny	vælg først en fil eller mappe, eller afvis
+@msg	the script file permissions could not be saved: {e}	scriptets filtilladelser kunne ikke gemmes: {e}
+@msg	this script's file access can be allowed only once	dette scripts filadgang kan kun tillades én gang
+@msg	Only the person at the keyboard can allow a script's file access	Kun personen ved tastaturet kan tillade et scripts filadgang
+@msg	A script is given at most 2,048 files: the files picked after them were left out	Et script får højst 2.048 filer: de filer, der blev valgt derefter, blev udeladt
 @msg	File.seek: takes a position and a mode	File.seek: tager en position og en tilstand
 @msg	vc.run: give a command id, as a string	vc.run: angiv et kommando-id som en streng
 @msg	vc.run: takes a command id and an object of parameters	vc.run: tager et kommando-id og et objekt med parametre
