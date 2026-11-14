@@ -62,7 +62,8 @@ fn kinsoku_sets_are_set_as_one_undo_step_and_saved() {
 
 /// The sets are checked before anything changes: a built-in name, a blank or too-long name, two
 /// sets of one name in any case, an unknown key, a sequence of one character or with a space, a
-/// control character, a `from` the document has no set of, and more than 256 sets all fail.
+/// control character, a `from` the document has no set of, a null value, and more than 256 sets
+/// all fail.
 #[test]
 fn kinsoku_sets_refuse_what_a_set_cannot_hold() {
     let mut s = session();
@@ -83,6 +84,9 @@ fn kinsoku_sets_refuse_what_a_set_cannot_hold() {
         json!([{"name": "A", "cannotStart": ["あ"]}]),
         json!([{"name": "A", "from": "Missing"}]),
         json!([{"name": "A", "from": "Tight"}, {"name": "B", "from": "tight"}]),
+        json!([{"name": "Tight", "from": "Tight", "cannotStart": null}]),
+        json!([{"name": "Tight", "from": null}]),
+        json!([{"name": "A", "inseparable": null}]),
         json!((0..257).map(|i| json!({"name": format!("S{i}")})).collect::<Vec<_>>()),
     ] {
         assert!(s.execute("type.kinsokuSets.set", &json!({"sets": bad})).is_err(), "{bad}");

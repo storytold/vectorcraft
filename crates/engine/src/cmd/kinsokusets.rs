@@ -174,6 +174,10 @@ fn parse_set(v: &Value, c: &str) -> Result<(KinsokuSet, Option<String>)> {
     if let Some(k) = o.keys().find(|k| !SET_KEYS.contains(&k.as_str())) {
         return Err(bad(c, format!("unknown key `{k}`; a set takes {}", SET_KEYS.join(", "))));
     }
+    // A null value is refused rather than read as a key left out.
+    if let Some(k) = o.iter().find_map(|(k, v)| v.is_null().then_some(k)) {
+        return Err(bad(c, format!("`{k}` can't be null; leave it out instead")));
+    }
     let raw = o.get("name").and_then(Value::as_str).ok_or_else(|| bad(c, "each set needs a name"))?;
     let name = KinsokuSet::clean_name(raw).ok_or_else(|| {
         bad(c, format!("`{raw}` can't name a Kinsoku set (1 to {KINSOKU_NAME_MAX} characters, no control characters, not None, Hard or Soft)"))

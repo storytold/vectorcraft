@@ -8705,8 +8705,8 @@ sequence counts each of its characters); a control or space character in a categ
 case and never None, Hard or Soft; a document holds at most 256 sets. These limits are VectorCraft's own. A set with
 the name of a set the document has (any case) and no `from` edits that set; `from` names the set it renames. Every
 paragraph and paragraph style using an edited set takes its new characters and name, and those using a set left out
-take Hard. An unknown key, a name used twice, a `from` the document has no set of and a sequence of one character fail
-the call and change nothing. The built-in None, Hard and Soft are not stored and can't be changed. → `{sets}`.
+take Hard. An unknown key, a null value, a name used twice, a `from` the document has no set of and a sequence of one
+character fail the call and change nothing. The built-in None, Hard and Soft are not stored and can't be changed. → `{sets}`.
 
 `type.kinsokuSets.list` returns the sets with how many paragraphs (`paragraphs`), paragraph styles (`styles`) and graphs
 (`graphs`, in the paragraph attributes a graph keeps for its labels) use each. `type.kinsokuSets.base {base: "hard"|"soft"|"none"|name, name?}` returns the categories a new set based on a
