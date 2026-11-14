@@ -7532,7 +7532,7 @@ breakText	Glyphs	Merkit
 	Grommet Inset	Purjerenkaiden etäisyys reunasta
 	Diameter	Halkaisija
 
-# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+# Messages of the effects, 3D, image and PDF export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D-tehosteet vaativat äärelliset koordinaatit 100 miljoonan pisteen rajoissa
 @msg	3D effects require one to ten lights	3D-tehosteet vaativat 1–10 valonlähdettä
 @msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP-värisyvyys {_1}: 1, 4, 8, 16, 24 tai 32 bittiä pikseliä kohti
@@ -7609,6 +7609,7 @@ breakText	Glyphs	Merkit
 @msg	its localized names take more than {_1} KB	sen lokalisoidut nimet vievät yli {_1} KB
 @msg	its objects are nested too deep ({e})	sen objektit ovat sisäkkäin liian monella tasolla ({e})
 @msg	its tag table lists the `{_1}` tag more than once	sen tunnistetaulukossa `{_1}`-tunniste on useammin kuin kerran
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	poistoryhmät, joissa on liian monta päällekkäistä läpikuultavaa elementtiä, kirjoitetaan PDF-poistoryhminä: niiden läpikuultavat elementit poistavat peittämänsä alueen kokonaan
 @msg	not a graphic style library: {e}	ei grafiikkatyylikirjasto: {e}
 @msg	not a swatch library (.vcswatches or .gpl)	ei värimallikirjasto (.vcswatches tai .gpl)
 @msg	not a swatch library (format `{_1}`)	ei värimallikirjasto (muoto `{_1}`)
