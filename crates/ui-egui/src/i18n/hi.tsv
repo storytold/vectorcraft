@@ -1468,6 +1468,9 @@ antiAlias	Sharp	शार्प
 	Double-click to insert	सम्मिलित करने के लिए डबल क्लिक करें
 	Double-click to rename	नाम बदलने के लिए डबल क्लिक करें
 	Double-click to replace	प्रतिस्थापित करने के लिए डबल क्लिक करें
+	Click to replace	प्रतिस्थापित करने के लिए क्लिक करें
+	Show all alternates in the Glyphs panel	ग्लिफ़्स पैनल में सभी ऑप्शन दिखाएँ
+	Show Character Alternates	कैरेक्टर के ऑप्शन दिखाएँ
 	Select one character with the Type tool first.	पहले टाइप टूल से एक कैरेक्टर सिलेक्ट करें।
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} {font} का ग्लिफ़ है, उस फ़ॉन्ट का नहीं जिसमें सिलेक्ट किया टेक्स्ट सेट है ({text_font})।
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} {base} (U+{base_code}) का है, {place}; आपका सिलेक्शन {sel} (U+{code}) है।
@@ -1995,6 +1998,7 @@ antiAlias	Sharp	शार्प
 	Format Options	फ़ॉर्मेट ऑप्शन्स
 	Format Presets	फ़ॉर्मैट प्रीसेट
 	Format Settings	फ़ॉर्मैट सेटिंग
+	Format Settings…	फ़ॉर्मैट सेटिंग…
 	Format:	फ़ॉर्मेट:
 	Formats:	फ़ॉर्मैट:
 	Fractional Widths	आंशिक चौड़ाई
@@ -2334,6 +2338,7 @@ antiAlias	Sharp	शार्प
 	Import Library…	आयात लाइब्रेरी…
 	Import Matches	आयात मैच
 	Import PDF	PDF आयात करें
+	Import PDF pages as links	PDF पृष्ठों को लिंक के रूप में आयात करें
 	Import PDF Presets	PDF प्रीसेट्स इम्पोर्ट करें
 	Import Perspective Grid Presets	आयात पर्सपेक्टिव ग्रिड प्रीसेट
 	Import Preset…	प्रीसेट इम्पोर्ट करें…
@@ -4732,6 +4737,18 @@ antiAlias	Sharp	शार्प
 	Smart Pen Panel	स्मार्ट पेन पैनल
 	Smart Pen Tool	स्मार्ट पेन टूल
 	Smart Punctuation…	स्मार्ट विराम-चिह्न…
+	Smart Punctuation	स्मार्ट विराम-चिह्न
+	ff, fi, ffi Ligatures	ff, fi, ffi लिगेचर
+	ff, fl, ffl Ligatures	ff, fl, ffl लिगेचर
+	Smart Quotes	स्मार्ट उद्धरण-चिह्न
+	Smart Spaces	स्मार्ट स्पेस
+	En, Em Dashes	एन और एम डैश
+	Ellipses	दीर्घविराम
+	Expert Fractions	विशेषज्ञ भिन्न
+	Replace In	इसमें रिप्लेस करें
+	Selected Text Only	केवल सिलेक्ट किया गया टेक्स्ट
+	Entire Document	पूरा डॉक्यूमेंट
+	Report Results	परिणाम रिपोर्ट करें
 	Smooth	स्मूथ
 	Smooth Anchors	चिकना एंकर
 	Smooth Anchors…	चिकना एंकर…
@@ -4771,6 +4788,7 @@ antiAlias	Sharp	शार्प
 	Sort by Luminance	द्वारा क्रमबद्ध Luminance
 	Sort by Name	नाम से क्रमबद्ध करें
 	Sort by Popularity	लोकप्रियता द्वारा क्रमबद्ध
+	Sort by Size	आकार द्वारा क्रमबद्ध
 	Sort by Status	स्थिति द्वारा क्रमबद्ध
 	Sort By:	द्वारा क्रमबद्ध:
 	Sort Objects	ऑब्जेक्ट्स को क्रमबद्ध करें
@@ -7427,7 +7445,7 @@ antiAlias	Sharp	शार्प
 @msg	no selected slice in the image: select slices, or save all of them	इमेज में कोई सिलेक्टेड स्लाइस नहीं: स्लाइस सिलेक्ट करें, या सभी स्लाइस सेव करें
 @msg	no selection bounds	कोई सिलेक्शन सीमा नहीं
 @msg	no series {i}	कोई श्रृंखला {i}
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	कोई समान ऑब्जेक्ट नहीं पाया (घूर्णित या परिलक्षित प्रतियां मिलान नहीं की जाती हैं); वैश्विक संपादन ऑप्शन्स बदलें और फिर से प्रयास करें
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	कोई समान ऑब्जेक्ट नहीं पाया (परिलक्षित प्रतियां मिलान नहीं की जाती हैं); वैश्विक संपादन ऑप्शन्स बदलें और फिर से प्रयास करें
 @msg	no slice {n} in the image (see slice.list)	इमेज में कोई स्लाइस {n} नहीं है (slice.list देखें)
 @msg	no slice selected	सिलेक्टेड कोई स्लाइस नहीं
 @msg	no source art	कोई स्रोत कला
@@ -8294,6 +8312,7 @@ antiAlias	Sharp	शार्प
 @msg	the subpath is closed or too short to close	सबपैथ बंद है या बंद करने के लिए बहुत कम है
 @msg	the SVG expands to more than {0} nested SVG images	SVG {0} नेस्टेड SVG इमेज से अधिक का विस्तार करता है
 @msg	the SVG expands to more than {0} objects	SVG {0} ऑब्जेक्ट्स से अधिक का विस्तार करता है
+@msg	the SVG's styles expand to more than {0} MB	SVG की शैलियाँ {0} MB से अधिक तक विस्तारित होती हैं
 @msg	the SVG has no drawable objects	SVG में कोई आकर्षक ऑब्जेक्ट नहीं है
 @msg	the SVG's elements are nested more than {0} deep	SVG के तत्वों को {0} से अधिक गहरा घोंसला दिया जाता है
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ फ़ाइल ने {_1} MB से अधिक के लिए अनपैक किया
@@ -8872,6 +8891,9 @@ theme	Appearance	अपीयरेंस
 	Open Tutorial Sample	ट्यूटोरियल का नमूना खोलें
 	Finish Tutorial	ट्यूटोरियल पूरा करें
 	Next Tutorial	अगला ट्यूटोरियल
+	Show Learn Tab	सीखें का टैब दिखाएँ
+	Show Skill	कौशल दिखाएँ
+	Back One Level	एक स्तर वापस
 	Back to Skills	कौशल पर वापस जाएँ
 @msg	tutorial `{id}` has no practice sample	ट्यूटोरियल `{id}` का कोई अभ्यास नमूना नहीं है
 @msg	open the practice sample of `{id}` first (see learn.openSample)	पहले `{id}` का अभ्यास नमूना खोलें (learn.openSample देखें)
@@ -8912,3 +8934,6 @@ theme	Appearance	अपीयरेंस
 	Grommets	आईलेट
 	Grommet Inset	किनारे से आईलेट की दूरी
 	Diameter	व्यास
+	Nest Shapes…	आकृतियाँ सटाकर रखें…
+	Nest Shapes	आकृतियाँ सटाकर रखें
+	Roll	रोल

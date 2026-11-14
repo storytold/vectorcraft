@@ -492,9 +492,11 @@ fn new_and_renamed_artboards_trim_their_names() {
     assert_eq!(names(&s), ["Back", "Artboard 2", "Artboard 3", "Artboard 4"]);
 }
 
-/// Duplicate, Copy and Cut Artboard and Move Artboard Up/Down fail with `no such artboard` on an
-/// `index` that names no artboard (past the last, negative, fractional, a string or null), and the
-/// artboards, the art and the clipboard stay as they were.
+/// Duplicate, Copy and Cut Artboard and Move Artboard Up/Down fail with `no such artboard` on a
+/// whole-number `index` past the last artboard, with "`index` must be a whole number" on one that
+/// is negative, fractional, a string, true or a list, and with `missing index` on a null one,
+/// instead of acting on the Artboard tool's active artboard. The artboards, the art and the
+/// clipboard stay as they were.
 #[test]
 fn artboard_copies_refuse_an_index_that_names_no_artboard() {
     let mut s = session();
@@ -502,15 +504,111 @@ fn artboard_copies_refuse_an_index_that_names_no_artboard() {
     s.execute("artboard.new", &json!({})).unwrap();
     s.set_tool_options(Some("artboard"), json!({"active": 1}).as_object().unwrap());
     let (was, n) = (boards(&s), s.doc().unwrap().history.undo.len());
-    for index in [json!(99), json!(-1), json!(1.5), json!("1"), serde_json::Value::Null] {
+    let not_whole = Some("`index` must be a whole number");
+    let cases = [
+        (json!(99), None),
+        (json!(u64::MAX), None),
+        (json!(-1), not_whole),
+        (json!(1.5), not_whole),
+        (json!("1"), not_whole),
+        (json!(true), not_whole),
+        (json!([1]), not_whole),
+        (serde_json::Value::Null, Some("missing index")),
+    ];
+    for (index, error) in cases {
         for cmd in ["artboard.duplicate", "artboard.copy", "artboard.cut", "artboard.reorder"] {
             let p = if cmd == "artboard.reorder" { json!({"index": index, "to": 0}) } else { json!({"index": index}) };
-            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), "no such artboard", "{cmd} {p}");
+            let want = error.map_or_else(|| "no such artboard".to_string(), |e| format!("invalid parameters for `{cmd}`: {e}"));
+            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
         }
     }
     let st = s.doc().unwrap();
     assert_eq!((boards(&s), st.doc.layers[0].children().unwrap().len(), st.history.undo.len()), (was, 1, n));
     assert!(s.clipboard.nodes.is_empty() && s.clipboard.artboards.is_empty(), "nothing copied");
+}
+
+/// The artboard commands that take `indices` (and `selectedArtboards`, a replay of the journal)
+/// name the fault: a value that is not a list, an empty list and a list with an entry that is not a
+/// whole number each have their own message naming the key, and a whole number past the last
+/// artboard is `no such artboard`, also when another entry is malformed after it. The artboards,
+/// the art, the undo history and the clipboard stay as they were.
+#[test]
+fn artboard_lists_name_the_fault_and_the_key() {
+    let mut s = session();
+    rect(&mut s);
+    s.execute("artboard.new", &json!({})).unwrap();
+    let (was, n) = (boards(&s), s.doc().unwrap().history.undo.len());
+    let cmds = [
+        ("artboard.duplicate", json!({})),
+        ("artboard.copy", json!({})),
+        ("artboard.cut", json!({})),
+        ("artboard.rename", json!({"name": "A"})),
+        ("artboard.switchOrientation", json!({})),
+        ("artboard.delete", json!({})),
+        ("artboard.fitToArt", json!({})),
+        ("artboard.move", json!({"dx": 10, "dy": 0})),
+        ("artboard.align", json!({"horizontal": "left"})),
+    ];
+    for key in ["indices", "selectedArtboards"] {
+        let cases = [
+            (json!(null), format!("`{key}` must be a list of artboard indices")),
+            (json!(1), format!("`{key}` must be a list of artboard indices")),
+            (json!("0,1"), format!("`{key}` must be a list of artboard indices")),
+            (json!([]), format!("`{key}` must be a non-empty list of artboard indices")),
+            (json!([0, -1]), format!("`{key}` must contain whole numbers")),
+            (json!([0, 1.5]), format!("`{key}` must contain whole numbers")),
+            (json!(["1"]), format!("`{key}` must contain whole numbers")),
+            (json!([null]), format!("`{key}` must contain whole numbers")),
+            (json!([9, "1"]), format!("`{key}` must contain whole numbers")),
+            (json!([0, 9]), "no such artboard".to_string()),
+        ];
+        for (cmd, base) in &cmds {
+            if key == "selectedArtboards" && matches!(*cmd, "artboard.delete" | "artboard.fitToArt" | "artboard.move") {
+                continue;
+            }
+            for (value, want) in &cases {
+                let mut p = base.clone();
+                p[key] = value.clone();
+                let want = if want.starts_with('`') { format!("invalid parameters for `{cmd}`: {want}") } else { want.clone() };
+                assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
+            }
+        }
+    }
+    let st = s.doc().unwrap();
+    assert_eq!((boards(&s), st.doc.layers[0].children().unwrap().len(), st.history.undo.len()), (was, 1, n));
+    assert!(s.clipboard.nodes.is_empty() && s.clipboard.artboards.is_empty(), "nothing copied");
+}
+
+/// Align, Distribute and Distribute Spacing for artboards name the key that holds a malformed
+/// artboard to align to (`artboard` or `activeArtboard`), not `index`; a null one is left out, and
+/// a whole number past the last artboard is `no such artboard`.
+#[test]
+fn artboard_align_names_the_key_of_a_malformed_reference() {
+    let mut s = session();
+    s.execute("artboard.new", &json!({})).unwrap();
+    s.execute("artboard.new", &json!({})).unwrap();
+    let cmds = [
+        ("artboard.align", json!({"indices": [0, 1, 2], "horizontal": "left", "to": "artboard"})),
+        ("artboard.distribute", json!({"indices": [0, 1, 2], "horizontal": "left", "to": "artboard"})),
+        ("artboard.distributeSpacing", json!({"indices": [0, 1, 2], "to": "artboard"})),
+    ];
+    for (cmd, base) in &cmds {
+        for key in ["artboard", "activeArtboard"] {
+            let (was, n) = (boards(&s), s.doc().unwrap().history.undo.len());
+            for value in [json!(-1), json!(1.5), json!("1"), json!(true)] {
+                let mut p = base.clone();
+                p[key] = value;
+                let want = format!("invalid parameters for `{cmd}`: `{key}` must be a whole number");
+                assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), want, "{cmd} {p}");
+            }
+            let mut p = base.clone();
+            p[key] = json!(9);
+            assert_eq!(s.execute(cmd, &p).unwrap_err().to_string(), "no such artboard", "{cmd} {p}");
+            assert_eq!((boards(&s), s.doc().unwrap().history.undo.len()), (was, n), "{cmd} {key}: nothing moved");
+            p[key] = json!(null);
+            s.execute(cmd, &p).unwrap();
+        }
+    }
 }
 
 /// Artboard Options, Move Artboard, Duplicate Artboards, Copy Artboard and Cut Artboard refuse an

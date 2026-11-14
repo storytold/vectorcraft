@@ -917,6 +917,9 @@ font-technology	Variable	Variabili
 	The selected character's font is not available.	Il font del carattere selezionato non è disponibile.
 	No alternates for the selected character.	Nessuna alternativa per il carattere selezionato.
 	Double-click to replace	Fai doppio clic per sostituire
+	Click to replace	Fai clic per sostituire
+	Show all alternates in the Glyphs panel	Mostra tutte le alternative nel pannello Glifi
+	Show Character Alternates	Mostra alternative carattere
 	Select one character with the Type tool first.	Seleziona prima un carattere con lo strumento Testo.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} è un glifo di {font}, non del font del testo selezionato ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} appartiene a {base} (U+{base_code}) {place}; la tua selezione è {sel} (U+{code}).
@@ -1364,6 +1367,7 @@ file-filter	Templates	Modelli
 	Format	Formato
 	Format Options	Opzioni formato
 	Format Settings	Impostazioni formato
+	Format Settings…	Impostazioni formato…
 	Format:	Formato:
 	Formats:	Formati:
 	Fractional Widths	Larghezze frazionarie
@@ -1725,6 +1729,7 @@ file-filter	Templates	Modelli
 	Images:	Immagini:
 	Import Keyboard Shortcuts…	Importa scelte rapide da tastiera…
 	Import PDF	Importa PDF
+	Import PDF pages as links	Importa le pagine PDF come collegamenti
 	Import PDF Presets	Importa preset PDF
 	Import Perspective Grid Presets	Importa preset griglia prospettica
 	Import Print Presets	Importa preset di stampa
@@ -3492,6 +3497,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Guide sensibili (Visualizza → Guide sensibili)
 	Smart Guides (⌘U)	Guide sensibili (⌘U)
 	Smart Punctuation…	Punteggiatura intelligente…
+	Smart Punctuation	Punteggiatura intelligente
+	ff, fi, ffi Ligatures	Legature ff, fi, ffi
+	ff, fl, ffl Ligatures	Legature ff, fl, ffl
+	Smart Quotes	Virgolette intelligenti
+	Smart Spaces	Spazi intelligenti
+	En, Em Dashes	Trattini medi e lineette
+	Ellipses	Puntini di sospensione
+	Expert Fractions	Frazioni esperte
+	Replace In	Sostituisci in
+	Selected Text Only	Solo testo selezionato
+	Entire Document	Intero documento
+	Report Results	Mostra risultati
 	Smooth	Smussa
 	Corner	Angolo
 	Relative	Relativo
@@ -3522,6 +3539,7 @@ digits	Malayalam	Malayalam
 	Solid	Pieno
 	Sort by Kind	Ordina per tipo
 	Sort by Name	Ordina per nome
+	Sort by Size	Ordina per dimensione
 	Sort by Status	Ordina per stato
 	Source code on GitHub	Codice sorgente su GitHub
 	Source Sans 3	Source Sans 3
@@ -6313,7 +6331,7 @@ axis	Y Axis	Asse Y
 @plural	Result: {n}|Results: {n}	Risultato: {n}|Risultati: {n}
 @msg	select one object	selezionate un oggetto
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	La modifica globale funziona su tracciati, tracciati composti, istanze di simboli e gruppi di essi
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nessun oggetto simile trovato (le copie ruotate o riflesse non vengono riconosciute); cambiate le opzioni di modifica globale e riprovate
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nessun oggetto simile trovato (le copie riflesse non vengono riconosciute); cambiate le opzioni di modifica globale e riprovate
 @msg	Global Edit is off	La modifica globale non è attiva
 @msg	only an object of the Global Edit other than the one it started from can be left out	si può escludere solo un oggetto della modifica globale diverso da quello da cui è partita
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all o un intervallo come 1, 3-5, non {v}
@@ -7110,6 +7128,9 @@ breakText	Glyphs	Glifi
 	Open Tutorial Sample	Apri l’esempio del tutorial
 	Finish Tutorial	Termina il tutorial
 	Next Tutorial	Tutorial successivo
+	Show Learn Tab	Mostra una scheda di Impara
+	Show Skill	Mostra competenza
+	Back One Level	Indietro di un livello
 	Back to Skills	Torna alle competenze
 @msg	tutorial `{id}` has no practice sample	il tutorial `{id}` non ha un esempio di esercitazione
 @msg	open the practice sample of `{id}` first (see learn.openSample)	apri prima l’esempio di esercitazione di `{id}` (vedi learn.openSample)
@@ -8638,6 +8659,7 @@ breakText	Glyphs	Glifi
 @msg	the RTF file is too large to place as type (at most {_1} MB)	il file RTF è troppo grande per essere inserito come testo (al massimo {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	l'SVG si espande in più di {0} immagini SVG annidate
 @msg	the SVG expands to more than {0} objects	l'SVG si espande in più di {0} oggetti
+@msg	the SVG's styles expand to more than {0} MB	gli stili dell'SVG si espandono a oltre {0} MB
 @msg	the SVG has no drawable objects	l'SVG non ha oggetti disegnabili
 @msg	the SVGZ file unpacks to more than {_1} MB	il file SVGZ si decomprime in più di {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	il documento Word ha più di {MAX_PAGES} pagine di proprietà, troppe per essere inserito
@@ -9083,3 +9105,6 @@ breakText	Glyphs	Glifi
 	Grommets	Occhielli
 	Grommet Inset	Distanza degli occhielli dal bordo
 	Diameter	Diametro
+	Nest Shapes…	Annida forme…
+	Nest Shapes	Annida forme
+	Roll	Rotolo
