@@ -1319,3 +1319,99 @@ fn the_dialog_builds_the_preset_list_again_only_when_the_presets_change() {
     let mine = list.as_array().unwrap().iter().find(|p| p["name"] == "Mine").unwrap();
     assert_eq!(mine["settings"]["formats"][0]["format"], "pdf", "{list}");
 }
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
+fn switching_export_tabs_commits_an_artboard_name() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let out = h.settle(&mut app);
+        let old = app.session.active().unwrap().doc.artboards[0].name.clone();
+        let at = screen_text_at(&out, &format!("1  {old}"));
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        assert!(h.ctx.egui_wants_keyboard_input());
+        h.frame(&mut app, vec![egui::Event::Text("Committed on tab".into())]);
+        h.click_label(&mut app, "Assets");
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Committed on tab");
+        assert_eq!(field(&app, "tab"), "assets");
+        assert_eq!(field(&app, "boards"), before);
+        assert!(log.borrow().is_empty());
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old);
+    }
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
+fn double_clicking_an_artboard_name_in_export_for_screens_renames_it() {
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        let mut h = ScreensFrame::new();
+        let before = field(&app, "boards");
+        let out = h.settle(&mut app);
+        let old = app.session.active().unwrap().doc.artboards[0].name.clone();
+        let at = screen_text_at(&out, &format!("1  {old}"));
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        assert!(h.ctx.egui_wants_keyboard_input(), "double-clicking the artboard name must open an editable field");
+        h.frame(&mut app, vec![egui::Event::Text("Renamed".into())]);
+        h.frame(
+            &mut app,
+            vec![egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }],
+        );
+        h.settle(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Renamed");
+        assert_eq!(kind(&app), Some(export_for_screens::KIND));
+        assert_eq!(field(&app, "boards"), before, "renaming must not change the checked artboards");
+        assert!(log.borrow().is_empty(), "renaming must not export");
+        // The real shortcut handler runs before the dialog body. Escape cancels only the name.
+        let out = h.settle(&mut app);
+        let at = screen_text_at(&out, "1  Renamed");
+        h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+        for pressed in [true, false, true, false] {
+            h.frame(
+                &mut app,
+                vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }],
+            );
+        }
+        h.settle(&mut app);
+        h.frame(&mut app, vec![egui::Event::Text("Discard".into())]);
+        let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
+        h.time += 0.1;
+        let input = egui::RawInput {
+            events: vec![key],
+            time: Some(h.time),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1100.0, 900.0))),
+            ..Default::default()
+        };
+        let mut out = h.ctx.run_ui(input, |ui| {
+            crate::shortcuts::handle(&mut app, ui.ctx());
+            super::show(&mut app, ui.ctx());
+        });
+        out.textures_delta.clear();
+        h.settle(&mut app);
+        assert_eq!(kind(&app), Some(export_for_screens::KIND));
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Renamed");
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old);
+    }
+}
