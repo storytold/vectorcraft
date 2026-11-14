@@ -4,7 +4,9 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject,
+};
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
@@ -39,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -672,12 +674,38 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             }
             placed.extend(ruby.map(|(_, r)| r));
             let mut children = placed;
+            // The whole outline the object's own fills and strokes paint: every glyph, ruby glyph
+            // and bar, as the canvas paints them.
+            let mut all = kurbo::BezPath::new();
+            for g in lay.glyphs.iter().chain(&lay.ruby) {
+                all.extend(g.outline.iter());
+            }
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
+                all.extend(bar.iter());
                 let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
                 let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
                 node.appearance = st.appearance().into();
                 children.push(Arc::new(node));
+            }
+            // The object's own fills and strokes (not its characters') paint the whole outline:
+            // those below the Characters row under the characters, the others over them, with
+            // their unplaced gradients fixed to the layout's bounds in the document.
+            let all = PathData::from_bezpath(&all).transformed(t.xf);
+            if !n.appearance.items.is_empty() && !all.is_empty() {
+                let (below, above) = n.appearance.split_contents();
+                let tb = t.xf.transform_rect_bbox(lay.bounds);
+                let mut whole = |items: &[AppearanceItem]| {
+                    let mut ap = Appearance { items: items.to_vec(), ..Default::default() };
+                    ap.pin_gradients(tb);
+                    Arc::new(Node::path(d.alloc_id(), all.clone(), ap))
+                };
+                if !below.is_empty() {
+                    children.insert(0, whole(below));
+                }
+                if !above.is_empty() {
+                    children.push(whole(above));
+                }
             }
             let (par, idx, _) = d.position(tid).ok_or(EngineError::NoNode(tid))?;
             d.remove(tid)?;

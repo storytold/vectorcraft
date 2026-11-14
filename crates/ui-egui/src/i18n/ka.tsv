@@ -5927,6 +5927,7 @@ imageTrace	Outline	კონტური
 @msg	no such color	ასეთი ფერი არ არის
 @msg	{_1} cannot be used on Windows	{_1} ვერ გამოიყენება Windows-ში
 @msg	more than one action is named “{_1}”	„{_1}“ ერთზე მეტი მოქმედების სახელია
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	მოქმედება „{_1}“ აყენებს საქაღალდის პარამეტრს {_2}; ნაკრების შესანახად წაშალეთ ეს ნაბიჯი
 @msg	no symbol named `{n}`	სიმბოლო სახელით `{n}` არ არის
 @msg	no saved selection recalled	შენახული მონიშვნა გამოძახებული არ არის
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft-ის ბოლო გაშვება ფანჯრის გამოჩენამდე შეწყდა (გრაფიკული პროცესორი: {name}), ამიტომ VectorCraft გაეშვა: {summary}. ამ გრაფიკული პროცესორის ხელახლა საცდელად შეცვალეთ პარამეტრები › წარმადობა › გრაფიკული პროცესორი ან გაუშვით WGPU_BACKEND ცვლადის მითითებით

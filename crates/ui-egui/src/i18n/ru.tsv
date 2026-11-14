@@ -5809,6 +5809,7 @@ lighting	Light	Свет
 @msg	no such color	такого цвета нет
 @msg	{_1} cannot be used on Windows	Сочетание {_1} нельзя использовать в Windows
 @msg	more than one action is named “{_1}”	несколько действий называются «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	действие «{_1}» задаёт настройку папки {_2}; удалите этот шаг, чтобы сохранить набор
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
 	Smudge Stick…	Растушёвка…
 	Smudge Stick	Растушёвка
