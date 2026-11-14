@@ -13,7 +13,7 @@ use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_pathops as po;
 use vectorcraft_pathops::{BoolOp, PathfinderOp};
 
-use super::edit::selected_roots;
+use super::edit::{selected_roots, selection_roots};
 use super::expand::{fill_shape, reshaped, seeded};
 use super::{
     CommandSpec, EngineError, Result, Session, always, bad, check_switches, checked_ids_or_selection, cmd, has_doc, has_selected_path, has_selection,
@@ -964,6 +964,23 @@ pub(crate) fn ordered_map<T: Sync, R: Send>(
 /// Can Outline Stroke turn `st` into filled art?
 pub(crate) fn outlinable(st: &StrokeLayer) -> bool {
     st.visible && !st.paint.is_none() && st.width > 0.0
+}
+
+/// Does Outline Stroke have a stroke to turn into art somewhere under `n`: a visible stroke of
+/// some paint and weight on a path or compound path (type is not outlined by it)?
+fn has_outlinable_stroke(n: &Node) -> bool {
+    let mut found = false;
+    each_leaf(n, &mut |l| {
+        found |= !matches!(l.kind, NodeKind::Text(_)) && l.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if outlinable(st)));
+    });
+    found
+}
+
+/// Does `object.path.outlineStroke` have a stroke to outline in `st`'s selection? It acts on the
+/// selection's roots (a compound path's member stands for its compound, which holds the
+/// appearance), so eligibility looks at those same roots, not at the selected nodes themselves.
+pub fn can_outline_stroke(st: &crate::DocState) -> bool {
+    selection_roots(st).into_iter().filter_map(|id| st.doc.node(id)).any(has_outlinable_stroke)
 }
 
 /// `n` with `opacity` and `blend` applied: set on it when it has none of its own, else on a
