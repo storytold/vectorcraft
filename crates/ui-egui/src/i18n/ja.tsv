@@ -6401,9 +6401,6 @@ axis	Y Axis	Y 軸
 @msg	`{KEY}` must be a list	`{KEY}` にはリストを指定してください
 @msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` に指定できるエントリは最大 {MAX_PARAGRAPH_INDENTS} 個です (指定数: {_1})
 @msg	`{KEY}` takes no `{other}` beside it	`{KEY}` と一緒に `{other}` は指定できません
-@msg	`{_1}` can't name a composite font	`{_1}` は合成フォントの名前に使用できません
-@msg	`{_1}` is the name of an installed font	`{_1}` はインストール済みのフォントの名前です
-@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} は合成フォント `{font}` で設定されています
 @msg	`{base}` is larger than {_1} MB	`{base}` は {_1} MB を超えています
 @msg	`{base}` is not in the DCS file's folder	`{base}` は DCS ファイルのフォルダーにありません
 @msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` の単語が {MAX_EDIT_WORDS} 個を超えています
@@ -6422,20 +6419,13 @@ axis	Y Axis	Y 軸
 @msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}` にはパス上のオブジェクトグループのパスに配置されたオブジェクトを指定してください
 @msg	`{key}` names an object that is hidden or locked	`{key}` に指定されたオブジェクトは非表示またはロックされています
 @msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}` は独立したファイルで、DCS ファイルのパスと同じ場所でのみ見つけられます
-@msg	`{name}`: give the kanji part	`{name}`: 漢字の部分を指定してください
-@msg	`{name}`: parts must be an object	`{name}`: parts にはオブジェクトを指定してください
-@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: `{k}` は不明なクラスです。クラスは kanji、kana、punctuation、symbols、roman、numerals です
-@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1} の `{k}` は不明なキーです
-@msg	`{name}`: {_1} must be an object	`{name}`: {_1} にはオブジェクトを指定してください
 @msg	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
-@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` は合成フォントの名前に使用できません (1～{COMPOSITE_NAME_MAX} 文字、制御文字なし)
 @msg	`{u}` is no Unicode character	`{u}` は Unicode 文字ではありません
 @msg	`{word}` isn't in the custom dictionary	`{word}` はカスタム辞書にありません
 @msg	a CMap has too many mappings	CMap のマッピングが多すぎます
 @msg	a \\u escape needs four hexadecimal digits	\\u エスケープには 4 桁の 16 進数が必要です
 @msg	a comma in an XPath expression must separate function arguments	XPath 式のカンマは関数の引数を区切るものでなければなりません
 @msg	a document holds at most {_1} SVG filters	ドキュメントに含められる SVG フィルターは最大 {_1} 個です
-@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ドキュメントに保持できる合成フォントは最大 {COMPOSITE_FONTS_MAX} 個です
 @msg	a document with unsaved changes has no recovery copy	未保存の変更があるドキュメントに復帰用のコピーがありません
 @msg	a font's data is too large	フォントのデータが大きすぎます
 @msg	a font's subroutines are too large	フォントのサブルーチンが大きすぎます
@@ -6484,15 +6474,11 @@ axis	Y Axis	Y 軸
 @msg	character dimensions cannot be represented with the target text transform	文字の寸法をターゲットのテキスト変形で表すことができません
 @msg	continuation must be an array of path chunks	continuation にはパスチャンクの配列を指定してください
 @msg	continuation requires points	continuation には点が必要です
-@msg	dataBase64 is not base64	dataBase64 が base64 ではありません
-@msg	each font must be {name, parts}	各フォントは {name, parts} にしてください
-@msg	each font needs a name	各フォントに名前が必要です
 @msg	each path chunk must contain 1 to 4096 points	各パスチャンクには 1～4096 個の点が必要です
 @msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	各指定は {{at: [x, y]}} または {{rect: [x0, y0, x1, y1]}} です (指定値: {v})
 @msg	each weight must be a number of 0 or more (got {v})	各ウェイトには 0 以上の数値を指定してください (指定値: {v})
 @msg	finally table {t} out of range	finally テーブル {t} が範囲外です
 @msg	flags cannot be given with a RegExp object	RegExp オブジェクトと一緒にフラグを指定することはできません
-@msg	fonts must be a list of composite fonts	fonts には合成フォントのリストを指定してください
 @msg	function declaration index out of range	関数宣言のインデックスが範囲外です
 @msg	give `char`, `text`, `code` or `unicode`	`char`、`text`、`code`、`unicode` のいずれかを指定してください
 @msg	give `count` or `spacing`, not both	`count` または `spacing` のどちらか一方を指定してください
@@ -6501,10 +6487,8 @@ axis	Y Axis	Y 軸
 @msg	give `xml`, one SVG <filter> element	SVG の <filter> 要素を 1 つ `xml` に指定してください
 @msg	give exactly one of `at`, `rect` and `points`	`at`、`rect`、`points` のうち 1 つだけを指定してください
 @msg	give exactly one of `path`, `data` and `dataBase64`	`path`、`data`、`dataBase64` のうち 1 つだけを指定してください
-@msg	give fonts: [{name, parts}…]	fonts: [{name, parts}…] を指定してください
 @msg	give index or indexes, not both	index または indexes のどちらか一方を指定してください
 @msg	give one <filter> element	<filter> 要素を 1 つ指定してください
-@msg	give one of path, data or dataBase64	path、data、dataBase64 のいずれかを指定してください
 @msg	give opacity or blend	opacity または blend を指定してください
 @msg	handler at {_1} expects {_2} values but its range starts with {d}	{_1} のハンドラーは {_2} 個の値を想定していますが、範囲の開始時は {d} 個です
 @msg	handler depth too large	ハンドラーの深さが大きすぎます
@@ -6549,8 +6533,6 @@ axis	Y Axis	Y 軸
 @msg	must be an object with `kind` and `value`	には `kind` と `value` を持つオブジェクトを指定してください
 @msg	must have `kind` alert, confirm or prompt	の `kind` には alert、confirm、prompt のいずれかを指定してください
 @msg	must have exactly `kind` and `value`	には `kind` と `value` だけを指定してください
-@msg	names must be a list of names	names には名前のリストを指定してください
-@msg	names must be strings	names には文字列を指定してください
 @msg	needs a closing quote after the name	名前の後に閉じ引用符が必要です
 @msg	needs a name	名前が必要です
 @msg	needs a name of at most 64 bytes	64 バイト以内の名前が必要です
@@ -6562,9 +6544,6 @@ axis	Y Axis	Y 軸
 @msg	no SVG filter at index {k}	インデックス {k} に SVG フィルターはありません
 @msg	no arrowheads file here	ここに矢印ファイルはありません
 @msg	no character has code {code}	コード {code} の文字はありません
-@msg	no composite font	合成フォントがありません
-@msg	no composite font named `{n}`	`{n}` という名前の合成フォントはありません
-@msg	no composite fonts to export	書き出す合成フォントがありません
 @msg	no custom arrowhead {name} (see stroke.arrowheads.list)	カスタム矢印 {name} はありません (stroke.arrowheads.list を参照)
 @msg	no file to open	開くファイルがありません
 @msg	no instructions	命令がありません
@@ -6576,8 +6555,6 @@ axis	Y Axis	Y 軸
 @msg	node {_1} already has the text variable `{_2}`	ノード {_1} にはすでにテキスト変数 `{_2}` があります
 @msg	not a DCS file	DCS ファイルではありません
 @msg	not a RegExp object	RegExp オブジェクトではありません
-@msg	not a composite fonts file: no compositeFonts list	合成フォントファイルではありません: compositeFonts リストがありません
-@msg	not a composite fonts file: {e}	合成フォントファイルではありません: {e}
 @msg	not a regular expression	正規表現ではありません
 @msg	not an action set: the text doesn't start with /version and a number	アクションセットではありません: テキストが /version と数値で始まっていません
 @msg	nothing to repeat	繰り返す対象がありません
@@ -6592,7 +6569,6 @@ axis	Y Axis	Y 軸
 @msg	operand too large	オペランドが大きすぎます
 @msg	order is a whole number from 0 to {others}, not `{v}`	order には 0 から {others} までの整数を指定してください (`{v}` は指定できません)
 @msg	path chunks must share their boundary point	パスの分割部分は境界点を共有している必要があります
-@msg	path is empty	パスが空です
 @msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false の場合、useArtboards が false のときは、編集可能なアートワークを保持するためにアートボードが必要です
 @msg	point x must be a number	点の x には数値を指定してください
 @msg	point y must be a number	点の y には数値を指定してください
@@ -6644,10 +6620,6 @@ axis	Y Axis	Y 軸
 @msg	the document has no SVG filter named {r}	ドキュメントに {r} という名前の SVG フィルターはありません
 @msg	the document has no color swatches	ドキュメントにカラースウォッチがありません
 @msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	ドキュメントのスウォッチには {_1} 色ありますが、ドキュメント減色で使用できるのは最大 255 色です
-@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	ファイルに {COMPOSITE_FONTS_MAX} 個を超える合成フォントがあります
-@msg	the file holds no composite fonts	ファイルに合成フォントがありません
-@msg	the file holds two composite fonts named `{_1}`	ファイルに `{_1}` という名前の合成フォントが 2 つあります
-@msg	the file is larger than 4 MB	ファイルが 4 MB を超えています
 @msg	the file isn't valid SVG: {e}	ファイルが有効な SVG ではありません: {e}
 @msg	the file names no plate	ファイルに版が指定されていません
 @msg	the function's prototype is not an object	関数のプロトタイプがオブジェクトではありません
@@ -6696,10 +6668,8 @@ axis	Y Axis	Y 軸
 @msg	toString is not a function	toString は関数ではありません
 @msg	too many arguments	引数が多すぎます
 @msg	too many quantifiers	量指定子が多すぎます
-@msg	two composite fonts are named `{_1}`	`{_1}` という名前の合成フォントが 2 つあります
 @msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	`{t}` は不明な OpenType 機能です (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt。オフにするには先頭に - を付けます。swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt には、`salt=2` のように `tag=N` の形式で代替字形の番号を指定できます。N は 0 から {_1} まで)
 @msg	unknown dither `{d}` (diffusion, pattern, noise or none)	`{d}` は不明なディザの指定です (diffusion、pattern、noise、none のいずれか)
-@msg	unknown key `{k}`; a font takes name and parts	`{k}` は不明なキーです。フォントに指定できるのは name と parts です
 @msg	unknown panel `{panel}`	`{panel}` は不明なパネルです
 @msg	unknown parameter `{key}`	`{key}` は不明なパラメーターです
 @msg	unknown parameter `{within}settings.{format}`; {why}	`{within}settings.{format}` は不明なパラメーターです。{why}
@@ -6720,13 +6690,7 @@ axis	Y Axis	Y 軸
 @msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}: カスタム矢印のパスには塗りつぶせる領域が必要で、アンカーは最大 {most} 個、サブパスは最大 {most} 個、各アンカーは先端から矢印単位で {far} 以内に収めてください
 @msg	{k}: bad custom arrowhead path: {e}	{k}: カスタム矢印のパスが正しくありません: {e}
 @msg	{k}: bad custom arrowhead: {e}	{k}: カスタム矢印が正しくありません: {e}
-@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline には {_1}～{_2}% を指定してください
 @msg	{k}: custom must be a name	{k}: custom には名前を指定してください
-@msg	{k}: give a font	{k}: フォントを指定してください
-@msg	{k}: only kana can be scaled at the center	{k}: 中央を基準に拡大・縮小できるのはかなだけです
-@msg	{k}: only kana, roman and numerals can be scaled	{k}: 拡大・縮小できるのはかな、欧文、数字だけです
-@msg	{k}: scale must be {_1} to {_2}%	{k}: scale には {_1}～{_2}% を指定してください
-@msg	{k}: size must be {_1} to {_2}%	{k}: size には {_1}～{_2}% を指定してください
 @msg	{name} must be a number	{name} には数値を指定してください
 @msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}: copy で DCS ファイルを使用できるのは、版がファイル内にある場合だけです。版ファイルのある場所でそのファイルに再リンクしてください
 @msg	{path}: larger than {_1} MB	{path}: {_1} MB を超えています
@@ -6996,7 +6960,6 @@ axis	Y Axis	Y 軸
 @msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` は作業用スペースです: 先に edit.colorSettings で別のものを選択してください
 @msg	`{name}` is built in and stays	`{name}` は組み込みのため、削除されません
 @msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` には同じ種類のペイント (カラー、グラデーション、パターン) を指定してください
-@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: 最小は最適を、最適は最大を超えないようにしてください
 @msg	`{n}` can't be deleted	`{n}` は削除できません
 @msg	`{n}` can't be merged	`{n}` は結合できません
 @msg	`{n}` can't be moved	`{n}` は移動できません
@@ -7747,7 +7710,6 @@ axis	Y Axis	Y 軸
 @msg	select a graph	グラフを選択してください
 @msg	select a group or layer with visible, unlocked members	表示されていてロックされていないメンバーを含むグループまたはレイヤーを選択してください
 @msg	select a layer	レイヤーを選択してください
-@msg	select a path	パスを選択してください
 @msg	select a text object	テキストオブジェクトを選択してください
 @msg	select an image (or an Image Trace group)	画像 (または画像トレースグループ) を選択してください
 @msg	select an image, or pass id	画像を選択するか、id を指定してください
