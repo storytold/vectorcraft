@@ -7,6 +7,7 @@ use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 mod actionset;
 pub(super) mod adjust;
 mod ai_open_path;
+mod anchor_edit_work;
 mod appearance;
 mod areafit;
 mod arrowheads;

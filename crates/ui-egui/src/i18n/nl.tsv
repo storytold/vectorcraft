@@ -169,6 +169,7 @@
 @msg	the Simplify slider is not open	de schuifregelaar Vereenvoudigen is niet geopend
 @msg	the Smooth slider is not open	de schuifregelaar Gladmaken is niet geopend
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	de pagina van tekengebied {n} is {size}, langer dan de paginalimiet van PDF van 14.400 pt (200 in): hij wordt geschreven met een UserUnit van {unit}, dus apps die UserUnit negeren tonen hem zoveel keer kleiner
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	de pagina van tekengebied {n} is {size}, langer dan de paginalimiet van PDF van 14.400 pt (200 in): hij wordt geschreven met een UserUnit van {unit}, dus apps die UserUnit negeren tonen hem zoveel keer kleiner: schakel 'Pagina's langer dan 200 in op ware grootte in punten schrijven' in
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	de pagina van tekengebied {n} is {size}, langer dan de paginalimiet van PDF van 14.400 pt (200 in): {label}-pagina’s worden zonder UserUnit in punten geschreven, en apps die zich aan de limiet houden snijden de pagina af op 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 heeft geen UserUnit, die een pagina langer dan 14.400 pt (200 in) nodig heeft om zijn formaat te behouden: het bestand wordt geschreven als PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 heeft geen UserUnit, die een pagina langer dan 14.400 pt (200 in) nodig heeft om binnen de paginalimiet van PDF/A-2 van 14.400 eenheden te blijven: het bestand wordt geschreven als PDF 1.6
@@ -2058,6 +2059,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Tate-chu-yoko-instellingen…
 	Tate-chu-yoko Settings	Tate-chu-yoko-instellingen
+	Warichu	Warichu
+	Warichu Settings…	Warichu-instellingen…
+	Warichu Settings	Warichu-instellingen
+	Lines:	Regels:
+	Line Gap:	Regelafstand:
 	Composite Fonts…	Samengestelde lettertypen…
 	Composite Fonts	Samengestelde lettertypen
 	Export Composite Fonts	Samengestelde lettertypen exporteren
@@ -3650,6 +3656,29 @@ theme	Appearance	Vormgeving
 	Bristle Brush	Borstelpenseel
 	Pattern Brush	Patroonpenseel
 	missing from the Brushes panel	ontbreekt in het deelvenster Penselen
+	built in	ingebouwd
+	embedding not allowed	insluiten niet toegestaan
+	embedding for editing	insluiten voor bewerken
+	embedding for preview and print	insluiten voor voorvertoning en afdrukken
+	embedding allowed	insluiten toegestaan
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	vervangen: weergegeven in {family} {style} ({detail})
+	missing: shown in {family} {style}	ontbreekt: weergegeven in {family} {style}
+	missing	ontbreekt
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Lineair verloop
+	Radial gradient	Radiaal verloop
+	Conic gradient	Conisch verloop
+	Diamond gradient	Ruitverloop
+	Freeform gradient	Vrijvormverloop
+@plural	{n} instance|{n} instances	{n} exemplaar|{n} exemplaren
+@plural	{n} row|{n} rows	{n} rij|{n} rijen
+@plural	{n} column|{n} columns	{n} kolom|{n} kolommen
 	Select art to make a scatter, art or pattern brush.	Selecteer illustratie om een verspreidings-, art- of patroonpenseel te maken.
 	Brush Art	Penseelillustratie
 	New Symbol	Nieuw symbool
@@ -4124,6 +4153,11 @@ theme	Appearance	Vormgeving
 	Primary	Primair
 	Printing / Exporting	Afdrukken / exporteren
 	Real-time Drawing and Editing	Tekenen en bewerken in realtime
+	Use Monitor Profile for Canvas	Monitorprofiel gebruiken voor canvas
+	The canvas is drawn in sRGB.	Het canvas wordt in sRGB getekend.
+	Canvas display profile:	Weergaveprofiel van het canvas:
+	The system matches the window to the display's colors.	Het systeem stemt het venster af op de kleuren van het scherm.
+	No usable display profile was found: the canvas is drawn in sRGB.	Geen bruikbaar weergaveprofiel gevonden: het canvas wordt in sRGB getekend.
 	Render Threads (-1 = Automatic)	Renderthreads (-1 = automatisch)
 	Reset Preferences	Voorkeuren herstellen
 	Export Preferences…	Voorkeuren exporteren…
@@ -4769,6 +4803,10 @@ imageTrace	Outline	Contour
 @msg	Couldn't paste: the document it was pasted in was reverted	Kon niet plakken: het document waarin werd geplakt, is teruggezet
 @msg	Couldn't read {name}: {e}	Kon {name} niet lezen: {e}
 @msg	Couldn't save recovery data: {e}	Kon herstelgegevens niet opslaan: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kon herstelgegevens voor {title} niet opslaan: {e}. Kopieën gaan naar {folder}, de standaardherstelmap; stel voor een andere map Voorkeuren → Bestandsafhandeling → Gegevensherstel → Map (recoveryFolder) in
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kon herstelgegevens voor {title} niet opslaan: {e}. Kopieën gaan naar {folder}, de map die in Voorkeuren is ingesteld; stel voor een andere map Voorkeuren → Bestandsafhandeling → Gegevensherstel → Map (recoveryFolder) in
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kon herstelgegevens niet opslaan: {e}. Kopieën gaan naar {folder}, de standaardherstelmap; stel voor een andere map Voorkeuren → Bestandsafhandeling → Gegevensherstel → Map (recoveryFolder) in
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Kon herstelgegevens niet opslaan: {e}. Kopieën gaan naar {folder}, de map die in Voorkeuren is ingesteld; stel voor een andere map Voorkeuren → Bestandsafhandeling → Gegevensherstel → Map (recoveryFolder) in
 @msg	Create Outlines: select text objects	Contouren maken: selecteer tekstobjecten
 @msg	Create from Guides: the document has no artboard	Uit hulplijnen maken: het document heeft geen tekengebied
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Uit hulplijnen maken: de hulplijnen maken meer dan {MAX_PIECES} slices
@@ -4776,6 +4814,7 @@ imageTrace	Outline	Contour
 @msg	Data Recovery has nowhere to keep copies: set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Gegevensherstel heeft nergens ruimte om kopieën te bewaren: stel Voorkeuren → Bestandsafhandeling → Gegevensherstel → Map (recoveryFolder) in
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecteer met directe selectie ankerpunten om te knippen (niet de eindpunten van open paden)
 @msg	Divide Objects Below: select a path	Objecten eronder verdelen: selecteer een pad
+@msg	select a path	selecteer een pad
 @msg	Divide Objects Below: select exactly one path	Objecten eronder verdelen: selecteer precies één pad
 @msg	Downloaded {what}	{what} gedownload
 @msg	Expand Appearance: the selection has a basic appearance	Vormgeving uitbreiden: de selectie heeft een basisvormgeving
@@ -5348,6 +5387,7 @@ imageTrace	Outline	Contour
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} hersteld document verworpen|{n} herstelde documenten verworpen
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} hersteld document teruggezet: sla het op om het te behouden|{n} herstelde documenten teruggezet: sla ze op om ze te behouden
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Geopend met {n} opmerking: {first}|Geopend met {n} opmerkingen: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Geopend met {n} opmerking: {first}|{notice}. Geopend met {n} opmerkingen: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} opgeslagen met {n} opmerking: {first}|{path} opgeslagen met {n} opmerkingen: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} afbeelding ingesloten; {missing} ontbreken: koppel ze eerst opnieuw|{n} afbeeldingen ingesloten; {missing} ontbreken: koppel ze eerst opnieuw
 @msgplural	Embedded {n} image|Embedded {n} images	{n} afbeelding ingesloten|{n} afbeeldingen ingesloten
@@ -5423,6 +5463,8 @@ imageTrace	Outline	Contour
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	een ingesloten afbeelding van {_1} × {_2} pixels is verkleind tot {_3} × {_4} pixels om de lagen te behouden
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gekoppelde afbeeldingen tonen het in het bestand opgeslagen voorbeeld met lage resolutie totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
 @msg	linked type areas past VectorCraft's limits were left out	gekoppelde tekstvlakken buiten de limieten van VectorCraft zijn weggelaten
+@msg	the Line Breaking setting of legacy type was left out	de instelling voor regelafbreking van tekst in de oude indeling is weggelaten
+@msg	the Japanese layout rules of legacy type were left out	de Japanse opmaakregels van tekst in de oude indeling zijn weggelaten
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst die binnen een tekstobject van schrijfrichting verandert, wordt geopend in de richting van het eerste teken
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst die als masker wordt gebruikt in gekoppelde vlakken, tekstomloop of een samengesteld pad knipt niet uit
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gekoppelde afbeeldingen zonder voorbeeld in het bestand tonen een tijdelijke aanduiding totdat hun bestanden zijn gevonden: koppel ze opnieuw in het paneel Koppelingen
@@ -6462,6 +6504,9 @@ swatch	Bright Violet	Felviolet
 
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Opslaan schrijft {_1}, niet {_2}: gebruik file.saveAsTemplate om het te schrijven
 @msg	`{key}` must be a #rrggbb color	`{key}` moet een #rrggbb-kleur zijn
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` moet een #rrggbb-kleur of de naam van een laagkleur zijn
+@msg	unknown Live Paint option `{key}`	onbekende Live Paint-optie `{key}`
+@msg	unknown Shape Builder option `{key}`	onbekende Vormopbouw-optie `{key}`
 @msg	a key object sits on that point	op dat punt ligt een sleutelobject
 @msg	a linked image can't become a gradient mesh: embed it first	een gekoppelde afbeelding kan geen verloopraster worden: sluit deze eerst in
 @msg	a mask has more than one art block	een masker heeft meer dan één illustratieblok
@@ -6936,6 +6981,8 @@ anchor	Points:	Punten:
 	Anchor Inspector	Ankerpuntinspecteur
 	Add Points at Crossings	Punten toevoegen bij kruisingen
 	Split at Crossings	Splitsen bij kruisingen
+	Trim at Crossings Tool	Afsnijden bij kruisingen-gereedschap
+	Trim at Crossings	Afsnijden bij kruisingen
 	Extend Path	Pad verlengen
 	Measure & Inspect	Meten en inspecteren
 	Set Anchor	Ankerpunt instellen
@@ -7465,3 +7512,9 @@ breakText	Glyphs	Glyphs
 	Box	Kader
 	Swatch	Staal
 	Direction	Richting
+	Banner Hems and Grommets…	Bannerzomen en zeilringen…
+	Banner Hems and Grommets	Bannerzomen en zeilringen
+	Hem	Zoom
+	Grommets	Zeilringen
+	Grommet Inset	Afstand van zeilringen tot de rand
+	Diameter	Diameter

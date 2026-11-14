@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Invert Colors",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
+            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step. On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke (docs/mcp.md) → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
             has_selection,
             |s, p| recolor(s, p, "edit.colors.invert", "Invert Colors", &invert)
         ),
@@ -104,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Front to Back",
             ["Edit", "Edit Colors"],
             None,
-            "{} ≥3 filled objects (solid fills or gradient meshes, which keep their shading): intermediate fills graded between the frontmost and backmost fill → {changed}",
+            "{} ≥3 filled objects (solid fills or gradient meshes, which keep their shading): intermediate fills graded between the frontmost and backmost fill. On a path directly in a graph series, the graph also stores the new fill, as for the other Blend commands (docs/mcp.md) → {changed}",
             has_selection,
             |s, _| blend(s, BlendOrder::Stack)
         ),
@@ -473,13 +473,29 @@ fn run_pass(s: &mut Session, p: &Value, cmd: &str, label: &str, pass: Recolor) -
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
     let (n, not_changed) = s.edit(label, |d, _| {
         let not_changed = NotChanged::of(pass.again().would_change(d, &left).into_iter().map(|(_, hidden)| hidden));
-        let n = pass.run(d, &ids);
-        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
+        let n = keeping_series_paint(d, &ids, |d| {
+            let n = pass.run(d, &ids);
+            super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
+            Ok(n)
+        })?;
         Ok((n, not_changed))
     })?;
     let mut out = json!({ "changed": n });
     not_changed.report(&mut out);
     Ok(out)
+}
+
+/// Run `recolor` on `d` (it returns how many objects it changed) over `roots`, then store on their graphs what it changed
+/// on the graph series marks among `roots` and inside them, so the marks keep their new paint when the graph is drawn
+/// again.
+pub(crate) fn keeping_series_paint(d: &mut Document, roots: &[NodeId], recolor: impl FnOnce(&mut Document) -> Result<usize>) -> Result<usize> {
+    let marks = super::graph::series_marks_in(d, roots);
+    let before = (!marks.is_empty()).then(|| d.clone());
+    let n = recolor(d)?;
+    if let Some(before) = before.filter(|_| n > 0) {
+        super::appearance::capture_series_changes(&before, d, &marks);
+    }
+    Ok(n)
 }
 
 /// The objects a recolor of `roots` leaves out of the art the user meant to recolor, each with
@@ -887,7 +903,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
     };
     let fills = Scope { fill: true, stroke: false, images: false, patterns: false };
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
-    let changed = s.edit(label, |d, _| {
+    let run = |d: &mut Document| -> Result<usize> {
         let mut changed = 0;
         for (i, id) in ids.iter().enumerate().take(n - 1).skip(1) {
             let c = lerp_color(&first, &last, i as f32 / (n - 1) as f32).in_model(model);
@@ -906,7 +922,8 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
         }
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(label, e))?;
         Ok(changed)
-    })?;
+    };
+    let changed = s.edit(label, |d, _| keeping_series_paint(d, &ids, run))?;
     Ok(json!({ "changed": changed }))
 }
 
