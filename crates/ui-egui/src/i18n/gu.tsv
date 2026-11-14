@@ -1046,6 +1046,9 @@
 	Double-click to insert	દાખલ કરવા ડબલ-ક્લિક કરો
 	Double-click to rename	નામ બદલવા ડબલ-ક્લિક કરો
 	Double-click to replace	બદલવા ડબલ-ક્લિક કરો
+	Click to replace	બદલવા ક્લિક કરો
+	Show all alternates in the Glyphs panel	ગ્લિફ્સ પેનલમાં બધા વૈકલ્પિક બતાવો
+	Show Character Alternates	અક્ષરના વૈકલ્પિક બતાવો
 	Double-click to target the contents	સામગ્રી લક્ષ્ય બનાવવા ડબલ-ક્લિક કરો
 	Download:	ડાઉનલોડ:
 	Drag	ખેંચો
@@ -1454,6 +1457,7 @@
 	Format Options	ફોર્મેટ વિકલ્પો
 	Format Presets	ફોર્મેટ પ્રીસેટ્સ
 	Format Settings	ફોર્મેટ સેટિંગ્સ
+	Format Settings…	ફોર્મેટ સેટિંગ્સ…
 	Format:	ફોર્મેટ:
 	Formats:	ફોર્મેટ્સ:
 	Fractional Widths	અપૂર્ણાંક પહોળાઈ
@@ -4533,6 +4537,9 @@ antiAlias	Sharp	શાર્પ
 	Open Tutorial Sample	ટ્યુટોરિયલનો નમૂનો ખોલો
 	Finish Tutorial	ટ્યુટોરિયલ પૂર્ણ કરો
 	Next Tutorial	આગળનો ટ્યુટોરિયલ
+	Show Learn Tab	શીખો ટૅબ બતાવો
+	Show Skill	કૌશલ્ય બતાવો
+	Back One Level	એક સ્તર પાછા જાઓ
 	Back to Skills	કૌશલ્યો પર પાછા જાઓ
 	Cutting Tools	કટિંગ ટૂલ્સ
 	Stencil Bridges…	સ્ટેન્સિલ બ્રિજિસ…
