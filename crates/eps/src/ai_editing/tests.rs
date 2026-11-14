@@ -8085,7 +8085,8 @@ fn brushes_document() -> Document {
 }
 
 /// Brush art `n` as a tree to compare with [`same_tree`]: each object's kind, its anchors and handles,
-/// the fills and strokes that paint (a stroke with its width), and its members in order.
+/// the fills and strokes that paint (a stroke with its width), its members in order, and its opacity
+/// mask's art and options when it has one.
 fn art_tree(n: &Node) -> serde_json::Value {
     let kind = match &n.kind {
         NodeKind::Path { .. } => "path",
@@ -8110,7 +8111,11 @@ fn art_tree(n: &Node) -> serde_json::Value {
         })
         .collect();
     let members: Vec<serde_json::Value> = n.children().map(|c| c.iter().map(|m| art_tree(m)).collect()).unwrap_or_default();
-    serde_json::json!({"kind": kind, "anchors": anchors, "paints": paints, "members": members})
+    let mut tree = serde_json::json!({"kind": kind, "anchors": anchors, "paints": paints, "members": members});
+    if let Some(m) = &n.extras().mask {
+        tree["mask"] = serde_json::json!({"art": art_tree(&m.art), "options": [m.clip, m.invert, m.disabled, m.linked]});
+    }
+    tree
 }
 
 /// Are trees `a` and `b` ([`art_tree`]) the same but for numbers within the written numbers'
@@ -8251,6 +8256,166 @@ fn an_art_brush_whose_art_doesnt_bend_keeps_its_paths_look() {
     let lib = vectorcraft_brush::library(&back);
     let (BrushKind::Art(got), BrushKind::Art(want)) = (&lib[0].kind, &brush.kind) else { panic!("art") };
     assert!(same_tree(&art_tree(&got.art), &art_tree(&want.art)), "{:#?}", got.art);
+}
+
+/// An opacity mask whose art is rectangle `r` filled in `paint`, with the options given.
+fn rect_mask(id: u64, r: Rect, paint: Paint, clip: bool, invert: bool, linked: bool) -> OpacityMask {
+    let art = Node::path(vectorcraft_doc::NodeId(id), shapes::rectangle(r), Appearance::basic(paint, Paint::None, 0.0));
+    OpacityMask { art: Arc::new(art), clip, invert, disabled: false, linked }
+}
+
+/// `levels` white rectangle masks that clip, each but the last holding the next in its art.
+fn mask_chain(levels: u32) -> Option<Box<OpacityMask>> {
+    (0..levels).fold(None, |inner, i| {
+        let mut m = rect_mask(100 + u64::from(i), Rect::new(0.0, 0.0, 30.0 - f64::from(i), 8.0), solid(Color::WHITE), true, false, true);
+        Arc::make_mut(&mut m.art).extras_mut().mask = inner;
+        Some(Box::new(m))
+    })
+}
+
+/// [`brush_art_node`] with opacity masks: on the group, a mid-gray rectangle that clips; on the wide
+/// block, a white rectangle inverted without clipping. Both masks are `linked` or not.
+fn masked_brush_art(linked: bool) -> Node {
+    let mut art = brush_art_node();
+    if let Some(c) = art.children_mut() {
+        let wide = rect_mask(10, Rect::new(0.0, 0.0, 20.0, 4.0), solid(Color::WHITE), false, true, linked);
+        Arc::make_mut(&mut c[0]).extras_mut().mask = Some(Box::new(wide));
+    }
+    art.extras_mut().mask = Some(Box::new(rect_mask(11, Rect::new(0.0, 0.0, 30.0, 8.0), solid(Color::rgb(0.5, 0.5, 0.5)), true, false, linked)));
+    art
+}
+
+/// Scatter and Art brushes whose art holds opacity masks come back in the Brushes panel with their
+/// settings, the masks' art in place with its paint, and the masks' options: masks on the art and on
+/// a member, masks that don't move with their objects, and masks seven deep in one another's art. A
+/// path with the masked Art brush comes back as its drawn look, with the stroke warning.
+#[test]
+fn scatter_and_art_brush_mask_art_round_trips() {
+    use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Scatter};
+    let mut deep = brush_art_node();
+    deep.extras_mut().mask = mask_chain(7);
+    let lib = vec![
+        Brush { name: "Masked spray".into(), kind: BrushKind::Scatter(Scatter { art: masked_brush_art(true), ..Scatter::default() }) },
+        Brush { name: "Masked ribbon".into(), kind: BrushKind::Art(ArtBrush { art: masked_brush_art(true), ..ArtBrush::default() }) },
+        Brush { name: "Unlinked spray".into(), kind: BrushKind::Scatter(Scatter { art: masked_brush_art(false), ..Scatter::default() }) },
+        Brush { name: "Unlinked ribbon".into(), kind: BrushKind::Art(ArtBrush { art: masked_brush_art(false), ..ArtBrush::default() }) },
+        Brush { name: "Deep spray".into(), kind: BrushKind::Scatter(Scatter { art: deep.clone(), ..Scatter::default() }) },
+        Brush { name: "Deep ribbon".into(), kind: BrushKind::Art(ArtBrush { art: deep, ..ArtBrush::default() }) },
+    ];
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    brushed(&mut doc, "Masked ribbon", (20.0, 120.0), (280.0, 150.0), 1.0);
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES || w == writer::DEEP_MASKS), "{:?}", out.warnings);
+    assert!(out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+    assert_eq!(program(&doc).matches("%AI8_BeginBrushPattern").count(), lib.len());
+    let back = read_back(&doc);
+    assert!(matches!(back.layers[0].children().unwrap()[0].kind, NodeKind::Group { .. }), "the path's drawn look");
+    let got = vectorcraft_brush::library(&back);
+    assert_eq!(got.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>());
+    let none = || Node::group(vectorcraft_doc::NodeId(0), vec![]);
+    for (g, w) in got.iter().zip(&lib) {
+        let name = &w.name;
+        let (ga, wa) = match (&g.kind, &w.kind) {
+            (BrushKind::Scatter(gs), BrushKind::Scatter(ws)) => {
+                let settings = |s: &Scatter| Scatter { art: none(), modes: Some(s.modes()), ..s.clone() };
+                assert_eq!(settings(gs), settings(ws), "{name}");
+                (&gs.art, &ws.art)
+            }
+            (BrushKind::Art(ga), BrushKind::Art(wa)) => {
+                assert_eq!(ArtBrushOptions::of(ga), ArtBrushOptions::of(wa), "{name}");
+                (&ga.art, &wa.art)
+            }
+            _ => panic!("{name}: {g:?}"),
+        };
+        let (gt, wt) = (art_tree(ga), art_tree(wa));
+        assert!(same_tree(&gt, &wt), "{name}: {gt:#} for {wt:#}");
+    }
+}
+
+/// Brushes whose mask art the reader wouldn't read back as it is are left out with a warning, beside
+/// a brush that comes back: a Scatter brush whose art's mask is a gradient, one whose art holds
+/// masks eight deep in one another's art (deeper than the editing data writes masks), one whose
+/// mask's art is a compound path of 26,500 members of two squares each, which the reader reads as
+/// 53,000 paths, more art than it copies into one file's brushes, and one whose art is a compound
+/// path with a mask on a member (a compound path is written as one path, without its members' masks).
+#[test]
+fn brushes_whose_mask_art_isnt_read_back_are_left_out() {
+    use vectorcraft_brush::{Brush, BrushKind, Scatter};
+    let keep = Brush { name: "Masked spray".into(), kind: BrushKind::Scatter(Scatter { art: masked_brush_art(true), ..Scatter::default() }) };
+    let mut gradient = brush_art_node();
+    let ramp = gradient_paint(sunset(), None, None);
+    gradient.extras_mut().mask = Some(Box::new(rect_mask(11, Rect::new(0.0, 0.0, 30.0, 8.0), ramp, true, false, true)));
+    let mut deep = brush_art_node();
+    deep.extras_mut().mask = mask_chain(8);
+    let square = |i: u32| {
+        let (x, y) = (f64::from(i % 400) * 2.0, f64::from(i / 400) * 2.0);
+        shapes::rectangle(Rect::new(x, y, x + 1.0, y + 1.0)).subpaths
+    };
+    let members = (0..26_500)
+        .map(|m| {
+            let path = PathData::new((0..2).flat_map(|k| square(m * 2 + k)).collect());
+            Arc::new(Node::path(vectorcraft_doc::NodeId(21), path, Appearance::basic(solid(Color::WHITE), Paint::None, 0.0)))
+        })
+        .collect();
+    let mut squares = Node::path(vectorcraft_doc::NodeId(20), PathData::default(), Appearance::basic(solid(Color::WHITE), Paint::None, 0.0));
+    squares.kind = NodeKind::Compound { children: members, rule: FillRule::NonZero };
+    let mut heavy = brush_art_node();
+    heavy.extras_mut().mask = Some(Box::new(OpacityMask { art: Arc::new(squares), clip: true, invert: false, disabled: false, linked: true }));
+    let mut member = brush_art_node();
+    member.kind = match member.kind {
+        NodeKind::Group { mut children, .. } => {
+            let mask = rect_mask(10, Rect::new(0.0, 0.0, 20.0, 4.0), solid(Color::WHITE), true, false, true);
+            Arc::make_mut(&mut children[0]).extras_mut().mask = Some(Box::new(mask));
+            NodeKind::Compound { children, rule: FillRule::NonZero }
+        }
+        kind => kind,
+    };
+    member.appearance = Appearance::basic(black_fill(), Paint::None, 0.0).into();
+    let cases = [
+        ("gradient mask", gradient),
+        ("masks eight deep", deep),
+        ("mask art past the reader's limit", heavy),
+        ("mask on a compound path's member", member),
+    ];
+    for (why, art) in cases {
+        let mut doc = Document::new(300.0, 200.0);
+        let lib = vec![keep.clone(), Brush { name: why.into(), kind: BrushKind::Scatter(Scatter { art, ..Scatter::default() }) }];
+        vectorcraft_brush::store(&mut doc, &lib);
+        let out = export_ai_editing(&doc, &opts()).unwrap();
+        assert!(out.warnings.iter().any(|w| w == writer::BRUSHES), "{why}: {:?}", out.warnings);
+        assert!(!out.warnings.iter().any(|w| w == writer::DEEP_MASKS), "{why}: {:?}", out.warnings);
+        let names: Vec<String> = vectorcraft_brush::library(&read_back(&doc)).into_iter().map(|b| b.name).collect();
+        assert_eq!(names, ["Masked spray"], "{why}");
+        assert_eq!(program(&doc).matches("%AI8_BeginBrushPattern").count(), 1, "{why}");
+    }
+}
+
+/// A brush's mask art is written as the brush holds it when an object of the layers' mask art with
+/// the same id keeps a live effect as an art style: the brush's mask comes back as its own plain
+/// rectangle, without the layers' object's effect or geometry.
+#[test]
+fn a_brushs_mask_art_isnt_written_as_a_styled_object_with_its_id() {
+    use vectorcraft_brush::{Brush, BrushKind, Scatter};
+    let offset = fx("path.offsetPath", serde_json::json!({"offset": 8.0, "joins": "miter", "miterLimit": 4.0}));
+    let mut id = None;
+    let mut doc = masked_image(|doc| {
+        let grown = styled_rect(doc, "Grown", Rect::new(60.0, 30.0, 110.0, 70.0), solid(Color::rgb(0.0, 0.0, 0.0)), Paint::None, vec![offset]);
+        id = Some(grown.id);
+        grown
+    });
+    let id = id.expect("the mask's art");
+    let mut art = brush_art_node();
+    art.extras_mut().mask = Some(Box::new(rect_mask(id.0, Rect::new(0.0, 0.0, 30.0, 8.0), solid(Color::WHITE), true, false, true)));
+    let lib = vec![Brush { name: "Masked spray".into(), kind: BrushKind::Scatter(Scatter { art, ..Scatter::default() }) }];
+    vectorcraft_brush::store(&mut doc, &lib);
+    let got = vectorcraft_brush::library(&read_back(&doc));
+    let [Brush { kind: BrushKind::Scatter(s), .. }] = got.as_slice() else { panic!("{got:?}") };
+    let BrushKind::Scatter(want) = &lib[0].kind else { panic!("a Scatter brush") };
+    let m = s.art.extras().mask.as_deref().unwrap_or_else(|| panic!("the mask is read: {:#?}", s.art));
+    assert!(m.art.appearance.effects.is_empty(), "{:?}", m.art.appearance.effects);
+    let (gt, wt) = (art_tree(&s.art), art_tree(&want.art));
+    assert!(same_tree(&gt, &wt), "{gt:#} for {wt:#}");
 }
 
 /// Settings the other tests don't use come back: a Calligraphic brush varying with tilt and bearing,

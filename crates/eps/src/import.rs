@@ -90,7 +90,7 @@ pub(crate) use ai::objects_read;
 pub(crate) use ai::{
     BRUSH_MANAGER, BrushesRead, DEFORM_PLUGIN, EnvelopeGridPoint, MAX_CHECKED as ENVELOPE_CHECKS, MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS,
     MAX_LISTED, MAX_LISTED_NAME, MAX_SYMBOLS, brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, read_art_style, read_brush_object,
-    read_style_list, style_moves_with, symbol_art_member, warp_number,
+    read_style_list, style_moves_with, symbol_art_member, turn_brush_art_over, warp_number,
 };
 pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES, record_version};
 pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};

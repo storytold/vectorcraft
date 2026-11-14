@@ -23,7 +23,7 @@ use super::{Writer, Xy};
 use crate::ai_ops;
 use crate::ps;
 
-pub(in crate::ai_editing) const BRUSHES: &str = "Pattern and Bristle brushes, Art brushes that don't stretch their art along the path from left to right at 100% unflipped without overlap, Scatter and Art brushes in Tints and Shades or Hue Shift, brushes whose art holds an empty path or group or more than paths, compound paths and groups with one solid fill and one plain stroke each, brushes whose names hold a slash or repeat an earlier brush's name, brushes that would open with other settings, brushes past the number or the amount of art one file's brushes can hold, and every brush on a large canvas are left out of the Brushes panel in the editing data for other apps";
+pub(in crate::ai_editing) const BRUSHES: &str = "Pattern and Bristle brushes, Art brushes that don't stretch their art along the path from left to right at 100% unflipped without overlap, Scatter and Art brushes in Tints and Shades or Hue Shift, brushes whose art or its opacity masks' art holds an empty path or group or more than paths, compound paths and groups with one solid fill and one plain stroke each, or opacity masks on a compound path's members or more than seven deep in one another's art, brushes whose names hold a slash or repeat an earlier brush's name, brushes that would open with other settings, brushes past the number or the amount of art one file's brushes can hold, and every brush on a large canvas are left out of the Brushes panel in the editing data for other apps";
 
 /// Most brushes written (the reader's limit).
 const MAX_BRUSHES: usize = 4096;
@@ -164,17 +164,38 @@ fn art_params(a: &ArtBrush, art: &str) -> Option<String> {
     Some(format!("2 / {art}/ / / / / 0 0/ 5 0 0 0 /  {}", nums6(&numbers)))
 }
 
+/// Most opacity masks in one another's art in a brush's art: a brush's art section writes its art
+/// one level inside, and masks at [`super::MAX_NEST`] levels are left out ([`super::DEEP_MASKS`]).
+const MAX_MASK_NEST: u32 = super::MAX_NEST - 1;
+
 /// Is `art` written as the reader reads it back, within a brush: paths and compound paths with
 /// points and groups with members (not clipping, without paint of their own), each opaque in the
-/// normal blending mode, without effects or opacity masks, with at most one fill and one plain
-/// stroke (no brush, width profile, arrowheads, alignment off the path or dashes fitted to corners)
-/// over it, each in a color or none? A path without points isn't written ([`Writer::plain_object`]).
+/// normal blending mode, without effects, with at most one fill and one plain stroke (no brush,
+/// width profile, arrowheads, alignment off the path or dashes fitted to corners) over it, each in a
+/// color or none, and opacity masks whose art is such art too, at most [`MAX_MASK_NEST`] deep and
+/// none on a compound path's members? A path without points isn't written
+/// ([`Writer::plain_object`]).
 fn plain_art(art: &Node) -> bool {
+    plain_within(art, MAX_MASK_NEST)
+}
+
+/// Does no object of `art` have an opacity mask?
+fn unmasked(art: &Node) -> bool {
+    let mut unmasked = true;
+    art.walk(&mut |n| unmasked &= n.extras().mask.is_none());
+    unmasked
+}
+
+/// [`plain_art`] with at most `masks` opacity masks in one another's art.
+fn plain_within(art: &Node, masks: u32) -> bool {
     let mut plain = true;
     art.walk(&mut |n| {
         let kind = match &n.kind {
             NodeKind::Path { path, guide: false, clipping: false, .. } => path.subpaths.iter().any(|sp| !sp.anchors.is_empty()),
-            NodeKind::Compound { .. } => super::compound_path(n).subpaths.iter().any(|sp| !sp.anchors.is_empty()),
+            // A compound path is written as one path of its members' subpaths, without their masks.
+            NodeKind::Compound { children, .. } => {
+                children.iter().all(|c| unmasked(c)) && super::compound_path(n).subpaths.iter().any(|sp| !sp.anchors.is_empty())
+            }
             NodeKind::Group { children, clip: false } => !children.is_empty(),
             _ => false,
         };
@@ -198,7 +219,7 @@ fn plain_art(art: &Node) -> bool {
             && order
             && quiet
             && n.appearance.effects.is_empty()
-            && n.extras().mask.is_none()
+            && n.extras().mask.as_deref().is_none_or(|m| masks > 0 && plain_within(&m.art, masks - 1))
             && n.opacity >= 1.0
             && n.blend == BlendMode::Normal;
     });
@@ -209,8 +230,13 @@ fn plain_art(art: &Node) -> bool {
 /// compound path with the subpaths of all its members as one path ([`super::compound_path`]), is
 /// written as one path when it has one subpath with points and as a compound path when it has more
 /// ([`Writer::plain_object`]); the reader reads that compound path as one path for each subpath,
-/// each with the object's paint.
+/// each with the object's paint. An opacity mask's art is written shown ([`Writer::mask`]).
 fn as_read(art: &mut Node) {
+    if let Some(m) = art.extras_if_any().and_then(|e| e.mask.as_mut()) {
+        let mask_art = Arc::make_mut(&mut m.art);
+        mask_art.visible = true;
+        as_read(mask_art);
+    }
     let (subpaths, rule) = match &art.kind {
         NodeKind::Path { path, rule, .. } => (path.subpaths.clone(), *rule),
         NodeKind::Compound { rule, .. } => (super::compound_path(art).subpaths, *rule),
@@ -341,7 +367,7 @@ impl Writer<'_> {
                 }
                 let mut read = a.clone();
                 if *to_section == Affine::IDENTITY {
-                    read.transform(Affine::FLIP_Y, false);
+                    crate::import::turn_brush_art_over(&mut read);
                 }
                 as_read(&mut read);
                 Some(read)
@@ -378,6 +404,9 @@ impl Writer<'_> {
             // The art is the brush's own: not on `%_` lines, in a drawn look or in a symbol that
             // first uses the brush.
             (std::mem::take(&mut self.hidden), std::mem::take(&mut self.in_look), std::mem::take(&mut self.in_symbol)),
+            // The layers' objects written with art styles, by id: none of them is the brush's art,
+            // which may hold objects with the same ids.
+            std::mem::take(&mut self.styled),
         );
         (self.to_art, self.grad_space, self.canvas, self.block_end) = (to_section, to_section, to_section, usize::MAX);
         self.state(false, false);
@@ -413,6 +442,7 @@ impl Writer<'_> {
             self.clip,
             (self.block_start, self.block_end),
             (self.hidden, self.in_look, self.in_symbol),
+            self.styled,
         ) = saved;
         let text = std::mem::replace(&mut self.body, body);
         if !std::mem::replace(&mut self.warnings, warnings).is_empty() {

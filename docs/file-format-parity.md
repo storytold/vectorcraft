@@ -118,7 +118,9 @@ private editing data. VectorCraft:
   Scatter and Art brushes with their art, are written in its order: Scatter and Art brushes in Tints or keeping their
   art's colors, Art brushes that stretch their art along the path from left to right at 100% unflipped without
   overlap, and art of paths and compound paths with points and groups with members, with one solid fill and one
-  plain stroke each. Other brushes,
+  plain stroke each. Such art may hold opacity masks whose art is of the same kinds, up to seven deep in one
+  another's art; the masks are written with their options, and an Art brush whose art holds one is written with
+  its strokes as their drawn look. Other brushes,
   Pattern and Bristle brushes among them, and brushes past the number or the art VectorCraft's reader reads are left
   out with a warning; no brush is written on a large canvas. A path or compound path with a Calligraphic brush, or
   with an Art brush in Tints whose art bends along the path, keeps the brush on its stroke; other brushed strokes are
