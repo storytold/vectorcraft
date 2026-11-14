@@ -501,8 +501,8 @@ fn composer_x_mixed_sizes_overflow_a_shaped_frame() {
     // A stepped frame too short for the paragraph: the every-line composer still breaks the lines
     // that fit as one paragraph, with the lines past the frame's end measured as wide as the last
     // line the frame holds. Here that is the narrow part, so the lines that fit break as in a frame
-    // tall enough for the whole paragraph, and not as the single-line composer breaks them. They
-    // are set in order, each once and within its room, and the frame overflows.
+    // tall enough for the whole paragraph. They are set in order, each once and within its room,
+    // and the frame overflows.
     let w = x_width();
     let set = |bottom: f64, composer: Composer| {
         let mut t = stepped(w, w * 0.5, 40.0, bottom);
@@ -520,8 +520,10 @@ fn composer_x_mixed_sizes_overflow_a_shaped_frame() {
     assert_eq!(every, ["Destroy all creatures with toughness", "X or less. Then", "draw a card for each"]);
     let (whole, ..) = set(300.0, Composer::EveryLine);
     assert_eq!(every, whole[..every.len()]);
+    // The single-line composer measures each line across its height too, and breaks the lines
+    // that fit the same way.
     let (greedy, ..) = set(75.0, Composer::SingleLine);
-    assert_ne!(every, greedy);
+    assert_eq!(every, greedy);
     // A frame with no room for a line sets none.
     for composer in [Composer::EveryLine, Composer::SingleLine] {
         let mut t = stepped(w, w * 0.5, 4.0, 8.0);
@@ -562,8 +564,10 @@ fn composer_x_mixed_sizes_overflow_around_text_wrap() {
     assert_eq!(hits.count(), 0, "{:?}", l.lines);
     // The lines that fit break as in `composer_x_mixed_sizes_around_text_wrap`'s taller frame.
     assert_eq!(every, ["Destroy all creatures with", "toughness\u{a0}X", "or less. Then", "draw a card for", "each creature"]);
+    // The single-line composer measures each line across its height too, and breaks the lines
+    // that fit the same way.
     let (greedy, ..) = set(Composer::SingleLine);
-    assert_ne!(every, greedy);
+    assert_eq!(every, greedy);
 }
 
 #[test]
