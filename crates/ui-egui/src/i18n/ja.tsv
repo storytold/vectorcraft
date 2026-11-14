@@ -6343,6 +6343,1810 @@ axis	Y Axis	Y 軸
 @msg	no menu item that can be inserted runs this command	このコマンドを実行する、挿入できるメニュー項目はありません
 @msg	the action already has 10,000 steps	アクションにはすでに 10,000 ステップがあります
 @msg	the action set would be larger than 8 MiB	アクションセットが 8 MiB を超えます
+@msg	'caller', 'callee' and 'arguments' cannot be used on strict mode functions	strict モードの関数では 'caller'、'callee'、'arguments' を使用できません
+@msg	Alignment must be one of the choices	揃えには選択肢のいずれかを指定してください
+@msg	Boolean.prototype.{name} was called on a value that is not a Boolean	Boolean.prototype.{name} が Boolean ではない値に対して呼び出されました
+@msg	CMYK images whose samples couldn't be read in CMYK were imported in RGB	サンプルを CMYK で読み取れなかった CMYK 画像は RGB で読み込みました
+@msg	Cannot write to the location of “{name}”; choose where to save it	「{name}」の場所に書き込めません。保存先を選択してください
+@msg	DCS files can only be placed linked: use File › Place with Link on	DCS ファイルはリンクとしてのみ配置できます: 「リンク」をオンにして「ファイル › 配置」を使用してください
+@msg	Date.prototype method called on a value that is not a Date object	Date.prototype のメソッドが Date オブジェクトではない値に対して呼び出されました
+@msg	Error.prototype.toString was called on a value that is not an object	Error.prototype.toString がオブジェクトではない値に対して呼び出されました
+@msg	Function.prototype.toString was called on a value that is not a function	Function.prototype.toString が関数ではない値に対して呼び出されました
+@msg	Import SVG Filter reads SVG files, not SVGZ	「SVG フィルターを読み込み」が読み込むのは SVG ファイルで、SVGZ ファイルは読み込みません
+@msg	JSON.parse: {why} (at offset {at})	JSON.parse: {why} (オフセット {at})
+@msg	JSON.stringify cannot write a structure that contains itself	JSON.stringify は自身を含む構造を書き出せません
+@msg	Line Gap must be a number	行間には数値を指定してください
+@msg	Namespace.prototype.toString needs a Namespace	Namespace.prototype.toString には Namespace が必要です
+@msg	New Document profiles need the preferences folder, which this run doesn't have	新規ドキュメントプロファイルには環境設定フォルダーが必要ですが、この実行環境にはありません
+@msg	Number.prototype.{name} was called on a value that is not a number	Number.prototype.{name} が数値ではない値に対して呼び出されました
+@msg	Object.create's prototype must be an object or null	Object.create のプロトタイプにはオブジェクトまたは null を指定してください
+@msg	Object.{function} was given a value that is not an object	Object.{function} にオブジェクトではない値が渡されました
+@msg	QName.prototype.toString needs a QName	QName.prototype.toString には QName が必要です
+@msg	RegExp.prototype.{name} was called on a value that is not a RegExp object	RegExp.prototype.{name} が RegExp オブジェクトではない値に対して呼び出されました
+@msg	Stencil Bridges: the selected art is too large or too detailed to bridge	ステンシルブリッジ: 選択したアートが大きすぎるか細かすぎるため、ブリッジを作成できません
+@msg	String.prototype.toString was called on a value that is not a string	String.prototype.toString が文字列ではない値に対して呼び出されました
+@msg	The {name} profile could not be read, so the new document has the default settings: {reason}	{name} プロファイルを読み込めなかったため、新規ドキュメントには初期設定を使用しました: {reason}
+@msg	Trap: more than {_1} pairs of objects lie close enough to trap, or too many objects share a horizontal range; trap fewer objects at a time	トラップ: トラップできるほど近いオブジェクトの組が {_1} 組を超えているか、水平方向の範囲が重なるオブジェクトが多すぎます。一度にトラップするオブジェクトを減らしてください
+@msg	Weed Box and Lines: no weeding line fits outside the art, and the weed box is off	カス取り枠とライン: アートの外側に収まるカス取りラインがなく、カス取り枠もオフになっています
+@msg	\\ at end of pattern	パターンの末尾に \\ があります
+@msg	`alignOn` cannot be empty	`alignOn` を空にすることはできません
+@msg	`alignOn` must be a string	`alignOn` には文字列を指定してください
+@msg	`align` must be a string	`align` には文字列を指定してください
+@msg	`answer` for this {kind} dialog must be one of: {_1}	この {kind} ダイアログの `answer` には次のいずれかを指定してください: {_1}
+@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` の回答が {MAX_ANSWERS} 個を超えています
+@msg	`answers` is larger than 1 MiB	`answers` が 1 MiB を超えています
+@msg	`answers` must be a list of answers	`answers` には回答のリストを指定してください
+@msg	`artboard` must be the index of an artboard of the document	`artboard` にはドキュメントのアートボードのインデックスを指定してください
+@msg	`artboardsAt` must be [x, y]	`artboardsAt` には [x, y] を指定してください
+@msg	`artboards` names an artboard the document does not have	`artboards` にドキュメントにないアートボードが指定されています
+@msg	`artboards` names an artboard twice	`artboards` に同じアートボードが 2 回指定されています
+@msg	`at` must be [x, y] (got {at})	`at` には [x, y] を指定してください (指定値: {at})
+@msg	`at` must be a point [x, y]	`at` には点 [x, y] を指定してください
+@msg	`beside` needs `side`	`beside` には `side` が必要です
+@msg	`code` must be a whole number	`code` には整数を指定してください
+@msg	`colorMode` must be one of rgb, cmyk	`colorMode` には rgb、cmyk のいずれかを指定してください
+@msg	`colors` does not apply to the {name} reduction	`colors` は {name} 減色には適用されません
+@msg	`colors` must be a whole number from 2 to 256	`colors` には 2 から 256 までの整数を指定してください
+@msg	`colors` must be at least 9 for the uniform reduction	均等減色では `colors` に 9 以上を指定してください
+@msg	`colors` must be between 1 and {MAX_THEME_COLORS} (got {n})	`colors` には 1 から {MAX_THEME_COLORS} までの値を指定してください (指定値: {n})
+@msg	`count` must be a whole number from 0 to {MAX_COUNT}	`count` には 0 から {MAX_COUNT} までの整数を指定してください
+@msg	`ditherAmount` must be a number from 0 to 100	`ditherAmount` には 0 から 100 までの数値を指定してください
+@msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` には {lo}～{hi} pt の値を指定してください
+@msg	`focal` and `radius` cannot be used together	`focal` と `radius` は同時に使用できません
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` には [subpath, anchor] の組の配列を指定してください
+@msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` に指定された [{si}, {ai}] はパスのアンカーではありません
+@msg	`glyphAlternate` takes only null, which takes a glyph choice away (text.setGlyphAlternate makes one)	`glyphAlternate` に指定できるのは null のみで、字形の選択を解除します (選択は text.setGlyphAlternate で行います)
+@msg	`group` must be one of {_1}	`group` には {_1} のいずれかを指定してください
+@msg	`group` must be the Objects on Path group of `member` and `target`	`group` には `member` と `target` のパス上のオブジェクトグループを指定してください
+@msg	`id` is an object id, not {v}	`id` にはオブジェクト ID を指定してください ({v} は指定できません)
+@msg	`item` needs `index`	`item` には `index` が必要です
+@msg	`kerningBefore` belongs to a line's first character, not to a character style (text.setRangeStyle sets it)	`kerningBefore` は文字スタイルではなく行の先頭文字の設定です (text.setRangeStyle で設定します)
+@msg	`kinsokuType` must be "pushInFirst", "pushOutFirst" or "pushOutOnly"	`kinsokuType` には "pushInFirst"、"pushOutFirst"、"pushOutOnly" のいずれかを指定してください
+@msg	`leader` must be a string	`leader` には文字列を指定してください
+@msg	`max` must be 1 to {MAX_SUGGESTIONS}	`max` には 1～{MAX_SUGGESTIONS} を指定してください
+@msg	`name` must be a name that is not empty	`name` には空でない名前を指定してください
+@msg	`name` must not be empty	`name` を空にすることはできません
+@msg	`origin` must be [x, y] in points	`origin` にはポイント単位の [x, y] を指定してください
+@msg	`picks` must be an array (got {v})	`picks` には配列を指定してください (指定値: {v})
+@msg	`picks` must hold 1 to {MAX_PICKS} picks (got {_1})	`picks` には 1～{MAX_PICKS} 個の指定が必要です (指定数: {_1})
+@msg	`points` must hold from 2 to 100000 points	`points` には 2～100000 個の点が必要です
+@msg	`radius` must be 0 or more	`radius` には 0 以上を指定してください
+@msg	`rect` must be [x, y, width, height]	`rect` には [x, y, width, height] を指定してください
+@msg	`rect` must be [x0, y0, x1, y1] (got {r})	`rect` には [x0, y0, x1, y1] を指定してください (指定値: {r})
+@msg	`replace` must be a string	`replace` には文字列を指定してください
+@msg	`rows` must be lists of numbers or nulls, not {r}	`rows` には数値または null のリストを指定してください ({r} は指定できません)
+@msg	`scale` must be a number from 0.001 to 1000	`scale` には 0.001 から 1000 までの数値を指定してください
+@msg	`scope.{key}` must be a non-empty array	`scope.{key}` には空でない配列を指定してください
+@msg	`scope` must be "document", {artboards} or {layers}	`scope` には "document"、{artboards}、{layers} のいずれかを指定してください
+@msg	`side` must be "left", "right", "top" or "bottom"	`side` には "left"、"right"、"top"、"bottom" のいずれかを指定してください
+@msg	`side` places the artboard: leave out x, y, width and height	`side` でアートボードを配置します: x、y、width、height は省略してください
+@msg	`source` is the only path in series group `target`	`source` は系列グループ `target` の唯一のパスです
+@msg	`spacing` makes more than {MAX_COUNT} lines across the box	`spacing` ではボックス全体のラインが {MAX_COUNT} 本を超えます
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` には 0 より大きく {MAX_DISTANCE} pt 以下の値を指定してください
+@msg	`target` must be an object of the same Objects on Path group as `member`	`target` には `member` と同じパス上のオブジェクトグループのオブジェクトを指定してください
+@msg	`tolerance` must be from 0 to 100 pt	`tolerance` には 0～100 pt の値を指定してください
+@msg	`version` must be 0 or {_1}	`version` には 0 または {_1} を指定してください
+@msg	`version` must be 0 or {newest}	`version` には 0 または {newest} を指定してください
+@msg	`warichuAlign` must be one of {_1}	`warichuAlign` には {_1} のいずれかを指定してください
+@msg	`warichuLines` must be a whole number from {_1} to {_2}	`warichuLines` には {_1} から {_2} までの整数を指定してください
+@msg	`weight` must be from 0.01 to 1000 pt	`weight` には 0.01～1000 pt の値を指定してください
+@msg	`weights` must be a list of {_1} numbers, one per row (got {v})	`weights` には行ごとに 1 つずつ、{_1} 個の数値のリストを指定してください (指定値: {v})
+@msg	`xml` must be a string	`xml` には文字列を指定してください
+@msg	`{KEY}` entry {n} gives the paragraph at byte {start} of {_1} other indents than an entry before it	`{KEY}` のエントリ {n} は、{_1} のバイト {start} の段落に、前のエントリとは異なるインデントを指定しています
+@msg	`{KEY}` entry {n} must be an object	`{KEY}` のエントリ {n} にはオブジェクトを指定してください
+@msg	`{KEY}` entry {n} sets neither `leftIndent` nor `firstLineIndent`	`{KEY}` のエントリ {n} は `leftIndent` も `firstLineIndent` も設定していません
+@msg	`{KEY}` entry {n}: `id` must be an object id	`{KEY}` のエントリ {n}: `id` にはオブジェクト ID を指定してください
+@msg	`{KEY}` entry {n}: `start` must be a byte offset	`{KEY}` のエントリ {n}: `start` にはバイトオフセットを指定してください
+@msg	`{KEY}` entry {n}: `{k}` must be a number from -{MAX_PARA} to {MAX_PARA} pt	`{KEY}` のエントリ {n}: `{k}` には -{MAX_PARA}～{MAX_PARA} pt の数値を指定してください
+@msg	`{KEY}` entry {n}: no paragraph of {_1} starts at byte {start}	`{KEY}` のエントリ {n}: {_1} にはバイト {start} から始まる段落がありません
+@msg	`{KEY}` entry {n}: unknown key `{k}`	`{KEY}` のエントリ {n}: `{k}` は不明なキーです
+@msg	`{KEY}` entry {n}: {_1} is not a type object	`{KEY}` のエントリ {n}: {_1} はテキストオブジェクトではありません
+@msg	`{KEY}` is empty	`{KEY}` が空です
+@msg	`{KEY}` must be a list	`{KEY}` にはリストを指定してください
+@msg	`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {_1})	`{KEY}` に指定できるエントリは最大 {MAX_PARAGRAPH_INDENTS} 個です (指定数: {_1})
+@msg	`{KEY}` takes no `{other}` beside it	`{KEY}` と一緒に `{other}` は指定できません
+@msg	`{base}` is larger than {_1} MB	`{base}` は {_1} MB を超えています
+@msg	`{base}` is not in the DCS file's folder	`{base}` は DCS ファイルのフォルダーにありません
+@msg	`{key}` holds more than {MAX_EDIT_WORDS} words	`{key}` の単語が {MAX_EDIT_WORDS} 個を超えています
+@msg	`{key}` must be 0 or more	`{key}` には 0 以上を指定してください
+@msg	`{key}` must be [x, y] numbers	`{key}` には数値の [x, y] を指定してください
+@msg	`{key}` must be a list of words	`{key}` には単語のリストを指定してください
+@msg	`{key}` must be a list, not {v}	`{key}` にはリストを指定してください ({v} は指定できません)
+@msg	`{key}` must be a number or null, not {v}	`{key}` には数値または null を指定してください ({v} は指定できません)
+@msg	`{key}` must be a whole number of 0 or more	`{key}` には 0 以上の整数を指定してください
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` には 0～{MAX_DISTANCE} pt の値を指定してください
+@msg	`{key}` must be from {lo} to {hi}, not {v}	`{key}` には {lo}～{hi} の値を指定してください ({v} は指定できません)
+@msg	`{key}` must be one of auto, always, never	`{key}` には auto、always、never のいずれかを指定してください
+@msg	`{key}` must be one of miter, round, bevel	`{key}` には miter、round、bevel のいずれかを指定してください
+@msg	`{key}` must be one word of at most {_1} characters	`{key}` には {_1} 文字以内の 1 語を指定してください
+@msg	`{key}` must hold single words of at most {_1} characters	`{key}` には {_1} 文字以内の単語を 1 語ずつ指定してください
+@msg	`{key}` must name an object attached to the path of an Objects on Path group	`{key}` にはパス上のオブジェクトグループのパスに配置されたオブジェクトを指定してください
+@msg	`{key}` names an object that is hidden or locked	`{key}` に指定されたオブジェクトは非表示またはロックされています
+@msg	`{name}` is a file of its own, which can only be found next to the DCS file's path	`{name}` は独立したファイルで、DCS ファイルのパスと同じ場所でのみ見つけられます
+@msg	`{name}`: {_1}: {e}	`{name}`: {_1}: {e}
+@msg	`{u}` is no Unicode character	`{u}` は Unicode 文字ではありません
+@msg	`{word}` isn't in the custom dictionary	`{word}` はカスタム辞書にありません
+@msg	a CMap has too many mappings	CMap のマッピングが多すぎます
+@msg	a \\u escape needs four hexadecimal digits	\\u エスケープには 4 桁の 16 進数が必要です
+@msg	a comma in an XPath expression must separate function arguments	XPath 式のカンマは関数の引数を区切るものでなければなりません
+@msg	a document holds at most {_1} SVG filters	ドキュメントに含められる SVG フィルターは最大 {_1} 個です
+@msg	a document with unsaved changes has no recovery copy	未保存の変更があるドキュメントに復帰用のコピーがありません
+@msg	a font's data is too large	フォントのデータが大きすぎます
+@msg	a font's subroutines are too large	フォントのサブルーチンが大きすぎます
+@msg	a function declaration without a name	名前のない関数宣言です
+@msg	a host value has too many entries	ホストの値のエントリが多すぎます
+@msg	a host value is nested too deep	ホストの値の入れ子が深すぎます
+@msg	a namespace declaration uses a reserved prefix or URI	名前空間の宣言で予約済みのプレフィックスまたは URI が使用されています
+@msg	a namespace qualifier is undefined	名前空間の修飾子が定義されていません
+@msg	a namespace with an empty URI cannot have a prefix	URI が空の名前空間にはプレフィックスを付けられません
+@msg	a number has no digits	数値に数字がありません
+@msg	a number's exponent has no digits	数値の指数部に数字がありません
+@msg	a number's fraction has no digits	数値の小数部に数字がありません
+@msg	a property descriptor cannot have both a value or writable and a get or set	プロパティ記述子に value または writable と get または set の両方を指定することはできません
+@msg	a property descriptor must be an object	プロパティ記述子にはオブジェクトを指定してください
+@msg	a property's {name} must be a function or undefined	プロパティの {name} には関数または undefined を指定してください
+@msg	a stream in it would decode to more than 256 MB, or its decode parameters can't be applied	含まれるストリームをデコードすると 256 MB を超えるか、デコードパラメーターを適用できません
+@msg	a string holds a control character	文字列に制御文字が含まれています
+@msg	a string holds an escape sequence JSON does not have	文字列に JSON にないエスケープシーケンスが含まれています
+@msg	a string is not closed	文字列が閉じていません
+@msg	an SVG filter is named by its id: give `xml` with `name`	SVG フィルターの名前はその ID です: `xml` と `name` を指定してください
+@msg	an XML element has two attributes with the same name	XML 要素に同じ名前の属性が 2 つあります
+@msg	an XML value cannot be inserted into itself or its descendants	XML 値をそれ自身またはその子孫に挿入することはできません
+@msg	an XML value's children cannot be assigned by position	XML 値の子を位置で代入することはできません
+@msg	an XML value's children cannot be deleted by position	XML 値の子を位置で削除することはできません
+@msg	an XMLList converts to XML only when it has one item	XMLList を XML に変換できるのは、項目が 1 つの場合だけです
+@msg	an XPath node test is missing	XPath のノードテストがありません
+@msg	an XPath operand is missing	XPath のオペランドがありません
+@msg	an XPath operator is missing	XPath の演算子がありません
+@msg	an XPath predicate or step cannot follow here	ここに XPath の述語やステップを続けることはできません
+@msg	an XPath predicate or step follows a value that is not a node-set	XPath の述語またはステップがノードセットではない値の後にあります
+@msg	an XPath step is missing	XPath のステップがありません
+@msg	an image couldn't be decoded and is missing from the picture	画像をデコードできなかったため、図に含まれていません
+@msg	an image of {w} × {h} pixels is too large to convert (at most {_1} pixels)	{w} × {h} ピクセルの画像は大きすぎて変換できません (最大 {_1} ピクセル)
+@msg	apply was called on a value that is not a function	apply が関数ではない値に対して呼び出されました
+@msg	area type in a thread cannot use Dynamic Text: {frames}	スレッド内のエリア内文字ではダイナミックテキストを使用できません: {frames}
+@msg	array literal too long	配列リテラルが長すぎます
+@msg	assignment to a constant binding	定数バインディングへの代入です
+@msg	at least one row that isn't excluded needs a weight above 0	除外されていない行の少なくとも 1 つに 0 より大きいウェイトが必要です
+@msg	bad point {v}: expected [x, y]	点 {v} が正しくありません: [x, y] を指定してください
+@msg	blend must be a mode name	blend には描画モードの名前を指定してください
+@msg	both sides of an XPath | must select nodes	XPath の | の両辺でノードを選択する必要があります
+@msg	canceled	キャンセルしました
+@msg	cannot convert the object to a primitive value	オブジェクトをプリミティブ値に変換できません
+@msg	cannot convert undefined or null to an object	undefined または null をオブジェクトに変換できません
+@msg	character dimensions cannot be represented with the source text transform	文字の寸法をソースのテキスト変形で表すことができません
+@msg	character dimensions cannot be represented with the target text transform	文字の寸法をターゲットのテキスト変形で表すことができません
+@msg	continuation must be an array of path chunks	continuation にはパスチャンクの配列を指定してください
+@msg	continuation requires points	continuation には点が必要です
+@msg	each path chunk must contain 1 to 4096 points	各パスチャンクには 1～4096 個の点が必要です
+@msg	each pick is {{at: [x, y]}} or {{rect: [x0, y0, x1, y1]}} (got {v})	各指定は {{at: [x, y]}} または {{rect: [x0, y0, x1, y1]}} です (指定値: {v})
+@msg	each weight must be a number of 0 or more (got {v})	各ウェイトには 0 以上の数値を指定してください (指定値: {v})
+@msg	finally table {t} out of range	finally テーブル {t} が範囲外です
+@msg	flags cannot be given with a RegExp object	RegExp オブジェクトと一緒にフラグを指定することはできません
+@msg	function declaration index out of range	関数宣言のインデックスが範囲外です
+@msg	give `char`, `text`, `code` or `unicode`	`char`、`text`、`code`、`unicode` のいずれかを指定してください
+@msg	give `count` or `spacing`, not both	`count` または `spacing` のどちらか一方を指定してください
+@msg	give `name`, an SVG filter's name	SVG フィルターの名前を `name` に指定してください
+@msg	give `path`, an SVG file, or `svg`, SVG text	SVG ファイルを `path` に、または SVG テキストを `svg` に指定してください
+@msg	give `xml`, one SVG <filter> element	SVG の <filter> 要素を 1 つ `xml` に指定してください
+@msg	give exactly one of `at`, `rect` and `points`	`at`、`rect`、`points` のうち 1 つだけを指定してください
+@msg	give exactly one of `path`, `data` and `dataBase64`	`path`、`data`、`dataBase64` のうち 1 つだけを指定してください
+@msg	give index or indexes, not both	index または indexes のどちらか一方を指定してください
+@msg	give one <filter> element	<filter> 要素を 1 つ指定してください
+@msg	give opacity or blend	opacity または blend を指定してください
+@msg	handler at {_1} expects {_2} values but its range starts with {d}	{_1} のハンドラーは {_2} 個の値を想定していますが、範囲の開始時は {d} 個です
+@msg	handler depth too large	ハンドラーの深さが大きすぎます
+@msg	handler range {_1}..{_2} out of range	ハンドラーの範囲 {_1}..{_2} が範囲外です
+@msg	hiddenLayers must be true or false	hiddenLayers には true または false を指定してください
+@msg	hvcC	hvcC
+@msg	images in a spot ink whose samples couldn't be read were imported in RGB	サンプルを読み取れなかった特色インキの画像は RGB で読み込みました
+@msg	images past the most pixels one file may hold were left out	1 つのファイルに含められる最大ピクセル数を超えた画像は除外しました
+@msg	images too large to read were left out	大きすぎて読み込めない画像は除外しました
+@msg	indexes may hold at most {MAX_GUIDE_INDEXES} entries	indexes に指定できるエントリは最大 {MAX_GUIDE_INDEXES} 個です
+@msg	indexes must be an array of guide indexes	indexes にはガイドのインデックスの配列を指定してください
+@msg	instruction out of range	命令が範囲外です
+@msg	instruction {pc} ({op}) pops below the stack	命令 {pc} ({op}) がスタックの底を超えて取り出しています
+@msg	instruction {pc} reached with stack depths {seen} and {d}	命令 {pc} にスタックの深さ {seen} と {d} で到達しました
+@msg	invalid array length	配列の長さが無効です
+@msg	invalid group	グループが無効です
+@msg	invalid object id {v}: expected a non-negative integer	オブジェクト ID {v} が無効です: 0 以上の整数を指定してください
+@msg	invalid regular expression flag '{_1}'	正規表現のフラグ '{_1}' が無効です
+@msg	invalid regular expression: {m}	正規表現が無効です: {m}
+@msg	invalid time value	時刻の値が無効です
+@msg	is a confirm's answer, whose `value` must be true or false	は confirm の回答で、`value` には true または false を指定してください
+@msg	is a prompt's answer, whose `value` must be a string or null	は prompt の回答で、`value` には文字列または null を指定してください
+@msg	is an alert's answer, whose `value` must be "ok"	は alert の回答で、`value` には "ok" を指定してください
+@msg	is longer than 16 KiB	が 16 KiB を超えています
+@msg	it draws its image through a clipping path	クリッピングパスを通して画像を描画しています
+@msg	it draws no image	画像を描画していません
+@msg	it is larger than {MAX_DICTIONARY_FILE_BYTES} bytes	{MAX_DICTIONARY_FILE_BYTES} バイトを超えています
+@msg	it isn't a file	ファイルではありません
+@msg	it names {_1} plates, and at most {MAX_PLATES} are read	{_1} 個の版が指定されていますが、読み込めるのは最大 {MAX_PLATES} 個です
+@msg	its art is too long or too detailed for a head	アートが長すぎるか細かすぎるため、矢印にできません
+@msg	its art paints nothing	アートが何も描画しません
+@msg	its image is too large to read	画像が大きすぎて読み込めません
+@msg	its plates are too large: more than {MAX_SAMPLES} pixels together	版が大きすぎます: 合計で {MAX_SAMPLES} ピクセルを超えています
+@msg	its plates are too large: {_1} plates of {w} × {h} pixels	版が大きすぎます: {w} × {h} ピクセルの版が {_1} 個あります
+@msg	its plates can't be kept together	版をまとめて保持できません
+@msg	its shapes could not be combined into one	シェイプを 1 つに結合できませんでした
+@msg	jump to {pc}, past the end	末尾を超えた {pc} へのジャンプです
+@msg	legacyNameEncoding must be one of {_1}	legacyNameEncoding には {_1} のいずれかを指定してください
+@msg	localize: the first argument must be a localization object or a string	localize: 最初の引数にはローカライズオブジェクトまたは文字列を指定してください
+@msg	missing `picks`	`picks` がありません
+@msg	missing `word`	`word` がありません
+@msg	must be an object with `kind` and `value`	には `kind` と `value` を持つオブジェクトを指定してください
+@msg	must have `kind` alert, confirm or prompt	の `kind` には alert、confirm、prompt のいずれかを指定してください
+@msg	must have exactly `kind` and `value`	には `kind` と `value` だけを指定してください
+@msg	needs a closing quote after the name	名前の後に閉じ引用符が必要です
+@msg	needs a name	名前が必要です
+@msg	needs a name of at most 64 bytes	64 バイト以内の名前が必要です
+@msg	needs a name of letters, digits and _, or a quoted name	文字、数字、_ からなる名前、または引用符で囲んだ名前が必要です
+@msg	needs a name without control characters	制御文字を含まない名前が必要です
+@msg	nesting too deep	入れ子が深すぎます
+@msg	no HP-GL format	HP-GL 形式はありません
+@msg	no New Document profile called `{shown}` ({_1})	`{shown}` という新規ドキュメントプロファイルはありません ({_1})
+@msg	no SVG filter at index {k}	インデックス {k} に SVG フィルターはありません
+@msg	no arrowheads file here	ここに矢印ファイルはありません
+@msg	no character has code {code}	コード {code} の文字はありません
+@msg	no custom arrowhead {name} (see stroke.arrowheads.list)	カスタム矢印 {name} はありません (stroke.arrowheads.list を参照)
+@msg	no file to open	開くファイルがありません
+@msg	no instructions	命令がありません
+@msg	no layer to rename	名前を変更するレイヤーがありません
+@msg	no random numbers ({e})	乱数を取得できません ({e})
+@msg	no selected or given object has a visible 3D effect	選択または指定したオブジェクトに、表示されている 3D 効果がありません
+@msg	no such artboard {v}	アートボード {v} はありません
+@msg	no symbol named `{_1}`	`{_1}` という名前のシンボルはありません
+@msg	node {_1} already has the text variable `{_2}`	ノード {_1} にはすでにテキスト変数 `{_2}` があります
+@msg	not a DCS file	DCS ファイルではありません
+@msg	not a RegExp object	RegExp オブジェクトではありません
+@msg	not a regular expression	正規表現ではありません
+@msg	not an action set: the text doesn't start with /version and a number	アクションセットではありません: テキストが /version と数値で始まっていません
+@msg	nothing to repeat	繰り返す対象がありません
+@msg	numbers out of order in {_1} quantifier	{_1} 量指定子の数値の順序が正しくありません
+@msg	object {_1} needs a 3D effect	オブジェクト {_1} には 3D 効果が必要です
+@msg	object {_1}: a hollow Extrude & Bevel has no caps: turn on Cap to map a graphic	オブジェクト {_1}: 中空の「押し出しとベベル」にはキャップがありません: グラフィックをマッピングするには「キャップ」をオンにしてください
+@msg	object {_1}: with a depth of 0 the object has one face: map its graphics onto the front	オブジェクト {_1}: 奥行きが 0 のオブジェクトは面が 1 つです: グラフィックは前面にマッピングしてください
+@msg	object {_1}: {_2}	オブジェクト {_1}: {_2}
+@msg	object {_1}: {e}	オブジェクト {_1}: {e}
+@msg	object {_1}: {name} at index {index} has no lighting presets; set its lights with effect.setParams	オブジェクト {_1}: インデックス {index} の {name} には照明プリセットがありません。ライトは effect.setParams で設定してください
+@msg	opacity must be a number	opacity には数値を指定してください
+@msg	operand too large	オペランドが大きすぎます
+@msg	order is a whole number from 0 to {others}, not `{v}`	order には 0 から {others} までの整数を指定してください (`{v}` は指定できません)
+@msg	path chunks must share their boundary point	パスの分割部分は境界点を共有している必要があります
+@msg	pdfCompatible: false needs the artboards to keep the editable artwork when useArtboards is false	pdfCompatible: false の場合、useArtboards が false のときは、編集可能なアートワークを保持するためにアートボードが必要です
+@msg	point x must be a number	点の x には数値を指定してください
+@msg	point y must be a number	点の y には数値を指定してください
+@msg	points must be [x,y] pairs	points には [x,y] の組を指定してください
+@msg	points must be finite canvas points	points にはキャンバス上の有限の点を指定してください
+@msg	range out of order in character class	文字クラス内の範囲の順序が正しくありません
+@msg	reduce of an empty array with no initial value	初期値のない空の配列に対する reduce です
+@msg	regular expression flag '{_1}' given twice	正規表現のフラグ '{_1}' が 2 回指定されています
+@msg	sampled text would exceed the canvas (coordinates out of range)	サンプリングしたテキストがキャンバスを超えます (座標が範囲外)
+@msg	select an SVG filter	SVG フィルターを選択してください
+@msg	select an object with a 3D effect	3D 効果のあるオブジェクトを選択してください
+@msg	select an object with a 3D effect, or give its id in ids	3D 効果のあるオブジェクトを選択するか、その ID を ids に指定してください
+@msg	select one layer, group or object to rename	名前を変更するレイヤー、グループ、オブジェクトのいずれかを 1 つ選択してください
+@msg	select the art to weed	カス取りするアートを選択してください
+@msg	select type on a path or area type	パス上文字またはエリア内文字を選択してください
+@msg	side is left or right, not `{v}`	side には left または right を指定してください (`{v}` は指定できません)
+@msg	source text transform is collapsed or unrepresentable	元のテキストの変形がつぶれているか、表現できません
+@msg	table must be true or false	table には true または false を指定してください
+@msg	takes one name	名前を 1 つ指定してください
+@msg	target text transform is collapsed or unrepresentable	対象のテキストの変形がつぶれているか、表現できません
+@msg	that makes too many pieces (at most 100000) or dash steps: simplify the dash pattern or make the dashes longer	分割数 (最大 100000) またはダッシュの段数が多くなりすぎます: 破線パターンを単純にするか、ダッシュを長くしてください
+@msg	the Layers panel is not shown	レイヤーパネルが表示されていません
+@msg	the Layers panel's search, filter or Show Layers Only hides its row	レイヤーパネルの検索、フィルター、「レイヤーのみを表示」のいずれかでその行が隠れています
+@msg	the Objects on Path group is hidden or locked	「パス上のオブジェクト」グループが非表示またはロックされています
+@msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	SVG ファイルが {MAX_IMPORT_BYTES} バイトを超えています
+@msg	the XML operation needs an XML or XMLList value	XML 操作には XML または XMLList の値が必要です
+@msg	the XPath expression does not evaluate to a node-set	XPath 式の評価結果がノードセットではありません
+@msg	the XPath expression ends early	XPath 式が途中で終わっています
+@msg	the XPath expression has an unmatched )	XPath 式に対応していない ) があります
+@msg	the XPath expression has an unmatched ]	XPath 式に対応していない ] があります
+@msg	the XPath expression has an unmatched closing bracket	XPath 式に対応していない閉じ括弧があります
+@msg	the XPath expression selects a namespace node, which is not an XML value	XPath 式が名前空間ノードを選択していますが、これは XML の値ではありません
+@msg	the XPath expression selects the root node, which is not an XML value	XPath 式がルートノードを選択していますが、これは XML の値ではありません
+@msg	the XPath function {name} needs a node-set	XPath 関数 {name} にはノードセットが必要です
+@msg	the XPath function {name} takes the wrong number of arguments	XPath 関数 {name} の引数の数が正しくありません
+@msg	the XPath name functions need a node-set	XPath の名前関数にはノードセットが必要です
+@msg	the XPath prefix {shown} is not bound to a namespace	XPath の接頭辞 {shown} は名前空間に結び付けられていません
+@msg	the XPath variable ${shown} is not bound	XPath 変数 ${shown} は束縛されていません
+@msg	the argument list is not an object	引数リストがオブジェクトではありません
+@msg	the artwork is too large for EPS: what follows 256 MB of PostScript was left out	アートワークが EPS には大きすぎます: PostScript の 256 MB より後の部分は除外しました
+@msg	the bitmaps hold more pixels than one file may	ビットマップのピクセル数が 1 つのファイルに含められる数を超えています
+@msg	the code runs past its last instruction	コードが最後の命令を超えて実行されます
+@msg	the curve tolerance must be from 0.01 to 10 points	曲線の許容値には 0.01 から 10 ポイントまでの値を指定してください
+@msg	the custom dictionary couldn't be saved to {_1}: {e}	カスタム辞書を {_1} に保存できませんでした: {e}
+@msg	the custom dictionary {_1} can't be read ({why}), so it is left as it is	カスタム辞書 {_1} を読み込めないため ({why})、そのまま残しました
+@msg	the document already has an SVG filter named {name}	ドキュメントにはすでに {name} という名前の SVG フィルターがあります
+@msg	the document has another SVG filter named {name}: use svgFilter.apply, or svgFilter.define with `replace` to edit it	ドキュメントには {name} という名前の別の SVG フィルターがあります: svgFilter.apply を使用するか、編集するには `replace` を付けて svgFilter.define を使用してください
+@msg	the document has no SVG filter named {name}	ドキュメントに {name} という名前の SVG フィルターはありません
+@msg	the document has no SVG filter named {r}	ドキュメントに {r} という名前の SVG フィルターはありません
+@msg	the document has no color swatches	ドキュメントにカラースウォッチがありません
+@msg	the document's swatches hold {_1} colors; the document reduction takes at most 255	ドキュメントのスウォッチには {_1} 色ありますが、ドキュメント減色で使用できるのは最大 255 色です
+@msg	the file isn't valid SVG: {e}	ファイルが有効な SVG ではありません: {e}
+@msg	the file names no plate	ファイルに版が指定されていません
+@msg	the function's prototype is not an object	関数のプロトタイプがオブジェクトではありません
+@msg	the guide is hidden or locked	ガイドが非表示またはロックされています
+@msg	the library's file is outside the read roots	ライブラリのファイルが読み取りルートの外にあります
+@msg	the line is too long, or the paths it passes too many, to check	線が長すぎるか、通過するパスが多すぎるため、確認できません
+@msg	the method needs an XML value	このメソッドには XML の値が必要です
+@msg	the paint is not a freeform gradient (apply one with paint.editGradient {kind})	ペイントがフリーフォームグラデーションではありません (paint.editGradient {kind} で適用してください)
+@msg	the parameters or body do not form one function	パラメーターまたは本体が 1 つの関数になっていません
+@msg	the pasted SVG filter {name} draws differently from the document's filter of that name, and no free name fits it	ペーストした SVG フィルター {name} は、ドキュメントにある同名のフィルターと描画結果が異なり、使用できる空き名もありません
+@msg	the paths are too many or too tangled to find where they cross	パスが多すぎるか複雑に絡み合っているため、交差する位置を見つけられません
+@msg	the pen table holds more than 255 pens	ペンテーブルに 255 本を超えるペンがあります
+@msg	the plates can't be kept	版を保持できません
+@msg	the position table does not match the instructions	位置テーブルが命令と一致しません
+@msg	the prompt's text is longer than {MAX_PROMPT_BYTES} bytes	prompt のテキストが {MAX_PROMPT_BYTES} バイトを超えています
+@msg	the radix must be between 2 and 36	基数には 2 から 36 までの値を指定してください
+@msg	the rectangle or line reaches too many paths to check	長方形または線にかかるパスが多すぎるため、確認できません
+@msg	the right side of 'in' is not an object	'in' の右辺がオブジェクトではありません
+@msg	the right side of 'instanceof' is not a function	'instanceof' の右辺が関数ではありません
+@msg	the selected art is nested more than {MAX_DEPTH} levels deep	選択したアートの入れ子が {MAX_DEPTH} 階層を超えています
+@msg	the selected art is too large to measure	選択したアートが大きすぎて計測できません
+@msg	the selection has no outlines to weed around	選択範囲に、カス取りの対象となるアウトラインがありません
+@msg	the value bind was called on is not a function	bind の呼び出し対象の値が関数ではありません
+@msg	the value is not a constructor	値がコンストラクターではありません
+@msg	the value is not a function	値が関数ではありません
+@msg	the value is not a valid XML name	値が有効な XML 名ではありません
+@msg	the value is not an XML attribute name	値が XML 属性名ではありません
+@msg	the value is not an XML name	値が XML 名ではありません
+@msg	the weeding lines cross the art's outlines too many times to measure; use fewer lines	カス取りラインがアートのアウトラインと交差する回数が多すぎて計測できません。ラインの数を減らしてください
+@msg	the weeding lines pass too close to too many outline segments to measure; use fewer lines or a smaller gap	カス取りラインに近すぎるアウトラインのセグメントが多すぎて計測できません。ラインの数を減らすか、間隔を小さくしてください
+@msg	the weeding lines would be more than {max_pieces} pieces	カス取りラインが {max_pieces} 個を超えます
+@msg	the {_1} plate lies outside the file	{_1} 版がファイルの外にあります
+@msg	this is a binary DXF file, which can't be read: save it from the CAD app as an ASCII DXF and open that	これはバイナリ DXF ファイルのため読み込めません: CAD アプリで ASCII DXF として保存し、そのファイルを開いてください
+@msg	this warp's points can't be edited: use Reset with Mesh first	このワープのポイントは編集できません: 先に「メッシュでリセット」を使用してください
+@msg	toExponential() digits must be between 0 and 20	toExponential() の桁数には 0 から 20 までの値を指定してください
+@msg	toFixed() digits must be between 0 and 20	toFixed() の桁数には 0 から 20 までの値を指定してください
+@msg	toISOString is not a function	toISOString は関数ではありません
+@msg	toPrecision() argument must be between 1 and 21	toPrecision() の引数には 1 から 21 までの値を指定してください
+@msg	toSource: a getter cannot be written as source	toSource: ゲッターはソースとして書き出せません
+@msg	toSource: an array with properties besides its elements, a property that is not enumerable or another prototype cannot be written as source	toSource: 要素以外のプロパティ、列挙可能でないプロパティ、または別のプロトタイプを持つ配列は、ソースとして書き出せません
+@msg	toSource: an object with a property that is not enumerable, or whose prototype is not Object.prototype, cannot be written as source	toSource: 列挙可能でないプロパティを持つオブジェクトや、プロトタイプが Object.prototype ではないオブジェクトは、ソースとして書き出せません
+@msg	toSource: the source is too long	toSource: ソースが長すぎます
+@msg	toSource: the value contains itself	toSource: 値が自身を含んでいます
+@msg	toSource: the value has too many entries	toSource: 値のエントリが多すぎます
+@msg	toSource: the value is nested too deep	toSource: 値の入れ子が深すぎます
+@msg	toString is not a function	toString は関数ではありません
+@msg	too many arguments	引数が多すぎます
+@msg	too many quantifiers	量指定子が多すぎます
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	`{t}` は不明な OpenType 機能です (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt。オフにするには先頭に - を付けます。swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt には、`salt=2` のように `tag=N` の形式で代替字形の番号を指定できます。N は 0 から {_1} まで)
+@msg	unknown dither `{d}` (diffusion, pattern, noise or none)	`{d}` は不明なディザの指定です (diffusion、pattern、noise、none のいずれか)
+@msg	unknown panel `{panel}`	`{panel}` は不明なパネルです
+@msg	unknown parameter `{key}`	`{key}` は不明なパラメーターです
+@msg	unknown parameter `{within}settings.{format}`; {why}	`{within}settings.{format}` は不明なパラメーターです。{why}
+@msg	unknown parameter `{within}{key}`; {why}	`{within}{key}` は不明なパラメーターです。{why}
+@msg	unknown reduction `{reduction}` (selective, perceptual, adaptive, web, gray, blackWhite, uniform or document)	`{reduction}` は不明な減色の指定です (selective、perceptual、adaptive、web、gray、blackWhite、uniform、document のいずれか)
+@msg	unmatched ')'	対応していない ')' があります
+@msg	unterminated character class	文字クラスが閉じられていません
+@msg	unterminated group	グループが閉じられていません
+@msg	wordGap and lineGap need area type in the selection	wordGap と lineGap を使用するには、選択範囲にエリア内文字が必要です
+@msg	xpath needs its variables as an object	xpath の変数にはオブジェクトを指定してください
+@msg	xpath needs the expression as a string	xpath の式には文字列を指定してください
+@msg	{GRANT_NOT_REMOVED}, and its settings and cache can't be moved back from {_1} to {_2}: {e}	{GRANT_NOT_REMOVED}。また、設定とキャッシュを {_1} から {_2} に戻せません: {e}
+@msg	{_1} is not a folder: {e}	{_1} はフォルダーではありません: {e}
+@msg	{_1}: {_2} and {_3} are in the way	{_1}: {_2} と {_3} が妨げになっています
+@msg	{code}: {0}	{code}: {0}
+@msg	{dir}: {e}	{dir}: {e}
+@msg	{file} names more than one linked JavaScript file	{file} にリンクされた JavaScript ファイルが複数指定されています
+@msg	{k}: a custom arrowhead's path needs an area to fill and at most {most} anchors and {most} subpaths, each anchor within {far} head units of its tip	{k}: カスタム矢印のパスには塗りつぶせる領域が必要で、アンカーは最大 {most} 個、サブパスは最大 {most} 個、各アンカーは先端から矢印単位で {far} 以内に収めてください
+@msg	{k}: bad custom arrowhead path: {e}	{k}: カスタム矢印のパスが正しくありません: {e}
+@msg	{k}: bad custom arrowhead: {e}	{k}: カスタム矢印が正しくありません: {e}
+@msg	{k}: custom must be a name	{k}: custom には名前を指定してください
+@msg	{name} must be a number	{name} には数値を指定してください
+@msg	{path}: copy takes a DCS file only when its plates are inside it; relink to it where its plate files are	{path}: copy で DCS ファイルを使用できるのは、版がファイル内にある場合だけです。版ファイルのある場所でそのファイルに再リンクしてください
+@msg	{path}: larger than {_1} MB	{path}: {_1} MB を超えています
+@msg	{shown} is not an XPath 1.0 function	{shown} は XPath 1.0 の関数ではありません
+@msg	{v} names no layer or sublayer	{v} に該当するレイヤーまたはサブレイヤーはありません
+@msg	{what} is not a function	{what} は関数ではありません
+@msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what} では 1 枚の用紙に {MAX_COPIES_PER_SHEET} 部を超えてプリントされます: 拡大してください
+@msg	{what} {i} out of range	{what} {i} が範囲外です
+@msg	A profile supports one Revolve effect. Edit the existing effect's options instead.	1 つのプロファイルに適用できる回転体効果は 1 つです。既存の効果のオプションを編集してください。
+@msg	Add Points at Crossings: a path went missing	交差点にポイントを追加: パスが見つからなくなりました
+@msg	CSS options: {e}	CSS オプション: {e}
+@msg	CSV has a header but no data rows	CSV にヘッダーはありますが、データ行がありません
+@msg	CSV holds NUL bytes: save it as UTF-8, or as UTF-16 with a byte-order mark	CSV に NUL バイトが含まれています: UTF-8、またはバイトオーダーマーク付きの UTF-16 で保存してください
+@msg	CSV is empty	CSV が空です
+@msg	CSV is larger than {MAX_CSV_BYTES} bytes	CSV が {MAX_CSV_BYTES} バイトを超えています
+@msg	CSV is not UTF-16	CSV が UTF-16 ではありません
+@msg	CSV is not UTF-8	CSV が UTF-8 ではありません
+@msg	CSV would be larger than {MAX_CSV_BYTES} bytes	CSV が {MAX_CSV_BYTES} バイトを超えます
+@msg	Choose original artwork, not a dimension's generated paths	寸法から生成されたパスではなく、元のアートワークを選択してください
+@msg	Contour: select paths or shapes	輪郭: パスまたはシェイプを選択してください
+@msg	Contour: the Offset Path effect is not available	輪郭: 「パスのオフセット」効果を使用できません
+@msg	Create needs fills, strokes or both	「作成」には塗り、線、またはその両方が必要です
+@msg	DXF options: {e}	DXF オプション: {e}
+@msg	DXF scale must be a positive number up to {_1}, not {scale}	DXF の拡大・縮小率には {_1} 以下の正の数値を指定してください ({scale} は指定できません)
+@msg	DXF {field} `{s}`: {allowed}	DXF {field} `{s}`: {allowed}
+@msg	Dimension is locked or hidden	寸法がロックされているか非表示です
+@msg	Dimension mode does not match its source	寸法のモードが元のオブジェクトと一致しません
+@msg	Draw Inside needs exactly one selected path, compound path or text	「内側描画」を使用するには、パス、複合パス、テキストのいずれかを 1 つだけ選択してください
+@msg	EPS Save writes all artwork: use document.export for selected-only EPS	EPS の保存ではすべてのアートワークを書き出します: 選択部分だけの EPS には document.export を使用してください
+@msg	EPS flattener: {e}	EPS の分割・統合: {e}
+@msg	EPS options: {e}	EPS オプション: {e}
+@msg	EPS {field} `{s}`: {allowed}	EPS {field} `{s}`: {allowed}
+@msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	「スクリーン用に書き出し」で書き出せるのは png、png8、jpg、webp、gif、tiff、bmp、tga、psd、svg、svgz、pdf、eps、ai、vectorcraft です
+@msg	Flare click coordinates must be finite numbers	フレアのクリック座標には有限の数値を指定してください
+@msg	HTML Text applies to object slices of type only	「HTML テキスト」を適用できるのは文字のオブジェクトスライスだけです
+@msg	Identify Objects By is XML ID: the name must be a valid XML ID (start with a letter, underscore or colon; no spaces)	「オブジェクトの識別方法」が XML ID になっています: 名前には有効な XML ID を指定してください (先頭は文字、アンダースコア、コロンのいずれか。スペースは使用できません)
+@msg	Image Trace failed: internal error: its thread stopped (please report this bug)	画像トレースに失敗しました: 内部エラー: スレッドが停止しました (このバグを報告してください)
+@msg	Image Trace failed: {e}	画像トレースに失敗しました: {e}
+@msg	Image Trace finished, but its document was closed	画像トレースは完了しましたが、ドキュメントが閉じられています
+@msg	Image Trace finished, but the image or its settings changed meanwhile: trace it again	画像トレースは完了しましたが、その間に画像または設定が変更されました: もう一度トレースしてください
+@msg	Invalid dimension offset	寸法のオフセットが無効です
+@msg	Invalid point	点が無効です
+@msg	Join: a subpath went missing	連結: サブパスが見つからなくなりました
+@msg	Lock Workspace is not available in VectorCraft	「ワークスペースをロック」は VectorCraft では使用できません
+@msg	Move Panel to New Window is not available: floating panels stay in the main window	「パネルを新規ウィンドウに移動」は使用できません: フローティングパネルはメインウィンドウ内に表示されます
+@msg	Offset Path: the path is too complex to offset	パスのオフセット: パスが複雑すぎてオフセットできません
+@msg	Offset Path: {e}	パスのオフセット: {e}
+@msg	PDF content is incomplete or exceeds the reader's limits; no document was imported	PDF の内容が不完全か、読み込み機能の上限を超えています。ドキュメントは読み込まれませんでした
+@msg	PDF flattener: {e}	PDF の分割・統合: {e}
+@msg	PDF options: {e}	PDF オプション: {e}
+@msg	Recolor Artwork is no longer open	「アートワークを再配色」はすでに閉じられています
+@msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	SVG が UTF-8、UTF-16、ISO 8859-1 のいずれでもありません
+@msg	Save writes one artboard: name one, or export several with document.export	保存で書き出せるアートボードは 1 つです: 1 つ指定するか、複数の場合は document.export で書き出してください
+@msg	Select a dimension first	先に寸法を選択してください
+@msg	Select dimensions to update	更新する寸法を選択してください
+@msg	Select only dimensions	寸法だけを選択してください
+@msg	Select two or more objects, or a group	2 つ以上のオブジェクト、またはグループを選択してください
+@msg	Shaper needs 1–64 source paths	Shaper には 1～64 個の元パスが必要です
+@msg	Switch x/y is for scatter graphs	「X/Y を入れ替え」は散布図用です
+@msg	Text options: {e}	テキストオプション: {e}
+@msg	`align` is start, center or end	`align` には start、center、end のいずれかを指定してください
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` には [subpath, anchor] の組の配列を指定してください
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` にはアンカーのインデックス (0, 1, 2…) を指定してください ({k} は指定できません)
+@msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` にはアンカーのインデックス (0, 1, 2…) を指定してください ({v} は指定できません)
+@msg	`artboards` must be a list of artboard indices	`artboards` にはアートボードのインデックスのリストを指定してください
+@msg	`asset` is the asset id (see assets.list)	`asset` にはアセット ID を指定してください (assets.list を参照)
+@msg	`at` must be a byte offset	`at` にはバイトオフセットを指定してください
+@msg	`autoLeading` must be a number	`autoLeading` には数値を指定してください
+@msg	`background` must be "", "matte" or #rrggbb	`background` には ""、"matte"、#rrggbb のいずれかを指定してください
+@msg	`burasagari` must be "none", "standard" or "forced"	`burasagari` には "none"、"standard"、"forced" のいずれかを指定してください
+@msg	`center` must be [x, y]	`center` には [x, y] を指定してください
+@msg	`charAlign` must be "romanBaseline", "emBoxTop", "emBoxCenter", "emBoxBottom", "icfTop" or "icfBottom"	`charAlign` には "romanBaseline"、"emBoxTop"、"emBoxCenter"、"emBoxBottom"、"icfTop"、"icfBottom" のいずれかを指定してください
+@msg	`charDirection` must be "default", "leftToRight" or "rightToLeft"	`charDirection` には "default"、"leftToRight"、"rightToLeft" のいずれかを指定してください
+@msg	`clearStroke` requires `stroke: false`, `ids: []` and no `stop`	`clearStroke` には `stroke: false` と `ids: []` が必要で、`stop` は指定できません
+@msg	`clear` must be a list of type object ids, not {v}	`clear` には文字オブジェクトの ID のリストを指定してください ({v} は指定できません)
+@msg	`clear` must list type objects; {_1} is not one	`clear` には文字オブジェクトを指定してください。{_1} は文字オブジェクトではありません
+@msg	`clear` must not list `id`	`clear` に `id` を含めることはできません
+@msg	`color` needs a `rule` to make the theme from	`color` には、テーマの作成に使用する `rule` が必要です
+@msg	`colors` is empty	`colors` が空です
+@msg	`columnType` is vertical, uniform, repeating or sliding	`columnType` には vertical、uniform、repeating、sliding のいずれかを指定してください
+@msg	`columns` must be a whole number 1..50	`columns` には 1..50 の整数を指定してください
+@msg	`commands` must not be empty	`commands` を空にすることはできません
+@msg	`contents` goes with `to`	`contents` は `to` と一緒に指定してください
+@msg	`corners` must be sharp, round or square, not `{other}`	`corners` には sharp、round、square のいずれかを指定してください (`{other}` は指定できません)
+@msg	`corners` must list anchor indices (0, 1, 2…), not {v}	`corners` にはアンカーのインデックス (0, 1, 2…) を指定してください ({v} は指定できません)
+@msg	`count` must be a whole number from 1 to 100	`count` には 1 から 100 までの整数を指定してください
+@msg	`dataBase64` is larger than the module limit	`dataBase64` がモジュールの上限を超えています
+@msg	`dataBase64` is not valid base64	`dataBase64` が有効な base64 ではありません
+@msg	`defaultsOnly` cannot be combined with `ids`, `reverse` or `append`	`defaultsOnly` は `ids`、`reverse`、`append` と同時に使用できません
+@msg	`depth` and `childLimit` slice the summary: pass `summary: true`	`depth` と `childLimit` はサマリーを絞り込みます: `summary: true` を指定してください
+@msg	`design` is a design name, or null for plain columns	`design` にはデザイン名を指定します。通常の棒にするには null を指定します
+@msg	`design` is a design name, or null for the default marker	`design` にはデザイン名を指定します。初期設定のマーカーにするには null を指定します
+@msg	`destinationFolder` is required when destination is `folder`	destination が `folder` の場合は `destinationFolder` が必要です
+@msg	`destination` must be `none`, `saveAndClose` or `folder`	`destination` には `none`、`saveAndClose`、`folder` のいずれかを指定してください
+@msg	`diameter` must be from 0.1 to 2500 pt	`diameter` には 0.1 から 2500 pt までの値を指定してください
+@msg	`digits` must be one of {_1}	`digits` には {_1} のいずれかを指定してください
+@msg	`dimImages` is a percentage or false	`dimImages` にはパーセント値または false を指定してください
+@msg	`direction` must be "auto", "leftToRight" or "rightToLeft"	`direction` には "auto"、"leftToRight"、"rightToLeft" のいずれかを指定してください
+@msg	`each` is the value one design stands for, more than 0	`each` にはデザイン 1 つが表す値を 0 より大きい数で指定してください
+@msg	`end` must be "start" or "end"	`end` には "start" または "end" を指定してください
+@msg	`ends` applies to joining exactly two paths	`ends` を使用できるのは、ちょうど 2 つのパスを連結する場合だけです
+@msg	`event` must be one of {_1}	`event` には {_1} のいずれかを指定してください
+@msg	`every` must be "all", "odd" or "even", not {v}	`every` には "all"、"odd"、"even" のいずれかを指定してください ({v} は指定できません)
+@msg	`expand` must be true or false	`expand` には true または false を指定してください
+@msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` には、直前の text.findFontFiles の検索で見つかったフォントファイルのパスを 1 ～ 1000 個指定してください
+@msg	`folder` must be an absolute folder path	`folder` にはフォルダーの絶対パスを指定してください
+@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` には、{"wght"} のような軸タグと値のオブジェクトを指定してください
+@msg	`format` must be a string	`format` には文字列を指定してください
+@msg	`format` must be one of {_1}	`format` には {_1} のいずれかを指定してください
+@msg	`fractions` is chop or scale	`fractions` には chop または scale を指定してください
+@msg	`from` and `to` must differ	`from` と `to` には異なる値を指定してください
+@msg	`from` has an empty frame	`from` に空のフレームがあります
+@msg	`from` must be a non-negative integer	`from` には 0 以上の整数を指定してください
+@msg	`from` must be area type or type on a path	`from` にはエリア内文字またはパス上文字を指定してください
+@msg	`gid` must be a glyph id, not {v}	`gid` にはグリフ ID を指定してください ({v} は指定できません)
+@msg	`glyphAlternate` belongs to one character, not to a character style (text.setGlyphAlternate sets it)	`glyphAlternate` は 1 つの文字に設定するもので、文字スタイルには設定できません (text.setGlyphAlternate で設定します)
+@msg	`guide` must be a guide index (guide.list)	`guide` にはガイドのインデックスを指定してください (guide.list)
+@msg	`hAlign` must be default, left, center or right	`hAlign` には default、left、center、right のいずれかを指定してください
+@msg	`id` must be a node id	`id` にはノード ID を指定してください
+@msg	`id` must be an object id, not {v}	`id` にはオブジェクト ID を指定してください ({v} は指定できません)
+@msg	`ids` must name Objects on Path groups or objects in them	`ids` には「パス上のオブジェクト」グループ、またはその中のオブジェクトを指定してください
+@msg	`ids` takes at most {MAX_INSPECT_IDS} ids	`ids` に指定できる ID は最大 {MAX_INSPECT_IDS} 個です
+@msg	`imageMap` must be none, rectangle or polygon	`imageMap` には none、rectangle、polygon のいずれかを指定してください
+@msg	`includeArtboardFill` must be true or false	`includeArtboardFill` には true または false を指定してください
+@msg	`includeSubdirs` must be true or false	`includeSubdirs` には true または false を指定してください
+@msg	`index` must be a point index	`index` にはポイントのインデックスを指定してください
+@msg	`index` must be a whole number or null	`index` には整数または null を指定してください
+@msg	`indices` must be a non-empty array of item indices	`indices` には項目のインデックスを 1 つ以上含む配列を指定してください
+@msg	`items` is a list of {kind, item}	`items` には {kind, item} のリストを指定してください
+@msg	`items` is empty	`items` が空です
+@msg	`items` must be a list of {id, points}	`items` には {id, points} のリストを指定してください
+@msg	`items` must be a list of {{id, anchors?}}, not {v}	`items` には {{id, anchors?}} のリストを指定してください ({v} は指定できません)
+@msg	`items` must be an array of {id, anchors}	`items` には {id, anchors} の配列を指定してください
+@msg	`items` must be an array of {{id, corners?}}, not {v}	`items` には {{id, corners?}} の配列を指定してください ({v} は指定できません)
+@msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida` には "none"、"short"、"medium"、"long"、"stylistic" のいずれかを指定してください
+@msg	`kind` is one of {_1}	`kind` には {_1} のいずれかを指定してください
+@msg	`kind` must be "round", "invertedRound" or "chamfer", not {v}	`kind` には "round"、"invertedRound"、"chamfer" のいずれかを指定してください ({v} は指定できません)
+@msg	`kind` must be `text`, `visibility`, `image` or `graph`	`kind` には `text`、`visibility`、`image`、`graph` のいずれかを指定してください
+@msg	`kind` must be a string	`kind` には文字列を指定してください
+@msg	`kind` must be image, noImage or htmlText	`kind` には image、noImage、htmlText のいずれかを指定してください
+@msg	`kinsoku` must be "none", "hard" or "soft"	`kinsoku` には "none"、"hard"、"soft" のいずれかを指定してください
+@msg	`label` must be a non-empty name of at most 200 characters	`label` には 200 文字以内の空でない名前を指定してください
+@msg	`language` must be a language name or tag, such as "Turkish" or "tr"	`language` には、"Turkish" や "tr" のような言語名またはタグを指定してください
+@msg	`leadingModel` must be "romanBaseline" or "emBoxTop"	`leadingModel` には "romanBaseline" または "emBoxTop" を指定してください
+@msg	`leading` must be from 0.1 to 5000, or null for Auto	`leading` には 0.1 から 5000 までの値を指定してください。自動にするには null を指定します
+@msg	`length` must be a number of at most 1000000 pt either way	`length` には正負いずれの方向でも 1000000 pt 以内の数値を指定してください
+@msg	`line` must be true or false	`line` には true または false を指定してください
+@msg	`minAngle` ({min_angle}°) can't be more than `maxAngle` ({max_angle}°)	`minAngle` ({min_angle}°) を `maxAngle` ({max_angle}°) より大きくすることはできません
+@msg	`mode` must be "handles", "straight" or "smooth"	`mode` には "handles"、"straight"、"smooth" のいずれかを指定してください
+@msg	`mode` must be "straight", "bezier" or "arc"	`mode` には "straight"、"bezier"、"arc" のいずれかを指定してください
+@msg	`mode` must be one of {_1}	`mode` には {_1} のいずれかを指定してください
+@msg	`mojikumi` must be "none", "yakumonoHankaku", "gyomatsuYakumonoHankaku", "gyomatsuYakumonoZenkaku", "yakumonoZenkaku" or "lineEndHalf"	`mojikumi` には "none"、"yakumonoHankaku"、"gyomatsuYakumonoHankaku"、"gyomatsuYakumonoZenkaku"、"yakumonoZenkaku"、"lineEndHalf" のいずれかを指定してください
+@msg	`names` is a list of preset names	`names` にはプリセット名のリストを指定してください
+@msg	`names` lists preset names	`names` にはプリセット名を指定してください
+@msg	`names` must be a list of names	`names` には名前のリストを指定してください
+@msg	`names` must be a list of swatch names	`names` にはスウォッチ名のリストを指定してください
+@msg	`names` must be an array of style names	`names` にはスタイル名の配列を指定してください
+@msg	`new` is a design name, or true	`new` にはデザイン名または true を指定してください
+@msg	`path` must be a folder	`path` にはフォルダーを指定してください
+@msg	`path` must be a path object	`path` にはパスオブジェクトを指定してください
+@msg	`pivot` must be a whole number from 0 to 8	`pivot` には 0 から 8 までの整数を指定してください
+@msg	`points` must be a list of [x, y] points	`points` には [x, y] の点のリストを指定してください
+@msg	`points` must be a list of point indexes	`points` にはポイントのインデックスのリストを指定してください
+@msg	`points` must be an array of point indices	`points` にはポイントのインデックスの配列を指定してください
+@msg	`points` must be point indexes	`points` にはポイントのインデックスを指定してください
+@msg	`port` must be "in" or "out"	`port` には "in" または "out" を指定してください
+@msg	`position` is above or below	`position` には above または below を指定してください
+@msg	`preset` must be a string	`preset` には文字列を指定してください
+@msg	`ratio` must be from 0.1 to 0.5	`ratio` には 0.1 から 0.5 までの値を指定してください
+@msg	`rect` must be [x, y, width, height] with a positive size	`rect` には、サイズが正の [x, y, width, height] を指定してください
+@msg	`relation` must be overlap, inside or outside	`relation` には overlap、inside、outside のいずれかを指定してください
+@msg	`reversed` must be true or false	`reversed` には true または false を指定してください
+@msg	`rotate` must be a finite number	`rotate` には有限の数値を指定してください
+@msg	`rule` must be nonZero or evenOdd	`rule` には nonZero または evenOdd を指定してください
+@msg	`scale` must be a number in (0, 100]	`scale` には (0, 100] の範囲の数値を指定してください
+@msg	`scope` must be "selection" or "document", not {other}	`scope` には "selection" または "document" を指定してください ({other} は指定できません)
+@msg	`script` must be a string	`script` には文字列を指定してください
+@msg	`seriesIndexes` is a non-empty list of series indexes	`seriesIndexes` には系列のインデックスを 1 つ以上含むリストを指定してください
+@msg	`seriesIndexes` needs a `type` or a `valueAxis`	`seriesIndexes` には `type` または `valueAxis` が必要です
+@msg	`shift` must be a number of points	`shift` にはポイント単位の数値を指定してください
+@msg	`showCenter` must be true or false	`showCenter` には true または false を指定してください
+@msg	`singleWordJustification` must be "fullJustify", "alignLeft", "alignCenter" or "alignRight"	`singleWordJustification` には "fullJustify"、"alignLeft"、"alignCenter"、"alignRight" のいずれかを指定してください
+@msg	`size` is a percentage of the base text's size, 1 to 100	`size` には、親文字のサイズに対する割合を 1 から 100 までのパーセント値で指定してください
+@msg	`source` and `target` are the same object	`source` と `target` が同じオブジェクトです
+@msg	`source` must be `folder` or `datasets`	`source` には `folder` または `datasets` を指定してください
+@msg	`spacing` must be a number	`spacing` には数値を指定してください
+@msg	`spacing` must be a number of points, 0 or more, or "auto"	`spacing` には 0 以上のポイント単位の数値、または "auto" を指定してください
+@msg	`start` must be a finite number	`start` には有限の数値を指定してください
+@msg	`starts` must be an array of anchor indices (or nulls)	`starts` にはアンカーのインデックス (または null) の配列を指定してください
+@msg	`status` must be linked, embedded, missing or modified, or a list of them	`status` には linked、embedded、missing、modified のいずれか、またはそのリストを指定してください
+@msg	`stop` must be a stop index	`stop` には分岐点のインデックスを指定してください
+@msg	`story` styles the whole story: give no `start` or `end`	`story` はストーリー全体にスタイルを設定します: `start` と `end` は指定しないでください
+@msg	`story` takes the whole story: give no `start` or `end`	`story` はストーリー全体を対象にします: `start` と `end` は指定しないでください
+@msg	`strokeMode` applies to strokes (stroke: true)	`strokeMode` は線に適用されます (stroke: true)
+@msg	`style` must be roman or japanese	`style` には roman または japanese を指定してください
+@msg	`subpaths` must be two integer indices	`subpaths` には整数のインデックスを 2 つ指定してください
+@msg	`symbol` must be a symbol name	`symbol` にはシンボル名を指定してください
+@msg	`target` must be "object" or "contents", not {v}	`target` には "object" または "contents" を指定してください ({v} は指定できません)
+@msg	`tint` applies to global and spot colours	`tint` はグローバルカラーと特色に適用されます
+@msg	`tint` goes with a global or spot `swatch`	`tint` はグローバルまたは特色の `swatch` と一緒に指定してください
+@msg	`tint` must be a number (%)	`tint` には数値 (%) を指定してください
+@msg	`tint` needs a global or spot colour	`tint` にはグローバルカラーまたは特色が必要です
+@msg	`to` is already threaded	`to` はすでにスレッドされています
+@msg	`to` is the design's new name	`to` にはデザインの新しい名前を指定してください
+@msg	`to` must be [x, y]	`to` には [x, y] を指定してください
+@msg	`to` must be a closed path, area type or type on a path other than `from`	`to` には、`from` 以外のクローズパス、エリア内文字、パス上文字のいずれかを指定してください
+@msg	`to` must be a whole number	`to` には整数を指定してください
+@msg	`to` takes the rows of one object's stack, not aligned rows	`to` には、整列した行ではなく、1 つのオブジェクトのスタック内の行を指定してください
+@msg	`useLab` must be true or false	`useLab` には true または false を指定してください
+@msg	`vAlign` must be default, top, middle, baseline or bottom	`vAlign` には default、top、middle、baseline、bottom のいずれかを指定してください
+@msg	`values` must be a list	`values` にはリストを指定してください
+@msg	`values` must be an object	`values` にはオブジェクトを指定してください
+@msg	`values` must name hex, rgb, cmyk, lab or gray	`values` には hex、rgb、cmyk、lab、gray のいずれかを指定してください
+@msg	`values` names a kind twice	`values` に同じ種類が 2 回指定されています
+@msg	`{_1}` can't be edited or removed	`{_1}` は編集も削除もできません
+@msg	`{_1}` is built in and always listed	`{_1}` は組み込みで、常に一覧に表示されます
+@msg	`{_1}` is not a font file the last text.findFontFiles search found	`{_1}` は、直前の text.findFontFiles の検索で見つかったフォントファイルではありません
+@msg	`{_1}` would be overwritten by the package: choose a different folder or name	`{_1}` がパッケージで上書きされます: 別のフォルダーまたは名前を選択してください
+@msg	`{file}` has no art to place	`{file}` に配置できるアートがありません
+@msg	`{file}` is over {_1} MB	`{file}` が {_1} MB を超えています
+@msg	`{f}` belongs to a VectorCraft that is running	`{f}` は実行中の VectorCraft が使用しています
+@msg	`{f}` is the copy of a document open now	`{f}` は現在開いているドキュメントのコピーです
+@msg	`{id}` is no writable format (see document.formats)	`{id}` は書き出せる形式ではありません (document.formats を参照)
+@msg	`{id}` isn't a loaded library	`{id}` は読み込まれているライブラリではありません
+@msg	`{key}` has no colours	`{key}` にカラーがありません
+@msg	`{key}` is a design name	`{key}` にはデザイン名を指定してください
+@msg	`{key}` is a design name or a list of them	`{key}` にはデザイン名またはそのリストを指定してください
+@msg	`{key}` is longer than {MAX_NAME} characters	`{key}` が {MAX_NAME} 文字を超えています
+@msg	`{key}` is out of range	`{key}` が範囲外です
+@msg	`{key}` must be [min, desired, max] or {{min?, desired?, max?}}, in percent	`{key}` には [min, desired, max] または {{min?, desired?, max?}} をパーセントで指定してください
+@msg	`{key}` must be a non-negative integer	`{key}` には 0 以上の整数を指定してください
+@msg	`{key}` must be a number {_1}..{_2}	`{key}` には {_1}..{_2} の数値を指定してください
+@msg	`{key}` must be a whole number of at least 0, not {n}	`{key}` には 0 以上の整数を指定してください ({n} は指定できません)
+@msg	`{key}` must be an appearance item index (paint order) or null	`{key}` にはアピアランス項目のインデックス (ペイント順) または null を指定してください
+@msg	`{key}` must be an array of asset ids (see assets.list)	`{key}` にはアセット ID の配列を指定してください (assets.list を参照)
+@msg	`{key}` must be from 0 to 180 degrees, not {a}	`{key}` には 0 から 180 度までの値を指定してください ({a} は指定できません)
+@msg	`{key}` must be from {_1} to {shift_max}	`{key}` には {_1} から {shift_max} までの値を指定してください
+@msg	`{key}`: not a colour: {v}	`{key}`: カラーではありません: {v}
+@msg	`{k}.family` is required	`{k}.family` は必須です
+@msg	`{k}` is a number 0..1	`{k}` には 0..1 の数値を指定してください
+@msg	`{k}` is true or false	`{k}` には true または false を指定してください
+@msg	`{k}` isn't an export setting: {_1}	`{k}` は書き出し設定ではありません: {_1}
+@msg	`{k}` must be a byte offset	`{k}` にはバイトオフセットを指定してください
+@msg	`{k}` must be a number	`{k}` には数値を指定してください
+@msg	`{k}` must be a number of points	`{k}` にはポイント単位の数値を指定してください
+@msg	`{k}` must be a string	`{k}` には文字列を指定してください
+@msg	`{k}` must be a whole number	`{k}` には整数を指定してください
+@msg	`{k}` must be from {lo} to {hi} for {key}	{key} の `{k}` には {lo} から {hi} までの値を指定してください
+@msg	`{k}` must be {what}, not {v}	`{k}` には {what} を指定してください ({v} は指定できません)
+@msg	`{l}` isn't a global or spot colour	`{l}` はグローバルカラーでも特色でもありません
+@msg	`{m}` isn't a bitmap: use clipboard.importSvg, importPdf or importText	`{m}` はビットマップではありません: clipboard.importSvg、importPdf、importText のいずれかを使用してください
+@msg	`{name}` can't be deleted	`{name}` は削除できません
+@msg	`{name}` can't be duplicated	`{name}` は複製できません
+@msg	`{name}` can't be edited	`{name}` は編集できません
+@msg	`{name}` can't be edited this way	`{name}` はこの方法では編集できません
+@msg	`{name}` can't be renamed	`{name}` は名前を変更できません
+@msg	`{name}` can't name a folder	`{name}` にフォルダーは指定できません
+@msg	`{name}` has no art to place	`{name}` に配置できるアートがありません
+@msg	`{name}` has no text to place	`{name}` に配置できるテキストがありません
+@msg	`{name}` in the Word document is not UTF-8 or UTF-16 text	Word 文書内の `{name}` が UTF-8 または UTF-16 のテキストではありません
+@msg	`{name}` in the Word document is not well-formed XML: {e}	Word 文書内の `{name}` が整形式の XML ではありません: {e}
+@msg	`{name}` in the Word document nests elements more than {MAX_NESTING} deep	Word 文書内の `{name}` で要素の入れ子が {MAX_NESTING} 階層を超えています
+@msg	`{name}` is a built-in preset and is read-only: save it under another name	`{name}` は組み込みのプリセットで、読み取り専用です: 別の名前で保存してください
+@msg	`{name}` is a built-in preset: save under another name	`{name}` は組み込みのプリセットです: 別の名前で保存してください
+@msg	`{name}` is a built-in profile and stays	`{name}` は組み込みのプロファイルのため、削除されません
+@msg	`{name}` is a tint of `{base}`: edit `{base}` (a tint swatch only takes a new name)	`{name}` は `{base}` の濃度違いです: `{base}` を編集してください (濃度スウォッチで変更できるのは名前だけです)
+@msg	`{name}` is a working space: choose another with edit.colorSettings first	`{name}` は作業用スペースです: 先に edit.colorSettings で別のものを選択してください
+@msg	`{name}` is built in and stays	`{name}` は組み込みのため、削除されません
+@msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` には同じ種類のペイント (カラー、グラデーション、パターン) を指定してください
+@msg	`{n}` can't be deleted	`{n}` は削除できません
+@msg	`{n}` can't be merged	`{n}` は結合できません
+@msg	`{n}` can't be moved	`{n}` は移動できません
+@msg	`{n}` is not a colour swatch	`{n}` はカラースウォッチではありません
+@msg	`{n}` isn't a solid colour	`{n}` は単色ではありません
+@msg	`{n}`: colour groups hold solid colours only	`{n}`: カラーグループに入れられるのは単色だけです
+@msg	`{other}` doesn't trace an image	`{other}` では画像をトレースできません
+@msg	`{s}`: the step's references copy in more than {_1} MB of values	`{s}`: このステップの参照でコピーされる値が {_1} MB を超えています
+@msg	`{tag}` is not an axis tag: a tag is four characters, such as "wght"	`{tag}` は軸タグではありません: タグは "wght" のような 4 文字です
+@msg	`{to}` is empty or already used	`{to}` が空か、すでに使用されています
+@msg	`{what}` is longer than {MAX_TEXT} bytes	`{what}` が {MAX_TEXT} バイトを超えています
+@msg	`{what}` must be text	`{what}` にはテキストを指定してください
+@msg	a DXF drawing has one origin: pass useArtboards: true for one drawing per artboard	DXF 図面の原点は 1 つです: アートボードごとに 1 つの図面にするには useArtboards: true を指定してください
+@msg	a PDF presets file with over {_1} presets	PDF プリセットファイルに {_1} 個を超えるプリセットがあります
+@msg	a batch preview cannot switch documents	バッチのプレビューではドキュメントを切り替えられません
+@msg	a brush named `{nn}` exists	`{nn}` という名前のブラシがすでにあります
+@msg	a container of the listed objects is gone	指定したオブジェクトを含むコンテナがなくなりました
+@msg	a content stream can't be read	コンテンツストリームを読み込めません
+@msg	a content stream isn't a stream	コンテンツストリームがストリームではありません
+@msg	a design holds at most {_1} objects	デザインに含められるオブジェクトは最大 {_1} 個です
+@msg	a design needs a name	デザインには名前が必要です
+@msg	a dictionary grew too large	辞書が大きくなりすぎました
+@msg	a document keeps at most {_1} graph designs	ドキュメントに保存できるグラフのデザインは最大 {_1} 個です
+@msg	a document keeps at most {_1} saved selections	ドキュメントに保存できる選択範囲は最大 {_1} 個です
+@msg	a document keeps at most {_1} views	ドキュメントに保存できる表示は最大 {_1} 個です
+@msg	a document links at most {MAX_SVG_SCRIPTS} JavaScript files	ドキュメントにリンクできる JavaScript ファイルは最大 {MAX_SVG_SCRIPTS} 個です
+@msg	a feConvolveMatrix filter's order is {x}×{y}, which overflows the kernel-size multiply usvg makes	feConvolveMatrix フィルターの order が {x}×{y} で、usvg が行うカーネルサイズの乗算がオーバーフローします
+@msg	a gradient preset is already called {n}	{n} という名前のグラデーションプリセットがすでにあります
+@msg	a graph has at most {_1} series, so it transposes with at most that many categories	グラフの系列は最大 {_1} 個のため、行と列を入れ替えられるのは項目がその数以下の場合です
+@msg	a layer can't be merged into its own sublayer	レイヤーを自身のサブレイヤーに結合することはできません
+@msg	a layer's form box isn't an array	レイヤーのフォームのボックスが配列ではありません
+@msg	a layer's form can't be read	レイヤーのフォームを読み込めません
+@msg	a layer's form has no box	レイヤーのフォームにボックスがありません
+@msg	a layer's form has no dictionary	レイヤーのフォームに辞書がありません
+@msg	a legend draws at most {MAX_CHIPS} swatches	凡例に描画できるスウォッチは最大 {MAX_CHIPS} 個です
+@msg	a name names one asset: give multiple: false, or one object	名前で指定できるアセットは 1 つです: multiple: false を指定するか、オブジェクトを 1 つにしてください
+@msg	a page can't be read	ページを読み込めません
+@msg	a page object is used by something else	ページオブジェクトが別のものに使用されています
+@msg	a page thumbnail must be RGB pixels, 1 to {THUMBNAIL_SIZE} a side (got {w} × {h})	ページのサムネールには、1 辺が 1 から {THUMBNAIL_SIZE} までの RGB ピクセルを指定してください (指定値: {w} × {h})
+@msg	a pattern layer doesn't end what it starts	パターンレイヤーで、開始したものが終了していません
+@msg	a pattern layer's colors hold something else	パターンレイヤーのカラーに別のものが含まれています
+@msg	a pattern named `{n}` exists	`{n}` という名前のパターンがすでにあります
+@msg	a plug-in with id {_1} is already installed	ID が {_1} のプラグインはすでにインストールされています
+@msg	a preset named `{n}` exists	`{n}` という名前のプリセットがすでにあります
+@msg	a print presets file with over {_1} presets	プリントプリセットファイルに {_1} 個を超えるプリセットがあります
+@msg	a profile is already called {n}	{n} という名前のプロファイルがすでにあります
+@msg	a row can't go into itself	行を自身の中に入れることはできません
+@msg	a series goes on the left or the right value axis	系列は左または右の数値軸に割り当てます
+@msg	a start must be an anchor index ≥ 0 or null	開始位置には 0 以上のアンカーのインデックスまたは null を指定してください
+@msg	a style named `{name}` already exists	`{name}` という名前のスタイルがすでにあります
+@msg	a style named `{to}` already exists	`{to}` という名前のスタイルがすでにあります
+@msg	a swatch needs a colour, gradient or pattern	スウォッチにはカラー、グラデーション、パターンのいずれかが必要です
+@msg	a symbol named `{n}` already exists	`{n}` という名前のシンボルがすでにあります
+@msg	a theme has 1 to {THEME_SIZE} colours	テーマのカラーは 1 から {THEME_SIZE} 色までです
+@msg	a theme is already called {name} (replace: "{name}" overwrites it)	{name} という名前のテーマがすでにあります (replace: "{name}" で上書きできます)
+@msg	a toolbar name has at most {MAX_NAME} characters	ツールバー名は {MAX_NAME} 文字以内です
+@msg	a view named `{_1}` exists	`{_1}` という名前の表示がすでにあります
+@msg	a view named `{name}` exists	`{name}` という名前の表示がすでにあります
+@msg	a workspace keeps at most {MAX} toolbars	ワークスペースに保存できるツールバーは最大 {MAX} 個です
+@msg	a {_1} series can't go in a {_2} graph	{_1} の系列は {_2} グラフに入れられません
+@msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}: "pdf" (PDF 互換、初期設定) または "7" (旧形式の .ai、バージョン 7) を指定してください
+@msg	already editing an opacity mask	すでに不透明マスクを編集中です
+@msg	already editing another object's opacity mask	すでに別のオブジェクトの不透明マスクを編集中です
+@msg	already in pattern editing mode	すでにパターン編集モードです
+@msg	an artboard is listed twice	同じアートボードが 2 回指定されています
+@msg	an empty artboard has no width or height to scale to	空のアートボードには、拡大・縮小の基準となる幅も高さもありません
+@msg	an image is too large for DXF and was left out	画像が DXF には大きすぎるため、除外しました
+@msg	an image of {_1} MB, at most {_2} MB	画像が {_1} MB あります (上限は {_2} MB)
+@msg	an image of {declared_w} × {declared_h} pixels is too large to draw	{declared_w} × {declared_h} ピクセルの画像は大きすぎて描画できません
+@msg	an image of {width} × {height} pixels is too large to draw	{width} × {height} ピクセルの画像は大きすぎて描画できません
+@msg	an index must be a whole number	インデックスには整数を指定してください
+@msg	an inline graphic has no glyphs	インライングラフィックにグリフがありません
+@msg	an invisible text form can't be read	非表示テキストのフォームを読み込めません
+@msg	an object is missing	オブジェクトが見つかりません
+@msg	an object's header is missing	オブジェクトのヘッダーがありません
+@msg	an overprinting form can't be read	オーバープリントのフォームを読み込めません
+@msg	an unread object has no readable bounds	未読み込みのオブジェクトに、読み取れる境界がありません
+@msg	an unread object holds a frame of threaded type	未読み込みのオブジェクトに、スレッドテキストのフレームが含まれています
+@msg	an unread object is missing from its layer	未読み込みのオブジェクトがレイヤーにありません
+@msg	anchor `smooth` must be true or false	アンカーの `smooth` には true または false を指定してください
+@msg	anchor `{key}` must be [x, y]	アンカーの `{key}` には [x, y] を指定してください
+@msg	anchor `{key}` must be a number	アンカーの `{key}` には数値を指定してください
+@msg	angle and roundness must be finite	angle と roundness には有限の値を指定してください
+@msg	angles must be a list as long as pins (degrees or null)	angles には pins と同じ長さのリスト (度数または null) を指定してください
+@msg	appearance must be flat|center|edge	appearance には flat|center|edge のいずれかを指定してください
+@msg	apply is "fill" or "stroke", not `{other}`	apply には "fill" または "stroke" を指定してください (`{other}` は指定できません)
+@msg	area must be a closed polygon of 3 to 100000 [x, y] points	area には 3 から 100000 個の [x, y] の点からなる閉じた多角形を指定してください
+@msg	area type needs a path that encloses an area	エリア内文字には、領域を囲むパスが必要です
+@msg	area type {_1} is named twice	エリア内文字 {_1} が 2 回指定されています
+@msg	arrowAlign must be extend|tip, got {o}	arrowAlign には extend|tip のいずれかを指定してください (指定値: {o})
+@msg	arrowScale must be [start, end]	arrowScale には [start, end] を指定してください
+@msg	artboard is a 0-based index	artboard には 0 から始まるインデックスを指定してください
+@msg	artboard must be a 0-based index	artboard には 0 から始まるインデックスを指定してください
+@msg	artboard {i} doesn't print	アートボード {i} はプリントされません
+@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout には {layout?, columns?, spacing?, rightToLeft?} を指定してください
+@msg	artboardLayout.columns must be 1 or more	artboardLayout.columns には 1 以上の値を指定してください
+@msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout には gridByRow、gridByColumn、row、column のいずれかを指定してください
+@msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft には true または false を指定してください
+@msg	artboardLayout.spacing must be 0–{MAX_SPACING} pt	artboardLayout.spacing には 0–{MAX_SPACING} pt を指定してください
+@msg	artboards must be a non-empty list	artboards には空でないリストを指定してください
+@msg	artboards must be a number	artboards には数値を指定してください
+@msg	asset `{_1}` has no art to export	アセット `{_1}` に書き出せるアートがありません
+@msg	at most {MAX_KEYWORDS} keywords	キーワードは最大 {MAX_KEYWORDS} 個です
+@msg	at most {MAX_MATCHES} matches are kept	保持される一致は最大 {MAX_MATCHES} 件です
+@msg	at most {MAX_POINTS} points	ポイントは最大 {MAX_POINTS} 個です
+@msg	at most {MAX_QUEUE} files	ファイルは最大 {MAX_QUEUE} 個です
+@msg	at must be [x, y]	at には [x, y] を指定してください
+@msg	at/rect lie outside the canvas	at/rect がキャンバスの外にあります
+@msg	attribute must be size|leading|tracking|kerning|baselineShift	attribute には size|leading|tracking|kerning|baselineShift のいずれかを指定してください
+@msg	attrs must be an object	attrs にはオブジェクトを指定してください
+@msg	automation path rejected: the folder's name isn't valid text	自動処理のパスを拒否しました: フォルダー名が有効なテキストではありません
+@msg	automation path rejected: {_1} isn't valid text	自動処理のパスを拒否しました: {_1} が有効なテキストではありません
+@msg	automation path rejected: {why}: {path}	自動処理のパスを拒否しました: {why}: {path}
+@msg	axis must be "vertical", "horizontal" or an angle in degrees, not `{given}`	axis には "vertical"、"horizontal"、または度数の角度を指定してください (`{given}` は指定できません)
+@msg	backgroundContents must be transparent or white	backgroundContents には transparent または white を指定してください
+@msg	bad AES key	AES キーが正しくありません
+@msg	bad `runs`: {e}	`runs` が正しくありません: {e}
+@msg	bad arrowScale	arrowScale が正しくありません
+@msg	bad base64	base64 が正しくありません
+@msg	bad color {c}	カラー {c} が正しくありません
+@msg	bad colour	カラーが正しくありません
+@msg	bad colour in `colors`	`colors` 内のカラーが正しくありません
+@msg	bad colour {v}	カラー {v} が正しくありません
+@msg	bad colour {v} in groupColors	groupColors 内のカラー {v} が正しくありません
+@msg	bad cross-reference entry	相互参照エントリが正しくありません
+@msg	bad cross-reference table	相互参照テーブルが正しくありません
+@msg	bad current colour {v}	現在のカラー {v} が正しくありません
+@msg	bad dataBase64	dataBase64 が正しくありません
+@msg	bad edit	編集内容が正しくありません
+@msg	bad fill {v}	塗り {v} が正しくありません
+@msg	bad fit: {e}	fit が正しくありません: {e}
+@msg	bad model {other} (keep, new or document)	model {other} が正しくありません (keep、new、document のいずれか)
+@msg	bad new colour {v}	新しいカラー {v} が正しくありません
+@msg	bad object	オブジェクトが正しくありません
+@msg	bad object number	オブジェクト番号が正しくありません
+@msg	bad offset	オフセットが正しくありません
+@msg	bad path data: {e}	パスデータが正しくありません: {e}
+@msg	bad point {v}: expected [x, y] or [x, y, pressure]	点 {v} が正しくありません: [x, y] または [x, y, pressure] を指定してください
+@msg	bad reference	参照が正しくありません
+@msg	bad trailer size	トレーラーのサイズが正しくありません
+@msg	bad {k} colour	{k} のカラーが正しくありません
+@msg	batches cannot nest	バッチを入れ子にすることはできません
+@msg	bind something to a variable first	先に何かを変数にバインドしてください
+@msg	bleed must be 0–{MAX_BLEED} pt: a number, [top, bottom, left, right] or {{top, bottom, left, right}}	bleed には 0–{MAX_BLEED} pt を指定してください: 数値、[top, bottom, left, right]、{{top, bottom, left, right}} のいずれか
+@msg	brush must be a name or null	brush には名前または null を指定してください
+@msg	by must be a number	by には数値を指定してください
+@msg	can't add page thumbnails: {why}	ページのサムネールを追加できません: {why}
+@msg	can't add the editing data for other apps: {why}	他のアプリ用の編集データを追加できません: {why}
+@msg	can't edit the written PDF: {why}	書き出した PDF を編集できません: {why}
+@msg	can't encrypt the PDF: {why}	PDF を暗号化できません: {why}
+@msg	can't linearise the PDF: {why}	PDF をリニアライズできません: {why}
+@msg	can't open `{_1}`: {_2}	`{_1}` を開けません: {_2}
+@msg	can't open `{_1}`: {e}	`{_1}` を開けません: {e}
+@msg	can't open `{name}`: not a format VectorCraft reads (see document.formats)	`{name}` を開けません: VectorCraft で読み込める形式ではありません (document.formats を参照)
+@msg	can't place `{name}`: not a format VectorCraft reads (see document.formats)	`{name}` を配置できません: VectorCraft で読み込める形式ではありません (document.formats を参照)
+@msg	can't read back the written PDF: {e}	書き出した PDF を読み戻せません: {e}
+@msg	can't read this Word document: {why}	この Word 文書を読み込めません: {why}
+@msg	can't write .{e} images: use .png, .jpg, .gif, .webp, .tif or .bmp	.{e} 画像は書き出せません: .png、.jpg、.gif、.webp、.tif、.bmp のいずれかを使用してください
+@msg	can't write PDF layers, overprint or invisible text: {why}	PDF レイヤー、オーバープリント、非表示テキストを書き出せません: {why}
+@msg	can't write the file's copyright: {why}	ファイルの著作権情報を書き出せません: {why}
+@msg	can't write the file's modification date: {why}	ファイルの更新日を書き出せません: {why}
+@msg	can't write the pages' user units: {why}	ページのユーザー単位を書き出せません: {why}
+@msg	cannot distort a zero-size or non-finite bounding box	サイズが 0 または有限でないバウンディングボックスは変形できません
+@msg	cannot move an object into itself	オブジェクトを自身の中に移動することはできません
+@msg	case must be upper|lower|title|sentence	case には upper|lower|title|sentence のいずれかを指定してください
+@msg	category `{c}`: one of {_1}	category `{c}`: {_1} のいずれかを指定してください
+@msg	center must be [x, y]	center には [x, y] を指定してください
+@msg	choose at least one artboard	アートボードを 1 つ以上選択してください
+@msg	choose at least one status	状態を 1 つ以上選択してください
+@msg	clip must be true or false	clip には true または false を指定してください
+@msg	clippingMask must be true or false	clippingMask には true または false を指定してください
+@msg	closed must be a boolean	closed にはブール値を指定してください
+@msg	collapsed must be true or false	collapsed には true または false を指定してください
+@msg	color.profile: no RGB or CMYK profile is called “{profile}”	color.profile: 「{profile}」という名前の RGB または CMYK プロファイルはありません
+@msg	colorMode must be rgb or cmyk, not `{m}`	colorMode には rgb または cmyk を指定してください (`{m}` は指定できません)
+@msg	colorModel must be {own} (the document's mode), grayscale or bitmap	colorModel には {own} (ドキュメントのモード)、grayscale、bitmap のいずれかを指定してください
+@msg	colour groups can't go into colour groups	カラーグループをカラーグループに入れることはできません
+@msg	colour, mode and spot apply to solid-colour swatches only	colour、mode、spot を適用できるのは単色のスウォッチだけです
+@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	列 {column}: `{cell}` はグラフデータファイルの `%` 列で、読み込まれません
+@msg	column {column}: `{cell}` names `{name}`, which is a {_1} variable	列 {column}: `{cell}` が指定している `{name}` は {_1} 変数です
+@msg	column {column}: `{cell}` names no variable	列 {column}: `{cell}` に該当する変数はありません
+@msg	column {column}: the variable name is longer than {MAX_NAME} characters	列 {column}: 変数名が {MAX_NAME} 文字を超えています
+@msg	column: true floats the whole column and takes no onto, above or below	column: true は列全体をフローティングにするため、onto、above、below は指定できません
+@msg	command must be a shape.* command	command には shape.* コマンドを指定してください
+@msg	commands[{i}]: missing `command`	commands[{i}]: `command` がありません
+@msg	composer must be "singleLine" or "everyLine"	composer には "singleLine" または "everyLine" を指定してください
+@msg	compound shapes take paths, compound paths, groups, compound shapes, type, blends and envelopes	複合シェイプに含められるのは、パス、複合パス、グループ、複合シェイプ、文字、ブレンド、エンベロープです
+@msg	compound {_1} must contain exactly one open path to join	連結するには、複合パス {_1} にオープンパスがちょうど 1 つ含まれている必要があります
+@msg	connect end must be "start" or "end"	connect の end には "start" または "end" を指定してください
+@msg	connect needs a path other than the one extended	connect には、延長したパスとは別のパスが必要です
+@msg	connect needs id	connect には id が必要です
+@msg	connect path has no open end	connect のパスに開いた端点がありません
+@msg	copy needs path: the file to copy into the document's folder	copy には path が必要です: ドキュメントのフォルダーにコピーするファイルを指定してください
+@msg	copy takes images only: relink placed documents where their files are	copy を使用できるのは画像だけです: 配置したドキュメントは、ファイルのある場所で再リンクしてください
+@msg	copying a file isn't available on the web	Web 版ではファイルをコピーできません
+@msg	copyrightStatus must be unknown, copyrighted or publicDomain	copyrightStatus には unknown、copyrighted、publicDomain のいずれかを指定してください
+@msg	copyrightUrl must be a URL (no spaces, at most 2048 characters)	copyrightUrl には URL を指定してください (スペースなし、2048 文字以内)
+@msg	corners must be 4 [x, y] points (TL, TR, BR, BL)	corners には [x, y] の点を 4 つ指定してください (TL, TR, BR, BL)
+@msg	counterPer `{c}`: item or file	counterPer `{c}`: item または file を指定してください
+@msg	crop `{_1}`: only PDF pages have art, trim, bleed and media boxes; use "crop" or "bounding"	crop `{_1}`: アート、仕上がり、裁ち落とし、メディアの各ボックスがあるのは PDF ページだけです。"crop" または "bounding" を使用してください
+@msg	crop rectangle doesn't overlap the image	切り抜きの長方形が画像と重なっていません
+@msg	cross-reference and object streams aren't supported	相互参照ストリームとオブジェクトストリームには対応していません
+@msg	damaged compressed data: {e}	圧縮データが破損しています: {e}
+@msg	dash lengths must be numbers, got {v}	ダッシュの長さには数値を指定してください (指定値: {v})
+@msg	dash must be a list of lengths or null, got {v}	dash には長さのリストまたは null を指定してください (指定値: {v})
+@msg	data key `{k}`: letters, digits, -, _ and . (not name or vc-…)	データキー `{k}`: 使用できるのは文字、数字、-、_、. です (name と vc-… は使用できません)
+@msg	data must be an object of key: value, not {v}	data には key: value のオブジェクトを指定してください ({v} は指定できません)
+@msg	data set `{name}` holds a value for `{var}`, which the library doesn't declare	データセット `{name}` に、ライブラリで宣言されていない `{var}` の値があります
+@msg	data set `{name}` holds two values for `{var}`	データセット `{name}` に `{var}` の値が 2 つあります
+@msg	data set `{name}` is declared twice	データセット `{name}` が 2 回宣言されています
+@msg	data takes at most {MAX_DATA} keys at once	data に一度に指定できるキーは最大 {MAX_DATA} 個です
+@msg	dataset `{name}` already exists	データセット `{name}` はすでにあります
+@msg	dataset `{to}` already exists	データセット `{to}` はすでにあります
+@msg	date `{d}`: YYYY-MM-DD	date `{d}`: YYYY-MM-DD の形式で指定してください
+@msg	decoded data is too large	デコードしたデータが大きすぎます
+@msg	define a variable first	先に変数を定義してください
+@msg	detect must be true or false	detect には true または false を指定してください
+@msg	direct-select anchor points of a path	パスのアンカーポイントをダイレクト選択してください
+@msg	distance must be > 0	distance には 0 より大きい値を指定してください
+@msg	dx and dy give the arrow's direction	dx と dy には矢印の方向を指定してください
+@msg	dx and dy must be numbers	dx と dy には数値を指定してください
+@msg	dxf fitTo must be [width, height], positive	dxf の fitTo には正の値の [width, height] を指定してください
+@msg	dxf must be an object of DXF import options	dxf には DXF 読み込みオプションのオブジェクトを指定してください
+@msg	dxf scale must be a positive number up to {_1}, not {s}	dxf の scale には {_1} 以下の正の数値を指定してください ({s} は指定できません)
+@msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf の unit `{u}`: mm、cm、in、pt などの単位を指定してください
+@msg	dxf: {e}	dxf: {e}
+@msg	each format is an object {format, scale?, suffix?}	各形式にはオブジェクト {format, scale?, suffix?} を指定してください
+@msg	each item needs an id	各項目には id が必要です
+@msg	each match needs `kind`	各一致には `kind` が必要です
+@msg	each match needs a `name`	各一致には `name` が必要です
+@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	`fonts` の各要素には {family, style?} を指定してください。要素数は 1 から 1000 個です
+@msg	each of `items` is {kind, item}	`items` の各要素には {kind, item} を指定してください
+@msg	each of `items` is {{id, corners?}} with an object id, not {it}	`items` の各要素には、オブジェクト ID を含む {{id, corners?}} を指定してください ({it} は指定できません)
+@msg	each row needs `from`	各行には `from` が必要です
+@msg	each stop needs a position	各分岐点には位置が必要です
+@msg	each subpath needs an anchors array	各サブパスには anchors 配列が必要です
+@msg	easingType must be easeIn, easeOut, easeInOut or easeOutIn	easingType には easeIn、easeOut、easeInOut、easeOutIn のいずれかを指定してください
+@msg	editingData must be true or false	editingData には true または false を指定してください
+@msg	editingData must be true, false or "always"	editingData には true、false、"always" のいずれかを指定してください
+@msg	edits overlap	編集範囲が重なっています
+@msg	effects of objects whose appearances differ can't be moved together	アピアランスが異なるオブジェクトの効果は、まとめて移動できません
+@msg	empty header in column {_1}	列 {_1} のヘッダーが空です
+@msg	encoding `{_1}`: utf8 or utf16	encoding `{_1}`: utf8 または utf16 を指定してください
+@msg	ends must be two of "first" and "last"	ends には "first" と "last" から 2 つを指定してください
+@msg	every numbered name for the result is taken	結果に使用できる番号付きの名前がすべて使用されています
+@msg	expanded SVG styles exceed the import size limit	展開した SVG スタイルが読み込みサイズの上限を超えています
+@msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	書き出しプリセットファイルが {MAX_PRESET_FILE_BYTES} バイトを超えています
+@msg	exportText must be editable or appearance	exportText には editable または appearance を指定してください
+@msg	exportType must be movieClip or graphic, not `{s}`	exportType には movieClip または graphic を指定してください (`{s}` は指定できません)
+@msg	extend needs id	extend には id が必要です
+@msg	featureChanges lists at most {MAX_FEATURE_CHANGES} tags	featureChanges に指定できるタグは最大 {MAX_FEATURE_CHANGES} 個です
+@msg	featureChanges must be a list of tags	featureChanges にはタグのリストを指定してください
+@msg	features must be a list of tags	features にはタグのリストを指定してください
+@msg	fidelity must be 0..100	fidelity には 0..100 の値を指定してください
+@msg	files must be {name, dataBase64}	files には {name, dataBase64} を指定してください
+@msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit には none|autoHeight|shrinkText|block のいずれかを指定してください (指定値: {id})
+@msg	flattener: {e}	分割・統合: {e}
+@msg	flattenerPreset `{name}`: high, medium, low or a saved one (see flattener.presets.list)	flattenerPreset `{name}`: high、medium、low、または保存済みのプリセットを指定してください (flattener.presets.list を参照)
+@msg	flipProfile must be along|across, got {o}	flipProfile には along|across のいずれかを指定してください (指定値: {o})
+@msg	folders `{f}`: none, rows, format, item or itemFormat	folders `{f}`: none、rows、format、item、itemFormat のいずれかを指定してください
+@msg	folders deeper than {MAX_BATCH_DEPTH} levels	フォルダーの階層が {MAX_BATCH_DEPTH} を超えています
+@msg	folders deeper than {MAX_DEPTH} levels	フォルダーの階層が {MAX_DEPTH} を超えています
+@msg	font family `{family}` is not available	フォントファミリー `{family}` は使用できません
+@msg	font family `{tf}` is not available	フォントファミリー `{tf}` は使用できません
+@msg	format `{f}`: pdf or postscript	format `{f}`: pdf または postscript を指定してください
+@msg	format `{f}`: text or json	format `{f}`: text または json を指定してください
+@msg	format is `{format}`	format は `{format}` です
+@msg	formats must be an array of rows, not {v}	formats には行の配列を指定してください ({v} は指定できません)
+@msg	frequency must be between 1 and 300 lines per inch	frequency には 1 から 300 線/インチまでの値を指定してください
+@msg	from and to must be finite	from と to には有限の値を指定してください
+@msg	from must be [x0, y0, x1, y1]	from には [x0, y0, x1, y1] を指定してください
+@msg	give `before` or `after`, not both	`before` または `after` のどちらか一方を指定してください
+@msg	give `colors`, or `color` and `rule`	`colors`、または `color` と `rule` を指定してください
+@msg	give `event`, such as onclick	onclick などの `event` を指定してください
+@msg	give `file`, the JavaScript file's path or URL	`file` に JavaScript ファイルのパスまたは URL を指定してください
+@msg	give `fill` and/or `stroke`	`fill` と `stroke` の一方または両方を指定してください
+@msg	give `fill`, `stroke` or both	`fill`、`stroke`、またはその両方を指定してください
+@msg	give `folder`	`folder` を指定してください
+@msg	give `fonts`, or open a document	`fonts` を指定するか、ドキュメントを開いてください
+@msg	give `from` or `indices`, not both	`from` または `indices` のどちらか一方を指定してください
+@msg	give `id` (no text is being edited)	`id` を指定してください (編集中のテキストがありません)
+@msg	give `id` and `anchors`, or `items`, not both	`id` と `anchors`、または `items` のどちらか一方を指定してください
+@msg	give `id` or `guide`, not both	`id` または `guide` のどちらか一方を指定してください
+@msg	give `length` or `to`	`length` または `to` を指定してください
+@msg	give `matches`: [{kind, name, target}]	`matches` を指定してください: [{kind, name, target}]
+@msg	give `name` (or edit a pattern)	`name` を指定してください (またはパターンを編集してください)
+@msg	give `name` or `names`	`name` または `names` を指定してください
+@msg	give `path` (a .wasm file) or `dataBase64` (the module)	`path` (.wasm ファイル) または `dataBase64` (モジュール) を指定してください
+@msg	give `path`, `data` or `dataBase64`	`path`、`data`、`dataBase64` のいずれかを指定してください
+@msg	give `path`, `data`, `dataBase64` or `csv`	`path`、`data`、`dataBase64`、`csv` のいずれかを指定してください
+@msg	give `path`, `xml` or `dataBase64`	`path`、`xml`、`dataBase64` のいずれかを指定してください
+@msg	give `script`, the JavaScript the event runs ("" removes the event)	`script` に、イベントで実行する JavaScript を指定してください ("" を指定するとイベントを削除します)
+@msg	give `text` (the reading) or `remove`	`text` (読み) または `remove` を指定してください
+@msg	give `x` and `y` (and a `tolerance` of 0 or more)	`x` と `y` (および 0 以上の `tolerance`) を指定してください
+@msg	give a mode or r/g/b, c/m/y/k, gray or tint adjustments	mode、または r/g/b、c/m/y/k、gray、tint の調整値を指定してください
+@msg	give a name, or paint the active proxy with a saved preset	名前を指定するか、保存済みのプリセットでアクティブなプロキシをペイントしてください
+@msg	give a name, or select a stroke with a saved profile	名前を指定するか、保存済みのプロファイルが適用された線を選択してください
+@msg	give a pattern name or select an object painted with a pattern	パターン名を指定するか、パターンでペイントしたオブジェクトを選択してください
+@msg	give at least one of clip, invert, disabled, linked	clip、invert、disabled、linked のうち 1 つ以上を指定してください
+@msg	give color, none, swatch or gradient	color、none、swatch、gradient のいずれかを指定してください
+@msg	give dataBase64	dataBase64 を指定してください
+@msg	give either at (a click) or area (a path drawn around the overlaps)	at (クリック位置) または area (重なりを囲むように描いたパス) のどちらかを指定してください
+@msg	give formats or a preset, not both	formats またはプリセットのどちらか一方を指定してください
+@msg	give newName or delete	newName または delete を指定してください
+@msg	give offset or by	offset または by を指定してください
+@msg	give one of `to`, `rect` or `at`	`to`、`rect`、`at` のいずれかを指定してください
+@msg	give one of assets, layers, selection or fullDocument	assets、layers、selection、fullDocument のいずれかを指定してください
+@msg	give only one of onto, above, below, icon and a column place	onto、above、below、icon、列の位置のうち 1 つだけを指定してください
+@msg	give origin: [x, y], or reset: true	origin: [x, y] または reset: true を指定してください
+@msg	give overprintFill, overprintStroke, showCenter, imageMap, url or note	overprintFill、overprintStroke、showCenter、imageMap、url、note のいずれかを指定してください
+@msg	give path (a file) or folder	path (ファイル) または folder を指定してください
+@msg	give path, or name and dataBase64	path、または name と dataBase64 を指定してください
+@msg	give paths or files	paths または files を指定してください
+@msg	give rows, rowHeight, columns or columnWidth	rows、rowHeight、columns、columnWidth のいずれかを指定してください
+@msg	give svg, or dataBase64 of an SVG or SVGZ file	svg、または SVG か SVGZ ファイルの dataBase64 を指定してください
+@msg	give text	text を指定してください
+@msg	give the asset a name	アセットに名前を指定してください
+@msg	give the preset a `name`	プリセットに `name` を指定してください
+@msg	give the preset a name	プリセットに名前を指定してください
+@msg	give the preset a name (1–64 characters)	プリセットに名前を指定してください (1–64 文字)
+@msg	give the settings to change, e.g. {"formats"}]}	変更する設定を指定してください (例: {"formats"}]})
+@msg	give the style a name	スタイルに名前を指定してください
+@msg	give two or more style `names`	スタイルの `names` を 2 つ以上指定してください
+@msg	give two or more swatches	スウォッチを 2 つ以上指定してください
+@msg	give x, y, or a handle's length or angle	x、y、またはハンドルの length か angle を指定してください
+@msg	give {key, value} or {values}	{key, value} または {values} を指定してください
+@msg	global must be true or false	global には true または false を指定してください
+@msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	この文字のスタイル (オールキャップス、スモールキャップ、数字の体系など) では、{ch} にグリフ {_1} は使用されません
+@msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	グリフ {g} は {_1} {_2} における {ch} の代替字形ではありません
+@msg	gradient must be "objects" or "mesh"	gradient には "objects" または "mesh" を指定してください
+@msg	grays must be "profile" or "black", not `{g}`	grays には "profile" または "black" を指定してください (`{g}` は指定できません)
+@msg	gridColors must be a preset name or two colours	gridColors にはプリセット名または 2 つのカラーを指定してください
+@msg	gridSize must be small, medium or large	gridSize には small、medium、large のいずれかを指定してください
+@msg	guide {g} is not selected	ガイド {g} は選択されていません
+@msg	handle must be 0..3	handle には 0..3 の値を指定してください
+@msg	hiddenObjects {v}: "layer" (the default), "omit" or "visible"	hiddenObjects {v}: "layer" (初期設定)、"omit"、"visible" のいずれかを指定してください
+@msg	highlight a layer to merge into	結合先のレイヤーをハイライトしてください
+@msg	highlight two or more rows in one layer or group	1 つのレイヤーまたはグループ内の行を 2 つ以上ハイライトしてください
+@msg	highlight two or more rows to merge	結合する行を 2 つ以上ハイライトしてください
+@msg	icon docks a panel in the icon column: use window.panel.dock	icon はパネルをアイコン列にドッキングします: window.panel.dock を使用してください
+@msg	id must be a dimension id	id には寸法の ID を指定してください
+@msg	image has no bounds	画像に境界がありません
+@msg	image {_1} is linked already	画像 {_1} はすでにリンクされています
+@msg	imageMap `{m}`: none, client or server	imageMap `{m}`: none、client、server のいずれかを指定してください
+@msg	index out of range	インデックスが範囲外です
+@msg	instances must be 1..1000	instances には 1..1000 の値を指定してください
+@msg	invalid `color`	`color` が無効です
+@msg	invalid anchor index {v}: expected a non-negative integer	アンカーのインデックス {v} が無効です: 0 以上の整数を指定してください
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	アンカーの参照 {v} が無効です: [subpath, anchor] を指定してください
+@msg	invalid angle	角度が無効です
+@msg	invalid brush: {e}	ブラシが無効です: {e}
+@msg	invalid color	カラーが無効です
+@msg	invalid colour {c}	カラー {c} が無効です
+@msg	invalid delta	差分が無効です
+@msg	invalid point	点が無効です
+@msg	invalid size	サイズが無効です
+@msg	invalid t	t が無効です
+@msg	invalid tolerance	許容値が無効です
+@msg	its artboards all lie beyond the canvas (more than {_1} pt from the origin)	アートボードがすべてキャンバスの外にあります (原点から {_1} pt を超えています)
+@msg	its clipping masks are nested too deeply	クリッピングマスクの入れ子が深すぎます
+@msg	its metadata has no description	メタデータに説明がありません
+@msg	its metadata has no direct length	メタデータに直接指定された長さがありません
+@msg	join two different paths	異なる 2 つのパスを連結してください
+@msg	justify must be auto|left|center|right|justifyAll	justify には auto|left|center|right|justifyAll のいずれかを指定してください
+@msg	kbps must be a positive number, not {kbps}	kbps には正の数値を指定してください ({kbps} は指定できません)
+@msg	keywords must be a list of words or a comma-separated string	keywords には単語のリストまたはカンマ区切りの文字列を指定してください
+@msg	keywords must be at most {MAX_KEYWORD} characters, without control characters	keywords には制御文字を含まない {MAX_KEYWORD} 文字以内の値を指定してください
+@msg	kind must be 1, 2 or 3, or give a preset `name` (see perspective.presets.list)	kind には 1、2、3 のいずれかを指定するか、プリセットの `name` を指定してください (perspective.presets.list を参照)
+@msg	kind must be graphic, fillColor, strokeColor, fillGradient, strokeGradient, fillPattern, strokePattern, charStyle or paraStyle	kind には graphic、fillColor、strokeColor、fillGradient、strokeGradient、fillPattern、strokePattern、charStyle、paraStyle のいずれかを指定してください
+@msg	knockout must be "on", "off", "neutral" or a bool, not {v}	knockout には "on"、"off"、"neutral"、またはブール値を指定してください ({v} は指定できません)
+@msg	layer `{name}` has no art to export	レイヤー `{name}` に書き出せるアートがありません
+@msg	layer must name a layer or sublayer	layer にはレイヤーまたはサブレイヤーを指定してください
+@msg	layers can't be intertwined: select the objects in them	レイヤーを絡み合わせることはできません: レイヤー内のオブジェクトを選択してください
+@msg	layers go only at the top level or in layers, objects in layers and groups	レイヤーを置けるのは最上位またはレイヤー内だけで、オブジェクトを置けるのはレイヤー内とグループ内です
+@msg	layers must be true or false	layers には true または false を指定してください
+@msg	layout must be gridByRow, gridByColumn, row or column	layout には gridByRow、gridByColumn、row、column のいずれかを指定してください
+@msg	leading must be a number or "auto"	leading には数値または "auto" を指定してください
+@msg	left/right must be non-negative widths	left/right には 0 以上の幅を指定してください
+@msg	level `{t}`: 2 or 3	level `{t}`: 2 または 3 を指定してください
+@msg	line {line}: more than {MAX_CSV_COLS} columns	{line} 行目: 列が {MAX_CSV_COLS} 個を超えています
+@msg	line {line}: unclosed quote	{line} 行目: 引用符が閉じられていません
+@msg	line {line}: value for `{var}` must match its variable kind	{line} 行目: `{var}` の値は変数の種類に合わせてください
+@msg	lineEndings `{other}`: lf or crlf	lineEndings `{other}`: lf または crlf を指定してください
+@msg	loading profiles from disk isn't available in the browser	ブラウザーではディスクからプロファイルを読み込めません
+@msg	margin: a {m} pt margin leaves no imageable area on the paper	margin: マージンが {m} pt では用紙にプリント可能な領域が残りません
+@msg	matrix must be finite and invertible, depth finite	matrix には有限で逆行列を持つ値、depth には有限の値を指定してください
+@msg	matte: {e}	matte: {e}
+@msg	member is for order front, forward, backward or back	member は order が front、forward、backward、back のいずれかの場合に指定します
+@msg	missing `artboards`	`artboards` がありません
+@msg	missing `at` [x, y]	`at` [x, y] がありません
+@msg	missing `attrs`	`attrs` がありません
+@msg	missing `color` or `opacity`	`color` または `opacity` がありません
+@msg	missing `colors`	`colors` がありません
+@msg	missing `commands`	`commands` がありません
+@msg	missing `destinationFolder`	`destinationFolder` がありません
+@msg	missing `effect` id	`effect` の ID がありません
+@msg	missing `family`	`family` がありません
+@msg	missing `find`	`find` がありません
+@msg	missing `gid` (a glyph id, or null for the default glyph)	`gid` がありません (グリフ ID、または初期設定のグリフにする場合は null)
+@msg	missing `group`	`group` がありません
+@msg	missing `id`	`id` がありません
+@msg	missing `id`: give one, or select one type object	`id` がありません: 指定するか、文字オブジェクトを 1 つ選択してください
+@msg	missing `index` (a point index, or null to clear)	`index` がありません (ポイントのインデックス、または消去する場合は null)
+@msg	missing `index` (a stop index, or null to clear)	`index` がありません (分岐点のインデックス、または消去する場合は null)
+@msg	missing `index` (an item index or null)	`index` がありません (項目のインデックスまたは null)
+@msg	missing `item`	`item` がありません
+@msg	missing `library`	`library` がありません
+@msg	missing `library` (see graphicStyle.libraries)	`library` がありません (graphicStyle.libraries を参照)
+@msg	missing `library` (see swatch.library.list)	`library` がありません (swatch.library.list を参照)
+@msg	missing `map` (rows [{from, to}] or {current})	`map` がありません (行 [{from, to}] または {current})
+@msg	missing `matrix` [a,b,c,d,e,f]	`matrix` [a,b,c,d,e,f] がありません
+@msg	missing `name` (see gradient.presets.list)	`name` がありません (gradient.presets.list を参照)
+@msg	missing `offset` (a distance in points)	`offset` がありません (ポイント単位の距離)
+@msg	missing `path`	`path` がありません
+@msg	missing `path` (a path object id)	`path` がありません (パスオブジェクトの ID)
+@msg	missing `rule`	`rule` がありません
+@msg	missing `source` id	`source` の ID がありません
+@msg	missing `start` (the byte offset of a character)	`start` がありません (文字のバイトオフセット)
+@msg	missing `status`: linked, embedded, missing or modified	`status` がありません: linked、embedded、missing、modified のいずれかを指定してください
+@msg	missing `target` id	`target` の ID がありません
+@msg	missing `text`	`text` がありません
+@msg	missing `to`	`to` がありません
+@msg	missing `to` (an index)	`to` がありません (インデックス)
+@msg	missing `to`: a non-negative integer	`to` がありません: 0 以上の整数を指定してください
+@msg	missing `type`	`type` がありません
+@msg	missing `value`	`value` がありません
+@msg	missing `{key}`	`{key}` がありません
+@msg	missing `{k}`	`{k}` がありません
+@msg	missing anchor	anchor がありません
+@msg	missing anchors	anchors がありません
+@msg	missing anchors [[subpath, anchor]…]	anchors [[subpath, anchor]…] がありません
+@msg	missing array `{key}`	配列 `{key}` がありません
+@msg	missing case	case がありません
+@msg	missing color	color がありません
+@msg	missing commands	commands がありません
+@msg	missing destination folder	出力先フォルダーがありません
+@msg	missing from	from がありません
+@msg	missing group	group がありません
+@msg	missing id or ids	id または ids がありません
+@msg	missing ids	ids がありません
+@msg	missing indexes	indexes がありません
+@msg	missing matrix [a,b,c,d,e,f]	matrix [a,b,c,d,e,f] がありません
+@msg	missing name	name がありません
+@msg	missing op	op がありません
+@msg	missing or invalid `color`	`color` がないか、無効です
+@msg	missing or unknown `tool`	`tool` がないか、不明です
+@msg	missing point	point がありません
+@msg	missing point [x,y]	point [x,y] がありません
+@msg	missing point `{key}` ([x, y])	点 `{key}` ([x, y]) がありません
+@msg	missing points	points がありません
+@msg	missing points [[x,y]…]	points [[x,y]…] がありません
+@msg	missing segment	segment がありません
+@msg	missing stops	stops がありません
+@msg	missing subpaths	subpaths がありません
+@msg	missing target	target がありません
+@msg	missing to	to がありません
+@msg	missing x, y	x, y がありません
+@msg	mode is set, add or toggle, not `{other}`	mode には set、add、toggle のいずれかを指定してください (`{other}` は指定できません)
+@msg	mode must be "cmyk" or "rgb"	mode には "cmyk" または "rgb" を指定してください
+@msg	mode must be area|onPath, got {o}	mode には area|onPath のいずれかを指定してください (指定値: {o})
+@msg	more than 10000 linked files: package dependencies in smaller parts	リンクファイルが 10000 個を超えています: 依存ファイルを小分けにしてパッケージしてください
+@msg	more than 256 commands	コマンドが 256 個を超えています
+@msg	more than {MAX_BATCH_FILES} data sets	データセットが {MAX_BATCH_FILES} 個を超えています
+@msg	more than {MAX_BATCH_FILES} files	ファイルが {MAX_BATCH_FILES} 個を超えています
+@msg	more than {MAX_CSV_ROWS} data rows	データ行が {MAX_CSV_ROWS} 行を超えています
+@msg	more than {MAX_FILES} images	画像が {MAX_FILES} 個を超えています
+@msg	more than {MAX_IMPORT} presets	プリセットが {MAX_IMPORT} 個を超えています
+@msg	moved must be [[x,y]…]	moved には [[x,y]…] を指定してください
+@msg	name (a toolbar's name) is required	name (ツールバー名) は必須です
+@msg	name (a toolbar's name) must be a string	name (ツールバー名) には文字列を指定してください
+@msg	name must be a toolbar's name	name にはツールバー名を指定してください
+@msg	names is empty	names が空です
+@msg	names must be an array of symbol names	names にはシンボル名の配列を指定してください
+@msg	need `anchor` or `segment` + `t`	`anchor`、または `segment` + `t` が必要です
+@msg	need at least one anchor	アンカーが 1 つ以上必要です
+@msg	need at least one point	点が 1 つ以上必要です
+@msg	need at least two points	点が 2 つ以上必要です
+@msg	needs points	点が必要です
+@msg	nineSlice must be true or false	nineSlice には true または false を指定してください
+@msg	nineSliceGuides must be [left, top, right, bottom], each -16..16, with left + right < 1 and top + bottom < 1	nineSliceGuides には [left, top, right, bottom] を指定してください。各値は -16..16 で、left + right < 1 かつ top + bottom < 1 にしてください
+@msg	no PDF preset named `{n}`	`{n}` という名前の PDF プリセットはありません
+@msg	no action set is current	現在のアクションセットがありません
+@msg	no active data set	アクティブなデータセットがありません
+@msg	no appearance item {index}	アピアランス項目 {index} はありません
+@msg	no artboard {_1}	アートボード {_1} はありません
+@msg	no artboard {artboard} (0-based; the document has {_1})	アートボード {artboard} はありません (0 から始まるインデックス。ドキュメントのアートボードは {_1} 個)
+@msg	no asset {id}	アセット {id} はありません
+@msg	no asset {id} (see assets.list)	アセット {id} はありません (assets.list を参照)
+@msg	no assets to export	書き出すアセットがありません
+@msg	no assets yet: collect art for export first (assets.add)	アセットがまだありません: 先に書き出すアートを収集してください (assets.add)
+@msg	no brush named `{n}`	`{n}` という名前のブラシはありません
+@msg	no character at byte {start}	バイト {start} の位置に文字はありません
+@msg	no colour	カラーがありません
+@msg	no colour group `{group}`	カラーグループ `{group}` はありません
+@msg	no colour group `{name}`	カラーグループ `{name}` はありません
+@msg	no data sets	データセットがありません
+@msg	no dataset named `{from}`	`{from}` という名前のデータセットはありません
+@msg	no dataset named `{name}`	`{name}` という名前のデータセットはありません
+@msg	no datasets	データセットがありません
+@msg	no design named `{name}`	`{name}` という名前のデザインはありません
+@msg	no design named `{n}`	`{n}` という名前のデザインはありません
+@msg	no design named `{old}`	`{old}` という名前のデザインはありません
+@msg	no encoder for {_1} yet	{_1} のエンコーダーはまだありません
+@msg	no export preset `{name}` (see document.exportPresets.list)	書き出しプリセット `{name}` はありません (document.exportPresets.list を参照)
+@msg	no folder: pass `path` or set Preferences › Plug-ins & Scratch Disks › Additional Plug-ins Folder	フォルダーがありません: `path` を指定するか、「環境設定 › プラグイン & 仮想記憶ディスク › 追加プラグインフォルダー」を設定してください
+@msg	no fonts to look for: they are all available	検索するフォントがありません: すべて使用できます
+@msg	no formats to export	書き出す形式がありません
+@msg	no gradient preset `{name}` (see gradient.presets.list)	グラデーションプリセット `{name}` はありません (gradient.presets.list を参照)
+@msg	no graphic style `{n}` in `{_1}`	`{_1}` にグラフィックスタイル `{n}` はありません
+@msg	no graphic style library `{key}` (see graphicStyle.libraries)	グラフィックスタイルライブラリ `{key}` はありません (graphicStyle.libraries を参照)
+@msg	no guide selected	ガイドが選択されていません
+@msg	no guide selected (or give an index)	ガイドが選択されていません (またはインデックスを指定してください)
+@msg	no guide {i}	ガイド {i} はありません
+@msg	no images in the folder	フォルダーに画像がありません
+@msg	no item at index {_1}	インデックス {_1} に項目はありません
+@msg	no item at index {from}	インデックス {from} に項目はありません
+@msg	no item at one of the indices {idx}	インデックス {idx} のいずれかに項目がありません
+@msg	no layer	レイヤーがありません
+@msg	no layer {id} (see layer.list)	レイヤー {id} はありません (layer.list を参照)
+@msg	no layers to export	書き出すレイヤーがありません
+@msg	no library `{key}`	ライブラリ `{key}` はありません
+@msg	no metafile format	メタファイル形式はありません
+@msg	no object {_1}	オブジェクト {_1} はありません
+@msg	no objects	オブジェクトがありません
+@msg	no parent layer	親レイヤーがありません
+@msg	no perspective grid preset named `{b}` (see perspective.presets.list)	`{b}` という名前の遠近グリッドプリセットはありません (perspective.presets.list を参照)
+@msg	no perspective grid preset named `{n}`	`{n}` という名前の遠近グリッドプリセットはありません
+@msg	no point selected (give `index`)	ポイントが選択されていません (`index` を指定してください)
+@msg	no preset called `{from}` (see file.newPresets)	`{from}` というプリセットはありません (file.newPresets を参照)
+@msg	no preset called `{name}` (see file.newPresets)	`{name}` というプリセットはありません (file.newPresets を参照)
+@msg	no preset named `{n}`	`{n}` という名前のプリセットはありません
+@msg	no print preset named `{b}` (see print.presets.list)	`{b}` という名前のプリントプリセットはありません (print.presets.list を参照)
+@msg	no print preset named `{name}` (presets: {_1})	`{name}` という名前のプリントプリセットはありません (プリセット: {_1})
+@msg	no print preset named `{n}`	`{n}` という名前のプリントプリセットはありません
+@msg	no profile named `{name}`	`{name}` という名前のプロファイルはありません
+@msg	no readable files in the folder	フォルダーに読み込めるファイルがありません
+@msg	no recovery copy `{f}` (see file.recovery.list)	復元用コピー `{f}` はありません (file.recovery.list を参照)
+@msg	no rows	行がありません
+@msg	no saved PDF preset named `{name}`	`{name}` という名前の保存済み PDF プリセットはありません
+@msg	no saved export preset `{name}`	保存済みの書き出しプリセット `{name}` はありません
+@msg	no saved gradient preset called {name}	{name} という保存済みのグラデーションプリセットはありません
+@msg	no saved gradient presets	保存済みのグラデーションプリセットがありません
+@msg	no saved preset called `{name}`	`{name}` という保存済みのプリセットはありません
+@msg	no saved presets to export (name [Default] in `names` to export it)	書き出す保存済みプリセットがありません ([Default] を書き出すには `names` に指定してください)
+@msg	no saved presets to export (name built-in ones in `names`)	書き出す保存済みプリセットがありません (組み込みのプリセットは `names` に指定してください)
+@msg	no saved print preset named `{name}`	`{name}` という名前の保存済みプリントプリセットはありません
+@msg	no saved profile called {name}	{name} という保存済みのプロファイルはありません
+@msg	no saved selection `{name}`	保存した選択範囲 `{name}` はありません
+@msg	no saved theme called {name} (see colorTheme.list)	{name} という保存済みのテーマはありません (colorTheme.list を参照)
+@msg	no saved views	保存した表示がありません
+@msg	no series {i}	系列 {i} はありません
+@msg	no slice {n} in the image (see slice.list)	画像にスライス {n} はありません (slice.list を参照)
+@msg	no source art	元のアートがありません
+@msg	no stop {i} (the gradient has {n})	分岐点 {i} はありません (グラデーションの分岐点は {n} 個)
+@msg	no style `{name}`	スタイル `{name}` はありません
+@msg	no such assets (see assets.list)	該当するアセットはありません (assets.list を参照)
+@msg	no such frame anchor, or the frame would reach past the canvas	該当するフレームのアンカーがないか、フレームがキャンバスからはみ出します
+@msg	no such objects	該当するオブジェクトはありません
+@msg	no such path anchor, or the path would reach past the canvas	該当するパスのアンカーがないか、パスがキャンバスからはみ出します
+@msg	no such rows	該当する行はありません
+@msg	no swatch `{keep}`	スウォッチ `{keep}` はありません
+@msg	no swatch `{n}`	スウォッチ `{n}` はありません
+@msg	no swatch `{n}` (swatches and colour groups move separately)	スウォッチ `{n}` はありません (スウォッチとカラーグループは別々に移動します)
+@msg	no swatch library `{key}` (see swatch.library.list)	スウォッチライブラリ `{key}` はありません (swatch.library.list を参照)
+@msg	no swatch library `{key}` (see swatch.library.list; "document": the document's swatches)	スウォッチライブラリ `{key}` はありません (swatch.library.list を参照。"document" はドキュメントのスウォッチ)
+@msg	no swatch library `{key}` (see swatch.library.list; "{DOCUMENT_SWATCHES}": the document's swatches)	スウォッチライブラリ `{key}` はありません (swatch.library.list を参照。"{DOCUMENT_SWATCHES}" はドキュメントのスウォッチ)
+@msg	no swatch named `{n}`	`{n}` という名前のスウォッチはありません
+@msg	no swatch or colour group `{n}`	スウォッチまたはカラーグループ `{n}` はありません
+@msg	no swatch or colour group `{n}` in `{_1}`	`{_1}` にスウォッチまたはカラーグループ `{n}` はありません
+@msg	no symbol named `{name}`	`{name}` という名前のシンボルはありません
+@msg	no text objects selected	テキストオブジェクトが選択されていません
+@msg	no toolbar named `{_1}`	`{_1}` という名前のツールバーはありません
+@msg	no toolbar named `{name}`	`{name}` という名前のツールバーはありません
+@msg	no tracing preset `{preset}` (see imageTrace.presets)	トレースプリセット `{preset}` はありません (imageTrace.presets を参照)
+@msg	no user library folder here (save with a path, or without one to get the data)	ここにはユーザーライブラリフォルダーがありません (パスを指定して保存するか、パスを指定せずにデータを取得してください)
+@msg	no variable named `{from}`	`{from}` という名前の変数はありません
+@msg	no variable named `{name}`	`{name}` という名前の変数はありません
+@msg	no variable named `{var}`	`{var}` という名前の変数はありません
+@msg	no variable named `{v}`	`{v}` という名前の変数はありません
+@msg	no view named `{name}`	`{name}` という名前の表示はありません
+@msg	node {_1} is not a graph	ノード {_1} はグラフではありません
+@msg	node {_1} is not an image	ノード {_1} は画像ではありません
+@msg	node {_1} is not type	ノード {_1} は文字ではありません
+@msg	not a PDF presets file (format `{_1}`)	PDF プリセットファイルではありません (形式 `{_1}`)
+@msg	not a PDF presets file: {e}	PDF プリセットファイルではありません: {e}
+@msg	not a Word document: its WordDocument stream doesn't start with a file information block	Word 文書ではありません: WordDocument ストリームがファイル情報ブロックで始まっていません
+@msg	not a Word document: its compound file has no WordDocument stream	Word 文書ではありません: 複合ファイルに WordDocument ストリームがありません
+@msg	not a Word document: its main part is not a WordprocessingML document	Word 文書ではありません: メインパートが WordprocessingML 文書ではありません
+@msg	not a Word document: its package has no main document part	Word 文書ではありません: パッケージにメイン文書パートがありません
+@msg	not a closed path	クローズパスではありません
+@msg	not a flattener presets file (format `{_1}`)	分割・統合プリセットファイルではありません (形式 `{_1}`)
+@msg	not a flattener presets file: {e}	分割・統合プリセットファイルではありません: {e}
+@msg	not a layer or group	レイヤーでもグループでもありません
+@msg	not a library file: {e}	ライブラリファイルではありません: {e}
+@msg	not a mesh envelope point	メッシュエンベロープのポイントではありません
+@msg	not a perspective grid presets file (format `{_1}`)	遠近グリッドプリセットファイルではありません (形式 `{_1}`)
+@msg	not a perspective grid presets file: {e}	遠近グリッドプリセットファイルではありません: {e}
+@msg	not a print presets file (format `{_1}`)	プリントプリセットファイルではありません (形式 `{_1}`)
+@msg	not a print presets file: {e}	プリントプリセットファイルではありません: {e}
+@msg	not a stored or deflated central record	無圧縮または Deflate 圧縮のセントラルレコードではありません
+@msg	not a valid SVGZ file: {e}	有効な SVGZ ファイルではありません: {e}
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF ファイルではありません: {\\rtf で始まっていません
+@msg	not an image VectorCraft reads (see document.formats)	VectorCraft で読み込める画像ではありません (document.formats を参照)
+@msg	not area type (text in a frame) outside perspective	遠近グリッド外のエリア内文字 (フレーム内のテキスト) ではありません
+@msg	not editing an opacity mask	不透明マスクを編集中ではありません
+@msg	not type on a path outside perspective	遠近グリッド外のパス上文字ではありません
+@msg	nothing prints	プリントされるものがありません
+@msg	nothing to bind	バインドする対象がありません
+@msg	nothing to change	変更する内容がありません
+@msg	nothing to change: give dx, dy, hScale, vScale or rotation	変更する内容がありません: dx、dy、hScale、vScale、rotation のいずれかを指定してください
+@msg	nothing to crop	切り抜く対象がありません
+@msg	nothing to export	書き出す対象がありません
+@msg	nothing to export: the document has no visible art	書き出す対象がありません: ドキュメントに表示されているアートがありません
+@msg	nothing to mark	マークする対象がありません
+@msg	nothing to print: every artboard picked is blank	プリントする対象がありません: 選択したアートボードがすべて空白です
+@msg	nothing to print: the document has no art that prints	プリントする対象がありません: ドキュメントにプリントされるアートがありません
+@msg	object is not a path	オブジェクトがパスではありません
+@msg	object transparency cannot be sampled onto highlighted characters; disable Transparency in Eyedropper Options or select the whole object	オブジェクトの透明は、ハイライトした文字には適用できません。「スポイトオプション」の「透明」をオフにするか、オブジェクト全体を選択してください
+@msg	object {_1} can't be set as point type	オブジェクト {_1} はポイント文字にできません
+@msg	object {_1} has lost its file's contents: relink it	オブジェクト {_1} のファイルの内容が失われています: 再リンクしてください
+@msg	object {_1} has no path	オブジェクト {_1} にパスがありません
+@msg	object {_1} has no size	オブジェクト {_1} にサイズがありません
+@msg	object {_1} is hidden or locked, or on a locked artboard	オブジェクト {_1} は非表示かロックされているか、ロックされたアートボード上にあります
+@msg	object {_1} is not a placed document	オブジェクト {_1} は配置したドキュメントではありません
+@msg	object {_1} is not an Intertwine group	オブジェクト {_1} は織り交ぜグループではありません
+@msg	object {_1} is not an image	オブジェクト {_1} は画像ではありません
+@msg	object {_1} is not an image or a linked file	オブジェクト {_1} は画像でもリンクファイルでもありません
+@msg	object {_1} is not an image or a placed document	オブジェクト {_1} は画像でも配置したドキュメントでもありません
+@msg	object {_1} is not in this Intertwine group	オブジェクト {_1} はこの織り交ぜグループに含まれていません
+@msg	object {_1} needs a 3D effect at index {index}	オブジェクト {_1} にはインデックス {index} に 3D 効果が必要です
+@msg	object {id} has anchors 0–{_1} for `corners`, not {past}	オブジェクト {id} で `corners` に指定できるアンカーは 0–{_1} です ({past} は指定できません)
+@msg	object {id} has {n} anchors, so no anchor {past}	オブジェクト {id} のアンカーは {n} 個のため、アンカー {past} はありません
+@msg	objects must be none, move or copy	objects には none、move、copy のいずれかを指定してください
+@msg	objects were left out	除外されたオブジェクトがあります
+@msg	offset out of range	オフセットが範囲外です
+@msg	on must be true or false	on には true または false を指定してください
+@msg	only groups, layers, type and images have a Contents (Characters) row	「内容 (文字)」行があるのは、グループ、レイヤー、文字、画像だけです
+@msg	only interior mesh lines can be deleted	削除できるのは内側のメッシュラインだけです
+@msg	only solid colours can be added (not gradients or patterns)	追加できるのは単色だけです (グラデーションとパターンは追加できません)
+@msg	only solid-colour swatches can be spot colours	特色にできるのは単色のスウォッチだけです
+@msg	only this Affinity file's embedded preview could be read: use File › Open to see it with its warning, or export SVG or PDF from Affinity first	この Affinity ファイルは埋め込みプレビューしか読み込めませんでした: 「ファイル › 開く」で警告とともに表示するか、先に Affinity から SVG または PDF を書き出してください
+@msg	only this Affinity file's embedded preview could be read; use File › Open to see it with its warning	この Affinity ファイルは埋め込みプレビューしか読み込めませんでした。「ファイル › 開く」で警告とともに表示できます
+@msg	onto, above, below, icon and a column place belong to window.panel.float and window.panel.dock	onto、above、below、icon、列の位置は window.panel.float と window.panel.dock で指定します
+@msg	onto, above, below, icon and a column place take no anchor, side, zone or before	onto、above、below、icon、列の位置を指定する場合、anchor、side、zone、before は指定できません
+@msg	onto, above, below, icon and a column place take no x, y, width or height	onto、above、below、icon、列の位置を指定する場合、x、y、width、height は指定できません
+@msg	open a document to look for its linked files	リンクファイルを検索するには、ドキュメントを開いてください
+@msg	options must be an object (see file.formatOptions)	options にはオブジェクトを指定してください (file.formatOptions を参照)
+@msg	order must be leftToRight or rightToLeft	order には leftToRight または rightToLeft を指定してください
+@msg	orientation must be portrait or landscape, not `{o}`	orientation には portrait または landscape を指定してください (`{o}` は指定できません)
+@msg	outlineText {v}: true or false	outlineText {v}: true または false を指定してください
+@msg	output intent profile: {e}	出力インテントのプロファイル: {e}
+@msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: 「{name}」という名前の RGB または CMYK プロファイルはありません
+@msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1} ファイルは CMYK ですが、「{name}」は RGB プロファイルです
+@msg	output.destination: {e}	output.destination: {e}
+@msg	output.inks: no ink is set to print	output.inks: プリントするように設定されたインキがありません
+@msg	output.outputIntent: no profile is called “{name}”, and a {std} output intent embeds its profile	output.outputIntent: 「{name}」という名前のプロファイルはありません。{std} の出力インテントにはプロファイルを埋め込みます
+@msg	output.outputIntent: no profile is called “{name}”: a {std} output intent embeds a profile, or names a registered printing condition (outputConditionId and registry)	output.outputIntent: 「{name}」という名前のプロファイルはありません: {std} の出力インテントには、プロファイルを埋め込むか、登録済みの印刷条件 (outputConditionId と registry) を指定します
+@msg	output.outputIntent: {std} files print in CMYK, and “{name}” is an RGB profile	output.outputIntent: {std} ファイルは CMYK でプリントされますが、「{name}」は RGB プロファイルです
+@msg	output.outputIntent: “{name}” is a grey profile, which can't be a {std} output intent	output.outputIntent: 「{name}」はグレープロファイルのため、{std} の出力インテントにはできません
+@msg	overlap: {o} pt is half a tile or more	overlap: {o} pt はタイルの半分以上です
+@msg	overlapping Shaper paths must be in the same layer or group	重なり合う Shaper パスは、同じレイヤーまたはグループ内にある必要があります
+@msg	overlapping edits	編集範囲が重なっています
+@msg	page art conflicts with image data for {key}	ページのアートが {key} の画像データと一致しません
+@msg	page art conflicts with pattern {name}	ページのアートがパターン {name} と一致しません
+@msg	page art conflicts with swatch {name}	ページのアートがスウォッチ {name} と一致しません
+@msg	page art is missing image data for {key}	ページのアートに {key} の画像データがありません
+@msg	page art is missing pattern {name}	ページのアートにパターン {name} がありません
+@msg	page art is missing swatch {name}	ページのアートにスウォッチ {name} がありません
+@msg	page must be a whole number from 1	page には 1 以上の整数を指定してください
+@msg	page thumbnail: {e}	ページのサムネール: {e}
+@msg	page {page} of the PDF has no objects	PDF の {page} ページにオブジェクトがありません
+@msg	page {page}: `{file}` has {n} {artboards}	{page} ページ: `{file}` には {n} {artboards} あります
+@msg	page {page}: `{name}` has {n} {pages}	{page} ページ: `{name}` には {n} {pages} あります
+@msg	pages must be a range such as "2-3" or a page number, not {v}	pages には "2-3" のような範囲またはページ番号を指定してください ({v} は指定できません)
+@msg	pages: {e}	pages: {e}
+@msg	panel position must be finite	パネルの位置には有限の値を指定してください
+@msg	parameters must be an object	parameters にはオブジェクトを指定してください
+@msg	params must be an object	params にはオブジェクトを指定してください
+@msg	passwords can have up to {MAX_PASSWORD} bytes	パスワードは {MAX_PASSWORD} バイト以内です
+@msg	path has no open end	パスに開いた端点がありません
+@msg	paths must be strings	paths には文字列を指定してください
+@msg	pdfCompatible: false needs every artboard to keep the editable artwork	pdfCompatible: false の場合、編集可能なアートワークを保持するためにすべてのアートボードが必要です
+@msg	pdfs `{m}`: single or multiple	pdfs `{m}`: single または multiple を指定してください
+@msg	pickColorFrom is "artwork" or "swatches", not {v}	pickColorFrom には "artwork" または "swatches" を指定してください ({v} は指定できません)
+@msg	pins and moved must be non-empty lists of the same length	pins と moved には、同じ長さの空でないリストを指定してください
+@msg	pins must be [[x,y]…]	pins には [[x,y]…] を指定してください
+@msg	pins must be finite	pins には有限の値を指定してください
+@msg	place is above, below or inside, not `{other}`	place には above、below、inside のいずれかを指定してください (`{other}` は指定できません)
+@msg	plane must be left|right|ground	plane には left|right|ground のいずれかを指定してください
+@msg	plane must be left|right|ground|none	plane には left|right|ground|none のいずれかを指定してください
+@msg	point is outside the mesh	点がメッシュの外にあります
+@msg	points must be [t, left, right] with non-negative widths	points には、幅が 0 以上の [t, left, right] を指定してください
+@msg	points must be a non-empty [[x,y,pressure?]…] list	points には空でない [[x,y,pressure?]…] のリストを指定してください
+@msg	points must be a non-empty list of finite [x,y]	points には有限の [x,y] からなる空でないリストを指定してください
+@msg	points must be an array or null	points には配列または null を指定してください
+@msg	points must be finite	points には有限の値を指定してください
+@msg	points must be finite [x,y] pairs	points には有限の [x,y] の組を指定してください
+@msg	points must contain 1–4096 coordinates	points には 1–4096 個の座標を指定してください
+@msg	position must be normal, superscript or subscript	position には normal、superscript、subscript のいずれかを指定してください
+@msg	position must be topLeft, topRight, bottomLeft or bottomRight	position には topLeft、topRight、bottomLeft、bottomRight のいずれかを指定してください
+@msg	positions must be between 0 and 100000 pt	positions には 0 から 100000 pt までの値を指定してください
+@msg	ppi must be a positive number, not {ppi}	ppi には正の数値を指定してください ({ppi} は指定できません)
+@msg	ppi must be between 1 and 2400	ppi には 1 から 2400 までの値を指定してください
+@msg	preserve `{v}` is not transforms|bounds|fileDimensions|fit|fill	preserve `{v}` は transforms|bounds|fileDimensions|fit|fill のいずれでもありません
+@msg	preserveShape must be clippingMask|transparency	preserveShape には clippingMask|transparency のいずれかを指定してください
+@msg	preset `{id}`: mobile or density	preset `{id}`: mobile または density を指定してください
+@msg	preset must be standard, diffuse, topLeft or right	preset には standard、diffuse、topLeft、right のいずれかを指定してください
+@msg	preset must be the name of a print preset	preset にはプリントプリセットの名前を指定してください
+@msg	previewMode must be default, pixel or overprint	previewMode には default、pixel、overprint のいずれかを指定してください
+@msg	print settings: {e}	プリント設定: {e}
+@msg	procedures nest too deeply	プロシージャの入れ子が深すぎます
+@msg	procedures nested too deeply	プロシージャの入れ子が深すぎます
+@msg	quotes must be {double?, single?}	quotes には {double?, single?} を指定してください
+@msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	quotes.{k} には開き引用符と閉じ引用符を指定してください (例: "“”")
+@msg	rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)	rasterEffectsPpi には 1–2400 を指定してください (72 がスクリーン、150 が標準、300 が高解像度)
+@msg	rating must be a whole number from 0 to {MAX_RATING}	rating には 0 から {MAX_RATING} までの整数を指定してください
+@msg	rect and {k} contradict each other: give the area or the artboards	rect と {k} が矛盾しています: 領域またはアートボードのどちらかを指定してください
+@msg	rect applies to raster formats, not {_1}	rect はラスター形式に適用されます ({_1} には適用されません)
+@msg	rect is [x, y, width, height] in points	rect には [x, y, width, height] をポイント単位で指定してください
+@msg	rect must be [x, y, width, height]	rect には [x, y, width, height] を指定してください
+@msg	rect must be [x, y, width, height] with a positive width and height	rect には、幅と高さが正の [x, y, width, height] を指定してください
+@msg	rect needs finite numbers and a positive width and height	rect には有限の数値と、正の幅と高さが必要です
+@msg	redraw needs id	redraw には id が必要です
+@msg	redraw within must be a finite distance of 0 or more	redraw の within には 0 以上の有限の距離を指定してください
+@msg	registration must be 0..8	registration には 0..8 の値を指定してください
+@msg	release a layer or a group	レイヤーまたはグループを解除してください
+@msg	replace keeps the replaced object's place and transform: drop template, at and rect	replace では置き換えられるオブジェクトの位置と変形が保持されます: template、at、rect は指定しないでください
+@msg	replace: select the one object to replace	replace: 置き換えるオブジェクトを 1 つ選択してください
+@msg	resolution must be a number or screen|medium|high	resolution には数値、または screen|medium|high のいずれかを指定してください
+@msg	resolution must be between 1 and 2400 ppi	resolution には 1 から 2400 ppi までの値を指定してください
+@msg	rotation must be a number of degrees	rotation には度数の数値を指定してください
+@msg	rotation must be finite	rotation には有限の値を指定してください
+@msg	rows and cols must be 1..50	rows と cols には 1..50 の値を指定してください
+@msg	rows and columns must be 1..500	rows と columns には 1..500 の値を指定してください
+@msg	rows of objects whose appearances differ can't be reordered together	アピアランスが異なるオブジェクトの行は、まとめて並べ替えられません
+@msg	save the document first: Package collects a saved document	先にドキュメントを保存してください: パッケージは保存済みのドキュメントを収集します
+@msg	save the document first: copy puts the file in its folder	先にドキュメントを保存してください: copy はファイルをドキュメントのフォルダーに置きます
+@msg	savedPreset: {e}	savedPreset: {e}
+@msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	scale `{s}`: 2x のような倍率、幅 (100w)、高さ (100h)、解像度 (72ppi) のいずれかを指定してください
+@msg	scale must be a number above 0, at most 64	scale には 0 より大きく 64 以下の数値を指定してください
+@msg	scale must be non-zero	scale には 0 以外の値を指定してください
+@msg	scope must be selection or all (got {other})	scope には selection または all を指定してください (指定値: {other})
+@msg	scribble is too long	落書きが長すぎます
+@msg	segment does not exist	セグメントが存在しません
+@msg	select a Shaper group	Shaper グループを選択してください
+@msg	select a blend to set easing or color shift	イージングまたはカラーシフトを設定するブレンドを選択してください
+@msg	select a compound shape	複合シェイプを選択してください
+@msg	select a graph	グラフを選択してください
+@msg	select a group or layer with visible, unlocked members	表示されていてロックされていないメンバーを含むグループまたはレイヤーを選択してください
+@msg	select a layer	レイヤーを選択してください
+@msg	select a text object	テキストオブジェクトを選択してください
+@msg	select an image (or an Image Trace group)	画像 (または画像トレースグループ) を選択してください
+@msg	select an image, or pass id	画像を選択するか、id を指定してください
+@msg	select an object (or pass `id`)	オブジェクトを選択してください (または `id` を指定してください)
+@msg	select an object with a freeform gradient	フリーフォームグラデーションのあるオブジェクトを選択してください
+@msg	select an object with an opacity mask	不透明マスクのあるオブジェクトを選択してください
+@msg	select area type	エリア内文字を選択してください
+@msg	select area type (text in a frame)	エリア内文字 (フレーム内のテキスト) を選択してください
+@msg	select area type and closed paths (at least one area type object)	エリア内文字とクローズパスを選択してください (エリア内文字オブジェクトが 1 つ以上必要です)
+@msg	select area type whose first line can fit its frame	1 行目がフレームに収まるエリア内文字を選択してください
+@msg	select artwork to add its colours	カラーを追加するアートワークを選択してください
+@msg	select artwork to make a group of its colours	カラーのグループを作成するアートワークを選択してください
+@msg	select artwork to recolour, or give a colour `group`	再配色するアートワークを選択するか、カラーの `group` を指定してください
+@msg	select exactly two path ends to join	連結するパスの端点をちょうど 2 つ選択してください
+@msg	select members of a compound shape	複合シェイプのメンバーを選択してください
+@msg	select objects or give ids	オブジェクトを選択するか、ids を指定してください
+@msg	select objects to align to the guide	ガイドに整列するオブジェクトを選択してください
+@msg	select one Intertwine group	織り交ぜグループを 1 つ選択してください
+@msg	select one image or pass id	画像を 1 つ選択するか、id を指定してください
+@msg	select paths	パスを選択してください
+@msg	select paths or compound paths	パスまたは複合パスを選択してください
+@msg	select rows or objects to collect	収集する行またはオブジェクトを選択してください
+@msg	select something to export	書き出す対象を選択してください
+@msg	select something to export (or turn off selectedOnly)	書き出す対象を選択してください (または selectedOnly をオフにしてください)
+@msg	select text to redefine the style from	スタイルの再定義に使用するテキストを選択してください
+@msg	select the art and, on top of it, the mask object	アートと、その前面にあるマスクオブジェクトを選択してください
+@msg	select the art for the design	デザインにするアートを選択してください
+@msg	select the art for the pattern tile	パターンタイルにするアートを選択してください
+@msg	select the art to add first	先に追加するアートを選択してください
+@msg	select the art to collect (or give its ids)	収集するアートを選択してください (またはその ids を指定してください)
+@msg	select the content and a path on top	内容と、その前面にあるパスを選択してください
+@msg	select the images to relink, or pass ids	再リンクする画像を選択するか、ids を指定してください
+@msg	select the images, or pass ids	画像を選択するか、ids を指定してください
+@msg	select the linked images or placed documents, or pass ids	リンク画像または配置したドキュメントを選択するか、ids を指定してください
+@msg	select the object to copy from	コピー元のオブジェクトを選択してください
+@msg	select the objects (or give their ids)	オブジェクトを選択してください (またはその ids を指定してください)
+@msg	select the objects to attach to the path	パスに配置するオブジェクトを選択してください
+@msg	select the objects to bind	バインドするオブジェクトを選択してください
+@msg	select two or more objects to intertwine	織り交ぜるオブジェクトを 2 つ以上選択してください
+@msg	select two or more slices to combine	結合するスライスを 2 つ以上選択してください
+@msg	select type on a path	パス上文字を選択してください
+@msg	selection `{m}`: one or each	selection `{m}`: one または each を指定してください
+@msg	settings is an object of document.exportForScreens params	settings には document.exportForScreens のパラメーターのオブジェクトを指定してください
+@msg	settings must be an object	settings にはオブジェクトを指定してください
+@msg	show `{show}`: all, missing, modified or embedded	show `{show}`: all、missing、modified、embedded のいずれかを指定してください
+@msg	show must be true or false	show には true または false を指定してください
+@msg	size must be "small", "medium", "large" or a number of points over 0 up to {_1}	size には "small"、"medium"、"large"、または 0 より大きく {_1} 以下のポイント数を指定してください
+@msg	size must be positive	size には正の値を指定してください
+@msg	sizeMode is "fixed" or "pressure", not `{other}`	sizeMode には "fixed" または "pressure" を指定してください (`{other}` は指定できません)
+@msg	sizeMode is "fixed" or "pressure", not {other}	sizeMode には "fixed" または "pressure" を指定してください ({other} は指定できません)
+@msg	sizeVariation must be 0 or more	sizeVariation には 0 以上の値を指定してください
+@msg	smallCaps must be true or false	smallCaps には true または false を指定してください
+@msg	sort `{x}`: name, kind or status	sort `{x}`: name、kind、status のいずれかを指定してください
+@msg	source paths are too large for Shaper	元パスが Shaper には大きすぎます
+@msg	spot, mode and group apply to solid colours only	spot、mode、group を適用できるのは単色だけです
+@msg	status `{s}`: linked, embedded, missing or modified	status `{s}`: linked、embedded、missing、modified のいずれかを指定してください
+@msg	steps must be 1..1000	steps には 1..1000 の値を指定してください
+@msg	steps must be 1..{MAX_STEPS}	steps には 1..{MAX_STEPS} の値を指定してください
+@msg	stop {i}: `plates` must be four numbers from 0 to 1 (C, M, Y, K)	分岐点 {i}: `plates` には 0 から 1 までの数値を 4 つ指定してください (C, M, Y, K)
+@msg	stopped before the archive was finished	アーカイブが完成する前に停止しました
+@msg	strokeMode must be within|along|across, got {m}	strokeMode には within|along|across のいずれかを指定してください (指定値: {m})
+@msg	strokeOptions must be an object of stroke.set options	strokeOptions には stroke.set のオプションのオブジェクトを指定してください
+@msg	strokeWidth must be a positive number of pixels	strokeWidth には正のピクセル数を指定してください
+@msg	subpath {si} is not an open subpath	サブパス {si} はオープンなサブパスではありません
+@msg	subpaths required when joining the same path	同じパスを連結する場合は subpaths が必要です
+@msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict には "merge" または "add" を指定してください ({v} は指定できません)
+@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text には {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?} を指定してください
+@msg	text transform is collapsed or unrepresentable	テキストの変形がつぶれているか、表現できません
+@msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces には 2 から 100 までの整数を指定してください
+@msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: "{_1}" または "{_2}" を使用してください
+@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: 画像ファイルの {path} または {name, dataBase64}、あるいは effect.list が返す形式のテクスチャを指定してください
+@msg	textureImage: {e}	textureImage: {e}
+@msg	that makes more than {MAX_PIECES} slices	スライスが {MAX_PIECES} 個を超えます
+@msg	that object is not in the overlap	そのオブジェクトは重なりの中にありません
+@msg	the Affinity document has no page with a size	Affinity ドキュメントにサイズのあるページがありません
+@msg	the CMYK image couldn't be written	CMYK 画像を書き出せませんでした
+@msg	the PDF security settings were saved without their passwords: give openPassword or permissionsPassword again, or security without passwordRequired to export unprotected	PDF のセキュリティ設定はパスワードなしで保存されています: openPassword または permissionsPassword をもう一度指定するか、保護なしで書き出すには passwordRequired のない security を指定してください
+@msg	the RTF file has too many paragraphs or formatting changes to place as type (at most {MAX_PARAGRAPHS} paragraphs and {MAX_RUNS} runs)	RTF ファイルの段落または書式の変更が多すぎて、文字として配置できません (最大 {MAX_PARAGRAPHS} 段落、{MAX_RUNS} ラン)
+@msg	the RTF file is too large to place as type (at most {_1} MB)	RTF ファイルが大きすぎて、文字として配置できません (最大 {_1} MB)
+@msg	the SVG expands to more than {0} nested SVG images	SVG を展開すると、入れ子の SVG 画像が {0} 個を超えます
+@msg	the SVG expands to more than {0} objects	SVG を展開すると、オブジェクトが {0} 個を超えます
+@msg	the SVG has no drawable objects	SVG に描画できるオブジェクトがありません
+@msg	the SVGZ file unpacks to more than {_1} MB	SVGZ ファイルを展開すると {_1} MB を超えます
+@msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文書のプロパティが {MAX_PAGES} ページを超えており、多すぎて配置できません
+@msg	the Word document has more than {MAX_RUNS} runs of character or paragraph properties, too many to place	Word 文書の文字または段落プロパティのランが {MAX_RUNS} 個を超えており、多すぎて配置できません
+@msg	the Word document has more than {_1} MB of formatting properties, too many to place	Word 文書の書式プロパティが {_1} MB を超えており、多すぎて配置できません
+@msg	the Word document has too much text or formatting to place as type (at most {MAX_PARAGRAPHS} paragraphs, {MAX_RUNS} runs and {_1} MB of text)	Word 文書のテキストまたは書式が多すぎて、文字として配置できません (最大 {MAX_PARAGRAPHS} 段落、{MAX_RUNS} ラン、テキスト {_1} MB)
+@msg	the Word document has too much text to place as type (at most {_1} MB)	Word 文書のテキストが多すぎて、文字として配置できません (最大 {_1} MB)
+@msg	the Word document is encrypted or protected with a password; save it without one to place it	Word 文書が暗号化されているか、パスワードで保護されています。配置するには、パスワードなしで保存してください
+@msg	the Word document is too large to place (its {name} stream holds more than {_1} MB)	Word 文書が大きすぎて配置できません ({name} ストリームが {_1} MB を超えています)
+@msg	the Word document was last saved with fast save, which VectorCraft doesn't read; save it again with fast save turned off	Word 文書は高速保存で保存されていますが、VectorCraft はこの形式を読み込めません。高速保存をオフにして保存し直してください
+@msg	the Word document was saved by Word 6.0 or Word 95, which VectorCraft doesn't read; save it as a Word 97-2003 document	Word 文書は Word 6.0 または Word 95 で保存されていますが、VectorCraft はこの形式を読み込めません。Word 97-2003 文書として保存してください
+@msg	the Word document's text is made of more than {MAX_PIECES} pieces, too many to place	Word 文書のテキストが {MAX_PIECES} 個を超えるピースに分かれており、多すぎて配置できません
+@msg	the action set ids are not a list	アクションセットの ID がリストではありません
+@msg	the active paint is not a gradient	アクティブなペイントがグラデーションではありません
+@msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	アートボードがキャンバスに収まりません: アートボードの数を減らすか、間隔またはサイズを小さくしてください
+@msg	the character's size can't be measured	文字のサイズを計測できません
+@msg	the compound shape is too complex to expand	複合シェイプが複雑すぎて拡張できません
+@msg	the container of the listed objects is gone	指定したオブジェクトを含むコンテナがなくなりました
+@msg	the copy `{user_id}` can't be read as a library	コピー `{user_id}` をライブラリとして読み込めません
+@msg	the copy would leave the canvas	コピーがキャンバスからはみ出します
+@msg	the cut cannot be made on this art: {e}	このアートはカットできません: {e}
+@msg	the data isn't an EMF or WMF picture	データが EMF または WMF の画像ではありません
+@msg	the data isn't an EPS or PostScript picture	データが EPS または PostScript の画像ではありません
+@msg	the deferred paste is no longer available	遅延ペーストは使用できなくなりました
+@msg	the design is too big to draw at every data point of this graph	デザインが大きすぎて、このグラフのすべてのデータポイントには描画できません
+@msg	the design is too big to draw in every column of this graph	デザインが大きすぎて、このグラフのすべての棒には描画できません
+@msg	the dialog it was opened over is no longer open	元のダイアログはすでに閉じられています
+@msg	the dictionary stack overflowed	辞書スタックがオーバーフローしました
+@msg	the editing data's hash has no place	編集データのハッシュを書き込む場所がありません
+@msg	the entities the document declares expand to too much text	ドキュメントで宣言されたエンティティを展開すると、テキストが多くなりすぎます
+@msg	the envelope's content has no bounds	エンベロープの内容に境界がありません
+@msg	the envelope's mesh is malformed	エンベロープのメッシュの形式が正しくありません
+@msg	the file holds no `variableSets` element	ファイルに `variableSets` 要素がありません
+@msg	the file is larger than {_1} MB	ファイルが {_1} MB を超えています
+@msg	the file is too large	ファイルが大きすぎます
+@msg	the file was updated or encrypted already	ファイルはすでに更新または暗号化されています
+@msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	行の先頭の文字には、カーニングの対象となる前の文字がありません: 上下 (dy) にのみ移動します
+@msg	the font {_1} is not available	フォント {_1} は使用できません
+@msg	the format has no file extension	この形式にはファイル拡張子がありません
+@msg	the graphic can't be read: {e}	グラフィックを読み込めません: {e}
+@msg	the graphic is empty	グラフィックが空です
+@msg	the graphic's data is damaged	グラフィックのデータが破損しています
+@msg	the graphic's document has no artboard	グラフィックのドキュメントにアートボードがありません
+@msg	the header `{cell}` for `{name}` would read back as the variable `{other}`: rename one of them	`{name}` のヘッダー `{cell}` は、読み戻すと変数 `{other}` として扱われます: どちらかの名前を変更してください
+@msg	the image `{path}` isn't followed: {r}	画像 `{path}` は参照しません: {r}
+@msg	the image has no embedded pixels	画像に埋め込みピクセルがありません
+@msg	the image is empty	画像が空です
+@msg	the image is fully transparent	画像が完全に透明です
+@msg	the image is not on an artboard; pass rect	画像がアートボード上にありません。rect を指定してください
+@msg	the image's pixels are missing	画像のピクセルがありません
+@msg	the image's pixels aren't in the document	画像のピクセルがドキュメント内にありません
+@msg	the image's pixels can't be read: {e}	画像のピクセルを読み込めません: {e}
+@msg	the image's transparency doesn't fit it	画像の透明情報が画像と合っていません
+@msg	the job would print more than {MAX_PAGES} pages	このジョブでは {MAX_PAGES} ページを超えてプリントされます
+@msg	the job would print more than {_1} pages	このジョブでは {_1} ページを超えてプリントされます
+@msg	the layers hold no art to mask	レイヤーにマスクするアートがありません
+@msg	the layout moved	レイアウトが移動しました
+@msg	the library has a group `{name}` already	ライブラリにはすでにグループ `{name}` があります
+@msg	the library has no group `{name}`	ライブラリにグループ `{name}` はありません
+@msg	the library has no item `{item}`	ライブラリに項目 `{item}` はありません
+@msg	the library has no item `{other}`	ライブラリに項目 `{other}` はありません
+@msg	the library holds {MAX_GROUPS} groups already	ライブラリにはすでに {MAX_GROUPS} 個のグループがあります
+@msg	the library holds {MAX_ITEMS} items of this kind already	ライブラリにはこの種類の項目がすでに {MAX_ITEMS} 個あります
+@msg	the name is empty	名前が空です
+@msg	the object has no fill, stroke or effect	オブジェクトに塗り、線、効果のいずれもありません
+@msg	the object has no graphic style (pass `name`)	オブジェクトにグラフィックスタイルがありません (`name` を指定してください)
+@msg	the objects don't match the plan	オブジェクトが計画と一致しません
+@msg	the open and permissions passwords must differ	文書を開くパスワードと権限パスワードには異なるものを指定してください
+@msg	the operand stack overflowed	オペランドスタックがオーバーフローしました
+@msg	the page has no area	ページに面積がありません
+@msg	the page's type in an unread object's box isn't in its page art	未読み込みオブジェクトのボックス内にあるページの文字が、ページのアートにありません
+@msg	the paint behind the proxy is not a gradient	プロキシのペイントがグラデーションではありません
+@msg	the parent must be a layer or sublayer	親にはレイヤーまたはサブレイヤーを指定してください
+@msg	the path can't be extended	パスを延長できません
+@msg	the path can't be inside one of the objects to attach	パスを、配置するオブジェクトの中に置くことはできません
+@msg	the path has no segments to measure	パスに計測できるセグメントがありません
+@msg	the path is empty	パスが空です
+@msg	the path is too short to shorten that much	パスが短すぎて、その長さだけ短くできません
+@msg	the picture has no objects	画像にオブジェクトがありません
+@msg	the program runs too long	プログラムの実行時間が長すぎます
+@msg	the program uses too much memory	プログラムのメモリ使用量が多すぎます
+@msg	the rectangle must have a width and a height	長方形には幅と高さが必要です
+@msg	the rectangle needs a size and must lie on the canvas	長方形にはサイズが必要で、キャンバス上にある必要があります
+@msg	the selected art has no width	選択したアートに幅がありません
+@msg	the selection draws nothing	選択範囲は何も描画しません
+@msg	the selection has no area	選択範囲に面積がありません
+@msg	the selection has no art to export	選択範囲に書き出せるアートがありません
+@msg	the selection has no bounds	選択範囲に境界がありません
+@msg	the selection has no graphic style	選択範囲にグラフィックスタイルがありません
+@msg	the slice would leave the canvas	スライスがキャンバスからはみ出します
+@msg	the spot colour couldn't be added	特色を追加できませんでした
+@msg	the subpath has no ends to extend (it is closed or a single point)	サブパスに延長できる端点がありません (閉じているか、点が 1 つだけです)
+@msg	the symbols are nested too deeply to expand their instances	シンボルの入れ子が深すぎて、インスタンスを拡張できません
+@msg	the text file is too large to place as type (at most {_1} MB)	テキストファイルが大きすぎて、文字として配置できません (最大 {_1} MB)
+@msg	the text is empty	テキストが空です
+@msg	the text is over {_1} MB	テキストが {_1} MB を超えています
+@msg	the top object must be a path	最前面のオブジェクトはパスである必要があります
+@msg	the trace was cancelled	トレースがキャンセルされました
+@msg	the trailer has no size	トレーラーにサイズがありません
+@msg	the type object is flattened to nothing	文字オブジェクトを分割・統合すると何も残りません
+@msg	the value of axis `{tag}` must be a number or null	軸 `{tag}` の値には数値または null を指定してください
+@msg	the variable library declares more than {MAX_LIBRARY_DATASETS} data sets	変数ライブラリで宣言されているデータセットが {MAX_LIBRARY_DATASETS} 個を超えています
+@msg	the variable library declares more than {MAX_LIBRARY_ENTITIES} entities	変数ライブラリで宣言されているエンティティが {MAX_LIBRARY_ENTITIES} 個を超えています
+@msg	the variable library declares more than {MAX_LIBRARY_VARIABLES} variables	変数ライブラリで宣言されている変数が {MAX_LIBRARY_VARIABLES} 個を超えています
+@msg	the variable library declares no variables	変数ライブラリで変数が宣言されていません
+@msg	the variable library is larger than {MAX_LIBRARY_BYTES} bytes	変数ライブラリが {MAX_LIBRARY_BYTES} バイトを超えています
+@msg	the variable library is not UTF-8	変数ライブラリが UTF-8 ではありません
+@msg	the variable library is not well-formed XML: {e}	変数ライブラリが整形式の XML ではありません: {e}
+@msg	the variable library nests elements more than {MAX_LIBRARY_NESTING} deep	変数ライブラリの要素の入れ子が {MAX_LIBRARY_NESTING} 階層を超えています
+@msg	the variable library's document type declaration holds something other than entities of plain text	変数ライブラリの文書型宣言に、プレーンテキストのエンティティ以外のものが含まれています
+@msg	the variable library's entities expand to more than {MAX_LIBRARY_BYTES} bytes	変数ライブラリのエンティティを展開すると {MAX_LIBRARY_BYTES} バイトを超えます
+@msg	the window has no dock	ウィンドウにドックがありません
+@msg	the written PDF has no catalog	書き出した PDF にカタログがありません
+@msg	the written PDF has no cross-reference table	書き出した PDF に相互参照テーブルがありません
+@msg	the written PDF's metadata can't be edited	書き出した PDF のメタデータを編集できません
+@msg	there are no colour swatches to draw	描画するカラースウォッチがありません
+@msg	there is already a design named `{name}`	`{name}` という名前のデザインがすでにあります
+@msg	there is already a design named `{to}`	`{to}` という名前のデザインがすでにあります
+@msg	there is already a toolbar named `{name}`	`{name}` という名前のツールバーがすでにあります
+@msg	there is already a toolbar named `{to}`	`{to}` という名前のツールバーがすでにあります
+@msg	there is no library: create one first	ライブラリがありません: 先に作成してください
+@msg	these paths are too degenerate for Shaper	これらのパスは縮退しているため、Shaper では使用できません
+@msg	thumbnail: no page {v} (the {what} has {count})	thumbnail: ページ {v} はありません ({what} のページ数は {count})
+@msg	tileRange of {what}: {e}	{what} の tileRange: {e}
+@msg	title can't be empty	title を空にすることはできません
+@msg	to (the new name) is required	to (新しい名前) は必須です
+@msg	to must be fill or stroke	to には fill または stroke を指定してください
+@msg	to must be smooth or corner	to には smooth または corner を指定してください
+@msg	too large for a zip archive: package to a folder	zip アーカイブには大きすぎます: フォルダーにパッケージしてください
+@msg	too many Shaper edits	Shaper の編集が多すぎます
+@msg	too many `points` (at most 100000)	`points` が多すぎます (最大 100000)
+@msg	too many characters: at most {MAX_CHARS}	文字数が多すぎます: 最大 {MAX_CHARS} 文字
+@msg	too many dots for this size: lower the frequency	このサイズにはドットが多すぎます: 線数を下げてください
+@msg	too many filters over one file	1 つのファイルにかかるフィルターが多すぎます
+@msg	too many overlapping paths for Shaper	重なり合うパスが Shaper には多すぎます
+@msg	too many saved clips	保存されたクリップが多すぎます
+@msg	too many saved graphics states	保存されたグラフィックス状態が多すぎます
+@msg	toolbar (a toolbar's name) must be a string	toolbar (ツールバー名) には文字列を指定してください
+@msg	toolbar name can't be empty	ツールバー名を空にすることはできません
+@msg	transparentImages {v}: "flatten" (the default) or "omit"	transparentImages {v}: "flatten" (初期設定) または "omit" を指定してください
+@msg	two saved selections would be named `{_1}`	保存した選択範囲のうち 2 つが `{_1}` という名前になります
+@msg	type dimension cannot be represented with this text transform	このテキストの変形では文字の寸法を表現できません
+@msg	type dimension must be finite	文字の寸法には有限の値を指定してください
+@msg	unexpected resources	予期しないリソースがあります
+@msg	unknown CMYK profile `{name}`	`{name}` は不明な CMYK プロファイルです
+@msg	unknown File Info field `{k}`	`{k}` は不明なファイル情報フィールドです
+@msg	unknown OpenType feature `{t}` in featureChanges (the tags `features` takes)	featureChanges 内の `{t}` は不明な OpenType 機能です (`features` で使用できるタグを指定してください)
+@msg	unknown PDF preset `{name}` (presets: {_1})	`{name}` は不明な PDF プリセットです (プリセット: {_1})
+@msg	unknown Warp style	不明なワープスタイルです
+@msg	unknown alignToPath `{a}`	`{a}` は不明な alignToPath の指定です
+@msg	unknown arrowhead {v}	{v} は不明な矢印です
+@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	`{k}` は不明な artboardLayout のキーです (layout、columns、spacing、rightToLeft のいずれか)
+@msg	unknown attribute `{attribute}`	`{attribute}` は不明な属性です
+@msg	unknown attribute `{k}`	`{k}` は不明な属性です
+@msg	unknown axis `{other}` (vertical|horizontal|free)	`{other}` は不明な軸の指定です (vertical|horizontal|free)
+@msg	unknown blend mode `{b}`	`{b}` は不明な描画モードです
+@msg	unknown blend mode {b}	{b} は不明な描画モードです
+@msg	unknown brush type `{o}`	`{o}` は不明なブラシの種類です
+@msg	unknown category `{c}`	`{c}` は不明なカテゴリです
+@msg	unknown category `{c}` ({_1})	`{c}` は不明なカテゴリです ({_1})
+@msg	unknown character `{c}`	`{c}` は不明な文字です
+@msg	unknown character style number field	文字スタイルの数値フィールドが不明です
+@msg	unknown effect `{e}`	`{e}` は不明な効果です
+@msg	unknown end {e}	{e} は不明な end の指定です
+@msg	unknown flattenerPreset `{name}` (High Resolution, Medium Resolution, Low Resolution or a saved one: see flattener.presets.list)	`{name}` は不明な flattenerPreset です (High Resolution、Medium Resolution、Low Resolution、または保存済みのプリセット: flattener.presets.list を参照)
+@msg	unknown format `{f}` (vcswatches, gpl, ase or css)	`{f}` は不明な形式です (vcswatches、gpl、ase、css のいずれか)
+@msg	unknown from {f}	{f} は不明な from の指定です
+@msg	unknown graph type `{t}`	`{t}` は不明なグラフの種類です
+@msg	unknown grid colours `{name}` (one of {_1})	`{name}` は不明なグリッドカラーです ({_1} のいずれか)
+@msg	unknown gridType `{t}`	`{t}` は不明な gridType です
+@msg	unknown highlight `{v}`	`{v}` は不明なハイライトの指定です
+@msg	unknown intent `{i}`	`{i}` は不明なインテントです
+@msg	unknown issue kind {id}	{id} は不明な問題の種類です
+@msg	unknown issue kind {v}	{v} は不明な問題の種類です
+@msg	unknown knockout state {k}	{k} は不明な抜きの状態です
+@msg	unknown language `{language}` (one of {_1})	`{language}` は不明な言語です ({_1} のいずれか)
+@msg	unknown language `{l}` (one of {_1})	`{l}` は不明な言語です ({_1} のいずれか)
+@msg	unknown method `{m}` ({_1})	`{m}` は不明な方法です ({_1})
+@msg	unknown mode `{other}` (gray, rgb, hsb, lab, cmyk or web)	`{other}` は不明なモードです (gray、rgb、hsb、lab、cmyk、web のいずれか)
+@msg	unknown mode `{other}` (mono|cmyk)	`{other}` は不明なモードです (mono|cmyk)
+@msg	unknown mode `{other}` (rgb|cmyk|gray|global)	`{other}` は不明なモードです (rgb|cmyk|gray|global)
+@msg	unknown mode `{other}` (set, add, subtract)	`{other}` は不明なモードです (set、add、subtract のいずれか)
+@msg	unknown mode `{o}`	`{o}` は不明なモードです
+@msg	unknown mode {m}	{m} は不明なモードです
+@msg	unknown model `{other}`	`{other}` は不明な model です
+@msg	unknown model `{other}` (keep, new or document)	`{other}` は不明な model です (keep、new、document のいずれか)
+@msg	unknown op {o}	{o} は不明な op です
+@msg	unknown order `{o}`: toggle, front, forward, backward or back	`{o}` は不明な order です: toggle、front、forward、backward、back のいずれかを指定してください
+@msg	unknown overprints `{v}` (preserve, simulate or discard)	`{v}` は不明な overprints の指定です (preserve、simulate、discard のいずれか)
+@msg	unknown panel	不明なパネルです
+@msg	unknown pieLegend `{v}` (none, standard or wedges)	`{v}` は不明な pieLegend の指定です (none、standard、wedges のいずれか)
+@msg	unknown piePosition `{v}` (even, ratio or stacked)	`{v}` は不明な piePosition の指定です (even、ratio、stacked のいずれか)
+@msg	unknown pieSort `{v}` (none, all or first)	`{v}` は不明な pieSort の指定です (none、all、first のいずれか)
+@msg	unknown plate `{n}`	`{n}` は不明な版です
+@msg	unknown preference `{k}`	`{k}` は不明な環境設定です
+@msg	unknown profile {id} (see stroke.widthProfile.list)	{id} は不明なプロファイルです (stroke.widthProfile.list を参照)
+@msg	unknown proof target `{t}`	`{t}` は不明な校正ターゲットです
+@msg	unknown quotes key `{k}` (double, single)	`{k}` は不明な quotes のキーです (double、single のいずれか)
+@msg	unknown resolution `{v}`	`{v}` は不明な解像度です
+@msg	unknown rule `{rule}` ({_1})	`{rule}` は不明なルールです ({_1})
+@msg	unknown rule `{r}` (see color.harmony)	`{r}` は不明なルールです (color.harmony を参照)
+@msg	unknown setting `{k}`	`{k}` は不明な設定です
+@msg	unknown shape `{v}` (circle|ellipse|square|diamond|line)	`{v}` は不明なシェイプです (circle|ellipse|square|diamond|line)
+@msg	unknown spacing `{o}` (smooth|steps|distance)	`{o}` は不明な間隔の指定です (smooth|steps|distance)
+@msg	unknown tileType `{t}` ({_1})	`{t}` は不明な tileType です ({_1})
+@msg	unknown units	不明な単位です
+@msg	unknown units `{u}`	`{u}` は不明な単位です
+@msg	unknown value axis `{v}` (left, right or both)	`{v}` は不明な数値軸の指定です (left、right、both のいずれか)
+@msg	unknown variation `{v}` (tintsShades|warmCool|vividMuted)	`{v}` は不明なバリエーションです (tintsShades|warmCool|vividMuted)
+@msg	unknown warp style `{s}`	`{s}` は不明なワープスタイルです
+@msg	unknown {key} `{v}` (none, short or full)	`{v}` は不明な {key} の指定です (none、short、full のいずれか)
+@msg	unknown {key} profile `{n}`	`{n}` は不明な {key} プロファイルです
+@msg	unknown {k} key `{key}` (size, position)	`{key}` は不明な {k} のキーです (size、position のいずれか)
+@msg	unreadable object	読み込めないオブジェクトです
+@msg	unsafe destination file name	出力先のファイル名が安全ではありません
+@msg	use paths or compound paths	パスまたは複合パスを使用してください
+@msg	useArtboards must be true or false, not {v}	useArtboards には true または false を指定してください ({v} は指定できません)
+@msg	value for `{var}` must match its variable kind	`{var}` の値は変数の種類に合わせてください
+@msg	variable `{_1}` is already defined	変数 `{_1}` はすでに定義されています
+@msg	variable `{name}` has no `trait`	変数 `{name}` に `trait` がありません
+@msg	variable `{name}` is already defined	変数 `{name}` はすでに定義されています
+@msg	variable `{name}` is declared twice	変数 `{name}` が 2 回宣言されています
+@msg	variable `{to}` already exists	変数 `{to}` はすでにあります
+@msg	view is required	view は必須です
+@msg	view must be one of {_1}	view には {_1} のいずれかを指定してください
+@msg	warpStyle can only edit an applied Warp effect	warpStyle で編集できるのは、適用済みのワープ効果だけです
+@msg	width and height must be more than 0 and at most {limit}	width と height には 0 より大きく {limit} 以下の値を指定してください
+@msg	width factors must be finite	幅の係数には有限の値を指定してください
+@msg	width must be positive	width には正の値を指定してください
+@msg	width out of range	幅が範囲外です
+@msg	width/height must be > 0	width/height には 0 より大きい値を指定してください
+@msg	x and y must be finite numbers	x と y には有限の数値を指定してください
+@msg	x and y must be given together	x と y は一緒に指定してください
+@msg	zone needs an anchor: dock beside a panel with anchor, or in a new dock column with side (Start or End)	zone には anchor が必要です: anchor でパネルの横にドッキングするか、side (Start または End) で新しいドック列にドッキングしてください
+@msg	zoom must be positive	zoom には正の値を指定してください
+@msg	{C}: no effect at index {list}	{C}: インデックス {list} に効果はありません
+@msg	{DEFAULT_PRESET} is protected and stays	{DEFAULT_PRESET} は保護されているため、削除されません
+@msg	{DEFAULT_PRESET} is protected: save the settings under another name	{DEFAULT_PRESET} は保護されています: 設定を別の名前で保存してください
+@msg	{LABEL} produced an empty result	{LABEL} の結果が空になりました
+@msg	{_1} MB of document, at most {_2} MB	ドキュメントが {_1} MB あります (上限は {_2} MB)
+@msg	{_1} MB of images, at most {_2} MB	画像が {_1} MB あります (上限は {_2} MB)
+@msg	{_1} bytes of RGBA data for a {width} × {height} image	{width} × {height} の画像に対して RGBA データが {_1} バイトあります
+@msg	{_1} can't be read, or changed since it was read: relink or update it first	{_1} を読み込めないか、読み込み後に変更されています: 先に再リンクまたは更新してください
+@msg	{_1} can't go into {into}	{_1} を {into} に入れることはできません
+@msg	{_1} can't limit printing to low resolution: choose PDF 1.4 or later, or allow high-resolution printing	{_1} ではプリントを低解像度に制限できません: PDF 1.4 以降を選択するか、高解像度プリントを許可してください
+@msg	{_1} files can't be opened yet	{_1} ファイルはまだ開けません
+@msg	{_1} files can't be password-protected: remove the passwords or choose no standard	{_1} ファイルはパスワードで保護できません: パスワードを削除するか、規格なしを選択してください
+@msg	{_1} files can't be {_2}	{_1} ファイルは {_2} にできません
+@msg	{_1} files can't carry editing data: turn off preserveEditing	{_1} ファイルには編集データを含められません: preserveEditing をオフにしてください
+@msg	{_1} files can't have PDF layers: turn off createLayers	{_1} ファイルには PDF レイヤーを含められません: createLayers をオフにしてください
+@msg	{_1} files need a creation date, and this platform has no clock to give one	{_1} ファイルには作成日が必要ですが、このプラットフォームには日時を取得できる時計がありません
+@msg	{_1} isn't a path	{_1} はパスではありません
+@msg	{_1} options: {e}	{_1} オプション: {e}
+@msg	{_1} paints nothing to rasterize	{_1} にはラスタライズできる描画内容がありません
+@msg	{_1} passwords can have up to {MAX_LEGACY_PASSWORD} ASCII characters (PDF 1.7 and later take any)	{_1} のパスワードは ASCII 文字で {MAX_LEGACY_PASSWORD} 文字以内です (PDF 1.7 以降では任意の文字を使用できます)
+@msg	{_1} with linked images or an image map writes several files: use document.export	リンク画像またはイメージマップのある {_1} は複数のファイルを書き出します: document.export を使用してください
+@msg	{_1} writes one file per artboard here: use document.export, or name one artboard	ここでは {_1} はアートボードごとに 1 つのファイルを書き出します: document.export を使用するか、アートボードを 1 つ指定してください
+@msg	{_1} × {_2} pixels is too large for {_3} (at most {max} pixels a side): lower the scale	{_1} × {_2} ピクセルは {_3} には大きすぎます (1 辺あたり最大 {max} ピクセル): 拡大・縮小率を下げてください
+@msg	{_1}: belongs to another account	{_1}: 別のアカウントのものです
+@msg	{_1}: not a folder of its own	{_1}: 専用のフォルダーではありません
+@msg	{_1}: not a plain file	{_1}: 通常のファイルではありません
+@msg	{dest}: {e}	{dest}: {e}
+@msg	{doc} has no folder	{doc} にフォルダーがありません
+@msg	{file} isn't linked	{file} はリンクされていません
+@msg	{folder} is not a package folder	{folder} はパッケージフォルダーではありません
+@msg	{folder}: more than {max} files and folders	{folder}: ファイルとフォルダーが {max} 個を超えています
+@msg	{folder}: {e}	{folder}: {e}
+@msg	{g} is not a Live Paint group	{g} はライブペイントグループではありません
+@msg	{id} is not a slice	{id} はスライスではありません
+@msg	{key} must be 0–{MAX_ADD_AROUND} pt	{key} には 0–{MAX_ADD_AROUND} pt を指定してください
+@msg	{key} must be [x,y]	{key} には [x,y] を指定してください
+@msg	{key} must be a percentage {min}..100	{key} には {min}..100 のパーセント値を指定してください
+@msg	{key} must be a positive number, not {n}	{key} には正の数値を指定してください ({n} は指定できません)
+@msg	{key} must be a positive number, not {v}	{key} には正の数値を指定してください ({v} は指定できません)
+@msg	{key} must be one of {_1}	{key} には {_1} のいずれかを指定してください
+@msg	{key} must be {_1}, got {s}	{key} には {_1} を指定してください (指定値: {s})
+@msg	{key} must name a floating panel	{key} にはフローティングパネルを指定してください
+@msg	{key} must name a panel in another group	{key} には別のグループにあるパネルを指定してください
+@msg	{key} must name a panel that shows	{key} には表示されているパネルを指定してください
+@msg	{key} must name a registered panel	{key} には登録済みのパネルを指定してください
+@msg	{kind} files have no transparency, and the file would have {what}: flatten it first (object.flattenTransparency)	{kind} ファイルは透明に対応していませんが、ファイルに {what} が含まれます: 先に分割・統合してください (object.flattenTransparency)
+@msg	{kind} images can't be opened (see document.formats)	{kind} 画像は開けません (document.formats を参照)
+@msg	{k} `{v}` is not one of the choices	{k} `{v}` は選択肢にありません
+@msg	{k} has control characters{_1}	{k} に制御文字{_1} が含まれています
+@msg	{k} is too long (at most {MAX_TEXT} characters)	{k} が長すぎます (最大 {MAX_TEXT} 文字)
+@msg	{k} must be > 0	{k} には 0 より大きい値を指定してください
+@msg	{k} must be a number (pt) or a length such as "210 mm"	{k} には数値 (pt)、または "210 mm" のような長さを指定してください
+@msg	{k} must be a number from {min} to {max}	{k} には {min} から {max} までの数値を指定してください
+@msg	{k} must be a number or "auto"	{k} には数値または "auto" を指定してください
+@msg	{k} must be a string	{k} には文字列を指定してください
+@msg	{k} must be text	{k} にはテキストを指定してください
+@msg	{k} must be true or false	{k} には true または false を指定してください
+@msg	{k} must be {{size?, position?}}	{k} には {{size?, position?}} を指定してください
+@msg	{k}: can't read `{s}` as a length	{k}: `{s}` を長さとして読み取れません
+@msg	{label} must be a number at most {max}	{label} には {max} 以下の数値を指定してください
+@msg	{label} must be a number from -1296 to 1296	{label} には -1296 から 1296 までの数値を指定してください
+@msg	{label} must be a number from 1 to 10000	{label} には 1 から 10000 までの数値を指定してください
+@msg	{name} `{s}`: {ids}	{name} `{s}`: {ids}
+@msg	{name} is built in and can't be deleted	{name} は組み込みのため、削除できません
+@msg	{name} must be {lo}–{hi}{unit} (got {v})	{name} には {lo}–{hi}{unit} を指定してください (指定値: {v})
+@msg	{name}: CRC or size mismatch	{name}: CRC またはサイズが一致しません
+@msg	{name}: only this Affinity file's embedded preview could be read; use File › Open to see it with its warning, or export SVG or PDF from Affinity before placing	{name}: この Affinity ファイルは埋め込みプレビューしか読み込めませんでした。「ファイル › 開く」で警告とともに表示するか、配置する前に Affinity から SVG または PDF を書き出してください
+@msg	{name}: {e}	{name}: {e}
+@msg	{native}; its embedded preview can't be read either ({e})	{native}。埋め込みプレビューも読み込めません ({e})
+@msg	{std} files are CMYK, and the file would have colours in {_1}	{std} ファイルは CMYK ですが、ファイルに {_1} のカラーが含まれます
+@msg	{std} files embed their fonts, and the file would have one that isn't	{std} ファイルにはフォントを埋め込みますが、ファイルに埋め込まれないフォントが含まれます
+@msg	{target} is the file this document was read from, and reading it left things out ({what}): writing over it would lose them for good. Write another file instead, or pass acknowledgeLoss: true to replace it anyway	{target} はこのドキュメントの読み込み元のファイルで、読み込み時に除外された内容があります ({what}): 上書きすると、それらは完全に失われます。別のファイルに書き出すか、それでも置き換える場合は acknowledgeLoss: true を指定してください
+@msg	{ty} brushes need selected art (or params.{k})	{ty} ブラシには選択したアート (または params.{k}) が必要です
+@msg	{v} is not an asset id	{v} はアセット ID ではありません
+@msg	{what} can't be intertwined	{what} は織り交ぜられません
+@msg	{what} doesn't fit the paper with its bleed and marks	{what} は、裁ち落としとトンボを含めると用紙に収まりません
+@msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} は {MAX_TILES} 枚を超えるタイルにプリントされます: 縮小してください
 	Playback Options	再生オプション
 	Accelerated	高速
 	Step by Step	ステップ実行
