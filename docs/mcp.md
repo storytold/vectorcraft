@@ -10397,9 +10397,9 @@ How blends interpolate: closed shapes start where they twist least unless `start
 interpolate weight, dashes (a solid stroke counts as the dashed one with its gaps closed), miter limit, arrowhead scale,
 width profiles and the pen pressure, tilt, bearing and rotation recorded with the Paintbrush (a stroke without a
 recording counts as half pressure, half tilt and 0°, as brushes read it; angles turn the shorter way round; a key's
-profiles, recordings and arrowheads turn with its path when the blend starts it at another anchor), while
-caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one kind with
-different stop counts resample to a common set of stops. Groups pair their members in stacking order (members only
+profiles, recordings, arrowheads, dashes and gradient along or across the stroke turn with its path when the blend
+starts it at another anchor), while caps, joins, alignment, arrowheads and brushes switch halfway; gradients of one
+kind with different stop counts resample to a common set of stops, keeping each step (two stops at one offset). Groups pair their members in stacking order (members only
 one group has grow out of the other's centre), compound paths stay compound paths, and type, symbol instances and
 images interpolate their transforms (type also its colours, stroke weight and size run by run; the words and the
 symbol switch halfway). New blends are knockout groups (`object.setProps {knockout}` changes it), drawn on the

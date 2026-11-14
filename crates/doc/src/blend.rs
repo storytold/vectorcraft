@@ -19,11 +19,11 @@
 use std::f64::consts::PI;
 use std::sync::Arc;
 
-use vectorcraft_color::{Color, Gradient, GradientPaint, GradientStop, Paint};
+use vectorcraft_color::{Color, Gradient, GradientMethod, GradientPaint, GradientSpread, GradientStop, Paint};
 use vectorcraft_geom::kurbo::{ParamCurve, ParamCurveArclen, ParamCurveDeriv};
 use vectorcraft_geom::{Affine, Anchor, BezPath, FillRule, PathData, Point, Rect, SubPath, Vec2};
 
-use crate::appearance::{AngleProfile, Appearance, AppearanceItem, Dash, PressureProfile, StrokeLayer, WidthProfile};
+use crate::appearance::{AngleProfile, Appearance, AppearanceItem, Dash, PressureProfile, StrokeGradientMode, StrokeLayer, WidthProfile};
 use crate::live::{BlendOrientation, BlendSpacing, BlendSpec};
 use crate::node::{Node, NodeId, NodeKind};
 use crate::text::TextObject;
@@ -60,7 +60,11 @@ fn solid_gradient(c: Color, swatch: Option<&str>, tint: f32, like: &Gradient) ->
 /// The swatch and tint `g` paints at `t`: a stop's own link, or the shared swatch of the two stops
 /// around `t` at the tint between theirs (unlinked when they differ), as [`Gradient::sample_with`] walks.
 fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32) {
-    let stops = &g.stops;
+    link_in(&g.stops, t)
+}
+
+/// [`link_at`] of a gradient's `stops`.
+fn link_in(stops: &[GradientStop], t: f32) -> (Option<String>, f32) {
     let link = |s: &GradientStop| (s.swatch.clone(), s.tint);
     let Some(first) = stops.first() else { return (None, 1.0) };
     if t <= first.offset {
@@ -84,15 +88,30 @@ fn link_at(g: &Gradient, t: f32) -> (Option<String>, f32) {
     stops.last().map_or((None, 1.0), link)
 }
 
-/// `g` with its stops at `offsets`, each painting what `g` paints there (midpoints centred).
+/// How close two places a gradient changes are for [`common_stops`] to give them one stop (two
+/// where either gradient steps there: two of its stops at the same offset).
+const STEP: f32 = 1e-4;
+
+/// `g` with its stops at `offsets`, each painting what `g` paints there (midpoints centred). An
+/// offset given twice is a step: the second stop paints what `g` steps to there (its last stop
+/// within [`STEP`] of it), or what it paints there when it does not step.
 fn resample_stops(g: &Gradient, offsets: &[f32]) -> Gradient {
     let mut out = g.clone();
     out.stops = offsets
         .iter()
-        .map(|&o| {
-            let (color, opacity) = g.sample_keep_model(o);
-            let (swatch, tint) = link_at(g, o);
-            GradientStop { opacity, swatch, tint, ..GradientStop::new(o, color) }
+        .enumerate()
+        .map(|(i, &o)| {
+            let after = i.checked_sub(1).and_then(|j| offsets.get(j)) == Some(&o);
+            let mut near = g.stops.iter().filter(|s| (s.offset - o).abs() < STEP);
+            let stepped = if after && near.next().is_some() { near.next_back() } else { None };
+            match stepped {
+                Some(s) => GradientStop { opacity: s.opacity, swatch: s.swatch.clone(), tint: s.tint, ..GradientStop::new(o, s.color) },
+                None => {
+                    let (color, opacity) = g.sample_keep_model(o);
+                    let (swatch, tint) = link_at(g, o);
+                    GradientStop { opacity, swatch, tint, ..GradientStop::new(o, color) }
+                }
+            }
         })
         .collect();
     out
@@ -111,7 +130,7 @@ fn gradient_breaks(g: &Gradient, out: &mut Vec<f32>) {
 }
 
 /// Two gradients of one kind with the same number of stops: as they are when the counts match,
-/// else both resampled at every place either changes.
+/// else both resampled at every place either changes, with two stops where either steps.
 fn common_stops(a: &Gradient, b: &Gradient) -> Option<(Gradient, Gradient)> {
     if a.kind != b.kind {
         return None;
@@ -127,8 +146,22 @@ fn common_stops(a: &Gradient, b: &Gradient) -> Option<(Gradient, Gradient)> {
     gradient_breaks(b, &mut offs);
     offs.retain(|o| o.is_finite());
     offs.sort_by(f32::total_cmp);
-    offs.dedup_by(|x, y| (*x - *y).abs() < 1e-4);
-    Some((resample_stops(a, &offs), resample_stops(b, &offs)))
+    offs.dedup_by(|x, y| (*x - *y).abs() < STEP);
+    let mut steps: Vec<f32> =
+        [a, b].into_iter().flat_map(|g| g.stops.windows(2).filter(|w| w[1].offset == w[0].offset).map(|w| w[0].offset)).collect();
+    steps.sort_by(f32::total_cmp);
+    let mut at = Vec::with_capacity(offs.len() + steps.len());
+    let mut k = 0;
+    for o in offs {
+        at.push(o);
+        while steps.get(k).is_some_and(|&s| s <= o - STEP) {
+            k += 1;
+        }
+        if steps.get(k).is_some_and(|&s| (s - o).abs() < STEP) {
+            at.push(o);
+        }
+    }
+    Some((resample_stops(a, &at), resample_stops(b, &at)))
 }
 
 fn lerp_gradient(a: &GradientPaint, b: &GradientPaint, t: f32) -> Option<GradientPaint> {
@@ -606,12 +639,111 @@ fn reoriented<V: Copy>(points: &[(f64, V)], o: Orient, at: impl Fn(f64) -> V, wr
     out
 }
 
-/// A key's stroke read along its subpath turned as `o` says: its width profile (whose sides swap
-/// when reversed), pen pressure, tilt, bearing and rotation, and on a reversed open path its
-/// arrowheads.
-fn reorient_stroke(s: &mut StrokeLayer, o: Orient) {
+/// Gradient `g` laid along a closed subpath that now starts at fraction `s` of its length: the
+/// part from `s` on runs first, then the part before it, stepping where the old start now falls.
+/// The stops follow its colors as [`Gradient::span`] reads them, mixed linearly, and run once.
+/// One of `g`'s own stops keeps its swatch link (each stop of a step its own), and a stop between
+/// two of them the link [`link_at`] reads there.
+fn gradient_from(g: &Gradient, s: f32) -> Gradient {
+    let g = g.unrolled();
+    let mut own = g.stops.clone();
+    own.sort_by(|a, b| a.offset.total_cmp(&b.offset));
+    let mut stops = Vec::new();
+    // The part from `s` to the end runs first, then the part up to `s`.
+    for (from, to, at) in [(s, 1.0, 0.0), (0.0, s, 1.0 - s)] {
+        // The first of `own` not yet matched: the parts' stops run in order, so the links are
+        // found in one pass.
+        let mut j = 0;
+        for st in g.span(from, to).stops {
+            let p = from + (to - from) * st.offset;
+            while own.get(j).is_some_and(|o| o.offset <= p - STEP) {
+                j += 1;
+            }
+            let hit = (j..own.len())
+                .take_while(|&i| own.get(i).is_some_and(|o| o.offset < p + STEP))
+                .find(|&i| own.get(i).is_some_and(|o| o.color == st.color && o.opacity == st.opacity));
+            let (swatch, tint) = match hit.and_then(|i| own.get(i).map(|o| (i, o))) {
+                Some((i, o)) => {
+                    j = i + 1;
+                    (o.swatch.clone(), o.tint)
+                }
+                None => link_in(own.get(j.saturating_sub(1)..(j + 1).min(own.len())).unwrap_or_default(), p),
+            };
+            stops.push(GradientStop { offset: at + (to - from) * st.offset, swatch, tint, ..st });
+        }
+    }
+    Gradient { stops, method: GradientMethod::Classic, spread: GradientSpread::Pad, repeats: 1, ..g.into_owned() }
+}
+
+/// Dash pattern `d` read along subpaths of lengths `lens` turned as `o` says. Reversed, the
+/// pattern runs backwards: from the start of a dash, that is the dash and then the other entries
+/// in reverse order. Exact dashes also start where the turned subpaths now start. The pattern
+/// restarts on every subpath at the one offset, so the offset moves only when every subpath needs
+/// the same one (as subpaths whose lengths differ by whole periods do); dashes fitted to corners
+/// ignore the offset, which stays as it is. A dash pattern starts once per subpath, so on a closed
+/// subpath started elsewhere the dashes match the key's as far as its own start, and past it run
+/// on without restarting there.
+fn reorient_dash(d: &mut Dash, o: Orient, lens: &[f64]) {
+    if !d.is_dashed() || !d.offset.is_finite() {
+        return;
+    }
+    let mut pat = d.pattern.clone();
+    // An odd pattern repeats twice per period (dash, gap, dash / gap, dash, gap).
+    if pat.len() % 2 == 1 {
+        pat.extend_from_within(..);
+    }
+    let period: f64 = pat.iter().sum();
+    // Where along the key's own subpath the turned one starts (a closed one wraps round).
+    let at = if o.closed { o.seam() } else { o.start };
+    let first = pat.first().copied().unwrap_or(0.0);
+    let offset = |len: f64| if o.reversed { first - at * len - d.offset } else { d.offset + at * len };
+    let offsets: Vec<f64> = lens.iter().map(|&len| offset(len)).collect();
+    let agree = offsets.first().is_some_and(|&a| {
+        offsets.iter().all(|&b| {
+            let r = (b - a).rem_euclid(period);
+            r.is_finite() && r.min(period - r) <= 1e-6
+        })
+    });
+    if o.reversed {
+        if let Some(rest) = pat.get_mut(1..) {
+            rest.reverse();
+        }
+        d.pattern = pat;
+    }
+    if let Some(&off) = offsets.first().filter(|_| agree && !d.align_corners) {
+        d.offset = off;
+    }
+}
+
+/// A key's stroke read along its subpaths turned as `o` says (`lens`: their lengths): its width
+/// profile (whose sides swap when reversed), pen pressure, tilt, bearing and rotation, its dashes,
+/// a gradient along the path or across it (whose sides swap when reversed), and on a reversed
+/// open path its arrowheads.
+fn reorient_stroke(s: &mut StrokeLayer, o: Orient, lens: &[f64]) {
     if o.is_identity() {
         return;
+    }
+    if let Some(d) = &mut s.dash {
+        reorient_dash(d, o, lens);
+    }
+    let along = s.gradient_mode == StrokeGradientMode::Along;
+    if s.path_gradient().is_some()
+        && let Paint::Gradient(g) = &mut s.paint
+    {
+        let start = along && o.seam() > 0.0;
+        if start {
+            g.gradient = gradient_from(&g.gradient, o.seam() as f32);
+        }
+        // Stops that reflect an even number of times read the same either way.
+        let (spread, runs) = g.gradient.painted_spread();
+        let reverse = o.reversed && !(spread == GradientSpread::Reflect && runs % 2 == 0);
+        if reverse {
+            g.gradient.reverse();
+        }
+        if start || reverse {
+            // The turned gradient is no longer the swatch's.
+            g.swatch = None;
+        }
     }
     let same = |v: f64| v;
     if let Some(p) = &mut s.profile {
@@ -659,9 +791,11 @@ fn reorient_strokes(n: &mut Node, o: Orient) {
     if o.is_identity() {
         return;
     }
+    let lens: Vec<f64> =
+        node_path(n).map(|(p, ..)| p.subpaths.iter().map(|sp| PathData::new(vec![sp.clone()]).length()).collect()).unwrap_or_default();
     for it in n.appearance.items.iter_mut() {
         if let AppearanceItem::Stroke(s) = it {
-            reorient_stroke(s, o);
+            reorient_stroke(s, o, &lens);
         }
     }
 }
@@ -2625,6 +2759,149 @@ mod tests {
         let rot = |t: f64, f: f64| stroke(&blend.at(t)).rotation.as_ref().map_or(0.0, |p| p.unwrapped_at(f));
         assert!((vectorcraft_geom::normalize_deg(rot(1.0, 0.25)) + 90.0).abs() < 1e-6, "{:?}", s.rotation);
         assert!((rot(0.5, 0.499) - rot(0.5, 0.501)).abs() < 1.0, "no jump where the key started: {:?}", stroke(&blend.at(0.5)).rotation);
+    }
+
+    #[test]
+    fn stroke_gradients_and_dashes_turn_with_a_key_path_started_elsewhere() {
+        let keyed = |path: PathData, edit: &dyn Fn(&mut StrokeLayer)| {
+            let mut ap = Appearance::default();
+            ap.set_stroke(Paint::solid(Color::BLACK));
+            if let Some(s) = ap.stroke_mut() {
+                edit(s);
+            }
+            Node::path(NodeId(1), path, ap)
+        };
+        let stroke = |n: &Node| n.appearance.stroke().cloned().unwrap_or_else(|| panic!("a stroke"));
+        // How light the stroke's gradient is at `u` (0 black, 3 white).
+        let light = |s: &StrokeLayer, u: f32| match &s.paint {
+            Paint::Gradient(g) => g.gradient.sample(u).0.to_rgb().iter().sum::<f32>(),
+            p => panic!("a gradient: {p:?}"),
+        };
+        // Whether dash pattern `d` draws a dash `at` this far along its subpath.
+        let dash_at = |d: &Dash, at: f64| {
+            let p = if d.pattern.len() % 2 == 1 { d.pattern.repeat(2) } else { d.pattern.clone() };
+            let mut x = (at + d.offset).rem_euclid(p.iter().sum());
+            for (i, v) in p.iter().enumerate() {
+                if x < *v {
+                    return i % 2 == 0;
+                }
+                x -= v;
+            }
+            false
+        };
+        let graded = |mode: StrokeGradientMode| {
+            move |s: &mut StrokeLayer| {
+                s.paint = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+                s.gradient_mode = mode;
+                s.dash = Some(Dash { pattern: vec![1.0, 2.0, 3.0, 1.5], offset: 0.75, align_corners: false });
+            }
+        };
+        // An open key clicked at its last anchor runs the other way: a gradient along it or across
+        // it (whose sides swap) runs the other way too, and its dashes are read from its end.
+        let line = |x: f64| PathData::single(SubPath::polyline(&[Point::new(x, 0.0), Point::new(x + 13.0, 0.0)], false));
+        let plain = keyed(line(0.0), &|_| {});
+        for mode in [StrokeGradientMode::Along, StrokeGradientMode::Across] {
+            let key = keyed(line(100.0), &graded(mode));
+            let s = stroke(&Lerp::new(&plain, &key, (None, Some(1))).at(1.0));
+            assert!(light(&s, 0.0) < 0.01 && light(&s, 1.0) > 2.99, "{mode:?}: {:?}", s.paint);
+            let (own, d) = (stroke(&key).dash.unwrap_or_default(), s.dash.unwrap_or_default());
+            for k in 1..130 {
+                let u = k as f64 / 10.0 + 0.03;
+                assert_eq!(dash_at(&d, u), dash_at(&own, 13.0 - u), "at {u}: {d:?}");
+            }
+        }
+        // A closed key started half way round starts its gradient along it there too, stepping
+        // where its own start was, and its dashes start there.
+        let square = |x: f64| shapes::rectangle(Rect::new(x, 0.0, x + 10.0, 10.0));
+        let key = keyed(square(100.0), &graded(StrokeGradientMode::Along));
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &key, (Some(0), Some(2))).at(1.0));
+        for (u, want) in [(0.0, 1.5), (0.25, 0.75), (0.499, 0.0), (0.501, 3.0), (0.75, 2.25), (1.0, 1.5)] {
+            assert!((light(&s, u) - want).abs() < 0.02, "at {u}: {} for {want}: {:?}", light(&s, u), s.paint);
+        }
+        let (own, d) = (stroke(&key).dash.unwrap_or_default(), s.dash.unwrap_or_default());
+        for k in 1..200 {
+            let u = k as f64 / 10.0 + 0.03;
+            assert_eq!(dash_at(&d, u), dash_at(&own, u + 20.0), "at {u}: {d:?}");
+        }
+        // Stops that reflect twice read the same either way; a link to a swatch stays.
+        let reflected = keyed(line(100.0), &|s| {
+            let mut g = Gradient { spread: GradientSpread::Reflect, repeats: 2, ..Gradient::default() };
+            g.stops[1].swatch = Some("Ink".into());
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+            s.gradient_mode = StrokeGradientMode::Along;
+        });
+        assert_eq!(stroke(&Lerp::new(&plain, &reflected, (None, Some(1))).b).paint, stroke(&reflected).paint);
+        let linked = keyed(square(100.0), &|s| {
+            let mut g = Gradient::default();
+            g.stops[1].swatch = Some("Ink".into());
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+            s.gradient_mode = StrokeGradientMode::Along;
+        });
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &linked, (Some(0), Some(2))).b);
+        let links = match &s.paint {
+            Paint::Gradient(g) => g.gradient.stops.iter().filter(|st| st.swatch.as_deref() == Some("Ink")).map(|st| st.offset).collect::<Vec<_>>(),
+            p => panic!("a gradient: {p:?}"),
+        };
+        assert!(links.contains(&0.5), "the stop the old start ended on keeps its link: {:?}", s.paint);
+        // Each stop of a step keeps its own link.
+        let step = keyed(square(100.0), &|s| {
+            let mut g = Gradient::default();
+            let (mut before, mut after) = (GradientStop::new(0.25, Color::BLACK), GradientStop::new(0.25, Color::WHITE));
+            (before.swatch, after.swatch) = (Some("Ink".into()), Some("Paper".into()));
+            g.stops.splice(1..1, [before, after]);
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+            s.gradient_mode = StrokeGradientMode::Along;
+        });
+        let s = stroke(&Lerp::new(&keyed(square(0.0), &|_| {}), &step, (Some(0), Some(2))).b);
+        let links = match &s.paint {
+            Paint::Gradient(g) => g.gradient.stops.iter().filter(|st| st.offset == 0.75).map(|st| st.swatch.clone()).collect::<Vec<_>>(),
+            p => panic!("a gradient: {p:?}"),
+        };
+        assert_eq!(links, vec![Some("Ink".into()), Some("Paper".into())], "{:?}", s.paint);
+        // Blended with a gradient of other stops, the steps keep that step.
+        let three = keyed(square(0.0), &|s| {
+            let mut g = Gradient::default();
+            g.stops.insert(1, GradientStop::new(0.5, Color::BLACK));
+            s.paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+            s.gradient_mode = StrokeGradientMode::Along;
+        });
+        let s = stroke(&Lerp::new(&three, &key, (Some(0), Some(2))).at(0.75));
+        assert!(light(&s, 0.501) - light(&s, 0.499) > 1.5, "{:?}", s.paint);
+        // Subpaths whose lengths call for different dash offsets keep the offset.
+        let rings = |x: f64, turn: usize| {
+            let mut inner = shapes::rectangle(Rect::new(x, 20.0, x + 7.0, 27.0)).subpaths.remove(0);
+            inner.anchors.rotate_left(turn);
+            PathData::new(vec![square(x).subpaths.remove(0), inner])
+        };
+        let key = keyed(rings(100.0, 2), &graded(StrokeGradientMode::Along));
+        let blend = Lerp::new(&keyed(rings(0.0, 0), &|_| {}), &key, (Some(0), Some(2)));
+        let turned = match &blend.shape {
+            Shape::Path { pair, .. } => pair.orient.1,
+            _ => panic!("a path blend"),
+        };
+        assert!((turned.seam() - 0.5).abs() < 1e-9, "both rings turn half way round: {turned:?}");
+        let s = stroke(&blend.at(1.0));
+        assert_eq!(s.dash.map(|d| d.offset), Some(0.75));
+    }
+
+    #[test]
+    fn gradients_of_other_stop_counts_keep_their_steps() {
+        let red = Color::Rgb { r: 1.0, g: 0.0, b: 0.0 };
+        let stepped = Gradient::new(
+            vectorcraft_color::GradientKind::Linear,
+            vec![
+                GradientStop::new(0.0, Color::WHITE),
+                GradientStop::new(0.5, Color::BLACK),
+                GradientStop::new(0.5, Color::WHITE),
+                GradientStop::new(0.50015, red),
+                GradientStop::new(1.0, Color::BLACK),
+            ],
+        );
+        let (a, b) = common_stops(&stepped, &Gradient::default()).unwrap_or_else(|| panic!("one kind"));
+        let at = |g: &Gradient| g.stops.iter().map(|s| (s.offset, s.color)).collect::<Vec<_>>();
+        assert_eq!(at(&a), vec![(0.0, Color::WHITE), (0.5, Color::BLACK), (0.5, Color::WHITE), (0.50015, red), (1.0, Color::BLACK)]);
+        assert_eq!(b.stops.len(), 5);
+        assert_eq!(b.stops.get(1).map(|s| s.color), b.stops.get(2).map(|s| s.color), "a gradient without the step paints one color there");
     }
 
     #[test]
