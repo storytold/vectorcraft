@@ -233,6 +233,25 @@ fn pencil_alt_closes_path() {
     assert!(ps[0].1.is_closed());
 }
 
+/// A Pencil stroke drawn as a dome and closed with Alt at the release closes with a straight segment
+/// across the bottom, from where the stroke ends to where it starts: the path stays within where the
+/// pen went, rather than curving on past both ends and back like a hat's brim.
+#[test]
+fn pencil_alt_closes_a_stroke_straight_back_to_its_start() {
+    let mut s = session();
+    let pts: Vec<(f64, f64)> =
+        (0..=60).map(|i| f64::from(i) * std::f64::consts::PI / 60.0).map(|a| (300.0 - 150.0 * a.cos(), 400.0 - 200.0 * a.sin())).collect();
+    drag(&mut s, "pencil", &pts, Mods { alt: true, ..Default::default() });
+    let ps = paths(&s);
+    let sp = &ps[0].1.subpaths[0];
+    assert!(sp.closed);
+    let b = ps[0].1.bounds().unwrap();
+    assert!(b.x0 > 149.5 && b.x1 < 450.5 && b.y1 < 400.5, "within the stroke: {b:?}");
+    let (first, last) = (sp.anchors.first().unwrap(), sp.anchors.last().unwrap());
+    assert!(first.p.distance(Point::new(150.0, 400.0)) < 1e-6 && last.p.distance(Point::new(450.0, 400.0)) < 1e-6, "{first:?} {last:?}");
+    assert_eq!((last.h_out, first.h_in), (last.p, first.p), "a straight closing segment");
+}
+
 /// #3799: with Shift held, a wavy Pencil drag draws one straight segment at 45° steps from the
 /// Constrain Angle (here 30°: a drag at about 60° comes out at 75°).
 #[test]

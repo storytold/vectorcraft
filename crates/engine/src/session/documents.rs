@@ -25,9 +25,11 @@ impl Session {
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
         // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
-        // evaluated again when the fonts or the plug-ins change.
+        // evaluated again when the fonts, the hyphenation exceptions or the plug-ins change.
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
-            vectorcraft_text::FontDb::global().generation().rotate_left(32) ^ vectorcraft_render::effects::plugin_revision()
+            let mut h = std::hash::DefaultHasher::new();
+            std::hash::Hash::hash(&(vectorcraft_text::layout_inputs(), vectorcraft_render::effects::plugin_revision()), &mut h);
+            std::hash::Hasher::finish(&h)
         });
         // Envelopes map type from the bounds of its glyph outlines, underlines and strikethroughs.
         vectorcraft_text::register_envelope_ink();
@@ -241,10 +243,18 @@ impl Session {
     /// Register the composite fonts of the document now in front ([`cmd::compositefonts::sync`]),
     /// after a switch or a close brought it there. Its type set in a composite font that differs
     /// from the one of that name before (added, changed or removed) is measured again, and type not
-    /// measured yet (in a document replaced while in the back) is measured now.
+    /// measured yet is measured now. Type that [`Session::replace_document`] measured in the
+    /// document's own composite fonts while it was in the back is not measured again when the
+    /// document is unchanged since.
     fn sync_front_composite_fonts(&mut self) {
-        let changed: HashSet<String> = cmd::compositefonts::sync(self).into_iter().collect();
+        let mut changed: HashSet<String> = cmd::compositefonts::sync(self).into_iter().collect();
         let Some(index) = self.active else { return };
+        if let Some(st) = self.docs.get_mut(index)
+            && let Some((doc, own)) = st.measured_in_own.take()
+            && std::ptr::eq(doc.as_ptr(), Arc::as_ptr(&st.doc))
+        {
+            changed.retain(|n| !own.contains(n));
+        }
         self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() || sets_in_any(t, &changed));
     }
 
@@ -347,14 +357,10 @@ impl Session {
         doc.resolve_inline_art();
         doc.guides_into_nodes();
         cmd::dimension::conform(&mut doc);
-        // In the back, type set in a font named like a composite font is measured when the document
-        // comes to the front and its own composite fonts are registered, not in the front
-        // document's.
-        let mut back_names = None;
-        if self.active == Some(index) {
-            // Pending tool work (typing, a drag) belongs to the content being thrown away.
-            self.reset_tool_for_doc_switch();
-        } else {
+        // In the back, type set in a font named like a composite font is measured again below, in
+        // the document's own composite fonts, not in the front document's.
+        let back = self.active != Some(index);
+        if back {
             let mut names = cmd::compositefonts::names_in_use(self);
             names.extend(doc.composite_fonts.iter().map(|f| f.name.to_lowercase()));
             for tree in text_trees_mut(&mut doc) {
@@ -363,7 +369,9 @@ impl Session {
                     t.cached_baselines.clear();
                 });
             }
-            back_names = Some(names);
+        } else {
+            // Pending tool work (typing, a drag) belongs to the content being thrown away.
+            self.reset_tool_for_doc_switch();
         }
         let old = &self.docs[index];
         let mut st = DocState::new(doc, old.path.clone());
@@ -396,14 +404,34 @@ impl Session {
         if let Some(stash) = &mut self.batch_stash {
             stash.push(old);
         }
-        match back_names {
-            Some(names) => self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none() && !sets_in_any(t, &names)),
-            None => {
-                self.sync_opened_composite_fonts(index);
-                self.sync_front_profiles();
-            }
+        if back {
+            self.measure_back_document(index);
+        } else {
+            self.sync_opened_composite_fonts(index);
+            self.sync_front_profiles();
         }
         true
+    }
+
+    /// Measure the type not measured yet in open document `index`, which is in the back, in its own
+    /// composite fonts, lent for the measuring, so its type has the bounds it will have when the
+    /// document comes to the front. The front document stays the one whose composite fonts are
+    /// registered. The names of the document's composite fonts its type was measured in are kept,
+    /// so its coming to the front does not measure that type again.
+    fn measure_back_document(&mut self, index: usize) {
+        let Some(st) = self.docs.get(index) else { return };
+        let fonts = st.doc.composite_fonts.clone();
+        let db = vectorcraft_text::FontDb::global();
+        let lent = db.lend_composite_fonts(&fonts);
+        // A name another loan holds with a different definition is not lent: type set in it is
+        // measured again when the document comes to the front.
+        let own: HashSet<String> =
+            fonts.iter().filter(|f| db.composite_font(&f.name).is_some_and(|have| *have == **f)).map(|f| f.name.to_lowercase()).collect();
+        self.refresh_document_text_bounds(index, |t| t.cached_bounds.is_none());
+        drop(lent);
+        if let Some(st) = self.docs.get_mut(index) {
+            st.measured_in_own = Some((Arc::downgrade(&st.doc), own));
+        }
     }
 
     /// Close the document in tab `index` (`file.close`). Closing a tab other than the current one

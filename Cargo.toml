@@ -25,6 +25,12 @@ craft-vectorcraft-format = { git = "https://github.com/storytold/craft-libs", re
 # craft-update: app-specific pretend versions apply to startup and manual checks.
 # Native Affinity documents (craft-libs#914).
 craft-affinity = { git = "https://github.com/storytold/craft-libs", rev = "228f6d0c50f1fdee4c5124603602993fc79d4c9d" }
+# SVG parsing, limits, SVGZ and writer (craft-libs#778).
+craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2", features = ["tree"] }
+# EPS container, previews, ASCII85 and DSC comments (craft-libs#778).
+craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
+# DXF tags, reader and writer (craft-libs#778, #926, #927).
+craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "e98299546f5c5c3c22388d16507f8b5e61a5f280", features = ["egui"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }

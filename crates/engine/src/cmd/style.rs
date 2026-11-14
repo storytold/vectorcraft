@@ -21,7 +21,7 @@ use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, DEFAULT_GRAPHIC_STYLE, Document, GraphicStyle, Node, NodeId, NodeKind, Shared};
 use vectorcraft_geom::Rect;
 
-use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index, object_param, ok, str_param, unique_name};
+use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, index_opt, object_param, ok, str_param, unique_name};
 use crate::EngineError;
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -332,7 +332,7 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     let i = style_index(&s.doc()?.doc, name)?;
     let add = bool_or(p, "add", false);
     let chars = s.prefs.override_char_color;
-    let own = super::appearance::appearance_targets(s, p)?;
+    let own = super::appearance::edit_targets(s, p)?;
     let ids = super::appearance::rowless_series_marks(&s.doc()?.doc, &own);
     // The series groups their paths stand for: a style that replaces the appearance clears what they hold themselves,
     // and a style added on top unlinks them.
@@ -585,10 +585,10 @@ fn style_merge(s: &mut Session, p: &Value) -> Result<Value> {
 fn style_move(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "graphicStyle.move";
     let name = str_param(p, "name").ok_or_else(|| bad(cmd, "missing name"))?;
-    let to = p.get("to").and_then(Value::as_u64).ok_or_else(|| bad(cmd, "missing `to` (an index)"))?;
+    let to = index_opt(p, "to", cmd)?.ok_or_else(|| bad(cmd, "missing `to` (an index)"))?;
     let d = &s.doc()?.doc;
     let from = style_index(d, name)?;
-    let to = index(to).min(d.graphic_styles.len() - 1);
+    let to = to.min(d.graphic_styles.len() - 1);
     if from == to {
         return ok();
     }
