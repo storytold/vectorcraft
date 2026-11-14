@@ -167,7 +167,8 @@ pub(crate) fn port_near(cx: &ToolContext, p: Point) -> Option<(NodeId, Port, f64
 }
 
 /// Which selected text overflows, for [`thread_ports`]: each text object's layout verdict kept
-/// with the object and the fonts it was made from, as overlays run every frame.
+/// with the object and the layout inputs it was made with (fonts and hyphenation exceptions,
+/// [`vectorcraft_text::layout_inputs`]), as overlays run every frame.
 #[derive(Default)]
 pub struct PortMarks {
     seen: std::collections::HashMap<NodeId, ((u64, TextObject), bool)>,
@@ -178,7 +179,7 @@ pub struct PortMarks {
 /// port whether text is hidden by the size of its frame, whatever tool is active. None when more
 /// than [`PORTS_MAX`] of them are selected.
 pub fn thread_ports(marks: &mut PortMarks, cx: &ToolContext) -> Vec<Overlay> {
-    let fonts = FontDb::global().generation();
+    let fonts = vectorcraft_text::layout_inputs();
     let mut o = Vec::new();
     let mut kept = std::collections::HashMap::new();
     if !ports_shown(cx.doc, &cx.selection.objects) {
