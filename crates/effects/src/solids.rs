@@ -1424,31 +1424,31 @@ fn masks_surface(paint: &Paint, colored: bool) -> bool {
     colored && crate::lighting::opaque_paint(paint).1.is_some()
 }
 
+/// A graphic of [`placed_graphics`]: the index of the first surface of the solids that share it,
+/// the index of the surface it is drawn right after, its face and its art.
+type Placement = (usize, usize, PlanarFace, Arc<Node>);
+
 /// The graphics of the solids `filled` ([`graphic_art`]), each with the index of the surface it is
 /// drawn right after (the last of those solids holding its face) and its face. Solids in a run
-/// with the same opacity and blending mode share their graphics. With `per_member`
-/// (a member's opacity mask or blending mode applies to its surfaces) each member's solids get
-/// graphics of their own, clipped to that member's caps, so they stay in that member's scopes.
-/// All the groups share one limit on the path elements drawn: once it is reached, later groups
-/// draw no graphics.
-fn placed_graphics(
-    doc: Option<&Document>,
-    id: NodeId,
-    effect: (&str, &Value),
-    bounds: Rect,
-    filled: &[Filled],
-    per_member: bool,
-) -> Vec<(usize, PlanarFace, Arc<Node>)> {
+/// with the same opacity and blending mode share their graphics, one on each face. With
+/// `per_member` (a member's opacity mask or blending mode applies to its surfaces) each member's
+/// solids get graphics of their own, clipped to that member's caps, so they stay in that member's
+/// scopes. All the groups share one limit on the path elements drawn: once it is reached, later
+/// groups draw no graphics.
+fn placed_graphics(doc: Option<&Document>, id: NodeId, effect: (&str, &Value), bounds: Rect, filled: &[Filled], per_member: bool) -> Vec<Placement> {
     let mut groups: Vec<Vec<&Filled>> = vec![];
     for f in filled {
         // Solids whose fills or strokes differ in opacity or blending mode get graphics of their
-        // own, each drawn as its fill or stroke is. A solid whose surface carries an opacity mask
-        // gets its own too, which takes that mask ([`with_graphics`]). A solid joins only the
-        // group of the solid before it, so a graphic is never drawn past a solid painted between.
-        let joins = |first: &Filled| {
-            (!per_member || first.member == f.member) && first.opacity == f.opacity && first.blend == f.blend && !first.masked && !f.masked
+        // own, each drawn as its fill or stroke is. One member's solids share their graphics
+        // whether or not their surfaces carry an opacity mask, and each graphic takes the mask of
+        // the surface it is drawn after ([`with_graphics`]). Solids of different members share
+        // them only when neither surface carries a mask. A solid joins only the group of the solid
+        // before it, so a graphic is never drawn past a solid painted between.
+        let joins = |g: &&Filled| {
+            let member = g.member == f.member;
+            (member || !per_member && !g.masked && !f.masked) && g.opacity == f.opacity && g.blend == f.blend
         };
-        match groups.last_mut().filter(|g| g.first().is_some_and(|first| joins(first))) {
+        match groups.last_mut().filter(|g| g.iter().all(joins)) {
             Some(g) => g.push(f),
             None => groups.push(vec![f]),
         }
@@ -1457,12 +1457,13 @@ fn placed_graphics(
     let mut elements = 0usize;
     for group in groups {
         let caps: Vec<&Facet> = group.iter().flat_map(|f| &f.caps).collect();
+        let first = group.first().map_or(0, |f| f.at);
         let opacity = group.first().map_or(1.0, |f| f.opacity);
         let blend = group.first().map_or(BlendMode::Normal, |f| f.blend);
         for (face, mut art) in graphic_art(doc, id, effect, bounds, &caps, opacity, &mut elements) {
             if let Some(f) = group.iter().rev().find(|f| f.caps.iter().any(|c| c.end == Some(face))) {
                 Arc::make_mut(&mut art).blend = blend;
-                out.push((f.at, face, art));
+                out.push((first, f.at, face, art));
             }
         }
     }
@@ -1474,23 +1475,19 @@ fn placed_graphics(
 type BuiltSurface<'s> = (Vec<Placed>, Node, &'s [Scope], Vec<Option<PlanarFace>>);
 
 /// [`with_graphics`] of built surfaces, each drawn whole.
-fn whole_surfaces<'s>(surfaces: Vec<BuiltSurface<'s>>, arts: &[(usize, PlanarFace, Arc<Node>)]) -> Vec<(&'s [Scope], Arc<Node>)> {
+fn whole_surfaces<'s>(surfaces: Vec<BuiltSurface<'s>>, arts: &[Placement]) -> Vec<(&'s [Scope], Arc<Node>)> {
     with_graphics(surfaces.into_iter().map(|(_, s, scopes, _)| (scopes, Arc::new(s))).collect(), 0, arts)
 }
 
 /// `surfaces` (those from index `first`) drawn whole, each with its scopes, and the graphics `arts`
 /// ([`placed_graphics`]) of those surfaces each right after its surface, with that surface's scopes
 /// and its opacity mask (a gradient's transparency), so a graphic is hidden where its cap is.
-fn with_graphics<'s>(
-    surfaces: Vec<(&'s [Scope], Arc<Node>)>,
-    first: usize,
-    arts: &[(usize, PlanarFace, Arc<Node>)],
-) -> Vec<(&'s [Scope], Arc<Node>)> {
+fn with_graphics<'s>(surfaces: Vec<(&'s [Scope], Arc<Node>)>, first: usize, arts: &[Placement]) -> Vec<(&'s [Scope], Arc<Node>)> {
     let mut out = Vec::with_capacity(surfaces.len() + arts.len());
     for (k, (scopes, s)) in surfaces.into_iter().enumerate() {
         let mask = s.extras().mask.clone();
         out.push((scopes, s));
-        out.extend(arts.iter().filter(|(at, ..)| *at == first + k).map(|(.., art)| {
+        out.extend(arts.iter().filter(|(_, at, ..)| *at == first + k).map(|(.., art)| {
             let mut art = art.clone();
             if let Some(mask) = &mask {
                 Arc::make_mut(&mut art).extras_mut().mask = Some(mask.clone());
@@ -1691,9 +1688,9 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
 /// surfaces right after the last face it is drawn on, of the surfaces that share it. A surface in a gradient with transparent stops
 /// carries an opacity mask: its faces go in runs ([`in_runs`]), each carrying the mask, and each of
 /// its graphics carries the mask too ([`with_graphics`]), so a graphic is hidden where its cap is.
-fn in_one_order(id: NodeId, surfaces: Vec<BuiltSurface<'_>>, first: usize, arts: &[(usize, PlanarFace, Arc<Node>)], sealed: bool) -> Vec<Arc<Node>> {
+fn in_one_order(id: NodeId, surfaces: Vec<BuiltSurface<'_>>, first: usize, arts: &[Placement], sealed: bool) -> Vec<Arc<Node>> {
     let masks: Vec<Option<Box<OpacityMask>>> = surfaces.iter().map(|(_, s, _, _)| s.extras().mask.clone()).collect();
-    let arts: Vec<&(usize, PlanarFace, Arc<Node>)> = arts.iter().filter(|(at, ..)| (first..first + surfaces.len()).contains(at)).collect();
+    let arts: Vec<&Placement> = arts.iter().filter(|(_, at, ..)| (first..first + surfaces.len()).contains(at)).collect();
     let (mut placed, mut faces, mut ends) = (vec![], vec![], vec![]);
     for (surface, (depths, s, _, e)) in surfaces.into_iter().enumerate() {
         if let NodeKind::Group { children, .. } = s.kind {
@@ -1704,24 +1701,18 @@ fn in_one_order(id: NodeId, surfaces: Vec<BuiltSurface<'_>>, first: usize, arts:
     }
     let order = draw_order(&placed, sealed);
     // Each graphic goes right after the last of the faces it is drawn on, among the surfaces that
-    // share it ([`placed_graphics`]): a masked surface's own, or else the run of surfaces without a
-    // mask that ends at its surface.
+    // share it ([`placed_graphics`]): those from the first of them to its own.
     let last: Vec<Option<usize>> = arts
         .iter()
-        .map(|(at, face, _)| {
-            let at = at - first;
-            let from = if masks.get(at).is_some_and(Option::is_some) {
-                at
-            } else {
-                masks.get(..at).and_then(|before| before.iter().rposition(Option::is_some)).map_or(0, |k| k + 1)
-            };
+        .map(|(from, at, face, _)| {
+            let (from, at) = (from.saturating_sub(first), at - first);
             order.iter().rposition(|k| ends.get(*k).copied().flatten().is_some_and(|(surface, end)| end == *face && (from..=at).contains(&surface)))
         })
         .collect();
     let mut drawn: Vec<(usize, Arc<Node>)> = Vec::with_capacity(order.len() + arts.len());
     for (at, k) in order.into_iter().enumerate() {
         drawn.extend(faces.get_mut(k).and_then(Option::take));
-        drawn.extend(last.iter().zip(&arts).filter(|(l, _)| **l == Some(at)).map(|(_, (surface, .., art))| {
+        drawn.extend(last.iter().zip(&arts).filter(|(l, _)| **l == Some(at)).map(|(_, (_, surface, _, art))| {
             let mut art = art.clone();
             if let Some(mask) = masks.get(surface - first).cloned().flatten() {
                 Arc::make_mut(&mut art).extras_mut().mask = Some(mask);
