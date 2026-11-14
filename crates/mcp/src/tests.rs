@@ -1597,6 +1597,27 @@ fn text_effect_pathfinder_transform_graph_and_wrap_tools() {
     let ds = d.to_string();
     // The wrap object carries the options and the area type resolved its shape.
     assert!(ds.contains("\"wrap\":{\"invert\":false,\"offset\":8.0}") && ds.contains("\"wrap\":[{\"invert\":false,\"offset\":8.0"), "{area}");
+    // An offset outside -1000 to 1000 pt, an invert or a release that is not true or false is an
+    // error, with release too, and the wrap and the selection stay as they were.
+    let r = call(&mut s, 20, "run_command", json!({"command": "select.set", "params": {"ids": [g]}}));
+    assert_eq!(r["isError"], false, "{r}");
+    for (id, args) in [
+        (21, json!({"ids": [c], "offset": 5000})),
+        (22, json!({"ids": [c], "offset": "8"})),
+        (23, json!({"ids": [c], "invert": "true"})),
+        (24, json!({"ids": [c], "release": "true"})),
+        (25, json!({"ids": [c], "release": true, "offset": -5000})),
+    ] {
+        let r = call(&mut s, id, "text_wrap", args.clone());
+        assert_eq!(r["isError"], true, "{args}: {r}");
+        assert!(doc_json(&mut s).to_string().contains("\"wrap\":{\"invert\":false,\"offset\":8.0}"), "{args}");
+    }
+    // The graph is still the selection: a wrap made without ids goes on it, not on the circle.
+    let r = call(&mut s, 26, "text_wrap", json!({"offset": 9}));
+    assert_eq!(r["isError"], false, "{r}");
+    let made: Value = serde_json::from_str(&text_of(&r)).unwrap();
+    assert_eq!(made["ids"], json!([g]), "{r}");
+    call(&mut s, 27, "text_wrap", json!({"release": true}));
     call(&mut s, 15, "text_wrap", json!({"ids": [c], "release": true}));
     assert!(!doc_json(&mut s).to_string().contains("\"offset\":8.0"));
 }
