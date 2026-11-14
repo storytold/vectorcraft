@@ -5562,7 +5562,7 @@ imageTrace	Outline	კონტური
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} არ არის განსაზღვრული
+@msg	{ident} is not defined	{ident} არ არის განსაზღვრული
 @msg	cannot read property '{key}' of {base}	{base} მნიშვნელობის თვისება '{key}' ვერ წაიკითხება
 @msg	cannot set property '{key}' of {base}	{base} მნიშვნელობის თვისება '{key}' ვერ დაყენდება
 @msg	cannot read a property of {base}	{base} მნიშვნელობის თვისება ვერ წაიკითხება
@@ -5570,7 +5570,7 @@ imageTrace	Outline	კონტური
 @msg	cannot define property '{key}': {why}	თვისება '{key}' ვერ განისაზღვრება: {why}
 @msg	cannot assign to property '{key}': {why}	თვისებას '{key}' მნიშვნელობა ვერ მიენიჭება: {why}
 @msg	cannot delete property '{key}'	თვისება '{key}' ვერ წაიშლება
-@msg	cannot declare function {name}	ფუნქცია {name} ვერ გამოცხადდება
+@msg	cannot declare function {ident}	ფუნქცია {ident} ვერ გამოცხადდება
 @msg	invalid assignment target	მინიჭების არასწორი სამიზნე
 @msg	the array's length is read-only	მასივის სიგრძე მხოლოდ წასაკითხია
 @msg	the property cannot be redefined	თვისება ხელახლა ვერ განისაზღვრება

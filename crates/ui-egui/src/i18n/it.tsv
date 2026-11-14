@@ -4377,7 +4377,7 @@ axis	Both	Entrambi
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} non è definito
+@msg	{ident} is not defined	{ident} non è definito
 @msg	cannot read property '{key}' of {base}	impossibile leggere la proprietà '{key}' di {base}
 @msg	cannot set property '{key}' of {base}	impossibile impostare la proprietà '{key}' di {base}
 @msg	cannot read a property of {base}	impossibile leggere una proprietà di {base}
@@ -4385,7 +4385,7 @@ axis	Both	Entrambi
 @msg	cannot define property '{key}': {why}	impossibile definire la proprietà '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	impossibile assegnare alla proprietà '{key}': {why}
 @msg	cannot delete property '{key}'	impossibile eliminare la proprietà '{key}'
-@msg	cannot declare function {name}	impossibile dichiarare la funzione {name}
+@msg	cannot declare function {ident}	impossibile dichiarare la funzione {ident}
 @msg	invalid assignment target	destinazione di assegnazione non valida
 @msg	the array's length is read-only	la lunghezza dell'array è di sola lettura
 @msg	the property cannot be redefined	la proprietà non può essere ridefinita

@@ -4111,7 +4111,7 @@ axis	Both	Her İkisi
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} tanımlı değil
+@msg	{ident} is not defined	{ident} tanımlı değil
 @msg	cannot read property '{key}' of {base}	{base} değerinin '{key}' özelliği okunamıyor
 @msg	cannot set property '{key}' of {base}	{base} değerinin '{key}' özelliği ayarlanamıyor
 @msg	cannot read a property of {base}	{base} değerinin bir özelliği okunamıyor
@@ -4119,7 +4119,7 @@ axis	Both	Her İkisi
 @msg	cannot define property '{key}': {why}	'{key}' özelliği tanımlanamıyor: {why}
 @msg	cannot assign to property '{key}': {why}	'{key}' özelliğine atama yapılamıyor: {why}
 @msg	cannot delete property '{key}'	'{key}' özelliği silinemiyor
-@msg	cannot declare function {name}	{name} fonksiyonu bildirilemiyor
+@msg	cannot declare function {ident}	{ident} fonksiyonu bildirilemiyor
 @msg	invalid assignment target	geçersiz atama hedefi
 @msg	the array's length is read-only	dizinin uzunluğu salt okunur
 @msg	the property cannot be redefined	özellik yeniden tanımlanamaz

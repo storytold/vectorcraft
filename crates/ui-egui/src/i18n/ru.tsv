@@ -4375,7 +4375,7 @@ axis	Both	Оба
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} не определено
+@msg	{ident} is not defined	{ident} не определено
 @msg	cannot read property '{key}' of {base}	невозможно прочитать свойство '{key}' у {base}
 @msg	cannot set property '{key}' of {base}	невозможно задать свойство '{key}' у {base}
 @msg	cannot read a property of {base}	невозможно прочитать свойство у {base}
@@ -4383,7 +4383,7 @@ axis	Both	Оба
 @msg	cannot define property '{key}': {why}	невозможно определить свойство '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	невозможно присвоить значение свойству '{key}': {why}
 @msg	cannot delete property '{key}'	невозможно удалить свойство '{key}'
-@msg	cannot declare function {name}	невозможно объявить функцию {name}
+@msg	cannot declare function {ident}	невозможно объявить функцию {ident}
 @msg	invalid assignment target	недопустимая цель присваивания
 @msg	the array's length is read-only	длина массива доступна только для чтения
 @msg	the property cannot be redefined	свойство нельзя переопределить

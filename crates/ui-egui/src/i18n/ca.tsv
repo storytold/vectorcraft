@@ -5543,7 +5543,7 @@ digits	Malayalam	Malaiàlam
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} no està definit
+@msg	{ident} is not defined	{ident} no està definit
 @msg	cannot read property '{key}' of {base}	no es pot llegir la propietat '{key}' de {base}
 @msg	cannot set property '{key}' of {base}	no es pot establir la propietat '{key}' de {base}
 @msg	cannot read a property of {base}	no es pot llegir cap propietat de {base}
@@ -5551,7 +5551,7 @@ digits	Malayalam	Malaiàlam
 @msg	cannot define property '{key}': {why}	no es pot definir la propietat '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	no es pot assignar a la propietat '{key}': {why}
 @msg	cannot delete property '{key}'	no es pot suprimir la propietat '{key}'
-@msg	cannot declare function {name}	no es pot declarar la funció {name}
+@msg	cannot declare function {ident}	no es pot declarar la funció {ident}
 @msg	invalid assignment target	destinació d'assignació no vàlida
 @msg	the array's length is read-only	la longitud de la matriu és només de lectura
 @msg	the property cannot be redefined	la propietat no es pot redefinir

@@ -4361,7 +4361,7 @@ axis	Both	Обидві
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} не визначено
+@msg	{ident} is not defined	{ident} не визначено
 @msg	cannot read property '{key}' of {base}	неможливо прочитати властивість '{key}' у {base}
 @msg	cannot set property '{key}' of {base}	неможливо встановити властивість '{key}' у {base}
 @msg	cannot read a property of {base}	неможливо прочитати властивість у {base}
@@ -4369,7 +4369,7 @@ axis	Both	Обидві
 @msg	cannot define property '{key}': {why}	неможливо визначити властивість '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	неможливо присвоїти значення властивості '{key}': {why}
 @msg	cannot delete property '{key}'	неможливо видалити властивість '{key}'
-@msg	cannot declare function {name}	неможливо оголосити функцію {name}
+@msg	cannot declare function {ident}	неможливо оголосити функцію {ident}
 @msg	invalid assignment target	недійсна ціль присвоєння
 @msg	the array's length is read-only	довжина масиву доступна лише для читання
 @msg	the property cannot be redefined	властивість не можна перевизначити

@@ -4248,7 +4248,7 @@ theme	Appearance	Erscheinungsbild
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} ist nicht definiert
+@msg	{ident} is not defined	{ident} ist nicht definiert
 @msg	cannot read property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gelesen werden
 @msg	cannot set property '{key}' of {base}	die Eigenschaft '{key}' von {base} kann nicht gesetzt werden
 @msg	cannot read a property of {base}	eine Eigenschaft von {base} kann nicht gelesen werden
@@ -4256,7 +4256,7 @@ theme	Appearance	Erscheinungsbild
 @msg	cannot define property '{key}': {why}	die Eigenschaft '{key}' kann nicht definiert werden: {why}
 @msg	cannot assign to property '{key}': {why}	der Eigenschaft '{key}' kann nichts zugewiesen werden: {why}
 @msg	cannot delete property '{key}'	die Eigenschaft '{key}' kann nicht gelöscht werden
-@msg	cannot declare function {name}	die Funktion {name} kann nicht deklariert werden
+@msg	cannot declare function {ident}	die Funktion {ident} kann nicht deklariert werden
 @msg	invalid assignment target	ungültiges Zuweisungsziel
 @msg	the array's length is read-only	die Länge des Arrays ist schreibgeschützt
 @msg	the property cannot be redefined	die Eigenschaft kann nicht neu definiert werden

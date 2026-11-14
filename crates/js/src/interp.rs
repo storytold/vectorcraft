@@ -1081,8 +1081,8 @@ impl Interp {
     }
 
     fn not_defined(&mut self, name: &[u16]) -> Abrupt {
-        let name = String::from_utf16_lossy(name);
-        self.throw(ErrorType::Reference, &format!("{name} is not defined"))
+        let ident = String::from_utf16_lossy(name);
+        self.throw(ErrorType::Reference, &format!("{ident} is not defined"))
     }
 
     fn get_var(&mut self, name: &Key) -> JsResult<(Value, Value)> {
@@ -2587,8 +2587,8 @@ impl Interp {
                                 self.put(object, name.clone(), v, true)
                             }
                             Some(_) => {
-                                let name = String::from_utf16_lossy(name);
-                                Err(self.type_error(&format!("cannot declare function {name}")))
+                                let ident = String::from_utf16_lossy(name);
+                                Err(self.type_error(&format!("cannot declare function {ident}")))
                             }
                         }
                     }

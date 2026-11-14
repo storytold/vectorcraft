@@ -4636,7 +4636,7 @@ imageTrace	Outline	Obrys
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} není definováno
+@msg	{ident} is not defined	{ident} není definováno
 @msg	cannot read property '{key}' of {base}	nelze číst vlastnost '{key}' hodnoty {base}
 @msg	cannot set property '{key}' of {base}	nelze nastavit vlastnost '{key}' hodnoty {base}
 @msg	cannot read a property of {base}	nelze číst vlastnost hodnoty {base}
@@ -4644,7 +4644,7 @@ imageTrace	Outline	Obrys
 @msg	cannot define property '{key}': {why}	nelze definovat vlastnost '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	nelze přiřadit do vlastnosti '{key}': {why}
 @msg	cannot delete property '{key}'	nelze odstranit vlastnost '{key}'
-@msg	cannot declare function {name}	nelze deklarovat funkci {name}
+@msg	cannot declare function {ident}	nelze deklarovat funkci {ident}
 @msg	invalid assignment target	neplatný cíl přiřazení
 @msg	the array's length is read-only	délka pole je jen pro čtení
 @msg	the property cannot be redefined	vlastnost nelze znovu definovat

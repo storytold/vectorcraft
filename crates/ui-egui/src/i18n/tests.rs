@@ -3327,7 +3327,7 @@ fn script_interpreter_core_errors_are_translated() {
         "the right side of 'in' is not an object",
         "the right side of 'instanceof' is not a function",
         "the function's prototype is not an object",
-        "{name} is not defined",
+        "{ident} is not defined",
         "cannot read property '{key}' of {base}",
         "cannot set property '{key}' of {base}",
         "cannot read a property of {base}",
@@ -3335,7 +3335,7 @@ fn script_interpreter_core_errors_are_translated() {
         "cannot define property '{key}': {why}",
         "cannot assign to property '{key}': {why}",
         "cannot delete property '{key}'",
-        "cannot declare function {name}",
+        "cannot declare function {ident}",
         "the array's length is read-only",
         "the property cannot be redefined",
         "the object is not extensible",
@@ -3355,6 +3355,8 @@ fn script_interpreter_core_errors_are_translated() {
     let mut lines: Vec<(String, String, Vec<&str>)> = vec![];
     for (source, inner, kept) in [
         ("nope", "nope is not defined", vec!["nope"]),
+        // An identifier that is also a message with its own entry stays as written.
+        ("damaged", "damaged is not defined", vec!["damaged"]),
         ("null.x", "cannot read property 'x' of null", vec!["'x'", "null"]),
         ("var u; u['y'] = 1", "cannot set property 'y' of undefined", vec!["'y'", "undefined"]),
         ("var u; u.y = 1", "cannot set a property of undefined", vec!["undefined"]),

@@ -4822,7 +4822,7 @@ imageTrace	Outline	轮廓
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} 未定义
+@msg	{ident} is not defined	{ident} 未定义
 @msg	cannot read property '{key}' of {base}	无法读取 {base} 的属性 '{key}'
 @msg	cannot set property '{key}' of {base}	无法设置 {base} 的属性 '{key}'
 @msg	cannot read a property of {base}	无法读取 {base} 的属性
@@ -4830,7 +4830,7 @@ imageTrace	Outline	轮廓
 @msg	cannot define property '{key}': {why}	无法定义属性 '{key}'：{why}
 @msg	cannot assign to property '{key}': {why}	无法为属性 '{key}' 赋值：{why}
 @msg	cannot delete property '{key}'	无法删除属性 '{key}'
-@msg	cannot declare function {name}	无法声明函数 {name}
+@msg	cannot declare function {ident}	无法声明函数 {ident}
 @msg	invalid assignment target	赋值目标无效
 @msg	the array's length is read-only	数组的长度是只读的
 @msg	the property cannot be redefined	属性无法重新定义

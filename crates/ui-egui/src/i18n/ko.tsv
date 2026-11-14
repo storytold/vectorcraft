@@ -5069,7 +5069,7 @@ theme	Appearance	외관
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name}이(가) 정의되지 않았습니다
+@msg	{ident} is not defined	{ident}이(가) 정의되지 않았습니다
 @msg	cannot read property '{key}' of {base}	{base}의 속성 '{key}'을(를) 읽을 수 없습니다
 @msg	cannot set property '{key}' of {base}	{base}의 속성 '{key}'을(를) 설정할 수 없습니다
 @msg	cannot read a property of {base}	{base}의 속성을 읽을 수 없습니다
@@ -5077,7 +5077,7 @@ theme	Appearance	외관
 @msg	cannot define property '{key}': {why}	속성 '{key}'을(를) 정의할 수 없습니다: {why}
 @msg	cannot assign to property '{key}': {why}	속성 '{key}'에 대입할 수 없습니다: {why}
 @msg	cannot delete property '{key}'	속성 '{key}'을(를) 삭제할 수 없습니다
-@msg	cannot declare function {name}	함수 {name}을(를) 선언할 수 없습니다
+@msg	cannot declare function {ident}	함수 {ident}을(를) 선언할 수 없습니다
 @msg	invalid assignment target	대입 대상이 잘못되었습니다
 @msg	the array's length is read-only	배열의 길이는 읽기 전용입니다
 @msg	the property cannot be redefined	속성을 다시 정의할 수 없습니다

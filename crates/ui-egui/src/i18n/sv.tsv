@@ -4248,7 +4248,7 @@ axis	Both	Båda
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} är inte definierat
+@msg	{ident} is not defined	{ident} är inte definierat
 @msg	cannot read property '{key}' of {base}	det går inte att läsa egenskapen '{key}' för {base}
 @msg	cannot set property '{key}' of {base}	det går inte att sätta egenskapen '{key}' för {base}
 @msg	cannot read a property of {base}	det går inte att läsa en egenskap för {base}
@@ -4256,7 +4256,7 @@ axis	Both	Båda
 @msg	cannot define property '{key}': {why}	det går inte att definiera egenskapen '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	det går inte att tilldela egenskapen '{key}': {why}
 @msg	cannot delete property '{key}'	det går inte att ta bort egenskapen '{key}'
-@msg	cannot declare function {name}	det går inte att deklarera funktionen {name}
+@msg	cannot declare function {ident}	det går inte att deklarera funktionen {ident}
 @msg	invalid assignment target	ogiltigt tilldelningsmål
 @msg	the array's length is read-only	arrayens längd är skrivskyddad
 @msg	the property cannot be redefined	egenskapen kan inte definieras om

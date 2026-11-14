@@ -6655,7 +6655,7 @@ antiAlias	Sharp	शार्प
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} परिभाषित नहीं है
+@msg	{ident} is not defined	{ident} परिभाषित नहीं है
 @msg	cannot read property '{key}' of {base}	{base} की प्रॉपर्टी '{key}' पढ़ी नहीं जा सकती
 @msg	cannot set property '{key}' of {base}	{base} की प्रॉपर्टी '{key}' सेट नहीं की जा सकती
 @msg	cannot read a property of {base}	{base} की कोई प्रॉपर्टी पढ़ी नहीं जा सकती
@@ -6663,7 +6663,7 @@ antiAlias	Sharp	शार्प
 @msg	cannot define property '{key}': {why}	प्रॉपर्टी '{key}' परिभाषित नहीं की जा सकती: {why}
 @msg	cannot assign to property '{key}': {why}	प्रॉपर्टी '{key}' को मान नहीं दिया जा सकता: {why}
 @msg	cannot delete property '{key}'	प्रॉपर्टी '{key}' हटाई नहीं जा सकती
-@msg	cannot declare function {name}	फ़ंक्शन {name} घोषित नहीं किया जा सकता
+@msg	cannot declare function {ident}	फ़ंक्शन {ident} घोषित नहीं किया जा सकता
 @msg	invalid assignment target	मान देने का लक्ष्य अमान्य है
 @msg	the array's length is read-only	ऐरे की लंबाई केवल-पठन है
 @msg	the property cannot be redefined	प्रॉपर्टी को फिर से परिभाषित नहीं किया जा सकता

@@ -4804,7 +4804,7 @@ theme	Appearance	Giao diện
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} chưa được định nghĩa
+@msg	{ident} is not defined	{ident} chưa được định nghĩa
 @msg	cannot read property '{key}' of {base}	không thể đọc thuộc tính '{key}' của {base}
 @msg	cannot set property '{key}' of {base}	không thể đặt thuộc tính '{key}' của {base}
 @msg	cannot read a property of {base}	không thể đọc thuộc tính của {base}
@@ -4812,7 +4812,7 @@ theme	Appearance	Giao diện
 @msg	cannot define property '{key}': {why}	không thể định nghĩa thuộc tính '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	không thể gán cho thuộc tính '{key}': {why}
 @msg	cannot delete property '{key}'	không thể xóa thuộc tính '{key}'
-@msg	cannot declare function {name}	không thể khai báo hàm {name}
+@msg	cannot declare function {ident}	không thể khai báo hàm {ident}
 @msg	invalid assignment target	đích gán không hợp lệ
 @msg	the array's length is read-only	độ dài của mảng là chỉ đọc
 @msg	the property cannot be redefined	không thể định nghĩa lại thuộc tính

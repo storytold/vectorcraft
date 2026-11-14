@@ -2536,7 +2536,7 @@ file-filter	Templates	範本
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} 未定義
+@msg	{ident} is not defined	{ident} 未定義
 @msg	cannot read property '{key}' of {base}	無法讀取 {base} 的屬性 '{key}'
 @msg	cannot set property '{key}' of {base}	無法設定 {base} 的屬性 '{key}'
 @msg	cannot read a property of {base}	無法讀取 {base} 的屬性
@@ -2544,7 +2544,7 @@ file-filter	Templates	範本
 @msg	cannot define property '{key}': {why}	無法定義屬性 '{key}'：{why}
 @msg	cannot assign to property '{key}': {why}	無法為屬性 '{key}' 賦值：{why}
 @msg	cannot delete property '{key}'	無法刪除屬性 '{key}'
-@msg	cannot declare function {name}	無法宣告函式 {name}
+@msg	cannot declare function {ident}	無法宣告函式 {ident}
 @msg	invalid assignment target	賦值目標無效
 @msg	the array's length is read-only	陣列的長度是唯讀的
 @msg	the property cannot be redefined	屬性無法重新定義

@@ -5155,7 +5155,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} は定義されていません
+@msg	{ident} is not defined	{ident} は定義されていません
 @msg	cannot read property '{key}' of {base}	{base} のプロパティ '{key}' を読み取れません
 @msg	cannot set property '{key}' of {base}	{base} のプロパティ '{key}' を設定できません
 @msg	cannot read a property of {base}	{base} のプロパティを読み取れません
@@ -5163,7 +5163,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	cannot define property '{key}': {why}	プロパティ '{key}' を定義できません: {why}
 @msg	cannot assign to property '{key}': {why}	プロパティ '{key}' に代入できません: {why}
 @msg	cannot delete property '{key}'	プロパティ '{key}' を削除できません
-@msg	cannot declare function {name}	関数 {name} を宣言できません
+@msg	cannot declare function {ident}	関数 {ident} を宣言できません
 @msg	invalid assignment target	代入先が無効です
 @msg	the array's length is read-only	配列の長さは読み取り専用です
 @msg	the property cannot be redefined	プロパティは再定義できません

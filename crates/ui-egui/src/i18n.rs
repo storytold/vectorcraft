@@ -682,8 +682,9 @@ const MESSAGE_DEPTH: usize = 5;
 /// Translate a status or error message for display (see the module docs). Unknown messages, and
 /// parts of them (file names, numbers, a reason with no entry, a JSON object or array such as
 /// `{"objects": [...]}`, a value the message quotes in `"…"`, `“…”`, `'…'` or backticks, such as a
-/// symbol's or a script property's name), stay as they are. A part that starts with `{` or `[` is translated only
-/// when it is a whole message with an exact entry, such as `[x, y] (two numbers)`.
+/// symbol's or a script property's name, and an `{ident}` placeholder's value, a script identifier),
+/// stay as they are. A part that starts with `{` or `[` is translated only when it is a whole
+/// message with an exact entry, such as `[x, y] (two numbers)`.
 pub fn message(lang: Lang, s: &str) -> String {
     message_at(lang, s, MESSAGE_DEPTH)
 }
@@ -703,7 +704,7 @@ fn message_at(lang: Lang, s: &str, depth: usize) -> String {
             message_at(lang, v, depth - 1)
         }
     };
-    let values: Vec<(&str, String)> = caps.into_iter().map(|(k, v)| (k, nested(v))).collect();
+    let values: Vec<(&str, String)> = caps.into_iter().map(|(k, v)| (k, if k == "ident" { v.to_string() } else { nested(v) })).collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();
     fill_once(template, &args)
 }

@@ -5358,7 +5358,7 @@ axis	Both	Ambos
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} não está definido
+@msg	{ident} is not defined	{ident} não está definido
 @msg	cannot read property '{key}' of {base}	não é possível ler a propriedade '{key}' de {base}
 @msg	cannot set property '{key}' of {base}	não é possível gravar a propriedade '{key}' de {base}
 @msg	cannot read a property of {base}	não é possível ler uma propriedade de {base}
@@ -5366,7 +5366,7 @@ axis	Both	Ambos
 @msg	cannot define property '{key}': {why}	não é possível definir a propriedade '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	não é possível atribuir à propriedade '{key}': {why}
 @msg	cannot delete property '{key}'	não é possível excluir a propriedade '{key}'
-@msg	cannot declare function {name}	não é possível declarar a função {name}
+@msg	cannot declare function {ident}	não é possível declarar a função {ident}
 @msg	invalid assignment target	destino de atribuição inválido
 @msg	the array's length is read-only	o comprimento do array é somente leitura
 @msg	the property cannot be redefined	a propriedade não pode ser redefinida

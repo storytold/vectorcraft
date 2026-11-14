@@ -5150,7 +5150,7 @@ imageTrace	Outline	Körvonal
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} nincs definiálva
+@msg	{ident} is not defined	{ident} nincs definiálva
 @msg	cannot read property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem olvasható
 @msg	cannot set property '{key}' of {base}	a(z) {base} '{key}' tulajdonsága nem állítható be
 @msg	cannot read a property of {base}	a(z) {base} tulajdonsága nem olvasható
@@ -5158,7 +5158,7 @@ imageTrace	Outline	Körvonal
 @msg	cannot define property '{key}': {why}	a(z) '{key}' tulajdonság nem definiálható: {why}
 @msg	cannot assign to property '{key}': {why}	a(z) '{key}' tulajdonságnak nem adható érték: {why}
 @msg	cannot delete property '{key}'	a(z) '{key}' tulajdonság nem törölhető
-@msg	cannot declare function {name}	a(z) {name} függvény nem deklarálható
+@msg	cannot declare function {ident}	a(z) {ident} függvény nem deklarálható
 @msg	invalid assignment target	érvénytelen értékadási cél
 @msg	the array's length is read-only	a tömb hossza csak olvasható
 @msg	the property cannot be redefined	a tulajdonság nem definiálható újra

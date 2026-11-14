@@ -98,7 +98,7 @@
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} is niet gedefinieerd
+@msg	{ident} is not defined	{ident} is niet gedefinieerd
 @msg	cannot read property '{key}' of {base}	kan eigenschap '{key}' van {base} niet lezen
 @msg	cannot set property '{key}' of {base}	kan eigenschap '{key}' van {base} niet instellen
 @msg	cannot read a property of {base}	kan geen eigenschap van {base} lezen
@@ -106,7 +106,7 @@
 @msg	cannot define property '{key}': {why}	kan eigenschap '{key}' niet definiëren: {why}
 @msg	cannot assign to property '{key}': {why}	kan niet toewijzen aan eigenschap '{key}': {why}
 @msg	cannot delete property '{key}'	kan eigenschap '{key}' niet verwijderen
-@msg	cannot declare function {name}	kan functie {name} niet declareren
+@msg	cannot declare function {ident}	kan functie {ident} niet declareren
 @msg	invalid assignment target	ongeldig toewijzingsdoel
 @msg	the array's length is read-only	de lengte van de array is alleen-lezen
 @msg	the property cannot be redefined	de eigenschap kan niet opnieuw worden gedefinieerd

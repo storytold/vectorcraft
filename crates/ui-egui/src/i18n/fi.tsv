@@ -4563,7 +4563,7 @@ imageTrace	Outline	Ääriviiva
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} ei ole määritelty
+@msg	{ident} is not defined	{ident} ei ole määritelty
 @msg	cannot read property '{key}' of {base}	arvon {base} ominaisuutta '{key}' ei voi lukea
 @msg	cannot set property '{key}' of {base}	arvon {base} ominaisuutta '{key}' ei voi asettaa
 @msg	cannot read a property of {base}	arvon {base} ominaisuutta ei voi lukea
@@ -4571,7 +4571,7 @@ imageTrace	Outline	Ääriviiva
 @msg	cannot define property '{key}': {why}	ominaisuutta '{key}' ei voi määrittää: {why}
 @msg	cannot assign to property '{key}': {why}	ominaisuuteen '{key}' ei voi sijoittaa: {why}
 @msg	cannot delete property '{key}'	ominaisuutta '{key}' ei voi poistaa
-@msg	cannot declare function {name}	funktiota {name} ei voi esitellä
+@msg	cannot declare function {ident}	funktiota {ident} ei voi esitellä
 @msg	invalid assignment target	virheellinen sijoituksen kohde
 @msg	the array's length is read-only	taulukon pituus on vain luku
 @msg	the property cannot be redefined	ominaisuutta ei voi määrittää uudelleen

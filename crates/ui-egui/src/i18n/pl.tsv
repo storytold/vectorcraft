@@ -4460,7 +4460,7 @@ imageTrace	Outline	Kontur
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	{name} nie jest zdefiniowane
+@msg	{ident} is not defined	{ident} nie jest zdefiniowane
 @msg	cannot read property '{key}' of {base}	nie można odczytać właściwości '{key}' wartości {base}
 @msg	cannot set property '{key}' of {base}	nie można ustawić właściwości '{key}' wartości {base}
 @msg	cannot read a property of {base}	nie można odczytać właściwości wartości {base}
@@ -4468,7 +4468,7 @@ imageTrace	Outline	Kontur
 @msg	cannot define property '{key}': {why}	nie można zdefiniować właściwości '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	nie można przypisać do właściwości '{key}': {why}
 @msg	cannot delete property '{key}'	nie można usunąć właściwości '{key}'
-@msg	cannot declare function {name}	nie można zadeklarować funkcji {name}
+@msg	cannot declare function {ident}	nie można zadeklarować funkcji {ident}
 @msg	invalid assignment target	nieprawidłowy cel przypisania
 @msg	the array's length is read-only	długość tablicy jest tylko do odczytu
 @msg	the property cannot be redefined	właściwości nie można zdefiniować ponownie

@@ -2407,7 +2407,7 @@ axis	Both	Και τα δύο
 @msg	SyntaxError: {e}	SyntaxError: {e}
 @msg	EvalError: {e}	EvalError: {e}
 @msg	URIError: {e}	URIError: {e}
-@msg	{name} is not defined	το {name} δεν έχει οριστεί
+@msg	{ident} is not defined	το {ident} δεν έχει οριστεί
 @msg	cannot read property '{key}' of {base}	δεν είναι δυνατή η ανάγνωση της ιδιότητας '{key}' του {base}
 @msg	cannot set property '{key}' of {base}	δεν είναι δυνατός ο ορισμός της ιδιότητας '{key}' του {base}
 @msg	cannot read a property of {base}	δεν είναι δυνατή η ανάγνωση ιδιότητας του {base}
@@ -2415,7 +2415,7 @@ axis	Both	Και τα δύο
 @msg	cannot define property '{key}': {why}	δεν είναι δυνατός ο καθορισμός της ιδιότητας '{key}': {why}
 @msg	cannot assign to property '{key}': {why}	δεν είναι δυνατή η ανάθεση στην ιδιότητα '{key}': {why}
 @msg	cannot delete property '{key}'	δεν είναι δυνατή η διαγραφή της ιδιότητας '{key}'
-@msg	cannot declare function {name}	δεν είναι δυνατή η δήλωση της συνάρτησης {name}
+@msg	cannot declare function {ident}	δεν είναι δυνατή η δήλωση της συνάρτησης {ident}
 @msg	invalid assignment target	μη έγκυρος στόχος ανάθεσης
 @msg	the array's length is read-only	το μήκος του πίνακα είναι μόνο για ανάγνωση
 @msg	the property cannot be redefined	η ιδιότητα δεν μπορεί να οριστεί ξανά
