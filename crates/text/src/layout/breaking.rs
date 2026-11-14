@@ -253,7 +253,8 @@ pub(super) fn drawn_width(sg: &[SGlyph], drawn: &[usize], tabs: &[vectorcraft_do
 }
 
 /// Most breaks, or hyphenation points, [`break_line`] measures as drawn one by one from the latest
-/// back before bisecting the earlier ones.
+/// back before bisecting the earlier ones, and most legal breaks a line with a glyph stepping back
+/// reads past where it first overflows in the order of its text.
 const MAX_DRAWN_CHECKS: usize = 256;
 
 /// Most copies of a leader drawn in one tab: a tiny type size and a far stop must not make
@@ -358,7 +359,10 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
 /// once the line holds a tab, whose width depends on what is drawn before it, the line reads on
 /// while the least it can be drawn at fits `width`, then ends at the latest legal break where it
 /// fits as drawn (past [`MAX_DRAWN_CHECKS`] breaks back from the latest, the earlier ones without a
-/// hyphen are bisected); hyphenation points are measured the same way.
+/// hyphen are bisected); hyphenation points are measured the same way. Once such a line holds a
+/// glyph with a negative advance and has been wider than `width` in the order of its text, it reads
+/// at most [`MAX_DRAWN_CHECKS`] legal breaks further and ends at the latest of the breaks read that
+/// fits as drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -426,6 +430,11 @@ pub(super) fn break_line(
         }
     };
     let mut last_break: Option<(usize, bool)> = None;
+    // Whether the line, once it holds a tab and is measured as drawn, has been wider in the order of
+    // its text than `width`, and how many legal breaks it has read since then with a glyph stepping
+    // back: past MAX_DRAWN_CHECKS of them the line stops reading.
+    let mut overflowed = false;
+    let mut breaks_past_overflow = 0usize;
     // A list marker (length 0) is a cluster of its own; the line holds it and at least the first
     // cluster after it.
     let first = i + g.get(i..).unwrap_or_default().iter().take_while(|h| h.len == 0).count();
@@ -476,6 +485,7 @@ pub(super) fn break_line(
         // there are tabs.
         let stops_reached = if back + cluster_back > 0.0 { f64::NEG_INFINITY } else { nth_stop(tabs_read) - x_start };
         let measured = if tabbed && fits.is_some() { (ink + cluster_ink).max(stops_reached) } else { x + cluster_width };
+        overflowed |= tabbed && fits.is_some() && j > first && !gl.is_space() && x + cluster_width - end_credit > width + EPS;
         if j > first && !gl.is_space() && measured - end_credit > width + EPS {
             // It ends the line with the spaces after it.
             if burasagari != Burasagari::None && hangs(gl) && kinsoku_allows(g, cluster_end - 1, kinsoku) {
@@ -503,6 +513,13 @@ pub(super) fn break_line(
                 last_break = Some((cluster_end, hyphenated));
                 if fits.is_some() {
                     breaks.push((cluster_end, hyphenated));
+                }
+                // A line with a glyph stepping back stops reading MAX_DRAWN_CHECKS breaks past where
+                // it first overflowed in the order of its text, and ends at the latest break read
+                // that fits as drawn.
+                breaks_past_overflow += usize::from(overflowed && back > 0.0);
+                if breaks_past_overflow >= MAX_DRAWN_CHECKS {
+                    return settle(tabbed, (cluster_end, hyphenated), &breaks);
                 }
             }
         }
