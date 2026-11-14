@@ -221,6 +221,11 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   that leave no art between them, a `Spacing`, `Adjustment` or `FoldAdjustment` other than 0, 1 and 1, art with
   strokes, gradients or patterns) and type with an Art brush keep the drawn look.
 
+- **Done (2026-11-14):** Calligraphic paths whose brush filter holds an entry that isn't read or a variable width
+  keep their drawn look. So do paths followed by samples of the pen (`(…) Xt n XD`) whose Calligraphic brush varies
+  with the pen; such a path no longer also comes in beside its look, unpainted. Synthetic importer regressions;
+  scores unchanged.
+
 - **Done (2026-11-12):** Explicitly requested editing data retains a single artboard larger than a capped 14,400 pt PDF page (#6865); the default import and other size mismatches remain unchanged. Synthetic importer regression; scores unchanged.
 - **Missing:** faithful layer and group structure from the editing data in real files (#951: 109 layers instead
   of 14), open speed on large files (#758), live effects, Scatter, Pattern and Bristle brushes on paths, the Art
