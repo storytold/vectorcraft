@@ -1547,6 +1547,9 @@ antiAlias	Sharp	날카롭게
 	The selected character's font is not available.	선택한 문자의 글꼴을 사용할 수 없습니다.
 	No alternates for the selected character.	선택한 문자의 대체 글리프가 없습니다.
 	Double-click to replace	더블클릭하여 바꾸기
+	Click to replace	클릭하여 바꾸기
+	Show all alternates in the Glyphs panel	글리프 패널에서 모든 대체 글리프 표시
+	Show Character Alternates	문자의 대체 글리프 표시
 	Select one character with the Type tool first.	먼저 문자 도구로 문자 하나를 선택하세요.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph}은(는) {font}의 글리프이며, 선택한 텍스트의 글꼴({text_font})의 것이 아닙니다.
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph}은(는) {base}(U+{base_code})의 {place} 글리프입니다. 선택한 문자는 {sel}(U+{code})입니다.
@@ -6261,7 +6264,7 @@ axis	Y Axis	Y축
 @plural	Result: {n}|Results: {n}	결과: {n}
 @msg	select one object	개체 하나를 선택하십시오
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	전체 편집은 패스, 컴파운드 패스, 심볼 인스턴스 및 이들의 그룹에서 작동합니다
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(회전하거나 반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	유사한 개체를 찾을 수 없습니다(반사한 복사본은 일치하지 않습니다). 전체 편집 옵션을 변경한 후 다시 시도하십시오
 @msg	Global Edit is off	전체 편집이 꺼져 있습니다
 @msg	only an object of the Global Edit other than the one it started from can be left out	전체 편집을 시작한 개체가 아닌 전체 편집의 개체만 제외할 수 있습니다
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all 또는 1, 3-5 같은 범위여야 합니다({v}이(가) 아님)
@@ -7058,6 +7061,9 @@ breakText	Glyphs	글리프
 	Open Tutorial Sample	튜토리얼 샘플 열기
 	Finish Tutorial	튜토리얼 완료
 	Next Tutorial	다음 튜토리얼
+	Show Learn Tab	학습 탭 표시
+	Show Skill	기술 표시
+	Back One Level	한 단계 뒤로
 	Back to Skills	기술로 돌아가기
 @msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
 @msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
