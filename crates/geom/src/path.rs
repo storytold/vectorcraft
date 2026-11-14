@@ -248,6 +248,16 @@ fn anchors_within<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Anchor>,
     d.deserialize_seq(V)
 }
 
+thread_local! {
+    /// [`measured_segments`] of this thread.
+    static MEASURED_SEGMENTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many segments [`PathData::bounds`] has measured on this thread.
+pub fn measured_segments() -> u64 {
+    MEASURED_SEGMENTS.get()
+}
+
 /// An open or closed run of anchors.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SubPath {
@@ -568,6 +578,7 @@ impl PathData {
         }
         let mut bbox: Option<Rect> = None;
         for sp in &self.subpaths {
+            MEASURED_SEGMENTS.set(MEASURED_SEGMENTS.get().saturating_add(sp.segment_count() as u64));
             for i in 0..sp.segment_count() {
                 let c = sp.segment(i);
                 // `to_bezpath_into` writes a line where neither handle is out, else a cubic.
