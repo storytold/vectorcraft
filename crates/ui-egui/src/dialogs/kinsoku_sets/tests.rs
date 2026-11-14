@@ -203,6 +203,47 @@ fn ok_takes_fields_set_without_a_frame() {
     assert_eq!((d.str("name"), d.str("cannotStart")), ("Other".to_string(), "ー".to_string()));
 }
 
+/// OK sets the sets of the document the dialog opened on, also when another document became the
+/// active one while it was open; with that document closed, OK closes the dialog and changes no
+/// document's sets.
+#[test]
+fn ok_sets_the_document_the_dialog_opened_on() {
+    let mut app = app();
+    let first = app.session.active().unwrap().uid;
+    app.run("type.kinsokuSets.set", json!({ "sets": [{"name": "First", "cannotStart": "ゝ"}] })).unwrap();
+    open(&mut app).unwrap();
+    assert!(!super::super::accepts_field(dialog(&mut app), DOC), "`ui.dialog.set` cannot change the document");
+    dialog(&mut app).fields.insert("name".into(), json!("Soft"));
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let other = app.session.active().unwrap().uid;
+    assert_ne!(other, first);
+    // A name OK refuses keeps the dialog open on its document, now the active one.
+    assert!(super::super::confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_some());
+    assert_eq!(app.session.active().unwrap().uid, first);
+    assert_eq!(doc_sets(&app)[0].name, "First");
+    app.run("document.activate", json!({ "index": app.session.documents().iter().position(|d| d.uid == other).unwrap() })).unwrap();
+    dialog(&mut app).fields.insert("name".into(), json!("Kinsoku Set 1"));
+    super::super::confirm(&mut app).unwrap();
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.active().unwrap().uid, first);
+    assert_eq!(doc_sets(&app)[0].name, "Kinsoku Set 1");
+    let second = app.session.documents().iter().find(|d| d.uid != first).unwrap();
+    assert!(second.doc.kinsoku_sets.is_empty(), "the other document keeps its sets");
+
+    // New skips the names of the dialog's document's sets, not of the active document's.
+    open(&mut app).unwrap();
+    press(&mut app, Action::Delete);
+    app.run("document.activate", json!({ "index": app.session.documents().iter().position(|d| d.uid == other).unwrap() })).unwrap();
+    press(&mut app, Action::New);
+    assert_eq!(dialog(&mut app).str("name"), "Kinsoku Set 2");
+    let i = app.session.documents().iter().position(|d| d.uid == first).unwrap();
+    app.session.execute("file.close", &json!({ "index": i })).unwrap();
+    assert!(super::super::confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_none());
+    assert!(app.session.documents().iter().all(|d| d.doc.kinsoku_sets.is_empty()));
+}
+
 /// Add takes a code point as U+XXXX, u+xxxx or bare hexadecimal, and never a control or space
 /// character or a value that is no character.
 #[test]

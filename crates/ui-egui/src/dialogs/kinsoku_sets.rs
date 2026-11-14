@@ -5,7 +5,8 @@
 //! of a Unicode code point into a category. Nothing changes in the document until OK,
 //! which runs `type.kinsokuSets.set` with every set as one undo step; Cancel leaves them as they were.
 //!
-//! Fields: `sets` (the sets as `type.kinsokuSets.set` takes them, each with the name it had in the
+//! Fields: `__doc` (the uid of the document the dialog opened on, which OK sets the sets of),
+//! `sets` (the sets as `type.kinsokuSets.set` takes them, each with the name it had in the
 //! document as `from`), `selected` (the index of the one picked), `name`, `cannotStart`,
 //! `cannotEnd`, `hanging` and `inseparable` (its name and categories as typed, the inseparable
 //! sequences separated by spaces), `base` (what New starts from), `code` (the code point Add
@@ -29,6 +30,10 @@ pub const KIND: &str = "kinsokuSets";
 /// The command OK runs, and the menu item's.
 pub const COMMAND: &str = vectorcraft_engine::cmd::kinsokusets::SET;
 
+/// The field that holds the uid of the document whose sets the dialog shows (`ui.dialog.set`
+/// refuses `__` fields).
+const DOC: &str = "__doc";
+
 /// The categories, as the command's keys, in the order the dialog shows them.
 const CATEGORIES: [&str; 4] = ["cannotStart", "cannotEnd", "hanging", "inseparable"];
 
@@ -37,10 +42,9 @@ pub(super) const SPEC: DialogSpec =
 
 /// Open Kinsoku Shori Settings on the active document's custom sets, the first one picked.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let sets: Vec<Value> = app
-        .session
-        .active()
-        .ok_or("no document open")?
+    let st = app.session.active().ok_or("no document open")?;
+    let uid = st.uid;
+    let sets: Vec<Value> = st
         .doc
         .kinsoku_sets
         .iter()
@@ -52,7 +56,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
             v
         })
         .collect();
-    let mut d = Dialog::new(KIND, json!({ "sets": sets, "selected": 0, "base": "hard", "into": "cannotStart", "code": "" }));
+    let mut d = Dialog::new(KIND, json!({ DOC: uid, "sets": sets, "selected": 0, "base": "hard", "into": "cannotStart", "code": "" }));
     show_selected(&mut d);
     app.ui.dialog = Some(d);
     Ok(Value::Null)
@@ -256,7 +260,8 @@ fn run(app: &mut VectorcraftApp, d: &mut Dialog, act: Action) -> Result<(), Stri
                 }
             };
             set.remove("from");
-            let doc = app.session.active().map(|t| t.doc.kinsoku_sets.to_vec()).unwrap_or_default();
+            let uid = d.fields.get(DOC).and_then(Value::as_u64);
+            let doc = app.session.documents().iter().find(|t| Some(t.uid) == uid).map(|t| t.doc.kinsoku_sets.to_vec()).unwrap_or_default();
             set.insert("name".into(), json!(new_name(&list, &doc)));
             list.push(set);
             put_sets(d, &list);
@@ -303,9 +308,19 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     {
         take_fields(d, set);
     }
+    // The sets go to the document the dialog opened on, also when another tab is active by now; a
+    // document closed since closes the dialog and changes nothing.
+    let uid = d.fields.get(DOC).and_then(Value::as_u64);
+    if app.session.active().map(|st| st.uid) != uid {
+        let Some(index) = app.session.documents().iter().position(|doc| Some(doc.uid) == uid) else {
+            app.ui.dialog = None;
+            return Err("that document is no longer open".into());
+        };
+        app.run("document.activate", json!({ "index": index }))?;
+    }
     let r = app.run(COMMAND, json!({ "sets": list }));
     // A name two sets share, a reserved name or a category too long keeps the dialog open to be
-    // changed.
+    // changed, with its document active.
     if r.is_ok() {
         app.ui.dialog = None;
     }
