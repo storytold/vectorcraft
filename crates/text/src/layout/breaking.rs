@@ -253,9 +253,14 @@ pub(super) fn drawn_width(sg: &[SGlyph], drawn: &[usize], tabs: &[vectorcraft_do
 }
 
 /// Most breaks, or hyphenation points, [`break_line`] measures as drawn one by one from the latest
-/// back before bisecting the earlier ones, and most legal breaks a line with a glyph stepping back
-/// reads past where it first overflows in the order of its text.
+/// back before bisecting the earlier ones.
 const MAX_DRAWN_CHECKS: usize = 256;
+
+/// Most breaks, or hyphenation points, [`break_line`] measures as drawn one by one when a glyph of
+/// the line has a negative advance: a later break can then be drawn narrower than an earlier one,
+/// and bisecting can miss the latest break that fits. It is also the most legal breaks such a line
+/// reads past where it first overflows in the order of its text.
+const MAX_DRAWN_CHECKS_STEPPING_BACK: usize = 1024;
 
 /// Most copies of a leader drawn in one tab: a tiny type size and a far stop must not make
 /// millions of outlines.
@@ -358,11 +363,12 @@ pub(super) fn word_width(g: &[SGlyph], i: usize, line_end: &[f64], kinsoku: Kins
 /// from `i` ending before glyph `end` (with a hyphen when `hyphenated`) fits `width` as it is drawn:
 /// once the line holds a tab, whose width depends on what is drawn before it, the line reads on
 /// while the least it can be drawn at fits `width`, then ends at the latest legal break where it
-/// fits as drawn (past [`MAX_DRAWN_CHECKS`] breaks back from the latest, the earlier ones without a
-/// hyphen are bisected); hyphenation points are measured the same way. Once such a line holds a
-/// glyph with a negative advance and has been wider than `width` in the order of its text, it reads
-/// at most [`MAX_DRAWN_CHECKS`] legal breaks further and ends at the latest of the breaks read that
-/// fits as drawn.
+/// fits as drawn (past [`MAX_DRAWN_CHECKS`] breaks back from the latest, or
+/// [`MAX_DRAWN_CHECKS_STEPPING_BACK`] when a glyph of the line has a negative advance, the earlier
+/// ones without a hyphen are bisected); hyphenation points are measured the same way. Once such a
+/// line holds a glyph with a negative advance and has been wider than `width` in the order of its
+/// text, it reads at most [`MAX_DRAWN_CHECKS_STEPPING_BACK`] legal breaks further and ends at the
+/// latest of the breaks read that fits as drawn.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn break_line(
     text: &str,
@@ -381,24 +387,26 @@ pub(super) fn break_line(
     fits: Option<&dyn Fn(usize, bool) -> bool>,
 ) -> (usize, bool) {
     // The line ending at `chosen`, once it holds a tab, when it fits as drawn; otherwise the latest
-    // of the legal `breaks` before it that fits as drawn, measuring at most MAX_DRAWN_CHECKS of
-    // them from the latest back and bisecting the earlier ones without a hyphen; the first of them
-    // when none of those measured fits.
-    let settle = |tabbed: bool, chosen: (usize, bool), breaks: &[(usize, bool)]| -> (usize, bool) {
+    // of the legal `breaks` before it that fits as drawn, measuring at most `checks` of them from
+    // the latest back and bisecting the earlier ones without a hyphen; the first of them when none
+    // of those measured fits.
+    let settle = |tabbed: bool, checks: usize, chosen: (usize, bool), breaks: &[(usize, bool)]| -> (usize, bool) {
         let Some(fits) = fits.filter(|_| tabbed) else { return chosen };
         if fits(chosen.0, chosen.1) {
             return chosen;
         }
         let earlier = breaks.get(breaks.partition_point(|b| b.0 <= i)..breaks.partition_point(|b| b.0 < chosen.0)).unwrap_or_default();
-        if let Some(&b) = earlier.iter().rev().take(MAX_DRAWN_CHECKS).find(|b| fits(b.0, b.1)) {
+        if let Some(&b) = earlier.iter().rev().take(checks).find(|b| fits(b.0, b.1)) {
             return b;
         }
         // Without a hyphen, a line that ends later is drawn no narrower, so those breaks bisect.
-        let rest = earlier.get(..earlier.len().saturating_sub(MAX_DRAWN_CHECKS)).unwrap_or_default();
+        let rest = earlier.get(..earlier.len().saturating_sub(checks)).unwrap_or_default();
         let plain: Vec<&(usize, bool)> = rest.iter().filter(|b| !b.1).collect();
         let fitting = plain.partition_point(|b| fits(b.0, b.1));
         fitting.checked_sub(1).and_then(|k| plain.get(k).copied()).or(earlier.first()).copied().unwrap_or(chosen)
     };
+    // How many breaks a line measures as drawn one by one.
+    let checks = |back: f64| if back > 0.0 { MAX_DRAWN_CHECKS_STEPPING_BACK } else { MAX_DRAWN_CHECKS };
     let mut breaks: Vec<(usize, bool)> = Vec::new();
     let mut tabbed = false;
     if !width.is_finite() {
@@ -432,7 +440,7 @@ pub(super) fn break_line(
     let mut last_break: Option<(usize, bool)> = None;
     // Whether the line, once it holds a tab and is measured as drawn, has been wider in the order of
     // its text than `width`, and how many legal breaks it has read since then with a glyph stepping
-    // back: past MAX_DRAWN_CHECKS of them the line stops reading.
+    // back: past MAX_DRAWN_CHECKS_STEPPING_BACK of them the line stops reading.
     let mut overflowed = false;
     let mut breaks_past_overflow = 0usize;
     // A list marker (length 0) is a cluster of its own; the line holds it and at least the first
@@ -471,7 +479,7 @@ pub(super) fn break_line(
         let cluster_ink = if is_tab { 0.0 } else { cluster_width };
         let cluster_back: f64 = if is_tab { 0.0 } else { g[j..cluster_end].iter().map(|glyph| (-glyph.adv).max(0.0)).sum() };
         if gl.ch == '\u{2028}' {
-            return settle(tabbed, (cluster_end, false), &breaks);
+            return settle(tabbed, checks(back), (cluster_end, false), &breaks);
         }
         // Measured as the line is set when it ends with this cluster: only the cluster's last glyph
         // is narrowed, and only where the line may end.
@@ -514,19 +522,19 @@ pub(super) fn break_line(
                 if fits.is_some() {
                     breaks.push((cluster_end, hyphenated));
                 }
-                // A line with a glyph stepping back stops reading MAX_DRAWN_CHECKS breaks past where
-                // it first overflowed in the order of its text, and ends at the latest break read
-                // that fits as drawn.
+                // A line with a glyph stepping back stops reading MAX_DRAWN_CHECKS_STEPPING_BACK
+                // breaks past where it first overflowed in the order of its text, and ends at the
+                // latest break read that fits as drawn: each of those breaks is measured one by one.
                 breaks_past_overflow += usize::from(overflowed && back > 0.0);
-                if breaks_past_overflow >= MAX_DRAWN_CHECKS {
-                    return settle(tabbed, (cluster_end, hyphenated), &breaks);
+                if breaks_past_overflow >= MAX_DRAWN_CHECKS_STEPPING_BACK {
+                    return settle(tabbed, checks(back), (cluster_end, hyphenated), &breaks);
                 }
             }
         }
         j = cluster_end;
     }
     if j >= g.len() {
-        return settle(tabbed, (g.len(), false), &breaks);
+        return settle(tabbed, checks(back), (g.len(), false), &breaks);
     }
     // Hyphenate the word that overflows. A list marker starting the line is not part of a word.
     let word_start = last_break.map_or(first, |b| b.0);
@@ -551,18 +559,19 @@ pub(super) fn break_line(
             .filter(|&k| k > 0 && kinsoku_allows(g, k - 1, kinsoku) && !splits_no_break(g, k))
             .collect();
         // The points the line may end at, the latest first. Measured as drawn, at most
-        // MAX_DRAWN_CHECKS of them are measured one by one, and the earlier ones are bisected:
+        // `checks(back)` of them are measured one by one, and the earlier ones are bisected:
         // each ends with a hyphen, so a later one is drawn no narrower.
         let points: Vec<usize> = pts.iter().rev().copied().filter(|&k| k <= j && k > i).collect();
         let drawn = fits.filter(|_| tabbed);
-        for &k in points.iter().take(if drawn.is_some() { MAX_DRAWN_CHECKS } else { usize::MAX }) {
+        let one_by_one = checks(back);
+        for &k in points.iter().take(if drawn.is_some() { one_by_one } else { usize::MAX }) {
             let w = x_ws + g[word_start..k].iter().map(|g| g.adv).sum::<f64>() + hyphen_glyph(&g[k - 1]).adv;
             if drawn.map_or(w <= width + EPS, |fits| fits(k, true)) {
                 return (k, true);
             }
         }
         if let Some(fits) = drawn {
-            let earlier: Vec<usize> = points.iter().skip(MAX_DRAWN_CHECKS).rev().copied().collect();
+            let earlier: Vec<usize> = points.iter().skip(one_by_one).rev().copied().collect();
             let fitting = earlier.partition_point(|&k| fits(k, true));
             if let Some(&k) = fitting.checked_sub(1).and_then(|n| earlier.get(n)) {
                 return (k, true);
@@ -572,7 +581,7 @@ pub(super) fn break_line(
     // Break candidates and greedy overflow are cluster boundaries; hyphenation also returns only
     // cluster starts, so the resulting end always keeps each source cluster together.
     match last_break {
-        Some(b) if b.0 > i => settle(tabbed, b, &breaks),
+        Some(b) if b.0 > i => settle(tabbed, checks(back), b, &breaks),
         _ => (j, false),
     }
 }

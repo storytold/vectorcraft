@@ -684,16 +684,16 @@ fn a_tabbed_line_stepping_back_stops_reading_past_its_overflow() {
     let ended =
         break_line(&text, &glyphs, 0, 30.0, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
     assert_eq!(ended, (9, false));
-    // 256 breaks past the overflow at `y`: the break before glyph 6 + 3 × 255.
-    assert_eq!(furthest.get(), 771, "read up to glyph {} of {}", furthest.get(), glyphs.len());
-    assert!(measured.get() <= 300, "measured {} breaks as drawn", measured.get());
+    // 1,024 breaks past the overflow at `y`: the break before glyph 6 + 3 × 1,023.
+    assert_eq!(furthest.get(), 3075, "read up to glyph {} of {}", furthest.get(), glyphs.len());
+    assert!(measured.get() <= 1100, "measured {} breaks as drawn", measured.get());
 }
 
 /// Where a tabbed line with glyphs stepping back stops reading, it ends at the latest break read
 /// that fits as drawn, even when a break past those fits too.
 #[test]
 fn a_tabbed_line_stepping_back_ends_at_the_latest_break_read_that_fits() {
-    let (text, glyphs) = stepping_back_tabbed_line(400);
+    let (text, glyphs) = stepping_back_tabbed_line(1500);
     let end = |drawn_fits: &dyn Fn(usize, bool) -> bool| {
         break_line(
             &text,
@@ -712,11 +712,60 @@ fn a_tabbed_line_stepping_back_ends_at_the_latest_break_read_that_fits() {
             Some(drawn_fits),
         )
     };
-    // The break before glyph 1101 is past the 256 breaks read after the overflow (up to 771).
-    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 1101), (9, false));
+    // The break before glyph 4002 is past the 1,024 breaks read after the overflow (up to 3075).
+    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 4002), (9, false));
     // A break among those read keeps its place.
     assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 600), (600, false));
-    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 771), (771, false));
+    assert_eq!(end(&|end: usize, _: bool| end <= 10 || end == 3075), (3075, false));
+}
+
+/// A long tabbed line with a glyph that steps back ends at the latest break that fits as drawn, even
+/// where a later break than one that does not fit fits again.
+#[test]
+fn a_long_tabbed_line_that_steps_back_ends_at_the_latest_break_that_fits_as_drawn() {
+    // a (0), tab (1), then b and a space for each u: breaks before 4 + 2u.
+    let text = format!("a\t{}", "b ".repeat(400));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), if byte == 2 { -0.5 } else { 1.0 }, ch)).collect();
+    let glyphs = synthetic_glyphs(&specs);
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 10 || end == 200;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended =
+        break_line(&text, &glyphs, 0, 1e6, &[], 0.0, None, Burasagari::None, Kinsoku::None, KinsokuShoriType::PushOutOnly, false, false, &[], fits);
+    assert_eq!(ended, (200, false));
+}
+
+/// A tabbed line with a glyph that steps back, ending in a word with more hyphenation points than
+/// are measured one by one, ends at the latest point that fits as drawn.
+#[test]
+fn a_tabbed_line_that_steps_back_ends_at_the_latest_hyphenation_point_that_fits_as_drawn() {
+    let opts = HyphenationOptions { words_longer_than: 0, after_first: 1, before_last: 1, ..Default::default() };
+    // a (0), tab (1), then a word of 400 syllables of two glyphs from glyph 2: points before 4, 6, ...
+    let text = format!("a\t{}", "कि".repeat(400));
+    let specs: Vec<_> = text.char_indices().map(|(byte, ch)| (byte, ch.len_utf8(), if byte == 2 { -1.0 } else { 1.0 }, ch)).collect();
+    let mut glyphs = synthetic_glyphs(&specs);
+    for glyph in &mut glyphs {
+        glyph.hyphen_language = crate::hyphen::Language::from_tag(Some("hi"));
+        glyph.sx = 0.001;
+    }
+    let drawn_fits = |end: usize, _hyphenated: bool| end <= 20 || end == 50;
+    let fits: Option<&dyn Fn(usize, bool) -> bool> = Some(&drawn_fits);
+    let ended = break_line(
+        &text,
+        &glyphs,
+        0,
+        600.0,
+        &[],
+        0.0,
+        Some((&opts, 0.0)),
+        Burasagari::None,
+        Kinsoku::None,
+        KinsokuShoriType::PushOutOnly,
+        false,
+        false,
+        &[],
+        fits,
+    );
+    assert_eq!(ended, (50, true));
 }
 
 /// Mojikumi: the greedy breaker measures a line as it is set, with its last character narrowed
@@ -1246,11 +1295,14 @@ fn justification_adds_no_gap_inside_a_warichu_block_drawn_right_to_left() {
         let mut glyphs = synthetic_glyphs(&[(0, 2, 10.0, first), (2, 2, 0.0, second)]);
         block(&mut glyphs[0], 0, 0.0);
         block(&mut glyphs[1], 0, 10.0);
-        assert!(!flow::is_letter_gap(1, &[], &after, 0, &glyphs, false), "{first}{second}");
-        assert!(!flow::is_cjk_gap(1, &[], &after, 0, &glyphs), "{first}{second}");
+        // Glyph 0 is drawn after glyph 1 of its block.
+        let begun = [true, false];
+        assert!(!flow::is_letter_gap(1, &[], (&after, &begun), 0, &glyphs, false), "{first}{second}");
+        assert!(!flow::is_cjk_gap(1, &[], (&after, &begun), 0, &glyphs), "{first}{second}");
         // The same two glyphs as the first glyphs of two blocks.
         block(&mut glyphs[1], 2, 0.0);
-        assert!(flow::is_letter_gap(1, &[], &after, 0, &glyphs, false), "{first}{second}");
-        assert_eq!(flow::is_cjk_gap(1, &[], &after, 0, &glyphs), first == '漢', "{first}{second}");
+        let begun = [false, false];
+        assert!(flow::is_letter_gap(1, &[], (&after, &begun), 0, &glyphs, false), "{first}{second}");
+        assert_eq!(flow::is_cjk_gap(1, &[], (&after, &begun), 0, &glyphs), first == '漢', "{first}{second}");
     }
 }
