@@ -992,8 +992,8 @@ struct StylePaints<'a> {
     brushes: &'a [super::super::brush::BrushDraft],
     /// Which of [`Self::brushes`] are kept as brushes ([`super::super::brush::kept`]).
     kept: &'a [bool],
-    /// The art an Art brush draws as the file does ([`super::super::brush::bending_art`]).
-    bending: &'a HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length ([`super::super::brush::bending_art`]).
+    bending: &'a HashMap<String, f64>,
     space: Affine,
 }
 
@@ -1141,7 +1141,8 @@ fn image_warps(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
 
 /// Does image `object` with `appearance` (its style's Warp) draw as `look`, its drawn look, compared
 /// over all that the warp draws ([`crate::import::ai::envelope::warped_alike`]) on `layer`, a layer
-/// id no other node has? Both are drawn shown, opaque and in the Normal mode. Unless the look is on
+/// id no other node has? Both are drawn shown, opaque and in the Normal mode; a hidden look is drawn
+/// with every object in it shown, as the hidden object's look holds them. Unless the look is on
 /// `%_` lines itself (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
 #[allow(clippy::too_many_arguments)]
 fn image_warp_alike(
@@ -1161,10 +1162,22 @@ fn image_warp_alike(
     if !hidden {
         strip(&mut plain, hidden_ids);
     }
+    if !plain.visible {
+        show_members(&mut plain);
+    }
     for n in [&mut live, &mut plain] {
         (n.visible, n.opacity, n.blend) = (true, 1.0, BlendMode::Normal);
     }
     crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
+}
+
+/// Show every object in container `n`, at any depth.
+fn show_members(n: &mut Node) {
+    for c in n.children_mut().into_iter().flatten() {
+        let c = Arc::make_mut(c);
+        c.visible = true;
+        show_members(c);
+    }
 }
 
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.
@@ -1257,7 +1270,7 @@ fn styled(object: &Node, look: &Node, st: &crate::import::ai::style::ArtStyle, p
                     if !super::super::brush::draws_as(draft, settings, paints.bending) {
                         return None;
                     }
-                    let art = matches!(settings, super::super::brush::PathBrush::Art);
+                    let art = matches!(settings, super::super::brush::PathBrush::Art(_));
                     let on_a_path = matches!(object.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
                     if !on_a_path && (art || !slot) {
                         return None;
@@ -1557,7 +1570,7 @@ mod tests {
         let st = &styles["Inked"];
         let brushes = [parse_tool_object(Tool::Calligraphic, "N", "1 4 8 30 50 -150 210 2 5 6 0").unwrap()];
         let (gradients, patterns, names, v7_patterns, bending) =
-            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashMap::new());
         let paints = StylePaints {
             gradients: &gradients,
             patterns: &patterns,
@@ -1603,7 +1616,7 @@ mod tests {
         // GUARDS: an image with a Warp in its art style came in as its drawn look.
         let warp = ("Adobe Deform", "1 /Int (DeformStyle) ,\n0.4 /Real (DeformValue) ,\n"); // brand-ok: the filter's name in the files
         let (gradients, patterns, names, v7_patterns, bending) =
-            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashSet::new());
+            (HashMap::new(), HashMap::new(), ShownNames::default(), HashSet::new(), HashMap::new());
         let paints = StylePaints {
             gradients: &gradients,
             patterns: &patterns,

@@ -201,6 +201,8 @@
 	Crop Image	Izreži sliku
 	Image Tools	Alati za slike
 	Remove Background…	Ukloni pozadinu…
+	Draw (Pencil)	Crtaj (olovka)
+	Place Image	Postavi sliku
 	Remove Background	Ukloni pozadinu
 	Background	Pozadina
 	Edge Color	Boja ruba
@@ -982,6 +984,7 @@
 	VectorCraft Title Bar on Every Desktop	Naslovna traka VectorCrafta na svakoj radnoj površini
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Dok je varijabla okruženja VECTORCRAFT_TITLEBAR postavljena, ona bira naslovnu traku.
 	System Title Bar takes precedence over this option while it is on.	Dok je uključena, Sistemska naslovna traka ima prednost pred ovom opcijom.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Dok je Naslovna traka VectorCrafta na svakoj radnoj površini isključena, ova radna površina crta naslovnu traku prozora bez obzira na to je li ova opcija uključena.
 	Exit	Izlaz
 	Distort	Izobliči
 	Diffuse Glow…	Difuzni sjaj…
@@ -6112,6 +6115,8 @@ axis	Y Axis	Y osa
 	Action Options…	Opcije akcije…
 	Action Options	Opcije akcije
 	Playback Options…	Opcije reprodukcije…
+	Button Mode	Način dugmadi
+	No actions.	Nema akcija.
 	Insert Stop…	Umetni zaustavljanje…
 	Insert Stop	Umetni zaustavljanje
 	Record Stop	Snimi zaustavljanje
