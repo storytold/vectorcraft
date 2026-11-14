@@ -32,6 +32,13 @@ every clause such as "all" or "what follows it". Type as a text object is टा
 in `crates/ui-egui/src/i18n/tests.rs` checks the save, swatch, crop, resolution and path terms
 and the point unit in every row.
 
+Translate a label by its sense in the interface, not by its first dictionary sense. A ruler is
+रूलर, never शासक (a sovereign); a text character is कैरेक्टर, never चरित्र (a personality); a
+vector point is पॉइंट and a printer's mark is मार्क, never अंक (a digit); fills are फ़िल्स, never
+भरता (the verb). In a minimum, desired and maximum range, Desired is वांछित, never देसी (local),
+and a range message keeps both comparisons: minimum ≤ desired ≤ maximum. The same test rejects
+these senses, and others found in the catalog, in every row whose English names the word.
+
 A variable is वेरिएबल (plural वेरिएबल्स) in every sense: a data-merge variable and the
 variable library, a variable font, a variable stroke width and an environment variable. It is
 never चर, परिवर्तनीय or वैरिएबल. Joining paths, anchor points, point type or the lines of a
@@ -61,7 +68,10 @@ checks every `@msg` row's lists.
 | Artwork | आर्टवर्क |
 | Path / Anchor point / Handle | पाथ / एंकर पॉइंट / हैंडल |
 | File path on disk | फ़ाइल पाथ |
-| Fill / Stroke | फ़िल / स्ट्रोक |
+| Fill / Fills / Stroke | फ़िल / फ़िल्स / स्ट्रोक |
+| Point (vector) / Printer's marks | पॉइंट / मार्क्स |
+| Ruler / Ruler origin | रूलर / रूलर ओरिजिन |
+| Minimum / Desired / Maximum | न्यूनतम / वांछित / अधिकतम |
 | Gradient / Mesh / Blend | ग्रेडिएंट / मेश / ब्लेंड |
 | Pattern / Swatch | पैटर्न / स्वॉच |
 | Type (text object) / Crop / Resolution | टाइप / क्रॉप / रिज़ॉल्यूशन |
@@ -89,7 +99,10 @@ percentage of the application's entire interface.
 On 2026-11-13 the catalog has 8,782 rows, including 3,014 `@msg`, 47 `@msgplural` and 41
 `@plural` rows. A wording pass on that date corrected 193 rows outside the plug-in
 messages for meaning, dropped clauses, English left in place and the save, swatch, crop,
-resolution, path and type terms. It is not a native proofread.
+resolution, path and type terms. A second pass on that date corrected 85 short labels and
+messages that used a word's unrelated sense, such as देसी (local) for Desired, शासक (a
+sovereign) for a ruler and उच्च न्यायालय (a high court) for High Contrast. It is not a native
+proofread.
 
 The comparison covers release `v0.21.1` (`f6aa4309`) and current `main` (`3c7d9e1f`). Their
 non-English catalogs have no missing Hindi keys except the names deliberately kept in English.

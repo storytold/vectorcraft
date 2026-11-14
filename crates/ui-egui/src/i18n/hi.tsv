@@ -763,8 +763,8 @@ antiAlias	Sharp	शार्प
 	Change Case	प्रकरण बदलें
 	Change Panel Layout	पैनल लेआउट बदलें
 	Change Screen Mode (F)	स्क्रीन मोड बदलें (F)
-	Change to Artboard Rulers	आर्टबोर्ड शासकों में परिवर्तन
-	Change to Global Rulers	वैश्विक शासकों में परिवर्तन
+	Change to Artboard Rulers	आर्टबोर्ड रूलर्स में परिवर्तन
+	Change to Global Rulers	ग्लोबल रूलर्स में परिवर्तन
 	Change to Left-to-Right Layout	लेफ्ट-टू-राइट लेआउट में परिवर्तन
 	Change to Right-to-Left Layout	राइट-टू-लेफ्ट लेआउट में परिवर्तन
 	Changed since the last check.	आखिरी चेक के बाद से बदल गया।
@@ -780,12 +780,12 @@ antiAlias	Sharp	शार्प
 	Channel 4	चैनल 4
 	Character	कैरेक्टर
 	Character / Paragraph	कैरेक्टर / पैराग्राफ
-	Character Alignment	चरित्र संरेखण
-	Character Color	चरित्र रंग
-	Character Direction	चरित्र निर्देशन
-	Character options	चरित्र ऑप्शन्स
-	Character Rotation	चरित्र रोटेशन
-	Character Set:	चरित्र सेट:
+	Character Alignment	कैरेक्टर संरेखण
+	Character Color	कैरेक्टर रंग
+	Character Direction	कैरेक्टर दिशा
+	Character options	कैरेक्टर ऑप्शन्स
+	Character Rotation	कैरेक्टर रोटेशन
+	Character Set:	कैरेक्टर सेट:
 	Character Style	कैरेक्टर स्टाइल
 	Character Style Options	कैरेक्टर स्टाइल ऑप्शन्स
 	Character Styles	कैरेक्टर स्टाइल्स
@@ -975,7 +975,7 @@ antiAlias	Sharp	शार्प
 	Compatible Gradient and Gradient Mesh Printing	कंपैटिबल ग्रेडिएंट और ग्रेडिएंट मेश प्रिंटिंग
 	Compiled or not text	संकलित या टेक्स्ट नहीं
 	Compiled script: ask its author for the .jsx file	कंपाइल की हुई स्क्रिप्ट: इसके लेखक से .jsx फ़ाइल माँगें
-	Complement	संगम
+	Complement	पूरक
 	Complementary	पूरक
 	Complementary 2	पूरक 2
 	Complete	पूरा करना
@@ -992,18 +992,18 @@ antiAlias	Sharp	शार्प
 	Compression	संपीड़न
 	Compression › Color › Above Ppi	संपीड़न › रंग › पीपीआई के ऊपर
 	Compression:	संपीड़न:
-	Concave	अवतरण
+	Concave	अवतल
 	Concentric Dividers:	सांद्रिक विभाजक:
 	Condition identifier:	शर्त पहचानकर्ता:
 	Configure Shape	आकार को कॉन्फ़िगर करें
 	Conflict {n} of {count}	{count} में से विरोध {n}
 	Connect	कनेक्ट
-	Connect Selected End Points	कनेक्ट सिलेक्टेड अंत अंक
+	Connect Selected End Points	सिलेक्टेड एंड पॉइंट्स कनेक्ट करें
 	Consider Open Filled Paths as Closed	बंद के रूप में ओपन भरा पाथ पर विचार करें
 	Consolidate All Windows	सभी विंडो एक साथ लाएँ
-	Constrain	कंस्ट्रक्शन
-	Constrain Angle	कंस्ट्रक्शन एंगल
-	Constrain Width and Height Proportions	कंस्ट्रक्शन चौड़ाई और ऊंचाई के अनुपात
+	Constrain	सीमित करें
+	Constrain Angle	कंस्ट्रेन एंगल
+	Constrain Width and Height Proportions	चौड़ाई और ऊंचाई का अनुपात बनाए रखें
 	Construction Guides	निर्माण गाइड
 	Conté Crayon	कॉन्टे क्रेयॉन
 	Conté Crayon…	कॉन्टे क्रेयॉन…
@@ -1182,7 +1182,7 @@ antiAlias	Sharp	शार्प
 	Cut Artboard	कट आर्टबोर्ड
 	Rename Artboards	आर्टबोर्ड्स का नाम बदलें
 	Cut Path	कट पाथ
-	Cut Path at Selected Anchor Points	सिलेक्टेड एंकर अंक पर पाथ काटें
+	Cut Path at Selected Anchor Points	सिलेक्टेड एंकर पॉइंट्स पर पाथ काटें
 	Cutout	कटआउट
 	Cutout…	कटआउट…
 	Cyan	सियान
@@ -1326,7 +1326,7 @@ antiAlias	Sharp	शार्प
 	Description:	विवरण:
 	Deselect	डीसिलेक्ट करें
 	Design…	डिजाइन…
-	Desired	देसी
+	Desired	वांछित
 	Destination Folder:	गंतव्य फ़ोल्डर:
 	Destination:	गंतव्य:
 	Detail	डिटेल
@@ -1355,7 +1355,7 @@ antiAlias	Sharp	शार्प
 	Dimensions	आयाम
 	Direct Selection	प्रत्यक्ष सिलेक्शन
 	Direct Selection Tool	डायरेक्ट सिलेक्शन टूल
-	Direct-select anchor points to edit them.	उन्हें संपादित करने के लिए डायरेक्ट-सिलेक्शन एंकर अंक।
+	Direct-select anchor points to edit them.	एंकर पॉइंट्स को संपादित करने के लिए उन्हें डायरेक्ट-सिलेक्ट करें।
 	Direction Balance	दिशा संतुलन
 	Direction Handles	निर्देशन हैंडल
 	Direction:	दिशा:
@@ -1683,7 +1683,7 @@ antiAlias	Sharp	शार्प
 	Envelope #10	लिफाफाफा #10
 	Envelope Distort	एन्वेलप डिस्टॉर्ट
 	Envelope DL	लिफ़ाफ़ा DL
-	Envelope Info	लिफाफे की जानकारी
+	Envelope Info	एन्वेलप जानकारी
 	Envelope Mesh	एन्वेलप मेश
 	Envelope Options	एन्वेलप ऑप्शन्स
 	Envelope Options…	एन्वेलप ऑप्शन्स…
@@ -1694,7 +1694,7 @@ antiAlias	Sharp	शार्प
 	Eraser Tool	इरेज़र टूल
 	Error	त्रुटि
 	Esc	Esc
-	Even	शाम
+	Even	बराबर
 	Even Fields	सम फ़ील्ड्स
 	Even-Numbered Anchors	यहां तक कि संख्या वाले एंकर
 	Event:	कार्यक्रम:
@@ -1869,7 +1869,7 @@ antiAlias	Sharp	शार्प
 	Fill new strokes	नए स्ट्रोक भरें
 	Fill New Type Objects With Placeholder Text	नए टाइप ऑब्जेक्ट्स में प्लेसहोल्डर टेक्स्ट भरें
 	Fill Pattern	पैटर्न भरें
-	Fill Rule	नियम भरें
+	Fill Rule	फ़िल रूल
 	Fill with Placeholder Text	प्लेसहोल्डर टेक्स्ट से भरें
 	Fill:	फ़िल:
 	Fill: click for swatches, Shift-click for the color mixer	फ़िल: स्वॉचेस के लिए क्लिक करें, कलर मिक्सर के लिए Shift-क्लिक करें
@@ -1877,7 +1877,7 @@ antiAlias	Sharp	शार्प
 	Filled Open Paths	भरा खुला पाथ
 	Filled Square	भरा वर्ग
 	Filling in form fields and signing	फॉर्म फ़ील्ड में भरना और साइन करना
-	Fills	भरता
+	Fills	फ़िल्स
 	Film & Video	फ़िल्म और वीडियो
 	Film Grain…	फ़िल्म ग्रेन…
 	Filter	फ़िल्टर
@@ -1981,7 +1981,7 @@ antiAlias	Sharp	शार्प
 	fonts not copied: {fonts}	फ़ॉन्ट कॉपी नहीं हुए: {fonts}
 	Fonts whose licence doesn't allow embedding are not copied.	जिन फ़ॉन्ट का लाइसेंस एम्बेडिंग की अनुमति नहीं देता है, उन्हें कॉपी नहीं किया जाता है।
 	For Fractions:	फ्रैक्शन के लिए:
-	Force	सेना
+	Force	बलपूर्वक
 	Forced Line Break	जबरन लाइन ब्रेक
 	Foreground Level	फ़ोरग्राउंड स्तर
 	Forget Import Matches	फॉरगेट आयात मैच
@@ -2019,7 +2019,7 @@ antiAlias	Sharp	शार्प
 	Full Width	पूर्ण चौड़ाई
 	Fully Inside	पूरी तरह से अंदर
 	Fully Outside	पूरी तरह बाहर
-	Function Key:	समारोह कुंजी:
+	Function Key:	फ़ंक्शन की:
 	Fuzziness:	फ़ज़ीनेस:
 	Gamma	गामा
 	Gamut Check	गैमट जाँच
@@ -2217,8 +2217,8 @@ antiAlias	Sharp	शार्प
 	Hide Gradient Annotator	ग्रेडिएंट एनोटेटर छिपाएँ
 	Hide Grid	ग्रिड छिपाएँ
 	Hide Guides	गाइड्स छिपाएँ
-	Hide Hidden Characters	छिपे हुए चरित्र छुपाएं
-	Hide Live Paint Gaps	छुपा लाइव पेंट गैप
+	Hide Hidden Characters	हिडन कैरेक्टर छिपाएँ
+	Hide Live Paint Gaps	लाइव पेंट गैप छिपाएँ
 	Hide Note	नोट छिपाएँ
 	Hide Options	ऑप्शन्स छिपाएँ
 	Hide Others	अन्य छिपाएँ
@@ -2230,23 +2230,23 @@ antiAlias	Sharp	शार्प
 	Hide Template	टेम्पलेट छिपाएँ
 	Hide Text Threads	टेक्स्ट थ्रेड छुपाएं
 	Hide Thumbnail	थंबनेल छिपाएँ
-	Hide Thumbnails	हिंदुस्तान
+	Hide Thumbnails	थंबनेल छिपाएँ
 	Hide Transparency Grid	पारदर्शिता ग्रिड छिपाएँ
 	Hide Units	इकाइयाँ छिपाएँ
 	Hide VectorCraft	VectorCraft छिपाएँ
-	Hide Video Rulers	वीडियो शासक
+	Hide Video Rulers	वीडियो रूलर्स छिपाएँ
 	High	उच्च
 	High (300 ppi)	उच्च (300 ppi)
-	High Contrast	उच्च न्यायालय
-	High Contrast 2	उच्च न्यायालय 2
-	High Contrast 3	उच्च न्यायालय 3
+	High Contrast	उच्च कंट्रास्ट
+	High Contrast 2	उच्च कंट्रास्ट 2
+	High Contrast 3	उच्च कंट्रास्ट 3
 	High Fidelity Photo	उच्च निष्ठा फोटो
 	High Performance (discrete)	उच्च निष्पादन (डिस्क्रीट)
 	High Quality Print	उच्च गुणवत्ता वाले प्रिंट
 	High resolution	उच्च रिज़ॉल्यूशन
 	High Resolution	उच्च रिज़ॉल्यूशन
 	Highlight	हाइलाइट
-	Highlight Alternate Glyphs	हाइलाइट अल्टरनेटर ग्लिफ़
+	Highlight Alternate Glyphs	अल्टरनेट ग्लिफ़ हाइलाइट करें
 	Highlight anchors on mouse over	माउस ओवर पर हाइलाइट एंकर
 	Highlight Area	हाइलाइट क्षेत्र
 	Highlight Font Name	हाइलाइट फ़ॉन्ट नाम
@@ -2470,7 +2470,7 @@ antiAlias	Sharp	शार्प
 	Keep Original	मूल रखें
 	Keep Plain Text	प्लेन टेक्स्ट रखें
 	Keep selected	सिलेक्ट करें
-	Keep Shared Points Together	साझा अंक एक साथ रखें
+	Keep Shared Points Together	साझा पॉइंट्स एक साथ रखें
 	Keep the pasted color as a new swatch with a numbered name.	पेस्ट किए गए रंग को क्रमांकित नाम वाले नए स्वॉच के रूप में रखें।
 	Keep this row's colors (exclude)	इस पंक्ति के रंग (बाहर) रखें
 	Keep visible surfaces only when expanding	विस्तार करते समय केवल दृश्यमान सतहों को रखें
@@ -2757,7 +2757,7 @@ antiAlias	Sharp	शार्प
 	Manage Workspaces…	वर्कस्पेस प्रबंधित करें…
 	Manually	मैन्युअल
 	Marathi	मराठी
-	Mark as trapped	निशानेबाज़ी
+	Mark as trapped	ट्रैप्ड के रूप में चिह्नित करें
 	Mark Older Files as [Converted] When Opened	पुरानी फ़ाइलें ओपन करने पर उन्हें [Converted] चिह्नित करें
 	Marker…	मार्कर…
 	Marks	मार्क्स
@@ -2828,7 +2828,7 @@ antiAlias	Sharp	शार्प
 	Minimize	छोटा करें
 	Minimum	न्यूनतम
 	Minimum angle	न्यूनतम कोण
-	Minimum must not exceed Desired, nor Desired Maximum.	न्यूनतम से अधिक नहीं होना चाहिए, न ही अधिकतम होना चाहिए।
+	Minimum must not exceed Desired, nor Desired Maximum.	न्यूनतम, वांछित से अधिक नहीं होना चाहिए और वांछित, अधिकतम से अधिक नहीं होना चाहिए।
 	Minimum:	न्यूनतम:
 	Minus Back	पीछे वाला घटाएँ
 	Minus Front	सामने वाला घटाएँ
@@ -3032,7 +3032,7 @@ antiAlias	Sharp	शार्प
 	Next Segment	अगला खंड
 	No	नहीं
 	No actions. Press ● to record.	कोई कार्रवाई नहीं। प्रेस ● रिकॉर्ड करने के लिए।
-	No alternates for the selected character.	सिलेक्टेड चरित्र के लिए कोई ऑप्शन नहीं।
+	No alternates for the selected character.	सिलेक्टेड कैरेक्टर के लिए कोई अल्टरनेट नहीं।
 	No artboards match.	कोई आर्टबोर्ड मैच नहीं।
 	No assets	कोई संपत्ति नहीं
 	No assets yet. Collect art with Object › Collect for Export, or drag it into the Asset Export panel.	अभी कोई एसेट नहीं है। ऑब्जेक्ट › एक्सपोर्ट के लिए कलेक्ट करें से आर्टवर्क जोड़ें या उसे एसेट एक्सपोर्ट पैनल में ड्रैग करें।
@@ -3115,7 +3115,7 @@ antiAlias	Sharp	शार्प
 	Number of Recent Fonts	हाल ही में फ़ॉन्ट की संख्या
 	Number:	संख्या:
 	Numbered List	क्रमांकित सूची
-	Numbers Without Units Are Points	यूनिट्स के बिना नंबर अंक हैं
+	Numbers Without Units Are Points	यूनिट्स के बिना संख्याएँ पॉइंट में हैं
 	Numerator	न्यूमेरेटर
 	Object	ऑब्जेक्ट
 	Object Highlighting	ऑब्जेक्ट हाइलाइटिंग
@@ -3289,7 +3289,7 @@ antiAlias	Sharp	शार्प
 	Outer Glow…	बाहरी ग्लो…
 	Outline	रूपरेखा
 	Outline Object	रूपरेखा ऑब्जेक्ट
-	Outline Others	अन्य लोग
+	Outline Others	अन्य को आउटलाइन व्यू में दिखाएँ
 	Outline Stroke	स्ट्रोक को आउटलाइन में बदलें
 	Outline Text	टेक्स्ट को आउटलाइन में बदलें
 	Outlined Strokes	रेखांकित स्ट्रोक
@@ -3343,7 +3343,7 @@ antiAlias	Sharp	शार्प
 	Pages	पृष्ठ
 	Paint Daubs	पेंट डॉब्स
 	Paint Daubs…	पेंट डॉब्स…
-	Paint Fills	पेंट भरता
+	Paint Fills	फ़िल्स पेंट करें
 	Paint Opacity:	पेंट ओपेसिटी:
 	Paint Stops At:	पेंट स्टॉप:
 	Paint Strokes	पेंट स्ट्रोक
@@ -3576,7 +3576,7 @@ antiAlias	Sharp	शार्प
 	Pointillize	पॉइंटिलाइज़
 	Pointillize…	पॉइंटिलाइज़…
 	Points	पॉइंट्स
-	Points per segment	प्रति खंड अंक
+	Points per segment	प्रति सेगमेंट पॉइंट्स
 	Points:	पॉइंट्स:
 	Points: clicks add free points	पॉइंट्स: क्लिक से अलग-अलग पॉइंट जुड़ते हैं
 	Polar Grid	ध्रुवीय ग्रिड
@@ -3913,7 +3913,7 @@ antiAlias	Sharp	शार्प
 	Remove Line Breaks	लाइन ब्रेक हटाएँ
 	Remove Paragraph Breaks	पैराग्राफ ब्रेक निकालें
 	Remove Plug-in	प्लग-इन निकालें
-	Remove Points, Keep Shape	अंक निकालें, आकार रखें
+	Remove Points, Keep Shape	पॉइंट्स हटाएँ, शेप रखें
 	Remove Redundant Points	गैरज़रूरी पॉइंट हटाएँ
 	Remove Selected Assets	सिलेक्टेड परिसंपत्तियों को हटा दें
 	Remove Selected Entry	सिलेक्टेड प्रविष्टि निकालें
@@ -4018,7 +4018,7 @@ antiAlias	Sharp	शार्प
 	Edit Arrowheads…	एरोहेड्स संपादित करें…
 	Reload Arrowheads	एरोहेड्स फिर से लोड करें
 	Reset Rotate View	व्यू घुमाएँ रीसेट करें
-	Reset Ruler Origin	शासकीय उत्पत्ति रीसेट करें
+	Reset Ruler Origin	रूलर ओरिजिन रीसेट करें
 	Reset Symbol Instance	सिंबल इंस्टेंस रीसेट करें
 	Reset Text Transform	टेक्स्ट ट्रांसफॉर्मर को रीसेट करें
 	Reset Text Transform and Scale	टेक्स्ट ट्रांसफॉर्म और स्केल को रीसेट करें
@@ -4092,7 +4092,7 @@ antiAlias	Sharp	शार्प
 	RGB:	RGB:
 	Ridges per segment:	प्रति खंड रिज:
 	Right	दाएँ
-	Right Complement	सही पूरक
+	Right Complement	राइट कम्प्लीमेंट
 	Right Diagonal	दायाँ विकर्ण
 	Right Grid:	राइट ग्रिड:
 	Right in Front	फ्रंट में राइट
@@ -4151,14 +4151,14 @@ antiAlias	Sharp	शार्प
 	Ruby	रूबी
 	Ruby…	रूबी…
 	Rule:	नियम:
-	Ruler Origin	शासकीय उत्पत्ति
+	Ruler Origin	रूलर ओरिजिन
 	Rulers	रूलर्स
 	Rulers & Grids	रूलर्स और ग्रिड
 	Run Length	रन लंबाई
 	Run Plug-in	रन प्लग-इन
 	Runs code the checker can't read	रन कोड चेकर को पढ़ा नहीं जा सकता
 	Russian	रूसी
-	Same	समीर
+	Same	समान
 	Same As Source	स्रोत के समान
 	Same file	एक ही फ़ाइल
 	Same item as a later row	बाद में पंक्ति के रूप में समान आइटम
@@ -4301,8 +4301,8 @@ antiAlias	Sharp	शार्प
 	Saved Views	सेव किया गया दृश्य
 	Saves the current bars, toolbar and panel layout.	वर्तमान बार, टूलबार और पैनल लेआउट को सेव करता है।
 	Saving	सेव किया जा रहा है
-	Saving {}	बचत {}
-	Saving Poster.vectorcraft	बचत Poster.vectorcraft
+	Saving {}	{} सेव किया जा रहा है
+	Saving Poster.vectorcraft	Poster.vectorcraft सेव किया जा रहा है
 	Saving recovery data for {}	{} के लिए रिकवरी डेटा सेव करना
 	Scale	आकार बदलें
 	Scale Artwork with Artboard	आर्टबोर्ड के साथ स्केल आर्टवर्क
@@ -4366,7 +4366,7 @@ antiAlias	Sharp	शार्प
 	Select a character with the Type tool to see its alternates.	अल्टरनेट ग्लिफ़ देखने के लिए टाइप टूल से कोई कैरेक्टर सिलेक्ट करें।
 	Select a parametric shape to edit it. With none selected, these set the next shape.	एडिट करने के लिए पैरामीट्रिक शेप सिलेक्ट करें। कोई शेप सिलेक्ट न होने पर ये सेटिंग्स अगली शेप पर लागू होंगी।
 	Select a text object	एक टेक्स्ट ऑब्जेक्ट चुनें
-	Select a text object to edit its character attributes.	अपने चरित्र विशेषताओं को संपादित करने के लिए एक टेक्स्ट ऑब्जेक्ट चुनें।
+	Select a text object to edit its character attributes.	कैरेक्टर एट्रिब्यूट्स संपादित करने के लिए एक टेक्स्ट ऑब्जेक्ट चुनें।
 	Select a text object to edit its paragraph attributes.	अपनी पैराग्राफ विशेषताओं को संपादित करने के लिए एक टेक्स्ट ऑब्जेक्ट चुनें।
 	Select a text object to set its tab stops.	अपने टैब स्टॉप सेट करने के लिए एक टेक्स्ट ऑब्जेक्ट चुनें।
 	Select All	सभी सिलेक्ट करें
@@ -4395,7 +4395,7 @@ antiAlias	Sharp	शार्प
 	Select by Link Status…	लिंक स्थिति द्वारा सिलेक्ट करें…
 	Select Data Set	डेटा सेट सिलेक्ट करें
 	Select Embedded	एम्बेडेड सिलेक्ट करें
-	Select Fills	भरता सिलेक्ट करें
+	Select Fills	फ़िल्स सिलेक्ट करें
 	Select Freeform Point	फ़्रीफ़ॉर्म पॉइंट सिलेक्ट करें
 	Select Gradient Stop	ग्रेडिएंट स्टॉप चुनें
 	Select Guides	गाइड्स सिलेक्ट करें
@@ -4642,7 +4642,7 @@ antiAlias	Sharp	शार्प
 	Show Tool Tips	टूल युक्तियाँ दिखाएँ
 	Show Toolbar	शो टूलबार
 	Show Transparency Grid	पारदर्शिता ग्रिड दिखाएँ
-	Show Video Rulers	शो वीडियो शासक
+	Show Video Rulers	वीडियो रूलर्स दिखाएँ
 	Show Video Safe Areas	वीडियो सुरक्षित क्षेत्र दिखाएं
 	Show Vivid/Muted	चमकीले/मंद दिखाएँ
 	Show Warm/Cool	शो वार्म / कूल
@@ -5095,7 +5095,7 @@ antiAlias	Sharp	शार्प
 	The Print Tiling tool placed the pages.	प्रिंट टाइलिंग टूल ने पृष्ठों को रखा।
 	The samples show this brush on a blue stroke.	नमूने इस ब्रश को ब्लू स्ट्रोक पर दिखाते हैं।
 	The search stopped at its limit: search a smaller folder.	सर्च अपनी लिमिट तक पहुँच गई: छोटे फ़ोल्डर में सर्च करें।
-	The selected character's font is not available.	सिलेक्टेड चरित्र का फ़ॉन्ट उपलब्ध नहीं है।
+	The selected character's font is not available.	सिलेक्टेड कैरेक्टर का फ़ॉन्ट उपलब्ध नहीं है।
 	The selected objects have no CSS of their own (see below).	सिलेक्टेड ऑब्जेक्ट का अपना CSS नहीं है (नीचे देखें)।
 	The system's settings of this printer	इस प्रिंटर की प्रणाली की सेटिंग
 	These fonts aren't available. Their text shows in another font.	ये फ़ॉन्ट उपलब्ध नहीं हैं। इनका टेक्स्ट दूसरे फ़ॉन्ट में दिखता है।
@@ -5129,7 +5129,7 @@ antiAlias	Sharp	शार्प
 	Tile Edge Color	टाइल एज रंग
 	Tile Edge Color…	टाइल एज रंग…
 	Tile Full Pages	टाइल पूर्ण पृष्ठ
-	Tile Imageable Areas	टाइल कल्पनाशील क्षेत्र
+	Tile Imageable Areas	इमेजेबल क्षेत्र टाइल करें
 	Tile Range:	टाइल रेंज:
 	Tile Size	टाइल साइज़
 	Tile Type:	टाइल प्रकार:
@@ -5238,9 +5238,9 @@ antiAlias	Sharp	शार्प
 	Transverse (the page a quarter turn on the paper)	ट्रांसवर्स (पेपर पर एक चौथाई मोड़ पृष्ठ)
 	Trap	ट्रैप
 	Trap…	ट्रैप…
-	Traps with Process Color	प्रक्रिया रंग के साथ जाल
-	Triad	त्रिदाद
-	Triad 2	त्रिद 2
+	Traps with Process Color	प्रोसेस रंग के साथ ट्रैप
+	Triad	त्रिक
+	Triad 2	त्रिक 2
 	Triad 3	त्रिक 3
 	Triangle	त्रिभुज
 	Triangle (open)	त्रिभुज (ओपन)
@@ -5248,7 +5248,7 @@ antiAlias	Sharp	शार्प
 	Trim	ट्रिम करें
 	Trim covered geometry on Expand Appearance. Live preview keeps the full surface. Transparent paints and surfaces exceeding visibility limits retain all faces.	अपीयरेंस एक्सपैंड करने पर ढकी हुई ज्यामिति ट्रिम करें। लाइव प्रीव्यू पूरी सतह रखता है। ट्रांसपेरेंट पेंट और विज़िबिलिटी लिमिट से बड़ी सतहों के सभी फेस बने रहते हैं।
 	Trim mark weight:	ट्रिम मार्क वजन:
-	Trim marks	ट्रिम अंक
+	Trim marks	ट्रिम मार्क्स
 	Trim View	ट्रिम देखें
 	True Colors	असली रंग
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	ट्रू कलर के लिए संस्करण 2004 या बाद का चाहिए: अभी 256 रंगों में सबसे निकट वाला रंग लिखा जाता है।
@@ -5475,7 +5475,7 @@ antiAlias	Sharp	शार्प
 	Video 1920×1080	1920 × 1080 वीडियो
 	Video 3840×2160	वीडियो 3840 × 2160
 	Video Banner 2560×1440	वीडियो बैनर 2560 × 1440
-	Video Ruler Pixel Aspect Ratio:	वीडियो शासक पिक्सेल दृष्टि अनुपात:
+	Video Ruler Pixel Aspect Ratio:	वीडियो रूलर पिक्सेल आस्पेक्ट रेशियो:
 	Fade Region Outside Artboard	आर्टबोर्ड के बाहर का क्षेत्र धुंधला करें
 	Update While Dragging	खींचते समय अपडेट करें
 	Video Thumbnail 1280×720	वीडियो थंबनेल 1280 × 720
@@ -5500,7 +5500,7 @@ antiAlias	Sharp	शार्प
 	Warp Options	वार्प ऑप्शन्स
 	Warp Tool	वार्प टूल
 	Watch 184×224	घड़ी 184 × 224
-	Watch 198×242	देखें 198 × 242
+	Watch 198×242	घड़ी 198 × 242
 	Water Paper	वॉटर पेपर
 	Water Paper…	वॉटर पेपर…
 	Watercolor	वॉटरकलर
@@ -5997,7 +5997,7 @@ antiAlias	Sharp	शार्प
 @msg	`{name}` is no recovery entry name	`{name}` कोई वसूली प्रविष्टि नाम नहीं है
 @msg	`{name}` isn't a colour swatch	`{name}` रंग स्वॉच नहीं है
 @msg	`{name}` takes a paint of its own kind (colour, gradient or pattern)	`{name}` अपने ही प्रकार का पेंट लेता है (रंग, ग्रेडिएंट या पैटर्न)
-@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: न्यूनतम इच्छा से अधिक नहीं होना चाहिए, न ही इच्छा अधिकतम
+@msg	`{name}`: Minimum must not exceed Desired, nor Desired Maximum	`{name}`: न्यूनतम, वांछित से अधिक नहीं होना चाहिए और वांछित, अधिकतम से अधिक नहीं होना चाहिए
 @msg	`{other}` doesn't trace an image	`{other}` एक इमेज का पता नहीं लगा
 @msg	`{path}` must be a bool or an object of bools	`{path}` एक bool होना चाहिए या एक ऑब्जेक्ट होना चाहिए।
 @msg	`{s}` is not a colour (#rrggbb or a preset name)	`{s}` एक रंग नहीं है (#rrggbb या एक पूर्व निर्धारित नाम)
@@ -6352,7 +6352,7 @@ antiAlias	Sharp	शार्प
 @msg	a wraparound group is inside a compound path	एक रैपराउंड समूह एक मिश्रित पाथ के अंदर है
 @msg	action is required	action आवश्यक है
 @msg	add a format to export	निर्यात करने के लिए एक फ़ॉर्मैट जोड़ें
-@msg	Add Points at Crossings: a path went missing	क्रॉसिंग्स में अंक जोड़ें: एक पाथ गायब हो गया
+@msg	Add Points at Crossings: a path went missing	क्रॉसिंग पर पॉइंट जोड़ें: एक पाथ गायब हो गया
 @msg	aiVersion {v}: "pdf" (PDF-compatible, the default) or "7" (legacy .ai, version 7)	aiVersion {v}: "pdf" (PDF-संगत, डिफ़ॉल्ट) या "7" (पुरानी .ai, संस्करण 7)
 @msg	aiVersion 7 writes legacy .ai files, not .ait templates	aiVersion 7 विरासत .ai फ़ाइलों को लिखते हैं, .ait टेम्पलेट नहीं
 @msg	All colors are within the CMYK gamut	सभी रंग CMYK गामट के भीतर हैं
@@ -6540,7 +6540,7 @@ antiAlias	Sharp	शार्प
 @msg	choose at least one status	कम से कम एक स्थिति चुनें
 @msg	Choose original artwork, not a dimension's generated paths	मूल आर्टवर्क चुनें, एक आयाम उत्पन्न पाथ नहीं
 @msg	choose the font files to add	जोड़ने के लिए फ़ॉन्ट फ़ाइलों को चुनें
-@msg	Choose two different points	दो अलग-अलग अंक चुनें
+@msg	Choose two different points	दो अलग-अलग पॉइंट्स चुनें
 @msg	Choose two non-parallel straight segments	दो गैर-parallel सीधे खंड चुनें
 @msg	Choose two nonzero angle arms	दो nonzero कोण हथियार चुनें
 @msg	Click in type with a Type tool to split it	इसे विभाजित करने के लिए टाइप टूल के साथ टाइप करें
@@ -6757,7 +6757,7 @@ antiAlias	Sharp	शार्प
 @msg	Dimension mode does not match its source	आयाम मोड अपने स्रोत से मेल नहीं खाता है
 @msg	Dimension point is outside the canvas	आयाम बिंदु कैनवास के बाहर है
 @msg	Dimension size is outside its supported range	आयाम आकार अपनी समर्थित सीमा से बाहर है
-@msg	direct-select anchor points of a path	एक पाथ के प्रत्यक्ष सिलेक्शन एंकर अंक
+@msg	direct-select anchor points of a path	किसी पाथ के एंकर पॉइंट्स डायरेक्ट-सिलेक्ट करें
 @msg	direct-select anchor points to cut at (not the end points of open paths)	डायरेक्ट-सिलेक्शन एंकर पॉइंट्स को कट करने के लिए ( ओपन पाथ के अंतिम बिंदु नहीं)
 @msg	direct-select the anchor points to remove	हटाने के लिए एंकर पॉइंट्स सिलेक्ट करें
 @msg	distance must be > 0	distance > 0 होना चाहिए
@@ -6812,7 +6812,7 @@ antiAlias	Sharp	शार्प
 @msg	exit isolation mode first	पहले अलगाव मोड से बाहर निकलें
 @msg	Expand Appearance: the selection has a basic appearance	उपस्थिति का विस्तार: सिलेक्शन में एक बुनियादी उपस्थिति है
 @msg	Expand: no brush strokes selected	विस्तार: सिलेक्टेड कोई ब्रश स्ट्रोक नहीं
-@msg	Expand: no gradient fills	विस्तार: कोई ग्रेडिएंट भरता नहीं
+@msg	Expand: no gradient fills	एक्सपैंड: कोई ग्रेडिएंट फ़िल नहीं
 @msg	Expand: nothing to expand	विस्तार: विस्तार करने के लिए कुछ नहीं
 @msg	expanded SVG styles exceed the import size limit	विस्तारित SVG स्टाइल्स आयात आकार सीमा से अधिक है
 @msg	expected {"dataBase64"}	अपेक्षित: {"dataBase64"}
@@ -6945,7 +6945,7 @@ antiAlias	Sharp	शार्प
 @msg	Global Edit is off	ग्लोबल एडिट बंद है
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	ग्लोबल एडिट पाथ, मिश्रित पाथ, सिंबल उदाहरणों और उनके समूहों पर काम करता है
 @msg	global must be true or false	global को true या false होना चाहिए
-@msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	Glyph {_1} चरित्र की स्टाइल (जैसे सभी कैप्स, छोटे कैप्स या एक संख्यात्मक प्रणाली) के साथ {ch} के लिए तैयार नहीं है।
+@msg	glyph {_1} is not drawn for {ch} with the character's style (such as All Caps, Small Caps or a numeral system)	Glyph {_1} कैरेक्टर की स्टाइल (जैसे सभी कैप्स, छोटे कैप्स या एक संख्यात्मक प्रणाली) के साथ {ch} के लिए तैयार नहीं है।
 @msg	glyph {g} is not an alternate of {ch} in {_1} {_2}	Glyph {g} {_1} {_2} में {ch} का एक वैकल्पिक नहीं है।
 @msg	gradient “{name}” isn't defined in the file: a plain colour stands in for it	ग्रेडिएंट "{name}" को फ़ाइल में परिभाषित नहीं किया गया है: इसके लिए एक सादे रंग खड़ा है
 @msg	gradient must be "objects" or "mesh"	gradient "objects" या "mesh" होना चाहिए
@@ -7202,8 +7202,8 @@ antiAlias	Sharp	शार्प
 @msg	missing point	लापता बिंदु
 @msg	missing point [x,y]	लापता बिंदु [x,y]
 @msg	missing point `{key}` ([x, y])	लापता बिंदु `{key}` ([x, y])
-@msg	missing points	लापता अंक
-@msg	missing points [[x,y]…]	लापता अंक [[x,y]...]
+@msg	missing points	पॉइंट्स नहीं दिए गए
+@msg	missing points [[x,y]…]	पॉइंट्स नहीं दिए गए [[x,y]…]
 @msg	missing segment	लापता खंड
 @msg	missing stops	लापता ठहराव
 @msg	missing subpaths	लापता subpaths
@@ -7250,7 +7250,7 @@ antiAlias	Sharp	शार्प
 @msg	no active data set	कोई सक्रिय डेटा सेट नहीं
 @msg	no active document	कोई सक्रिय डॉक्यूमेंट
 @msg	no active perspective plane	कोई सक्रिय पर्सपेक्टिव विमान नहीं
-@msg	no anchor points selected	कोई एंकर अंक नहीं चुना गया
+@msg	no anchor points selected	कोई एंकर पॉइंट सिलेक्ट नहीं है
 @msg	no app to open files here	यहां फ़ाइलों को ओपन करने के लिए कोई ऐप नहीं है
 @msg	no appearance item {index}	कोई उपस्थिति आइटम {index}
 @msg	no artboard	कोई आर्टबोर्ड नहीं
@@ -7275,7 +7275,7 @@ antiAlias	Sharp	शार्प
 @msg	no brush selected	कोई ब्रश नहीं चुना गया
 @msg	no catalog	कोई सूची नहीं
 @msg	no changes since the last save	आखिरी सेव के बाद से कोई बदलाव नहीं
-@msg	no character at byte {start}	byte {start} पर कोई चरित्र नहीं
+@msg	no character at byte {start}	byte {start} पर कोई कैरेक्टर नहीं
 @msg	no character style `{name}`	कोई कैरेक्टर स्टाइल `{name}`
 @msg	no clock to keep a heartbeat by	हार्टबीट का समय रखने के लिए कोई घड़ी नहीं
 @msg	no color group `{name}` in the document (see swatch.list)	डॉक्यूमेंट में कोई रंग समूह `{name}` (देखें swatch.list)
@@ -7778,7 +7778,7 @@ antiAlias	Sharp	शार्प
 @msg	Saved to User Defined: {_1}	उपयोगकर्ता परिभाषित करने के लिए सेव किया गया: {_1}
 @msg	savedPreset: {e}	savedPreset: {e}
 @msg	Saving	सेव किया जा रहा है
-@msg	Saving {_1}	बचत {_1}
+@msg	Saving {_1}	{_1} सेव किया जा रहा है
 @msg	Saving recovery data for {_1}	{_1} के लिए रिकवरी डेटा सेव करना
 @msg	scale `{s}`: a factor such as 2x, a width (100w), a height (100h) or a resolution (72ppi)	पैमाने `{s}`: एक कारक जैसे 2x, चौड़ाई (100w), ऊंचाई (100h) या एक रिज़ॉल्यूशन (72ppi)
 @msg	scale must be a number above 0, at most 64	scale 0 से बड़ी और अधिकतम 64 संख्या होनी चाहिए
@@ -7870,7 +7870,7 @@ antiAlias	Sharp	शार्प
 @msg	Select only dimensions	केवल आयाम सिलेक्ट करें
 @msg	select open paths to close	बंद करने के लिए खुले रास्ते सिलेक्ट करें
 @msg	select paths	पाथ चुनें
-@msg	select paths or anchor points	पाथ या एंकर अंक चुनें
+@msg	select paths or anchor points	पाथ या एंकर पॉइंट्स चुनें
 @msg	select paths or compound paths	पाथ या यौगिक पाथ सिलेक्ट करें
 @msg	select paths to join	जोड़ने के लिए पाथ सिलेक्ट करें
 @msg	select paths with dashed strokes to expand	विस्तृत करने के लिए डैश स्ट्रोक के साथ पाथ सिलेक्ट करें
@@ -7878,7 +7878,7 @@ antiAlias	Sharp	शार्प
 @msg	select plain rectangles, ellipses or regular polygons to convert	बदलने के लिए सादे आयत, अंडाकार या नियमित बहुभुजों सिलेक्ट करें
 @msg	Select point type	पॉइंट टाइप सिलेक्ट करें
 @msg	select rows or objects to collect	इकट्ठा करने के लिए पंक्तियों या ऑब्जेक्ट्स सिलेक्ट करें
-@msg	select segments, or paths, to add points to	खंडों, या पाथ का सिलेक्ट करने के लिए, अंक जोड़ने के लिए
+@msg	select segments, or paths, to add points to	पॉइंट्स जोड़ने के लिए सेगमेंट या पाथ सिलेक्ट करें
 @msg	select some type first	पहले कुछ टाइप सिलेक्ट करें
 @msg	select something to export	निर्यात करने के लिए कुछ का सिलेक्शन
 @msg	select something to export (or turn off selectedOnly)	एक्सपोर्ट करने के लिए कुछ चुनें (या selectedOnly बंद करें)
@@ -8064,7 +8064,7 @@ antiAlias	Sharp	शार्प
 @msg	the artboards don't fit on the canvas: fewer artboards, less spacing or a smaller size	आर्टबोर्ड कैनवास पर फिट नहीं हैं: कम आर्टबोर्ड, कम रिक्ति या छोटे आकार
 @msg	the background worker stopped	पृष्ठभूमि कार्यकर्ता बंद कर दिया
 @msg	the blend has no spine	मिश्रण में कोई रीढ़ नहीं है
-@msg	the character's size can't be measured	चरित्र का आकार मापा नहीं जा सकता है
+@msg	the character's size can't be measured	कैरेक्टर का आकार मापा नहीं जा सकता है
 @msg	the CMYK image couldn't be written	CMYK इमेज को नहीं लिखा जा सकता
 @msg	the Color Picker is not open	रंग पिकर खुला नहीं है
 @msg	the compound shape is too complex to expand	मिश्रित आकार का विस्तार करने के लिए बहुत जटिल है
@@ -8117,7 +8117,7 @@ antiAlias	Sharp	शार्प
 @msg	the file's variable library couldn't be read: the Variables panel doesn't list it	फ़ाइल की वेरिएबल लाइब्रेरी पढ़ी नहीं जा सकी: वेरिएबल्स पैनल उसे सूचीबद्ध नहीं करता
 @msg	the file's variable library was partly read (entries skipped: {_1}): the Variables panel lists the rest	फ़ाइल की वेरिएबल लाइब्रेरी आंशिक रूप से पढ़ी गई (छोड़ी गई प्रविष्टियाँ: {_1}): वेरिएबल्स पैनल शेष प्रविष्टियाँ दिखाता है
 @msg	the files come to more than 1 GB: add fewer at a time	फ़ाइलों को 1 GB से अधिक करने के लिए आते हैं: एक समय में कम जोड़ें
-@msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	एक पंक्ति के पहले चरित्र में बर्न से पहले कोई चरित्र नहीं है: यह केवल ऊपर और नीचे चला जाता है (डी)
+@msg	the first character of a line has no character before it to kern: it moves only up and down (dy)	किसी लाइन के पहले कैरेक्टर से पहले कर्न करने के लिए कोई कैरेक्टर नहीं है: यह केवल ऊपर और नीचे जाता है (dy)
 @msg	the font {_1} is not available	फ़ॉन्ट {_1} उपलब्ध नहीं है
 @msg	the format has no file extension	फ़ॉर्मैट में कोई फ़ाइल एक्सटेंशन नहीं है
 @msg	the graphic can't be read: {e}	ग्राफिक पढ़ा नहीं जा सकता: {e}
@@ -8405,8 +8405,8 @@ antiAlias	Sharp	शार्प
 @msg	unknown brush type `{o}`	अज्ञात ब्रश प्रकार `{o}`
 @msg	unknown category `{c}`	अज्ञात श्रेणी `{c}`
 @msg	unknown category `{c}` ({_1})	अज्ञात श्रेणी `{c}` ({_1})
-@msg	unknown character `{c}`	अज्ञात चरित्र `{c}`
-@msg	unknown character style number field	अज्ञात चरित्र स्टाइल संख्या क्षेत्र
+@msg	unknown character `{c}`	अज्ञात कैरेक्टर `{c}`
+@msg	unknown character style number field	अज्ञात कैरेक्टर स्टाइल संख्या फ़ील्ड
 @msg	unknown CMYK profile `{name}`	अज्ञात CMYK प्रोफ़ाइल `{name}`
 @msg	unknown command `{0}`	अज्ञात आदेश `{0}`
 @msg	unknown command `{0}`; did you mean `{1}`?	अज्ञात आदेश `{0}`; क्या आपको `{1}` का मतलब है?
