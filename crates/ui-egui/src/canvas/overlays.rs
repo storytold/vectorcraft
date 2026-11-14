@@ -209,11 +209,12 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
             app.session.prefs.hide_corner_widget_above,
         )
     {
-        for (id, q) in w.visible_on() {
+        // A Direct-Selected corner's widget is filled in the layer colour (#1232).
+        for (id, q, selected) in w.visible_marked() {
             let (sp, color) = (xf.to_screen(q), c32(st.doc.layer_color(id)));
-            p.circle_filled(sp, 3.0, Color32::WHITE);
+            p.circle_filled(sp, 3.0, if selected { color } else { Color32::WHITE });
             p.circle_stroke(sp, 3.0, Stroke::new(1.0, color));
-            p.circle_filled(sp, 1.0, color);
+            p.circle_filled(sp, 1.0, if selected { Color32::WHITE } else { color });
         }
     }
     // Bounding box with handles (Selection tool).
