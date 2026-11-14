@@ -6048,8 +6048,9 @@ Color on (HDR or Automatic Color Management) and macOS windows are converted by 
 again. In a Wayland session, and where no profile is set or the profile is not an RGB display profile of at most 1 MiB,
 the canvas stays sRGB. The app reads the display again every 10 seconds and when the window moves to another display.
 Exports, `ui.render`, the document, panels and thumbnails are not converted; with Proof Colors on, the proof is drawn
-first and then converted. The art is converted before it is drawn over the converted paper, so the blend of a
-translucent object or an antialiased edge with the paper can differ slightly from a conversion of the blended color.
+first and then converted. Translucent art and the antialiased edges of art over an artboard's paper or the
+transparency grid are blended with it in sRGB, and the blend is converted; over the pasteboard and in Outline the art
+is converted on its own.
 `ui.inspect` returns `displayProfile`: `{enabled, display, source, profile, from, applied, reason,
 osManaged}`, where `source` is `profile`, `srgbProfile` (a profile that shows sRGB unchanged), `system`, `none`,
 `pending` or `unsupported`, `applied` says whether the canvas is converted, and `reason` says why not.

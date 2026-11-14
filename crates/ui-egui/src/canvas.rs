@@ -623,6 +623,7 @@ fn cache_key(
         trace_source: app.ui.trace_hold_source.clone(),
         // Preferences › Performance › Use Monitor Profile for Canvas.
         display: app.display_profile.key(app.session.prefs.monitor_profile_display),
+        backdrop: backdrop(app, st, app.outline_view()),
     }
 }
 
@@ -887,9 +888,10 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             }
             if let (Some([x0, y0, x1, y1]), Some(tex)) = (region, &mut app.canvas.texture) {
                 let renderer = &mut app.canvas.renderer;
-                let mut part =
-                    effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, Affine::translate((-f64::from(x0), -f64::from(y0))) * view, &opts));
-                crate::display_profile::convert(display.as_deref(), &mut part.pixels);
+                let part_view = Affine::translate((-f64::from(x0), -f64::from(y0))) * view;
+                let mut part = effects.view(|| renderer.render(doc, x1 - x0, y1 - y0, part_view, &opts));
+                let width = part.width;
+                crate::display_profile::convert_over(display.as_deref(), &mut part.pixels, width, part_view, key.over());
                 let color = color_image(&part);
                 let options = if pixel.is_some() { egui::TextureOptions::NEAREST } else { egui::TextureOptions::LINEAR };
                 tex.set_partial([x0 as usize, y0 as usize], color, options);
@@ -927,7 +929,8 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             let renderer = &mut app.canvas.renderer;
             let mut img = effects.view(|| renderer.render(doc, w, h, view, &opts));
             effects.first_view_done();
-            crate::display_profile::convert(display.as_deref(), &mut img.pixels);
+            let width = img.width;
+            crate::display_profile::convert_over(display.as_deref(), &mut img.pixels, width, view, key.over());
             upload(app, ui.ctx(), img, pixel.is_some());
             app.canvas.key = Some(key.clone());
             app.canvas.shown = Some((doc.clone(), opts.clone()));
@@ -982,13 +985,11 @@ fn paint_paper(
     let on_display = |c: Color32| crate::display_profile::color32(display.as_deref(), c);
     if !shows_artboards(app) {
         // View › Hide Artboards: no edges and no pasteboard, the whole canvas paper (#4038).
-        let setup = &doc.setup;
-        painter.rect_filled(rect, 0.0, on_display(if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE }));
+        painter.rect_filled(rect, 0.0, on_display(paper_color(&doc.setup)));
     } else {
         let setup = &doc.setup;
-        let grid = (st.transparency_grid && setup.background == vectorcraft_doc::Background::Transparent)
-            .then(|| checker_texture(ui.ctx(), setup, display.as_deref()));
-        let paper = if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE };
+        let grid = shows_transparency_grid(st).then(|| checker_texture(ui.ctx(), setup, display.as_deref()));
+        let paper = paper_color(setup);
         for ab in &doc.artboards {
             let q = xf.quad(ab.rect);
             // Hard 2 pt drop shadow, right and bottom (measured: #4d4d4d then #565656 on #606060).
@@ -998,12 +999,50 @@ fn paint_paper(
             match &grid {
                 Some((tex, cell)) => checker(painter, &q, ab.rect, xf.zoom, tex.id(), *cell),
                 None => {
-                    let fill = ab.color.map_or(paper, |c| crate::panels::c32(&c) * paper);
-                    painter.add(Shape::convex_polygon(q, on_display(fill), Stroke::NONE));
+                    painter.add(Shape::convex_polygon(q, on_display(artboard_paper(ab, paper)), Stroke::NONE));
                 }
             }
         }
     }
+}
+
+/// The color of the paper: Simulate Colored Paper's, else white.
+fn paper_color(setup: &vectorcraft_doc::DocSetup) -> Color32 {
+    if setup.simulate_paper { crate::panels::c32(&setup.paper()) } else { Color32::WHITE }
+}
+
+/// The color of artboard `ab`'s paper, the paper `paper`: an artboard with a background color
+/// multiplies it with the paper, each sRGB channel artboard × paper / 255, rounded.
+fn artboard_paper(ab: &vectorcraft_doc::Artboard, paper: Color32) -> Color32 {
+    ab.color.map_or(paper, |c| crate::panels::c32(&c) * paper)
+}
+
+/// The transparency grid covers the artboards of document `st`: it is shown, and the Background
+/// Contents are transparent.
+fn shows_transparency_grid(st: &vectorcraft_engine::DocState) -> bool {
+    st.transparency_grid && st.doc.setup.background == vectorcraft_doc::Background::Transparent
+}
+
+/// The paper [`paint_paper`] draws for document `st`, which translucent art is blended with before
+/// the display profile's conversion. None without a display profile, and in Outline (`outline`),
+/// whose white canvas is the interface's.
+fn backdrop(app: &VectorcraftApp, st: &vectorcraft_engine::DocState, outline: bool) -> Option<std::sync::Arc<crate::display_profile::Backdrop>> {
+    if outline || app.display_profile.transform(app.session.prefs.monitor_profile_display).is_none() {
+        return None;
+    }
+    let rgb = |c: Color32| [c.r(), c.g(), c.b()];
+    let setup = &st.doc.setup;
+    let paper = paper_color(setup);
+    let b = if shows_artboards(app) {
+        crate::display_profile::Backdrop {
+            everywhere: None,
+            artboards: st.doc.artboards.iter().map(|ab| (ab.rect, rgb(artboard_paper(ab, paper)))).collect(),
+            grid: shows_transparency_grid(st).then(|| (setup.grid_colors.map(|c| rgb(crate::panels::c32(&c))), setup.grid_size.cell())),
+        }
+    } else {
+        crate::display_profile::Backdrop { everywhere: Some(rgb(paper)), artboards: vec![], grid: None }
+    };
+    Some(std::sync::Arc::new(b))
 }
 
 /// The last rendered frame, placed through the current view while a new one is on its way.
