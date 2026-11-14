@@ -6263,6 +6263,240 @@ axis	Y Axis	Sumbu Y
 	Stars	Bintang
 	Triangles	Segitiga
 	Sparkles	Kilauan
+	Warm Gray	Abu-abu hangat
+	Cool Gray	Abu-abu sejuk
+	Neutrals	Warna netral
+	Ivory	Gading
+	Linen	Linen
+	Oat	Gandum
+	Greige	Greige
+	Stone	Batu
+	Taupe	Taupe
+	Slate	Batu tulis
+	Clay	Tanah liat
+	Terracotta	Terakota
+	Ochre	Oker
+	Umber	Umber
+	Sand	Pasir
+	Olive	Zaitun
+	Moss	Lumut
+	Rosy	Kemerahan
+	Neutral	Netral
+	Golden	Keemasan
+	Pastel	Pastel
+	Pastel Red	Merah pastel
+	Pastel Orange	Oranye pastel
+	Pastel Amber	Amber pastel
+	Pastel Yellow	Kuning pastel
+	Pastel Lime	Limau pastel
+	Pastel Green	Hijau pastel
+	Pastel Teal	Hijau toska pastel
+	Pastel Cyan	Sian pastel
+	Pastel Azure	Biru langit pastel
+	Pastel Blue	Biru pastel
+	Pastel Violet	Violet pastel
+	Pastel Magenta	Magenta pastel
+	Soft Red	Merah lembut
+	Soft Orange	Oranye lembut
+	Soft Amber	Amber lembut
+	Soft Yellow	Kuning lembut
+	Soft Lime	Limau lembut
+	Soft Green	Hijau lembut
+	Soft Teal	Hijau toska lembut
+	Soft Cyan	Sian lembut
+	Soft Azure	Biru langit lembut
+	Soft Blue	Biru lembut
+	Soft Violet	Violet lembut
+	Soft Magenta	Magenta lembut
+	Vivid Red	Merah cerah
+	Vivid Orange	Oranye cerah
+	Vivid Amber	Amber cerah
+	Vivid Yellow	Kuning cerah
+	Vivid Lime	Limau cerah
+	Vivid Green	Hijau cerah
+	Vivid Teal	Hijau toska cerah
+	Vivid Cyan	Sian cerah
+	Vivid Azure	Biru langit cerah
+	Vivid Blue	Biru cerah
+	Vivid Violet	Violet cerah
+	Vivid Magenta	Magenta cerah
+	Deep	Pekat
+	Deep Red	Merah pekat
+	Deep Orange	Oranye pekat
+	Deep Amber	Amber pekat
+	Deep Yellow	Kuning pekat
+	Deep Lime	Limau pekat
+	Deep Green	Hijau pekat
+	Deep Teal	Hijau toska pekat
+	Deep Cyan	Sian pekat
+	Deep Azure	Biru langit pekat
+	Deep Blue	Biru pekat
+	Deep Violet	Violet pekat
+	Deep Magenta	Magenta pekat
+	Gold	Emas
+	Silver	Perak
+	Bronze	Perunggu
+	Copper	Tembaga
+	Brass	Kuningan
+	Rose Gold	Emas mawar
+	Gunmetal	Abu-abu logam
+	Platinum	Platina
+	Pewter	Timah
+	Ember	Bara
+	Lagoon	Laguna
+	Dusk	Senja
+	Clay to Teal	Tanah liat ke hijau toska
+	Plum to Olive	Prem ke zaitun
+	Complementary Coral	Koral komplementer
+	Split Complementary Coral	Koral komplementer terpisah
+	Analogous Coral	Koral analog
+	Triad Coral	Koral triad
+	Tetrad Coral	Koral tetrad
+	Pentagram Coral	Koral pentagram
+	Complementary Teal	Hijau toska komplementer
+	Split Complementary Teal	Hijau toska komplementer terpisah
+	Analogous Teal	Hijau toska analog
+	Triad Teal	Hijau toska triad
+	Tetrad Teal	Hijau toska tetrad
+	Pentagram Teal	Hijau toska pentagram
+	Soft Spectrum	Spektrum lembut
+	Red to Amber	Merah ke amber
+	Orange to Yellow	Oranye ke kuning
+	Amber to Lime	Amber ke limau
+	Yellow to Green	Kuning ke hijau
+	Lime to Teal	Limau ke hijau toska
+	Green to Cyan	Hijau ke sian
+	Teal to Azure	Hijau toska ke biru langit
+	Cyan to Blue	Sian ke biru
+	Azure to Violet	Biru langit ke violet
+	Blue to Magenta	Biru ke magenta
+	Violet to Red	Violet ke merah
+	Magenta to Orange	Magenta ke oranye
+	Dawn	Fajar
+	Noon	Tengah hari
+	Sunset	Matahari terbenam
+	Night	Malam
+	Overcast	Mendung
+	White to Black	Putih ke hitam
+	Light Grays	Abu-abu terang
+	Dark Grays	Abu-abu gelap
+	Warm Grays	Gradasi abu-abu hangat
+	Cool Grays	Gradasi abu-abu sejuk
+	Fade to Transparent	Memudar ke transparan
+	White Fade	Pudar putih
+	Vignette	Vinyet
+	Mist	Kabut
+	Petal	Kelopak
+	Fern	Pakis
+	Smoke	Asap
+	Honey	Madu
+	Seafoam	Buih laut
+	Lavender	Lavender
+	Driftwood	Kayu apung
+	Ink Wash	Sapuan tinta
+	Tide	Pasang surut
+	Bloom	Mekar
+	Dew	Embun
+	Pollen	Serbuk sari
+	Lichen	Lumut kerak
+	Prism Veil	Selubung prisma
+	Opal Ribbon	Pita opal
+	Pearl Flash	Kilatan mutiara
+	Aurora Foil	Foil aurora
+	Iris Sheen	Kilau iris
+	Frost Spectrum	Spektrum beku
+	Silver Tide	Pasang perak
+	Rose Quartz Gleam	Kilau kuarsa mawar
+	Moonstone Shift	Kilau batu bulan
+	Violet Edge	Tepi violet
+	Mint Halo	Halo mint
+	Amber Corona	Korona amber
+	Polar Glint	Kerlip kutub
+	Pastel Orbit	Orbit pastel
+	Coral and Navy	Koral dan biru dongker
+	Plum and Lime	Prem dan limau
+	Teal and Gold	Hijau toska dan emas
+	Indigo and Peach	Nila dan persik
+	Forest and Rose	Hutan dan mawar
+	Red Glow	Pendar merah
+	Orange Glow	Pendar oranye
+	Amber Glow	Pendar amber
+	Yellow Glow	Pendar kuning
+	Lime Glow	Pendar limau
+	Green Glow	Pendar hijau
+	Teal Glow	Pendar hijau toska
+	Cyan Glow	Pendar sian
+	Azure Glow	Pendar biru langit
+	Blue Glow	Pendar biru
+	Violet Glow	Pendar violet
+	Magenta Glow	Pendar magenta
+	Polka Dots	Polkadot
+	Vertical Stripes	Garis vertikal
+	Horizontal Stripes	Garis horizontal
+	Diagonal Stripes	Garis diagonal
+	Checkerboard	Papan catur
+	Diamonds	Belah ketupat
+	Crosses	Silang
+	Coarse Grit	Butiran kasar
+	Stipple	Titik-titik
+	Scratches	Goresan
+	Sparse Flecks	Bintik jarang
+	Dense Flecks	Bintik rapat
+	Sine Bands	Pita sinus
+	Ripple Lines	Garis riak
+	Interference Rings	Cincin interferensi
+	Offset Rings	Cincin bergeser
+	Warped Checks	Kotak melengkung
+	Pinched Stripes	Garis terjepit
+	Chevron Pulse	Denyut chevron
+	Radiating Lenses	Lensa memancar
+	Soft Shadow	Bayangan lembut
+	Hard Shadow	Bayangan tajam
+	Lifted Card	Kartu terangkat
+	Neon Tube	Tabung neon
+	Inner Light	Cahaya dalam
+	Feathered	Tepi lembut
+	Haze	Kabut tipis
+	Double Rule	Garis ganda
+	Triple Rule	Garis rangkap tiga
+	Dashed Border	Bingkai putus-putus
+	Dotted Border	Bingkai bertitik
+	Offset Keyline	Garis kontur bergeser
+	Inset Keyline	Garis kontur dalam
+	Outside Stroke	Goresan luar
+	Pointer	Penunjuk
+	Highlighter	Stabilo
+	Sketchy Line	Garis sketsa
+	Scribble Fill	Isian coretan
+	Wobble	Goyang
+	Zig Zag Edge	Tepi zigzag
+	Wavy Edge	Tepi bergelombang
+	Puffy	Menggembung
+	Starburst	Ledakan bintang
+	Glossy	Mengilap
+	Brushed Metal	Logam disikat
+	Spotlight	Lampu sorot
+	Sunset Band	Pita senja
+	Sea Glass	Kaca laut
+	Pearl	Mutiara
+	Chrome Rim	Bingkai krom
+	Glow Orb	Bola berpendar
+	Pill Badge	Lencana pil
+	Round Badge	Lencana bulat
+	Flag Wave	Bendera berkibar
+	Bulge	Menggelembung
+	Twisted	Terpuntir
+	Echo	Gema
+	Spiral Copies	Salinan spiral
+	Multiply Tint	Rona multiply
+	Darken Veil	Selubung menggelapkan
+	Ghosted	Samar
+	Two Tone	Dua warna
+	Overlay Glaze	Glasir menimpa
+	Screen Light	Cahaya layar
+	Soft Light Wash	Sapuan cahaya lembut
+	Burst	Ledakan
+	Rounded Square	Persegi bulat
 	Save Brush Library…	Simpan pustaka kuas…
 @msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
 	Scale Presets	Preset skala

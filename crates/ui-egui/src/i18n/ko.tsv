@@ -6391,6 +6391,245 @@ axis	Y Axis	Y축
 	Stars	별
 	Triangles	삼각형
 	Sparkles	반짝임
+	Warm Gray	따뜻한 회색
+	Cool Gray	차가운 회색
+	Neutrals	뉴트럴
+	Ivory	아이보리
+	Linen	리넨
+	Oat	오트
+	Greige	그레이지
+	Stone	스톤
+	Taupe	토프
+	Slate	슬레이트
+	Clay	점토
+	Terracotta	테라코타
+	Ochre	황토색
+	Umber	엄버
+	Sand	모래
+	Olive	올리브
+	Moss	이끼
+	Rosy	장밋빛
+	Neutral	중성
+	Golden	황금빛
+	Pastel	파스텔
+	Pastel Red	파스텔 빨강
+	Pastel Orange	파스텔 주황
+	Pastel Amber	파스텔 호박색
+	Pastel Yellow	파스텔 노랑
+	Pastel Lime	파스텔 라임
+	Pastel Green	파스텔 초록
+	Pastel Teal	파스텔 청록
+	Pastel Cyan	파스텔 시안
+	Pastel Azure	파스텔 하늘색
+	Pastel Blue	파스텔 파랑
+	Pastel Violet	파스텔 보라
+	Pastel Magenta	파스텔 마젠타
+	Soft Red	부드러운 빨강
+	Soft Orange	부드러운 주황
+	Soft Amber	부드러운 호박색
+	Soft Yellow	부드러운 노랑
+	Soft Lime	부드러운 라임
+	Soft Green	부드러운 초록
+	Soft Teal	부드러운 청록
+	Soft Cyan	부드러운 시안
+	Soft Azure	부드러운 하늘색
+	Soft Blue	부드러운 파랑
+	Soft Violet	부드러운 보라
+	Soft Magenta	부드러운 마젠타
+	Vivid Red	선명한 빨강
+	Vivid Orange	선명한 주황
+	Vivid Amber	선명한 호박색
+	Vivid Yellow	선명한 노랑
+	Vivid Lime	선명한 라임
+	Vivid Green	선명한 초록
+	Vivid Teal	선명한 청록
+	Vivid Cyan	선명한 시안
+	Vivid Azure	선명한 하늘색
+	Vivid Blue	선명한 파랑
+	Vivid Violet	선명한 보라
+	Vivid Magenta	선명한 마젠타
+	Deep	짙은 색
+	Deep Red	짙은 빨강
+	Deep Orange	짙은 주황
+	Deep Amber	짙은 호박색
+	Deep Yellow	짙은 노랑
+	Deep Lime	짙은 라임
+	Deep Green	짙은 초록
+	Deep Teal	짙은 청록
+	Deep Cyan	짙은 시안
+	Deep Azure	짙은 하늘색
+	Deep Blue	짙은 파랑
+	Deep Violet	짙은 보라
+	Deep Magenta	짙은 마젠타
+	Gold	금
+	Silver	은
+	Bronze	청동
+	Copper	구리
+	Brass	황동
+	Rose Gold	로즈 골드
+	Gunmetal	건메탈
+	Platinum	백금
+	Pewter	백랍
+	Ember	잔불
+	Lagoon	석호
+	Dusk	땅거미
+	Clay to Teal	점토에서 청록으로
+	Plum to Olive	자두색에서 올리브로
+	Complementary Coral	코럴, 보색
+	Split Complementary Coral	코럴, 분할 보색
+	Analogous Coral	코럴, 유사색
+	Triad Coral	코럴, 3색 조화
+	Tetrad Coral	코럴, 4색 조화
+	Pentagram Coral	코럴, 오각별
+	Complementary Teal	청록, 보색
+	Split Complementary Teal	청록, 분할 보색
+	Analogous Teal	청록, 유사색
+	Triad Teal	청록, 3색 조화
+	Tetrad Teal	청록, 4색 조화
+	Pentagram Teal	청록, 오각별
+	Soft Spectrum	부드러운 스펙트럼
+	Red to Amber	빨강에서 호박색으로
+	Orange to Yellow	주황에서 노랑으로
+	Amber to Lime	호박색에서 라임으로
+	Yellow to Green	노랑에서 초록으로
+	Lime to Teal	라임에서 청록으로
+	Green to Cyan	초록에서 시안으로
+	Teal to Azure	청록에서 하늘색으로
+	Cyan to Blue	시안에서 파랑으로
+	Azure to Violet	하늘색에서 보라로
+	Blue to Magenta	파랑에서 마젠타로
+	Violet to Red	보라에서 빨강으로
+	Magenta to Orange	마젠타에서 주황으로
+	Dawn	새벽
+	Noon	정오
+	Sunset	노을
+	Night	밤
+	Overcast	흐린 하늘
+	White to Black	흰색에서 검정으로
+	Light Grays	밝은 회색
+	Dark Grays	어두운 회색
+	Warm Grays	따뜻한 회색 계열
+	Cool Grays	차가운 회색 계열
+	Fade to Transparent	투명으로 페이드
+	White Fade	흰색 페이드
+	Vignette	비네트
+	Mist	안개
+	Petal	꽃잎
+	Fern	고사리
+	Smoke	연기
+	Honey	꿀
+	Seafoam	바다 거품
+	Lavender	라벤더
+	Driftwood	유목
+	Ink Wash	수묵 번짐
+	Tide	조수
+	Bloom	개화
+	Dew	이슬
+	Pollen	꽃가루
+	Lichen	지의류
+	Prism Veil	프리즘 베일
+	Opal Ribbon	오팔 리본
+	Pearl Flash	진주 섬광
+	Aurora Foil	오로라 호일
+	Iris Sheen	무지갯빛 광택
+	Frost Spectrum	서리 스펙트럼
+	Silver Tide	은빛 물결
+	Rose Quartz Gleam	로즈 쿼츠 광채
+	Moonstone Shift	월장석 일렁임
+	Violet Edge	보라 가장자리
+	Mint Halo	민트 후광
+	Amber Corona	호박색 코로나
+	Polar Glint	극지의 반짝임
+	Pastel Orbit	파스텔 궤도
+	Coral and Navy	코럴과 네이비
+	Plum and Lime	자두색과 라임
+	Teal and Gold	청록과 금색
+	Indigo and Peach	인디고와 복숭아색
+	Forest and Rose	숲과 장미
+	Red Glow	빨강 광채
+	Orange Glow	주황 광채
+	Amber Glow	호박색 광채
+	Yellow Glow	노랑 광채
+	Lime Glow	라임 광채
+	Green Glow	초록 광채
+	Teal Glow	청록 광채
+	Cyan Glow	시안 광채
+	Azure Glow	하늘색 광채
+	Blue Glow	파랑 광채
+	Violet Glow	보라 광채
+	Magenta Glow	마젠타 광채
+	Polka Dots	물방울무늬
+	Vertical Stripes	세로 줄무늬
+	Horizontal Stripes	가로 줄무늬
+	Diagonal Stripes	사선 줄무늬
+	Checkerboard	체커보드
+	Diamonds	마름모
+	Crosses	십자
+	Coarse Grit	거친 입자
+	Stipple	점묘
+	Scratches	긁힌 자국
+	Sparse Flecks	성긴 반점
+	Dense Flecks	촘촘한 반점
+	Sine Bands	사인파 띠
+	Ripple Lines	물결선
+	Interference Rings	간섭 고리
+	Offset Rings	어긋난 고리
+	Warped Checks	뒤틀린 체크
+	Pinched Stripes	오므린 줄무늬
+	Chevron Pulse	셰브런 펄스
+	Radiating Lenses	방사형 렌즈
+	Soft Shadow	부드러운 그림자
+	Hard Shadow	선명한 그림자
+	Lifted Card	들린 카드
+	Neon Tube	네온관
+	Inner Light	안쪽 빛
+	Feathered	가장자리 흐림
+	Haze	아지랑이
+	Double Rule	이중 괘선
+	Triple Rule	삼중 괘선
+	Dashed Border	파선 테두리
+	Dotted Border	점선 테두리
+	Offset Keyline	오프셋 윤곽선
+	Inset Keyline	안쪽 윤곽선
+	Outside Stroke	바깥쪽 획
+	Pointer	포인터
+	Highlighter	형광펜
+	Sketchy Line	스케치 선
+	Scribble Fill	낙서 칠
+	Wobble	흔들림
+	Zig Zag Edge	지그재그 가장자리
+	Wavy Edge	물결 가장자리
+	Puffy	부풀림
+	Starburst	별 폭발
+	Glossy	광택
+	Brushed Metal	브러시드 메탈
+	Spotlight	스포트라이트
+	Sunset Band	노을 띠
+	Sea Glass	바다 유리
+	Pearl	진주
+	Chrome Rim	크롬 테
+	Glow Orb	빛나는 구
+	Pill Badge	알약 배지
+	Round Badge	원형 배지
+	Flag Wave	펄럭이는 깃발
+	Bulge	불룩
+	Twisted	비틀림
+	Echo	메아리
+	Spiral Copies	나선형 복사본
+	Multiply Tint	곱하기 색조
+	Darken Veil	어둡게 베일
+	Ghosted	반투명
+	Two Tone	투톤
+	Overlay Glaze	오버레이 유약
+	Screen Light	스크린 빛
+	Soft Light Wash	소프트 라이트 번짐
+	Burst	폭발
+	Rounded Square	둥근 사각형
+	Bar	막대
+	Hexagon	육각형
+	Spectrum	스펙트럼
+	Triangle	삼각형
+	Vivid	선명한 색
 	Save Brush Library…	브러시 라이브러리 저장…
 @msg	`{_1}` has no brushes to apply	`{_1}`에 적용할 브러시가 없습니다
 @msg	missing `library` (see brush.libraries)	`library`가 없습니다(brush.libraries 참조)

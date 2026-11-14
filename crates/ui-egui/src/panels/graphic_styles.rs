@@ -9,6 +9,7 @@
 //! the same tiles ([`picker`]). Graphic style libraries open in library panels
 //! ([`GraphicStyleLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -726,9 +727,15 @@ impl LibraryKind for GraphicStyleLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.style_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a style's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibStyle>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|s| found(&s.style().name)).map(|s| Row { name: &s.style().name, item: Some(s) }).collect()
+    }
+    /// A built-in library's style in the UI language; a User Defined or loaded library's style as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, STYLE_LIBRARIES.iter().any(|b| b.id == id)).into()
     }
     /// The style on the Graphic Styles panel's preview shape.
     fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, s: &LibStyle, selected: bool, hovered: bool) {

@@ -6263,6 +6263,240 @@ axis	Y Axis	Y-akse
 	Stars	Stjerner
 	Triangles	Trekanter
 	Sparkles	Gnister
+	Warm Gray	Varm grå
+	Cool Gray	Kølig grå
+	Neutrals	Neutrale toner
+	Ivory	Elfenben
+	Linen	Hør
+	Oat	Havre
+	Greige	Greige
+	Stone	Sten
+	Taupe	Taupe
+	Slate	Skifer
+	Clay	Ler
+	Terracotta	Terrakotta
+	Ochre	Okker
+	Umber	Umbra
+	Sand	Sand
+	Olive	Oliven
+	Moss	Mos
+	Rosy	Rosa
+	Neutral	Neutral
+	Golden	Gylden
+	Pastel	Pastel
+	Pastel Red	Pastelrød
+	Pastel Orange	Pastelorange
+	Pastel Amber	Pastelrav
+	Pastel Yellow	Pastelgul
+	Pastel Lime	Pastellime
+	Pastel Green	Pastelgrøn
+	Pastel Teal	Pastelblågrøn
+	Pastel Cyan	Pastelcyan
+	Pastel Azure	Pastelazur
+	Pastel Blue	Pastelblå
+	Pastel Violet	Pastelviolet
+	Pastel Magenta	Pastelmagenta
+	Soft Red	Blød rød
+	Soft Orange	Blød orange
+	Soft Amber	Blød rav
+	Soft Yellow	Blød gul
+	Soft Lime	Blød lime
+	Soft Green	Blød grøn
+	Soft Teal	Blød blågrøn
+	Soft Cyan	Blød cyan
+	Soft Azure	Blød azur
+	Soft Blue	Blød blå
+	Soft Violet	Blød violet
+	Soft Magenta	Blød magenta
+	Vivid Red	Intens rød
+	Vivid Orange	Intens orange
+	Vivid Amber	Intens rav
+	Vivid Yellow	Intens gul
+	Vivid Lime	Intens lime
+	Vivid Green	Intens grøn
+	Vivid Teal	Intens blågrøn
+	Vivid Cyan	Intens cyan
+	Vivid Azure	Intens azur
+	Vivid Blue	Intens blå
+	Vivid Violet	Intens violet
+	Vivid Magenta	Intens magenta
+	Deep	Dybe
+	Deep Red	Dyb rød
+	Deep Orange	Dyb orange
+	Deep Amber	Dyb rav
+	Deep Yellow	Dyb gul
+	Deep Lime	Dyb lime
+	Deep Green	Dyb grøn
+	Deep Teal	Dyb blågrøn
+	Deep Cyan	Dyb cyan
+	Deep Azure	Dyb azur
+	Deep Blue	Dyb blå
+	Deep Violet	Dyb violet
+	Deep Magenta	Dyb magenta
+	Gold	Guld
+	Silver	Sølv
+	Bronze	Bronze
+	Copper	Kobber
+	Brass	Messing
+	Rose Gold	Rosaguld
+	Gunmetal	Gunmetal
+	Platinum	Platin
+	Pewter	Tin
+	Ember	Glød
+	Lagoon	Lagune
+	Dusk	Skumring
+	Clay to Teal	Ler til blågrøn
+	Plum to Olive	Blomme til oliven
+	Complementary Coral	Koral komplementær
+	Split Complementary Coral	Koral delt komplementær
+	Analogous Coral	Koral analog
+	Triad Coral	Koral triade
+	Tetrad Coral	Koral tetrad
+	Pentagram Coral	Koral pentagram
+	Complementary Teal	Blågrøn komplementær
+	Split Complementary Teal	Blågrøn delt komplementær
+	Analogous Teal	Blågrøn analog
+	Triad Teal	Blågrøn triade
+	Tetrad Teal	Blågrøn tetrad
+	Pentagram Teal	Blågrøn pentagram
+	Soft Spectrum	Blødt spektrum
+	Red to Amber	Rød til rav
+	Orange to Yellow	Orange til gul
+	Amber to Lime	Rav til lime
+	Yellow to Green	Gul til grøn
+	Lime to Teal	Lime til blågrøn
+	Green to Cyan	Grøn til cyan
+	Teal to Azure	Blågrøn til azur
+	Cyan to Blue	Cyan til blå
+	Azure to Violet	Azur til violet
+	Blue to Magenta	Blå til magenta
+	Violet to Red	Violet til rød
+	Magenta to Orange	Magenta til orange
+	Dawn	Daggry
+	Noon	Middag
+	Sunset	Solnedgang
+	Night	Nat
+	Overcast	Overskyet
+	White to Black	Hvid til sort
+	Light Grays	Lyse gråtoner
+	Dark Grays	Mørke gråtoner
+	Warm Grays	Varme gråtoner
+	Cool Grays	Kølige gråtoner
+	Fade to Transparent	Udtoning til gennemsigtig
+	White Fade	Hvid udtoning
+	Vignette	Vignet
+	Mist	Dis
+	Petal	Kronblad
+	Fern	Bregne
+	Smoke	Røg
+	Honey	Honning
+	Seafoam	Havskum
+	Lavender	Lavendel
+	Driftwood	Drivtømmer
+	Ink Wash	Tuschlavering
+	Tide	Tidevand
+	Bloom	Blomstring
+	Dew	Dug
+	Pollen	Pollen
+	Lichen	Lav
+	Prism Veil	Prismeslør
+	Opal Ribbon	Opalbånd
+	Pearl Flash	Perleglimt
+	Aurora Foil	Nordlysfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	Frostspektrum
+	Silver Tide	Sølvtidevand
+	Rose Quartz Gleam	Rosakvartsglans
+	Moonstone Shift	Månestensskær
+	Violet Edge	Violet kant
+	Mint Halo	Mynteglorie
+	Amber Corona	Ravkorona
+	Polar Glint	Polarglimt
+	Pastel Orbit	Pastelbane
+	Coral and Navy	Koral og marineblå
+	Plum and Lime	Blomme og lime
+	Teal and Gold	Blågrøn og guld
+	Indigo and Peach	Indigo og fersken
+	Forest and Rose	Skov og rosa
+	Red Glow	Rød glød
+	Orange Glow	Orange glød
+	Amber Glow	Ravglød
+	Yellow Glow	Gul glød
+	Lime Glow	Limeglød
+	Green Glow	Grøn glød
+	Teal Glow	Blågrøn glød
+	Cyan Glow	Cyanglød
+	Azure Glow	Azurglød
+	Blue Glow	Blå glød
+	Violet Glow	Violet glød
+	Magenta Glow	Magentaglød
+	Polka Dots	Prikker
+	Vertical Stripes	Lodrette striber
+	Horizontal Stripes	Vandrette striber
+	Diagonal Stripes	Diagonale striber
+	Checkerboard	Skakbræt
+	Diamonds	Ruder
+	Crosses	Kryds
+	Coarse Grit	Groft korn
+	Stipple	Punktering
+	Scratches	Ridser
+	Sparse Flecks	Spredte pletter
+	Dense Flecks	Tætte pletter
+	Sine Bands	Sinusbånd
+	Ripple Lines	Bølgelinjer
+	Interference Rings	Interferensringe
+	Offset Rings	Forskudte ringe
+	Warped Checks	Forvredne tern
+	Pinched Stripes	Klemte striber
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Strålende linser
+	Soft Shadow	Blød skygge
+	Hard Shadow	Hård skygge
+	Lifted Card	Løftet kort
+	Neon Tube	Neonrør
+	Inner Light	Indre lys
+	Feathered	Blød kant
+	Haze	Dunst
+	Double Rule	Dobbelt streg
+	Triple Rule	Tredobbelt streg
+	Dashed Border	Stiplet kant
+	Dotted Border	Prikket kant
+	Offset Keyline	Forskudt konturlinje
+	Inset Keyline	Indre konturlinje
+	Outside Stroke	Ydre streg
+	Pointer	Viser
+	Highlighter	Overstregningstusch
+	Sketchy Line	Skitseagtig linje
+	Scribble Fill	Kruseduldefyld
+	Wobble	Slinger
+	Zig Zag Edge	Zigzagkant
+	Wavy Edge	Bølget kant
+	Puffy	Oppustet
+	Starburst	Stjerneudbrud
+	Glossy	Blank
+	Brushed Metal	Børstet metal
+	Spotlight	Spotlys
+	Sunset Band	Solnedgangsbånd
+	Sea Glass	Havglas
+	Pearl	Perle
+	Chrome Rim	Kromkant
+	Glow Orb	Lyskugle
+	Pill Badge	Pillemærke
+	Round Badge	Rundt mærke
+	Flag Wave	Vajende flag
+	Bulge	Bule
+	Twisted	Snoet
+	Echo	Ekko
+	Spiral Copies	Spiralkopier
+	Multiply Tint	Multiplikationstone
+	Darken Veil	Mørkere slør
+	Ghosted	Spøgelsesagtig
+	Two Tone	Tofarvet
+	Overlay Glaze	Overlejringsglasur
+	Screen Light	Skærmlys
+	Soft Light Wash	Blødt lys-lavering
+	Burst	Udbrud
+	Rounded Square	Afrundet kvadrat
 	Save Brush Library…	Gem penselbibliotek…
 @msg	no empty artboards to delete	ingen tomme tegneflader at slette
 	Scale Presets	Skaleringsforudindstillinger

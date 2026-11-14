@@ -6787,6 +6787,240 @@ axis	Y Axis	Y tengely
 	Stars	Csillagok
 	Triangles	Háromszögek
 	Sparkles	Szikrák
+	Warm Gray	Meleg szürke
+	Cool Gray	Hideg szürke
+	Neutrals	Semleges tónusok
+	Ivory	Elefántcsont
+	Linen	Len
+	Oat	Zab
+	Greige	Greige
+	Stone	Kő
+	Taupe	Tópszürke
+	Slate	Pala
+	Clay	Agyag
+	Terracotta	Terrakotta
+	Ochre	Okker
+	Umber	Umbra
+	Sand	Homok
+	Olive	Olíva
+	Moss	Moha
+	Rosy	Rózsás
+	Neutral	Semleges
+	Golden	Aranyos
+	Pastel	Pasztell
+	Pastel Red	Pasztellpiros
+	Pastel Orange	Pasztellnarancs
+	Pastel Amber	Pasztellborostyán
+	Pastel Yellow	Pasztellsárga
+	Pastel Lime	Pasztell-lime
+	Pastel Green	Pasztellzöld
+	Pastel Teal	Pasztell kékeszöld
+	Pastel Cyan	Pasztellcián
+	Pastel Azure	Pasztellazúr
+	Pastel Blue	Pasztellkék
+	Pastel Violet	Pasztellibolya
+	Pastel Magenta	Pasztellmagenta
+	Soft Red	Lágy piros
+	Soft Orange	Lágy narancs
+	Soft Amber	Lágy borostyán
+	Soft Yellow	Lágy sárga
+	Soft Lime	Lágy lime
+	Soft Green	Lágy zöld
+	Soft Teal	Lágy kékeszöld
+	Soft Cyan	Lágy cián
+	Soft Azure	Lágy azúr
+	Soft Blue	Lágy kék
+	Soft Violet	Lágy ibolya
+	Soft Magenta	Lágy magenta
+	Vivid Red	Élénk piros
+	Vivid Orange	Élénk narancs
+	Vivid Amber	Élénk borostyán
+	Vivid Yellow	Élénk sárga
+	Vivid Lime	Élénk lime
+	Vivid Green	Élénk zöld
+	Vivid Teal	Élénk kékeszöld
+	Vivid Cyan	Élénk cián
+	Vivid Azure	Élénk azúr
+	Vivid Blue	Élénk kék
+	Vivid Violet	Élénk ibolya
+	Vivid Magenta	Élénk magenta
+	Deep	Mély
+	Deep Red	Mélypiros
+	Deep Orange	Mélynarancs
+	Deep Amber	Mély borostyán
+	Deep Yellow	Mélysárga
+	Deep Lime	Mély lime
+	Deep Green	Mélyzöld
+	Deep Teal	Mély kékeszöld
+	Deep Cyan	Mély cián
+	Deep Azure	Mély azúr
+	Deep Blue	Mélykék
+	Deep Violet	Mély ibolya
+	Deep Magenta	Mély magenta
+	Gold	Arany
+	Silver	Ezüst
+	Bronze	Bronz
+	Copper	Réz
+	Brass	Sárgaréz
+	Rose Gold	Rozéarany
+	Gunmetal	Ágyúfém
+	Platinum	Platina
+	Pewter	Ón
+	Ember	Parázs
+	Lagoon	Lagúna
+	Dusk	Alkonyat
+	Clay to Teal	Agyagtól kékeszöldig
+	Plum to Olive	Szilvától olíváig
+	Complementary Coral	Korall, kiegészítő
+	Split Complementary Coral	Korall, felosztott kiegészítő
+	Analogous Coral	Korall, analóg
+	Triad Coral	Korall, triád
+	Tetrad Coral	Korall, tetrád
+	Pentagram Coral	Korall, pentagram
+	Complementary Teal	Kékeszöld, kiegészítő
+	Split Complementary Teal	Kékeszöld, felosztott kiegészítő
+	Analogous Teal	Kékeszöld, analóg
+	Triad Teal	Kékeszöld, triád
+	Tetrad Teal	Kékeszöld, tetrád
+	Pentagram Teal	Kékeszöld, pentagram
+	Soft Spectrum	Lágy spektrum
+	Red to Amber	Pirostól borostyánig
+	Orange to Yellow	Narancstól sárgáig
+	Amber to Lime	Borostyántól lime-ig
+	Yellow to Green	Sárgától zöldig
+	Lime to Teal	Lime-tól kékeszöldig
+	Green to Cyan	Zöldtől ciánig
+	Teal to Azure	Kékeszöldtől azúrig
+	Cyan to Blue	Ciántól kékig
+	Azure to Violet	Azúrtól ibolyáig
+	Blue to Magenta	Kéktől magentáig
+	Violet to Red	Ibolyától pirosig
+	Magenta to Orange	Magentától narancsig
+	Dawn	Hajnal
+	Noon	Dél
+	Sunset	Naplemente
+	Night	Éjszaka
+	Overcast	Borult ég
+	White to Black	Fehértől feketéig
+	Light Grays	Világos szürkék
+	Dark Grays	Sötét szürkék
+	Warm Grays	Meleg szürkék
+	Cool Grays	Hideg szürkék
+	Fade to Transparent	Áttűnés átlátszóba
+	White Fade	Fehér áttűnés
+	Vignette	Vignetta
+	Mist	Köd
+	Petal	Szirom
+	Fern	Páfrány
+	Smoke	Füst
+	Honey	Méz
+	Seafoam	Tajték
+	Lavender	Levendula
+	Driftwood	Uszadékfa
+	Ink Wash	Tuslavírozás
+	Tide	Árapály
+	Bloom	Virágzás
+	Dew	Harmat
+	Pollen	Virágpor
+	Lichen	Zuzmó
+	Prism Veil	Prizmafátyol
+	Opal Ribbon	Opálszalag
+	Pearl Flash	Gyöngyházvillanás
+	Aurora Foil	Sarki fény fólia
+	Iris Sheen	Íriszfény
+	Frost Spectrum	Deres spektrum
+	Silver Tide	Ezüst dagály
+	Rose Quartz Gleam	Rózsakvarc csillogás
+	Moonstone Shift	Holdkő játék
+	Violet Edge	Ibolya szegély
+	Mint Halo	Menta fényudvar
+	Amber Corona	Borostyán korona
+	Polar Glint	Sarki csillanás
+	Pastel Orbit	Pasztell pálya
+	Coral and Navy	Korall és tengerészkék
+	Plum and Lime	Szilva és lime
+	Teal and Gold	Kékeszöld és arany
+	Indigo and Peach	Indigó és barack
+	Forest and Rose	Erdő és rózsa
+	Red Glow	Piros izzás
+	Orange Glow	Narancs izzás
+	Amber Glow	Borostyán izzás
+	Yellow Glow	Sárga izzás
+	Lime Glow	Lime izzás
+	Green Glow	Zöld izzás
+	Teal Glow	Kékeszöld izzás
+	Cyan Glow	Cián izzás
+	Azure Glow	Azúr izzás
+	Blue Glow	Kék izzás
+	Violet Glow	Ibolya izzás
+	Magenta Glow	Magenta izzás
+	Polka Dots	Pöttyök
+	Vertical Stripes	Függőleges csíkok
+	Horizontal Stripes	Vízszintes csíkok
+	Diagonal Stripes	Átlós csíkok
+	Checkerboard	Sakktábla
+	Diamonds	Rombuszok
+	Crosses	Keresztek
+	Coarse Grit	Durva szemcse
+	Stipple	Pontozás
+	Scratches	Karcolások
+	Sparse Flecks	Ritka pöttyözés
+	Dense Flecks	Sűrű pöttyözés
+	Sine Bands	Szinuszsávok
+	Ripple Lines	Fodrozódó vonalak
+	Interference Rings	Interferenciagyűrűk
+	Offset Rings	Eltolt gyűrűk
+	Warped Checks	Torzított kockák
+	Pinched Stripes	Összecsípett csíkok
+	Chevron Pulse	Chevronlüktetés
+	Radiating Lenses	Sugárzó lencsék
+	Soft Shadow	Lágy árnyék
+	Hard Shadow	Éles árnyék
+	Lifted Card	Kiemelt kártya
+	Neon Tube	Neoncső
+	Inner Light	Belső fény
+	Feathered	Lágy szélű
+	Haze	Pára
+	Double Rule	Dupla vonal
+	Triple Rule	Tripla vonal
+	Dashed Border	Szaggatott szegély
+	Dotted Border	Pontozott szegély
+	Offset Keyline	Eltolt körvonal
+	Inset Keyline	Belső körvonal
+	Outside Stroke	Külső körvonal
+	Pointer	Mutató
+	Highlighter	Kiemelő
+	Sketchy Line	Vázlatos vonal
+	Scribble Fill	Firkált kitöltés
+	Wobble	Remegés
+	Zig Zag Edge	Cikcakkos szél
+	Wavy Edge	Hullámos szél
+	Puffy	Puffadt
+	Starburst	Csillagrobbanás
+	Glossy	Fényes
+	Brushed Metal	Szálcsiszolt fém
+	Spotlight	Reflektor
+	Sunset Band	Naplementesáv
+	Sea Glass	Tengeri üveg
+	Pearl	Gyöngy
+	Chrome Rim	Krómperem
+	Glow Orb	Izzó gömb
+	Pill Badge	Kapszula jelvény
+	Round Badge	Kerek jelvény
+	Flag Wave	Lobogó zászló
+	Bulge	Kidudorodás
+	Twisted	Csavart
+	Echo	Visszhang
+	Spiral Copies	Spirális másolatok
+	Multiply Tint	Szorzás árnyalat
+	Darken Veil	Sötétítés fátyol
+	Ghosted	Áttetsző
+	Two Tone	Kéttónusú
+	Overlay Glaze	Átfedés máz
+	Screen Light	Képernyő fény
+	Soft Light Wash	Lágy fény lavírozás
+	Burst	Robbanás
+	Rounded Square	Lekerekített négyzet
 	Save Brush Library…	Ecsetkönyvtár mentése…
 @msg	`{_1}` has no brushes to apply	A(z) `{_1}` nem tartalmaz alkalmazható ecsetet
 @msg	missing `library` (see brush.libraries)	hiányzik a `library` (lásd: brush.libraries)

@@ -2,6 +2,7 @@
 //! selects a symbol (it becomes the Symbol Sprayer's current symbol); double-click opens it in symbol editing mode. Symbol
 //! libraries open in library panels ([`SymbolLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -496,9 +497,15 @@ impl LibraryKind for SymbolLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.symbol_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
-        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
+    /// Find matches a symbol's name as shown and as stored.
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
+        let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query) || Self::label(id, n).to_lowercase().contains(query);
         lib.iter().filter(|s| found(s.name())).map(|s| Row { name: s.name(), item: Some(s) }).collect()
+    }
+    /// A built-in library's symbol in the UI language; a User Defined or loaded library's symbol as
+    /// it is named.
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, symbollib::BUILTIN.iter().any(|b| b.id == id)).into()
     }
     /// The symbol's art on white, as the Symbols panel shows it.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, s: &LibSymbol, selected: bool, hovered: bool) {

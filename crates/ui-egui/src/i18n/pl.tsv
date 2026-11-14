@@ -6659,6 +6659,242 @@ axis	Y Axis	Oś Y
 	Stars	Gwiazdy
 	Triangles	Trójkąty
 	Sparkles	Iskry
+	Warm Gray	Ciepła szarość
+	Cool Gray	Chłodna szarość
+	Neutrals	Barwy neutralne
+	Ivory	Kość słoniowa
+	Linen	Len
+	Oat	Owies
+	Greige	Greige
+	Stone	Kamień
+	Taupe	Taupe
+	Slate	Łupek
+	Clay	Glina
+	Terracotta	Terakota
+	Ochre	Ochra
+	Umber	Umbra
+	Sand	Piasek
+	Olive	Oliwka
+	Moss	Mech
+	Rosy	Różowawy
+	Neutral	Neutralny
+	Golden	Złocisty
+	Pastel	Pastelowe
+	Pastel Red	Pastelowy czerwony
+	Pastel Orange	Pastelowy pomarańczowy
+	Pastel Amber	Pastelowy bursztynowy
+	Pastel Yellow	Pastelowy żółty
+	Pastel Lime	Pastelowa limonka
+	Pastel Green	Pastelowy zielony
+	Pastel Teal	Pastelowy morski
+	Pastel Cyan	Pastelowy cyjan
+	Pastel Azure	Pastelowy lazurowy
+	Pastel Blue	Pastelowy niebieski
+	Pastel Violet	Pastelowy fioletowy
+	Pastel Magenta	Pastelowa magenta
+	Soft Red	Łagodny czerwony
+	Soft Orange	Łagodny pomarańczowy
+	Soft Amber	Łagodny bursztynowy
+	Soft Yellow	Łagodny żółty
+	Soft Lime	Łagodna limonka
+	Soft Green	Łagodny zielony
+	Soft Teal	Łagodny morski
+	Soft Cyan	Łagodny cyjan
+	Soft Azure	Łagodny lazurowy
+	Soft Blue	Łagodny niebieski
+	Soft Violet	Łagodny fioletowy
+	Soft Magenta	Łagodna magenta
+	Vivid Red	Żywy czerwony
+	Vivid Orange	Żywy pomarańczowy
+	Vivid Amber	Żywy bursztynowy
+	Vivid Yellow	Żywy żółty
+	Vivid Lime	Żywa limonka
+	Vivid Green	Żywy zielony
+	Vivid Teal	Żywy morski
+	Vivid Cyan	Żywy cyjan
+	Vivid Azure	Żywy lazurowy
+	Vivid Blue	Żywy niebieski
+	Vivid Violet	Żywy fioletowy
+	Vivid Magenta	Żywa magenta
+	Deep	Głębokie
+	Deep Red	Głęboki czerwony
+	Deep Orange	Głęboki pomarańczowy
+	Deep Amber	Głęboki bursztynowy
+	Deep Yellow	Głęboki żółty
+	Deep Lime	Głęboka limonka
+	Deep Green	Głęboki zielony
+	Deep Teal	Głęboki morski
+	Deep Cyan	Głęboki cyjan
+	Deep Azure	Głęboki lazurowy
+	Deep Blue	Głęboki niebieski
+	Deep Violet	Głęboki fioletowy
+	Deep Magenta	Głęboka magenta
+	Gold	Złoto
+	Silver	Srebro
+	Bronze	Brąz
+	Copper	Miedź
+	Brass	Mosiądz
+	Rose Gold	Różowe złoto
+	Gunmetal	Grafitowy metal
+	Platinum	Platyna
+	Pewter	Cyna
+	Ember	Żar
+	Lagoon	Laguna
+	Dusk	Zmierzch
+	Clay to Teal	Od gliny do morskiego
+	Plum to Olive	Od śliwki do oliwki
+	Complementary Coral	Koralowy, dopełniające
+	Split Complementary Coral	Koralowy, rozdzielone dopełniające
+	Analogous Coral	Koralowy, analogiczne
+	Triad Coral	Koralowy, triada
+	Tetrad Coral	Koralowy, tetrada
+	Pentagram Coral	Koralowy, pentagram
+	Complementary Teal	Morski, dopełniające
+	Split Complementary Teal	Morski, rozdzielone dopełniające
+	Analogous Teal	Morski, analogiczne
+	Triad Teal	Morski, triada
+	Tetrad Teal	Morski, tetrada
+	Pentagram Teal	Morski, pentagram
+	Soft Spectrum	Łagodne spektrum
+	Red to Amber	Od czerwonego do bursztynowego
+	Orange to Yellow	Od pomarańczowego do żółtego
+	Amber to Lime	Od bursztynowego do limonki
+	Yellow to Green	Od żółtego do zielonego
+	Lime to Teal	Od limonki do morskiego
+	Green to Cyan	Od zielonego do cyjanu
+	Teal to Azure	Od morskiego do lazurowego
+	Cyan to Blue	Od cyjanu do niebieskiego
+	Azure to Violet	Od lazurowego do fioletowego
+	Blue to Magenta	Od niebieskiego do magenty
+	Violet to Red	Od fioletowego do czerwonego
+	Magenta to Orange	Od magenty do pomarańczowego
+	Dawn	Świt
+	Noon	Południe
+	Sunset	Zachód słońca
+	Night	Noc
+	Overcast	Zachmurzenie
+	White to Black	Od białego do czarnego
+	Light Grays	Jasne szarości
+	Dark Grays	Ciemne szarości
+	Warm Grays	Ciepłe szarości
+	Cool Grays	Chłodne szarości
+	Fade to Transparent	Zanikanie do przezroczystości
+	White Fade	Białe zanikanie
+	Vignette	Winieta
+	Mist	Mgła
+	Petal	Płatek
+	Fern	Paproć
+	Smoke	Dym
+	Honey	Miód
+	Seafoam	Morska piana
+	Lavender	Lawenda
+	Driftwood	Drewno wyrzucone przez morze
+	Ink Wash	Lawowanie tuszem
+	Tide	Przypływ
+	Bloom	Rozkwit
+	Dew	Rosa
+	Pollen	Pyłek
+	Lichen	Porost
+	Prism Veil	Pryzmatyczny welon
+	Opal Ribbon	Opalowa wstęga
+	Pearl Flash	Perłowy błysk
+	Aurora Foil	Folia zorzy
+	Iris Sheen	Połysk irysu
+	Frost Spectrum	Szronione spektrum
+	Silver Tide	Srebrny przypływ
+	Rose Quartz Gleam	Blask kwarcu różowego
+	Moonstone Shift	Opalizacja kamienia księżycowego
+	Violet Edge	Fioletowa krawędź
+	Mint Halo	Miętowa aureola
+	Amber Corona	Bursztynowa korona
+	Polar Glint	Polarny błysk
+	Pastel Orbit	Pastelowa orbita
+	Coral and Navy	Koralowy i granatowy
+	Plum and Lime	Śliwka i limonka
+	Teal and Gold	Morski i złoty
+	Indigo and Peach	Indygo i brzoskwinia
+	Forest and Rose	Las i róża
+	Red Glow	Czerwona poświata
+	Orange Glow	Pomarańczowa poświata
+	Amber Glow	Bursztynowa poświata
+	Yellow Glow	Żółta poświata
+	Lime Glow	Limonkowa poświata
+	Green Glow	Zielona poświata
+	Teal Glow	Morska poświata
+	Cyan Glow	Cyjanowa poświata
+	Azure Glow	Lazurowa poświata
+	Blue Glow	Niebieska poświata
+	Violet Glow	Fioletowa poświata
+	Magenta Glow	Magentowa poświata
+	Polka Dots	Groszki
+	Vertical Stripes	Pionowe paski
+	Horizontal Stripes	Poziome paski
+	Diagonal Stripes	Ukośne paski
+	Checkerboard	Szachownica
+	Diamonds	Romby
+	Crosses	Krzyżyki
+	Coarse Grit	Gruboziarnisty
+	Stipple	Punktowanie
+	Scratches	Rysy
+	Sparse Flecks	Rzadkie plamki
+	Dense Flecks	Gęste plamki
+	Sine Bands	Pasma sinusoidalne
+	Ripple Lines	Linie zmarszczek
+	Interference Rings	Pierścienie interferencyjne
+	Offset Rings	Przesunięte pierścienie
+	Warped Checks	Zniekształcona krata
+	Pinched Stripes	Ściśnięte paski
+	Chevron Pulse	Pulsujące jodełki
+	Radiating Lenses	Promieniujące soczewki
+	Soft Shadow	Miękki cień
+	Hard Shadow	Twardy cień
+	Lifted Card	Uniesiona karta
+	Neon Tube	Neonówka
+	Inner Light	Wewnętrzne światło
+	Feathered	Wtopione krawędzie
+	Haze	Opar
+	Double Rule	Podwójna linia
+	Triple Rule	Potrójna linia
+	Dashed Border	Kreskowana ramka
+	Dotted Border	Kropkowana ramka
+	Offset Keyline	Przesunięty kontur
+	Inset Keyline	Wewnętrzny kontur
+	Outside Stroke	Obrys zewnętrzny
+	Pointer	Wskaźnik
+	Highlighter	Zakreślacz
+	Sketchy Line	Szkicowa linia
+	Scribble Fill	Wypełnienie bazgrołami
+	Wobble	Chwianie
+	Zig Zag Edge	Krawędź zygzakowata
+	Wavy Edge	Falista krawędź
+	Puffy	Napuszony
+	Starburst	Wybuch gwiazdy
+	Glossy	Błyszczący
+	Brushed Metal	Szczotkowany metal
+	Spotlight	Reflektor
+	Sunset Band	Pas zachodu słońca
+	Sea Glass	Szkło morskie
+	Pearl	Perła
+	Chrome Rim	Chromowany brzeg
+	Glow Orb	Świecąca kula
+	Pill Badge	Odznaka w kształcie pigułki
+	Round Badge	Okrągła odznaka
+	Flag Wave	Powiewająca flaga
+	Bulge	Wybrzuszenie
+	Twisted	Skręcony
+	Echo	Echo
+	Spiral Copies	Kopie po spirali
+	Multiply Tint	Odcień mnożenia
+	Darken Veil	Welon ciemniej
+	Ghosted	Widmowy
+	Two Tone	Dwutonowy
+	Overlay Glaze	Glazura nakładki
+	Screen Light	Światło mnożenia odwrotnego
+	Soft Light Wash	Lawowanie łagodnym światłem
+	Burst	Wybuch
+	Rounded Square	Zaokrąglony kwadrat
+	Spectrum	Spektrum
+	Vivid	Żywe
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)

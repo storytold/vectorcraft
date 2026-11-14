@@ -29,6 +29,7 @@
 
 mod catalog;
 
+use std::borrow::Cow;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -671,6 +672,23 @@ pub fn trn(lang: Lang, n: u64, one: &str, other: &str) -> String {
 /// `menu_item_name`, `dim_name`).
 pub fn label_or_name(lang: Lang, s: &str, built_in: bool) -> &str {
     if built_in { tr(lang, s) } else { s }
+}
+
+/// A built-in name that may end in a number ("Warm Gray 3") in `lang`: its own row, or the row of
+/// the name before the number followed by the number as it is. Any other name, a color value
+/// such as `K=35` among them, comes back as it is.
+pub fn numbered_label(lang: Lang, s: &str) -> Cow<'_, str> {
+    if let Some(shown) = lang.catalog().plain(s) {
+        return Cow::Borrowed(shown);
+    }
+    if let Some((head, n)) = s.rsplit_once(' ')
+        && !n.is_empty()
+        && n.bytes().all(|b| b.is_ascii_digit())
+        && let Some(shown) = lang.catalog().plain(head)
+    {
+        return Cow::Owned(format!("{shown} {n}"));
+    }
+    Cow::Borrowed(s)
 }
 
 /// How deep [`message`] translates placeholder values that are messages themselves. The status

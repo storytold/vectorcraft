@@ -400,6 +400,97 @@ fn built_in_library_brush_names_are_in_complete_catalogs() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
+/// The complete catalogs that lack a row for one of `names`, with the names each lacks; `shown`
+/// tells whether a catalog shows a name translated.
+fn lacking(names: &[String], shown: impl Fn(&Catalog, &str) -> bool) -> Vec<String> {
+    let mut bad = vec![];
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        let missing: Vec<&String> = names.iter().filter(|n| !shown(lang.catalog(), n.as_str())).collect();
+        if !missing.is_empty() {
+            bad.push(format!("{} is missing {missing:?}", lang.code));
+        }
+    }
+    bad
+}
+
+/// Sorted, without repeats.
+fn distinct(mut names: Vec<String>) -> Vec<String> {
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// A built-in graphic style library's panel lists its styles in the UI language, so every style of
+/// every built-in library has a row in each complete catalog.
+#[test]
+fn built_in_library_style_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::stylelib;
+    let session = vectorcraft_engine::Session::new();
+    let names = distinct(
+        vectorcraft_doc::style_libs::STYLE_LIBRARIES
+            .iter()
+            .filter_map(|b| stylelib::library(&session, b.id))
+            .flat_map(|(_, lib)| lib.styles.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
+            .collect(),
+    );
+    assert_eq!(names.len(), 80, "{names:?}");
+    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A built-in symbol library's panel lists its symbols in the UI language, so every symbol of
+/// every built-in library has a row in each complete catalog.
+#[test]
+fn built_in_library_symbol_names_are_in_complete_catalogs() {
+    use vectorcraft_engine::cmd::symbollib;
+    let session = vectorcraft_engine::Session::new();
+    let names = distinct(
+        symbollib::BUILTIN
+            .iter()
+            .filter_map(|b| symbollib::library(&session, b.id))
+            .flat_map(|(_, lib)| lib.doc.symbols.iter().map(|s| s.name.clone()).collect::<Vec<_>>())
+            .collect(),
+    );
+    assert_eq!(names.len(), 26, "{names:?}");
+    let bad = lacking(&names, |c, n| c.plain(n).is_some());
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A built-in swatch, gradient or pattern library's panel lists its swatches and color groups in
+/// the UI language, so each name has a row in each complete catalog, or is a numbered name
+/// ("Warm Gray 3") whose name before the number has one. Names that are color values (`#33cc99`,
+/// `K=35`) are shown as they are.
+#[test]
+fn built_in_library_swatch_names_are_in_complete_catalogs() {
+    use vectorcraft_color::libraries::{GRADIENT_LIBRARIES, SWATCH_LIBRARIES, builtin_library};
+    use vectorcraft_engine::cmd::patternlib::{self, PATTERN_LIBRARIES};
+    let mut libs: Vec<_> = SWATCH_LIBRARIES.iter().chain(GRADIENT_LIBRARIES).filter_map(|b| builtin_library(b.id)).collect();
+    libs.extend(PATTERN_LIBRARIES.iter().filter_map(|b| patternlib::library(b.id)).map(|(_, lib)| lib));
+    assert_eq!(libs.len(), SWATCH_LIBRARIES.len() + GRADIENT_LIBRARIES.len() + PATTERN_LIBRARIES.len());
+    let all = libs.iter().flat_map(|lib| lib.iter().map(|w| w.name.clone()).chain(lib.groups.iter().map(|g| g.name.clone())).collect::<Vec<_>>());
+    let names = distinct(all.filter(|n| !n.starts_with('#') && !n.starts_with("K=")).collect());
+    assert_eq!(names.len(), 384, "{names:?}");
+    let numbered = |c: &Catalog, n: &str| {
+        n.rsplit_once(' ').is_some_and(|(head, d)| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()) && c.plain(head).is_some())
+    };
+    let bad = lacking(&names, |c, n| c.plain(n).is_some() || numbered(c, n));
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A numbered built-in name shows its name before the number translated and the number as it
+/// is; a name with a row of its own uses that row, and any other name comes back unchanged.
+#[test]
+fn numbered_labels_translate_the_name_before_the_number() {
+    let fr = Lang::from_code("fr").expect("fr registered");
+    assert_eq!(numbered_label(fr, "Grays"), tr(fr, "Grays"));
+    assert_ne!(tr(fr, "Grays"), "Grays");
+    assert_eq!(numbered_label(fr, "Grays 12"), format!("{} 12", tr(fr, "Grays")));
+    for kept in ["K=35", "#33cc99", "Grays x", "Grays ", "Not A Catalog Name 3"] {
+        assert_eq!(numbered_label(fr, kept), kept);
+    }
+    assert_eq!(numbered_label(Lang::EN, "Grays 12"), "Grays 12");
+}
+
 /// Preference choices and the marquee's E hint share the same translated labels.
 #[test]
 fn marquee_selection_labels_are_in_complete_catalogs() {

@@ -6784,6 +6784,240 @@ axis	Y Axis	Y-axel
 	Stars	Stjärnor
 	Triangles	Trianglar
 	Sparkles	Gnistor
+	Warm Gray	Varmgrå
+	Cool Gray	Kallgrå
+	Neutrals	Neutrala toner
+	Ivory	Elfenben
+	Linen	Linne
+	Oat	Havre
+	Greige	Greige
+	Stone	Sten
+	Taupe	Taupe
+	Slate	Skiffer
+	Clay	Lera
+	Terracotta	Terrakotta
+	Ochre	Ockra
+	Umber	Umbra
+	Sand	Sand
+	Olive	Oliv
+	Moss	Mossa
+	Rosy	Rosig
+	Neutral	Neutral
+	Golden	Gyllene
+	Pastel	Pastell
+	Pastel Red	Pastellröd
+	Pastel Orange	Pastellorange
+	Pastel Amber	Pastellbärnsten
+	Pastel Yellow	Pastellgul
+	Pastel Lime	Pastellime
+	Pastel Green	Pastellgrön
+	Pastel Teal	Pastellblågrön
+	Pastel Cyan	Pastellcyan
+	Pastel Azure	Pastellazur
+	Pastel Blue	Pastellblå
+	Pastel Violet	Pastellviolett
+	Pastel Magenta	Pastellmagenta
+	Soft Red	Mjuk röd
+	Soft Orange	Mjuk orange
+	Soft Amber	Mjuk bärnsten
+	Soft Yellow	Mjuk gul
+	Soft Lime	Mjuk lime
+	Soft Green	Mjuk grön
+	Soft Teal	Mjuk blågrön
+	Soft Cyan	Mjuk cyan
+	Soft Azure	Mjuk azur
+	Soft Blue	Mjuk blå
+	Soft Violet	Mjuk violett
+	Soft Magenta	Mjuk magenta
+	Vivid Red	Livfull röd
+	Vivid Orange	Livfull orange
+	Vivid Amber	Livfull bärnsten
+	Vivid Yellow	Livfull gul
+	Vivid Lime	Livfull lime
+	Vivid Green	Livfull grön
+	Vivid Teal	Livfull blågrön
+	Vivid Cyan	Livfull cyan
+	Vivid Azure	Livfull azur
+	Vivid Blue	Livfull blå
+	Vivid Violet	Livfull violett
+	Vivid Magenta	Livfull magenta
+	Deep	Djupa
+	Deep Red	Djupröd
+	Deep Orange	Djuporange
+	Deep Amber	Djup bärnsten
+	Deep Yellow	Djupgul
+	Deep Lime	Djup lime
+	Deep Green	Djupgrön
+	Deep Teal	Djup blågrön
+	Deep Cyan	Djup cyan
+	Deep Azure	Djup azur
+	Deep Blue	Djupblå
+	Deep Violet	Djupviolett
+	Deep Magenta	Djup magenta
+	Gold	Guld
+	Silver	Silver
+	Bronze	Brons
+	Copper	Koppar
+	Brass	Mässing
+	Rose Gold	Roséguld
+	Gunmetal	Gunmetal
+	Platinum	Platina
+	Pewter	Tenn
+	Ember	Glöd
+	Lagoon	Lagun
+	Dusk	Skymning
+	Clay to Teal	Lera till blågrön
+	Plum to Olive	Plommon till oliv
+	Complementary Coral	Korall komplementär
+	Split Complementary Coral	Korall delade komplementfärger
+	Analogous Coral	Korall analog
+	Triad Coral	Korall triad
+	Tetrad Coral	Korall tetrad
+	Pentagram Coral	Korall pentagram
+	Complementary Teal	Blågrön komplementär
+	Split Complementary Teal	Blågrön delade komplementfärger
+	Analogous Teal	Blågrön analog
+	Triad Teal	Blågrön triad
+	Tetrad Teal	Blågrön tetrad
+	Pentagram Teal	Blågrön pentagram
+	Soft Spectrum	Mjukt spektrum
+	Red to Amber	Röd till bärnsten
+	Orange to Yellow	Orange till gul
+	Amber to Lime	Bärnsten till lime
+	Yellow to Green	Gul till grön
+	Lime to Teal	Lime till blågrön
+	Green to Cyan	Grön till cyan
+	Teal to Azure	Blågrön till azur
+	Cyan to Blue	Cyan till blå
+	Azure to Violet	Azur till violett
+	Blue to Magenta	Blå till magenta
+	Violet to Red	Violett till röd
+	Magenta to Orange	Magenta till orange
+	Dawn	Gryning
+	Noon	Middag
+	Sunset	Solnedgång
+	Night	Natt
+	Overcast	Mulet
+	White to Black	Vit till svart
+	Light Grays	Ljusa gråtoner
+	Dark Grays	Mörka gråtoner
+	Warm Grays	Varma gråtoner
+	Cool Grays	Kalla gråtoner
+	Fade to Transparent	Tona till genomskinlig
+	White Fade	Vit toning
+	Vignette	Vinjett
+	Mist	Dimma
+	Petal	Kronblad
+	Fern	Ormbunke
+	Smoke	Rök
+	Honey	Honung
+	Seafoam	Havsskum
+	Lavender	Lavendel
+	Driftwood	Drivved
+	Ink Wash	Tuschlavering
+	Tide	Tidvatten
+	Bloom	Blomning
+	Dew	Dagg
+	Pollen	Pollen
+	Lichen	Lav
+	Prism Veil	Prismaslöja
+	Opal Ribbon	Opalband
+	Pearl Flash	Pärlblixt
+	Aurora Foil	Norrskensfolie
+	Iris Sheen	Irisglans
+	Frost Spectrum	Frostspektrum
+	Silver Tide	Silvertidvatten
+	Rose Quartz Gleam	Rosenkvartsglans
+	Moonstone Shift	Månstensskimmer
+	Violet Edge	Violett kant
+	Mint Halo	Mintgloria
+	Amber Corona	Bärnstenskorona
+	Polar Glint	Polarglimt
+	Pastel Orbit	Pastellbana
+	Coral and Navy	Korall och marinblå
+	Plum and Lime	Plommon och lime
+	Teal and Gold	Blågrön och guld
+	Indigo and Peach	Indigo och persika
+	Forest and Rose	Skog och rosa
+	Red Glow	Rött sken
+	Orange Glow	Orange sken
+	Amber Glow	Bärnstenssken
+	Yellow Glow	Gult sken
+	Lime Glow	Limesken
+	Green Glow	Grönt sken
+	Teal Glow	Blågrönt sken
+	Cyan Glow	Cyansken
+	Azure Glow	Azursken
+	Blue Glow	Blått sken
+	Violet Glow	Violett sken
+	Magenta Glow	Magentasken
+	Polka Dots	Prickar
+	Vertical Stripes	Lodräta ränder
+	Horizontal Stripes	Vågräta ränder
+	Diagonal Stripes	Diagonala ränder
+	Checkerboard	Schackruta
+	Diamonds	Ruter
+	Crosses	Kors
+	Coarse Grit	Grovt korn
+	Stipple	Punktering
+	Scratches	Repor
+	Sparse Flecks	Glesa fläckar
+	Dense Flecks	Täta fläckar
+	Sine Bands	Sinusband
+	Ripple Lines	Krusningslinjer
+	Interference Rings	Interferensringar
+	Offset Rings	Förskjutna ringar
+	Warped Checks	Förvrängda rutor
+	Pinched Stripes	Klämda ränder
+	Chevron Pulse	Chevronpuls
+	Radiating Lenses	Strålande linser
+	Soft Shadow	Mjuk skugga
+	Hard Shadow	Hård skugga
+	Lifted Card	Upplyft kort
+	Neon Tube	Neonrör
+	Inner Light	Inre ljus
+	Feathered	Mjuk kant
+	Haze	Dis
+	Double Rule	Dubbel linje
+	Triple Rule	Trippel linje
+	Dashed Border	Streckad kant
+	Dotted Border	Prickad kant
+	Offset Keyline	Förskjuten konturlinje
+	Inset Keyline	Inre konturlinje
+	Outside Stroke	Yttre linje
+	Pointer	Visare
+	Highlighter	Överstrykningspenna
+	Sketchy Line	Skissartad linje
+	Scribble Fill	Klotterfyllning
+	Wobble	Vingel
+	Zig Zag Edge	Sicksackkant
+	Wavy Edge	Vågig kant
+	Puffy	Uppblåst
+	Starburst	Stjärnexplosion
+	Glossy	Blank
+	Brushed Metal	Borstad metall
+	Spotlight	Strålkastare
+	Sunset Band	Solnedgångsband
+	Sea Glass	Havsglas
+	Pearl	Pärla
+	Chrome Rim	Kromkant
+	Glow Orb	Lysande klot
+	Pill Badge	Pillermärke
+	Round Badge	Runt märke
+	Flag Wave	Vajande flagga
+	Bulge	Utbuktning
+	Twisted	Vriden
+	Echo	Eko
+	Spiral Copies	Spiralkopior
+	Multiply Tint	Multiplicera-ton
+	Darken Veil	Mörkare-slöja
+	Ghosted	Spöklik
+	Two Tone	Tvåfärgad
+	Overlay Glaze	Överlägg-glasyr
+	Screen Light	Skärm-ljus
+	Soft Light Wash	Mjukt ljus-lavering
+	Burst	Utbrott
+	Rounded Square	Rundad kvadrat
 	Save Brush Library…	Spara penselbibliotek…
 @msg	`{_1}` has no brushes to apply	`{_1}` har inga penslar att använda
 @msg	missing `library` (see brush.libraries)	`library` saknas (se brush.libraries)

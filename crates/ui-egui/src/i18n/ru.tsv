@@ -6415,6 +6415,240 @@ axis	Y Axis	Ось Y
 	Stars	Звёзды
 	Triangles	Треугольники
 	Sparkles	Искры
+	Warm Gray	Тёплый серый
+	Cool Gray	Холодный серый
+	Neutrals	Нейтральные
+	Ivory	Слоновая кость
+	Linen	Лён
+	Oat	Овёс
+	Greige	Грейж
+	Stone	Камень
+	Taupe	Серо-коричневый
+	Slate	Сланец
+	Clay	Глина
+	Terracotta	Терракота
+	Ochre	Охра
+	Umber	Умбра
+	Sand	Песок
+	Olive	Оливковый
+	Moss	Мох
+	Rosy	Розоватый
+	Neutral	Нейтральный
+	Golden	Золотистый
+	Pastel	Пастельные
+	Pastel Red	Пастельный красный
+	Pastel Orange	Пастельный оранжевый
+	Pastel Amber	Пастельный янтарный
+	Pastel Yellow	Пастельный жёлтый
+	Pastel Lime	Пастельный лаймовый
+	Pastel Green	Пастельный зелёный
+	Pastel Teal	Пастельный сине-зелёный
+	Pastel Cyan	Пастельный голубой
+	Pastel Azure	Пастельный лазурный
+	Pastel Blue	Пастельный синий
+	Pastel Violet	Пастельный фиолетовый
+	Pastel Magenta	Пастельный пурпурный
+	Soft Red	Мягкий красный
+	Soft Orange	Мягкий оранжевый
+	Soft Amber	Мягкий янтарный
+	Soft Yellow	Мягкий жёлтый
+	Soft Lime	Мягкий лаймовый
+	Soft Green	Мягкий зелёный
+	Soft Teal	Мягкий сине-зелёный
+	Soft Cyan	Мягкий голубой
+	Soft Azure	Мягкий лазурный
+	Soft Blue	Мягкий синий
+	Soft Violet	Мягкий фиолетовый
+	Soft Magenta	Мягкий пурпурный
+	Vivid Red	Яркий красный
+	Vivid Orange	Яркий оранжевый
+	Vivid Amber	Яркий янтарный
+	Vivid Yellow	Яркий жёлтый
+	Vivid Lime	Яркий лаймовый
+	Vivid Green	Яркий зелёный
+	Vivid Teal	Яркий сине-зелёный
+	Vivid Cyan	Яркий голубой
+	Vivid Azure	Яркий лазурный
+	Vivid Blue	Яркий синий
+	Vivid Violet	Яркий фиолетовый
+	Vivid Magenta	Яркий пурпурный
+	Deep	Глубокие
+	Deep Red	Тёмно-красный
+	Deep Orange	Тёмно-оранжевый
+	Deep Amber	Тёмно-янтарный
+	Deep Yellow	Тёмно-жёлтый
+	Deep Lime	Тёмно-лаймовый
+	Deep Green	Тёмно-зелёный
+	Deep Teal	Тёмный сине-зелёный
+	Deep Cyan	Тёмно-голубой
+	Deep Azure	Тёмно-лазурный
+	Deep Blue	Тёмно-синий
+	Deep Violet	Тёмно-фиолетовый
+	Deep Magenta	Тёмно-пурпурный
+	Gold	Золото
+	Silver	Серебро
+	Bronze	Бронза
+	Copper	Медь
+	Brass	Латунь
+	Rose Gold	Розовое золото
+	Gunmetal	Оружейный металл
+	Platinum	Платина
+	Pewter	Олово
+	Ember	Тлеющие угли
+	Lagoon	Лагуна
+	Dusk	Сумерки
+	Clay to Teal	От глины к сине-зелёному
+	Plum to Olive	От сливового к оливковому
+	Complementary Coral	Коралловый, дополнительная
+	Split Complementary Coral	Коралловый, расщепленная дополнительная
+	Analogous Coral	Коралловый, аналоговая
+	Triad Coral	Коралловый, триада
+	Tetrad Coral	Коралловый, тетрада
+	Pentagram Coral	Коралловый, пентаграмма
+	Complementary Teal	Сине-зелёный, дополнительная
+	Split Complementary Teal	Сине-зелёный, расщепленная дополнительная
+	Analogous Teal	Сине-зелёный, аналоговая
+	Triad Teal	Сине-зелёный, триада
+	Tetrad Teal	Сине-зелёный, тетрада
+	Pentagram Teal	Сине-зелёный, пентаграмма
+	Soft Spectrum	Мягкий спектр
+	Red to Amber	От красного к янтарному
+	Orange to Yellow	От оранжевого к жёлтому
+	Amber to Lime	От янтарного к лаймовому
+	Yellow to Green	От жёлтого к зелёному
+	Lime to Teal	От лаймового к сине-зелёному
+	Green to Cyan	От зелёного к голубому
+	Teal to Azure	От сине-зелёного к лазурному
+	Cyan to Blue	От голубого к синему
+	Azure to Violet	От лазурного к фиолетовому
+	Blue to Magenta	От синего к пурпурному
+	Violet to Red	От фиолетового к красному
+	Magenta to Orange	От пурпурного к оранжевому
+	Dawn	Рассвет
+	Noon	Полдень
+	Sunset	Закат
+	Night	Ночь
+	Overcast	Пасмурно
+	White to Black	От белого к чёрному
+	Light Grays	Светло-серые
+	Dark Grays	Тёмно-серые
+	Warm Grays	Тёплые серые
+	Cool Grays	Холодные серые
+	Fade to Transparent	Переход в прозрачность
+	White Fade	Белый переход
+	Vignette	Виньетка
+	Mist	Дымка
+	Petal	Лепесток
+	Fern	Папоротник
+	Smoke	Дым
+	Honey	Мёд
+	Seafoam	Морская пена
+	Lavender	Лаванда
+	Driftwood	Плавник
+	Ink Wash	Размывка тушью
+	Tide	Прилив
+	Bloom	Цветение
+	Dew	Роса
+	Pollen	Пыльца
+	Lichen	Лишайник
+	Prism Veil	Призматическая вуаль
+	Opal Ribbon	Опаловая лента
+	Pearl Flash	Жемчужная вспышка
+	Aurora Foil	Фольга северного сияния
+	Iris Sheen	Радужный отлив
+	Frost Spectrum	Морозный спектр
+	Silver Tide	Серебряный прилив
+	Rose Quartz Gleam	Блеск розового кварца
+	Moonstone Shift	Перелив лунного камня
+	Violet Edge	Фиолетовый край
+	Mint Halo	Мятный ореол
+	Amber Corona	Янтарная корона
+	Polar Glint	Полярный блик
+	Pastel Orbit	Пастельная орбита
+	Coral and Navy	Коралловый и тёмно-синий
+	Plum and Lime	Сливовый и лаймовый
+	Teal and Gold	Сине-зелёный и золотой
+	Indigo and Peach	Индиго и персиковый
+	Forest and Rose	Лесной и розовый
+	Red Glow	Красное свечение
+	Orange Glow	Оранжевое свечение
+	Amber Glow	Янтарное свечение
+	Yellow Glow	Жёлтое свечение
+	Lime Glow	Лаймовое свечение
+	Green Glow	Зелёное свечение
+	Teal Glow	Сине-зелёное свечение
+	Cyan Glow	Голубое свечение
+	Azure Glow	Лазурное свечение
+	Blue Glow	Синее свечение
+	Violet Glow	Фиолетовое свечение
+	Magenta Glow	Пурпурное свечение
+	Polka Dots	Горошек
+	Vertical Stripes	Вертикальные полосы
+	Horizontal Stripes	Горизонтальные полосы
+	Diagonal Stripes	Диагональные полосы
+	Checkerboard	Шахматная доска
+	Diamonds	Ромбы
+	Crosses	Крестики
+	Coarse Grit	Крупное зерно
+	Stipple	Пунктир
+	Scratches	Царапины
+	Sparse Flecks	Редкие крапинки
+	Dense Flecks	Густые крапинки
+	Sine Bands	Синусоидальные полосы
+	Ripple Lines	Линии ряби
+	Interference Rings	Интерференционные кольца
+	Offset Rings	Смещённые кольца
+	Warped Checks	Искажённая клетка
+	Pinched Stripes	Сжатые полосы
+	Chevron Pulse	Пульсирующие шевроны
+	Radiating Lenses	Лучистые линзы
+	Soft Shadow	Мягкая тень
+	Hard Shadow	Жёсткая тень
+	Lifted Card	Приподнятая карточка
+	Neon Tube	Неоновая трубка
+	Inner Light	Внутренний свет
+	Feathered	Растушёванный
+	Haze	Марево
+	Double Rule	Двойная линейка
+	Triple Rule	Тройная линейка
+	Dashed Border	Штриховая рамка
+	Dotted Border	Точечная рамка
+	Offset Keyline	Смещённый контур
+	Inset Keyline	Внутренний контур
+	Outside Stroke	Внешняя обводка
+	Pointer	Указатель
+	Highlighter	Маркер
+	Sketchy Line	Набросочная линия
+	Scribble Fill	Заливка каракулями
+	Wobble	Дрожание
+	Zig Zag Edge	Зигзагообразный край
+	Wavy Edge	Волнистый край
+	Puffy	Пухлый
+	Starburst	Звёздный взрыв
+	Glossy	Глянцевый
+	Brushed Metal	Шлифованный металл
+	Spotlight	Прожектор
+	Sunset Band	Полоса заката
+	Sea Glass	Морское стекло
+	Pearl	Жемчуг
+	Chrome Rim	Хромированный ободок
+	Glow Orb	Светящийся шар
+	Pill Badge	Значок-капсула
+	Round Badge	Круглый значок
+	Flag Wave	Развевающийся флаг
+	Bulge	Выпуклость
+	Twisted	Закрученный
+	Echo	Эхо
+	Spiral Copies	Копии по спирали
+	Multiply Tint	Оттенок умножения
+	Darken Veil	Затемняющая вуаль
+	Ghosted	Призрачный
+	Two Tone	Двухцветный
+	Overlay Glaze	Глазурь перекрытия
+	Screen Light	Свет растра
+	Soft Light Wash	Размывка мягким светом
+	Burst	Вспышка
+	Rounded Square	Скруглённый квадрат
 	Save Brush Library…	Сохранить библиотеку кистей…
 @msg	`{_1}` has no brushes to apply	В `{_1}` нет кистей для применения
 @msg	missing `library` (see brush.libraries)	не указан `library` (см. brush.libraries)

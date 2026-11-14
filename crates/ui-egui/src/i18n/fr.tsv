@@ -6799,6 +6799,240 @@ axis	Y Axis	Axe Y
 	Stars	Étoiles
 	Triangles	Triangles
 	Sparkles	Étincelles
+	Warm Gray	Gris chaud
+	Cool Gray	Gris froid
+	Neutrals	Neutres
+	Ivory	Ivoire
+	Linen	Lin
+	Oat	Avoine
+	Greige	Grège
+	Stone	Pierre
+	Taupe	Taupe
+	Slate	Ardoise
+	Clay	Argile
+	Terracotta	Terre cuite
+	Ochre	Ocre
+	Umber	Terre d’ombre
+	Sand	Sable
+	Olive	Olive
+	Moss	Mousse
+	Rosy	Rosé
+	Neutral	Neutre
+	Golden	Doré
+	Pastel	Pastel
+	Pastel Red	Rouge pastel
+	Pastel Orange	Orange pastel
+	Pastel Amber	Ambre pastel
+	Pastel Yellow	Jaune pastel
+	Pastel Lime	Citron vert pastel
+	Pastel Green	Vert pastel
+	Pastel Teal	Sarcelle pastel
+	Pastel Cyan	Cyan pastel
+	Pastel Azure	Azur pastel
+	Pastel Blue	Bleu pastel
+	Pastel Violet	Violet pastel
+	Pastel Magenta	Magenta pastel
+	Soft Red	Rouge doux
+	Soft Orange	Orange doux
+	Soft Amber	Ambre doux
+	Soft Yellow	Jaune doux
+	Soft Lime	Citron vert doux
+	Soft Green	Vert doux
+	Soft Teal	Sarcelle doux
+	Soft Cyan	Cyan doux
+	Soft Azure	Azur doux
+	Soft Blue	Bleu doux
+	Soft Violet	Violet doux
+	Soft Magenta	Magenta doux
+	Vivid Red	Rouge vif
+	Vivid Orange	Orange vif
+	Vivid Amber	Ambre vif
+	Vivid Yellow	Jaune vif
+	Vivid Lime	Citron vert vif
+	Vivid Green	Vert vif
+	Vivid Teal	Sarcelle vif
+	Vivid Cyan	Cyan vif
+	Vivid Azure	Azur vif
+	Vivid Blue	Bleu vif
+	Vivid Violet	Violet vif
+	Vivid Magenta	Magenta vif
+	Deep	Foncés
+	Deep Red	Rouge foncé
+	Deep Orange	Orange foncé
+	Deep Amber	Ambre foncé
+	Deep Yellow	Jaune foncé
+	Deep Lime	Citron vert foncé
+	Deep Green	Vert foncé
+	Deep Teal	Sarcelle foncé
+	Deep Cyan	Cyan foncé
+	Deep Azure	Azur foncé
+	Deep Blue	Bleu foncé
+	Deep Violet	Violet foncé
+	Deep Magenta	Magenta foncé
+	Gold	Or
+	Silver	Argent
+	Bronze	Bronze
+	Copper	Cuivre
+	Brass	Laiton
+	Rose Gold	Or rose
+	Gunmetal	Gris canon
+	Platinum	Platine
+	Pewter	Étain
+	Ember	Braise
+	Lagoon	Lagon
+	Dusk	Crépuscule
+	Clay to Teal	Argile à sarcelle
+	Plum to Olive	Prune à olive
+	Complementary Coral	Corail complémentaire
+	Split Complementary Coral	Corail complémentaire divisée
+	Analogous Coral	Corail analogue
+	Triad Coral	Corail en triade
+	Tetrad Coral	Corail en tétrade
+	Pentagram Coral	Corail en pentagramme
+	Complementary Teal	Sarcelle complémentaire
+	Split Complementary Teal	Sarcelle complémentaire divisée
+	Analogous Teal	Sarcelle analogue
+	Triad Teal	Sarcelle en triade
+	Tetrad Teal	Sarcelle en tétrade
+	Pentagram Teal	Sarcelle en pentagramme
+	Soft Spectrum	Spectre doux
+	Red to Amber	Rouge à ambre
+	Orange to Yellow	Orange à jaune
+	Amber to Lime	Ambre à citron vert
+	Yellow to Green	Jaune à vert
+	Lime to Teal	Citron vert à sarcelle
+	Green to Cyan	Vert à cyan
+	Teal to Azure	Sarcelle à azur
+	Cyan to Blue	Cyan à bleu
+	Azure to Violet	Azur à violet
+	Blue to Magenta	Bleu à magenta
+	Violet to Red	Violet à rouge
+	Magenta to Orange	Magenta à orange
+	Dawn	Aube
+	Noon	Midi
+	Sunset	Coucher de soleil
+	Night	Nuit
+	Overcast	Ciel couvert
+	White to Black	Blanc à noir
+	Light Grays	Gris clairs
+	Dark Grays	Gris foncés
+	Warm Grays	Gris chauds
+	Cool Grays	Gris froids
+	Fade to Transparent	Fondu vers transparent
+	White Fade	Fondu blanc
+	Vignette	Vignette
+	Mist	Brume
+	Petal	Pétale
+	Fern	Fougère
+	Smoke	Fumée
+	Honey	Miel
+	Seafoam	Écume
+	Lavender	Lavande
+	Driftwood	Bois flotté
+	Ink Wash	Lavis d’encre
+	Tide	Marée
+	Bloom	Floraison
+	Dew	Rosée
+	Pollen	Pollen
+	Lichen	Lichen
+	Prism Veil	Voile prismatique
+	Opal Ribbon	Ruban opale
+	Pearl Flash	Éclat nacré
+	Aurora Foil	Feuille aurore
+	Iris Sheen	Reflet iris
+	Frost Spectrum	Spectre givré
+	Silver Tide	Marée argentée
+	Rose Quartz Gleam	Lueur quartz rose
+	Moonstone Shift	Reflet pierre de lune
+	Violet Edge	Bord violet
+	Mint Halo	Halo menthe
+	Amber Corona	Couronne ambrée
+	Polar Glint	Scintillement polaire
+	Pastel Orbit	Orbite pastel
+	Coral and Navy	Corail et marine
+	Plum and Lime	Prune et citron vert
+	Teal and Gold	Sarcelle et or
+	Indigo and Peach	Indigo et pêche
+	Forest and Rose	Forêt et rose
+	Red Glow	Lueur rouge
+	Orange Glow	Lueur orange
+	Amber Glow	Lueur ambre
+	Yellow Glow	Lueur jaune
+	Lime Glow	Lueur citron vert
+	Green Glow	Lueur verte
+	Teal Glow	Lueur sarcelle
+	Cyan Glow	Lueur cyan
+	Azure Glow	Lueur azur
+	Blue Glow	Lueur bleue
+	Violet Glow	Lueur violette
+	Magenta Glow	Lueur magenta
+	Polka Dots	Pois
+	Vertical Stripes	Rayures verticales
+	Horizontal Stripes	Rayures horizontales
+	Diagonal Stripes	Rayures diagonales
+	Checkerboard	Damier
+	Diamonds	Losanges
+	Crosses	Croix
+	Coarse Grit	Grain grossier
+	Stipple	Pointillé
+	Scratches	Éraflures
+	Sparse Flecks	Mouchetures éparses
+	Dense Flecks	Mouchetures denses
+	Sine Bands	Bandes sinusoïdales
+	Ripple Lines	Lignes ondulées
+	Interference Rings	Anneaux d’interférence
+	Offset Rings	Anneaux décalés
+	Warped Checks	Damier déformé
+	Pinched Stripes	Rayures pincées
+	Chevron Pulse	Chevrons pulsés
+	Radiating Lenses	Lentilles rayonnantes
+	Soft Shadow	Ombre douce
+	Hard Shadow	Ombre dure
+	Lifted Card	Carte surélevée
+	Neon Tube	Tube néon
+	Inner Light	Lumière intérieure
+	Feathered	Estompé sur les bords
+	Haze	Brouillard
+	Double Rule	Double filet
+	Triple Rule	Triple filet
+	Dashed Border	Bordure en tirets
+	Dotted Border	Bordure pointillée
+	Offset Keyline	Filet décalé
+	Inset Keyline	Filet intérieur
+	Outside Stroke	Contour extérieur
+	Pointer	Pointeur
+	Highlighter	Surligneur
+	Sketchy Line	Trait esquissé
+	Scribble Fill	Fond griffonné
+	Wobble	Tremblé
+	Zig Zag Edge	Bord en zigzag
+	Wavy Edge	Bord ondulé
+	Puffy	Gonflé
+	Starburst	Éclat d’étoile
+	Glossy	Brillant
+	Brushed Metal	Métal brossé
+	Spotlight	Projecteur
+	Sunset Band	Bande coucher de soleil
+	Sea Glass	Verre de mer
+	Pearl	Perle
+	Chrome Rim	Bord chromé
+	Glow Orb	Orbe lumineux
+	Pill Badge	Badge pilule
+	Round Badge	Badge rond
+	Flag Wave	Drapeau ondulant
+	Bulge	Renflement
+	Twisted	Torsadé
+	Echo	Écho
+	Spiral Copies	Copies en spirale
+	Multiply Tint	Teinte produit
+	Darken Veil	Voile obscurcir
+	Ghosted	Fantôme
+	Two Tone	Bicolore
+	Overlay Glaze	Glacis incrustation
+	Screen Light	Lumière superposition
+	Soft Light Wash	Lavis lumière tamisée
+	Burst	Éclat
+	Rounded Square	Carré arrondi
 	Save Brush Library…	Enregistrer la bibliothèque de formes…
 @msg	`{_1}` has no brushes to apply	`{_1}` n'a aucune forme à appliquer
 @msg	missing `library` (see brush.libraries)	`library` manquant (voir brush.libraries)

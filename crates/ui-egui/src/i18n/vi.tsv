@@ -6411,6 +6411,245 @@ axis	Y Axis	Trục Y
 	Stars	Ngôi sao
 	Triangles	Tam giác
 	Sparkles	Lấp lánh
+	Warm Gray	Xám ấm
+	Cool Gray	Xám lạnh
+	Neutrals	Màu trung tính
+	Ivory	Ngà
+	Linen	Vải lanh
+	Oat	Yến mạch
+	Greige	Xám be
+	Stone	Đá
+	Taupe	Nâu xám
+	Slate	Đá phiến
+	Clay	Đất sét
+	Terracotta	Đất nung
+	Ochre	Đất son
+	Umber	Nâu đất
+	Sand	Cát
+	Olive	Ô liu
+	Moss	Rêu
+	Rosy	Hồng phớt
+	Neutral	Trung tính
+	Golden	Vàng óng
+	Pastel	Màu phấn
+	Pastel Red	Đỏ phấn
+	Pastel Orange	Cam phấn
+	Pastel Amber	Hổ phách phấn
+	Pastel Yellow	Vàng phấn
+	Pastel Lime	Vàng chanh phấn
+	Pastel Green	Xanh lá phấn
+	Pastel Teal	Xanh mòng két phấn
+	Pastel Cyan	Xanh lơ phấn
+	Pastel Azure	Xanh da trời phấn
+	Pastel Blue	Xanh dương phấn
+	Pastel Violet	Tím phấn
+	Pastel Magenta	Đỏ hồng phấn
+	Soft Red	Đỏ dịu
+	Soft Orange	Cam dịu
+	Soft Amber	Hổ phách dịu
+	Soft Yellow	Vàng dịu
+	Soft Lime	Vàng chanh dịu
+	Soft Green	Xanh lá dịu
+	Soft Teal	Xanh mòng két dịu
+	Soft Cyan	Xanh lơ dịu
+	Soft Azure	Xanh da trời dịu
+	Soft Blue	Xanh dương dịu
+	Soft Violet	Tím dịu
+	Soft Magenta	Đỏ hồng dịu
+	Vivid Red	Đỏ rực
+	Vivid Orange	Cam rực
+	Vivid Amber	Hổ phách rực
+	Vivid Yellow	Vàng rực
+	Vivid Lime	Vàng chanh rực
+	Vivid Green	Xanh lá rực
+	Vivid Teal	Xanh mòng két rực
+	Vivid Cyan	Xanh lơ rực
+	Vivid Azure	Xanh da trời rực
+	Vivid Blue	Xanh dương rực
+	Vivid Violet	Tím rực
+	Vivid Magenta	Đỏ hồng rực
+	Deep	Đậm
+	Deep Red	Đỏ đậm
+	Deep Orange	Cam đậm
+	Deep Amber	Hổ phách đậm
+	Deep Yellow	Vàng đậm
+	Deep Lime	Vàng chanh đậm
+	Deep Green	Xanh lá đậm
+	Deep Teal	Xanh mòng két đậm
+	Deep Cyan	Xanh lơ đậm
+	Deep Azure	Xanh da trời đậm
+	Deep Blue	Xanh dương đậm
+	Deep Violet	Tím đậm
+	Deep Magenta	Đỏ hồng đậm
+	Gold	Vàng kim
+	Silver	Bạc
+	Bronze	Đồng thiếc
+	Copper	Đồng đỏ
+	Brass	Đồng thau
+	Rose Gold	Vàng hồng
+	Gunmetal	Xám thép
+	Platinum	Bạch kim
+	Pewter	Thiếc
+	Ember	Than hồng
+	Lagoon	Đầm phá
+	Dusk	Hoàng hôn
+	Clay to Teal	Đất sét sang xanh mòng két
+	Plum to Olive	Mận sang ô liu
+	Complementary Coral	San hô, bổ sung
+	Split Complementary Coral	San hô, bổ sung tách
+	Analogous Coral	San hô, tương đồng
+	Triad Coral	San hô, bộ ba
+	Tetrad Coral	San hô, bộ bốn
+	Pentagram Coral	San hô, ngôi sao năm cánh
+	Complementary Teal	Xanh mòng két, bổ sung
+	Split Complementary Teal	Xanh mòng két, bổ sung tách
+	Analogous Teal	Xanh mòng két, tương đồng
+	Triad Teal	Xanh mòng két, bộ ba
+	Tetrad Teal	Xanh mòng két, bộ bốn
+	Pentagram Teal	Xanh mòng két, ngôi sao năm cánh
+	Soft Spectrum	Quang phổ dịu
+	Red to Amber	Đỏ sang hổ phách
+	Orange to Yellow	Cam sang vàng
+	Amber to Lime	Hổ phách sang vàng chanh
+	Yellow to Green	Vàng sang xanh lá
+	Lime to Teal	Vàng chanh sang xanh mòng két
+	Green to Cyan	Xanh lá sang xanh lơ
+	Teal to Azure	Xanh mòng két sang xanh da trời
+	Cyan to Blue	Xanh lơ sang xanh dương
+	Azure to Violet	Xanh da trời sang tím
+	Blue to Magenta	Xanh dương sang đỏ hồng
+	Violet to Red	Tím sang đỏ
+	Magenta to Orange	Đỏ hồng sang cam
+	Dawn	Bình minh
+	Noon	Giữa trưa
+	Sunset	Hoàng hôn rực
+	Night	Đêm
+	Overcast	Trời âm u
+	White to Black	Trắng sang đen
+	Light Grays	Xám nhạt
+	Dark Grays	Xám sẫm
+	Warm Grays	Các sắc xám ấm
+	Cool Grays	Các sắc xám lạnh
+	Fade to Transparent	Mờ dần sang trong suốt
+	White Fade	Mờ dần sang trắng
+	Vignette	Viền tối
+	Mist	Sương mù
+	Petal	Cánh hoa
+	Fern	Dương xỉ
+	Smoke	Khói
+	Honey	Mật ong
+	Seafoam	Bọt biển
+	Lavender	Oải hương
+	Driftwood	Gỗ trôi dạt
+	Ink Wash	Mực loang
+	Tide	Thủy triều
+	Bloom	Nở hoa
+	Dew	Sương
+	Pollen	Phấn hoa
+	Lichen	Địa y
+	Prism Veil	Màn lăng kính
+	Opal Ribbon	Dải opal
+	Pearl Flash	Ánh ngọc trai
+	Aurora Foil	Lá cực quang
+	Iris Sheen	Ánh óng ánh
+	Frost Spectrum	Quang phổ sương giá
+	Silver Tide	Triều bạc
+	Rose Quartz Gleam	Ánh thạch anh hồng
+	Moonstone Shift	Ánh đá mặt trăng
+	Violet Edge	Viền tím
+	Mint Halo	Quầng bạc hà
+	Amber Corona	Vành hổ phách
+	Polar Glint	Ánh cực
+	Pastel Orbit	Quỹ đạo màu phấn
+	Coral and Navy	San hô và xanh hải quân
+	Plum and Lime	Mận và vàng chanh
+	Teal and Gold	Xanh mòng két và vàng kim
+	Indigo and Peach	Chàm và đào
+	Forest and Rose	Rừng và hoa hồng
+	Red Glow	Ánh đỏ
+	Orange Glow	Ánh cam
+	Amber Glow	Ánh hổ phách
+	Yellow Glow	Ánh vàng
+	Lime Glow	Ánh vàng chanh
+	Green Glow	Ánh xanh lá
+	Teal Glow	Ánh xanh mòng két
+	Cyan Glow	Ánh xanh lơ
+	Azure Glow	Ánh xanh da trời
+	Blue Glow	Ánh xanh dương
+	Violet Glow	Ánh tím
+	Magenta Glow	Ánh đỏ hồng
+	Polka Dots	Chấm bi
+	Vertical Stripes	Sọc dọc
+	Horizontal Stripes	Sọc ngang
+	Diagonal Stripes	Sọc chéo
+	Checkerboard	Bàn cờ
+	Diamonds	Hình thoi
+	Crosses	Chữ thập
+	Coarse Grit	Hạt thô
+	Stipple	Chấm điểm
+	Scratches	Vết xước
+	Sparse Flecks	Đốm thưa
+	Dense Flecks	Đốm dày
+	Sine Bands	Dải hình sin
+	Ripple Lines	Đường gợn sóng
+	Interference Rings	Vòng giao thoa
+	Offset Rings	Vòng lệch
+	Warped Checks	Ô vuông méo
+	Pinched Stripes	Sọc thắt
+	Chevron Pulse	Nhịp chữ V
+	Radiating Lenses	Thấu kính tỏa tia
+	Soft Shadow	Bóng mềm
+	Hard Shadow	Bóng cứng
+	Lifted Card	Thẻ nổi
+	Neon Tube	Ống neon
+	Inner Light	Ánh sáng bên trong
+	Feathered	Viền mềm
+	Haze	Mờ sương
+	Double Rule	Đường kẻ đôi
+	Triple Rule	Đường kẻ ba
+	Dashed Border	Viền nét đứt
+	Dotted Border	Viền chấm
+	Offset Keyline	Đường viền lệch
+	Inset Keyline	Đường viền trong
+	Outside Stroke	Nét ngoài
+	Pointer	Con trỏ
+	Highlighter	Bút dạ quang
+	Sketchy Line	Nét phác thảo
+	Scribble Fill	Tô nguệch ngoạc
+	Wobble	Chao đảo
+	Zig Zag Edge	Mép răng cưa
+	Wavy Edge	Mép lượn sóng
+	Puffy	Phồng
+	Starburst	Nổ sao
+	Glossy	Bóng loáng
+	Brushed Metal	Kim loại xước
+	Spotlight	Đèn chiếu
+	Sunset Band	Dải hoàng hôn
+	Sea Glass	Thủy tinh biển
+	Pearl	Ngọc trai
+	Chrome Rim	Vành crôm
+	Glow Orb	Quả cầu phát sáng
+	Pill Badge	Huy hiệu viên thuốc
+	Round Badge	Huy hiệu tròn
+	Flag Wave	Cờ bay
+	Bulge	Phình
+	Twisted	Xoắn
+	Echo	Tiếng vọng
+	Spiral Copies	Bản sao xoắn ốc
+	Multiply Tint	Sắc nhân
+	Darken Veil	Màn làm tối
+	Ghosted	Mờ ảo
+	Two Tone	Hai tông
+	Overlay Glaze	Men phủ lên
+	Screen Light	Ánh màn hình
+	Soft Light Wash	Loang ánh sáng mềm
+	Burst	Bùng nổ
+	Rounded Square	Hình vuông bo góc
+	Bar	Thanh
+	Hexagon	Lục giác
+	Spectrum	Quang phổ
+	Triangle	Tam giác
+	Vivid	Rực rỡ
 	Save Brush Library…	Lưu thư viện cọ…
 @msg	`{_1}` has no brushes to apply	`{_1}` không có cọ nào để áp dụng
 @msg	missing `library` (see brush.libraries)	thiếu `library` (xem brush.libraries)

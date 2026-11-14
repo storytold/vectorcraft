@@ -719,3 +719,37 @@ fn the_list_fills_a_tall_panel_above_its_footer() {
     let loose = list(None);
     assert!(loose.height() <= 220.5, "unsized, the list keeps its height: {loose:?}");
 }
+
+/// A built-in swatch library lists its swatches and color groups in the UI language, a numbered
+/// swatch with its number as it is, and Find matches the name shown and the swatch's own name. A
+/// click adds the swatch under its own name. A color value, and a User Defined or loaded
+/// library's names, are shown as they are.
+#[test]
+fn built_in_library_swatches_are_listed_in_the_ui_language() {
+    let mut app = app();
+    let ctx = context();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    app.run("window.swatchLibrary", json!({"library": "earth-tones"})).unwrap();
+    app.run("ui.libraryPanel", json!({"panel": shown(&app), "view": "smallList"})).unwrap();
+    let mut texts = vec![];
+    for time in [0.0, 0.25] {
+        let screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0)));
+        let mut out = ctx.run_ui(egui::RawInput { time: Some(time), screen_rect, ..Default::default() }, |ui| show_window(&mut app, ui.ctx()));
+        out.textures_delta.clear();
+        texts =
+            out.shapes.iter().filter_map(|c| if let egui::Shape::Text(t) = &c.shape { Some(t.galley.text().to_string()) } else { None }).collect();
+    }
+    assert!(texts.iter().any(|t| t == "Argile") && texts.iter().any(|t| t == "Argile 1"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Clay" || t == "Clay 1"), "{texts:?}");
+    let lib = SwatchLibraries::get(&app, "earth-tones").unwrap().1;
+    for query in ["argile 2", "clay 2"] {
+        let rows = SwatchLibraries::rows(&lib, "earth-tones", query);
+        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Clay", "Clay 2"], "{query}");
+    }
+    assert!(SwatchLibraries::rows(&lib, "loaded/1", "argile").is_empty(), "another library's swatch is matched by its own name only");
+    assert_eq!(SwatchLibraries::label("grays-neutrals", "K=35"), "K=35");
+    assert_eq!(SwatchLibraries::label("user/1", "Clay 3"), "Clay 3");
+    click(&mut app, &ctx, "Clay 1", Modifiers::NONE, 1.0);
+    assert!(app.session.doc().unwrap().doc.swatch("Clay 1").is_some(), "added under its own name");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+}

@@ -7,6 +7,7 @@
 //! on macOS) onto such a brush replaces its art. Brush libraries open in library panels
 //! ([`BrushLibraries`]).
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -654,8 +655,8 @@ impl LibraryKind for BrushLibraries {
     }
     /// A built-in library's brush in the UI language; a User Defined or loaded library's brush as
     /// it is named.
-    fn label<'a>(id: &str, name: &'a str) -> &'a str {
-        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id))
+    fn label<'a>(id: &str, name: &'a str) -> Cow<'a, str> {
+        super::label_or_name(name, brushlib::BUILTIN.iter().any(|b| b.id == id)).into()
     }
     /// The brush's stroke preview, drawn with the library's resources.
     fn draw(_: &VectorcraftApp, ui: &Ui, r: egui::Rect, b: &LibBrush, selected: bool, hovered: bool) {

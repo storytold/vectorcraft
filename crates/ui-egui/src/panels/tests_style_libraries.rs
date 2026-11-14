@@ -210,3 +210,31 @@ fn saving_to_a_file_and_opening_a_vcstyles_file() {
     assert_eq!(other.submenu, Some("Other Libraries"));
     assert_eq!(GraphicStyleLibraries::get(&app, &open.id).unwrap().1.len(), app.session.doc().unwrap().doc.graphic_styles.len());
 }
+
+/// A built-in library lists its styles in the UI language, and Find matches the name shown and the
+/// style's own name. A click applies the style under its own name. Another library's styles are
+/// matched by their own names only.
+#[test]
+fn built_in_library_styles_are_listed_in_the_ui_language() {
+    let mut app = app();
+    let ctx = context();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("fr").expect("fr registered"));
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 40})).unwrap();
+    app.run("window.graphicStyleLibrary", json!({"library": "shadows-glows"})).unwrap();
+    let panel = last_open(&app.ui).map(LibraryPanel::panel).unwrap_or_default();
+    app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
+    frame(&ctx, vec![], Modifiers::NONE, 0.0, |ui| library_panel::show_window(&mut app, ui.ctx()));
+    let texts = frame(&ctx, vec![], Modifiers::NONE, 0.25, |ui| library_panel::show_window(&mut app, ui.ctx()));
+    assert!(texts.iter().any(|t| t == "Ombre douce"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "Soft Shadow"), "{texts:?}");
+    let lib = GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1;
+    for query in ["ombre douce", "soft shadow"] {
+        let rows = GraphicStyleLibraries::rows(&lib, "shadows-glows", query);
+        assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Soft Shadow"], "{query}");
+    }
+    assert!(GraphicStyleLibraries::rows(&lib, "loaded/1", "ombre douce").is_empty(), "another library's style is matched by its own name only");
+    click(&mut app, &ctx, "Soft Shadow", Modifiers::NONE, 1.0);
+    let (g, _) = app.session.selection_graphic_style().expect("applied to the selection");
+    assert_eq!(g.name, "Soft Shadow");
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+}

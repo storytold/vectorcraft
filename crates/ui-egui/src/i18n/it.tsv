@@ -6430,6 +6430,245 @@ axis	Y Axis	Asse Y
 	Stars	Stelle
 	Triangles	Triangoli
 	Sparkles	Scintille
+	Warm Gray	Grigio caldo
+	Cool Gray	Grigio freddo
+	Neutrals	Neutri
+	Ivory	Avorio
+	Linen	Lino
+	Oat	Avena
+	Greige	Greige
+	Stone	Pietra
+	Taupe	Tortora
+	Slate	Ardesia
+	Clay	Argilla
+	Terracotta	Terracotta
+	Ochre	Ocra
+	Umber	Terra d'ombra
+	Sand	Sabbia
+	Olive	Oliva
+	Moss	Muschio
+	Rosy	Rosato
+	Neutral	Neutro
+	Golden	Dorato
+	Pastel	Pastello
+	Pastel Red	Rosso pastello
+	Pastel Orange	Arancione pastello
+	Pastel Amber	Ambra pastello
+	Pastel Yellow	Giallo pastello
+	Pastel Lime	Lime pastello
+	Pastel Green	Verde pastello
+	Pastel Teal	Verde acqua pastello
+	Pastel Cyan	Ciano pastello
+	Pastel Azure	Azzurro pastello
+	Pastel Blue	Blu pastello
+	Pastel Violet	Viola pastello
+	Pastel Magenta	Magenta pastello
+	Soft Red	Rosso tenue
+	Soft Orange	Arancione tenue
+	Soft Amber	Ambra tenue
+	Soft Yellow	Giallo tenue
+	Soft Lime	Lime tenue
+	Soft Green	Verde tenue
+	Soft Teal	Verde acqua tenue
+	Soft Cyan	Ciano tenue
+	Soft Azure	Azzurro tenue
+	Soft Blue	Blu tenue
+	Soft Violet	Viola tenue
+	Soft Magenta	Magenta tenue
+	Vivid Red	Rosso vivo
+	Vivid Orange	Arancione vivo
+	Vivid Amber	Ambra vivo
+	Vivid Yellow	Giallo vivo
+	Vivid Lime	Lime vivo
+	Vivid Green	Verde vivo
+	Vivid Teal	Verde acqua vivo
+	Vivid Cyan	Ciano vivo
+	Vivid Azure	Azzurro vivo
+	Vivid Blue	Blu vivo
+	Vivid Violet	Viola vivo
+	Vivid Magenta	Magenta vivo
+	Deep	Scuri
+	Deep Red	Rosso scuro
+	Deep Orange	Arancione scuro
+	Deep Amber	Ambra scuro
+	Deep Yellow	Giallo scuro
+	Deep Lime	Lime scuro
+	Deep Green	Verde scuro
+	Deep Teal	Verde acqua scuro
+	Deep Cyan	Ciano scuro
+	Deep Azure	Azzurro scuro
+	Deep Blue	Blu scuro
+	Deep Violet	Viola scuro
+	Deep Magenta	Magenta scuro
+	Gold	Oro
+	Silver	Argento
+	Bronze	Bronzo
+	Copper	Rame
+	Brass	Ottone
+	Rose Gold	Oro rosa
+	Gunmetal	Canna di fucile
+	Platinum	Platino
+	Pewter	Peltro
+	Ember	Brace
+	Lagoon	Laguna
+	Dusk	Crepuscolo
+	Clay to Teal	Argilla a verde acqua
+	Plum to Olive	Prugna a oliva
+	Complementary Coral	Corallo complementare
+	Split Complementary Coral	Corallo complementare diviso
+	Analogous Coral	Corallo analogo
+	Triad Coral	Corallo in triade
+	Tetrad Coral	Corallo in tetrade
+	Pentagram Coral	Corallo in pentagramma
+	Complementary Teal	Verde acqua complementare
+	Split Complementary Teal	Verde acqua complementare diviso
+	Analogous Teal	Verde acqua analogo
+	Triad Teal	Verde acqua in triade
+	Tetrad Teal	Verde acqua in tetrade
+	Pentagram Teal	Verde acqua in pentagramma
+	Soft Spectrum	Spettro tenue
+	Red to Amber	Da rosso ad ambra
+	Orange to Yellow	Da arancione a giallo
+	Amber to Lime	Da ambra a lime
+	Yellow to Green	Da giallo a verde
+	Lime to Teal	Da lime a verde acqua
+	Green to Cyan	Da verde a ciano
+	Teal to Azure	Da verde acqua ad azzurro
+	Cyan to Blue	Da ciano a blu
+	Azure to Violet	Da azzurro a viola
+	Blue to Magenta	Da blu a magenta
+	Violet to Red	Da viola a rosso
+	Magenta to Orange	Da magenta ad arancione
+	Dawn	Alba
+	Noon	Mezzogiorno
+	Sunset	Tramonto
+	Night	Notte
+	Overcast	Nuvoloso
+	White to Black	Da bianco a nero
+	Light Grays	Grigi chiari
+	Dark Grays	Grigi scuri
+	Warm Grays	Grigi caldi
+	Cool Grays	Grigi freddi
+	Fade to Transparent	Dissolvenza a trasparente
+	White Fade	Dissolvenza bianca
+	Vignette	Vignettatura
+	Mist	Foschia
+	Petal	Petalo
+	Fern	Felce
+	Smoke	Fumo
+	Honey	Miele
+	Seafoam	Schiuma di mare
+	Lavender	Lavanda
+	Driftwood	Legno di mare
+	Ink Wash	Acquerello a inchiostro
+	Tide	Marea
+	Bloom	Fioritura
+	Dew	Rugiada
+	Pollen	Polline
+	Lichen	Lichene
+	Prism Veil	Velo prismatico
+	Opal Ribbon	Nastro opale
+	Pearl Flash	Lampo perlato
+	Aurora Foil	Lamina aurora
+	Iris Sheen	Riflesso iride
+	Frost Spectrum	Spettro brinato
+	Silver Tide	Marea argentata
+	Rose Quartz Gleam	Bagliore quarzo rosa
+	Moonstone Shift	Riflesso pietra di luna
+	Violet Edge	Bordo viola
+	Mint Halo	Alone menta
+	Amber Corona	Corona ambrata
+	Polar Glint	Luccichio polare
+	Pastel Orbit	Orbita pastello
+	Coral and Navy	Corallo e blu navy
+	Plum and Lime	Prugna e lime
+	Teal and Gold	Verde acqua e oro
+	Indigo and Peach	Indaco e pesca
+	Forest and Rose	Foresta e rosa
+	Red Glow	Bagliore rosso
+	Orange Glow	Bagliore arancione
+	Amber Glow	Bagliore ambra
+	Yellow Glow	Bagliore giallo
+	Lime Glow	Bagliore lime
+	Green Glow	Bagliore verde
+	Teal Glow	Bagliore verde acqua
+	Cyan Glow	Bagliore ciano
+	Azure Glow	Bagliore azzurro
+	Blue Glow	Bagliore blu
+	Violet Glow	Bagliore viola
+	Magenta Glow	Bagliore magenta
+	Polka Dots	Pois
+	Vertical Stripes	Righe verticali
+	Horizontal Stripes	Righe orizzontali
+	Diagonal Stripes	Righe diagonali
+	Checkerboard	Scacchiera
+	Diamonds	Rombi
+	Crosses	Croci
+	Coarse Grit	Grana grossa
+	Stipple	Puntinato
+	Scratches	Graffi
+	Sparse Flecks	Macchioline rade
+	Dense Flecks	Macchioline fitte
+	Sine Bands	Bande sinusoidali
+	Ripple Lines	Linee increspate
+	Interference Rings	Anelli di interferenza
+	Offset Rings	Anelli sfalsati
+	Warped Checks	Quadretti deformati
+	Pinched Stripes	Righe strozzate
+	Chevron Pulse	Impulso a chevron
+	Radiating Lenses	Lenti radianti
+	Soft Shadow	Ombra morbida
+	Hard Shadow	Ombra netta
+	Lifted Card	Scheda sollevata
+	Neon Tube	Tubo al neon
+	Inner Light	Luce interna
+	Feathered	Sfumato
+	Haze	Velatura
+	Double Rule	Filetto doppio
+	Triple Rule	Filetto triplo
+	Dashed Border	Bordo tratteggiato
+	Dotted Border	Bordo punteggiato
+	Offset Keyline	Filetto sfalsato
+	Inset Keyline	Filetto interno
+	Outside Stroke	Traccia esterna
+	Pointer	Puntatore
+	Highlighter	Evidenziatore
+	Sketchy Line	Linea abbozzata
+	Scribble Fill	Riempimento scarabocchiato
+	Wobble	Tremolio
+	Zig Zag Edge	Bordo a zigzag
+	Wavy Edge	Bordo ondulato
+	Puffy	Gonfio
+	Starburst	Esplosione stellare
+	Glossy	Lucido
+	Brushed Metal	Metallo spazzolato
+	Spotlight	Riflettore
+	Sunset Band	Fascia tramonto
+	Sea Glass	Vetro di mare
+	Pearl	Perla
+	Chrome Rim	Bordo cromato
+	Glow Orb	Sfera luminosa
+	Pill Badge	Badge a pillola
+	Round Badge	Badge rotondo
+	Flag Wave	Bandiera ondeggiante
+	Bulge	Rigonfiamento
+	Twisted	Ritorto
+	Echo	Eco
+	Spiral Copies	Copie a spirale
+	Multiply Tint	Tinta moltiplica
+	Darken Veil	Velo scurisci
+	Ghosted	Fantasma
+	Two Tone	Bicolore
+	Overlay Glaze	Velatura sovrapponi
+	Screen Light	Luce schermo
+	Soft Light Wash	Acquerello luce soffusa
+	Burst	Esplosione
+	Rounded Square	Quadrato arrotondato
+	Bar	Barra
+	Hexagon	Esagono
+	Spectrum	Spettro
+	Triangle	Triangolo
+	Vivid	Vivi
 	Save Brush Library…	Salva libreria pennelli…
 @msg	`{_1}` has no brushes to apply	`{_1}` non ha pennelli da applicare
 @msg	missing `library` (see brush.libraries)	manca `library` (vedi brush.libraries)

@@ -3979,6 +3979,240 @@ digits	Malayalam	Malaiàlam
 	Stars	Estrelles
 	Triangles	Triangles
 	Sparkles	Espurnes
+	Warm Gray	Gris càlid
+	Cool Gray	Gris fred
+	Neutrals	Neutres
+	Ivory	Ivori
+	Linen	Lli
+	Oat	Civada
+	Greige	Greige
+	Stone	Pedra
+	Taupe	Talp
+	Slate	Pissarra
+	Clay	Argila
+	Terracotta	Terracota
+	Ochre	Ocre
+	Umber	Ombra
+	Sand	Sorra
+	Olive	Oliva
+	Moss	Molsa
+	Rosy	Rosat
+	Neutral	Neutre
+	Golden	Daurat
+	Pastel	Pastel
+	Pastel Red	Vermell pastel
+	Pastel Orange	Taronja pastel
+	Pastel Amber	Ambre pastel
+	Pastel Yellow	Groc pastel
+	Pastel Lime	Llima pastel
+	Pastel Green	Verd pastel
+	Pastel Teal	Verd blavós pastel
+	Pastel Cyan	Cian pastel
+	Pastel Azure	Atzur pastel
+	Pastel Blue	Blau pastel
+	Pastel Violet	Violeta pastel
+	Pastel Magenta	Magenta pastel
+	Soft Red	Vermell suau
+	Soft Orange	Taronja suau
+	Soft Amber	Ambre suau
+	Soft Yellow	Groc suau
+	Soft Lime	Llima suau
+	Soft Green	Verd suau
+	Soft Teal	Verd blavós suau
+	Soft Cyan	Cian suau
+	Soft Azure	Atzur suau
+	Soft Blue	Blau suau
+	Soft Violet	Violeta suau
+	Soft Magenta	Magenta suau
+	Vivid Red	Vermell viu
+	Vivid Orange	Taronja viu
+	Vivid Amber	Ambre viu
+	Vivid Yellow	Groc viu
+	Vivid Lime	Llima viu
+	Vivid Green	Verd viu
+	Vivid Teal	Verd blavós viu
+	Vivid Cyan	Cian viu
+	Vivid Azure	Atzur viu
+	Vivid Blue	Blau viu
+	Vivid Violet	Violeta viu
+	Vivid Magenta	Magenta viu
+	Deep	Foscos
+	Deep Red	Vermell fosc
+	Deep Orange	Taronja fosc
+	Deep Amber	Ambre fosc
+	Deep Yellow	Groc fosc
+	Deep Lime	Llima fosc
+	Deep Green	Verd fosc
+	Deep Teal	Verd blavós fosc
+	Deep Cyan	Cian fosc
+	Deep Azure	Atzur fosc
+	Deep Blue	Blau fosc
+	Deep Violet	Violeta fosc
+	Deep Magenta	Magenta fosc
+	Gold	Or
+	Silver	Plata
+	Bronze	Bronze
+	Copper	Coure
+	Brass	Llautó
+	Rose Gold	Or rosa
+	Gunmetal	Gris metall
+	Platinum	Platí
+	Pewter	Peltre
+	Ember	Brasa
+	Lagoon	Llacuna
+	Dusk	Capvespre
+	Clay to Teal	Argila a verd blavós
+	Plum to Olive	Pruna a oliva
+	Complementary Coral	Corall complementari
+	Split Complementary Coral	Corall complementari dividit
+	Analogous Coral	Corall anàleg
+	Triad Coral	Corall en tríada
+	Tetrad Coral	Corall en tètrada
+	Pentagram Coral	Corall en pentagrama
+	Complementary Teal	Verd blavós complementari
+	Split Complementary Teal	Verd blavós complementari dividit
+	Analogous Teal	Verd blavós anàleg
+	Triad Teal	Verd blavós en tríada
+	Tetrad Teal	Verd blavós en tètrada
+	Pentagram Teal	Verd blavós en pentagrama
+	Soft Spectrum	Espectre suau
+	Red to Amber	Vermell a ambre
+	Orange to Yellow	Taronja a groc
+	Amber to Lime	Ambre a llima
+	Yellow to Green	Groc a verd
+	Lime to Teal	Llima a verd blavós
+	Green to Cyan	Verd a cian
+	Teal to Azure	Verd blavós a atzur
+	Cyan to Blue	Cian a blau
+	Azure to Violet	Atzur a violeta
+	Blue to Magenta	Blau a magenta
+	Violet to Red	Violeta a vermell
+	Magenta to Orange	Magenta a taronja
+	Dawn	Alba
+	Noon	Migdia
+	Sunset	Posta de sol
+	Night	Nit
+	Overcast	Ennuvolat
+	White to Black	Blanc a negre
+	Light Grays	Grisos clars
+	Dark Grays	Grisos foscos
+	Warm Grays	Grisos càlids
+	Cool Grays	Grisos freds
+	Fade to Transparent	Esvaïment a transparent
+	White Fade	Esvaïment blanc
+	Vignette	Vinyeta
+	Mist	Boira
+	Petal	Pètal
+	Fern	Falguera
+	Smoke	Fum
+	Honey	Mel
+	Seafoam	Escuma de mar
+	Lavender	Espígol
+	Driftwood	Fusta de deriva
+	Ink Wash	Aiguada de tinta
+	Tide	Marea
+	Bloom	Floració
+	Dew	Rosada
+	Pollen	Pol·len
+	Lichen	Liquen
+	Prism Veil	Vel prismàtic
+	Opal Ribbon	Cinta d’òpal
+	Pearl Flash	Llampec nacrat
+	Aurora Foil	Làmina aurora
+	Iris Sheen	Lluentor iris
+	Frost Spectrum	Espectre gebrat
+	Silver Tide	Marea platejada
+	Rose Quartz Gleam	Resplendor de quars rosa
+	Moonstone Shift	Reflex de pedra de lluna
+	Violet Edge	Vora violeta
+	Mint Halo	Halo menta
+	Amber Corona	Corona ambre
+	Polar Glint	Espurneig polar
+	Pastel Orbit	Òrbita pastel
+	Coral and Navy	Corall i blau marí
+	Plum and Lime	Pruna i llima
+	Teal and Gold	Verd blavós i or
+	Indigo and Peach	Indi i préssec
+	Forest and Rose	Bosc i rosa
+	Red Glow	Resplendor vermella
+	Orange Glow	Resplendor taronja
+	Amber Glow	Resplendor ambre
+	Yellow Glow	Resplendor groga
+	Lime Glow	Resplendor llima
+	Green Glow	Resplendor verda
+	Teal Glow	Resplendor verd blavós
+	Cyan Glow	Resplendor cian
+	Azure Glow	Resplendor atzur
+	Blue Glow	Resplendor blava
+	Violet Glow	Resplendor violeta
+	Magenta Glow	Resplendor magenta
+	Polka Dots	Pics
+	Vertical Stripes	Ratlles verticals
+	Horizontal Stripes	Ratlles horitzontals
+	Diagonal Stripes	Ratlles diagonals
+	Checkerboard	Escaquer
+	Diamonds	Rombes
+	Crosses	Creus
+	Coarse Grit	Gra gruixut
+	Stipple	Puntejat
+	Scratches	Ratllades
+	Sparse Flecks	Taques disperses
+	Dense Flecks	Taques denses
+	Sine Bands	Bandes sinusoidals
+	Ripple Lines	Línies ondulades
+	Interference Rings	Anells d’interferència
+	Offset Rings	Anells desplaçats
+	Warped Checks	Quadres deformats
+	Pinched Stripes	Ratlles pinçades
+	Chevron Pulse	Pols de galons
+	Radiating Lenses	Lents radiants
+	Soft Shadow	Ombra suau
+	Hard Shadow	Ombra dura
+	Lifted Card	Targeta elevada
+	Neon Tube	Tub de neó
+	Inner Light	Llum interior
+	Feathered	Difuminat
+	Haze	Calitja
+	Double Rule	Filet doble
+	Triple Rule	Filet triple
+	Dashed Border	Vora discontínua
+	Dotted Border	Vora puntejada
+	Offset Keyline	Filet desplaçat
+	Inset Keyline	Filet interior
+	Outside Stroke	Traç exterior
+	Pointer	Punter
+	Highlighter	Retolador
+	Sketchy Line	Línia esbossada
+	Scribble Fill	Emplenament gargotejat
+	Wobble	Tremolós
+	Zig Zag Edge	Vora en ziga-zaga
+	Wavy Edge	Vora ondulada
+	Puffy	Inflat
+	Starburst	Esclat estel·lar
+	Glossy	Brillant
+	Brushed Metal	Metall raspallat
+	Spotlight	Focus
+	Sunset Band	Banda de posta de sol
+	Sea Glass	Vidre de mar
+	Pearl	Perla
+	Chrome Rim	Vora cromada
+	Glow Orb	Orbe lluminós
+	Pill Badge	Insígnia de càpsula
+	Round Badge	Insígnia rodona
+	Flag Wave	Bandera onejant
+	Bulge	Bombament
+	Twisted	Recargolat
+	Echo	Eco
+	Spiral Copies	Còpies en espiral
+	Multiply Tint	Tint multiplica
+	Darken Veil	Vel enfosqueix
+	Ghosted	Fantasma
+	Two Tone	Bicolor
+	Overlay Glaze	Veladura superposició
+	Screen Light	Llum pantalla
+	Soft Light Wash	Aiguada llum suau
+	Burst	Esclat
+	Rounded Square	Quadrat arrodonit
 	Scatter:	Dispersió:
 	Scissors	Tisores
 	Scissors Tool	Eina de tisores

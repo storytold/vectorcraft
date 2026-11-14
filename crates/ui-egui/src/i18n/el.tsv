@@ -6756,6 +6756,240 @@ axis	Y Axis	Άξονας Y
 	Stars	Αστέρια
 	Triangles	Τρίγωνα
 	Sparkles	Σπίθες
+	Warm Gray	Θερμό γκρι
+	Cool Gray	Ψυχρό γκρι
+	Neutrals	Ουδέτερα
+	Ivory	Ελεφαντόδοντο
+	Linen	Λινό
+	Oat	Βρόμη
+	Greige	Γκρεζ
+	Stone	Πέτρα
+	Taupe	Γκριζοκαφέ
+	Slate	Σχιστόλιθος
+	Clay	Πηλός
+	Terracotta	Τερακότα
+	Ochre	Ώχρα
+	Umber	Σκιά
+	Sand	Άμμος
+	Olive	Λαδί
+	Moss	Βρύα
+	Rosy	Ροδαλό
+	Neutral	Ουδέτερο
+	Golden	Χρυσαφί
+	Pastel	Παστέλ
+	Pastel Red	Παστέλ κόκκινο
+	Pastel Orange	Παστέλ πορτοκαλί
+	Pastel Amber	Παστέλ κεχριμπαρί
+	Pastel Yellow	Παστέλ κίτρινο
+	Pastel Lime	Παστέλ λάιμ
+	Pastel Green	Παστέλ πράσινο
+	Pastel Teal	Παστέλ γαλαζοπράσινο
+	Pastel Cyan	Παστέλ κυανό
+	Pastel Azure	Παστέλ γαλάζιο
+	Pastel Blue	Παστέλ μπλε
+	Pastel Violet	Παστέλ βιολετί
+	Pastel Magenta	Παστέλ ματζέντα
+	Soft Red	Απαλό κόκκινο
+	Soft Orange	Απαλό πορτοκαλί
+	Soft Amber	Απαλό κεχριμπαρί
+	Soft Yellow	Απαλό κίτρινο
+	Soft Lime	Απαλό λάιμ
+	Soft Green	Απαλό πράσινο
+	Soft Teal	Απαλό γαλαζοπράσινο
+	Soft Cyan	Απαλό κυανό
+	Soft Azure	Απαλό γαλάζιο
+	Soft Blue	Απαλό μπλε
+	Soft Violet	Απαλό βιολετί
+	Soft Magenta	Απαλό ματζέντα
+	Vivid Red	Έντονο κόκκινο
+	Vivid Orange	Έντονο πορτοκαλί
+	Vivid Amber	Έντονο κεχριμπαρί
+	Vivid Yellow	Έντονο κίτρινο
+	Vivid Lime	Έντονο λάιμ
+	Vivid Green	Έντονο πράσινο
+	Vivid Teal	Έντονο γαλαζοπράσινο
+	Vivid Cyan	Έντονο κυανό
+	Vivid Azure	Έντονο γαλάζιο
+	Vivid Blue	Έντονο μπλε
+	Vivid Violet	Έντονο βιολετί
+	Vivid Magenta	Έντονο ματζέντα
+	Deep	Βαθιά
+	Deep Red	Βαθύ κόκκινο
+	Deep Orange	Βαθύ πορτοκαλί
+	Deep Amber	Βαθύ κεχριμπαρί
+	Deep Yellow	Βαθύ κίτρινο
+	Deep Lime	Βαθύ λάιμ
+	Deep Green	Βαθύ πράσινο
+	Deep Teal	Βαθύ γαλαζοπράσινο
+	Deep Cyan	Βαθύ κυανό
+	Deep Azure	Βαθύ γαλάζιο
+	Deep Blue	Βαθύ μπλε
+	Deep Violet	Βαθύ βιολετί
+	Deep Magenta	Βαθύ ματζέντα
+	Gold	Χρυσό
+	Silver	Ασημί
+	Bronze	Μπρούντζος
+	Copper	Χαλκός
+	Brass	Ορείχαλκος
+	Rose Gold	Ροζ χρυσό
+	Gunmetal	Ατσαλί
+	Platinum	Πλατίνα
+	Pewter	Κασσίτερος
+	Ember	Θράκα
+	Lagoon	Λιμνοθάλασσα
+	Dusk	Σούρουπο
+	Clay to Teal	Από πηλό σε γαλαζοπράσινο
+	Plum to Olive	Από δαμασκηνί σε λαδί
+	Complementary Coral	Κοραλλί, συμπληρωματικά
+	Split Complementary Coral	Κοραλλί, διαίρεση συμπληρωματικών
+	Analogous Coral	Κοραλλί, ανάλογα
+	Triad Coral	Κοραλλί, τριάδα
+	Tetrad Coral	Κοραλλί, τετράδα
+	Pentagram Coral	Κοραλλί, πεντάγραμμο
+	Complementary Teal	Γαλαζοπράσινο, συμπληρωματικά
+	Split Complementary Teal	Γαλαζοπράσινο, διαίρεση συμπληρωματικών
+	Analogous Teal	Γαλαζοπράσινο, ανάλογα
+	Triad Teal	Γαλαζοπράσινο, τριάδα
+	Tetrad Teal	Γαλαζοπράσινο, τετράδα
+	Pentagram Teal	Γαλαζοπράσινο, πεντάγραμμο
+	Soft Spectrum	Απαλό φάσμα
+	Red to Amber	Από κόκκινο σε κεχριμπαρί
+	Orange to Yellow	Από πορτοκαλί σε κίτρινο
+	Amber to Lime	Από κεχριμπαρί σε λάιμ
+	Yellow to Green	Από κίτρινο σε πράσινο
+	Lime to Teal	Από λάιμ σε γαλαζοπράσινο
+	Green to Cyan	Από πράσινο σε κυανό
+	Teal to Azure	Από γαλαζοπράσινο σε γαλάζιο
+	Cyan to Blue	Από κυανό σε μπλε
+	Azure to Violet	Από γαλάζιο σε βιολετί
+	Blue to Magenta	Από μπλε σε ματζέντα
+	Violet to Red	Από βιολετί σε κόκκινο
+	Magenta to Orange	Από ματζέντα σε πορτοκαλί
+	Dawn	Αυγή
+	Noon	Μεσημέρι
+	Sunset	Ηλιοβασίλεμα
+	Night	Νύχτα
+	Overcast	Συννεφιά
+	White to Black	Από λευκό σε μαύρο
+	Light Grays	Ανοιχτά γκρι
+	Dark Grays	Σκούρα γκρι
+	Warm Grays	Θερμά γκρι
+	Cool Grays	Ψυχρά γκρι
+	Fade to Transparent	Σβήσιμο σε διαφανές
+	White Fade	Λευκό σβήσιμο
+	Vignette	Βινιέτα
+	Mist	Ομίχλη
+	Petal	Πέταλο
+	Fern	Φτέρη
+	Smoke	Καπνός
+	Honey	Μέλι
+	Seafoam	Αφρός θάλασσας
+	Lavender	Λεβάντα
+	Driftwood	Ξύλο θάλασσας
+	Ink Wash	Αραιωμένο μελάνι
+	Tide	Παλίρροια
+	Bloom	Άνθιση
+	Dew	Δροσιά
+	Pollen	Γύρη
+	Lichen	Λειχήνα
+	Prism Veil	Πέπλο πρίσματος
+	Opal Ribbon	Κορδέλα οπαλίου
+	Pearl Flash	Μαργαριταρένια λάμψη
+	Aurora Foil	Φύλλο σέλαος
+	Iris Sheen	Ιριδίζουσα γυαλάδα
+	Frost Spectrum	Παγωμένο φάσμα
+	Silver Tide	Ασημένια παλίρροια
+	Rose Quartz Gleam	Λάμψη ροζ χαλαζία
+	Moonstone Shift	Ανταύγεια σεληνόπετρας
+	Violet Edge	Βιολετί άκρη
+	Mint Halo	Άλως μέντας
+	Amber Corona	Κεχριμπαρένιο στέμμα
+	Polar Glint	Πολική αναλαμπή
+	Pastel Orbit	Παστέλ τροχιά
+	Coral and Navy	Κοραλλί και ναυτικό μπλε
+	Plum and Lime	Δαμασκηνί και λάιμ
+	Teal and Gold	Γαλαζοπράσινο και χρυσό
+	Indigo and Peach	Λουλακί και ροδακινί
+	Forest and Rose	Δάσος και τριαντάφυλλο
+	Red Glow	Κόκκινη λάμψη
+	Orange Glow	Πορτοκαλί λάμψη
+	Amber Glow	Κεχριμπαρένια λάμψη
+	Yellow Glow	Κίτρινη λάμψη
+	Lime Glow	Λάμψη λάιμ
+	Green Glow	Πράσινη λάμψη
+	Teal Glow	Γαλαζοπράσινη λάμψη
+	Cyan Glow	Κυανή λάμψη
+	Azure Glow	Γαλάζια λάμψη
+	Blue Glow	Μπλε λάμψη
+	Violet Glow	Βιολετί λάμψη
+	Magenta Glow	Λάμψη ματζέντα
+	Polka Dots	Πουά
+	Vertical Stripes	Κάθετες ρίγες
+	Horizontal Stripes	Οριζόντιες ρίγες
+	Diagonal Stripes	Διαγώνιες ρίγες
+	Checkerboard	Σκακιέρα
+	Diamonds	Ρόμβοι
+	Crosses	Σταυροί
+	Coarse Grit	Χοντρός κόκκος
+	Stipple	Στικτό
+	Scratches	Γρατσουνιές
+	Sparse Flecks	Αραιές κηλίδες
+	Dense Flecks	Πυκνές κηλίδες
+	Sine Bands	Ημιτονοειδείς ζώνες
+	Ripple Lines	Γραμμές κυματισμού
+	Interference Rings	Δακτύλιοι συμβολής
+	Offset Rings	Μετατοπισμένοι δακτύλιοι
+	Warped Checks	Παραμορφωμένο καρό
+	Pinched Stripes	Στενεμένες ρίγες
+	Chevron Pulse	Παλμός σεβρόν
+	Radiating Lenses	Ακτινωτοί φακοί
+	Soft Shadow	Απαλή σκιά
+	Hard Shadow	Σκληρή σκιά
+	Lifted Card	Ανυψωμένη κάρτα
+	Neon Tube	Σωλήνας νέον
+	Inner Light	Εσωτερικό φως
+	Feathered	Απαλές άκρες
+	Haze	Θολούρα
+	Double Rule	Διπλή γραμμή
+	Triple Rule	Τριπλή γραμμή
+	Dashed Border	Διακεκομμένο περίγραμμα
+	Dotted Border	Περίγραμμα με τελείες
+	Offset Keyline	Μετατοπισμένη γραμμή περιγράμματος
+	Inset Keyline	Εσωτερική γραμμή περιγράμματος
+	Outside Stroke	Εξωτερική πινελιά
+	Pointer	Δείκτης
+	Highlighter	Μαρκαδόρος υπογράμμισης
+	Sketchy Line	Γραμμή σκίτσου
+	Scribble Fill	Γέμισμα με μουτζούρες
+	Wobble	Τρεμούλιασμα
+	Zig Zag Edge	Ζιγκζάγκ άκρη
+	Wavy Edge	Κυματιστή άκρη
+	Puffy	Φουσκωτό
+	Starburst	Έκρηξη αστεριού
+	Glossy	Γυαλιστερό
+	Brushed Metal	Βουρτσισμένο μέταλλο
+	Spotlight	Προβολέας
+	Sunset Band	Ζώνη ηλιοβασιλέματος
+	Sea Glass	Γυαλί θάλασσας
+	Pearl	Μαργαριτάρι
+	Chrome Rim	Χρωμιωμένο χείλος
+	Glow Orb	Φωτεινή σφαίρα
+	Pill Badge	Σήμα κάψουλα
+	Round Badge	Στρογγυλό σήμα
+	Flag Wave	Κυματιστή σημαία
+	Bulge	Διόγκωση
+	Twisted	Στριμμένο
+	Echo	Ηχώ
+	Spiral Copies	Αντίγραφα σε σπείρα
+	Multiply Tint	Απόχρωση πολλαπλασιασμού
+	Darken Veil	Πέπλο σκοτεινιάσματος
+	Ghosted	Φαντασματικό
+	Two Tone	Δίχρωμο
+	Overlay Glaze	Βερνίκι επικάλυψης
+	Screen Light	Φως αρνητικού πολλαπλασιασμού
+	Soft Light Wash	Αραίωση απαλού φωτός
+	Burst	Έκρηξη
+	Rounded Square	Στρογγυλεμένο τετράγωνο
 	Save Brush Library…	Αποθήκευση βιβλιοθήκης πινέλων…
 @msg	`{_1}` has no brushes to apply	Η `{_1}` δεν έχει πινέλα για εφαρμογή
 @msg	missing `library` (see brush.libraries)	λείπει το `library` (δείτε brush.libraries)

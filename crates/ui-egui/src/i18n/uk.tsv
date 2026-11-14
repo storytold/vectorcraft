@@ -6410,6 +6410,245 @@ axis	Y Axis	Вісь Y
 	Stars	Зірки
 	Triangles	Трикутники
 	Sparkles	Іскри
+	Warm Gray	Теплий сірий
+	Cool Gray	Холодний сірий
+	Neutrals	Нейтральні
+	Ivory	Слонова кістка
+	Linen	Льон
+	Oat	Овес
+	Greige	Грейж
+	Stone	Камінь
+	Taupe	Сіро-коричневий
+	Slate	Сланець
+	Clay	Глина
+	Terracotta	Теракота
+	Ochre	Охра
+	Umber	Умбра
+	Sand	Пісок
+	Olive	Оливковий
+	Moss	Мох
+	Rosy	Рожевуватий
+	Neutral	Нейтральний
+	Golden	Золотистий
+	Pastel	Пастельні
+	Pastel Red	Пастельний червоний
+	Pastel Orange	Пастельний помаранчевий
+	Pastel Amber	Пастельний бурштиновий
+	Pastel Yellow	Пастельний жовтий
+	Pastel Lime	Пастельний лаймовий
+	Pastel Green	Пастельний зелений
+	Pastel Teal	Пастельний синьо-зелений
+	Pastel Cyan	Пастельний блакитний
+	Pastel Azure	Пастельний лазуровий
+	Pastel Blue	Пастельний синій
+	Pastel Violet	Пастельний фіолетовий
+	Pastel Magenta	Пастельний пурпурний
+	Soft Red	М’який червоний
+	Soft Orange	М’який помаранчевий
+	Soft Amber	М’який бурштиновий
+	Soft Yellow	М’який жовтий
+	Soft Lime	М’який лаймовий
+	Soft Green	М’який зелений
+	Soft Teal	М’який синьо-зелений
+	Soft Cyan	М’який блакитний
+	Soft Azure	М’який лазуровий
+	Soft Blue	М’який синій
+	Soft Violet	М’який фіолетовий
+	Soft Magenta	М’який пурпурний
+	Vivid Red	Яскравий червоний
+	Vivid Orange	Яскравий помаранчевий
+	Vivid Amber	Яскравий бурштиновий
+	Vivid Yellow	Яскравий жовтий
+	Vivid Lime	Яскравий лаймовий
+	Vivid Green	Яскравий зелений
+	Vivid Teal	Яскравий синьо-зелений
+	Vivid Cyan	Яскравий блакитний
+	Vivid Azure	Яскравий лазуровий
+	Vivid Blue	Яскравий синій
+	Vivid Violet	Яскравий фіолетовий
+	Vivid Magenta	Яскравий пурпурний
+	Deep	Глибокі
+	Deep Red	Темно-червоний
+	Deep Orange	Темно-помаранчевий
+	Deep Amber	Темно-бурштиновий
+	Deep Yellow	Темно-жовтий
+	Deep Lime	Темно-лаймовий
+	Deep Green	Темно-зелений
+	Deep Teal	Темний синьо-зелений
+	Deep Cyan	Темно-блакитний
+	Deep Azure	Темно-лазуровий
+	Deep Blue	Темно-синій
+	Deep Violet	Темно-фіолетовий
+	Deep Magenta	Темно-пурпурний
+	Gold	Золото
+	Silver	Срібло
+	Bronze	Бронза
+	Copper	Мідь
+	Brass	Латунь
+	Rose Gold	Рожеве золото
+	Gunmetal	Збройовий метал
+	Platinum	Платина
+	Pewter	Олово
+	Ember	Жар
+	Lagoon	Лагуна
+	Dusk	Сутінки
+	Clay to Teal	Від глини до синьо-зеленого
+	Plum to Olive	Від сливового до оливкового
+	Complementary Coral	Кораловий, доповняльна
+	Split Complementary Coral	Кораловий, розщеплена доповняльна
+	Analogous Coral	Кораловий, аналогова
+	Triad Coral	Кораловий, тріада
+	Tetrad Coral	Кораловий, тетрада
+	Pentagram Coral	Кораловий, пентаграма
+	Complementary Teal	Синьо-зелений, доповняльна
+	Split Complementary Teal	Синьо-зелений, розщеплена доповняльна
+	Analogous Teal	Синьо-зелений, аналогова
+	Triad Teal	Синьо-зелений, тріада
+	Tetrad Teal	Синьо-зелений, тетрада
+	Pentagram Teal	Синьо-зелений, пентаграма
+	Soft Spectrum	М’який спектр
+	Red to Amber	Від червоного до бурштинового
+	Orange to Yellow	Від помаранчевого до жовтого
+	Amber to Lime	Від бурштинового до лаймового
+	Yellow to Green	Від жовтого до зеленого
+	Lime to Teal	Від лаймового до синьо-зеленого
+	Green to Cyan	Від зеленого до блакитного
+	Teal to Azure	Від синьо-зеленого до лазурового
+	Cyan to Blue	Від блакитного до синього
+	Azure to Violet	Від лазурового до фіолетового
+	Blue to Magenta	Від синього до пурпурного
+	Violet to Red	Від фіолетового до червоного
+	Magenta to Orange	Від пурпурного до помаранчевого
+	Dawn	Світанок
+	Noon	Полудень
+	Sunset	Захід сонця
+	Night	Ніч
+	Overcast	Похмуро
+	White to Black	Від білого до чорного
+	Light Grays	Світло-сірі
+	Dark Grays	Темно-сірі
+	Warm Grays	Теплі сірі
+	Cool Grays	Холодні сірі
+	Fade to Transparent	Перехід у прозорість
+	White Fade	Білий перехід
+	Vignette	Віньєтка
+	Mist	Серпанок
+	Petal	Пелюстка
+	Fern	Папороть
+	Smoke	Дим
+	Honey	Мед
+	Seafoam	Морська піна
+	Lavender	Лаванда
+	Driftwood	Викинуте морем дерево
+	Ink Wash	Розмивка тушшю
+	Tide	Приплив
+	Bloom	Цвітіння
+	Dew	Роса
+	Pollen	Пилок
+	Lichen	Лишайник
+	Prism Veil	Призматична вуаль
+	Opal Ribbon	Опалова стрічка
+	Pearl Flash	Перлинний спалах
+	Aurora Foil	Фольга полярного сяйва
+	Iris Sheen	Райдужний полиск
+	Frost Spectrum	Морозний спектр
+	Silver Tide	Срібний приплив
+	Rose Quartz Gleam	Блиск рожевого кварцу
+	Moonstone Shift	Перелив місячного каменю
+	Violet Edge	Фіолетовий край
+	Mint Halo	М’ятний ореол
+	Amber Corona	Бурштинова корона
+	Polar Glint	Полярний відблиск
+	Pastel Orbit	Пастельна орбіта
+	Coral and Navy	Кораловий і темно-синій
+	Plum and Lime	Сливовий і лаймовий
+	Teal and Gold	Синьо-зелений і золотий
+	Indigo and Peach	Індиго і персиковий
+	Forest and Rose	Лісовий і рожевий
+	Red Glow	Червоне сяйво
+	Orange Glow	Помаранчеве сяйво
+	Amber Glow	Бурштинове сяйво
+	Yellow Glow	Жовте сяйво
+	Lime Glow	Лаймове сяйво
+	Green Glow	Зелене сяйво
+	Teal Glow	Синьо-зелене сяйво
+	Cyan Glow	Блакитне сяйво
+	Azure Glow	Лазурове сяйво
+	Blue Glow	Синє сяйво
+	Violet Glow	Фіолетове сяйво
+	Magenta Glow	Пурпурне сяйво
+	Polka Dots	Горошок
+	Vertical Stripes	Вертикальні смуги
+	Horizontal Stripes	Горизонтальні смуги
+	Diagonal Stripes	Діагональні смуги
+	Checkerboard	Шахівниця
+	Diamonds	Ромби
+	Crosses	Хрестики
+	Coarse Grit	Велике зерно
+	Stipple	Пунктир
+	Scratches	Подряпини
+	Sparse Flecks	Рідкі цятки
+	Dense Flecks	Густі цятки
+	Sine Bands	Синусоїдні смуги
+	Ripple Lines	Лінії брижів
+	Interference Rings	Інтерференційні кільця
+	Offset Rings	Зміщені кільця
+	Warped Checks	Викривлена клітинка
+	Pinched Stripes	Стиснуті смуги
+	Chevron Pulse	Пульсуючі шеврони
+	Radiating Lenses	Променисті лінзи
+	Soft Shadow	М’яка тінь
+	Hard Shadow	Різка тінь
+	Lifted Card	Піднята картка
+	Neon Tube	Неонова трубка
+	Inner Light	Внутрішнє світло
+	Feathered	Розтушований
+	Haze	Імла
+	Double Rule	Подвійна лінійка
+	Triple Rule	Потрійна лінійка
+	Dashed Border	Штрихова рамка
+	Dotted Border	Точкова рамка
+	Offset Keyline	Зміщений контур
+	Inset Keyline	Внутрішній контур
+	Outside Stroke	Зовнішня обвідка
+	Pointer	Вказівник
+	Highlighter	Маркер
+	Sketchy Line	Ескізна лінія
+	Scribble Fill	Заливка каракулями
+	Wobble	Тремтіння
+	Zig Zag Edge	Зигзагоподібний край
+	Wavy Edge	Хвилястий край
+	Puffy	Пухкий
+	Starburst	Зоряний вибух
+	Glossy	Глянцевий
+	Brushed Metal	Шліфований метал
+	Spotlight	Прожектор
+	Sunset Band	Смуга заходу
+	Sea Glass	Морське скло
+	Pearl	Перлина
+	Chrome Rim	Хромований обідок
+	Glow Orb	Сяйна куля
+	Pill Badge	Значок-капсула
+	Round Badge	Круглий значок
+	Flag Wave	Майоріючий прапор
+	Bulge	Опуклість
+	Twisted	Закручений
+	Echo	Відлуння
+	Spiral Copies	Копії по спіралі
+	Multiply Tint	Відтінок множення
+	Darken Veil	Затемнювальна вуаль
+	Ghosted	Примарний
+	Two Tone	Двоколірний
+	Overlay Glaze	Глазур накладання
+	Screen Light	Світло екрана
+	Soft Light Wash	Розмивка м’яким світлом
+	Burst	Спалах
+	Rounded Square	Округлений квадрат
+	Bar	Панель
+	Hexagon	Шестикутник
+	Spectrum	Спектр
+	Triangle	Трикутник
+	Vivid	Яскраві
 	Save Brush Library…	Зберегти бібліотеку пензлів…
 @msg	`{_1}` has no brushes to apply	У `{_1}` немає пензлів для застосування
 @msg	missing `library` (see brush.libraries)	не вказано `library` (див. brush.libraries)

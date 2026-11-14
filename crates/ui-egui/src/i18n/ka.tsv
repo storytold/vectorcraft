@@ -6755,6 +6755,240 @@ axis	Y Axis	Y ღერძი
 	Stars	ვარსკვლავები
 	Triangles	სამკუთხედები
 	Sparkles	ნაპერწკლები
+	Warm Gray	თბილი ნაცრისფერი
+	Cool Gray	ცივი ნაცრისფერი
+	Neutrals	ნეიტრალურები
+	Ivory	სპილოს ძვალი
+	Linen	სელი
+	Oat	შვრია
+	Greige	ნაცრისფერ-ბეჟი
+	Stone	ქვა
+	Taupe	ნაცრისფერ-ყავისფერი
+	Slate	ფიქალი
+	Clay	თიხა
+	Terracotta	ტერაკოტა
+	Ochre	ოხრა
+	Umber	უმბრა
+	Sand	ქვიშა
+	Olive	ზეთისხილისფერი
+	Moss	ხავსი
+	Rosy	ვარდისფრადი
+	Neutral	ნეიტრალური
+	Golden	ოქროსფერი
+	Pastel	პასტელური
+	Pastel Red	პასტელური წითელი
+	Pastel Orange	პასტელური ნარინჯისფერი
+	Pastel Amber	პასტელური ქარვისფერი
+	Pastel Yellow	პასტელური ყვითელი
+	Pastel Lime	პასტელური ლაიმისფერი
+	Pastel Green	პასტელური მწვანე
+	Pastel Teal	პასტელური ზღვისფერი
+	Pastel Cyan	პასტელური ცისფერი
+	Pastel Azure	პასტელური ლაჟვარდისფერი
+	Pastel Blue	პასტელური ლურჯი
+	Pastel Violet	პასტელური იისფერი
+	Pastel Magenta	პასტელური მეწამული
+	Soft Red	რბილი წითელი
+	Soft Orange	რბილი ნარინჯისფერი
+	Soft Amber	რბილი ქარვისფერი
+	Soft Yellow	რბილი ყვითელი
+	Soft Lime	რბილი ლაიმისფერი
+	Soft Green	რბილი მწვანე
+	Soft Teal	რბილი ზღვისფერი
+	Soft Cyan	რბილი ცისფერი
+	Soft Azure	რბილი ლაჟვარდისფერი
+	Soft Blue	რბილი ლურჯი
+	Soft Violet	რბილი იისფერი
+	Soft Magenta	რბილი მეწამული
+	Vivid Red	ცოცხალი წითელი
+	Vivid Orange	ცოცხალი ნარინჯისფერი
+	Vivid Amber	ცოცხალი ქარვისფერი
+	Vivid Yellow	ცოცხალი ყვითელი
+	Vivid Lime	ცოცხალი ლაიმისფერი
+	Vivid Green	ცოცხალი მწვანე
+	Vivid Teal	ცოცხალი ზღვისფერი
+	Vivid Cyan	ცოცხალი ცისფერი
+	Vivid Azure	ცოცხალი ლაჟვარდისფერი
+	Vivid Blue	ცოცხალი ლურჯი
+	Vivid Violet	ცოცხალი იისფერი
+	Vivid Magenta	ცოცხალი მეწამული
+	Deep	მუქი
+	Deep Red	მუქი წითელი
+	Deep Orange	მუქი ნარინჯისფერი
+	Deep Amber	მუქი ქარვისფერი
+	Deep Yellow	მუქი ყვითელი
+	Deep Lime	მუქი ლაიმისფერი
+	Deep Green	მუქი მწვანე
+	Deep Teal	მუქი ზღვისფერი
+	Deep Cyan	მუქი ცისფერი
+	Deep Azure	მუქი ლაჟვარდისფერი
+	Deep Blue	მუქი ლურჯი
+	Deep Violet	მუქი იისფერი
+	Deep Magenta	მუქი მეწამული
+	Gold	ოქრო
+	Silver	ვერცხლი
+	Bronze	ბრინჯაო
+	Copper	სპილენძი
+	Brass	თითბერი
+	Rose Gold	ვარდისფერი ოქრო
+	Gunmetal	ფოლადისფერი
+	Platinum	პლატინა
+	Pewter	კალა
+	Ember	ნაკვერჩხალი
+	Lagoon	ლაგუნა
+	Dusk	ბინდი
+	Clay to Teal	თიხიდან ზღვისფრამდე
+	Plum to Olive	ქლიავიდან ზეთისხილისფრამდე
+	Complementary Coral	მარჯნისფერი, დამატებითი
+	Split Complementary Coral	მარჯნისფერი, გაყოფილი დამატებითი
+	Analogous Coral	მარჯნისფერი, ანალოგიური
+	Triad Coral	მარჯნისფერი, ტრიადა
+	Tetrad Coral	მარჯნისფერი, ტეტრადა
+	Pentagram Coral	მარჯნისფერი, პენტაგრამა
+	Complementary Teal	ზღვისფერი, დამატებითი
+	Split Complementary Teal	ზღვისფერი, გაყოფილი დამატებითი
+	Analogous Teal	ზღვისფერი, ანალოგიური
+	Triad Teal	ზღვისფერი, ტრიადა
+	Tetrad Teal	ზღვისფერი, ტეტრადა
+	Pentagram Teal	ზღვისფერი, პენტაგრამა
+	Soft Spectrum	რბილი სპექტრი
+	Red to Amber	წითლიდან ქარვისფრამდე
+	Orange to Yellow	ნარინჯისფრიდან ყვითლამდე
+	Amber to Lime	ქარვისფრიდან ლაიმისფრამდე
+	Yellow to Green	ყვითლიდან მწვანემდე
+	Lime to Teal	ლაიმისფრიდან ზღვისფრამდე
+	Green to Cyan	მწვანიდან ცისფრამდე
+	Teal to Azure	ზღვისფრიდან ლაჟვარდისფრამდე
+	Cyan to Blue	ცისფრიდან ლურჯამდე
+	Azure to Violet	ლაჟვარდისფრიდან იისფრამდე
+	Blue to Magenta	ლურჯიდან მეწამულამდე
+	Violet to Red	იისფრიდან წითლამდე
+	Magenta to Orange	მეწამულიდან ნარინჯისფრამდე
+	Dawn	განთიადი
+	Noon	შუადღე
+	Sunset	მზის ჩასვლა
+	Night	ღამე
+	Overcast	მოღრუბლული
+	White to Black	თეთრიდან შავამდე
+	Light Grays	ღია ნაცრისფრები
+	Dark Grays	მუქი ნაცრისფრები
+	Warm Grays	თბილი ნაცრისფრები
+	Cool Grays	ცივი ნაცრისფრები
+	Fade to Transparent	გადასვლა გამჭვირვალემდე
+	White Fade	თეთრი გადასვლა
+	Vignette	ვინიეტი
+	Mist	ნისლი
+	Petal	ფურცელი
+	Fern	გვიმრა
+	Smoke	კვამლი
+	Honey	თაფლი
+	Seafoam	ზღვის ქაფი
+	Lavender	ლავანდა
+	Driftwood	ზღვის მიერ გამორიყული ხე
+	Ink Wash	მელნის რეცხვა
+	Tide	მოქცევა
+	Bloom	ყვავილობა
+	Dew	ცვარი
+	Pollen	მტვერი
+	Lichen	მღიერი
+	Prism Veil	პრიზმული საბურველი
+	Opal Ribbon	ოპალის ლენტი
+	Pearl Flash	მარგალიტის ელვა
+	Aurora Foil	ჩრდილოეთის ციალის ფოლგა
+	Iris Sheen	ირისის ლაპლაპი
+	Frost Spectrum	ყინვის სპექტრი
+	Silver Tide	ვერცხლისფერი მოქცევა
+	Rose Quartz Gleam	ვარდისფერი კვარცის ბზინვა
+	Moonstone Shift	მთვარის ქვის ციმციმი
+	Violet Edge	იისფერი კიდე
+	Mint Halo	პიტნისფერი შარავანდი
+	Amber Corona	ქარვისფერი გვირგვინი
+	Polar Glint	პოლარული ელვარება
+	Pastel Orbit	პასტელური ორბიტა
+	Coral and Navy	მარჯნისფერი და მუქი ლურჯი
+	Plum and Lime	ქლიავისფერი და ლაიმისფერი
+	Teal and Gold	ზღვისფერი და ოქროსფერი
+	Indigo and Peach	ინდიგო და ატმისფერი
+	Forest and Rose	ტყე და ვარდი
+	Red Glow	წითელი ნათება
+	Orange Glow	ნარინჯისფერი ნათება
+	Amber Glow	ქარვისფერი ნათება
+	Yellow Glow	ყვითელი ნათება
+	Lime Glow	ლაიმისფერი ნათება
+	Green Glow	მწვანე ნათება
+	Teal Glow	ზღვისფერი ნათება
+	Cyan Glow	ცისფერი ნათება
+	Azure Glow	ლაჟვარდისფერი ნათება
+	Blue Glow	ლურჯი ნათება
+	Violet Glow	იისფერი ნათება
+	Magenta Glow	მეწამული ნათება
+	Polka Dots	ბარდისებრი წერტილები
+	Vertical Stripes	ვერტიკალური ზოლები
+	Horizontal Stripes	ჰორიზონტალური ზოლები
+	Diagonal Stripes	დიაგონალური ზოლები
+	Checkerboard	ჭადრაკის დაფა
+	Diamonds	რომბები
+	Crosses	ჯვრები
+	Coarse Grit	მსხვილი მარცვალი
+	Stipple	წერტილოვანი დაჩრდილვა
+	Scratches	ნაკაწრები
+	Sparse Flecks	იშვიათი ლაქები
+	Dense Flecks	ხშირი ლაქები
+	Sine Bands	სინუსოიდური ზოლები
+	Ripple Lines	ტალღოვანი ხაზები
+	Interference Rings	ინტერფერენციის რგოლები
+	Offset Rings	წანაცვლებული რგოლები
+	Warped Checks	დამახინჯებული უჯრები
+	Pinched Stripes	შევიწროებული ზოლები
+	Chevron Pulse	შევრონების პულსი
+	Radiating Lenses	მანათობელი ლინზები
+	Soft Shadow	რბილი ჩრდილი
+	Hard Shadow	მკვეთრი ჩრდილი
+	Lifted Card	აწეული ბარათი
+	Neon Tube	ნეონის მილი
+	Inner Light	შიდა სინათლე
+	Feathered	რბილი კიდეებით
+	Haze	ბურუსი
+	Double Rule	ორმაგი ხაზი (ჩარჩო)
+	Triple Rule	სამმაგი ხაზი
+	Dashed Border	შტრიხებიანი საზღვარი
+	Dotted Border	წერტილოვანი საზღვარი
+	Offset Keyline	წანაცვლებული კონტური
+	Inset Keyline	შიდა კონტური
+	Outside Stroke	გარე შტრიხი
+	Pointer	მაჩვენებელი
+	Highlighter	მარკერი
+	Sketchy Line	ესკიზური ხაზი
+	Scribble Fill	ჯღაბნით შევსება
+	Wobble	რხევა
+	Zig Zag Edge	ზიგზაგისებრი კიდე
+	Wavy Edge	ტალღოვანი კიდე
+	Puffy	გაბერილი
+	Starburst	ვარსკვლავის აფეთქება
+	Glossy	პრიალა
+	Brushed Metal	გახეხილი ლითონი
+	Spotlight	პროჟექტორი
+	Sunset Band	მზის ჩასვლის ზოლი
+	Sea Glass	ზღვის მინა
+	Pearl	მარგალიტი
+	Chrome Rim	ქრომის არშია
+	Glow Orb	მანათობელი სფერო
+	Pill Badge	კაფსულის ნიშანი
+	Round Badge	მრგვალი ნიშანი
+	Flag Wave	აფრიალებული დროშა
+	Bulge	გამობერილობა
+	Twisted	დაგრეხილი
+	Echo	ექო
+	Spiral Copies	ასლები სპირალზე
+	Multiply Tint	გამრავლების ელფერი
+	Darken Veil	ჩამუქების საბურველი
+	Ghosted	მოჩვენებითი
+	Two Tone	ორფეროვანი
+	Overlay Glaze	გადაფარვის ჭიქური
+	Screen Light	ეკრანის სინათლე
+	Soft Light Wash	რბილი სინათლის რეცხვა
+	Burst	აფეთქება
+	Rounded Square	მომრგვალებული კვადრატი
 	Save Brush Library…	ფუნჯების ბიბლიოთეკის შენახვა…
 @msg	`{_1}` has no brushes to apply	`{_1}`-ში გამოსაყენებელი ფუნჯები არ არის
 @msg	missing `library` (see brush.libraries)	`library` აკლია (იხ. brush.libraries)
