@@ -586,6 +586,55 @@ fn expand_appearance_leaves_a_graph_designs_art() {
     assert!(s.doc().unwrap().doc.node(NodeId(other)).is_none_or(|m| m.appearance.effects.is_empty()));
 }
 
+/// `effect` with `params`, as `effect.apply` gives it to an object.
+fn an_effect(s: &mut Session, effect: &str, params: serde_json::Value) -> vectorcraft_doc::Effect {
+    let r = s.execute("shape.rectangle", &json!({"x": 700, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": effect, "ids": [r], "params": params})).unwrap();
+    s.doc().unwrap().doc.node(NodeId(r)).unwrap().appearance.effects[0].clone()
+}
+
+/// Expand Appearance of a graph neither lists the art of a design in a series whose own effect it leaves, nor adds an
+/// image of that effect to the document.
+#[test]
+fn expand_appearance_lists_no_design_art_and_rasterizes_none() {
+    let (mut s, id, copy, _, mark) = design_art();
+    let shadow = an_effect(&mut s, "stylize.dropShadow", json!({}));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(copy).unwrap().appearance.effects.push(shadow);
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0]})).unwrap();
+    let copy_was = look(&s, copy);
+    let images = |s: &Session| s.doc().unwrap().doc.images.len();
+    let before = images(&s);
+    s.execute("select.set", &json!({"ids": [mark.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    let per_mark = images(&s) - before;
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let expanded = s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(expanded["ids"], json!([mark.0]));
+    assert_eq!(look(&s, copy), copy_was);
+    assert_eq!(images(&s) - before, per_mark, "only the mark's shadow becomes an image");
+}
+
+/// A geometry effect of a series group that Expand Appearance bakes moves the art of a design in that series with the
+/// marks.
+#[test]
+fn expand_appearance_moves_design_art_with_its_series_groups_effect() {
+    let (mut s, id, copy, _, _) = design_art();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let group = series(&n, 0).id;
+    let shift = an_effect(&mut s, "distort.transform", json!({"moveH": 50}));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(group).unwrap().appearance.effects.push(shift);
+    let left = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        series(&n, 0).children().unwrap()[0].geometric_bounds().unwrap().x0
+    };
+    let was = left(&s);
+    assert_eq!(series(&n, 0).children().unwrap()[0].id, copy);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert!((left(&s) - was - 50.0).abs() < 1e-6, "{} then {}", was, left(&s));
+}
+
 /// The commands that give rows, effects or graphic styles refuse the art of a graph design inside a series, given by
 /// id (the design's copy or a path inside it) or selected: the graph draws that art again from the design.
 #[test]
