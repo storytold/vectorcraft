@@ -15,7 +15,7 @@ translation never fails a test or a build: the interface shows the English text 
 `cargo xtask ci` prints the untranslated report (`cargo xtask i18n-report` alone), which lists per language the
 strings missing from each catalog with the `complete_menus` flag and the messages missing from each language in
 the `COMPLETE_MESSAGES` list. Every non-English language marked "full" has the flag, and all of them except
-Bulgarian, Danish and Indonesian are in the list. No language has help content: there is no translated (or
+Bosnian, Bulgarian, Danish and Indonesian are in the list. No language has help content: there is no translated (or
 English) in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents
