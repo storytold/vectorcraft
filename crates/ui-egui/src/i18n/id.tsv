@@ -2080,6 +2080,7 @@ digits	Malayalam	Malayalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	entri paths {i} memerlukan path dan ids (id objek yang tidak dimiliki entri lain)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder menerima path: tautan hilang lainnya dicari di folder file tersebut
 	Show Missing	Tampilkan yang hilang
+	Sort by Size	Urutkan berdasarkan ukuran
 	Sort by Status	Urutkan berdasarkan status
 	Clear Overrides	Hapus penimpaan
 	Create New {kind} Style	Buat gaya {kind} baru
