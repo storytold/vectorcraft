@@ -9,7 +9,7 @@ use vectorcraft_color::swatch::{REGISTRATION, Swatch};
 use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LayerColor, Node, NodeId, NodeKind, OpacityMask, StrokeLayer, TextWrap};
 use vectorcraft_effects::stroke;
-use vectorcraft_geom::{Affine, FillRule, PathData, Shape, SubPath};
+use vectorcraft_geom::{Affine, FillRule, PathData, Shape, SubPath, shapes};
 use vectorcraft_pathops::BoolOp;
 
 use crate::ai_ops::{self, unit};
@@ -271,6 +271,9 @@ pub(super) struct Writer<'a> {
     /// brushed stroke's pieces) the art being written is in. Text wrap options are written only
     /// outside them, since only the document's own objects wrap type.
     drawn: u32,
+    /// The type just written as outlines has its text wrap options on the rectangle of its bounds
+    /// ([`Self::wrap_bounds`]), not in the group's dictionary.
+    wrap_moved: bool,
     /// The brushes written ([`brushes`]).
     brush_set: brushes::Brushes,
     /// Brushes may be written; false on a large canvas, where they are left out.
@@ -350,6 +353,7 @@ impl<'a> Writer<'a> {
             styles: styles::Styles::default(),
             in_look: false,
             drawn: 0,
+            wrap_moved: false,
             brush_set: brushes::Brushes::default(),
             brushes_live: true,
             deform: false,
@@ -829,7 +833,8 @@ impl<'a> Writer<'a> {
     /// deep, or its art doesn't fit.
     fn dictionary(&mut self, n: &Node) -> bool {
         let name = n.name.as_deref().filter(|s| !s.is_empty());
-        let wrap = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look);
+        let moved = std::mem::take(&mut self.wrap_moved);
+        let wrap = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look && !moved);
         let placed = std::mem::take(&mut self.placed);
         let typed = std::mem::take(&mut self.typed);
         let bound = self.bound_variables(n, placed, typed);
@@ -1404,7 +1409,8 @@ impl<'a> Writer<'a> {
     /// ([`vectorcraft_effects::outline_text`]): each run's glyphs with their underline and
     /// strikethrough, its color glyphs, and the object's own fills and strokes; then its inline
     /// graphics as their symbols' art where the layout places them, as the PDF page draws them;
-    /// the group has the type's transparency `xy`.
+    /// last, with text wrap options, the rectangle of its bounds ([`Self::wrap_bounds`]). The group
+    /// has the type's transparency `xy`.
     fn outlined_text(&mut self, n: &Node, xy: Xy) {
         if !self.open_group("u") {
             return;
@@ -1460,10 +1466,32 @@ impl<'a> Writer<'a> {
         for c in over {
             self.node(c);
         }
+        // Type wraps by its bounds: its text wrap options go on a rectangle of its bounds, the
+        // group's last member, and the group's dictionary leaves them out.
+        if let Some(w) = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look) {
+            self.wrap_bounds(n, w);
+            self.wrap_moved = true;
+        }
         if let Some((locked, hidden)) = state {
             self.state(locked, hidden);
         }
         self.end_group("U", xy);
+    }
+
+    /// An unpainted closed rectangle at the geometric bounds of type `n`, the region its text wraps
+    /// around, with `n`'s lock and hidden state and text wrap options `w` in its dictionary. Nothing
+    /// when `n` has no finite bounds, or without room for it ([`Self::take_objects`]).
+    fn wrap_bounds(&mut self, n: &Node, w: TextWrap) {
+        let Some(b) = n.geometric_bounds().filter(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite())) else { return };
+        self.state(n.locked, !n.visible);
+        let objects = self.objects;
+        self.plain_object(&shapes::rectangle(b), FillRule::NonZero, None, None, Xy::PLAIN);
+        if self.objects == objects {
+            return;
+        }
+        self.body.push_str("%_/ArtDictionary :\n");
+        self.text_wrap(w);
+        self.body.push_str("%_;\n%_\n");
     }
 
     // ---------- color ----------
