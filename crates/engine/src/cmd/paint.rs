@@ -902,7 +902,7 @@ pub(super) fn restore_unpainted_stroke(ap: &mut Appearance, index: Option<usize>
 }
 
 fn swap(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = paint_targets(s, p)?;
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, paint_targets(s, p)?);
     if !ids.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
@@ -936,7 +936,7 @@ fn swap(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn default_paint(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = paint_targets(s, p)?;
+    let ids = super::appearance::drop_design_art(&s.doc()?.doc, paint_targets(s, p)?);
     if !ids.is_empty() {
         // When every object comes out as it was, the document and its undo history stay as they are.
         let before = s.doc()?.doc.clone();
@@ -1006,7 +1006,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
     let item = item_target(s, p, cmd)?.of_kind(s, !stroke);
     let (r, shown_item) = match item {
         ItemTarget::Item { index, .. } => {
-            let ids = item.targets(s, p)?;
+            let ids = super::appearance::drop_design_art(&s.doc()?.doc, item.targets(s, p)?);
             let mut changed = 0;
             edit_items(s, &ids, item, cmd, label, !stroke, |n, i| {
                 let paint =
@@ -1076,6 +1076,9 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(bad(C, "select objects or give ids"));
     }
+    // The object-level opacity, blend mode, isolation and knockout of a graph design's art in a series are drawn again
+    // from the design too.
+    let ids = super::appearance::without_design_art(&s.doc()?.doc, ids, C)?;
     // While an opacity mask is edited the selection is its art, so the Appearance panel's active
     // item (a row of that art) doesn't stand for the masked object.
     let editing_mask = p.get("ids").is_none() && p.get("id").is_none() && s.doc()?.doc.mask_edit.is_some();
@@ -1102,7 +1105,7 @@ fn transparency(s: &mut Session, p: &Value) -> Result<Value> {
         return s.execute("object.setProps", &Value::Object(q));
     };
     // Opacity and blend belong to the targeted fill/stroke; isolate/knockout/knockoutShape stay object-level.
-    let item_ids = if editing_mask { ids } else { row_targets(s, p)? };
+    let item_ids = if editing_mask { ids } else { row_targets(s, p, C)? };
     if explicit {
         let d = &s.doc()?.doc;
         if !item_ids.iter().any(|id| d.node(*id).is_some_and(|n| index < n.appearance.items.len())) {

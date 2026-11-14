@@ -811,15 +811,22 @@ The other commands given a series group's id edit the group itself, and the grap
 `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
 group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
 
-The graph draws the art of a column or marker design in a series again from the design, so the commands that add,
-change, move or remove fill and stroke rows, effects or graphic styles leave that art out: the `appearance.*` commands
-listed above, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit, move or remove an
-effect, `graphicStyle.apply` (and `graphicStyle.addFromLibrary` with `apply`), `transparency.set` with a fill or stroke
-`item`, and `appearance.copyFrom` as the target. The art is any object inside a series group other than a path directly
-in it, whether given by id, selected, or reached through `target: "contents"`. The commands edit the other objects they
-are given, and a command whose objects are all design art is an error. `appearance.transfer` with design art as its
-`target`, or as its `source` without `copy`, is an error. The paint commands leave the art out as well, without an
-error. To change the art, edit the design with `graph.design`.
+When a graph is drawn again (a change to its data, its type, or its column or marker designs), it draws the art of a
+column or marker design in a series again from the design, and an edit made to that art is lost. The art is any object
+inside a series group other than a path directly in it, a legend swatch's included, whether given by id, selected, or
+reached through `target: "contents"`. These commands leave that art out, edit the other objects they are given, and
+are an error when all their objects are design art: the `appearance.*` commands listed above, `effect.apply`,
+`appearance.addEffect` and the other `effect.*` commands that edit, move or remove an effect,
+`effect.expandAppearance` (which also leaves the art inside a selected graph or series group as it was, unless an
+effect of that group turns the whole group into other art, and is disabled when only design art is selected or
+given), `threeD.mapGraphic`,
+`graphicStyle.apply`, `graphicStyle.addFromLibrary` with `apply`, `graphicStyle.breakLink`, `transparency.set`, the
+`paint.freeform.*` commands that edit points and lines, and `appearance.copyFrom` as the target.
+`appearance.transfer` with design art as its `target`, or as its `source` without `copy`, is an error.
+`paint.setFill`, `paint.setStroke`, `paint.swap`, `paint.default`, `paint.invert` and `paint.complement` with an
+`item`, `stroke.set`, `stroke.weightUp`, `stroke.weightDown`, `stroke.setAdvanced`, `paint.editGradient`,
+`paint.setGradientGeom` and `object.setOverprint` leave the art out without an error. When the first selected object is design art, the commands
+do not use the Appearance panel's active row. To change the art, edit the design with `graph.design`.
 
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient

@@ -416,7 +416,174 @@ fn refused_on_design_art(s: &mut Session, cmd: &str, p: serde_json::Value) {
     let steps = s.doc().unwrap().history.undo.len();
     let e = s.execute(cmd, &p).unwrap_err().to_string();
     assert!(e.contains("drawn again from the design"), "{cmd}: {e}");
+    // `appearance.addEffect` is an alias of `effect.apply`, whose errors name `effect.apply`.
+    let named = if cmd == "appearance.addEffect" { "effect.apply" } else { cmd };
+    assert!(e.contains(&format!("`{named}`")), "the error names the command that ran: {e}");
     assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+}
+
+/// The look of object `id`: its appearance, opacity, blend mode, isolation, knockout and overprint.
+fn look(s: &Session, id: NodeId) -> String {
+    format!("{:?}", s.doc().unwrap().doc.node(id).unwrap())
+}
+
+/// An edit of a graph design's art in a series lasts only until the graph is drawn again: the graph draws the art again
+/// from the design.
+#[test]
+fn an_edit_of_a_graph_designs_art_is_lost_when_the_graph_is_drawn_again() {
+    let (mut s, id, _, art, _) = design_art();
+    let path = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let mut out = None;
+        series(&n, 0).children().unwrap()[0].walk(&mut |m| {
+            if out.is_none() && matches!(m.kind, NodeKind::Path { .. }) {
+                out = Some(m.clone());
+            }
+        });
+        out.unwrap()
+    };
+    assert_eq!(path(&s).id, art);
+    s.execute("object.setProps", &json!({"id": art.0, "opacity": 50})).unwrap();
+    assert!((path(&s).opacity - 0.5).abs() < 1e-6);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("graph.setData", &json!({"csv": ",2024,2025\nQ1,3,2\nQ2,5,8\nQ3,-1,6"})).unwrap();
+    assert!((path(&s).opacity - 1.0).abs() < 1e-6);
+}
+
+/// The paint, stroke, gradient and overprint commands leave the art of a graph design in a series as the design draws
+/// it, and edit the other objects they are given.
+#[test]
+fn paint_commands_leave_a_graph_designs_art_out() {
+    let (mut s, _, copy, art, mark) = design_art();
+    let fill = top_row(&s, art, true);
+    let commands = [
+        ("stroke.set", json!({"weight": 5})),
+        ("stroke.weightUp", json!({})),
+        ("stroke.setAdvanced", json!({"arrowScale": [200, 200]})),
+        ("paint.editGradient", json!({"kind": "linear"})),
+        ("paint.setGradientGeom", json!({"start": [0, 0], "end": [50, 50]})),
+        ("object.setOverprint", json!({"fill": true})),
+        ("paint.swap", json!({})),
+        ("paint.default", json!({})),
+        ("paint.invert", json!({"item": fill, "stroke": false})),
+    ];
+    let (copy_was, art_was) = (look(&s, copy), look(&s, art));
+    for (cmd, p) in &commands {
+        for ids in [json!([copy.0]), json!([art.0])] {
+            let steps = s.doc().unwrap().history.undo.len();
+            let mut q = p.clone();
+            q["ids"] = ids;
+            let _ = s.execute(cmd, &q);
+            assert_eq!((look(&s, copy), look(&s, art)), (copy_was.clone(), art_was.clone()), "{cmd}");
+            assert_eq!(s.doc().unwrap().history.undo.len(), steps, "{cmd}");
+        }
+        let mark_was = look(&s, mark);
+        let mut q = p.clone();
+        q["ids"] = json!([art.0, mark.0]);
+        s.execute(cmd, &q).unwrap();
+        assert_eq!(look(&s, art), art_was, "{cmd}");
+        assert_ne!(look(&s, mark), mark_was, "{cmd}");
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    // Selected, without ids.
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 5})).unwrap();
+    assert_eq!(look(&s, art), art_was);
+    // A freeform gradient point is refused on the art alone.
+    refused_on_design_art(&mut s, "paint.freeform.addPoint", json!({"ids": [art.0], "at": [0, 0]}));
+}
+
+/// With only the art of a graph design selected, `stroke.setAdvanced` and the stroke mode of `paint.editGradient` act
+/// as edits of a selection, not of the stroke the next object drawn takes.
+#[test]
+fn stroke_edits_of_selected_design_art_leave_the_new_art_stroke() {
+    let (mut s, _, _, art, _) = design_art();
+    s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+    let was = format!("{:?}", s.new_art_stroke());
+    s.execute("stroke.setAdvanced", &json!({"arrowScale": [200, 200], "swapArrows": true})).unwrap();
+    assert_eq!(format!("{:?}", s.new_art_stroke()), was, "stroke.setAdvanced");
+    let mode = s.new_art_stroke().gradient_mode;
+    s.execute("paint.editGradient", &json!({"kind": "linear", "stroke": true, "strokeMode": "along"})).unwrap();
+    assert_eq!(s.new_art_stroke().gradient_mode, mode, "paint.editGradient");
+}
+
+/// `transparency.set` without `item` refuses the art of a graph design in a series, and given it with other objects
+/// sets only theirs.
+#[test]
+fn object_transparency_leaves_a_graph_designs_art_out() {
+    let (mut s, _, copy, art, mark) = design_art();
+    refused_on_design_art(&mut s, "transparency.set", json!({"ids": [art.0], "opacity": 40}));
+    refused_on_design_art(&mut s, "transparency.set", json!({"ids": [copy.0], "isolate": true}));
+    s.execute("transparency.set", &json!({"ids": [art.0, mark.0], "opacity": 40, "blend": "multiply"})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert!((d.node(art).unwrap().opacity - 1.0).abs() < 1e-6);
+    assert!((d.node(mark).unwrap().opacity - 0.4).abs() < 1e-6);
+}
+
+/// With the art of a graph design selected first, the Appearance panel's active row (a row of that art) stands for no
+/// row of the other objects selected: an effect goes on each of them as a whole.
+#[test]
+fn an_active_row_of_a_graph_designs_art_is_not_applied_to_other_objects() {
+    let (mut s, _, _, art, mark) = design_art();
+    let stroke = top_row(&s, art, false);
+    s.execute("select.set", &json!({"ids": [art.0, mark.0]})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.subjects().first(), Some(&art));
+    s.execute("appearance.setActiveItem", &json!({"index": stroke})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow"})).unwrap();
+    let n = s.doc().unwrap().doc.node(mark).unwrap().clone();
+    assert_eq!(n.appearance.effects.len(), 1);
+    assert!(n.appearance.items.iter().all(|it| it.effects().is_empty()));
+    assert!(s.doc().unwrap().doc.node(art).unwrap().appearance.effects.is_empty());
+}
+
+/// Expand Appearance leaves the art of a graph design in a series as the design draws it.
+#[test]
+fn expand_appearance_leaves_a_graph_designs_art() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let r = s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].clone();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [r]})).unwrap();
+    s.execute("select.set", &json!({"ids": [r]})).unwrap();
+    s.execute("graph.design", &json!({"new": "Shadow"})).unwrap();
+    s.execute("graph.column", &json!({"id": id.0, "seriesIndexes": [0], "design": "Shadow"})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let mut art = vec![];
+    series(&n, 0).children().unwrap()[0].walk(&mut |m| {
+        if !m.appearance.effects.is_empty() {
+            art.push(m.id);
+        }
+    });
+    let art = art[0];
+    let other = s.execute("shape.rectangle", &json!({"x": 700, "y": 700, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [other]})).unwrap();
+    let art_was = look(&s, art);
+    // Given alone, by id or selected, it leaves Expand Appearance disabled.
+    for p in [json!({"ids": [art.0]}), json!({})] {
+        s.execute("select.set", &json!({"ids": [art.0]})).unwrap();
+        assert!(s.execute("effect.expandAppearance", &p).unwrap_err().to_string().contains("not available"));
+        assert_eq!(look(&s, art), art_was);
+    }
+    // Inside a selected graph or series group, the art stays as the design draws it: with nothing else to expand there,
+    // Expand Appearance is disabled, and with a mark's effect, the mark expands alone.
+    let series_group = series(&n, 0).id;
+    for root in [id, series_group] {
+        s.execute("select.set", &json!({"ids": [root.0]})).unwrap();
+        assert!(s.execute("effect.expandAppearance", &json!({})).unwrap_err().to_string().contains("not available"));
+        assert_eq!(look(&s, art), art_was);
+    }
+    let mark = series(&n, 1).children().unwrap()[0].id;
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [mark.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let expanded = s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(expanded["ids"], json!([mark.0]));
+    assert_eq!(look(&s, art), art_was);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Selected with another object, the art is left as it is and the other object expands.
+    s.execute("select.set", &json!({"ids": [art.0, other]})).unwrap();
+    s.execute("effect.expandAppearance", &json!({})).unwrap();
+    assert_eq!(look(&s, art), art_was);
+    assert!(s.doc().unwrap().doc.node(NodeId(other)).is_none_or(|m| m.appearance.effects.is_empty()));
 }
 
 /// The commands that give rows, effects or graphic styles refuse the art of a graph design inside a series, given by
@@ -445,6 +612,7 @@ fn appearance_commands_refuse_a_graph_designs_art_in_a_series() {
         refused_on_design_art(&mut s, "effect.remove", json!({"ids": ids, "index": 0}));
         refused_on_design_art(&mut s, "threeD.mapGraphic", json!({"ids": ids, "symbol": "Mark"}));
         refused_on_design_art(&mut s, "graphicStyle.apply", json!({"name": "Blue", "ids": ids}));
+        refused_on_design_art(&mut s, "graphicStyle.breakLink", json!({"ids": ids}));
     }
     for cmd in ["appearance.removeItem", "appearance.duplicateItem"] {
         refused_on_design_art(&mut s, cmd, json!({"ids": [art.0], "index": fill}));

@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, the graph stores the label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
+            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, the graph stores the label's topmost visible fill and stroke rows and object opacity and blend mode for every label of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
             has_doc,
             style_apply
         ),
@@ -332,7 +332,7 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     let i = style_index(&s.doc()?.doc, name)?;
     let add = bool_or(p, "add", false);
     let chars = s.prefs.override_char_color;
-    let own = super::appearance::edit_targets(s, p)?;
+    let own = super::appearance::edit_targets(s, p, "graphicStyle.apply")?;
     let ids = super::appearance::rowless_series_marks(&s.doc()?.doc, &own);
     // The series groups their paths stand for: a style that replaces the appearance clears what they hold themselves,
     // and a style added on top unlinks them.
@@ -516,7 +516,7 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn style_break_link(s: &mut Session, p: &Value) -> Result<Value> {
-    let ids = super::appearance::whole_targets(s, p)?;
+    let ids = super::appearance::whole_targets(s, p, "graphicStyle.breakLink")?;
     s.edit("Break Link to Graphic Style", |d, _| {
         set_link(d, &ids, None);
         Ok(())
