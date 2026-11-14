@@ -78,7 +78,7 @@ fn icc_for(icc: Option<Vec<u8>>, space: ImageColorspace) -> Option<Arc<Vec<u8>>>
 
 /// The ICC profile image `bytes` carries: a TIFF's tag 34675 (read by the TIFF decoder itself,
 /// which reads tags of any size), another format's as its decoder reads it. `None` without one.
-fn source_icc(bytes: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn source_icc(bytes: &[u8]) -> Option<Vec<u8>> {
     let reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
     if reader.format() == Some(ImageFormat::Tiff) {
         return vectorcraft_doc::cmyk::tiff_icc_profile(bytes);
@@ -140,10 +140,11 @@ pub(crate) fn from_decoded(img: DynamicImage, icc: Option<Vec<u8>>, interpolate:
     Image::from_custom(raw, interpolate).ok()
 }
 
-/// Image `bytes` decoded within [`limits`] with the ICC profile it carries ([`source_icc`]), as
-/// [`from_decoded`] writes it. `None` when it can't be decoded.
-pub(crate) fn decoded_image(bytes: &[u8], interpolate: bool, sixteen_bit: bool) -> Option<Image> {
-    from_decoded(decoded(bytes)?, source_icc(bytes), interpolate, sixteen_bit)
+/// Image `bytes` decoded within [`limits`], with the ICC profile it carries ([`source_icc`]) when
+/// `profiles` allows it (not in PDF/X-1a, which has device colours only), as [`from_decoded`]
+/// writes it. `None` when it can't be decoded.
+pub(crate) fn decoded_image(bytes: &[u8], interpolate: bool, sixteen_bit: bool, profiles: bool) -> Option<Image> {
+    from_decoded(decoded(bytes)?, profiles.then(|| source_icc(bytes)).flatten(), interpolate, sixteen_bit)
 }
 
 /// Are all of the RGBA pixels `rgba` grey?
@@ -304,9 +305,17 @@ fn resample(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> DynamicImage {
 
 /// Encoded image `bytes` placed `size` points wide and high, as the Compression settings `c` ask:
 /// resampled when its resolution is above the threshold, compressed with ZIP or JPEG, its colours
-/// converted by `convert` (colour images). `interpolate` lets viewers smooth it. An image that
-/// can't be decoded is kept as it is.
-pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, interpolate: bool, convert: Option<&Pixels>) -> Recoded {
+/// converted by `convert` (colour images). Pixels that keep their colours keep the ICC profile
+/// they carry when `profiles` allows it (not in PDF/X-1a, which has device colours only).
+/// `interpolate` lets viewers smooth it. An image that can't be decoded is kept as it is.
+pub(crate) fn recode(
+    bytes: &[u8],
+    size: (f64, f64),
+    c: &CompressionSettings,
+    interpolate: bool,
+    convert: Option<&Pixels>,
+    profiles: bool,
+) -> Recoded {
     let keep = Recoded { image: None, warning: None };
     let Ok(reader) = ImageReader::new(Cursor::new(bytes)).with_guessed_format() else { return keep };
     let jpeg = reader.format() == Some(ImageFormat::Jpeg);
@@ -338,7 +347,8 @@ pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, in
     // Pixels that keep their colours keep the profile they are in; converted ones are in the
     // destination's.
     let want = if kind == Kind::Color { *b"RGB " } else { *b"GRAY" };
-    let icc = convert.is_none().then(|| source_icc(bytes)).flatten().filter(|icc| vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want));
+    let icc =
+        (profiles && convert.is_none()).then(|| source_icc(bytes)).flatten().filter(|icc| vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want));
     let rgb_icc = icc.is_some() && kind == Kind::Color;
     let mut rgba = resample(img, &rule, sized(&rule, dims, size)).into_rgba8();
     if kind == Kind::Mono {

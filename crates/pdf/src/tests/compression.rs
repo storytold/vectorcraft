@@ -234,7 +234,7 @@ fn images_declaring_more_than_the_allowance_are_not_decoded() {
     assert_eq!(crate::images::mask_alpha(&blob, 60_000, 60_000, false), None);
     assert_eq!(crate::images::mask_alpha(&blob, 2, 2, false), None, "another size is not decoded at all");
     let c: CompressionSettings = serde_json::from_value(json!({"gray": {"downsample": "bicubic", "ppi": 72, "abovePpi": 100}})).unwrap();
-    let r = crate::images::recode(&png, (10.0, 10.0), &c, false, None);
+    let r = crate::images::recode(&png, (10.0, 10.0), &c, false, None, true);
     assert!(r.image.is_none(), "kept as it is");
 }
 
@@ -390,5 +390,20 @@ fn tagged_tiffs_keep_their_icc_profile() {
     for destination in [vectorcraft_color::cms::DISPLAY_P3, vectorcraft_color::cms::GENERIC_CMYK] {
         let spaces = export(&tiff(&colour(), &rgb), json!({"output": {"conversion": "destination", "destination": destination}}));
         assert!(spaces.len() == 1 && spaces[0].icc.as_deref() != Some(rgb.as_slice()), "converted to {destination}: {spaces:?}");
+    }
+    // PDF/X-1a has device colours only: a tagged gray TIFF or PNG is written in DeviceGray, kept as
+    // it is, resampled or compressed with JPEG.
+    let compressions = [json!({}), json!({"gray": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}), json!({"gray": {"compression": "jpeg"}})];
+    let png = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Png), "image/png");
+    for (format, d) in [("TIFF", tiff(&colour().grayscale(), &gray)), ("PNG", png)] {
+        for compression in &compressions {
+            let mut settings: PdfSettings =
+                serde_json::from_value(json!({"standard": "pdfX1a", "compatibility": "1.3", "compression": compression.clone()})).unwrap();
+            settings.compression.compress_text = false;
+            let r = export_with_report(&d, &PdfOptions { settings, ..Default::default() });
+            let spaces = image_spaces(&r.unwrap_or_else(|e| panic!("PDF/X-1a, {format}, {compression}: {e}")).bytes);
+            let gray = spaces.len() == 1 && spaces[0].space == "DeviceGray" && spaces[0].icc.is_none();
+            assert!(gray, "PDF/X-1a, {format}, {compression}: {spaces:?}");
+        }
     }
 }

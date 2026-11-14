@@ -325,7 +325,7 @@ impl Exporter<'_> {
         let img = match self.images.get(&cache) {
             Some(img) => img.clone(),
             None => {
-                let img = embed(&image.blob, self.interpolate, self.sixteen_bit);
+                let img = embed(&image.blob, self.interpolate, self.sixteen_bit, !self.out.standard.cmyk_only());
                 self.images.insert(cache, img.clone());
                 img
             }
