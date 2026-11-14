@@ -655,7 +655,7 @@ enum SpectrumHit {
 fn spectrum(ui: &mut Ui, mode: Mode, size: egui::Vec2) -> Option<SpectrumHit> {
     let t = Tokens::get(ui.ctx());
     let (r, _) = ui.allocate_exact_size(size, Sense::hover());
-    let resp = ui.interact(r, ui.scope_id().with("color-spectrum"), Sense::click_and_drag());
+    let resp = ui.interact(r, ui.scope_id().with("color-spectrum"), Sense::click_and_drag()).on_hover_text(mode.label());
     ui.painter().add(widgets::color_mesh(r, (72, 12), &|x, y| to32(&spectrum_at(mode, x, y))));
     ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     if let Some(p) = resp.hover_pos() {
