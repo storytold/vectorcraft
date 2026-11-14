@@ -200,4 +200,11 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Save Swatch Library…"), true, false) {
         app.run("ui.saveSwatchLibrary", json!({ "names": deletable(&selected) })).ok();
     }
+    ui.separator();
+    if menu_item(ui, tl!("Use Current Swatches as Default"), crate::menus::enabled(app, "swatch.defaults.save"), false) {
+        app.run("swatch.defaults.save", json!({})).ok();
+    }
+    if menu_item(ui, tl!("Restore Factory Default Swatches"), crate::menus::enabled(app, "swatch.defaults.reset"), false) {
+        app.run("swatch.defaults.reset", json!({})).ok();
+    }
 }

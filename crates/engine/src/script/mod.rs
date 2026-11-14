@@ -146,6 +146,8 @@ pub fn refused_to_scripts(id: &str) -> bool {
         "view.overprintPreview",
         "view.separationsPreview",
         "edit.clearHistory",
+        "swatch.defaults.save",
+        "swatch.defaults.reset",
     ];
     let saved_preset = (id.contains("resets.") || id.contains(".preset.")) && !id.ends_with(".list") && !id.ends_with(".apply");
     id != "script.check" && (saved_preset || PREFIXES.iter().any(|p| id.starts_with(p)) || IDS.contains(&id))

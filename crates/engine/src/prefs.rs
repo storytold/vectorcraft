@@ -18,6 +18,15 @@ fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<S
     Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
 }
 
+/// The palette explicitly chosen for future regular new documents. An absent preference keeps
+/// the category profile's palette; Factory deliberately overrides a customized profile too.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum SavedSwatchDefaults {
+    Factory,
+    Custom { data: String },
+}
+
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
 /// `prefs.set {key, value}` (camelCase keys, validated against [`cmd::prefscmds::PREF_SPECS`]).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -282,6 +291,9 @@ pub struct Prefs {
     /// `gradient.presets.*` edit it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub gradient_presets: Vec<cmd::GradientPreset>,
+    /// Swatches panel defaults for regular new documents. A local library, not a Preferences
+    /// dialog field; swatch.defaults.save/reset replace it without editing an open document.
+    pub default_swatches: Option<SavedSwatchDefaults>,
     /// Width profiles saved to the Stroke panel's Profile list (`stroke.widthProfile.*`). Not a
     /// Preferences dialog field, so it has no [`cmd::prefscmds::PREF_SPECS`] row.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -535,6 +547,7 @@ impl Default for Prefs {
             flattener_presets: vec![],
             trace_presets: vec![],
             gradient_presets: vec![],
+            default_swatches: None,
             width_profiles: vec![],
             japanese_crop_marks: false,
             new_art_basic: true,
