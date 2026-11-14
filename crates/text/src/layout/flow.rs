@@ -449,8 +449,9 @@ fn place_flow_line(cx: &mut Ctx<'_>, pen: &mut Pen<'_>, context: &mut PlacementC
                         .filter(|&j| j < trimmed)
                         .collect();
                     let hyphen = if hyphenated { end.checked_sub(1).and_then(|k| glyphs.get(k)).map_or(0.0, |g| hyphen_glyph(g).adv) } else { 0.0 };
-                    let credit = trimmed.checked_sub(1).filter(|&k| k >= start).and_then(|k| line_end.get(k)).copied().unwrap_or(0.0);
-                    drawn_width(glyphs, &drawn, &para.tabs, ind_l) + hyphen - credit <= width + EPS
+                    // The last glyph's end trim comes off where it is drawn, before the tabs after it.
+                    let credit = trimmed.checked_sub(1).filter(|&k| k >= start).and_then(|k| line_end.get(k).map(|&trim| (k, trim)));
+                    drawn_width(glyphs, &drawn, &para.tabs, ind_l, credit) + hyphen <= width + EPS
                 };
                 let fits: Option<&dyn Fn(usize, bool) -> bool> = (!cx.vertical && bidi.is_some_and(|b| b.has_rtl())).then_some(&drawn_fits);
                 let line = |ty| {
@@ -649,9 +650,11 @@ fn prepare_line_geometry(cx: &Ctx<'_>, t: &TextObject, paragraph: &ParagraphData
     let line_end = sg.get(position.end).map_or(paragraph.pr.end, |g| g.byte);
     let order = visual_order(paragraph.bidi.as_ref().filter(|_| !cx.vertical), paragraph.pr.start, line_start..line_end, &sg[index..position.end]);
     // The line is as wide as it is drawn: its glyphs before its trailing spaces in drawing order,
-    // each tab up to its stop from where the glyphs drawn before it end.
+    // each tab up to its stop from where the glyphs drawn before it end, with the last glyph's end
+    // trim taken off where it is drawn.
     let measured: Vec<usize> = order.iter().map(|&offset| index + offset).filter(|&j| j < trimmed).collect();
-    let measured_width = drawn_width(sg, &measured, &para.tabs, position.ind_l) + hyphen.as_ref().map_or(0.0, |g| g.adv) - end_trim;
+    let trim_at = trimmed.checked_sub(1).filter(|&k| k >= index).map(|k| (k, end_trim));
+    let measured_width = drawn_width(sg, &measured, &para.tabs, position.ind_l, trim_at) + hyphen.as_ref().map_or(0.0, |g| g.adv);
     // The glyphs before `stop` in visual order, each with the advance it is set with. A list
     // marker does not hang: it is counted with no width.
     let visible = |stop: usize| -> (Vec<usize>, Vec<(&SGlyph, f64)>) {

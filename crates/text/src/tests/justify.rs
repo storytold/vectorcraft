@@ -668,6 +668,36 @@ fn a_right_to_left_line_with_a_tab_and_many_breaks_wraps_when_it_does_not_fit_as
     }
 }
 
+/// A right-to-left line with a tab whose last character loses its Japanese–Latin space at the
+/// line's end is measured with that space taken off where the character is drawn, before the tab:
+/// right aligned, it ends on the frame's right edge, and it wraps when it does not fit as drawn.
+#[test]
+fn a_right_to_left_tabbed_line_is_measured_without_its_line_end_space() {
+    use vectorcraft_doc::Mojikumi;
+    // א (0), ב (2), tab (4), ג (5), 漢 (7), then a Hebrew word too long for the frame: the first
+    // line ends after 漢, which loses the quarter em it had before the Hebrew word.
+    let text = format!("אב\tג漢{}", "ד".repeat(40));
+    let lay = |width: f64| {
+        let mut t = area(&text, width, Justify::Right, no_ranges());
+        t.para.mojikumi = Mojikumi::GyomatsuYakumonoZenkaku;
+        t.para.tabs = vec![TabStop { position: 150.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+        layout(db(), &t)
+    };
+    let l = lay(300.0);
+    assert!(l.lines.len() >= 2, "wraps: {} line(s)", l.lines.len());
+    assert!(l.glyphs.iter().filter(|g| g.line == 0).all(|g| g.byte < 10), "the first line ends after 漢");
+    let (_, right) = drawn_extent(&l, &text, 0);
+    assert!((right - 300.0).abs() < 1e-6, "ends on the right edge: {right}");
+    assert!((l.lines[0].x1 - right).abs() < 1e-6, "the line's record ends where it is drawn: {}", l.lines[0].x1);
+    // Drawn, that line is as wide as the stop and the text after the tab (אב). In a frame a point
+    // narrower, less than the quarter em, it does not fit and the first line stays in the frame.
+    let after_tab: f64 = l.glyphs.iter().filter(|g| g.byte < 4).map(|g| g.advance).sum();
+    let width = 150.0 + after_tab - 1.0;
+    let l = lay(width);
+    let (left, right) = drawn_extent(&l, &text, 0);
+    assert!(left >= -1e-6 && right <= width + 1e-6, "the first line stays in the frame: {left} {right} (frame {width})");
+}
+
 /// Point type has no measure to fill: a justified line with a tab keeps its natural width.
 #[test]
 fn justified_point_type_with_a_tab_keeps_its_width() {
