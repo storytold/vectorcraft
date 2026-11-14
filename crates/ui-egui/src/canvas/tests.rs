@@ -184,6 +184,9 @@ fn system_cursors_show_the_same_crosshair_with_precise_cursors_on_or_off() {
         Cursor::PencilNew,
         Cursor::PencilStraight,
         Cursor::PencilContinue,
+        Cursor::LivePaintBucket,
+        Cursor::LivePaintBucketFace,
+        Cursor::LivePaintBucketEdge,
     ] {
         assert_eq!(cursor_icon(c), egui::CursorIcon::Crosshair, "{c:?}");
         assert_eq!(cursor_icon(c), cursor_icon(c.precise()), "{c:?}");
@@ -1025,6 +1028,278 @@ fn two_finger_tap_in_touch_switches_selection_and_drawing_modes() {
     tap(&mut app, 2);
     assert_eq!(app.session.tool_id(), "rectangle");
     assert_eq!(count(&app), before - 1, "Essentials: undone");
+}
+
+/// One frame of the canvas with `events`, with the modal backdrop drawn over it when `backdrop` is set, as the app
+/// draws it for an open dialog.
+fn modal_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, backdrop: bool) {
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), events, ..Default::default() };
+    let mut out = ctx.run_ui(raw, |ui| {
+        show(app, ui);
+        if backdrop {
+            crate::dialogs::modal::show(ui.ctx(), "Test", egui::Id::unique("test-dialog"), 0.0, 8, |ui| ui.label("A dialog"));
+        }
+    });
+    out.textures_delta.clear();
+}
+
+/// Finger `n` touching at `pos`.
+fn finger(n: u64, phase: egui::TouchPhase, pos: Pos2) -> egui::Event {
+    egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(n), phase, pos, force: None }
+}
+
+/// The primary button pressed or released at `pos`.
+fn finger_button(pos: Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+}
+
+/// A tap of `fingers` fingers beside `c`, the first also pressing as the pointer and moving a little, in frames drawn
+/// with the modal backdrop when `backdrop` is set ([`modal_frame`]).
+fn finger_tap(app: &mut VectorcraftApp, ctx: &egui::Context, c: Pos2, fingers: u64, backdrop: bool) {
+    use egui::TouchPhase::{End, Move, Start};
+    let at = |n: u64| c + vec2(n as f32 * 50.0, 0.0);
+    let moved = at(0) + vec2(6.0, 6.0);
+    modal_frame(app, ctx, vec![finger(0, Start, at(0)), egui::Event::PointerMoved(at(0)), finger_button(at(0), true)], backdrop);
+    modal_frame(app, ctx, vec![finger(0, Move, moved), egui::Event::PointerMoved(moved)], backdrop);
+    modal_frame(app, ctx, (1..fingers).map(|n| finger(n, Start, at(n))).collect(), backdrop);
+    modal_frame(app, ctx, vec![finger(0, End, at(0)), finger_button(moved, false), egui::Event::PointerGone], backdrop);
+    modal_frame(app, ctx, (1..fingers).map(|n| finger(n, End, at(n))).collect(), backdrop);
+    modal_frame(app, ctx, vec![], backdrop);
+}
+
+/// While a modal is open, a two-finger tap on the canvas does not undo, a three-finger tap does not redo, and in the
+/// Touch workspace a two-finger tap does not switch modes: with the app's dialog open, before its backdrop is drawn
+/// (the frame it opens) and after, and under a modal backdrop alone.
+#[test]
+fn modal_blocks_two_and_three_finger_canvas_taps() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 40, "height": 40})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    modal_frame(&mut app, &ctx, vec![], false);
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+    let c = app.canvas_rect.unwrap().center();
+    let settle = |app: &mut VectorcraftApp| {
+        app.ui.dialog = None;
+        modal_frame(app, &ctx, vec![], false);
+        modal_frame(app, &ctx, vec![], false);
+    };
+    for (dialog, backdrop) in [(true, true), (true, false), (false, true)] {
+        let open = |app: &mut VectorcraftApp| app.ui.dialog = dialog.then(|| crate::state::Dialog::new("preferences", json!({})));
+        open(&mut app);
+        finger_tap(&mut app, &ctx, c, 2, backdrop);
+        assert_eq!(count(&app), 1, "dialog {dialog}, backdrop {backdrop}: two fingers undo nothing");
+        settle(&mut app);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(count(&app), 0);
+        open(&mut app);
+        finger_tap(&mut app, &ctx, c, 3, backdrop);
+        assert_eq!(count(&app), 0, "dialog {dialog}, backdrop {backdrop}: three fingers redo nothing");
+        settle(&mut app);
+        app.run("edit.redo", json!({})).unwrap();
+        assert_eq!(count(&app), 1);
+    }
+    crate::workspaces::switch(&mut app.ui, crate::workspaces::TOUCH).unwrap();
+    app.select_tool("selection");
+    modal_frame(&mut app, &ctx, vec![], false);
+    app.ui.dialog = Some(crate::state::Dialog::new("preferences", json!({})));
+    finger_tap(&mut app, &ctx, c, 2, true);
+    assert_eq!((app.session.tool_id(), count(&app)), ("selection", 1), "Touch: no switch to drawing mode under the dialog");
+    settle(&mut app);
+    finger_tap(&mut app, &ctx, c, 2, false);
+    assert_ne!(app.session.tool_id(), "selection", "closed: two fingers switch to drawing mode again");
+}
+
+/// Fingers down on the canvas when a modal dialog opens make no tap: lifting them while the dialog is open, or after it
+/// closes, runs nothing. A tap begun after it closes undoes again.
+#[test]
+fn opening_a_modal_discards_a_pending_canvas_tap() {
+    use egui::TouchPhase::{End, Start};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 40, "height": 40})).unwrap();
+    app.select_tool("selection");
+    let ctx = egui::Context::default();
+    modal_frame(&mut app, &ctx, vec![], false);
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+    let c = app.canvas_rect.unwrap().center();
+    let at = |n: u64| c + vec2(n as f32 * 50.0, 0.0);
+    modal_frame(&mut app, &ctx, vec![finger(0, Start, at(0)), egui::Event::PointerMoved(at(0)), finger_button(at(0), true)], false);
+    modal_frame(&mut app, &ctx, vec![finger(1, Start, at(1))], false);
+    // The dialog opens in a frame with no touch, and one finger lifts while it is open.
+    app.ui.dialog = Some(crate::state::Dialog::new("preferences", json!({})));
+    modal_frame(&mut app, &ctx, vec![], true);
+    modal_frame(&mut app, &ctx, vec![finger(0, End, at(0)), finger_button(at(0), false), egui::Event::PointerGone], true);
+    assert_eq!(count(&app), 1, "nothing undone while the dialog is open");
+    // The other finger lifts after it closes.
+    app.ui.dialog = None;
+    modal_frame(&mut app, &ctx, vec![], false);
+    modal_frame(&mut app, &ctx, vec![], false);
+    modal_frame(&mut app, &ctx, vec![finger(1, End, at(1))], false);
+    modal_frame(&mut app, &ctx, vec![], false);
+    assert_eq!(count(&app), 1, "the tap begun before the dialog runs nothing after it closes");
+    finger_tap(&mut app, &ctx, c, 2, false);
+    assert_eq!(count(&app), 0, "a tap begun after it closes undoes");
+}
+
+/// While a modal is open and the canvas is not yet covered by its backdrop (the frame a dialog opens), a click in
+/// Presentation Mode does not step to the next artboard, and a pinch or a wheel does not move the view. Closed, both
+/// act again.
+#[test]
+fn modal_blocks_presentation_tap_and_touch_navigation() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("artboard.new", &json!({"x": 500, "y": 0, "width": 100, "height": 80, "name": "Far"})).unwrap();
+    let ctx = egui::Context::default();
+    let dialog = || Some(crate::state::Dialog::new("preferences", json!({})));
+    app.ui.screen_mode = 3;
+    modal_frame(&mut app, &ctx, vec![], false);
+    let c = app.canvas_rect.unwrap().center();
+    let click = |app: &mut VectorcraftApp| {
+        modal_frame(app, &ctx, vec![egui::Event::PointerMoved(c)], false);
+        modal_frame(app, &ctx, vec![finger_button(c, true)], false);
+        modal_frame(app, &ctx, vec![finger_button(c, false)], false);
+        modal_frame(app, &ctx, vec![], false);
+    };
+    let at = |app: &VectorcraftApp| crate::panels::artboards::selected(app, 2);
+    assert_eq!(at(&app), 0);
+    app.ui.dialog = dialog();
+    click(&mut app);
+    assert_eq!(at(&app), 0, "no step under the dialog");
+    app.ui.dialog = None;
+    click(&mut app);
+    assert_eq!(at(&app), 1, "closed: a click steps");
+
+    app.ui.screen_mode = 0;
+    modal_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(c)], false);
+    let view = |app: &VectorcraftApp| {
+        let v = app.view().unwrap();
+        (v.zoom, v.center)
+    };
+    let wheel = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: vec2(0.0, 40.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    let before = view(&app);
+    app.ui.dialog = dialog();
+    modal_frame(&mut app, &ctx, vec![egui::Event::Zoom(2.0)], false);
+    modal_frame(&mut app, &ctx, vec![wheel.clone()], false);
+    for _ in 0..30 {
+        modal_frame(&mut app, &ctx, vec![], false);
+    }
+    assert_eq!(view(&app), before, "the view does not move under the dialog");
+    // A wheel turn of whole lines, which egui lets out over several frames, made just before the dialog closes.
+    let lines = egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: vec2(0.0, 3.0),
+        phase: egui::TouchPhase::Move,
+        modifiers: Default::default(),
+        source: egui::MouseWheelSource::Unknown,
+    };
+    modal_frame(&mut app, &ctx, vec![lines], false);
+    app.ui.dialog = None;
+    for _ in 0..30 {
+        modal_frame(&mut app, &ctx, vec![], false);
+    }
+    assert_eq!(view(&app), before, "the rest of a wheel turn made under the dialog does not move the view after it closes");
+    modal_frame(&mut app, &ctx, vec![egui::Event::Zoom(2.0)], false);
+    assert_ne!(view(&app).0, before.0, "closed: a pinch zooms");
+    let zoomed = view(&app);
+    modal_frame(&mut app, &ctx, vec![wheel.clone()], false);
+    for _ in 0..30 {
+        modal_frame(&mut app, &ctx, vec![], false);
+    }
+    assert_ne!(view(&app), zoomed, "closed: a new wheel turn moves the view");
+    // A dialog opened and closed with no wheel turn under it: a wheel turn in the first frame after it closes moves
+    // the view.
+    let scrolled = view(&app);
+    app.ui.dialog = dialog();
+    modal_frame(&mut app, &ctx, vec![], false);
+    app.ui.dialog = None;
+    modal_frame(&mut app, &ctx, vec![wheel], false);
+    for _ in 0..30 {
+        modal_frame(&mut app, &ctx, vec![], false);
+    }
+    assert_ne!(view(&app), scrolled, "a wheel turn just after the dialog closes moves the view");
+}
+
+/// While a modal is open, a pen or finger held still on the canvas does not drop the press it began.
+#[test]
+fn modal_long_touch_does_not_cancel_canvas_press() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width":800,"height":600})).unwrap();
+    app.select_tool("rectangle");
+    let ctx = egui::Context::default();
+    let tick = |app: &mut VectorcraftApp, time, events| {
+        let raw = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| show(app, ui));
+        out.textures_delta.clear();
+    };
+    tick(&mut app, 0.0, vec![]);
+    let pos = app.canvas_rect.unwrap().center();
+    tick(&mut app, 0.1, pen(egui::TouchPhase::Start, pos, 0.5));
+    assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Tool)));
+    app.ui.dialog = Some(crate::state::Dialog::new("preferences", json!({})));
+    tick(&mut app, 1.5, vec![]);
+    assert!(matches!(ctx.data(|d| d.get_temp::<Drag>(drag_id())), Some(Drag::Tool)), "the press is kept under the dialog");
+}
+
+/// While a modal is open and its backdrop does not yet cover the canvas (the frame a dialog opens), a drag on the canvas
+/// draws nothing, a two-finger tap with a drawing tool draws nothing, a middle-button drag does not pan and a
+/// double-click on type does not start editing it. Closed, a drag draws again.
+#[test]
+fn modal_blocks_new_canvas_presses() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let id = app.session.execute("text.create", &json!({"x": 100, "y": 150, "text": "Hello world", "size": 24})).unwrap()["id"].as_u64().unwrap();
+    app.session.execute("select.none", &json!({})).unwrap();
+    app.select_tool("rectangle");
+    let ctx = egui::Context::default();
+    modal_frame(&mut app, &ctx, vec![], false);
+    let count = |app: &VectorcraftApp| app.session.active().unwrap().doc.layers[0].children().unwrap().len();
+    let from = app.canvas_rect.unwrap().center() + vec2(0.0, 80.0);
+    let drag = |app: &mut VectorcraftApp, button: egui::PointerButton| {
+        let to = from + vec2(60.0, 40.0);
+        let b = |pos, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: Default::default() };
+        modal_frame(app, &ctx, vec![egui::Event::PointerMoved(from), b(from, true)], false);
+        modal_frame(app, &ctx, vec![egui::Event::PointerMoved(from + vec2(30.0, 20.0))], false);
+        modal_frame(app, &ctx, vec![egui::Event::PointerMoved(to)], false);
+        modal_frame(app, &ctx, vec![b(to, false)], false);
+        modal_frame(app, &ctx, vec![], false);
+    };
+    let before = count(&app);
+    app.ui.dialog = Some(crate::state::Dialog::new("preferences", json!({})));
+    drag(&mut app, egui::PointerButton::Primary);
+    assert_eq!(count(&app), before, "a drag with the Rectangle tool draws nothing under the dialog");
+    finger_tap(&mut app, &ctx, from, 2, false);
+    assert_eq!(count(&app), before, "a two-finger tap with the Rectangle tool draws nothing under the dialog");
+    let center = app.view().unwrap().center;
+    drag(&mut app, egui::PointerButton::Middle);
+    assert_eq!(app.view().unwrap().center, center, "a middle-button drag does not pan under the dialog");
+    app.select_tool("selection");
+    modal_frame(&mut app, &ctx, vec![], false);
+    let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+    let b = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().geometric_bounds().unwrap();
+    let at = xf.to_screen(b.center());
+    let button = |pressed| finger_button(at, pressed);
+    modal_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at), button(true), button(false), button(true), button(false)], false);
+    modal_frame(&mut app, &ctx, vec![], false);
+    assert_eq!(app.session.tool_id(), "selection", "a double-click on type does not edit it under the dialog");
+    app.ui.dialog = None;
+    app.select_tool("rectangle");
+    modal_frame(&mut app, &ctx, vec![], false);
+    modal_frame(&mut app, &ctx, vec![], false);
+    drag(&mut app, egui::PointerButton::Primary);
+    assert_eq!(count(&app), before + 1, "closed: a drag draws");
 }
 
 /// Switch Selection and Drawing Modes from the command: Pencil when no drawing tool was chosen yet,
@@ -2385,6 +2660,53 @@ fn pixel_preview_shows_the_document_pixels() {
     app.view_mut().unwrap().zoom = 0.5;
     let (w, _, hard, _) = upload(&mut app);
     assert!(w > 600 && !hard, "zoomed out: the screen's pixels");
+}
+
+/// Preferences › Performance › Use Monitor Profile for Canvas: with a display profile read, the
+/// art is drawn converted into it, and drawn again when the profile or the preference changes.
+#[test]
+fn the_canvas_is_drawn_through_the_display_profile_while_the_preference_is_on() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.session.execute("shape.rectangle", &json!({"x": 100, "y": 50, "width": 200, "height": 200})).unwrap();
+    app.session.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    app.canvas.worker_started = true; // render on this thread
+    assert!(app.session.prefs.monitor_profile_display, "on by default");
+    let ctx = egui::Context::default();
+    // How many pixels of the art's raster one frame uploads are `c`, None when it was not re-rendered.
+    let count = |app: &mut VectorcraftApp, c: egui::Color32| -> Option<usize> {
+        let (_, mut delta) = frame_output(app, &ctx);
+        let art = app.canvas.texture.as_ref().unwrap().id();
+        let n = delta.set.iter().find(|e| e.0.eq(&art)).and_then(|e| e.1.last()).map(|d| {
+            let egui::ImageData::Color(img) = &d.image;
+            img.pixels.iter().filter(|p| **p == c).count()
+        });
+        delta.clear();
+        n
+    };
+    let red = egui::Color32::RED;
+    let srgb = count(&mut app, red).expect("the first frame");
+    assert!(srgb > 1000, "the rectangle in sRGB: {srgb}");
+    let p3 = crate::display_profile::tests::p3();
+    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
+    let [r, g, b] = t.apply8([255, 0, 0]);
+    let shown = egui::Color32::from_rgb(r, g, b);
+    assert_ne!(shown, red, "sRGB red is less saturated on a wide-gamut display");
+    let reading = |found| Reading { display: Some("DP-1".into()), found };
+    assert!(app.display_profile.report(reading(Found::Profile { icc: p3.clone(), from: "test".into() })));
+    assert_eq!(count(&mut app, shown), Some(srgb), "drawn again, converted");
+    // The same profile again: nothing is drawn again.
+    assert!(!app.display_profile.report(reading(Found::Profile { icc: p3, from: "test".into() })));
+    assert_eq!(count(&mut app, shown), None);
+    // Off: drawn again in sRGB.
+    app.session.prefs.monitor_profile_display = false;
+    assert_eq!(count(&mut app, red), Some(srgb));
+    // On again, then the system takes over: sRGB.
+    app.session.prefs.monitor_profile_display = true;
+    assert_eq!(count(&mut app, shown), Some(srgb));
+    app.display_profile.report(reading(Found::System("test".into())));
+    assert_eq!(count(&mut app, red), Some(srgb));
 }
 
 /// View › Hide Template (#2000): a template layer's art leaves the canvas, and Show Template
@@ -7044,6 +7366,48 @@ fn cmd_space_zooms_and_space_pans_whatever_the_tool() {
     assert!((after.center.x - (before.center.x - 30.0 / before.zoom)).abs() < 1e-6, "{before:?} → {after:?}");
 }
 
+/// While the Type tool edits text, Space types a space: held, it shows no hand and a drag with it
+/// does not pan the view. Cmd+Space still zooms.
+#[test]
+fn space_types_a_space_while_editing_text_and_does_not_pan() {
+    use egui::{CursorIcon, Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let at = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.0, 100.0));
+    let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
+    let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    // The cursor the canvas sets over a window without the focus, as in
+    // `the_rotate_cursor_shows_for_space_shift_and_the_rotate_view_tool`.
+    let shown = |app: &mut VectorcraftApp| {
+        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, focused: false, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.cursor_icon
+    };
+    typing_frame(&mut app, &ctx, vec![Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at), space(true, Modifiers::NONE), Event::Text(" ".into())]);
+    assert_eq!(plain(&app, id), "a ", "Space types a space");
+    assert_ne!(shown(&mut app), CursorIcon::Grab, "held while editing, Space shows no hand");
+    let before = *app.view().unwrap();
+    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(30.0, 0.0))]);
+    typing_frame(&mut app, &ctx, vec![button(at + vec2(30.0, 0.0), false, Modifiers::NONE)]);
+    let after = *app.view().unwrap();
+    assert_eq!((after.center, after.zoom, after.rotation), (before.center, before.zoom, before.rotation), "a drag with Space held does not pan");
+    assert!(app.session.tool_wants_text(), "editing goes on");
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE)]);
+    // Cmd+Space still lends the Zoom tool.
+    typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
+    assert_eq!(shown(&mut app), CursorIcon::ZoomIn, "Cmd+Space shows the magnifier");
+    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
+    typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true), "Cmd+Space click zooms in");
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
+    assert_eq!(plain(&app, id), "a ", "the text is as typed");
+}
+
 #[test]
 fn space_shift_drag_rotates_the_view_whatever_the_tool() {
     use egui::{Event, Modifiers};
@@ -11512,6 +11876,7 @@ fn pan_job(doc: &std::sync::Arc<vectorcraft_doc::Document>, key: &CacheKey, (dx,
         effects: Default::default(),
         may_copy: true,
         may_keep: true,
+        display: None,
     }
 }
 

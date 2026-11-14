@@ -12,10 +12,10 @@ use vectorcraft_testkit::invariants::{check_all, check_session, doc_json};
 use vectorcraft_testkit::strategies::{command_param_keys, junk_params_for_command, junk_values, param_keys, safe_value_for_command};
 
 /// Commands that replace/close the active document or touch the filesystem are fine to call, but
-/// their file and folder params are redirected into a temp dir (`safe_value_for_command`, which
-/// `junk_params_for_command` applies, by the keys the command catalog names as files and folders).
-fn safe_path() -> String {
-    vectorcraft_testkit::temp_dir("sweep").join("out.bin").to_string_lossy().to_string()
+/// their file and folder params are redirected into the test's temp dir `dir` (`safe_value_for_command`,
+/// which `junk_params_for_command` applies, by the keys the command catalog names as files and folders).
+fn safe_path(dir: &std::path::Path) -> String {
+    dir.join("out.bin").to_string_lossy().to_string()
 }
 
 /// `r`, after failing the case if the command panicked. The engine's guard reports a panic as
@@ -219,7 +219,8 @@ fn junk_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Value> {
 
 #[test]
 fn every_command_with_junk_params() {
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let mut failures = vec![];
     let mut calls = 0usize;
     for fx in Fixture::ALL {
@@ -311,8 +312,8 @@ fn names_location(spec: Option<&vectorcraft_engine::CommandSpec>, key: &str) -> 
 /// command alone in at least one case ([`junk_cases`]).
 #[test]
 fn sweep_cases_name_files_only_inside_the_temp_folder() {
-    let path = safe_path();
-    let dir = vectorcraft_testkit::temp_dir("sweep");
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let mut unsent = vec![];
     let mut outside = std::collections::BTreeSet::new();
     for c in command_specs() {
@@ -344,8 +345,8 @@ fn sweep_cases_name_files_only_inside_the_temp_folder() {
 /// `paths: [{ids, path}]`, each with a string in the temp folder, and a folder key a folder there.
 #[test]
 fn sweep_cases_send_the_file_keys_of_the_command_catalog() {
-    let path = safe_path();
-    let dir = vectorcraft_testkit::temp_dir("sweep");
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let spec = |id: &str| command_specs().iter().find(|c| c.id == id).unwrap();
     let inside = |v: &Value| v.as_str().is_some_and(|s| std::path::Path::new(s).starts_with(&dir));
     for (id, key) in [
@@ -381,7 +382,8 @@ fn sweep_cases_send_the_file_keys_of_the_command_catalog() {
 /// document as it was, still applies after it.
 #[test]
 fn commands_that_do_not_wait_for_a_tool_edit_change_no_document() {
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let mut failures = vec![];
     for fx in [Fixture::Single, Fixture::Multi] {
         for c in command_specs().iter().filter(|c| !vectorcraft_engine::waits_for_tool_edit(c.id)) {
@@ -847,6 +849,14 @@ fn structured_junk() {
         ("addon.pathtools.movePointsTogether", json!({"enabled": true})),
         ("addon.pathtools.slideAnchor", json!({"id": 2, "anchor": 1, "t": 0.5})),
         ("addon.pathtools.movePointsTogether", json!({"enabled": false})),
+        // Path Precision Tools: Trim at Crossings.
+        ("addon.pathtools.trim", json!({"at": [1e308, -1e308], "tolerance": 1e308})),
+        ("addon.pathtools.trim", json!({"at": ["x", null], "rect": [0, 0, f64::NAN, 1], "points": "all"})),
+        ("addon.pathtools.trim", json!({"rect": [-1e7, -1e7, 2e7, 2e7]})),
+        ("addon.pathtools.trim", json!({"rect": [0, 0, -1e308, 1e308]})),
+        ("addon.pathtools.trim", json!({"points": [[0, 0], [1e7, 1e7], [-1e7, 5], [0, 0]]})),
+        ("addon.pathtools.trim", json!({"points": [[0, 0], [1, "y"], null]})),
+        ("addon.pathtools.trim", json!({"at": [50, 50], "tolerance": 100})),
         // Arrange Tools add-on.
         ("addon.arrange.grid", json!({"columns": u64::MAX, "gapX": 1e6, "gapY": -1e6, "centerOnArtboard": true})),
         ("addon.arrange.grid", json!({"layout": "row", "gapX": f64::MAX, "columns": -1})),
@@ -899,6 +909,11 @@ fn structured_junk() {
         ("addon.cutting.weed", json!({"spacing": 1e-300, "box": "no", "direction": ["both"], "swatch": 5})),
         ("addon.cutting.weed", json!({"spacing": "1 mm", "box": false, "direction": "vertical", "swatch": "no such swatch"})),
         ("addon.cutting.weed", json!({"count": u64::MAX, "margin": "x", "gap": null, "weight": 0})),
+        ("addon.cutting.banner", json!({"hem": 1e5, "grommetInset": 1e5, "spacing": 1e-300, "diameter": 1000})),
+        ("addon.cutting.banner", json!({"hem": -1, "spacing": f64::MAX, "weight": 1e308, "top": "no", "allArtboards": 1})),
+        ("addon.cutting.banner", json!({"hem": 0, "grommetInset": 0, "spacing": 0.01, "allArtboards": true})),
+        ("addon.cutting.banner", json!({"spacing": "1 mm", "grommets": false, "swatch": 5, "left": null})),
+        ("addon.cutting.banner", json!({"top": false, "right": false, "bottom": false, "left": false, "allArtboards": false})),
         // Type Tools add-on.
         ("addon.type.textTweaker", json!({"attribute": "size", "from": 1296, "to": 0.1, "shape": "random", "seed": u64::MAX})),
         ("addon.type.textTweaker", json!({"attribute": "tracking", "from": f64::MAX, "to": -1e308, "shape": "spike"})),
@@ -1127,7 +1142,8 @@ fn serializable_cases(c: &vectorcraft_engine::CommandSpec, path: &str) -> Vec<Va
 /// After a successful fuzzed call, the document still round-trips and exports.
 #[test]
 fn fuzzed_calls_keep_documents_serializable() {
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let mut failures = vec![];
     for c in command_specs() {
         for p in serializable_cases(c, &path) {
@@ -1196,7 +1212,8 @@ fn recovery_commands_with_a_damaged_store_and_junk_params() {
     ] {
         store.write(name, bytes).unwrap();
     }
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     for fx in Fixture::ALL {
         for id in ["file.recovery.save", "file.recovery.list", "file.recovery.restore", "file.recovery.discard"] {
             let spec = command_specs().iter().find(|c| c.id == id).unwrap();
@@ -1216,7 +1233,8 @@ fn recovery_commands_with_a_damaged_store_and_junk_params() {
 /// interaction or a broken tree.
 #[test]
 fn envelope_commands_with_junk_params_on_envelopes() {
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let makes: [(&str, Value); 3] = [
         ("object.envelope.makeWithWarp", json!({"style": "twist", "bend": 80})),
         ("object.envelope.makeWithMesh", json!({"rows": 2, "cols": 3})),
@@ -1262,7 +1280,8 @@ fn envelope_commands_with_junk_params_on_envelopes() {
 #[test]
 fn text_commands_with_junk_params_on_inline_graphics() {
     use vectorcraft_testkit::fixtures::{ellipse, exec, id_of, select};
-    let path = safe_path();
+    let dir = vectorcraft_testkit::TempDir::new("sweep");
+    let path = safe_path(&dir);
     let setup = || {
         let mut s = Fixture::Multi.session();
         let e = ellipse(&mut s, 400.0, 300.0, 20.0, 20.0);

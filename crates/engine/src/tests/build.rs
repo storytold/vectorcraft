@@ -840,7 +840,7 @@ fn shape_builder_applies_a_merge_before_what_comes_next() {
         }),
     ];
     let _proof = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let dir = vectorcraft_testkit::temp_dir("shape-builder-merge-first");
+    let dir = vectorcraft_testkit::TempDir::new("shape-builder-merge-first");
     for (what, then) in next {
         let mut s = session();
         if what == "Select All Instances" {
@@ -3087,6 +3087,144 @@ fn live_paint_bucket_tool_fills_face() {
     assert_eq!(s.doc().unwrap().selection.objects, vec![f.id]);
 }
 
+/// `tool.setOption` refuses an invalid value for the Live Paint tools, naming its key, whether the
+/// tool is active or not and in the `key`/`value` and `values` forms: a switch that is not true or
+/// false, a color that is not an RGB color (an alpha part included), a width that is not a number
+/// and an option the tool does not have. Nothing is set, also from the valid values sent with it,
+/// and the saved settings stay as they were.
+#[test]
+fn live_paint_tool_options_refuse_invalid_values_and_change_nothing() {
+    let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
+    let widths = [json!("wide"), json!(null), json!(true)];
+    let switches = [json!("true"), json!(null), json!(1)];
+    for (tool, keys) in
+        [("livePaintBucket", &["paintFills", "paintStrokes", "highlight"][..]), ("livePaintSelection", &["selectFills", "selectStrokes"][..])]
+    {
+        let mut bad: Vec<(&str, Value)> = keys.iter().flat_map(|k| switches.iter().map(move |v| (*k, v.clone()))).collect();
+        bad.extend(colors.iter().map(|v| ("color", v.clone())));
+        bad.extend(widths.iter().map(|v| ("width", v.clone())));
+        bad.push(("colour", json!("#00ff00")));
+        for active in [false, true] {
+            let mut s = session();
+            if active {
+                s.select_tool(tool, ViewInfo::default()).unwrap();
+            }
+            let (options, prefs) = (s.tool_options_of(tool), s.prefs.clone());
+            for (key, v) in &bad {
+                let mut values = serde_json::Map::new();
+                values.insert("width".into(), json!(9));
+                values.insert(key.to_string(), v.clone());
+                for p in [json!({"tool": tool, "values": values}), json!({"tool": tool, "key": key, "value": v})] {
+                    let e = s.set_tool_option_cmd(&p).unwrap_err();
+                    assert!(e.contains(&format!("`{key}`")), "{tool} {p}: {e}");
+                    assert_eq!((s.tool_options_of(tool), &s.prefs), (options.clone(), &prefs), "{tool} {p}");
+                }
+            }
+            // A `key` left without a `value` is an invalid value too.
+            assert!(s.set_tool_option_cmd(&json!({"tool": tool, "key": "color"})).is_err());
+            s.select_tool(tool, ViewInfo::default()).unwrap();
+            assert_eq!(s.tool_options_of(tool), options, "{tool}");
+        }
+    }
+}
+
+/// The Live Paint tools' options take each color form they took before, and a width out of range
+/// is clamped to 1–20 rather than refused; the values are saved with the preferences.
+#[test]
+fn live_paint_tool_options_take_rgb_colors_and_clamp_the_width() {
+    let mut s = session();
+    for tool in ["livePaintBucket", "livePaintSelection"] {
+        for (color, hex) in [("#00FF00", "#00ff00"), ("#0f0", "#00ff00"), ("0000ff", "#0000ff"), ("light blue", "#4f80ff"), ("white", "#ffffff")] {
+            let o = s.set_tool_option_cmd(&json!({"tool": tool, "key": "color", "value": color})).unwrap();
+            assert_eq!(o["color"], hex, "{tool} {color}");
+        }
+        for (width, set) in [(100.0, 20.0), (0.0, 1.0), (-3.0, 1.0), (7.5, 7.5)] {
+            let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"width": width}})).unwrap();
+            assert_eq!(o["width"], set, "{tool} {width}");
+        }
+        assert_eq!(s.prefs.tool_settings[tool]["width"], 7.5);
+        assert_eq!(s.prefs.tool_settings[tool]["color"], "#ffffff");
+    }
+    let o = s.set_tool_option_cmd(&json!({"tool": "livePaintBucket", "values": {"paintFills": false, "highlight": false}})).unwrap();
+    assert_eq!((&o["paintFills"], &o["highlight"]), (&json!(false), &json!(false)));
+}
+
+/// Saved Live Paint settings that hold an invalid value still load: the tool keeps its default for
+/// that option and takes the valid ones.
+#[test]
+fn live_paint_tools_load_saved_settings_with_invalid_values() {
+    let mut s = session();
+    let saved = json!({"paintFills": "yes", "highlight": false, "width": "wide", "color": "nope", "paintStrokes": true});
+    s.prefs.tool_settings.insert("livePaintBucket".into(), saved.as_object().unwrap().clone());
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    let o = s.tool_options_of("livePaintBucket");
+    assert_eq!(
+        (&o["paintFills"], &o["paintStrokes"], &o["highlight"], &o["width"], &o["color"]),
+        (&json!(true), &json!(true), &json!(false), &json!(4.0), &json!("#ff2a2a"))
+    );
+}
+
+/// `tool.setOption` refuses an invalid value for the Shape Builder, naming its key, whether the
+/// tool is active or not and in the `key`/`value` and `values` forms: a switch that is not true or
+/// false, a `pickColorFrom` or `selection` that is not one of its names, a `gapLength` that is not
+/// a number, a `highlightColor` that is not an RGB color (an alpha part included) and an option the
+/// tool does not have. Nothing is set, also from the valid values sent with it, and the saved
+/// settings stay as they were.
+#[test]
+fn shape_builder_tool_options_refuse_invalid_values_and_change_nothing() {
+    let tool = "shapeBuilder";
+    let switches = ["openFilledAsClosed", "cursorSwatchPreview", "highlightFill", "gapDetection", "clickStrokeSplitsPath", "highlightStroke"];
+    let mut bad: Vec<(&str, Value)> = switches.iter().flat_map(|k| [json!("true"), json!(null), json!(1)].map(move |v| (*k, v))).collect();
+    bad.extend([json!("Swatches"), json!(true), json!(null), json!("")].map(|v| ("pickColorFrom", v)));
+    bad.extend([json!("straight"), json!(1), json!(null)].map(|v| ("selection", v)));
+    bad.extend([json!("wide"), json!(null), json!(true)].map(|v| ("gapLength", v)));
+    let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
+    bad.extend(colors.map(|v| ("highlightColor", v)));
+    bad.push(("color", json!("#00ff00")));
+    for active in [false, true] {
+        let mut s = session();
+        if active {
+            s.select_tool(tool, ViewInfo::default()).unwrap();
+        }
+        let (options, prefs) = (s.tool_options_of(tool), s.prefs.clone());
+        for (key, v) in &bad {
+            let mut values = serde_json::Map::new();
+            values.insert("gapLength".into(), json!(9));
+            values.insert(key.to_string(), v.clone());
+            for p in [json!({"tool": tool, "values": values}), json!({"tool": tool, "key": key, "value": v})] {
+                let e = s.set_tool_option_cmd(&p).unwrap_err();
+                assert!(e.contains(&format!("`{key}`")), "{p}: {e}");
+                assert_eq!((s.tool_options_of(tool), &s.prefs), (options.clone(), &prefs), "{p}");
+            }
+        }
+        s.select_tool(tool, ViewInfo::default()).unwrap();
+        assert_eq!(s.tool_options_of(tool), options);
+    }
+}
+
+/// The Shape Builder's options take each value they took before: the names of `pickColorFrom` and
+/// `selection`, each RGB color form, and a gap length out of range clamped rather than refused.
+#[test]
+fn shape_builder_tool_options_take_valid_values_and_clamp_the_gap() {
+    let mut s = session();
+    let tool = "shapeBuilder";
+    for (color, hex) in [("#00FF00", "#00ff00"), ("#0f0", "#00ff00"), ("0000ff", "#0000ff"), ("light blue", "#4f80ff"), ("white", "#ffffff")] {
+        let o = s.set_tool_option_cmd(&json!({"tool": tool, "key": "highlightColor", "value": color})).unwrap();
+        assert_eq!(o["highlightColor"], hex, "{color}");
+    }
+    for (gap, set) in [(1000.0, vectorcraft_tools::builder::SHAPE_BUILDER_MAX_GAP), (-3.0, 0.0), (7.5, 7.5)] {
+        let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"gapLength": gap}})).unwrap();
+        assert_eq!(o["gapLength"], set, "{gap}");
+    }
+    let o = s
+        .set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "swatches", "selection": "straightLine", "gapDetection": true}}))
+        .unwrap();
+    assert_eq!((&o["pickColorFrom"], &o["selection"], &o["gapDetection"]), (&json!("swatches"), &json!("straightLine"), &json!(true)));
+    let o = s.set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "artwork", "selection": "freeform"}})).unwrap();
+    assert_eq!((&o["pickColorFrom"], &o["selection"]), (&json!("artwork"), &json!("freeform")));
+    assert_eq!(s.prefs.tool_settings[tool]["gapLength"], 7.5);
+}
+
 #[test]
 fn live_paint_bucket_alt_sample_paints_next_face_without_changing_selection() {
     let mut s = session();
@@ -3788,6 +3926,103 @@ fn a_trace_run_needs_the_library_colours_it_traced_with() {
     assert!(!run.current(&s), "{name} changed");
 }
 
+/// `image_doc`'s image with its disc 20 px to the left: the same size, other pixels.
+fn moved_disc_png() -> Vec<u8> {
+    vectorcraft_trace::Raster::from_fn(100, 100, |x, y| {
+        let (dx, dy) = (x as f64 + 0.5 - 30.0, y as f64 + 0.5 - 50.0);
+        if dx * dx + dy * dy <= 900.0 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }
+    })
+    .encode_png()
+}
+
+/// Puts `bytes` under the image key `key`, or takes the key's image data away (`None`).
+fn set_image_data(s: &mut Session, key: &str, bytes: Option<Vec<u8>>) {
+    s.edit("image data", |d, _| {
+        match bytes {
+            Some(b) => d.images.insert(key.into(), ImageBlob::new("image/png", b)),
+            None => d.images.remove(key),
+        };
+        Ok(())
+    })
+    .unwrap();
+}
+
+/// The middle of the first traced path of the Image Trace object the reply `r` names, in x.
+fn traced_center_x(s: &Session, r: &Value) -> f64 {
+    outline(&traced_paths(&node(s, NodeId(r["id"].as_u64().unwrap())))[0]).0.bounds().unwrap().center().x
+}
+
+/// A trace made away from its command no longer applies once the pixels under its image's key
+/// change, though the object, its image record and the settings stay as they were; both commands
+/// then trace the pixels there now. The same bytes in another allocation still apply.
+#[test]
+fn a_trace_run_needs_the_pixels_it_traced() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut s = session();
+        image_doc(&mut s);
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        // The same bytes, allocated anew: still current.
+        let same = s.doc().unwrap().doc.images["img1"].bytes.to_vec();
+        set_image_data(&mut s, "img1", Some(same));
+        assert!(run.current(&s), "{command}: equal bytes");
+        // Other pixels under the same key: no longer current, and the hand-off is dropped.
+        set_image_data(&mut s, "img1", Some(moved_disc_png()));
+        assert!(!run.current(&s), "{command}: other pixels");
+        traced.hand_in(&mut s);
+        let r = s.execute(command, run.params()).unwrap();
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        // The disc is now at image x 30, which the ×2 placement at 50 puts at 110.
+        let x = traced_center_x(&s, &r);
+        assert!((x - 110.0).abs() < 1.5, "{command}: traced the pixels there now, at {x}");
+    }
+}
+
+/// Image data that is missing or empty: a run made before it went no longer applies, the run's
+/// command gives the error it gives without a run, and nothing panics.
+#[test]
+fn a_trace_run_of_missing_or_empty_image_data() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    let traced = run.run(&|_, _| true).unwrap();
+    set_image_data(&mut s, "img1", None);
+    assert!(!run.current(&s), "missing");
+    traced.hand_in(&mut s);
+    let e = s.execute(run.command(), run.params()).unwrap_err().to_string();
+    assert!(e.contains("image data `img1` is missing"), "{e}");
+    set_image_data(&mut s, "img1", Some(vec![]));
+    assert!(!run.current(&s), "empty");
+    let empty = cmd::TraceRun::prepare(&s, "imageTrace.make", &p).unwrap();
+    assert!(empty.current(&s), "two empty blobs are equal");
+    assert!(matches!(empty.run(&|_, _| true), Err(EngineError::Other(_))));
+    assert!(matches!(s.execute(run.command(), run.params()), Err(EngineError::Other(_))));
+}
+
+/// Tracing an Image Trace object again follows the same rule: once the pixels of the image it
+/// holds change, a run made before no longer applies, and the command traces the pixels there now.
+#[test]
+fn a_trace_run_of_an_image_trace_object_needs_its_pixels() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    let mut s = session();
+    image_doc(&mut s);
+    let g = s.execute("imageTrace.make", &p).unwrap()["id"].as_u64().unwrap();
+    let again = json!({"id": g, "params": {"ignoreWhite": true}});
+    let run = cmd::TraceRun::prepare(&s, "imageTrace.make", &again).unwrap();
+    assert_eq!(run.target(), NodeId(g));
+    let traced = run.run(&|_, _| true).unwrap();
+    assert!(run.current(&s));
+    set_image_data(&mut s, "img1", Some(moved_disc_png()));
+    assert!(!run.current(&s));
+    traced.hand_in(&mut s);
+    let r = s.execute(run.command(), run.params()).unwrap();
+    assert!(s.trace_hand_off.is_none(), "dropped");
+    let x = traced_center_x(&s, &r);
+    assert!((x - 110.0).abs() < 1.5, "traced the pixels there now, at {x}");
+}
+
 /// Shapes: the disc of the test image comes out as a live ellipse where the image lies, the same
 /// circle as its traced path; without the option it is a plain path.
 #[test]
@@ -4037,7 +4272,10 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         sorted.sort();
         assert_eq!(sorted, ["#000000", "#c82832", "#f0f0dc"], "{method}");
         let n = node(&s, g);
-        assert_eq!(names(&n), order, "{method}");
+        // Overlapping fills the ring whole and draws the field inside it above the ring: that path starts a second
+        // group of the field's color, above the black one.
+        let want: Vec<String> = if method == "overlapping" { order.iter().chain(order.first()).cloned().collect() } else { order.clone() };
+        assert_eq!(names(&n), want, "{method}");
         // Each group holds its color's paths, and in turn they are the paths of the trace without
         // byColor, in their order.
         let groups = n.children().unwrap();
@@ -4051,8 +4289,8 @@ fn image_trace_expand_by_color_groups_each_colors_paths() {
         // Release to Layers: a sublayer for each color, in the same order.
         let r = s.execute("layer.releaseToLayers", &json!({"id": g.0})).unwrap();
         let subs = ids(&r);
-        assert_eq!(subs.len(), 3, "{method}");
-        for (sub, name) in subs.iter().zip(&order) {
+        assert_eq!(subs.len(), want.len(), "{method}");
+        for (sub, name) in subs.iter().zip(&want) {
             let l = node(&s, *sub);
             assert!(matches!(l.kind, NodeKind::Layer { .. }), "{method}");
             assert_eq!(names(&l), std::slice::from_ref(name), "{method}");

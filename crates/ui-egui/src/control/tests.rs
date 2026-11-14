@@ -33,11 +33,9 @@ fn hiding(hidden: &[(&str, &str)], readable: &[&str]) -> super::Hiding {
 
 /// [`super::hide_library_ids`] on `reply`, under a read root made for `tag`.
 fn hide_under_a_root(tag: &str, reply: &mut Value, hidden: &super::Hiding) {
-    let root = std::env::temp_dir().join(format!("vc-{tag}-root-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
-    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let root = crate::tests_folder::Folder::new(&format!("{tag}-root"));
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
     vectorcraft_engine::file_access::confine(roots.as_ref(), || super::hide_library_ids(reply, hidden));
-    let _ = std::fs::remove_dir_all(root);
 }
 
 /// Encoded file data in a reply, a base64 string under `dataBase64`, `pngBase64`, `thumbnailBase64`
@@ -73,7 +71,7 @@ fn a_reply_keeps_encoded_data_that_holds_a_hidden_path() {
 /// space do not keep it.
 #[test]
 fn a_reply_keeps_a_hidden_path_only_inside_a_known_library_id() {
-    let base = std::env::temp_dir().join(format!("vc-continuation-{}", std::process::id()));
+    let base = crate::tests_folder::Folder::new("continuation");
     let root = base.join("in");
     std::fs::create_dir_all(&root).unwrap();
     let hidden_path = base.join("in x").join("b.svg").to_string_lossy().into_owned();
@@ -84,7 +82,6 @@ fn a_reply_keeps_a_hidden_path_only_inside_a_known_library_id() {
     let mut reply = json!({"error": format!("kept {hidden_path}.bak, {other}{up} and {known}")});
     let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
     vectorcraft_engine::file_access::confine(roots.as_ref(), || super::hide_library_ids(&mut reply, &hidden));
-    let _ = std::fs::remove_dir_all(base);
     assert_eq!(reply["error"], json!(format!("kept b.svg.bak, b.svg (2){up} and {known}")), "{reply}");
     // A readable library's id with a space after the hidden part stays whole.
     // A readable id with a `..` part does not keep the hidden part.
@@ -250,7 +247,7 @@ fn a_reply_hides_a_hidden_relative_path_written_as_absolute() {
 /// by their file names; plain text and a path inside the root are not.
 #[test]
 fn a_request_sends_paths_that_an_error_hides() {
-    let base = std::env::temp_dir().join(format!("vc-sent-paths-{}", std::process::id()));
+    let base = crate::tests_folder::Folder::new("sent-paths");
     let root = base.join("in");
     std::fs::create_dir_all(&root).unwrap();
     let inside = root.join("a.svg").to_string_lossy().into_owned();
@@ -259,7 +256,6 @@ fn a_request_sends_paths_that_an_error_hides() {
     let mut sent = Vec::new();
     let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
     vectorcraft_engine::file_access::confine(roots.as_ref(), || super::sent_paths(&params, &mut sent));
-    let _ = std::fs::remove_dir_all(base);
     let pair = |path: &str, name: &str| (format!("loaded/{path}"), format!("loaded/{name}"));
     let want = [
         pair("outside/h.svg", "h.svg"),
@@ -276,7 +272,7 @@ fn a_request_sends_paths_that_an_error_hides() {
 /// relative name and a path inside the root are not.
 #[test]
 fn an_absolute_path_outside_the_read_root_is_unreadable() {
-    let base = std::env::temp_dir().join(format!("vc-unreadable-absolute-{}", std::process::id()));
+    let base = crate::tests_folder::Folder::new("unreadable-absolute");
     std::fs::create_dir_all(base.join("in")).unwrap();
     let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
     let inside = base.join("in").join("a.svg").to_string_lossy().into_owned();
@@ -295,7 +291,6 @@ fn an_absolute_path_outside_the_read_root_is_unreadable() {
         assert!(!super::unreadable_absolute("keep"));
         assert!(!super::unreadable_absolute(&inside));
     });
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// Without a read root, a `file:` URL that names another host may be read, and a recorded step keeps
@@ -395,12 +390,10 @@ fn a_reply_keeps_a_longer_path_that_ends_with_a_hidden_relative_path() {
 #[cfg(not(windows))]
 #[test]
 fn a_sent_path_keeps_a_backslash_in_its_file_name() {
-    let root = std::env::temp_dir().join(format!("vc-sent-backslash-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
-    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let root = crate::tests_folder::Folder::new("sent-backslash");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
     let mut sent = Vec::new();
     vectorcraft_engine::file_access::confine(roots.as_ref(), || super::sent_paths(&json!({"path": "/out/weird\\name.svg"}), &mut sent));
-    let _ = std::fs::remove_dir_all(root);
     assert_eq!(sent, [("loaded//out/weird\\name.svg".to_string(), "loaded/weird\\name.svg".to_string())]);
 }
 
@@ -412,16 +405,37 @@ fn a_hidden_library_at_the_top_of_the_file_system_keeps_its_shown_id() {
     let panel = "library:swatches:loaded//b.svg".to_string();
     app.ui.color_guide_limit = "loaded//b.svg".to_string();
     app.ui.open_panel = Some(panel);
-    let root = std::env::temp_dir().join(format!("vc-top-level-library-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
-    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let root = crate::tests_folder::Folder::new("top-level-library");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
     let (inspected, docking) = vectorcraft_engine::file_access::confine(roots.as_ref(), || {
         (input_request(&mut app, "ui.inspect", json!({})), input_request(&mut app, "ui.docking", json!({})))
     });
-    let _ = std::fs::remove_dir_all(root);
     assert_eq!(inspected["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{inspected}");
     assert_eq!(inspected["result"]["ui"]["open_panel"], "library:swatches:loaded/b.svg", "{inspected}");
     assert_eq!(docking["result"]["flyout"], "library:swatches:loaded/b.svg", "{docking}");
+}
+
+/// `ui.inspect` shows a recovery folder outside the read root that the status text names (a failed
+/// recovery copy) by its folder name, also in the paths under it: the folder in use, and one a
+/// failure named before the preference moved on. A readable one stays.
+#[test]
+fn a_recovery_folder_outside_the_read_root_is_hidden_in_the_status() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.session.recovery.set_default_folder(Some("/outside/recovery".into()));
+    let root = crate::tests_folder::Folder::new("recovery-status");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
+    let inspect = |app: &mut VectorcraftApp, status: String| {
+        app.ui.status = status;
+        let reply = vectorcraft_engine::file_access::confine(roots.as_ref(), || input_request(app, "ui.inspect", json!({})));
+        reply["result"]["ui"]["status"].clone()
+    };
+    let status = "Couldn't save recovery data: /outside/recovery/a-1 is not a folder. Copies go to /outside/recovery".to_string();
+    assert_eq!(inspect(&mut app, status), "Couldn't save recovery data: recovery/a-1 is not a folder. Copies go to recovery");
+    let inside = root.as_path().join("copies").to_string_lossy().into_owned();
+    app.session.prefs.recovery_folder = inside.clone();
+    app.recovery.named = vec!["/outside/earlier".into()];
+    assert_eq!(inspect(&mut app, "Copies go to /outside/earlier".into()), "Copies go to earlier");
+    assert_eq!(inspect(&mut app, format!("Copies go to {inside}")), json!(format!("Copies go to {inside}")));
 }
 
 /// A path outside the read root that a request sent is shown by its file name in a reply that succeeded
@@ -429,9 +443,8 @@ fn a_hidden_library_at_the_top_of_the_file_system_keeps_its_shown_id() {
 #[test]
 fn a_sent_path_reads_the_same_whatever_the_outcome() {
     let app = VectorcraftApp::new(Session::new(), Services::default());
-    let root = std::env::temp_dir().join(format!("vc-sent-outcome-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
-    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&root], &[]).unwrap();
+    let root = crate::tests_folder::Folder::new("sent-outcome");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
     let sent = json!({"path": "/outside/b.svg"});
     let mut done = json!({"ok": true, "result": {"path": "/outside/b.svg"}});
     let mut failed = json!({"ok": false, "error": "can't read /outside/b.svg"});
@@ -439,7 +452,6 @@ fn a_sent_path_reads_the_same_whatever_the_outcome() {
         super::hide_in_reply(&app, &mut done, &sent, super::Hiding::default());
         super::hide_in_reply(&app, &mut failed, &sent, super::Hiding::default());
     });
-    let _ = std::fs::remove_dir_all(root);
     assert_eq!(done["result"]["path"], "b.svg", "{done}");
     assert_eq!(failed["error"], "can't read b.svg", "{failed}");
 }
@@ -1157,7 +1169,7 @@ fn panels_that_redraw_apply_a_merge_on_another_thread_first() {
 /// applies the merge first: the file holds it, and closing asks to save it.
 #[test]
 fn save_and_close_apply_a_merge_on_another_thread_first() {
-    let dir = vectorcraft_testkit::temp_dir("control-merge-save");
+    let dir = crate::tests_folder::Folder::adopt(vectorcraft_testkit::temp_dir("control-merge-save"));
     for then in ["file.saveAs", "file.exportAs", "file.close"] {
         let services = Services { write: Some(Box::new(|p: &str, b: &[u8]| std::fs::write(p, b).map_err(|e| e.to_string()))), ..Default::default() };
         let mut app = VectorcraftApp::new(Session::new(), services);

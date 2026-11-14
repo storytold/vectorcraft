@@ -575,6 +575,8 @@ antiAlias	Sharp	锐利
 	Convert to Artboards	转换为画板
 	Convert to CMYK	转换为 CMYK
 	Convert to Grayscale	转换为灰度
+	Convert to Indexed Color	转换为索引颜色
+	Convert to Indexed Color…	转换为索引颜色…
 	Convert To Outlines	转换为轮廓
 	Convert To Point Type	转换为点文字
 	Convert to RGB	转换为 RGB
@@ -1543,6 +1545,8 @@ file-filter	Templates	模板
 	Objects on Path Tool	路径上的对象工具
 	Attach Objects on Path	附加路径上的对象
 	Expand Objects on Path	扩展路径上的对象
+	Detach	分离
+	Detach Object from Path	将对象从路径分离
 	Release Live Paint	释放实时上色
 	Release Repeat	释放重复
 	Release Slice	释放切片
@@ -2083,6 +2087,29 @@ file-filter	Templates	模板
 	Bristle Brush	鬃毛画笔
 	Pattern Brush	图案画笔
 	missing from the Brushes panel	“画笔”面板中没有
+	built in	内置
+	embedding not allowed	不允许嵌入
+	embedding for editing	允许嵌入以供编辑
+	embedding for preview and print	允许嵌入以供预览和打印
+	embedding allowed	允许嵌入
+	{file}; {embedding}	{file}；{embedding}
+	substituted: shown in {family} {style} ({detail})	已替换：以 {family} {style} 显示 ({detail})
+	missing: shown in {family} {style}	缺失：以 {family} {style} 显示
+	missing	缺失
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}，{instances}
+	{kind}, {rows} × {cols}	{kind}，{rows} × {cols}
+	{grid}, {instances}	{grid}，{instances}
+	Linear gradient	线性渐变
+	Radial gradient	径向渐变
+	Conic gradient	锥形渐变
+	Diamond gradient	菱形渐变
+	Freeform gradient	自由渐变
+@plural	{n} instance|{n} instances	{n} 个实例
+@plural	{n} row|{n} rows	{n} 行
+@plural	{n} column|{n} columns	{n} 列
 	Select art to make a scatter, art or pattern brush.	选择图稿以创建散布画笔、艺术画笔或图案画笔。
 	Brush Art	画笔图稿
 	New Calligraphic Brush	新建书法画笔
@@ -2597,6 +2624,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Rating:	等级：
 	Real World:	真实世界：
 	Real-time Drawing and Editing	实时绘图和编辑
+	Use Monitor Profile for Canvas	画布使用显示器配置文件
+	The canvas is drawn in sRGB.	画布以 sRGB 绘制。
+	Canvas display profile:	画布显示配置文件：
+	The system matches the window to the display's colors.	系统会使窗口匹配显示器的颜色。
+	No usable display profile was found: the canvas is drawn in sRGB.	未找到可用的显示器配置文件：画布以 sRGB 绘制。
 	Rearrange All Artboards	重新排列所有画板
 	Rearrange	重新排列
 	Select All Artboards	选择所有画板
@@ -2808,6 +2840,9 @@ digits	Malayalam	马拉雅拉姆数字
 	Reset the rows to the artwork's colors	将各行重置为图稿的颜色
 	Color Theme Picker	色彩主题拾取器
 	Click or drag across the art to pick its colors; Shift adds more	单击或拖过图稿以拾取其颜色；按住 Shift 可添加更多
+	Prominent Colors	主要颜色
+	Save All Colors	存储所有颜色
+	Save Prominent Colors	存储主要颜色
 	Reset to Default	恢复默认
 	Reset to White, Black	重置为白、黑
 	Reset with Mesh	以网格重置
@@ -3323,6 +3358,19 @@ digits	Malayalam	马拉雅拉姆数字
 	Spot Color Objects	使用专色的对象
 	Pattern Objects	使用图案的对象
 	Gradient Objects	使用渐变的对象
+	Font Details	字体详细信息
+	Linked Images	链接的图像
+	Embedded Images	嵌入的图像
+	Compound Paths	复合路径
+	Text Objects	文本对象
+	Placed Documents	置入的文档
+	Symbol Instances	符号实例
+	Gradient Meshes	渐变网格
+	Blends	混合
+	Envelopes	封套
+	Intertwine Groups	交织编组
+	Opacity Masks	不透明度蒙版
+	Objects with Effects	使用效果的对象
 	Spot Colors	专色
 	Spot Colors…	专色…
 	Spread:	扩散：
@@ -3479,6 +3527,11 @@ digits	Malayalam	马拉雅拉姆数字
 	Tate-chu-yoko	纵中横
 	Tate-chu-yoko Settings…	纵中横设置…
 	Tate-chu-yoko Settings	纵中横设置
+	Warichu	割注
+	Warichu Settings…	割注设置…
+	Warichu Settings	割注设置
+	Lines:	行数：
+	Line Gap:	行间距：
 	Composite Fonts…	复合字体…
 	Composite Fonts	复合字体
 	Export Composite Fonts	导出复合字体
@@ -3683,6 +3736,8 @@ digits	Malayalam	马拉雅拉姆数字
 @plural	{n} linked image changed on disk. Show the new version?|{n} linked images changed on disk. Show the new versions?	有 {n} 个链接图像已在磁盘上更改。要显示新版本吗？
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	链接的图片在找到其文件之前显示文件中存储的低分辨率预览：请在“链接”面板中重新链接
 @msg	linked type areas past VectorCraft's limits were left out	超出 VectorCraft 限制的串接文字区域已省略
+@msg	the Line Breaking setting of legacy type was left out	旧格式文字的换行设置已省略
+@msg	the Japanese layout rules of legacy type were left out	旧格式文字的日文排版规则已省略
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	在文字对象内更改书写方向的文字按其第一个字符的方向打开
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	在串接区域、绕排文字或复合路径中用作蒙版的文字不会剪切
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	文件中没有预览的链接图片在找到其文件之前显示占位符：请在“链接”面板中重新链接
@@ -4240,6 +4295,7 @@ imageTrace	Outline	轮廓
 @msg	direct-select anchor points to cut at (not the end points of open paths)	请直接选择要在其处切割的锚点 (不能是开放路径的端点)
 @msg	select paths or anchor points	请选择路径或锚点
 @msg	Divide Objects Below: select a path	分割下方对象：请选择一条路径
+@msg	select a path	请选择一条路径
 @msg	Divide Objects Below: select exactly one path	分割下方对象：请只选择一条路径
 @msg	Offset Path: select paths	偏移路径：请选择路径
 @msg	Offset Path: the offset leaves nothing of the selected paths (an inset larger than the shapes)	偏移路径：偏移后所选路径不剩任何部分 (内缩量大于形状)
@@ -4259,6 +4315,7 @@ imageTrace	Outline	轮廓
 @msg	select a repeat	请选择一个重复对象
 @msg	select an Intertwine group	请选择一个交织组
 @msg	select an Objects on Path group	请选择一个路径上的对象组
+@msg	choose the object to detach with its Select/Move widget	请用对象的“选择/移动”控件选择要分离的对象
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	复合路径、混合对象、封套、重复对象或交织组中的路径无法附加对象
 @msg	a clipping path can't take objects	剪切路径无法附加对象
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	混合对象、封套、重复对象或交织组中的对象无法附加到路径
@@ -4467,6 +4524,7 @@ imageTrace	Outline	轮廓
 @msg	cannot read PDF: {0}	无法读取 PDF：{0}
 @msg	invalid PDF setting: {0}	PDF 设置无效：{0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：它以 UserUnit {unit} 写入，因此忽略 UserUnit 的应用会将其显示为缩小相应倍数：请打开“以实际尺寸（点）写入长于 200 in 的页面”
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	画板 {n} 的页面为 {size}，超过 PDF 的页面上限 14,400 pt (200 in)：{label} 页面不带 UserUnit，以点为单位写入，遵守上限的应用会将页面裁切为 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持尺寸：文件将以 PDF 1.6 写入
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 没有 UserUnit，而长于 14,400 pt (200 in) 的页面需要它来保持在 PDF/A-2 的 14,400 单位页面上限之内：文件将以 PDF 1.6 写入
@@ -4846,15 +4904,23 @@ imageTrace	Outline	轮廓
 @msg	no user library folder here	此处没有用户库文件夹
 @msg	Couldn't place {name}: the document it was dropped on was closed	无法置入 {name}：将它拖放到的文档已关闭
 @msg	Couldn't place {name}: the document it was placed in was closed	无法置入 {name}：要置入的文档已关闭
+@msg	Couldn't place {name}: the document it was dropped on was reverted	无法置入 {name}：将它拖放到的文档已恢复
+@msg	Couldn't place {name}: the document it was placed in was reverted	无法置入 {name}：要置入的文档已恢复
+@msg	Couldn't paste: the document it was pasted in was reverted	无法粘贴：要粘贴到的文档已恢复
 @msg	no files to place	没有要置入的文件
 @msg	`{file}` isn't a VectorCraft document, a PDF or a PDF-compatible .ai file	`{file}` 不是 VectorCraft 文档、PDF 或 PDF 兼容的 .ai 文件
 @msg	paths: give at least one file	paths：请至少给出一个文件
 @msg	replace: the object to replace was changed or deleted	replace：要替换的对象已被更改或删除
+@msg	the document it was prepared for is no longer active	为其准备的文档已不再处于活动状态
 @msg	Couldn't place {name}: {e}	无法置入 {name}：{e}
 @msg	no print service	没有打印服务
 @msg	the print job has no data	打印作业没有数据
 @msg	there are no printer settings to open here	此处没有可打开的打印机设置
 @msg	Couldn't save recovery data: {e}	无法保存恢复数据：{e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	无法保存 {title} 的恢复数据：{e}。副本保存在 {folder}（默认恢复文件夹）；要使用其他文件夹，请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	无法保存 {title} 的恢复数据：{e}。副本保存在 {folder}（在“首选项”中设置的文件夹）；要使用其他文件夹，请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	无法保存恢复数据：{e}。副本保存在 {folder}（默认恢复文件夹）；要使用其他文件夹，请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	无法保存恢复数据：{e}。副本保存在 {folder}（在“首选项”中设置的文件夹）；要使用其他文件夹，请设置“首选项 → 文件处理 → 数据恢复 → 文件夹” (recoveryFolder)
 @msg	Saved recovery data for {title}	已保存 {title} 的恢复数据
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	已丢弃 {n} 个恢复的文档
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	已还原 {n} 个恢复的文档：请保存以保留它们
@@ -4862,6 +4928,7 @@ imageTrace	Outline	轮廓
 @msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	已复制，有 {n} 条注释：{first}
 @msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	已剪切，有 {n} 条注释：{first}
 @msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	已描摹图像，有 {n} 条注释：{first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}。已打开，有 {n} 条注释：{first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	已保存 {path}，有 {n} 条注释：{first}
 @msg	Saving recovery data for {_1}	正在保存 {_1} 的恢复数据
 @msg	This shortcut file is in a form VectorCraft can't read.	此快捷键文件的格式 VectorCraft 无法读取。
@@ -4913,6 +4980,7 @@ imageTrace	Outline	轮廓
 @msg	every numbered name for it is taken in the Fonts folder	字体文件夹中所有带编号的名称均已被占用
 @msg	every numbered name for {name} is taken in the document's folder	文档所在文件夹中 {name} 的所有带编号的名称均已被占用
 @msg	No linked files to look for	没有要查找的链接文件
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	该链接位于符号、图表设计、图案或不透明度蒙版中，在画布上没有位置
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` 是步骤引用 {r}，只有 `run` 和 `command_batch` 能解析它
 @msg	`ids` must be an array of object ids, not {v}	`ids` 必须是由对象 id 组成的数组，而不是 {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` 必须是由颜色组成的数组，而不是 {v}
@@ -5248,6 +5316,8 @@ imageTrace	Outline	轮廓
 	Outlined Text	轮廓化的文字
 	All Rasterized Regions	所有栅格化区域
 	Perceptual	可感知
+	Hue Clockwise	色相顺时针
+	Hue Counterclockwise	色相逆时针
 	Relative Colorimetric	相对比色
 	Absolute Colorimetric	绝对比色
 	Simulate	模拟
@@ -5443,6 +5513,10 @@ axis	Both	两者
 	Dock Panel	停放面板
 	Dock to Top	停放到顶部
 	Dock to Bottom	停放到底部
+	Dock to Left	停放到左侧
+	Dock to Right	停放到右侧
+	Dock Toolbar	停放工具栏
+	Float Toolbar	浮动工具栏
 	Control Bar Options	控制栏选项
 	Tool Options	工具选项
 	Object Options	对象选项
@@ -5814,7 +5888,10 @@ lighting	Light	光源
 @msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` 的 face 必须是 front 或 back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	`{GRAPHICS}` 的 {key} 必须是 {lo} 到 {hi} 之间的数字
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` 必须是数组
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	图形映射到平坦的面上：请使用突出或平面对象类型
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	图形映射到平面、突出和回转对象类型上
+	Graphics map onto the Plane, Extrude and Revolve object types.	图形映射到平面、突出和回转对象类型上。
+@msg	Revolve maps graphics onto its side: map them onto the front	回转将图形映射到其侧面：请将图形映射到正面
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	图形对此表面过于复杂：请简化符号的图稿或减少分段数
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` 最多接受 {MAX_GRAPHICS} 个图形
 @msg	A plane has one face: map its graphics onto the front	平面只有一个面：请将其图形映射到正面
 @msg	The graphics are too complex: simplify the symbols' art	图形过于复杂：请简化符号的图稿
@@ -5990,6 +6067,9 @@ lighting	Light	光源
 @msg	a mask has more than one art block	蒙版包含多个图稿块
 @msg	mask art ends outside a mask dictionary	蒙版图稿在蒙版字典之外结束
 @msg	`{key}` must be a #rrggbb color	`{key}` 必须是 #rrggbb 格式的颜色
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` 必须是 #rrggbb 格式的颜色或图层颜色名称
+@msg	unknown Live Paint option `{key}`	未知的实时上色选项 `{key}`
+@msg	unknown Shape Builder option `{key}`	未知的形状生成器选项 `{key}`
 @msg	a linked image can't become a gradient mesh: embed it first	链接的图像无法转换为渐变网格：请先嵌入它
 @msg	the image has no usable size or position	图像没有可用的尺寸或位置
 @msg	the image's pixels can't be read	无法读取图像的像素
@@ -6125,7 +6205,7 @@ axis	Y Axis	Y 轴
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` 适用于渐变填色 (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` 适用于渐变填色 (paint.setFill)
 @msg	`dither` must be true or false	`dither` 必须是 true 或 false
-@msg	`method` must be classic or perceptual	`method` 必须是 classic 或 perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` 必须是 classic、perceptual、hue-clockwise 或 hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` 必须是 pad、repeat 或 reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` 必须是 1 到 {MAX_REPEATS} 之间的整数
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` 适用于线性、径向、圆锥和菱形渐变
@@ -6368,12 +6448,14 @@ axis	Y Axis	Y 轴
 	Continue	继续
 	Continue Action	继续动作
 	Delete Action Step	删除动作步骤
+	Move Action Step	移动动作步骤
 	Press Play Current Selection in the Actions panel to go on.	要继续，请按“动作”面板中的“播放当前选择项目”。
 	Stop: {message}	停止：{message}
 @msg	no action is waiting at a stop	没有动作在停止处等待
 @msg	message must be text	message 必须是文本
 @msg	allowContinue must be true or false	allowContinue 必须是 true 或 false
 @msg	Batch cannot play an action with a stop	批处理无法播放含有停止的动作
+@msg	Batch cannot play an action with a View menu step	批处理无法播放含有视图菜单步骤的动作
 	Insert Menu Item…	插入菜单项…
 	Insert Menu Item	插入菜单项
 	Insert Select Path	插入选择路径
@@ -6538,6 +6620,22 @@ axis	Y Axis	Y 轴
 	Graphite Pencil	石墨铅笔
 	Wax Crayon	蜡笔
 	Charcoal Dust	炭粉
+	Notched Ribbon	凹口丝带
+	Double Line	双线
+	Wave	波浪
+	Teardrop	泪滴
+	Striped Ribbon	条纹丝带
+	Fine Nib	细笔尖
+	Broad Nib	宽笔尖
+	Chisel	凿形
+	Round Pen	圆头笔
+	Pressure Pen	压感笔
+	Beads	珠串
+	Dash Dot	点划线
+	Scallops	扇贝边
+	Stars	星形
+	Triangles	三角形
+	Sparkles	闪光
 	Save Brush Library…	保存画笔库…
 @msg	`{_1}` has no brushes to apply	`{_1}` 中没有可应用的画笔
 @msg	missing `library` (see brush.libraries)	缺少 `library`（请参阅 brush.libraries）
@@ -6557,6 +6655,13 @@ axis	Y Axis	Y 轴
 	Area Text	区域文字
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	按字形边界度量文字
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	对齐像素选项
+	Pixel Snapping Options…	对齐像素选项…
+	Snap to Pixel While Drawing	绘制时对齐像素
+	Snap to Pixel While Moving	移动时对齐像素
+	Snap to Pixel While Scaling	缩放时对齐像素
+	These options take effect when View › Snap to Pixel is on.	这些选项在“视图 › 对齐像素”打开时生效。
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	显示靠齐字符选项
 	Hide Snap to Glyph Options	隐藏靠齐字符选项
@@ -6642,6 +6747,8 @@ anchor	Points:	点：
 	Anchor Inspector	锚点检查器
 	Add Points at Crossings	在交叉处添加锚点
 	Split at Crossings	在交叉处分割
+	Trim at Crossings Tool	在交叉处修剪工具
+	Trim at Crossings	在交叉处修剪
 	Extend Path	延长路径
 	Measure & Inspect	测量与检查
 	Set Anchor	设置锚点
@@ -7184,6 +7291,19 @@ breakText	Glyphs	字形
 	Show where this tool is	显示此工具的位置
 @msg	missing `tutorial` (see learn.list)	缺少 `tutorial` (请参阅 learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	未知教程 `{id}` (请参阅 learn.list)
+	View more	查看更多
+	Finish tutorial	完成教程
+	Next Up	下一个
+	You finished the last tutorial in this skill.	你已完成此技能的最后一个教程。
+	Back to skills	返回技能
+	Open Tutorial Sample	打开教程示例
+	Finish Tutorial	完成教程
+	Next Tutorial	下一个教程
+	Back to Skills	返回技能
+@msg	tutorial `{id}` has no practice sample	教程 `{id}` 没有练习示例
+@msg	open the practice sample of `{id}` first (see learn.openSample)	请先打开 `{id}` 的练习示例 (请参阅 learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	请先完成 `{id}` (请参阅 learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` 是其技能的最后一个教程
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	刷新延迟的效果
@@ -7207,3 +7327,9 @@ breakText	Glyphs	字形
 	Margin	边距
 	Box	框
 	Swatch	色板
+	Banner Hems and Grommets…	横幅折边和扣眼…
+	Banner Hems and Grommets	横幅折边和扣眼
+	Hem	折边
+	Grommets	扣眼
+	Grommet Inset	扣眼边距
+	Diameter	直径

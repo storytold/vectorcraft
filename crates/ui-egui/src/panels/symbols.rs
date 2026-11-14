@@ -496,7 +496,7 @@ impl LibraryKind for SymbolLibraries {
     fn path(app: &VectorcraftApp, id: &str) -> Option<String> {
         app.session.symbol_libraries.path(id).map(str::to_string)
     }
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, LibSymbol>> {
+    fn rows<'a>(lib: &'a Self::Lib, _: &str, query: &str) -> Vec<Row<'a, LibSymbol>> {
         let found = |n: &str| query.is_empty() || n.to_lowercase().contains(query);
         lib.iter().filter(|s| found(s.name())).map(|s| Row { name: s.name(), item: Some(s) }).collect()
     }

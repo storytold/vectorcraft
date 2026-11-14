@@ -5,10 +5,11 @@
 
 use std::io::Cursor;
 
+use craft_pdf::syntax::object::{Name, Object};
 use image::{DynamicImage, ImageFormat};
 use serde_json::{Value, json};
 use vectorcraft_doc::{Document, ImageBlob, ImageObject, Node, NodeKind};
-use vectorcraft_geom::Affine;
+use vectorcraft_geom::{Affine, Point};
 
 use crate::*;
 
@@ -70,6 +71,55 @@ fn images_above_the_threshold_are_resampled_to_the_target_resolution() {
     let grey = doc(encoded(colour().grayscale(), ImageFormat::Png), "image/png");
     let (text, _) = pdf(&grey, json!({"color": {"downsample": "bicubic", "ppi": 150}, "gray": {"downsample": "bicubic", "ppi": 100}}));
     assert!(text.contains("/Width 100") && text.contains("/DeviceGray"), "grey at 100 ppi");
+}
+
+/// The width and height of each image XObject in `pdf`.
+fn image_sizes(pdf: &[u8]) -> Vec<(u32, u32)> {
+    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    file.objects()
+        .into_iter()
+        .filter_map(|o| match o {
+            Object::Stream(s) if s.dict().get::<Name<'_>>(b"Subtype").is_some_and(|n| n.as_ref() == b"Image") => {
+                Some((s.dict().get::<u32>(b"Width").unwrap_or(0), s.dict().get::<u32>(b"Height").unwrap_or(0)))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A mesh warp that stretches the image across more toward its right side cuts it into pieces
+/// placed at different widths. With downsampling on, every piece paints one image, resampled for
+/// the widest piece; another placement of the image keeps its own resampling.
+#[test]
+fn a_warped_image_is_written_once_for_all_its_pieces() {
+    let compression = json!({"color": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}});
+    for masked in [false, true] {
+        let mut d = doc(encoded(colour(), ImageFormat::Png), "image/png");
+        let id = d.layers[0].children().unwrap()[0].id;
+        let n = d.node(id).unwrap().clone();
+        let NodeKind::Image(im) = &n.kind else { panic!("the image") };
+        // 0.5 to 1.5 times as wide from left to right, within the page.
+        let stretch = |p: Point| Point::new(p.x * (0.5 + p.x / 144.0), p.y);
+        *d.node_mut(id).unwrap() = vectorcraft_doc::live::mesh_warp_image(&n, im, &stretch, 4, false, masked);
+        let mut settings: PdfSettings = serde_json::from_value(json!({ "compression": compression })).unwrap();
+        settings.compression.compress_text = false;
+        let bytes = export_with_report(&d, &PdfOptions { settings: settings.clone(), ..Default::default() }).unwrap().bytes;
+        let sizes = image_sizes(&bytes);
+        assert_eq!(sizes.len(), 1, "masked {masked}: one image for 32 pieces, not {sizes:?}");
+        // One inch high (150 pixels at 150 ppi), and wider than one inch at its widest.
+        let (w, h) = sizes[0];
+        assert!(h == 150 && w > 150 && w < 600, "masked {masked}: {w} × {h}");
+        assert!(String::from_utf8_lossy(&bytes).matches(" Do").count() >= 32, "masked {masked}: every piece paints the image");
+
+        // The image placed again, two inches wide and high, is resampled for that placement.
+        let plain = Node::new(d.alloc_id(), NodeKind::Image(Box::new(ImageObject { xf: Affine::scale(144.0 / 600.0), ..(**im).clone() })));
+        let l = d.layers[0].id;
+        d.insert(Some(l), 1, plain).unwrap();
+        let bytes = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
+        let mut sizes = image_sizes(&bytes);
+        sizes.sort_unstable();
+        assert_eq!(sizes, [(w, h), (300, 300)], "masked {masked}");
+    }
 }
 
 #[test]

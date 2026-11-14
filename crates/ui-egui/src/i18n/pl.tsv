@@ -111,6 +111,8 @@
 	Blend Vertically	Przejście w pionie
 	Convert to CMYK	Konwertuj na CMYK
 	Convert to Grayscale	Konwertuj na skalę szarości
+	Convert to Indexed Color	Konwertuj na kolory indeksowane
+	Convert to Indexed Color…	Konwertuj na kolory indeksowane…
 	Convert to RGB	Konwertuj na RGB
 	Invert Colors	Odwróć kolory
 	Overprint Black…	Nadruk czerni…
@@ -868,6 +870,10 @@
 	Dock Panel	Zadokuj panel
 	Dock to Top	Zadokuj u góry
 	Dock to Bottom	Zadokuj u dołu
+	Dock to Left	Zadokuj po lewej
+	Dock to Right	Zadokuj po prawej
+	Dock Toolbar	Zadokuj pasek narzędzi
+	Float Toolbar	Odepnij pasek narzędzi
 	Control Bar Options	Opcje paska sterowania
 	Tool Options	Opcje narzędzia
 	Object Options	Opcje obiektu
@@ -1542,6 +1548,11 @@ digits	Malayalam	Malajalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ustawienia Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ustawienia Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Ustawienia Warichu…
+	Warichu Settings	Ustawienia Warichu
+	Lines:	Wiersze:
+	Line Gap:	Odstęp między wierszami:
 	Composite Fonts…	Fonty złożone…
 	Composite Fonts	Fonty złożone
 	Export Composite Fonts	Eksportuj fonty złożone
@@ -1757,6 +1768,8 @@ digits	Malayalam	Malajalam
 	Objects on Path Tool	Narzędzie Obiekty na ścieżce
 	Attach Objects on Path	Dołącz obiekty do ścieżki
 	Expand Objects on Path	Rozszerz obiekty na ścieżce
+	Detach	Odłącz
+	Detach Object from Path	Odłącz obiekt od ścieżki
 	Release Live Paint	Uwolnij aktywne malowanie
 	Release Repeat	Uwolnij powtórzenie
 	Release Slice	Uwolnij plasterek
@@ -2800,6 +2813,9 @@ digits	Malayalam	Malajalam
 	Reset the rows to the artwork's colors	Przywróć w wierszach kolory kompozycji
 	Color Theme Picker	Próbnik motywu kolorów
 	Click or drag across the art to pick its colors; Shift adds more	Kliknij lub przeciągnij po kompozycji, aby pobrać jej kolory; Shift dodaje kolejne
+	Prominent Colors	Dominujące kolory
+	Save All Colors	Zapisz wszystkie kolory
+	Save Prominent Colors	Zapisz dominujące kolory
 	Separate colors into rows	Rozdziel kolory na wiersze
 	Unlink harmony colors	Odłącz kolory harmonii
 	1 Color Job	Praca 1-kolorowa
@@ -3269,6 +3285,29 @@ theme	Appearance	Wygląd
 	Bristle Brush	Pędzel włosiankowy
 	Pattern Brush	Pędzel wzorka
 	missing from the Brushes panel	brak w panelu Pędzle
+	built in	wbudowany
+	embedding not allowed	osadzanie niedozwolone
+	embedding for editing	osadzanie do edycji
+	embedding for preview and print	osadzanie do podglądu i drukowania
+	embedding allowed	osadzanie dozwolone
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	zastąpiony: wyświetlany krojem {family} {style} ({detail})
+	missing: shown in {family} {style}	brak: wyświetlany krojem {family} {style}
+	missing	brak
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Gradient liniowy
+	Radial gradient	Gradient promienisty
+	Conic gradient	Gradient stożkowy
+	Diamond gradient	Gradient rombowy
+	Freeform gradient	Gradient dowolny
+@plural	{n} instance|{n} instances	{n} wystąpienie|{n} wystąpienia|{n} wystąpień
+@plural	{n} row|{n} rows	{n} wiersz|{n} wiersze|{n} wierszy
+@plural	{n} column|{n} columns	{n} kolumna|{n} kolumny|{n} kolumn
 	Select art to make a scatter, art or pattern brush.	Zaznacz kompozycję, aby utworzyć pędzel rozproszony, artystyczny lub wzorka.
 	Brush Art	Kompozycja pędzla
 	New Symbol	Nowy symbol
@@ -3743,6 +3782,11 @@ theme	Appearance	Wygląd
 	Primary	Główny
 	Printing / Exporting	Drukowanie / eksportowanie
 	Real-time Drawing and Editing	Rysowanie i edycja w czasie rzeczywistym
+	Use Monitor Profile for Canvas	Użyj profilu monitora dla płótna
+	The canvas is drawn in sRGB.	Płótno jest rysowane w sRGB.
+	Canvas display profile:	Profil wyświetlacza płótna:
+	The system matches the window to the display's colors.	System dopasowuje okno do kolorów wyświetlacza.
+	No usable display profile was found: the canvas is drawn in sRGB.	Nie znaleziono użytecznego profilu wyświetlacza: płótno jest rysowane w sRGB.
 	Render Threads (-1 = Automatic)	Wątki renderowania (-1 = automatycznie)
 	Reset Preferences	Resetuj preferencje
 	Export Preferences…	Eksportuj preferencje…
@@ -3871,6 +3915,20 @@ theme	Appearance	Wygląd
 	Spot Color Objects	Obiekty z kolorami dodatkowymi
 	Pattern Objects	Obiekty ze wzorkami
 	Gradient Objects	Obiekty z gradientami
+	Font Details	Szczegóły czcionek
+	Linked Images	Połączone obrazy
+	Embedded Images	Osadzone obrazy
+	Compound Paths	Ścieżki złożone
+	Text Objects	Obiekty tekstowe
+	Placed Documents	Umieszczone dokumenty
+	Symbol Instances	Wystąpienia symboli
+	Gradient Meshes	Siatki gradientowe
+	Blends	Przejścia
+	Envelopes	Koperty
+	Intertwine Groups	Grupy przeplatania
+	Opacity Masks	Maski krycia
+	Objects with Effects	Obiekty z efektami
+	Pattern Swatches	Próbki wzorków
 	Spot Colors	Kolory dodatkowe
 	Swatch Options	Opcje próbki
 	Ungroup Color Group	Rozgrupuj grupę kolorów
@@ -4452,8 +4510,15 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Nie udało się otworzyć {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Nie udało się umieścić {name}: dokument, na który go upuszczono, został zamknięty
 @msg	Couldn't place {name}: the document it was placed in was closed	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został zamknięty
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Nie udało się umieścić {name}: dokument, na który go upuszczono, został przywrócony
+@msg	Couldn't place {name}: the document it was placed in was reverted	Nie udało się umieścić {name}: dokument, w którym był umieszczany, został przywrócony
+@msg	Couldn't paste: the document it was pasted in was reverted	Nie udało się wkleić: dokument, do którego wklejano, został przywrócony
 @msg	Couldn't read {name}: {e}	Nie udało się odczytać {name}: {e}
 @msg	Couldn't save recovery data: {e}	Nie udało się zapisać danych odzyskiwania: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nie udało się zapisać danych odzyskiwania dla {title}: {e}. Kopie trafiają do {folder}, domyślnego folderu odzyskiwania; aby użyć innego folderu, ustaw Preferencje → Obsługa plików → Odzyskiwanie danych → Folder (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nie udało się zapisać danych odzyskiwania dla {title}: {e}. Kopie trafiają do {folder}, folderu ustawionego w Preferencjach; aby użyć innego folderu, ustaw Preferencje → Obsługa plików → Odzyskiwanie danych → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nie udało się zapisać danych odzyskiwania: {e}. Kopie trafiają do {folder}, domyślnego folderu odzyskiwania; aby użyć innego folderu, ustaw Preferencje → Obsługa plików → Odzyskiwanie danych → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Nie udało się zapisać danych odzyskiwania: {e}. Kopie trafiają do {folder}, folderu ustawionego w Preferencjach; aby użyć innego folderu, ustaw Preferencje → Obsługa plików → Odzyskiwanie danych → Folder (recoveryFolder)
 @msg	Create Outlines: select text objects	Utwórz kontury: zaznacz obiekty tekstowe
 @msg	Create from Guides: the document has no artboard	Utwórz z linii pomocniczych: dokument nie ma obszaru kompozycji
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Utwórz z linii pomocniczych: linie pomocnicze tworzą więcej niż {MAX_PIECES} plasterków
@@ -4463,6 +4528,7 @@ imageTrace	Outline	Kontur
 @msg	Plug-ins can't be loaded from {path}: {e}	Nie można wczytać wtyczek z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	zaznacz bezpośrednio punkty kontrolne, w których ma nastąpić cięcie (nie punkty końcowe otwartych ścieżek)
 @msg	Divide Objects Below: select a path	Podziel obiekty poniżej: zaznacz ścieżkę
+@msg	select a path	zaznacz ścieżkę
 @msg	Divide Objects Below: select exactly one path	Podziel obiekty poniżej: zaznacz dokładnie jedną ścieżkę
 @msg	Downloaded {what}	Pobrano {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozszerz wygląd: zaznaczenie ma wygląd podstawowy
@@ -4538,6 +4604,9 @@ imageTrace	Outline	Kontur
 @msg	`{keep}` is not a side of this axis	`{keep}` nie jest stroną tej osi
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` musi mieć wartość `auto` lub kod języka, np. `en` albo `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` musi być kolorem #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` musi być kolorem #rrggbb lub nazwą koloru warstwy
+@msg	unknown Live Paint option `{key}`	nieznana opcja aktywnego malowania `{key}`
+@msg	unknown Shape Builder option `{key}`	nieznana opcja kreatora kształtów `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` musi być kolorem #rrggbb
 @msg	`{key}` must be a number	`{key}` musi być liczbą
 @msg	`{key}` must be a number, not {v}	`{key}` musi być liczbą, nie {v}
@@ -4697,6 +4766,7 @@ imageTrace	Outline	Kontur
 @msg	internal error: {msg} (please report this bug)	błąd wewnętrzny: {msg} (zgłoś ten błąd)
 @msg	invalid PDF setting: {0}	nieprawidłowe ustawienie PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): jest zapisywana z UserUnit {unit}, więc aplikacje ignorujące UserUnit pokazują ją tyle razy mniejszą
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): jest zapisywana z UserUnit {unit}, więc aplikacje ignorujące UserUnit pokazują ją tyle razy mniejszą: włącz „Zapisuj strony dłuższe niż 200 in w pełnym rozmiarze, w punktach”
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	strona obszaru kompozycji {n} ma {size}, czyli więcej niż limit strony PDF wynoszący 14 400 pt (200 in): strony {label} są zapisywane bez UserUnit, w punktach, a aplikacje przestrzegające limitu przycinają stronę do 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 nie ma UserUnit, którego strona dłuższa niż 14 400 pt (200 in) potrzebuje, aby zachować rozmiar: plik jest zapisywany jako PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 nie ma UserUnit, którego strona dłuższa niż 14 400 pt (200 in) potrzebuje, aby zmieścić się w limicie strony PDF/A-2 wynoszącym 14 400 jednostek: plik jest zapisywany jako PDF 1.6
@@ -4881,6 +4951,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	ścieżki zawierają nieprawidłowe współrzędne
 @msg	paths: give at least one file	paths: podaj co najmniej jeden plik
 @msg	replace: the object to replace was changed or deleted	replace: obiekt do zastąpienia został zmieniony lub usunięty
+@msg	the document it was prepared for is no longer active	dokument, dla którego to przygotowano, nie jest już aktywny
 @msg	pattern missing	brak wzorka
 @msg	patterns nested too deeply are filled with mid-grey	zbyt głęboko zagnieżdżone wzorki są wypełniane średnią szarością
 @msg	percent must be above 0 and at most 6400, not {p}	percent musi być większy od 0 i nie większy niż 6400, nie {p}
@@ -4916,6 +4987,7 @@ imageTrace	Outline	Kontur
 @msg	select a repeat	zaznacz powtórzenie
 @msg	select an Intertwine group	zaznacz grupę przeplotu
 @msg	select an Objects on Path group	zaznacz grupę obiektów na ścieżce
+@msg	choose the object to detach with its Select/Move widget	wybierz obiekt do odłączenia jego uchwytem Zaznacz/Przesuń
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	do ścieżki wewnątrz ścieżki złożonej, przejścia, koperty, powtórzenia lub grupy przeplotu nie można dołączyć obiektów
 @msg	a clipping path can't take objects	do ścieżki przycinającej nie można dołączyć obiektów
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	obiektów wewnątrz przejścia, koperty, powtórzenia lub grupy przeplotu nie można dołączyć do ścieżki
@@ -5140,6 +5212,7 @@ imageTrace	Outline	Kontur
 @msgplural	Copied with {n} note: {first}|Copied with {n} notes: {first}	Skopiowano z {n} uwagą: {first}|Skopiowano z {n} uwagami: {first}|Skopiowano z {n} uwagami: {first}
 @msgplural	Cut with {n} note: {first}|Cut with {n} notes: {first}	Wycięto z {n} uwagą: {first}|Wycięto z {n} uwagami: {first}|Wycięto z {n} uwagami: {first}
 @msgplural	Traced with {n} note: {first}|Traced with {n} notes: {first}	Obrysowano obraz z {n} uwagą: {first}|Obrysowano obraz z {n} uwagami: {first}|Obrysowano obraz z {n} uwagami: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Otwarto z {n} uwagą: {first}|{notice}. Otwarto z {n} uwagami: {first}|{notice}. Otwarto z {n} uwagami: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Zapisano {path} z {n} uwagą: {first}|Zapisano {path} z {n} uwagami: {first}|Zapisano {path} z {n} uwagami: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Osadzono {n} obraz; brakuje {missing}: najpierw połącz je ponownie|Osadzono {n} obrazy; brakuje {missing}: najpierw połącz je ponownie|Osadzono {n} obrazów; brakuje {missing}: najpierw połącz je ponownie
 @msgplural	Embedded {n} image|Embedded {n} images	Osadzono {n} obraz|Osadzono {n} obrazy|Osadzono {n} obrazów
@@ -5219,6 +5292,8 @@ imageTrace	Outline	Kontur
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	osadzony obraz o wymiarach {_1} × {_2} pikseli zmniejszono do {_3} × {_4} pikseli, aby zachować warstwy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	połączone obrazy pokazują zapisany w pliku podgląd niskiej rozdzielczości, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
 @msg	linked type areas past VectorCraft's limits were left out	połączone obszary tekstu poza limitami VectorCraft zostały pominięte
+@msg	the Line Breaking setting of legacy type was left out	pominięto ustawienie łamania wierszy tekstu w starym formacie
+@msg	the Japanese layout rules of legacy type were left out	pominięto japońskie reguły składu tekstu w starym formacie
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst zmieniający kierunek pisania wewnątrz obiektu tekstowego otwiera się w kierunku swojego pierwszego znaku
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst użyty jako maska w połączonych obszarach, oblewanym tekście lub ścieżce złożonej nie przycina
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	połączone obrazy bez podglądu w pliku pokazują symbol zastępczy, dopóki ich pliki nie zostaną znalezione: połącz je ponownie w panelu Łącza
@@ -5244,6 +5319,7 @@ imageTrace	Outline	Kontur
 @msg	every numbered name for it is taken in the Fonts folder	wszystkie numerowane nazwy dla niego są zajęte w folderze czcionek
 @msg	every numbered name for {name} is taken in the document's folder	wszystkie numerowane nazwy dla {name} są zajęte w folderze dokumentu
 @msg	No linked files to look for	Brak połączonych plików do wyszukania
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Łącze znajduje się w symbolu, wzorze wykresu, wzorku lub masce krycia i nie ma miejsca na obszarze roboczym
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` to odwołanie do kroku {r}, które rozwiązują tylko `run` i `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musi być tablicą identyfikatorów obiektów, nie {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musi być tablicą kolorów, nie {v}
@@ -5543,6 +5619,8 @@ imageTrace	Outline	Kontur
 	High Contrast 3	Wysoki kontrast 3
 	Pentagram	Pentagram
 	Perceptual	Percepcyjna
+	Hue Clockwise	Barwa zgodnie z ruchem wskazówek zegara
+	Hue Counterclockwise	Barwa przeciwnie do ruchu wskazówek zegara
 	Relative Colorimetric	Kolorymetryczna względna
 	Absolute Colorimetric	Kolorymetryczna bezwzględna
 	Exact	Dokładne
@@ -5771,7 +5849,9 @@ mark-style	Japanese	Japońskie
 @msg	`{GRAPHICS}` face must be front or back	face w `{GRAPHICS}` musi mieć wartość front lub back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} w `{GRAPHICS}` musi być liczbą od {lo} do {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` musi być tablicą
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafiki są nakładane na płaskie ściany: użyj typu obiektu Wyciągnięcie lub Płaszczyzna
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafiki są nakładane na obiekty typu Płaszczyzna, Wyciągnięcie i Obrót
+@msg	Revolve maps graphics onto its side: map them onto the front	Obrót nakłada grafiki na swoją powierzchnię boczną: umieść je na przedniej stronie
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiki są zbyt złożone dla tej powierzchni: uprość rysunki symboli lub zmniejsz Segmenty
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` przyjmuje najwyżej {MAX_GRAPHICS} grafik
 @msg	A plane has one face: map its graphics onto the front	Płaszczyzna ma jedną stronę: umieść jej grafiki na przedniej stronie
 @msg	The graphics are too complex: simplify the symbols' art	Grafiki są zbyt złożone: uprość rysunki symboli
@@ -6141,7 +6221,7 @@ axis	Y Axis	Oś Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` dotyczy wypełnień gradientem (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` dotyczy wypełnień gradientem (paint.setFill)
 @msg	`dither` must be true or false	`dither` musi mieć wartość true lub false
-@msg	`method` must be classic or perceptual	`method` musi mieć wartość classic lub perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` musi mieć wartość classic, perceptual, hue-clockwise lub hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` musi mieć wartość pad, repeat lub reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` musi być liczbą całkowitą od 1 do {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` dotyczy gradientów liniowych, radialnych, stożkowych i rombowych
@@ -6384,12 +6464,14 @@ axis	Y Axis	Oś Y
 	Continue	Kontynuuj
 	Continue Action	Kontynuuj operację
 	Delete Action Step	Usuń krok operacji
+	Move Action Step	Przenieś krok operacji
 	Press Play Current Selection in the Actions panel to go on.	Aby kontynuować, naciśnij Odtwórz bieżące zaznaczenie w panelu Operacje.
 	Stop: {message}	Zatrzymanie: {message}
 @msg	no action is waiting at a stop	żadna operacja nie czeka na zatrzymaniu
 @msg	message must be text	message musi być tekstem
 @msg	allowContinue must be true or false	allowContinue musi mieć wartość true lub false
 @msg	Batch cannot play an action with a stop	Przetwarzanie wsadowe nie może odtworzyć operacji z zatrzymaniem
+@msg	Batch cannot play an action with a View menu step	Przetwarzanie wsadowe nie może odtworzyć operacji z krokiem z menu Widok
 	Insert Menu Item…	Wstaw polecenie menu…
 	Insert Menu Item	Wstaw polecenie menu
 	Insert Select Path	Wstaw zaznaczenie ścieżki
@@ -6554,6 +6636,22 @@ axis	Y Axis	Oś Y
 	Graphite Pencil	Ołówek grafitowy
 	Wax Crayon	Kredka woskowa
 	Charcoal Dust	Pył węglowy
+	Notched Ribbon	Wstęga z nacięciami
+	Double Line	Podwójna linia
+	Wave	Fala
+	Teardrop	Łza
+	Striped Ribbon	Wstęga w paski
+	Fine Nib	Cienka stalówka
+	Broad Nib	Szeroka stalówka
+	Chisel	Dłuto
+	Round Pen	Okrągłe pióro
+	Pressure Pen	Pióro z naciskiem
+	Beads	Koraliki
+	Dash Dot	Kreska-kropka
+	Scallops	Feston
+	Stars	Gwiazdy
+	Triangles	Trójkąty
+	Sparkles	Iskry
 	Save Brush Library…	Zapisz bibliotekę pędzli…
 @msg	`{_1}` has no brushes to apply	`{_1}` nie ma pędzli do zastosowania
 @msg	missing `library` (see brush.libraries)	brak `library` (zobacz brush.libraries)
@@ -6573,6 +6671,13 @@ axis	Y Axis	Oś Y
 	Area Text	Tekst akapitowy
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Mierz tekst według granic glifów
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opcje przyciągania do pikseli
+	Pixel Snapping Options…	Opcje przyciągania do pikseli…
+	Snap to Pixel While Drawing	Przyciągaj do pikseli podczas rysowania
+	Snap to Pixel While Moving	Przyciągaj do pikseli podczas przesuwania
+	Snap to Pixel While Scaling	Przyciągaj do pikseli podczas skalowania
+	These options take effect when View › Snap to Pixel is on.	Te opcje działają, gdy włączona jest opcja Widok › Przyciągaj do pikseli.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Pokaż opcje przyciągania do glifów
 	Hide Snap to Glyph Options	Ukryj opcje przyciągania do glifów
@@ -6658,6 +6763,8 @@ anchor	Points:	Punkty:
 	Anchor Inspector	Inspektor punktów kontrolnych
 	Add Points at Crossings	Dodaj punkty na skrzyżowaniach
 	Split at Crossings	Podziel na skrzyżowaniach
+	Trim at Crossings Tool	Narzędzie Przytnij na skrzyżowaniach
+	Trim at Crossings	Przytnij na skrzyżowaniach
 	Extend Path	Przedłuż ścieżkę
 	Measure & Inspect	Mierz i badaj
 	Set Anchor	Ustaw punkt kontrolny
@@ -7202,6 +7309,19 @@ breakText	Glyphs	Glify
 	Show where this tool is	Pokaż, gdzie jest to narzędzie
 @msg	missing `tutorial` (see learn.list)	brak `tutorial` (patrz learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	nieznany samouczek `{id}` (patrz learn.list)
+	View more	Pokaż więcej
+	Finish tutorial	Zakończ samouczek
+	Next Up	Następny
+	You finished the last tutorial in this skill.	Ukończono ostatni samouczek tej umiejętności.
+	Back to skills	Powrót do umiejętności
+	Open Tutorial Sample	Otwórz przykład samouczka
+	Finish Tutorial	Zakończ samouczek
+	Next Tutorial	Następny samouczek
+	Back to Skills	Powrót do umiejętności
+@msg	tutorial `{id}` has no practice sample	samouczek `{id}` nie ma przykładu do ćwiczeń
+@msg	open the practice sample of `{id}` first (see learn.openSample)	najpierw otwórz przykład do ćwiczeń samouczka `{id}` (patrz learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	najpierw zakończ `{id}` (patrz learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` to ostatni samouczek swojej umiejętności
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Odśwież odroczone efekty
@@ -7225,3 +7345,9 @@ breakText	Glyphs	Glify
 	Margin	Margines
 	Box	Ramka
 	Swatch	Próbka
+	Banner Hems and Grommets…	Obszycia i oczka banera…
+	Banner Hems and Grommets	Obszycia i oczka banera
+	Hem	Obszycie
+	Grommets	Oczka
+	Grommet Inset	Odległość oczek od krawędzi
+	Diameter	Średnica
