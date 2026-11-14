@@ -11,7 +11,7 @@ use super::clipboard::SwatchChoices;
 use super::{
     CommandSpec, Result, Session, always, bad, can_clear_history, can_redo, can_undo, check_numbers, checked_ids_param, clock_date, cmd, date_param,
     f64_req, finite_numbers, has_clipboard, has_doc, has_selection, has_selection_guides_or_artboard_tool, has_selection_or_guides, index, number_or,
-    object_param, ok, point_param, str_param, switch_or,
+    object_param, ok, point_param, str_param, switch_or, u64_req,
 };
 use crate::{Clipboard, EngineError, SourceLayer, inspect};
 
@@ -249,7 +249,10 @@ fn file_close(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
-    let i = p.get("index").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.activate", "missing index"))?;
+    let i = match p.get("index") {
+        None | Some(Value::Null) => return Err(bad("document.activate", "missing index")),
+        Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.activate", "`index` must be a whole number"))?,
+    };
     if s.set_active(i) { ok() } else { Err(bad("document.activate", "no such document")) }
 }
 
@@ -262,7 +265,10 @@ fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {
     if from >= n {
         return Err(bad("document.move", "no such document"));
     }
-    let to = p.get("to").and_then(Value::as_u64).map(index).ok_or_else(|| bad("document.move", "missing `to`: a non-negative integer"))?;
+    let to = match p.get("to") {
+        None | Some(Value::Null) => return Err(bad("document.move", "missing `to`: a non-negative integer")),
+        Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.move", "`to` must be a whole number"))?,
+    };
     let to = to.min(n.saturating_sub(1));
     if !s.move_document(from, to) {
         return Err(bad("document.move", "no such document"));
@@ -1190,8 +1196,7 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
 fn drop_selection(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "edit.dropSelection";
-    let key = "sourceDocument";
-    let uid = p[key].as_u64().ok_or_else(|| bad(CMD, format!("missing integer `{key}`")))?;
+    let uid = u64_req(p, "sourceDocument", CMD)?;
     let point = |key: &str| finite_numbers::<2>(&p[key]).ok_or_else(|| bad(CMD, format!("{key} must be [x, y] with finite coordinates")));
     let grab = point("grab")?;
     let at = point("at")?;

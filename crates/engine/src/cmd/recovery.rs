@@ -1176,6 +1176,7 @@ pub fn jobs(s: &mut Session, store: &Arc<dyn RecoveryStore>) -> Result<(Vec<Reco
             modified: None,
             notes: Vec::new(),
             lossy_source: None,
+            kept: serde_json::Map::new(),
         };
         let save = fileio::job_for(s, st, plan)?;
         let meta = Meta {
