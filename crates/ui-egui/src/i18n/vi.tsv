@@ -4063,6 +4063,48 @@ mark-style	Japanese	Kiểu Nhật
 	Composite Fonts	Phông chữ tổ hợp
 	Export Composite Fonts	Xuất phông chữ tổ hợp
 	Import Composite Fonts	Nhập phông chữ tổ hợp
+@msg	each font must be {name, parts}	mỗi phông chữ phải là {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	khóa không xác định `{k}`; một phông chữ nhận name và parts
+@msg	each font needs a name	mỗi phông chữ cần có tên
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` không thể là tên phông chữ tổ hợp (từ 1 đến {COMPOSITE_NAME_MAX} ký tự, không có ký tự điều khiển)
+@msg	`{name}`: parts must be an object	`{name}`: parts phải là một đối tượng
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: lớp không xác định `{k}`; các lớp là kanji, kana, punctuation, symbols, roman và numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} phải là một đối tượng
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: khóa không xác định `{k}` trong {_1}
+@msg	`{name}`: give the kanji part	`{name}`: hãy cung cấp phần kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	một tài liệu chứa tối đa {COMPOSITE_FONTS_MAX} phông chữ tổ hợp
+@msg	two composite fonts are named `{_1}`	có hai phông chữ tổ hợp cùng tên `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` là tên của một phông chữ đã cài đặt
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} dùng `{font}`, một phông chữ tổ hợp
+@msg	give fonts: [{name, parts}…]	hãy cung cấp fonts: [{name, parts}…]
+@msg	path is empty	path trống
+@msg	fonts must be a list of composite fonts	fonts phải là danh sách phông chữ tổ hợp
+@msg	names must be strings	names phải là chuỗi
+@msg	no composite font named `{n}`	không có phông chữ tổ hợp nào tên `{n}`
+@msg	names must be a list of names	names phải là danh sách tên
+@msg	no composite fonts to export	không có phông chữ tổ hợp nào để xuất
+@msg	not a composite fonts file: {e}	không phải tệp phông chữ tổ hợp: {e}
+@msg	not a composite fonts file: no compositeFonts list	không phải tệp phông chữ tổ hợp: không có danh sách compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	tệp chứa hơn {COMPOSITE_FONTS_MAX} phông chữ tổ hợp
+@msg	the file is larger than 4 MB	tệp lớn hơn 4 MB
+@msg	dataBase64 is not base64	dataBase64 không phải base64
+@msg	give one of path, data or dataBase64	hãy cung cấp path, data hoặc dataBase64
+@msg	the file holds no composite fonts	tệp không chứa phông chữ tổ hợp nào
+@msg	the file holds two composite fonts named `{_1}`	tệp chứa hai phông chữ tổ hợp cùng tên `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` không thể là tên phông chữ tổ hợp
+@msg	{k}: give a font	{k}: hãy cung cấp một phông chữ
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: hãy cung cấp một phông chữ
+@msg	{k}: size must be {_1} to {_2}%	{k}: size phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size phải từ {_1} đến {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline phải từ {_1} đến {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: tỷ lệ phải từ {_1} đến {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: tỷ lệ phải từ {_1} đến {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: chỉ kana, roman và numerals mới co giãn được
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: chỉ kana, roman và numerals mới co giãn được
+@msg	{k}: only kana can be scaled at the center	{k}: chỉ kana mới co giãn từ tâm được
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: chỉ kana mới co giãn từ tâm được
+@msg	no composite font	không có phông chữ tổ hợp
 	Delete Font	Xóa phông chữ
 	Kanji	Kanji
 	Kana	Kana

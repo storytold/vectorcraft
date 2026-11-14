@@ -3710,6 +3710,48 @@ digits	Malayalam	Малаялам
 	Composite Fonts	Составные шрифты
 	Export Composite Fonts	Экспорт составных шрифтов
 	Import Composite Fonts	Импорт составных шрифтов
+@msg	each font must be {name, parts}	каждый шрифт должен иметь вид {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	неизвестный ключ `{k}`; шрифт принимает name и parts
+@msg	each font needs a name	у каждого шрифта должно быть имя
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` не может быть именем составного шрифта (от 1 до {COMPOSITE_NAME_MAX} символов, без управляющих символов)
+@msg	`{name}`: parts must be an object	`{name}`: parts должен быть объектом
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: неизвестный класс `{k}`; классы: kanji, kana, punctuation, symbols, roman и numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} должен быть объектом
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: неизвестный ключ `{k}` в {_1}
+@msg	`{name}`: give the kanji part	`{name}`: укажите часть kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	документ содержит не более {COMPOSITE_FONTS_MAX} составных шрифтов
+@msg	two composite fonts are named `{_1}`	два составных шрифта называются `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` является именем установленного шрифта
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} использует `{font}`, а это составной шрифт
+@msg	give fonts: [{name, parts}…]	укажите fonts: [{name, parts}…]
+@msg	path is empty	path пуст
+@msg	fonts must be a list of composite fonts	fonts должен быть списком составных шрифтов
+@msg	names must be strings	names должны быть строками
+@msg	no composite font named `{n}`	нет составного шрифта с именем `{n}`
+@msg	names must be a list of names	names должен быть списком имён
+@msg	no composite fonts to export	нет составных шрифтов для экспорта
+@msg	not a composite fonts file: {e}	это не файл составных шрифтов: {e}
+@msg	not a composite fonts file: no compositeFonts list	это не файл составных шрифтов: нет списка compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	в файле больше {COMPOSITE_FONTS_MAX} составных шрифтов
+@msg	the file is larger than 4 MB	файл больше 4 МБ
+@msg	dataBase64 is not base64	dataBase64 не в формате base64
+@msg	give one of path, data or dataBase64	укажите path, data или dataBase64
+@msg	the file holds no composite fonts	в файле нет составных шрифтов
+@msg	the file holds two composite fonts named `{_1}`	в файле два составных шрифта с именем `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` не может быть именем составного шрифта
+@msg	{k}: give a font	{k}: укажите шрифт
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: укажите шрифт
+@msg	{k}: size must be {_1} to {_2}%	{k}: size должен быть от {_1} до {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size должен быть от {_1} до {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline должен быть от {_1} до {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline должен быть от {_1} до {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: масштаб должен быть от {_1} до {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: масштаб должен быть от {_1} до {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: масштабировать можно только kana, roman и numerals
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: масштабировать можно только kana, roman и numerals
+@msg	{k}: only kana can be scaled at the center	{k}: масштабировать от центра можно только kana
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: масштабировать от центра можно только kana
+@msg	no composite font	нет составного шрифта
 	Delete Font	Удалить шрифт
 	Kanji	Кандзи
 	Kana	Кана

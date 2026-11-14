@@ -3724,6 +3724,48 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Font compositi
 	Export Composite Fonts	Esporta font compositi
 	Import Composite Fonts	Importa font compositi
+@msg	each font must be {name, parts}	ogni font deve essere {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	chiave sconosciuta `{k}`; un font accetta name e parts
+@msg	each font needs a name	ogni font deve avere un nome
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` non può essere il nome di un font composito (da 1 a {COMPOSITE_NAME_MAX} caratteri, senza caratteri di controllo)
+@msg	`{name}`: parts must be an object	`{name}`: parts deve essere un oggetto
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: classe sconosciuta `{k}`; le classi sono kanji, kana, punctuation, symbols, roman e numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} deve essere un oggetto
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: chiave sconosciuta `{k}` in {_1}
+@msg	`{name}`: give the kanji part	`{name}`: indica la parte kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un documento contiene al massimo {COMPOSITE_FONTS_MAX} font compositi
+@msg	two composite fonts are named `{_1}`	due font compositi si chiamano `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` è il nome di un font installato
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, un font composito
+@msg	give fonts: [{name, parts}…]	indica fonts: [{name, parts}…]
+@msg	path is empty	path è vuoto
+@msg	fonts must be a list of composite fonts	fonts deve essere un elenco di font compositi
+@msg	names must be strings	names deve contenere stringhe
+@msg	no composite font named `{n}`	nessun font composito di nome `{n}`
+@msg	names must be a list of names	names deve essere un elenco di nomi
+@msg	no composite fonts to export	nessun font composito da esportare
+@msg	not a composite fonts file: {e}	non è un file di font compositi: {e}
+@msg	not a composite fonts file: no compositeFonts list	non è un file di font compositi: manca l’elenco compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	il file contiene più di {COMPOSITE_FONTS_MAX} font compositi
+@msg	the file is larger than 4 MB	il file supera 4 MB
+@msg	dataBase64 is not base64	dataBase64 non è base64
+@msg	give one of path, data or dataBase64	indica path, data o dataBase64
+@msg	the file holds no composite fonts	il file non contiene font compositi
+@msg	the file holds two composite fonts named `{_1}`	il file contiene due font compositi di nome `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` non può essere il nome di un font composito
+@msg	{k}: give a font	{k}: indica un font
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indica un font
+@msg	{k}: size must be {_1} to {_2}%	{k}: size deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size deve essere tra {_1} e {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline deve essere tra {_1} e {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: la scala deve essere tra {_1} e {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: la scala deve essere tra {_1} e {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: solo kana, roman e numerals si possono ridimensionare
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: solo kana, roman e numerals si possono ridimensionare
+@msg	{k}: only kana can be scaled at the center	{k}: solo kana si può ridimensionare dal centro
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: solo kana si può ridimensionare dal centro
+@msg	no composite font	nessun font composito
 	Delete Font	Elimina font
 	Kanji	Kanji
 	Kana	Kana

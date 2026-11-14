@@ -4163,6 +4163,48 @@ digits	Malayalam	Μαλαγιάλαμ
 	Composite Fonts	Σύνθετες γραμματοσειρές
 	Export Composite Fonts	Εξαγωγή σύνθετων γραμματοσειρών
 	Import Composite Fonts	Εισαγωγή σύνθετων γραμματοσειρών
+@msg	each font must be {name, parts}	κάθε γραμματοσειρά πρέπει να είναι {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	άγνωστο κλειδί `{k}`· μια γραμματοσειρά δέχεται name και parts
+@msg	each font needs a name	κάθε γραμματοσειρά χρειάζεται όνομα
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	το `{raw}` δεν μπορεί να είναι όνομα σύνθετης γραμματοσειράς (1 έως {COMPOSITE_NAME_MAX} χαρακτήρες, χωρίς χαρακτήρες ελέγχου)
+@msg	`{name}`: parts must be an object	`{name}`: το parts πρέπει να είναι αντικείμενο
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: άγνωστη κλάση `{k}`· οι κλάσεις είναι kanji, kana, punctuation, symbols, roman και numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: το {_1} πρέπει να είναι αντικείμενο
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: άγνωστο κλειδί `{k}` στο {_1}
+@msg	`{name}`: give the kanji part	`{name}`: δώστε το τμήμα kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ένα έγγραφο περιέχει το πολύ {COMPOSITE_FONTS_MAX} σύνθετες γραμματοσειρές
+@msg	two composite fonts are named `{_1}`	δύο σύνθετες γραμματοσειρές ονομάζονται `{_1}`
+@msg	`{_1}` is the name of an installed font	το `{_1}` είναι όνομα εγκατεστημένης γραμματοσειράς
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: το {_2} χρησιμοποιεί την `{font}`, που είναι σύνθετη γραμματοσειρά
+@msg	give fonts: [{name, parts}…]	δώστε fonts: [{name, parts}…]
+@msg	path is empty	το path είναι κενό
+@msg	fonts must be a list of composite fonts	το fonts πρέπει να είναι λίστα σύνθετων γραμματοσειρών
+@msg	names must be strings	τα names πρέπει να είναι συμβολοσειρές
+@msg	no composite font named `{n}`	δεν υπάρχει σύνθετη γραμματοσειρά με όνομα `{n}`
+@msg	names must be a list of names	το names πρέπει να είναι λίστα ονομάτων
+@msg	no composite fonts to export	δεν υπάρχουν σύνθετες γραμματοσειρές για εξαγωγή
+@msg	not a composite fonts file: {e}	δεν είναι αρχείο σύνθετων γραμματοσειρών: {e}
+@msg	not a composite fonts file: no compositeFonts list	δεν είναι αρχείο σύνθετων γραμματοσειρών: δεν υπάρχει λίστα compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	το αρχείο περιέχει περισσότερες από {COMPOSITE_FONTS_MAX} σύνθετες γραμματοσειρές
+@msg	the file is larger than 4 MB	το αρχείο είναι μεγαλύτερο από 4 MB
+@msg	dataBase64 is not base64	το dataBase64 δεν είναι base64
+@msg	give one of path, data or dataBase64	δώστε path, data ή dataBase64
+@msg	the file holds no composite fonts	το αρχείο δεν περιέχει σύνθετες γραμματοσειρές
+@msg	the file holds two composite fonts named `{_1}`	το αρχείο περιέχει δύο σύνθετες γραμματοσειρές με όνομα `{_1}`
+@msg	`{_1}` can't name a composite font	το `{_1}` δεν μπορεί να είναι όνομα σύνθετης γραμματοσειράς
+@msg	{k}: give a font	{k}: δώστε γραμματοσειρά
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: δώστε γραμματοσειρά
+@msg	{k}: size must be {_1} to {_2}%	{k}: το size πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: το size πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: το baseline πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: το baseline πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}: η κλίμακα πρέπει να είναι από {_1} έως {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: η κλίμακα πρέπει να είναι από {_1} έως {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: μόνο τα kana, roman και numerals αλλάζουν κλίμακα
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: μόνο τα kana, roman και numerals αλλάζουν κλίμακα
+@msg	{k}: only kana can be scaled at the center	{k}: μόνο το kana αλλάζει κλίμακα από το κέντρο
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: μόνο το kana αλλάζει κλίμακα από το κέντρο
+@msg	no composite font	καμία σύνθετη γραμματοσειρά
 	Delete Font	Διαγραφή γραμματοσειράς
 	Kanji	Κάντζι
 	Kana	Κάνα

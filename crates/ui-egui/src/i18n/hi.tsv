@@ -5036,6 +5036,48 @@ antiAlias	Sharp	शार्प
 	Composite Fonts	कंपोज़िट फ़ॉन्ट
 	Export Composite Fonts	कंपोज़िट फ़ॉन्ट एक्सपोर्ट करें
 	Import Composite Fonts	कंपोज़िट फ़ॉन्ट इम्पोर्ट करें
+@msg	each font must be {name, parts}	हर फ़ॉन्ट {name, parts} होना चाहिए
+@msg	unknown key `{k}`; a font takes name and parts	अज्ञात कुंजी `{k}`; फ़ॉन्ट name और parts लेता है
+@msg	each font needs a name	हर फ़ॉन्ट का एक नाम होना चाहिए
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` कंपोज़िट फ़ॉन्ट का नाम नहीं हो सकता (1 से {COMPOSITE_NAME_MAX} अक्षर, कोई नियंत्रण अक्षर नहीं)
+@msg	`{name}`: parts must be an object	`{name}`: parts एक ऑब्जेक्ट होना चाहिए
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: अज्ञात वर्ग `{k}`; वर्ग kanji, kana, punctuation, symbols, roman और numerals हैं
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} एक ऑब्जेक्ट होना चाहिए
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1} में अज्ञात कुंजी `{k}`
+@msg	`{name}`: give the kanji part	`{name}`: kanji भाग दें
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	एक दस्तावेज़ में अधिकतम {COMPOSITE_FONTS_MAX} कंपोज़िट फ़ॉन्ट रहते हैं
+@msg	two composite fonts are named `{_1}`	दो कंपोज़िट फ़ॉन्ट का नाम `{_1}` है
+@msg	`{_1}` is the name of an installed font	`{_1}` एक इंस्टॉल किए गए फ़ॉन्ट का नाम है
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} `{font}` में सेट है, जो एक कंपोज़िट फ़ॉन्ट है
+@msg	give fonts: [{name, parts}…]	fonts दें: [{name, parts}…]
+@msg	path is empty	path खाली है
+@msg	fonts must be a list of composite fonts	fonts कंपोज़िट फ़ॉन्ट की सूची होनी चाहिए
+@msg	names must be strings	names स्ट्रिंग होने चाहिए
+@msg	no composite font named `{n}`	`{n}` नाम का कोई कंपोज़िट फ़ॉन्ट नहीं है
+@msg	names must be a list of names	names नामों की सूची होनी चाहिए
+@msg	no composite fonts to export	एक्सपोर्ट करने के लिए कोई कंपोज़िट फ़ॉन्ट नहीं है
+@msg	not a composite fonts file: {e}	यह कंपोज़िट फ़ॉन्ट फ़ाइल नहीं है: {e}
+@msg	not a composite fonts file: no compositeFonts list	यह कंपोज़िट फ़ॉन्ट फ़ाइल नहीं है: compositeFonts सूची नहीं है
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	फ़ाइल में {COMPOSITE_FONTS_MAX} से अधिक कंपोज़िट फ़ॉन्ट हैं
+@msg	the file is larger than 4 MB	फ़ाइल 4 MB से बड़ी है
+@msg	dataBase64 is not base64	dataBase64 base64 नहीं है
+@msg	give one of path, data or dataBase64	path, data या dataBase64 में से एक दें
+@msg	the file holds no composite fonts	फ़ाइल में कोई कंपोज़िट फ़ॉन्ट नहीं है
+@msg	the file holds two composite fonts named `{_1}`	फ़ाइल में `{_1}` नाम के दो कंपोज़िट फ़ॉन्ट हैं
+@msg	`{_1}` can't name a composite font	`{_1}` कंपोज़िट फ़ॉन्ट का नाम नहीं हो सकता
+@msg	{k}: give a font	{k}: एक फ़ॉन्ट दें
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: एक फ़ॉन्ट दें
+@msg	{k}: size must be {_1} to {_2}%	{k}: size {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size {_1} से {_2}% तक होना चाहिए
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline {_1} से {_2}% तक होना चाहिए
+@msg	{k}: scale must be {_1} to {_2}%	{k}: स्केल {_1} से {_2}% तक होना चाहिए
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: स्केल {_1} से {_2}% तक होना चाहिए
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: केवल kana, roman और numerals को स्केल किया जा सकता है
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: केवल kana, roman और numerals को स्केल किया जा सकता है
+@msg	{k}: only kana can be scaled at the center	{k}: केंद्र से केवल kana को स्केल किया जा सकता है
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: केंद्र से केवल kana को स्केल किया जा सकता है
+@msg	no composite font	कोई कंपोज़िट फ़ॉन्ट नहीं
 	Delete Font	फ़ॉन्ट हटाएँ
 	Kanji	कांजी
 	Kana	काना

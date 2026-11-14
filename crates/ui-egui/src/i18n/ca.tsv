@@ -4651,6 +4651,48 @@ digits	Malayalam	Malaiàlam
 	Composite Fonts	Tipus de lletra compostos
 	Export Composite Fonts	Exporta tipus de lletra compostos
 	Import Composite Fonts	Importa tipus de lletra compostos
+@msg	each font must be {name, parts}	cada tipus de lletra ha de ser {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	clau desconeguda `{k}`; un tipus de lletra admet name i parts
+@msg	each font needs a name	cada tipus de lletra necessita un nom
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` no pot anomenar un tipus de lletra compost (d’1 a {COMPOSITE_NAME_MAX} caràcters, sense caràcters de control)
+@msg	`{name}`: parts must be an object	`{name}`: parts ha de ser un objecte
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: classe desconeguda `{k}`; les classes són kanji, kana, punctuation, symbols, roman i numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} ha de ser un objecte
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: clau desconeguda `{k}` a {_1}
+@msg	`{name}`: give the kanji part	`{name}`: indiqueu la part kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	un document conté com a màxim {COMPOSITE_FONTS_MAX} tipus de lletra compostos
+@msg	two composite fonts are named `{_1}`	dos tipus de lletra compostos es diuen `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` és el nom d’un tipus de lletra instal·lat
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} usa `{font}`, un tipus de lletra compost
+@msg	give fonts: [{name, parts}…]	indiqueu fonts: [{name, parts}…]
+@msg	path is empty	path és buit
+@msg	fonts must be a list of composite fonts	fonts ha de ser una llista de tipus de lletra compostos
+@msg	names must be strings	names ha de contenir cadenes
+@msg	no composite font named `{n}`	cap tipus de lletra compost anomenat `{n}`
+@msg	names must be a list of names	names ha de ser una llista de noms
+@msg	no composite fonts to export	cap tipus de lletra compost per exportar
+@msg	not a composite fonts file: {e}	no és un fitxer de tipus de lletra compostos: {e}
+@msg	not a composite fonts file: no compositeFonts list	no és un fitxer de tipus de lletra compostos: no hi ha cap llista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	el fitxer conté més de {COMPOSITE_FONTS_MAX} tipus de lletra compostos
+@msg	the file is larger than 4 MB	el fitxer ocupa més de 4 MB
+@msg	dataBase64 is not base64	dataBase64 no és base64
+@msg	give one of path, data or dataBase64	indiqueu path, data o dataBase64
+@msg	the file holds no composite fonts	el fitxer no conté cap tipus de lletra compost
+@msg	the file holds two composite fonts named `{_1}`	el fitxer conté dos tipus de lletra compostos anomenats `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` no pot anomenar un tipus de lletra compost
+@msg	{k}: give a font	{k}: indiqueu un tipus de lletra
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: indiqueu un tipus de lletra
+@msg	{k}: size must be {_1} to {_2}%	{k}: size ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size ha d’estar entre {_1} i {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline ha d’estar entre {_1} i {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: l’escala ha d’estar entre {_1} i {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: l’escala ha d’estar entre {_1} i {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: només kana, roman i numerals es poden escalar
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: només kana, roman i numerals es poden escalar
+@msg	{k}: only kana can be scaled at the center	{k}: només kana es pot escalar des del centre
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: només kana es pot escalar des del centre
+@msg	no composite font	cap tipus de lletra compost
 	Delete Font	Suprimeix el tipus de lletra
 	Kanji	Kanji
 	Kana	Kana

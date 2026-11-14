@@ -3630,6 +3630,48 @@ effect	Points	Punkte
 	Composite Fonts	Zusammengesetzte Schriften
 	Export Composite Fonts	Zusammengesetzte Schriften exportieren
 	Import Composite Fonts	Zusammengesetzte Schriften importieren
+@msg	each font must be {name, parts}	jede Schrift muss {name, parts} sein
+@msg	unknown key `{k}`; a font takes name and parts	unbekannter Schlüssel `{k}`; eine Schrift nimmt name und parts
+@msg	each font needs a name	jede Schrift braucht einen Namen
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kann keine zusammengesetzte Schrift benennen (1 bis {COMPOSITE_NAME_MAX} Zeichen, keine Steuerzeichen)
+@msg	`{name}`: parts must be an object	`{name}`: parts muss ein Objekt sein
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: unbekannte Klasse `{k}`; die Klassen sind kanji, kana, punctuation, symbols, roman und numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} muss ein Objekt sein
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: unbekannter Schlüssel `{k}` in {_1}
+@msg	`{name}`: give the kanji part	`{name}`: geben Sie den Teil kanji an
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ein Dokument enthält höchstens {COMPOSITE_FONTS_MAX} zusammengesetzte Schriften
+@msg	two composite fonts are named `{_1}`	zwei zusammengesetzte Schriften heißen `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` ist der Name einer installierten Schrift
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} ist in `{font}` gesetzt, einer zusammengesetzten Schrift
+@msg	give fonts: [{name, parts}…]	geben Sie fonts an: [{name, parts}…]
+@msg	path is empty	path ist leer
+@msg	fonts must be a list of composite fonts	fonts muss eine Liste zusammengesetzter Schriften sein
+@msg	names must be strings	names müssen Zeichenketten sein
+@msg	no composite font named `{n}`	keine zusammengesetzte Schrift namens `{n}`
+@msg	names must be a list of names	names muss eine Liste von Namen sein
+@msg	no composite fonts to export	keine zusammengesetzten Schriften zum Exportieren
+@msg	not a composite fonts file: {e}	keine Datei mit zusammengesetzten Schriften: {e}
+@msg	not a composite fonts file: no compositeFonts list	keine Datei mit zusammengesetzten Schriften: keine Liste compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	die Datei enthält mehr als {COMPOSITE_FONTS_MAX} zusammengesetzte Schriften
+@msg	the file is larger than 4 MB	die Datei ist größer als 4 MB
+@msg	dataBase64 is not base64	dataBase64 ist kein Base64
+@msg	give one of path, data or dataBase64	geben Sie path, data oder dataBase64 an
+@msg	the file holds no composite fonts	die Datei enthält keine zusammengesetzten Schriften
+@msg	the file holds two composite fonts named `{_1}`	die Datei enthält zwei zusammengesetzte Schriften namens `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kann keine zusammengesetzte Schrift benennen
+@msg	{k}: give a font	{k}: geben Sie eine Schrift an
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: geben Sie eine Schrift an
+@msg	{k}: size must be {_1} to {_2}%	{k}: size muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size muss {_1} bis {_2} % sein
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline muss {_1} bis {_2} % sein
+@msg	{k}: scale must be {_1} to {_2}%	{k}: die Skalierung muss {_1} bis {_2} % sein
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: die Skalierung muss {_1} bis {_2} % sein
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: nur kana, roman und numerals lassen sich skalieren
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: nur kana, roman und numerals lassen sich skalieren
+@msg	{k}: only kana can be scaled at the center	{k}: nur kana lässt sich am Mittelpunkt skalieren
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: nur kana lässt sich am Mittelpunkt skalieren
+@msg	no composite font	keine zusammengesetzte Schrift
 	Delete Font	Schrift löschen
 	Kanji	Kanji
 	Kana	Kana

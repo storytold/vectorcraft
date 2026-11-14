@@ -4053,6 +4053,48 @@ file-filter	Templates	テンプレート
 	Composite Fonts	合成フォント
 	Export Composite Fonts	合成フォントを書き出し
 	Import Composite Fonts	合成フォントを読み込み
+@msg	each font must be {name, parts}	各フォントは {name, parts} の形にしてください
+@msg	unknown key `{k}`; a font takes name and parts	`{k}` は不明なキーです。フォントに使えるのは name と parts です
+@msg	each font needs a name	各フォントには名前が必要です
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` は合成フォントの名前にできません (1～{COMPOSITE_NAME_MAX} 文字、制御文字なし)
+@msg	`{name}`: parts must be an object	`{name}`: parts はオブジェクトにしてください
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: `{k}` は不明なクラスです。クラスは kanji、kana、punctuation、symbols、roman、numerals です
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} はオブジェクトにしてください
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: {_1} の `{k}` は不明なキーです
+@msg	`{name}`: give the kanji part	`{name}`: kanji の部分を指定してください
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	1 つのドキュメントに置ける合成フォントは {COMPOSITE_FONTS_MAX} 個までです
+@msg	two composite fonts are named `{_1}`	`{_1}` という名前の合成フォントが 2 つあります
+@msg	`{_1}` is the name of an installed font	`{_1}` はインストール済みのフォントの名前です
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} に合成フォントの `{font}` が設定されています
+@msg	give fonts: [{name, parts}…]	fonts を指定してください: [{name, parts}…]
+@msg	path is empty	path が空です
+@msg	fonts must be a list of composite fonts	fonts は合成フォントのリストにしてください
+@msg	names must be strings	names は文字列にしてください
+@msg	no composite font named `{n}`	`{n}` という合成フォントはありません
+@msg	names must be a list of names	names は名前のリストにしてください
+@msg	no composite fonts to export	書き出す合成フォントがありません
+@msg	not a composite fonts file: {e}	合成フォントのファイルではありません: {e}
+@msg	not a composite fonts file: no compositeFonts list	合成フォントのファイルではありません: compositeFonts のリストがありません
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	ファイルに {COMPOSITE_FONTS_MAX} 個を超える合成フォントがあります
+@msg	the file is larger than 4 MB	ファイルが 4 MB を超えています
+@msg	dataBase64 is not base64	dataBase64 が base64 ではありません
+@msg	give one of path, data or dataBase64	path、data、dataBase64 のいずれかを指定してください
+@msg	the file holds no composite fonts	ファイルに合成フォントがありません
+@msg	the file holds two composite fonts named `{_1}`	ファイルに `{_1}` という名前の合成フォントが 2 つあります
+@msg	`{_1}` can't name a composite font	`{_1}` は合成フォントの名前にできません
+@msg	{k}: give a font	{k}: フォントを指定してください
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: フォントを指定してください
+@msg	{k}: size must be {_1} to {_2}%	{k}: size は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size は {_1}～{_2}% にしてください
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline は {_1}～{_2}% にしてください
+@msg	{k}: scale must be {_1} to {_2}%	{k}: 比率は {_1}～{_2}% にしてください
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: 比率は {_1}～{_2}% にしてください
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: 比率を変更できるのは kana、roman、numerals だけです
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: 比率を変更できるのは kana、roman、numerals だけです
+@msg	{k}: only kana can be scaled at the center	{k}: 中央を基準に比率を変更できるのは kana だけです
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: 中央を基準に比率を変更できるのは kana だけです
+@msg	no composite font	合成フォントがありません
 	Delete Font	フォントを削除
 	Kanji	漢字
 	Kana	かな

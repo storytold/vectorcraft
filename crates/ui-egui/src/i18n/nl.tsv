@@ -2073,6 +2073,48 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Samengestelde lettertypen
 	Export Composite Fonts	Samengestelde lettertypen exporteren
 	Import Composite Fonts	Samengestelde lettertypen importeren
+@msg	each font must be {name, parts}	elk lettertype moet {name, parts} zijn
+@msg	unknown key `{k}`; a font takes name and parts	onbekende sleutel `{k}`; een lettertype neemt name en parts
+@msg	each font needs a name	elk lettertype heeft een naam nodig
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan geen naam van een samengesteld lettertype zijn (1 tot {COMPOSITE_NAME_MAX} tekens, geen besturingstekens)
+@msg	`{name}`: parts must be an object	`{name}`: parts moet een object zijn
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: onbekende klasse `{k}`; de klassen zijn kanji, kana, punctuation, symbols, roman en numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} moet een object zijn
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: onbekende sleutel `{k}` in {_1}
+@msg	`{name}`: give the kanji part	`{name}`: geef het deel kanji op
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	een document bevat hoogstens {COMPOSITE_FONTS_MAX} samengestelde lettertypen
+@msg	two composite fonts are named `{_1}`	twee samengestelde lettertypen heten `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` is de naam van een geïnstalleerd lettertype
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} gebruikt `{font}`, een samengesteld lettertype
+@msg	give fonts: [{name, parts}…]	geef fonts op: [{name, parts}…]
+@msg	path is empty	path is leeg
+@msg	fonts must be a list of composite fonts	fonts moet een lijst van samengestelde lettertypen zijn
+@msg	names must be strings	names moeten tekenreeksen zijn
+@msg	no composite font named `{n}`	geen samengesteld lettertype met de naam `{n}`
+@msg	names must be a list of names	names moet een lijst van namen zijn
+@msg	no composite fonts to export	geen samengestelde lettertypen om te exporteren
+@msg	not a composite fonts file: {e}	geen bestand met samengestelde lettertypen: {e}
+@msg	not a composite fonts file: no compositeFonts list	geen bestand met samengestelde lettertypen: geen lijst compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	het bestand bevat meer dan {COMPOSITE_FONTS_MAX} samengestelde lettertypen
+@msg	the file is larger than 4 MB	het bestand is groter dan 4 MB
+@msg	dataBase64 is not base64	dataBase64 is geen base64
+@msg	give one of path, data or dataBase64	geef path, data of dataBase64 op
+@msg	the file holds no composite fonts	het bestand bevat geen samengestelde lettertypen
+@msg	the file holds two composite fonts named `{_1}`	het bestand bevat twee samengestelde lettertypen met de naam `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kan geen naam van een samengesteld lettertype zijn
+@msg	{k}: give a font	{k}: geef een lettertype op
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: geef een lettertype op
+@msg	{k}: size must be {_1} to {_2}%	{k}: size moet tussen {_1} en {_2}% liggen
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size moet tussen {_1} en {_2}% liggen
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline moet tussen {_1} en {_2}% liggen
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline moet tussen {_1} en {_2}% liggen
+@msg	{k}: scale must be {_1} to {_2}%	{k}: de schaal moet tussen {_1} en {_2}% liggen
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: de schaal moet tussen {_1} en {_2}% liggen
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: alleen kana, roman en numerals kunnen worden geschaald
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: alleen kana, roman en numerals kunnen worden geschaald
+@msg	{k}: only kana can be scaled at the center	{k}: alleen kana kan vanuit het midden worden geschaald
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: alleen kana kan vanuit het midden worden geschaald
+@msg	no composite font	geen samengesteld lettertype
 	Delete Font	Lettertype verwijderen
 	Kanji	Kanji
 	Kana	Kana

@@ -4346,6 +4346,48 @@ mark-style	Japanese	Japán
 	Composite Fonts	Összetett betűtípusok
 	Export Composite Fonts	Összetett betűtípusok exportálása
 	Import Composite Fonts	Összetett betűtípusok importálása
+@msg	each font must be {name, parts}	minden betűtípusnak {name, parts} alakúnak kell lennie
+@msg	unknown key `{k}`; a font takes name and parts	ismeretlen kulcs: `{k}`; egy betűtípus name és parts kulcsot fogad
+@msg	each font needs a name	minden betűtípusnak kell egy név
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` nem lehet összetett betűtípus neve (1–{COMPOSITE_NAME_MAX} karakter, vezérlőkarakterek nélkül)
+@msg	`{name}`: parts must be an object	`{name}`: a parts értékének objektumnak kell lennie
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: ismeretlen osztály: `{k}`; az osztályok: kanji, kana, punctuation, symbols, roman és numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: a(z) {_1} értékének objektumnak kell lennie
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: ismeretlen kulcs: `{k}` itt: {_1}
+@msg	`{name}`: give the kanji part	`{name}`: adja meg a kanji részt
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	egy dokumentum legfeljebb {COMPOSITE_FONTS_MAX} összetett betűtípust tartalmazhat
+@msg	two composite fonts are named `{_1}`	két összetett betűtípus neve is `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` egy telepített betűtípus neve
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: a(z) {_2} a(z) `{font}` összetett betűtípust használja
+@msg	give fonts: [{name, parts}…]	adja meg: fonts: [{name, parts}…]
+@msg	path is empty	a path üres
+@msg	fonts must be a list of composite fonts	a fonts értékének összetett betűtípusok listájának kell lennie
+@msg	names must be strings	a names elemeinek karakterláncoknak kell lenniük
+@msg	no composite font named `{n}`	nincs `{n}` nevű összetett betűtípus
+@msg	names must be a list of names	a names értékének nevek listájának kell lennie
+@msg	no composite fonts to export	nincs exportálható összetett betűtípus
+@msg	not a composite fonts file: {e}	nem összetettbetűtípus-fájl: {e}
+@msg	not a composite fonts file: no compositeFonts list	nem összetettbetűtípus-fájl: nincs compositeFonts lista
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	a fájl több mint {COMPOSITE_FONTS_MAX} összetett betűtípust tartalmaz
+@msg	the file is larger than 4 MB	a fájl nagyobb 4 MB-nál
+@msg	dataBase64 is not base64	a dataBase64 nem base64
+@msg	give one of path, data or dataBase64	adja meg a path, data vagy dataBase64 egyikét
+@msg	the file holds no composite fonts	a fájl nem tartalmaz összetett betűtípust
+@msg	the file holds two composite fonts named `{_1}`	a fájl két `{_1}` nevű összetett betűtípust tartalmaz
+@msg	`{_1}` can't name a composite font	`{_1}` nem lehet összetett betűtípus neve
+@msg	{k}: give a font	{k}: adjon meg egy betűtípust
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: adjon meg egy betűtípust
+@msg	{k}: size must be {_1} to {_2}%	{k}: a size értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: a size értéke {_1}–{_2}% lehet
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: a baseline értéke {_1}–{_2}% lehet
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: a baseline értéke {_1}–{_2}% lehet
+@msg	{k}: scale must be {_1} to {_2}%	{k}: a méretezés {_1}–{_2}% lehet
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: a méretezés {_1}–{_2}% lehet
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: csak a kana, roman és numerals méretezhető
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: csak a kana, roman és numerals méretezhető
+@msg	{k}: only kana can be scaled at the center	{k}: csak a kana méretezhető a középpontból
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: csak a kana méretezhető a középpontból
+@msg	no composite font	nincs összetett betűtípus
 	Delete Font	Betűtípus törlése
 	Kanji	Kandzsi
 	Kana	Kana

@@ -4795,6 +4795,48 @@ digits	Malayalam	馬來亞拉姆數字
 	Composite Fonts	複合字體
 	Export Composite Fonts	匯出複合字體
 	Import Composite Fonts	匯入複合字體
+@msg	each font must be {name, parts}	每個字體都必須是 {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	未知的鍵 `{k}`；字體可用的鍵為 name 和 parts
+@msg	each font needs a name	每個字體都需要名稱
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` 不能作為複合字體的名稱（1 到 {COMPOSITE_NAME_MAX} 個字元，不含控制字元）
+@msg	`{name}`: parts must be an object	`{name}`：parts 必須是物件
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`：未知的類別 `{k}`；類別為 kanji、kana、punctuation、symbols、roman 和 numerals
+@msg	`{name}`: {_1} must be an object	`{name}`：{_1} 必須是物件
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`：{_1} 中有未知的鍵 `{k}`
+@msg	`{name}`: give the kanji part	`{name}`：請指定 kanji 部分
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	一份文件最多保存 {COMPOSITE_FONTS_MAX} 個複合字體
+@msg	two composite fonts are named `{_1}`	有兩個複合字體都名為 `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` 是已安裝字體的名稱
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`：{_2} 使用了複合字體 `{font}`
+@msg	give fonts: [{name, parts}…]	請指定 fonts：[{name, parts}…]
+@msg	path is empty	path 為空
+@msg	fonts must be a list of composite fonts	fonts 必須是複合字體清單
+@msg	names must be strings	names 必須是字串
+@msg	no composite font named `{n}`	沒有名為 `{n}` 的複合字體
+@msg	names must be a list of names	names 必須是名稱清單
+@msg	no composite fonts to export	沒有可匯出的複合字體
+@msg	not a composite fonts file: {e}	不是複合字體檔案：{e}
+@msg	not a composite fonts file: no compositeFonts list	不是複合字體檔案：沒有 compositeFonts 清單
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	檔案包含超過 {COMPOSITE_FONTS_MAX} 個複合字體
+@msg	the file is larger than 4 MB	檔案大於 4 MB
+@msg	dataBase64 is not base64	dataBase64 不是 base64
+@msg	give one of path, data or dataBase64	請指定 path、data 或 dataBase64 其中之一
+@msg	the file holds no composite fonts	檔案不含複合字體
+@msg	the file holds two composite fonts named `{_1}`	檔案中有兩個複合字體都名為 `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` 不能作為複合字體的名稱
+@msg	{k}: give a font	{k}：請指定字體
+@msg	`{name}`: {k}: give a font	`{name}`: {k}：請指定字體
+@msg	{k}: size must be {_1} to {_2}%	{k}：size 必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}：size 必須為 {_1}% 到 {_2}%
+@msg	{k}: baseline must be {_1} to {_2}%	{k}：baseline 必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}：baseline 必須為 {_1}% 到 {_2}%
+@msg	{k}: scale must be {_1} to {_2}%	{k}：縮放必須為 {_1}% 到 {_2}%
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}：縮放必須為 {_1}% 到 {_2}%
+@msg	{k}: only kana, roman and numerals can be scaled	{k}：只有 kana、roman 和 numerals 可以縮放
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}：只有 kana、roman 和 numerals 可以縮放
+@msg	{k}: only kana can be scaled at the center	{k}：只有 kana 可以從中心縮放
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}：只有 kana 可以從中心縮放
+@msg	no composite font	沒有複合字體
 	Delete Font	刪除字體
 	Kanji	漢字
 	Kana	假名

@@ -3600,6 +3600,48 @@ digits	Malayalam	Malayalam
 	Composite Fonts	Sammansatta typsnitt
 	Export Composite Fonts	Exportera sammansatta typsnitt
 	Import Composite Fonts	Importera sammansatta typsnitt
+@msg	each font must be {name, parts}	varje typsnitt måste vara {name, parts}
+@msg	unknown key `{k}`; a font takes name and parts	okänd nyckel `{k}`; ett typsnitt tar name och parts
+@msg	each font needs a name	varje typsnitt behöver ett namn
+@msg	`{raw}` can't name a composite font (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` kan inte vara namnet på ett sammansatt typsnitt (1 till {COMPOSITE_NAME_MAX} tecken, inga styrtecken)
+@msg	`{name}`: parts must be an object	`{name}`: parts måste vara ett objekt
+@msg	`{name}`: unknown class `{k}`; the classes are kanji, kana, punctuation, symbols, roman and numerals	`{name}`: okänd klass `{k}`; klasserna är kanji, kana, punctuation, symbols, roman och numerals
+@msg	`{name}`: {_1} must be an object	`{name}`: {_1} måste vara ett objekt
+@msg	`{name}`: unknown key `{k}` in {_1}	`{name}`: okänd nyckel `{k}` i {_1}
+@msg	`{name}`: give the kanji part	`{name}`: ange delen kanji
+@msg	a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts	ett dokument har högst {COMPOSITE_FONTS_MAX} sammansatta typsnitt
+@msg	two composite fonts are named `{_1}`	två sammansatta typsnitt heter `{_1}`
+@msg	`{_1}` is the name of an installed font	`{_1}` är namnet på ett installerat typsnitt
+@msg	`{_1}`: {_2} is set in `{font}`, a composite font	`{_1}`: {_2} använder `{font}`, ett sammansatt typsnitt
+@msg	give fonts: [{name, parts}…]	ange fonts: [{name, parts}…]
+@msg	path is empty	path är tom
+@msg	fonts must be a list of composite fonts	fonts måste vara en lista med sammansatta typsnitt
+@msg	names must be strings	names måste vara strängar
+@msg	no composite font named `{n}`	inget sammansatt typsnitt heter `{n}`
+@msg	names must be a list of names	names måste vara en lista med namn
+@msg	no composite fonts to export	inga sammansatta typsnitt att exportera
+@msg	not a composite fonts file: {e}	inte en fil med sammansatta typsnitt: {e}
+@msg	not a composite fonts file: no compositeFonts list	inte en fil med sammansatta typsnitt: ingen lista compositeFonts
+@msg	the file holds more than {COMPOSITE_FONTS_MAX} composite fonts	filen innehåller fler än {COMPOSITE_FONTS_MAX} sammansatta typsnitt
+@msg	the file is larger than 4 MB	filen är större än 4 MB
+@msg	dataBase64 is not base64	dataBase64 är inte base64
+@msg	give one of path, data or dataBase64	ange path, data eller dataBase64
+@msg	the file holds no composite fonts	filen innehåller inga sammansatta typsnitt
+@msg	the file holds two composite fonts named `{_1}`	filen innehåller två sammansatta typsnitt som heter `{_1}`
+@msg	`{_1}` can't name a composite font	`{_1}` kan inte vara namnet på ett sammansatt typsnitt
+@msg	{k}: give a font	{k}: ange ett typsnitt
+@msg	`{name}`: {k}: give a font	`{name}`: {k}: ange ett typsnitt
+@msg	{k}: size must be {_1} to {_2}%	{k}: size måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: size must be {_1} to {_2}%	`{name}`: {k}: size måste vara {_1} till {_2} %
+@msg	{k}: baseline must be {_1} to {_2}%	{k}: baseline måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: baseline must be {_1} to {_2}%	`{name}`: {k}: baseline måste vara {_1} till {_2} %
+@msg	{k}: scale must be {_1} to {_2}%	{k}: skalan måste vara {_1} till {_2} %
+@msg	`{name}`: {k}: scale must be {_1} to {_2}%	`{name}`: {k}: skalan måste vara {_1} till {_2} %
+@msg	{k}: only kana, roman and numerals can be scaled	{k}: bara kana, roman och numerals kan skalas
+@msg	`{name}`: {k}: only kana, roman and numerals can be scaled	`{name}`: {k}: bara kana, roman och numerals kan skalas
+@msg	{k}: only kana can be scaled at the center	{k}: bara kana kan skalas från mitten
+@msg	`{name}`: {k}: only kana can be scaled at the center	`{name}`: {k}: bara kana kan skalas från mitten
+@msg	no composite font	inget sammansatt typsnitt
 	Delete Font	Ta bort typsnitt
 	Kanji	Kanji
 	Kana	Kana
