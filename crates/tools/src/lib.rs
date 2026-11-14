@@ -660,7 +660,10 @@ mod cursor_tests {
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.
         assert_eq!(cursor_at("pencil", &d, away), Cursor::PencilNew);
-        assert_eq!(Cursor::PencilNew.precise(), Cursor::Crosshair);
+        // Its badged cursors are drawn on the crosshair, and Use Precise Cursors keeps the badge.
+        for c in [Cursor::PencilNew, Cursor::PencilClose, Cursor::PencilStraight, Cursor::PencilContinue, Cursor::PaintbrushClose] {
+            assert_eq!(c.precise(), c, "{c:?}");
+        }
         assert_eq!(Cursor::PencilNew.stand_in(), None);
         assert_eq!(Cursor::Pencil.precise(), Cursor::Crosshair);
         assert_eq!(Cursor::Pencil.stand_in(), Some(Cursor::Crosshair));

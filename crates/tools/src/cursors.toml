@@ -628,7 +628,10 @@ hotspot = "The lead tip."
 [[cursor]]
 id = "PencilNew"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool before a press that draws a new freehand path: the pointer is not within Edit Selected Paths of a selected path that the press would continue from an end or redraw. Over such a path, and while a stroke is drawn, the Pencil cursor has no star."]
+shown_when = [
+    "The Pencil tool before a press that draws a new freehand path: the pointer is not within Edit Selected Paths of a selected path that the press would continue from an end or redraw. Over such a path, and while a stroke is drawn, the Pencil cursor has no star.",
+    "With Use Precise Cursors on it shows as well: it is drawn on the crosshair, and the badge stays.",
+]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a small star badge, where PencilClose has its ring."
 
@@ -639,6 +642,7 @@ shown_when = [
     "The Pencil tool with Alt pressed after the drag starts, when Alt key toggles to Smooth Tool is off: releasing the mouse button with Alt still held closes the path. A drag started with Shift or Alt held draws an open straight line and does not show this cursor.",
     "The Pencil tool while a freehand stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
     "The Pencil tool while a stroke continuing a selected open path, freehand or a straight line, is drawn to within Close Paths When Ends Are Within of that path's other end: releasing the mouse button there closes the path.",
+    "With Use Precise Cursors on it shows as well: it is drawn on the crosshair, and the badge stays.",
 ]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
@@ -646,7 +650,10 @@ look = "The Pencil cursor with a ring badge (closing the loop), like PenClose."
 [[cursor]]
 id = "PencilStraight"
 group = "Drawing and editing tools"
-shown_when = ["The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone."]
+shown_when = [
+    "The Pencil tool with Shift or Alt held before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press draws a straight line, at 45° steps from the Constrain Angle when Shift is held and at any angle with Alt alone.",
+    "With Use Precise Cursors on it shows as well: it is drawn on the crosshair, and the badge stays.",
+]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a short level-line badge, where PencilClose has its ring."
 
@@ -656,6 +663,7 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Pencil tool over an end of a selected open path, within Edit Selected Paths, before a press, except with Alt held when Alt key toggles to Smooth Tool is on: the press continues the path from that end, freehand, or with a straight line when Shift or Alt is held.",
     "The Pencil tool while a stroke continuing a selected path ends within Edit Selected Paths of an open end of another path selected at the press: releasing the mouse button connects the two.",
+    "With Use Precise Cursors on it shows as well: it is drawn on the crosshair, and the badge stays.",
 ]
 hotspot = "The lead tip."
 look = "The Pencil cursor with a short badge line rising to the right, where PencilClose has its ring (the stroke carries on from the path)."
@@ -672,6 +680,7 @@ group = "Drawing and editing tools"
 shown_when = [
     "The Paintbrush tool with Alt held while drawing, or before a press when no path is selected that the Smooth tool can act on (with one selected, Smooth shows): releasing the mouse button with Alt still held closes the path.",
     "The Paintbrush tool while a stroke is drawn back to within Close Paths When Ends Are Within of its start: releasing the mouse button there closes the path.",
+    "With Use Precise Cursors on it shows as well: it is drawn on the crosshair, and the badge stays.",
 ]
 hotspot = "The bristle tip."
 look = "The Paintbrush cursor with a ring badge (closing the loop), like PenClose."

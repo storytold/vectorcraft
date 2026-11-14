@@ -748,7 +748,7 @@ fn pencil_shows_the_straight_line_cursor_when_a_press_draws_a_line() {
     t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 40.0, -10.0).with_mods(shift));
     assert_eq!(t.cursor(&cx, at, shift), Cursor::Pencil, "a freehand stroke");
     assert_eq!(GestureTool::new("paintbrush").cursor(&cx, at, shift), Cursor::Paintbrush);
-    assert_eq!(Cursor::PencilStraight.precise(), Cursor::Crosshair, "Use Precise Cursors");
+    assert_eq!(Cursor::PencilStraight.precise(), Cursor::PencilStraight, "Use Precise Cursors keeps the badge");
 }
 
 /// Before a press, the Pencil shows its new-path cursor (the star) exactly when the press draws
@@ -883,7 +883,7 @@ fn pencil_shows_the_continuation_cursor_over_an_end_a_line_continues() {
     let cx_none = crate::testutil::cx(&d, &none, &p);
     assert_eq!(GestureTool::new("pencil").cursor(&cx_none, end, shift), Cursor::PencilStraight, "nothing selected");
     assert_eq!(GestureTool::new("paintbrush").cursor(&cx, end, shift), Cursor::Paintbrush);
-    assert_eq!(Cursor::PencilContinue.precise(), Cursor::Crosshair, "Use Precise Cursors");
+    assert_eq!(Cursor::PencilContinue.precise(), Cursor::PencilContinue, "Use Precise Cursors keeps the badge");
 }
 
 /// A Pencil stroke continuing a selected path shows the continuation cursor while a release would
