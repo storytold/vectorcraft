@@ -18,6 +18,8 @@ gate: all six core workflows (path drawing and editing, paint and style, type, l
 production, file exchange) work end to end on macOS with save and reopen, and only the last is partial, without
 blocking it ([Alpha gate](docs/roadmap.md#alpha-gate)).
 
+> **Gujarati status (2026-11-14, #6613):** 4,673 catalog rows: the original 4,286 remain unchanged; all 387 additions are contributor-reviewed and approved, with 11 wording corrections. Status/error messages remain partial, and the pinned CI/release fonts and web startup list contain no Gujarati face; web selection stays unavailable until a Gujarati interface face is bundled. Scores and estimates unchanged.
+
 ## Headline numbers
 
 | | Value | Kind |
@@ -96,7 +98,8 @@ Weights, evidence and the missing items per area: [target-app-parity.md](docs/ta
 | Simplified Chinese | `zh-hans` | partial (messages in English) | 85% |
 | Spanish | `es` | full | 100% |
 | Hindi | `hi` | catalog complete; machine-assisted draft, native review pending | complete under the scanner |
-| Tamil | `ta` | catalog complete; AI-assisted, native review pending | complete under the scanner |
+| Gujarati | `gu` | 4,673 contributor-reviewed catalog rows; 11 corrections applied to the 387 additions | menus and dialogs; status/error messages partial |
+| Tamil | `ta` | catalog complete under the translation tests; AI-assisted, native review pending | menus and dialogs; status/error messages partial (523 in the untranslated report) |
 | Arabic | `ar` | none (no right-to-left interface) | 0% |
 | French | `fr` | full | 100% |
 | Portuguese (Brazil) | `pt-br` | full | 100% |
@@ -124,6 +127,7 @@ Ranked; detail in [docs/roadmap.md](docs/roadmap.md) and [docs/gaps.md](docs/gap
 
 - 2026-11-05: Window › Toolbars › Keep Tools Beside the Canvas, off by default, docks the Tools panel between left-side panels and the canvas instead of at the window's left edge, and the canvas's left edge then also docks a floating Tools panel (`window.toolsBesideCanvas`, #5395). Workspaces keep the setting; workspaces saved without it keep Tools at the window's edge. An optional VectorCraft layout choice; headline numbers unchanged.
 - 2026-11-12: Stencil Bridges in the Cutting Tools add-on (Object › Plug-ins › Cutting Tools): strips of a set width are cut out of the selected art so that every island of a stencil cut from it (the inside of an O, a hole in a shape) stays attached to the sheet, by the shortest crossings first, vertical, horizontal or the shortest among 12 directions 15° apart, with up to 16 bridges per island; type is measured by its glyph outlines and stays type, and the original goes to a hidden layer or is replaced. One undo step (`addon.cutting.bridges`). A VectorCraft addition: headline numbers unchanged.
+- 2026-11-13: Banner Hems and Grommets in the Cutting Tools add-on (Object › Plug-ins › Cutting Tools): on the chosen sides of the selected art's bounds, or of each artboard, a hem line at a set depth inside the edge and grommet marks (a circle with a cross) at a set inset, one at each end of a side and the rest spread evenly at most a set spacing apart, stroked in a chosen swatch; a dialog with Preview, one undo step (`addon.cutting.banner`). A VectorCraft addition: headline numbers unchanged.
 - 2026-11-05: Release Type on a Path joins the Type Tools add-on (Object › Plug-ins › Type Tools): each selected type on a path splits into point type with the same text and attributes, on one straight line starting where its first character sat, and the plain path it was set on, with its exact shape and place in the stacking order and no paint; or keeps only the path or only the text, optionally leaving the original. A dialog with Preview, one undo step (`addon.type.releasePath`, #5532). A VectorCraft addition: headline numbers unchanged.
 - 2026-11-04: New Document: the units chosen in Preset Details now belong to the chosen document, as the pane's options are listed for the selected preset; the chosen card shows them, every other Recent and Saved card keeps the units its document or preset was made in, and the built-in tabs still follow the chosen units, so switching between inches and millimetres no longer restyles every recent template. Scores and estimates unchanged.
 - 2026-11-02: Mouse wheel over a closed font-family field in Character, Properties or Control changes selected text through the family list using saved font filters (excluding search text), one undo step per notch, stopping at the ends (#5253). Scores and estimates unchanged.
@@ -218,6 +222,7 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | Gujarati (#6613): contributor proofreading completed for all 387 additions, with 11 wording corrections; 4,673 reviewed catalog rows. Status/error messages remain partial; web selection requires a bundled Gujarati face. Scores and estimates unchanged. |
 | 2026-11-10 | minor | Tidy-up, no content change: the unheaded change bullets at the top of the file and a revision row inside the headline-numbers table move to this table under their commit dates. Scores and estimates unchanged. |
 | 2026-11-10 | minor | Raster effects: Effect Gallery thumbnails and an in-dialog preview (an original drawing through each filter). Features-table Raster effects 85% → 88%, hours 1–2 → none. Headline numbers unchanged, so the progress log is unchanged. |
 | 2026-11-05 | minor | Compound Shapes add-on (beyond Illustrator): a menu for Make, Release and Expand Compound Shape and a setting, off by default, that makes the Pathfinder panel's Shape Mode buttons create compound shapes on a click. Scores and estimates unchanged. |
@@ -226,7 +231,9 @@ The full earlier record of what landed is kept in [docs/roadmap.md](docs/roadmap
 | 2026-11-03 | minor | UI: Window → Help Bar toggles the tool-help strip separately from the status bar and saves visibility with workspaces. Scores and estimates unchanged. |
 | 2026-11-03 | minor | Docked Tools stays between left-side panels and the canvas; redocking accepts canvas and window edges. Requested layout choice; scores and estimates unchanged. |
 | 2026-11-02 | minor | Selection QoL: saved marquee modes, screen drag direction with a 3 px dead zone, and translated mode/E feedback (#5313); VectorCraft addition, scores and estimates unchanged. |
+| 2026-11-12 | minor | Gujarati (`gu`): reviewed by a native speaker; zero/one singular plurals (CLDR); Gujarati craft-fonts faces join the UI fonts; strings added on main since branching translated (4,286 rows) |
 | 2026-11-12 | minor | Tamil (`ta`): 8,490-row catalog (5,194 rows from the craft-i18n Tamil catalogs, the rest AI-assisted), one/other plurals, desktop Tamil font fallback, optional `Taml` craft-fonts face, and a web startup font that takes effect once the craft-fonts pin has Noto Sans Tamil; all 81 translation tests pass; native review pending; scores and estimates unchanged |
+| 2026-11-11 | minor | Gujarati (`gu`): 4,235-row machine-assisted interface catalog, one/other plurals, desktop Gujarati font fallback; messages not yet translated; native review pending |
 | 2026-11-06 | minor | Hindi (`hi`): 7,877-row machine-assisted catalog, zero/one singular plurals, desktop font fallback and optional Devanagari craft-fonts fallback; all 55 translation tests pass; native review and a web font remain; scores and estimates unchanged |
 | 2026-11-05 | minor | Progress log row for the Type Tools add-on's Release Type on a Path (#5532); headline numbers unchanged. |
 | 2026-11-03 | minor | Progress log row for the Type Tools add-on's Text Tweaker (#4924); headline numbers unchanged. |

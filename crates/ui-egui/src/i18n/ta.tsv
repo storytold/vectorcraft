@@ -1136,6 +1136,8 @@ antiAlias	Sharp	கூர்மையான
 	Crop Image	படத்தை வெட்டிச் சுருக்கு
 	Image Tools	படக் கருவிகள்
 	Remove Background…	பின்னணியை அகற்று…
+	Draw (Pencil)	வரை (பென்சில்)
+	Place Image	படத்தை இடு
 	Remove Background	பின்னணியை அகற்று
 	Background	பின்னணி
 	Edge Color	விளிம்பு நிறம்
@@ -3376,6 +3378,29 @@ antiAlias	Sharp	கூர்மையான
 	Pattern Borders	வடிவமாதிரி எல்லைகள்
 	Pattern Brush	வடிவமாதிரித் தூரிகை
 	missing from the Brushes panel	தூரிகைகள் பலகத்தில் இல்லை
+	built in	உள்ளமைந்தது
+	embedding not allowed	உட்பொதிக்க அனுமதி இல்லை
+	embedding for editing	திருத்துவதற்காக உட்பொதித்தல்
+	embedding for preview and print	முன்காட்சிக்கும் அச்சிடுதலுக்கும் உட்பொதித்தல்
+	embedding allowed	உட்பொதிக்க அனுமதி உண்டு
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	மாற்றப்பட்டது: {family} {style} இல் காட்டப்படுகிறது ({detail})
+	missing: shown in {family} {style}	காணவில்லை: {family} {style} இல் காட்டப்படுகிறது
+	missing	காணவில்லை
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	நேரியல் நிறச்சாய்வு
+	Radial gradient	ஆரவடிவ நிறச்சாய்வு
+	Conic gradient	கூம்பு நிறச்சாய்வு
+	Diamond gradient	சாய்சதுர நிறச்சாய்வு
+	Freeform gradient	கட்டற்ற நிறச்சாய்வு
+@plural	{n} instance|{n} instances	{n} நிகழ்வு|{n} நிகழ்வுகள்
+@plural	{n} row|{n} rows	{n} வரிசை|{n} வரிசைகள்
+@plural	{n} column|{n} columns	{n} நெடுவரிசை|{n} நெடுவரிசைகள்
 	Pattern Brush Options	வடிவமாதிரித் தூரிகை விருப்பங்கள்
 	Pattern Editing	வடிவமாதிரித் திருத்தம்
 	Pattern Options	வடிவமாதிரி விருப்பங்கள்
@@ -3516,6 +3541,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	the action set would be larger than 8 MiB	செயல் தொகுப்பு 8 MiB ஐ விடப் பெரிதாகிவிடும்
 	Playback Options	இயக்க விருப்பங்கள்
 	Playback Options…	இயக்க விருப்பங்கள்…
+	Button Mode	பொத்தான் பயன்முறை
+	No actions.	செயல்கள் இல்லை.
 	Plug-in Info	செருகுநிரல் தகவல்
 	Plug-in…	செருகுநிரல்…
 	Plug-ins	செருகுநிரல்கள்
@@ -3720,6 +3747,11 @@ antiAlias	Sharp	கூர்மையான
 	Real name	உண்மையான பெயர்
 	Real World:	உண்மை உலகு:
 	Real-time Drawing and Editing	நேரடி வரைதல் மற்றும் திருத்துதல்
+	Use Monitor Profile for Canvas	கேன்வாஸுக்குத் திரைச் சுயவிவரத்தைப் பயன்படுத்து
+	The canvas is drawn in sRGB.	கேன்வாஸ் sRGB இல் வரையப்படுகிறது.
+	Canvas display profile:	கேன்வாஸ் திரைக்காட்சிச் சுயவிவரம்:
+	The system matches the window to the display's colors.	கணினி சாளரத்தைத் திரைக்காட்சியின் நிறங்களுக்கு ஏற்பப் பொருத்துகிறது.
+	No usable display profile was found: the canvas is drawn in sRGB.	பயன்படுத்தக்கூடிய திரைக்காட்சிச் சுயவிவரம் எதுவும் கிடைக்கவில்லை: கேன்வாஸ் sRGB இல் வரையப்படுகிறது.
 	Rearrange	மறுஒழுங்கமை
 	Select All Artboards	அனைத்து ஆர்ட்போர்டுகளையும் தேர்ந்தெடு
 	Switch Orientation	திசையமைவை மாற்று
@@ -4741,6 +4773,8 @@ antiAlias	Sharp	கூர்மையான
 	Split at Anchors	நங்கூரங்களில் பிரி
 	Split at Anchors…	நங்கூரங்களில் பிரி…
 	Split at Crossings	குறுக்கிடும் இடங்களில் பிரி
+	Trim at Crossings Tool	குறுக்கீடுகளில் வெட்டும் கருவி
+	Trim at Crossings	குறுக்கீடுகளில் வெட்டு
 	Split at Cursor	கர்சரில் பிரி
 	Split Complementary	பிரிக்கப்பட்ட நிரப்பு
 	Split Freeform Line	கட்டற்ற கோட்டைப் பிரி
@@ -4926,6 +4960,7 @@ antiAlias	Sharp	கூர்மையான
 	VectorCraft Title Bar on Every Desktop	ஒவ்வொரு டெஸ்க்டாப்பிலும் VectorCraft தலைப்புப் பட்டை
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	VECTORCRAFT_TITLEBAR சூழல் மாறி அமைக்கப்பட்டிருக்கும்போது, அதுவே தலைப்புப் பட்டையைத் தேர்ந்தெடுக்கும்.
 	System Title Bar takes precedence over this option while it is on.	கணினி தலைப்புப் பட்டை இயக்கத்தில் இருக்கும்போது, அது இந்த விருப்பத்தை விட முன்னுரிமை பெறும்.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	ஒவ்வொரு டெஸ்க்டாப்பிலும் VectorCraft தலைப்புப் பட்டை அணைக்கப்பட்டிருக்கும்போது, இந்த விருப்பம் இயக்கத்தில் இருந்தாலும் அணைக்கப்பட்டிருந்தாலும் இந்த டெஸ்க்டாப் சாளரத்தின் தலைப்புப் பட்டையை வரைகிறது.
 	Tab	தத்தல்
 	Tab Stops	தாவல் நிறுத்தங்கள்
 	Table	அட்டவணை
@@ -4949,6 +4984,11 @@ antiAlias	Sharp	கூர்மையான
 	Target:	இலக்கு:
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings	Tate-chu-yoko அமைப்புகள்
+	Warichu	Warichu
+	Warichu Settings…	Warichu அமைப்புகள்…
+	Warichu Settings	Warichu அமைப்புகள்
+	Lines:	வரிகள்:
+	Line Gap:	வரி இடைவெளி:
 	Tate-chu-yoko Settings…	Tate-chu-yoko அமைப்புகள்…
 	Composite Fonts…	கூட்டு எழுத்துருக்கள்…
 	Composite Fonts	கூட்டு எழுத்துருக்கள்
@@ -5801,6 +5841,12 @@ antiAlias	Sharp	கூர்மையான
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} அதன் வெட்டு விளிம்பு மற்றும் குறிகளுடன் காகிதத்தில் பொருந்தவில்லை
 @msg	{what} points outside memory	{what} நினைவகத்திற்கு வெளியே சுட்டுகிறது
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} {MAX_TILES}-க்கும் அதிகமான ஓடுகளில் அச்சிடப்படும்: அதன் அளவைக் குறைக்கவும்
+	Banner Hems and Grommets…	பேனர் மடிப்பு ஓரங்களும் கண்ணி வளையங்களும்…
+	Banner Hems and Grommets	பேனர் மடிப்பு ஓரங்களும் கண்ணி வளையங்களும்
+	Hem	மடிப்பு ஓரம்
+	Grommets	கண்ணி வளையங்கள்
+	Grommet Inset	கண்ணி வளைய உள்தள்ளல்
+	Diameter	விட்டம்
 @msg	`{_1}` can't be edited or removed	`{_1}` ஐத் திருத்தவோ அகற்றவோ முடியாது
 @msg	`{_1}` has no brushes to apply	`{_1}` இல் பயன்படுத்துவதற்குத் தூரிகைகள் இல்லை
 @msg	`{_1}` has no symbols to place	`{_1}` இல் இடுவதற்குக் குறியீடுகள் இல்லை
@@ -5851,11 +5897,15 @@ antiAlias	Sharp	கூர்மையான
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` என்பது `auto` ஆக அல்லது `en`, `zh-hant` போன்ற மொழிக் குறியீடாக இருக்க வேண்டும்
 @msg	`{key}` must be 0..{max}	`{key}` 0..{max} ஆக இருக்க வேண்டும்
 @msg	`{key}` must be a #rrggbb color	`{key}` ஒரு #rrggbb நிறமாக இருக்க வேண்டும்
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` ஒரு #rrggbb நிறமாகவோ அடுக்கு நிறப் பெயராகவோ இருக்க வேண்டும்
+@msg	unknown Live Paint option `{key}`	அறியப்படாத நேரடி வண்ண விருப்பம் `{key}`
+@msg	unknown Shape Builder option `{key}`	அறியப்படாத வடிவ உருவாக்கி விருப்பம் `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` ஒரு #rrggbb நிறமாக இருக்க வேண்டும்
 @msg	`{key}` must be a non-negative integer	`{key}` ஆனது எதிர்மறையல்லாத முழு எண்ணாக இருக்க வேண்டும்
 @msg	`{key}` must be a number	`{key}` ஓர் எண்ணாக இருக்க வேண்டும்
 @msg	`{key}` must be a number {_1}..{_2}	`{key}` {_1}..{_2} வரம்பில் உள்ள எண்ணாக இருக்க வேண்டும்
 @msg	`{key}` must be a number not below 0	`{key}` ஆனது 0 க்குக் குறையாத எண்ணாக இருக்க வேண்டும்
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` 0 க்குக் குறையாத நான்கு எண்களாக இருக்க வேண்டும்: [tl, tr, br, bl]
 @msg	`{key}` must be a number, not {v}	`{key}` ஓர் எண்ணாக இருக்க வேண்டும், {v} ஆக அல்ல
 @msg	`{key}` must be a profile name or null	`{key}` ஆனது ஒரு சுயவிவரப் பெயராகவோ null ஆகவோ இருக்க வேண்டும்
 @msg	`{key}` must be a string	`{key}` ஒரு உரையாக இருக்க வேண்டும்
@@ -6284,6 +6334,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	an image of {width} × {height} pixels is too large to draw	{width} × {height} பிக்சல்கள் கொண்ட படம் வரைய முடியாத அளவுக்குப் பெரியது
 @msg	an image VectorCraft can't read was left out	VectorCraft படிக்க முடியாத ஒரு படம் விடுபட்டது
 @msg	an image whose data is cut short was left out	தரவு முழுமையற்ற ஒரு படம் விடுபட்டது
+@msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	அடுக்குகளைத் தக்கவைக்க, {_1} × {_2} பிக்சல் உட்பொதிக்கப்பட்ட படம் {_3} × {_4} பிக்சல்களாகக் குறைக்கப்பட்டது
 @msg	an index must be a whole number	சுட்டெண் ஒரு முழு எண்ணாக இருக்க வேண்டும்
 @msg	an inline graphic has no glyphs	வரிக்குள் உள்ள வரைகலைக்குக் குறியெழுத்துகள் இல்லை
 @msg	an invisible text form can't be read	கண்ணுக்குத் தெரியாத உரைப் படிவத்தைப் படிக்க முடியவில்லை
@@ -6617,6 +6668,10 @@ antiAlias	Sharp	கூர்மையான
 @msg	Couldn't paste: the document it was pasted in was reverted	ஒட்ட முடியவில்லை: ஒட்டப்பட்ட ஆவணம் முந்தைய நிலைக்குத் திருப்பப்பட்டுவிட்டது
 @msg	Couldn't read {name}: {e}	{name} ஐப் படிக்க முடியவில்லை: {e}
 @msg	Couldn't save recovery data: {e}	மீட்பு தரவைச் சேமிக்க முடியவில்லை: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title} க்கான மீட்புத் தரவைச் சேமிக்க முடியவில்லை: {e}. நகல்கள் இயல்புநிலை மீட்புக் கோப்புறையான {folder} க்குச் செல்லும்; வேறு கோப்புறையைப் பயன்படுத்த, விருப்பத்தேர்வுகள் → கோப்புக் கையாளுதல் → தரவு மீட்பு → கோப்புறை (recoveryFolder) ஐ அமைக்கவும்
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	{title} க்கான மீட்புத் தரவைச் சேமிக்க முடியவில்லை: {e}. நகல்கள் விருப்பத்தேர்வுகளில் அமைக்கப்பட்ட கோப்புறையான {folder} க்குச் செல்லும்; வேறு கோப்புறையைப் பயன்படுத்த, விருப்பத்தேர்வுகள் → கோப்புக் கையாளுதல் → தரவு மீட்பு → கோப்புறை (recoveryFolder) ஐ அமைக்கவும்
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	மீட்புத் தரவைச் சேமிக்க முடியவில்லை: {e}. நகல்கள் இயல்புநிலை மீட்புக் கோப்புறையான {folder} க்குச் செல்லும்; வேறு கோப்புறையைப் பயன்படுத்த, விருப்பத்தேர்வுகள் → கோப்புக் கையாளுதல் → தரவு மீட்பு → கோப்புறை (recoveryFolder) ஐ அமைக்கவும்
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	மீட்புத் தரவைச் சேமிக்க முடியவில்லை: {e}. நகல்கள் விருப்பத்தேர்வுகளில் அமைக்கப்பட்ட கோப்புறையான {folder} க்குச் செல்லும்; வேறு கோப்புறையைப் பயன்படுத்த, விருப்பத்தேர்வுகள் → கோப்புக் கையாளுதல் → தரவு மீட்பு → கோப்புறை (recoveryFolder) ஐ அமைக்கவும்
 @msg	counterPer `{c}`: item or file	counterPer `{c}`: item அல்லது file ஆக இருக்க வேண்டும்
 @msg	Create from Guides: the document has no artboard	வழிகாட்டிகளிலிருந்து உருவாக்கு: ஆவணத்தில் ஆர்ட்போர்டு இல்லை
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	வழிகாட்டிகளிலிருந்து உருவாக்கு: வழிகாட்டிகள் {MAX_PIECES} க்கும் மேற்பட்ட துண்டுகளை உருவாக்குகின்றன
@@ -6925,6 +6980,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	invalid pattern tile choice	தவறான வடிவமாதிரி ஓடு தேர்வு
 @msg	invalid PDF setting: {0}	PDF அமைப்பு தவறு: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	ஆர்ட்போர்டு {n}-இன் பக்கம் {size}, இது PDF-இன் 14,400 pt (200 in) பக்க வரம்பை விட நீளமானது: இது {unit} UserUnit உடன் எழுதப்படுகிறது, எனவே UserUnit-ஐப் புறக்கணிக்கும் பயன்பாடுகள் இதை அத்தனை மடங்கு சிறியதாகக் காட்டும்
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	ஆர்ட்போர்டு {n} இன் பக்கம் {size}, இது PDF இன் 14,400 pt (200 in) பக்க வரம்பை விட நீளமானது: இது {unit} UserUnit உடன் எழுதப்படுகிறது, எனவே UserUnit ஐப் புறக்கணிக்கும் பயன்பாடுகள் அதை அத்தனை மடங்கு சிறியதாகக் காட்டும்: 200 in ஐ விட நீளமான பக்கங்களை முழு அளவில் புள்ளிகளில் எழுது என்பதை இயக்கவும்
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	ஆர்ட்போர்டு {n}-இன் பக்கம் {size}, இது PDF-இன் 14,400 pt (200 in) பக்க வரம்பை விட நீளமானது: {label} பக்கங்கள் UserUnit இல்லாமல் pt அலகில் எழுதப்படுகின்றன, மேலும் வரம்பைப் பின்பற்றும் பயன்பாடுகள் பக்கத்தை 200 in ஆக வெட்டும்
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5-இல் UserUnit இல்லை; 14,400 pt (200 in)-ஐ விட நீளமான பக்கம் தன் அளவைத் தக்கவைக்க அது தேவை: கோப்பு PDF 1.6 ஆக எழுதப்படுகிறது
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4-இல் UserUnit இல்லை; 14,400 pt (200 in)-ஐ விட நீளமான பக்கம் PDF/A-2-இன் 14,400 அலகுகள் பக்க வரம்புக்குள் இருக்க அது தேவை: கோப்பு PDF 1.6 ஆக எழுதப்படுகிறது
@@ -7008,6 +7064,8 @@ antiAlias	Sharp	கூர்மையான
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	கோப்புகள் கண்டறியப்படும் வரை இணைக்கப்பட்ட படங்கள் கோப்பில் சேமிக்கப்பட்ட குறைந்த தெளிவுத்திறன் முன்காட்சியைக் காட்டும்: இணைப்புகள் பலகத்தில் அவற்றை மீண்டும் இணைக்கவும்
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	கோப்பில் முன்காட்சி இல்லாத இணைக்கப்பட்ட படங்கள், அவற்றின் கோப்புகள் கண்டறியப்படும் வரை இடநிரப்பியைக் காட்டும்: இணைப்புகள் பலகத்தில் அவற்றை மீண்டும் இணைக்கவும்
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft இன் வரம்புகளைத் தாண்டிய இணைக்கப்பட்ட உரைப் பரப்புகள் சேர்க்கப்படவில்லை
+@msg	the Line Breaking setting of legacy type was left out	பழைய உரையின் வரி முறிவு அமைப்பு விடப்பட்டது
+@msg	the Japanese layout rules of legacy type were left out	பழைய உரையின் ஜப்பானிய தளவமைப்பு விதிகள் விடப்பட்டன
 @msg	Live Paint Merge: select a Live Paint group and the paths to add	நேரடி வண்ண இணைப்பு: ஒரு நேரடி வண்ணக் குழுவையும் சேர்க்க வேண்டிய பாதைகளையும் தேர்ந்தெடுக்கவும்
 @msg	Live Paint takes paths and compound paths: convert type, images and other objects to paths first	நேரடி வண்ணம் பாதைகளையும் கூட்டுப் பாதைகளையும் மட்டுமே ஏற்கும்: முதலில் உரை, படங்கள் மற்றும் பிற பொருட்களைப் பாதைகளாக மாற்றவும்
 @msg	Live Paint: select paths or compound paths	நேரடி வண்ணம்: பாதைகள் அல்லது கூட்டுப் பாதைகளைத் தேர்ந்தெடுக்கவும்
@@ -7126,6 +7184,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	more than 10000 linked files: package dependencies in smaller parts	10000 க்கும் மேற்பட்ட இணைக்கப்பட்ட கோப்புகள்: சார்புகளைச் சிறு பகுதிகளாகத் தொகுப்பாக்கவும்
 @msg	more than 256 commands	256 க்கும் மேற்பட்ட கட்டளைகள் உள்ளன
 @msg	more than one action is named “{_1}”	“{_1}” என்ற பெயரில் ஒன்றுக்கு மேற்பட்ட செயல்கள் உள்ளன
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	“{_1}” செயல் கோப்புறை விருப்பத்தேர்வு {_2} ஐ அமைக்கிறது; தொகுப்பைச் சேமிக்க அந்தப் படியை நீக்கவும்
 @msg	Move Panel to New Window is not available: floating panels stay in the main window	பலகத்தைப் புதிய சாளரத்திற்கு நகர்த்துதல் கிடைக்காது: மிதக்கும் பலகங்கள் முதன்மைச் சாளரத்திலேயே இருக்கும்
 @msg	move requires a destination panel	நகர்த்த ஓர் இலக்குப் பலகம் தேவை
 @msg	move requires an existing destination panel	நகர்த்த ஏற்கனவே உள்ள ஓர் இலக்குப் பலகம் தேவை
@@ -8494,6 +8553,7 @@ antiAlias	Sharp	கூர்மையான
 @msg	the document sets a bleed that this PDF/X file leaves out: turn on Use document bleed settings	ஆவணம் அமைக்கும் வெட்டு விளிம்பை இந்த PDF/X கோப்பு விட்டுவிடுகிறது: ஆவணத்தின் வெட்டு விளிம்பு அமைப்புகளைப் பயன்படுத்து என்பதை இயக்கவும்
 @msgplural	Exported {what} with {n} note: {first}|Exported {what} with {n} notes: {first}	{what} ஏற்றுமதி செய்யப்பட்டது, {n} குறிப்புடன்: {first}|{what} ஏற்றுமதி செய்யப்பட்டது, {n} குறிப்புகளுடன்: {first}
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	{n} குறிப்புடன் திறக்கப்பட்டது: {first}|{n} குறிப்புகளுடன் திறக்கப்பட்டது: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. {n} குறிப்புடன் திறக்கப்பட்டது: {first}|{notice}. {n} குறிப்புகளுடன் திறக்கப்பட்டது: {first}
 @msgplural	Packaged {n} file ({note}) in {folder}|Packaged {n} files ({note}) in {folder}	{n} கோப்பு ({note}) {folder} இல் தொகுப்பாக்கப்பட்டது|{n} கோப்புகள் ({note}) {folder} இல் தொகுப்பாக்கப்பட்டன
 @msgplural	Packaged {n} file {note}|Packaged {n} files {note}	{n} கோப்பு தொகுக்கப்பட்டது {note}|{n} கோப்புகள் தொகுக்கப்பட்டன {note}
 @msgplural	Packaged {n} file in {folder}|Packaged {n} files in {folder}	{folder} இல் {n} கோப்பு தொகுக்கப்பட்டது|{folder} இல் {n} கோப்புகள் தொகுக்கப்பட்டன
@@ -8807,6 +8867,7 @@ theme	Appearance	தோற்றப்பாணி
 	Load Character Styles	எழுத்துப் பாணிகளை ஏற்று
 	Load Paragraph Styles	பத்திப் பாணிகளை ஏற்று
 @msg	CMYK JPEG XL images can't be read	CMYK JPEG XL படங்களைப் படிக்க முடியாது
+@msg	the JPEG XL file can't be read: {e}	JPEG XL கோப்பைப் படிக்க முடியவில்லை: {e}
 @msg	HEIC and HEIF images can't be opened in this build	இந்தப் பதிப்பில் HEIC, HEIF படங்களைத் திறக்க முடியாது
 @msg	`threshold` must be a number from 0 to 1	`threshold` 0 முதல் 1 வரையிலான எண்ணாக இருக்க வேண்டும்
 @msg	background {v}: a color such as "#808080"	background {v}: "#808080" போன்ற ஒரு நிறமாக இருக்க வேண்டும்

@@ -1,9 +1,9 @@
 # Tamil interface terminology and verification
 
-The `ta` catalog (`crates/ui-egui/src/i18n/ta.tsv`, interface name **தமிழ்**) has 8,883 rows:
-3,033 `@msg`, 47 `@msgplural` and 41 `@plural`. It covers every row of the Hindi catalog, the
-newest complete one, plus the strings the untranslated report listed beyond it, so the report lists no
-Tamil gaps.
+The `ta` catalog (`crates/ui-egui/src/i18n/ta.tsv`, interface name **தமிழ்**) has 8,944 rows:
+3,047 `@msg`, 48 `@msgplural` and 44 `@plural`. It covers every row of the Hindi catalog and
+every menu string the untranslated report scans. Since main's wider message scan (2026-11-14), the
+report lists 523 Tamil messages, most of them rows that seven European catalogs already have.
 
 ## Provenance
 
