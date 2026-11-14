@@ -2700,6 +2700,7 @@ mark-style	Japanese	Японський
 	Proportional Metrics	Пропорційні метрики
 	Insert Aki Left	Вставити акі ліворуч
 	Insert Aki Right	Вставити акі праворуч
+	Tsume	Цуме
 	Character Direction	Напрямок символів
 	Digits	Цифри
 	Arabic	Арабські
@@ -4780,6 +4781,7 @@ axis	Both	Обидві
 @msg	no action set to save	немає набору дій для збереження
 @msg	the action set file can't be read in full	файл набору дій неможливо прочитати повністю
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Завантажено «{name}»: пропущено {n} крок|Завантажено «{name}»: пропущено {n} кроки|Завантажено «{name}»: пропущено {n} кроків
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Завантажено «{name}»: {n} крок із невідомою командою збережено: «{action}», крок {step}, `{command}`|Завантажено «{name}»: {n} кроки з невідомими командами збережено; перший: «{action}», крок {step}, `{command}`|Завантажено «{name}»: {n} кроків із невідомими командами збережено; перший: «{action}», крок {step}, `{command}`
 @msg	not an action set file	це не файл набору дій
 @msg	the action set file is larger than 8 MiB	файл набору дій більший за 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: довідник був би більшим за {MAX_BYTES} байтів
@@ -5021,6 +5023,7 @@ axis	Both	Обидві
 @msg	tool shortcuts must be a single key (optionally with Shift)	поєднання інструментів має бути однією клавішею (необов’язково з Shift)
 @msg	truncated	усічено
 @msg	unknown command `{0}`	невідома команда `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	крок {step} дії «{action}» виконує невідому команду `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	невідома команда `{0}`; можливо, ви мали на увазі `{1}`?
 @msg	unknown effect `{id}`	невідомий ефект `{id}`
 @msg	unknown format	невідомий формат
@@ -5999,8 +6002,8 @@ axis	Y Axis	Вісь Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	модуль експорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	поза групами може бути не більше {MAX_UNGROUPED} параметрів: задайте решті `group`
 @msg	can't encode the input	не вдається закодувати вхідні дані
-@msg	expected {"dataBase64"}	очікувалося {"dataBase64"}
-@msg	expected {"objects"}	очікувалося {"objects"}
+@msg	expected {{"dataBase64": "…"}}	очікувалося {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	очікувалося {{"objects": [...]}}
 @msg	export `{name}`: {e}	експорт модуля `{name}`: {e}
 @msg	extension {e} is listed twice	розширення {e} вказано двічі
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	розширення {e}: використовуйте 1-16 малих літер і цифр, без крапки
@@ -6064,11 +6067,11 @@ axis	Y Axis	Вісь Y
 @msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
 @msg	a read-only object was left out	пропущено об’єкт лише для читання
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {"id"} або в тому вигляді, у якому його передано
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
 @msg	a string	рядок
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	обведення має лише `paint`, `width`, `join`, `cap` і `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	обведення має мати вигляд {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	ефект має мати вигляд {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обведення має мати вигляд {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	ефект має мати вигляд {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ефект на заливці повертає лише `fills`
 @msg	an effect on a stroke returns only `strokes`	ефект на обведенні повертає лише `strokes`
 @msg	an object must be a JSON object	об’єкт має бути об’єктом JSON
