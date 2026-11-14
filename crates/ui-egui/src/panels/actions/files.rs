@@ -170,6 +170,30 @@ fn ui_steps_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
         .collect()
 }
 
+/// A folder preference whose value in a step running `command` with `params` names a folder
+/// ([`vectorcraft_engine::cmd::prefscmds::names_a_folder`]): in a `prefs.set` step, given as
+/// `{key, value}` or in `values`, and in a `command.batch` step, in any of its commands at any depth.
+/// Every such value is found, also one under `values` that `{key, value}` replaces when the step runs,
+/// because [`write_set`] writes the params as they are.
+fn folder_pref_in(command: &str, params: &Value) -> Option<String> {
+    use vectorcraft_engine::cmd::prefscmds::names_a_folder;
+    match command {
+        "prefs.set" => {
+            let names = |key: &str, value: &Value| value.as_str().is_some_and(|v| names_a_folder(key, v));
+            let pair = params.get("key").and_then(Value::as_str).filter(|key| params.get("value").is_some_and(|v| names(key, v)));
+            let values = params.get("values").and_then(Value::as_object).into_iter().flatten();
+            pair.map(str::to_string).or_else(|| values.filter(|(key, v)| names(key, v)).map(|(key, _)| key.clone()).next())
+        }
+        "command.batch" => {
+            let mut steps = params.get("commands").and_then(Value::as_array).into_iter().flatten();
+            steps.find_map(|step| {
+                folder_pref_in(step.get("command").and_then(Value::as_str).unwrap_or_default(), step.get("params").unwrap_or(&Value::Null))
+            })
+        }
+        _ => None,
+    }
+}
+
 /// `set` as the text of an action set file.
 pub fn write_set(set: &ActionSet) -> String {
     let actions = set
@@ -282,7 +306,9 @@ pub(super) fn set_file_stem(name: &str) -> String {
 /// the set (the web downloads it) → `{path}`. `id` is the panel's own set id ([`ActionSet::id`]),
 /// which the panel menu passes: the set with this id is saved wherever it is when the file dialog
 /// answers, and `set` is not read. A set that [`read_set`] would refuse (larger than 8 MiB as a
-/// file, more than 1,000 actions, an action with more than 10,000 steps) is not written.
+/// file, more than 1,000 actions, an action with more than 10,000 steps) is not written, nor is a set
+/// with a step that sets a folder preference to a folder ([`folder_pref_in`]), which names a folder
+/// on this computer: the error names the action and the preference.
 pub fn save_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let len = app.ui.action_sets.len();
     let set = match (p.get("id"), p.get("set")) {
@@ -293,6 +319,11 @@ pub fn save_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         (_, Some(v)) => v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|&i| i < len).ok_or("no such action set")?,
     };
     let Some(s) = app.ui.action_sets.get(set) else { return Err("no such action set".into()) };
+    let folder =
+        s.actions.iter().find_map(|a| a.steps.iter().find_map(|(command, params)| folder_pref_in(command, params)).map(|key| (&a.name, key)));
+    if let Some((action, key)) = folder {
+        return Err(format!("the action “{}” sets the folder preference {}; delete that step to save the set", action, key));
+    }
     let text = write_set(s);
     // What Save Actions… writes, Load Actions… reads back.
     read_set(&text, "")?;

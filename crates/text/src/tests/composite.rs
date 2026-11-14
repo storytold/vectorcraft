@@ -101,9 +101,9 @@ fn ruby_over_composite_type_is_set_in_its_own_parts() {
     assert!(rise > 8.0 && rise < 15.0, "the reading is {rise} pt above the base's baseline");
 }
 
-/// Lent composite fonts are available while a guard lends them: a second guard lends one again, a
-/// font of the same name the database holds is replaced and put back afterwards, and a font named
-/// like an installed family is not lent.
+/// Lent composite fonts are available while a guard lends them, in place of a font of the same name
+/// the database holds, which the database keeps. A font named like an installed family is not
+/// lent, and of two fonts of one name the first is.
 #[test]
 fn lent_composite_fonts_last_as_long_as_a_guard() {
     let db = FontDb::with_font_dirs(vec![]);
@@ -115,6 +115,7 @@ fn lent_composite_fonts_last_as_long_as_a_guard() {
     assert!(db.composite_font("lent").is_some());
     assert_eq!(db.composite_font("Held").unwrap().parts.roman.size, 75.0);
     assert!(db.composite_font("Inter").is_none());
+    assert_eq!(db.composite_font_names(), ["Held"], "the database's own fonts stay");
     let second = db.lend_composite_fonts(&fonts);
     drop(first);
     assert!(db.composite_font("Lent").is_some());
@@ -122,29 +123,97 @@ fn lent_composite_fonts_last_as_long_as_a_guard() {
     drop(second);
     assert!(db.composite_font("Lent").is_none());
     assert_eq!(db.composite_font("Held").unwrap().parts.roman.size, 50.0);
-    // A font set in its place while lent stays when the guard drops.
+    // A font set in the database while one of that name is lent doesn't change the one in use, and
+    // is used once the guard drops.
     let lent = db.lend_composite_fonts(&fonts[..1]);
     let mut replaced = mixed("Lent");
     replaced.parts.roman.size = 60.0;
     db.set_composite_font(&replaced);
+    assert_eq!(db.composite_font("Lent").unwrap().parts.roman.size, 50.0);
     drop(lent);
     assert_eq!(db.composite_font("Lent").unwrap().parts.roman.size, 60.0);
-    // So does the same definition set while lent, after every guard lending it drops.
-    assert!(db.remove_composite_font("Lent"));
-    let (one, two) = (db.lend_composite_fonts(&fonts[..1]), db.lend_composite_fonts(&fonts[..1]));
-    assert!(!db.set_composite_font(&fonts[0]));
-    drop(one);
-    drop(two);
-    assert!(db.composite_font("Lent").is_some());
-    // A guard whose font was removed doesn't give back a later guard's loan of that name.
-    assert!(db.remove_composite_font("Lent"));
-    let old = db.lend_composite_fonts(&fonts[..1]);
-    assert!(db.remove_composite_font("Lent"));
-    let new = db.lend_composite_fonts(&fonts[..1]);
-    drop(old);
-    assert!(db.composite_font("Lent").is_some());
-    drop(new);
-    assert!(db.composite_font("Lent").is_none());
+    let mut other = mixed("LENT");
+    other.parts.roman.size = 70.0;
+    let lent = db.lend_composite_fonts(&[mixed("Lent"), other]);
+    assert_eq!(db.composite_font("lent").unwrap().parts.roman.size, 50.0);
+    drop(lent);
+}
+
+/// A composite font `name` whose Roman part is set at `size` percent.
+fn roman_at(name: &str, size: f64) -> CompositeFont {
+    let mut f = mixed(name);
+    f.parts.roman.size = size;
+    f
+}
+
+/// The advance of `A` set at `size` points in `family`.
+fn advance(db: &FontDb, family: &str, size: f64) -> f64 {
+    layout(db, &TextObject::point(Point::ZERO, "A", style(family, size))).glyphs[0].advance
+}
+
+/// Two documents that define one name differently each lay out in their own definition, also when
+/// one's guard lends inside the other's (a document placed in another): the inner definition is
+/// used until its guard drops, then the outer one again, also after a panic inside the inner one.
+/// The generation tells the layouts apart, and lending changes nothing the database holds.
+#[test]
+fn nested_loans_of_one_name_use_each_documents_definition() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let (a, b) = (roman_at("CF Shared", 50.0), roman_at("CF Shared", 75.0));
+    db.set_composite_font(&a);
+    let (half, three_quarters) = (advance(&db, "JetBrains Mono", 10.0), advance(&db, "JetBrains Mono", 15.0));
+    // Lending looks the name up among the installed families, which catalogs them the first time.
+    assert!(!db.has_installed_family("CF Shared"));
+    let plain = db.generation();
+    let outer = db.lend_composite_fonts(std::slice::from_ref(&a));
+    assert_eq!(db.generation(), plain, "the database's own definition");
+    assert!((advance(&db, "CF Shared", 20.0) - half).abs() < 1e-9);
+    {
+        let _inner = db.lend_composite_fonts(std::slice::from_ref(&b));
+        assert_eq!(db.composite_font("cf shared").unwrap().parts.roman.size, 75.0);
+        assert!((advance(&db, "CF Shared", 20.0) - three_quarters).abs() < 1e-9);
+        assert_ne!(db.generation(), plain, "another definition lays out under another generation");
+        let elsewhere =
+            std::thread::scope(|s| s.spawn(|| (db.generation(), db.composite_font("CF Shared").unwrap().parts.roman.size)).join().unwrap());
+        assert_eq!(elsewhere, (plain, 50.0), "other threads keep the database's");
+    }
+    assert!((advance(&db, "CF Shared", 20.0) - half).abs() < 1e-9);
+    assert_eq!(db.generation(), plain);
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _inner = db.lend_composite_fonts(std::slice::from_ref(&b));
+        panic!("a render that fails");
+    }));
+    assert!(caught.is_err());
+    assert_eq!(db.composite_font("CF Shared").unwrap().parts.roman.size, 50.0);
+    drop(outer);
+    let next = db.lend_composite_fonts(std::slice::from_ref(&b));
+    assert_eq!(db.composite_font("CF Shared").unwrap().parts.roman.size, 75.0);
+    drop(next);
+    assert_eq!(db.composite_font("CF Shared").unwrap().parts.roman.size, 50.0);
+    assert_eq!(db.generation(), plain);
+}
+
+/// Two threads that lend different definitions of one name at once each lay out in their own.
+#[test]
+fn threads_lending_one_name_at_once_use_their_own_definitions() {
+    let db = FontDb::with_font_dirs(vec![]);
+    let (half, three_quarters) = (advance(&db, "JetBrains Mono", 10.0), advance(&db, "JetBrains Mono", 15.0));
+    let (both_lent, both_read) = (std::sync::Barrier::new(2), std::sync::Barrier::new(2));
+    let lend = |size: f64| {
+        let _lent = db.lend_composite_fonts(&[roman_at("CF Threads", size)]);
+        both_lent.wait();
+        let read = (advance(&db, "CF Threads", 20.0), db.generation());
+        both_read.wait();
+        read
+    };
+    let ((a, ga), (b, gb)) = std::thread::scope(|s| {
+        let a = s.spawn(|| lend(50.0));
+        let b = s.spawn(|| lend(75.0));
+        (a.join().unwrap(), b.join().unwrap())
+    });
+    assert!((a - half).abs() < 1e-9, "{a} vs {half}");
+    assert!((b - three_quarters).abs() < 1e-9, "{b} vs {three_quarters}");
+    assert_ne!(ga, gb);
+    assert!(db.composite_font("CF Threads").is_none());
 }
 
 /// The fonts a composite font sets text in are those of the parts its characters fall in, and
