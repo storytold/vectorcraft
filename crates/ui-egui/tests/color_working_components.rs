@@ -308,3 +308,49 @@ fn spectrum_tooltip_follows_shift_cycle_without_painting() {
         assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "cycling to HSB adds no undo step");
     }
 }
+
+/// Spectrum hover text uses the selected UI language, in both panel layouts.
+#[test]
+fn spectrum_tooltip_uses_the_interface_language() {
+    use vectorcraft_ui_egui::i18n::{self, Lang};
+
+    // i18n is process-global in this integration binary. Every case holds the CMS lock.
+    // Restore the language before WorkingSpace releases that lock, including after a panic.
+    let _space = WorkingSpace::new(SRGB);
+    struct Language(Lang);
+    impl Drop for Language {
+        fn drop(&mut self) {
+            i18n::set_current(self.0);
+        }
+    }
+    let _language = Language(i18n::current());
+    let german = Lang::from_code("de").unwrap();
+    let mode = Mode::Grayscale;
+    let expected = "Graustufen";
+    assert_eq!(i18n::tr(german, mode.label()), expected, "use an existing, distinct catalog translation");
+
+    for hidden in [false, true] {
+        let mut app = spectrum_app();
+        app.session.prefs.interface_language = german.code().into();
+        // The host normally does this in tick_frame; this harness draws the panel directly.
+        assert_eq!(app.ui_language(), german);
+        i18n::set_current(app.ui_language());
+        let color = convert_to(mode, &Color::rgb8(51, 102, 153));
+        app.run("paint.setFill", json!({"color": color_json(&color), "keepModel": true})).unwrap();
+        app.ui.color_mode = Some(mode);
+        app.ui.color_hide_options = hidden;
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| style.interaction.tooltip_delay = 0.1);
+        let paints = app.session.proxy_paints();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let (_, away) = spectrum_hover_texts(&mut app, &ctx, false);
+        assert!(!away.iter().any(|text| text == expected), "hidden {hidden}: no translated tooltip away: {away:?}");
+        let (_, hovered) = spectrum_hover_texts(&mut app, &ctx, true);
+        assert_eq!(hovered.iter().filter(|text| text.as_str() == expected).count(), 1, "hidden {hidden}: translated tooltip: {hovered:?}");
+        assert!(!hovered.iter().any(|text| text == mode.label()), "hidden {hidden}: no untranslated tooltip: {hovered:?}");
+        let (_, away) = spectrum_hover_texts(&mut app, &ctx, false);
+        assert!(!away.iter().any(|text| text == expected), "hidden {hidden}: translated tooltip hides again: {away:?}");
+        assert_eq!(app.session.proxy_paints(), paints, "translated hover changes no paint");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "translated hover adds no undo step");
+    }
+}
