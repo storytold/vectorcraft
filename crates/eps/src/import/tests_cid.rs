@@ -638,10 +638,11 @@ fn named_cid_type_in_charpath_cshow_and_glyphshow() {
 }
 
 /// A font name ending in the row-and-cell CMap `H` or `V` stays a font of the whole name, its
-/// strings read byte by byte, unless the part before the CMap names a CIDFont the file defines (or
-/// an installed face that covers Japanese). Type in a predefined CMap whose mappings aren't
-/// available is left out with a warning, each code moving the point one em, and a long string in a
-/// CID-keyed font over a predefined CMap shown in a loop runs out of the budget.
+/// strings read byte by byte, unless the part before the CMap names a CIDFont the file defines, a
+/// Japanese CIDFont a printer carries (or an installed face that covers Japanese). Type in a
+/// predefined CMap whose mappings aren't available is left out with a warning, each code moving
+/// the point one em, and a long string in a CID-keyed font over a predefined CMap shown in a loop
+/// runs out of the budget.
 #[test]
 fn latin_names_ending_in_h_and_cmaps_that_cannot_be_read() {
     for (font, family, style) in [("Futura-H", "Futura", "H"), ("Foo-Bold-H", "Foo", "Bold-H"), ("Foo-Condensed-V", "Foo", "Condensed-V")] {
@@ -664,6 +665,18 @@ fn latin_names_ending_in_h_and_cmaps_that_cannot_be_read() {
     for define in defines {
         let r = super::tests::read(&format!("{define} findfont 20 scalefont setfont 10 20 moveto <467c> show"));
         assert_eq!(texts(&r).iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["日"], "{define}: {:?}", r.warnings);
+    }
+    // The Japanese CIDFonts a printer carries (Adobe Technical Note #5014, appendix A.2) split at
+    // `H` or `V` without the file defining them or a face of their name being installed. A face
+    // with the whole name, when installed, is that face's.
+    for (font, vertical) in [("Ryumin-Light-H", false), ("GothicBBB-Medium-V", true)] {
+        if vectorcraft_text::FontDb::global().find_postscript(font).is_some() {
+            continue;
+        }
+        let r = super::tests::read(&format!("/{font} findfont 20 scalefont setfont 10 20 moveto <467c> show"));
+        let t = texts(&r);
+        assert_eq!(t.iter().map(|t| t.plain_text()).collect::<Vec<_>>(), ["日"], "{font}: {:?}", r.warnings);
+        assert_eq!(t[0].vertical, vertical, "{font}");
     }
     let r = super::tests::read("/Ryumin-Light-GBT-H findfont 20 scalefont setfont 10 20 moveto (AB) show 0 0 10 10 rectfill");
     assert!(texts(&r).is_empty(), "{:?}", all(&r.document));
