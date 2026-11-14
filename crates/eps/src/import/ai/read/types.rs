@@ -386,9 +386,8 @@ pub(super) const IGNORED: &[&str] = &[
     // Path resolution (`Ar`, §12): how finely curves print.
     "Ar",
     "Xs",
+    // The samples of the pen that `XD` notes on the object before them (`Reader::pen_samples`).
     "Xt",
-    // Five indexed curves of samples along a brushed path (`(…) Xt n XD`), on its hidden source path.
-    "XD",
     "Xi",
     "XI",
     "LB2",
