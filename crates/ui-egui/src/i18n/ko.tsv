@@ -344,6 +344,10 @@ digits	Malayalam	말라얄람어
 	Rename Preset	프리셋 이름 바꾸기
 	Save Image Trace Preset	이미지 추적 프리셋 저장
 	Delete Image Trace Preset	이미지 추적 프리셋 삭제
+	Tracing Presets…	추적 프리셋…
+	Import Image Trace Presets	이미지 추적 프리셋 가져오기
+	Export Image Trace Presets	이미지 추적 프리셋 내보내기
+	Replace the saved presets that have these names?	이 이름을 가진 저장된 프리셋을 대체하시겠습니까?
 	Text Wrap	문자 감싸기
 	Text Wrap Options…	문자 감싸기 옵션…
 	Clipping Mask	클리핑 마스크

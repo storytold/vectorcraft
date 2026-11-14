@@ -1599,6 +1599,10 @@ font-technology	Variable	Μεταβλητές
 	Rename Preset	Μετονομασία προεπιλογής
 	Save Image Trace Preset	Αποθήκευση προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
 	Delete Image Trace Preset	Διαγραφή προεπιλογής ανίχνευσης περιγραμμάτων εικόνας
+	Tracing Presets…	Προεπιλογές ανίχνευσης περιγραμμάτων…
+	Import Image Trace Presets	Εισαγωγή προεπιλογών ανίχνευσης περιγραμμάτων εικόνας
+	Export Image Trace Presets	Εξαγωγή προεπιλογών ανίχνευσης περιγραμμάτων εικόνας
+	Replace the saved presets that have these names?	Αντικατάσταση των αποθηκευμένων προεπιλογών με αυτά τα ονόματα;
 	Image Trace Presets	Προεπιλογές ανίχνευσης περιγραμμάτων εικόνας
 	Image:	Εικόνα:
 	Images:	Εικόνες:

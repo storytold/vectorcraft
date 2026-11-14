@@ -1715,6 +1715,10 @@ file-filter	Templates	Modelli
 	Rename Preset	Rinomina preset
 	Save Image Trace Preset	Salva preset ricalco immagine
 	Delete Image Trace Preset	Elimina preset ricalco immagine
+	Tracing Presets…	Preset di ricalco…
+	Import Image Trace Presets	Importa preset ricalco immagine
+	Export Image Trace Presets	Esporta preset ricalco immagine
+	Replace the saved presets that have these names?	Sostituire i preset salvati con questi nomi?
 	Image Trace Presets	Preset ricalco immagine
 	Image:	Immagine:
 	Images:	Immagini:

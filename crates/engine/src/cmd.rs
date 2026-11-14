@@ -876,6 +876,10 @@ pub use gradpresets::{GradientPreset, GradientPresetEntry};
 /// A saved Image Trace preset ([`crate::Prefs::trace_presets`]), and a change to the saved presets.
 pub use buildcmds::{TracePreset, TracePresetChange};
 
+/// The `format`, extensions and largest size of the tracing presets files
+/// `imageTrace.presets.export` writes and `imageTrace.presets.import` reads.
+pub use buildcmds::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES};
+
 /// An Image Trace made off the UI thread, and what it traced (#3098).
 pub use buildcmds::{TraceRun, Traced};
 

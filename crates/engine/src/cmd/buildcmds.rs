@@ -41,8 +41,10 @@ pub use live_paint::live_paint_gaps;
 use live_paint::{lp_expand, lp_fill, lp_gap_options, lp_info, lp_make, lp_merge, lp_release, lp_stroke_edge};
 use shape_builder::{sb_merge, sb_regions};
 pub(crate) use trace::TracePresetChanges;
-pub use trace::{TracePreset, TracePresetChange, TraceRun, Traced};
-use trace::{trace_expand, trace_make, trace_presets_delete, trace_presets_save, trace_release, trace_set_view};
+pub use trace::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES, TracePreset, TracePresetChange, TraceRun, Traced};
+use trace::{
+    trace_expand, trace_make, trace_presets_delete, trace_presets_export, trace_presets_import, trace_presets_save, trace_release, trace_set_view,
+};
 
 /// Name of an Image Trace group.
 pub const TRACE_NAME: &str = "Image Trace";
@@ -206,6 +208,24 @@ pub fn specs() -> Vec<CommandSpec> {
             "{name} delete a saved tracing preset (built-in ones stay) → {deleted: name}",
             always,
             trace_presets_delete
+        ),
+        cmd!(
+            query "imageTrace.presets.import",
+            "Import Image Trace Presets",
+            [],
+            None,
+            "{path? | data?: file text | dataBase64?, replace?: false (true: a preset whose name a saved preset has replaces that preset's settings; false: it is skipped)} add the presets of a .vctracepresets file (as imageTrace.presets.export writes, at most 4 MiB and 1,000 presets) to the saved ones → {imported: [names added], replaced: [names], skipped: [names]}; every preset is checked first, and a file with a built-in preset's or Custom's name, two presets of one name, a preset without a name or with settings imageTrace.presets.save refuses, or a newer version changes nothing",
+            always,
+            trace_presets_import
+        ),
+        cmd!(
+            query "imageTrace.presets.export",
+            "Export Image Trace Presets",
+            [],
+            None,
+            "{names?: [saved preset names] (default: every saved preset; built-in ones are refused), path?} write the saved tracing presets as a .vctracepresets file (JSON: format, version 1, presets: [{name, params}]) → {path, count}; without path → {data: the file's text, count}; more than 1,000 presets, or a file over 4 MiB, is refused, as imageTrace.presets.import would refuse it",
+            always,
+            trace_presets_export
         ),
     ]
 }

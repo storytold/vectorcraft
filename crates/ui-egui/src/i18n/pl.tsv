@@ -1820,6 +1820,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Zmień nazwę ustawienia
 	Save Image Trace Preset	Zapisz ustawienie obrysu obrazu
 	Delete Image Trace Preset	Usuń ustawienie obrysu obrazu
+	Tracing Presets…	Ustawienia obrysu…
+	Import Image Trace Presets	Importuj ustawienia obrysu obrazu
+	Export Image Trace Presets	Eksportuj ustawienia obrysu obrazu
+	Replace the saved presets that have these names?	Zastąpić zapisane ustawienia o tych nazwach?
 	Method:	Metoda:
 	Pad	Przedłuż
 	Repeats	Liczba powtórzeń

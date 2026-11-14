@@ -1875,6 +1875,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Nimeä esiasetus uudelleen
 	Save Image Trace Preset	Tallenna kuvan jäljityksen esiasetus
 	Delete Image Trace Preset	Poista kuvan jäljityksen esiasetus
+	Tracing Presets…	Jäljityksen esiasetukset…
+	Import Image Trace Presets	Tuo kuvan jäljityksen esiasetukset
+	Export Image Trace Presets	Vie kuvan jäljityksen esiasetukset
+	Replace the saved presets that have these names?	Korvataanko tallennetut esiasetukset, joilla on nämä nimet?
 	Method:	Menetelmä:
 	Pad	Jatka
 	Repeats	Toistokerrat

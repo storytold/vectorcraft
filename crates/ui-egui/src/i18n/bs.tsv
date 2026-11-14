@@ -1871,6 +1871,10 @@ digits	Malayalam	Malajalam
 	Rename Preset	Preimenuj unaprijed postavljeno
 	Save Image Trace Preset	Sačuvaj unaprijed postavljeno praćenje slike
 	Delete Image Trace Preset	Izbriši unaprijed postavljeno praćenje slike
+	Tracing Presets…	Predlošci praćenja…
+	Import Image Trace Presets	Uvezi predloške praćenja slike
+	Export Image Trace Presets	Izvezi predloške praćenja slike
+	Replace the saved presets that have these names?	Zamijeniti sačuvane predloške s ovim imenima?
 	Method:	Metoda:
 	Pad	Produži
 	Repeats	Broj ponavljanja

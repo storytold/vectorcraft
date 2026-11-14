@@ -1684,6 +1684,10 @@ file-filter	Templates	Vorlagen
 	Rename Preset	Vorgabe umbenennen
 	Save Image Trace Preset	Bildnachzeichner-Vorgabe speichern
 	Delete Image Trace Preset	Bildnachzeichner-Vorgabe löschen
+	Tracing Presets…	Nachzeichnervorgaben…
+	Import Image Trace Presets	Bildnachzeichner-Vorgaben importieren
+	Export Image Trace Presets	Bildnachzeichner-Vorgaben exportieren
+	Replace the saved presets that have these names?	Gespeicherte Vorgaben mit diesen Namen ersetzen?
 	Image Trace Presets	Bildnachzeichner-Vorgaben
 	Image:	Bild:
 	Images:	Bilder:

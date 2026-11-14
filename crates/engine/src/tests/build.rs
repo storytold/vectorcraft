@@ -5393,6 +5393,111 @@ fn image_trace_built_in_presets_cannot_be_saved_over_or_deleted() {
     assert_eq!(six["params"], serde_json::to_value(vectorcraft_trace::preset("6 Colors").unwrap()).unwrap());
 }
 
+/// Saved tracing presets go out to a .vctracepresets file and come back with their names and
+/// settings; a hand-written file in the documented layout imports too.
+#[test]
+fn image_trace_presets_export_and_import_round_trip() {
+    let mut s = session();
+    assert!(s.execute("imageTrace.presets.export", &json!({})).unwrap_err().to_string().contains("no saved tracing presets"));
+    s.execute("imageTrace.presets.save", &json!({"name": "Poster", "preset": "6 Colors", "params": {"noise": 40, "ignoreWhite": true}})).unwrap();
+    s.execute("imageTrace.presets.save", &json!({"name": "Ink", "params": {"threshold": 90, "fills": false, "strokes": true}})).unwrap();
+    let e = s.execute("imageTrace.presets.export", &json!({"names": ["Default"]})).unwrap_err().to_string();
+    assert!(e.contains("only saved presets are exported"), "{e}");
+    assert!(s.execute("imageTrace.presets.export", &json!({"names": ["Nope"]})).is_err());
+    let all = s.execute("imageTrace.presets.export", &json!({})).unwrap();
+    assert_eq!(all["count"], 2);
+    let one = s.execute("imageTrace.presets.export", &json!({"names": ["poster", "Poster"]})).unwrap();
+    assert_eq!(one["count"], 1);
+    let file: Value = serde_json::from_str(all["data"].as_str().unwrap()).unwrap();
+    assert_eq!((file["format"].as_str(), file["version"].as_u64()), (Some("vctracepresets"), Some(1)));
+    let saved = s.prefs.trace_presets.clone();
+    // Into a session without them: the same names and settings, and a new revision the panel follows.
+    let mut t = session();
+    let before = t.trace_presets_revision();
+    let r = t.execute("imageTrace.presets.import", &json!({"data": all["data"]})).unwrap();
+    assert_eq!(r, json!({"imported": ["Poster", "Ink"], "replaced": [], "skipped": []}));
+    assert_eq!(t.prefs.trace_presets, saved);
+    assert_eq!(t.trace_presets_revision(), before + 2);
+    // A file written by hand in the documented layout: missing settings are Default's.
+    let hand = r#"{"format": "vctracepresets", "version": 1, "presets": [{"name": "Hand", "params": {"mode": "grayscale", "colors": 12}}]}"#;
+    t.execute("imageTrace.presets.import", &json!({ "dataBase64": vectorcraft_format::base64_encode(hand.as_bytes()) })).unwrap();
+    let hand = t.trace_preset("hand").unwrap().params.clone();
+    assert_eq!((hand.mode, hand.colors, hand.threshold), (vectorcraft_trace::Mode::Grayscale, 12, 128));
+}
+
+/// Export writes no file that import would refuse (more than 1,000 presets, or more than 4 MiB),
+/// and no more than 1,000 tracing presets can be saved.
+#[test]
+fn image_trace_presets_export_keeps_to_what_import_reads() {
+    let mut s = session();
+    let params = vectorcraft_trace::preset("Default").unwrap();
+    let preset = |name: String| crate::cmd::TracePreset { name, params: params.clone() };
+    s.prefs.trace_presets = (1..=1001).map(|i| preset(format!("P{i}"))).collect();
+    let e = s.execute("imageTrace.presets.export", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("more than one file holds (1000)"), "{e}");
+    s.prefs.trace_presets.pop();
+    let all = s.execute("imageTrace.presets.export", &json!({})).unwrap();
+    assert_eq!(all["count"], 1000);
+    let mut t = session();
+    assert_eq!(t.execute("imageTrace.presets.import", &json!({"data": all["data"]})).unwrap()["imported"].as_array().map(Vec::len), Some(1000));
+    // No more can be saved or imported then, so every saved preset still fits in one file; a
+    // saved preset can still change, and a file of saved names still replaces them.
+    let e = t.execute("imageTrace.presets.save", &json!({"name": "One More"})).unwrap_err().to_string();
+    assert!(e.contains("delete one first"), "{e}");
+    t.execute("imageTrace.presets.save", &json!({"name": "P1", "params": {"noise": 9}})).unwrap();
+    let one = json!({"format": "vctracepresets", "version": 1, "presets": [{"name": "Fresh", "params": {}}]}).to_string();
+    let e = t.execute("imageTrace.presets.import", &json!({ "data": one })).unwrap_err().to_string();
+    assert!(e.contains("more than 1000 saved"), "{e}");
+    let again = json!({"format": "vctracepresets", "version": 1, "presets": [{"name": "P2", "params": {}}]}).to_string();
+    assert_eq!(t.execute("imageTrace.presets.import", &json!({"data": again, "replace": true})).unwrap()["replaced"], json!(["P2"]));
+    assert_eq!(t.prefs.trace_presets.len(), 1000);
+    s.prefs.trace_presets = vec![preset("x".repeat(4 << 20))];
+    let e = s.execute("imageTrace.presets.export", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("larger than 4 MiB"), "{e}");
+}
+
+/// A saved preset of the same name is skipped unless `replace` is on; a file with a fault, or one
+/// too large, changes nothing.
+#[test]
+fn image_trace_presets_import_checks_the_whole_file_first() {
+    let mut s = session();
+    s.execute("imageTrace.presets.save", &json!({"name": "Poster", "params": {"noise": 40}})).unwrap();
+    let file = |rows: Value| json!({"format": "vctracepresets", "version": 1, "presets": rows}).to_string();
+    let data = file(json!([{"name": "poster", "params": {"noise": 7}}, {"name": "Fresh", "params": {}}]));
+    let r = s.execute("imageTrace.presets.import", &json!({ "data": data })).unwrap();
+    assert_eq!(r, json!({"imported": ["Fresh"], "replaced": [], "skipped": ["poster"]}));
+    assert_eq!(s.trace_preset("Poster").unwrap().params.noise, 40);
+    let r = s.execute("imageTrace.presets.import", &json!({"data": data, "replace": true})).unwrap();
+    assert_eq!(r, json!({"imported": [], "replaced": ["Poster", "Fresh"], "skipped": []}));
+    assert_eq!(s.trace_preset("Poster").unwrap().params.noise, 7);
+    assert!(s.execute("imageTrace.presets.import", &json!({"data": data, "replace": "yes"})).is_err());
+    let saved = s.prefs.trace_presets.clone();
+    let revision = s.trace_presets_revision();
+    let bad_files = [
+        (file(json!([{"name": "New One", "params": {}}, {"name": "[Default]", "params": {}}])), "built-in preset"),
+        (file(json!([{"name": "custom", "params": {}}])), "built-in preset"),
+        (file(json!([{"name": "Twice", "params": {}}, {"name": "twice", "params": {}}])), "two presets named"),
+        (file(json!([{"name": " ", "params": {}}])), "has no name"),
+        (file(json!([{"name": "No Params"}])), "has no `params`"),
+        (file(json!([{"name": "Neither", "params": {"fills": false, "strokes": false}}])), "Create needs fills"),
+        (file(json!([{"name": "Typo", "params": {"nosie": 3}}])), "nosie"),
+        (json!({"format": "vctracepresets", "version": 2, "presets": []}).to_string(), "newer"),
+        (json!({"format": "vcflattener", "version": 1, "presets": []}).to_string(), "not a tracing presets file"),
+        ("{".to_string(), "not a tracing presets file"),
+        (file(Value::Array(vec![json!({"name": "x", "params": {}}); 1001])), "more than 1000"),
+        (" ".repeat((4 << 20) + 1), "larger than 4 MiB"),
+    ];
+    for (data, why) in bad_files {
+        let e = s.execute("imageTrace.presets.import", &json!({ "data": data })).unwrap_err().to_string();
+        assert!(e.contains(why), "{why}: {e}");
+    }
+    let big = vectorcraft_format::base64_encode(&vec![b' '; (4 << 20) + 1]);
+    assert!(s.execute("imageTrace.presets.import", &json!({ "dataBase64": big })).unwrap_err().to_string().contains("larger than 4 MiB"));
+    assert!(s.execute("imageTrace.presets.import", &json!({})).is_err());
+    assert_eq!(s.prefs.trace_presets, saved, "nothing changed");
+    assert_eq!(s.trace_presets_revision(), revision);
+}
+
 /// Saved tracing presets are kept with the preferences, are not a preference key, and survive
 /// resetting the preferences.
 #[test]

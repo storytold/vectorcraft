@@ -3606,6 +3606,10 @@ font-technology	Variable	Variáveis
 	Rename Preset	Renomear Predefinido
 	Save Image Trace Preset	Salvar Predefinido de Rastreamento de Imagem
 	Delete Image Trace Preset	Excluir Predefinido de Rastreamento de Imagem
+	Tracing Presets…	Predefinições de vetorização…
+	Import Image Trace Presets	Importar Predefinidos de Rastreamento de Imagem
+	Export Image Trace Presets	Exportar Predefinidos de Rastreamento de Imagem
+	Replace the saved presets that have these names?	Substituir os predefinidos salvos que têm esses nomes?
 	Japanese	Japonês
 	Keep a link to an image file instead of only embedding it	Manter um link para o arquivo de imagem em vez de apenas incorporá-lo
 	Latin	Latim

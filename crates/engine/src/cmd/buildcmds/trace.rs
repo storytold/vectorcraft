@@ -134,6 +134,9 @@ pub(super) fn trace_presets_save(s: &mut Session, p: &Value) -> Result<Value> {
     if old.is_none() && new_name.is_some() {
         return Err(bad(C, format!("no saved preset named `{name}` to rename")));
     }
+    if old.is_none() && s.prefs.trace_presets.len() >= TRACE_PRESET_MAX_COUNT {
+        return Err(bad(C, format!("{TRACE_PRESET_MAX_COUNT} tracing presets are saved, the most there can be: delete one first")));
+    }
     // A saved preset changes from its own settings unless `preset` says where to start.
     let mut q = p.clone();
     if let (Some(old), Some(o), None) = (&old, q.as_object_mut(), preset) {
@@ -167,6 +170,162 @@ pub(super) fn trace_presets_delete(s: &mut Session, p: &Value) -> Result<Value> 
     let deleted = s.prefs.trace_presets.remove(i).name;
     s.trace_preset_changes.note(TracePresetChange { revision: 0, name: deleted.clone(), renamed_from: None, deleted: true });
     Ok(json!({ "deleted": deleted }))
+}
+
+/// The `format` of a tracing presets file, also its extension.
+pub const TRACE_PRESET_FORMAT: &str = "vctracepresets";
+
+/// The extensions of tracing presets files (opening one imports it).
+pub const TRACE_PRESET_EXTS: &[&str] = &[TRACE_PRESET_FORMAT];
+
+/// The `version` `imageTrace.presets.export` writes; `imageTrace.presets.import` reads files of
+/// this version and earlier ones.
+const TRACE_PRESET_VERSION: u64 = 1;
+
+/// The largest tracing presets file `imageTrace.presets.import` reads.
+pub const TRACE_PRESET_MAX_BYTES: usize = 4 << 20;
+
+/// The most presets one tracing presets file may hold, and the most tracing presets that can be
+/// saved (so every saved preset fits in one exported file).
+const TRACE_PRESET_MAX_COUNT: usize = 1000;
+
+pub(super) fn trace_presets_export(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "imageTrace.presets.export";
+    let presets: Vec<&TracePreset> = match p.get("names").filter(|v| !v.is_null()) {
+        Some(Value::Array(names)) => {
+            let mut out: Vec<&TracePreset> = vec![];
+            for n in names {
+                let n = n.as_str().ok_or_else(|| bad(C, "`names` must hold preset names"))?;
+                if tr::preset(n).is_some() {
+                    return Err(bad(C, format!("`{n}` is a built-in preset: only saved presets are exported")));
+                }
+                let q = s.trace_preset(n).ok_or_else(|| bad(C, format!("no saved preset named `{n}`")))?;
+                if !out.iter().any(|o| o.name == q.name) {
+                    out.push(q);
+                }
+            }
+            out
+        }
+        Some(_) => return Err(bad(C, "`names` must be an array of preset names")),
+        None => s.prefs.trace_presets.iter().collect(),
+    };
+    if presets.is_empty() {
+        return Err(bad(C, "no saved tracing presets to export"));
+    }
+    // A file is written only when `imageTrace.presets.import` can read it back.
+    let count = presets.len();
+    if count > TRACE_PRESET_MAX_COUNT {
+        return Err(bad(C, format!("{count} presets are more than one file holds ({TRACE_PRESET_MAX_COUNT}): export fewer with `names`")));
+    }
+    let rows: Vec<Value> = presets.iter().map(|q| json!({"name": q.name, "params": q.params})).collect();
+    let file = json!({"format": TRACE_PRESET_FORMAT, "version": TRACE_PRESET_VERSION, "presets": rows});
+    let text = serde_json::to_string_pretty(&file).map_err(|e| EngineError::Other(e.to_string()))?;
+    if text.len() > TRACE_PRESET_MAX_BYTES {
+        return Err(bad(C, format!("the file would be larger than {} MiB: export fewer with `names`", TRACE_PRESET_MAX_BYTES >> 20)));
+    }
+    match opt_str(C, p, "path")? {
+        Some(path) => {
+            crate::cmd::fileio::write_file(path, text.as_bytes())?;
+            Ok(json!({"path": path, "count": count}))
+        }
+        None => Ok(json!({"data": text, "count": count})),
+    }
+}
+
+/// The bytes of the tracing presets file `p` names (`path`, `data` or `dataBase64`), at most
+/// [`TRACE_PRESET_MAX_BYTES`] of them.
+fn trace_preset_file(c: &str, p: &Value) -> Result<Vec<u8>> {
+    let too_big = || bad(c, format!("the file is larger than {} MiB", TRACE_PRESET_MAX_BYTES >> 20));
+    let bytes = match (opt_str(c, p, "path")?, opt_str(c, p, "data")?, opt_str(c, p, "dataBase64")?) {
+        (Some(path), ..) => crate::cmd::fileio::read_file_head(path, TRACE_PRESET_MAX_BYTES + 1)?,
+        (None, Some(text), _) => {
+            if text.len() > TRACE_PRESET_MAX_BYTES {
+                return Err(too_big());
+            }
+            text.as_bytes().to_vec()
+        }
+        (None, None, Some(b64)) => {
+            if vectorcraft_format::base64_decoded_len(b64) > TRACE_PRESET_MAX_BYTES as u64 {
+                return Err(too_big());
+            }
+            vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(c, "bad dataBase64"))?
+        }
+        _ => return Err(bad(c, "give `path`, `data` or `dataBase64`")),
+    };
+    if bytes.len() > TRACE_PRESET_MAX_BYTES {
+        return Err(too_big());
+    }
+    Ok(bytes)
+}
+
+pub(super) fn trace_presets_import(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "imageTrace.presets.import";
+    let replace = switch_or(p, "replace", false, C)?;
+    let bytes = trace_preset_file(C, p)?;
+    let not_file = |why: String| bad(C, format!("not a tracing presets file: {why}"));
+    let file: Value = serde_json::from_slice(&bytes).map_err(|e| not_file(e.to_string()))?;
+    if file["format"] != TRACE_PRESET_FORMAT {
+        return Err(not_file(format!("format `{}`", file["format"].as_str().unwrap_or_default())));
+    }
+    match file["version"].as_u64() {
+        Some(v) if (1..=TRACE_PRESET_VERSION).contains(&v) => {}
+        Some(v) => return Err(bad(C, format!("the file's version {v} is newer than this version of VectorCraft reads ({TRACE_PRESET_VERSION})"))),
+        None => return Err(not_file("no `version`".into())),
+    }
+    let rows = file["presets"].as_array().ok_or_else(|| not_file("no `presets` list".into()))?;
+    if rows.len() > TRACE_PRESET_MAX_COUNT {
+        return Err(bad(C, format!("the file holds {} presets, more than {TRACE_PRESET_MAX_COUNT}", rows.len())));
+    }
+    // Every preset is checked before any is saved, so a file with a fault changes nothing.
+    let mut presets: Vec<TracePreset> = Vec::with_capacity(rows.len());
+    for (i, row) in rows.iter().enumerate() {
+        let name = row["name"].as_str().map(str::trim).unwrap_or_default();
+        if name.is_empty() {
+            return Err(bad(C, format!("preset {} has no name", i + 1)));
+        }
+        if tr::preset(name).is_some() || name.eq_ignore_ascii_case("Custom") {
+            return Err(bad(C, format!("`{name}` is the name of a built-in preset: rename it in the file")));
+        }
+        if presets.iter().any(|q| q.name.eq_ignore_ascii_case(name)) {
+            return Err(bad(C, format!("the file holds two presets named `{name}`")));
+        }
+        let params = match row.get("params").filter(|v| v.is_object()) {
+            Some(params) => trace_params(s, C, &json!({"preset": "Default", "params": params})).map_err(|e| match e {
+                EngineError::BadParams { msg, .. } => bad(C, format!("`{name}`: {msg}")),
+                e => e,
+            })?,
+            None => return Err(bad(C, format!("`{name}` has no `params`"))),
+        };
+        presets.push(TracePreset { name: name.to_string(), params });
+    }
+    let added = presets.iter().filter(|q| s.trace_preset_index(&q.name).is_none()).count();
+    if s.prefs.trace_presets.len() + added > TRACE_PRESET_MAX_COUNT {
+        return Err(bad(
+            C,
+            format!("the file's {added} new presets would make more than {TRACE_PRESET_MAX_COUNT} saved tracing presets: delete some first"),
+        ));
+    }
+    let (mut imported, mut replaced, mut skipped) = (vec![], vec![], vec![]);
+    for preset in presets {
+        let name = preset.name.clone();
+        match s.trace_preset_index(&name) {
+            Some(i) if replace => {
+                let Some(slot) = s.prefs.trace_presets.get_mut(i) else { continue };
+                // The saved preset keeps its name as it was saved.
+                let kept = slot.name.clone();
+                *slot = TracePreset { name: kept.clone(), params: preset.params };
+                s.trace_preset_changes.note(TracePresetChange { revision: 0, name: kept.clone(), renamed_from: None, deleted: false });
+                replaced.push(kept);
+            }
+            Some(_) => skipped.push(name),
+            None => {
+                s.prefs.trace_presets.push(preset);
+                s.trace_preset_changes.note(TracePresetChange { revision: 0, name: name.clone(), renamed_from: None, deleted: false });
+                imported.push(name);
+            }
+        }
+    }
+    Ok(json!({"imported": imported, "replaced": replaced, "skipped": skipped}))
 }
 
 /// The string `key` of `p` (`None` when it is missing or null); any other type is an error of

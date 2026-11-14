@@ -1727,6 +1727,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Ganti nama preset
 	Save Image Trace Preset	Simpan preset telusur gambar
 	Delete Image Trace Preset	Hapus preset telusur gambar
+	Tracing Presets…	Preset penelusuran…
+	Import Image Trace Presets	Impor preset telusur gambar
+	Export Image Trace Presets	Ekspor preset telusur gambar
+	Replace the saved presets that have these names?	Ganti preset tersimpan yang memiliki nama-nama ini?
 	Method:	Metode:
 	Pad	Perpanjang
 	Repeats	Jumlah ulangan

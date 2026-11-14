@@ -351,6 +351,10 @@ digits	Malayalam	マラヤーラム数字
 	Rename Preset	プリセット名を変更
 	Save Image Trace Preset	画像トレースプリセットを保存
 	Delete Image Trace Preset	画像トレースプリセットを削除
+	Tracing Presets…	トレースプリセット…
+	Import Image Trace Presets	画像トレースプリセットを読み込み
+	Export Image Trace Presets	画像トレースプリセットを書き出し
+	Replace the saved presets that have these names?	これらの名前の保存済みプリセットを置き換えますか？
 	Text Wrap	テキストの回り込み
 	Text Wrap Options…	テキストの回り込みオプション…
 	Clipping Mask	クリッピングマスク

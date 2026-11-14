@@ -2245,6 +2245,10 @@ digits	Malayalam	Malayalam
 	Rename Preset	Voorinstelling hernoemen
 	Save Image Trace Preset	Voorinstelling voor afbeeldingtracering opslaan
 	Delete Image Trace Preset	Voorinstelling voor afbeeldingtracering verwijderen
+	Tracing Presets…	Traceervoorinstellingen…
+	Import Image Trace Presets	Voorinstellingen voor afbeeldingtracering importeren
+	Export Image Trace Presets	Voorinstellingen voor afbeeldingtracering exporteren
+	Replace the saved presets that have these names?	Opgeslagen voorinstellingen met deze namen vervangen?
 	Method:	Methode:
 	Pad	Doortrekken
 	Repeats	Herhalingen

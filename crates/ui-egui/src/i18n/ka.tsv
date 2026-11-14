@@ -1664,6 +1664,10 @@ digits	Malayalam	მალაიალამური
 	Rename Preset	პრესეტის სახელის შეცვლა
 	Save Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის შენახვა
 	Delete Image Trace Preset	გამოსახულების ვექტორიზაციის პრესეტის წაშლა
+	Tracing Presets…	ვექტორიზაციის პრესეტები…
+	Import Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების იმპორტირება
+	Export Image Trace Presets	გამოსახულების ვექტორიზაციის პრესეტების ექსპორტირება
+	Replace the saved presets that have these names?	ჩავანაცვლოთ ამ სახელების მქონე შენახული პრესეტები?
 	Cancel Image Trace	გამოსახულების ვექტორიზაციის გაუქმება
 	Method:	მეთოდი:
 	Pad	გაგრძელება

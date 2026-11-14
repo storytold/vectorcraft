@@ -35,6 +35,9 @@ fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opt
         };
         return dialogs::script_check::command(app, &p).map(|_| Value::Null);
     }
+    if let Some(OpensAs::Presets { import: "imageTrace.presets.import", .. }) = opens {
+        return dialogs::tracing_presets::open_file(app, bytes).map(|_| Value::Null);
+    }
     if let Some(OpensAs::Presets { import, what }) = opens {
         import_presets(app, import, what, serde_json::json!({"dataBase64": vectorcraft_format::base64_encode(bytes)}))?;
         return Ok(Value::Null);
@@ -106,6 +109,7 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
         (vectorcraft_engine::cmd::pdfcmds::PRESET_EXTS, "pdf.preset.import", "PDF presets"),
         (vectorcraft_engine::cmd::printpresets::PRESET_EXTS, "print.presets.import", "print presets"),
         (vectorcraft_engine::cmd::perspgrid::PRESET_EXTS, "perspective.presets.import", "perspective grid presets"),
+        (vectorcraft_engine::cmd::TRACE_PRESET_EXTS, "imageTrace.presets.import", "tracing presets"),
         (fileio::SCREEN_EXPORT_PRESET_EXTS, "document.exportPresets.import", EXPORT_PRESETS),
         (vectorcraft_engine::cmd::compositefonts::EXTS, "type.compositeFonts.import", "composite fonts"),
     ];

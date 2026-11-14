@@ -300,7 +300,7 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
 /// tools, the select add-on and Select by Link Status…), four "…" items whose menu entry gives
 /// params, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
 /// dialogs and Apply SVG Filter….
-const MENU_DIALOG_COMMANDS: [&str; 39] = [
+const MENU_DIALOG_COMMANDS: [&str; 40] = [
     "object.path.smooth",
     "object.path.simplify",
     "object.path.offsetPath",
@@ -338,6 +338,7 @@ const MENU_DIALOG_COMMANDS: [&str; 39] = [
     "ui.flattenerPresetsDialog",
     "ui.printPresetsDialog",
     "ui.pdfPresetsDialog",
+    "ui.tracingPresetsDialog",
     "ui.perspectivePresetsDialog",
     "ui.svgFilterDialog",
 ];
