@@ -66,6 +66,8 @@ pub(crate) struct SGlyph {
     pub ch: char,
     /// Vertical type: part of a tate-chu-yoko block (set across the column, upright).
     pub tcy: Option<Tcy>,
+    /// Part of a warichu block (stacked on several lines inside its line, see [`crate::layout`]).
+    pub wari: Option<Wari>,
     /// Japanese composition: the space taken off before the glyph (an opening bracket after
     /// another, see [`crate::layout`]); the glyph is drawn that much earlier on the line.
     pub lead: f64,
@@ -161,9 +163,32 @@ pub(crate) struct Tcy {
     pub right: f64,
 }
 
+/// A glyph's place in a warichu block: the block takes the length of its longest line along its
+/// line, and its glyphs are set on its lines inside that length. The block's first glyph
+/// advances by the whole length and the others by none, as a tate-chu-yoko block's do.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Wari {
+    /// The byte of the block's first glyph, which names the block.
+    pub start: usize,
+    /// Laid-out distance from the block's start to this glyph's pen position (0 for the block's
+    /// first glyph, the block's length for the others).
+    pub pen: f64,
+    /// Where the glyph is drawn, from the block's start along the line.
+    pub along: f64,
+    /// Where the glyph is drawn across the line, from the line's baseline (y down): the
+    /// baseline of the block's line the glyph is on.
+    pub across: f64,
+    /// The glyph's own advance on its block line, in points.
+    pub advance: f64,
+    /// The em of the line the block sits in: the glyph's em without its Warichu Settings Scale.
+    pub em: f64,
+}
+
 impl SGlyph {
+    /// A space between words. Not a space inside a warichu block, which is set with its block and
+    /// takes no part in justifying or breaking its line.
     pub fn is_space(&self) -> bool {
-        self.inline.is_none() && matches!(self.ch, ' ' | '\t' | '\u{3000}' | '\u{2002}'..='\u{200B}')
+        self.inline.is_none() && self.wari.is_none() && matches!(self.ch, ' ' | '\t' | '\u{3000}' | '\u{2002}'..='\u{200B}')
     }
     /// A line may break after this glyph.
     pub fn break_after(&self) -> bool {
@@ -183,6 +208,12 @@ impl SGlyph {
     /// Vertical type: a tate-chu-yoko glyph after its block's first, sharing that glyph's cell.
     pub fn continues_tcy(&self) -> bool {
         self.tcy.is_some_and(|t| t.pen > 0.0)
+    }
+    /// A tate-chu-yoko glyph after its block's first ([`Self::continues_tcy`]), or a warichu
+    /// glyph after its block's first: justification and Japanese composition add or take no
+    /// space before it, since its block is set as one piece.
+    pub fn continues_block(&self) -> bool {
+        self.continues_tcy() || self.wari.is_some_and(|w| w.pen > 0.0)
     }
 }
 
@@ -940,7 +971,7 @@ fn source_run_at(runs: &[(Range<usize>, &CharStyle)], span: &Range<usize>, byte:
 /// Horizontal type does not read Standard Vertical Roman Alignment or the tate-chu-yoko offsets.
 /// The space before a line's first character ([`space_before`]) and Insert Aki ([`aki`]) come
 /// from the cluster's first character, so they do not split a ligature or a letter from its marks
-/// either.
+/// either. Warichu Settings count only on characters marked Warichu ([`warichu_alike`]).
 fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
     // Exhaustive, like `shapes_alike`: compare borrowed fields without copying feature lists.
     let CharStyle {
@@ -986,6 +1017,12 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         tcy_up_down,
         tcy_left_right,
         standard_vertical_roman,
+        // Compared by `warichu_alike`.
+        warichu: _,
+        warichu_lines: _,
+        warichu_gap: _,
+        warichu_scale: _,
+        warichu_align: _,
         digits,
         font_height_reference,
         no_break,
@@ -1034,11 +1071,24 @@ fn drawn_alike(a: &CharStyle, b: &CharStyle, vertical: bool) -> bool {
         && kashidas == &b.kashidas
         && proportional_metrics == &b.proportional_metrics
         && tate_chu_yoko == &b.tate_chu_yoko
+        && warichu_alike(a, b)
         && digits == &b.digits
         && font_height_reference == &b.font_height_reference
         && no_break == &b.no_break
         && language == &b.language
         && glyph_alternate == &b.glyph_alternate
+}
+
+/// Do characters in styles `a` and `b` set warichu alike: neither marked Warichu, whatever their
+/// Warichu Settings (which then take no part in setting them), or both marked with the same
+/// Warichu Settings?
+pub(crate) fn warichu_alike(a: &CharStyle, b: &CharStyle) -> bool {
+    a.warichu == b.warichu
+        && (!a.warichu
+            || (a.warichu_lines == b.warichu_lines
+                && a.warichu_gap == b.warichu_gap
+                && a.warichu_scale == b.warichu_scale
+                && a.warichu_align == b.warichu_align))
 }
 
 /// Do text runs in styles `a` and `b` shape alike, so that they are shaped as one piece of text?
@@ -1096,6 +1146,14 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         tcy_up_down: _,
         tcy_left_right: _,
         standard_vertical_roman: _,
+        // A warichu block is shaped apart from the text around it and from a block with other
+        // settings: its characters are set at their own size and stacked by its settings
+        // ([`warichu_alike`]).
+        warichu: _,
+        warichu_lines: _,
+        warichu_gap: _,
+        warichu_scale: _,
+        warichu_align: _,
         digits,
         font_height_reference,
         no_break,
@@ -1103,6 +1161,7 @@ fn shapes_alike(a: &CharStyle, b: &CharStyle) -> bool {
         glyph_alternate,
     } = a;
     *font_family == b.font_family
+        && warichu_alike(a, b)
         && *font_style == b.font_style
         && *file_font_id == b.file_font_id
         && *font_version == b.font_version
@@ -1232,6 +1291,7 @@ fn inline_glyph(
         xh,
         ch: text.get(range.clone()).and_then(|s| s.chars().next()).unwrap_or(INLINE_CHAR),
         tcy: None,
+        wari: None,
         lead: 0.0,
         proportional: false,
         vpal: None,
@@ -1715,6 +1775,7 @@ fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFe
             xh,
             ch,
             tcy: None,
+            wari: None,
             lead: 0.0,
             proportional: proportional.get(gi).copied().unwrap_or(false),
             vpal: vpal.get(gi).copied().flatten(),

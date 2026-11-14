@@ -312,7 +312,7 @@ fn an_images_stroke_with_outline_object_follows_its_opaque_area() {
     run(&mut s, "effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 3}, "item": 0}));
     assert_eq!([shade(&s, 61, 100), shade(&s, 64, 100)], ["white", "black"]);
     // Relinked to an opaque image, the stroke follows the frame 3 pt out: it shows from 43 to 50.
-    let dir = vectorcraft_testkit::temp_dir("outline-object-relink");
+    let dir = vectorcraft_testkit::TempDir::new("outline-object-relink");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("opaque.png");
     let mut png = vec![];

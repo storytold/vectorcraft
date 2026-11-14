@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Profile",
             [],
             None,
-            "{name: a category of file.newPresets} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first → document.open's result",
+            "{name: a category of file.newPresets} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first; under automation roots it needs write and read access to the file, and an error names the file by its file name outside the read roots → document.open's result",
             always,
             edit_profile
         ),
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Profile",
             [],
             None,
-            "{name: a category of file.newPresets} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open → {name, reset: whether a file was deleted}",
+            "{name: a category of file.newPresets} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open; under automation roots it needs write access to the file, and an error names the file by its file name outside the read roots → {name, reset: whether a file was deleted}",
             always,
             reset_profile
         ),
@@ -1000,10 +1000,17 @@ fn list_profiles(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "profiles": profiles, "folder": s.new_doc_profile_dir().and_then(shown) }))
 }
 
+/// `msg`, an error about the profile file at `path`, as the request being served may see it: the
+/// file named whole inside the read roots, else by its file name.
+fn profile_error(msg: String, path: &str) -> super::EngineError {
+    super::fileio::naming_in_error(super::EngineError::Other(msg), path)
+}
+
 /// The file of profile `name` for `cmd` to change, checked against the request's write access.
 fn writable_profile(s: &Session, name: &str, cmd: &str) -> Result<std::path::PathBuf> {
     let path = s.profile_path(name).ok_or_else(|| bad(cmd, "New Document profiles need the preferences folder, which this run doesn't have"))?;
-    crate::file_access::check_write(&path.to_string_lossy()).map_err(super::EngineError::Other)?;
+    let file = path.to_string_lossy();
+    crate::file_access::check_write(&file).map_err(|e| profile_error(e, &file))?;
     Ok(path)
 }
 
@@ -1013,13 +1020,13 @@ fn edit_profile(s: &mut Session, p: &Value) -> Result<Value> {
     let file = writable_profile(s, name, C)?;
     let path = file.to_string_lossy().to_string();
     // document.open reads it next: a profile it can't open is not written either.
-    crate::file_access::check_read(&path).map_err(super::EngineError::Other)?;
+    crate::file_access::check_read(&path).map_err(|e| profile_error(e, &path))?;
     if !file.exists() {
         let bytes = vectorcraft_format::save(&shipped_profile(s, name), false);
         file.parent()
             .map_or(Ok(()), std::fs::create_dir_all)
             .and_then(|()| std::fs::write(&file, bytes))
-            .map_err(|e| super::EngineError::Other(format!("{path}: {e}")))?;
+            .map_err(|e| profile_error(format!("{path}: {e}"), &path))?;
     }
     s.execute("document.open", &json!({ "path": path }))
 }
@@ -1032,7 +1039,7 @@ fn reset_profile(s: &mut Session, p: &Value) -> Result<Value> {
     let reset = match std::fs::remove_file(&file) {
         Ok(()) => true,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
-        Err(e) => return Err(super::EngineError::Other(format!("{path}: {e}"))),
+        Err(e) => return Err(profile_error(format!("{path}: {e}"), &path)),
     };
     Ok(json!({ "name": name, "reset": reset }))
 }

@@ -13,7 +13,7 @@ use vectorcraft_doc::{Document, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
-use super::appearance::{ItemTarget, aligned, appearance_targets, index_param, item_indices, item_target, item_target_at};
+use super::appearance::{ItemTarget, aligned, appearance_targets, edit_targets, index_param, item_indices, item_target, item_target_at};
 use super::expand::has_seeded;
 use super::rasterfx;
 use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, check_switches, cmd, fileio, has_doc, str_param, switch_or};
@@ -49,7 +49,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Apply Effect",
             [],
             None,
-            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?|id?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step) → {ids, index, item, grouped?}",
+            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?|id?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step); the art of a graph design in a graph series is left out, and objects that are all such art are an error (docs/mcp.md) → {ids, index, item, grouped?}",
             has_doc,
             apply
         ),
@@ -298,7 +298,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
 /// edits its equal item, or its equal object-level effect, each target matched on its own whatever
 /// the other targets have; in a target without them, `item` and `index` stand for themselves.
 pub(crate) fn effect_targets(s: &Session, p: &Value, item: ItemTarget, index: usize, cmd: &str) -> Result<Vec<(NodeId, Option<usize>, usize)>> {
-    let roots = appearance_targets(s, p)?;
+    let roots = edit_targets(s, p)?;
     let d = &s.doc()?.doc;
     let per = item.per_target(s, &roots);
     let first = roots.first().and_then(|f| d.node(*f));
@@ -453,13 +453,14 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?;
     if effects::is_three_d(id) {
-        let targets = appearance_targets(s, p)?;
+        let targets = edit_targets(s, p)?;
         for (target, at) in targets.iter().copied().zip(item.per_target(s, &targets)) {
             let d = &s.doc()?.doc;
             let n = d.node(target).ok_or(EngineError::NoNode(target))?;
-            // A new effect goes after the item's others.
+            // A new effect goes after the item's (or the object's) others.
             let on = at.and_then(|at| at.effects_item(&n.appearance, C).ok()).flatten();
-            let on = on.and_then(|i| Some((i, n.appearance.items.get(i)?.effects().len())));
+            let on = on.and_then(|i| Some((Some(i), n.appearance.items.get(i)?.effects().len())));
+            let on = on.unwrap_or((None, n.appearance.effects.len()));
             effects::validate_three_d_at_in(Some(d), n, id, &effect.params, on).map_err(|e| bad(C, e))?;
             if let Some(name) = effects::missing_symbol(d, &effect.params, None) {
                 return Err(bad(C, format!("no symbol named `{name}`")));
@@ -491,8 +492,9 @@ fn loose_for_pathfinder(s: &Session, p: &Value, id: &str) -> Result<Option<Vec<N
     if !effects::is_pathfinder(id) || ["ids", "id", "item", "target"].iter().any(|k| p.get(k).is_some()) {
         return Ok(None);
     }
-    let roots = super::appearance::subject_roots(s)?;
     let d = &s.doc()?.doc;
+    // The art of a graph design in a series stays where the graph draws it.
+    let roots = super::appearance::without_design_art(d, super::appearance::subject_roots(s)?, "appearance")?;
     let grouped = roots.iter().any(|r| d.node(*r).is_some_and(|n| matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })));
     Ok((roots.len() >= 2 && !grouped).then_some(roots))
 }
@@ -605,7 +607,7 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     let src = item_target_at(s, p, "fromItem", C)?;
     let dst = if p.get("toItem").is_some() { item_target_at(s, p, "toItem", C)? } else { src };
     let copy = switch_or(p, "copy", false, C)?;
-    let roots = appearance_targets(s, p)?;
+    let roots = edit_targets(s, p)?;
     // Where an aligned effect would go in each of several different stacks isn't one place.
     if aligned(p, C)? && super::appearance::appearances_differ(&s.doc()?.doc, &roots) {
         return Err(bad(C, "effects of objects whose appearances differ can't be moved together"));
@@ -786,7 +788,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
                 return Err(bad(C, format!("no symbol named `{name}`")));
             }
             if visible != Some(false) {
-                effects::validate_three_d_at_in(Some(d), n, to, &prospective, target.map(|item| (item, index))).map_err(|e| bad(C, e))?;
+                effects::validate_three_d_at_in(Some(d), n, to, &prospective, (target, index)).map_err(|e| bad(C, e))?;
             } else {
                 // Hidden, the effect draws nothing, so its object need not fit. The values given are
                 // checked, and after a change of 3D type so is every value it keeps.

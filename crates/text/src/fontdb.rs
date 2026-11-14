@@ -120,6 +120,8 @@ pub struct FontDb {
     family_cache: Mutex<Option<Arc<[String]>>>,
     menu_cache: Mutex<Option<MenuFamilies>>,
     generation: AtomicU64,
+    /// This database's [`FontDb::id`].
+    id: u64,
     /// System fallback state: characters no system font covers.
     #[cfg(not(target_arch = "wasm32"))]
     sys: Mutex<SysFallback>,
@@ -129,10 +131,9 @@ pub struct FontDb {
     /// Faces instanced at the axis settings of type's Variable Font sliders ([`FontDb::instance`]).
     instances: Mutex<Instances>,
     /// Composite fonts (Type › Composite Fonts…) by lowercased name ([`FontDb::set_composite_font`]):
-    /// type naming one as its family is set in its parts' fonts.
+    /// type naming one as its family is set in its parts' fonts. A thread's guards can lend others
+    /// in their place ([`FontDb::lend_composite_fonts`]).
     composites: RwLock<HashMap<String, Arc<vectorcraft_doc::CompositeFont>>>,
-    /// The composite fonts [`FontDb::lend_composite_fonts`] put in, by lowercased name.
-    composite_loans: Mutex<HashMap<String, composite::CompositeLoan>>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.

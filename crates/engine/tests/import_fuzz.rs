@@ -4318,6 +4318,63 @@ proptest! {
         survive("style library in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 
+    /// Graphic style libraries whose styles are one paint (`/SimpleStyle`): any paint operators in
+    /// any order, with any operands or none, `Xd` missing or repeated, and the paint left open. The
+    /// library is also loaded in the Graphic Style Libraries panel and its styles applied to artwork.
+    #[test]
+    fn ai_style_libraries_of_one_paint_styles_never_panic(
+        // Each operator, and whether it is a paint operator rather than any text.
+        ops in prop::collection::vec(prop_oneof![
+            prop::sample::select(vec![
+                "0 R", "0 O", "0 1 1 0 K", "1 0 0 0 k", "0 0 0 0 1 0 0 Xa", "0 0 0 0 1 0 0 XA", "0.5 G", "0 g", "K", "Xa",
+                "0 J 0 j 2 w 10 M []0 d", "-1 w", "1e400 w", "0 M", "[3 -1]0 d", "[]0 d",
+                "1 0 Xd", "0 1 Xd", "1 1 Xd", "0 0 Xd", "1 Xd", "Xd", "0 1 0 0 0 Xy", "1 0.5 1 1 0 Xy", "Xy",
+                "0 Bb", "2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg", "0 BB", "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p",
+                "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P", "0 XR",
+            ]).prop_map(|op| (op.to_string(), true)),
+            "[ -~]{0,12}".prop_map(|text| (text, false)),
+        ], 0..12),
+        closed in any::<bool>(),
+    ) {
+        use vectorcraft_testkit::ai;
+        let close = if closed { "/Paint ;\n/Def ;\n" } else { "" };
+        // C, a red 2 pt stroke, comes first, so that it reads whatever A holds.
+        let header = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(C) /Name ,\n/SimpleStyle :\n0 R\n0 1 1 0 K\n2 w\n1 0 Xd\n/Paint ;\n/Def ;\n\
+             /KnownStyle :\n(A) /Name ,\n/SimpleStyle :\n{}\n{close}/KnownStyle :\n(B) /Name ,\n/SimpleStyle :\n1 0 Xd\n/Paint ;\n/Def ;\n\
+             %AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(A)\n(B)\n(C)\n%AI9_EndArtStyleList\n",
+            ops.iter().map(|(op, _)| op.as_str()).collect::<Vec<_>>().join("\n")
+        );
+        let library = ai::editing_data(200.0, 100.0, &header);
+        survive("one-paint style library", || Some(vectorcraft_eps::layered_ai(library.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let file = ai::ai(library.as_bytes(), ai::page_pdf());
+        // How many objects C's look reached, what applying it answered, and whether that look is
+        // C's red 2 pt stroke with no fill.
+        let (mut styled, mut applied, mut red_stroke) = (0, Value::Null, false);
+        survive("one-paint styles applied", || {
+            let mut s = rich_session();
+            let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fuzz.ai"});
+            let library = no_panic(s.execute("graphicStyle.loadLibrary", &p)).ok()?["library"].clone();
+            no_panic(s.execute("select.all", &json!({}))).ok()?;
+            // Every style is added and the first one, A when it reads, applied; then C is applied.
+            let _ = no_panic(s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "apply": true})));
+            applied = no_panic(s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": ["C"], "apply": true}))).ok()?;
+            let d = (*s.doc().ok()?.doc).clone();
+            if let Some(look) = applied["applied"].as_str().and_then(|name| d.graphic_style(name)).map(|g| &g.appearance) {
+                let strokes = look.items.iter().filter(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_))).count();
+                red_stroke = look.fill().is_none()
+                    && strokes == 1
+                    && look.stroke().is_some_and(|s| (s.paint.color(), s.width) == (Some(vectorcraft_color::Color::cmyk(0.0, 1.0, 1.0, 0.0)), 2.0));
+                d.walk(|n| styled += usize::from(n.appearance == *look));
+            }
+            Some(d)
+        })?;
+        // Text that isn't a paint operator can leave a string or a comment open over the style list.
+        if ops.iter().all(|(_, paint)| *paint) {
+            prop_assert!(applied["applied"].is_string() && red_stroke && styled > 0, "the stroke style wasn't applied: {applied}");
+        }
+    }
+
     /// Objects on Path records of any shape: ids in any order, repeated or missing, any number of
     /// objects, pivots and angles out of range or not finite, spacings, order tags that disagree,
     /// groups nested or cut short, and versioned content left open.
@@ -6085,7 +6142,8 @@ fn findme_wanted() -> vectorcraft_text::WantedFonts {
 
 /// Whether reading `bytes` as a font file a search reads panics.
 fn search_reads(what: &str, bytes: &[u8]) -> Result<Vec<usize>, TestCaseError> {
-    let path = vectorcraft_testkit::temp_dir("font-search-fuzz").join(format!("{:?}.ttc", std::thread::current().id()));
+    let dir = vectorcraft_testkit::TempDir::new("font-search-fuzz");
+    let path = dir.join("font.ttc");
     std::fs::write(&path, bytes).unwrap();
     catch_quiet(|| findme_wanted().provided_by(&path)).map_err(|e| TestCaseError::fail(format!("{what}: a search reading the file panicked: {e}")))
 }
@@ -7428,5 +7486,35 @@ proptest! {
         prop_assert_eq!(paths, 1, "{:?}", notes);
         prop_assert!(notes.iter().any(|n| n.contains("graphs come in as plain art")), "{:?}", notes);
         prop_assert!(!notes.iter().any(|n| n.contains("art this can't read")), "the records aren't art: {:?}", notes);
+    }
+}
+
+/// A graph in `.ai` editing data whose records read whole (version 7 specification, appendix A), of
+/// a table `rows` × `cols` (its label row and column included): a series group tagged by its
+/// column, and the axes on the plot's edges.
+fn live_graph_text(rows: &str, cols: &str) -> String {
+    format!(
+        "%_Gs\n%_10 90 110 10 Gb\n%_5 0 0 14 0 1 0 0 6 44 Gy\n%_10 2 0 0 90 80 0 Gd\n\
+         %_1 () Ga\n%_0 13 0 0 0 0 0 () GA\n%_2 () Ga\n%_0 14 0 0 0 0 0 () GA\n%_4 () Ga\n%_0 14 0 0 0 0 0 () GA\n\
+         %_{rows} {cols} 1 1 Gz\n%_() Gc (East) Gc (Q1) Gc 5 Gc GC\n\
+         u\nu\n0 0 0 1 k\n20 10 m\n20 50 L\n40 50 L\n40 10 L\nf\nU\n%_2 1 0 0 Go\nu\n0 0 0 1 K\n10 90 m\n10 10 L\n110 10 L\nS\nU\nU\n%_GS\n"
+    )
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A `.ai` graph that reads whole, then cut or damaged, or with a table of any size (zero, past
+    /// the limits, past what memory holds), never panics, and its drawn art always comes in.
+    #[test]
+    fn ai_live_graph_never_panics(cut in 0usize..800, edits in prop::collection::vec((0usize..800, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '%', '_', 'G', 'c', 'C', 'o', 's', 'S', 'u', 'U'])), 0..12), rows in prop_oneof![Just(2u64), 0u64..20_000, Just(u64::MAX)], cols in prop_oneof![Just(2u64), 0u64..400, Just(4_000_000_000u64)]) {
+        let text = mutate_text(&live_graph_text("2", "2"), cut, &edits);
+        survive("mutated live .ai graph", || Some(vectorcraft_eps::layered_ai(&ai_private(&text), Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
+        let sized = live_graph_text(&rows.to_string(), &cols.to_string());
+        let (doc, notes, read) = vectorcraft_eps::layered_ai(&ai_private(&sized), Document::new(4000.0, 200.0), vec![], false, true, 1.0);
+        prop_assert!(read, "{:?}", notes);
+        let mut paths = 0;
+        doc.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
+        prop_assert_eq!(paths, 2, "{:?}", notes);
     }
 }

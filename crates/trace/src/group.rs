@@ -420,13 +420,13 @@ mod tests {
 
     #[test]
     fn a_dense_trace_is_grouped_with_a_few_box_tests_per_path() {
-        let img = noise(120, 120);
+        let img = noise(150, 150);
         for (method, stacked) in [(crate::Method::Abutting, false), (crate::Method::Overlapping, true)] {
             let paths = traced(&img, method);
             let n = paths.len();
             let counted = |by_pairs: bool| {
                 BOX_TESTS.with(|n| n.set(0));
-                let found = if by_pairs { parents_by_pairs(&paths, 120, 120, stacked) } else { parents(&paths, 120, 120, stacked) };
+                let found = if by_pairs { parents_by_pairs(&paths, 150, 150, stacked) } else { parents(&paths, 150, 150, stacked) };
                 (found, BOX_TESTS.with(std::cell::Cell::get))
             };
             let (found, tests) = counted(false);

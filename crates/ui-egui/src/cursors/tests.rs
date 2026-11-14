@@ -292,6 +292,84 @@ fn the_pencil_continuation_cursor_is_the_straight_line_cursor_with_an_end_point(
     }
 }
 
+/// The Live Paint Bucket's cursors are drawn, not the crosshair: an empty bucket where a click
+/// paints nothing, a filled bucket with a larger drop on the hotspot where it fills a face, and a
+/// brush with its tip on the hotspot where it paints an edge.
+#[test]
+fn the_live_paint_bucket_shows_a_bucket_or_a_brush() {
+    for ppp in [1.0f32, 2.0] {
+        let img = |c| rasterize(c, ppp).unwrap_or_else(|| panic!("{c:?} at {ppp}"));
+        let (cross, empty, filled, brush) =
+            (img(Cursor::Crosshair), img(Cursor::LivePaintBucket), img(Cursor::LivePaintBucketFace), img(Cursor::LivePaintBucketEdge));
+        // The pixel nearest the point `u` points up-right of the hotspot and `v` down-right across.
+        let at = |img: &CustomCursorImage, u: f32, v: f32| {
+            let s = std::f32::consts::FRAC_1_SQRT_2;
+            let [hx, hy] = img.hotspot.map(f32::from);
+            let (x, y) = ((hx + (u + v) * s * ppp - 0.5).round(), (hy + (v - u) * s * ppp - 0.5).round());
+            let inside = x >= 0.0 && y >= 0.0 && x < f32::from(img.size[0]) && y < f32::from(img.size[1]);
+            if inside { pixel(img, x as usize, y as usize) } else { [0; 4] }
+        };
+        let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
+        let white = |p: [u8; 4]| p[3] > 200 && p[0] > 192;
+        assert!(white(at(&empty, 11.0, 2.0)), "the empty bucket's body is white at {ppp}");
+        assert!(inked(at(&filled, 11.0, 2.0)), "the filled bucket's body is ink at {ppp}");
+        assert!(at(&empty, 0.0, 0.0)[3] > 0 && inked(at(&filled, 0.0, 0.0)), "a drop on the hotspot at {ppp}");
+        if ppp == 2.0 {
+            assert!(inked(at(&filled, 1.4, 0.0)) && !inked(at(&empty, 2.0, 0.0)), "the filled bucket's drop is larger");
+        }
+        assert!(inked(at(&brush, 3.0, 0.0)), "the bristles by the hotspot at {ppp}");
+        assert!(white(at(&brush, 7.5, 0.0)), "the white ferrule at {ppp}");
+        assert!(inked(at(&brush, 14.0, 0.0)), "the handle at {ppp}");
+        assert!(!inked(at(&brush, 11.0, 4.0)), "the brush is thin where the bucket is wide at {ppp}");
+        assert!(white(at(&empty, 14.0, 0.0)), "the empty bucket has no handle there at {ppp}");
+        for (c, i) in [(Cursor::LivePaintBucket, &empty), (Cursor::LivePaintBucketFace, &filled), (Cursor::LivePaintBucketEdge, &brush)] {
+            assert!(c.stand_in().is_none(), "{c:?} is drawn");
+            assert_ne!(i, &cross, "{c:?} is not the crosshair at {ppp}");
+            assert_eq!(rasterize(c.precise(), ppp).as_ref(), Some(&cross), "{c:?} with Use Precise Cursors at {ppp}");
+        }
+        assert!(empty != filled && filled != brush && empty != brush, "three looks at {ppp}");
+    }
+}
+
+/// Live Paint Selection's cursors are the solid arrow, its tip on the hotspot, with a badge at its
+/// lower right: a filled square over a face, a line between two anchor marks over an edge, and an x
+/// where a click selects nothing.
+#[test]
+fn live_paint_selection_shows_the_arrow_with_a_face_edge_or_x_badge() {
+    for ppp in [2.0f32, 3.0] {
+        let img = |c| rasterize(c, ppp).unwrap_or_else(|| panic!("{c:?} at {ppp}"));
+        let (arrow, cross) = (img(Cursor::Arrow), img(Cursor::Crosshair));
+        let (face, edge, out) = (img(Cursor::LivePaintSelectFace), img(Cursor::LivePaintSelectEdge), img(Cursor::LivePaintSelectOutside));
+        // The pixel at (dx, dy) points from the hotspot.
+        let at = |img: &CustomCursorImage, dx: f32, dy: f32| {
+            let [hx, hy] = img.hotspot.map(usize::from);
+            let (x, y) = ((hx as f32 + dx * ppp) as usize, (hy as f32 + dy * ppp) as usize);
+            if x < img.size[0] as usize && y < img.size[1] as usize { pixel(img, x, y) } else { [0; 4] }
+        };
+        let inked = |p: [u8; 4]| p[3] > 200 && p[0] < 64;
+        // Inside the square, away from the x's strokes and the edge's line.
+        let square = (15.0, 14.0);
+        // The edge's upper anchor mark, beyond the square and the x.
+        let mark = (19.0, 13.0);
+        // On the x's stroke from top left to bottom right, away from the edge's line.
+        let x_stroke = (13.0, 14.0);
+        for (c, i, want) in [
+            (Cursor::LivePaintSelectFace, &face, [true, false, true]),
+            (Cursor::LivePaintSelectEdge, &edge, [false, true, false]),
+            (Cursor::LivePaintSelectOutside, &out, [false, false, true]),
+        ] {
+            assert_eq!(i.hotspot, arrow.hotspot, "{c:?} has the arrow's hotspot at {ppp}");
+            assert!(inked(at(i, 1.5, 6.0)), "{c:?} is the solid arrow at {ppp}");
+            let got = [square, mark, x_stroke].map(|(x, y)| inked(at(i, x, y)));
+            assert_eq!(got, want, "{c:?} at {ppp}");
+            assert!(c.stand_in().is_none(), "{c:?} is drawn");
+            assert_ne!(i, &arrow, "{c:?} is not the plain arrow at {ppp}");
+            assert_eq!(rasterize(c.precise(), ppp).as_ref(), Some(&cross), "{c:?} with Use Precise Cursors at {ppp}");
+        }
+        assert!(face != edge && edge != out && face != out, "three looks at {ppp}");
+    }
+}
+
 #[test]
 fn each_bitmap_is_made_once_so_the_os_cursor_is_kept() {
     let mut images = Images::default();

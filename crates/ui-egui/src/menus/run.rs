@@ -814,6 +814,10 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
             crate::dialogs::saturate::open(app);
             Ok(Value::Null)
         }
+        "ui.indexedColorDialog" => {
+            crate::dialogs::indexed_color::open(app);
+            Ok(Value::Null)
+        }
         "window.swatchLibrary" => crate::panels::swatches::open_library(app, p),
         "window.swatchLibrary.other" => crate::panels::swatches::other_library(app, s("path")),
         "ui.saveSwatchLibrary" => {
@@ -933,6 +937,7 @@ fn run_ui_part10(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "ui.hyphenation" => crate::dialogs::hyphenation::open(app),
         "ui.justification" => crate::dialogs::justification::open(app),
         "ui.tateChuYokoSettings" => crate::dialogs::tate_chu_yoko::open(app),
+        "ui.warichuSettings" => crate::dialogs::warichu::open(app),
         "ui.colorGuideLimit" => crate::panels::color_guide::set_limit(app, p),
         "ui.colorPanel" => crate::panels::color::command(app, p),
         "ui.colorRgbPercent" => crate::panels::color::rgb_percent_command(app, p),
@@ -989,6 +994,7 @@ fn run_ui_part11(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         crate::panels::actions::INSERT_SELECT_OBJECT => crate::panels::actions::insert_select_object(app, p),
         crate::panels::actions::CONTINUE_PLAYBACK => crate::panels::actions::continue_playback(app, p),
         crate::panels::actions::DELETE_STEP => crate::panels::actions::delete_step(app, p),
+        crate::panels::actions::MOVE_STEP => crate::panels::actions::move_step(app, p),
         "ui.batchDialog" => {
             let index = |k: &str| opt_index(p, k).map(|i| i.unwrap_or(0));
             index("set").and_then(|set| Ok((set, index("action")?))).and_then(|(set, action)| crate::dialogs::action_batch::open(app, set, action))

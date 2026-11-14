@@ -687,6 +687,36 @@ pub fn lam_alef_font(feature: &[u8; 4]) -> Option<Vec<u8>> {
     Some(builder.build())
 }
 
+/// The family of [`tatweel_font`].
+pub const TATWEEL_FAMILY: &str = "Tatweeltest Sans";
+
+/// A test-only Arabic cmap over bundled Source Sans 3, without Arabic shaping: beh uses b, teh t,
+/// dal d, the tatweel the hyphen and the space the space, so that a justified line takes kashidas
+/// without an OS font. `None` when it can't be built.
+pub fn tatweel_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [(' ', ' '), ('\u{0628}', 'b'), ('\u{062A}', 't'), ('\u{062F}', 'd'), ('\u{0640}', '-')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let full = format!("{TATWEEL_FAMILY} Regular");
+    let postscript = format!("{}-Regular", TATWEEL_FAMILY.replace(' ', ""));
+    let name = name_table(&[(1, TATWEEL_FAMILY), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
 /// The family of [`alternates_font`] with an `aalt` feature, and without one.
 pub fn alternates_family(aalt: bool) -> &'static str {
     if aalt { "Alttest Sans" } else { "Alttest Sans Noaalt" }

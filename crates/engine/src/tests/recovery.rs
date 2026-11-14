@@ -467,6 +467,23 @@ fn an_app_that_leaves_has_its_copies_offered_at_once() {
     }
 }
 
+/// The folder copies go to: the `recoveryFolder` preference, trimmed, when it names one, else the
+/// folder the app sets; none with a store the host installed. The web build has no folders.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_folder_in_use_is_the_preference_or_the_apps() {
+    let mut s = Session::new();
+    assert_eq!(cmd::recovery::folder(&s), None);
+    s.recovery.set_default_folder(Some("/app/recovery".into()));
+    assert_eq!(cmd::recovery::folder(&s), Some(("/app/recovery".into(), false)));
+    s.prefs.recovery_folder = " \t ".into();
+    assert_eq!(cmd::recovery::folder(&s), Some(("/app/recovery".into(), false)));
+    s.prefs.recovery_folder = "  /chosen/copies ".into();
+    assert_eq!(cmd::recovery::folder(&s), Some(("/chosen/copies".into(), true)));
+    s.recovery.set_store(Arc::new(MemoryStore::default()));
+    assert_eq!(cmd::recovery::folder(&s), None);
+}
+
 #[test]
 fn folder_areas_are_locked_by_running_apps() {
     let dir = std::env::temp_dir().join(format!("vc-recovery-locks-{}", std::process::id()));

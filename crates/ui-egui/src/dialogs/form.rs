@@ -453,7 +453,14 @@ pub(super) fn param_fields(
                 if is_length(&k) {
                     // An effect's documented range keeps the field to the distance it applies.
                     let range = vectorcraft_effects::length_range(&d.str("__effect"), &k);
-                    if spinners {
+                    // A command's own range refuses a distance typed outside it.
+                    if let Some(bounds) = super::command::length_range(&d.str("__command"), &k) {
+                        let value = d.fields.contains_key(&k).then(|| d.f64(&k, 0.0));
+                        if let Some(x) = crate::widgets::num_field_refusing(ui, ("dlg-len", k.as_str()), value, unit, 140.0, bounds) {
+                            d.fields.insert(k.clone(), json!(x));
+                            changed = true;
+                        }
+                    } else if spinners {
                         let bounds = range.unwrap_or(if k == "blur" { 0.0..=f64::INFINITY } else { crate::widgets::ANY });
                         let value = d.fields.contains_key(&k).then(|| d.f64(&k, 0.0));
                         if let Some(x) = crate::widgets::spin_length_within(ui, ("dlg-len", k.as_str()), value, unit, 140.0, bounds) {

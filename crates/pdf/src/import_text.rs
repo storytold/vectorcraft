@@ -224,6 +224,8 @@ pub(crate) struct TextLine {
     /// A glyph of the line is drawn in a font the file carries for a family that isn't available
     /// ([`keep_file_fonts`]).
     pub file_font: bool,
+    /// Whether this line holds Type 3 font glyphs.
+    pub has_type3: bool,
 }
 
 /// Where the file put a glyph: the glyph's index in the line, and its advance in the file's font
@@ -276,6 +278,7 @@ impl TextLine {
             drawn_space: None,
             held: vec![],
             file_font: false,
+            has_type3: false,
         }
     }
 

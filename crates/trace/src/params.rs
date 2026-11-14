@@ -24,7 +24,8 @@ pub enum Method {
     #[default]
     Abutting,
     /// Stacked: every layer extends under the layers above it, within the areas that hold its own
-    /// color.
+    /// color. With Fills (without Create Strokes) each shape is filled whole, and what it encloses
+    /// is stacked above it.
     Overlapping,
 }
 
@@ -114,7 +115,8 @@ pub struct TraceParams {
     pub gradients: bool,
     /// Create: trace areas as filled shapes.
     pub fills: bool,
-    /// Create: trace lines no wider than `stroke_width` as stroked centre lines.
+    /// Create: trace lines no wider than `stroke_width`, and such thin features of wider shapes, as
+    /// stroked center lines.
     pub strokes: bool,
     /// Stroke: the widest feature (px) traced as a stroke.
     pub stroke_width: f64,

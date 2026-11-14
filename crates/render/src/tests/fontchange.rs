@@ -259,6 +259,60 @@ fn a_documents_own_composite_font_draws_without_being_registered() {
     assert!(db.composite_font(NAME).is_none(), "given back after each render");
 }
 
+/// A placed document draws its type in its own definition of a composite font that the document
+/// placing it defines differently.
+#[test]
+fn a_placed_document_draws_its_own_definition_of_a_name_the_page_defines() {
+    use vectorcraft_doc::{CompositeFont, CompositePart, CompositeParts, ImageBlob, LinkInfo, PlacedDocument};
+    let _adding = adding_fonts();
+    const NAME: &str = "CF Placed Twice";
+    let definition = |roman: &str| {
+        let mut parts = CompositeParts::all(CompositePart::new("Source Sans 3", "Regular"));
+        parts.roman = CompositePart::new(roman, "Regular");
+        CompositeFont { name: NAME.into(), parts }
+    };
+    let typed = |family: &str| {
+        let mut d = Document::new(300.0, 150.0);
+        let style = CharStyle { size: 60.0, font_family: family.into(), ..Default::default() };
+        let n = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 100.0), "Hamburg", style))));
+        let l = d.layers[0].id;
+        let id = d.insert(Some(l), 0, n).unwrap();
+        (d, id)
+    };
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    // A page placing `d` (drawn exactly), defining `fonts`.
+    let page = |d: &Document, id: NodeId, key: &str, fonts: Vec<CompositeFont>| {
+        let blob = ImageBlob::new("application/json", key.as_bytes().to_vec());
+        let p = PlacedDocument {
+            link: LinkInfo::new("/art/type.vectorcraft"),
+            key: key.into(),
+            bounding: false,
+            page_box: Default::default(),
+            width: 300.0,
+            height: 150.0,
+            xf: Affine::IDENTITY,
+            placement: Default::default(),
+        };
+        let art = d.node(id).unwrap().clone();
+        vectorcraft_doc::placed_document::prime(&p, blob.bytes.clone(), (d.clone(), art, Rect::new(0.0, 0.0, 300.0, 150.0)));
+        let mut page = Document::new(300.0, 150.0);
+        page.composite_fonts.extend(fonts);
+        page.images.insert(key.into(), blob);
+        let n = Node::new(page.alloc_id(), NodeKind::PlacedDocument(Box::new(p)));
+        let l = page.layers[0].id;
+        page.insert(Some(l), 0, n).unwrap();
+        Renderer::new().render(&page, 300, 150, Affine::IDENTITY, &opts).pixels
+    };
+    let (mut placed, id) = typed(NAME);
+    placed.composite_fonts.push(definition("JetBrains Mono"));
+    let (plain, plain_id) = typed("JetBrains Mono");
+    let (inter, inter_id) = typed("Inter");
+    let own = page(&placed, id, "fontchange-placed-twice", vec![definition("Inter")]);
+    assert!(own == page(&plain, plain_id, "fontchange-placed-twice-plain", vec![]), "drawn in the placed document's definition");
+    assert!(own != page(&inter, inter_id, "fontchange-placed-twice-inter", vec![]), "not in the page's");
+    assert!(vectorcraft_text::FontDb::global().composite_font(NAME).is_none());
+}
+
 /// Type at 80% opacity, in Multiply and with a drop shadow redraws in a font that becomes
 /// available: the glyph geometry kept for it is laid out again.
 #[test]

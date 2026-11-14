@@ -357,8 +357,8 @@ fn shrink_to_fit(db: &FontDb, t: &TextObject, shown: &TextObject, opts: &LayoutO
     Some(best.unwrap_or_else(|| at(lo)))
 }
 
-/// `t` with every run's size, explicit leading, baseline shift and tate-chu-yoko offsets scaled by `f`, inline art's own
-/// shift included (auto leading and the art's size follow the size; paragraph spacing stays).
+/// `t` with every run's size, explicit leading, baseline shift, tate-chu-yoko offsets and warichu Line Gap scaled by `f`,
+/// inline art's own shift included (auto leading and the art's size follow the size; paragraph spacing stays).
 /// Shrink Text to Fit lays `t` out as `scaled(t, f)`, where `f` is the layout's
 /// [`TextLayout::fit_scale`], so the result holds the styles the text is drawn in.
 pub fn scaled(t: &TextObject, f: f64) -> TextObject {
@@ -369,6 +369,7 @@ pub fn scaled(t: &TextObject, f: f64) -> TextObject {
         r.style.baseline_shift *= f;
         r.style.tcy_up_down *= f;
         r.style.tcy_left_right *= f;
+        r.style.warichu_gap *= f;
         if let Some(a) = &mut r.inline {
             a.baseline_shift *= f;
         }
@@ -435,10 +436,13 @@ pub(crate) fn layout_faces_per_call(db: &FontDb, t: &TextObject) -> TextLayout {
     l
 }
 
-/// One layout pass, without fitting. Runs set in a composite font are laid out as the runs of one
-/// class each that [`FontDb::composite_split`] makes of them; the glyphs, ruby and inline
-/// graphics still name the runs of `t`.
+/// One layout pass, without fitting. Warichu runs are set at their Warichu Settings Scale of
+/// their size ([`super::warichu::warichu_sizes`]). Runs set in a composite font are laid out as
+/// the runs of one class each that [`FontDb::composite_split`] makes of them; the glyphs, ruby and
+/// inline graphics still name the runs of `t`.
 fn layout_once(db: &FontDb, t: &TextObject, opts: &LayoutOptions) -> TextLayout {
+    let sized = super::warichu::warichu_sizes(t);
+    let t = &*sized;
     let Some((split, from)) = db.composite_split(t) else { return layout_runs(db, t, opts, None) };
     let mut l = layout_runs(db, &split, opts, Some(t));
     let original = |run: &mut usize| *run = from.get(*run).copied().unwrap_or(*run);
@@ -513,7 +517,9 @@ fn layout_runs(db: &FontDb, t: &TextObject, opts: &LayoutOptions, set: Option<&T
         TextKind::Point => {
             let first = cx.style_at(0);
             let centre = cx.face_at(0).map_or(EM_CENTER, |f| f.ideographic_centre());
-            Affine::translate((-centre * first.size, 0.0)) * QUARTER_TURN
+            // A warichu first character keeps the size of its line ([`super::warichu::warichu_sizes`]).
+            let size = if super::warichu::stacked(first, true) { super::warichu::WariStyle::of(first).parent_size() } else { first.size };
+            Affine::translate((-centre * size, 0.0)) * QUARTER_TURN
         }
         _ => QUARTER_TURN,
     };

@@ -205,7 +205,8 @@ fn svg_continues_in_svg_options() {
 
 /// Without Use Artboards, a PDF continues in Save PDF too, without its artboard choice, and the
 /// file is one page of the art's bounds. Its options apply: a drawing 10 m long is written at
-/// full size in points with "Write pages longer than 200 in at full size in points".
+/// full size in points with "Write pages longer than 200 in at full size in points" (on by
+/// default), and with a `UserUnit` without it.
 #[test]
 fn pdf_art_continues_in_the_save_pdf_dialog() {
     let (mut app, written) = app(2);
@@ -223,11 +224,20 @@ fn pdf_art_continues_in_the_save_pdf_dialog() {
     app.run("shape.rectangle", json!({"x": 0, "y": 100, "width": 28_346.46, "height": 50})).unwrap();
     app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
     confirm(&mut app).unwrap();
-    set(&mut app, "longPagesInPoints", json!(true));
     frame(&mut app);
     confirm(&mut app).unwrap();
     let bytes = written.borrow()[1].1.clone();
     assert!(!String::from_utf8_lossy(&bytes).contains("/UserUnit"));
+    let width = vectorcraft_pdf::import(&bytes).unwrap().artboards[0].rect.width();
+    assert!((28_346.0..28_350.0).contains(&width), "{width}");
+
+    app.run("file.exportAs", json!({"format": "pdf"})).unwrap();
+    confirm(&mut app).unwrap();
+    set(&mut app, "longPagesInPoints", json!(false));
+    frame(&mut app);
+    confirm(&mut app).unwrap();
+    let bytes = written.borrow()[2].1.clone();
+    assert!(String::from_utf8_lossy(&bytes).contains("/UserUnit"));
     let width = vectorcraft_pdf::import(&bytes).unwrap().artboards[0].rect.width();
     assert!((28_346.0..28_350.0).contains(&width), "{width}");
 }
