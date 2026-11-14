@@ -947,12 +947,6 @@ fn names_a_loaded_library(v: &Value) -> bool {
     }
 }
 
-/// The preferences that hold a folder, by their keys in `ui.engine_prefs` and the Preferences dialog.
-const PREF_FOLDERS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
-
-/// The scratch disk choices that are not paths.
-const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
-
 /// May the request being served read `path`? Under an automation read root (a control client's
 /// request), `ui.inspect` leaves out a path outside the root, as `ui.menu.list` leaves out a recent
 /// file or a listed script outside it. Another platform's absolute path
@@ -975,11 +969,11 @@ fn unreadable_absolute(s: &str) -> bool {
 }
 
 /// Is `s` written as a path that the request may not read: an absolute path or a `file:` URL
-/// ([`unreadable_absolute`]), `~` or a path under it, or a path that starts with `.` or `..` and a
-/// separator? It is checked as the file access check reads it, relative to the working folder. Other
-/// text with a separator (`a/b`) stays.
+/// ([`unreadable_absolute`]), as written or with surrounding whitespace trimmed, `~` or a path under
+/// it, or a path that starts with `.` or `..` and a separator? It is checked as the file access check
+/// reads it, relative to the working folder. Other text with a separator (`a/b`) stays.
 fn unreadable_path_like(s: &str) -> bool {
-    if unreadable_absolute(s) {
+    if unreadable_absolute(s) || unreadable_absolute(s.trim()) {
         return true;
     }
     let t = s.trim_start();
@@ -1048,24 +1042,63 @@ fn percent_decoded(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// The params of each step of each action of action set `set` (`ui.action_sets`).
-fn steps_mut(set: &mut Value) -> impl Iterator<Item = &mut serde_json::Map<String, Value>> {
+/// The command and params of each step of each action of action set `set` (`ui.action_sets`).
+fn steps_mut(set: &mut Value) -> impl Iterator<Item = (String, &mut serde_json::Map<String, Value>)> {
     let actions = set.get_mut("actions").and_then(Value::as_array_mut).into_iter().flatten();
     let steps = actions.filter_map(|action| action.get_mut("steps").and_then(Value::as_array_mut)).flatten();
-    steps.filter_map(|step| step.get_mut(1).and_then(Value::as_object_mut))
+    steps.filter_map(|step| {
+        let command = step.get(0).and_then(Value::as_str).unwrap_or_default().to_string();
+        step.get_mut(1).and_then(Value::as_object_mut).map(|params| (command, params))
+    })
+}
+
+/// Takes out of the params of a recorded step running `command` the paths the request may not read:
+/// the folder preferences' values [`leave_out_unreadable_pref_steps`] takes out, and what
+/// [`leave_out_unreadable_params`] takes out, each in one pass over the params.
+fn leave_out_unreadable_step(command: &str, params: &mut serde_json::Map<String, Value>) {
+    leave_out_unreadable_pref_steps(command, params);
+    leave_out_unreadable_params(params);
+}
+
+/// Takes out of the params of a step running `command` the folder preferences' values the request
+/// may not read ([`shows_folder`]): in a `prefs.set` step, given as `{key, value}` or in `values`; in
+/// a `command.batch` step, the same in each of its commands, at any depth.
+fn leave_out_unreadable_pref_steps(command: &str, params: &mut serde_json::Map<String, Value>) {
+    match command {
+        "prefs.set" => {
+            if let Some(Value::Object(values)) = params.get_mut("values") {
+                leave_out_unreadable_folders(values);
+            }
+            if let (Some(key), Some(value)) = (params.get("key").and_then(Value::as_str), params.get("value").and_then(Value::as_str))
+                && !shows_folder(key, value)
+            {
+                params.remove("value");
+            }
+        }
+        "command.batch" => {
+            for step in params.get_mut("commands").and_then(Value::as_array_mut).into_iter().flatten().filter_map(Value::as_object_mut) {
+                let command = step.get("command").and_then(Value::as_str).unwrap_or_default().to_string();
+                if let Some(Value::Object(params)) = step.get_mut("params") {
+                    leave_out_unreadable_pref_steps(&command, params);
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Takes out of a recorded step's params, at any depth (the commands of a `command.batch` step), the
 /// paths the request may not read: the value of a path param
 /// ([`vectorcraft_engine::file_access::is_path_key`]: `path`, `file`, `diffPath`, `destinationFolder`
 /// and the like), each path of a list under such a param, and under any other param, as a key too, a
-/// string written as a path ([`unreadable_path_like`]).
+/// string written as a path ([`unreadable_path_like`]). An empty or blank value names no path and stays.
 fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>) {
     use vectorcraft_engine::file_access::is_path_key;
+    let shown = |p: &str| p.trim().is_empty() || readable_value(p);
     params.retain(|key, v| {
         !unreadable_path_like(key)
             && match v.as_str() {
-                Some(p) => !unreadable_path_like(p) && !(is_path_key(key) && !readable_value(p)),
+                Some(p) => !unreadable_path_like(p) && !(is_path_key(key) && !shown(p)),
                 None => true,
             }
     });
@@ -1073,7 +1106,7 @@ fn leave_out_unreadable_params(params: &mut serde_json::Map<String, Value>) {
         if let Value::Array(paths) = v
             && is_path_key(key)
         {
-            paths.retain(|p| p.as_str().is_none_or(readable_value));
+            paths.retain(|p| p.as_str().is_none_or(shown));
         }
         leave_out_unreadable_values(v);
     }
@@ -1108,8 +1141,8 @@ fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<Str
             }
         }
     }
-    for step in ui.get_mut("action_sets").and_then(Value::as_array_mut).into_iter().flatten().flat_map(steps_mut) {
-        leave_out_unreadable_params(step);
+    for (command, params) in ui.get_mut("action_sets").and_then(Value::as_array_mut).into_iter().flatten().flat_map(steps_mut) {
+        leave_out_unreadable_step(&command, params);
     }
     if let Some(Value::Object(prefs)) = ui.get_mut("engine_prefs") {
         leave_out_unreadable_folders(prefs);
@@ -1130,18 +1163,22 @@ fn leave_out_unreadable_paths(app: &VectorcraftApp, ui: &mut serde_json::Map<Str
     }
 }
 
-/// Takes out of `prefs` the folder preferences ([`PREF_FOLDERS`]) the request may not read, as written
-/// or trimmed as the app uses it. An empty value (no folder) and a scratch disk choice
-/// ([`SCRATCH_CHOICES`]) stay.
+/// Takes out of `prefs` the folder preferences
+/// ([`vectorcraft_engine::cmd::prefscmds::FOLDER_PREFS`]) the request may not read ([`shows_folder`]).
 fn leave_out_unreadable_folders(prefs: &mut serde_json::Map<String, Value>) {
-    for key in PREF_FOLDERS {
-        let Some(written) = prefs.get(key).and_then(Value::as_str) else { continue };
-        let path = written.trim();
-        if path.is_empty() || (key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path)) || (readable(written) && readable(path)) {
-            continue;
+    for key in vectorcraft_engine::cmd::prefscmds::FOLDER_PREFS {
+        if prefs.get(key).and_then(Value::as_str).is_some_and(|written| !shows_folder(key, written)) {
+            prefs.remove(key);
         }
-        prefs.remove(key);
     }
+}
+
+/// May the request see `written` as the value of preference `key`? Yes unless it names a folder
+/// ([`vectorcraft_engine::cmd::prefscmds::names_a_folder`]: an empty value and a scratch disk choice
+/// do not) that the request may not read as written, or trimmed as the app uses it, also as a `file:`
+/// URL ([`readable_value`]).
+fn shows_folder(key: &str, written: &str) -> bool {
+    !vectorcraft_engine::cmd::prefscmds::names_a_folder(key, written) || (readable(written) && readable_value(written.trim()))
 }
 
 fn key_from(name: &str) -> Option<egui::Key> {

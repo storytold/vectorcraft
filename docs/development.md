@@ -121,7 +121,7 @@ A file opened from the file manager (double-click, Open With, a drop on the exec
 
 ## Linux: Wayland and X11
 
-On GNOME/Wayland, enable **Preferences › User Interface › System Title Bar** and restart to use winit's font-free Adwaita window controls (`wayland-csd-adwaita-notitle`); the existing custom title bar remains the Linux default. On X11, on a Wayland compositor that draws server-side decorations such as KDE Plasma, and in a window opened through XWayland, enable **Preferences › User Interface › VectorCraft Title Bar on Every Desktop** and restart to use the app bar as the title bar instead of the desktop's frame. `VECTORCRAFT_TITLEBAR=app`, `=system` or `=desktop` chooses the frame for one run and takes precedence over System Title Bar and VectorCraft Title Bar on Every Desktop. The variable is case-sensitive and surrounding spaces are ignored; any other value, such as `unknown`, is ignored and does not override System Title Bar.
+On GNOME/Wayland, enable **Preferences › User Interface › System Title Bar** and restart to use winit's font-free Adwaita window controls (`wayland-csd-adwaita-notitle`); the app bar is the title bar by default only on a Wayland compositor that leaves the window's frame to the app, such as GNOME's, in a window not opened through XWayland (see the drop and pen items below). On X11, on a Wayland compositor that draws server-side decorations such as KDE Plasma, and in a window opened through XWayland, enable **Preferences › User Interface › VectorCraft Title Bar on Every Desktop** and restart to use the app bar as the title bar instead of the desktop's frame. `VECTORCRAFT_TITLEBAR=app`, `=system` or `=desktop` chooses the frame for one run and takes precedence over System Title Bar and VectorCraft Title Bar on Every Desktop. The variable is case-sensitive and surrounding spaces are ignored; any other value, such as `unknown`, is ignored and does not override System Title Bar.
 
 The window runs natively on Wayland (eframe's `wayland` feature) and on X11. On machines with two GPUs it renders on the one the desktop runs on unless Preferences say otherwise; see [Desktop graphics processor](#desktop-graphics-processor) (#502). The system clipboard (`apps/vectorcraft/src/clipboard.rs`) is arboard with its `wayland-data-control` feature:
 
@@ -296,10 +296,14 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   `Couldn't open {name}: {e}`; `{_1}`, `{_2}` … stand for the format string's `{}`, and the values in the
   placeholders are translated in turn (the reason after `: {e}` is often a message too). Czech, German, Greek, Spanish, French, Georgian, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan and Dutch
   translate status and error messages (`COMPLETE_MESSAGES` in `i18n::tests`); the untranslated report lists the
-  message literals the scan finds that one of them has no row for. The scan reads `Err("…")`, `Other(…)`,
+  message literals the scan finds, and the phrases a parameter schema's error builds at run time
+  (`SCHEMA_PHRASES`), that one of them has no row for. The scan covers the crates in `MESSAGE_CRATES`, the
+  effects and the crates whose errors the engine passes on included. It reads `Err("…")`, `Other(…)`,
   `#[error(…)]` and `status(…)` messages, messages given to an error enum's variant (`PsError::Limit(…)`, the reason
   in `EngineError::Disabled(id, …)`), to the engine's `bad(cmd, …)`, `err(…)` or `error(…)`, and to the PDF writer's
-  `bad(…)` or `failed(…)`, and skips calls inside comments
+  `bad(…)` or `failed(…)`, and the messages a `.map_err(|e| …)` closure returns (from each `if` branch,
+  `match` arm and statement of a block) or the handler a `.map_err(name)` names returns (a closure bound with `let name = |e| …;` or a
+  function `fn name(…)`), and skips calls inside comments
   (`VECTORCRAFT_I18N_DUMP_MESSAGES=messages.txt cargo test -p vectorcraft-ui-egui dump_source_strings` lists them
   all). A missing row shows the English message. Other languages show messages in English until they add `@msg`
   rows.
