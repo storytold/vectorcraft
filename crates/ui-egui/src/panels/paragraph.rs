@@ -86,8 +86,7 @@ pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, p: Value) -
 /// [`run_on_paragraphs`], with the Selection tool on the selected type objects alone unless
 /// `stories`.
 fn run_on(app: &mut VectorcraftApp, cmd: &str, mut p: Value, stories: bool) -> Result<Value, String> {
-    if let Some((id, a, b)) = super::character::text_editing(app) {
-        super::character::end_typing(app);
+    if let Some((id, a, b)) = super::character::text_editing_kept(app) {
         match super::character::text_story(app) {
             // After Select All in threaded text: every paragraph of every frame.
             Some(story) => p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>()),

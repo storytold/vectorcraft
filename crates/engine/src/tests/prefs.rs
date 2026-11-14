@@ -2586,6 +2586,35 @@ fn settling_typing_for_a_tool_shows_its_preview_warning() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 50.0, 380.0).with_mods(cmd), ViewInfo::default()).unwrap();
 }
 
+/// Typing kept as its own step when a dialog or a panel begins its preview, or when the font menus
+/// end the typing session, returns its applied preview's warning for the status bar. A preview
+/// without a warning returns none, and with no typing in progress nothing is kept and no step is
+/// added.
+#[test]
+fn settling_typing_for_a_dialog_returns_its_preview_warning() {
+    let warned = |w: &[String]| w.iter().any(|m| m.contains("type"));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let before = steps(&s);
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "the typing is a step of its own");
+    assert_eq!(s.doc().unwrap().interaction.as_ref().map(|it| it.label.as_str()), Some("Offset Path"));
+
+    let mut s = deferred_bloat("Typing", true, "selection");
+    let w = s.keep_typing().unwrap();
+    assert!(warned(&w), "{w:?}");
+    assert!(!s.in_interaction());
+    assert_eq!(steps(&s), before + 1);
+    let w = s.keep_typing().unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(steps(&s), before + 1, "nothing in progress adds no step");
+
+    let mut s = deferred_bloat("Typing", false, "selection");
+    let w = s.begin_interaction_warned("Offset Path").unwrap();
+    assert!(w.is_empty(), "{w:?}");
+}
+
 /// File Handling › Use Low Resolution Proxy for Linked EPS (#394): off by default; toggling it does
 /// not replace full-resolution pixels already in the document.
 #[test]

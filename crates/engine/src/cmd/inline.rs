@@ -46,18 +46,22 @@ fn insert_inline(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let len = edit::runs_len(&t.runs);
     let from_tool = editing == Some(id);
-    let (a, b) = match p.get("at") {
-        None | Some(Value::Null) if from_tool => {
-            let g = |k: &str| tool.get(k).and_then(Value::as_u64).map_or(len, |v| (v as usize).min(len));
-            let (x, y) = (g("start"), g("end"));
-            (x.min(y), x.max(y))
-        }
-        None | Some(Value::Null) => (len, len),
-        Some(v) => {
-            let at = v.as_u64().ok_or_else(|| bad(C, "`at` must be a byte offset"))?.min(len as u64) as usize;
-            (at, at)
-        }
+    // Where the graphic goes in text `len` bytes long.
+    let range = |len: usize| -> Result<(usize, usize)> {
+        Ok(match p.get("at") {
+            None | Some(Value::Null) if from_tool => {
+                let g = |k: &str| tool.get(k).and_then(Value::as_u64).map_or(len, |v| (v as usize).min(len));
+                let (x, y) = (g("start"), g("end"));
+                (x.min(y), x.max(y))
+            }
+            None | Some(Value::Null) => (len, len),
+            Some(v) => {
+                let at = v.as_u64().ok_or_else(|| bad(C, "`at` must be a byte offset"))?.min(len as u64) as usize;
+                (at, at)
+            }
+        })
     };
+    let (mut a, mut b) = range(len)?;
     let symbol = match str_param(p, "symbol") {
         Some(n) if doc.symbols.iter().any(|s| s.name == n) => n.to_string(),
         Some(n) => return Err(bad(C, format!("no symbol named `{n}`"))),
@@ -75,11 +79,16 @@ fn insert_inline(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) => 0.0,
         Some(v) => v.as_f64().filter(|k| k.is_finite() && k.abs() <= 1e5).ok_or_else(|| bad(C, "`shift` must be a number of points"))?,
     };
-    // A typing session ends first: the insertion is a step of its own.
+    // A typing session ends first: the insertion is a step of its own. Typing that Real-time
+    // Drawing off left unapplied is applied first, and the caret is read in the typed text.
     let typing = tool.get("typing").and_then(Value::as_bool) == Some(true);
     if typing && from_tool {
         s.set_tool_option("commitTyping", &Value::Bool(true));
-        s.commit_interaction()?;
+        super::settle_interaction(s)?;
+        let NodeKind::Text(t) = &s.doc()?.doc.node(id).ok_or(EngineError::NoNode(id))?.kind else {
+            return Err(bad(C, format!("node {} is not text", id.0)));
+        };
+        (a, b) = range(edit::runs_len(&t.runs))?;
     }
     let caret = s.edit("Insert Inline Symbol", |d, _| {
         let mut art = InlineArt { scale, baseline_shift: shift, ..InlineArt::new(symbol.clone()) };

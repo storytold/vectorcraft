@@ -482,13 +482,18 @@ fn preview(app: &mut VectorcraftApp, d: &mut Dialog) {
     if unchanged || !selected {
         return;
     }
-    let _ = app.session.begin_interaction(if artboard {
+    let label = if artboard {
         "Artboard Options"
     } else if d.bool("stroke") {
         "Stroke Color"
     } else {
         "Fill Color"
-    });
+    };
+    // A failure to begin (typing that can't be kept) shows, and nothing previews.
+    if let Err(e) = app.begin_interaction(label) {
+        app.status(e);
+        return;
+    }
     if let Err(e) = app.session.preview(cmd, &params) {
         app.status(e.to_string());
     }

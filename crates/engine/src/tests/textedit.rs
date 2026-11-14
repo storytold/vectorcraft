@@ -3038,6 +3038,41 @@ fn a_previewed_transform_while_typing_keeps_the_typing() {
     assert!((left(&s, id) - 400.0).abs() < 1e-6);
 }
 
+/// With Performance › Real-time Drawing and Editing off, the typing is applied when its session
+/// ends. Ending it for another edit applies it first, as a step of its own: a dialog or a panel
+/// beginning its preview, the font menus ([`Session::keep_typing`]), a paint for the selected
+/// characters.
+#[test]
+fn ending_deferred_typing_for_another_edit_keeps_the_typing() {
+    let typed = |end: &dyn Fn(&mut Session)| {
+        let mut s = session();
+        s.prefs.real_time_drawing = false;
+        let v = ViewInfo::default();
+        let id = text(&mut s, "Hello");
+        s.select_tool("type", v).unwrap();
+        let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+        click(&mut s, b.x1 - 1.0, b.center().y);
+        s.tool_text(" world", v).unwrap();
+        assert_eq!(obj(&s, id).plain_text(), "Hello", "the typing waits for its session to end");
+        let steps = undo_labels(&s).len();
+        end(&mut s);
+        assert_eq!(obj(&s, id).plain_text(), "Hello world");
+        assert_eq!(undo_labels(&s)[steps], "Typing", "{:?}", undo_labels(&s));
+    };
+    typed(&|s| {
+        assert!(s.begin_interaction_warned("Fill Color").unwrap().is_empty());
+        s.preview("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+        s.commit_interaction().unwrap();
+    });
+    typed(&|s| {
+        assert!(s.keep_typing().unwrap().is_empty());
+        assert!(!s.in_interaction());
+    });
+    typed(&|s| {
+        s.execute("paint.setFill", &json!({"color": "#00a000"})).unwrap();
+    });
+}
+
 /// #1950: a colour previewed while typing (the Color Picker, a Color panel slider) colours the
 /// typed text: its interaction used to join the typing session and preview from the document
 /// before the typing, so the new type came back as its placeholder text.

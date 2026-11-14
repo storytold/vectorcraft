@@ -478,12 +478,14 @@ pub(crate) fn live_run(app: &mut VectorcraftApp, label: &str, cmd: &str, params:
     match phase {
         Live::Idle => {}
         Live::Dragging | Live::Released => {
-            if app.session.begin_interaction(label).is_ok() {
+            if app.begin_interaction(label).is_ok() {
                 if let Err(e) = app.session.preview(cmd, &params) {
                     app.ui.status = e.to_string();
                 }
-                if phase == Live::Released {
-                    app.session.commit_interaction().ok();
+                if phase == Live::Released
+                    && let Err(e) = app.session.commit_interaction()
+                {
+                    app.ui.status = e.to_string();
                 }
                 app.sync_views();
             } else if phase == Live::Released {

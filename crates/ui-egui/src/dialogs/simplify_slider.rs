@@ -87,7 +87,7 @@ impl Strip {
     /// The open strip `d` moves to the level `cmd {auto: true}` picks for the selection, and the
     /// canvas previews it → {level}.
     pub fn auto(&self, app: &mut VectorcraftApp, mut d: Dialog) -> Result<Value, String> {
-        let _ = app.session.begin_interaction(self.label);
+        app.begin_interaction(self.label)?;
         let r = app.session.preview(self.cmd, &json!({ "auto": true })).map_err(|e| e.to_string())?;
         let level = r["level"].as_f64().unwrap_or(self.default_level);
         d.fields.insert("level".into(), json!(level));
