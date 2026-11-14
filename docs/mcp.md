@@ -2991,7 +2991,8 @@ already walks Image Trace. Short agent entry points:
   a symbol with guides keeps its corners at their size, and `symbol.breakLink` gives its art as it draws; dragging a
   guide on the canvas in symbol editing mode sends `nineSliceGuides` in one undo step; `type` is
   Symbol Type, `static` by default for the command and `dynamic` by default in the Symbol Options dialog),
-  `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask; a hidden or locked instance's
+  `symbol.place {name?, x?, y?}`, `symbol.breakLink {ids?}` (the art keeps the instance's opacity mask and its bounding box, square after
+  `object.resetBoundingBox`; a hidden or locked instance's
   art stays hidden or locked and is not selected), `symbol.replace`,
   `symbol.edit {id?, ids?, name?, x?, y?, artboard?, viewCenter?}` (symbol editing mode: the symbol's art on a temporary
   isolated layer, where the instance `id` shows it or centered on (x, y), by default on the center of artboard
@@ -7379,8 +7380,8 @@ restore the selection that was cleared. While the slices are locked or hidden, a
 ```
 
 The Slice tool (`slice`, Shift+K) and the Slice Selection tool (`sliceSelection`) reduce to commands:
-`object.slice.create {x, y, width, height}` (the Slice tool's drag; it snaps to ruler guides), `object.slice.select
-{slices?, toggle?}`, `object.slice.move {slices?, dx, dy}` (an object slice moves its object),
+`object.slice.create {x, y, width, height}` (the Slice tool's drag; it snaps as drawn points do, then to ruler guides),
+`object.slice.select {slices?, toggle?}`, `object.slice.move {slices?, dx, dy}` (an object slice moves its object),
 `object.slice.setRect {id, x, y, width, height}` (user slices) and `object.slice.delete {slices?}`. Slice ids are user
 slice ids and the ids of objects with an object slice. `object.slice.select` with `slices` left out or null deselects
 the slices.
@@ -8129,7 +8130,9 @@ square to the page. `object.resetBoundingBox` squares the box again without movi
 object inside the selected ones: the children of groups, compound paths, clip groups, blends, envelopes, repeats and
 intertwines, and the art of linked opacity masks (an unlinked mask's art keeps its angle). Ungroup, Release Clipping
 Mask, Release Compound Path, Blend Expand, Release Envelope, Release Repeat, Release Intertwine and Release Opacity Mask
-then bring back boxes square to the page.
+then bring back boxes square to the page. `symbol.breakLink` and `object.expand` give a symbol instance's art the
+instance's own box: after a reset the art stands square to the page, and an object turned inside the symbol keeps its
+angle relative to the instance's box.
 
 ```json
 {"name":"run_command","arguments":{"command":"object.rotate","params":{"angle":45,"absolute":true}}}
@@ -10723,7 +10726,8 @@ Tools:
   centre (move), the box's lower right corner (size; Shift keeps the proportions), a handle above the top (rotation;
   Shift: 45° steps), a dot on the top edge (corner radius) and one of the kind's own (a star's or ring's inner radius, a
   gear's tooth height, an arrow's head, a cross's bar, a heart's notch, a bubble's tail tip); each drag runs
-  `addon.pathtools.shape.set`. A double-click on the canvas places a shape with the last settings. Options
+  `addon.pathtools.shape.set`. A double-click on the canvas places a shape with the last settings. A new shape's
+  center and the point dragged out from it snap as drawn points do. Options
   (`tool.setOption`, or the panel with no shape selected) are the next shape's numbers, as the commands take them.
 - **Corner Tool** (`cornerTool`, or the UI command `addon.pathtools.cornerTool`, which also shows the Anchor Inspector
   panel with its Corners section): edits the app's Live Corners on any path, selected or not. Over an anchor where two
