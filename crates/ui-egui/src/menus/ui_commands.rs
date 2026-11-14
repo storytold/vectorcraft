@@ -1550,7 +1550,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         crate::panels::actions::SAVE_SET,
         "Save Actions…",
         "",
-        "{set?: index, id?, path?} write the Actions panel's set at set (0 is the top set; default: the current set) with its actions to an action set file (.vcactions) at path, else a picked file named after the set (the web downloads it). id holds the panel's own set id, which its menu passes: the set with this id is saved wherever it is now, and set is not read. A set over 8 MiB as a file, with more than 1,000 actions or with an action of more than 10,000 steps is not written; the panel menu's Save Actions… → {path}",
+        "{set?: index, id?, path?} write the Actions panel's set at set (0 is the top set; default: the current set) with its actions to an action set file (.vcactions) at path, else a picked file named after the set (the web downloads it). id holds the panel's own set id, which its menu passes: the set with this id is saved wherever it is now, and set is not read. A set over 8 MiB as a file, with more than 1,000 actions or with an action of more than 10,000 steps is not written, nor is a set with a prefs.set step (also in a batch step) that sets a folder preference to a folder (an error names the action and the preference; an empty folder and the scratch disk choices Startup and None save); the panel menu's Save Actions… → {path}",
     ),
     (
         crate::panels::actions::LOAD_SET,

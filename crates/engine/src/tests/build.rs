@@ -2446,6 +2446,193 @@ fn live_paint_stroke_edge() {
     assert!(s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [300, 300]})).is_err());
 }
 
+/// The undo and redo depths, the unsaved state and the revision of the active document.
+fn history_state(s: &Session) -> (usize, usize, bool, u64) {
+    let st = s.doc().unwrap();
+    (st.history.undo.len(), st.history.redo.len(), st.is_dirty(), st.revision)
+}
+
+/// Draw a rectangle and undo it, so a redo step is waiting, then mark the document saved with `g`
+/// alone selected.
+fn redo_waiting_and_saved(s: &mut Session, g: NodeId) {
+    rect(s, 300.0, 300.0, 10.0, 10.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+}
+
+/// The active document and its [`history_state`].
+type Snapshot = (vectorcraft_doc::Document, (usize, usize, bool, u64));
+
+fn snapshot(s: &Session) -> Snapshot {
+    ((*s.doc().unwrap().doc).clone(), history_state(s))
+}
+
+/// After a Live Paint edit that changed nothing: the document, the undo and redo steps, the saved
+/// state and the revision are as `before`, and Redo still brings back the rectangle
+/// [`redo_waiting_and_saved`] undid. Undoes the rectangle again, marks the document saved and
+/// takes a new `before`.
+fn assert_unchanged(s: &mut Session, before: &mut Snapshot, what: &str) {
+    assert!(*s.doc().unwrap().doc == before.0, "{what}: the document is as it was");
+    assert_eq!(history_state(s), before.1, "{what}: no undo step, the redo step kept, still saved");
+    let children = layer_children(s);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(layer_children(s), children + 1, "{what}: Redo brings back the rectangle");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    *before = snapshot(s);
+}
+
+#[test]
+fn live_paint_fill_same_paint_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let drag = json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#00ff00"});
+    s.execute("livePaint.fill", &drag).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    // A color used since stays the newest recent color and the last color.
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    s.remember_paint_now(&Paint::solid(blue));
+    let recent = (s.recent_colors.clone(), s.last_solid);
+    let mut before = snapshot(&s);
+    let click = s.execute("livePaint.fill", &json!({"group": g.0, "point": [75, 50], "color": "#00ff00"})).unwrap();
+    let face = vectorcraft_tools::builder::face_at(&node(&s, g), Point::new(75.0, 50.0)).unwrap().id;
+    assert_eq!(click, json!({"group": g.0, "face": face.0}), "the usual reply");
+    assert_unchanged(&mut s, &mut before, "a click on a face with the paint");
+    s.execute("livePaint.fill", &drag).unwrap();
+    assert_unchanged(&mut s, &mut before, "a drag over faces with the paint");
+    // Without a group, the click finds the Live Paint group among the selected objects.
+    s.execute("livePaint.fill", &json!({"point": [125, 50], "color": "#00ff00"})).unwrap();
+    assert_unchanged(&mut s, &mut before, "a click in the selected group");
+    assert_eq!((s.recent_colors.clone(), s.last_solid), recent, "the recent colors are as they were");
+    // A drag that reaches one face without the paint is one undo step and remembers the color.
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    for x in [25, 75] {
+        s.execute("livePaint.fill", &json!({"group": g.0, "point": [x, 50], "color": "#ff0000"})).unwrap();
+    }
+    s.remember_paint_now(&Paint::solid(blue));
+    let depth = s.doc().unwrap().history.undo.len();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#ff0000"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1);
+    assert_eq!(Paint::solid(s.last_solid), red);
+    let gn = node(&s, g);
+    for x in [25.0, 75.0, 125.0] {
+        assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), red, "{x}");
+    }
+}
+
+#[test]
+fn live_paint_bucket_click_with_the_face_paint_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+    let click = |s: &mut Session, x: f64| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, 50.0), v).unwrap();
+    };
+    click(&mut s, 125.0);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    click(&mut s, 125.0);
+    assert_unchanged(&mut s, &mut before, "a Bucket click on a face with the paint");
+    // A drag over faces with the paint changes nothing either.
+    click(&mut s, 25.0);
+    click(&mut s, 75.0);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+    assert_unchanged(&mut s, &mut before, "a Bucket drag over faces with the paint");
+}
+
+#[test]
+fn live_paint_stroke_edge_same_paint_and_width_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let call = json!({"group": g.0, "point": [100, 50], "color": "#ff0000", "width": 3});
+    let first = s.execute("livePaint.strokeEdge", &call).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    s.remember_paint_now(&Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let last = s.last_solid;
+    let mut before = snapshot(&s);
+    assert_eq!(s.execute("livePaint.strokeEdge", &call).unwrap(), first, "the usual reply");
+    assert_unchanged(&mut s, &mut before, "an edge with the paint and the width");
+    assert_eq!(s.last_solid, last, "the last color is as it was");
+    // Another width is an edit.
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100, 50], "color": "#ff0000", "width": 2})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
+#[test]
+fn live_paint_gap_options_same_values_are_no_op() {
+    let mut s = session();
+    let g = live_square_with_a_gap(&mut s);
+    let set = json!({"detect": true, "size": "small", "color": "#123456"});
+    let first = s.execute("livePaint.gapOptions", &set).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    assert_eq!(s.execute("livePaint.gapOptions", &set).unwrap(), first, "the usual reply");
+    assert_unchanged(&mut s, &mut before, "the options the group has");
+    s.execute("livePaint.gapOptions", &json!({})).unwrap();
+    assert_unchanged(&mut s, &mut before, "no options given");
+    // Close Gaps With Paths with a gap to close is an edit.
+    let r = s.execute("livePaint.gapOptions", &json!({"closeGaps": true})).unwrap();
+    assert_eq!(r["closed"], 1);
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
+#[test]
+fn live_paint_gap_options_close_without_gaps_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let r = s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true})).unwrap();
+    assert_eq!((ids(&r), &r["faces"], &r["closed"], gaps_of(&r).len()), (vec![g], &json!(3), &json!(0), 0));
+    assert_unchanged(&mut s, &mut before, "no gap to close");
+    // With other options, the faces keep their ids when no path is added.
+    let faces = |s: &Session| vectorcraft_tools::builder::faces(&node(s, g)).iter().map(|f| f.id).collect::<Vec<_>>();
+    let ids_before = faces(&s);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true, "color": "#00ff00"})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+    assert_eq!(faces(&s), ids_before);
+}
+
+#[test]
+fn live_paint_make_existing_group_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let r = s.execute("livePaint.make", &json!({})).unwrap();
+    assert_eq!((NodeId(r["id"].as_u64().unwrap()), &r["faces"]), (g, &json!(3)));
+    assert_eq!(r["edges"].as_u64().unwrap(), vectorcraft_tools::builder::edges(&node(&s, g)).len() as u64);
+    assert_unchanged(&mut s, &mut before, "Make with the group alone");
+}
+
+#[test]
+fn live_paint_merge_single_group_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let other = rect(&mut s, 300.0, 0.0, 50.0, 50.0);
+    redo_waiting_and_saved(&mut s, g);
+    // Given by id, the group is selected without an undo step.
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    let before = snapshot(&s);
+    let r = s.execute("livePaint.merge", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((NodeId(r["id"].as_u64().unwrap()), &r["faces"]), (g, &json!(3)));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
+    assert!(*s.doc().unwrap().doc == before.0);
+    let (undo, redo, dirty, _) = history_state(&s);
+    assert_eq!((undo, redo, dirty), (before.1.0, before.1.1, before.1.2));
+    // A path to add is an edit.
+    s.execute("livePaint.merge", &json!({"ids": [g.0, other.0]})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
 /// Shape Builder refuses an on/off option that is not true or false and a tolerance or gap that is
 /// not a number, given as text or as another value of the wrong kind, naming the key; the document
 /// and the undo history stay as they were. True, false and null still work.

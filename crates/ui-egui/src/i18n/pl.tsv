@@ -6058,6 +6058,7 @@ mark-style	Japanese	Japońskie
 @msg	no such color	brak takiego koloru
 @msg	{_1} cannot be used on Windows	Skrótu {_1} nie można używać w systemie Windows
 @msg	more than one action is named “{_1}”	więcej niż jedna operacja nazywa się „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	operacja „{_1}” ustawia preferencję folderu {_2}; usuń ten krok, aby zapisać zestaw
 @msg	no symbol named `{n}`	brak symbolu o nazwie `{n}`
 	Smudge Stick…	Rozmazywacz…
 	Smudge Stick	Rozmazywacz
