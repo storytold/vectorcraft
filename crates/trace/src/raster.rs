@@ -162,19 +162,14 @@ impl Raster {
             if info.width == 0 || info.height == 0 {
                 return Err(TraceError::Empty);
             }
-            if u64::from(info.width) * u64::from(info.height) > MAX_PIXELS
-                || gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS)
-            {
+            if u64::from(info.width) * u64::from(info.height) > MAX_PIXELS || gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
                 return Err(TraceError::TooLarge { width: info.width, height: info.height, max: MAX_PIXELS >> 20 });
             }
         } else if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_PIXELS) {
             return Err(TraceError::TooLarge { width: 0, height: 0, max: MAX_PIXELS >> 20 });
         }
         let opts = craft_image_codecs::DecodeOptions {
-            limits: craft_image_codecs::Limits {
-                max_pixels: MAX_PIXELS,
-                ..craft_image_codecs::Limits::default()
-            },
+            limits: craft_image_codecs::Limits { max_pixels: MAX_PIXELS, ..craft_image_codecs::Limits::default() },
             ..craft_image_codecs::DecodeOptions::default()
         };
         let img = craft_image_codecs::decode_with(bytes, &opts).map_err(|e| TraceError::Decode(e.to_string()))?;
@@ -198,18 +193,10 @@ impl Raster {
                 return Self::decode(bytes);
             }
             if pixels > MAX_SOURCE_PIXELS {
-                return Err(TraceError::TooLarge {
-                    width: info.width,
-                    height: info.height,
-                    max: MAX_SOURCE_PIXELS >> 20,
-                });
+                return Err(TraceError::TooLarge { width: info.width, height: info.height, max: MAX_SOURCE_PIXELS >> 20 });
             }
             if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_SOURCE_PIXELS) {
-                return Err(TraceError::TooLarge {
-                    width: info.width,
-                    height: info.height,
-                    max: MAX_SOURCE_PIXELS >> 20,
-                });
+                return Err(TraceError::TooLarge { width: info.width, height: info.height, max: MAX_SOURCE_PIXELS >> 20 });
             }
         } else if gif_first_frame_pixels(bytes).is_some_and(|p| p > MAX_SOURCE_PIXELS) {
             return Err(TraceError::TooLarge { width: 0, height: 0, max: MAX_SOURCE_PIXELS >> 20 });
@@ -243,12 +230,7 @@ impl Raster {
     }
     /// Encode as PNG.
     pub fn encode_png(&self) -> Vec<u8> {
-        let Ok(img) = craft_image_codecs::Image::from_u8(
-            self.width,
-            self.height,
-            craft_image_codecs::ChannelLayout::Rgba,
-            self.rgba.clone(),
-        ) else {
+        let Ok(img) = craft_image_codecs::Image::from_u8(self.width, self.height, craft_image_codecs::ChannelLayout::Rgba, self.rgba.clone()) else {
             return Vec::new();
         };
         craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &Default::default()).unwrap_or_default()
