@@ -225,12 +225,12 @@ fn a_flat_facet_measures_its_depth_on_its_plane() {
 /// eye, has no plane: its drawing no longer matches the plane's projection there.
 #[test]
 fn a_face_reaching_past_the_eye_has_no_plane() {
-    use super::build::{Builder, Order};
+    use super::build::{Builder, Keep, Order};
     let (_, b) = shape(&square(0.0, 0.0, 100.0));
     let camera = Camera::new(View { perspective: 50.0, ..front() }, b, 0.0);
     let eye = camera.center_and_eye().1.unwrap();
     for (far, has_plane) in [(eye / 2.0, true), (2.0 * eye, false)] {
-        let mut builder = Builder { camera: &camera, closed: false, hidden: false, facets: vec![], mesh: None };
+        let mut builder = Builder::new(&camera, false, false, Keep::Facets);
         let corners = vec![V3(-10.0, -10.0, 0.0), V3(10.0, -10.0, 0.0), V3(0.0, 10.0, far)];
         builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth).unwrap();
         assert_eq!(builder.facets.len(), 1, "{far}");
