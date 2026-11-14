@@ -283,11 +283,11 @@ fn row_buffer<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R
 /// `d`, the decoder of a TIFF of `file` bytes, set to decode `n` pixels of `per` samples of `bits`
 /// bits each into RGBA. `None` when the file has more than [`MAX_EXTRA_SAMPLES_PIXEL`] samples a
 /// pixel, when its samples aren't unsigned integers (a SampleFormat other than 1), and when the
-/// decoded samples, the copy that puts a planar file's samples pixel by pixel,
-/// the row the decoder reads each strip or tile into ([`row_buffer`]) and the RGBA pixels together
-/// take more than [`crate::MAX_RASTER_ALLOC`]. The decoder may then decode no more than those
-/// samples, and read no strip or tile of more compressed bytes than the file holds (nor more than
-/// its own limit of 128 MiB).
+/// decoded samples, the copy that puts a planar file's samples pixel by pixel, the row the decoder
+/// reads each strip or tile into ([`row_buffer`]) and the RGBA pixels together take more than
+/// [`crate::MAX_RASTER_ALLOC`]. The decoder may then decode no more than those samples, and read no
+/// strip or tile of more compressed bytes than the file holds (nor more than its own limit of
+/// 128 MiB).
 fn with_room<R: std::io::Read + std::io::Seek>(
     mut d: tiff::decoder::Decoder<R>,
     file: usize,
@@ -724,12 +724,12 @@ pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi:
 /// converted at 16 bits, and only the result is rounded to 8 bits. The samples may be stored
 /// together or one plane per channel. A CMYK file with two or more samples past its inks and its
 /// ExtraSamples values (or with no ExtraSamples tag) is read too, opaque when none of those values
-/// names an alpha. `None` for other images,
-/// CMYK ones without alpha (their inks are read by [`ImageBlob::cmyk`]), ones larger than
-/// [`MAX_CMYK_PIXELS`], ones whose SamplesPerPixel is more than [`MAX_EXTRA_SAMPLES_PIXEL`], ones
-/// whose samples aren't unsigned integers (a SampleFormat other than 1) and ones whose samples, with the copy a planar file needs, the row the decoder reads each strip or
-/// tile into and the RGBA pixels, take more than [`crate::MAX_RASTER_ALLOC`]; those are refused
-/// from the file's tags, before any decoding.
+/// names an alpha. `None` for other images, CMYK ones without alpha (their inks are read by
+/// [`ImageBlob::cmyk`]), ones larger than [`MAX_CMYK_PIXELS`], ones whose SamplesPerPixel is more
+/// than [`MAX_EXTRA_SAMPLES_PIXEL`], ones whose samples aren't unsigned integers (a SampleFormat
+/// other than 1) and ones whose samples, with the copy a planar file needs, the row the decoder
+/// reads each strip or tile into and the RGBA pixels, take more than [`crate::MAX_RASTER_ALLOC`];
+/// those are refused from the file's tags, before any decoding.
 pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3]) -> Option<image::RgbaImage> {
     use tiff::tags::Tag;
     let mut d = tiff_decoder(bytes)?;
