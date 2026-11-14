@@ -896,6 +896,8 @@ font-technology	Variable	Μεταβλητές
 	Duplicate	Δημιουργία αντιγράφου
 	Duplicate and Offset 10 pt	Δημιουργία αντιγράφου με μετατόπιση 10 pt
 	Duplicate Artboard	Δημιουργία αντιγράφου πίνακα σχεδίασης
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Κλικ για προσθήκη πίνακα σχεδίασης σε αυτή την πλευρά, Alt-κλικ για αντίγραφο αυτού του πίνακα σχεδίασης μαζί με τα γραφικά του
+	Click to add an artboard on this side	Κλικ για προσθήκη πίνακα σχεδίασης σε αυτή την πλευρά
 	Copy Artboard	Αντιγραφή πίνακα σχεδίασης
 	Cut Artboard	Αποκοπή πίνακα σχεδίασης
 	Rename Artboards	Μετονομασία πινάκων σχεδίασης

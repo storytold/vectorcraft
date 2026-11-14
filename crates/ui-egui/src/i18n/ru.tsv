@@ -937,6 +937,8 @@ font-technology	Variable	Вариативные
 	Duplicate	Дублировать
 	Duplicate and Offset 10 pt	Дублировать и сместить на 10 пт
 	Duplicate Artboard	Дублировать монтажную область
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Щёлкните, чтобы добавить монтажную область с этой стороны; щёлкните с Alt, чтобы дублировать эту монтажную область вместе с графикой
+	Click to add an artboard on this side	Щёлкните, чтобы добавить монтажную область с этой стороны
 	Copy Artboard	Копировать монтажную область
 	Cut Artboard	Вырезать монтажную область
 	Rename Artboards	Переименовать монтажные области

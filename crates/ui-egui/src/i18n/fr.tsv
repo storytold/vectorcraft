@@ -942,6 +942,8 @@ font-technology	Variable	Variables
 	Duplicate	Dupliquer
 	Duplicate and Offset 10 pt	Dupliquer et décaler de 10 pt
 	Duplicate Artboard	Dupliquer le plan de travail
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Cliquez pour ajouter un plan de travail de ce côté, Alt+clic pour dupliquer ce plan de travail avec son illustration
+	Click to add an artboard on this side	Cliquez pour ajouter un plan de travail de ce côté
 	Copy Artboard	Copier le plan de travail
 	Cut Artboard	Couper le plan de travail
 	Rename Artboards	Renommer les plans de travail

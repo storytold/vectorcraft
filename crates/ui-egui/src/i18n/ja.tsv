@@ -1583,6 +1583,8 @@ antiAlias	Sharp	シャープ
 	Drawing Mode	描画モード
 	Duplicate	複製
 	Duplicate Artboard	アートボードを複製
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	クリックでこの辺にアートボードを追加、Alt+クリックでこのアートボードをアートワークごと複製
+	Click to add an artboard on this side	クリックでこの辺にアートボードを追加
 	Copy Artboard	アートボードをコピー
 	Cut Artboard	アートボードをカット
 	Rename Artboards	アートボード名を変更

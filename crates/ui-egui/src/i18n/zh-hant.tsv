@@ -910,6 +910,8 @@ font-technology	Variable	可變
 	Duplicate	製作複本
 	Duplicate and Offset 10 pt	製作複本並位移 10 pt
 	Duplicate Artboard	製作工作區域複本
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	按一下以在這一側新增工作區域，Alt 加按一下以製作此工作區域及其圖稿的複本
+	Click to add an artboard on this side	按一下以在這一側新增工作區域
 	Copy Artboard	複製工作區域
 	Cut Artboard	剪下工作區域
 	Rename Artboards	重新命名工作區域

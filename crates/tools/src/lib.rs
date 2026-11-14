@@ -92,6 +92,10 @@ pub enum Overlay {
     Swatch { p: Point, color: [u8; 4], selected: bool },
     /// A hairline in a translucent colour (perspective gridlines), RGBA.
     GridLine { a: Point, b: Point, color: [u8; 4] },
+    /// Hover text for the disc of `radius` (document units) around `center`: while the pointer
+    /// rests there and nothing is being dragged, the UI shows `text`, an English UI string it
+    /// translates, as a tooltip. Nothing is drawn for it.
+    HoverText { center: Point, radius: f64, text: &'static str },
 }
 
 /// What an IME's "delete the text around the cursor" counts: UTF-8 bytes (winit's raw

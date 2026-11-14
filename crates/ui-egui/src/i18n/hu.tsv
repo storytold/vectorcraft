@@ -1220,6 +1220,8 @@ font-technology	Variable	Változó
 	Duplicate	Kettőzés
 	Duplicate and Offset 10 pt	Kettőzés és eltolás 10 pt-tal
 	Duplicate Artboard	Rajztábla kettőzése
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Kattintás: rajztábla hozzáadása ezen az oldalon, Alt+kattintás: a rajztábla kettőzése a grafikájával együtt
+	Click to add an artboard on this side	Kattintás: rajztábla hozzáadása ezen az oldalon
 	Duplicate Artboards	Rajztáblák kettőzése
 	Duplicate Brush	Ecset kettőzése
 	Duplicate Character Style	Karakterstílus kettőzése

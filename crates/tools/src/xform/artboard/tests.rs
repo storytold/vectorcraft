@@ -611,6 +611,44 @@ fn add_buttons_hide_with_several_artboards_selected_or_during_a_drag() {
     assert!(button_sides(&t, &c).is_empty(), "none while an artboard is dragged");
 }
 
+/// The tooltips the add buttons carry: each one's center, radius and text.
+fn button_tips(t: &ArtboardTool, c: &ToolContext) -> Vec<(Point, f64, &'static str)> {
+    t.overlays(c)
+        .into_iter()
+        .filter_map(|o| if let Overlay::HoverText { center, radius, text } = o { Some((center, radius, text)) } else { None })
+        .collect()
+}
+
+#[test]
+fn each_add_button_has_a_tooltip_over_the_area_a_press_takes() {
+    let mut d = two_boards();
+    let (s, p) = (Selection::default(), paint());
+    let c = cx(&d, &s, &p);
+    let t = ArtboardTool::default();
+    let radius = c.tol(EDGE_BUTTON_RADIUS);
+    let want: Vec<_> = t.edge_buttons(&c).into_iter().map(|(_, at)| (at, radius, EDGE_BUTTON_TIP)).collect();
+    assert_eq!(want.len(), 3, "no button and no tooltip on the side without room");
+    assert_eq!(button_tips(&t, &c), want);
+    // The tooltip's disc is the one a press takes.
+    for (at, r, _) in &want {
+        assert!(t.edge_button_at(&c, *at + Vec2::new(r * 0.99, 0.0)).is_some());
+        assert!(t.edge_button_at(&c, *at + Vec2::new(r * 1.01, 0.0)).is_none());
+    }
+    // None with several artboards selected or during a drag.
+    let several = ArtboardTool { active: 1, others: vec![0], ..Default::default() };
+    assert!(button_tips(&several, &c).is_empty());
+    let mut dragging = ArtboardTool::default();
+    dragging.pointer(&c, &ev(PointerKind::Down, 700.0, 100.0));
+    dragging.pointer(&c, &ev(PointerKind::Drag, 720.0, 100.0));
+    assert!(button_tips(&dragging, &c).is_empty(), "none while an artboard is dragged");
+    // A locked artboard's buttons tell only what a click does: an Alt-click does nothing there.
+    d.artboards[0].locked = true;
+    let c = cx(&d, &s, &p);
+    let tips = button_tips(&t, &c);
+    assert_eq!(tips.len(), 3);
+    assert!(tips.iter().all(|(_, _, text)| *text == EDGE_BUTTON_TIP_LOCKED), "{tips:?}");
+}
+
 #[test]
 fn an_add_button_adds_an_empty_artboard_and_alt_duplicates_on_that_side() {
     let d = two_boards();

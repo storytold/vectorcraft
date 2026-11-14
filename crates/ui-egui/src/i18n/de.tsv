@@ -926,6 +926,8 @@ font-technology	Variable	Variabel
 	Duplicate	Duplizieren
 	Duplicate and Offset 10 pt	Duplizieren und um 10 pt versetzen
 	Duplicate Artboard	Zeichenfläche duplizieren
+	Click to add an artboard on this side; Alt-click to duplicate this artboard with its art	Klicken fügt auf dieser Seite eine Zeichenfläche hinzu, Alt-Klick dupliziert diese Zeichenfläche mit ihrem Bildmaterial
+	Click to add an artboard on this side	Klicken fügt auf dieser Seite eine Zeichenfläche hinzu
 	Copy Artboard	Zeichenfläche kopieren
 	Cut Artboard	Zeichenfläche ausschneiden
 	Rename Artboards	Zeichenflächen umbenennen
