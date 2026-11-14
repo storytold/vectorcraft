@@ -103,6 +103,37 @@ fn a_strokes_own_glow_filters_the_stroke_element_only() {
 }
 
 #[test]
+fn a_clipping_paths_transform_effect_moves_the_written_clip_path() {
+    // A clip group whose clipping path covers x 0 to 50; `effect` moves it 50 pt right.
+    let clipped = |x0: f64, effect: bool| {
+        let mut clip =
+            Node::path(NodeId(0), shapes::rectangle(Rect::new(x0, 0.0, x0 + 50.0, 100.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+        if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+            *clipping = true;
+        }
+        if effect {
+            clip.appearance.effects.push(Effect { id: "distort.transform".into(), params: json!({"moveH": 50}), visible: true });
+        }
+        let art = Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)),
+            Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+        );
+        let mut d = Document::new(200.0, 200.0);
+        let (clip, art) = (Node { id: d.alloc_id(), ..clip }, Node { id: d.alloc_id(), ..art });
+        let g = Node::new(d.alloc_id(), NodeKind::Group { children: vec![std::sync::Arc::new(clip), std::sync::Arc::new(art)], clip: true });
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, g).unwrap();
+        let svg = export(&d, &ExportOptions::default());
+        let open = svg.find("<clipPath").expect("a clip path");
+        let body = &svg[open..open + svg[open..].find("</clipPath>").expect("its end")];
+        body[body.find('>').unwrap()..].to_string()
+    };
+    assert_eq!(clipped(0.0, true), clipped(50.0, false), "the clip path is written where the effect moves it");
+    assert_ne!(clipped(0.0, true), clipped(0.0, false));
+}
+
+#[test]
 fn geometry_effects_on_type_export_as_its_reshaped_outlines() {
     let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
     let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(10.0, 60.0), "Hi", style))));

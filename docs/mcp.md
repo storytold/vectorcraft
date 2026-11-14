@@ -3299,7 +3299,13 @@ already walks Image Trace. Short agent entry points:
   action and preference. An empty folder and the scratch disk choices `Startup` and `None` save. `ui.actionSet.load {path? | data?}` reads
   the file at `path`, else a picked one, or the file's text `data`, adds its set after the other sets and returns
   `{set, name, actions}`. A set named like one already in the panel gets the next free number (`Print 2`), and the
-  other sets and the current set stay as they are. An action set file (`.vcactions`) is JSON:
+  other sets and the current set stay as they are. A step whose command is not a built-in command, a command of an
+  installed plug-in, a View menu step or a stop, and such a command of a `command.batch` step, loads as it is, excluded
+  or not, and `ui.actionSet.save` writes it back. The answer then also has `unknownCommands: [{action, actionIndex, step,
+  stepIndex, batchStep?, command}]`, the first 1,000 such steps (`step` and `batchStep` count from 1, `actionIndex` and
+  `stepIndex` from 0, and `batchStep` is the command's place in a `command.batch` step), and `unknownCount`, how many
+  there are; the status bar names the first and the count, with control characters replaced and long names cut at 80
+  characters. These are VectorCraft's own rules. An action set file (`.vcactions`) is JSON:
   `{"format": "vcactions", "version": 1 to 6, "name", "actions": [{"name", "steps": [{"command", "params", "excluded"?}]}]}`, each step
   a command id and its params as `command.batch` takes them, or a stop: the command `action.stop` with
   `{message, allowContinue}`. A Select Object step is the command `select.byNote` with `{note, caseSensitive,
@@ -3379,8 +3385,12 @@ already walks Image Trace. Short agent entry points:
   made active, or that document was closed), the playback ends with a status and the rest do not play; a step that
   makes another document active itself does not end it. A name that no
   action has, or that more than one action in the sets looked in has, or whose every step is excluded, is an error, and
-  then nothing plays. So is an action played while another is still playing at Step by Step or Pause For. A
-  `command.batch` step, which an action played or a panel operation run as one batch records, plays as its own steps,
+  then nothing plays. So is an action played while another is still playing at Step by Step or Pause For. So is an
+  action with an included step whose command is not a built-in command, a command of an installed plug-in, a View menu
+  step or a stop at the time it plays, at every speed: the error names the first such step, as in step 2 of “Print”
+  runs the unknown command `example.finish`, and a command of a `command.batch` step by its place in the batch, as in
+  step 2.3. An excluded step is not checked.
+  A `command.batch` step, which an action played or a panel operation run as one batch records, plays as its own steps,
   here and in Batch…. An action with an included stop plays up to the stop at any speed and then waits, with its
   message box open, until `ui.action.continue` or `ui.action.stop`. At Accelerated the steps between two stops are one
   undoable batch each. The result is then `{results, pending, atStop?}`, with `atStop: true` when the action already
@@ -5381,9 +5391,10 @@ keeps the segment's direction when the smoothed path there turns back by 90° or
 path, the curve keeps the direction of the part outside the drag. `object.path.smooth` and Simplify keep each end's
 direction.
 
-In the desktop app, Object › Path › Smooth and the canvas context menu's Smooth… (listed while the selection holds a
-path) open the slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at
-the Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
+In the desktop app, Object › Path › Smooth, the canvas context menu's Smooth… (listed while the selection holds a
+path) and the Contextual Task Bar's Smooth (with a path selected whole with the Direct Selection tool) open the
+slider (`ui.menuDialog {command: "object.path.smooth"}`, dialog `smoothSlider` with field `level`) at the
+Auto-Smooth level, and the slider previews the result until `ui.dialog.confirm`; `ui.smoothAuto` moves the open
 slider back to the Auto-Smooth level.
 
 ## Editing a path with the Curvature tool
