@@ -249,7 +249,7 @@ fn cmyk_inks(kind: tiff::ColorType, d: &mut tiff::decoder::Decoder<Cursor<&[u8]>
 }
 
 /// `d` with room to decode `n` pixels of `per` samples of `bits` bits each, when they take more
-/// than the decoder's own limit (256 MB of samples); `None` when they take more than
+/// than the decoder's own limit (256 MiB of samples); `None` when they take more than
 /// [`crate::MAX_RASTER_ALLOC`].
 fn with_room<R: std::io::Read + std::io::Seek>(d: tiff::decoder::Decoder<R>, n: usize, per: usize, bits: u8) -> Option<tiff::decoder::Decoder<R>> {
     let need = n.checked_mul(per)?.checked_mul(usize::from(bits.div_ceil(8)))?;
@@ -1161,7 +1161,7 @@ mod tests {
         f
     }
 
-    /// A TIFF with extra samples whose samples take more than the decoder's own limit of 256 MB
+    /// A TIFF with extra samples whose samples take more than the decoder's own limit of 256 MiB
     /// reads: here 65,537 pixels of 4,096 samples, 4,096 bytes more than the limit.
     #[test]
     fn a_tiff_with_extra_samples_past_the_decoders_limit_reads() {
