@@ -1733,6 +1733,583 @@ fn live_paint_selection_click_outside_the_faces_selects_the_edge_it_highlights()
     assert_eq!(lp_click(&mut t, &cx, ev(PointerKind::Down, 106.0, 50.0)), vec![Action::Exec("select.none".into(), json!({}))]);
 }
 
+/// A Live Paint group of three faces in a row, A (0..50), B (50..100) and C (100..150), 50 pt tall,
+/// with these edges: AB between A and B, with no stroke; BC between B and C, stroked red; the tops
+/// of A and B stroked black; the top of C stroked red; and one bottom edge under all three,
+/// stroked black. Returns the group, the faces [A, B, C] and the edges [AB, BC, top A, top B,
+/// top C, bottom].
+fn live_strip(d: &mut Document) -> (NodeId, [NodeId; 3], [NodeId; 6]) {
+    let l = d.layers[0].id;
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let mut kids = vec![empty_sources(d)];
+    let mut fs = [NodeId(0); 3];
+    for (k, x) in [0.0, 50.0, 100.0].into_iter().enumerate() {
+        fs[k] = d.alloc_id();
+        let mut face = Node::path(fs[k], shapes::rectangle(Rect::new(x, 0.0, x + 50.0, 50.0)), Appearance::default());
+        face.name = Some(FACE_NAME.into());
+        kids.push(Arc::new(face));
+    }
+    let pt = Point::new;
+    let lines = [
+        (pt(50.0, 0.0), pt(50.0, 50.0), None),
+        (pt(100.0, 0.0), pt(100.0, 50.0), Some(red.clone())),
+        (pt(0.0, 0.0), pt(50.0, 0.0), Some(black.clone())),
+        (pt(50.0, 0.0), pt(100.0, 0.0), Some(black.clone())),
+        (pt(100.0, 0.0), pt(150.0, 0.0), Some(red)),
+        (pt(0.0, 50.0), pt(150.0, 50.0), Some(black)),
+    ];
+    let mut es = [NodeId(0); 6];
+    for (k, (from, to, stroke)) in lines.into_iter().enumerate() {
+        es[k] = d.alloc_id();
+        let mut a = Appearance::default();
+        if let Some(s) = stroke {
+            a.set_stroke(s);
+        }
+        let mut edge = Node::path(es[k], shapes::line(from, to), a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    let at = d.layers[0].children().map_or(0, |c| c.len());
+    d.insert(Some(l), at, g).unwrap();
+    (gid, fs, es)
+}
+
+#[test]
+fn live_paint_flood_crosses_unstroked_edges_and_stops_at_stroked_ones() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, [a, b, c], [ab, bc, ..]) = live_strip(&mut d);
+    let group = |d: &Document| d.node(g).unwrap().clone();
+    assert_eq!(flood_faces(&group(&d), a), vec![a, b]);
+    assert_eq!(flood_faces(&group(&d), b), vec![b, a]);
+    assert_eq!(flood_faces(&group(&d), c), vec![c]);
+    // A hidden edge does not part the faces either; a hidden face is not reached and does not start
+    // a flood; an id that is not a face of the group reaches nothing.
+    let mut hidden = d.clone();
+    hidden.node_mut(bc).unwrap().visible = false;
+    assert_eq!(flood_faces(&group(&hidden), a), vec![a, b, c]);
+    hidden.node_mut(b).unwrap().visible = false;
+    assert_eq!(flood_faces(&group(&hidden), a), vec![a]);
+    assert!(flood_faces(&group(&hidden), b).is_empty());
+    assert!(flood_faces(&group(&d), ab).is_empty());
+    // An edge whose stroke is hidden, 0 pt wide or fully transparent, or that is itself fully
+    // transparent, draws no stroke, so the flood crosses it.
+    use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
+    let base = d.node(bc).unwrap().appearance.stroke().unwrap().clone();
+    let changes: [fn(&mut StrokeLayer); 3] = [|s| s.visible = false, |s| s.width = 0.0, |s| s.opacity = 0.0];
+    for change in changes {
+        let mut e = d.clone();
+        let mut s = base.clone();
+        change(&mut s);
+        e.node_mut(bc).unwrap().appearance.items.retain(|i| !matches!(i, AppearanceItem::Stroke(_)));
+        e.node_mut(bc).unwrap().appearance.items.push(AppearanceItem::Stroke(s));
+        assert_eq!(flood_faces(&group(&e), a), vec![a, b, c]);
+    }
+    let mut e = d.clone();
+    e.node_mut(bc).unwrap().opacity = 0.0;
+    assert_eq!(flood_faces(&group(&e), a), vec![a, b, c]);
+}
+
+/// Faces P (0..50) and Q (50..100) above one edge from (0, 0) to (100, 0) and face R (0..100) below
+/// it, with no edge between P and Q (as where a Gap Detection line parts them): P and Q each run
+/// along part of the edge, and R along all of it.
+#[test]
+fn live_paint_flood_measures_faces_along_part_of_an_edge() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = [NodeId(0); 3];
+    for (k, r) in [Rect::new(0.0, -50.0, 50.0, 0.0), Rect::new(50.0, -50.0, 100.0, 0.0), Rect::new(0.0, 0.0, 100.0, 50.0)].into_iter().enumerate() {
+        ids[k] = d.alloc_id();
+        let mut face = Node::path(ids[k], shapes::rectangle(r), Appearance::default());
+        face.name = Some(FACE_NAME.into());
+        kids.push(Arc::new(face));
+    }
+    let [p, q, r] = ids;
+    let mut edge = Node::path(d.alloc_id(), shapes::line(Point::new(0.0, 0.0), Point::new(100.0, 0.0)), Appearance::default());
+    edge.name = Some(EDGE_NAME.into());
+    kids.push(Arc::new(edge));
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap().clone();
+    // P reaches R across the edge, and Q through R; P and Q only touch at (50, 0).
+    assert_eq!(flood_faces(&group, p), vec![p, r, q]);
+    let mut without_r = d.clone();
+    without_r.node_mut(r).unwrap().visible = false;
+    assert_eq!(flood_faces(without_r.node(gid).unwrap(), p), vec![p]);
+}
+
+/// Face P (0..100) above unstroked edges along y = 0 split at `splits`, whose outline runs along
+/// all of them with one segment, and below them one face between each two splits, the faces parted
+/// from each other by stroked edges. A flood from any face below reaches P and, through it, the
+/// others; this holds when the outline's middle is no edge's middle (30), is the end shared by two
+/// edges (50), and is the middle of an edge shorter than the outline (25 and 75).
+#[test]
+fn live_paint_flood_crosses_an_outline_segment_that_spans_several_edges() {
+    for splits in [vec![30.0], vec![50.0], vec![25.0, 75.0]] {
+        let mut d = Document::new(500.0, 500.0);
+        let l = d.layers[0].id;
+        let mut kids = vec![empty_sources(&mut d)];
+        let xs: Vec<f64> = std::iter::once(0.0).chain(splits.iter().copied()).chain(std::iter::once(100.0)).collect();
+        let add_face = |d: &mut Document, kids: &mut Vec<Arc<Node>>, r: Rect| {
+            let id = d.alloc_id();
+            let mut face = Node::path(id, shapes::rectangle(r), Appearance::default());
+            face.name = Some(FACE_NAME.into());
+            kids.push(Arc::new(face));
+            id
+        };
+        let p = add_face(&mut d, &mut kids, Rect::new(0.0, -50.0, 100.0, 0.0));
+        let below: Vec<NodeId> = xs.windows(2).map(|w| add_face(&mut d, &mut kids, Rect::new(w[0], 0.0, w[1], 50.0))).collect();
+        let pt = Point::new;
+        let lines = xs
+            .windows(2)
+            .map(|w| (pt(w[0], 0.0), pt(w[1], 0.0), false))
+            .chain(splits.iter().map(|&x| (pt(x, 0.0), pt(x, 50.0), true)))
+            .collect::<Vec<_>>();
+        for (from, to, stroked) in lines {
+            let mut a = Appearance::default();
+            if stroked {
+                a.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+            }
+            let mut edge = Node::path(d.alloc_id(), shapes::line(from, to), a);
+            edge.name = Some(EDGE_NAME.into());
+            kids.push(Arc::new(edge));
+        }
+        let gid = d.alloc_id();
+        let mut g = Node::group(gid, kids);
+        g.name = Some(LIVE_PAINT_NAME.into());
+        d.insert(Some(l), 0, g).unwrap();
+        let group = d.node(gid).unwrap().clone();
+        let mut all = below.clone();
+        all.push(p);
+        all.sort();
+        for &f in &below {
+            let mut got = flood_faces(&group, f);
+            assert_eq!(got.first(), Some(&f), "{splits:?}");
+            got.sort();
+            assert_eq!(got, all, "{splits:?} from {f:?}");
+        }
+    }
+}
+
+/// A Live Paint group built from `paths` as `livePaint.make` builds one, with Gap Detection closing
+/// gaps up to `gap` pt when given, and with no stroke on any edge. Returns the group and its faces.
+fn live_from_paths(paths: Vec<PathData>, gap: Option<f64>) -> (Node, Vec<NodeId>) {
+    let mut d = Document::new(500.0, 500.0);
+    let shapes: Vec<po::Shape> = paths.into_iter().enumerate().map(|(k, p)| po::Shape::new(p, FillRule::NonZero, k as u64)).collect();
+    let (regions, lines) = match gap {
+        Some(g) => {
+            let (r, e, _) = po::live_paint_with_gaps(&shapes, g);
+            (r, e)
+        }
+        None => po::live_paint(&shapes),
+    };
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for r in regions {
+        let id = d.alloc_id();
+        let mut face = Node::path(id, r.path, Appearance::default());
+        face.name = Some(FACE_NAME.into());
+        kids.push(Arc::new(face));
+        ids.push(id);
+    }
+    for e in lines {
+        let mut edge = Node::path(d.alloc_id(), e.path, Appearance::default());
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+    }
+    let mut g = Node::group(d.alloc_id(), kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    (g, ids)
+}
+
+/// Live Paint groups built from curves, one with a T-junction where lines end inside an ellipse and
+/// one with Gap Detection closing the gap between a curve's end and a circle: with no stroke on any
+/// edge, a flood from any face reaches every face.
+#[test]
+fn live_paint_flood_crosses_unstroked_curves_in_built_groups() {
+    let pt = Point::new;
+    let frame = shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0));
+    let t_junction = vec![
+        frame,
+        shapes::ellipse(Rect::new(50.0, 60.0, 150.0, 140.0)),
+        shapes::line(pt(113.0, 0.0), pt(113.0, 80.0)),
+        shapes::line(pt(113.0, 200.0), pt(113.0, 120.0)),
+    ];
+    let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Smooth };
+    let (start, end) = (pt(102.7, 20.0), pt(109.0, 100.0 + (2500.0f64 - 81.0).sqrt() - 2.0));
+    let curve = PathData::single(SubPath::new(
+        vec![a(start, start, start + kurbo::Vec2::new(40.0, 40.0)), a(end, end + kurbo::Vec2::new(-30.0, -40.0), end)],
+        false,
+    ));
+    let gap = vec![shapes::ellipse(Rect::new(50.0, 50.0, 150.0, 150.0)), curve];
+    for (name, paths, max_gap, count) in [("T-junction", t_junction, None, 3), ("Gap Detection", gap, Some(3.0), 2)] {
+        let (g, fs) = live_from_paths(paths, max_gap);
+        assert_eq!(fs.len(), count, "{name}");
+        for &f in &fs {
+            let mut got = flood_faces(&g, f);
+            got.sort();
+            assert_eq!(got, fs, "{name} from {f:?}");
+        }
+    }
+}
+
+/// A closed outline: `curve`, then straight lines through `rest` and back to the curve's start.
+fn curve_then_lines(curve: kurbo::CubicBez, rest: &[Point]) -> PathData {
+    let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Corner };
+    let mut anchors = vec![a(curve.p0, curve.p0, curve.p1), a(curve.p3, curve.p2, curve.p3)];
+    anchors.extend(rest.iter().map(|&p| a(p, p, p)));
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// `c` with its two handles moved 0.006 pt along y: its ends stay put and its middle moves 0.0045 pt,
+/// as a face outline refit within the planar map's precision can lie off its edge.
+fn refit(c: kurbo::CubicBez) -> kurbo::CubicBez {
+    let up = kurbo::Vec2::new(0.0, 0.006);
+    kurbo::CubicBez::new(c.p0, c.p1 + up, c.p2 + up, c.p3)
+}
+
+/// A Live Paint group of `faces` and of `lines`, each line with or without a stroke. Returns the
+/// group and the ids of the faces.
+fn live_of(faces: Vec<PathData>, lines: Vec<(PathData, bool)>) -> (Node, Vec<NodeId>) {
+    let mut d = Document::new(500.0, 500.0);
+    let mut kids = vec![empty_sources(&mut d)];
+    let mut ids = vec![];
+    for pd in faces {
+        let id = d.alloc_id();
+        let mut face = Node::path(id, pd, Appearance::default());
+        face.name = Some(FACE_NAME.into());
+        kids.push(Arc::new(face));
+        ids.push(id);
+    }
+    for (pd, stroked) in lines {
+        let mut a = Appearance::default();
+        if stroked {
+            a.set_stroke(Paint::solid(vectorcraft_color::Color::BLACK));
+        }
+        let mut edge = Node::path(d.alloc_id(), pd, a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+    }
+    let mut g = Node::group(d.alloc_id(), kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    (g, ids)
+}
+
+/// Faces whose outlines along an unstroked curved edge lie up to 0.0045 pt off it, as the planar map
+/// can leave them when it refits an outline across a T-junction or, with Gap Detection on, builds the
+/// faces and the edges from two maps: the flood still crosses the edge. Two faces that a gap parts
+/// on the same side of the edge, which only touch, are still not joined.
+#[test]
+fn live_paint_flood_crosses_curved_edges_that_outlines_lie_slightly_off() {
+    use kurbo::ParamCurve;
+    let c = kurbo::CubicBez::new(Point::new(0.0, 0.0), Point::new(30.0, 40.0), Point::new(70.0, 40.0), Point::new(100.0, 0.0));
+    let edge = |s: kurbo::CubicBez| {
+        let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Corner };
+        PathData::single(SubPath::new(vec![a(s.p0, s.p0, s.p1), a(s.p3, s.p2, s.p3)], false))
+    };
+    // T-junction: a stroked line ends on the curve at t = 0.4 and parts the faces below it (L and R);
+    // the curve is two edges, and the face above (U) runs along both with one refit segment.
+    let j = c.eval(0.4);
+    let (left, right) = (c.subsegment(0.0..0.4), c.subsegment(0.4..1.0));
+    let (g, ids) = live_of(
+        vec![
+            curve_then_lines(left, &[Point::new(j.x, 80.0), Point::new(0.0, 80.0)]),
+            curve_then_lines(right, &[Point::new(100.0, 80.0), Point::new(j.x, 80.0)]),
+            curve_then_lines(refit(c), &[Point::new(100.0, -50.0), Point::new(0.0, -50.0)]),
+        ],
+        vec![(edge(left), false), (edge(right), false), (shapes::line(j, Point::new(j.x, 80.0)), true)],
+    );
+    let [l, r, u] = [ids[0], ids[1], ids[2]];
+    assert_eq!(flood_faces(&g, l), vec![l, u, r]);
+    let mut from_u = flood_faces(&g, u);
+    assert_eq!(from_u.first(), Some(&u));
+    from_u.sort();
+    assert_eq!(from_u, ids);
+    // Gap Detection: a gap line, which is no edge, parts P and Q above the curve at t = 0.5; the curve
+    // is one edge, and Q and the face below (B) run along it with refit segments.
+    let m = c.eval(0.5);
+    let (g, ids) = live_of(
+        vec![
+            curve_then_lines(c.subsegment(0.0..0.5), &[Point::new(m.x, -50.0), Point::new(0.0, -50.0)]),
+            curve_then_lines(refit(c.subsegment(0.5..1.0)), &[Point::new(100.0, -50.0), Point::new(m.x, -50.0)]),
+            curve_then_lines(refit(c), &[Point::new(100.0, 80.0), Point::new(0.0, 80.0)]),
+        ],
+        vec![(edge(c), false)],
+    );
+    let [p, q, b] = [ids[0], ids[1], ids[2]];
+    assert_eq!(flood_faces(&g, p), vec![p, b, q]);
+    let mut without_b = g.clone();
+    if let Some(kids) = without_b.children_mut()
+        && let Some(n) = kids.iter_mut().find(|n| n.id == b)
+    {
+        Arc::make_mut(n).visible = false;
+    }
+    assert_eq!(flood_faces(&without_b, p), vec![p]);
+}
+
+/// Two large faces whose only shared edge, with no stroke, is 0.005 pt long: the flood crosses it.
+#[test]
+fn live_paint_flood_crosses_a_shared_edge_shorter_than_the_precision() {
+    let pt = Point::new;
+    let (a, b) = (pt(50.0, 0.0), pt(50.0, 0.005));
+    let (g, ids) = live_of(
+        vec![
+            PathData::single(SubPath::polyline(&[pt(0.0, -50.0), a, b, pt(0.0, 50.0)], true)),
+            PathData::single(SubPath::polyline(&[pt(100.0, -50.0), pt(100.0, 50.0), b, a], true)),
+        ],
+        vec![(shapes::line(a, b), false)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), ids);
+}
+
+/// A stroked edge along y = 0 and an edge with no stroke 0.008 pt below it, with a face above the
+/// first whose outline ends on it and bows 0.005 pt off it in the middle, nearer the second, and a
+/// face below the second: the stroked edge parts the two faces, so the flood does not join them.
+#[test]
+fn live_paint_flood_stops_where_a_stroked_edge_runs_along_an_unstroked_one() {
+    let pt = Point::new;
+    let bow = kurbo::CubicBez::new(pt(100.0, 0.0), pt(70.0, 0.02 / 3.0), pt(30.0, 0.02 / 3.0), pt(0.0, 0.0));
+    let (g, ids) = live_of(
+        vec![
+            curve_then_lines(bow, &[pt(0.0, -50.0), pt(100.0, -50.0)]),
+            PathData::single(SubPath::polyline(&[pt(0.0, 0.008), pt(0.0, 50.0), pt(100.0, 50.0), pt(100.0, 0.008)], true)),
+        ],
+        vec![(shapes::line(pt(0.0, 0.0), pt(100.0, 0.0)), true), (shapes::line(pt(0.0, 0.008), pt(100.0, 0.008)), false)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), vec![ids[0]]);
+    assert_eq!(flood_faces(&g, ids[1]), vec![ids[1]]);
+}
+
+/// An edge with no stroke from (10, 0) to (90, 0), and two faces that meet on a line 0.005 pt below
+/// it from (0, 0.005) to (100, 0.005) (as a Gap Detection line): neither face runs along the edge, so
+/// the flood does not join them.
+#[test]
+fn live_paint_flood_does_not_cross_an_edge_beside_a_line_two_faces_meet_on() {
+    let pt = Point::new;
+    let (a, b) = (pt(0.0, 0.005), pt(100.0, 0.005));
+    let (g, ids) = live_of(
+        vec![
+            PathData::single(SubPath::polyline(&[a, b, pt(100.0, -50.0), pt(0.0, -50.0)], true)),
+            PathData::single(SubPath::polyline(&[b, a, pt(0.0, 50.0), pt(100.0, 50.0)], true)),
+        ],
+        vec![(shapes::line(pt(10.0, 0.0), pt(90.0, 0.0)), false)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), vec![ids[0]]);
+}
+
+/// A stroked edge and an edge with no stroke that leave one point at a slope of 0.01, so they lie
+/// within 0.01 pt of each other for their first point or so: the face between them and the face
+/// beyond the edge with no stroke share that edge, so the flood joins them.
+#[test]
+fn live_paint_flood_crosses_an_unstroked_edge_beside_a_stroked_one() {
+    let pt = Point::new;
+    let (o, a, b) = (pt(0.0, 0.0), pt(100.0, 0.0), pt(100.0, 1.0));
+    let (g, ids) = live_of(
+        vec![
+            PathData::single(SubPath::polyline(&[o, a, b], true)),
+            PathData::single(SubPath::polyline(&[o, b, pt(100.0, 50.0), pt(0.0, 50.0)], true)),
+        ],
+        vec![(shapes::line(o, a), true), (shapes::line(o, b), false), (shapes::line(a, b), true)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), ids);
+}
+
+/// Two faces on either side of an edge with no stroke whose curve has a cusp at its middle (no
+/// direction there): the flood crosses it.
+#[test]
+fn live_paint_flood_crosses_an_edge_with_a_cusp_at_its_middle() {
+    let c = kurbo::CubicBez::new(Point::new(0.0, 0.0), Point::new(100.0, 60.0), Point::new(0.0, 60.0), Point::new(100.0, 0.0));
+    let a = |p: Point, h_in: Point, h_out: Point| vectorcraft_geom::Anchor { p, h_in, h_out, kind: vectorcraft_geom::AnchorKind::Corner };
+    let edge = PathData::single(SubPath::new(vec![a(c.p0, c.p0, c.p1), a(c.p3, c.p2, c.p3)], false));
+    let (g, ids) = live_of(
+        vec![
+            curve_then_lines(c, &[Point::new(100.0, -50.0), Point::new(0.0, -50.0)]),
+            curve_then_lines(c, &[Point::new(100.0, 100.0), Point::new(0.0, 100.0)]),
+        ],
+        vec![(edge, false)],
+    );
+    assert_eq!(flood_faces(&g, ids[0]), ids);
+}
+
+/// Two faces parted by a line that is no edge (as a Gap Detection line), which crosses an edge with
+/// no stroke: one 0.006 pt long, upright or at a slope of 0.1, and one 1 pt long at a slope of 0.09.
+/// The faces only cross the edge and do not run along it, so the flood does not join them.
+#[test]
+fn live_paint_flood_does_not_cross_an_edge_an_outline_only_crosses() {
+    let pt = Point::new;
+    let short = pt(0.006, 0.0);
+    for (a, b, end) in
+        [(pt(0.003, -0.004), pt(0.003, 0.02), short), (pt(-0.037, -0.004), pt(0.043, 0.004), short), (pt(0.1, -0.009), pt(0.3, 0.009), pt(1.0, 0.0))]
+    {
+        let (g, ids) = live_of(
+            vec![
+                PathData::single(SubPath::polyline(&[a, b, pt(-50.0, 50.0), pt(-50.0, -50.0)], true)),
+                PathData::single(SubPath::polyline(&[b, a, pt(50.0, -50.0), pt(50.0, 50.0)], true)),
+            ],
+            vec![(shapes::line(pt(0.0, 0.0), end), false)],
+        );
+        assert_eq!(flood_faces(&g, ids[0]), vec![ids[0]], "{a:?} to {b:?}");
+    }
+}
+
+#[test]
+fn live_paint_connected_edges_follow_the_same_stroke_paint() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, [a, ..], [ab, bc, top_a, top_b, top_c, bottom]) = live_strip(&mut d);
+    let group = d.node(g).unwrap().clone();
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    // Top A and top B join end to end; top C joins them but is red, and the black bottom does not
+    // join them.
+    assert_eq!(connected_edges(&group, top_a, &black), vec![top_a, top_b]);
+    // BC and top C, both red, join at (100, 0).
+    assert_eq!(connected_edges(&group, bc, &red), vec![bc, top_c]);
+    assert_eq!(connected_edges(&group, bottom, &black), vec![bottom]);
+    // The edge started from is taken whatever its paint.
+    assert_eq!(connected_edges(&group, ab, &Paint::None), vec![ab]);
+    assert!(connected_edges(&group, a, &black).is_empty());
+}
+
+/// An edge from (0, 0) through (50, 0) to (100, 0) and a second edge with the same stroke from
+/// (50, 0) to (50, 50): the second one ends at an anchor in the middle of the first, not at one of
+/// its ends, so the two are not joined end to end. A third edge from (100, 0) is.
+#[test]
+fn live_paint_connected_edges_join_only_at_path_ends() {
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let black = Paint::solid(vectorcraft_color::Color::BLACK);
+    let mut kids = vec![empty_sources(&mut d)];
+    let pt = Point::new;
+    let paths = [
+        PathData::single(SubPath::polyline(&[pt(0.0, 0.0), pt(50.0, 0.0), pt(100.0, 0.0)], false)),
+        shapes::line(pt(50.0, 0.0), pt(50.0, 50.0)),
+        shapes::line(pt(100.0, 0.0), pt(100.0, 50.0)),
+    ];
+    let mut ids = vec![];
+    for pd in paths {
+        let mut a = Appearance::default();
+        a.set_stroke(black.clone());
+        let id = d.alloc_id();
+        let mut edge = Node::path(id, pd, a);
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap().clone();
+    assert_eq!(connected_edges(&group, ids[0], &black), vec![ids[0], ids[2]]);
+    assert_eq!(connected_edges(&group, ids[1], &black), vec![ids[1]]);
+}
+
+/// Three edges end to end along (0, 0) to (150, 0) under one face: a red one, one drawn red with a
+/// hidden blue stroke over it, and one drawn blue with a hidden red stroke over it. Edges join by the
+/// paint they draw with, not by a hidden stroke's paint, for `connected_edges` and a double-click.
+#[test]
+fn live_paint_connected_edges_follow_the_stroke_paint_they_draw_with() {
+    use vectorcraft_doc::appearance::{AppearanceItem, StrokeLayer};
+    let mut d = Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let red = Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0));
+    let blue = Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0));
+    let mut kids = vec![empty_sources(&mut d)];
+    let fid = d.alloc_id();
+    let mut face = Node::path(fid, shapes::rectangle(Rect::new(0.0, 0.0, 150.0, 50.0)), Appearance::default());
+    face.name = Some(FACE_NAME.into());
+    kids.push(Arc::new(face));
+    let pt = Point::new;
+    let hidden = |p: &Paint| AppearanceItem::Stroke(StrokeLayer { visible: false, ..StrokeLayer::new(p.clone(), 1.0) });
+    let shown = |p: &Paint| AppearanceItem::Stroke(StrokeLayer::new(p.clone(), 1.0));
+    let edges = [(0.0, vec![shown(&red)]), (50.0, vec![shown(&red), hidden(&blue)]), (100.0, vec![shown(&blue), hidden(&red)])];
+    let mut ids = vec![];
+    for (x, items) in edges {
+        let id = d.alloc_id();
+        let mut edge = Node::path(id, shapes::line(pt(x, 0.0), pt(x + 50.0, 0.0)), Appearance { items, ..Appearance::default() });
+        edge.name = Some(EDGE_NAME.into());
+        kids.push(Arc::new(edge));
+        ids.push(id);
+    }
+    let gid = d.alloc_id();
+    let mut g = Node::group(gid, kids);
+    g.name = Some(LIVE_PAINT_NAME.into());
+    d.insert(Some(l), 0, g).unwrap();
+    let group = d.node(gid).unwrap().clone();
+    assert_eq!(connected_edges(&group, ids[0], &red), vec![ids[0], ids[1]]);
+    assert_eq!(connected_edges(&group, ids[2], &blue), vec![ids[2]]);
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let alt = Mods { alt: true, ..Default::default() };
+    let mut t = LivePaintSelectionTool::default();
+    let mut dbl = |x: f64| t.pointer(&cx, &ev(PointerKind::DoubleClick, x, 1.0).with_mods(alt));
+    assert_eq!(dbl(75.0), set(&[ids[1], ids[0]]));
+    assert_eq!(dbl(125.0), set(&[ids[2]]));
+}
+
+#[test]
+fn live_paint_selection_double_click_selects_connected_faces_or_edges() {
+    let mut d = Document::new(500.0, 500.0);
+    let (_, [a, b, c], [_, _, top_a, top_b, ..]) = live_strip(&mut d);
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let set = |ids: &[NodeId]| vec![Action::Exec("select.set".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let toggle = |ids: &[NodeId]| vec![Action::Exec("select.toggle".into(), json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))];
+    let alt = Mods { alt: true, ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
+    let dbl = |t: &mut LivePaintSelectionTool, x: f64, y: f64, m: Mods| t.pointer(&cx, &ev(PointerKind::DoubleClick, x, y).with_mods(m));
+    let mut t = LivePaintSelectionTool::default();
+    // A face: the faces not parted from it by a stroked edge.
+    assert_eq!(dbl(&mut t, 25.0, 25.0, Mods::default()), set(&[a, b]));
+    assert_eq!(dbl(&mut t, 125.0, 25.0, Mods::default()), set(&[c]));
+    // An edge (Alt): the edges joined to it end to end with its stroke paint.
+    assert_eq!(dbl(&mut t, 25.0, 1.0, alt), set(&[top_a, top_b]));
+    // With Shift held, the parts reached leave the selection or join it.
+    assert_eq!(dbl(&mut t, 75.0, 25.0, shift), toggle(&[b, a]));
+    assert_eq!(dbl(&mut t, 75.0, 1.0, Mods { alt: true, shift: true, ..Default::default() }), toggle(&[top_b, top_a]));
+    // Away from the group, a double-click adds nothing to what its clicks did.
+    assert!(dbl(&mut t, 300.0, 300.0, Mods::default()).is_empty());
+    // Select Fills off: the double-click picks the edge nearest the pointer as a click does.
+    t.set_option("selectFills", &json!(false));
+    assert_eq!(dbl(&mut t, 25.0, 1.0, Mods::default()), set(&[top_a, top_b]));
+    assert!(dbl(&mut t, 25.0, 25.0, Mods::default()).is_empty());
+    // Select Strokes off: Alt picks the face.
+    t.set_option("selectFills", &json!(true));
+    t.set_option("selectStrokes", &json!(false));
+    assert_eq!(dbl(&mut t, 25.0, 1.0, alt), set(&[a, b]));
+    // Both off: nothing.
+    t.set_option("selectFills", &json!(false));
+    assert!(dbl(&mut t, 25.0, 25.0, Mods::default()).is_empty());
+    assert!(dbl(&mut t, 25.0, 1.0, alt).is_empty());
+}
+
+#[test]
+fn live_paint_selection_double_click_skips_locked_groups_and_art_outside_isolation() {
+    let mut d = Document::new(500.0, 500.0);
+    let (g, _, _) = live_strip(&mut d);
+    let (other, _) = live_square(&mut d, Rect::new(200.0, 0.0, 300.0, 100.0));
+    let s = Selection::default();
+    let p = paint();
+    let dbl = |d: &Document, iso: Option<NodeId>, x: f64| {
+        let cx = ToolContext { isolation: iso, ..cx(d, &s, &p) };
+        LivePaintSelectionTool::default().pointer(&cx, &ev(PointerKind::DoubleClick, x, 25.0))
+    };
+    assert!(!dbl(&d, None, 25.0).is_empty());
+    assert!(dbl(&d, Some(other), 25.0).is_empty(), "outside the isolated art");
+    d.node_mut(g).unwrap().locked = true;
+    assert!(dbl(&d, None, 25.0).is_empty(), "a locked group");
+    assert!(!dbl(&d, None, 250.0).is_empty());
+}
+
 /// The Live Paint Selection pointer shows what a click at the point selects, from the point and
 /// the modifier keys alone (no move first): a face, an edge, or nothing. Groups the tool does not
 /// take (locked, hidden, outside isolation) show nothing to select. A press keeps its look until
