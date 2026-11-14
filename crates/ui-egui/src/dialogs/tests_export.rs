@@ -67,6 +67,7 @@ fn png_options_draw_and_export_with_the_chosen_options() {
     assert_eq!((d.f64("ppi", 0.0), d.str("background"), d.str("antiAlias"), d.bool("interlaced")), (72.0, "transparent".into(), "art".into(), false));
     assert_eq!(d.fields["__size"], json!([60.0, 40.0]), "the chosen artboard");
     frame(&mut app);
+    assert!(app.ui.dialog.as_ref().unwrap().fields.get("__estimatedBytes").and_then(|v| v.as_u64()).is_some());
     // Other resolution and an Other background colour draw their own field and colour button.
     set(&mut app, "__otherPpi", json!(true));
     set(&mut app, "ppi", json!(200));
@@ -91,6 +92,18 @@ fn png_options_draw_and_export_with_the_chosen_options() {
     set(&mut app, "quality", json!(40));
     confirm(&mut app).unwrap();
     assert_eq!(&written.borrow()[1].1[..2], [0xFF, 0xD8]);
+}
+
+#[test]
+fn png_options_estimated_file_size_follows_resolution() {
+    let (mut app, _) = app(1);
+    png_options::open(&mut app, fileio::format("png").unwrap(), json!({"format": "png", "path": "/out/a.png"}));
+    frame(&mut app);
+    let small = app.ui.dialog.as_ref().unwrap().fields["__estimatedBytes"].as_u64().unwrap();
+    set(&mut app, "ppi", json!(300.0));
+    frame(&mut app);
+    let large = app.ui.dialog.as_ref().unwrap().fields["__estimatedBytes"].as_u64().unwrap();
+    assert!(large > small, "{large} vs {small}");
 }
 
 #[test]
