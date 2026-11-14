@@ -1264,7 +1264,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.smoothAuto",
         "Auto-Smooth",
         "",
-        "{} the open Smooth slider (Object › Path › Smooth and the canvas context menu's Smooth… open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
+        "{} the open Smooth slider (Object › Path › Smooth, the canvas context menu's Smooth… and the Contextual Task Bar's Smooth open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
     ),
     (
         "ui.simplifyMoreOptions",
@@ -1330,7 +1330,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "file.exportAs",
         "Export As…",
         "",
-        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}; under automation read roots, an SVG or SVGZ is refused while the document links a JavaScript file outside them, as document.export refuses it",
+        "{format?, useArtboards?, range?} opens Export As (then the format's options); with {path, …document.export options} writes the file(s) → {path, warnings, files?}; exportSelection: true writes the selection alone, cropped to it, as document.exportSelection writes it (artboard options are not used); under automation read roots, an SVG or SVGZ is refused while the document links a JavaScript file outside them, as document.export refuses it",
     ),
     (
         "ui.fileInfoDialog",

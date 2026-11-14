@@ -953,6 +953,48 @@ fn an_objects_solids_count_their_faces_together() {
     }
 }
 
+/// How many Extrude & Bevel and Inflate solids `check` builds, and its result.
+fn geometry_builds(check: impl FnOnce() -> Result<(), String>) -> (usize, Result<(), String>) {
+    SOLID_GEOMETRY_BUILT.with(|b| b.set(0));
+    let result = check();
+    (SOLID_GEOMETRY_BUILT.with(std::cell::Cell::get), result)
+}
+
+/// The check builds each solid the effect draws once, about the bounds it draws it about: one for
+/// a fill and one for each stroke, on an object, on a group's members and on an appearance item,
+/// with the shadow on or off.
+#[test]
+fn the_check_builds_each_drawn_solid_once() {
+    for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
+        let n = square_node();
+        assert_eq!(geometry_builds(|| validate_solid(&n, id, &json!({}))), (2, Ok(())), "{id}: a fill and a stroke");
+        let mut other = square_node();
+        other.id = NodeId(2);
+        let g = Node::group(NodeId(9999), vec![Arc::new(square_node()), Arc::new(other)]);
+        assert_eq!(geometry_builds(|| validate_solid(&g, id, &json!({}))), (4, Ok(())), "{id}: two members' fills and strokes");
+    }
+    for id in [EXTRUDE, INFLATE] {
+        let n = square_node();
+        assert_eq!(geometry_builds(|| validate_three_d_at(&n, id, &json!({}), (Some(0), 0))), (1, Ok(())), "{id}: on the fill");
+        let shadow = json!({"shadow": true});
+        assert_eq!(geometry_builds(|| validate_solid(&n, id, &shadow)), (2, Ok(())), "{id}: with the shadow on");
+    }
+}
+
+/// A shape with no fill draws no solid of its profile, so the check builds the profile on its own
+/// as well as the strokes' solids, and an unpainted shape's profile alone.
+#[test]
+fn the_check_builds_the_profile_of_a_shape_with_no_fill() {
+    for id in [EXTRUDE, CLASSIC_EXTRUDE, INFLATE] {
+        let mut stroked = square_node();
+        stroked.appearance.items.retain(|i| matches!(i, AppearanceItem::Stroke(_)));
+        assert_eq!(geometry_builds(|| validate_solid(&stroked, id, &json!({}))), (2, Ok(())), "{id}: a stroke alone");
+        let mut bare = square_node();
+        bare.appearance.items.clear();
+        assert_eq!(geometry_builds(|| validate_solid(&bare, id, &json!({}))), (1, Ok(())), "{id}: no paint");
+    }
+}
+
 /// A convex polygon of `corners` corners about (20,000, 20,000), filled red, with no stroke.
 fn polygon_node(id: u64, corners: usize) -> Node {
     let points: Vec<Point> = (0..corners)
