@@ -20,6 +20,7 @@ use vectorcraft_doc::color::Color;
 mod alternates;
 mod build;
 mod cache;
+mod cjk;
 mod composite;
 mod db;
 mod dirs;
@@ -35,6 +36,8 @@ mod wanted;
 
 pub use alternates::GlyphAlternate;
 pub(crate) use alternates::listed;
+pub use cjk::CjkPreference;
+
 pub use build::style_weight;
 #[cfg(test)]
 use cache::GlyphCache;
@@ -119,6 +122,8 @@ pub struct FontDb {
     /// type naming one as its family is set in its parts' fonts. A thread's guards can lend others
     /// in their place ([`FontDb::lend_composite_fonts`]).
     composites: RwLock<HashMap<String, Arc<vectorcraft_doc::CompositeFont>>>,
+    /// Which script's Han ideographs the interface asked for (see [`FontDb::set_cjk_preference`]).
+    cjk: RwLock<CjkPreference>,
 }
 
 /// Where a database's system font scan looks: folders (read with their subfolders) and font files.
