@@ -254,7 +254,7 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
             let (natural, warnings) = (s.frame, s.warnings.clone());
             return Ok(Loaded { name, format, art: Art::Document(s, link.clone(), !crop), natural, warnings, link: Some(link), board: None });
         }
-        let a = pdf_art(src.name, &src.bytes, src.path, page, opts, !crop, cmd)?;
+        let a = pdf_art(src.name, (&src.bytes, None), src.path, page, opts, !crop, cmd)?;
         let art = Art::Vector { src: Box::new(a.doc), nodes: a.nodes, clip: a.clip };
         return Ok(Loaded { name, format, art, natural: a.frame, warnings: a.warnings, link: None, board: None });
     }
@@ -305,10 +305,12 @@ fn load(p: &Value, cmd: &str, board: Option<Rect>, link_pdf: bool) -> Result<Loa
 /// art; read with `opts.password`. Only the page placed is read. A .ai saved without PDF
 /// compatibility is read from its editing data, as it opens, and placed as an EPS is: the art on
 /// artboard `page`, its linked images found from its folder. So is page 1 of a .ai or PDF whose
-/// PDF part can't be read.
+/// PDF part can't be read. `opened`, when given, is the PDF `bytes` already read
+/// ([`vectorcraft_pdf::open_pdf`] with `opts`' password): its pages are read without reading the
+/// file again.
 pub(crate) fn pdf_art(
     src: &str,
-    bytes: &[u8],
+    (bytes, opened): (&[u8], Option<&vectorcraft_pdf::Opened>),
     path: Option<&str>,
     page: usize,
     opts: fileio::LoadOptions,
@@ -318,11 +320,15 @@ pub(crate) fn pdf_art(
     let name = fileio::file_name(src);
     let index = page.checked_sub(1).ok_or_else(|| bad(cmd, "page must be a whole number from 1"))?;
     let o = fileio::LoadOptions { crop: if bounding { CropTo::Crop } else { opts.crop }, ..opts };
-    let mut read = fileio::page_document(bytes, index, &o);
+    let page_document = |i: usize| match opened {
+        Some(opened) => fileio::opened_page_document(bytes, opened, i, &o),
+        None => fileio::page_document(bytes, i, &o),
+    };
+    let mut read = page_document(index);
     // Such a file can have more artboards than placeholder pages.
     if page > 1
         && read.is_err()
-        && let Err(e) = fileio::page_document(bytes, 0, &o)
+        && let Err(e) = page_document(0)
         && fileio::is_placeholder(&e)
     {
         read = Err(e);

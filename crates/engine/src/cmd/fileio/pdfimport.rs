@@ -205,7 +205,7 @@ pub fn page_document(bytes: &[u8], page: usize, o: &LoadOptions) -> Result<(Docu
 }
 
 /// [`page_document`] of `opened`, the PDF `bytes` already read.
-fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
+pub(crate) fn opened_page_document(bytes: &[u8], opened: &vectorcraft_pdf::Opened, page: usize, o: &LoadOptions) -> Result<(Document, Vec<String>)> {
     vectorcraft_pdf::import_opened(bytes, opened, &page_options(page, o)).map(|r| (r.document, r.warnings)).map_err(err)
 }
 
@@ -217,7 +217,7 @@ fn page_options(page: usize, o: &LoadOptions) -> ImportOptions {
 /// `document.open` with `linkPages`: the pages `o` picks of the PDF (or PDF-compatible `.ai` or
 /// `.ait`) `name`, read from `path`, as a document holding one placed document per page, linked to
 /// that page of the file as File › Place with Link places one ([`document::source`]). Each page
-/// gets an artboard of its `o.crop` box (its art's bounds for `bounding`), in a row from the left
+/// gets an artboard of its `o.crop` box (its art's bounds for `bounding`, a blank page's crop box), in a row from the left
 /// with the gap a PDF's artboards open with, and a layer named after the page. The document opens
 /// in CMYK when most of the pages read in CMYK, unless `o.color_mode` names a mode. Refused without a
 /// path, for any other file, with a password (a linked page is read again without one), with
@@ -239,7 +239,9 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
     if bytes.len() > document::MAX_FILE {
         return Err(bad(C, format!("linkPages: `{file}` is over {} MB", document::MAX_FILE >> 20)));
     }
-    let count = vectorcraft_pdf::open_pdf(bytes, None).map_err(err)?.page_count();
+    // The file is read once: every page is read from it.
+    let opened = vectorcraft_pdf::open_pdf(bytes, None).map_err(err)?;
+    let count = opened.page_count();
     let picked = match &o.pages {
         None => (0..count).collect(),
         Some(range) => parse_range(range, count).map_err(|e| err(format!("pages: {e}")))?,
@@ -258,7 +260,13 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
     let (mut x, mut warnings, mut cmyk_pages) = (0.0, Vec::<String>::new(), 0);
     for (i, &index) in picked.iter().enumerate() {
         let page = index as u32 + 1;
-        let s = document::shared_source(name, (&shared, &hash), Some(path), page, bounding, document::page_box(o.crop), C)?;
+        let file_once = document::SharedFile { bytes: &shared, hash: &hash, opened: &opened };
+        let read = |bounding| document::shared_source(name, file_once, Some(path), page, bounding, document::page_box(o.crop), C);
+        // A blank page has no art's bounds: it keeps its crop box, as opening it as art does.
+        let (s, bounding) = match read(bounding) {
+            Err(e) if bounding && e.to_string().contains("has no art to place") => (read(false)?, false),
+            s => (s?, bounding),
+        };
         // A page that is only a placeholder (a `.ai` saved without PDF compatibility) shows the
         // file's editing data, not a page of the file.
         if s.editing_data {

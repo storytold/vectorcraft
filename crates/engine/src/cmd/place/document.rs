@@ -118,6 +118,21 @@ pub(crate) fn document_art(
     page_box: PageBox,
     cmd: &str,
 ) -> Result<DocumentArt> {
+    opened_document_art(name, (bytes, None), path, page, bounding, page_box, cmd)
+}
+
+/// [`document_art`] of `bytes` and, for a PDF already read, `opened`: the PDF `bytes` as
+/// [`vectorcraft_pdf::open_pdf`] read it without a password, so its page is read without reading
+/// the file again.
+fn opened_document_art(
+    name: &str,
+    (bytes, opened): (&[u8], Option<&vectorcraft_pdf::Opened>),
+    path: Option<&str>,
+    page: u32,
+    bounding: bool,
+    page_box: PageBox,
+    cmd: &str,
+) -> Result<DocumentArt> {
     let file = fileio::file_name(name);
     let pdf = is_pdf(name, bytes);
     if !pdf && !is_native(name, bytes) {
@@ -128,7 +143,7 @@ pub(crate) fn document_art(
     }
     if pdf {
         let o = fileio::LoadOptions { crop: crop_to(page_box), ..Default::default() };
-        return super::pdf_art(name, bytes, path, page as usize, o, bounding, cmd);
+        return super::pdf_art(name, (bytes, opened), path, page as usize, o, bounding, cmd);
     }
     let mut l = fileio::load(name, bytes)?;
     // Its linked images show their files; its placed documents stay as they are, unless their
@@ -237,35 +252,46 @@ pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bo
     read_source(name, bytes, None, path, (page, bounding, page_box), cmd)
 }
 
-/// [`source`] of the file whose bytes `bytes` holds, kept by the blob without a copy of its own:
-/// several pages of one file read this way share one copy of it, with its hash ([`hash_bytes`])
-/// worked out once for them all: `file` is the bytes and that hash.
+/// A PDF (or PDF-compatible `.ai`) whose pages are read for placing linked, read once for them all.
+#[derive(Clone, Copy)]
+pub(crate) struct SharedFile<'a> {
+    /// The file's bytes, which every page's blob keeps without a copy of its own.
+    pub bytes: &'a Arc<Vec<u8>>,
+    /// The bytes' hash ([`hash_bytes`]).
+    pub hash: &'a str,
+    /// The bytes as [`vectorcraft_pdf::open_pdf`] read them, without a password.
+    pub opened: &'a vectorcraft_pdf::Opened,
+}
+
+/// [`source`] of page `page` of `file`: several pages of one file read this way share one copy of
+/// it, and the file is hashed and read once for them all.
 pub(crate) fn shared_source(
     name: &str,
-    file: (&Arc<Vec<u8>>, &str),
+    file: SharedFile<'_>,
     path: Option<&str>,
     page: u32,
     bounding: bool,
     page_box: PageBox,
     cmd: &str,
 ) -> Result<Source> {
-    read_source(name, file.0, Some(file), path, (page, bounding, page_box), cmd)
+    read_source(name, file.bytes, Some(file), path, (page, bounding, page_box), cmd)
 }
 
-/// [`source`], the blob keeping `shared`'s bytes when given (else a copy of `bytes`), and its hash
-/// used for the key (else `bytes` hashed); `shown` is the page (or artboard), whether the art's
-/// bounds are shown, and the page's box.
+/// [`source`], the blob keeping `shared`'s bytes when given (else a copy of `bytes`), its hash
+/// used for the key (else `bytes` hashed) and its pages read from what was read of it; `shown` is
+/// the page (or artboard), whether the art's bounds are shown, and the page's box.
 fn read_source(
     name: &str,
     bytes: &[u8],
-    shared: Option<(&Arc<Vec<u8>>, &str)>,
+    shared: Option<SharedFile<'_>>,
     path: Option<&str>,
     shown: (u32, bool, PageBox),
     cmd: &str,
 ) -> Result<Source> {
     let (page, bounding, page_box) = shown;
-    let hash = shared.map_or_else(|| hash_bytes(bytes), |(_, h)| h.to_string());
-    let shared = shared.map(|(b, _)| b);
+    let hash = shared.map_or_else(|| hash_bytes(bytes), |f| f.hash.to_string());
+    let opened = shared.map(|f| f.opened);
+    let shared = shared.map(|f| f.bytes);
     // The same document placed the same way is read once (placing it again is free).
     let key = key_for(&hash, page, bounding, page_box);
     // Resolving its links depends on where the file is and on what the caller may read, so a hit
@@ -278,7 +304,7 @@ fn read_source(
         }
         return Ok(s);
     }
-    let a = document_art(name, bytes, path, page, bounding, page_box, cmd)?;
+    let a = opened_document_art(name, (bytes, opened), path, page, bounding, page_box, cmd)?;
     let bytes = shared.cloned().unwrap_or_else(|| Arc::new(bytes.to_vec()));
     let mut blob = ImageBlob { mime: mime(name, &bytes).into(), bytes, proxy: None };
     let shown = PlacedDocument {
