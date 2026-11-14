@@ -1063,7 +1063,14 @@ apps (`editingData`), and always comes back with the warning `Preserve editing w
 bounds would replace the document's artboards when reopened`; with `pdfCompatible: false` it is refused, whatever
 `editingData` says. A legacy version 7 `.ai` (`aiVersion: "7"`) of the art's bounds is written as before.
 Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
-Artboards section and the page is the bounds of the visible art.
+Artboards section and the page is the bounds of the visible art. `document.exportSelection` run in the app with no
+params or `{}` (a shortcut, or an automation call) opens the save panel, and the picked format's options dialog
+follows as after Export As: Save PDF without its Artboards section, SVG Options without its artboards, the raster
+options, EPS Options, DXF Options without Export Selected Art Only, Text Export Options with Selection Only on, or an
+exporter plug-in's parameters. Other formats are written at once. OK writes the selection alone, cropped to it, as
+`document.exportSelection` writes it, with the chosen options. While a dialog is open the call returns `null`, and
+OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). To
+write without a dialog, pass `path` or any option. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
