@@ -17,7 +17,8 @@
 //!   that copied to send its data (a bitmap 10 s), and until that app answers, later reads fail at
 //!   once; a paste then waits for that read's answer off the UI thread.
 //! - Everywhere: files copied in a file manager paste as the first one that is art (SVG, PDF, EPS,
-//!   a metafile or a bitmap), before the clipboard's other formats (the files' paths as text).
+//!   a metafile or a bitmap), before the clipboard's other formats (the files' paths as text). A
+//!   file of more than 64 MiB is skipped before it is read.
 
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
@@ -144,9 +145,18 @@ fn dib_image(dib: &[u8]) -> Option<image::RgbaImage> {
     Some(img)
 }
 
+/// The most bytes a paste takes from another app (untrusted data), VectorCraft's own limit: a copied
+/// file of more is skipped, and on Wayland a read of more fails.
+const MAX_BYTES: usize = 64 << 20;
+
 /// The first of `paths` (files copied in a file manager) that pastes as one of `mimes`, read
-/// whole. Only its first bytes are read to tell, so other files cost little.
+/// whole, at most [`MAX_BYTES`]. Only its first bytes are read to tell, so other files cost little.
 fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
+    copied_file_within(paths, mimes, MAX_BYTES)
+}
+
+/// [`copied_file`] with a file of more than `limit` bytes skipped.
+fn copied_file_within(paths: Vec<PathBuf>, mimes: &[&'static str], limit: usize) -> Option<Flavour> {
     paths.into_iter().find_map(|path| {
         // text/uri-list lines end in CRLF (RFC 2483), but arboard splits them on LF only.
         let path = match path.to_str() {
@@ -164,12 +174,27 @@ fn copied_file(paths: Vec<PathBuf>, mimes: &[&'static str]) -> Option<Flavour> {
         if !std::fs::metadata(&path).ok()?.is_file() {
             return None;
         }
+        let mut file = std::fs::File::open(&path).ok()?;
+        // The file opened may not be the one looked at: its size is checked before any read.
+        let meta = file.metadata().ok()?;
+        if !meta.is_file() || meta.len() > limit as u64 {
+            return None;
+        }
         let mut head = Vec::with_capacity(FILE_HEAD);
-        std::fs::File::open(&path).ok()?.take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
+        (&mut file).take(FILE_HEAD as u64).read_to_end(&mut head).ok()?;
         let mime = file_flavour(&path.to_string_lossy(), &head, mimes)?;
-        let data = std::fs::read(&path).ok()?;
+        let data = read_rest(file, head, limit)?;
         (!data.is_empty()).then_some(Flavour { mime, data })
     })
+}
+
+/// `data` (the first bytes read of `file`) followed by the rest of `file`, or `None` when they come
+/// to more than `limit` bytes, as when the file grew after its size was checked. At most one byte
+/// past `limit` is read.
+fn read_rest(file: impl Read, mut data: Vec<u8>, limit: usize) -> Option<Vec<u8>> {
+    let more = (limit + 1).saturating_sub(data.len());
+    file.take(more as u64).read_to_end(&mut data).ok()?;
+    (data.len() <= limit).then_some(data)
 }
 
 #[cfg(windows)]
@@ -1817,14 +1842,11 @@ mod wayland {
     use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum};
 
     use super::loads::{Asker, GONE, LOAD_WAIT, Loads, wait_for_answer};
-    use super::{BITMAP, Flavour, PNG, SVG, TEXT};
+    use super::{BITMAP, Flavour, MAX_BYTES, PNG, SVG, TEXT};
 
     /// The types text is offered under and read from, best first: `text/plain;charset=utf-8` (GTK
     /// and Qt apps), `UTF8_STRING` (X11 apps through XWayland) and `text/plain`.
     const TEXT_TYPES: [&str; 3] = ["text/plain;charset=utf-8", "UTF8_STRING", "text/plain"];
-    /// The most bytes a read takes from the app that copied (untrusted data), VectorCraft's own
-    /// limit: a read of more fails.
-    const MAX_BYTES: usize = 64 << 20;
     /// The most pastes of a Copy's data that are sent at once; a paste beyond them gets nothing.
     const MAX_SENDS: usize = 8;
     /// The most types of an offer that are kept (untrusted data).
@@ -2950,6 +2972,51 @@ mod tests {
         std::fs::write(&red, png(2, 2)).unwrap();
         let with_cr = PathBuf::from(format!("{}\r", red.display()));
         assert_eq!(copied_file(vec![with_cr], &PASTE_ORDER).map(|f| f.mime), Some(PNG));
+    }
+
+    /// A copied file of more than 64 MiB is skipped before it is read, and the next one pastes.
+    #[test]
+    fn an_oversized_copied_file_is_skipped_before_it_is_read() {
+        let d = dir("oversized");
+        let (big, small) = (d.path().join("big.png"), d.path().join("small.png"));
+        std::fs::write(&big, png(2, 2)).unwrap();
+        // Sparse where the file system allows: no 64 MiB is written.
+        std::fs::OpenOptions::new().write(true).open(&big).unwrap().set_len(MAX_BYTES as u64 + 1).unwrap();
+        std::fs::write(&small, png(3, 2)).unwrap();
+        assert!(copied_file(vec![big.clone()], &PASTE_ORDER).is_none());
+        let f = copied_file(vec![big, small], &PASTE_ORDER).unwrap();
+        assert_eq!((f.mime, f.data), (PNG, png(3, 2)));
+    }
+
+    /// A copied file of exactly the limit pastes; one byte more and it is skipped.
+    #[test]
+    fn a_copied_file_pastes_up_to_the_limit() {
+        let d = dir("limit");
+        let art = d.path().join("art.svg");
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"/>";
+        std::fs::write(&art, svg).unwrap();
+        let read = |limit| copied_file_within(vec![art.clone()], &PASTE_ORDER, limit).map(|f| f.data);
+        assert_eq!(read(svg.len()), Some(svg.as_bytes().to_vec()));
+        assert_eq!(read(svg.len() - 1), None);
+    }
+
+    /// A file that grows past the limit after its size was checked is read to one byte past the
+    /// limit and refused.
+    #[test]
+    fn the_rest_of_a_file_is_read_to_the_limit_at_most() {
+        let read = |len: usize, head: usize| {
+            let bytes = vec![7u8; len];
+            let mut file = Cursor::new(bytes);
+            let mut first = vec![0; head];
+            file.read_exact(&mut first).unwrap();
+            (read_rest(&mut file, first, 16).map(|d| d.len()), file.position())
+        };
+        assert_eq!(read(16, 4), (Some(16), 16));
+        assert_eq!(read(0, 0), (Some(0), 0));
+        assert_eq!(read(17, 4), (None, 17));
+        assert_eq!(read(1000, 4), (None, 17));
+        // First bytes already past the limit: nothing more is read.
+        assert_eq!(read(1000, 20), (None, 20));
     }
 
     /// A DIB of `w`×`h` pixels (top row first when `h` is negative): a `header`-byte header (40,
