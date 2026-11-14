@@ -2812,6 +2812,27 @@ fn live_paint_gap_options_and_merge_fit_an_edge_look_to_each_piece() {
     let arrows: Vec<_> = pieces.iter().map(|p| (p.2.start_arrow.clone(), p.2.end_arrow.clone())).collect();
     assert_eq!(arrows, vec![(Some(Arrowhead::Triangle), None), (None, Some(Arrowhead::Circle))]);
     assert!(pieces.iter().all(|p| p.2.brush.is_none()), "a brush spreads over the whole line");
+    // A repainted edge that Merge cuts keeps its paint on every piece.
+    let mut s = session();
+    let l = line(&mut s, (0.0, 50.0), (100.0, 50.0));
+    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [50, 50], "color": "#ff0000", "width": 3})).unwrap();
+    let cut = line(&mut s, (50.0, 0.0), (50.0, 100.0));
+    s.execute("livePaint.merge", &json!({"ids": [g.0, cut.0]})).unwrap();
+    let gn = node(&s, g);
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    let mut on_line: Vec<(f64, bool)> = vectorcraft_tools::builder::edges(&gn)
+        .iter()
+        .filter_map(|e| {
+            let sp = e.path_data()?.subpaths.first()?;
+            let (a, z) = (sp.anchors.first()?.p, sp.anchors.last()?.p);
+            ((a.y - 50.0).abs() < 1e-6 && (z.y - 50.0).abs() < 1e-6)
+                .then(|| ((a.x.min(z.x) * 1e3).round() / 1e3, e.appearance.stroke().is_some_and(|st| st.paint == red)))
+        })
+        .collect();
+    on_line.sort_by(|p, q| p.0.total_cmp(&q.0));
+    assert_eq!(on_line, vec![(0.0, true), (50.0, true)], "both pieces keep the edge's paint");
 }
 
 /// The edge Make builds from a closed path that nothing cuts starts at the anchor the path starts

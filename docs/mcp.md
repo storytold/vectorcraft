@@ -3614,8 +3614,8 @@ already walks Image Trace. Short agent entry points:
   the path (Align Dashes to Corners is turned off on it), the arrowheads stay only at the path's own ends, and a width
   profile or brush stays only on an edge that runs the whole path. A gradient applied along a stroke starts again on
   each cut edge, and an inside or outside stroke is drawn centered on an edge that is an open piece of a closed path.
-  When `livePaint.gapOptions` or `livePaint.merge` cuts an edge into pieces, a piece that takes the edge's rows takes
-  them fitted to its part of the edge in the same way. A face or edge given no such row has one unpainted row. Rows that do not draw stay with the stored sources, which
+  When `livePaint.gapOptions` or `livePaint.merge` cuts an edge into pieces, each piece takes the edge's paint, with
+  its rows fitted to its part of the edge in the same way. A face or edge given no such row has one unpainted row. Rows that do not draw stay with the stored sources, which
   `livePaint.release` returns unchanged. The source's object effects and the strokes' pen pressure are not carried.
   Expand keeps those face fills.
   `livePaint.expand` keeps each face and edge that draws, with all its fill and stroke rows: it is shown, its opacity
