@@ -318,8 +318,9 @@ pub(super) fn png_8_bit(bytes: &[u8]) -> Option<Vec<u8>> {
 const MAX_EMBED_PIXELS: u64 = 1 << 27;
 
 /// Image `blob` as it is: PNG, JPEG, GIF and WebP through the PDF writer (JPEG data unchanged),
-/// other formats decoded. Without `sixteen_bit` (a file before PDF 1.5), a PNG of 16 bits a
-/// sample is written at 8 bits ([`png_8_bit`]).
+/// other formats (a TIFF) decoded with the ICC profile they carry and their 16-bit samples
+/// ([`crate::images::decoded_image`]). Without `sixteen_bit` (a file before PDF 1.5), a PNG or
+/// another image of 16 bits a sample is written at 8 bits ([`png_8_bit`]).
 pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixteen_bit: bool) -> Option<Image> {
     // The header's size first: the writer's decoders allocate what it declares, and the encoded
     // bytes of an image that is far larger than any the app reads may be a few kilobytes.
@@ -336,11 +337,7 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
         "image/webp" => Image::from_webp(bytes.clone().into(), interpolate).ok(),
         _ => None,
     };
-    direct.or_else(|| {
-        let rgba = image::load_from_memory(&bytes).ok()?.to_rgba8();
-        let (w, h) = rgba.dimensions();
-        Some(Image::from_rgba8(rgba.into_raw(), w, h))
-    })
+    direct.or_else(|| crate::images::decoded_image(&bytes, interpolate, sixteen_bit))
 }
 
 #[cfg(test)]

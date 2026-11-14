@@ -26,7 +26,8 @@ use vectorcraft_doc::cmyk::jpeg_components;
 use crate::output::{CmykPixels, Pixels};
 use crate::{CompressionSettings, Downsample, ImageCodec, JpegQuality, MonoCodec};
 
-/// Raw 8-bit pixels: colour samples (RGB, grey or CMYK) and an optional alpha channel.
+/// Raw pixels: colour samples (RGB, grey or CMYK) and an optional alpha channel, of 8 bits a
+/// sample or of 16 (big-endian), with the ICC profile the colour samples are in, if any.
 #[derive(Clone, Hash)]
 struct Raw {
     color: Arc<Vec<u8>>,
@@ -34,6 +35,8 @@ struct Raw {
     width: u32,
     height: u32,
     space: ImageColorspace,
+    bits: BitsPerComponent,
+    icc: Option<Arc<Vec<u8>>>,
 }
 
 impl CustomImage for Raw {
@@ -46,7 +49,7 @@ impl CustomImage for Raw {
     }
 
     fn bits_per_component(&self) -> BitsPerComponent {
-        BitsPerComponent::Eight
+        self.bits
     }
 
     fn size(&self) -> (u32, u32) {
@@ -54,7 +57,7 @@ impl CustomImage for Raw {
     }
 
     fn icc_profile(&self) -> Option<&[u8]> {
-        None
+        self.icc.as_deref().map(Vec::as_slice)
     }
 
     fn color_space(&self) -> ImageColorspace {
@@ -62,24 +65,85 @@ impl CustomImage for Raw {
     }
 }
 
+/// `icc` when it is a profile of the colour space `space` names: `GRAY` for grey samples, `RGB `
+/// for RGB ones. `None` for other profiles and spaces.
+fn icc_for(icc: Option<Vec<u8>>, space: ImageColorspace) -> Option<Arc<Vec<u8>>> {
+    let want = match space {
+        ImageColorspace::Luma => *b"GRAY",
+        ImageColorspace::Rgb => *b"RGB ",
+        ImageColorspace::Cmyk | ImageColorspace::DeviceN => return None,
+    };
+    icc.filter(|icc| vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want)).map(Arc::new)
+}
+
+/// The ICC profile image `bytes` carries: a TIFF's tag 34675 (read by the TIFF decoder itself,
+/// which reads tags of any size), another format's as its decoder reads it. `None` without one.
+fn source_icc(bytes: &[u8]) -> Option<Vec<u8>> {
+    let reader = ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?;
+    if reader.format() == Some(ImageFormat::Tiff) {
+        return vectorcraft_doc::cmyk::tiff_icc_profile(bytes);
+    }
+    let mut decoder = reader.into_decoder().ok()?;
+    decoder.icc_profile().ok().flatten().filter(|icc| !icc.is_empty())
+}
+
 /// A `width` × `height` image of straight (not premultiplied) RGBA pixels, written as RGB (as
 /// CMYK when `pixels` converts to CMYK), or as grey when every pixel is grey, with an alpha
-/// channel only when some pixel isn't opaque. `interpolate` asks viewers to smooth it when
-/// enlarged (PDF/A forbids it). `None` when `rgba` doesn't hold that many pixels.
-fn from_rgba(rgba: &[u8], width: u32, height: u32, interpolate: bool, pixels: Option<&Pixels>) -> Option<Image> {
+/// channel only when some pixel isn't opaque. With an RGB `icc` profile, pixels that `pixels`
+/// doesn't convert stay RGB and carry it; a grey one tags grey pixels. `interpolate` asks viewers
+/// to smooth it when enlarged (PDF/A forbids it). `None` when `rgba` doesn't hold that many pixels.
+fn from_rgba(rgba: &[u8], width: u32, height: u32, interpolate: bool, pixels: Option<&Pixels>, icc: Option<Vec<u8>>) -> Option<Image> {
     let px = rgba.as_chunks::<4>().0;
     if px.len() as u64 != width as u64 * height as u64 || px.is_empty() {
         return None;
     }
-    let (color, space) = if neutral(rgba) {
+    let rgb_icc = pixels.is_none() && icc.as_deref().and_then(vectorcraft_doc::cmyk::icc_color_space) == Some(*b"RGB ");
+    let (color, space) = if neutral(rgba) && !rgb_icc {
         (px.iter().map(|p| p[0]).collect(), ImageColorspace::Luma)
     } else if let Some(cmyk) = pixels.and_then(|p| p.cmyk(rgba)) {
         (cmyk, ImageColorspace::Cmyk)
     } else {
         (px.iter().flat_map(|p| [p[0], p[1], p[2]]).collect(), ImageColorspace::Rgb)
     };
+    let icc = icc_for(icc.filter(|_| pixels.is_none()), space);
     let alpha = px.iter().any(|p| p[3] < 255).then(|| Arc::new(px.iter().map(|p| p[3]).collect()));
-    Image::from_custom(Raw { color: Arc::new(color), alpha, width, height, space }, interpolate).ok()
+    Image::from_custom(Raw { color: Arc::new(color), alpha, width, height, space, bits: BitsPerComponent::Eight, icc }, interpolate).ok()
+}
+
+/// Decoded image `img` written losslessly as it is: grey or RGB samples (other kinds as RGB), with
+/// an alpha channel only when some pixel isn't opaque, at 16 bits a sample when it has more than 8
+/// and `sixteen_bit` allows it (PDF 1.5 and later), else at 8; tagged with ICC profile `icc` when
+/// that is a profile of the samples' colour space (`GRAY` or `RGB `). `None` when it has no pixels.
+pub(crate) fn from_decoded(img: DynamicImage, icc: Option<Vec<u8>>, interpolate: bool, sixteen_bit: bool) -> Option<Image> {
+    let (width, height) = (img.width(), img.height());
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let kind = img.color();
+    let space = if kind.has_color() { ImageColorspace::Rgb } else { ImageColorspace::Luma };
+    let n = if kind.has_color() { 3 } else { 1 };
+    let deep = sixteen_bit && kind.bits_per_pixel() > 8 * u16::from(kind.channel_count());
+    let (color, alpha, bits) = if deep {
+        let s = if kind.has_color() { img.into_rgba16().into_raw() } else { img.into_luma_alpha16().into_raw() };
+        let px = s.chunks_exact(n + 1);
+        let color = px.clone().flat_map(|p| p[..n].iter().flat_map(|v| v.to_be_bytes())).collect();
+        let alpha = (kind.has_alpha() && px.clone().any(|p| p[n] < u16::MAX)).then(|| px.flat_map(|p| p[n].to_be_bytes()).collect());
+        (color, alpha, BitsPerComponent::Sixteen)
+    } else {
+        let s = if kind.has_color() { img.into_rgba8().into_raw() } else { img.into_luma_alpha8().into_raw() };
+        let px = s.chunks_exact(n + 1);
+        let color = px.clone().flat_map(|p| p[..n].iter().copied()).collect();
+        let alpha = (kind.has_alpha() && px.clone().any(|p| p[n] < u8::MAX)).then(|| px.map(|p| p[n]).collect());
+        (color, alpha, BitsPerComponent::Eight)
+    };
+    let raw = Raw { color: Arc::new(color), alpha: alpha.map(Arc::new), width, height, space, bits, icc: icc_for(icc, space) };
+    Image::from_custom(raw, interpolate).ok()
+}
+
+/// Image `bytes` decoded within [`limits`] with the ICC profile it carries ([`source_icc`]), as
+/// [`from_decoded`] writes it. `None` when it can't be decoded.
+pub(crate) fn decoded_image(bytes: &[u8], interpolate: bool, sixteen_bit: bool) -> Option<Image> {
+    from_decoded(decoded(bytes)?, source_icc(bytes), interpolate, sixteen_bit)
 }
 
 /// Are all of the RGBA pixels `rgba` grey?
@@ -90,7 +154,8 @@ fn neutral(rgba: &[u8]) -> bool {
 /// Colour `samples` (grey, RGB, or CMYK ink amounts, as `space` says) with an optional `alpha`
 /// channel, written losslessly.
 fn lossless(samples: Vec<u8>, alpha: Option<Vec<u8>>, space: ImageColorspace, width: u32, height: u32, interpolate: bool) -> Option<Image> {
-    Image::from_custom(Raw { color: Arc::new(samples), alpha: alpha.map(Arc::new), width, height, space }, interpolate).ok()
+    let raw = Raw { color: Arc::new(samples), alpha: alpha.map(Arc::new), width, height, space, bits: BitsPerComponent::Eight, icc: None };
+    Image::from_custom(raw, interpolate).ok()
 }
 
 /// [`from_rgba`] of pixels converted by `pixels` (when given).
@@ -98,7 +163,7 @@ pub(crate) fn from_rgba_in(mut rgba: Vec<u8>, width: u32, height: u32, interpola
     if let Some(p) = pixels {
         p.rgb_in_place(&mut rgba);
     }
-    from_rgba(&rgba, width, height, interpolate, pixels)
+    from_rgba(&rgba, width, height, interpolate, pixels, None)
 }
 
 /// A `width` × `height` image of CMYK ink amounts `inks` (four bytes a pixel), converted by
@@ -270,6 +335,11 @@ pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, in
         return Recoded { image: None, warning: rule.instead };
     }
     let Some(img) = pixels.or_else(|| decoded(bytes)) else { return keep };
+    // Pixels that keep their colours keep the profile they are in; converted ones are in the
+    // destination's.
+    let want = if kind == Kind::Color { *b"RGB " } else { *b"GRAY" };
+    let icc = convert.is_none().then(|| source_icc(bytes)).flatten().filter(|icc| vectorcraft_doc::cmyk::icc_color_space(icc) == Some(want));
+    let rgb_icc = icc.is_some() && kind == Kind::Color;
     let mut rgba = resample(img, &rule, sized(&rule, dims, size)).into_rgba8();
     if kind == Kind::Mono {
         // Resampling greys the edges: back to black and white.
@@ -284,16 +354,18 @@ pub(crate) fn recode(bytes: &[u8], size: (f64, f64), c: &CompressionSettings, in
     let (width, height) = rgba.dimensions();
     let opaque = rgba.pixels().all(|p| p[3] == 255);
     let jpeg = jpeg_quality(&rule, jpeg).filter(|_| opaque).and_then(|q| {
-        // Grey pixels stay grey; colour ones go to CMYK when the output converts to CMYK.
-        let grey = kind != Kind::Color || neutral(&rgba);
+        // Grey pixels stay grey, unless they keep an RGB profile; colour ones go to CMYK when the
+        // output converts to CMYK.
+        let grey = kind != Kind::Color || (neutral(&rgba) && !rgb_icc);
         let (samples, space) = match convert.filter(|_| !grey).and_then(|p| p.cmyk(&rgba)) {
             Some(cmyk) => (cmyk, ImageColorspace::Cmyk),
             None if grey => (rgba.pixels().map(|p| p[0]).collect(), ImageColorspace::Luma),
             None => (rgba.pixels().flat_map(|p| [p[0], p[1], p[2]]).collect(), ImageColorspace::Rgb),
         };
-        to_jpeg(&samples, space, width, height, q, interpolate)
+        let icc = icc_for(icc.clone(), space);
+        to_jpeg(&samples, space, width, height, q, interpolate, icc.as_deref().map(Vec::as_slice))
     });
-    let image = jpeg.or_else(|| from_rgba(rgba.as_raw(), width, height, interpolate, convert));
+    let image = jpeg.or_else(|| from_rgba(rgba.as_raw(), width, height, interpolate, convert, icc));
     Recoded { image, warning: rule.instead }
 }
 
@@ -360,7 +432,7 @@ pub(crate) fn recode_cmyk(
         None => (inks, ImageColorspace::Cmyk),
     };
     // JPEG needs opaque pixels.
-    let image = jpeg_quality(&rule, jpeg).filter(|_| alpha.is_none()).and_then(|q| to_jpeg(&samples, space, width, height, q, interpolate));
+    let image = jpeg_quality(&rule, jpeg).filter(|_| alpha.is_none()).and_then(|q| to_jpeg(&samples, space, width, height, q, interpolate, None));
     let image = image.or_else(|| lossless(samples, alpha, space, width, height, interpolate));
     Recoded { image, warning: rule.instead }
 }
@@ -405,9 +477,9 @@ pub(crate) fn mask_alpha(blob: &ImageBlob, width: u32, height: u32, clip: bool) 
 }
 
 /// Opaque colour `samples` (grey, RGB, or CMYK ink amounts, as `space` says) as a JPEG at
-/// `quality`. CMYK JPEGs hold Adobe's inverted samples, which the PDF writer's Decode array
-/// undoes.
-fn to_jpeg(samples: &[u8], space: ImageColorspace, width: u32, height: u32, quality: u8, interpolate: bool) -> Option<Image> {
+/// `quality`, carrying grey or RGB samples' ICC profile `icc` when given. CMYK JPEGs hold Adobe's
+/// inverted samples, which the PDF writer's Decode array undoes.
+fn to_jpeg(samples: &[u8], space: ImageColorspace, width: u32, height: u32, quality: u8, interpolate: bool, icc: Option<&[u8]>) -> Option<Image> {
     let mut out = Vec::new();
     match space {
         ImageColorspace::Cmyk => {
@@ -416,7 +488,11 @@ fn to_jpeg(samples: &[u8], space: ImageColorspace, width: u32, height: u32, qual
         }
         ImageColorspace::Rgb | ImageColorspace::Luma => {
             let t = if space == ImageColorspace::Rgb { ExtendedColorType::Rgb8 } else { ExtendedColorType::L8 };
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode(samples, width, height, t).ok()?;
+            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality);
+            if let Some(icc) = icc {
+                image::ImageEncoder::set_icc_profile(&mut encoder, icc.to_vec()).ok()?;
+            }
+            encoder.encode(samples, width, height, t).ok()?;
         }
         ImageColorspace::DeviceN => return None,
     }
