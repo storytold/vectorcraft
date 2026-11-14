@@ -41,7 +41,8 @@ pub(super) const MAX_SET_ACTIONS: usize = 1000;
 /// The most steps [`read_set`] reads in one action.
 pub(super) const MAX_ACTION_STEPS: usize = 10_000;
 
-/// The most left-out steps that Load Actions… lists for an action set another app saved.
+/// The most left-out steps that Load Actions… lists for an action set another app saved, and the
+/// most steps with an unknown command it lists for an action set file.
 const MAX_SKIPPED: usize = 1000;
 
 /// An action set file: a header, the set's name and its actions.
@@ -488,6 +489,11 @@ fn load_aia(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
 /// Actions… would write as a file Load Actions… refuses (larger than 8 MiB, as a file with less
 /// white space or a name that gets a number can give) is refused too, and no set is added.
 ///
+/// A step whose command is not known now ([`super::KnownCommands`]), excluded or not, and a command
+/// of a `command.batch` step that is not, still loads as it is. The answer then also lists them,
+/// and the status bar names the first and how many there are → `{…, unknownCommands: [{action,
+/// actionIndex, step, stepIndex, batchStep?, command}] (at most 1,000), unknownCount: n}`.
+///
 /// An action set another app saved as text (`.aia`, read with `actionSet.read`) comes in with its
 /// actions and the steps that stand for a VectorCraft command ([`step_name`], [`step_commands`]),
 /// with no params; a step that is off in the file is excluded from playback. A set with no name is
@@ -537,7 +543,47 @@ pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     set.name = free_set_name(&app.ui.action_sets, &set.name);
     // A number added to the name can make a file at the limit larger than it.
     super::edit_keeps_set_loadable(app, None, &set)?;
+    let (unknown, unknown_count, first) = unknown_commands(&set);
     let (name, actions) = (set.name.clone(), set.actions.len());
     app.ui.action_sets.push(set);
-    Ok(json!({ "set": app.ui.action_sets.len() - 1, "name": name, "actions": actions }))
+    let mut answer = json!({ "set": app.ui.action_sets.len() - 1, "name": name, "actions": actions });
+    if let Some((action, step, command)) = first {
+        app.status(crate::i18n::msg_n(
+            unknown_count as u64,
+            "Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`",
+            "Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`",
+            &[
+                ("name", &super::shown_text(&name)),
+                ("action", &super::shown_text(&action)),
+                ("step", &step),
+                ("command", &super::shown_text(&command)),
+            ],
+        ));
+        answer["unknownCommands"] = json!(unknown);
+        answer["unknownCount"] = json!(unknown_count);
+    }
+    Ok(answer)
+}
+
+/// The steps of `set` whose command is not known now ([`super::KnownCommands`]), excluded steps
+/// included: the first [`MAX_SKIPPED`] as `[{action, actionIndex, step, stepIndex, batchStep?,
+/// command}]` (`step` and `batchStep` count from 1, the indexes from 0), how many there are, and the
+/// first one's action name, place ([`super::step_place`]) and command.
+fn unknown_commands(set: &ActionSet) -> (Vec<Value>, usize, Option<(String, String, String)>) {
+    let known = super::KnownCommands::now();
+    let (mut listed, mut count, mut first) = (vec![], 0usize, None);
+    for (a, action) in set.actions.iter().enumerate() {
+        for (step, in_batch, command) in action.unknown_commands(&known, false) {
+            count += 1;
+            first.get_or_insert_with(|| (action.name.clone(), super::step_place(step, in_batch), command.to_string()));
+            if listed.len() < MAX_SKIPPED {
+                let mut entry = json!({ "action": action.name, "actionIndex": a, "step": step + 1, "stepIndex": step, "command": command });
+                if let Some(j) = in_batch {
+                    entry["batchStep"] = json!(j + 1);
+                }
+                listed.push(entry);
+            }
+        }
+    }
+    (listed, count, first)
 }

@@ -481,7 +481,7 @@ impl Writer<'_> {
             (self.to_art, self.grad_space, self.canvas),
             self.state.take(),
             self.gs.replace(Xy::OPAQUE),
-            self.clip.take(),
+            (self.clip.take(), std::mem::take(&mut self.shown)),
             self.block_end,
         );
         // `Bg` places a gradient in a pattern's tile as on the canvas, mirrored top to bottom: its
@@ -505,7 +505,7 @@ impl Writer<'_> {
         self.hidden -= 1;
         self.nest -= 1;
         let art;
-        (art, (self.to_art, self.grad_space, self.canvas), self.state, self.gs, self.clip, self.block_end) = saved;
+        (art, (self.to_art, self.grad_space, self.canvas), self.state, self.gs, (self.clip, self.shown), self.block_end) = saved;
         let art = std::mem::replace(&mut self.body, art);
         self.defining.pop();
         if self.left_out_since(before) {
