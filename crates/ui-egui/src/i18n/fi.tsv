@@ -7612,6 +7612,7 @@ breakText	Glyphs	Merkit
 @msg	its objects are nested too deep ({e})	sen objektit ovat sisäkkäin liian monella tasolla ({e})
 @msg	its tag table lists the `{_1}` tag more than once	sen tunnistetaulukossa `{_1}`-tunniste on useammin kuin kerran
 @msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	poistoryhmät, joissa on liian monta päällekkäistä läpikuultavaa elementtiä, kirjoitetaan PDF-poistoryhminä: niiden läpikuultavat elementit poistavat peittämänsä alueen kokonaan
+@msg	knockout groups with brushed strokes over other translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	poistoryhmät, joissa on sivellinviivoja muiden läpikuultavien elementtien päällä, kirjoitetaan PDF-poistoryhminä: niiden läpikuultavat elementit poistavat peittämänsä alueen kokonaan
 @msg	not a graphic style library: {e}	ei grafiikkatyylikirjasto: {e}
 @msg	not a swatch library (.vcswatches or .gpl)	ei värimallikirjasto (.vcswatches tai .gpl)
 @msg	not a swatch library (format `{_1}`)	ei värimallikirjasto (muoto `{_1}`)
