@@ -629,6 +629,43 @@ mod tests {
         assert_eq!(offset(&mut h), -5.0);
     }
 
+    /// In a document in picas, Text Wrap Options › Offset reads a bare number as the other length
+    /// fields in picas do: in points with Preferences › Units › Numbers Without Units Are Points on
+    /// (the default), in picas with it off. A typed unit is read as typed either way.
+    #[test]
+    fn text_wrap_offset_in_picas_follows_numbers_without_units_are_points() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("document.setUnits", json!({"units": "picas"})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        app.run("object.textWrap.make", json!({})).unwrap();
+        let mut fonts = false;
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
+            move |ui, app: &mut VectorcraftApp| {
+                if !std::mem::replace(&mut fonts, true) {
+                    crate::theme::install_fonts(ui.ctx());
+                    return;
+                }
+                crate::dialogs::show(app, ui.ctx());
+            },
+            app,
+        );
+        let apply = |h: &mut egui_kittest::Harness<'_, VectorcraftApp>, text: &str| {
+            crate::menus::invoke(h.state_mut(), "object.textWrap.options", json!({}));
+            h.run_steps(3);
+            enter_offset(h, text);
+            assert!(h.state().ui.dialog.is_none(), "{text}: OK applied it");
+            h.state_mut().session.execute("object.textWrap.options", &json!({})).unwrap()["offset"].as_f64().unwrap()
+        };
+        assert_eq!(apply(&mut h, "10"), 10.0, "on by default: a bare number is in points");
+        assert_eq!(apply(&mut h, "2p6"), 30.0, "picas and points as typed");
+        assert_eq!(apply(&mut h, "-1in"), -72.0, "a typed unit wins");
+        crate::widgets::set_bare_numbers_are_points(&h.ctx, false);
+        assert_eq!(apply(&mut h, "10"), 120.0, "off: a bare number is in picas");
+        assert_eq!(apply(&mut h, "-12 pt"), -12.0, "a typed unit wins");
+    }
+
     /// Clicks the dialog's OK button with the pointer, the press and the release in frames of
     /// their own.
     fn click_ok(h: &mut egui_kittest::Harness<'_, VectorcraftApp>) {
