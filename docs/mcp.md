@@ -4757,7 +4757,10 @@ type, with the image under it. A group's or layer's own fills and strokes become
 members are expanded too. A symbol instance whose topmost fill or topmost stroke is visible, has an opacity above 0
 and has a geometry effect becomes a group of its art: that fill's effects reshape the filled shapes of the art and that
 stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them (VectorCraft's own
-rule); the instance's other fills and strokes are dropped. The result is `{ids}`; when an image in the art can't be decoded, the images made from
+rule); the instance's other fills and strokes are dropped. A raster effect on that fill or stroke draws on the filled
+or stroked shapes of the art, and expanding makes it an image as for other objects; with no geometry effect, the
+instance stays an instance over a shadow or glow image, and a blur, feather or inner glow replaces it with the image.
+The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the
 [Expand objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html) help
