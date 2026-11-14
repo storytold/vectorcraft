@@ -925,6 +925,12 @@ fn structured_junk() {
         ("addon.type.releasePath", json!({"mode": "text", "keepOriginal": false, "id": 2})),
         ("addon.type.releasePath", json!({"mode": ["both"], "keepOriginal": "no", "ids": "all", "id": -1})),
         ("addon.type.releasePath", json!({"mode": "nope", "keepOriginal": 1e308, "ids": [1.5, null, "x"]})),
+        // Unit Converter add-on.
+        ("addon.units.convert", json!({"value": f64::MAX, "unit": "yards"})),
+        ("addon.units.convert", json!({"value": "1e308m*1e308", "unit": "q"})),
+        ("addon.units.convert", json!({"value": "-2p6/0", "unit": ["mm"]})),
+        ("addon.units.convert", json!({"value": [1], "unit": 5})),
+        ("addon.units.selectionSize", json!({"ids": [u64::MAX]})),
         // Cutting Tools add-on: Stencil Bridges.
         ("addon.cutting.bridges", json!({"width": 0.01, "count": 16, "direction": "shortest", "keepOriginal": true})),
         ("addon.cutting.bridges", json!({"width": 1000, "count": 1, "direction": "horizontal", "keepOriginal": false})),

@@ -7000,6 +7000,12 @@ anchor	Points:	Punkter:
 @msg	not an RTF file: it doesn't start with {{\\rtf	inte en RTF-fil: den börjar inte med {{\\rtf
 shape	Open	Öppen
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Enhetsomvandlare
+	Unit Converter Panel	Panelen Enhetsomvandlare
+	Copy with Units	Kopiera med enheter
+	From Selection	Från markering
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Markera efter färgtyp
 	Objects with Spot Colors	Objekt med dekorfärger

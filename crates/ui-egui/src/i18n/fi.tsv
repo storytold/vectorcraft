@@ -7021,6 +7021,12 @@ anchor	Points:	Pisteet:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` on oltava "free", "keepAngles" tai "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` on oltava [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Yksikkömuunnin
+	Unit Converter Panel	Yksikkömuunnin-paneeli
+	Copy with Units	Kopioi yksiköineen
+	From Selection	Valinnasta
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Valitse värityypin mukaan
 	Objects with Spot Colors	Objektit, joissa on spottivärejä

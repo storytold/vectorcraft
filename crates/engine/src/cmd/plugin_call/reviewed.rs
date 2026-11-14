@@ -77,6 +77,8 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.shapes.star",
     "addon.type.releasePath",
     "addon.type.textTweaker",
+    "addon.units.convert",
+    "addon.units.selectionSize",
     "appearance.addEffect",
     "appearance.addFill",
     "appearance.addStroke",

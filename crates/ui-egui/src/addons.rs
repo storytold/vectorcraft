@@ -14,6 +14,7 @@ pub mod pen;
 pub mod select;
 pub mod shapes;
 pub mod typetools;
+pub mod units;
 
 use crate::menus::Item;
 
@@ -34,6 +35,7 @@ pub fn plugin_menu() -> Vec<Item> {
         Item::Sub("Selection Tools", select::menu()),
         Item::Sub("Smart Pen", pen::menu()),
         Item::Sub("Type Tools", typetools::menu()),
+        Item::Sub("Unit Converter", units::menu()),
         Item::Sep,
     ]
 }

@@ -6847,6 +6847,12 @@ anchor	Points:	Punkty:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` musi mieć wartość "free", "keepAngles" lub "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` musi mieć postać [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Konwerter jednostek
+	Unit Converter Panel	Panel Konwerter jednostek
+	Copy with Units	Kopiuj z jednostkami
+	From Selection	Z zaznaczenia
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Zaznacz według rodzaju koloru
 	Objects with Spot Colors	Obiekty z kolorami dodatkowymi

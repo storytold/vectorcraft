@@ -752,6 +752,7 @@
 	Copy into the document's folder	દસ્તાવેજના ફોલ્ડરમાં નકલ કરો
 	Copy only fonts you own or are licensed to install.	ફક્ત તમારી માલિકીના અથવા ઇન્સ્ટોલ કરવાના લાઇસન્સવાળા ફોન્ટ્સની નકલ કરો.
 	Copy to User Defined	વપરાશકર્તા-વ્યાખ્યાયિતમાં નકલ કરો
+	Copy with Units	એકમો સાથે નકલ કરો
 	Copyright	કૉપીરાઇટ
 	Copyright Info URL:	કૉપીરાઇટ માહિતી URL:
 	Copyright Notice:	કૉપીરાઇટ સૂચના:
@@ -1468,6 +1469,7 @@
 	Frequencies and angles are the output device's to apply.	ફ્રિક્વન્સી અને એંગલ આઉટપુટ ડિવાઇસ લાગુ કરશે.
 	Frequency	ફ્રિક્વન્સી
 	Fresco…	ફ્રેસ્કો…
+	From Selection	પસંદગીમાંથી
 	From:	થી:
 	Front	આગળ
 	Full Document	સંપૂર્ણ દસ્તાવેજ
@@ -3969,6 +3971,8 @@
 	Uniform	યુનિફોર્મ
 	Uniformly Scaled	સમાન રીતે સ્કેલ કરેલ
 	Unite	યુનાઇટ
+	Unit Converter	એકમ રૂપાંતરક
+	Unit Converter Panel	એકમ રૂપાંતરક પેનલ
 	Units	એકમો
 	Units:	એકમો:
 	Units: {units}	એકમો: {units}

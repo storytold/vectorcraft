@@ -6991,6 +6991,12 @@ anchor	Points:	Body:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` musí být "free", "keepAngles" nebo "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` musí být [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Převodník jednotek
+	Unit Converter Panel	Panel Převodník jednotek
+	Copy with Units	Kopírovat s jednotkami
+	From Selection	Z výběru
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Vybrat podle druhu barvy
 	Objects with Spot Colors	Objekty s přímými barvami

@@ -6442,6 +6442,12 @@ anchor	Points:	Titik:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` harus "free", "keepAngles" atau "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` harus [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Pengonversi Satuan
+	Unit Converter Panel	Panel Pengonversi Satuan
+	Copy with Units	Salin dengan Satuan
+	From Selection	Dari Seleksi
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Pilih menurut Jenis Warna
 	Objects with Spot Colors	Objek dengan Warna Spot

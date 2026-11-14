@@ -6442,6 +6442,12 @@ anchor	Points:	Punkter:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` skal være "free", "keepAngles" eller "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` skal være [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Enhedsomregner
+	Unit Converter Panel	Panelet Enhedsomregner
+	Copy with Units	Kopiér med enheder
+	From Selection	Fra markering
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Markér efter farvetype
 	Objects with Spot Colors	Objekter med spotfarver

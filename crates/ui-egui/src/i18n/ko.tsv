@@ -6581,6 +6581,12 @@ anchor	Points:	포인트:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode`는 "free", "keepAngles" 또는 "symmetric"이어야 합니다
 @msg	`{key}` must be [x, y]	`{key}`은(는) [x, y]여야 합니다
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	단위 변환기
+	Unit Converter Panel	단위 변환기 패널
+	Copy with Units	단위 포함 복사
+	From Selection	선택 영역에서
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	색상 종류로 선택
 	Objects with Spot Colors	별색을 사용한 개체

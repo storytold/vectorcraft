@@ -7064,6 +7064,12 @@ anchor	Points:	Noktalar:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` "free", "keepAngles" veya "symmetric" olmalıdır
 @msg	`{key}` must be [x, y]	`{key}` [x, y] olmalıdır
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Birim Dönüştürücü
+	Unit Converter Panel	Birim Dönüştürücü Paneli
+	Copy with Units	Birimlerle Kopyala
+	From Selection	Seçimden
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Renk Türüne Göre Seç
 	Objects with Spot Colors	Spot Renkli Nesneler

@@ -7017,6 +7017,12 @@ anchor	Points:	წერტილები:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` უნდა იყოს "free", "keepAngles" ან "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` უნდა იყოს [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	ერთეულების გადამყვანი
+	Unit Converter Panel	ერთეულების გადამყვანის პანელი
+	Copy with Units	ერთეულებით კოპირება
+	From Selection	მონიშნულიდან
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	ფერის სახეობით არჩევა
 	Objects with Spot Colors	ობიექტები სპოტ-ფერებით

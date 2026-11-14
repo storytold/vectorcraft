@@ -6600,6 +6600,12 @@ anchor	Points:	Точки:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` має бути "free", "keepAngles" або "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` має бути [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Конвертер одиниць
+	Unit Converter Panel	Панель «Конвертер одиниць»
+	Copy with Units	Копіювати з одиницями
+	From Selection	З виділення
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Виділити за типом кольору
 	Objects with Spot Colors	Об’єкти з плашковими кольорами

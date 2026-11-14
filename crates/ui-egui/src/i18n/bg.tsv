@@ -6426,6 +6426,12 @@ anchor	Points:	Точки:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` трябва да е "free", "keepAngles" или "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` трябва да е [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Преобразувател на мерни единици
+	Unit Converter Panel	Панел „Преобразувател на мерни единици“
+	Copy with Units	Копиране с мерните единици
+	From Selection	От селекцията
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Избиране по вид цвят
 	Objects with Spot Colors	Обекти с плакатни цветове

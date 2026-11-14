@@ -6943,6 +6943,12 @@ anchor	Points:	Σημεία:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	Το `mode` πρέπει να είναι "free", "keepAngles" ή "symmetric"
 @msg	`{key}` must be [x, y]	Το `{key}` πρέπει να είναι [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Μετατροπέας μονάδων
+	Unit Converter Panel	Πλαίσιο Μετατροπέας μονάδων
+	Copy with Units	Αντιγραφή με μονάδες
+	From Selection	Από την επιλογή
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Επιλογή κατά είδος χρώματος
 	Objects with Spot Colors	Αντικείμενα με χρώματα spot

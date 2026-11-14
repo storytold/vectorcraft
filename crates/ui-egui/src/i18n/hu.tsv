@@ -6975,6 +6975,12 @@ anchor	Points:	Pontok:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode`: "free", "keepAngles" vagy "symmetric" kell
 @msg	`{key}` must be [x, y]	`{key}`: [x, y] kell
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Mértékegység-átváltó
+	Unit Converter Panel	Mértékegység-átváltó panel
+	Copy with Units	Másolás mértékegységgel
+	From Selection	A kijelölésből
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Kijelölés színtípus szerint
 	Objects with Spot Colors	Direkt színeket használó objektumok

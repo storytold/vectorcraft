@@ -8885,6 +8885,12 @@ anchor	Points:	Punten:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` moet "free", "keepAngles" of "symmetric" zijn
 @msg	`{key}` must be [x, y]	`{key}` moet [x, y] zijn
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Eenhedenomrekenaar
+	Unit Converter Panel	Deelvenster Eenhedenomrekenaar
+	Copy with Units	Kopiëren met eenheden
+	From Selection	Uit selectie
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Selecteren op kleursoort
 	Objects with Spot Colors	Objecten met steunkleuren

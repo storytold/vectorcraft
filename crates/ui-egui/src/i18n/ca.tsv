@@ -6960,6 +6960,12 @@ anchor	Points:	Punts:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` ha de ser "free", "keepAngles" o "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` ha de ser [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Convertidor d’unitats
+	Unit Converter Panel	Tauler Convertidor d’unitats
+	Copy with Units	Copia amb les unitats
+	From Selection	De la selecció
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Selecciona per tipus de color
 	Objects with Spot Colors	Objectes amb colors directes

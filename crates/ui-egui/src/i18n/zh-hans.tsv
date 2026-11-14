@@ -6833,6 +6833,12 @@ anchor	Points:	点：
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` 必须是 "free"、"keepAngles" 或 "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` 必须是 [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	单位换算器
+	Unit Converter Panel	单位换算器面板
+	Copy with Units	复制时包含单位
+	From Selection	从所选对象
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	按颜色类型选择
 	Objects with Spot Colors	使用专色的对象

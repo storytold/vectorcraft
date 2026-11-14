@@ -8490,6 +8490,12 @@ anchor	Points:	ポイント:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` には "free"、"keepAngles" または "symmetric" を指定してください
 @msg	`{key}` must be [x, y]	`{key}` には [x, y] を指定してください
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	単位換算
+	Unit Converter Panel	単位換算パネル
+	Copy with Units	単位付きでコピー
+	From Selection	選択範囲から
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	カラーの種類で選択
 	Objects with Spot Colors	特色を使用したオブジェクト

@@ -11855,6 +11855,45 @@ Path Options' Preview does (#5360).
 {"name":"run_command","arguments":{"command":"addon.type.releasePath","params":{"mode":"path","keepOriginal":true}}}
 ```
 
+## Unit Converter add-on
+
+Unit Converter is a built-in add-on that shows one length in every unit at once (#5528): its commands are
+`addon.units.convert` and `addon.units.selectionSize`, and in the desktop app it lives in Object › Plug-ins › Unit
+Converter and in its panel (`window.panel {panel: "unitConverter"}`). Neither command changes the document.
+
+`addon.units.convert {value, unit?}` reads `value` as a number field reads it: a number, or text with a unit suffix and
+`+ - * /` arithmetic (`"10mm"`, `"1in/2"`, `"2p6"`, `"1080/2 px"`, `"3cm*50%"`, `"13q"`), a decimal comma read as a point
+(`"0,5 mm"`) and a single number with a thousands comma (`"1,000 mm"`) refused, in at most 1024 bytes with at most 128 `+ - * /` signs. A
+number without a suffix is in `unit` (a unit's name, suffix or key: `points`, `picas`, `inches`, `millimeters`,
+`centimeters`, `pixels`, `feetInches`, `meters`, `yards`, `feet`, `q`, `ha`; default `points`); a suffix in the text
+takes precedence over `unit`. It works without an open document. The command fails when `value` is missing, does not
+read, or is not finite in every unit, and when `unit` is not a unit. Result: `{points, units: [{unit, label, number,
+text}]}`: the length in points, then one row per unit of Preferences › Units › East Asian Type (pt, picas, in, mm, cm,
+px, ft & in, m, yd, ft, Q, Ha) in that order, with the unit's key, its label, the number without its suffix and the
+text with it, rounded as the number fields round them (3 decimals in pt, px, picas, Q and Ha, 4 in the others). Pixels
+are points.
+
+`addon.units.selectionSize {}` gives the selection's width and height as the Transform panel shows them: the bounding
+box (rotated with rotated objects), the visual bounds with Use Preview Bounds, or the box around the selected anchor
+points with Direct Selection. It fails with nothing selected. Result: `{width, height}`, each as
+`addon.units.convert` gives a length.
+
+The panel has one field per unit. A value typed in any field updates the others as it is typed, and text that does not
+read leaves them as they were. Each field's copy button puts its value on the clipboard, with the unit when Copy with
+Units is on. From Selection reads the selection's size (`addon.units.selectionSize`), and Width or Height picks which
+of the two the fields show; the size read is dropped when the document, its selection, Use Preview Bounds or Measure
+Type by Glyph Bounds changes, and the fields keep the length they show. Apply sets that side of the selection to the length with `object.setBounds`, as the Transform
+panel's W or H field does: from its reference point (a symbol instance's registration point with Use Registration Point
+for Symbol on), with the other side scaled too under Constrain Width and Height Proportions, and with the panel menu's
+Transform Object Only, Transform Pattern Only or Transform Both. It is one undo step, and none when the size is already
+that length.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.units.convert","params":{"value":"10mm"}}}
+{"name":"run_command","arguments":{"command":"addon.units.convert","params":{"value":2.5,"unit":"in"}}}
+{"name":"run_command","arguments":{"command":"addon.units.selectionSize","params":{}}}
+```
+
 ## Save location errors
 
 A save refused by the filesystem with PermissionDenied or ReadOnlyFilesystem returns

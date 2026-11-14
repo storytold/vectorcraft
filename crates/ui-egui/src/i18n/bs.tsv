@@ -6767,6 +6767,11 @@ shape	Open	Otvoren
 	Create Swatch Legend…	Kreiraj legendu uzoraka boja…
 	HEX	HEX
 	Help Bar	Traka pomoći
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Pretvarač jedinica
+	Unit Converter Panel	Panel Pretvarač jedinica
+	Copy with Units	Kopiraj s jedinicama
+	From Selection	Iz odabira
 # Type Tools add-on (Object › Plug-ins › Type Tools).
 	Type Tools	Alati za tekst
 	Text Tweaker…	Podešavanje teksta…

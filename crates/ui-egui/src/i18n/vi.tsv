@@ -6601,6 +6601,12 @@ anchor	Points:	Điểm:
 @msg	`mode` must be "free", "keepAngles" or "symmetric"	`mode` phải là "free", "keepAngles" hoặc "symmetric"
 @msg	`{key}` must be [x, y]	`{key}` phải là [x, y]
 
+# Unit Converter add-on (Object › Plug-ins › Unit Converter): its panel.
+	Unit Converter	Bộ chuyển đổi đơn vị
+	Unit Converter Panel	Bảng Bộ chuyển đổi đơn vị
+	Copy with Units	Sao chép kèm đơn vị
+	From Selection	Từ vùng chọn
+
 # Color Effects add-on: Select by Color Kind.
 	Select by Color Kind	Chọn theo loại màu
 	Objects with Spot Colors	Đối tượng có màu pha
