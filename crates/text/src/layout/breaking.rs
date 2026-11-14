@@ -243,11 +243,16 @@ pub(super) fn drawn_after_tab<'g>(sg: &'g [SGlyph], drawn: &'g [usize], k: usize
 /// them) set on a line whose content starts `x_start` from the tab origin: tabs of the text take
 /// what [`tab_advance`] gives them from where the glyphs drawn before them end, aligning the glyphs
 /// drawn after them, not the width of their glyph. The tab of a list marker (length 0) keeps its
-/// own width.
-pub(super) fn drawn_width(sg: &[SGlyph], drawn: &[usize], tabs: &[vectorcraft_doc::TabStop], x_start: f64) -> f64 {
+/// own width. With `end_trim` (a glyph index and an amount), that glyph is set that much narrower
+/// where it is drawn (a line's end trim), before the tabs drawn after it take their stops.
+pub(super) fn drawn_width(sg: &[SGlyph], drawn: &[usize], tabs: &[vectorcraft_doc::TabStop], x_start: f64, end_trim: Option<(usize, f64)>) -> f64 {
     let mut x = x_start;
-    for (k, g) in drawn.iter().enumerate().filter_map(|(k, &j)| sg.get(j).map(|g| (k, g))) {
-        x += if g.ch == '\t' && g.len > 0 { tab_advance(tabs, 0.0, x, drawn_after_tab(sg, drawn, k)).0 } else { g.adv };
+    for (k, j, g) in drawn.iter().enumerate().filter_map(|(k, &j)| sg.get(j).map(|g| (k, j, g))) {
+        x += if g.ch == '\t' && g.len > 0 {
+            tab_advance(tabs, 0.0, x, drawn_after_tab(sg, drawn, k)).0
+        } else {
+            g.adv - end_trim.filter(|&(at, _)| at == j).map_or(0.0, |(_, trim)| trim)
+        };
     }
     x - x_start
 }

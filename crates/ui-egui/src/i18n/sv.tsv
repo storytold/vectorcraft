@@ -891,6 +891,9 @@ font-technology	Variable	Variabla
 	The selected character's font is not available.	Typsnittet för det markerade tecknet är inte tillgängligt.
 	No alternates for the selected character.	Inga alternativ för det markerade tecknet.
 	Double-click to replace	Dubbelklicka för att ersätta
+	Click to replace	Klicka för att ersätta
+	Show all alternates in the Glyphs panel	Visa alla alternativ i panelen Glyfer
+	Show Character Alternates	Visa teckenalternativ
 	Select one character with the Type tool first.	Markera först ett tecken med textverktyget.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} är en glyf i {font}, inte i det typsnitt den markerade texten är satt i ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} hör till {base} (U+{base_code}) {place}; din markering är {sel} (U+{code}).
@@ -6654,7 +6657,7 @@ axis	Y Axis	Y-axel
 @plural	Result: {n}|Results: {n}	Resultat: {n}|Resultat: {n}
 @msg	select one object	markera ett objekt
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Global redigering fungerar på banor, sammansatta banor, symbolinstanser och grupper av dem
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (roterade eller speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	inga liknande objekt hittades (speglade kopior matchas inte); ändra alternativen för global redigering och försök igen
 @msg	Global Edit is off	Global redigering är inte aktiv
 @msg	only an object of the Global Edit other than the one it started from can be left out	bara ett annat objekt än det som den globala redigeringen började med kan uteslutas
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all eller ett intervall som 1, 3-5, inte {v}
@@ -8907,6 +8910,9 @@ digits	Hindi	Hindi
 	Open Tutorial Sample	Öppna övningsexempel för självstudie
 	Finish Tutorial	Slutför självstudie
 	Next Tutorial	Nästa självstudie
+	Show Learn Tab	Visa flik i Lär dig
+	Show Skill	Visa färdighet
+	Back One Level	En nivå tillbaka
 	Back to Skills	Tillbaka till färdigheter
 @msg	tutorial `{id}` has no practice sample	självstudien `{id}` har inget övningsexempel
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öppna först övningsexemplet för `{id}` (se learn.openSample)

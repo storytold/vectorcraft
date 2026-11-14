@@ -1172,6 +1172,9 @@ font-technology	Variable	Változó
 	The selected character's font is not available.	A kijelölt karakter betűtípusa nem érhető el.
 	No alternates for the selected character.	A kijelölt karakternek nincsenek változatai.
 	Double-click to replace	Csere dupla kattintással
+	Click to replace	Csere kattintással
+	Show all alternates in the Glyphs panel	Minden változat megjelenítése a Glifák panelen
+	Show Character Alternates	Karakterváltozatok megjelenítése
 	Select one character with the Type tool first.	Előbb jelölj ki egy karaktert a Szöveg eszközzel.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	A(z) {glyph} a(z) {font} glifája, nem a kijelölt szöveg betűtípusáé ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	A(z) {glyph} ehhez tartozik: {base} (U+{base_code}) {place}; a te kijelölésed: {sel} (U+{code}).
@@ -6657,7 +6660,7 @@ axis	Y Axis	Y tengely
 @plural	Result: {n}|Results: {n}	Eredmény: {n}
 @msg	select one object	jelöljön ki egy objektumot
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	A globális szerkesztés útvonalakon, összetett útvonalakon, szimbólumpéldányokon és ezek csoportjain működik
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nem található hasonló objektum (az elforgatott vagy tükrözött másolatok nem számítanak egyezésnek); módosítsa a globális szerkesztés beállításait, és próbálja újra
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nem található hasonló objektum (a tükrözött másolatok nem számítanak egyezésnek); módosítsa a globális szerkesztés beállításait, és próbálja újra
 @msg	Global Edit is off	A globális szerkesztés nincs bekapcsolva
 @msg	only an object of the Global Edit other than the one it started from can be left out	a globális szerkesztésből csak a kiindulási objektumtól eltérő objektum zárható ki
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all vagy egy tartomány, például 1, 3-5, nem {v}
@@ -7464,6 +7467,9 @@ breakText	Glyphs	Glifák
 	Open Tutorial Sample	Oktatóanyag mintafájljának megnyitása
 	Finish Tutorial	Oktatóanyag befejezése
 	Next Tutorial	Következő oktatóanyag
+	Show Learn Tab	Tanulás lap megjelenítése
+	Show Skill	Készség megjelenítése
+	Back One Level	Egy szinttel vissza
 	Back to Skills	Vissza a készségekhez
 @msg	tutorial `{id}` has no practice sample	nincs gyakorló mintafájl ehhez az oktatóanyaghoz: `{id}`
 @msg	open the practice sample of `{id}` first (see learn.openSample)	előbb nyissa meg a gyakorló mintafájlt ehhez: `{id}` (lásd: learn.openSample)
