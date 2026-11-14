@@ -1305,7 +1305,9 @@ Drive a tool like a mouse:
 
 Edit a gradient with the Gradient tool's annotator (the bar runs along the vector; stop chips sit 10 px under
 it, midpoint diamonds 7 px above): a click on the bar adds a stop, dragging a chip moves it (drag it off the bar to
-delete it, hold Alt to copy it), dragging the end handle changes the vector. The selected stop
+delete it, hold Alt to copy it), dragging the end handle changes the vector. Both ends of a vector drawn on the art,
+the start of one a click applies, and the dragged start and end handles snap as drawn points do; with Shift, the end
+or the handle keeps to 45° steps and snaps along them. The selected stop
 (`gradient.selectStop`) takes Delete and ←/→:
 
 ```json
@@ -2158,7 +2160,7 @@ VectorCraft's own, and `vc.api.has("dollar")` is true where they are available:
 | `build`, `version` | VectorCraft's version |
 | `buildDate` | `null` |
 | `decimalPoint` | `","` for a locale whose language writes a decimal comma (such as `de`, `fr`, `ru`), otherwise `"."` |
-| `engineName` | `"VectorCraft"` |
+| `engineName` | the name `#targetengine` gave the engine the script runs in, or `"VectorCraft"` without that line |
 | `error` | the last `Error` object the run threw, caught or not, or `null` before one |
 | `flags` | `0`, or `512` while localization is on; only `0` and `512` can be set, and setting `512` turns `$.localize` on |
 | `gc()` | does nothing; the interpreter collects its own garbage |
@@ -2166,7 +2168,7 @@ VectorCraft's own, and `vc.api.has("dollar")` is true where they are available:
 | `global` | the global object |
 | `hiresTimer` | the microseconds since the run last read it, or since the run started; `0` on the web |
 | `level`, `memCache` | `0`; setting `memCache` throws |
-| `line`, `stack` | the line of the code that reads it, counted in the file that code is in (the script, a file it included or a file `$.evalFile` ran, in this run or an earlier run of its named engine); the running code, outermost first, one a line as `name@file:line` (`[global]` for the script's own code, `[anonymous]` for a function without a name; the file as `$.fileName` gives it, or the run's name for a script given as `source`), at most 64 lines. Code that `eval` or `Function` compiled keeps the line of the source they compiled, in the file `[eval]`; code whose place a named engine no longer keeps is at line `0` of `[unknown]` |
+| `line`, `stack` | `$.line` is the line of the code that reads it, counted in the file that code is in (the script, a file it included or a file `$.evalFile` ran, in this run or an earlier run of its named engine). `$.stack` lists the running code, outermost first, one frame a line as `name@file:line`: `name` is `[global]` for code outside a function (in the script, in a file it included, or in code that `$.evalFile` or `eval` ran) and `[anonymous]` for a function without a name, and `file` and `line` are the file and line that code is in, so `file` is the file `$.fileName` gives in that code. It lists the innermost 64 frames; when there are more, a first line `…` stands for the ones left out. In code from a script given as `source`, `file` is that run's name, while `$.fileName` is empty. Code that `eval` or `Function` compiled keeps the line of the source they compiled, in the file `[eval]`, while `$.fileName` there is the file being run; code whose place a named engine no longer keeps is at line `0` of `[unknown]`, and `$.fileName` there is empty |
 | `locale` | the interface's language as a locale such as `de` or `pt_BR` (`en` when the interface follows the system); a script can set `ll` or `ll_RR`, and `null` or `""` sets the interface's again |
 | `localize` | `false`; while `true`, `String(object)` of a localization object gives its text for `$.locale` |
 | `os` | `Windows`, `macOS`, `Linux`, `FreeBSD`, `Unix` or `Web`, without a version |
@@ -2510,8 +2512,12 @@ neutral, the default). In a knockout group each child hides what it covers of th
 pass the enclosing group's setting to their children, off groups never knock out. `knockoutShape: true` makes the
 object's opacity and opacity mask scale how much it knocks out. `transparency.togglePageKnockoutGroup` and
 `transparency.togglePageIsolatedBlending` (`{value?}`) treat the whole page as a knockout or isolated group; they are
-saved with the document and undoable, and `transparency.info` reports them. PDF and SVG write knockout groups as
-soft-masked groups with the same look (the PDF export reports a warning).
+saved with the document and undoable, and `transparency.info` reports them. PDF writes a knockout group as a PDF
+knockout group, which PDF import reads back as one. Where an element knocks out less than the area it paints
+(`knockoutShape: true` with opacity or a mask, or translucent paint), PDF draws each element through one soft mask of
+the overlapping elements above it, as SVG does for every knockout group of translucent art. A group whose masks would
+hold more than 65,536 objects (PDF) or shapes (SVG), or that has more than 2,048 elements, is written as a PDF knockout
+group or a plain SVG group instead, and the export reports a warning.
 
 Groups are not isolated unless Isolate Blending is on: a blend mode inside a group with opacity, a blend mode, an
 opacity mask, knockout or a clip reaches the art below the group, on screen and in PDF (a knockout group's elements
@@ -4798,7 +4804,10 @@ type, with the image under it. A group's or layer's own fills and strokes become
 members are expanded too. A symbol instance whose topmost fill or topmost stroke is visible, has an opacity above 0
 and has a geometry effect becomes a group of its art: that fill's effects reshape the filled shapes of the art and that
 stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them (VectorCraft's own
-rule); the instance's other fills and strokes are dropped. The result is `{ids}`; when an image in the art can't be decoded, the images made from
+rule); the instance's other fills and strokes are dropped. A raster effect on that fill or stroke draws on the filled
+or stroked shapes of the art, and expanding makes it an image as for other objects; with no geometry effect, the
+instance stays an instance over a shadow or glow image, and a blur, feather or inner glow replaces it with the image.
+The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the
 [Expand objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html) help
@@ -6596,8 +6605,8 @@ number, naming the key, and place nothing; null is the same as leaving the key o
 `edit.copy` keeps the copied objects with the document resources they use: image blobs, symbols, patterns, global
 and spot swatches (with the tint swatches of the tints used; never the built-in [Registration] swatch), the gradient
 swatches their gradients came from, graphic styles the objects are linked to, character and paragraph styles and
-brushes. Width profiles live in the preferences, so they need no copying. Every `edit.paste*` command (also `edit.pasteWithoutFormatting`, which leaves
-text styles behind) brings them into the active document in the same undo step: an identical resource is reused,
+brushes, with the swatches, patterns and text styles a graph keeps for its series and labels. Width profiles live in the preferences, so they need no copying. Every `edit.paste*` command (also `edit.pasteWithoutFormatting`, which leaves
+text styles behind, those of graph labels included) brings them into the active document in the same undo step: an identical resource is reused,
 a missing one added, and one of the same name that differs is added renamed ("Mark 2"; a copy an earlier paste
 added is reused), which the pasted objects follow. Linked colours show the document's swatch at their tint (a Lab
 spot colour as its Spot Colors option says). The result reports `{ids, added, merged, renamed: [{kind, from,
@@ -10488,9 +10497,13 @@ give the same result there. A paragraph whose characters differ in line metrics 
 scale, or an inline graphic taller than the text) is composed with Every-line in area type of any shape, rows,
 columns and text wrap included. In a frame that is not a rectangle, or with text wrap, each line it tries is measured
 where the lines above it put it, across the line's own height, so a taller line that reaches where the frame is
-narrower, or beside a wrap object, gets the room there. Such a paragraph falls back to Single-line when the frame has
-no room for all of it, or when the search for its breaks passes VectorCraft's own limits (1,000,000 lines tried and
-2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the paragraphs of a frame).
+narrower, or beside a wrap object, gets the room there. When the frame has no room for all of such a paragraph, the
+lines it holds are still composed with the whole paragraph: VectorCraft measures the lines past the frame's end as
+wide as the span of the last line the frame holds, less their indents. Those lines overflow, or go on in the next
+threaded frame, which composes them again at its own widths. Such a paragraph falls back to Single-line when the
+frame has no room for its first line, or when the search for its breaks passes VectorCraft's own limits (1,000,000
+lines tried and 2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the
+paragraphs of a frame).
 The UI command `type.lineComposer` (Cmd+Alt+Shift+C, in remote mode `press_key {key: "C", mods: {cmd: true, alt: true,
 shift: true}}` or `invoke_menu`) sets `singleLine` when every paragraph of the selected type (or every paragraph the
 Type tool's selection touches) uses Every-line, else `everyLine`, and returns the composer it set.
@@ -11050,6 +11063,33 @@ changes nothing until the pointer moves, a Contour that already stands at a dist
 whole points and Escape cancels. A drag keeps a Contour's own corners and miter limit; a new Contour takes the tool's
 options `corners` and `miterLimit` (`tool.setOption`). A border with a gap is two Contours of one shape (the gap first, so
 it ends up in front), baked with `effect.expandAppearance`, then `object.pathfinder.minusFront`.
+
+## 3D Box and shapes add-on
+
+The `addon.shapes.*` commands draw rotatable 3D boxes (`addon.shapes.box3d`) and rectangles, ellipses, polygons, stars and
+spirals that keep their settings (`addon.shapes.rectangle`, `ellipse`, `polygon`, `star`, `spiral`), and
+`addon.shapes.configure` changes those settings on the selected shapes (or `ids`). In a drawing command, an omitted or
+null value takes the default in the table. In `configure`, an omitted or null value keeps each shape's setting. A value
+outside its range is an error that names the parameter and the range, and the command then draws or changes nothing.
+The ranges are VectorCraft's own:
+
+| Parameter | Commands | Range (default) |
+|---|---|---|
+| `width`, `height` | `rectangle`, `ellipse`, `box3d` | pt, 0 or more |
+| `radius` | `polygon`, `spiral` | pt, 0 or more |
+| `radius` (corners) | `rectangle`, `configure` | pt, 0 or more (0); `configure` fits a larger radius to half each rectangle's shorter side |
+| `radii` | `rectangle`, `configure` | four numbers, 0 or more: `[tl, tr, br, bl]` |
+| `radius1` | `star` | pt, 0 or more |
+| `radius2` | `star` | 0.01 to 1 times `radius1` (half of it) |
+| `sides`, `points` | `polygon`, `star`, `configure` (`sides`) | a whole number from 3 to 1000 (6 sides, 5 points) |
+| `rounded`, `randomized` | `polygon`, `star`, `configure` | −10 to 10 (0) |
+| `spokeRatio` | `configure` | 0.01 to 1 |
+| `turns` | `spiral`, `configure` | 0.01 to 1024 (3) |
+| `divergence` | `spiral`, `configure` | 0 to 1000 (1) |
+| `innerRadius` | `spiral`, `configure` | 0 to 0.999 of the radius (0) |
+| `arcMode` | `rectangle`, `ellipse`, `polygon`, `star`, `configure` | `whole`, `pie` (or `slice`), `chord`, `arc` (or `open`) (`whole`) |
+
+A `configure` call that changes no shape records no undo step and returns `{updated: 0}`.
 
 ## Cutting Tools add-on
 
