@@ -36,6 +36,13 @@ use crate::{Imported, Kind};
 
 const PATTERNS: &str = "hatched and pattern brushes are filled with their average color";
 const ENDS_EARLY: &str = "the file ends early: what it held was imported";
+const TOO_MANY: &str = "objects past the most one file may hold were left out";
+const AT_LIMIT: &str = "the file reached the most objects one file may hold: any after them were not read";
+
+/// The most items `craft_metafile` keeps from one file (its `MAX_ITEMS`). It stops reading at the
+/// limit and does not say whether more items followed, so a picture holding this many may have
+/// been cut short.
+const READER_ITEMS: usize = 200_000;
 
 /// Points a unit of a WMF without a placeable header (1440 units an inch).
 const WMF_UNIT: f64 = 72.0 / 1440.0;
@@ -243,7 +250,7 @@ impl Mapper {
 
     fn push(&mut self, clips: Vec<Arc<Clip>>, mut node: Node) {
         if self.out.len() >= MAX_NODES {
-            return;
+            return self.warn(TOO_MANY);
         }
         if !node.visual_bounds().is_none_or(sane) {
             return self.warn(FAR_AWAY);
@@ -525,6 +532,9 @@ pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
     let mut m = Mapper::new(f64::from(pic.width), f64::from(pic.height), k);
     if ends_early(bytes, kind) {
         m.warn(ENDS_EARLY);
+    }
+    if pic.items.len() >= READER_ITEMS {
+        m.warn(AT_LIMIT);
     }
     for item in pic.items {
         m.item(item);

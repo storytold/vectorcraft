@@ -370,6 +370,18 @@ fn damaged_files_fail_or_import_partly() {
     assert!(import(&huge).is_ok());
 }
 
+#[test]
+fn a_file_with_more_objects_than_are_read_says_so() {
+    // RECTANGLE records: 10 more than the reader keeps, then a few under that.
+    let rect = (43, le(&[0, 0, 100, 100]));
+    let many = hand_emf(5000, 3000, &vec![rect.clone(); 200_010]);
+    let back = import(&many).unwrap();
+    assert_eq!(paths(&back.document).len(), 200_000);
+    assert!(back.warnings.iter().any(|w| w.contains("reached the most objects")), "{:?}", back.warnings);
+    let few = import(&hand_emf(5000, 3000, &vec![rect; 3])).unwrap();
+    assert!(few.warnings.is_empty(), "{:?}", few.warnings);
+}
+
 /// An EMR_STRETCHDIBITS copying `png` (a BI_PNG bitmap) to a 10 × 10 box.
 fn png_stretch_dibits(png: &[u8]) -> Vec<u8> {
     // Bounds; destination, source and its size; the BITMAPINFO and the bits (from the record start);
