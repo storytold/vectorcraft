@@ -7545,7 +7545,7 @@ digits	Hindi	Hindi
 @msg	`{what}` is longer than {MAX_TEXT} bytes	`{what}` är längre än {MAX_TEXT} byte
 @msg	`{what}` must be text	`{what}` måste vara text
 @msg	`align` is start, center or end	`align` är start, center eller end
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` måste vara en array av par [delbana, ankarpunkt]
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` måste vara en array av par [subpath, anchor]
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` måste lista ankarpunktsindex (0, 1, 2…), inte {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` måste lista ankarpunktsindex (0, 1, 2…), inte {v}
 @msg	`artboards` must be a list of artboard indices	`artboards` måste vara en lista med ritytsindex
@@ -8070,7 +8070,7 @@ digits	Hindi	Hindi
 @msg	instruction budget	instruktionsbudget
 @msg	invalid `color`	ogiltig `color`
 @msg	invalid anchor index {v}: expected a non-negative integer	ogiltigt ankarindex {v}: ett icke-negativt heltal förväntades
-@msg	invalid anchor reference {v}: expected [subpath, anchor]	ogiltig ankarreferens {v}: [delbana, ankare] förväntades
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	ogiltig ankarreferens {v}: [subpath, anchor] förväntades
 @msg	invalid angle	ogiltig vinkel
 @msg	invalid brush: {e}	ogiltig pensel: {e}
 @msg	invalid color	ogiltig färg
@@ -8159,7 +8159,7 @@ digits	Hindi	Hindi
 @msg	missing `value`	`value` saknas
 @msg	missing anchor	ankare saknas
 @msg	missing anchors	ankare saknas
-@msg	missing anchors [[subpath, anchor]…]	ankare saknas [[delbana, ankare]…]
+@msg	missing anchors [[subpath, anchor]…]	ankare saknas [[subpath, anchor]…]
 @msg	missing array `{key}`	arrayen `{key}` saknas
 @msg	missing case	skiftläge saknas
 @msg	missing color	färg saknas
