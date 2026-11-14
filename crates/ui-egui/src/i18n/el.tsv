@@ -6158,6 +6158,7 @@ effect	Points	Σημεία
 @msg	no such color	δεν υπάρχει τέτοιο χρώμα
 @msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
 @msg	more than one action is named “{_1}”	περισσότερες από μία ενέργειες ονομάζονται «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	η ενέργεια «{_1}» ορίζει την προτίμηση φακέλου {_2}· διαγράψτε αυτό το βήμα για να αποθηκεύσετε το σύνολο
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
 	Smudge Stick…	Μουτζούρα…
 	Smudge Stick	Μουτζούρα

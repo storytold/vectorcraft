@@ -5774,6 +5774,7 @@ swatch	Bright Violet	Violet cerah
 @msg	no such color	tidak ada warna seperti itu
 @msg	{_1} cannot be used on Windows	{_1} tidak dapat digunakan di Windows
 @msg	more than one action is named “{_1}”	lebih dari satu tindakan bernama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	tindakan “{_1}” mengatur preferensi folder {_2}; hapus langkah itu untuk menyimpan set
 @msg	no symbol named `{n}`	tidak ada simbol bernama `{n}`
 	Remove Color Profile…	Hapus profil warna…
 	Color wheel	Roda warna

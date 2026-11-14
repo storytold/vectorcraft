@@ -6189,6 +6189,7 @@ imageTrace	Outline	Körvonal
 @msg	no such color	nincs ilyen szín
 @msg	{_1} cannot be used on Windows	A(z) {_1} nem használható Windows rendszeren
 @msg	more than one action is named “{_1}”	több művelet neve is „{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	a(z) „{_1}” művelet beállítja a(z) {_2} mappabeállítást; a készlet mentéséhez törölje ezt a lépést
 @msg	no symbol named `{n}`	nincs `{n}` nevű szimbólum
 	Smudge Stick…	Elmosó rúd…
 	Smudge Stick	Elmosó rúd

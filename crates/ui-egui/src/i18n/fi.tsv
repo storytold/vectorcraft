@@ -6169,6 +6169,7 @@ mark-style	Japanese	Japanilainen
 @msg	no such color	väriä ei ole
 @msg	{_1} cannot be used on Windows	{_1} ei ole käytettävissä Windowsissa
 @msg	more than one action is named “{_1}”	useamman kuin yhden toiminnon nimi on ”{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	toiminto ”{_1}” asettaa kansioasetuksen {_2}; poista tämä vaihe, jotta voit tallentaa sarjan
 @msg	no symbol named `{n}`	symbolia nimeltä `{n}` ei ole
 	Smudge Stick…	Sumennuskynä…
 	Smudge Stick	Sumennuskynä

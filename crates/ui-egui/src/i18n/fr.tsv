@@ -6201,6 +6201,7 @@ theme	Appearance	Apparence
 @msg	no such color	couleur inexistante
 @msg	{_1} cannot be used on Windows	{_1} ne peut pas être utilisé sous Windows
 @msg	more than one action is named “{_1}”	plusieurs scripts s’appellent « {_1} »
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	le script « {_1} » définit la préférence de dossier {_2} ; supprimez cette étape pour enregistrer le jeu
 @msg	no symbol named `{n}`	aucun symbole nommé `{n}`
 	Smudge Stick…	Estompe…
 	Smudge Stick	Estompe
