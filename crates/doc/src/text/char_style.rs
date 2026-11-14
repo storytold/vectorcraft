@@ -44,6 +44,14 @@ pub struct CharStyle {
     /// Insert Aki Right: space added after the character in reading order, as [`Self::aki_left`].
     #[serde(default, rename = "akiRight", skip_serializing_if = "crate::skip::is_default")]
     pub aki_right: f64,
+    /// Tsume (Character panel, East Asian options): the percentage of the blank space on each side
+    /// of the character's ink, inside its own width, that is taken away, 0 to [`MAX_TSUME`]. 50
+    /// halves that space and 100 sets the ink edge to edge; the glyph itself is not scaled. A
+    /// cluster takes the value of its first character. Tracking, kerning and Insert Aki are added
+    /// after it. Horizontal type only.
+    /// <https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html>
+    #[serde(default, skip_serializing_if = "crate::skip::is_default")]
+    pub tsume: f64,
     /// Use glyph shapes for automatic pair spacing; false uses font metrics.
     #[serde(default, rename = "opticalKerning", skip_serializing_if = "crate::skip::is_default")]
     pub optical_kerning: bool,
@@ -440,6 +448,9 @@ fn hundred() -> f64 {
 /// The largest Insert Aki Left or Right ([`CharStyle::aki_left`]), in 1/1000 em: one em.
 pub const MAX_AKI: f64 = 1000.0;
 
+/// The largest Tsume ([`CharStyle::tsume`]), in percent: all the blank space beside the ink.
+pub const MAX_TSUME: f64 = 100.0;
+
 /// The number of lines a warichu block may be stacked on ([`CharStyle::warichu_lines`]).
 pub const WARICHU_LINES: std::ops::RangeInclusive<u8> = 1..=6;
 
@@ -534,6 +545,7 @@ impl Default for CharStyle {
             kerning_before: 0.0,
             aki_left: 0.0,
             aki_right: 0.0,
+            tsume: 0.0,
             optical_kerning: false,
             baseline_shift: 0.0,
             h_scale: 100.0,
@@ -588,7 +600,8 @@ impl CharStyle {
     /// becomes the nearer end. A leading of 0, which legacy `.ai` import stores, stays, and a
     /// baseline shift that is not a number becomes 0. The Tate-chu-yoko Up/Down and Left/Right
     /// offsets are kept as the baseline shift is. Insert Aki Left and Right are kept from 0 to
-    /// [`MAX_AKI`], and one that is not a number becomes 0. The Warichu Settings Lines and Scale
+    /// [`MAX_AKI`], and one that is not a number becomes 0; Tsume is kept from 0 to [`MAX_TSUME`] the
+    /// same way. The Warichu Settings Lines and Scale
     /// are kept to [`WARICHU_LINES`] and [`WARICHU_SCALE`]; a gap or scale that is not a number becomes its default. The gap is kept to 0 to
     /// [`crate::MAX_COORD`], as the baseline shift is, since a scaled type object holds it in its
     /// own units.
@@ -606,6 +619,7 @@ impl CharStyle {
         let aki = |v: f64| if v.is_nan() { 0.0 } else { v.clamp(0.0, MAX_AKI) };
         self.aki_left = aki(self.aki_left);
         self.aki_right = aki(self.aki_right);
+        self.tsume = if self.tsume.is_nan() { 0.0 } else { self.tsume.clamp(0.0, MAX_TSUME) };
         self.warichu_lines = self.warichu_lines.clamp(*WARICHU_LINES.start(), *WARICHU_LINES.end());
         self.warichu_gap = if self.warichu_gap.is_nan() { default.warichu_gap } else { self.warichu_gap.clamp(0.0, crate::MAX_COORD) };
         self.warichu_scale =

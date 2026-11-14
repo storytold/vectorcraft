@@ -18,7 +18,9 @@
 //!   document's), RGB with sRGB (colours of another RGB space as their sRGB equivalents) and grey
 //!   with the sRGB tone curve. Otherwise they are device colours. PDF/A, PDF/X-3 and PDF/X-4
 //!   always tag them, whatever `profiles` says; PDF/X-1a never does, and always converts to a
-//!   CMYK destination (see [`crate::pdfx`]).
+//!   CMYK destination (see [`crate::pdfx`]). A CMYK image that keeps its numbers is tagged with
+//!   the CMYK profile it carries, if any, with `all` and `taggedSource`, and in PDF/A, PDF/X-3
+//!   and PDF/X-4 unless `profiles` is `destination` ([`ColorOut::cmyk_image_icc`]).
 //! - Output intent: the profile `outputIntent` names, embedded as the `/GTS_PDFX` output intent
 //!   of the catalog with the condition, identifier and registry; Trapped goes in the document
 //!   information (`/False` when an output intent is written untrapped). PDF/A files carry their
@@ -59,6 +61,9 @@ pub(crate) struct ColorOut {
     dest: Option<Dest>,
     /// Colours are written in ICC-based colour spaces.
     pub tagged: bool,
+    /// CMYK images that keep their numbers are tagged with the CMYK profile they carry
+    /// ([`Self::cmyk_image_icc`]).
+    image_icc: bool,
     /// The CMYK profile that tags CMYK colours.
     cmyk_profile: String,
     /// Tagged RGB colours are written as their sRGB equivalents: why (a warning), when their RGB
@@ -105,6 +110,7 @@ impl Default for ColorOut {
             profile_notes: vec![],
             dest: None,
             tagged: false,
+            image_icc: false,
             cmyk_profile,
             srgb_note: None,
             pixels: OnceLock::new(),
@@ -240,6 +246,14 @@ impl ColorOut {
                     ProfileInclusion::All | ProfileInclusion::Destination => true,
                     ProfileInclusion::TaggedSource => !doc.color_profiles.is_empty(),
                 });
+        // Source profiles: with `all` and `taggedSource`, and in the files that tag every colour
+        // unless only the destination profile is asked for; never in PDF/X-1a.
+        out.image_icc = !set.standard.cmyk_only()
+            && match set.output.profiles {
+                ProfileInclusion::All | ProfileInclusion::TaggedSource => true,
+                ProfileInclusion::None => matches!(set.standard, Standard::PdfA2b | Standard::PdfX3 | Standard::PdfX4),
+                ProfileInclusion::Destination => false,
+            };
         let rgb = match &out.dest {
             Some(d) if d.model == Model::Rgb => (d.srgb, d.cms.settings().rgb.clone()),
             _ => (source.rgb_is_srgb(), st.rgb.clone()),
@@ -322,6 +336,16 @@ impl ColorOut {
                 }
             })
             .as_ref()
+    }
+
+    /// The CMYK profile CMYK image `blob` is tagged with ([`crate::images::cmyk_icc`]): the one it
+    /// carries, when its numbers are kept and the Profiles setting or the standard includes source
+    /// profiles. `None` otherwise, and in PDF/X-1a, whose images are untagged CMYK.
+    pub(crate) fn cmyk_image_icc(&self, blob: &vectorcraft_doc::ImageBlob) -> Option<Vec<u8>> {
+        if !self.image_icc || self.cmyk_pixels().is_some() {
+            return None;
+        }
+        crate::images::cmyk_icc(blob)
     }
 
     /// How CMYK images' ink amounts are converted; `None` when they keep their numbers (no
@@ -477,7 +501,7 @@ fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
 
 /// The object number of the stream of an ICC-based colour space of `pdf` that holds profile `icc`
 /// (its data as it is, or Flate-compressed); `None` when no colour space uses that profile.
-fn tagging_stream(pdf: &[u8], xref: &Xref, icc: &[u8]) -> Option<u32> {
+pub(crate) fn tagging_stream(pdf: &[u8], xref: &Xref, icc: &[u8]) -> Option<u32> {
     use std::io::Read;
     const ICC: &[u8] = b"[/ICCBased ";
     let mut from = 0;
