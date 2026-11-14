@@ -72,8 +72,9 @@ struct Start<'r> {
 }
 
 /// What a line's placement depends on: its first glyph, whether it is the paragraph's first line,
-/// and the pen's cell, baselines, pending space, narrowest word without room and further spans.
-type Key = (usize, bool, usize, Option<u64>, Option<u64>, u64, u64, Vec<[u64; 3]>);
+/// and the pen's cell, baselines, pending space, narrowest word without room and further spans
+/// with what their band was placed below.
+type Key = (usize, bool, usize, Option<u64>, Option<u64>, u64, u64, Vec<[u64; 3]>, (Option<u64>, Option<u64>, u64));
 
 fn key(pos: usize, first: bool, pen: &Pen<'_>) -> Key {
     (
@@ -85,6 +86,7 @@ fn key(pos: usize, first: bool, pen: &Pen<'_>) -> Key {
         pen.pending.to_bits(),
         pen.no_room_for.to_bits(),
         pen.queued.iter().map(|&(b, x0, x1)| [b.to_bits(), x0.to_bits(), x1.to_bits()]).collect(),
+        (pen.above.prev.map(f64::to_bits), pen.above.next_top.map(f64::to_bits), pen.above.pending.to_bits()),
     )
 }
 
