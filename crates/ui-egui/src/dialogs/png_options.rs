@@ -53,7 +53,11 @@ fn format_of(d: &Dialog) -> Option<&'static Format> {
 /// Open the options of raster format `f` for an export whose params (format, path, artboard
 /// choice) are `params`.
 pub fn open(app: &mut VectorcraftApp, f: &Format, mut params: Value) {
-    let size = app.session.active().and_then(|st| export_size(&st.doc, &params));
+    let selection = params[super::export_as::SELECTION_FIELD] == true;
+    let size = app.session.active().and_then(|st| match selection {
+        true => vectorcraft_engine::cmd::fileio::selection_doc(st, "document.exportSelection", false).ok().map(|(_, r)| (r.width(), r.height())),
+        false => export_size(&st.doc, &params),
+    });
     if let Some(o) = params.as_object_mut() {
         o.insert("ppi".into(), json!(72));
         o.extend(defaults(app, f));
@@ -340,5 +344,5 @@ pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, ids: &[&str],
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (format, path) = (d.str("format"), d.str("path"));
     app.ui.dialog = None;
-    io::export(app, Some(&format), Some(path), &form::params(d))
+    io::export(app, Some(&format), Some(path), &super::export_as::exported(d, form::params(d)))
 }
