@@ -282,7 +282,8 @@ fn row_buffer<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R
 
 /// `d`, the decoder of a TIFF of `file` bytes, set to decode `n` pixels of `per` samples of `bits`
 /// bits each into RGBA. `None` when the file has more than [`MAX_EXTRA_SAMPLES_PIXEL`] samples a
-/// pixel, and when the decoded samples, the copy that puts a planar file's samples pixel by pixel,
+/// pixel, when its samples aren't unsigned integers (a SampleFormat other than 1), and when the
+/// decoded samples, the copy that puts a planar file's samples pixel by pixel,
 /// the row the decoder reads each strip or tile into ([`row_buffer`]) and the RGBA pixels together
 /// take more than [`crate::MAX_RASTER_ALLOC`]. The decoder may then decode no more than those
 /// samples, and read no strip or tile of more compressed bytes than the file holds (nor more than
@@ -319,9 +320,10 @@ fn planar<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -
 /// type has), pixel by pixel and 8 bits each (16-bit samples to their high byte), whether the file
 /// stores each pixel's samples together or one plane per channel. `None` when they don't decode to
 /// that many samples, which includes images whose planes together need more than the decoder's
-/// limit (256 MB of samples), and, before any decoding, files with more than
-/// [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel and ones whose samples with the row the decoder
-/// reads each strip or tile into ([`row_buffer`]) take more than [`crate::MAX_RASTER_ALLOC`].
+/// limit (256 MiB of samples), and, before any decoding, files with more than
+/// [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel, files whose samples aren't unsigned integers (a
+/// SampleFormat other than 1) and ones whose samples with the row the decoder reads each strip or
+/// tile into ([`row_buffer`]) take more than [`crate::MAX_RASTER_ALLOC`].
 pub(crate) fn read_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Vec<u8>> {
     Some(match read_samples_at_depth(d, n, per)? {
         Samples::Eight(v) => v,
@@ -442,8 +444,11 @@ struct CmykSource {
 }
 
 /// The samples of CMYK TIFF `bytes` (8 or 16 bits), their inks together or one plane per ink, with
-/// the TIFF's CMYK ICC profile; `None` for other images, CMYK ones with alpha and ones larger than
-/// [`MAX_CMYK_PIXELS`].
+/// the TIFF's CMYK ICC profile; `None` for other images, CMYK ones with alpha, ones larger than
+/// [`MAX_CMYK_PIXELS`], and, before any decoding, ones with more than [`MAX_EXTRA_SAMPLES_PIXEL`]
+/// samples a pixel (their SamplesPerPixel), ones whose samples aren't unsigned integers (a
+/// SampleFormat other than 1) and ones whose samples with the row the decoder reads each strip or
+/// tile into ([`row_buffer`]) take more than [`crate::MAX_RASTER_ALLOC`].
 fn tiff_source(bytes: &[u8]) -> Option<CmykSource> {
     let (kind, mut d) = tiff(bytes)?;
     if !cmyk_inks(kind, &mut d) {
@@ -657,7 +662,10 @@ fn jpeg_inks(bytes: &[u8]) -> Option<Inks> {
 }
 
 /// The ink amounts of a CMYK TIFF (16-bit samples to 8 bits), its inks stored together or one plane
-/// per ink.
+/// per ink. `None` for other images, ones larger than [`MAX_CMYK_PIXELS`], and the files
+/// [`read_samples`] refuses: more than [`MAX_EXTRA_SAMPLES_PIXEL`] samples a pixel, samples that
+/// aren't unsigned integers, or samples that with the decoder's row take more than
+/// [`crate::MAX_RASTER_ALLOC`].
 fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
     let (kind, mut d) = tiff(bytes)?;
     let (w, h) = d.dimensions().ok()?;
@@ -718,8 +726,8 @@ pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi:
 /// ExtraSamples values (or with no ExtraSamples tag) is read too, opaque when none of those values
 /// names an alpha. `None` for other images,
 /// CMYK ones without alpha (their inks are read by [`ImageBlob::cmyk`]), ones larger than
-/// [`MAX_CMYK_PIXELS`], ones whose SamplesPerPixel is more than [`MAX_EXTRA_SAMPLES_PIXEL`] and
-/// ones whose samples, with the copy a planar file needs, the row the decoder reads each strip or
+/// [`MAX_CMYK_PIXELS`], ones whose SamplesPerPixel is more than [`MAX_EXTRA_SAMPLES_PIXEL`], ones
+/// whose samples aren't unsigned integers (a SampleFormat other than 1) and ones whose samples, with the copy a planar file needs, the row the decoder reads each strip or
 /// tile into and the RGBA pixels, take more than [`crate::MAX_RASTER_ALLOC`]; those are refused
 /// from the file's tags, before any decoding.
 pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3]) -> Option<image::RgbaImage> {
@@ -1372,14 +1380,17 @@ mod tests {
     }
 
     /// The copy that puts a planar file's samples pixel by pixel is allocated at its length, so
-    /// the reader holds no more than the allowance counts.
+    /// the reader holds no more than the allowance counts. 33 samples: a copy that grew as it
+    /// was filled would hold room for 64.
     #[test]
     fn the_planar_copy_is_allocated_at_its_length() {
-        let (n, per) = (3, 5);
-        let data: Vec<u8> = (0..15).collect();
-        let out = chunky(data, per, n, per).unwrap();
-        assert_eq!(out, [0, 3, 6, 9, 12, 1, 4, 7, 10, 13, 2, 5, 8, 11, 14]);
-        assert_eq!(out.capacity(), n * per);
+        let (n, per) = (11u8, 3u8);
+        let data: Vec<u8> = (0..n * per).collect();
+        let len = data.len();
+        let out = chunky(data, usize::from(per), usize::from(n), usize::from(per)).unwrap();
+        let pixel_by_pixel: Vec<u8> = (0..n).flat_map(|i| (0..per).map(move |p| p * n + i)).collect();
+        assert_eq!(out, pixel_by_pixel);
+        assert!(out.capacity() >= len && out.capacity() < len.next_power_of_two(), "capacity {} for {len} samples", out.capacity());
     }
 
     /// A TIFF whose decoded samples fit [`crate::MAX_RASTER_ALLOC`] but not with its RGBA pixels
