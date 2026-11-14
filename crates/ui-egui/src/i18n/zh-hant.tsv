@@ -2577,17 +2577,7 @@ file-filter	Templates	範本
 @msg	`name` must be the name of a script engine	`name` 必須是指令碼引擎的名稱
 @msg	the main script engine is new for each run and is never kept, so it cannot be dropped	主指令碼引擎在每次執行時都是新的，從不保留，因此無法捨棄
 @msg	there is no script engine named {name}	沒有名為 {name} 的指令碼引擎
-@msg	`answers` must be a list of answers	`answers` 必須是回答的清單
-@msg	`answers` has more than {MAX_ANSWERS} answers	`answers` 中的回答超過 {MAX_ANSWERS} 個
-@msg	`answers` is larger than 1 MiB	`answers` 大於 1 MiB
 @msg	`answers[{i}]` {e}	`answers[{i}]` {e}
-@msg	must be an object with `kind` and `value`	必須是包含 `kind` 和 `value` 的物件
-@msg	must have exactly `kind` and `value`	必須只包含 `kind` 和 `value`
-@msg	is an alert's answer, whose `value` must be "ok"	是 alert 的回答，其 `value` 必須是 "ok"
-@msg	is a confirm's answer, whose `value` must be true or false	是 confirm 的回答，其 `value` 必須為 true 或 false
-@msg	is longer than 16 KiB	長度超過 16 KiB
-@msg	is a prompt's answer, whose `value` must be a string or null	是 prompt 的回答，其 `value` 必須是字串或 null
-@msg	must have `kind` alert, confirm or prompt	`kind` 必須是 alert、confirm 或 prompt
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` 僅適用於沒有人可詢問的執行：在應用程式中，由使用者回答每個對話框
 @msg	Running a script	正在執行指令碼
 @msg	Copied the script report	已複製指令碼報告
