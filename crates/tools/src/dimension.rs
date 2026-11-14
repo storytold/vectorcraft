@@ -469,6 +469,13 @@ impl Tool for DimensionTool {
             self.style = o;
         }
     }
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        match key {
+            "mode" => crate::option_check::one_of(key, value, &["linear", "angular", "radial", "radius", "diameter"]),
+            "style" => DimensionOptions::from_params(value.clone()).map(|_| ()),
+            _ => Err(crate::option_check::unknown(key)),
+        }
+    }
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.at = ev.pos;
         self.shift = ev.mods.shift;

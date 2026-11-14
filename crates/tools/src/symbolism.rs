@@ -222,6 +222,15 @@ impl Tool for SymbolismTool {
             _ => {}
         }
     }
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "diameter" => c::number(key, v, 2.0, 2000.0),
+            "intensity" | "density" => c::number(key, v, 1.0, 10.0),
+            "symbol" | "style" => c::string_or_null(key, v),
+            _ => Err(c::unknown(key)),
+        }
+    }
 }
 
 /// Paintbrush: the freehand gesture, painting with the current brush.
@@ -287,6 +296,9 @@ impl Tool for BrushPaintTool {
         } else {
             self.inner.set_option(key, v);
         }
+    }
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        if key == "brush" { crate::option_check::string_or_null(key, v) } else { self.inner.check_option(key, v) }
     }
     fn wants_samples(&self) -> bool {
         self.inner.wants_samples()

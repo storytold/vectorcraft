@@ -343,6 +343,10 @@ impl Tool for IntertwineTool {
         }
     }
 
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        if key == "prev" { crate::option_check::string_or_null(key, value) } else { Err(crate::option_check::unknown(key)) }
+    }
+
     fn busy(&self) -> bool {
         self.dragging
     }

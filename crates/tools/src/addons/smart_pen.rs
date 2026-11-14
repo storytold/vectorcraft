@@ -624,6 +624,10 @@ impl Tool for SmartPenTool {
             }
         }
     }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        if key == "next" { crate::option_check::one_of(key, v, &["curved", "straight"]) } else { Err(crate::option_check::unknown(key)) }
+    }
 }
 
 #[cfg(test)]

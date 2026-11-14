@@ -506,6 +506,10 @@ impl Tool for LivePaintBucketTool {
         self.hover = LpHover::None;
     }
 
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        check_live_paint_options(self.id(), &serde_json::Map::from_iter([(key.to_string(), v.clone())]))
+    }
+
     fn waiting(&self) -> bool {
         self.cache.waiting()
     }
@@ -810,5 +814,9 @@ impl Tool for LivePaintSelectionTool {
             _ => return,
         }
         self.hover = LpHover::None;
+    }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        check_live_paint_options(self.id(), &serde_json::Map::from_iter([(key.to_string(), v.clone())]))
     }
 }

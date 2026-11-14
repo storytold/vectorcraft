@@ -829,6 +829,25 @@ impl Tool for LiquifyTool {
             }
         }
     }
+    /// The options of [`LiquifyParams::from_json`] within its ranges, `diameter` for both sizes,
+    /// `showBrush`, and `tool` naming this tool. A percentage is a fraction up to 1 and a percent
+    /// above it.
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "tool" if value.as_str() == Some(self.params.kind.id()) => Ok(()),
+            "tool" => Err(format!("`tool` must be `{}`", self.params.kind.id())),
+            "diameter" | "width" | "height" => c::number(key, value, 0.5, 10_000.0),
+            "angle" => c::finite(key, value),
+            "intensity" | "horizontal" | "vertical" => c::number(key, value, 0.0, 100.0),
+            "detail" => c::number(key, value, 1.0, 10.0),
+            "simplify" => c::number(key, value, 0.0, 100.0),
+            "rate" => c::number(key, value, -180.0, 180.0),
+            "complexity" => c::number(key, value, 0.0, 15.0),
+            "showBrush" | "usePressure" | "simplifyOn" | "affectAnchors" | "affectIn" | "affectOut" => c::boolean(key, value),
+            _ => Err(c::unknown(key)),
+        }
+    }
     /// The tool claims Escape during an Alt-drag that sizes the brush.
     fn claims_key(&self, _cx: &ToolContext, key: ToolKey) -> bool {
         key == ToolKey::Escape && self.sizing.is_some()

@@ -239,12 +239,15 @@ fn body(_app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> bool {
     false
 }
 
-/// OK: set the tool's options.
+/// OK: set the tool's options. When the tool refuses one of them, nothing is set and the dialog
+/// stays open.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let tool = d.str("__tool");
     let values: Map<String, Value> = d.fields.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
     let r = app.run("tool.setOption", json!({ "tool": tool, "values": values }));
-    app.ui.dialog = None;
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
     r
 }
 

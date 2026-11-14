@@ -1654,6 +1654,26 @@ impl Tool for GestureTool {
             _ => {}
         }
     }
+    /// The options the tool shows ([`Self::options`]), and the Smooth tool's Fidelity that the
+    /// Pencil, Paintbrush and Blob Brush smooth with while Alt is held (`smoothFidelity`).
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        let smooth_store = key == "smoothFidelity" && matches!(self.id, "pencil" | "paintbrush" | "blobBrush");
+        if !smooth_store && self.options().get(key).is_none() {
+            return Err(c::unknown(key));
+        }
+        match key {
+            "fidelity" => c::number(key, v, super::min_fidelity(self.id), 100.0),
+            "smoothFidelity" => c::number(key, v, super::min_fidelity("smooth"), 100.0),
+            "size" => c::number(key, v, 0.1, 1000.0),
+            "sizeVariation" => c::number(key, v, 0.0, 1000.0),
+            "angle" => c::number(key, v, -180.0, 180.0),
+            "roundness" => c::number(key, v, if self.id == "blobBrush" { 0.0 } else { 1.0 }, 100.0),
+            "editWithin" | "closeWithin" => c::number(key, v, 0.0, 100.0),
+            "sizeMode" => c::one_of(key, v, &["fixed", "pressure"]),
+            _ => c::boolean(key, v),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -621,6 +621,16 @@ fn run_and_close(app: &mut VectorcraftApp, id: &str, params: Value) -> DialogRes
     r
 }
 
+/// Set a tool's options with `tool.setOption` (`params`) and close the dialog; when the tool
+/// refuses one of them, nothing is set and the dialog stays open.
+fn set_tool_options_and_close(app: &mut VectorcraftApp, params: Value) -> DialogResult {
+    let r = app.run("tool.setOption", params);
+    if r.is_ok() {
+        app.ui.dialog = None;
+    }
+    r
+}
+
 /// The field of a dialog opened over another (Import Shortcut Set over Keyboard Shortcuts) that
 /// holds the dialog under it, which Cancel and Escape show again.
 pub(crate) const PARENT: &str = "__parent";

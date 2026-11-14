@@ -324,3 +324,105 @@ fn alt_smoothing_takes_the_smooth_tools_fidelity() {
         assert_eq!(s.tool_options()["fidelity"], json!(3.0), "{id}");
     }
 }
+
+/// `tool.setOption` with a value of the wrong type, a number out of range, an unknown value or an
+/// option the tool doesn't have is an error naming the tool and the option. Nothing is set, also
+/// when another option given with it is good, and nothing is saved or recorded for undo.
+#[test]
+fn bad_option_values_are_errors_that_set_nothing() {
+    let mut s = session();
+    select(&mut s, "smooth");
+    let (options, saved, undo) = (s.tool_options(), s.prefs.tool_settings.clone(), s.doc().unwrap().history.undo.len());
+    let fidelity = "tool `smooth`: `fidelity` must be a number from 0.05 to 100";
+    for bad in [json!("abc"), json!(true), json!(-3), json!(1e9), json!(null), json!([2])] {
+        assert_eq!(s.set_tool_option_cmd(&json!({"key": "fidelity", "value": bad})).unwrap_err(), fidelity, "{bad}");
+    }
+    let cases = [
+        (json!({"key": "bogus", "value": 1}), "tool `smooth`: unknown option `bogus`"),
+        (json!({"tool": "pencil", "values": {"closeWithin": 5, "fidelity": "x"}}), "tool `pencil`: `fidelity` must be a number from 0.01 to 100"),
+        (json!({"tool": "pencil", "key": "fill", "value": "yes"}), "tool `pencil`: `fill` must be true or false"),
+        (json!({"tool": "blobBrush", "key": "sizeMode", "value": "huge"}), "tool `blobBrush`: `sizeMode` must be one of `fixed`, `pressure`"),
+        (json!({"tool": "eraser", "key": "fidelity", "value": 4}), "tool `eraser`: unknown option `fidelity`"),
+        (json!({"tool": "polygon", "key": "sides", "value": 2}), "tool `polygon`: `sides` must be a whole number from 3 to 1000"),
+        (
+            json!({"tool": "mirrorCut", "key": "axis", "value": "diagonal"}),
+            "tool `mirrorCut`: `axis` must be one of `vertical`, `horizontal`, `free`",
+        ),
+        (json!({"tool": "selection", "key": "fidelity", "value": 4}), "tool `selection`: unknown option `fidelity`"),
+        (json!({"values": [1]}), "`values` must be an object"),
+        (json!({"tool": 3, "key": "fidelity", "value": 4}), "`tool` must be a tool id"),
+        (json!({"key": "fidelity"}), "`value` is missing for `fidelity`"),
+    ];
+    for (p, want) in cases {
+        assert_eq!(s.set_tool_option_cmd(&p).unwrap_err(), want, "{p}");
+    }
+    assert_eq!(s.tool_options_of("pencil")["closeWithin"], session().tool_options_of("pencil")["closeWithin"]);
+    assert_eq!((s.tool_options(), &s.prefs.tool_settings, s.doc().unwrap().history.undo.len()), (options, &saved, undo));
+    // A good value after the errors is set and read back.
+    assert_eq!(s.set_tool_option_cmd(&json!({"key": "fidelity", "value": 9})).unwrap()["fidelity"], json!(9.0));
+}
+
+/// `tool.setOption {}` reads the options, of the active tool or of the tool named, and saves nothing.
+#[test]
+fn an_empty_set_option_reads_and_saves_nothing() {
+    let mut s = session();
+    select(&mut s, "smooth");
+    let saved = s.prefs.tool_settings.clone();
+    assert_eq!(s.set_tool_option_cmd(&json!({})).unwrap(), s.tool_options());
+    assert_eq!(s.set_tool_option_cmd(&json!({"tool": "flare"})).unwrap(), s.tool_options_of("flare"));
+    assert_eq!(s.prefs.tool_settings, saved);
+}
+
+/// A Place queue with a malformed entry is an error, and the queue held stays as it was.
+#[test]
+fn a_malformed_place_queue_is_an_error() {
+    let mut s = session();
+    select(&mut s, "place");
+    let entry = json!({"params": {"svg": "<svg/>"}, "name": "a", "width": 10, "height": 10});
+    s.set_tool_option_cmd(&json!({"key": "queue", "value": {"entries": [entry]}})).unwrap();
+    let bad = json!({"params": {}, "name": "b", "width": "wide", "height": 10});
+    let e = s.set_tool_option_cmd(&json!({"key": "queue", "value": {"entries": [entry, bad]}})).unwrap_err();
+    assert!(e.starts_with("tool `place`: `queue` must be"), "{e}");
+    assert_eq!(s.tool_options()["names"], json!(["a"]));
+    assert_eq!(
+        s.set_tool_option_cmd(&json!({"key": "current", "value": 1})).unwrap_err(),
+        "tool `place`: `current` must be the index of a queued file, from 0 to 0"
+    );
+}
+
+/// A `current` given with a new Place queue picks among the files of that queue.
+#[test]
+fn a_place_queue_and_its_current_file_set_together() {
+    let mut s = session();
+    select(&mut s, "place");
+    let entry = |name: &str| json!({"params": {"svg": "<svg/>"}, "name": name, "width": 10, "height": 10});
+    let queue = json!({"entries": [entry("a"), entry("b"), entry("c")]});
+    let out = s.set_tool_option_cmd(&json!({"values": {"queue": queue, "current": 2}})).unwrap();
+    assert_eq!((out["names"].clone(), out["current"].clone()), (json!(["a", "b", "c"]), json!(2)));
+    let short = json!({"entries": [entry("d")]});
+    let e = s.set_tool_option_cmd(&json!({"values": {"queue": short, "current": 2}})).unwrap_err();
+    assert_eq!(e, "tool `place`: `current` must be the index of a queued file, from 0 to 0");
+    assert_eq!(s.tool_options()["names"], json!(["a", "b", "c"]), "a refused call keeps the queue held");
+}
+
+/// A value given with a parametric shape's new `kind` is checked against that kind's range and
+/// set on it, whether the tool is chosen or not.
+#[test]
+fn a_parametric_shape_kind_and_its_values_set_together() {
+    for active in [false, true] {
+        let mut s = session();
+        if active {
+            select(&mut s, "parametricShape");
+        }
+        let set = |s: &mut Session, values: serde_json::Value| s.set_tool_option_cmd(&json!({"tool": "parametricShape", "values": values}));
+        set(&mut s, json!({"kind": "polygon"})).unwrap();
+        let out = set(&mut s, json!({"kind": "star", "a": 0.8})).unwrap();
+        assert_eq!((out["kind"].clone(), out["a"].clone()), (json!("star"), json!(0.8)), "active {active}");
+        set(&mut s, json!({"kind": "ring"})).unwrap();
+        let out = set(&mut s, json!({"kind": "star", "a": 1.0})).unwrap();
+        assert_eq!((out["kind"].clone(), out["a"].clone()), (json!("star"), json!(1.0)), "active {active}");
+        let e = set(&mut s, json!({"kind": "ring", "a": 1.0})).unwrap_err();
+        assert!(e.contains("`a`"), "{e}");
+        assert_eq!(s.tool_options_of("parametricShape")["kind"], json!("star"), "a refused call sets nothing");
+    }
+}

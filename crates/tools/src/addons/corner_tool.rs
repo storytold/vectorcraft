@@ -381,6 +381,16 @@ impl Tool for CornerTool {
             _ => {}
         }
     }
+
+    fn check_option(&self, key: &str, v: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "radius" => c::number(key, v, 0.0, MAX_RADIUS),
+            "kind" if serde_json::from_value::<CornerKind>(v.clone()).is_ok() => Ok(()),
+            "kind" => Err("`kind` must be one of `round`, `invertedRound`, `chamfer`".into()),
+            _ => Err(c::unknown(key)),
+        }
+    }
 }
 
 #[cfg(test)]

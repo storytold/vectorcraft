@@ -1148,7 +1148,7 @@ fn puppet_warp_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.label(egui::RichText::new(tl!("Expand:")).size(12.0).color(t.text));
     let unit = app.session.general_unit();
     if let Some(v) = widgets::num_field(ui, ("cb-tool", "expand"), opts["expand"].as_f64(), unit, 64.0) {
-        app.run("tool.setOption", json!({ "key": "expand", "value": v })).ok();
+        app.run("tool.setOption", json!({ "key": "expand", "value": v.clamp(0.0, 1000.0) })).ok();
     }
     let show = opts["showMesh"].as_bool().unwrap_or(true);
     if widgets::check(ui, "Show Mesh", show, true) {

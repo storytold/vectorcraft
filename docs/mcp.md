@@ -10002,9 +10002,21 @@ intensity), and the Symbolism tools one brush. Interaction state (pins, a refere
 desktop app, while the Artboard tool is in use, a change to its `selected` or `active` makes the artboard it then has
 active the active artboard (the navigator's and the Artboards panel's).
 
+Every option given is checked before any is set. A key that the tool's `check_option` does not take (it is unknown
+to that tool), a value of the wrong type, a number outside the tool's range, an unknown choice, a `key` without a
+`value`, a `values` that is not an object or a `tool` that is not a tool id is an error result that names the tool and
+the option, and nothing changes: no option, no saved preference and no undo step, also when another option given with
+it is good. `{}` reads the options and sets nothing. The ranges are VectorCraft's own (for example the Smooth tool's
+`fidelity` takes 0.05 to 100, the Pencil's 0.01 to 100); a refused value in a Tool Options dialog keeps the dialog
+open. The Live Paint tools' `width` and the Shape Builder's `gapLength` are set to the nearest end of their range
+when a number outside it is given, as their sections above say.
+
 ```json
 {"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"twirl","values":{"width":60,"rate":90}}}}
+{"name":"run_command","arguments":{"command":"tool.setOption","params":{"tool":"smooth","key":"fidelity","value":-3}}}
 ```
+
+The second call returns the error ``tool `smooth`: `fidelity` must be a number from 0.05 to 100``.
 
 The Pencil's, the Paintbrush's and the Smooth tool's `fidelity` is in screen pixels: the tools send `path.freehand` and
 `path.smoothRegion` the option divided by the zoom, so a stroke keeps as many points and a Smooth drag smooths as much

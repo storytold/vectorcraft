@@ -971,6 +971,15 @@ impl Tool for ObjectsOnPathTool {
         }
     }
 
+    fn check_option(&self, key: &str, value: &Value) -> Result<(), String> {
+        use crate::option_check as c;
+        match key {
+            "pivot" => c::whole(key, value, 0, 8),
+            "rotate" => c::number(key, value, -360.0, 360.0),
+            _ => Err(c::unknown(key)),
+        }
+    }
+
     fn busy(&self) -> bool {
         self.press.is_some() || self.rotating.is_some() || self.spacing.is_some() || self.moving.is_some() || self.member.is_some()
     }

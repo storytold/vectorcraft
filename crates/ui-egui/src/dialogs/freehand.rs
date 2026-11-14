@@ -16,7 +16,7 @@
 use serde_json::{Map, Value, json};
 
 use super::document_setup::check;
-use super::{DialogSpec, form, run_and_close};
+use super::{DialogSpec, form, set_tool_options_and_close};
 use crate::state::Dialog;
 use crate::theme::Tokens;
 use crate::{VectorcraftApp, widgets};
@@ -315,7 +315,7 @@ fn blob_tip_short_ratio(roundness: f64) -> f32 {
 /// OK: set the tool's options.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let values: Map<String, Value> = KEYS.iter().filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))).collect();
-    run_and_close(app, "tool.setOption", json!({ "tool": d.str("tool"), "values": values }))
+    set_tool_options_and_close(app, json!({ "tool": d.str("tool"), "values": values }))
 }
 
 #[cfg(test)]
