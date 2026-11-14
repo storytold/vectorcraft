@@ -7379,6 +7379,7 @@ breakText	Glyphs	Glify
 @msg	there is no room for the results to the right of the image	Po prawej stronie obrazu nie ma miejsca na wyniki
 @msg	the image is on a layer with a clipping mask, which would hide the results	Obraz jest na warstwie z maską przycinającą, która ukryłaby wyniki
 @msg	the image is on a layer with an opacity mask, which would hide the results	Obraz jest na warstwie z maską krycia, która ukryłaby wyniki
+@msg	the image is on a layer with effects of its own, which would apply to the results	Obraz jest na warstwie z własnymi efektami, które zostałyby zastosowane także do wyników
 @msg	`output` must be "vector"	`output` musi mieć wartość "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` nie przyjmuje promptu i tworzy tylko grafikę wektorową
 @msg	Making the Concept to Vector styles	Tworzenie stylów Koncepcja na wektor

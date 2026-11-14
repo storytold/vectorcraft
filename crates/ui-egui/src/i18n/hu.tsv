@@ -7506,6 +7506,7 @@ breakText	Glyphs	Glifák
 @msg	there is no room for the results to the right of the image	A kép jobb oldalán nincs hely az eredményeknek
 @msg	the image is on a layer with a clipping mask, which would hide the results	A kép vágómaszkos rétegen van, amely elrejtené az eredményeket
 @msg	the image is on a layer with an opacity mask, which would hide the results	A kép átlátszósági maszkos rétegen van, amely elrejtené az eredményeket
+@msg	the image is on a layer with effects of its own, which would apply to the results	A kép saját effektusokkal rendelkező rétegen van, amelyek az eredményekre is vonatkoznának
 @msg	`output` must be "vector"	`output`: "vector" kell
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` nem fogad promptot, és csak vektorgrafikát készít
 @msg	Making the Concept to Vector styles	Koncepcióból vektor stílusok készítése

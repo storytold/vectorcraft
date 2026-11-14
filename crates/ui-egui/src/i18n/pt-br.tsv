@@ -7595,6 +7595,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	there is no room for the results to the right of the image	Não há espaço para os resultados à direita da imagem
 @msg	the image is on a layer with a clipping mask, which would hide the results	A imagem está em uma camada com máscara de corte, que ocultaria os resultados
 @msg	the image is on a layer with an opacity mask, which would hide the results	A imagem está em uma camada com máscara de opacidade, que ocultaria os resultados
+@msg	the image is on a layer with effects of its own, which would apply to the results	A imagem está em uma camada com efeitos próprios, que seriam aplicados também aos resultados
 @msg	`output` must be "vector"	`output` deve ser "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` não aceita prompt e cria apenas arte vetorial
 @msg	Making the Concept to Vector styles	Criando os estilos de Conceito para vetor

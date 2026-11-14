@@ -7522,6 +7522,7 @@ breakText	Glyphs	Glyfy
 @msg	there is no room for the results to the right of the image	Vpravo od obrazu není pro výsledky místo
 @msg	the image is on a layer with a clipping mask, which would hide the results	Obraz je ve vrstvě s ořezovou maskou, která by výsledky skryla
 @msg	the image is on a layer with an opacity mask, which would hide the results	Obraz je ve vrstvě s maskou krytí, která by výsledky skryla
+@msg	the image is on a layer with effects of its own, which would apply to the results	Obraz je ve vrstvě s vlastními efekty, které by se použily i na výsledky
 @msg	`output` must be "vector"	`output` musí být "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` nepřijímá výzvu a vytváří jen vektorovou grafiku
 @msg	Making the Concept to Vector styles	Vytvářejí se styly Koncept na vektor

@@ -7132,6 +7132,7 @@ breakText	Glyphs	Гліфи
 @msg	there is no room for the results to the right of the image	Праворуч від зображення немає місця для результатів
 @msg	the image is on a layer with a clipping mask, which would hide the results	Зображення на шарі з обтравною маскою, яка приховала б результати
 @msg	the image is on a layer with an opacity mask, which would hide the results	Зображення на шарі з маскою непрозорості, яка приховала б результати
+@msg	the image is on a layer with effects of its own, which would apply to the results	Зображення на шарі з власними ефектами, які застосувалися б і до результатів
 @msg	`output` must be "vector"	`output` має бути "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` не приймає запиту і створює лише векторну графіку
 @msg	Making the Concept to Vector styles	Створення стилів «Концепт у вектор»

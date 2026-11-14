@@ -7218,6 +7218,7 @@ breakText	Glyphs	字形
 @msg	there is no room for the results to the right of the image	画像の右側に結果を置く場所がありません
 @msg	the image is on a layer with a clipping mask, which would hide the results	画像はクリッピングマスクのあるレイヤー上にあり、結果が隠れてしまいます
 @msg	the image is on a layer with an opacity mask, which would hide the results	画像は不透明マスクのあるレイヤー上にあり、結果が隠れてしまいます
+@msg	the image is on a layer with effects of its own, which would apply to the results	画像は独自の効果を持つレイヤー上にあり、その効果が結果にも適用されてしまいます
 @msg	`output` must be "vector"	`output` には "vector" を指定してください
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` はプロンプトを受け付けず、ベクターアートのみを作成します
 @msg	Making the Concept to Vector styles	コンセプトからベクターのスタイルを作成中

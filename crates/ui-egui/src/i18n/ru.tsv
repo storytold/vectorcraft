@@ -7611,6 +7611,7 @@ shape	Open	Открытый
 @msg	there is no room for the results to the right of the image	Справа от изображения нет места для результатов
 @msg	the image is on a layer with a clipping mask, which would hide the results	Изображение находится на слое с обтравочной маской, которая скрыла бы результаты
 @msg	the image is on a layer with an opacity mask, which would hide the results	Изображение находится на слое с непрозрачной маской, которая скрыла бы результаты
+@msg	the image is on a layer with effects of its own, which would apply to the results	Изображение находится на слое с собственными эффектами, которые применились бы и к результатам
 @msg	`output` must be "vector"	`output` должно быть "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` не принимает запрос и создаёт только векторную графику
 @msg	Making the Concept to Vector styles	Создание стилей «Концепт в вектор»

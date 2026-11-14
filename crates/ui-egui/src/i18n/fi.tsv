@@ -7557,6 +7557,7 @@ breakText	Glyphs	Merkit
 @msg	there is no room for the results to the right of the image	Kuvan oikealla puolella ei ole tilaa tuloksille
 @msg	the image is on a layer with a clipping mask, which would hide the results	Kuva on tasolla, jolla on leikkausmaski, joka piilottaisi tulokset
 @msg	the image is on a layer with an opacity mask, which would hide the results	Kuva on tasolla, jolla on peittävyysmaski, joka piilottaisi tulokset
+@msg	the image is on a layer with effects of its own, which would apply to the results	Kuva on tasolla, jolla on omia tehosteita, jotka kohdistuisivat myös tuloksiin
 @msg	`output` must be "vector"	`output` on oltava "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` ei ota kehotetta ja tekee vain vektorigrafiikkaa
 @msg	Making the Concept to Vector styles	Luodaan Konseptista vektoriksi -tyylejä

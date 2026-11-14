@@ -7133,6 +7133,7 @@ breakText	Glyphs	Glyph
 @msg	there is no room for the results to the right of the image	Không còn chỗ cho kết quả ở bên phải ảnh
 @msg	the image is on a layer with a clipping mask, which would hide the results	Ảnh nằm trên một lớp có mặt nạ cắt, mặt nạ này sẽ che các kết quả
 @msg	the image is on a layer with an opacity mask, which would hide the results	Ảnh nằm trên một lớp có mặt nạ độ mờ, mặt nạ này sẽ che các kết quả
+@msg	the image is on a layer with effects of its own, which would apply to the results	Ảnh nằm trên một lớp có hiệu ứng riêng, các hiệu ứng này cũng sẽ áp dụng cho kết quả
 @msg	`output` must be "vector"	`output` phải là "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` không nhận lời nhắc và chỉ tạo hình vector
 @msg	Making the Concept to Vector styles	Đang tạo kiểu Ý tưởng thành vector

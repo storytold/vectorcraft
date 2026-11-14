@@ -8960,6 +8960,7 @@ digits	Hindi	Hindi
 @msg	there is no room for the results to the right of the image	Det finns ingen plats för resultaten till höger om bilden
 @msg	the image is on a layer with a clipping mask, which would hide the results	Bilden ligger på ett lager med urklippsmask, som skulle dölja resultaten
 @msg	the image is on a layer with an opacity mask, which would hide the results	Bilden ligger på ett lager med opacitetsmask, som skulle dölja resultaten
+@msg	the image is on a layer with effects of its own, which would apply to the results	Bilden ligger på ett lager med egna effekter, som också skulle tillämpas på resultaten
 @msg	`output` must be "vector"	`output` måste vara "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` tar ingen prompt och skapar bara vektorgrafik
 @msg	Making the Concept to Vector styles	Skapar stilar för Koncept till vektor

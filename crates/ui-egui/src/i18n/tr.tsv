@@ -7478,6 +7478,7 @@ breakText	Glyphs	Glifler
 @msg	there is no room for the results to the right of the image	Görüntünün sağında sonuçlar için yer yok
 @msg	the image is on a layer with a clipping mask, which would hide the results	Görüntü, sonuçları gizleyecek bir kırpma maskesi olan bir katmanda
 @msg	the image is on a layer with an opacity mask, which would hide the results	Görüntü, sonuçları gizleyecek bir opaklık maskesi olan bir katmanda
+@msg	the image is on a layer with effects of its own, which would apply to the results	Görüntü, sonuçlara da uygulanacak kendi efektleri olan bir katmanda
 @msg	`output` must be "vector"	`output` "vector" olmalıdır
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` istem almaz ve yalnızca vektör çizim yapar
 @msg	Making the Concept to Vector styles	Konseptten Vektöre stilleri yapılıyor

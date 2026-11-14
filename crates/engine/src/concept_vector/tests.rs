@@ -798,6 +798,36 @@ fn insert_puts_the_results_outside_an_envelope_around_the_image() {
     assert!(*d.node(envelope).unwrap() == before, "the envelope is unchanged");
 }
 
+/// For an image in a group with an effect of its own, the results go beside the group, which stays
+/// as it is; on a layer with an effect of its own, insert is refused and changes nothing.
+#[test]
+fn insert_keeps_out_of_a_group_or_layer_with_effects_of_its_own() {
+    let (mut s, img) = doc_with(&art());
+    let other = s.execute("shape.rectangle", &json!({"x": 120, "y": 120, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    s.execute("select.set", &json!({"ids": [img.0, other]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let group = d.parent_of(img).unwrap();
+    let transform = json!({"effect": "distort.transform", "params": {"scaleH": 200}, "ids": [group.0]});
+    s.execute("effect.apply", &transform).unwrap();
+    let d = &s.doc().unwrap().doc;
+    let (layer, before) = (d.parent_of(group).unwrap(), d.node(group).unwrap().clone());
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap();
+    let d = &s.doc().unwrap().doc;
+    assert_eq!(d.parent_of(NodeId(r["ids"][0].as_u64().unwrap())), Some(layer), "beside the group, not in it");
+    assert!(*d.node(group).unwrap() == before, "the group is unchanged");
+
+    let (mut s, img) = doc_with(&art());
+    let layer = s.doc().unwrap().doc.parent_of(img).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.dropShadow", "ids": [layer.0]})).unwrap();
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let e = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["outline"]})).unwrap_err().to_string();
+    assert!(e.contains("effects of its own"), "{e}");
+    assert!(s.doc().unwrap().doc == before);
+}
+
 #[test]
 fn insert_puts_the_results_outside_a_clip_group_around_the_image() {
     let (mut s, img) = doc_with(&art());

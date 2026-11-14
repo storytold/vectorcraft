@@ -7168,6 +7168,7 @@ breakText	Glyphs	字符
 @msg	there is no room for the results to the right of the image	影像右側沒有放置結果的空間
 @msg	the image is on a layer with a clipping mask, which would hide the results	影像位於帶有剪裁遮色片的圖層上，剪裁遮色片會遮住結果
 @msg	the image is on a layer with an opacity mask, which would hide the results	影像位於帶有不透明度遮色片的圖層上，不透明度遮色片會遮住結果
+@msg	the image is on a layer with effects of its own, which would apply to the results	影像位於帶有自身效果的圖層上，這些效果也會套用到結果上
 @msg	`output` must be "vector"	`output` 必須是 "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` 不接受提示詞，且只製作向量圖稿
 @msg	Making the Concept to Vector styles	正在製作概念轉向量樣式

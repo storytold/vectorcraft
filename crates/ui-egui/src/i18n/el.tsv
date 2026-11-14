@@ -7475,6 +7475,7 @@ breakText	Glyphs	Γλύφοι
 @msg	there is no room for the results to the right of the image	Δεν υπάρχει χώρος για τα αποτελέσματα δεξιά από την εικόνα
 @msg	the image is on a layer with a clipping mask, which would hide the results	Η εικόνα βρίσκεται σε επίπεδο με μάσκα αποκοπής, η οποία θα έκρυβε τα αποτελέσματα
 @msg	the image is on a layer with an opacity mask, which would hide the results	Η εικόνα βρίσκεται σε επίπεδο με μάσκα αδιαφάνειας, η οποία θα έκρυβε τα αποτελέσματα
+@msg	the image is on a layer with effects of its own, which would apply to the results	Η εικόνα βρίσκεται σε επίπεδο με δικά του εφέ, τα οποία θα εφαρμόζονταν και στα αποτελέσματα
 @msg	`output` must be "vector"	Το `output` πρέπει να είναι "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	Το `{pid}` δεν δέχεται προτροπή και δημιουργεί μόνο διανυσματικά γραφικά
 @msg	Making the Concept to Vector styles	Δημιουργία των στυλ «Από ιδέα σε διάνυσμα»

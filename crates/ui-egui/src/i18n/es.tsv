@@ -7466,6 +7466,7 @@ breakText	Glyphs	Glifos
 @msg	there is no room for the results to the right of the image	No hay espacio para los resultados a la derecha de la imagen
 @msg	the image is on a layer with a clipping mask, which would hide the results	La imagen está en una capa con una máscara de recorte, que ocultaría los resultados
 @msg	the image is on a layer with an opacity mask, which would hide the results	La imagen está en una capa con una máscara de opacidad, que ocultaría los resultados
+@msg	the image is on a layer with effects of its own, which would apply to the results	La imagen está en una capa con efectos propios, que se aplicarían a los resultados
 @msg	`output` must be "vector"	`output` debe ser "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` no admite indicaciones y solo crea ilustraciones vectoriales
 @msg	Making the Concept to Vector styles	Creando los estilos de Concepto a vector

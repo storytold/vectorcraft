@@ -7636,6 +7636,7 @@ font-script	Japanese	იაპონური
 @msg	there is no room for the results to the right of the image	გამოსახულების მარჯვნივ შედეგებისთვის ადგილი არ არის
 @msg	the image is on a layer with a clipping mask, which would hide the results	გამოსახულება მოჭრის ნიღბიან ფენაზეა, რომელიც შედეგებს დამალავდა
 @msg	the image is on a layer with an opacity mask, which would hide the results	გამოსახულება გაუმჭვირვალობის ნიღბიან ფენაზეა, რომელიც შედეგებს დამალავდა
+@msg	the image is on a layer with effects of its own, which would apply to the results	გამოსახულება საკუთარი ეფექტების მქონე ფენაზეა, რომლებიც შედეგებზეც გავრცელდებოდა
 @msg	`output` must be "vector"	`output` უნდა იყოს "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` მოთხოვნას არ იღებს და მხოლოდ ვექტორულ გრაფიკას ქმნის
 @msg	Making the Concept to Vector styles	იქმნება „კონცეფციიდან ვექტორამდე“ სტილები

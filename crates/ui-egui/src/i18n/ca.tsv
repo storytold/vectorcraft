@@ -7503,6 +7503,7 @@ breakText	Glyphs	Glifs
 @msg	there is no room for the results to the right of the image	No hi ha espai per als resultats a la dreta de la imatge
 @msg	the image is on a layer with a clipping mask, which would hide the results	La imatge és en una capa amb una màscara de retall, que amagaria els resultats
 @msg	the image is on a layer with an opacity mask, which would hide the results	La imatge és en una capa amb una màscara d’opacitat, que amagaria els resultats
+@msg	the image is on a layer with effects of its own, which would apply to the results	La imatge és en una capa amb efectes propis, que s’aplicarien també als resultats
 @msg	`output` must be "vector"	`output` ha de ser "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` no admet indicacions i només fa art vectorial
 @msg	Making the Concept to Vector styles	S’estan fent els estils de Concepte a vector

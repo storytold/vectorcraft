@@ -7113,6 +7113,7 @@ breakText	Glyphs	글리프
 @msg	there is no room for the results to the right of the image	이미지 오른쪽에 결과를 놓을 공간이 없습니다
 @msg	the image is on a layer with a clipping mask, which would hide the results	이미지가 클리핑 마스크가 있는 레이어에 있어 결과가 가려집니다
 @msg	the image is on a layer with an opacity mask, which would hide the results	이미지가 불투명 마스크가 있는 레이어에 있어 결과가 가려집니다
+@msg	the image is on a layer with effects of its own, which would apply to the results	이미지가 자체 효과가 있는 레이어에 있어 그 효과가 결과에도 적용됩니다
 @msg	`output` must be "vector"	`output`은 "vector"여야 합니다
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}`은 프롬프트를 받지 않으며 벡터 아트만 만듭니다
 @msg	Making the Concept to Vector styles	콘셉트를 벡터로 스타일을 만드는 중

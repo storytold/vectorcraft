@@ -7361,6 +7361,7 @@ breakText	Glyphs	字形
 @msg	there is no room for the results to the right of the image	图像右侧没有放置结果的空间
 @msg	the image is on a layer with a clipping mask, which would hide the results	图像位于带剪切蒙版的图层上，剪切蒙版会遮住结果
 @msg	the image is on a layer with an opacity mask, which would hide the results	图像位于带不透明度蒙版的图层上，不透明度蒙版会遮住结果
+@msg	the image is on a layer with effects of its own, which would apply to the results	图像位于带有自身效果的图层上，这些效果也会应用到结果上
 @msg	`output` must be "vector"	`output` 必须是 "vector"
 @msg	`{pid}` takes no prompt and makes vector art only	`{pid}` 不接受提示词，且只生成矢量图稿
 @msg	Making the Concept to Vector styles	正在生成概念转矢量样式
