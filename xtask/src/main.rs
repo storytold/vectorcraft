@@ -205,17 +205,31 @@ fn cmd_layers() -> Result<(), String> {
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
 /// shell, and the web app (its wasm-only code is compiled by nothing else).
-fn wasm_set() -> Result<Vec<String>, String> {
-    let crates = layers::from_metadata(&metadata()?)?;
-    Ok(crates
+fn wasm_set() -> Result<Vec<(String, String)>, String> {
+    wasm_packages(&metadata()?)
+}
+
+/// [`wasm_set`] from `cargo metadata --no-deps`: each package's name and its package ID. `-p` takes
+/// the ID because a dependency can bring in another package with the same name (craft-svg brings in
+/// an older vectorcraft-geom from git), and `-p <name>` is then an error.
+fn wasm_packages(meta: &serde_json::Value) -> Result<Vec<(String, String)>, String> {
+    let pkgs = meta["packages"].as_array().ok_or("metadata: no packages array")?;
+    layers::from_metadata(meta)?
         .into_iter()
         .filter(|c| match layers::classify(&c.name) {
             Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
             Some(layers::Class::Standalone) => true,
             _ => layers::short_name(&c.name) == "web",
         })
-        .map(|c| c.name)
-        .collect())
+        .map(|c| {
+            let id = pkgs
+                .iter()
+                .find(|p| p["name"].as_str() == Some(c.name.as_str()))
+                .and_then(|p| p["id"].as_str())
+                .ok_or_else(|| format!("metadata: {} has no package id", c.name))?;
+            Ok((c.name, id.to_owned()))
+        })
+        .collect()
 }
 
 /// One `cargo check` over the whole wasm set: the crates share one build, and `--keep-going`
@@ -224,10 +238,11 @@ fn cmd_wasm() -> Result<(), String> {
     let set = wasm_set()?;
     let mut c = cargo();
     c.args(["check", "--target", "wasm32-unknown-unknown", "--keep-going"]);
-    for pkg in &set {
-        c.args(["-p", pkg]);
+    for (_, id) in &set {
+        c.args(["-p", id]);
     }
-    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), set.join(", ")))
+    let names: Vec<&str> = set.iter().map(|(name, _)| name.as_str()).collect();
+    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", names.len(), names.join(", ")))
 }
 
 /// Whether `cargo nextest` is installed.
@@ -374,4 +389,25 @@ fn cmd_ci_i18n_report() -> Result<(), String> {
     let mut c = cargo();
     c.args(["test", "--workspace", "--lib", "--bins", "--tests", "--", "i18n::tests::untranslated_report", "--exact", "--nocapture"]);
     run(c, "cargo test --workspace --lib --bins --tests -- i18n::tests::untranslated_report --exact --nocapture")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_wasm_set_names_each_package_by_its_id() {
+        let meta = serde_json::json!({"packages": [
+            {"name": "vectorcraft-geom", "id": "path+file:///x/crates/geom#vectorcraft-geom@0.24.1", "dependencies": []},
+            {"name": "vectorcraft-cli", "id": "path+file:///x/crates/cli#vectorcraft-cli@0.24.1", "dependencies": []},
+        ]});
+        let set = wasm_packages(&meta).unwrap();
+        assert_eq!(set, [("vectorcraft-geom".to_owned(), "path+file:///x/crates/geom#vectorcraft-geom@0.24.1".to_owned())]);
+    }
+
+    #[test]
+    fn a_wasm_package_without_an_id_is_an_error() {
+        let meta = serde_json::json!({"packages": [{"name": "vectorcraft-geom", "dependencies": []}]});
+        assert!(wasm_packages(&meta).unwrap_err().contains("vectorcraft-geom"));
+    }
 }
