@@ -143,6 +143,11 @@ impl Appearance {
     pub fn fill_paint(&self) -> Paint {
         self.fill().map(|f| f.paint.clone()).unwrap_or(Paint::None)
     }
+    /// Whether any visible fill has non-None paint. Unlike [`Self::fill`], this
+    /// includes lower fills in the stack; zero opacity still counts for selecting its geometry.
+    pub fn has_visible_fill(&self) -> bool {
+        self.items.iter().any(|item| matches!(item, AppearanceItem::Fill(fill) if fill.visible && !fill.paint.is_none()))
+    }
     pub fn stroke_paint(&self) -> Paint {
         self.stroke().map(|s| s.paint.clone()).unwrap_or(Paint::None)
     }
