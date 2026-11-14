@@ -31,6 +31,8 @@ craft-svg = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e
 craft-eps = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
 # DXF tags, reader and writer (craft-libs#778, #926, #927).
 craft-dxf = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
+# WMF, EMF and EMF+ reader (craft-libs#778).
+craft-metafile = { git = "https://github.com/storytold/craft-libs", rev = "6d620e971e820b517b11a99cad040ebac670e1e2" }
 craft-update = { git = "https://github.com/storytold/craft-libs", version = "=0.1.0", rev = "e98299546f5c5c3c22388d16507f8b5e61a5f280", features = ["egui"] }
 # internal
 vectorcraft-geom = { path = "crates/geom" }
