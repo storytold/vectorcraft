@@ -3509,7 +3509,8 @@ effect	Points	Точки
 	Solid	Суцільний
 	Sort by Kind	Сортувати за типом
 	Sort by Name	Сортувати за назвою
-	Sort by Status	Сортувати за:
+	Sort by Size	Сортувати за розміром
+	Sort by Status	Сортувати за станом
 	Source code on GitHub	Вихідний код GitHub
 	Source Sans 3	Source Sans 3
 	Space After Paragraph	Інтервал після абзацу

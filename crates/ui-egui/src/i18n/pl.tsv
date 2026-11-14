@@ -2196,6 +2196,7 @@ digits	Malayalam	Malajalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	wpis {i} w paths wymaga path i ids (identyfikatorów obiektów, których nie ma żaden inny wpis)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder przyjmuje path: w folderze tego pliku szukane są pozostałe brakujące łącza
 	Show Missing	Pokaż brakujące
+	Sort by Size	Sortuj według rozmiaru
 	Sort by Status	Sortuj według stanu
 	Clear Overrides	Wyczyść zastąpienia
 	Create New {kind} Style	Utwórz nowy styl: {kind}

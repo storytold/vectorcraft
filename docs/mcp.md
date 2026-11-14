@@ -7434,8 +7434,10 @@ listed in `warnings`. ASCII and binary DXF files are read; DWG files answer an e
 
 ## Links panel
 
-`links.list {show?: all|missing|modified|embedded, sort?: name|kind|status}` lists every image in the layers, top
-first, as the Links panel does, then every image and placed document in opacity-mask art and in the art of symbols,
+`links.list {show?: all|missing|modified|embedded, sort?: name|kind|status|size}` lists every image in the layers, top
+first, as the Links panel does (`sort: "size"`, the panel menu's Sort by Size, puts the smallest file first by the
+size Link Info shows; rows without one, embedded images and missing files whose size is not kept, come last, and equal
+sizes go by name), then every image and placed document in opacity-mask art and in the art of symbols,
 graph designs, patterns and stored brushes, one row per stored object (never one per symbol instance, pattern tile or
 brushed stroke): `{id, name, linked, status: ok|modified|missing|embedded, format, pixelWidth, pixelHeight, path?,
 found?, page?, preview?, note?, owner?}` (`owner`, for an object outside the layer tree:
