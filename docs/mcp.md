@@ -11010,8 +11010,8 @@ it ends up in front), baked with `effect.expandAppearance`, then `object.pathfin
 ## Cutting Tools add-on
 
 Cutting Tools is a built-in add-on that prepares art for cutting. Its commands are `addon.cutting.bridges`,
-`addon.cutting.weed` and `addon.cutting.banner`; in the desktop app they are Object › Plug-ins › Cutting Tools › Stencil
-Bridges…, Weed Box and Lines… and Banner Hems and Grommets….
+`addon.cutting.weed`, `addon.cutting.banner` and `addon.cutting.nest`; in the desktop app they are Object › Plug-ins ›
+Cutting Tools › Stencil Bridges…, Weed Box and Lines…, Banner Hems and Grommets… and Nest Shapes….
 
 ### Stencil Bridges
 
@@ -11130,6 +11130,39 @@ Banner Hems and Grommets… opens the command dialog with Preview.
 
 ```json
 {"name":"run_command","arguments":{"command":"addon.cutting.banner","params":{"hem":"1 in","grommetInset":"0.5 in","spacing":"2 ft"}}}
+```
+
+### Nest Shapes
+
+`addon.cutting.nest {roll?, width?, height?, margin?, spacing?, rotate?, usePreviewBounds?, artboard?, patterns?}` moves
+the selected objects close together onto a sheet or a roll of material
+([packing problems](https://en.wikipedia.org/wiki/Packing_problems)). The ranges, defaults and rules below are
+VectorCraft's own. The sheet starts at the top-left corner of artboard `artboard` (0-based; by default the artboard
+under the center of the selection, else the first). It is `width` × `height` points (0 to 1000000 each; 0, the default,
+takes the artboard's width or height). With `roll` true it is a roll `width` wide with no end, and `height` is not used.
+`margin` (0 to 100000, default 18) is kept clear inside each edge of the sheet; on a roll, inside the sides and the
+start. `spacing` (0 to 100000, default 9) is kept between two objects.
+
+Each selected object is packed by its bounding box: with its strokes and effects, including the reach of shadows, glows
+and blurs, when `usePreviewBounds` is true (the default), else by its geometry. A group is one object. The tallest
+objects go first, each where its bottom edge is highest and then furthest left. With `rotate` true (false by default),
+an object may turn 90° clockwise where that puts its bottom edge higher, or where only the turned object fits; the
+longest side then decides the order, and a turned object is measured as it is after the turn. A path of a
+pixel-aligned compound path is not turned. Objects are moved, and turned with `rotate`, never resized. An object on the
+pixel grid moves by whole points and takes 1 pt more room across and down. Objects that do not fit go in a column to
+the right of the sheet, from its top, `spacing` from its edge and from each other, in stacking order (back to front).
+Objects without bounds, such as an empty group, are not moved. `patterns` moves pattern fills and strokes with the art
+(default: General › Transform Pattern Tiles).
+
+All of it is one undo step, and nothing changes when no object moves. The command fails when nothing selected can be
+measured, when the margin leaves no room on the sheet, when no selected object fits, with more than 10000 objects
+selected, and with bad params. Result: `{placed, unplaced, rotated, skipped, length}`: the number of objects placed,
+the ids of the objects put beside the sheet, the ids of the objects turned, the ids of the objects without bounds, and
+the length of material used in points, from the sheet's top edge to the margin below the lowest object placed. Nest
+Shapes… opens the command dialog with Preview.
+
+```json
+{"name":"run_command","arguments":{"command":"addon.cutting.nest","params":{"roll":true,"width":"24 in","margin":"0.25 in","spacing":"0.125 in","rotate":true}}}
 ```
 
 ## Color Effects add-on

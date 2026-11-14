@@ -34,6 +34,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "addon.contour.set",
     "addon.cutting.banner",
     "addon.cutting.bridges",
+    "addon.cutting.nest",
     "addon.cutting.weed",
     "addon.image.applyColorMask",
     "addon.image.colorMask",
