@@ -645,15 +645,54 @@ pub(crate) fn capture_line_rows(doc: &mut Document, ids: &[NodeId]) -> bool {
     store_line_rows(doc, ids, false)
 }
 
-/// Keep the object rows of the graph lines among `ids` whose rows an edit changed (`before`: the document before the
-/// edit) for every line of their kind. Returns whether kept rows changed.
-fn capture_line_changes(before: &Document, doc: &mut Document, ids: &[NodeId]) -> bool {
-    let changed: Vec<NodeId> = ids
-        .iter()
-        .copied()
-        .filter(|id| graph_line(doc, *id).is_some() && before.node(*id).map(label_rows) != doc.node(*id).map(label_rows))
-        .collect();
-    store_line_rows(doc, &changed, false)
+/// Keep, for every line of their kind, the attributes of the object rows ([`label_rows`]) that an edit changed on the
+/// graph lines among `ids` (`before`: the document before the edit). The attributes the edit left alone stay as the kind
+/// keeps them, also when a line still shows other ones until the graph is drawn again. Lines of a kind that the edit
+/// changed differently take the frontmost one's attributes. Called inside the same edit, so they undo together. Returns
+/// whether kept rows changed.
+pub(crate) fn capture_line_changes(before: &Document, doc: &mut Document, ids: &[NodeId]) -> bool {
+    let mut changed = false;
+    for (id, graph, line) in lines_of(doc, ids) {
+        let old = before.node(id).and_then(label_rows).unwrap_or_default();
+        let new = doc.node(id).and_then(label_rows).unwrap_or_default();
+        if old == new {
+            continue;
+        }
+        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        let slot = line_slot(&mut spec.label_styles, line);
+        let mut rows = slot.clone().unwrap_or_else(|| line.default_rows());
+        merge_row_edits(&mut rows, &old, &new);
+        let kept = (rows != line.default_rows()).then_some(rows);
+        changed |= *slot != kept;
+        *slot = kept;
+    }
+    changed
+}
+
+/// Is `id` a graph line: a path directly in a graph's Axes group?
+pub(crate) fn is_graph_line(doc: &Document, id: NodeId) -> bool {
+    graph_line(doc, id).is_some()
+}
+
+/// Set each attribute of `rows` that differs between `old` and `new` as `new` has it.
+fn merge_row_edits(rows: &mut vectorcraft_doc::LabelRows, old: &vectorcraft_doc::LabelRows, new: &vectorcraft_doc::LabelRows) {
+    fn take<T: PartialEq + Clone>(kept: &mut T, old: &T, new: &T) {
+        if old != new {
+            *kept = new.clone();
+        }
+    }
+    let (k, o, n) = (&mut rows.paint, &old.paint, &new.paint);
+    take(&mut k.fill, &o.fill, &n.fill);
+    take(&mut k.stroke, &o.stroke, &n.stroke);
+    take(&mut k.stroke_width, &o.stroke_width, &n.stroke_width);
+    take(&mut k.fill_opacity, &o.fill_opacity, &n.fill_opacity);
+    take(&mut k.stroke_opacity, &o.stroke_opacity, &n.stroke_opacity);
+    take(&mut k.fill_blend, &o.fill_blend, &n.fill_blend);
+    take(&mut k.stroke_blend, &o.stroke_blend, &n.stroke_blend);
+    take(&mut k.opacity, &o.opacity, &n.opacity);
+    take(&mut k.blend, &o.blend, &n.blend);
+    take(&mut rows.below, &old.below, &new.below);
+    take(&mut rows.stroke_under, &old.stroke_under, &new.stroke_under);
 }
 
 /// Would [`store_line_rows`] with `object_only` change what a graph keeps for the lines among `ids`? Reads the document
@@ -901,7 +940,7 @@ pub(crate) fn labels_in(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
 /// labels itself ([`picks_legend_fill`]), their fill is kept only when the legend labels among `ids` end up with one
 /// fill and the edit named them: with `named`, only a legend label among `named` (an edit that reached the others
 /// through the graph or a group leaves them the graph's black or white); without it, every label in `ids`. The graph
-/// lines among `ids` whose rows changed keep them for every line of their kind ([`capture_line_rows`]), with or without
+/// lines among `ids` whose rows changed keep what changed for every line of their kind ([`capture_line_changes`]), with or without
 /// `rows`. Called inside the same edit, so they undo together. Returns whether what a graph keeps changed.
 pub(crate) fn capture_label_changes(before: &Document, doc: &mut Document, ids: &[NodeId], rows: bool, named: Option<&[NodeId]>) -> bool {
     let lines = capture_line_changes(before, doc, ids);

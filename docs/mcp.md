@@ -873,10 +873,12 @@ the paint, weight, opacity and blend mode of its topmost visible fill and stroke
 opacity and blend mode. `paint.setFill`, `paint.setStroke` and the recolor commands also store them when given the
 graph, its Axes group or a group that holds the graph, so the lines keep the paint those commands give a whole graph.
 The other commands store them when given the line itself. `transparency.set` without an `item` and `object.setProps`
-store only the object opacity and blend mode. `appearance.copyFrom` stores the rows whatever it picks up, with or
-without `append`. The recolor commands, `paint.swap` and `paint.default` store a line's rows when they change them. The
-other commands store them even when the line already showed them, except that rows equal to a kind's default stroke
-(0.5 pt black for axis lines and tick marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
+store only the object opacity and blend mode. `appearance.clear`, `appearance.transfer`, `graphicStyle.apply`,
+`graphicStyle.redefine`, and `appearance.copyFrom` with every attribute picked up and applied or with `append`, store a
+line's rows even when the line already showed them. The other commands, an `appearance.copyFrom` of some attributes
+included, store only what they change on a line's rows; the kind keeps its other attributes, also when the line still
+shows different ones until the graph is drawn again. Rows equal to a kind's default stroke (0.5 pt black for axis lines
+and tick marks, 0.25 pt gray for rings) are not saved. When one command reaches several lines of one kind, the frontmost line in
 paint order sets what the kind keeps, whatever order the `ids` are in. A gradient is stored without its placement, and
 each line fits it when the graph is drawn again. The graph saves the rows as `axisRows` and `ringRows` in its label
 styles. Other stroke options (caps, joins, miter limit, alignment, dashes and arrowheads), rows below the topmost one of

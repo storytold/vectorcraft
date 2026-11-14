@@ -6193,6 +6193,53 @@ fn an_object_opacity_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
     }
 }
 
+/// An Eyedropper pick that applies only the object's transparency to an axis line keeps the stroke its kind keeps, though
+/// the line it is applied to still shows the default stroke.
+#[test]
+fn a_transparency_only_pick_on_an_axis_line_keeps_the_stroke_its_kind_keeps() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = NodeId(s.execute("shape.rectangle", &json!({"x": 600, "y": 600, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("transparency.set", &json!({"ids": [rect.0], "opacity": 50})).unwrap();
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+    assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "the other lines show black until the graph is drawn again");
+    let fill = json!({"color": false, "transparency": false, "overprint": false});
+    let stroke = json!({"color": false, "transparency": false, "overprint": false, "weight": false, "cap": false, "join": false, "miter": false, "dash": false});
+    let apply = json!({"appearance": {"transparency": true, "fill": fill, "stroke": stroke}, "character": false, "paragraph": false});
+    s.execute("appearance.copyFrom", &json!({"source": rect.0, "ids": [lines[1].id.0], "apply": apply})).unwrap();
+    let looks = redrawn_line_looks(&mut s, id);
+    assert!(looks.iter().all(|l| l.0 == "#ff0000" && (l.2 - 0.5).abs() < 1e-6), "{looks:?}");
+}
+
+/// An edit of some attributes on an axis line that still shows the default stroke keeps what it changes, and the stroke
+/// its kind keeps from another line stays: a cap is not kept, so it changes nothing the kind keeps.
+#[test]
+fn an_edit_of_some_attributes_on_an_axis_line_keeps_the_rest_its_kind_keeps() {
+    let cases = [
+        ("stroke.set", json!({"cap": "round"}), ""),
+        ("paint.setFill", json!({"color": "#0000ff"}), "#0000ff"),
+        ("appearance.setItem", json!({"index": 0, "color": "#00ff00"}), "#00ff00"),
+    ];
+    for (cmd, params, fill) in cases {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        let lines = line_nodes(&s, id);
+        s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "color": "#ff0000"})).unwrap();
+        assert_eq!(line_look(&line_nodes(&s, id)[1]).0, "#000000", "{cmd}: the other lines show black until the graph is drawn again");
+        let mut p = params.clone();
+        p["ids"] = json!([lines[1].id.0]);
+        s.execute(cmd, &p).unwrap();
+        let looks = redrawn_line_looks(&mut s, id);
+        assert!(looks.iter().all(|l| *l == ("#ff0000".into(), 0.5, 1.0)), "{cmd}: {looks:?}");
+        let fills: Vec<String> =
+            line_nodes(&s, id).iter().map(|n| n.appearance.fill_paint().color().map(|c| c.to_hex()).unwrap_or_default()).collect();
+        assert!(fills.iter().all(|f| f == fill), "{cmd}: {fills:?}");
+    }
+}
+
 /// An opacity and a stroke weight given to a radar graph's ring are kept for its rings, and its spokes keep their own.
 #[test]
 fn transparency_and_stroke_weight_on_a_radar_ring_are_kept_for_its_rings() {
