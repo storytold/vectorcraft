@@ -10494,9 +10494,13 @@ give the same result there. A paragraph whose characters differ in line metrics 
 scale, or an inline graphic taller than the text) is composed with Every-line in area type of any shape, rows,
 columns and text wrap included. In a frame that is not a rectangle, or with text wrap, each line it tries is measured
 where the lines above it put it, across the line's own height, so a taller line that reaches where the frame is
-narrower, or beside a wrap object, gets the room there. Such a paragraph falls back to Single-line when the frame has
-no room for all of it, or when the search for its breaks passes VectorCraft's own limits (1,000,000 lines tried and
-2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the paragraphs of a frame).
+narrower, or beside a wrap object, gets the room there. When the frame has no room for all of such a paragraph, the
+lines it holds are still composed with the whole paragraph: VectorCraft measures the lines past the frame's end as
+wide as the span of the last line the frame holds, less their indents. Those lines overflow, or go on in the next
+threaded frame, which composes them again at its own widths. Such a paragraph falls back to Single-line when the
+frame has no room for its first line, or when the search for its breaks passes VectorCraft's own limits (1,000,000
+lines tried and 2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the
+paragraphs of a frame).
 The UI command `type.lineComposer` (Cmd+Alt+Shift+C, in remote mode `press_key {key: "C", mods: {cmd: true, alt: true,
 shift: true}}` or `invoke_menu`) sets `singleLine` when every paragraph of the selected type (or every paragraph the
 Type tool's selection touches) uses Every-line, else `everyLine`, and returns the composer it set.
