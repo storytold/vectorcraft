@@ -9300,3 +9300,119 @@ breakText	Glyphs	Glyphes
 	Grommets	Œillets
 	Grommet Inset	Distance des œillets au bord
 	Diameter	Diamètre
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	Les effets 3D exigent des coordonnées finies comprises dans 100 millions de points
+@msg	3D effects require one to ten lights	Les effets 3D exigent d’une à dix lumières
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Profondeur BMP {_1} : 1, 4, 8, 16, 24 ou 32 bits par pixel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Échec de l’encodage BMP : {width} × {height} pixels ne conviennent ni au format ni au tampon de pixels
+@msg	GIF encoding failed: the palette image is malformed	Échec de l’encodage GIF : l’image à palette est mal formée
+@msg	GIF encoding failed: {e}	Échec de l’encodage GIF : {e}
+@msg	JPEG colour profile: {e}	Profil colorimétrique JPEG : {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Échec de l’encodage JPEG : le tampon de pixels ne correspond pas à la taille de l’image
+@msg	JPEG encoding failed: {e}	Échec de l’encodage JPEG : {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Échec de l’encodage PNG : le tampon de pixels ne correspond pas à la taille de l’image
+@msg	PNG encoding failed: the palette image is malformed	Échec de l’encodage PNG : l’image à palette est mal formée
+@msg	PNG encoding failed: {e}	Échec de l’encodage PNG : {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Échec de l’encodage PNG : {width} × {height} pixels n’est pas une taille d’image valide
+@msg	PSD colour profile: {e}	Profil colorimétrique PSD : {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Échec de l’encodage PSD : le tampon de pixels ne correspond pas à la taille de l’image
+@msg	Revolve profile contains invalid coordinates	Le profil de révolution contient des coordonnées non valides
+@msg	Revolve profile is too complex	Le profil de révolution est trop complexe
+@msg	Revolve projection is not finite	La projection de la révolution n’est pas finie
+@msg	Revolve requires finite profile coordinates within 100 million points	La révolution exige des coordonnées de profil finies comprises dans 100 millions de points
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	La surface de révolution est trop complexe ; réduisez Segments ou simplifiez le profil
+@msg	Revolve surface is too complex; simplify the profile	La surface de révolution est trop complexe ; simplifiez le profil
+@msg	Revolve visibility cannot split the projected boundary	La visibilité de la révolution ne peut pas diviser le contour projeté
+@msg	Revolve visibility creates too many fragments	La visibilité de la révolution crée trop de fragments
+@msg	Revolve visibility creates too many vector anchors	La visibilité de la révolution crée trop de points d’ancrage vectoriels
+@msg	Revolve visibility exceeds its geometry work limit	La visibilité de la révolution dépasse sa limite de calcul géométrique
+@msg	Revolve visibility exceeds its spatial index limit	La visibilité de la révolution dépasse sa limite d’index spatial
+@msg	Revolve visibility has too many boundary crossings	La visibilité de la révolution compte trop de croisements de contour
+@msg	Revolve visibility has too many input anchors	La visibilité de la révolution compte trop de points d’ancrage en entrée
+@msg	Revolve visibility requires convex cap sectors	La visibilité de la révolution exige des secteurs de fermeture convexes
+@msg	Revolve visibility requires finite projected faces	La visibilité de la révolution exige des faces projetées finies
+@msg	SVG options: {e}	Options SVG : {e}
+@msg	Save for Web settings: {e}	Réglages d’Enregistrer pour le web : {e}
+@msg	TIFF colour profile: {e}	Profil colorimétrique TIFF : {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Échec de l’encodage TIFF : le tampon de pixels ne correspond pas à la taille de l’image
+@msg	TIFF encoding failed: {e}	Échec de l’encodage TIFF : {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Profondeur Targa {_1} : 16, 24 ou 32 bits par pixel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Échec de l’encodage Targa : le tampon de pixels ne correspond pas à la taille de l’image
+@msg	The 3D projection is not finite	La projection 3D n’est pas finie
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	L’ombre 3D est trop complexe ; désactivez Ombres ou simplifiez l’illustration
+@msg	The shape contains invalid coordinates	La forme contient des coordonnées non valides
+@msg	Too many Revolve faces for visibility evaluation	Trop de faces de révolution pour évaluer la visibilité
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft lit au plus {ASE_MAX_ENTRIES} couleurs et groupes d’un fichier d’échange de nuances, et cette bibliothèque en contient {entries}
+@msg	WebP encoding failed: {e}	Échec de l’encodage WebP : {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}` : {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` vaut smallThumb, mediumThumb, largeThumb, smallList ou largeList
+@msg	a line can't run from a point to itself	une ligne ne peut pas relier un point à lui-même
+@msg	a line needs at least two points	une ligne nécessite au moins deux points
+@msg	a number cannot be read	un nombre ne peut pas être lu
+@msg	a swatch exchange block is too long	un bloc du fichier d’échange de nuances est trop long
+@msg	a swatch exchange name is too long	un nom du fichier d’échange de nuances est trop long
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	une image de {sw} × {sh} ne peut pas être redimensionnée à {width} × {height} pixels
+@msg	a {width} × {height} image is too large	une image de {width} × {height} est trop grande
+@msg	a {width} × {height} image: {e}	une image de {width} × {height} : {e}
+@msg	an image could not be written: {e}	une image n’a pas pu être écrite : {e}
+@msg	an image that couldn't be read was left out	une image illisible a été omise
+@msg	can't open “{name}”: {e}	impossible d’ouvrir « {name} » : {e}
+@msg	cannot align zip entries to {align} bytes	impossible d’aligner les entrées zip sur {align} octets
+@msg	cannot open the automation {kind} root `{_1}`: {e}	impossible d’ouvrir le dossier racine d’automatisation ({kind}) `{_1}` : {e}
+@msg	cannot read profile: {0}	impossible de lire le profil : {0}
+@msg	color book version {version} isn't supported (only 1)	la version {version} du carnet de couleurs n’est pas prise en charge (seulement 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	les carnets de couleurs dans l’espace colorimétrique {other} ne sont pas pris en charge (seulement RVB, CMJN et Lab)
+@msg	file name too long to zip: {_1}	nom de fichier trop long pour le zip : {_1}
+@msg	file name too long to zip: {name}	nom de fichier trop long pour le zip : {name}
+@msg	freeform line {i}: {e}	ligne libre {i} : {e}
+@msg	freeform point {i}: {e}	point libre {i} : {e}
+@msg	give `{key}` or `{other}`, not both	indiquez `{key}` ou `{other}`, pas les deux
+@msg	grayscale profiles can't be working spaces yet	les profils en niveaux de gris ne peuvent pas encore servir d’espaces de travail
+@msg	input contains NaN or infinite coordinates	l’entrée contient des coordonnées NaN ou infinies
+@msg	input path could not be closed	le tracé d’entrée n’a pas pu être fermé
+@msg	invalid ICC profile: {0}	profil ICC non valide : {0}
+@msg	invalid scale {scale}	échelle non valide {scale}
+@msg	its localized names take more than {_1} KB	ses noms localisés occupent plus de {_1} Ko
+@msg	its objects are nested too deep ({e})	ses objets sont trop profondément imbriqués ({e})
+@msg	its tag table lists the `{_1}` tag more than once	sa table de balises répertorie la balise `{_1}` plus d’une fois
+@msg	not a graphic style library: {e}	ce n’est pas une bibliothèque de styles graphiques : {e}
+@msg	not a swatch library (.vcswatches or .gpl)	ce n’est pas une bibliothèque de nuances (.vcswatches ou .gpl)
+@msg	not a swatch library (format `{_1}`)	ce n’est pas une bibliothèque de nuances (format `{_1}`)
+@msg	not a swatch library: {e}	ce n’est pas une bibliothèque de nuances : {e}
+@msg	not an action set file ({e})	ce n’est pas un fichier de jeu de scripts ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	l’espace colorimétrique {other} du profil n’est pas RVB, CMJN ou Niveaux de gris
+@msg	regular expression too large	expression régulière trop volumineuse
+@msg	script file is not UTF-8 text: {value}	le fichier de script n’est pas du texte UTF-8 : {value}
+@msg	stop {i}: {e}	étape de dégradé {i} : {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	la version {major}.{minor} du fichier d’échange de nuances n’est pas prise en charge (seulement 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	le carnet de couleurs contient plus de {ASE_MAX_ENTRIES} couleurs
+@msg	the color book is cut short	le carnet de couleurs est tronqué
+@msg	the color book's names take more than {_1} MB	les noms du carnet de couleurs occupent plus de {_1} Mo
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	l’image mesurerait {w} × {h} pixels ; les exports en pixels sont limités à {MAX_RASTER_SIDE} pixels par côté et à {_1} mégapixels : réduisez l’échelle ou la résolution
+@msg	the optimised image can't be read back: {e}	l’image optimisée ne peut pas être relue : {e}
+@msg	the pixel buffer doesn't match the image size	le tampon de pixels ne correspond pas à la taille de l’image
+@msg	the preview: {e}	l’aperçu : {e}
+@msg	the request may not read the New Document profiles folder	la requête n’est pas autorisée à lire le dossier des profils de nouveau document
+@msg	the shapes are too degenerate to combine	les formes sont trop dégénérées pour être combinées
+@msg	the shapes cross themselves and each other too often to combine	les formes se croisent elles-mêmes et entre elles trop souvent pour être combinées
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	le fichier d’échange de nuances contient plus de {ASE_MAX_ENTRIES} couleurs et groupes
+@msg	the swatch exchange file is cut short	le fichier d’échange de nuances est tronqué
+@msg	the {_1} plate can't be read: {e}	la plaque {_1} ne peut pas être lue : {e}
+@msg	too many classes	trop de classes
+@msg	too many groups	trop de groupes
+@msg	too many layers for PSD (at most 32767)	trop de calques pour le PSD (32767 au plus)
+@msg	too many swatch exchange blocks	trop de blocs dans le fichier d’échange de nuances
+@msg	unknown colour profile: {0}	profil colorimétrique inconnu : {0}
+@msg	{_1} clashes with a built-in profile name	{_1} entre en conflit avec le nom d’un profil intégré
+@msg	{_1}: no usable transform to/from sRGB	{_1} : aucune transformation utilisable vers ou depuis sRGB
+@msg	{name} is not a CMYK profile	{name} n’est pas un profil CMJN
+@msg	{name} is not an RGB profile	{name} n’est pas un profil RVB
+@msg	{path}: could not be read	{path} : lecture impossible
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels, c’est trop grand pour le JPEG (65535 pixels par côté au plus) : réduisez la résolution
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixels, c’est trop grand pour le Targa (65535 pixels par côté au plus) : réduisez la résolution
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixels, c’est trop grand pour le PSD ({MAX_SIDE} pixels par côté au plus) : réduisez la résolution
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	c’est un dessin DWG, qui ne peut pas être lu : enregistrez-le depuis l’application de CAO au format DXF et ouvrez ce fichier
+@msg	this binary DXF file is damaged or cut short	ce fichier DXF binaire est endommagé ou tronqué
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixels, c’est trop grand pour le GIF (65535 pixels par côté au plus) : réduisez la résolution
