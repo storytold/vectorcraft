@@ -315,13 +315,13 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
     let pos = Point::new(f64_req(p, "x", "path.setHandle")?, f64_req(p, "y", "path.setHandle")?);
     let independent = switch_or(p, "independent", false, "path.setHandle")?;
     // A handle already there, on an anchor already of the kind it would get, changes nothing and
-    // records no undo step.
-    if let Some(a) = anchor_of(s, id, si, ai)? {
-        let mut b = a;
-        b.set_handle(out, pos, independent);
-        if b == a {
-            return ok();
-        }
+    // records no undo step. The handle is compared directly: `set_handle` would recompute the
+    // other handle of a smooth anchor, which need not give back the same value.
+    if let Some(a) = anchor_of(s, id, si, ai)?
+        && (if out { a.h_out } else { a.h_in }) == pos
+        && !(independent && a.kind != AnchorKind::Corner)
+    {
+        return ok();
     }
     s.edit("Reshape", |d, _| {
         let path = path_mut(d, id)?;
