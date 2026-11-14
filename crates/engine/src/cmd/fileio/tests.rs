@@ -203,15 +203,18 @@ fn a_16_bit_cmyk_tiff_with_alpha_places_at_16_bits() {
 }
 
 /// A CMYK or grayscale TIFF whose alpha follows another extra sample opens and places with that
-/// alpha, at 8 and 16 bits, chunky and planar; a CMYK one is not kept as inks.
+/// alpha, at 8 and 16 bits, chunky and planar; a CMYK one is not kept as inks. A CMYK one with two
+/// more samples than its ExtraSamples values count does too.
 #[test]
 fn a_tiff_with_alpha_after_another_extra_sample_places_with_its_alpha() {
     let none = vec![0u16; 6];
     let full = vec![255u16; 6];
     let other = vec![9u16, 8, 7, 6, 5, 4];
     let alpha = vec![255u16, 128, 0, 255, 64, 1];
+    let inks = [full.clone(), none.clone(), none.clone(), none.clone()];
     let cases = [
         ("CMYK", 5, vec![full.clone(), none.clone(), none.clone(), none.clone(), other.clone(), alpha.clone()]),
+        ("CMYK, two more samples", 5, [&inks[..], &[other.clone(), alpha.clone(), other.clone(), full.clone()]].concat()),
         ("gray", 1, vec![full.clone(), other.clone(), alpha.clone()]),
     ];
     for (what, photometric, channels) in cases {

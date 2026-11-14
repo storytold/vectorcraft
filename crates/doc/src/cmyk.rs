@@ -124,20 +124,24 @@ pub fn oversized_tiff(bytes: &[u8]) -> Option<(u32, u32)> {
     (tiles || strips).then_some((width, height))
 }
 
-/// The color type of TIFF `bytes` and its decoder; `None` for [`oversized_tiff`] images too.
-pub(crate) fn tiff(bytes: &[u8]) -> Option<(tiff::ColorType, tiff::decoder::Decoder<Cursor<&[u8]>>)> {
+/// The decoder of TIFF `bytes`' first image; `None` for other bytes and [`oversized_tiff`] images.
+fn tiff_decoder(bytes: &[u8]) -> Option<tiff::decoder::Decoder<Cursor<&[u8]>>> {
     if !is_tiff(bytes) || oversized_tiff(bytes).is_some() {
         return None;
     }
-    let mut d = tiff::decoder::Decoder::new(Cursor::new(bytes)).ok()?;
+    tiff::decoder::Decoder::new(Cursor::new(bytes)).ok()
+}
+
+/// The color type of TIFF `bytes` and its decoder; `None` for [`oversized_tiff`] images too.
+pub(crate) fn tiff(bytes: &[u8]) -> Option<(tiff::ColorType, tiff::decoder::Decoder<Cursor<&[u8]>>)> {
+    let mut d = tiff_decoder(bytes)?;
     Some((d.colortype().ok()?, d))
 }
 
 /// The Orientation tag of TIFF `bytes`' first image, of any unsigned type; `None` for other images
-/// and TIFFs without one. Reads only its header.
+/// and TIFFs without one. Reads only its header, for any color type.
 pub fn tiff_orientation(bytes: &[u8]) -> Option<u16> {
-    let (_, mut d) = tiff(bytes)?;
-    d.find_tag_unsigned::<u16>(tiff::tags::Tag::Orientation).ok().flatten()
+    tiff_decoder(bytes)?.find_tag_unsigned::<u16>(tiff::tags::Tag::Orientation).ok().flatten()
 }
 
 /// The EXIF orientation of encoded image `bytes` when it turns or flips the pixels; `None` when
@@ -155,12 +159,46 @@ pub fn exif_orientation(bytes: &[u8]) -> Option<image::metadata::Orientation> {
     decoded().or_else(tagged).filter(|o| *o != Orientation::NoTransforms)
 }
 
-/// TIFF `bytes` with the PhotometricInterpretation (tag 262) of their first image set to 1 (black
-/// is zero) in each of its entries that holds one SHORT or LONG value. The decoder gives every
-/// sample of a grayscale image's pixels, in the order the file stores them, where it gives a CMYK
-/// image's inks and at most the first extra sample, and doesn't read a white-is-zero image with
-/// extra samples. `None` for bytes that aren't a TIFF and when the first image has no such entry.
-fn as_black_is_zero(bytes: &[u8]) -> Option<Vec<u8>> {
+/// TIFF bytes as a reader sees them with some of them replaced: each patch is an offset and the
+/// bytes read there instead, at most four, in order of offset without overlaps. The file is not
+/// copied.
+struct Patched<'a> {
+    bytes: Cursor<&'a [u8]>,
+    patches: Vec<(usize, &'static [u8])>,
+}
+
+impl std::io::Read for Patched<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let start = usize::try_from(self.bytes.position()).unwrap_or(usize::MAX);
+        let read = std::io::Read::read(&mut self.bytes, buf)?;
+        let got = buf.get_mut(..read).unwrap_or_default();
+        let end = start.saturating_add(read);
+        // The patches are in order and apart, and each is at most four bytes long.
+        let first = self.patches.partition_point(|&(at, _)| at.saturating_add(4) <= start);
+        for &(at, with) in self.patches.get(first..).unwrap_or_default().iter().take_while(|&&(at, _)| at < end) {
+            for (k, &b) in with.iter().enumerate() {
+                if let Some(slot) = at.checked_add(k).and_then(|i| i.checked_sub(start)).and_then(|i| got.get_mut(i)) {
+                    *slot = b;
+                }
+            }
+        }
+        Ok(read)
+    }
+}
+
+impl std::io::Seek for Patched<'_> {
+    fn seek(&mut self, to: std::io::SeekFrom) -> std::io::Result<u64> {
+        std::io::Seek::seek(&mut self.bytes, to)
+    }
+}
+
+/// TIFF `bytes` read with the PhotometricInterpretation (tag 262) of their first image set to 1
+/// (black is zero) in each of its entries that holds one SHORT or LONG value. The decoder gives
+/// every sample of a grayscale image's pixels, in the order the file stores them, where it gives a
+/// CMYK image's inks and at most the first extra sample, and doesn't read a white-is-zero image
+/// with extra samples. `None` for bytes that aren't a TIFF and when the first image has no such
+/// entry.
+fn as_black_is_zero(bytes: &[u8]) -> Option<Patched<'_>> {
     let le = bytes.starts_with(b"II*\0");
     if !le && !bytes.starts_with(b"MM\0*") {
         return None;
@@ -174,8 +212,7 @@ fn as_black_is_zero(bytes: &[u8]) -> Option<Vec<u8>> {
         Some(if le { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) })
     };
     let ifd = usize::try_from(u32_at(4)?).ok()?;
-    let mut out = bytes.to_vec();
-    let mut changed = false;
+    let mut patches = Vec::new();
     for i in 0..usize::from(u16_at(ifd)?) {
         let e = ifd.checked_add(i.checked_mul(12)?.checked_add(2)?)?;
         let (Some(tag), Some(ty), Some(count)) = (u16_at(e), u16_at(e.checked_add(2)?), u32_at(e.checked_add(4)?)) else { break };
@@ -183,7 +220,7 @@ fn as_black_is_zero(bytes: &[u8]) -> Option<Vec<u8>> {
             continue;
         }
         // The value sits in the entry, in the file's byte order.
-        let one: &[u8] = match (ty, le) {
+        let one: &'static [u8] = match (ty, le) {
             (3, true) => &[1, 0],
             (3, false) => &[0, 1],
             (4, true) => &[1, 0, 0, 0],
@@ -191,10 +228,10 @@ fn as_black_is_zero(bytes: &[u8]) -> Option<Vec<u8>> {
             _ => continue,
         };
         let at = e.checked_add(8)?;
-        out.get_mut(at..at.checked_add(one.len())?)?.copy_from_slice(one);
-        changed = true;
+        bytes.get(at..at.checked_add(one.len())?)?;
+        patches.push((at, one));
     }
-    changed.then_some(out)
+    (!patches.is_empty()).then(|| Patched { bytes: Cursor::new(bytes), patches })
 }
 
 /// The ExtraSamples values of the image `d` reads, one for each sample after its color, in order:
@@ -203,11 +240,25 @@ fn extra_samples(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> Vec<u16> {
     d.find_tag_unsigned_vec::<u16>(tiff::tags::Tag::ExtraSamples).ok().flatten().unwrap_or_default()
 }
 
-/// Does `kind`, the color type of the TIFF `d` reads, hold inks that [`ImageBlob::cmyk`] reads:
-/// CMYK of 8 or 16 bits, with no extra sample that the file names as alpha? The decoder gives a
-/// CMYK color type to a file whose alpha follows another extra sample.
+/// Does `kind`, the color type of the TIFF `d` reads, hold inks that Open and Place keep: CMYK of 8
+/// or 16 bits, with no extra sample that the file names as alpha? The decoder gives a CMYK color
+/// type to a file whose alpha follows another extra sample. [`ImageBlob::cmyk`] reads the inks of
+/// such a file all the same: a document saved with one as a CMYK image keeps it.
 fn cmyk_inks(kind: tiff::ColorType, d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>) -> bool {
     matches!(kind, tiff::ColorType::CMYK(8 | 16)) && !extra_samples(d).iter().any(|e| matches!(e, 1 | 2))
+}
+
+/// `d` with room to decode `n` pixels of `per` samples of `bits` bits each, when they take more
+/// than the decoder's own limit (256 MB of samples); `None` when they take more than
+/// [`crate::MAX_RASTER_ALLOC`].
+fn with_room<R: std::io::Read + std::io::Seek>(d: tiff::decoder::Decoder<R>, n: usize, per: usize, bits: u8) -> Option<tiff::decoder::Decoder<R>> {
+    let need = n.checked_mul(per)?.checked_mul(usize::from(bits.div_ceil(8)))?;
+    if u64::try_from(need).ok()? > crate::MAX_RASTER_ALLOC {
+        return None;
+    }
+    let mut limits = tiff::decoder::Limits::default();
+    limits.decoding_buffer_size = limits.decoding_buffer_size.max(need);
+    Some(d.with_limits(limits))
 }
 
 /// Does the TIFF `d` reads store one plane per channel (PlanarConfiguration 2)?
@@ -251,7 +302,7 @@ enum SampleSlice<'a> {
 }
 
 /// [`read_samples`], keeping 16-bit samples at 16 bits.
-fn read_samples_at_depth(d: &mut tiff::decoder::Decoder<Cursor<&[u8]>>, n: usize, per: usize) -> Option<Samples> {
+fn read_samples_at_depth<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>, n: usize, per: usize) -> Option<Samples> {
     let mut buf = tiff::decoder::DecodingResult::U8(Vec::new());
     let layout = d.read_image_to_buffer(&mut buf).ok()?;
     match buf {
@@ -414,13 +465,13 @@ impl ImageBlob {
     /// Does the image hold CMYK samples (a four-component JPEG or a CMYK TIFF)? Reads only its
     /// header.
     pub fn is_cmyk(&self) -> bool {
-        jpeg_components(&self.bytes) == Some(4) || tiff(&self.bytes).is_some_and(|(t, mut d)| cmyk_inks(t, &mut d))
+        jpeg_components(&self.bytes) == Some(4) || tiff(&self.bytes).is_some_and(|(t, _)| matches!(t, tiff::ColorType::CMYK(8 | 16)))
     }
 
     /// Does the image hold CMYK samples of 16 bits (a CMYK TIFF), which [`Self::cmyk`] gives at 8
     /// bits? Reads only its header.
     pub fn is_cmyk16(&self) -> bool {
-        tiff(&self.bytes).is_some_and(|(t, mut d)| matches!(t, tiff::ColorType::CMYK(16)) && cmyk_inks(t, &mut d))
+        tiff(&self.bytes).is_some_and(|(t, _)| matches!(t, tiff::ColorType::CMYK(16)))
     }
 
     /// The width and height a JPEG or TIFF says it has, for any color type. Reads only its header.
@@ -539,7 +590,7 @@ fn jpeg_inks(bytes: &[u8]) -> Option<Inks> {
 fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
     let (kind, mut d) = tiff(bytes)?;
     let (w, h) = d.dimensions().ok()?;
-    if !cmyk_inks(kind, &mut d) {
+    if !matches!(kind, tiff::ColorType::CMYK(8 | 16)) {
         return None;
     }
     let n = usize::try_from(pixels(w, h)?).ok()?;
@@ -549,8 +600,8 @@ fn tiff_inks(bytes: &[u8]) -> Option<Inks> {
 /// CMYK TIFF `bytes` that no orientation turns ([`turned_cmyk`] stores the others) as Open and
 /// Place store them: as they are, or, when they store one plane per ink, which the image decoder
 /// doesn't read, their inks together in a CMYK TIFF with the resolution `ppi`, at the 8 or 16 bits
-/// the file has, carrying the file's CMYK ICC profile. `None` for other images and for CMYK TIFFs
-/// whose inks [`ImageBlob::cmyk`] doesn't read.
+/// the file has, carrying the file's CMYK ICC profile. `None` for other images, for CMYK TIFFs
+/// with an extra sample named as alpha and for ones whose inks [`ImageBlob::cmyk`] doesn't read.
 pub fn stored_cmyk_tiff(bytes: &[u8], ppi: Option<(f64, f64)>) -> Option<Vec<u8>> {
     let source = tiff_source(bytes)?;
     let (_, mut d) = tiff(bytes)?;
@@ -564,7 +615,8 @@ pub fn stored_cmyk_tiff(bytes: &[u8], ppi: Option<(f64, f64)>) -> Option<Vec<u8>
 /// inks turned and written again as a CMYK TIFF with the resolution `ppi` of the turned pixels,
 /// with the turned width and height. A TIFF keeps its 8 or 16 bits, a JPEG has 8, and both keep
 /// their CMYK ICC profile (a JPEG's put together from all its APP2 segments). `None` for other
-/// images and for CMYK images whose inks [`ImageBlob::cmyk`] doesn't read.
+/// images, for CMYK TIFFs with an extra sample named as alpha and for CMYK images whose inks
+/// [`ImageBlob::cmyk`] doesn't read.
 pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi: Option<(f64, f64)>) -> Option<(Vec<u8>, (u32, u32))> {
     let CmykSource { width, height, samples, icc } = if bytes.starts_with(&[0xFF, 0xD8]) { jpeg_source(bytes) } else { tiff_source(bytes) }?;
     // Four inks to a pixel, turned as four channels of the same depth are.
@@ -591,35 +643,43 @@ pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi:
 /// ExtraSamples tag has that sample as unassociated alpha. Associated (premultiplied) alpha is
 /// divided back out, and a pixel with no associated alpha has no color. 16-bit samples are
 /// converted at 16 bits, and only the result is rounded to 8 bits. The samples may be stored
-/// together or one plane per channel. `None` for other images, CMYK ones without alpha (their inks
-/// are read by [`ImageBlob::cmyk`]) and ones larger than [`MAX_CMYK_PIXELS`].
+/// together or one plane per channel. A CMYK file with two or more samples past its inks and its
+/// ExtraSamples values is read when one of those values names an alpha. `None` for other images,
+/// CMYK ones without alpha (their inks are read by [`ImageBlob::cmyk`]), ones larger than
+/// [`MAX_CMYK_PIXELS`] and ones whose samples take more than [`crate::MAX_RASTER_ALLOC`].
 pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3]) -> Option<image::RgbaImage> {
     use tiff::tags::Tag;
-    let (kind, mut d) = tiff(bytes)?;
+    let mut d = tiff_decoder(bytes)?;
+    // The decoder gives no color type to a CMYK file that has six or more samples besides the
+    // ones its ExtraSamples values count.
+    let kind = d.colortype().ok();
     let (w, h) = d.dimensions().ok()?;
-    // 0: white is zero, 1: black is zero (the two grayscales).
+    // 0: white is zero, 1: black is zero (the two grayscales), 5: CMYK.
     let photometric = d.find_tag_unsigned::<u16>(Tag::PhotometricInterpretation).ok().flatten();
     let extras = extra_samples(&mut d);
     // The first extra sample named as alpha: (its place among the extra samples, is it associated?)
     let named = extras.iter().position(|e| matches!(e, 1 | 2)).map(|i| (i, extras.get(i) == Some(&1)));
+    // The samples of a pixel that no ExtraSamples value counts.
+    let uncounted = d.find_tag_unsigned::<u16>(Tag::SamplesPerPixel).ok().flatten().and_then(|all| usize::from(all).checked_sub(extras.len()));
     // (how many of a pixel's samples are its color, the alpha among the extra samples)
     let (colour, alpha) = match kind {
-        tiff::ColorType::CMYKA(8 | 16) => (4, if extras.is_empty() { Some((0, false)) } else { named }),
-        tiff::ColorType::CMYK(8 | 16) if named.is_some() => (4, named),
-        tiff::ColorType::Multiband { bit_depth: 8 | 16, num_samples: 2.. } if matches!(photometric, Some(0 | 1)) => (1, named),
+        Some(tiff::ColorType::CMYKA(8 | 16)) => (4, if extras.is_empty() { Some((0, false)) } else { named }),
+        Some(tiff::ColorType::CMYK(8 | 16)) if named.is_some() => (4, named),
+        Some(tiff::ColorType::Multiband { bit_depth: 8 | 16, num_samples: 2.. }) if matches!(photometric, Some(0 | 1)) => (1, named),
+        None if photometric == Some(5) && named.is_some() && uncounted.is_some_and(|c| c > 5) => (4, named),
         _ => return None,
     };
     let n = usize::try_from(pixels(w, h)?).ok()?;
     // The decoder gives a CMYK pixel its inks and at most one extra sample, and doesn't read
     // white-is-zero gray with extra samples: those are read as black-is-zero gray, every sample.
-    let given = usize::from(kind.num_samples());
+    let given = kind.map_or(0, |k| usize::from(k.num_samples()));
     let (data, samples) = if photometric == Some(0) || alpha.is_some_and(|(i, _)| colour + i >= given) {
-        let all = as_black_is_zero(bytes)?;
-        let (all_kind, mut d) = tiff(&all)?;
-        let samples = usize::from(all_kind.num_samples());
-        (read_samples_at_depth(&mut d, n, samples)?, samples)
+        let mut d = tiff::decoder::Decoder::new(as_black_is_zero(bytes)?).ok()?;
+        let tiff::ColorType::Multiband { bit_depth: bits @ (8 | 16), num_samples } = d.colortype().ok()? else { return None };
+        let samples = usize::from(num_samples);
+        (read_samples_at_depth(&mut with_room(d, n, samples, bits)?, n, samples)?, samples)
     } else {
-        (read_samples_at_depth(&mut d, n, given)?, given)
+        (read_samples_at_depth(&mut with_room(d, n, given, kind?.bit_depth())?, n, given)?, given)
     };
     // (the alpha's sample in a pixel, is it associated?), when the pixel has that sample.
     let alpha = alpha.map(|(i, associated)| (colour + i, associated)).filter(|(at, _)| *at < samples);
@@ -966,6 +1026,8 @@ mod tests {
     }
     samples!(Cmyk6x8, u8, CMYK, 8, 6);
     samples!(Cmyk6x16, u16, CMYK, 16, 6);
+    samples!(Cmyk7x8, u8, CMYK, 8, 7);
+    samples!(Cmyk8x8, u8, CMYK, 8, 8);
     samples!(Gray3x8, u8, BlackIsZero, 8, 3);
     samples!(WhiteGray2x8, u8, WhiteIsZero, 8, 2);
 
@@ -997,6 +1059,9 @@ mod tests {
 
     /// A CMYK TIFF whose pixels have alpha and another extra sample reads the sample its
     /// ExtraSamples names as alpha, first or second, at 8 and 16 bits, and leaves the other out.
+    /// Open and Place don't keep its inks. A blob that holds the file, as a document saved with it
+    /// as a CMYK image does, is a CMYK image with those inks when the alpha is the second extra
+    /// sample.
     #[test]
     fn a_cmyk_tiff_with_alpha_and_another_extra_sample_reads_its_alpha() {
         let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
@@ -1008,7 +1073,16 @@ mod tests {
                 let px = extra_samples_tiff_rgba(&bytes, naive).unwrap_or_else(|| panic!("{extra:?}, {bits} bits: reads"));
                 assert_eq!(px.into_raw(), [0, 255, 255, 128, 0, 0, 0, 255], "{extra:?}, {bits} bits: cyan at half alpha, then black");
                 assert!(stored_cmyk_tiff(&bytes, None).is_none(), "{extra:?}, {bits} bits: the inks can't be kept with the alpha");
-                assert!(!ImageBlob::new("image/tiff", bytes).is_cmyk(), "{extra:?}, {bits} bits");
+                let b = ImageBlob::new("image/tiff", bytes);
+                if extra[0] != 0 {
+                    // The decoder gives these the color type of CMYK with alpha.
+                    assert!(!b.is_cmyk() && b.cmyk().is_none(), "{extra:?}, {bits} bits: never stored as inks");
+                    continue;
+                }
+                assert!(b.is_cmyk(), "{extra:?}, {bits} bits: a stored one stays a CMYK image");
+                assert_eq!(b.is_cmyk16(), bits == 16, "{extra:?}, {bits} bits");
+                let cyan = u8::try_from(data[0]).unwrap();
+                assert_eq!(b.cmyk().map(|i| i.data), Some(vec![cyan, 0, 0, 0, 0, 0, 0, 255]), "{extra:?}, {bits} bits: a stored one keeps its inks");
             }
         }
         // Two extra samples, neither of them alpha: the inks are kept, as with one.
@@ -1029,6 +1103,99 @@ mod tests {
         let read = |extra: u16| extra_samples_tiff_rgba(&extras_tiff::<Cmyk6x8>(&[extra], &data), naive).expect("reads").into_raw();
         assert_eq!(read(2), [0, 255, 255, 128, 0, 0, 0, 255], "the sample after the inks is the alpha");
         assert_eq!(read(0), [0, 255, 255, 255, 0, 0, 0, 255], "not alpha: opaque");
+        // Eight samples with two values: the decoder gives the file no color type. The second
+        // value names the sixth sample as the alpha.
+        let wide = [255, 0, 0, 0, 9, 128, 17, 18];
+        let px = extra_samples_tiff_rgba(&extras_tiff::<Cmyk8x8>(&[0, 2], &wide), naive).expect("reads");
+        assert_eq!(px.into_raw(), [0, 255, 255, 128], "cyan at the alpha the second value names");
+        assert!(extra_samples_tiff_rgba(&extras_tiff::<Cmyk8x8>(&[0, 0], &wide), naive).is_none(), "no value names an alpha: not read");
+        // Seven samples with two values: the decoder reads it as CMYK with alpha.
+        let px = extra_samples_tiff_rgba(&extras_tiff::<Cmyk7x8>(&[0, 2], &wide[..7]), naive).expect("reads");
+        assert_eq!(px.into_raw(), [0, 255, 255, 128], "seven samples: cyan at the alpha the second value names");
+        // Its Orientation tag is read too.
+        let mut file = Cursor::new(Vec::new());
+        let mut enc = tiff::encoder::TiffEncoder::new(&mut file).unwrap();
+        let mut img = enc.new_image::<Cmyk8x8>(1, 1).unwrap();
+        img.encoder().write_tag(tiff::tags::Tag::ExtraSamples, &[0u16, 2][..]).unwrap();
+        img.encoder().write_tag(tiff::tags::Tag::Orientation, 6u16).unwrap();
+        img.write_data(&wide).unwrap();
+        let turned = file.into_inner();
+        assert_eq!(tiff_orientation(&turned), Some(6));
+        assert_eq!(exif_orientation(&turned), Some(image::metadata::Orientation::Rotate90));
+    }
+
+    /// A white-is-zero grayscale TIFF one pixel wide and `rows` tall, each pixel `samples` samples
+    /// of 8 bits: a level of 0, an unassociated alpha of 128, then zeros. Each row is a strip, and
+    /// every strip is the same bytes of the file.
+    fn tall_gray_tiff(rows: u32, samples: u16) -> Vec<u8> {
+        let at = |f: &Vec<u8>| u32::try_from(f.len()).unwrap();
+        let mut f = b"II*\0\0\0\0\0".to_vec();
+        let row = at(&f);
+        f.extend([0, 128]);
+        f.resize(f.len() + usize::from(samples) - 2, 0);
+        let offsets = at(&f);
+        f.extend((0..rows).flat_map(|_| row.to_le_bytes()));
+        let counts = at(&f);
+        f.extend((0..rows).flat_map(|_| u32::from(samples).to_le_bytes()));
+        let ifd = at(&f);
+        f[4..8].copy_from_slice(&ifd.to_le_bytes());
+        // (tag, type (3 SHORT, 4 LONG), count, value or offset)
+        let entries = [
+            (256u16, 4u16, 1, 1),
+            (257, 4, 1, rows),
+            (258, 3, 1, 8),
+            (259, 3, 1, 1),
+            (262, 3, 1, 0),
+            (273, 4, rows, offsets),
+            (277, 3, 1, u32::from(samples)),
+            (278, 4, 1, 1),
+            (279, 4, rows, counts),
+            (338, 3, 1, 2),
+        ];
+        f.extend(u16::try_from(entries.len()).unwrap().to_le_bytes());
+        for (tag, ty, count, value) in entries {
+            f.extend([tag.to_le_bytes(), ty.to_le_bytes()].concat());
+            f.extend([count.to_le_bytes(), value.to_le_bytes()].concat());
+        }
+        f.extend([0; 4]);
+        f
+    }
+
+    /// A TIFF with extra samples whose samples take more than the decoder's own limit of 256 MB
+    /// reads: here 65,537 pixels of 4,096 samples, 4,096 bytes more than the limit.
+    #[test]
+    fn a_tiff_with_extra_samples_past_the_decoders_limit_reads() {
+        let (rows, samples) = (65_537, 4096);
+        assert!(u64::from(rows) * u64::from(samples) > 256 << 20);
+        let px = extra_samples_tiff_rgba(&tall_gray_tiff(rows, samples), |_| [0.0; 3]).expect("reads");
+        assert_eq!((px.width(), px.height()), (1, rows));
+        assert!(px.pixels().all(|p| p.0 == [255, 255, 255, 128]), "white at an alpha of 128");
+    }
+
+    /// Patched bytes read the same whole, a byte at a time and after a seek into a patch.
+    #[test]
+    fn patched_bytes_read_with_their_patches() {
+        use std::io::{Read, Seek, SeekFrom};
+        let bytes: Vec<u8> = (10..30).collect();
+        let patched = || Patched { bytes: Cursor::new(&bytes[..]), patches: vec![(4, &[1, 0]), (19, &[7, 7])] };
+        let want = [10, 11, 12, 13, 1, 0, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 7];
+        let mut whole = Vec::new();
+        patched().read_to_end(&mut whole).unwrap();
+        assert_eq!(whole, want);
+        let mut one = patched();
+        let bytewise: Vec<u8> = (0..want.len())
+            .map(|_| {
+                let mut b = [0];
+                assert_eq!(one.read(&mut b).unwrap(), 1);
+                b[0]
+            })
+            .collect();
+        assert_eq!(bytewise, want);
+        let mut from = patched();
+        from.seek(SeekFrom::Start(5)).unwrap();
+        let mut b = [9; 3];
+        from.read_exact(&mut b).unwrap();
+        assert_eq!(b, [0, 16, 17], "the second byte of the first patch, then the file");
     }
 
     /// A grayscale TIFF whose alpha follows another extra sample reads that alpha.
