@@ -7457,6 +7457,19 @@ breakText	Glyphs	Glyffer
 	Align New Objects to Pixel Grid	Juster nye objekter efter pixelgitter
 	Not Aligned to Pixel Grid	Ikke justeret efter pixelgitter
 @msg	side is left or right, not `{s}`	side er left eller right, ikke `{s}`
+@msg	side is left or right, not `{v}`	side er left eller right, ikke `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order er et heltal fra 0 til {others}, ikke `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (navnet på en værktøjslinje) skal være en streng
+@msg	no toolbar named `{name}`	ingen værktøjslinje med navnet `{name}`
+@msg	toolbar name can't be empty	navnet på en værktøjslinje må ikke være tomt
+@msg	a toolbar name has at most {MAX_NAME} characters	navnet på en værktøjslinje har højst {MAX_NAME} tegn
+@msg	there is already a toolbar named `{name}`	der findes allerede en værktøjslinje med navnet `{name}`
+@msg	there is already a toolbar named `{to}`	der findes allerede en værktøjslinje med navnet `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	et arbejdsområde gemmer højst {MAX} værktøjslinjer
+@msg	name (a toolbar's name) must be a string	name (navnet på en værktøjslinje) skal være en streng
+@msg	name (a toolbar's name) is required	name (navnet på en værktøjslinje) er påkrævet
+@msg	to (the new name) is required	to (det nye navn) er påkrævet
+@msg	name must be a toolbar's name	name skal være navnet på en værktøjslinje
 	Edit Custom Dictionary	Redigér egen ordliste
 	Entry:	Opslag:
 # Script Console
