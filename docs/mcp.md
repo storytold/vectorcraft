@@ -2880,6 +2880,14 @@ not finished, or a skill's last tutorial, it is an error. For all three, a missi
 is an error, and an error changes nothing. Behavior reference:
 [Quick skill guide](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/learn-skills-quick-skill-guide.html).
 
+The Home screen has a Learn section between Recent Files and the new-file presets, as
+[the help page](https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/homescreen-overview.html)
+lists Learn, with in-app tutorials, among the Home screen's options. The section holds the Quick skill guide card,
+which runs `learn.skills`, and every tutorial of the Learn panel under its skill, each a button that runs
+`learn.show {tutorial}`. The panel shows beside the Home screen; no document is opened, closed or switched, and a
+second choice keeps the panel shown. The section's place, its layout and what a choice opens are VectorCraft's own
+rules.
+
 ```json
 {"name":"invoke_menu","arguments":{"command":"learn.show","params":{"tutorial":"pen-paths"}}}
 {"name":"invoke_menu","arguments":{"command":"learn.openSample","params":{"tutorial":"pen-paths"}}}
