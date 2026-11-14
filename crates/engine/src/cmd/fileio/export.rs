@@ -295,8 +295,14 @@ fn source<'a>(s: &'a mut Session, f: &Format, p: &Value, cmd: &str) -> Result<(C
 /// ([`isolated`]), with one artboard: their crop. With `text`, the objects alone on one layer, so a
 /// text export holds the type of the selected objects and not that of a clipping path around them.
 fn selection(s: &mut Session, cmd: &str, text: bool) -> Result<(Document, vectorcraft_geom::Rect)> {
-    let ids = selected_artwork(s)?;
-    let doc = &s.doc()?.doc;
+    selection_doc(s.doc()?, cmd, text)
+}
+
+/// The document an Export Selection of `st` writes and its crop, as `document.exportSelection`
+/// writes it ([`selection`]); `cmd` names the command in the error when nothing selected draws.
+pub fn selection_doc(st: &DocState, cmd: &str, text: bool) -> Result<(Document, vectorcraft_geom::Rect)> {
+    let ids = artwork_of(st);
+    let doc = &st.doc;
     let (mut d, bounds) = isolated(doc, &ids, "Selection").ok_or_else(|| bad(cmd, "select something to export"))?;
     if text {
         let mut layer = Node::layer(d.alloc_id(), "Selection", vectorcraft_doc::LayerColor::Preset(0));
@@ -312,12 +318,16 @@ fn selection(s: &mut Session, cmd: &str, text: bool) -> Result<(Document, vector
 /// layers are guides and are left out. With an object of a dynamic symbol instance's art selected,
 /// the instance is exported whole.
 pub(crate) fn selected_artwork(s: &Session) -> Result<Vec<NodeId>> {
-    let st = s.doc()?;
+    Ok(artwork_of(s.doc()?))
+}
+
+/// [`selected_artwork`] of document `st`.
+fn artwork_of(st: &DocState) -> Vec<NodeId> {
     let ids = edit::roots_of(&st.doc, st.selection.in_paint_order(&st.doc));
     let is_template = |id| st.doc.node(id).is_some_and(|l| matches!(l.kind, NodeKind::Layer { template: true, .. }));
     // On a template layer or sublayer, at any depth.
     let on_template = |id| st.doc.ancestry(id).is_some_and(|a| a.into_iter().any(is_template));
-    Ok(ids.into_iter().filter(|id| !on_template(*id)).collect())
+    ids.into_iter().filter(|id| !on_template(*id)).collect()
 }
 
 /// The crop of an export of objects `ids` of `doc` alone ([`isolated`]): the bounds the renderer
