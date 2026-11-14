@@ -13,7 +13,7 @@ use std::sync::{Arc, LazyLock};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, Node, NodeId, NodeKind, Symbol, SymbolNineSlice};
-use vectorcraft_geom::{Affine, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, Rect, SubPath, shapes};
 
 use super::brushsym::{CURRENT_SYMBOL, natural_size, normalize, place_xf, set_natural_size};
 use super::clipboard::Clipboard;
@@ -160,6 +160,7 @@ pub const BUILTIN: &[BuiltinSymbolLibrary] = &[
     BuiltinSymbolLibrary { id: "map-markers", name: "Map Markers", make: map_markers },
     BuiltinSymbolLibrary { id: "inventory-icons", name: "Inventory Icons", make: inventory_icons },
     BuiltinSymbolLibrary { id: "skill-icons", name: "Skill Icons", make: skill_icons },
+    BuiltinSymbolLibrary { id: "weather-icons", name: "Weather Icons", make: weather_icons },
 ];
 
 /// Built-in library `id`, made once.
@@ -356,6 +357,140 @@ fn skill_icons() -> SymbolLibrary {
     }
     doc.title = "Skill Icons".into();
     SymbolLibrary { name: "Skill Icons".into(), doc }
+}
+
+/// Weather Icons: sun, moon, cloud, rain, thunder and snow for weather/status art (original, no 9-slice).
+fn weather_icons() -> SymbolLibrary {
+    // 1. Sun: Central circular disk with radial rays.
+    let mut sun_subpaths = Vec::new();
+    sun_subpaths.extend(shapes::ellipse(Rect::new(-8.5, -8.5, 8.5, 8.5)).subpaths);
+    for i in 0..8 {
+        let angle = (i as f64) * std::f64::consts::PI / 4.0;
+        let (sin, cos) = angle.sin_cos();
+        let r_in = 11.5;
+        let r_out = 18.5;
+        let w = 1.5;
+        let p1 = Point::new(r_in * cos - w * sin, r_in * sin + w * cos);
+        let tip = Point::new(r_out * cos, r_out * sin);
+        let p2 = Point::new(r_in * cos + w * sin, r_in * sin - w * cos);
+        sun_subpaths.push(SubPath::polyline(&[p1, tip, p2], true));
+    }
+    let sun = PathData::new(sun_subpaths);
+
+    // 2. Moon: Crescent moon shape.
+    let moon_anchors = vec![
+        Anchor { p: Point::new(3.0, -17.0), h_in: Point::new(-2.0, -10.0), h_out: Point::new(-8.0, -17.0), kind: AnchorKind::Corner },
+        Anchor { p: Point::new(-16.0, 0.0), h_in: Point::new(-16.0, -9.0), h_out: Point::new(-16.0, 9.0), kind: AnchorKind::Smooth },
+        Anchor { p: Point::new(5.0, 16.0), h_in: Point::new(-6.0, 16.0), h_out: Point::new(0.0, 8.0), kind: AnchorKind::Corner },
+        Anchor { p: Point::new(-4.0, -1.0), h_in: Point::new(-4.0, 6.0), h_out: Point::new(-4.0, -8.0), kind: AnchorKind::Smooth },
+    ];
+    let moon = PathData::single(SubPath { anchors: moon_anchors, closed: true });
+
+    // Helper for cloud contour
+    let cloud_subpath = |offset_y: f64, scale: f64| -> SubPath {
+        let mut pts = Vec::new();
+        let base_y = 8.0 * scale + offset_y;
+        pts.push(Point::new(9.0 * scale, base_y));
+        pts.push(Point::new(-9.0 * scale, base_y));
+
+        let c1 = Point::new(-9.0 * scale, 2.0 * scale + offset_y);
+        let r1 = 6.0 * scale;
+        let steps_lobe = 8;
+        for i in 1..=steps_lobe {
+            let a = std::f64::consts::FRAC_PI_2 + (i as f64) * std::f64::consts::PI / (steps_lobe as f64);
+            pts.push(Point::new(c1.x + r1 * a.cos(), c1.y + r1 * a.sin()));
+        }
+
+        let c2 = Point::new(0.0, -3.0 * scale + offset_y);
+        let r2 = 9.0 * scale;
+        let a_start = -2.973;
+        let a_end = -0.169;
+        let steps_top = 10;
+        for i in 1..=steps_top {
+            let a = a_start + (i as f64) * (a_end - a_start) / (steps_top as f64);
+            pts.push(Point::new(c2.x + r2 * a.cos(), c2.y + r2 * a.sin()));
+        }
+
+        let c3 = Point::new(9.0 * scale, 2.0 * scale + offset_y);
+        let r3 = 6.0 * scale;
+        for i in 1..steps_lobe {
+            let a = -std::f64::consts::FRAC_PI_2 + (i as f64) * std::f64::consts::PI / (steps_lobe as f64);
+            pts.push(Point::new(c3.x + r3 * a.cos(), c3.y + r3 * a.sin()));
+        }
+
+        SubPath::polyline(&pts, true)
+    };
+
+    // 3. Cloud: Merged circular lobes with a flat base.
+    let cloud = PathData::single(cloud_subpath(0.0, 1.0));
+
+    // 4. Rain: Cloud outline with angled falling droplet/dash lines.
+    let mut rain_subpaths = vec![cloud_subpath(-4.0, 0.9)];
+    let drops = [(-6.0, 6.0), (0.0, 8.0), (6.0, 6.0)];
+    for &(x0, y0) in &drops {
+        let (dx, dy) = (-2.0, 6.0);
+        let w = 1.0;
+        let d = [Point::new(x0 + w, y0), Point::new(x0 + dx + w, y0 + dy), Point::new(x0 + dx - w, y0 + dy), Point::new(x0 - w, y0)];
+        rain_subpaths.push(SubPath::polyline(&d, true));
+    }
+    let rain = PathData::new(rain_subpaths);
+
+    // 5. Thunder: Angular zigzag lightning bolt polygon.
+    let bolt = [(3.0, -18.0), (-8.0, -1.0), (-1.0, -1.0), (-5.0, 18.0), (8.0, 1.0), (1.0, 1.0)];
+    let bolt_pts: Vec<Point> = bolt.iter().map(|&(x, y)| Point::new(x, y)).collect();
+    let thunder = PathData::single(SubPath::polyline(&bolt_pts, true));
+
+    // 6. Snow: Symmetrical snowflake with hexagonal cross and branching ticks.
+    let mut snow_pts = Vec::new();
+    let r_hub = 3.5;
+    for k in 0..6 {
+        let angle = (k as f64) * std::f64::consts::PI / 3.0;
+        let (u_sin, u_cos) = angle.sin_cos();
+        let u = Point::new(u_cos, u_sin);
+        let v = Point::new(-u_sin, u_cos);
+        let to_pt = |du: f64, dv: f64| Point::new(du * u.x + dv * v.x, du * u.y + dv * v.y);
+
+        let valley_angle = angle - std::f64::consts::PI / 6.0;
+        snow_pts.push(Point::new(r_hub * valley_angle.cos(), r_hub * valley_angle.sin()));
+
+        snow_pts.push(to_pt(5.0, -1.0));
+        snow_pts.push(to_pt(8.5, -1.0));
+        snow_pts.push(to_pt(10.0, -3.0));
+        snow_pts.push(to_pt(11.5, -1.0));
+        snow_pts.push(to_pt(15.5, -1.0));
+        snow_pts.push(to_pt(15.5, -2.5));
+
+        snow_pts.push(to_pt(18.0, 0.0));
+
+        snow_pts.push(to_pt(15.5, 2.5));
+        snow_pts.push(to_pt(15.5, 1.0));
+        snow_pts.push(to_pt(11.5, 1.0));
+        snow_pts.push(to_pt(10.0, 3.0));
+        snow_pts.push(to_pt(8.5, 1.0));
+        snow_pts.push(to_pt(5.0, 1.0));
+    }
+    let snow = PathData::single(SubPath::polyline(&snow_pts, true));
+
+    let icons = [
+        ("Sun", sun, "#f39c12"),
+        ("Moon", moon, "#5c6bc0"),
+        ("Cloud", cloud, "#78909c"),
+        ("Rain", rain, "#3498db"),
+        ("Thunder", thunder, "#f1c40f"),
+        ("Snow", snow, "#29b6f6"),
+    ];
+    let mut doc = Document::new(100.0, 100.0);
+    for (name, path, hex) in icons {
+        let fill = Color::from_hex(hex).unwrap_or(Color::BLACK);
+        let edge = fill.lerp(&Color::BLACK, 0.35);
+        let id = doc.alloc_id();
+        let art = Node::path(id, path, Appearance::basic(Paint::solid(fill), Paint::solid(edge), 1.25));
+        let Ok((art, size, _)) = normalize(art) else { continue };
+        doc.symbols.push(Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+        set_natural_size(&mut doc, name, Some(size));
+    }
+    doc.title = "Weather Icons".into();
+    SymbolLibrary { name: "Weather Icons".into(), doc }
 }
 
 /// An instance of symbol `name` (what the resource gathering follows).

@@ -154,6 +154,69 @@ fn has_instances_selected(app: &VectorcraftApp) -> bool {
     instance_selected(app, |_| true)
 }
 
+/// Collect the IDs of selected instances of symbol `name` (including inside groups).
+fn selected_symbol_instances(app: &VectorcraftApp, name: &str) -> Vec<u64> {
+    let mut ids = vec![];
+    if let Some(st) = app.session.active() {
+        for id in &st.selection.objects {
+            if let Some(n) = st.doc.node(*id) {
+                n.walk(&mut |c| {
+                    if matches!(&c.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == name) {
+                        ids.push(c.id.0);
+                    }
+                });
+            }
+        }
+    }
+    ids
+}
+
+/// A symbol item's context menu.
+fn item_context_menu(app: &mut VectorcraftApp, ui: &mut Ui, name: &str) {
+    let center = app
+        .view()
+        .map(|v| v.center)
+        .or_else(|| app.session.active().and_then(|st| st.doc.artboards.first().map(|a| a.rect.center())))
+        .unwrap_or(vectorcraft_geom::Point::ZERO);
+
+    if menu_item(ui, tl!("Place Symbol Instance"), true, false) {
+        if let Err(e) = app.run("symbol.place", json!({ "name": name, "x": center.x, "y": center.y })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if menu_item(ui, tl!("Edit Symbol"), true, false) {
+        if let Err(e) = app.run("symbol.edit", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if menu_item(ui, tl!("Duplicate Symbol"), true, false) {
+        if let Err(e) = app.run("symbol.duplicate", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if menu_item(ui, tl!("Delete Symbol"), true, false) {
+        delete(app, &[], Some(name), false);
+        ui.close();
+    }
+    let break_ids = selected_symbol_instances(app, name);
+    let break_enabled = !break_ids.is_empty();
+    if menu_item(ui, tl!("Break Link to Symbol"), break_enabled, false) {
+        if let Err(e) = app.run("symbol.breakLink", json!({ "ids": break_ids })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+    if menu_item(ui, tl!("Select All Instances"), true, false) {
+        if let Err(e) = app.run("symbol.selectInstances", json!({ "name": name })) {
+            app.status(e);
+        }
+        ui.close();
+    }
+}
+
 /// Does the selection hold a symbol instance with appearance changes of its own (a dynamic
 /// symbol's), which Reset drops?
 pub(crate) fn changed_instances_selected(app: &VectorcraftApp) -> bool {
@@ -249,11 +312,19 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 }
                 chip(ui, &doc, &keys, egui::Rect::from_center_size(r.left_center() + vec2(3.0 + side / 2.0, 0.0), vec2(side, side)), n);
                 ui.painter().text(r.left_center() + vec2(side + 10.0, 0.0), egui::Align2::LEFT_CENTER, n, egui::FontId::proportional(text), t.text);
+                let resp = resp.on_hover_text(n);
                 if resp.double_clicked() {
                     clicked = Some((n.clone(), true));
                 } else if resp.clicked() {
                     clicked = Some((n.clone(), false));
                 }
+                if resp.secondary_clicked() && (sel.as_deref() != Some(n) || !marked.is_empty()) {
+                    set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
+                    if let Err(e) = app.run("symbol.setCurrent", json!({ "name": n })) {
+                        app.status(e);
+                    }
+                }
+                resp.context_menu(|ui| item_context_menu(app, ui, n));
             }
         } else {
             ui.horizontal_wrapped(|ui| {
@@ -274,6 +345,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     } else if resp.clicked() {
                         clicked = Some((n.clone(), false));
                     }
+                    if resp.secondary_clicked() && (sel.as_deref() != Some(n) || !marked.is_empty()) {
+                        set_pstate(ui.ctx(), MARKED, (uid, Vec::<String>::new()));
+                        if let Err(e) = app.run("symbol.setCurrent", json!({ "name": n })) {
+                            app.status(e);
+                        }
+                    }
+                    resp.context_menu(|ui| item_context_menu(app, ui, n));
                 }
             });
         }
@@ -1497,5 +1575,166 @@ mod tests {
         let at = clickable(&out).into_iter().find(|(l, _)| l == "Reset").expect("a Reset button").1;
         bar(&mut app, vec![egui::Event::PointerMoved(at), button(at, true), button(at, false)]);
         assert!(close(xf(&app), master), "the Control bar's Reset resets the instance: {:?} vs {master:?}", xf(&app));
+    }
+
+    /// Right-clicking a symbol in the Symbols panel selects it (if not already selected),
+    /// displays the context menu, and clicking an item dispatches the corresponding command.
+    #[test]
+    fn right_click_context_menu_in_symbols_panel_runs_actions() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+
+        let has_instance = |doc: &Document, name: &str| {
+            let mut found = false;
+            for l in &doc.layers {
+                l.walk(&mut |c| found |= matches!(&c.kind, NodeKind::SymbolInstance { symbol, .. } if symbol == name));
+            }
+            found
+        };
+
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        // Create two symbols "A" and "B" (clearing the instances symbol.new leaves)
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+        let id_a = app.run("symbol.new", json!({"name": "A"})).unwrap()["id"].as_u64().unwrap();
+        app.run("edit.clear", json!({"ids": [id_a]})).unwrap();
+        app.run("shape.rectangle", json!({"x": 50, "y": 10, "width": 30, "height": 20})).unwrap();
+        let id_b = app.run("symbol.new", json!({"name": "B"})).unwrap()["id"].as_u64().unwrap();
+        app.run("edit.clear", json!({"ids": [id_b]})).unwrap();
+
+        // Currently "B" is the current symbol
+        assert_eq!(current(&mut app), Some("B".to_string()));
+
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(260.0, 400.0)).with_accessibility_check(false).build_ui_state(
+            |ui, app: &mut VectorcraftApp| {
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(2);
+
+        // In thumbnail view, get symbol A
+        let node_a = h.get_by_label("A");
+        let pos_a = node_a.rect().center();
+
+        // Right-click symbol A
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Right-clicking unselected "A" selected it
+        assert_eq!(current(h.state_mut()), Some("A".to_string()));
+
+        // Context menu items are displayed
+        let place = h.get_by_label("   Place Symbol Instance");
+        let _ = h.get_by_label("   Edit Symbol");
+        let _ = h.get_by_label("   Duplicate Symbol");
+        let _ = h.get_by_label("   Delete Symbol");
+        let break_link = h.get_by_label("   Break Link to Symbol");
+        let _ = h.get_by_label("   Select All Instances");
+
+        // Break Link to Symbol is disabled because no instances of A are selected
+        assert!(break_link.accesskit_node().is_disabled());
+
+        // 1. Click "Place Symbol Instance"
+        place.click();
+        h.run_steps(2);
+
+        // An instance of A is placed on the canvas and selected
+        let doc = &h.state().session.active().unwrap().doc;
+        assert!(has_instance(doc, "A"));
+
+        // 2. Right-click symbol A again now that its instance is selected
+        // Place an instance of B as well and select both to verify Break Link is scoped to A
+        let inst_b = h.state_mut().run("symbol.place", json!({ "name": "B" })).unwrap()["id"].as_u64().unwrap();
+        let inst_a = h.state().session.active().unwrap().doc.layers[0].children().unwrap()[0].id.0;
+        h.state_mut().run("select.set", json!({ "ids": [inst_a, inst_b] })).unwrap();
+        h.run_steps(2);
+
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        // Now "Break Link to Symbol" is enabled
+        let break_link = h.get_by_label("   Break Link to Symbol");
+        assert!(!break_link.accesskit_node().is_disabled());
+        break_link.click();
+        h.run_steps(2);
+
+        // Link broken for A (no longer a SymbolInstance of A), while B remains an instance
+        let doc = &h.state().session.active().unwrap().doc;
+        assert!(!has_instance(doc, "A"));
+        assert!(has_instance(doc, "B"));
+
+        // 3. Right-click A and click "Duplicate Symbol"
+        let before_syms = symbols(h.state_mut());
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        h.get_by_label("   Duplicate Symbol").click();
+        h.run_steps(2);
+
+        let after_syms = symbols(h.state_mut());
+        assert_eq!(after_syms.len(), before_syms.len() + 1);
+        assert!(before_syms.iter().all(|s| after_syms.contains(s)));
+        assert!(after_syms.contains(&"A copy".to_string()));
+
+        // 4. Right-click B and click "Edit Symbol"
+        let node_b = h.get_by_label("B");
+        let pos_b = node_b.rect().center();
+        h.event(egui::Event::PointerMoved(pos_b));
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        assert_eq!(current(h.state_mut()), Some("B".to_string()));
+        h.get_by_label("   Edit Symbol").click();
+        h.run_steps(2);
+        assert!(h.state().session.active().unwrap().doc.symbol_edit.is_some());
+
+        // Exit symbol editing mode
+        h.state_mut().run("symbol.exitEditing", json!({})).unwrap();
+        h.run_steps(2);
+
+        // 5. Right-click B and click "Delete Symbol"
+        h.event(egui::Event::PointerMoved(pos_b));
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        h.get_by_label("   Delete Symbol").click();
+        h.run_steps(2);
+
+        // Dialog opened; cancelling preserves B
+        assert!(h.state().ui.dialog.is_some());
+        h.state_mut().ui.dialog = None;
+        assert!(symbols(h.state_mut()).contains(&"B".to_string()));
+
+        // Right-click B again and confirm deletion
+        h.event(egui::Event::PointerMoved(pos_b));
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_b, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+        h.get_by_label("   Delete Symbol").click();
+        h.run_steps(2);
+        crate::dialogs::confirm(h.state_mut()).unwrap();
+        assert!(!symbols(h.state_mut()).contains(&"B".to_string()));
+
+        // Also test list view
+        set_pstate(&h.ctx, VIEW, View::SmallList);
+        h.run_steps(2);
+        let node_a = h.get_by_label("A");
+        let pos_a = node_a.rect().center();
+        h.event(egui::Event::PointerMoved(pos_a));
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+        h.event(egui::Event::PointerButton { pos: pos_a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+        h.run_steps(2);
+
+        assert!(h.query_by_label("   Place Symbol Instance").is_some());
+        h.get_by_label("   Select All Instances").click();
+        h.run_steps(2);
     }
 }

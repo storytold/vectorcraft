@@ -421,6 +421,18 @@
 	Title Case	Svaka Riječ Velikim Slovom
 	Sentence case	Veliko početno slovo rečenice
 	Smart Punctuation…	Pametna interpunkcija…
+	Smart Punctuation	Pametna interpunkcija
+	ff, fi, ffi Ligatures	Ligature ff, fi, ffi
+	ff, fl, ffl Ligatures	Ligature ff, fl, ffl
+	Smart Quotes	Pametni navodnici
+	Smart Spaces	Pametni razmaci
+	En, Em Dashes	Srednje i duge crtice
+	Ellipses	Tri tačke
+	Expert Fractions	Stručni razlomci
+	Replace In	Zamijeni u
+	Selected Text Only	Samo odabrani tekst
+	Entire Document	Cijeli dokument
+	Report Results	Izvještaj o rezultatima
 	Create Outlines	Kreiraj obrise
 	Optical Margin Alignment	Optičko poravnanje margina
 	Dynamic Text	Dinamički tekst
@@ -1701,6 +1713,9 @@ digits	Malayalam	Malajalam
 	The selected character's font is not available.	Font odabranog znaka nije dostupan.
 	No alternates for the selected character.	Nema alternativa za odabrani znak.
 	Double-click to replace	Dvostruki klik za zamjenu
+	Click to replace	Klik za zamjenu
+	Show all alternates in the Glyphs panel	Prikaži sve alternative u panelu Glifovi
+	Show Character Alternates	Prikaži alternative znaka
 	Select one character with the Type tool first.	Prvo odaberite jedan znak alatom za tekst.
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} je glif fonta {font}, a ne fonta kojim je postavljen odabrani tekst ({text_font}).
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} pripada znaku {base} (U+{base_code}) {place}; vaš odabir je {sel} (U+{code}).
@@ -2246,6 +2261,7 @@ digits	Malayalam	Malajalam
 @msg	paths entry {i} needs path and ids (object ids no other entry has)	unos {i} u paths treba path i ids (ID-ove objekata koje nema nijedan drugi unos)
 @msg	scope missingInFolder takes path: the folder of that file is searched for the other missing links	scope missingInFolder uzima path: u folderu te datoteke traže se ostale nedostajuće veze
 	Show Missing	Prikaži nedostajuće
+	Sort by Size	Sortiraj po veličini
 	Sort by Status	Sortiraj po statusu
 	Clear Overrides	Očisti zamjene
 	Create New {kind} Style	Kreiraj novi {kind} stil
@@ -2500,6 +2516,7 @@ digits	Malayalam	Malajalam
 	Export Asset	Izvezi resurs
 	Export to:	Izvezi u:
 	Format Settings	Postavke formata
+	Format Settings…	Postavke formata…
 	Formats:	Formati:
 	Full Document	Cijeli dokument
 	Include Bleed	Uključi napust
@@ -2598,6 +2615,7 @@ digits	Malayalam	Malajalam
 	e.g. 1-3, 5	npr. 1-3, 5
 	First Page	Prva stranica
 	Import PDF	Uvezi PDF
+	Import PDF pages as links	Uvezi stranice PDF-a kao veze
 	Last Page	Posljednja stranica
 	Next Page	Sljedeća stranica
 	of {count}	od {count}
@@ -6170,7 +6188,7 @@ axis	Y Axis	Y osa
 @plural	Result: {n}|Results: {n}	Rezultat: {n}|Rezultati: {n}|Rezultati: {n}
 @msg	select one object	odaberite jedan objekat
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	Globalno uređivanje radi na putanjama, složenim putanjama, instancama simbola i njihovim grupama
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	nisu pronađeni slični objekti (rotirane ili zrcaljene kopije se ne podudaraju); promijenite opcije globalnog uređivanja i pokušajte ponovo
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	nisu pronađeni slični objekti (zrcaljene kopije se ne podudaraju); promijenite opcije globalnog uređivanja i pokušajte ponovo
 @msg	Global Edit is off	Globalno uređivanje je isključeno
 @msg	only an object of the Global Edit other than the one it started from can be left out	iz globalnog uređivanja može se isključiti samo objekt koji nije onaj od kojeg je počelo
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all ili raspon poput 1, 3-5, a ne {v}
@@ -6913,11 +6931,20 @@ shape	Open	Otvoren
 	Open Tutorial Sample	Otvori uzorak tutorijala
 	Finish Tutorial	Završi tutorijal
 	Next Tutorial	Sljedeći tutorijal
+	Show Learn Tab	Prikaži karticu u Učenju
+	Show Skill	Prikaži vještinu
+	Back One Level	Jedan nivo nazad
 	Back to Skills	Nazad na vještine
 @msg	tutorial `{id}` has no practice sample	tutorijal `{id}` nema uzorak za vježbu
 @msg	open the practice sample of `{id}` first (see learn.openSample)	prvo otvorite uzorak za vježbu tutorijala `{id}` (vidi learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	prvo završite `{id}` (vidi learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` je posljednji tutorijal u svojoj vještini
+	Reset progress	Vrati napredak na početno
+	Mark Tutorial Step	Označi korak tutorijala
+	Reset Learn Progress	Vrati napredak učenja na početno
+@msg	missing `step` (see learn.show)	nedostaje `step` (vidi learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` mora biti broj koraka od 0 do {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` je završen (vidi learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Osvježi odgođene efekte
@@ -6940,3 +6967,6 @@ shape	Open	Otvoren
 	Grommets	Ušice
 	Grommet Inset	Udaljenost ušica od ruba
 	Diameter	Prečnik
+	Nest Shapes…	Slaganje oblika…
+	Nest Shapes	Slaganje oblika
+	Roll	Rolna
