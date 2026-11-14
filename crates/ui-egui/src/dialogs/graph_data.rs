@@ -147,7 +147,10 @@ pub(crate) fn grid_from_text(text: &str) -> Grid {
 }
 
 /// A text file's bytes as text: UTF-16 with its byte-order mark (spreadsheets' "Unicode Text"),
-/// else UTF-8 without one.
+/// else UTF-16 without one when the bytes hold NUL bytes and Import Data Sets' rule gives them a
+/// byte order ([`vectorcraft_engine::cmd::utf16_order_without_mark`]), else UTF-8 with or without
+/// one. UTF-16 is read as it is after a byte-order mark: an odd last byte is left out, and an
+/// unpaired surrogate reads as U+FFFD.
 pub(crate) fn decode(bytes: &[u8]) -> String {
     let utf16 = |rest: &[u8], le: bool| {
         let units: Vec<u16> = rest.as_chunks::<2>().0.iter().map(|p| if le { u16::from_le_bytes(*p) } else { u16::from_be_bytes(*p) }).collect();
@@ -157,7 +160,10 @@ pub(crate) fn decode(bytes: &[u8]) -> String {
         [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
         [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
         [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
-        _ => String::from_utf8_lossy(bytes).into_owned(),
+        _ => match bytes.contains(&0).then(|| vectorcraft_engine::cmd::utf16_order_without_mark(bytes)).flatten() {
+            Some(le) => utf16(bytes, le),
+            None => String::from_utf8_lossy(bytes).into_owned(),
+        },
     }
 }
 
@@ -515,6 +521,28 @@ mod tests {
         assert_eq!(decode(&utf16), "a\tb");
         let wide = vec!["x"; 400].join("\t");
         assert_eq!(grid_from_text(&wide)[0].len(), MAX_COLS);
+    }
+
+    #[test]
+    fn utf16_without_a_byte_order_mark_reads_by_its_line_breaks() {
+        let text = "\tSales é\r\nQ1\t1\n";
+        let le: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        let be: Vec<u8> = text.encode_utf16().flat_map(u16::to_be_bytes).collect();
+        assert_eq!(decode(&le), text, "little-endian");
+        assert_eq!(decode(&be), text, "big-endian");
+        assert_eq!(grid_from_text(&decode(&le)), g(&[&["", "Sales é"], &["Q1", "1"]]));
+        // One row has no line break: the side of each unit that holds the NUL byte gives the order.
+        for (bytes, order) in [(b"\0Q\x001\0\t\x002".to_vec(), "big-endian"), (b"Q\x001\0\t\x002\0".to_vec(), "little-endian")] {
+            assert_eq!(decode(&bytes), "Q1\t2", "one line, {order}");
+        }
+        // A file cut short by one byte, or with an unpaired surrogate, reads as it would after a
+        // byte-order mark.
+        assert_eq!(decode(&[le.as_slice(), &[0x0A]].concat()), text, "odd length");
+        assert_eq!(decode(&[le.as_slice(), &[0x00, 0xD8]].concat()), format!("{text}\u{FFFD}"), "unpaired surrogate");
+        // A line break in both byte orders leaves the order unknown, and UTF-8 with a stray NUL
+        // byte isn't UTF-16: both read as UTF-8, as before.
+        assert_eq!(decode(&[0x0A, 0, 0, 0x0A]), "\n\0\0\n");
+        assert_eq!(decode(b"a,b\n1,2\0"), "a,b\n1,2\0");
     }
 
     #[test]

@@ -59,25 +59,35 @@ fn utf16(bytes: &[u8], le: bool) -> Option<String> {
     char::decode_utf16(units).collect::<std::result::Result<String, _>>().ok().filter(|_| odd.is_empty())
 }
 
-/// `bytes`, which hold NUL bytes and no byte-order mark, as UTF-16, or `None`. At least half of
-/// the two-byte units must hold a NUL byte, as characters from U+0001 to U+00FF do; a file with
-/// fewer, such as UTF-8 or Windows-1252 text with stray NUL bytes, is refused. The byte order is
-/// the one that reads a line break (`\n` or `\r`). The other order reads one only from U+0A00 or
-/// U+0D00, so a file that reads one in both orders is refused. A file that reads none in either
-/// order has no data rows, and is read little-endian so that the import reports that. The text
-/// must be valid UTF-16 in that order and hold no NUL character.
-fn utf16_without_mark(bytes: &[u8]) -> Option<String> {
-    let (units, odd) = bytes.as_chunks::<2>();
-    if !odd.is_empty() || units.iter().filter(|c| c.contains(&0)).count() * 2 < units.len() {
+/// The byte order of `bytes`, which hold NUL bytes and no byte-order mark, read as UTF-16:
+/// `Some(true)` for little-endian, or `None` when they don't read as UTF-16. At least half of the
+/// two-byte units must hold a NUL byte, as characters from U+0001 to U+00FF do; a file with fewer,
+/// such as UTF-8 or Windows-1252 text with stray NUL bytes, is refused. The byte order is the one
+/// that reads a line break (`\n` or `\r`). The other order reads one only from U+0A00 or U+0D00,
+/// so a file that reads one in both orders is refused. A file that reads none in either order (one
+/// line) is big-endian when more of its units start with a NUL byte than end with one, as
+/// characters from U+0001 to U+00FF do in that order, and little-endian otherwise. An odd last
+/// byte is left out of the count.
+pub fn utf16_order_without_mark(bytes: &[u8]) -> Option<bool> {
+    let units = bytes.as_chunks::<2>().0;
+    if units.iter().filter(|c| c.contains(&0)).count() * 2 < units.len() {
         return None;
     }
     let is_line_break = |u: u16| matches!(u, 0x0A | 0x0D);
     let lines_le = units.iter().any(|&c| is_line_break(u16::from_le_bytes(c)));
     let lines_be = units.iter().any(|&c| is_line_break(u16::from_be_bytes(c)));
-    if lines_le && lines_be {
-        return None;
+    match (lines_le, lines_be) {
+        (true, true) => None,
+        (false, false) => Some(units.iter().filter(|c| c[0] == 0).count() <= units.iter().filter(|c| c[1] == 0).count()),
+        (_, lines_be) => Some(!lines_be),
     }
-    utf16(bytes, !lines_be).filter(|text| !text.contains('\0'))
+}
+
+/// `bytes`, which hold NUL bytes and no byte-order mark, as UTF-16 in the byte order
+/// [`utf16_order_without_mark`] gives, or `None`. The file must have an even length, and the text
+/// must be valid UTF-16 in that order and hold no NUL character.
+fn utf16_without_mark(bytes: &[u8]) -> Option<String> {
+    utf16(bytes, utf16_order_without_mark(bytes)?).filter(|text| !text.contains('\0'))
 }
 
 /// A row of a datasets CSV: the file line it starts on, its cells, and for each cell whether it was quoted.

@@ -3224,8 +3224,9 @@ already walks Image Trace. Short agent entry points:
   byte order that reads a line break (`\n` or `\r`). It is refused when fewer of its units hold a NUL byte (UTF-8 or
   Windows-1252 text with stray NUL bytes, or UTF-16 text made mostly of other characters, which needs a byte-order
   mark), when both byte orders read a line break (the text holds U+0A00 or U+0D00), when it has an odd length, and
-  when it isn't valid UTF-16 in that order or holds a NUL character. A file with no line break has no data rows and is
-  refused for that. `csv` and `data` are read as the text they hold.
+  when it isn't valid UTF-16 in that order or holds a NUL character. A file with no line break is read big-endian when
+  more of its two-byte units start with a NUL byte than end with one, and little-endian otherwise; it has no data rows,
+  so the import is refused. `csv` and `data` are read as the text they hold.
 - Variable libraries: `variable.loadLibrary {path|xml|dataBase64}` (the Variables panel menu's Load Variable
   Library…) replaces the document's variables and data sets with a variable library's in one undo step. A load, like a
   `dataset.import`, adds no undo step when it leaves the variables and data sets as they were. The library
