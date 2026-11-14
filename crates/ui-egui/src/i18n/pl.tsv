@@ -699,10 +699,10 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Widok koła
 	Box View	Widok kwadratu
+	Show Out-of-Gamut Colors	Pokaż kolory poza gamutem
 	Box Channel	Kanał kwadratu
 	Color box	Kwadrat koloru
 	Color Wheel Options	Opcje koła kolorów
-	Show Out-of-Gamut Colors	Pokaż kolory poza gamutem
 	CSS Properties	Właściwości CSS
 	Document Info	Informacje o dokumencie
 	Flattener Preview	Podgląd spłaszczania

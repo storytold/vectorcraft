@@ -741,10 +741,10 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Ympyränäkymä
 	Box View	Ruutunäkymä
+	Show Out-of-Gamut Colors	Näytä väriavaruuden ulkopuoliset värit
 	Box Channel	Ruudun kanava
 	Color box	Väriruutu
 	Color Wheel Options	Väriympyrän asetukset
-	Show Out-of-Gamut Colors	Näytä väriavaruuden ulkopuoliset värit
 	CSS Properties	CSS-ominaisuudet
 	Document Info	Asiakirjan tiedot
 	Flattener Preview	Litistyksen esikatselu

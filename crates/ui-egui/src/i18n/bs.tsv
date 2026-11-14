@@ -737,10 +737,10 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Prikaz kotača
 	Box View	Prikaz kvadrata
+	Show Out-of-Gamut Colors	Prikaži boje izvan gamuta
 	Box Channel	Kanal kvadrata
 	Color box	Kvadrat boje
 	Color Wheel Options	Opcije kotača boja
-	Show Out-of-Gamut Colors	Prikaži boje izvan gamuta
 	CSS Properties	CSS svojstva
 	Document Info	Informacije o dokumentu
 	Flattener Preview	Pregled spljoštavanja

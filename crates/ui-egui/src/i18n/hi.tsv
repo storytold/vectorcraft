@@ -945,10 +945,10 @@ antiAlias	Sharp	शार्प
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	व्हील व्यू
 	Box View	बॉक्स व्यू
+	Show Out-of-Gamut Colors	गैमट से बाहर के रंग दिखाएँ
 	Box Channel	बॉक्स चैनल
 	Color box	कलर बॉक्स
 	Color Wheel Options	कलर व्हील ऑप्शन्स
-	Show Out-of-Gamut Colors	गैमट से बाहर के रंग दिखाएँ
 	Color Type:	रंग का प्रकार:
 	Color wheel	कलर व्हील
 	Color:	रंग:

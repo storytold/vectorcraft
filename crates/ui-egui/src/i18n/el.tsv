@@ -534,10 +534,10 @@ font-technology	Variable	Μεταβλητές
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Προβολή τροχού
 	Box View	Προβολή τετραγώνου
+	Show Out-of-Gamut Colors	Εμφάνιση χρωμάτων εκτός χρωματικής γκάμας
 	Box Channel	Κανάλι τετραγώνου
 	Color box	Τετράγωνο χρώματος
 	Color Wheel Options	Επιλογές χρωματικού τροχού
-	Show Out-of-Gamut Colors	Εμφάνιση χρωμάτων εκτός χρωματικής γκάμας
 	Color Type:	Τύπος χρώματος:
 	Color:	Χρώμα:
 	Colorize	Χρωματισμός

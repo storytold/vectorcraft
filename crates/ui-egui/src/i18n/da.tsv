@@ -695,10 +695,10 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hjulvisning
 	Box View	Kvadratvisning
+	Show Out-of-Gamut Colors	Vis farver uden for gamut
 	Box Channel	Kvadratets kanal
 	Color box	Farvekvadrat
 	Color Wheel Options	Indstillinger for farvehjul
-	Show Out-of-Gamut Colors	Vis farver uden for gamut
 	CSS Properties	CSS-egenskaber
 	Document Info	Dokumentoplysninger
 	Flattener Preview	Udjævningsforhåndsvisning

@@ -555,10 +555,10 @@ font-technology	Variable	Değişken
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Tekerlek Görünümü
 	Box View	Kutu Görünümü
+	Show Out-of-Gamut Colors	Gamut Dışı Renkleri Göster
 	Box Channel	Kutu Kanalı
 	Color box	Renk kutusu
 	Color Wheel Options	Renk Tekerleği Seçenekleri
-	Show Out-of-Gamut Colors	Gamut Dışı Renkleri Göster
 	Color Type:	Renk Türü:
 	Color:	Renk:
 	Colorize	Renklendir

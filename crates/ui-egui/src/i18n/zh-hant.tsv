@@ -537,10 +537,10 @@ font-technology	Variable	可變
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色輪檢視
 	Box View	方塊檢視
+	Show Out-of-Gamut Colors	顯示超出色域的顏色
 	Box Channel	方塊色版
 	Color box	顏色方塊
 	Color Wheel Options	色輪選項
-	Show Out-of-Gamut Colors	顯示超出色域的顏色
 	Color Type:	顏色類型：
 	Color:	顏色：
 	Colorize	上色

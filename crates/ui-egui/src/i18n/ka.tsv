@@ -661,10 +661,10 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	წრის ხედი
 	Box View	კვადრატის ხედი
+	Show Out-of-Gamut Colors	ფერთა გამის გარეთ მყოფი ფერების ჩვენება
 	Box Channel	კვადრატის არხი
 	Color box	ფერის კვადრატი
 	Color Wheel Options	ფერთა წრის პარამეტრები
-	Show Out-of-Gamut Colors	ფერთა გამის გარეთ მყოფი ფერების ჩვენება
 	CSS Properties	CSS თვისებები
 	Document Info	დოკუმენტის ინფორმაცია
 	Flattener Preview	გაბრტყელების წინასწარი ნახვა

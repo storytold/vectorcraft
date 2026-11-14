@@ -1213,10 +1213,10 @@
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Wielweergave
 	Box View	Vakweergave
+	Show Out-of-Gamut Colors	Kleuren buiten gamut tonen
 	Box Channel	Kanaal van het vak
 	Color box	Kleurvak
 	Color Wheel Options	Opties voor kleurenwiel
-	Show Out-of-Gamut Colors	Kleuren buiten gamut tonen
 	CSS Properties	CSS-eigenschappen
 	Document Info	Documentinfo
 	Flattener Preview	Afvlakvoorbeeld

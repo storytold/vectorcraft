@@ -765,10 +765,10 @@ digits	Malayalam	マラヤーラム数字
 	{name1} {value1}, {name2} {value2}	{name1} {value1}、{name2} {value2}
 	Wheel View	ホイール表示
 	Box View	ボックス表示
+	Show Out-of-Gamut Colors	色域外のカラーを表示
 	Box Channel	ボックスのチャンネル
 	Color box	カラーボックス
 	Color Wheel Options	カラーホイールオプション
-	Show Out-of-Gamut Colors	色域外のカラーを表示
 	CSS Properties	CSS プロパティ
 	Document Info	ドキュメント情報
 	Flattener Preview	分割・統合プレビュー

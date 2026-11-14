@@ -758,10 +758,10 @@ digits	Malayalam	말라얄람어
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	휠 보기
 	Box View	상자 보기
+	Show Out-of-Gamut Colors	색상 범위를 벗어난 색상 표시
 	Box Channel	상자 채널
 	Color box	색상 상자
 	Color Wheel Options	색상환 옵션
-	Show Out-of-Gamut Colors	색상 범위를 벗어난 색상 표시
 	CSS Properties	CSS 속성
 	Document Info	문서 정보
 	Flattener Preview	병합 미리 보기

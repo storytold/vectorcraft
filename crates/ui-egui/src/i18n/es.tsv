@@ -574,10 +574,10 @@ font-technology	Variable	Variables
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Vista de rueda
 	Box View	Vista de cuadro
+	Show Out-of-Gamut Colors	Mostrar colores fuera de gama
 	Box Channel	Canal del cuadro
 	Color box	Cuadro de color
 	Color Wheel Options	Opciones de la rueda de color
-	Show Out-of-Gamut Colors	Mostrar colores fuera de gama
 	Color Type:	Tipo de color:
 	Color:	Color:
 	Colorize	Colorear

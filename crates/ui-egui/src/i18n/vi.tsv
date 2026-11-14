@@ -661,10 +661,10 @@ font-technology	Variable	Biến thiên
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hiển thị bánh xe
 	Box View	Hiển thị hộp
+	Show Out-of-Gamut Colors	Hiện màu ngoài dải màu
 	Box Channel	Kênh của hộp
 	Color box	Hộp màu
 	Color Wheel Options	Tùy chọn bánh xe màu
-	Show Out-of-Gamut Colors	Hiện màu ngoài dải màu
 	Color Type:	Loại màu:
 	Color:	Màu:
 	Colorization	Tô màu

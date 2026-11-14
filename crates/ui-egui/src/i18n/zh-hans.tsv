@@ -520,10 +520,10 @@ antiAlias	Sharp	锐利
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
 	Wheel View	色轮视图
 	Box View	方块视图
+	Show Out-of-Gamut Colors	显示超出色域的颜色
 	Box Channel	方块色版
 	Color box	颜色方块
 	Color Wheel Options	色轮选项
-	Show Out-of-Gamut Colors	显示超出色域的颜色
 	Color Type:	颜色类型：
 	Color:	颜色：
 	Colorize	上色

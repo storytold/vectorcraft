@@ -568,10 +568,10 @@ font-technology	Variable	Варіативні
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Вигляд «Коло»
 	Box View	Вигляд «Квадрат»
+	Show Out-of-Gamut Colors	Показати кольори поза колірним охопленням
 	Box Channel	Канал квадрата
 	Color box	Колірний квадрат
 	Color Wheel Options	Параметри колірного кола
-	Show Out-of-Gamut Colors	Показати кольори поза колірним охопленням
 	Color Type:	Тип кольору:
 	Color:	Колір:
 	Colorize	Тонувати

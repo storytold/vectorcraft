@@ -463,7 +463,7 @@ pub fn color_field_shaded(
 }
 
 /// The gray over a shaded cell of a [`color_field_shaded`].
-const SHADE: Color32 = Color32::from_rgba_premultiplied(96, 96, 96, 192);
+pub(crate) const SHADE: Color32 = Color32::from_rgba_premultiplied(96, 96, 96, 192);
 
 /// Whether cell `col` of row `row` of `shade` is marked; a cell outside the grid is not.
 fn shaded(shade: &[u16], col: usize, row: usize) -> bool {
@@ -491,7 +491,7 @@ pub(crate) fn shade_edges(shade: &[u16]) -> Vec<[(usize, usize); 2]> {
 
 /// Gray out the cells `shade` marks over `rect`, and draw the lines between them and the others
 /// dark under light.
-fn shade_cells(painter: &egui::Painter, rect: Rect, shade: &[u16]) {
+pub(crate) fn shade_cells(painter: &egui::Painter, rect: Rect, shade: &[u16]) {
     let n = shade.len().min(16);
     if n == 0 {
         return;

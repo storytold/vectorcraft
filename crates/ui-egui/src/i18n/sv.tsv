@@ -561,10 +561,10 @@ font-technology	Variable	Variabla
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Hjulvy
 	Box View	Rutvy
+	Show Out-of-Gamut Colors	Visa färger utanför färgomfånget
 	Box Channel	Rutans kanal
 	Color box	Färgruta
 	Color Wheel Options	Alternativ för färghjulet
-	Show Out-of-Gamut Colors	Visa färger utanför färgomfånget
 	Color Type:	Färgtyp:
 	Color:	Färg:
 	Colorize	Färglägg

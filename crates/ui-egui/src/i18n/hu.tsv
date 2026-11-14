@@ -750,10 +750,10 @@ font-technology	Variable	Változó
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Körnézet
 	Box View	Négyzetnézet
+	Show Out-of-Gamut Colors	Színtartományon kívüli színek megjelenítése
 	Box Channel	Négyzet csatornája
 	Color box	Színnégyzet
 	Color Wheel Options	Színkör beállításai
-	Show Out-of-Gamut Colors	Színtartományon kívüli színek megjelenítése
 	Color Type:	Színtípus:
 	Color:	Szín:
 	Colorization	Színezés

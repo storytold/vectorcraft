@@ -572,10 +572,10 @@ font-technology	Variable	Вариативные
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Вид «Круг»
 	Box View	Вид «Квадрат»
+	Show Out-of-Gamut Colors	Показать цвета вне цветового охвата
 	Box Channel	Канал квадрата
 	Color box	Цветовой квадрат
 	Color Wheel Options	Параметры цветового круга
-	Show Out-of-Gamut Colors	Показать цвета вне цветового охвата
 	Color Type:	Тип цвета:
 	Color:	Цвет:
 	Colorize	Тонировать

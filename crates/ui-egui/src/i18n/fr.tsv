@@ -575,10 +575,10 @@ font-technology	Variable	Variables
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Affichage roue
 	Box View	Affichage carré
+	Show Out-of-Gamut Colors	Afficher les couleurs hors gamme
 	Box Channel	Couche du carré
 	Color box	Carré de couleur
 	Color Wheel Options	Options de la roue chromatique
-	Show Out-of-Gamut Colors	Afficher les couleurs hors gamme
 	Color Type:	Type de couleur :
 	Color:	Couleur :
 	Colorize	Coloriser

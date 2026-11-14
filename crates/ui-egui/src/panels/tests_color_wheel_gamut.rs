@@ -116,8 +116,8 @@ fn the_grid_is_computed_again_after_a_profile_is_loaded() {
     }
     let name = "Color Wheel Gamut Reload CMYK";
     let bytes = cms::icc_bytes(cms::GENERIC_CMYK).unwrap();
-    let _unregister = Unregister(name);
     cms::register_icc(&bytes, Some(name.into())).unwrap();
+    let _unregister = Unregister(name);
     h.run_steps(2);
     let Some((after, _)) = drawn(&h) else { panic!("the box drew no grid") };
     assert_eq!((after.0, after.1, &after.2), (before.0, before.1, &before.2));
@@ -220,4 +220,35 @@ fn the_edge_runs_between_marked_and_unmarked_cells() {
     assert_eq!(crate::widgets::shade_edges(&[0b11, 0b11]), Vec::<[(usize, usize); 2]>::new(), "all marked");
     assert_eq!(crate::widgets::shade_edges(&[0b100]), Vec::<[(usize, usize); 2]>::new(), "bit 2 is past a 1 × 1 grid");
     assert_eq!(crate::widgets::shade_edges(&[]), Vec::<[(usize, usize); 2]>::new());
+}
+
+/// The gray covers each marked cell and no other, and each edge is drawn dark, then light on top.
+#[test]
+fn the_gray_covers_the_marked_cells_only() {
+    use egui::{Pos2, Rect, Shape};
+    let ctx = egui::Context::default();
+    let rect = Rect::from_min_size(Pos2::new(10.0, 20.0), vec2(16.0, 16.0));
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::widgets::shade_cells(ui.painter(), rect, &[0b01, 0b10]));
+    out.textures_delta.clear();
+    let grays: Vec<Rect> = out
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            Shape::Rect(r) if r.fill == crate::widgets::SHADE => Some(r.rect),
+            _ => None,
+        })
+        .collect();
+    let cell = |col: f32, row: f32| Rect::from_min_size(Pos2::new(10.0 + col * 8.0, 20.0 + row * 8.0), vec2(8.0, 8.0));
+    assert_eq!(grays, vec![cell(0.0, 0.0), cell(1.0, 1.0)]);
+    let lines: Vec<(f32, egui::Color32)> = out
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            Shape::LineSegment { stroke, .. } => Some((stroke.width, stroke.color)),
+            _ => None,
+        })
+        .collect();
+    let dark = vec![(2.0, egui::Color32::BLACK); 4];
+    let light = vec![(1.0, egui::Color32::WHITE); 4];
+    assert_eq!(lines, [dark, light].concat(), "four edges, dark under light");
 }
