@@ -2311,11 +2311,111 @@ fn the_blob_brush_and_the_eraser_outline_a_long_drag_a_bounded_amount_per_frame(
     }
 }
 
+/// The settled paths of the outline of a long Blob Brush or Eraser drag (each the outline of up
+/// to `BLOCK_PIECES` pieces) come back from one call to the next, at any zoom, as the same shared
+/// paths, which the host draws again without copying or flattening them. A step of the drag
+/// replaces only the paths of the pieces near it.
+#[test]
+fn the_settled_outline_of_a_long_drag_is_the_same_shared_path_each_frame() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    let settled = |o: &[Overlay]| -> Vec<std::sync::Arc<BezPath>> {
+        o.iter().filter_map(|o| if let Overlay::SharedPath { path, .. } = o { Some(std::sync::Arc::clone(path)) } else { None }).collect()
+    };
+    let kept = |was: &[std::sync::Arc<BezPath>], now: &[std::sync::Arc<BezPath>]| {
+        now.iter().filter(|n| was.iter().any(|w| std::sync::Arc::ptr_eq(w, n))).count()
+    };
+    for (id, angle, roundness, pressure) in
+        [("blobBrush", 0.0, 100.0, false), ("eraser", -60.0, 30.0, false), ("blobBrush", 0.0, 100.0, true), ("eraser", 45.0, 50.0, true)]
+    {
+        let mut t = GestureTool::new(id);
+        t.set_option("size", &json!(10));
+        t.set_option("angle", &json!(angle));
+        t.set_option("roundness", &json!(roundness));
+        if pressure {
+            t.set_option("sizeMode", &json!("pressure"));
+            t.set_option("sizeVariation", &json!(4));
+        }
+        let n = if pressure { 3000 } else { 6000 };
+        long_area_drag(&mut t, &cx, n, |i| if pressure { 0.3 + 0.6 * ((i % 50) as f32 / 50.0) } else { 1.0 });
+        drain_area(&t, &cx);
+        let first = settled(&t.overlays(&cx));
+        assert!(first.len() > 1, "{id}: {} settled paths", first.len());
+        for zoom in [1.0, 4.0, 1.0] {
+            let again = settled(&t.overlays(&ToolContext { zoom, ..cx }));
+            assert_eq!(again.len(), first.len(), "{id}");
+            assert_eq!(kept(&first, &again), first.len(), "{id}: at zoom {zoom}, every settled path is the one shown before");
+        }
+        // One step more along the drag: with Size set to Pressure each path holds 64 one-segment
+        // pieces, part of one turn of the drag, and the paths far from the step stay the ones shown
+        // before. (Without it a path holds 64 pieces of 32 segments, many turns round the circle.)
+        if !pressure {
+            continue;
+        }
+        let s = n as f64;
+        let r = 150.0 + 100.0 * (s * 0.0071).sin();
+        let (x, y) = (300.0 + r * (s * 0.04).cos(), 300.0 + r * (s * 0.04).sin());
+        t.pointer(&cx, &PointerEvent { pressure: 0.5, ..PointerEvent::new(PointerKind::Drag, x, y) });
+        drain_area(&t, &cx);
+        let after = settled(&t.overlays(&cx));
+        let replaced = after.len() - kept(&first, &after);
+        assert!((1..=8).contains(&replaced), "{id}: {replaced} of {} settled paths replaced", after.len());
+    }
+}
+
+/// The outline a Blob Brush or Eraser drag shows does not change what its release sends: the same
+/// drag sends the same command whether or not its outline was drawn along the way.
+#[test]
+fn drawing_the_outline_of_a_drag_does_not_change_what_its_release_sends() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = ToolContext { precise_cursors: true, ..cx(&d, &s, &p) };
+    for (id, angle, roundness, pressure) in
+        [("blobBrush", 0.0, 100.0, false), ("blobBrush", 30.0, 40.0, true), ("eraser", -60.0, 30.0, false), ("eraser", 45.0, 50.0, true)]
+    {
+        let release = |drawn: bool| {
+            let mut t = GestureTool::new(id);
+            t.set_option("size", &json!(10));
+            t.set_option("angle", &json!(angle));
+            t.set_option("roundness", &json!(roundness));
+            if pressure {
+                t.set_option("sizeMode", &json!("pressure"));
+                t.set_option("sizeVariation", &json!(4));
+            }
+            for i in 0..800 {
+                let s = i as f64;
+                let r = 150.0 + 100.0 * (s * 0.0071).sin();
+                let (x, y) = (300.0 + r * (s * 0.04).cos(), 300.0 + r * (s * 0.04).sin());
+                let kind = if i == 0 { PointerKind::Down } else { PointerKind::Drag };
+                let pressure = if pressure { 0.3 + 0.6 * ((i % 50) as f32 / 50.0) } else { 1.0 };
+                t.pointer(&cx, &PointerEvent { pressure, ..PointerEvent::new(kind, x, y) });
+                if drawn {
+                    t.overlays(&cx);
+                }
+            }
+            if drawn {
+                drain_area(&t, &cx);
+            }
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 300.0, 300.0))
+        };
+        let (drawn, not_drawn) = (release(true), release(false));
+        assert!(matches!(drawn.first(), Some(Action::Exec(..))), "{id}: {drawn:?}");
+        assert_eq!(drawn, not_drawn, "{id}");
+    }
+}
+
 /// Every flattened point of the paths `o` (the outline shown).
 fn shown_points(o: &[Overlay]) -> Vec<(Point, Point)> {
     let mut lines = vec![];
     for o in o {
-        let Overlay::Path { path, .. } = o else { continue };
+        let path = match o {
+            Overlay::Path { path, .. } => path,
+            Overlay::SharedPath { path, .. } => &**path,
+            _ => continue,
+        };
         let mut pen = Point::ZERO;
         let mut start = Point::ZERO;
         vectorcraft_geom::kurbo::flatten(path.elements().iter().copied(), 0.01, |el| match el {
@@ -2402,7 +2502,11 @@ fn a_long_jump_in_a_blob_brush_drag_is_outlined_a_bounded_amount_at_a_time() {
     let o = t.overlays(&cx);
     let b = o
         .iter()
-        .filter_map(|o| if let Overlay::Path { path, .. } = o { Some(vectorcraft_geom::Shape::bounding_box(path)) } else { None })
+        .filter_map(|o| match o {
+            Overlay::Path { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(path)),
+            Overlay::SharedPath { path, .. } => Some(vectorcraft_geom::Shape::bounding_box(&**path)),
+            _ => None,
+        })
         .reduce(|a, b| a.union(b));
     let Some(b) = b else { panic!("{o:?}") };
     assert!((b.x0 + 0.5).abs() < 0.01 && (b.x1 - 20_000.5).abs() < 0.01, "{b:?}");

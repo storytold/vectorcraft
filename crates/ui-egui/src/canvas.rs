@@ -59,6 +59,7 @@ use input::handle_input;
 use outline::KEY_OUTLINE;
 #[cfg(test)]
 use outline::{OVERLAY_MAX_ANCHORS, c32, node_outline, walk_drawn};
+pub use overlays::SharedPaths;
 #[cfg(test)]
 use overlays::selected_anchor;
 use overlays::{HandleLook, blend_widgets_overlay, draw_inside_overlay, draw_overlays, hover_highlight, ime_geometry, selection_overlay};
@@ -238,6 +239,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let hidden_chars = std::mem::take(&mut app.canvas.hidden_chars);
     // The selection's kept marks. Likewise, a frame that does not draw them drops them.
     let selection_marks = std::mem::take(&mut app.canvas.selection_marks);
+    // The meshes of the tools' shared paths. Likewise, a frame that does not draw the tools'
+    // overlays drops them.
+    let mut shared_paths = std::mem::take(&mut app.canvas.shared_paths);
     // A release ends the Image Trace panel's eye-button hold, also when the panel is no longer
     // drawn, so a later press elsewhere does not show the source image.
     if app.ui.trace_hold_source.is_some() && !ui.input(|i| i.pointer.any_down()) {
@@ -409,7 +413,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         original_path_overlay(app, &painter, &xf);
 
         let overlays = selection_visuals(app, &painter, &xf, (hidden_chars, selection_marks, hover_still), revolve_edit, view_info);
-        draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs));
+        draw_overlays(&painter, &xf, &overlays, &t, HandleLook::of(&app.session.prefs), &mut shared_paths);
+        app.canvas.shared_paths = shared_paths;
         if !revolve_edit {
             shaper_widget_overlay(app, &painter, &xf);
             crate::panels::three_d::paint_graphic_handles(app, &painter, &xf);

@@ -17,6 +17,7 @@ fn marquee_feedback_explains_the_rule_and_stays_on_canvas() {
                 &[Overlay::SelectionMarquee { rect: Rect::new(20.0, y - 60.0, 300.0, y), enclosed, pointer: Point::new(315.0, y) }],
                 &t,
                 overlays::HandleLook::of(&prefs),
+                &mut overlays::SharedPaths::default(),
             );
         }
     };
@@ -59,6 +60,89 @@ fn marquee_feedback_explains_the_rule_and_stays_on_canvas() {
         harness.run_steps(4);
         harness.render().unwrap().save(path).unwrap();
     }
+}
+
+/// A tool's shared path ([`Overlay::SharedPath`], the settled outline of a long Blob Brush or Eraser
+/// drag) is drawn with the mesh kept from the last frame while the path and the view stay the same,
+/// and that mesh is the one the plain path draws. Another path, even one with the same elements, or
+/// a new view builds a new mesh, and a frame keeps only the meshes it draws.
+#[test]
+fn a_shared_tool_path_is_drawn_with_the_mesh_kept_while_it_and_the_view_stay() {
+    let ctx = egui::Context::default();
+    crate::theme::install_fonts(&ctx);
+    crate::theme::apply(&ctx, crate::theme::Brightness::MediumDark);
+    let prefs = vectorcraft_engine::Prefs::default();
+    let mut shared = overlays::SharedPaths::default();
+    let frame = |overlays: &[Overlay], zoom: f64, shared: &mut overlays::SharedPaths| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let t = Tokens::get(ui.ctx());
+            let xf = Xf { rect: ui.max_rect(), zoom, center: Point::new(200.0, 150.0), rot: 0.3 };
+            overlays::draw_overlays(ui.painter(), &xf, overlays, &t, overlays::HandleLook::of(&prefs), shared);
+        });
+        out.textures_delta.clear();
+        out.shapes
+    };
+    let meshes = |shapes: &[egui::epaint::ClippedShape]| -> Vec<std::sync::Arc<egui::Mesh>> {
+        shapes.iter().filter_map(|c| if let Shape::Mesh(m) = &c.shape { Some(std::sync::Arc::clone(m)) } else { None }).collect()
+    };
+    let one = |shapes: Vec<egui::epaint::ClippedShape>| {
+        let found = meshes(&shapes);
+        assert_eq!(found.len(), 1, "one mesh");
+        std::sync::Arc::clone(&found[0])
+    };
+    let mut path = BezPath::new();
+    path.move_to((60.0, 80.0));
+    path.curve_to((120.0, 20.0), (220.0, 260.0), (330.0, 120.0));
+    path.close_path();
+    path.move_to((150.0, 150.0));
+    path.line_to((250.0, 160.0));
+    let a = std::sync::Arc::new(path.clone());
+    let b = std::sync::Arc::new(path.clone());
+    let shared_of = |p: &std::sync::Arc<BezPath>| Overlay::SharedPath { path: std::sync::Arc::clone(p), color: [0x80, 0x80, 0x80], width: 1.0 };
+    let first = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(!first.vertices.is_empty());
+    let again = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(std::sync::Arc::ptr_eq(&first, &again), "the same path at the same view is drawn with the kept mesh");
+    // The plain path draws the same triangles.
+    let plain = frame(&[Overlay::Path { path: path.clone(), color: [0x80, 0x80, 0x80], width: 1.0, dashed: false }], 1.0, &mut shared);
+    assert!(shared.meshes.is_empty(), "a frame that draws no shared path keeps no mesh");
+    let lines: Vec<_> = plain.into_iter().filter(|c| matches!(c.shape, Shape::Path(_))).collect();
+    assert_eq!(lines.len(), 2, "a line for each subpath");
+    let tessellated = ctx.tessellate(lines, ctx.pixels_per_point());
+    let triangles: Vec<_> = tessellated
+        .into_iter()
+        .filter_map(|c| if let egui::epaint::Primitive::Mesh(m) = c.primitive { Some(m) } else { None })
+        .flat_map(|m| m.vertices)
+        .map(|v| (v.pos, v.color))
+        .collect();
+    assert_eq!(triangles, first.vertices.iter().map(|v| (v.pos, v.color)).collect::<Vec<_>>());
+    // A dropped mesh, another allocation of the same path and a new view each build a new mesh.
+    let rebuilt = one(frame(&[shared_of(&a)], 1.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&first, &rebuilt) && *first == *rebuilt);
+    let other = one(frame(&[shared_of(&b)], 1.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&rebuilt, &other) && *rebuilt == *other);
+    let zoomed = one(frame(&[shared_of(&b)], 2.0, &mut shared));
+    assert!(!std::sync::Arc::ptr_eq(&other, &zoomed) && *other != *zoomed);
+    // Two paths in one frame: each keeps its own mesh, and only those two are kept.
+    let both = meshes(&frame(&[shared_of(&a), shared_of(&b)], 2.0, &mut shared));
+    let both_again = meshes(&frame(&[shared_of(&a), shared_of(&b)], 2.0, &mut shared));
+    assert_eq!(both.len(), 2);
+    assert!(both.iter().zip(&both_again).all(|(x, y)| std::sync::Arc::ptr_eq(x, y)));
+    assert!(std::sync::Arc::ptr_eq(&both[1], &zoomed), "b at zoom 2 was kept from its frame");
+    assert_eq!(shared.meshes.len(), 2);
+    // A path off the canvas gets no triangles and draws nothing, and the lines of one partly off
+    // it are left out of its mesh.
+    let mut far = path.clone();
+    far.apply_affine(vectorcraft_geom::Affine::translate((5000.0, 5000.0)));
+    let far = std::sync::Arc::new(far);
+    assert!(meshes(&frame(&[shared_of(&far)], 1.0, &mut shared)).is_empty());
+    assert!(shared.meshes.values().all(|m| m.mesh.is_empty()) && shared.meshes.len() == 1);
+    let mut half = path.clone();
+    half.move_to((5000.0, 5000.0));
+    half.line_to((5100.0, 5000.0));
+    let half = one(frame(&[shared_of(&std::sync::Arc::new(half))], 1.0, &mut shared));
+    assert_eq!(*half, *first, "the subpath off the canvas adds no triangles");
 }
 
 #[test]
