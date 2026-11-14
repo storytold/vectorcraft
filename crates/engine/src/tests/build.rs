@@ -3179,6 +3179,192 @@ fn live_paint_release_and_expand() {
     assert!((area(&s, a) - 10000.0).abs() < 1.0);
 }
 
+/// Set the appearance rows of the face of Live Paint group `g` at `face` (or the edge nearest
+/// `edge`) to `items`, and give it `opacity`; returns that child's id.
+fn set_live_part(s: &mut Session, g: NodeId, face: Option<(f64, f64)>, edge: Option<(f64, f64)>, items: Vec<AppearanceItem>, opacity: f32) -> NodeId {
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let n = node(s, g);
+    let part = match (face, edge) {
+        (Some((x, y)), _) => face_at(&n, Point::new(x, y)),
+        (_, Some((x, y))) => edge_near(&n, Point::new(x, y), 0.5),
+        _ => None,
+    };
+    let id = part.unwrap().id;
+    s.edit("t", |d, _| {
+        let c = d.node_mut(id).unwrap();
+        c.appearance.items = items;
+        c.opacity = opacity;
+        Ok(())
+    })
+    .unwrap();
+    id
+}
+
+/// Expand keeps a face or edge when a fill or stroke row draws it, whatever row is on top: a
+/// painted lower row under an unpainted top row is kept, and a part whose only painted row is
+/// hidden, transparent or 0 pt wide, or whose own opacity is 0, is dropped.
+#[test]
+fn live_paint_expand_keeps_the_faces_and_edges_that_draw() {
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let stroke = |p: Paint, w: f64| AppearanceItem::Stroke(StrokeLayer::new(p, w));
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let hidden = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.visible = false,
+            AppearanceItem::Stroke(st) => st.visible = false,
+        }
+        i
+    };
+    let clear = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.opacity = 0.0,
+            AppearanceItem::Stroke(st) => st.opacity = 0.0,
+        }
+        i
+    };
+    let mut s = session();
+    let g = live(&mut s);
+    let lower_fill = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![fill(red()), fill(Paint::None)], 1.0);
+    let hidden_fill = set_live_part(&mut s, g, Some((125.0, 50.0)), None, vec![hidden(fill(red()))], 1.0);
+    let clear_fill = set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![clear(fill(red()))], 1.0);
+    let lower_stroke = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke(red(), 2.0), stroke(Paint::None, 1.0)], 1.0);
+    let hidden_stroke = set_live_part(&mut s, g, None, Some((150.0, 50.0)), vec![hidden(stroke(red(), 2.0))], 1.0);
+    let thin_stroke = set_live_part(&mut s, g, None, Some((100.0, 50.0)), vec![stroke(red(), 0.0)], 1.0);
+    let clear_stroke = set_live_part(&mut s, g, None, Some((50.0, 50.0)), vec![clear(stroke(red(), 2.0))], 1.0);
+    let clear_edge = set_live_part(&mut s, g, None, Some((75.0, 0.0)), vec![stroke(red(), 2.0)], 0.0);
+    let parts = [lower_fill, hidden_fill, clear_fill, lower_stroke, hidden_stroke, thin_stroke, clear_stroke, clear_edge];
+    assert_eq!(parts.iter().collect::<std::collections::HashSet<_>>().len(), parts.len());
+    let before = node(&s, g);
+    s.execute("livePaint.expand", &json!({})).unwrap();
+    let n = node(&s, g);
+    let kept: Vec<NodeId> = n.children().unwrap().iter().map(|c| c.id).collect();
+    let has = |id: NodeId| kept.contains(&id);
+    assert!(has(lower_fill) && has(lower_stroke), "a painted lower row draws: {kept:?}");
+    for id in [hidden_fill, clear_fill, hidden_stroke, thin_stroke, clear_stroke, clear_edge] {
+        assert!(!has(id), "{id:?} draws nothing: {kept:?}");
+    }
+    // The kept parts keep every row.
+    let rows = |n: &Node, id: NodeId| n.children().unwrap().iter().find(|c| c.id == id).unwrap().appearance.items.clone();
+    assert_eq!(rows(&n, lower_fill), rows(&before, lower_fill));
+    assert_eq!(rows(&n, lower_stroke), rows(&before, lower_stroke));
+}
+
+/// Merge carries a face's whole appearance when one of its rows draws, and carries nothing from a
+/// face that draws nothing.
+#[test]
+fn live_paint_merge_carries_the_faces_that_draw() {
+    use vectorcraft_doc::FillLayer;
+    use vectorcraft_tools::builder::face_at;
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let green = || Paint::solid(Color::rgb(0.0, 1.0, 0.0));
+    let mut s = session();
+    let g = live(&mut s);
+    let rows = vec![fill(green()), fill(Paint::None)];
+    set_live_part(&mut s, g, Some((25.0, 50.0)), None, rows.clone(), 1.0);
+    let mut only_hidden = fill(green());
+    if let AppearanceItem::Fill(f) = &mut only_hidden {
+        f.visible = false;
+    }
+    set_live_part(&mut s, g, Some((125.0, 50.0)), None, vec![only_hidden], 1.0);
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(face_at(&n, Point::new(25.0, 50.0)).unwrap().appearance.items, rows, "the drawn lower fill is carried");
+    let b = face_at(&n, Point::new(125.0, 50.0)).unwrap();
+    assert_eq!(b.appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), "the face takes its source's fill again");
+    assert!(b.appearance.has_drawn_fill());
+}
+
+/// Merge rebuilds the faces and edges as other paths, so the appearance it carries to them leaves
+/// the strokes' pen pressure behind and keeps the rest.
+#[test]
+fn live_paint_merge_leaves_pen_pressure_behind() {
+    use vectorcraft_doc::{FillLayer, PressureProfile, StrokeLayer};
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let pressed = || {
+        let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 3.0);
+        st.pressure = PressureProfile::from_samples([(0.0, 0.2), (0.5, 1.0), (1.0, 0.2)]);
+        assert!(st.pressure.is_some());
+        st
+    };
+    let green = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0))));
+    let mut s = session();
+    let g = live(&mut s);
+    set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![green.clone(), AppearanceItem::Stroke(pressed())], 1.0);
+    set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![AppearanceItem::Stroke(pressed())], 1.0);
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    let mut plain = pressed();
+    plain.pressure = None;
+    let face = &face_at(&n, Point::new(75.0, 50.0)).unwrap().appearance.items;
+    assert_eq!(face, &vec![green, AppearanceItem::Stroke(plain.clone())]);
+    assert_eq!(edge_near(&n, Point::new(0.0, 50.0), 0.5).unwrap().appearance.items, vec![AppearanceItem::Stroke(plain)]);
+}
+
+/// The gradients Merge carries to the rebuilt faces and edges keep their fit on the old outline,
+/// lower rows included.
+#[test]
+fn live_paint_merge_keeps_the_fit_of_carried_gradients() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let stops = vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)];
+    let unplaced = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let gradient = || Paint::Gradient(Box::new(unplaced.clone()));
+    let mut s = session();
+    let g = live(&mut s);
+    let rows = vec![AppearanceItem::Fill(FillLayer::new(gradient())), AppearanceItem::Fill(FillLayer::new(Paint::None))];
+    let face = set_live_part(&mut s, g, Some((25.0, 50.0)), None, rows, 1.0);
+    let edge = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![AppearanceItem::Stroke(StrokeLayer::new(gradient(), 2.0))], 1.0);
+    let before = node(&s, g);
+    let old = |id: NodeId| before.children().unwrap().iter().find(|c| c.id == id).unwrap().clone();
+    let (old_face, old_edge) = (old(face), old(edge));
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    let geom = |items: &[AppearanceItem]| match items[0].paint() {
+        Paint::Gradient(gp) => gp.geom,
+        p => panic!("a gradient, not {p:?}"),
+    };
+    let face_bounds = old_face.geometric_bounds().unwrap();
+    let new_face = face_at(&n, Point::new(25.0, 50.0)).unwrap();
+    assert_eq!(geom(&new_face.appearance.items), Some(unplaced.resolve(face_bounds)), "the lower-row fill keeps its fit");
+    let AppearanceItem::Stroke(st) = &old_edge.appearance.items[0] else { panic!("a stroke") };
+    let edge_box = st.paint_bounds(old_edge.geometric_bounds().unwrap());
+    let new_edge = edge_near(&n, Point::new(0.0, 50.0), 0.5).unwrap();
+    assert_eq!(geom(&new_edge.appearance.items), Some(unplaced.resolve(edge_box)), "the stroke keeps its fit");
+}
+
+/// Merge carries a face's or edge's visibility, opacity and blending mode to the rebuilt part with
+/// its appearance: a half-transparent face drawn by a stroke alone stays half transparent, and a
+/// hidden edge stays hidden.
+#[test]
+fn live_paint_merge_keeps_the_visibility_opacity_and_blending_of_carried_parts() {
+    use vectorcraft_color::BlendMode;
+    use vectorcraft_doc::StrokeLayer;
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let stroke = || AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 2.0));
+    let mut s = session();
+    let g = live(&mut s);
+    let face = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![stroke()], 0.5);
+    let edge = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke()], 1.0);
+    s.edit("t", |d, _| {
+        d.node_mut(face).unwrap().blend = BlendMode::Multiply;
+        d.node_mut(edge).unwrap().visible = false;
+        Ok(())
+    })
+    .unwrap();
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    let f = face_at(&n, Point::new(25.0, 50.0)).unwrap();
+    assert_eq!((f.appearance.items.clone(), f.opacity, f.blend, f.visible), (vec![stroke()], 0.5, BlendMode::Multiply, true));
+    let e = edge_near(&n, Point::new(0.0, 50.0), 0.5).unwrap();
+    assert_eq!((e.appearance.items.clone(), e.visible), (vec![stroke()], false), "the hidden edge stays hidden");
+}
+
 fn live_group_only(s: &mut Session) -> NodeId {
     let r = s.execute("livePaint.make", &json!({})).unwrap();
     NodeId(r["id"].as_u64().unwrap())

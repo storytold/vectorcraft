@@ -99,7 +99,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Expand",
             ["Object", "Live Paint"],
             None,
-            "{id?, ids?: [id…] (instead of id)} turn Live Paint groups into plain groups of their painted faces and edges → {ids}",
+            "{id?, ids?: [id…] (instead of id)} turn Live Paint groups into plain groups of the faces and edges that draw, with all their fill and stroke rows: a shown face or edge with an opacity above 0 and a shown fill or stroke row that has paint and an opacity above 0 (a stroke also a weight above 0), whichever row is on top → {ids}",
             has_selection_or_ids,
             lp_expand
         ),
