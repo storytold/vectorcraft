@@ -92,17 +92,19 @@ impl Template {
     /// The placeholder values if `s` is an instance of this template.
     fn captures<'a>(&self, s: &'a str) -> Option<Vec<(&str, &'a str)>> {
         let mut out = Vec::new();
-        match_pieces(&self.pieces, s, self.counted, &mut out).then_some(out)
+        match_pieces(&self.pieces, s, self.counted, &mut out, None).then_some(out)
     }
 }
 
 /// Match `s` against `pieces`, a placeholder taking the shortest non-empty text that lets the
-/// rest match (the last one takes what remains). With `counted`, `{n}` takes only a count. A
-/// placeholder that occurs twice takes the same text both times.
-fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mut Vec<(&'p str, &'a str)>) -> bool {
+/// rest match (the last one takes what remains). A placeholder between two of the same quote
+/// (`'{key}'`, `"{key}"` or `` `{key}` ``) may also take no text, as for a property named by the
+/// empty string. With `counted`, `{n}` takes only a count. A placeholder that occurs twice takes
+/// the same text both times. `before` is the last character of the text piece before `pieces`.
+fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mut Vec<(&'p str, &'a str)>, before: Option<char>) -> bool {
     let Some((first, rest)) = pieces.split_first() else { return s.is_empty() };
     match first {
-        Piece::Text(t) => s.strip_prefix(t.as_str()).is_some_and(|tail| match_pieces(rest, tail, counted, out)),
+        Piece::Text(t) => s.strip_prefix(t.as_str()).is_some_and(|tail| match_pieces(rest, tail, counted, out, t.chars().last())),
         Piece::Hole(name) => {
             let earlier = out.iter().find(|(n, _)| *n == name.as_str()).map(|&(_, v)| v);
             let fits = |value: &str| (!(counted && name == "n") || value.parse::<u64>().is_ok()) && earlier.is_none_or(|e| e == value);
@@ -114,7 +116,19 @@ fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mu
                 return true;
             };
             let Piece::Text(next) = next else { return false };
-            // Every place the next literal occurs, nearest first (the hole is never empty).
+            let quoted = before.is_some_and(|q| matches!(q, '\'' | '"' | '`') && next.starts_with(q));
+            if quoted
+                && fits("")
+                && let Some(tail) = s.strip_prefix(next.as_str())
+            {
+                let mark = out.len();
+                out.push((name.as_str(), ""));
+                if match_pieces(after, tail, counted, out, next.chars().last()) {
+                    return true;
+                }
+                out.truncate(mark);
+            }
+            // Every other place the next literal occurs, nearest first.
             let mut from = s.chars().next().map_or(1, char::len_utf8);
             while let Some(at) = s.get(from..).and_then(|tail| tail.find(next.as_str())).map(|i| i + from) {
                 let (Some(value), Some(tail)) = (s.get(..at), s.get(at + next.len()..)) else { return false };
@@ -124,7 +138,7 @@ fn match_pieces<'p, 'a>(pieces: &'p [Piece], s: &'a str, counted: bool, out: &mu
                 }
                 let mark = out.len();
                 out.push((name.as_str(), value));
-                if match_pieces(after, tail, counted, out) {
+                if match_pieces(after, tail, counted, out, next.chars().last()) {
                     return true;
                 }
                 out.truncate(mark);

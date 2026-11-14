@@ -3361,6 +3361,7 @@ fn script_interpreter_core_errors_are_translated() {
         ("var u; u['y'] = 1", "cannot set property 'y' of undefined", vec!["'y'", "undefined"]),
         ("var u; u.y = 1", "cannot set a property of undefined", vec!["undefined"]),
         ("null[new Array(300).join('a')]", "cannot read a property of null", vec!["null"]),
+        ("null['']", "cannot read property '' of null", vec!["''", "null"]),
         ("null['invalid array length']", "cannot read property 'invalid array length' of null", vec!["'invalid array length'", "null"]),
         (
             "'use strict'; var o = {}; Object.defineProperty(o, 'a', {value: 1}); o.a = 2",
