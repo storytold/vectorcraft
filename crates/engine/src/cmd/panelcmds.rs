@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Convert to Text",
             [],
             None,
-            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches; after Select All in a frame of threaded text, without `ids`, `id` or a range, every paragraph of the story's frames that are neither locked nor hidden; while the story is selected, its locked and hidden frames are not converted even when named, nor a paragraph whose text starts in one) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them (a whole story that Select All selected stays selected when the call converts all of it); in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
+            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches; after Select All in a frame of threaded text, without `ids`, `id` or a range, every paragraph of every frame of the story, locked and hidden frames included) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them (a whole story that Select All selected stays selected when the call converts all of it); in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
             has_doc,
             convert_list_to_text
         ),
@@ -1305,19 +1305,11 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
     use vectorcraft_doc::text::ParaList;
     let range = super::typecmd::TextRange::parse(p, C)?;
     // After Select All in a frame of threaded text, a call that names no type and no range takes
-    // every paragraph of the story's editable frames; its locked and hidden frames stay as they are
-    // whichever way they are named.
-    let full = super::textedit::editing_story(s);
-    let story: Vec<NodeId> = full.iter().copied().filter(|f| s.doc().is_ok_and(|st| st.doc.is_editable(*f))).collect();
+    // every paragraph of every frame of the story, its locked and hidden frames included: the story
+    // is one text.
+    let story = super::textedit::editing_story(s);
     let named = ["ids", "id"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
-    let ids = if !story.is_empty() && !named && range.is_none() {
-        story.clone()
-    } else {
-        super::typecmd::text_targets(s, p, C)?.into_iter().filter(|id| !full.contains(id) || story.contains(id)).collect()
-    };
-    // The selected story's locked and hidden frames: no paragraph whose text starts in one is
-    // converted, and none of their paragraphs is restyled.
-    let held: Vec<NodeId> = full.iter().copied().filter(|f| !story.contains(f)).collect();
+    let ids = if !story.is_empty() && !named && range.is_none() { story.clone() } else { super::typecmd::text_targets(s, p, C)? };
     // Converting the whole story leaves it selected.
     let whole_story = !story.is_empty() && range.is_none() && story.iter().all(|f| ids.contains(f));
     let editing = match super::textedit::editing_range(s)? {
@@ -1351,7 +1343,6 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
     let mut converted = 0;
     for story in &stories {
         let frames: Vec<&vectorcraft_doc::TextObject> = story.iter().filter_map(|id| text(*id)).collect();
-        let is_held = |f: usize| story.get(f).is_some_and(|id| held.contains(id));
         let mut paras: Vec<StoryParagraph> = vec![];
         let mut named_parts = vec![];
         let plains: Vec<String> = frames.iter().map(|t| t.plain_text()).collect();
@@ -1377,7 +1368,7 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
         }
         for (i, named) in named_parts {
             if let Some(para) = paras.get_mut(i) {
-                let listed = para.main_part().is_some_and(|p| p.list.is_some() && !is_held(p.frame));
+                let listed = para.main_part().is_some_and(|p| p.list.is_some());
                 para.converts |= named && listed;
             }
         }
@@ -1467,7 +1458,7 @@ fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
                 let tab = vectorcraft_doc::TabStop { position: x, align: vectorcraft_doc::TabAlign::Left, leader: String::new(), align_on: '.' };
                 style.tabs.insert(i, tab);
             }
-            for part in story_para.parts.iter().filter(|q| (std::ptr::eq(*q, para) || q.bytes.is_empty()) && !is_held(q.frame)) {
+            for part in story_para.parts.iter().filter(|q| std::ptr::eq(*q, para) || q.bytes.is_empty()) {
                 if let Some((stops, _)) = frame_edits.get_mut(part.frame) {
                     stops.push((part.index, style.clone()));
                 }
