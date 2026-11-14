@@ -6827,6 +6827,43 @@ fn a_centered_label_with_an_empty_middle_line_and_kept_leading_stays_centered() 
 }
 
 #[test]
+fn a_centered_label_with_a_line_break_in_its_text_is_set_as_with_a_bar() {
+    // A quoted CSV cell keeps its line breaks, so they reach the label as well as the `|` it is written with.
+    for (bar, quoted, text) in [("Q|1", "\"Q\n1\"", "Q\n1"), ("Q|||1", "\"Q\n||1\"", "Q\n\n\n1")] {
+        let label_middle = |s: &Session, id: NodeId| {
+            let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+            let label =
+                group(&n, "Axes").children().unwrap().iter().find(|c| matches!(&c.kind, NodeKind::Text(t) if t.plain_text() == text)).unwrap();
+            let b = label.geometric_bounds().unwrap();
+            (b.y0 + b.y1) / 2.0
+        };
+        let drawn = |cat: &str, leading: bool| {
+            let mut s = Session::new();
+            s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+            let csv = format!(",2024,2025\n{cat},3,2\nQ2,5,4\nQ3,-1,6");
+            let id = NodeId(
+                s.execute("graph.create", &json!({"type": "bar", "x": 100, "y": 100, "width": 300, "height": 200, "csv": csv})).unwrap()["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+            if leading {
+                let l = text_id(&s, id, "Axes", text);
+                s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+                s.execute("text.setFormat", &json!({"autoLeading": 400})).unwrap();
+                s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+                s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+            }
+            label_middle(&s, id)
+        };
+        for leading in [false, true] {
+            let (by_bar, by_break) = (drawn(bar, leading), drawn(quoted, leading));
+            assert!((by_bar - by_break).abs() < 0.01, "{text:?} sits where {bar:?} does (kept leading: {leading}): {by_bar} {by_break}");
+        }
+        assert!((drawn(quoted, true) - drawn(quoted, false)).abs() < 0.01, "{text:?} keeps its middle with kept leading");
+    }
+}
+
+#[test]
 fn a_legend_across_top_measures_its_labels_with_system_layout() {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
