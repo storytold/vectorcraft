@@ -51,7 +51,7 @@ fn entries_keep_their_sections_and_the_command_counts_codes() {
     assert_eq!(r["codes"]["modifiers"], json!([{"value": 64, "count": 2}, {"value": 80, "count": 1}]));
     assert_eq!((r["unread"].as_array().unwrap().len(), r["truncated"].as_bool()), (0, Some(false)), "{r}");
     // The same from a file, and from its bytes.
-    let dir = vectorcraft_testkit::temp_dir("shortcutset-read");
+    let dir = vectorcraft_testkit::TempDir::new("shortcutset-read");
     let path = dir.join("Studio Keys.kys");
     std::fs::write(&path, text).unwrap();
     let mut s = Session::new();
@@ -59,7 +59,6 @@ fn entries_keep_their_sections_and_the_command_counts_codes() {
     assert_eq!((r["set"].as_str(), r["entries"].as_array().unwrap().len()), (Some("Studio Keys"), 3));
     let b64 = vectorcraft_format::base64_encode(text.as_bytes());
     assert_eq!(s.execute("shortcutSet.read", &json!({ "dataBase64": b64 })).unwrap()["entries"].as_array().unwrap().len(), 3);
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -124,7 +123,7 @@ fn caps_nesting_entries_and_names() {
 #[test]
 fn big_files_are_read_up_to_the_cap() {
     let text = format!("/Menus {{ /E {{ /Key 1 }} {} }}", " ".repeat(5 << 20));
-    let dir = vectorcraft_testkit::temp_dir("shortcutset-big");
+    let dir = vectorcraft_testkit::TempDir::new("shortcutset-big");
     let path = dir.join("Big.kys");
     std::fs::write(&path, &text).unwrap();
     let b64 = vectorcraft_format::base64_encode(text.as_bytes());
@@ -145,7 +144,6 @@ fn big_files_are_read_up_to_the_cap() {
     assert_eq!(fits.len(), (4 << 20) + 3);
     std::fs::write(&path, &fits).unwrap();
     assert_eq!(s.execute("shortcutSet.read", &json!({ "path": path.to_string_lossy() })).unwrap()["truncated"], false);
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 fn matched(s: &mut Session, p: Value) -> Vec<String> {

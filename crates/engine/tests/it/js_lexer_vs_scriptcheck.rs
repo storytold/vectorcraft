@@ -115,14 +115,26 @@ fn both_lexers_take_the_same_characters_into_names() {
     assert!(checker_member("\u{88F}\u{1ACF}", "\u{88F}\u{1ACF}") && one_identifier("\u{88F}\u{1ACF}", "\u{88F}\u{1ACF}"));
     for &c in NAME_CHARS {
         let escape = format!("\\u{:04X}", u32::from(c));
+        let braced = format!("\\u{{{:X}}}", u32::from(c));
         for (src, name) in [
             (format!("a{c}b"), format!("a{c}b")),
             (format!("{c}b"), format!("{c}b")),
             (format!("a{escape}b"), format!("a{c}b")),
             (format!("{escape}b"), format!("{c}b")),
+            (format!("a{braced}b"), format!("a{c}b")),
+            (format!("{braced}b"), format!("{c}b")),
         ] {
             assert_eq!(checker_member(&src, &name), one_identifier(&src, &name), "{src:?} (U+{:04X})", u32::from(c));
         }
+    }
+    // Braced escapes past U+FFFF and with leading zeros are read by both.
+    for (src, name) in [("\\u{1D49C}b", "\u{1D49C}b"), ("a\\u{0000000062}", "ab")] {
+        assert!(checker_member(src, name) && one_identifier(src, name), "{src:?}");
+    }
+    // Out of range, a surrogate and an empty one: the parser reads no identifier, and the checker's
+    // name ends before the escape.
+    for src in ["a\\u{110000}", "a\\u{D800}", "a\\u{}"] {
+        assert!(checker_member(src, "a") && !one_identifier(src, "a"), "{src:?}");
     }
 }
 

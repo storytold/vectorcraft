@@ -3,6 +3,10 @@ use super::mesh::{GradientMesh, MeshPoint, grid_len, grid_points, surface_of};
 use super::{Affine, Arc, Color, Deserialize, Node, NodeId, NodeKind, PathData, Point, Rect, Serialize, Vec2, yes};
 use vectorcraft_geom::Homography;
 
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 /// How an envelope distorts its content.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -19,6 +23,10 @@ pub enum EnvelopeKind {
         v: f64,
         #[serde(default = "yes")]
         horizontal: bool,
+        /// The map the warp draws with: [`WARP_NET`](super::WARP_NET) for its style's Bézier net,
+        /// 0 (as in files from before the version existed) for [`warp_point`](super::warp_point).
+        #[serde(default, skip_serializing_if = "is_zero")]
+        version: u32,
     },
     /// A `(rows+1)×(cols+1)` grid of points (row-major) the content's bounding box maps onto.
     Mesh {
@@ -141,20 +149,31 @@ impl EnvelopeOptions {
 /// its glyph outlines (see [`envelope_content_bounds`]). Strokes scale with the frame as
 /// [`Node::transform`] scales them.
 pub fn envelope_content_boxes(content: &[Arc<Node>], frame: Affine) -> Option<(Rect, Rect)> {
+    envelope_content_boxes_with(content, frame, false).or_else(|| envelope_content_boxes_with(content, frame, true))
+}
+
+/// [`envelope_content_boxes`] with type that draws nothing given its laid-out box when
+/// `blank_type_box` is set and no box when it is not. A caller that measures the members of an
+/// envelope's contents one at a time passes `true` only when the whole contents have no box with
+/// `false`, so each member is measured as the whole contents measure it.
+pub fn envelope_content_boxes_with(content: &[Arc<Node>], frame: Affine, blank_type_box: bool) -> Option<(Rect, Rect)> {
     let frame = if frame.is_finite() && frame.determinant().abs() > 1e-12 { frame } else { Affine::IDENTITY };
     let to_frame = frame.inverse();
-    let (stroked, plain) = content.iter().fold((None, None), |(stroked, plain), c| {
-        (vectorcraft_geom::union_opt(stroked, content_box(c, true, to_frame)), vectorcraft_geom::union_opt(plain, content_box(c, false, to_frame)))
-    });
-    Some((stroked?, plain?))
+    Some((content_set_box(content, true, to_frame, blank_type_box)?, content_set_box(content, false, to_frame, blank_type_box)?))
 }
 
 /// The geometric bounds an envelope around `content` on the page axes maps from: type, alone or
 /// in groups and layers, is measured by its glyph outlines, underlines and strikethroughs instead
 /// of its laid-out box. Type keeps its laid-out box while nothing is registered with
-/// [`set_type_ink`], and when it draws nothing.
+/// [`set_type_ink`]. Type that draws nothing adds no box while other content has one; when
+/// nothing else has a box, it keeps its laid-out box.
 pub fn envelope_content_bounds(content: &[Arc<Node>]) -> Option<Rect> {
-    content.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box(c, false, Affine::IDENTITY)))
+    content_set_box(content, false, Affine::IDENTITY, false).or_else(|| content_set_box(content, false, Affine::IDENTITY, true))
+}
+
+/// The union of the boxes [`content_box`] gives each of `content`.
+fn content_set_box(content: &[Arc<Node>], stroked: bool, to: Affine, blank_type_box: bool) -> Option<Rect> {
+    content.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box(c, stroked, to, blank_type_box)))
 }
 
 /// The box of type's glyph outlines, underlines and strikethroughs with its text space mapped by
@@ -359,15 +378,16 @@ fn find_type(n: &Node, typed: &mut std::collections::HashSet<usize>) -> bool {
 /// or with `stroked` its visual bounds (strokes scaled by `to` as [`Node::transform`] scales them),
 /// with type measured by its glyph outlines ([`type_ink`]) instead of its laid-out box, in groups
 /// and layers too. Type is laid out as it is on the page, and its outlines are then taken into
-/// those axes. A character's strokes reach as far past its glyphs as past the laid-out box.
-fn content_box(n: &Arc<Node>, stroked: bool, to: Affine) -> Option<Rect> {
+/// those axes. A character's strokes reach as far past its glyphs as past the laid-out box. Type
+/// that draws nothing has its laid-out box with `blank_type_box`, and no box without it.
+fn content_box(n: &Arc<Node>, stroked: bool, to: Affine, blank_type_box: bool) -> Option<Rect> {
     let mut typed = std::collections::HashSet::new();
     find_type(n, &mut typed);
-    content_box_in(n, stroked, to, &typed)
+    content_box_in(n, stroked, to, &typed, blank_type_box)
 }
 
 /// [`content_box`], with the addresses of the objects in `n` that hold type ([`find_type`]).
-fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collections::HashSet<usize>) -> Option<Rect> {
+fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collections::HashSet<usize>, blank_type_box: bool) -> Option<Rect> {
     // `n` in the axes of `to`.
     let moved = || {
         if to == Affine::IDENTITY {
@@ -387,10 +407,13 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
             let ink = match n.projection() {
                 None => type_ink(n, t, to * t.xf, None),
                 Some(h) => type_ink(n, t, t.xf, Some((h, to))),
-            }
-            .flatten();
+            };
             let m = moved();
-            let Some(ink) = ink else { return own(&m) };
+            let ink = match ink {
+                Some(Some(ink)) => ink,
+                Some(None) if !blank_type_box => return None,
+                _ => return own(&m),
+            };
             if !stroked {
                 return Some(ink);
             }
@@ -405,7 +428,13 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
         NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
             // A clipping path that paints strokes over the clip edge, as in `Node::visual_bounds`.
             let clip = children.first()?;
-            content_box_in(clip, stroked && matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)), to, typed)
+            content_box_in(
+                clip,
+                stroked && matches!(clip.kind, NodeKind::Path { .. } | NodeKind::Compound { .. } | NodeKind::Text(_)),
+                to,
+                typed,
+                blank_type_box,
+            )
         }
         NodeKind::Layer { .. } | NodeKind::Group { .. } => {
             let layer = matches!(n.kind, NodeKind::Layer { .. });
@@ -416,9 +445,11 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
                 let mut own_strokes = Node::new(n.id, NodeKind::Group { children: Vec::new(), clip: false });
                 own_strokes.appearance = n.appearance.clone();
                 own_strokes.transform(to, true);
-                own_strokes.visual_of_members(members.map(|c| content_box_in(c, true, to, typed)))
+                own_strokes.visual_of_members(members.map(|c| content_box_in(c, true, to, typed, blank_type_box)))
             } else {
-                members.filter(|c| c.visible || !layer).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box_in(c, false, to, typed)))
+                members
+                    .filter(|c| c.visible || !layer)
+                    .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box_in(c, false, to, typed, blank_type_box)))
             }
         }
         _ => own(&moved()),
@@ -517,19 +548,104 @@ pub fn envelope_of(doc: &crate::Document, id: NodeId) -> Option<&Node> {
     doc.ancestry(id)?.into_iter().rev().find_map(|a| doc.node(a).filter(|n| matches!(n.kind, NodeKind::Envelope { .. })))
 }
 
-/// What a selected envelope shows on the canvas: its mesh lines (a warp's surface on a 4×4 grid,
-/// a mesh envelope's own grid) or its top object's outline, and for a mesh envelope the grid to
-/// edit (its points and handles).
+/// What a selected envelope shows on the canvas: its mesh lines (a warp's surface on its
+/// [`warp_grid`], a mesh envelope's own grid) or its top object's outline, and for a warp or mesh
+/// envelope the grid to edit (its points and handles; none while its contents are edited).
 pub fn envelope_overlay(n: &Node) -> Option<(PathData, Option<GradientMesh>)> {
-    let NodeKind::Envelope { kind, .. } = &n.kind else { return None };
+    let NodeKind::Envelope { kind, editing, .. } = &n.kind else { return None };
+    let points = |grid: GradientMesh| (!*editing).then_some(grid);
     match &**kind {
-        EnvelopeKind::Mesh { rows, cols, points, handles } => {
-            let grid = envelope_grid(*rows, *cols, points, handles)?;
-            Some((grid.lines(), Some(grid)))
+        EnvelopeKind::Mesh { rows, cols, points: at, handles } => {
+            let grid = envelope_grid(*rows, *cols, at, handles)?;
+            Some((grid.lines(), points(grid)))
         }
-        EnvelopeKind::Warp { .. } => Some((EnvelopeMap::of(n)?.surface_mesh(4, 4, Color::BLACK).lines(), None)),
+        EnvelopeKind::Warp { .. } => match warp_grid(n) {
+            Some(grid) => Some((grid.lines(), points(grid))),
+            None => Some((EnvelopeMap::of(n)?.surface_mesh(4, 4, Color::BLACK).lines(), None)),
+        },
         EnvelopeKind::TopObject { path, .. } => Some((path.clone(), None)),
     }
+}
+
+/// The grid sizes [`warp_grid`] tries, in order: patches per row and per column.
+const WARP_GRIDS: [u32; 3] = [4, 8, 16];
+
+/// How far a [`warp_grid`] may draw from the warp it replaces, as a share of the diagonal of the
+/// warp's bounds.
+const WARP_GRID_TOLERANCE: f64 = 1e-3;
+
+/// The grid a warp envelope's points and handles are edited on: its surface sampled on the first
+/// of 4×4, 8×8 and 16×16 patches whose curves draw within [`WARP_GRID_TOLERANCE`] of the warp, with
+/// handles along it, as a gradient mesh with black points. Editing a point makes the envelope a
+/// mesh envelope with this grid. `None` for other nodes, for content with no bounds, and for a warp
+/// that no such grid follows closely enough or whose grid isn't finite.
+/// Built again only when the envelope's content objects, warp, frame or options change, or what
+/// type is measured with ([`set_type_ink`]).
+pub fn warp_grid(n: &Node) -> Option<GradientMesh> {
+    let NodeKind::Envelope { content, kind, frame, options, .. } = &n.kind else { return None };
+    if !matches!(**kind, EnvelopeKind::Warp { .. }) {
+        return None;
+    }
+    // `None` until a measure is registered, so a grid kept before then is built again after.
+    let inputs = TYPE_INK.get().map(|(_, inputs)| inputs());
+    let key: Vec<usize> = content.iter().map(|c| Arc::as_ptr(c) as usize).collect();
+    let same = |k: &KeptGrid| k.kind == **kind && k.frame == **frame && k.options == *options && k.inputs == inputs;
+    if let Some(grid) = WARP_GRIDS_KEPT.with_borrow(|kept| kept.get(&key).filter(|k| same(k)).map(|k| k.grid.clone())) {
+        return grid;
+    }
+    let grid = build_warp_grid(n);
+    WARP_GRIDS_KEPT.with_borrow_mut(|kept| {
+        if kept.len() >= WARP_GRID_KEPT {
+            // Entries for content that no longer exists go first, then one entry at a time.
+            kept.retain(|_, k| k.content.iter().all(|c| c.strong_count() > 0));
+            if kept.len() >= WARP_GRID_KEPT
+                && let Some(any) = kept.keys().next().cloned()
+            {
+                kept.remove(&any);
+            }
+        }
+        // The weak pointers keep the content's addresses from being reused while the entry is kept.
+        let kept_content = content.iter().map(Arc::downgrade).collect();
+        kept.insert(key, KeptGrid { content: kept_content, kind: (**kind).clone(), frame: **frame, options: *options, inputs, grid: grid.clone() });
+    });
+    grid
+}
+
+/// A grid [`warp_grid`] built, with what it was built from.
+struct KeptGrid {
+    content: Vec<std::sync::Weak<Node>>,
+    kind: EnvelopeKind,
+    frame: Affine,
+    options: EnvelopeOptions,
+    inputs: Option<u64>,
+    grid: Option<GradientMesh>,
+}
+
+/// How many grids [`warp_grid`] keeps on one thread.
+const WARP_GRID_KEPT: usize = 1024;
+
+std::thread_local! {
+    /// The grids [`warp_grid`] built on this thread, by the addresses of their envelopes' content.
+    static WARP_GRIDS_KEPT: std::cell::RefCell<std::collections::HashMap<Vec<usize>, KeptGrid>> = Default::default();
+}
+
+/// [`warp_grid`], built from scratch.
+fn build_warp_grid(n: &Node) -> Option<GradientMesh> {
+    let map = EnvelopeMap::of(n)?;
+    let bounds = map.bounds()?;
+    let tol = bounds.width().hypot(bounds.height()) * WARP_GRID_TOLERANCE;
+    if !tol.is_finite() {
+        return None;
+    }
+    WARP_GRIDS.into_iter().find_map(|k| {
+        let m = map.surface_mesh(k, k, Color::BLACK);
+        let finite = m.points.iter().all(|q| q.p.is_finite() && q.handles.iter().all(|h| h.is_finite()));
+        // Each patch is checked at its corners, the middles of its sides and its middle.
+        let steps = 2 * k as usize;
+        let at = |i: usize| i as f64 / steps as f64;
+        let fits = || (0..=steps).all(|j| (0..=steps).all(|i| mesh_at(&m, at(i), at(j)).distance(map.at(at(i), at(j))) <= tol));
+        (finite && fits()).then_some(m)
+    })
 }
 
 /// The frame an envelope keeps after transform `m` (its frame so far composed with the
@@ -556,7 +672,7 @@ impl<'a> EnvelopeMap<'a> {
     pub fn new(content: &[Arc<Node>], kind: &'a EnvelopeKind, frame: Affine, options: EnvelopeOptions) -> Option<Self> {
         let frame = if frame.is_finite() && frame.determinant().abs() > 1e-12 { frame } else { Affine::IDENTITY };
         let to_frame = frame.inverse();
-        let src = content.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, content_box(c, false, to_frame)))?;
+        let src = content_set_box(content, false, to_frame, false).or_else(|| content_set_box(content, false, to_frame, true))?;
         let src = options.source_box(src);
         Some(Self { src, frame, to_frame, surface: surface_of(kind, src, frame) })
     }
@@ -742,14 +858,171 @@ mod tests {
         let to = Affine::scale(2.0);
         let mut moved = (*group).clone();
         moved.transform(to, true);
-        let want = moved.visual_of_members(std::iter::once(content_box(&text, true, to)));
+        let want = moved.visual_of_members(std::iter::once(content_box(&text, true, to, true)));
         assert!(want.is_some());
-        assert_eq!(content_box(&group, true, to), want);
+        assert_eq!(content_box(&group, true, to, true), want);
         let mut nested = group;
         for i in 0..300 {
             nested = Arc::new(Node::group(NodeId(10 + i), vec![nested]));
         }
-        assert!(content_box(&nested, false, Affine::IDENTITY).is_some());
+        assert!(content_box(&nested, false, Affine::IDENTITY, true).is_some());
+    }
+
+    /// A warp envelope of `style` at `bend` with map `version` around a 200×100 rectangle at
+    /// (100, 50).
+    fn warp_node(style: &str, bend: f64, h: f64, version: u32) -> Node {
+        let rect = vectorcraft_geom::shapes::rectangle(Rect::new(100.0, 50.0, 300.0, 150.0));
+        let content = Arc::new(Node::path(NodeId(1), rect, crate::Appearance::default_art()));
+        let kind = EnvelopeKind::Warp { style: style.into(), bend, h, v: 0.0, horizontal: true, version };
+        Node::new(
+            NodeId(2),
+            NodeKind::Envelope {
+                content: vec![content],
+                kind: Box::new(kind),
+                fidelity: 50.0,
+                editing: false,
+                options: EnvelopeOptions::NEW,
+                frame: Box::new(Affine::IDENTITY),
+            },
+        )
+    }
+
+    const STYLES: [&str; 15] = [
+        "arc",
+        "arcLower",
+        "arcUpper",
+        "arch",
+        "bulge",
+        "shellLower",
+        "shellUpper",
+        "flag",
+        "wave",
+        "fish",
+        "rise",
+        "fisheye",
+        "inflate",
+        "squeeze",
+        "twist",
+    ];
+
+    /// Every warp style's Bézier net has a grid to edit: its points lie on the warp, and the grid
+    /// draws within a thousandth of the warp's diagonal of it, between the grid lines too. The
+    /// overlay shows that grid's lines and points.
+    #[test]
+    fn every_warp_style_has_a_grid_that_keeps_its_shape() {
+        for style in STYLES {
+            for (bend, h) in [(50.0, 0.0), (100.0, 0.0), (-100.0, 60.0)] {
+                let n = warp_node(style, bend, h, crate::live::WARP_NET);
+                let grid = warp_grid(&n).unwrap_or_else(|| panic!("{style} {bend} {h}: no grid"));
+                assert!(WARP_GRIDS.contains(&grid.rows) && grid.rows == grid.cols, "{style}: {}×{}", grid.rows, grid.cols);
+                let map = EnvelopeMap::of(&n).unwrap();
+                let b = map.bounds().unwrap();
+                let tol = b.width().hypot(b.height()) * 1e-3;
+                let k = grid.cols as usize;
+                for (i, q) in grid.points.iter().enumerate() {
+                    let want = map.at((i % (k + 1)) as f64 / k as f64, (i / (k + 1)) as f64 / k as f64);
+                    assert!(q.p.distance(want) < 1e-9, "{style}: point {i} at {:?}, the warp at {want:?}", q.p);
+                }
+                for j in 0..=20 {
+                    for i in 0..=20 {
+                        let (u, v) = (i as f64 / 20.0, j as f64 / 20.0);
+                        let off = mesh_at(&grid, u, v).distance(map.at(u, v));
+                        assert!(off <= tol, "{style} {bend} {h}: {off} off at ({u}, {v})");
+                    }
+                }
+                let (lines, shown) = envelope_overlay(&n).unwrap();
+                assert_eq!(shown.as_ref(), Some(&grid), "{style}");
+                assert_eq!(lines, grid.lines(), "{style}");
+            }
+        }
+    }
+
+    /// A kept warp grid is built again when the content, the warp, the frame or the options change,
+    /// and is the grid built from scratch otherwise.
+    #[test]
+    fn a_kept_warp_grid_follows_changes() {
+        let n = warp_node("arc", 50.0, 0.0, crate::live::WARP_NET);
+        let first = warp_grid(&n);
+        assert!(first.is_some());
+        assert_eq!(warp_grid(&n), first);
+        assert_eq!(build_warp_grid(&n), first);
+        let changed = |f: &dyn Fn(&mut Node)| {
+            let mut m = n.clone();
+            f(&mut m);
+            let grid = warp_grid(&m);
+            assert_eq!(grid, build_warp_grid(&m));
+            assert_ne!(grid, first);
+        };
+        changed(&|m| {
+            if let NodeKind::Envelope { content, .. } = &mut m.kind {
+                Arc::make_mut(&mut content[0]).transform(Affine::translate((40.0, 0.0)), true);
+            }
+        });
+        changed(&|m| {
+            if let NodeKind::Envelope { kind, .. } = &mut m.kind
+                && let EnvelopeKind::Warp { bend, .. } = &mut **kind
+            {
+                *bend = -30.0;
+            }
+        });
+        changed(&|m| {
+            if let NodeKind::Envelope { frame, .. } = &mut m.kind {
+                **frame = Affine::rotate(0.3);
+            }
+        });
+        changed(&|m| {
+            if let NodeKind::Envelope { options, .. } = &mut m.kind {
+                options.bounds_margin = [0.1; 4];
+            }
+        });
+    }
+
+    /// The table of kept warp grids stays bounded: full of envelopes that still exist, it drops one
+    /// entry at a time instead of emptying, and it drops the entries of envelopes that are gone
+    /// first.
+    #[test]
+    fn the_kept_warp_grids_stay_bounded() {
+        let nodes: Vec<Node> = (0..WARP_GRID_KEPT + 10).map(|i| warp_node("arc", (i % 100) as f64, 0.0, crate::live::WARP_NET)).collect();
+        for n in &nodes {
+            assert!(warp_grid(n).is_some());
+        }
+        assert_eq!(WARP_GRIDS_KEPT.with_borrow(|kept| kept.len()), WARP_GRID_KEPT);
+        // Once the envelopes are gone, their entries are the ones dropped.
+        drop(nodes);
+        assert!(warp_grid(&warp_node("arc", 10.0, 0.0, crate::live::WARP_NET)).is_some());
+        assert_eq!(WARP_GRIDS_KEPT.with_borrow(|kept| kept.len()), 1);
+    }
+
+    /// A warp drawn by the old point map that no grid of up to 16×16 patches follows closely
+    /// enough, content without bounds and other envelopes have no warp grid; the overlay still
+    /// draws the old warp's lines. While an envelope's contents are edited, it shows no points.
+    #[test]
+    fn a_warp_no_grid_follows_has_no_grid_to_edit() {
+        let n = warp_node("fisheye", 100.0, 0.0, 0);
+        assert!(warp_grid(&n).is_none());
+        let (lines, grid) = envelope_overlay(&n).unwrap();
+        assert!(grid.is_none());
+        assert!(lines.anchor_count() > 0);
+        // The same style on its Bézier net has one.
+        assert!(warp_grid(&warp_node("fisheye", 100.0, 0.0, crate::live::WARP_NET)).is_some());
+        let mut empty = warp_node("arc", 50.0, 0.0, crate::live::WARP_NET);
+        if let NodeKind::Envelope { content, .. } = &mut empty.kind {
+            content.clear();
+        }
+        assert!(warp_grid(&empty).is_none());
+        let mut mesh = warp_node("arc", 50.0, 0.0, crate::live::WARP_NET);
+        if let NodeKind::Envelope { kind, .. } = &mut mesh.kind {
+            **kind = EnvelopeKind::Mesh { rows: 1, cols: 1, points: grid_points(Rect::new(0.0, 0.0, 1.0, 1.0), 1, 1), handles: vec![] };
+        }
+        assert!(warp_grid(&mesh).is_none());
+        // While the contents are edited, a warp's and a mesh envelope's lines show without points.
+        for mut n in [warp_node("arc", 50.0, 0.0, crate::live::WARP_NET), mesh] {
+            if let NodeKind::Envelope { editing, .. } = &mut n.kind {
+                *editing = true;
+            }
+            let (lines, grid) = envelope_overlay(&n).unwrap();
+            assert!(grid.is_none() && lines.anchor_count() > 0);
+        }
     }
 
     /// A table that fills up is emptied instead of growing, and what is looked up after that is

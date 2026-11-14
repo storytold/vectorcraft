@@ -7,8 +7,10 @@ use vectorcraft_tools::{PointerEvent, PointerKind, ToolKey};
 mod actionset;
 pub(super) mod adjust;
 mod ai_open_path;
+mod anchor_edit_work;
 mod appearance;
 mod areafit;
+mod arrowheads;
 mod assets;
 mod assets_3d;
 mod attributes;
@@ -20,6 +22,7 @@ mod brushlib;
 mod brushsym;
 mod build;
 mod cancel;
+mod caret_kerning;
 mod charstroke;
 pub(super) mod clip;
 mod clipboard;
@@ -42,8 +45,10 @@ mod containers;
 mod css;
 mod cut;
 mod dashalign;
+mod dcs;
 mod distort;
 mod docsetup;
+mod document_close;
 mod document_move;
 mod draw2;
 mod dynamic_symbols;
@@ -133,6 +138,7 @@ mod placed_document;
 mod plugins;
 mod prefs;
 mod prefs_file;
+mod prefs_roots;
 mod previewbounds;
 mod print;
 mod printadvanced;
@@ -161,6 +167,7 @@ mod script_include;
 mod script_io;
 mod script_run;
 mod scripts;
+mod select_effects;
 mod select_ids_first;
 mod shaper;
 mod shapetools;
@@ -171,6 +178,7 @@ mod smartguides;
 mod smooth_path;
 mod spelling;
 mod store;
+mod stored_path;
 mod strokegeom;
 mod strokegradient;
 mod strokereach;
@@ -203,6 +211,7 @@ mod typescale;
 mod typeundo;
 mod units;
 mod variables;
+mod warp_images;
 mod webexport;
 mod widthpoints;
 mod widthprofiles;
@@ -230,6 +239,25 @@ pub(crate) fn selected_guides(s: &Session) -> Vec<usize> {
 pub(crate) fn key_guide(s: &Session) -> Option<usize> {
     let st = s.doc().unwrap();
     st.selection.key_guide.and_then(|k| crate::cmd::guide_indexes(&st.doc, &[k]).first().copied())
+}
+
+/// Runs the unit test `path` (`tests::newdoc::...`) again in a child process of the test binary
+/// → whether this is that child. For a test that changes process-wide state the tests running
+/// beside it read, such as the active color settings.
+pub(crate) fn in_own_process(path: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+    if std::env::var_os(CHILD).is_some() {
+        return true;
+    }
+    let output =
+        std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", path, "--nocapture"]).env(CHILD, "1").output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{path} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
 }
 
 #[test]
@@ -4024,6 +4052,38 @@ fn snap_to_pixel_rounds_drawing_and_moves() {
     s.pointer(&PointerEvent::new(PointerKind::Up, 37.3, 34.8), v).unwrap();
     let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
     assert_eq!((b.x0, b.y0), (17.0, 16.0));
+}
+
+/// Pixel Snapping Options (`view.snapToPixel.options`): with While Drawing off a rectangle drawn
+/// with Snap to Pixel on keeps its fractional corners while a move still lands on whole pixels, and
+/// with While Moving off a move keeps its fractional offset while drawing snaps again.
+#[test]
+fn pixel_snapping_options_choose_the_edits_snap_to_pixel_rounds() {
+    let mut s = session();
+    let v = ViewInfo { snap_to_pixel: true, smart_guides: false, snap_to_point: false, ..Default::default() };
+    let drag = |s: &mut Session, tool: &str, from: (f64, f64), to: (f64, f64)| {
+        s.select_tool(tool, v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.0, from.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.0, to.1), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.0, to.1), v).unwrap();
+    };
+    let bounds = |s: &Session, id| {
+        let b = s.doc().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap();
+        (b.x0, b.y0, b.x1, b.y1)
+    };
+    s.execute("view.snapToPixel.options", &json!({"drawing": false})).unwrap();
+    drag(&mut s, "rectangle", (10.25, 10.5), (60.5, 40.25));
+    let id = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, id), (10.25, 10.5, 60.5, 40.25), "drawing does not snap");
+    drag(&mut s, "selection", (30.0, 30.0), (37.5, 34.75));
+    assert_eq!(bounds(&s, id).0, 18.0, "moving still snaps the left edge");
+    assert_eq!(bounds(&s, id).1, 15.0, "moving still snaps the top edge");
+    s.execute("view.snapToPixel.options", &json!({"drawing": true, "moving": false})).unwrap();
+    drag(&mut s, "selection", (40.0, 30.0), (45.25, 33.5));
+    assert_eq!((bounds(&s, id).0, bounds(&s, id).1), (23.25, 18.5), "moving does not snap");
+    drag(&mut s, "rectangle", (100.25, 100.5), (140.5, 130.75));
+    let drawn = s.doc().unwrap().selection.objects[0];
+    assert_eq!(bounds(&s, drawn), (100.0, 101.0, 141.0, 131.0), "drawing snaps again");
 }
 
 #[test]

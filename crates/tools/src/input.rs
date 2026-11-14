@@ -109,6 +109,19 @@ impl PointerEvent {
     pub fn json_backquote(v: &Value, default: bool) -> Result<bool, String> {
         v.get("backquote").map_or(Ok(default), |b| b.as_bool().ok_or_else(|| "`backquote` must be a boolean".to_owned()))
     }
+    /// Checks the optional keys of a JSON pointer event (control channel, MCP): `pressure`,
+    /// `holdMs`, `tiltX`, `tiltY` and `rotation` must be numbers, and `space` must be `doc` or
+    /// `screen`. A key that is absent or null keeps its default.
+    pub fn json_check(e: &Value) -> Result<(), String> {
+        let given = |k: &str| e.get(k).filter(|v| !v.is_null());
+        if let Some(k) = ["pressure", "holdMs", "tiltX", "tiltY", "rotation"].into_iter().find(|k| given(k).is_some_and(|v| v.as_f64().is_none())) {
+            return Err(format!("`{k}` must be a number"));
+        }
+        if given("space").is_some_and(|v| !matches!(v.as_str(), Some("doc" | "screen"))) {
+            return Err("`space` must be doc or screen".to_owned());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -133,6 +146,27 @@ mod tests {
         assert_eq!(PointerEvent::json_backquote(&json!({"backquote": true}), false), Ok(true));
         for bad in [json!("true"), json!(1), json!(null)] {
             assert!(PointerEvent::json_backquote(&json!({"backquote": bad}), false).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn json_check_refuses_pen_values_and_spaces_of_the_wrong_type() {
+        use serde_json::json;
+        for ok in [
+            json!({}),
+            json!({"pressure": 0.5, "holdMs": 10, "tiltX": -5, "tiltY": 5, "rotation": 400, "space": "screen"}),
+            json!({"pressure": null, "space": null}),
+            json!({"space": "doc"}),
+        ] {
+            assert_eq!(PointerEvent::json_check(&ok), Ok(()), "{ok}");
+        }
+        for k in ["pressure", "holdMs", "tiltX", "tiltY", "rotation"] {
+            for bad in [json!("1"), json!(true), json!([1])] {
+                assert_eq!(PointerEvent::json_check(&json!({k: bad})), Err(format!("`{k}` must be a number")), "{k}: {bad}");
+            }
+        }
+        for bad in [json!("screeen"), json!(true), json!(1)] {
+            assert_eq!(PointerEvent::json_check(&json!({"space": bad})), Err("`space` must be doc or screen".to_owned()), "{bad}");
         }
     }
 }

@@ -4,14 +4,16 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject,
+};
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
 use super::pathops::{length_given, number_given, shape_node};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
-    str_param, switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, index_opt, number_or,
+    object_param, ok, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -21,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Vertical",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set vertical writing for the selected type and every frame of its threads → {vertical, ids}",
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads; no undo step when every object is already vertical → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, true)
         ),
@@ -30,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads → {vertical, ids}",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads; no undo step when every object is already horizontal → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -39,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -57,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Optical Margin Alignment",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered → {on, ids}",
+            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered; no undo step when every object already has the setting → {on, ids}",
             has_selection,
             optical_margin_alignment
         ),
@@ -66,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "System Layout",
             [],
             None,
-            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting → {on}",
+            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting. No undo step when the document and every text object already have the setting → {on}",
             has_doc,
             system_layout
         ),
@@ -75,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fractional Widths",
             [],
             None,
-            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters → {on, ids}",
+            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters. No undo step when every object already has the setting → {on, ids}",
             has_selection,
             fractional_widths
         ),
@@ -138,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", …] OpenType, featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -155,24 +157,30 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
-/// every frame of their threads, in one undo step.
+/// every frame of their threads, in one undo step (none when nothing changes).
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
-    s.edit("Text Orientation", |d, _| {
+    // When every object already has the orientation, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Text Orientation", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.vertical = vertical;
-            refresh_bounds(t);
+            if t.vertical != vertical {
+                t.vertical = vertical;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"vertical": vertical, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Type › Optical Margin Alignment: set `on` (without it, the opposite of the first object's
-/// setting) on every selected text object and every frame of their threads, in one undo step.
+/// setting) on every selected text object and every frame of their threads, in one undo step
+/// (none when nothing changes).
 fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Optical Margin Alignment")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
@@ -180,29 +188,38 @@ fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let on = switch_or(p, "on", !first.unwrap_or(false), "type.opticalMarginAlignment")?;
-    s.edit("Optical Margin Alignment", |d, _| {
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Optical Margin Alignment", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.optical_margin = on;
-            refresh_bounds(t);
+            if t.optical_margin != on {
+                t.optical_margin = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Character panel menu › System Layout: set `on` (without it, the opposite of the document's
-/// setting) on the document and every text object, in one undo step. Off is the default.
+/// setting) on the document and every text object, in one undo step (none when nothing changes).
+/// Off is the default.
 fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
     let current = s.doc()?.doc.setup.system_layout;
     let on = switch_or(p, "on", !current, "type.systemLayout")?;
-    s.edit("System Layout", |d, _| {
+    // When the document and every text object already have the setting, the document and its undo
+    // history stay as they are.
+    super::colorcmds::edit_if_changed(s, "System Layout", |_, d| {
+        let mut changed = d.setup.system_layout != on;
         d.setup.system_layout = on;
         let mut ids = vec![];
         d.walk(|n| {
-            if matches!(n.kind, NodeKind::Text(_)) {
+            if matches!(&n.kind, NodeKind::Text(t) if t.system_layout != on) {
                 ids.push(n.id);
             }
         });
@@ -212,15 +229,16 @@ fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
             };
             t.system_layout = on;
             refresh_bounds(t);
+            changed = true;
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({ "on": on }))
 }
 
 /// Character panel menu › Fractional Widths: set `on` (without it, the opposite of the first
 /// object's setting) on every selected text object and every frame of their threads, in one undo
-/// step. On is the default.
+/// step (none when nothing changes). On is the default.
 fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Fractional Widths")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
@@ -228,15 +246,20 @@ fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let on = switch_or(p, "on", !first.unwrap_or(true), "type.fractionalWidths")?;
-    s.edit("Fractional Widths", |d, _| {
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Fractional Widths", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.fractional_widths = on;
-            refresh_bounds(t);
+            if t.fractional_widths != on {
+                t.fractional_widths = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
@@ -672,12 +695,38 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             }
             placed.extend(ruby.map(|(_, r)| r));
             let mut children = placed;
+            // The whole outline the object's own fills and strokes paint: every glyph, ruby glyph
+            // and bar, as the canvas paints them.
+            let mut all = kurbo::BezPath::new();
+            for g in lay.glyphs.iter().chain(&lay.ruby) {
+                all.extend(g.outline.iter());
+            }
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
+                all.extend(bar.iter());
                 let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
                 let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
                 node.appearance = st.appearance().into();
                 children.push(Arc::new(node));
+            }
+            // The object's own fills and strokes (not its characters') paint the whole outline:
+            // those below the Characters row under the characters, the others over them, with
+            // their unplaced gradients fixed to the layout's bounds in the document.
+            let all = PathData::from_bezpath(&all).transformed(t.xf);
+            if !n.appearance.items.is_empty() && !all.is_empty() {
+                let (below, above) = n.appearance.split_contents();
+                let tb = t.xf.transform_rect_bbox(lay.bounds);
+                let mut whole = |items: &[AppearanceItem]| {
+                    let mut ap = Appearance { items: items.to_vec(), ..Default::default() };
+                    ap.pin_gradients(tb);
+                    Arc::new(Node::path(d.alloc_id(), all.clone(), ap))
+                };
+                if !below.is_empty() {
+                    children.insert(0, whole(below));
+                }
+                if !above.is_empty() {
+                    children.push(whole(above));
+                }
             }
             let (par, idx, _) = d.position(tid).ok_or(EngineError::NoNode(tid))?;
             d.remove(tid)?;
@@ -713,6 +762,20 @@ pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Node
         return Err(bad(cmd, "no text objects selected"));
     }
     Ok(t)
+}
+
+/// The type sizes a command takes, in points.
+pub(crate) const TYPE_SIZES: (f64, f64) = (0.1, 1296.0);
+
+/// A type size `size` that a command was given: an error naming the range when it is outside
+/// [`TYPE_SIZES`].
+pub(crate) fn given_type_size(size: f64, cmd: &str) -> Result<f64> {
+    let (lo, hi) = TYPE_SIZES;
+    if !(lo..=hi).contains(&size) {
+        let key = "size";
+        return Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}")));
+    }
+    Ok(size)
 }
 
 /// Clamp in the units shown to the user, then compensate the text's affine. Clamping
@@ -820,10 +883,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setStyle";
     let font = text_param(p, "font", C)?.map(str::to_string);
     let style = text_param(p, "style", C)?.map(str::to_string);
-    let size = length_given(p, "size", C)?;
-    if size.is_some_and(|v| v <= 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let size = length_given(p, "size", C)?.map(|v| given_type_size(v, C)).transpose()?;
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
@@ -1214,8 +1274,8 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|(id, t)| merged(&t.area, t.dynamic_text).map(|o| (id, o)))
         .collect::<Result<_>>()?;
     // Dynamic Text's Block is refused for threaded frames, as `type.dynamicText` refuses it.
-    let frames: Vec<String> =
-        planned.iter().filter(|(id, (_, block))| *block && !super::threads::story_of(d, *id).is_empty()).map(|(id, _)| id.0.to_string()).collect();
+    let threads = super::threads::ThreadIndex::of(d);
+    let frames: Vec<String> = planned.iter().filter(|(id, (_, block))| *block && threads.threaded(*id)).map(|(id, _)| id.0.to_string()).collect();
     if !frames.is_empty() {
         let frames = frames.join(", ");
         return Err(bad(C, format!("area type in a thread cannot use Dynamic Text: {frames}")));
@@ -1273,7 +1333,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut items = Vec::with_capacity(raw.len());
     for it in raw {
-        let id = id_param(it, "id").ok_or_else(|| bad(C, "missing id"))?;
+        let id = object_param(it, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
         let mut refs = super::select::checked_refs(it.get("anchors"), C)?;
         refs.sort_unstable();
         refs.dedup();
@@ -1304,7 +1364,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.reshapePath";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let mut refs = super::select::checked_refs(p.get("anchors"), C)?;
     refs.sort_unstable();
     refs.dedup();
@@ -1335,9 +1395,9 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setPathHandle";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
-    let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing anchor"))?;
+    let ai = index_opt(p, "anchor", C)?.ok_or_else(|| bad(C, "missing anchor"))?;
     let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
     let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let independent = switch_or(p, "independent", false, C)?;
@@ -1365,6 +1425,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(test)]
 mod area_tests;
 mod block;
+pub(crate) use block::needed_room;
 #[cfg(test)]
 mod block_tests;
 

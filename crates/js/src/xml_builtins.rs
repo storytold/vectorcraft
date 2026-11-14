@@ -1,18 +1,20 @@
 //! The E4X built-ins (ECMA-357 sections 13.1 to 13.5): `XML`, `XMLList`, `Namespace`, `QName`,
 //! `isXMLName` and `setDefaultXMLNamespace`. A realm has them only with [`crate::Options::e4x`].
 
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::builtins::{arg, constructor, data, method, native};
 use crate::heap::{
     Class, ENUMERABLE, Key, NativeFn, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, WRITABLE, XmlKind, XmlName, XmlNs, key, string_bytes,
 };
-use crate::interp::{Abrupt, Interp, JsResult};
-use crate::string_builtins::{new_array, set_element};
+use crate::interp::{Abrupt, HeldBytes, Interp, JsResult};
+use crate::string_builtins::{flat_charged, new_array, push_held, reserve_units, set_element};
 use crate::value::{Str, Value};
 use crate::xml::{
     Access, Content, NameRef, RESERVED_NS_BINDING, STAR, Xv, canonical_index, is_ncname, is_script_xml_name, ns_binding_allowed, xml_name_writable,
 };
+use crate::xpath::xpath;
 
 const SETTINGS: [(&str, Value); 5] = [
     ("ignoreComments", Value::Bool(false)),
@@ -44,7 +46,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     method(interp, xml, "settings", settings, 0)?;
     method(interp, xml, "setSettings", set_settings, 1)?;
     method(interp, xml, "defaultSettings", default_settings, 0)?;
-    let xml_methods: [(&'static str, NativeFn, u32); 39] = [
+    let xml_methods: [(&'static str, NativeFn, u32); 40] = [
         ("addNamespace", add_namespace, 1),
         ("appendChild", append_child, 1),
         ("attribute", attribute, 1),
@@ -84,6 +86,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
         ("toString", to_string, 0),
         ("toXMLString", to_xml_string, 0),
         ("valueOf", value_of, 0),
+        ("xpath", xpath, 1),
     ];
     for (name, f, n) in xml_methods {
         method(interp, xml_proto, name, f, n)?;
@@ -91,7 +94,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
 
     let list = native(interp, "XMLList", xml_list_ctor, 1, NativeKind::Plain, true)?;
     constructor(interp, "XMLList", list, list_proto)?;
-    let list_methods: [(&'static str, NativeFn, u32); 21] = [
+    let list_methods: [(&'static str, NativeFn, u32); 22] = [
         ("attribute", attribute, 1),
         ("attributes", attributes, 0),
         ("child", child, 1),
@@ -113,6 +116,7 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
         ("toString", to_string, 0),
         ("toXMLString", to_xml_string, 0),
         ("valueOf", value_of, 0),
+        ("xpath", xpath, 1),
     ];
     for (name, f, n) in list_methods {
         method(interp, list_proto, name, f, n)?;
@@ -180,6 +184,13 @@ fn as_qname(interp: &Interp, v: &Value) -> Option<(XmlName, bool)> {
     }
 }
 
+/// The code units of `v` as a string. A rope is flattened only after the bytes of its copy are
+/// reserved.
+fn str_arg(interp: &mut Interp, v: &Value) -> JsResult<Key> {
+    let s = interp.to_str(v)?;
+    flat_charged(interp, &s)
+}
+
 /// The namespace `new Namespace(...)` makes from its arguments (ECMA-357 section 13.2.2).
 fn build_namespace(interp: &mut Interp, args: &[Value]) -> JsResult<XmlNs> {
     match args {
@@ -193,7 +204,7 @@ fn build_namespace(interp: &mut Interp, args: &[Value]) -> JsResult<XmlNs> {
             {
                 return Ok(XmlNs { prefix: name.prefix, uri: u });
             }
-            let u = interp.to_str(uri)?.flat();
+            let u = str_arg(interp, uri)?;
             let prefix = if u.is_empty() { Some(empty()) } else { None };
             Ok(XmlNs { prefix, uri: u })
         }
@@ -201,7 +212,7 @@ fn build_namespace(interp: &mut Interp, args: &[Value]) -> JsResult<XmlNs> {
             let qname_uri = as_qname(interp, uri).and_then(|(n, _)| n.uri);
             let u = match qname_uri {
                 Some(u) => u,
-                None => interp.to_str(uri)?.flat(),
+                None => str_arg(interp, uri)?,
             };
             if u.is_empty() {
                 if matches!(prefix_value, Value::Undefined) || interp.to_str(prefix_value)?.len() == 0 {
@@ -212,7 +223,7 @@ fn build_namespace(interp: &mut Interp, args: &[Value]) -> JsResult<XmlNs> {
             if matches!(prefix_value, Value::Undefined) {
                 return Ok(XmlNs { prefix: None, uri: u });
             }
-            let p = interp.to_str(prefix_value)?.flat();
+            let p = str_arg(interp, prefix_value)?;
             Ok(XmlNs { prefix: is_ncname(&p).then_some(p), uri: u })
         }
     }
@@ -252,7 +263,7 @@ fn build_qname(interp: &mut Interp, args: &[Value]) -> JsResult<(XmlName, bool)>
     } else if matches!(name_value, Value::Undefined) {
         empty()
     } else {
-        interp.to_str(&name_value)?.flat()
+        str_arg(interp, &name_value)?
     };
     let (uri, prefix) = match namespace {
         Some(Value::Undefined) | None => {
@@ -286,7 +297,16 @@ fn qname_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> Js
     let Some((name, attribute)) = as_qname(interp, &this) else {
         return Err(interp.type_error("QName.prototype.toString needs a QName"));
     };
-    let mut units: Vec<u16> = Vec::new();
+    let uri_len = match &name.uri {
+        None => 3,
+        Some(u) if !u.is_empty() => u.len().saturating_add(2),
+        _ => 0,
+    };
+    let len = usize::from(attribute).saturating_add(uri_len).saturating_add(name.local.len());
+    let bytes = string_bytes(len);
+    interp.reserve_heap(bytes)?;
+    interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
+    let mut units: Vec<u16> = Vec::with_capacity(len);
     if attribute {
         units.push(0x40);
     }
@@ -299,9 +319,6 @@ fn qname_to_string(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> Js
         _ => {}
     }
     units.extend_from_slice(&name.local);
-    let bytes = string_bytes(units.len());
-    interp.reserve_heap(bytes)?;
-    interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
     Ok(Value::String(Str::from_units(units)))
 }
 
@@ -320,7 +337,7 @@ fn to_xml(interp: &mut Interp, v: &Value) -> JsResult<ObjId> {
             Err(interp.type_error("an XMLList converts to XML only when it has one item"))
         }
         Xv::Other => {
-            let text = if v.is_nullish() { empty() } else { interp.to_str(v)?.flat() };
+            let text = if v.is_nullish() { empty() } else { str_arg(interp, v)? };
             interp.xml_from_text(&text)
         }
     }
@@ -351,7 +368,7 @@ fn xml_list_ctor(interp: &mut Interp, _: Value, args: &[Value], construct: bool)
             Xv::Node(n) => i.list_push(out, n)?,
             _ if v.is_nullish() => {}
             _ => {
-                let text = i.to_str(&v)?.flat();
+                let text = str_arg(i, &v)?;
                 for node in i.xml_parse(&text)? {
                     i.list_push(out, node)?;
                 }
@@ -362,7 +379,7 @@ fn xml_list_ctor(interp: &mut Interp, _: Value, args: &[Value], construct: bool)
 }
 
 fn is_xml_name(interp: &mut Interp, _: Value, args: &[Value], _: bool) -> JsResult<Value> {
-    let s = interp.to_str(&arg(args, 0))?.flat();
+    let s = str_arg(interp, &arg(args, 0))?;
     Ok(Value::Bool(is_script_xml_name(&s)))
 }
 
@@ -436,10 +453,16 @@ fn this_id(interp: &mut Interp, this: &Value) -> JsResult<ObjId> {
     }
 }
 
-fn nodes_of(interp: &mut Interp, this: &Value) -> JsResult<Vec<ObjId>> {
+/// The nodes of `this`: the node itself, or a copy of the items of an XMLList, whose bytes `held`
+/// holds against the heap limit first.
+fn nodes_of(interp: &mut Interp, held: &mut HeldBytes, this: &Value) -> JsResult<Vec<ObjId>> {
     match interp.classify(this) {
         Xv::Node(n) => Ok(vec![n]),
-        Xv::List(l) => Ok(interp.xml_list(l)?.items.clone()),
+        Xv::List(l) => interp.rooted(std::slice::from_ref(this), |interp| {
+            let count = interp.xml_list(l)?.items.len();
+            held.add(interp, count.saturating_mul(size_of::<ObjId>()))?;
+            Ok(interp.xml_list(l)?.items.clone())
+        }),
         Xv::Other => Err(not_xml_method(interp)),
     }
 }
@@ -460,8 +483,14 @@ fn attribute_name(interp: &mut Interp, v: &Value) -> JsResult<NameRef> {
     if matches!(v, Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)) {
         return Err(interp.type_error("the value is not an XML attribute name"));
     }
-    let local = interp.to_str(v)?.flat();
-    let local = local.strip_prefix(&[0x40u16]).map_or_else(|| local.clone(), Rc::from);
+    let local = str_arg(interp, v)?;
+    let local = match local.strip_prefix(&[0x40u16]) {
+        Some(rest) => {
+            reserve_units(interp, rest.len())?;
+            Rc::from(rest)
+        }
+        None => local,
+    };
     let uri = if *local == *STAR { None } else { Some(empty()) };
     Ok(NameRef { uri, local, attribute: true })
 }
@@ -506,7 +535,8 @@ fn child(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<
     match interp.xml_access(&p)? {
         Access::Name(n) => Ok(Value::Object(interp.xml_select(id, &n)?)),
         Access::Index(i) => {
-            let nodes = nodes_of(interp, &this)?;
+            let mut held = HeldBytes::new(interp);
+            let nodes = nodes_of(interp, &mut held, &this)?;
             interp.rooted(std::slice::from_ref(&this), |it| {
                 let out = it.new_xml_list(Some(id), None)?;
                 it.xml_keep(out);
@@ -531,7 +561,8 @@ fn select_children(
     keep: impl Fn(&Interp, ObjId) -> JsResult<bool>,
 ) -> JsResult<Value> {
     let id = this_id(interp, this)?;
-    let nodes = nodes_of(interp, this)?;
+    let mut held = HeldBytes::new(interp);
+    let nodes = nodes_of(interp, &mut held, this)?;
     interp.rooted(std::slice::from_ref(this), |it| {
         let out = it.new_xml_list(Some(id), target_name)?;
         it.xml_keep(out);
@@ -662,28 +693,64 @@ fn has_simple_content(interp: &mut Interp, this: Value, _: &[Value], _: bool) ->
     }
 }
 
-/// The namespaces in scope at `x`, nearest declarations first, one for each prefix.
-fn scope_of(interp: &mut Interp, x: Option<ObjId>) -> JsResult<Vec<XmlNs>> {
-    let mut out: Vec<XmlNs> = Vec::new();
-    let mut cur = x;
-    while let Some(y) = cur {
-        let node = interp.xml_node(y)?.clone();
-        for ns in &node.ns {
-            interp.use_fuel()?;
-            if !out.iter().any(|n| n.prefix == ns.prefix) {
-                out.push(ns.clone());
-            }
-        }
-        cur = node.parent;
-    }
-    Ok(out)
+/// The namespaces in scope at a node, nearest declarations first, one for each prefix. The bytes of
+/// the list and of the table of prefixes that built it stay held against the heap limit until the
+/// scope is dropped.
+pub(crate) struct Scope {
+    pub(crate) list: Vec<XmlNs>,
+    _held: HeldBytes,
 }
 
-fn namespaces_array(interp: &mut Interp, list: Vec<XmlNs>) -> JsResult<Value> {
+/// Holds the bytes of a full hash table of `len` entries of `entry` bytes each, and returns how
+/// many more entries to reserve room for. Each new entry is counted four times with a control
+/// byte, which covers the empty slots the table keeps and the old table while it is rehashed.
+fn grow_table(interp: &mut Interp, held: &mut HeldBytes, len: usize, entry: usize) -> JsResult<usize> {
+    let more = len.max(4);
+    held.add(interp, more.saturating_mul(4).saturating_mul(entry.saturating_add(1)).saturating_add(16))?;
+    Ok(more)
+}
+
+/// The namespace `y` declares at index `i`.
+fn declared_at(interp: &mut Interp, y: ObjId, i: usize) -> JsResult<Option<XmlNs>> {
+    Ok(interp.xml_node(y)?.ns.get(i).cloned())
+}
+
+/// The namespaces in scope at `x`, nearest declarations first, one for each prefix. Takes one unit
+/// of fuel for each node it climbs through and for each declaration it reads.
+pub(crate) fn scope_of(interp: &mut Interp, x: Option<ObjId>) -> JsResult<Scope> {
+    let root: Vec<Value> = x.map(Value::Object).into_iter().collect();
+    interp.rooted(&root, |interp| {
+        let mut held = HeldBytes::new(interp);
+        let mut out: Vec<XmlNs> = Vec::new();
+        let mut seen: HashSet<Option<Key>> = HashSet::new();
+        let mut cur = x;
+        while let Some(y) = cur {
+            interp.use_fuel()?;
+            let mut i = 0;
+            while let Some(ns) = declared_at(interp, y, i)? {
+                interp.use_fuel()?;
+                i += 1;
+                if seen.contains(&ns.prefix) {
+                    continue;
+                }
+                if seen.len() == seen.capacity() {
+                    let more = grow_table(interp, &mut held, seen.len(), size_of::<Option<Key>>())?;
+                    seen.reserve(more);
+                }
+                seen.insert(ns.prefix.clone());
+                push_held(interp, &mut held, &mut out, ns)?;
+            }
+            cur = interp.xml_node(y)?.parent;
+        }
+        Ok(Scope { list: out, _held: held })
+    })
+}
+
+fn namespaces_array(interp: &mut Interp, list: &[XmlNs]) -> JsResult<Value> {
     interp.rooted(&[], |i| {
         let a = new_array(i);
-        for (at, ns) in list.into_iter().enumerate() {
-            let v = new_namespace(i, ns)?;
+        for (at, ns) in list.iter().enumerate() {
+            let v = new_namespace(i, ns.clone())?;
             set_element(i, a, at, v)?;
         }
         Ok(Value::Object(a))
@@ -692,29 +759,46 @@ fn namespaces_array(interp: &mut Interp, list: Vec<XmlNs>) -> JsResult<Value> {
 
 fn in_scope_namespaces(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let x = this_node(interp, &this)?;
-    let list = scope_of(interp, Some(x))?;
-    namespaces_array(interp, list)
+    let scope = scope_of(interp, Some(x))?;
+    namespaces_array(interp, &scope.list)
 }
 
 fn namespace_declarations(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
     let x = this_node(interp, &this)?;
     if interp.xml_kind(x)? != XmlKind::Element {
-        return namespaces_array(interp, Vec::new());
+        return namespaces_array(interp, &[]);
     }
-    let parent = interp.xml_node(x)?.parent;
-    let ancestors = scope_of(interp, parent)?;
-    let declared: Vec<XmlNs> =
-        interp.xml_node(x)?.ns.iter().filter(|ns| !ancestors.iter().any(|a| a.prefix == ns.prefix && a.uri == ns.uri)).cloned().collect();
-    namespaces_array(interp, declared)
+    interp.rooted(&[Value::Object(x)], |interp| {
+        let parent = interp.xml_node(x)?.parent;
+        let scope = scope_of(interp, parent)?;
+        let mut held = HeldBytes::new(interp);
+        let mut ancestors: HashMap<Option<Key>, Key> = HashMap::new();
+        for a in &scope.list {
+            if ancestors.len() == ancestors.capacity() {
+                let more = grow_table(interp, &mut held, ancestors.len(), size_of::<(Option<Key>, Key)>())?;
+                ancestors.reserve(more);
+            }
+            ancestors.insert(a.prefix.clone(), a.uri.clone());
+        }
+        let mut declared: Vec<XmlNs> = Vec::new();
+        let mut i = 0;
+        while let Some(ns) = declared_at(interp, x, i)? {
+            i += 1;
+            if ancestors.get(&ns.prefix) != Some(&ns.uri) {
+                push_held(interp, &mut held, &mut declared, ns)?;
+            }
+        }
+        namespaces_array(interp, &declared)
+    })
 }
 
 fn namespace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let x = this_node(interp, &this)?;
     let scope = scope_of(interp, Some(x))?;
     if let Some(p) = args.first() {
-        let p = interp.to_str(p)?.flat();
-        return match scope.into_iter().find(|ns| ns.prefix.as_deref() == Some(&*p)) {
-            Some(ns) => new_namespace(interp, ns),
+        let p = str_arg(interp, p)?;
+        return match scope.list.iter().find(|ns| ns.prefix.as_deref() == Some(&*p)) {
+            Some(ns) => new_namespace(interp, ns.clone()),
             None => Ok(Value::Undefined),
         };
     }
@@ -725,9 +809,10 @@ fn namespace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRes
     let Some(name) = node.name.clone() else { return Ok(Value::Null) };
     let uri = name.uri.clone().unwrap_or_else(empty);
     let found = scope
+        .list
         .iter()
         .find(|ns| ns.uri == uri && ns.prefix == name.prefix)
-        .or_else(|| scope.iter().find(|ns| ns.uri == uri))
+        .or_else(|| scope.list.iter().find(|ns| ns.uri == uri))
         .cloned()
         .unwrap_or(XmlNs { prefix: name.prefix, uri });
     new_namespace(interp, found)
@@ -768,7 +853,8 @@ fn node_kind(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult
 }
 
 fn normalize(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Value> {
-    for node in nodes_of(interp, &this)? {
+    let mut held = HeldBytes::new(interp);
+    for node in nodes_of(interp, &mut held, &this)? {
         if interp.xml_kind(node)? == XmlKind::Element {
             interp.node_normalize(node)?;
         }
@@ -797,12 +883,17 @@ fn parent(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> JsResult<Va
 
 fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let p = arg(args, 0);
-    let s = interp.to_str(&p)?.flat();
+    let s = str_arg(interp, &p)?;
     match interp.classify(&this) {
         Xv::Node(_) => Ok(Value::Bool(canonical_index(&s) == Some(0))),
         Xv::List(l) => Ok(Value::Bool(canonical_index(&s).is_some_and(|i| (i as usize) < interp.list_len(l).unwrap_or(0)))),
         Xv::Other => Err(not_xml_method(interp)),
     }
+}
+
+/// The attribute `x` holds at index `i`.
+fn attr_at(interp: &mut Interp, x: ObjId, i: usize) -> JsResult<Option<ObjId>> {
+    Ok(interp.xml_node(x)?.attrs.get(i).copied())
 }
 
 /// [[AddInScopeNamespace]] (ECMA-357 section 9.1.1.13).
@@ -814,16 +905,14 @@ fn add_in_scope(interp: &mut Interp, x: ObjId, ns: XmlNs) -> JsResult<()> {
     if !ns_binding_allowed(&prefix, &ns.uri) {
         return Err(interp.type_error(RESERVED_NS_BINDING));
     }
-    let node = interp.xml_node(x)?;
-    if prefix.is_empty() && node.name.as_ref().and_then(|n| n.uri.as_ref()).is_some_and(|u| u.is_empty()) {
+    if prefix.is_empty() && interp.xml_node(x)?.name.as_ref().and_then(|n| n.uri.as_ref()).is_some_and(|u| u.is_empty()) {
         return Ok(());
     }
-    if !node.ns.iter().any(|m| m.prefix.as_ref() == Some(&prefix)) {
+    if !interp.xml_node(x)?.ns.iter().any(|m| m.prefix.as_ref() == Some(&prefix)) {
         let bytes = crate::heap::XML_NS_BYTES;
         interp.reserve_heap(bytes)?;
         interp.heap.bytes = interp.heap.bytes.saturating_add(bytes);
     }
-    let attrs = interp.xml_node(x)?.attrs.clone();
     let node = interp.xml_node_mut(x)?;
     node.ns.retain(|m| m.prefix.as_ref() != Some(&prefix));
     node.ns.push(ns);
@@ -832,8 +921,10 @@ fn add_in_scope(interp: &mut Interp, x: ObjId, ns: XmlNs) -> JsResult<()> {
     {
         name.prefix = None;
     }
-    for a in attrs {
+    let mut i = 0;
+    while let Some(a) = attr_at(interp, x, i)? {
         interp.use_fuel()?;
+        i += 1;
         if let Some(name) = &mut interp.xml_node_mut(a)?.name
             && name.prefix.as_ref() == Some(&prefix)
         {
@@ -906,25 +997,31 @@ fn insert_child_before(interp: &mut Interp, this: Value, args: &[Value], _: bool
     insert_relative(interp, this, args, false)
 }
 
-/// One element of a `removeNamespace` walk; true when the walk goes on to its children.
-fn remove_ns_from(interp: &mut Interp, x: ObjId, ns: &XmlNs) -> JsResult<bool> {
-    let node = interp.xml_node(x)?;
-    let attrs = node.attrs.clone();
-    if node.name.as_ref().and_then(|n| n.uri.as_ref()) == Some(&ns.uri) {
-        return Ok(false);
+/// Whether the name of element `x` or of one of its attributes is in `ns`, which keeps `ns` on `x`
+/// and its descendants in a `removeNamespace` walk.
+fn ns_in_use(interp: &mut Interp, x: ObjId, ns: &XmlNs) -> JsResult<bool> {
+    if interp.xml_node(x)?.name.as_ref().and_then(|n| n.uri.as_ref()) == Some(&ns.uri) {
+        return Ok(true);
     }
-    for a in attrs {
+    let mut i = 0;
+    while let Some(a) = attr_at(interp, x, i)? {
         interp.use_fuel()?;
+        i += 1;
         if interp.xml_node(a)?.name.as_ref().and_then(|n| n.uri.as_ref()) == Some(&ns.uri) {
-            return Ok(false);
+            return Ok(true);
         }
     }
+    Ok(false)
+}
+
+/// Removes `ns` from the declarations of element `x`.
+fn remove_ns_from(interp: &mut Interp, x: ObjId, ns: &XmlNs) -> JsResult<()> {
     let list = &mut interp.xml_node_mut(x)?.ns;
     match &ns.prefix {
         None => list.retain(|m| m.uri != ns.uri),
         Some(p) => list.retain(|m| !(m.uri == ns.uri && m.prefix.as_ref() == Some(p))),
     }
-    Ok(true)
+    Ok(())
 }
 
 fn remove_namespace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -933,23 +1030,31 @@ fn remove_namespace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -
         return Ok(this);
     }
     let ns = build_namespace(interp, std::slice::from_ref(&arg(args, 0)))?;
-    if !remove_ns_from(interp, x, &ns)? {
-        return Ok(this);
-    }
-    let mut stack = vec![(x, 0usize)];
-    while let Some(&(node, next)) = stack.last() {
-        interp.use_fuel()?;
-        let Some(c) = interp.xml_node(node)?.children.get(next).copied() else {
-            stack.pop();
-            continue;
-        };
-        if let Some(frame) = stack.last_mut() {
-            frame.1 += 1;
+    interp.rooted(&[Value::Object(x)], |interp| {
+        if ns_in_use(interp, x, &ns)? {
+            return Ok(());
         }
-        if interp.xml_kind(c)? == XmlKind::Element && remove_ns_from(interp, c, &ns)? {
-            stack.push((c, 0));
+        let mut held = HeldBytes::new(interp);
+        let mut stack = Vec::new();
+        push_held(interp, &mut held, &mut stack, (x, 0usize))?;
+        remove_ns_from(interp, x, &ns)?;
+        while let Some(&(node, next)) = stack.last() {
+            interp.use_fuel()?;
+            let Some(c) = interp.xml_node(node)?.children.get(next).copied() else {
+                stack.pop();
+                continue;
+            };
+            if let Some(frame) = stack.last_mut() {
+                frame.1 += 1;
+            }
+            if interp.xml_kind(c)? != XmlKind::Element || ns_in_use(interp, c, &ns)? {
+                continue;
+            }
+            push_held(interp, &mut held, &mut stack, (c, 0))?;
+            remove_ns_from(interp, c, &ns)?;
         }
-    }
+        Ok(())
+    })?;
     Ok(this)
 }
 
@@ -980,6 +1085,9 @@ fn replace(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
         };
         let matched = i.xml_select(x, &NameRef { attribute: false, ..n })?;
         i.xml_keep(matched);
+        let mut held = HeldBytes::new(i);
+        let count = i.xml_list(matched)?.items.len();
+        held.add(i, count.saturating_mul(size_of::<ObjId>()))?;
         let items = i.xml_list(matched)?.items.clone();
         if items.is_empty() {
             return Ok(());
@@ -1011,7 +1119,7 @@ fn set_local_name(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> 
     let v = arg(args, 0);
     let local = match as_qname(interp, &v) {
         Some((n, _)) => n.local,
-        None => interp.to_str(&v)?.flat(),
+        None => str_arg(interp, &v)?,
     };
     checked_local(interp, &local)?;
     if kind == XmlKind::Attribute

@@ -19,7 +19,7 @@ use vectorcraft_doc::symbol_overrides::SymbolOverride;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection, SymbolEdit, SymbolRegistration};
 use vectorcraft_geom::{Affine, Point};
 
-use super::brushsym::{natural_size, place_xf};
+use super::brushsym::{fit_parts, natural_size, place_xf};
 use super::{EngineError, Result, Session, bad, number_or, object_param, ok, str_param};
 
 /// The name of the undo step that enters symbol editing mode.
@@ -425,8 +425,8 @@ fn each_changed_instance(n: &mut Node, name: &str, f: &mut dyn FnMut(&mut Vec<Sy
 }
 
 /// Each instance's appearance changes to objects of symbol `name`'s art follow those objects
-/// through an edit of the editing layer (see [`follow_paths`]), and keep only the changes to
-/// objects the art still has. That covers the instances on the layers and in the art of the
+/// through an edit of the editing layer (see [`follow_paths`]), and keep only the changes the art
+/// still draws ([`fit_parts`]). That covers the instances on the layers and in the art of the
 /// document's other symbols, graph designs, pattern tiles (the tiles pattern editing's Cancel puts
 /// back included) and brushes, opacity-mask art included. The editing layer holds no instance of
 /// the symbol, since [`sync`] refuses one.
@@ -435,7 +435,7 @@ fn follow_objects(d: &mut Document, name: &str, old: (&[Arc<Node>], bool), new: 
     let mut follow = |o: &mut Vec<SymbolOverride>| {
         follow_paths(o, old, new);
         match &art {
-            Some(art) => vectorcraft_doc::symbol_overrides::retain_parts(o, art),
+            Some(art) => fit_parts(o, art),
             None => o.clear(),
         }
     };

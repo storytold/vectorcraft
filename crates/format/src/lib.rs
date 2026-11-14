@@ -55,7 +55,7 @@ use serde::{Deserializer, Serialize};
 use vectorcraft_doc::{Document, ImageBlob};
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use atomic::{sync_file, write_atomic, write_atomic_with, write_new_with};
+pub use atomic::{read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
 pub use craft_vectorcraft_format::base64::{decode as base64_decode, decoded_len as base64_decoded_len, encode as base64_encode};
 pub use craft_vectorcraft_format::{
     BLOB_MAGIC, COMPRESSED_SINCE, EXTENSION, ICC_MIME, INLINE_MAX, LEGACY_EXTENSION, MIN_VERSION, PREVIEW_MAX, VERSION, is_compressed, json_part,
@@ -504,11 +504,23 @@ pub fn load_file(bytes: &[u8]) -> Result<NativeFile, FormatError> {
     load_file_within(bytes, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
 }
 
+/// [`load_file`] with a compressed file refused when its JSON, or the data after it (images,
+/// profiles, the preview), unpacks to more than `max` bytes (at most [`MAX_JSON`] and
+/// [`MAX_BLOBS`]), or, when it lacks the marker after its JSON, when all of it does.
+pub fn load_file_capped(bytes: &[u8], max: u64) -> Result<NativeFile, FormatError> {
+    let file = unpack::Unpacked::within_capped(bytes, max.min(MAX_JSON), max.min(MAX_UNPACKED), max.min(MAX_BLOBS))?;
+    load_unpacked(file, vectorcraft_doc::node::MAX_READ_NODES, vectorcraft_doc::node::MAX_BUFFERED_VALUES)
+}
+
 /// [`load_file`] reading at most `max_nodes` objects and buffering at most `max_values` values
 /// before objects' types, so a test can exercise the budgets without documents that large
 /// ([`vectorcraft_doc::node::MAX_READ_NODES`], [`vectorcraft_doc::node::MAX_BUFFERED_VALUES`]).
 fn load_file_within(bytes: &[u8], max_nodes: usize, max_values: usize) -> Result<NativeFile, FormatError> {
-    let file = unpack::Unpacked::new(bytes)?;
+    load_unpacked(unpack::Unpacked::new(bytes)?, max_nodes, max_values)
+}
+
+/// The document of `file`, within the budgets of [`load_file_within`].
+fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize) -> Result<NativeFile, FormatError> {
     // The JSON reader stops at 128 levels (a document's objects use three each), the paths read
     // at `MAX_READ_ANCHORS` anchors together, the document at `MAX_READ_NODES` objects, and the
     // fields read before an object's type at `MAX_BUFFERED_VALUES` values. The preview and the
@@ -1184,6 +1196,30 @@ mod tests {
         assert_eq!(back.node_count(), d.node_count());
         assert_eq!(back.images["k"].bytes.as_slice(), &[1, 2, 3, 250]);
         assert_eq!(back.node(id).unwrap().path_data(), d.node(id).unwrap().path_data());
+    }
+
+    /// A capped read refuses a compressed file whose images unpack past the cap, before reading
+    /// them, and reads the same file under a cap it fits.
+    #[test]
+    fn a_capped_load_caps_the_data_after_the_json() {
+        use std::io::Write as _;
+        let mut d = Document::new(100.0, 100.0);
+        let l = d.layers[0].id;
+        d.images.insert("k".into(), ImageBlob::new("image/png", vec![7; 1 << 16]));
+        let img = d.alloc_id();
+        let im = ImageObject { key: "k".into(), width: 1, height: 1, xf: Affine::IDENTITY, link: None, placement: Default::default(), pixels: None };
+        d.insert(Some(l), 0, Node::new(img, NodeKind::Image(Box::new(im)))).unwrap();
+        // The file gzipped whole, image and all, so the image unpacks from a few bytes.
+        let raw = save_with(&d, &SaveOptions::default()).unwrap();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+        gz.write_all(&raw).unwrap();
+        let bytes = gz.finish().unwrap();
+        assert!(is_compressed(&bytes) && bytes.len() < 1 << 12, "{}", bytes.len());
+        let json = unpack::Unpacked::new(&bytes).unwrap().json().len();
+        assert!(json < 1 << 15, "{json}");
+        assert!(matches!(load_file_capped(&bytes, (1 << 16) - 1), Err(FormatError::TooBig)));
+        assert_eq!(load_file_capped(&bytes, 3 << 15).unwrap().doc.images["k"].bytes.len(), 1 << 16);
+        assert_eq!(load_file(&bytes).unwrap().doc.images["k"].bytes.len(), 1 << 16);
     }
 
     /// #3587: objects are read within a budget. A compressed file of many small objects stays

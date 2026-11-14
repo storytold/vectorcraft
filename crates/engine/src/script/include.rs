@@ -88,6 +88,13 @@ impl SourceMap {
         let name = self.files.get(seg.file).cloned().unwrap_or_else(|| Arc::from(""));
         (seg.file, name, seg.line.saturating_add(line - seg.out_line), column)
     }
+
+    /// The memory the map holds, in bytes: its lists and its file names, each name counted in full
+    /// even when another map shares it.
+    pub(crate) fn bytes(&self) -> usize {
+        let names: usize = self.files.iter().map(|f| f.len() + 2 * size_of::<usize>()).sum();
+        self.files.capacity() * size_of::<Arc<str>>() + self.segments.capacity() * size_of::<Segment>() + names
+    }
 }
 
 /// How a preprocessor failure ends the run.
@@ -314,7 +321,8 @@ impl Files {
         std::env::var("JSINCLUDE").map(|v| v.split(';').map(str::trim).filter(|p| !p.is_empty()).map(PathBuf::from).collect()).unwrap_or_default()
     }
 
-    /// The file being run now, as `$.fileName` gives it (empty for a script given as text).
+    /// The file being run now: the script, or the file `$.evalFile` is running (empty for a script
+    /// given as text). `$.fileName` gives it to code that `eval` or `Function` compiled.
     pub(crate) fn file_name(&self) -> String {
         self.frames.last().map(|f| f.shown.to_string()).unwrap_or_default()
     }

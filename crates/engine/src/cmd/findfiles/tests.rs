@@ -43,12 +43,62 @@ impl Visitor for Blocked {
     }
 }
 
+/// A test's folder tree, removed with everything in it when dropped, also when the test panics,
+/// and also when the test locked a folder in it. A removal that fails (a walker still holding a
+/// file open) is ignored.
+struct Tree(PathBuf);
+
+impl std::ops::Deref for Tree {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.0
+    }
+}
+
+impl Drop for Tree {
+    fn drop(&mut self) {
+        if std::fs::remove_dir_all(&self.0).is_err() {
+            unlock(&self.0);
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+}
+
+/// Gives the owner read, write and search permission on `folder` and on every folder in it, so
+/// that a tree holding a folder a test locked can be removed. Links are not followed.
+#[cfg(unix)]
+fn unlock(folder: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let Ok(meta) = std::fs::symlink_metadata(folder) else { return };
+    if !meta.is_dir() {
+        return;
+    }
+    let mode = meta.permissions().mode() & 0o7777;
+    if mode & 0o700 != 0o700 {
+        let _ = std::fs::set_permissions(folder, std::fs::Permissions::from_mode(mode | 0o700));
+    }
+    let Ok(entries) = std::fs::read_dir(folder) else { return };
+    for entry in entries.flatten() {
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            unlock(&entry.path());
+        }
+    }
+}
+
+/// Folders on other systems are removed as they are.
+#[cfg(not(unix))]
+fn unlock(_: &Path) {}
+
 /// A fresh folder (canonical, as a search reports it) holding `paths`: files, and folders where
-/// they end in `/`.
-fn tree(tag: &str, paths: &[&str]) -> PathBuf {
-    let root = vectorcraft_testkit::temp_dir(&format!("findfiles-{tag}"));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+/// they end in `/`. The folder is removed when the returned [`Tree`] is dropped.
+fn tree(tag: &str, paths: &[&str]) -> Tree {
+    let mut root = Tree(vectorcraft_testkit::temp_dir(&format!("findfiles-{tag}")));
+    // Empties what a tree whose removal failed left, keeping the folder as `temp_dir` made it
+    // (owner-only on Unix).
+    for entry in std::fs::read_dir(&root.0).unwrap().flatten() {
+        let path = entry.path();
+        let _ = if entry.file_type().is_ok_and(|t| t.is_dir()) { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+    }
     for p in paths {
         let path = root.join(p);
         if p.ends_with('/') {
@@ -58,7 +108,54 @@ fn tree(tag: &str, paths: &[&str]) -> PathBuf {
             std::fs::write(&path, b"font").unwrap();
         }
     }
-    plain(std::fs::canonicalize(&root).unwrap())
+    root.0 = plain(std::fs::canonicalize(&root.0).unwrap());
+    root
+}
+
+#[test]
+fn a_tree_is_removed_when_its_test_ends() {
+    let path = {
+        let root = tree("removed", &["a/b/one.ttf", "c/"]);
+        assert!(root.join("a/b/one.ttf").is_file() && root.join("c").is_dir());
+        root.to_path_buf()
+    };
+    assert!(!path.exists(), "{} is left", path.display());
+}
+
+#[test]
+fn a_tree_is_removed_when_its_test_panics() {
+    let mut path = PathBuf::new();
+    let r = vectorcraft_testkit::catch_quiet::<()>(|| {
+        let root = tree("unwound", &["a/b/one.ttf"]);
+        path = root.to_path_buf();
+        panic!("a failed assertion");
+    });
+    assert_eq!(r.err().as_deref(), Some("a failed assertion"));
+    assert!(!path.as_os_str().is_empty() && !path.exists(), "{} is left", path.display());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_tree_is_private_to_this_user() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tree("private", &["a/one.ttf"]);
+    let mode = std::fs::metadata(&*root).unwrap().permissions().mode();
+    assert_eq!(mode & 0o077, 0, "{}: mode {mode:o}", root.display());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_tree_with_a_locked_folder_is_removed_when_its_test_panics() {
+    use std::os::unix::fs::PermissionsExt;
+    let mut path = PathBuf::new();
+    let r = vectorcraft_testkit::catch_quiet::<()>(|| {
+        let root = tree("locked", &["a/locked/b/one.ttf"]);
+        path = root.to_path_buf();
+        std::fs::set_permissions(root.join("a/locked"), std::fs::Permissions::from_mode(0o000)).unwrap();
+        panic!("a failed assertion");
+    });
+    assert_eq!(r.err().as_deref(), Some("a failed assertion"));
+    assert!(!path.as_os_str().is_empty() && !path.exists(), "{} is left", path.display());
 }
 
 /// The rules of a search of `root`: its `Users/me` is the home folder, `refused` an app's folder.
@@ -183,6 +280,16 @@ fn a_picked_folder_inside_other_apps_folders_is_refused() {
     assert!(p.error().is_some_and(|e| e.ends_with("is not a folder")), "{p:?}");
     let p = search(&root, "missing", Limits::default(), 1, &[]);
     assert!(p.error().is_some_and(|e| e.starts_with(&root.join("missing").display().to_string())), "{p:?}");
+    // Each failure has the same reason without the folder's path.
+    let briefs = [
+        ("missing", "the folder can't be read"),
+        ("file.ttf", "the path isn't a folder"),
+        ("refused", "VectorCraft doesn't search other apps' or the system's folders"),
+        ("Users/Public/x", "VectorCraft doesn't search the Shared or Public folder in Users"),
+    ];
+    for (picked, why) in briefs {
+        assert_eq!(search(&root, picked, Limits::default(), 1, &[]).failure(), Some(why), "{picked}");
+    }
 }
 
 #[test]
@@ -362,7 +469,7 @@ fn a_picked_folder_that_cant_be_listed_fails_the_search() {
     let p = search(&root, "locked", Limits::default(), 2, &["y.ttf"]);
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
     if enforced {
-        assert!(matches!(&p.end, Some(End::Failed(e)) if e.contains("locked")), "{p:?}");
+        assert!(matches!(&p.end, Some(End::Failed(e, "the folder can't be listed")) if e.contains("locked")), "{p:?}");
     } else {
         assert_eq!(found(&root, &p), ["locked/y.ttf"]);
     }

@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Other Library…",
             ["Window", "Graphic Style Libraries"],
             None,
-            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcstyles library, or the graphic styles of any document VectorCraft opens (see document.formats), for the library panel (Window → Graphic Style Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library) → {library: id, name, count}",
+            "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} load a .vcstyles library, or the graphic styles of any document VectorCraft opens (see document.formats), for the library panel (Window → Graphic Style Libraries lists it until the app quits; a file of the user library folder, or a file with the same extension and bytes as one there, opens as that User Defined library; a .ai or EPS style painting with one of the file's gradients by name takes it at the style's angle, fitted to each object it is applied to, VectorCraft's own placement) → {library: id, name, count}",
             always,
             load
         ),
@@ -161,11 +161,13 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "graphicStyle.addFromLibrary";
     let (info, lib) = library_param(s, p, C)?;
     let (apply, add) = (switch_or(p, "apply", false, C)?, switch_or(p, "add", false, C)?);
-    if p.get("ids").is_some_and(|v| !v.is_null()) {
+    let ids_given = p.get("ids").is_some_and(|v| !v.is_null());
+    if ids_given {
         checked_ids_param(s, p, "ids", C)?;
-    } else if apply {
-        // A selection that can't take a style is refused before any style is added.
-        super::appearance::appearance_targets(s, &json!({}))?;
+    }
+    if apply {
+        // Objects that can't take a style are refused before any style is added.
+        super::appearance::edit_targets(s, &if ids_given { json!({"ids": p["ids"]}) } else { json!({}) })?;
     }
     let mut names = names_param(p, C)?;
     names.extend(text_param(p, "name", C)?.map(str::to_string));

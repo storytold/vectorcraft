@@ -4,6 +4,8 @@
 
 use std::io::Cursor;
 
+use vectorcraft_doc::resample::{Resample, resized};
+
 use crate::bytes::Reader;
 
 /// Most pixels along a side of an image the writers store (larger ones are scaled down).
@@ -11,8 +13,8 @@ const MAX_SIDE: u32 = 8192;
 /// Most pixels an image the writers store holds.
 const MAX_PIXELS: u64 = 1 << 24;
 /// Most pixels along a side, and in all, of a bitmap the reader decodes.
-const MAX_READ_SIDE: u32 = 1 << 15;
-const MAX_READ_PIXELS: u64 = 1 << 26;
+pub(crate) const MAX_READ_SIDE: u32 = 1 << 15;
+pub(crate) const MAX_READ_PIXELS: u64 = 1 << 26;
 /// Most pixels the bitmaps of one file may decode to together (four of the largest one), so a small
 /// file of many image records can't cost minutes of decoding (#3600).
 pub(crate) const MAX_FILE_PIXELS: u64 = 1 << 28;
@@ -42,7 +44,8 @@ impl Rgba {
         let img = if k > 1.0 {
             let nw = ((f64::from(w) / k).floor() as u32).max(1);
             let nh = ((f64::from(h) / k).floor() as u32).max(1);
-            image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Triangle)
+            let how = Resample::Filter(image::imageops::FilterType::Triangle);
+            resized(image::DynamicImage::ImageRgba8(img), nw, nh, how).into_rgba8()
         } else {
             img
         };
@@ -164,7 +167,7 @@ fn png_without_metadata(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
 }
 
 /// Take a bitmap of `w` × `h` from what is `left` of the file's budget, before it is decoded.
-fn charge(w: u32, h: u32, left: &mut u64) -> Result<(), String> {
+pub(crate) fn charge(w: u32, h: u32, left: &mut u64) -> Result<(), String> {
     let n = u64::from(w) * u64::from(h);
     *left = left.checked_sub(n).ok_or(OVER_BUDGET)?;
     Ok(())
@@ -446,5 +449,19 @@ mod tests {
         let img = image::RgbaImage::new(MAX_SIDE * 2, 4);
         let f = Rgba::fitted(img);
         assert_eq!((f.width, f.height), (MAX_SIDE, 2));
+    }
+
+    /// A large image scaled to fit keeps the color of its opaque pixels beside clear ones: the
+    /// clear black beside them does not darken them.
+    #[test]
+    fn large_images_keep_their_color_beside_clear_pixels() {
+        let img =
+            image::RgbaImage::from_fn(MAX_SIDE * 2, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) });
+        let f = Rgba::fitted(img);
+        assert_eq!((f.width, f.height), (MAX_SIDE, 2));
+        let m = |c: u8, a: u8| (u16::from(c) * u16::from(a) / 255) as u8;
+        for p in f.pixels.as_chunks::<4>().0 {
+            assert!(p[3] > 0 && [200, 30, 30].iter().zip(p).all(|(&want, &c)| m(c, p[3]).abs_diff(m(want, p[3])) <= 1), "{p:?}");
+        }
     }
 }

@@ -114,3 +114,12 @@ fn keys_named(doc: &str) -> Vec<String> {
     }
     found.into_iter().map(|(k, _)| k).collect()
 }
+
+/// Turn notes the key walk above doesn't reach: a numeric reflection axis and the Scatter brush's
+/// `rotation [a, b]` range, whose head isn't a plain key.
+#[test]
+fn turns_outside_plain_keys_say_which_way() {
+    let doc = |id: &str| command_specs().iter().find(|c| c.id == id).map(|c| c.params).unwrap_or_default();
+    assert!(doc("object.reflect").contains("|deg (the mirror line, counter-clockwise from horizontal"), "object.reflect's numeric axis");
+    assert!(doc("brush.options").contains("rotation [a, b] −180..180° (counter-clockwise)"), "the Scatter brush's rotation");
+}

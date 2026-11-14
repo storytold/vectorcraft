@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientStop, Paint, Swatch, SwatchGroup, tint_percent};
 use vectorcraft_doc::pattern::pattern_paint;
-use vectorcraft_doc::swatches::{LinkFn, color_name, map_node_solid_paints, node_colors};
+use vectorcraft_doc::swatches::{LinkFn, PaintFn, color_name, map_node_paints, map_node_solid_paints, node_colors};
 use vectorcraft_doc::{Document, NodeId};
 
 use super::paint::paint_from;
@@ -19,7 +19,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "New Swatch",
             ["Window", "Swatches"],
             None,
-            "{name?, color? | colors?: [colour] (one swatch each, in one undo step; #rrggbbaa and #rgba are refused) | swatch? | gradient? | pattern?: name (default: the current fill), tint?: 0..100 (% of the global or spot `swatch`, or of the one the current fill links to), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour; lab: CIE L*a*b*, how spot colours are usually defined), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped), none?: true (the None paint), paint?: paint.setFill params, keepModel?: bool (as paint.setFill)} save a colour, gradient or pattern as a swatch. A tint of a global or spot colour (below 100%, without mode, global or spot) becomes a tint swatch, \"Name 40%\", linked to its base: it follows edits to the base and applies as that tint of it. A gradient swatch holds no link to the swatch its gradient came from, and a pattern swatch holds the pattern untransformed. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\", \"L=55 a=60 b=40\") → {name, names: [every new swatch]}",
+            "{name?, color? | colors?: [colour] (one swatch each, in one undo step; #rrggbbaa and #rgba are refused) | swatch? | gradient? | pattern?: name (default: the current fill), tint?: 0..100 (% of the global or spot `swatch`, or of the one the current fill links to), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour; lab: CIE L*a*b*, how spot colours are usually defined), global?, spot? (a spot colour, always global), group?: colour group name (solid colours only; default: ungrouped), none?: true (the None paint), paint?: paint.setFill params, keepModel?: bool (as paint.setFill)} save a colour, gradient or pattern as a swatch. A tint of a global or spot colour (below 100%, without mode, global or spot) becomes a tint swatch, \"Name 40%\", linked to its base: it follows edits to the base and applies as that tint of it. A gradient swatch keeps the gradient's aspect (with or without start/end) and holds no link to the swatch its gradient came from, and a pattern swatch holds the pattern untransformed. Names are unique (\"Sky 2\"); a colour's default name is its values (\"C=10 M=20 Y=30 K=0\", \"R=255 G=128 B=0\", \"Gray K=40\", \"L=55 a=60 b=40\") → {name, names: [every new swatch]}",
             has_doc,
             swatch_new
         ),
@@ -48,7 +48,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Options",
             ["Window", "Swatches"],
             None,
-            "{name, newName?, color? (e.g. {l, a, b} for a Lab colour; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill; the swatch's own color and a color given with mode keep their model), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient}, {swatch} or {pattern}) replacing the swatch's colour; gradient or pattern with one of the same kind} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
+            "{name, newName?, color? (e.g. {l, a, b} for a Lab colour; #rrggbbaa and #rgba are refused), keepModel?: bool (as paint.setFill; the swatch's own color and a color given with mode keep their model), mode?: \"gray\"|\"rgb\"|\"hsb\"|\"lab\"|\"cmyk\"|\"web\" (convert the colour), global?, spot? (spot colours are always global), paint?: paint.setFill params ({color}, {gradient} or {swatch}) or {pattern: name} replacing the swatch's colour; gradient or pattern with one of the same kind (stored as swatch.new stores it: a gradient keeps its aspect with or without start/end and holds no swatch link; a pattern is untransformed)} edit a swatch in any colour group, as one undo step. Fills, strokes, text, gradient stops and tint swatches linked to a global swatch take its new colour (at their own tint) and name; turning Global off unlinks them (they keep their colour). Colour, mode and spot apply to solid colours only; a tint swatch only takes a new name (edit its base) → {name, relinked: paints changed}",
             has_doc,
             swatch_edit
         ),
@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Select All Unused",
             ["Window", "Swatches"],
             None,
-            "{} → {names: [the swatches nothing uses, in panel order]}: a colour is used when a paint links to it or an unlinked paint, gradient stop or mesh point has its colour; a gradient when a gradient links to it or has its stops; a pattern when it fills or strokes anything (art, symbols, pattern tiles and graphic styles count). None is never listed",
+            "{} → {names: [the swatches nothing uses, in panel order]}: a colour is used when a paint links to it or an unlinked paint, gradient stop or mesh point has its colour; a gradient when a gradient links to it or has its stops; a pattern when it fills or strokes anything (art, symbols, pattern tiles and graphic styles count); a color, spot or process, when an image placed from a DCS file that the art shows has a spot plate of its name. None is never listed",
             has_doc,
             swatch_unused
         ),
@@ -187,11 +187,7 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
             })),
             Paint::None => Err(bad(C, "a swatch needs a colour, gradient or pattern")),
             _ if spot || mode.is_some() || group.is_some() => Err(bad(C, "spot, mode and group apply to solid colours only")),
-            // The swatch holds the gradient itself, not a link to the swatch it may have come from.
-            // It keeps `geom`, which holds the aspect the swatch is applied with.
-            Paint::Gradient(g) => Ok(Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { swatch: None, ..*g }))),
-            // The swatch holds the pattern untransformed, not the placement of the art it came from.
-            Paint::Pattern { pattern, .. } => Ok(pattern_paint(&pattern)),
+            paint @ (Paint::Gradient(_) | Paint::Pattern { .. }) => Ok(stored_paint(paint, p)),
         })
         .collect::<Result<Vec<_>>>()?;
     // A name applies to a single new swatch.
@@ -218,6 +214,27 @@ fn swatch_new(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(names)
     })?;
     Ok(json!({ "name": names[0], "names": names }))
+}
+
+/// A gradient or pattern `paint`, parsed from the paint params `p`, as a new or edited swatch
+/// stores it.
+fn stored_paint(paint: Paint, p: &Value) -> Paint {
+    match paint {
+        // A gradient given an `aspect` but no vector is placed on a box so that the swatch keeps
+        // the aspect, as `paint.setFill` places it on each object.
+        Paint::Gradient(ref g) if g.geom.is_none() && g.freeform.is_none() => {
+            match super::gradient::place_paint(&paint, p, Some(vectorcraft_geom::Rect::new(0.0, 0.0, 100.0, 100.0))) {
+                Paint::Gradient(g) => Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { swatch: None, ..*g })),
+                other => other,
+            }
+        }
+        // The swatch holds the gradient itself, not a link to the swatch it may have come from.
+        // It keeps `geom`, which holds the aspect the swatch is applied with.
+        Paint::Gradient(g) => Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { swatch: None, ..*g })),
+        // The swatch holds the pattern untransformed, not the placement of the art it came from.
+        Paint::Pattern { pattern, .. } => pattern_paint(&pattern),
+        other => other,
+    }
 }
 
 /// The `names` list and `name` parameters, without repeats; at least one is required.
@@ -322,7 +339,7 @@ fn swatch_delete(s: &mut Session, p: &Value) -> Result<Value> {
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(unlinked)
     })?;
-    map_default_paints(s, &mut unlink);
+    map_default_paints(s, &mut unlink)?;
     Ok(json!({"deleted": names, "unlinked": unlinked}))
 }
 
@@ -393,23 +410,27 @@ fn float_key(v: f32) -> Option<u32> {
 /// keys.
 type StopKey<'a> = (u32, ColorKey, u32, u32, Option<&'a str>, u32, Option<[u32; 4]>);
 
-/// A gradient's kind, method, dither and stops, as keys.
-type GradientKey<'a> = (u8, u8, bool, Vec<StopKey<'a>>);
+/// A gradient's kind, method, dither, spread and count as it paints them, and stops, as keys.
+type GradientKey<'a> = (u8, u8, bool, (vectorcraft_color::GradientSpread, u32), Vec<StopKey<'a>>);
 
-/// A key that is equal for two gradients exactly when the gradients are equal (`==`); `None` when
-/// any of its numbers is NaN, so the gradient equals no gradient.
+/// A key that is equal for two gradients exactly when the gradients are equal (`==`), apart from
+/// a count that a gradient which pads does not use ([`Gradient::painted_spread`]); `None` when any
+/// of its numbers is NaN, so the gradient equals no gradient.
 fn gradient_key(g: &Gradient) -> Option<GradientKey<'_>> {
     let kind = match g.kind {
         GradientKind::Linear => 0,
         GradientKind::Radial => 1,
         GradientKind::Freeform => 2,
         GradientKind::Conic => 3,
+        GradientKind::Diamond => 4,
     };
     let method = match g.method {
         GradientMethod::Classic => 0,
         GradientMethod::Perceptual => 1,
+        GradientMethod::HueClockwise => 2,
+        GradientMethod::HueCounterclockwise => 3,
     };
-    Some((kind, method, g.dither, g.stops.iter().map(stop_key).collect::<Option<_>>()?))
+    Some((kind, method, g.dither, g.painted_spread(), g.stops.iter().map(stop_key).collect::<Option<_>>()?))
 }
 
 /// A stop's key for [`gradient_key`]; `None` when any of its numbers is NaN.
@@ -656,20 +677,41 @@ impl Relink {
         renamed || recolored
     }
 
-    fn defaults(&self, s: &mut Session) {
-        map_default_paints(s, &mut |c, l, t| self.apply(c, l, t));
+    fn defaults(&self, s: &mut Session) -> Result<()> {
+        map_default_paints(s, &mut |c, l, t| self.apply(c, l, t))
     }
 }
 
-/// Apply a swatch-link rewrite to the default fill and stroke for new art, except during a live
-/// preview (Cancel rolls the document back, not the session).
-pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) {
-    if s.in_interaction() {
-        return;
+/// Apply a swatch-link rewrite to the fill and stroke new art takes and to the paints of its
+/// template appearance, except during a live preview (Cancel rolls the document back, not the
+/// session). A `command.batch` step rewrites them as the command run on its own does: a failed
+/// batch, and a canceled batch preview, put back the paints the batch started with. A change is
+/// recorded with the step just made, so Undo and Redo put these paints back with the document.
+pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) -> Result<()> {
+    if s.in_interaction() && s.batch_stash.is_none() {
+        return Ok(());
     }
-    for p in [&mut s.paint.fill, &mut s.paint.stroke] {
-        p.map_links(f);
+    let start = super::colormgmt::new_art_colors_before(s)?;
+    let pd = &mut s.paint;
+    let template = pd.appearance.iter_mut().flat_map(|a| a.items.iter_mut()).map(|it| match it {
+        vectorcraft_doc::AppearanceItem::Fill(f) => &mut f.paint,
+        vectorcraft_doc::AppearanceItem::Stroke(s) => &mut s.paint,
+    });
+    let mut changed = false;
+    for p in [&mut pd.fill, &mut pd.stroke].into_iter().chain(template) {
+        changed |= p.map_links(f);
     }
+    if changed {
+        super::colormgmt::record_new_art_colors(s, start)?;
+        // The step takes the paints the command finally leaves, after the selection's appearance
+        // is inherited.
+        let st = s.doc()?;
+        if st.interaction.is_none() {
+            let uid = st.uid;
+            s.batch_paint_docs.push(uid);
+        }
+    }
+    Ok(())
 }
 
 /// Apply a swatch-link rewrite to the document ([`Document::map_solid_paints`]) and to the art of
@@ -679,32 +721,16 @@ pub(super) fn map_default_paints(s: &mut Session, f: &mut LinkFn) {
 /// paint changed is merged into its entry ([`merge_stored`]), so fields the brush definition does
 /// not read are kept at every level.
 pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
-    use vectorcraft_brush::{Brush, BrushKind, Colorization};
-    let mut n = d.map_solid_paints(f);
-    // Each stored entry, its brush when it parses, the brush as written before the edit (only
-    // when its paint changed), and whether its paint changed.
-    let mut lib: Vec<(Value, Option<Brush>, Value, bool)> = match d.unknown.get(vectorcraft_brush::DOC_KEY) {
-        Some(v) => v.as_array().into_iter().flatten().map(|e| (e.clone(), Brush::from_json(e.clone()).ok(), Value::Null, false)).collect(),
-        None => {
-            vectorcraft_brush::library(d).into_iter().map(|b| (serde_json::to_value(&b).unwrap_or_default(), Some(b), Value::Null, false)).collect()
-        }
-    };
-    let mut in_brushes = 0;
-    for (_, b, base, changed) in lib.iter_mut() {
-        let Some(b) = b else { continue };
-        let before_edit = serde_json::to_value(&*b).unwrap_or_default();
+    use vectorcraft_brush::{BrushKind, Colorization};
+    let n = d.map_solid_paints(f);
+    n + edit_brush_library(d, &mut |b| {
         let key = match b.kind.colorization() {
             Colorization::HueShift { key } => Some(key),
             _ => None,
         };
         let before = key.map(|_| art_paint_colors(b.art()));
-        let in_brush = b.art_mut().into_iter().map(|art| map_node_solid_paints(art, f)).sum::<usize>();
-        *changed = in_brush > 0;
-        if *changed {
-            *base = before_edit;
-        }
-        in_brushes += in_brush;
-        let (Some(key), Some(before)) = (key, before) else { continue };
+        let in_brush = b.art_mut().into_iter().map(|art| map_node_solid_paints(art, &mut *f)).sum::<usize>();
+        let (Some(key), Some(before)) = (key, before) else { return in_brush };
         // Colors are compared by hex value, as `art_colors` (Brush Options' key colors) lists them.
         let same = |a: &Color, b: &Color| a.to_hex() == b.to_hex();
         let after = art_paint_colors(b.art());
@@ -717,10 +743,47 @@ pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
                 BrushKind::Art(a) => &mut a.colorization,
                 BrushKind::Scatter(s) => &mut s.colorization,
                 BrushKind::Pattern(p) => &mut p.colorization,
-                BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => continue,
+                BrushKind::Calligraphic(_) | BrushKind::Bristle(_) => return in_brush,
             };
             *c = Colorization::HueShift { key };
         }
+        in_brush
+    })
+}
+
+/// Apply a paint rewrite ([`Document::map_paints`]) to the document and to the art of the brushes
+/// in its library ([`edit_brush_library`]). Returns the number of changed paints.
+pub(super) fn map_all_paints(d: &mut Document, f: &mut PaintFn) -> usize {
+    let n = d.map_paints(f);
+    n + edit_brush_library(d, &mut |b| b.art_mut().into_iter().map(|art| map_node_paints(art, &mut *f)).sum())
+}
+
+/// Apply `edit` to each brush of the document's library, the stored entries or, with none stored,
+/// the built-in library; `edit` returns how many paints of the brush's art it changed. The library
+/// is stored again only when a brush's paint changed. Stored entries are stored again as they were
+/// read, except that a brush whose paint changed is merged into its entry ([`merge_stored`]), so
+/// fields the brush definition does not read are kept at every level. Returns the number of
+/// changed paints.
+fn edit_brush_library(d: &mut Document, edit: &mut dyn FnMut(&mut vectorcraft_brush::Brush) -> usize) -> usize {
+    use vectorcraft_brush::Brush;
+    // Each stored entry, its brush when it parses, the brush as written before the edit (only
+    // when its paint changed), and whether its paint changed.
+    let mut lib: Vec<(Value, Option<Brush>, Value, bool)> = match d.unknown.get(vectorcraft_brush::DOC_KEY) {
+        Some(v) => v.as_array().into_iter().flatten().map(|e| (e.clone(), Brush::from_json(e.clone()).ok(), Value::Null, false)).collect(),
+        None => {
+            vectorcraft_brush::library(d).into_iter().map(|b| (serde_json::to_value(&b).unwrap_or_default(), Some(b), Value::Null, false)).collect()
+        }
+    };
+    let mut in_brushes = 0;
+    for (_, b, base, changed) in lib.iter_mut() {
+        let Some(b) = b else { continue };
+        let before_edit = serde_json::to_value(&*b).unwrap_or_default();
+        let in_brush = edit(b);
+        *changed = in_brush > 0;
+        if *changed {
+            *base = before_edit;
+        }
+        in_brushes += in_brush;
     }
     if in_brushes > 0 {
         let lib = lib
@@ -731,9 +794,8 @@ pub(super) fn map_swatch_links(d: &mut Document, f: &mut LinkFn) -> usize {
             })
             .collect();
         d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), Value::Array(lib));
-        n += in_brushes;
     }
-    n
+    in_brushes
 }
 
 /// `new` (a definition as written after an edit) with the parts of `raw` (its stored entry) that
@@ -821,12 +883,21 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // A replacement paint of the swatch's kind (a dropped colour or edited gradient).
     let paint = match p.get("paint").filter(|v| !v.is_null()) {
-        Some(v) => match (if given("mode") { paint_from(s, &keeping_model(v))? } else { paint_from(s, v)? }, &sw.paint) {
+        Some(v) => match (
+            // A pattern by name, as `swatch.new` takes it.
+            match str_param(v, "pattern") {
+                Some(pat) if d.pattern(pat).is_some() => Some(pattern_paint(pat)),
+                Some(pat) => return Err(bad(C, format!("no pattern `{pat}`"))),
+                None if given("mode") => paint_from(s, &keeping_model(v))?,
+                None => paint_from(s, v)?,
+            },
+            &sw.paint,
+        ) {
             (Some(Paint::Solid { color, .. }), Paint::Solid { .. }) => Some(Paint::solid(color)),
-            (Some(Paint::Gradient(g)), Paint::Gradient(_)) => {
-                Some(Paint::Gradient(Box::new(vectorcraft_color::GradientPaint { geom: None, swatch: None, ..*g })))
+            // Stored as `swatch.new` stores it.
+            (Some(new @ Paint::Gradient(_)), Paint::Gradient(_)) | (Some(new @ Paint::Pattern { .. }), Paint::Pattern { .. }) => {
+                Some(stored_paint(new, v))
             }
-            (Some(new @ Paint::Pattern { .. }), Paint::Pattern { .. }) => Some(new),
             _ => return Err(bad(C, format!("`{name}` takes a paint of its own kind (colour, gradient or pattern)"))),
         },
         None => None,
@@ -864,7 +935,7 @@ fn swatch_edit(s: &mut Session, p: &Value) -> Result<Value> {
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(relinked)
     })?;
-    relink.defaults(s);
+    relink.defaults(s)?;
     Ok(json!({"name": to, "relinked": relinked}))
 }
 
@@ -986,8 +1057,28 @@ fn swatch_unused(s: &mut Session, _: &Value) -> Result<Value> {
     let colors: HashSet<ColorKey> = colors.iter().filter_map(color_key).collect();
     let patterns: HashSet<&String> = patterns.iter().collect();
     let gradients: HashSet<GradientKey> = gradients.iter().filter_map(gradient_key).collect();
+    // The spot inks the images placed from DCS files have plates for: their swatches print them.
+    // Only images the art shows count: a deleted one's pixels stay for undo.
+    let mut shown: HashSet<&str> = HashSet::new();
+    for root in d
+        .layers
+        .iter()
+        .chain(d.symbols.iter().map(|s| &s.art))
+        .chain(d.graph_designs.iter().map(|g| &g.art))
+        .chain(d.patterns.iter().flat_map(|p| &p.art))
+    {
+        vectorcraft_doc::swatches::walk_with_masks(root, &mut |n| {
+            if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
+                shown.insert(im.key.as_str());
+            }
+        });
+    }
+    let plate_inks: HashSet<String> =
+        shown.iter().filter_map(|k| d.images.get(*k)).flat_map(vectorcraft_doc::ImageBlob::spot_plates).map(|(name, _)| name).collect();
     let used = |w: &Swatch| {
         gradient_links.contains(&w.name)
+            // A spot swatch prints the plate; a process one gives the color it prints as process.
+            || (w.paint.color().is_some() && plate_inks.contains(&w.name))
             || match w.tint_of() {
                 Some((base, tint)) => float_key(tint).is_some_and(|t| link_tints.contains(&(base, t))),
                 None => link_names.contains(w.name.as_str()),
@@ -1040,7 +1131,7 @@ fn swatch_merge(s: &mut Session, p: &Value) -> Result<Value> {
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))?;
         Ok(relinked)
     })?;
-    map_default_paints(s, &mut relink);
+    map_default_paints(s, &mut relink)?;
     Ok(json!({"name": keep, "merged": merged, "relinked": relinked}))
 }
 
@@ -1097,7 +1188,7 @@ fn swatch_spot_options(s: &mut Session, p: &Value) -> Result<Value> {
         let relinked = map_swatch_links(d, &mut follow_bases(&bases));
         Ok((relinked, bases))
     })?;
-    map_default_paints(s, &mut follow_bases(&bases));
+    map_default_paints(s, &mut follow_bases(&bases))?;
     Ok(json!({"useLab": use_lab, "relinked": relinked}))
 }
 
@@ -1121,8 +1212,11 @@ pub(super) struct GroupEdit {
 
 impl GroupEdit {
     /// Apply the link changes to the default fill and stroke for new art.
-    pub(super) fn defaults(&self, s: &mut Session) {
-        self.relinks.iter().for_each(|r| r.defaults(s));
+    pub(super) fn defaults(&self, s: &mut Session) -> Result<()> {
+        if self.relinks.is_empty() {
+            return Ok(());
+        }
+        map_default_paints(s, &mut |c, l, t| self.relinks.iter().any(|r| r.apply(c, l, t)))
     }
 
     /// How many paints linked to the group's swatches the rewrite changed.
@@ -1198,6 +1292,6 @@ fn swatch_edit_group(s: &mut Session, p: &Value) -> Result<Value> {
         colors.into_iter().enumerate().map(|(i, c)| if old.get(i) == Some(&Some(c)) { c } else { super::paint::new_color(s, p, c) }).collect();
     let rename = str_param(p, "rename");
     let e = s.edit("Edit Color Group", |d, _| rewrite_group(d, group, &colors, rename, C))?;
-    e.defaults(s);
+    e.defaults(s)?;
     Ok(json!({"name": e.name, "swatches": e.swatches, "relinked": e.relinked}))
 }

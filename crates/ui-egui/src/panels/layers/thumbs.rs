@@ -65,6 +65,10 @@ pub(super) struct Thumbs {
     spent: (u64, f64, u32),
     /// Thumbnails rendered on the UI thread (tests count them).
     pub(super) renders: u64,
+    /// A test's clock (ms) for the render budget, replacing [`crate::now_ms`] so a test decides how
+    /// long each render takes (production always leaves this `None`).
+    #[cfg(test)]
+    pub(super) clock: Option<Box<dyn FnMut() -> f64>>,
 }
 
 thread_local! {
@@ -258,6 +262,15 @@ impl Thumbs {
         self.entries.keys().any(|key| key.0 == uid)
     }
 
+    /// The time (ms) a render on the UI thread is measured by: [`crate::now_ms`], or a test's clock.
+    fn now_ms(&mut self) -> f64 {
+        #[cfg(test)]
+        if let Some(clock) = self.clock.as_mut() {
+            return clock();
+        }
+        crate::now_ms()
+    }
+
     /// Release thumbnails and queued jobs for documents that have closed, keeping the cache for
     /// other open documents even when the panels are hidden or another document is active. When a
     /// document closes, the worker drops its jobs, the one running included, and the images it
@@ -416,9 +429,9 @@ impl Thumbs {
         thread_local! {
             static RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
         }
-        let t0 = crate::now_ms();
+        let t0 = self.now_ms();
         let img = RENDERER.with(|r| render_thumb(&mut r.borrow_mut(), src.doc, n, px));
-        let ms = crate::now_ms() - t0;
+        let ms = self.now_ms() - t0;
         self.spent.1 += ms;
         self.spent.2 += 1;
         self.renders += 1;

@@ -1,5 +1,6 @@
 //! Separations: the inks of a job ([`print_inks`]) and the document as one ink's plate, every
-//! colour (and image pixel) replaced by the grey of that ink's coverage.
+//! colour (and image pixel) replaced by the grey of that ink's coverage. An image placed from a
+//! DCS file prints its own plates ([`vectorcraft_doc::separated`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -7,7 +8,7 @@ use std::sync::Arc;
 use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, Cms, Model, ProfileKind};
 use vectorcraft_color::swatch::REGISTRATION;
-use vectorcraft_doc::inks::{Link, inks, plates, visit_node_colors};
+use vectorcraft_doc::inks::{Link, StopPlates, inks, plates, spot_color, stop_inks, visit_node_colors};
 use vectorcraft_doc::overprint::darken_overprints;
 use vectorcraft_doc::{ColorMode, Document, ImageBlob, Node, NodeKind};
 
@@ -100,12 +101,33 @@ impl<'a> Separator<'a> {
         inks(self.doc, &self.cms, c, link, color.intent).on_plate(plate)
     }
 
-    /// Recolour `n`'s subtree as plate `plate`: the grey of each colour's coverage, unlinked.
+    /// [`Self::ink`] of a colour that prints process plates `plates` with its spot tint
+    /// ([`stop_inks`]): the spot plate prints the tint and the process plates print `plates`. With
+    /// spots as process, each process plate prints `plates` layered with the spot tint's process
+    /// equivalent, as a separated image's plates layer ([`vectorcraft_doc::separated::Separated::coverage_as`]).
+    fn stop_ink(&self, plate: &str, c: &Color, link: Link, plates: StopPlates) -> f32 {
+        let own = stop_inks(self.doc, &self.cms, c, link, plates, self.set.color.intent);
+        let (Some(_), Some((name, tint))) = (plates, own.spot.as_ref()) else {
+            return self.ink(plate, c, link);
+        };
+        if !self.set.output.spots_to_process {
+            return own.on_plate(plate);
+        }
+        let Some(i) = cms::PROCESS_PLATES.iter().position(|p| *p == plate) else {
+            return 0.0;
+        };
+        let spot = spot_color(self.doc, name).map_or(0.0, |s| self.ink(plate, &s.tinted(*tint), None));
+        1.0 - (1.0 - own.cmyk[i]) * (1.0 - spot)
+    }
+
+    /// Recolour `n`'s subtree as plate `plate`: the grey of each colour's coverage, unlinked and
+    /// without process plates.
     pub fn node(&self, plate: &str, n: &mut Node) {
-        visit_node_colors(n, &mut |c, swatch, tint| {
-            *c = Color::Gray { k: self.ink(plate, c, swatch.as_deref().map(|s| (s, *tint))) };
+        visit_node_colors(n, &mut |c, swatch, tint, plates| {
+            *c = Color::Gray { k: self.stop_ink(plate, c, swatch.as_deref().map(|s| (s, *tint)), *plates) };
             *swatch = None;
             *tint = 1.0;
+            *plates = None;
         });
     }
 
@@ -130,7 +152,30 @@ impl<'a> Separator<'a> {
                 kept.insert(colorized_key(&key), blob.clone());
             }
         }
+        // A DCS file's image prints its own plates: a spot plate on its ink when the job prints
+        // that ink, else as its process equivalent.
+        let spots: BTreeSet<String> = if self.set.output.spots_to_process {
+            BTreeSet::new()
+        } else {
+            plates(self.doc).into_iter().filter(|p| p.spot).map(|p| p.name).collect()
+        };
+        let own = |name: &str| spots.contains(name);
+        // A spot plate printing as process prints as the document's swatch of its ink does, when
+        // there is one; else as the process equivalent its file gives.
+        let equivalent = |p: &vectorcraft_doc::separated::InkPlate| match self.doc.swatch(&p.name).and_then(|w| Some((w.paint.color()?, w.spot))) {
+            Some((c, spot)) => {
+                let c = self.doc.linked_color(c, spot);
+                cms::PROCESS_PLATES.map(|q| self.ink(q, &c, None))
+            }
+            None => p.cmyk,
+        };
         for blob in d.images.values_mut() {
+            if let Some(s) = blob.separated() {
+                if let Some(gray) = s.plate_png(plate, &own, &equivalent) {
+                    *blob = gray;
+                }
+                continue;
+            }
             let gray = blob.map_rgb(|[r, g, b]| {
                 let rgb = |v: u8| v as f32 / 255.0;
                 let v = (255.0 * (1.0 - self.ink(plate, &Color::rgb(rgb(r), rgb(g), rgb(b)), None))).round() as u8;
@@ -153,25 +198,34 @@ fn colorized_key(key: &str) -> String {
 }
 
 /// Point the colorized images in `n`'s subtree at [`colorized_key`], collecting their keys in
-/// `keys`. An image whose pixels in `images` don't take its colorize paint
-/// ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it shows.
+/// `keys`. A colorized image with a color mask is separated as it shows: its masked pixels
+/// ([`Document::shown_image`]). An image whose pixels it shows in `images` don't take its colorize
+/// paint ([`ImageBlob::takes_colorize`]) loses the paint instead, and is separated as the image it
+/// shows.
 fn keep_colorized_pixels(n: &mut Arc<Node>, images: &BTreeMap<String, ImageBlob>, keys: &mut BTreeSet<String>) {
     let colorized = |n: &Node| matches!(n.kind, NodeKind::Image(ref im) if im.pixels.is_none()) && n.extras().colorize.is_some();
     if !colorized(n) && n.children().is_none_or(|ch| ch.is_empty()) {
         return;
     }
     let node = Arc::make_mut(n);
-    if colorized(node)
-        && let NodeKind::Image(im) = &node.kind
-        && images.get(&im.key).is_some_and(|b| !b.takes_colorize())
-    {
+    let shown = match &node.kind {
+        NodeKind::Image(im) if colorized(node) => {
+            let mask = Document::color_mask_of(node).filter(|m| m.made_for(im) && images.contains_key(&m.key));
+            Some(mask.map_or(&im.key, |m| &m.key).clone())
+        }
+        _ => None,
+    };
+    if shown.as_ref().and_then(|key| images.get(key)).is_some_and(|b| !b.takes_colorize()) {
         node.extras_mut().colorize = None;
     }
-    if colorized(node)
-        && let NodeKind::Image(im) = &mut node.kind
-    {
-        keys.insert(im.key.clone());
-        im.key = colorized_key(&im.key);
+    if let Some(key) = shown.filter(|_| colorized(node)) {
+        if let Some(e) = node.extras_if_any() {
+            e.color_mask = None;
+        }
+        if let NodeKind::Image(im) = &mut node.kind {
+            im.key = colorized_key(&key);
+            keys.insert(key);
+        }
     }
     if let Some(ch) = node.children_mut() {
         for c in ch.iter_mut() {

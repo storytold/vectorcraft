@@ -179,7 +179,7 @@ fn render_row(app: &VectorcraftApp, ui: &mut egui::Ui, row: &Row, checks: bool, 
             let button = egui::Button::new(text).right_text(egui::Atom::custom(slot, crate::font_menu::MENU_SAMPLE_SIZE));
             let out = ui.add_enabled_ui(row.enabled, |ui| button.atom_ui(ui)).inner;
             if let Some(rect) = out.rect(slot) {
-                crate::font_menu::menu_item_sample(ui, rect, family);
+                crate::font_menu::menu_item_sample(ui, rect, family, app.session.prefs.font_samples_on_white);
             }
             out.response
         }

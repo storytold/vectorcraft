@@ -117,6 +117,53 @@ impl GlyphSnap {
     }
 }
 
+/// The Pixel Snapping Options (`view.snapToPixel.options`): which edits View › Snap to Pixel lands
+/// on whole pixels. All on by default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PixelSnap {
+    /// While Drawing: points placed by the drawing tools, ruler origins and measurements.
+    pub drawing: bool,
+    /// While Moving: the selection, its anchors and segments, artboards and ruler guides moved.
+    pub moving: bool,
+    /// While Scaling: the edges a bounding-box, Free Transform, Scale tool, artboard or slice
+    /// handle drags.
+    pub scaling: bool,
+}
+
+impl Default for PixelSnap {
+    fn default() -> Self {
+        Self { drawing: true, moving: true, scaling: true }
+    }
+}
+
+impl PixelSnap {
+    /// These options with the ones `p` names (booleans), or why `p` can't set them.
+    pub fn merged(self, p: &serde_json::Value) -> Result<Self, String> {
+        let mut o = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        match (p, o.as_object_mut()) {
+            (serde_json::Value::Null, _) => {}
+            (serde_json::Value::Object(given), Some(cur)) => {
+                for (k, v) in given {
+                    let slot = cur.get_mut(k).ok_or_else(|| format!("unknown Pixel Snapping option `{k}`"))?;
+                    *slot = serde_json::Value::Bool(v.as_bool().ok_or_else(|| format!("`{k}` must be true or false"))?);
+                }
+            }
+            _ => return Err("the Pixel Snapping options must be an object".into()),
+        }
+        serde_json::from_value(o).map_err(|e| e.to_string())
+    }
+}
+
+/// The kind of edit a snap serves, which picks the Pixel Snapping option that applies to it
+/// ([`ToolContext::snaps_to_pixel`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PixelOp {
+    Drawing,
+    Moving,
+    Scaling,
+}
+
 /// Read-only context a tool sees.
 pub struct ToolContext<'a> {
     pub doc: &'a Document,
@@ -141,8 +188,11 @@ pub struct ToolContext<'a> {
     pub snap_to_grid: bool,
     /// Bounding box shown (View → Show/Hide Bounding Box).
     pub show_bbox: bool,
-    /// View → Snap to Pixel.
+    /// View → Snap to Pixel. Which edits it snaps is [`Self::pixel_snap`]'s choice
+    /// ([`Self::snaps_to_pixel`]).
     pub snap_to_pixel: bool,
+    /// The Pixel Snapping Options: whether Snap to Pixel snaps drawing, moving and scaling.
+    pub pixel_snap: PixelSnap,
     /// View → Snap to Point: with Smart Guides off, dragged selections, drawn points and picked
     /// points (a transform's reference point) land on anchors and ruler guides within
     /// [`Self::snap_tolerance`].
@@ -341,6 +391,16 @@ impl ToolContext<'_> {
     pub fn segment_measure_label(&self, a: Point, b: Point) -> String {
         let (dist, ang, dx, dy) = xform::measure(a, b);
         format!("D: {}\nAngle: {ang:.1}°\n{}", self.len(dist), self.offset_label(dx, dy))
+    }
+    /// Does View › Snap to Pixel land an edit of kind `op` on whole pixels: is it on, with the
+    /// Pixel Snapping option for `op` on too?
+    pub fn snaps_to_pixel(&self, op: PixelOp) -> bool {
+        self.snap_to_pixel
+            && match op {
+                PixelOp::Drawing => self.pixel_snap.drawing,
+                PixelOp::Moving => self.pixel_snap.moving,
+                PixelOp::Scaling => self.pixel_snap.scaling,
+            }
     }
     /// What Snap to Grid snaps to: the grid's subdivisions (or its lines without any).
     pub fn grid_step(&self) -> f64 {

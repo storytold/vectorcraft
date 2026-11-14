@@ -34,10 +34,12 @@ use std::io::Read as _;
 use super::lex::find;
 use crate::ps;
 
+pub(crate) use brush::{BrushesRead, MANAGER_NAME as BRUSH_MANAGER, brushes_kept, plugin_name as brush_plugin_name, read_brush_object};
 pub(crate) use envelope::DRAWN as ENVELOPE_DRAWN;
-#[cfg(test)]
 pub(crate) use envelope::MAX_CHECKED;
 pub(crate) use envelope::TYPE_DRAWN as ENVELOPE_TYPE_DRAWN;
+pub(crate) use envelope::{GridPoint as EnvelopeGridPoint, PLUGIN as DEFORM_PLUGIN, outline as envelope_outline, upright as envelope_upright};
+pub(crate) use envelope::{MAX_ANY as ENVELOPE_MAX_ANY, MAX_SOLID as ENVELOPE_MAX_SOLID};
 pub(crate) use envelope::{WARPED_TYPE_DRAWN, WarpedType};
 pub(crate) use frames::text_frames;
 pub use obj::{NameEncoding, Names};

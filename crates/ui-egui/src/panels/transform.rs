@@ -448,7 +448,7 @@ pub(crate) fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live
     let mut set = None;
     egui::Grid::new((id, "grid")).num_columns(2).spacing([6.0, 6.0]).show(ui, |ui| {
         widgets::dim_label(ui, tl!("Sides:"));
-        if let Some(s) = widgets::range_field_named(ui, (id, "sides"), Some(tl!("Sides:")), f64::from(*sides), 3.0..=f64::INFINITY, "", 0, fw) {
+        if let Some(s) = widgets::range_field_named(ui, (id, "sides"), Some(tl!("Sides:")), f64::from(*sides), 3.0..=1000.0, "", 0, fw) {
             set = Some(("sides", json!(s as u64)));
         }
         ui.end_row();
@@ -580,6 +580,13 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let glyphs = app.session.prefs.type_glyph_bounds;
     if menu_item(ui, tl!("Measure Type by Glyph Bounds"), true, glyphs) {
         set_pref(app, "typeGlyphBounds", !glyphs);
+    }
+    // The active document's Align New Objects to Pixel Grid (`document.setup`).
+    let align_new = app.session.active().map(|st| st.doc.setup.align_new_objects_to_pixel_grid);
+    if menu_item(ui, tl!("Align New Objects to Pixel Grid"), align_new.is_some(), align_new == Some(true))
+        && let Err(e) = app.run("document.setup", json!({"alignNewObjectsToPixelGrid": align_new != Some(true)}))
+    {
+        app.status(e);
     }
     ui.separator();
     // What the panel transforms (Transform Object Only / Pattern Only / Both), one checked.

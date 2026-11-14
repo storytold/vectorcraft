@@ -1,6 +1,6 @@
 [package]
 name = "vectorcraft-affinity"
-description = "Bounded reader for native Affinity documents: archive, object stream and document model"
+description = "craft-affinity under its old name, for the corpus tests and fuzz targets"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,13 +11,13 @@ workspace = true
 
 [features]
 # Synthetic-container builders for tests and fuzz seeds; not an Affinity exporter.
-synth = []
+synth = ["craft-affinity/synth"]
 
 [dependencies]
-crc32fast = { workspace = true }
-flate2 = { workspace = true }
-image = { workspace = true }
-ruzstd = "0.9.1"
+craft-affinity = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+# The tests build containers and decode previews.
+crc32fast = { workspace = true }
+image = { workspace = true }

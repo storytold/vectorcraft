@@ -53,6 +53,21 @@ pub fn encode(rgba: &[u8], width: u32, height: u32, o: &PngOptions) -> Result<Ve
     write(&pixels, width, height, Layout { channels, bits: 8, color_type }, &[], o)
 }
 
+/// Encode grey levels with alpha (two bytes a pixel, `width`×`height`, row-major) as a greyscale
+/// PNG: grey and alpha (colour type 4), or grey alone (colour type 0) when every pixel is opaque.
+pub fn encode_gray(gray_alpha: &[u8], width: u32, height: u32, o: &PngOptions) -> Result<Vec<u8>, String> {
+    check_size(width, height)?;
+    if gray_alpha.len() as u64 != u64::from(width) * u64::from(height) * 2 {
+        return Err("PNG encoding failed: pixel buffer doesn't match the image size".into());
+    }
+    let px = gray_alpha.as_chunks::<2>().0;
+    if px.iter().all(|p| p[1] == 255) {
+        let levels: Vec<u8> = px.iter().map(|p| p[0]).collect();
+        return write(&levels, width, height, Layout { channels: 1, bits: 8, color_type: 0 }, &[], o);
+    }
+    write(gray_alpha, width, height, Layout { channels: 2, bits: 8, color_type: 4 }, &[], o)
+}
+
 /// Encode a palette image as an indexed PNG (colour type 3: `PLTE`, and `tRNS` for its
 /// transparent entry) at 1, 2, 4 or 8 bits per pixel, as few as the palette needs.
 pub fn encode_indexed(img: &Indexed, o: &PngOptions) -> Result<Vec<u8>, String> {

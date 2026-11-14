@@ -22,6 +22,16 @@ pub(crate) fn can_align(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
 }
 
+/// For an object being drawn into `d`: when the document's Align New Objects to Pixel Grid is on
+/// and [`can_align`] accepts `n`, turn `n`'s pixel-aligned property on. The edit that adds it snaps
+/// it to the pixel grid ([`refresh`]). Pasted, duplicated, placed and imported objects do not come
+/// through here.
+pub(crate) fn align_new_object(d: &Document, n: &mut Node) {
+    if d.setup.align_new_objects_to_pixel_grid && can_align(n) {
+        n.extras_mut().pixel_aligned = true;
+    }
+}
+
 /// `object.setPixelAligned`: turn the pixel-aligned property of the objects given (or the selected
 /// objects) on or off. Turning it on snaps them to the pixel grid at once. Every object must be
 /// one [`can_align`] accepts, else nothing changes. When every object already has the value, the

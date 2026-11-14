@@ -39,7 +39,7 @@ fn fifty() -> f64 {
 // =====================================================================================
 
 pub use crate::blend::{
-    Spine, blend_expand, blend_spine, blend_step_count, lerp_appearance, lerp_color, lerp_node, lerp_paint, lerp_path, pin_spine,
+    Spine, blend_expand, blend_layout_line, blend_spine, blend_step_count, lerp_appearance, lerp_color, lerp_node, lerp_paint, lerp_path, pin_spine,
     steps_knockout_shows,
 };
 
@@ -49,23 +49,23 @@ mod expand;
 mod mesh;
 mod warp;
 
-pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, BlendSpec};
+pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, BlendSpec, BlendSpineMode};
 #[cfg(test)]
 use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{
     EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, TypeInk, envelope_bounds, envelope_content_bounds,
-    envelope_content_boxes, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of, envelope_overlay, envelope_stroke_margin,
-    set_type_ink, smooth_handles,
+    envelope_content_boxes, envelope_content_boxes_with, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of,
+    envelope_overlay, envelope_stroke_margin, set_type_ink, smooth_handles, warp_grid,
 };
 pub(crate) use expand::max_outset;
 pub use expand::{
     Hooks, MAX_GENERATED, Outliner, PatternTiles, affine_near, expand_deep, expand_deep_hooks, expand_live, expand_live_hooks, expand_live_with,
-    expanded_group, expanded_group_hooks, is_live, mesh_quad_nodes, subtree_has_live,
+    expanded_group, expanded_group_hooks, is_live, mesh_quad_nodes, mesh_warp_cost, mesh_warp_image, subtree_has_live,
 };
 #[cfg(test)]
 use mesh::grid_eval;
 pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
-pub use warp::{WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, pieces, warp_point};
+pub use warp::{WARP_NET, WarpNet, WarpStyle, fit_piece, map_nonlinear, map_nonlinear_within, pieces, uses_net, warp_point, warp_version};
 
 #[cfg(test)]
 mod tests {
@@ -131,6 +131,200 @@ mod tests {
         let (nx, ny) = warp_point(WarpStyle::Arc, 0.5, 0.0, 0.0, 1.0, 0.5, 0.25);
         let (r0, a) = (4.0 / PI, 0.5 / (4.0 / PI));
         assert!((nx - (r0 - 0.25) * a.sin()).abs() < 1e-12 && (ny - (r0 - (r0 - 0.25) * a.cos())).abs() < 1e-12);
+    }
+
+    /// Each warp style's Bézier net, at points worked out by a separate implementation of the same
+    /// nets: (style, bend %, horizontal and vertical distortion %, vertical, box w × h, (u, v)) →
+    /// the point in the box (origin at its top left, y down).
+    #[test]
+    fn warp_nets_bend_each_style_as_its_own_patch() {
+        #[rustfmt::skip]
+        let samples = [
+            ("arc", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, -31.1605665, 30.1243045),
+            ("arc", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 170.241998, 58.8743443),
+            ("arc", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 50.6087118, 47.6275948),
+            ("arcLower", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 18.8784581, 35.5028749),
+            ("arcLower", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 164.486168, 119.348666),
+            ("arcLower", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 38.1073767, 36.0911629),
+            ("arcUpper", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 17.3830689, 17.1599587),
+            ("arcUpper", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.498463, 86.7390371),
+            ("arcUpper", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 46.1081993, 36.0252855),
+            ("arch", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 16.261527, 11.6570838),
+            ("arch", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 164.984631, 57.3903712),
+            ("arch", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 49.2508226, 36.2064484),
+            ("bulge", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 16.261527, 22.6628335),
+            ("bulge", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 164.984631, 116.087703),
+            ("bulge", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 42.965576, 36.2064484),
+            ("shellLower", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 10.6489723, 25.9914004),
+            ("shellLower", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 208.565464, 99.4817585),
+            ("shellLower", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 41.043987, 36.1302767),
+            ("shellUpper", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, -21.8346746, 41.6042708),
+            ("shellUpper", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.791499, 90.3680631),
+            ("shellUpper", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 42.9282896, 36.1475509),
+            ("flag", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 20.0, 55.92),
+            ("flag", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.0, 55.44),
+            ("flag", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 58.098, 35.91),
+            ("wave", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 20.0, 40.8864),
+            ("wave", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.0, 83.7792),
+            ("wave", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 42.33, 35.91),
+            ("fish", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 20.0, 19.632),
+            ("fish", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.0, 62.352),
+            ("fish", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 44.994, 35.91),
+            ("rise", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 20.0, 146.64),
+            ("rise", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 160.0, 102.48),
+            ("rise", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 118.686, 35.91),
+            ("fisheye", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 9.1136, 27.2784),
+            ("fisheye", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 166.2208, 94.1472),
+            ("fisheye", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 47.514, 35.7048),
+            ("inflate", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, -0.16, 27.84),
+            ("inflate", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 166.48, 97.68),
+            ("inflate", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 45.75, 36.54),
+            ("squeeze", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 40.16, 27.84),
+            ("squeeze", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 153.52, 97.68),
+            ("squeeze", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 45.75, 36.0),
+            ("twist", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.1, 0.3, 32.2472, 27.9588),
+            ("twist", 60.0, 0.0, 0.0, false, 200.0, 100.0, 0.8, 0.9, 149.1136, 89.2224),
+            ("twist", -40.0, 30.0, -50.0, true, 150.0, 60.0, 0.25, 0.6, 45.56325, 33.8769),
+        ];
+        for (style, bend, dh, dv, vertical, w, h, u, v, x, y) in samples {
+            let Some(st) = WarpStyle::from_id(style) else { panic!("{style}") };
+            let p = WarpNet::new(st, bend / 100.0, dh / 100.0, dv / 100.0, w, h, vertical).at(u, v);
+            assert!(p.distance(Point::new(x, y)) < 1e-6, "{style} {bend} {dh} {dv} {vertical} ({u}, {v}): {p:?} vs ({x}, {y})");
+        }
+    }
+
+    /// Arc's edges are concentric circles: at 100 % on a 200 × 100 box the bottom edge is the half
+    /// circle through the bottom corners about the bottom's middle, and the top edge the one 100
+    /// further out. One cubic for a half circle strays up to 1.84 % of the radius from the circle.
+    #[test]
+    fn warp_net_arc_edges_are_concentric_circles() {
+        let net = WarpNet::new(WarpStyle::Arc, 1.0, 0.0, 0.0, 200.0, 100.0, false);
+        let center = Point::new(100.0, 100.0);
+        for i in 0..=20 {
+            let u = f64::from(i) / 20.0;
+            for (v, r) in [(0.0, 200.0), (1.0, 100.0)] {
+                let d = net.at(u, v).distance(center);
+                assert!((d - r).abs() < 0.0184 * r, "u {u}, v {v}: {d} from the center, not {r}");
+                // Its ends and middle lie on the circle.
+                if i % 10 == 0 {
+                    assert!((d - r).abs() < 1e-9, "u {u}, v {v}: {d} from the center, not {r}");
+                }
+            }
+        }
+        // Bend 0 leaves the box as it is.
+        for st in [WarpStyle::Arc, WarpStyle::ShellLower, WarpStyle::Bulge, WarpStyle::Twist] {
+            let flat = WarpNet::new(st, 0.0, 0.0, 0.0, 200.0, 100.0, false);
+            assert!(flat.at(0.3, 0.7).distance(Point::new(60.0, 70.0)) < 1e-9, "{st:?}");
+        }
+    }
+
+    /// The horizontal distortion scales each column of the net about its middle (narrowing the left
+    /// side for a positive value), then the vertical one each row (narrowing the top).
+    #[test]
+    fn warp_net_distortion_scales_the_columns_then_the_rows() {
+        let corners = |dh: f64, dv: f64| {
+            let net = WarpNet::new(WarpStyle::Arc, 0.0, dh, dv, 200.0, 100.0, false);
+            [net.at(0.0, 0.0), net.at(1.0, 0.0), net.at(0.0, 1.0), net.at(1.0, 1.0)]
+        };
+        let near = |got: [Point; 4], want: [(f64, f64); 4]| got.iter().zip(want).all(|(p, (x, y))| p.distance(Point::new(x, y)) < 1e-9);
+        assert!(near(corners(0.5, 0.0), [(0.0, 25.0), (200.0, -25.0), (0.0, 75.0), (200.0, 125.0)]), "{:?}", corners(0.5, 0.0));
+        assert!(near(corners(0.0, 0.5), [(50.0, 0.0), (150.0, 0.0), (-50.0, 100.0), (250.0, 100.0)]), "{:?}", corners(0.0, 0.5));
+        // Both coordinates scale: after the columns the top row runs from (0, 15) to (200, -15), and
+        // it then scales by 1.4 about its middle, (100, 0).
+        assert!(near(corners(0.3, -0.4), [(-40.0, 21.0), (240.0, -21.0), (40.0, 91.0), (160.0, 109.0)]), "{:?}", corners(0.3, -0.4));
+    }
+
+    /// Numbers no warp can take still give a finite net: a bend or distortion that isn't a number
+    /// counts as 0, and out of range as its limit; a size that isn't a number as 0.
+    #[test]
+    fn warp_net_takes_any_numbers() {
+        for st in [WarpStyle::Arc, WarpStyle::ShellUpper, WarpStyle::Wave, WarpStyle::Inflate, WarpStyle::Twist] {
+            for (b, dh, w, h) in
+                [(f64::NAN, 0.2, 10.0, 10.0), (5.0, f64::INFINITY, 10.0, 0.0), (-1e300, -3.0, f64::NAN, 1e-300), (1e-300, 0.0, 0.0, 0.0)]
+            {
+                for vertical in [false, true] {
+                    let p = WarpNet::new(st, b, dh, dh, w, h, vertical).at(0.3, 0.6);
+                    assert!(p.x.is_finite() && p.y.is_finite(), "{st:?} {b} {dh} {w} {h}: {p:?}");
+                }
+            }
+        }
+        let clamped = WarpNet::new(WarpStyle::Flag, 7.0, 0.0, 0.0, 200.0, 100.0, false);
+        assert_eq!(clamped, WarpNet::new(WarpStyle::Flag, 1.0, 0.0, 0.0, 200.0, 100.0, false));
+    }
+
+    /// A box near the largest finite size still warps: Flag on a 1e308 × 100 box moves points only
+    /// up and down, as on a 1 × 1e-306 one scaled up, and on a 1e308 × 1e-300 box keeps the box's
+    /// height. Fisheye at 100 % on a 1.7e308 square, whose net goes past the largest finite number,
+    /// gives finite points inside the box and past it, and the unit square's points scaled up where
+    /// those are finite. Fisheye moves y by the height alone, so on boxes of the largest finite
+    /// width and a height of 1e-300 or 100 every y is the unit square's times the height, also
+    /// where x goes past the largest finite number.
+    #[test]
+    fn warp_net_bends_a_huge_box_without_overflowing() {
+        let w = 1e308;
+        let flag = WarpNet::new(WarpStyle::Flag, 0.5, 0.0, 0.0, w, 100.0, false);
+        let small = WarpNet::new(WarpStyle::Flag, 0.5, 0.0, 0.0, 1.0, 100.0 / w, false);
+        for (u, v) in [(0.0, 0.0), (0.3, 0.6), (0.9, 1.0), (1.0, 0.5)] {
+            let (p, q) = (flag.at(u, v), small.at(u, v));
+            assert!(p.is_finite(), "({u}, {v}): {p:?}");
+            assert!((p.x - u * w).abs() <= 1e-12 * w, "({u}, {v}): {p:?}");
+            assert!((p.y - q.y * w).abs() <= 1e-9 * p.y.abs().max(1.0), "({u}, {v}): {p:?} against {q:?}");
+        }
+        let thin = WarpNet::new(WarpStyle::Flag, 0.5, 0.0, 0.0, w, 1e-300, false);
+        assert_eq!(thin.at(0.0, 1.0), Point::new(0.0, 1e-300));
+        let fisheye = WarpNet::new(WarpStyle::Fisheye, 1.0, 0.0, 0.0, 1.7e308, 1.7e308, false);
+        for (u, v) in [(0.1, 0.1), (0.8, 0.3), (1.5, 0.5), (3.0, 3.0)] {
+            let p = fisheye.at(u, v);
+            assert!(p.is_finite(), "({u}, {v}): {p:?}");
+        }
+        let unit = WarpNet::new(WarpStyle::Fisheye, 1.0, 0.0, 0.0, 1.0, 1.0, false);
+        let near = |a: f64, b: f64| (a - b).abs() <= 1e-12 * b.abs().max(f64::MIN_POSITIVE);
+        let (p, q) = (fisheye.at(0.1, 0.1), unit.at(0.1, 0.1));
+        assert!(near(p.x, q.x * 1.7e308) && near(p.y, q.y * 1.7e308), "{p:?} against {q:?}");
+        // The bottom of a box with a subnormal height stays exactly at that height: the net is
+        // built on the box halved, and the height's lowest bit but one is set.
+        let low = f64::MIN_POSITIVE / 4.0 + f64::from_bits(2);
+        let sub = WarpNet::new(WarpStyle::Fisheye, 1.0, 0.0, 0.0, f64::MAX, low, false).at(0.0, 1.0);
+        assert_eq!(sub.y, low, "{sub:?}");
+        for h in [1e-300, 100.0] {
+            let tall = WarpNet::new(WarpStyle::Fisheye, 1.0, 0.0, 0.0, f64::MAX, h, false);
+            for (u, v) in [(0.1, 0.1), (0.9, 0.4), (0.5, 0.8)] {
+                let (p, q) = (tall.at(u, v), unit.at(u, v));
+                assert!(p.is_finite() && near(p.y, q.y * h), "h {h}, ({u}, {v}): {p:?} against {q:?}");
+            }
+        }
+    }
+
+    /// Content with no width or no height takes the middle of a warp envelope's patch along that
+    /// side: under Arc a vertical line stays vertical, under Bulge a horizontal line stays straight.
+    #[test]
+    fn warp_envelopes_bend_flat_content_as_the_middle_of_the_patch() {
+        let warp = |style: &str| EnvelopeKind::Warp { style: style.into(), bend: 50.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
+        let arc = warp("arc");
+        let map = envelope_mapper(&arc, Rect::new(100.0, 0.0, 100.0, 100.0));
+        for y in [0.0, 30.0, 100.0] {
+            let p = map(Point::new(100.0, y));
+            assert!((p.x - 100.0).abs() <= 1e-9, "{y}: {p:?}");
+        }
+        let bulge = warp("bulge");
+        let map = envelope_mapper(&bulge, Rect::new(0.0, 50.0, 200.0, 50.0));
+        for x in [0.0, 70.0, 200.0] {
+            let p = map(Point::new(x, 50.0));
+            assert!((p.y - 50.0).abs() <= 1e-9, "{x}: {p:?}");
+        }
+    }
+
+    /// A warp envelope's map version: none in a file reads as 0 (the earlier map), 0 is written
+    /// as none, so files keep their bytes, and the nets' version is written.
+    #[test]
+    fn warp_envelopes_write_their_map_version_only_when_it_has_one() {
+        let old: EnvelopeKind = serde_json::from_str(r#"{"type":"warp","style":"arc","bend":20}"#).unwrap();
+        assert!(matches!(old, EnvelopeKind::Warp { version: 0, .. }), "{old:?}");
+        assert!(!serde_json::to_string(&old).unwrap().contains("version"));
+        let new = EnvelopeKind::Warp { style: "arc".into(), bend: 20.0, h: 0.0, v: 0.0, horizontal: true, version: WARP_NET };
+        let text = serde_json::to_string(&new).unwrap();
+        assert!(text.contains(r#""version":1"#), "{text}");
+        assert_eq!(serde_json::from_str::<EnvelopeKind>(&text).unwrap(), new);
     }
     use vectorcraft_geom::shapes;
 
@@ -374,23 +568,167 @@ mod tests {
         }
     }
 
+    /// The outline of a 200 × 100 box whose top side is `pieces`, end to end from (0, 0) to
+    /// (200, 0), and whose other sides are straight.
+    fn top_of_pieces(pieces: &[CubicBez]) -> PathData {
+        let pt = |p: Point| (p.x, p.y);
+        let mut knots: Vec<Knot> = vec![];
+        for (k, c) in pieces.iter().enumerate() {
+            let h_in = if k == 0 { pt(c.p0) } else { pt(pieces[k - 1].p2) };
+            knots.push((pt(c.p0), h_in, pt(c.p1)));
+        }
+        let last = pieces.last().unwrap();
+        knots.push(((200.0, 0.0), pt(last.p2), (200.0, 0.0)));
+        knots.extend([((200.0, 100.0), (200.0, 100.0), (200.0, 100.0)), ((0.0, 100.0), (0.0, 100.0), (0.0, 100.0))]);
+        outline(&knots)
+    }
+
+    /// A top curve whose parameter runs fast at its start and slow at its end.
+    const UNEVEN_TOP: CubicBez =
+        CubicBez { p0: Point::new(0.0, 0.0), p1: Point::new(120.0, -60.0), p2: Point::new(190.0, -30.0), p3: Point::new(200.0, 0.0) };
+
     #[test]
-    fn a_split_curve_moves_the_top_object_share_to_its_new_anchor() {
-        // Splitting the top curve at t = 0.3 keeps its shape but changes the polygon shares: the
-        // new anchor lands at the first piece's share, not at u = 0.3.
-        let top = CubicBez::new((0.0, 0.0), (40.0, -40.0), (160.0, -40.0), (200.0, 0.0));
-        let (a, b) = (top.subsegment(0.0..0.3), top.subsegment(0.3..1.0));
-        let path = outline(&[
-            ((0.0, 0.0), (0.0, 0.0), a.p1.into()),
-            (a.p3.into(), a.p2.into(), b.p1.into()),
-            ((200.0, 0.0), b.p2.into(), (200.0, 0.0)),
-            ((200.0, 100.0), (200.0, 100.0), (200.0, 100.0)),
-            ((0.0, 100.0), (0.0, 100.0), (0.0, 100.0)),
-        ]);
-        let c = Coons::from_top_object(&path, None).unwrap();
+    fn a_split_curve_keeps_the_top_object_patch() {
+        // Splitting the top curve at t = 0.3, or into thirds, keeps its shape, and the patch stays
+        // the unsplit curve's: the new anchors land at u = 0.3, 1/3 and 2/3 (to within how finely
+        // the side is sampled), where the pieces' control polygons would have put them several
+        // points away.
+        let whole = Coons::from_top_object(&top_of_pieces(&[UNEVEN_TOP]), None).unwrap();
+        for cuts in [vec![0.3], vec![1.0 / 3.0, 2.0 / 3.0]] {
+            let ends: Vec<f64> = std::iter::once(0.0).chain(cuts.iter().copied()).chain([1.0]).collect();
+            let pieces: Vec<CubicBez> = ends.windows(2).map(|w| UNEVEN_TOP.subsegment(w[0]..w[1])).collect();
+            let c = Coons::from_top_object(&top_of_pieces(&pieces), None).unwrap();
+            let total: f64 = pieces.iter().map(|p| polygon(*p)).sum();
+            for (k, t) in cuts.iter().enumerate() {
+                let anchor = pieces[k].p3;
+                assert!(c.eval(*t, 0.0).distance(anchor) < 0.02, "{cuts:?}: u {t} → {:?}, want {anchor:?}", c.eval(*t, 0.0));
+                let share: f64 = pieces[..=k].iter().map(|p| polygon(*p)).sum::<f64>() / total;
+                assert!(c.eval(share, 0.0).distance(anchor) > 2.0, "{cuts:?}: the polygon share {share} lands on the anchor");
+            }
+            for (u, v) in [(0.1, 0.0), (0.3, 0.2), (0.5, 0.5), (0.62, 0.0), (0.9, 0.7), (0.97, 1.0)] {
+                let (p, q) = (c.eval(u, v), whole.eval(u, v));
+                assert!(p.distance(q) < 1e-9, "{cuts:?}: ({u}, {v}) → {p:?}, unsplit {q:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_split_curve_keeps_the_top_object_patch_when_split_at_a_cusp() {
+        // The top curve stops at t = 0.25 (a cusp), and an anchor splits it there: both handles at
+        // the split lie on the anchor, and the patch with the corners given stays the unsplit
+        // curve's.
+        let cusp = CubicBez::new((0.0, 0.0), (30.0, -40.0), (-58.0, 24.0), (200.0, 0.0));
+        let pieces = [cusp.subsegment(0.0..0.25), cusp.subsegment(0.25..1.0)];
+        assert!(pieces[0].p2.distance(pieces[0].p3) < 1e-9 && pieces[1].p1.distance(pieces[1].p0) < 1e-9);
+        let whole = Coons::from_top_object(&top_of_pieces(&[cusp]), Some([0, 1, 2, 3])).unwrap();
+        let c = Coons::from_top_object(&top_of_pieces(&pieces), Some([0, 2, 3, 4])).unwrap();
+        for (u, v) in [(0.1, 0.0), (0.25, 0.0), (0.3, 0.2), (0.5, 0.5), (0.62, 0.0), (0.9, 0.7), (0.97, 1.0)] {
+            let (p, q) = (c.eval(u, v), whole.eval(u, v));
+            assert!(p.distance(q) < 1e-6, "({u}, {v}) → {p:?}, unsplit {q:?}");
+        }
+    }
+
+    #[test]
+    fn a_split_curve_keeps_the_top_object_patch_where_it_barely_moves_and_runs_straight() {
+        // A straight top curve that barely moves at t = 0.25 and doesn't bend there: split there,
+        // the handles at the split are a few thousandths of a point long and the pieces don't bend
+        // at all, and the patch with the corners given stays the unsplit curve's.
+        let slow = CubicBez::new((0.0, 0.0), (28.578125, 0.0), (-57.109375, 0.0), (200.0, 0.0));
+        let pieces = [slow.subsegment(0.0..0.25), slow.subsegment(0.25..1.0)];
+        let (into, out) = (pieces[0].p3.distance(pieces[0].p2), pieces[1].p0.distance(pieces[1].p1));
+        assert!(into > 0.0 && out > 0.0 && into.max(out) < 0.01, "{into} {out}");
+        let whole = Coons::from_top_object(&top_of_pieces(&[slow]), Some([0, 1, 2, 3])).unwrap();
+        let c = Coons::from_top_object(&top_of_pieces(&pieces), Some([0, 2, 3, 4])).unwrap();
+        for (u, v) in [(0.1, 0.0), (0.25, 0.0), (0.3, 0.2), (0.5, 0.5), (0.62, 0.0), (0.9, 0.7), (0.97, 1.0)] {
+            let (p, q) = (c.eval(u, v), whole.eval(u, v));
+            assert!(p.distance(q) < 1e-6, "({u}, {v}) → {p:?}, unsplit {q:?}");
+        }
+    }
+
+    #[test]
+    fn a_top_object_joins_a_split_curve_saved_with_rounded_coordinates() {
+        // A file saves the pieces of a curve split into thirds, or into tenths, with its
+        // coordinates rounded to 0.001 pt, on an outline 5, 200 or 5,000 pt wide: the side is
+        // still that curve, to within 0.02 pt.
+        let round = |p: Point| Point::new((p.x * 1000.0).round() / 1000.0, (p.y * 1000.0).round() / 1000.0);
+        for cuts in [3u32, 10] {
+            let pieces: Vec<CubicBez> =
+                (0..cuts).map(|k| UNEVEN_TOP.subsegment(f64::from(k) / f64::from(cuts)..f64::from(k + 1) / f64::from(cuts))).collect();
+            for scale in [0.025, 1.0, 25.0] {
+                let mut split = top_of_pieces(&pieces);
+                split.transform(Affine::scale(scale));
+                for a in split.subpaths.iter_mut().flat_map(|sp| sp.anchors.iter_mut()) {
+                    (a.p, a.h_in, a.h_out) = (round(a.p), round(a.h_in), round(a.h_out));
+                }
+                let mut whole = top_of_pieces(&[UNEVEN_TOP]);
+                whole.transform(Affine::scale(scale));
+                let (c, whole) = (Coons::from_top_object(&split, None).unwrap(), Coons::from_top_object(&whole, None).unwrap());
+                for (u, v) in [(1.0 / 6.0, 0.0), (1.0 / 3.0, 0.0), (0.45, 0.0), (0.5, 0.5), (2.0 / 3.0, 0.0), (0.9, 0.3)] {
+                    let (p, q) = (c.eval(u, v), whole.eval(u, v));
+                    assert!(p.distance(q) < 0.02, "{cuts} pieces at {scale}x: ({u}, {v}) → {p:?}, unsplit {q:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_top_object_keeps_smoothly_joined_curves_apart() {
+        // The top side's second piece leaves the split anchor in line with the first piece's
+        // handle, but its far handle is 1 pt off the split curve's: the pieces are two curves, and
+        // each takes the share of its control polygon.
+        let (a, b) = (UNEVEN_TOP.subsegment(0.0..0.3), UNEVEN_TOP.subsegment(0.3..1.0));
+        let b = CubicBez::new(b.p0, b.p1, b.p2 + Vec2::new(0.0, 1.0), b.p3);
+        let c = Coons::from_top_object(&top_of_pieces(&[a, b]), None).unwrap();
         let share = polygon(a) / (polygon(a) + polygon(b));
         assert!(c.eval(share, 0.0).distance(a.p3) < 1e-9, "{:?}", c.eval(share, 0.0));
-        assert!((share - 0.3).abs() > 0.01, "{share}");
+        assert!((share - 0.3).abs() > 0.02, "{share}");
+    }
+
+    #[test]
+    fn a_top_object_side_partly_of_one_curve_keeps_the_polygon_shares() {
+        // The top side is a curve split at t = 0.3, then a straight segment: not all of it is one
+        // curve, so each piece keeps the share of its control polygon.
+        let curve = CubicBez::new((0.0, 0.0), (90.0, -45.0), (142.5, -22.5), (150.0, 0.0));
+        let (a, b) = (curve.subsegment(0.0..0.3), curve.subsegment(0.3..1.0));
+        let line = CubicBez::new((150.0, 0.0), (150.0 + 50.0 / 3.0, 0.0), (200.0 - 50.0 / 3.0, 0.0), (200.0, 0.0));
+        let c = Coons::from_top_object(&top_of_pieces(&[a, b, line]), None).unwrap();
+        let share = polygon(a) / (polygon(a) + polygon(b) + polygon(line));
+        assert!(c.eval(share, 0.0).distance(a.p3) < 1e-9, "{:?}", c.eval(share, 0.0));
+        // Joined into their curve, the two pieces would have put the anchor 0.3 of the way along
+        // their part of the side.
+        let joined = 0.3 * (polygon(a) + polygon(b)) / (polygon(a) + polygon(b) + polygon(line));
+        assert!(c.eval(joined, 0.0).distance(a.p3) > 1.0, "{share} vs {joined}");
+    }
+
+    #[test]
+    fn a_top_object_side_of_many_arcs_stays_on_them() {
+        // A 120° arc of radius 500 drawn as `n` circular arcs, each close to a piece of one cubic
+        // while the whole arc is not one: the side stays on the circle, and the content's middle
+        // stays on the middle anchor, as the arcs' polygon shares put it.
+        let centre = Point::new(300.0, 600.0);
+        for n in [64u32, 128, 256] {
+            let step = 120f64.to_radians() / f64::from(n);
+            let reach = 500.0 * 4.0 / 3.0 * (step / 4.0).tan();
+            let on = |a: f64| centre + Vec2::new(a.cos(), a.sin()) * 500.0;
+            let tangent = |a: f64| Vec2::new(-a.sin(), a.cos()) * reach;
+            let mut anchors: Vec<Anchor> = (0..=n)
+                .map(|i| {
+                    let a = (-150f64).to_radians() + step * f64::from(i);
+                    let p = on(a);
+                    let h_in = if i == 0 { p } else { p - tangent(a) };
+                    let h_out = if i == n { p } else { p + tangent(a) };
+                    Anchor { p, h_in, h_out, ..Anchor::corner(p) }
+                })
+                .collect();
+            let (start, end) = (on((-150f64).to_radians()), on((-30f64).to_radians()));
+            anchors.extend([Anchor::corner(Point::new(end.x, 800.0)), Anchor::corner(Point::new(start.x, 800.0))]);
+            let path = PathData::single(SubPath::new(anchors, true));
+            let c = Coons::from_top_object(&path, Some([0, n, n + 1, n + 2])).unwrap();
+            let off = (0..=4000).map(|k| (c.eval(f64::from(k) / 4000.0, 0.0).distance(centre) - 500.0).abs()).fold(0.0, f64::max);
+            assert!(off < 0.001, "{n} arcs: the side lies {off} pt off the circle");
+            let mid = c.eval(0.5, 0.0);
+            assert!(mid.distance(Point::new(300.0, 100.0)) < 0.001, "{n} arcs: the middle lands at {mid:?}");
+        }
     }
 
     #[test]
@@ -537,7 +875,7 @@ mod tests {
     #[test]
     fn an_envelope_maps_from_its_box_with_its_margins() {
         let rect = Node::path(NodeId(2), vectorcraft_geom::shapes::rectangle(Rect::new(10.0, 20.0, 110.0, 70.0)), crate::Appearance::default_art());
-        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true };
+        let kind = EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
         let content = [Arc::new(rect)];
         let src = |content: &[Arc<Node>], frame: Affine, options: EnvelopeOptions| EnvelopeMap::new(content, &kind, frame, options).unwrap().src();
         // Top, bottom, left and right.
@@ -831,6 +1169,37 @@ mod tests {
         assert_eq!(m.locate_within(Point::new(30.0, 60.0), 3.0), m.locate(Point::new(30.0, 60.0)));
     }
 
+    /// A point on a mesh's outline locates on the edge it lies on, on all four sides alike, with no
+    /// tolerance; a point just outside does not, and a tolerance reaches only as far as it says.
+    /// A point that isn't finite locates nowhere.
+    #[test]
+    fn mesh_locate_takes_a_point_on_any_side_of_the_outline() {
+        for (rows, cols) in [(1, 1), (2, 3)] {
+            let m =
+                GradientMesh::for_path(&shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), rows, cols, Color::BLACK, MeshAppearance::Flat, 0.0)
+                    .unwrap();
+            let sides = [
+                ("top", Point::new(30.0, 0.0), Vec2::new(0.0, -0.01)),
+                ("bottom", Point::new(30.0, 100.0), Vec2::new(0.0, 0.01)),
+                ("left", Point::new(0.0, 70.0), Vec2::new(-0.01, 0.0)),
+                ("right", Point::new(100.0, 70.0), Vec2::new(0.01, 0.0)),
+            ];
+            for (side, p, out) in sides {
+                let (r, c, u, v) = m.locate(p).unwrap_or_else(|| panic!("{rows}×{cols} {side}: {p:?} is not located"));
+                assert!(r < m.rows as usize && c < m.cols as usize && (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v), "{side}");
+                assert!(m.eval(r, c, u, v).distance(p) < 1e-3, "{rows}×{cols} {side}: {:?}", m.eval(r, c, u, v));
+                let mut e = m.clone();
+                assert!(e.add_lines_at(p, 0.0).is_some(), "{rows}×{cols} {side}: no line at {p:?}");
+                assert_eq!(m.locate(p + out), None, "{rows}×{cols} {side}: just outside");
+                assert_eq!(m.locate_within(p + out * 100.0, 0.5), None, "{rows}×{cols} {side}: past the tolerance");
+                assert!(m.locate_within(p + out * 100.0, 1.5).is_some(), "{rows}×{cols} {side}: within the tolerance");
+            }
+            for p in [Point::new(f64::NAN, 0.0), Point::new(30.0, f64::INFINITY)] {
+                assert_eq!(m.locate_within(p, f64::INFINITY), None, "{p:?}");
+            }
+        }
+    }
+
     /// Corners all in CMYK mix in CMYK (the inks halfway), not in RGB.
     #[test]
     fn a_cmyk_mesh_mixes_its_inks() {
@@ -876,6 +1245,62 @@ mod tests {
             let before = m.clone();
             assert!(!m.remove_point_lines(index), "{rows}×{cols}, point {index}");
             assert_eq!(m, before);
+        }
+    }
+
+    /// The pieces of a mesh-warped image make a knockout group, each knocking out its triangle
+    /// (clipping path or opacity mask art); the group keeps the image's transparency.
+    #[test]
+    fn mesh_warp_image_pieces_knock_out_by_their_triangles() {
+        let im = crate::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(NodeId(3), NodeKind::Image(Box::new(im.clone())));
+        n.opacity = 0.5;
+        n.blend = crate::color::BlendMode::Multiply;
+        let same = |p: Point| p;
+        for masked in [false, true] {
+            let g = mesh_warp_image(&n, &im, &same, 2, false, masked);
+            assert_eq!((g.knockout, g.opacity, g.blend, g.isolate), (crate::Knockout::On, 0.5, crate::color::BlendMode::Multiply, false));
+            let NodeKind::Group { children, clip: false } = &g.kind else { panic!("a group") };
+            assert_eq!(children.len(), 8);
+            for c in children {
+                assert!(c.extras().warp_piece);
+                let outline = c.knockout_outline().unwrap_or_else(|| panic!("masked {masked}: an outline"));
+                let NodeKind::Path { path, .. } = &outline.kind else { panic!("a path") };
+                assert_eq!(path.anchor_count(), 3);
+            }
+        }
+        // A clip group or masked image that is not a piece knocks out by what it paints.
+        let mut plain = mesh_warp_image(&n, &im, &same, 1, false, false);
+        let NodeKind::Group { children, .. } = &mut plain.kind else { panic!("a group") };
+        let piece = Arc::make_mut(&mut children[0]);
+        piece.extras_mut().warp_piece = false;
+        assert!(piece.knockout_outline().is_none());
+    }
+
+    /// More cells than the objects live art may make cut no pieces (the count overflowed).
+    #[test]
+    fn mesh_warp_image_past_the_budget_makes_an_empty_group() {
+        let im = crate::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::IDENTITY,
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let n = Node::new(NodeId(3), NodeKind::Image(Box::new(im.clone())));
+        for cells in [usize::MAX, 1000] {
+            let g = mesh_warp_image(&n, &im, &|p| p, cells, false, false);
+            assert!(matches!(&g.kind, NodeKind::Group { children, .. } if children.is_empty()), "{cells}");
         }
     }
 }

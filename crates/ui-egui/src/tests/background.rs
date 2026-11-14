@@ -122,6 +122,29 @@ fn exports_run_in_the_background_and_the_preference_turns_both_off() {
     assert!(app.background.jobs.is_empty());
 }
 
+/// A Background Export with a file per artboard checks for files there from its worker: one with
+/// an artboard file's name is asked about once the export ends, before anything is written, and
+/// the question's OK writes every file.
+#[test]
+fn a_background_export_asks_before_replacing_an_artboard_file() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.services.exists = Some(Arc::new(|p: &str| p == "/out/a-B.png"));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 200, "y": 0, "width": 100, "height": 80, "name": "B"})).unwrap();
+    let r = io::export(&mut app, Some("png"), Some("/out/a.png".into()), &json!({"useArtboards": true})).unwrap();
+    assert_eq!(r["background"].as_bool(), Some(true), "{r}");
+    gate.open();
+    background::wait_all(&mut app);
+    assert!(files.lock().unwrap().is_empty(), "nothing is written while it asks");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.kind.as_str(), d.str("message").as_str()), (crate::dialogs::confirm::REPLACE_FILES, "“a-B.png” already exists. Replace it?"));
+    crate::dialogs::confirm(&mut app).unwrap();
+    background::wait_all(&mut app);
+    let names: Vec<String> = files.lock().unwrap().iter().map(|(p, _)| p.clone()).collect();
+    assert_eq!(names, ["/out/a-Artboard-1.png", "/out/a-B.png"]);
+}
+
 /// A save that returns before the file is written still says what it writes and which options it
 /// does not use, as `app.save` (MCP's `save_file`) replies with it: what the format loses first, as
 /// the reply of a save written at once.

@@ -165,6 +165,26 @@ impl Anchor {
     pub fn reversed(&self) -> Self {
         Self { p: self.p, h_in: self.h_out, h_out: self.h_in, kind: self.kind }
     }
+    /// Make the anchor smooth between the points `prev` and `next` (its own point for a missing
+    /// one): handles in line with them, each a third of the way to that side's point. A smooth
+    /// anchor with both handles keeps them. False, with no change, when the two points give no
+    /// direction. [`SubPath::smooth_anchor`] calls it with the anchor's neighbors.
+    pub fn smooth_between(&mut self, prev: Option<Point>, next: Option<Point>) -> bool {
+        if self.kind == AnchorKind::Smooth && self.has_in() && self.has_out() {
+            return true;
+        }
+        let (pp, nn) = (prev.unwrap_or(self.p), next.unwrap_or(self.p));
+        let dir = nn - pp;
+        let l = dir.hypot();
+        if l <= 1e-9 {
+            return false;
+        }
+        let u = dir / l;
+        self.h_in = self.p - u * (self.p.distance(pp) / 3.0);
+        self.h_out = self.p + u * (self.p.distance(nn) / 3.0);
+        self.kind = AnchorKind::Smooth;
+        true
+    }
     /// Remove both handles (convert to a sharp corner).
     pub fn retract(&mut self) {
         self.h_in = self.p;
@@ -226,6 +246,16 @@ fn anchors_within<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Anchor>,
         }
     }
     d.deserialize_seq(V)
+}
+
+thread_local! {
+    /// [`measured_segments`] of this thread.
+    static MEASURED_SEGMENTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many segments [`PathData::bounds`] has measured on this thread.
+pub fn measured_segments() -> u64 {
+    MEASURED_SEGMENTS.get()
 }
 
 /// An open or closed run of anchors.
@@ -398,21 +428,7 @@ impl SubPath {
         };
         let at = |j: Option<usize>| j.and_then(|j| self.anchors.get(j)).map(|a| a.p);
         let (prev, next) = (at(prev), at(next));
-        let Some(a) = self.anchors.get_mut(i) else { return false };
-        if a.kind == AnchorKind::Smooth && a.has_in() && a.has_out() {
-            return true;
-        }
-        let (pp, nn) = (prev.unwrap_or(a.p), next.unwrap_or(a.p));
-        let dir = nn - pp;
-        let l = dir.hypot();
-        if l <= 1e-9 {
-            return false;
-        }
-        let u = dir / l;
-        a.h_in = a.p - u * (a.p.distance(pp) / 3.0);
-        a.h_out = a.p + u * (a.p.distance(nn) / 3.0);
-        a.kind = AnchorKind::Smooth;
-        true
+        self.anchors.get_mut(i).is_some_and(|a| a.smooth_between(prev, next))
     }
     /// Cut at the anchors `at`: each becomes the end of one open piece and the start of the next,
     /// its handle off each piece retracted (the shape doesn't change). A closed subpath opens at
@@ -562,6 +578,7 @@ impl PathData {
         }
         let mut bbox: Option<Rect> = None;
         for sp in &self.subpaths {
+            MEASURED_SEGMENTS.set(MEASURED_SEGMENTS.get().saturating_add(sp.segment_count() as u64));
             for i in 0..sp.segment_count() {
                 let c = sp.segment(i);
                 // `to_bezpath_into` writes a line where neither handle is out, else a cubic.
@@ -688,7 +705,8 @@ fn box_gap(c: &CubicBez, p: Point) -> Option<f64> {
 const MEASURE_LIMIT: f64 = 1e9;
 
 /// The length of `seg` to `accuracy`; 0 for a segment whose control points are not finite or past
-/// [`MEASURE_LIMIT`].
+/// [`MEASURE_LIMIT`], and 0 when the measurement is not finite (kurbo gives NaN for a quadratic
+/// segment whose three points coincide).
 pub fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
     let ok = |p: Point| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= MEASURE_LIMIT && p.y.abs() <= MEASURE_LIMIT;
     let fits = match seg {
@@ -696,7 +714,11 @@ pub fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
         PathSeg::Quad(q) => ok(q.p0) && ok(q.p1) && ok(q.p2),
         PathSeg::Cubic(c) => ok(c.p0) && ok(c.p1) && ok(c.p2) && ok(c.p3),
     };
-    if fits { kurbo::ParamCurveArclen::arclen(seg, accuracy) } else { 0.0 }
+    if !fits {
+        return 0.0;
+    }
+    let len = kurbo::ParamCurveArclen::arclen(seg, accuracy);
+    if len.is_finite() { len } else { 0.0 }
 }
 
 /// The largest x or y, in size, of a segment's control points for which [`segment_bounds`]
@@ -1054,6 +1076,19 @@ mod tests {
     #[test]
     fn length_of_square() {
         assert!((square().length() - 40.0).abs() < 1e-6);
+    }
+
+    /// A quadratic segment whose three points coincide measures 0, not NaN; quadratic segments
+    /// with only two points together, and an ordinary one, keep kurbo's length.
+    #[test]
+    fn measured_arclen_of_a_quad_whose_points_coincide_is_zero() {
+        let quad = |a: (f64, f64), b: (f64, f64), c: (f64, f64)| PathSeg::Quad(kurbo::QuadBez::new(a, b, c));
+        assert_eq!(measured_arclen(&quad((5.0, 5.0), (5.0, 5.0), (5.0, 5.0)), 1e-6), 0.0);
+        assert_eq!(measured_arclen(&quad((0.0, 0.0), (0.0, 0.0), (0.0, 0.0)), 1e-3), 0.0);
+        assert!((measured_arclen(&quad((0.0, 0.0), (0.0, 0.0), (10.0, 0.0)), 1e-6) - 10.0).abs() < 1e-6);
+        assert!((measured_arclen(&quad((0.0, 0.0), (10.0, 0.0), (0.0, 0.0)), 1e-6) - 10.0).abs() < 1e-6);
+        let ordinary = quad((0.0, 0.0), (10.0, 0.0), (10.0, 10.0));
+        assert_eq!(measured_arclen(&ordinary, 1e-6), kurbo::ParamCurveArclen::arclen(&ordinary, 1e-6));
     }
 
     #[test]

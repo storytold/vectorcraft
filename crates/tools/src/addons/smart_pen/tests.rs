@@ -315,6 +315,35 @@ fn the_rubber_band_shows_the_next_segment_and_ending_the_path() {
     assert!(t.overlays(&cx).is_empty());
 }
 
+/// With Enable Rubber Band for the Pen off, the preview segment is hidden but Measurement Labels
+/// still shows the readout from the last anchor to the pointer.
+#[test]
+fn the_measurement_label_shows_with_the_rubber_band_off() {
+    let (d, _, s) = doc(line());
+    let p = paint();
+    let on = plain(&d, &s, &p);
+    let off = ToolContext { pen_rubber_band: false, ..plain(&d, &s, &p) };
+    let (from, to) = (Point::new(200.0, 100.0), Point::new(300.0, 160.0));
+    let measure =
+        |o: &[Overlay]| o.iter().filter_map(|o| if let Overlay::Measure { text, .. } = o { Some(text.clone()) } else { None }).collect::<Vec<_>>();
+    let band = |o: &[Overlay]| o.iter().any(|o| matches!(o, Overlay::Path { .. }));
+    let mut t = drawing(&off, from);
+    t.pointer(&off, &ev(PointerKind::Move, to.x, to.y, NO));
+    let o = t.overlays(&off);
+    assert_eq!(measure(&o), vec![off.segment_measure_label(from, to)], "{o:?}");
+    assert!(!band(&o), "{o:?}");
+    let o = t.overlays(&on);
+    assert_eq!(measure(&o), vec![on.segment_measure_label(from, to)], "{o:?}");
+    assert!(band(&o), "{o:?}");
+    for rubber in [true, false] {
+        let quiet = ToolContext { pen_rubber_band: rubber, measurement_labels: false, ..plain(&d, &s, &p) };
+        assert!(measure(&t.overlays(&quiet)).is_empty());
+    }
+    // Hovering exactly on the last anchor measures no segment.
+    t.pointer(&off, &ev(PointerKind::Move, from.x, from.y, NO));
+    assert!(measure(&t.overlays(&off)).is_empty());
+}
+
 #[test]
 fn an_alt_drag_away_from_paths_selects_the_points_inside_a_marquee() {
     let (d, id, s) = doc(SubPath::polyline(&[Point::new(100.0, 100.0), Point::new(200.0, 100.0), Point::new(300.0, 100.0)], false));

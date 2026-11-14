@@ -214,26 +214,72 @@ fn swatch_library_replies_leave_out_paths_outside_the_read_root() {
     let mine = format!("loaded/{}", text(&inside));
     let copied = confine(roots.as_ref(), || run(&mut s, "swatch.library.copyToUser", json!({"library": mine})));
     assert_eq!((copied["library"].as_str(), copied["copied"].as_bool()), (Some("user/Kit.vcswatches"), Some(true)), "{copied}");
-    assert_eq!(copied["path"], Value::Null, "{copied}");
+    assert_eq!(copied.get("path"), None, "{copied}");
     let saved = confine(roots.as_ref(), || run(&mut s, "swatch.library.save", json!({"user": true, "name": "Mine"})));
     assert_eq!((saved["library"].as_str(), saved.get("path")), (Some("user/Mine.vcswatches"), None), "{saved}");
     for reply in [&added, &copied, &saved] {
         assert!(!holds(reply, &base.join("a")) && !holds(reply, &base.join("user")), "{reply}");
     }
-    // A library loaded from data under the file name keeps its id; each concealed one takes the next
-    // free one, so no two rows share an id.
+    // A library loaded from data under the file name keeps its id; the concealed one shown under that
+    // id takes the next free one, the other keeps its id, and no two rows share an id.
     let data = run(&mut s, "swatch.library.save", json!({}))["data"].as_str().unwrap().to_string();
     run(&mut s, "swatch.library.load", json!({"data": data, "name": "Kit.vcswatches"}));
     let list = confine(roots.as_ref(), || run(&mut s, "swatch.library.list", json!({})));
     let ids: Vec<Value> = loaded(&list).into_iter().map(|(id, ..)| id).collect();
-    assert_eq!(ids, [json!("loaded/Kit.vcswatches (2)"), json!("loaded/Kit.vcswatches (3)"), json!("loaded/Kit.vcswatches")], "{list}");
+    assert_eq!(ids, [json!("loaded/Kit.vcswatches (3)"), json!("loaded/Kit.vcswatches (2)"), json!("loaded/Kit.vcswatches")], "{list}");
     // Copied into the user library folder, it is still found by that id, which no other library takes.
     confine(roots.as_ref(), || run(&mut s, "swatch.library.copyToUser", json!({"library": "loaded/Kit.vcswatches"})));
     let list = confine(roots.as_ref(), || run(&mut s, "swatch.library.list", json!({})));
     let ids: Vec<Value> = loaded(&list).into_iter().map(|(id, ..)| id).collect();
-    assert_eq!(ids, [json!("loaded/Kit.vcswatches (2)"), json!("loaded/Kit.vcswatches (3)")], "{list}");
+    assert_eq!(ids, [json!("loaded/Kit.vcswatches (3)"), json!("loaded/Kit.vcswatches (2)")], "{list}");
     // The person sees the folder.
     let saved = run(&mut s, "swatch.library.save", json!({"user": true, "name": "Theirs"}));
     assert_eq!(saved["path"], json!(text(&base.join("user").join("Theirs.vcswatches"))));
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// Outside Windows a `\` is part of a file name: a concealed library saved at `<folder>/weird\name.gpl`
+/// is shown under its whole file name. Another platform's absolute path is still named by the part
+/// after its last `\`.
+#[cfg(not(windows))]
+#[test]
+fn a_concealed_library_keeps_a_backslash_in_its_file_name() {
+    let base = folder("backslash-name");
+    let roots = AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let native = format!("loaded/{}/weird\\name.gpl", text(&base.join("a")));
+    let foreign = r"loaded/C:\Users\someone\other.gpl".to_string();
+    let s = Session::new();
+    let mut hidden = confine(roots.as_ref(), || cmd::swatchlib::concealed_library_ids(&s, [native.clone(), foreign.clone()]));
+    let _ = std::fs::remove_dir_all(base);
+    hidden.sort();
+    let mut want = vec![(foreign, "loaded/other.gpl".to_string()), (native, "loaded/weird\\name.gpl".to_string())];
+    want.sort();
+    assert_eq!(hidden, want);
+}
+
+/// A concealed library keeps the id a client was shown when another library with the same file name,
+/// whose full id sorts before it, is loaded later: the id still finds the first library.
+#[test]
+fn a_concealed_library_keeps_its_id_after_another_with_its_file_name_loads() {
+    let base = folder("keeps-id");
+    let roots = AutomationRoots::new(&[&base.join("in")], &[&base.join("out")]).unwrap();
+    let (first, later) = (base.join("b").join("Kit.vcswatches"), base.join("a").join("Kit.vcswatches"));
+    let mut s = Session::new();
+    run(&mut s, "file.new", json!({"width": 100, "height": 100}));
+    (SWATCHES.add)(&mut s, "First");
+    run(&mut s, "swatch.library.save", json!({"path": text(&first), "name": "Kit"}));
+    (SWATCHES.add)(&mut s, "Second");
+    run(&mut s, "swatch.library.save", json!({"path": text(&later), "name": "Kit"}));
+    let shown = "loaded/Kit.vcswatches";
+    let count = run(&mut s, "swatch.library.load", json!({"path": text(&first)}))["count"].clone();
+    let list = confine(roots.as_ref(), || run(&mut s, "swatch.library.list", json!({})));
+    assert_eq!(loaded(&list), [(json!(shown), Value::Null, count)], "{list}");
+    run(&mut s, "swatch.library.load", json!({"path": text(&later)}));
+    let list = confine(roots.as_ref(), || run(&mut s, "swatch.library.list", json!({})));
+    let ids: Vec<Value> = loaded(&list).into_iter().map(|(id, ..)| id).collect();
+    assert_eq!(ids, [json!(shown), json!("loaded/Kit.vcswatches (2)")], "{list}");
+    let theirs = run(&mut s, "swatch.library.get", json!({"library": format!("loaded/{}", text(&first))}));
+    let got = confine(roots.as_ref(), || run(&mut s, "swatch.library.get", json!({"library": shown})));
+    assert_eq!((&got["id"], &got["swatches"]), (&json!(shown), &theirs["swatches"]), "the first library: {got}");
     let _ = std::fs::remove_dir_all(base);
 }

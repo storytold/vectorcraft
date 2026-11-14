@@ -17,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Text Wrap"],
             None,
-            "{offset?: pt (6), invert?: bool, ids?} area type below the selected objects (same layer) wraps around them → {ids}",
+            "{offset?: pt (6), invert?: bool, ids?} area type below the selected objects (same layer) wraps around them; a negative offset (to -1000) lets the text that far into them → {ids}",
             has_selection,
             make
         ),
@@ -27,15 +27,19 @@ pub fn specs() -> Vec<CommandSpec> {
             "Text Wrap Options…",
             ["Object", "Text Wrap"],
             None,
-            "{offset?: pt, invert?: bool, ids?} set the options of the selected wrap objects; no options → the current {offset, invert}",
+            "{offset?: pt, invert?: bool, ids?} set the options of the selected wrap objects (offset -1000 to 1000; a negative one lets text into the objects); no options → the current {offset, invert}",
             has_selection,
             options
         ),
     ]
 }
 
+/// The Offset a wrap object takes, in points.
+pub const TEXT_WRAP_OFFSET_RANGE: std::ops::RangeInclusive<f64> = -1000.0..=1000.0;
+
 fn wrap_param(p: &Value, base: TextWrap) -> TextWrap {
-    TextWrap { offset: f64_or(p, "offset", base.offset).clamp(-1000.0, 1000.0), invert: bool_or(p, "invert", base.invert) }
+    let (lo, hi) = (*TEXT_WRAP_OFFSET_RANGE.start(), *TEXT_WRAP_OFFSET_RANGE.end());
+    TextWrap { offset: f64_or(p, "offset", base.offset).clamp(lo, hi), invert: bool_or(p, "invert", base.invert) }
 }
 
 fn make(s: &mut Session, p: &Value) -> Result<Value> {
@@ -184,6 +188,33 @@ mod tests {
         s.execute("object.textWrap.make", &json!({})).unwrap();
         s.execute("object.arrange.sendToBack", &json!({})).unwrap();
         assert_eq!(lines(&s, t), plain);
+    }
+
+    /// A negative offset from Text Wrap Options lets the lines beside a wrap object run that far
+    /// into it, the options report it, and one undo puts back the offset before it.
+    #[test]
+    fn text_wrap_options_negative_offset_reflows_and_round_trips() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 600, "height": 600})).unwrap();
+        let t = s
+            .execute("text.create", &json!({"x": 0, "y": 0, "text": "word ".repeat(200), "size": 12, "area": {"width": 400, "height": 400}}))
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap();
+        let r = s.execute("shape.rectangle", &json!({"x": -50, "y": 50, "width": 250, "height": 100})).unwrap()["id"].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [r]})).unwrap();
+        s.execute("object.textWrap.make", &json!({})).unwrap();
+        let beside = |s: &Session| lines(s, t).into_iter().filter(|l| l.0 > 1.0).map(|l| l.0).collect::<Vec<_>>();
+        assert!(!beside(&s).is_empty() && beside(&s).iter().all(|x| (x - 206.0).abs() < 1e-6), "{:?}", beside(&s));
+        assert_eq!(s.execute("object.textWrap.options", &json!({"offset": -20})).unwrap()["offset"], json!(-20.0));
+        assert!(!beside(&s).is_empty() && beside(&s).iter().all(|x| (x - 180.0).abs() < 1e-6), "{:?}", beside(&s));
+        assert_eq!(s.execute("object.textWrap.options", &json!({})).unwrap()["offset"], json!(-20.0));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.execute("object.textWrap.options", &json!({})).unwrap()["offset"], json!(6.0));
+        assert!(beside(&s).iter().all(|x| (x - 206.0).abs() < 1e-6), "{:?}", beside(&s));
+        // An offset past -1000 is kept at -1000: the whole object lets text through.
+        assert_eq!(s.execute("object.textWrap.options", &json!({"offset": -5000})).unwrap()["offset"], json!(-1000.0));
+        assert!(lines(&s, t).iter().all(|l| l.0 < 1.0 && l.1 > 300.0));
     }
 
     #[test]

@@ -86,7 +86,47 @@ size. Raster exports with Art Optimized anti-aliasing, the default, do not show 
 pixels and 16,384 pixels on a side. A raster export shows the line as the canvas does when it uses
 Type Optimized anti-aliasing, or when it uses Art Optimized and is larger than either limit.
 Overlapping stacks the colors instead: a lower color continues under the edge of the color above it,
-and no background shows along that edge.
+and no background shows along that edge. With Fills and without Create Strokes, Overlapping also
+follows a fill rule of VectorCraft's own: each shape is filled whole, and the area of other colors
+that a shape encloses is traced again as shapes of its own and stacked above it. Each enclosed
+outline is then fitted once. The [Image Trace presets](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/image-trace-presets.html)
+page describes Overlapping as stacking shapes where it can and overlapping their edges elsewhere. A
+shape keeps a hole where the enclosed area holds a transparent pixel or a color that Ignore Color or
+Keep Colors leaves out. A hole smaller than Noise is filled with the shape's own color, as before.
+The pixels of an area inside other areas are scanned once more for each area around it, within a
+work budget of VectorCraft's own: four times the image's pixels (counted as at least 65,536) times
+its colors, with each area costing its bounding box times the colors in it. An area that costs more
+than what is left of the budget keeps its holes and is not charged, so a smaller area after it can
+still be filled.
+With Create Strokes, or without Fills, shapes keep their holes.
+
+**Flat Logo with named colors.** With `logoColors` named, Flat Logo decides whether the image is flat
+art by the image's own colors. It finds them the same way as when no colors are named, and looks for as
+many colors as are named, with white, or as the Colors setting gives, whichever is more. How far the named colors
+are from the image's colors does not change whether the image is refused. While no more colors are
+named than the Colors setting, an image is refused exactly when it is refused without named colors.
+The trace then uses only the named colors, and white while white is a color of its own. An area of a
+color that was not named is traced too: each of its pixels goes to the named color, white or
+transparent that has the largest share in the blend of them that comes closest to the pixel.
+
+**Flat Logo with a color between two others.** When a traced color lies between two others, as a gray
+lies between black and white, an anti-aliased edge pixel between the outer two is also a blend of the
+middle color and one of them. Flat Logo then reads the pixel as the blend of the colors that lie nearest
+it in the flat areas within 6 pixels, when the pixel has a neighbor darker and a neighbor lighter than the
+middle color, along the line between the other two. A black disc beside a gray square on white traces
+with one gray shape, the square, and no gray slivers around the disc, when its edges are sharp or blurred
+by up to about half a pixel. An edge blurred by a pixel or more can still leave gray slivers along the
+disc, and so can an image with noise of a level or more in its pixels. A gray stroke two or three pixels
+wide beside black has no darker pixel next to it and stays gray. A soft-edged gray stroke about two
+pixels wide that touches black traces as black and white, and one about three pixels wide that touches
+black can lose most or all of its gray when it is short (12 pixels long or less). A line of gray one
+pixel wide between black and white stays gray when at least 13 of its pixels touch: such a line and a
+straight black-to-white edge whose pixels are as light as the gray give the same pixels, and both
+trace as gray. A one-pixel gray line between black and white that is shorter than 13 pixels, falls
+between pixels or is blurred traces as black and white. A flat area whose color lies between two named colors, as when the colors are named
+some levels off, counts as holding the named colors it is a blend of, and so do the pixels of exactly
+its color that touch it.
+
 **Large images.** An image of more than 1500 pixels on a side is traced as any other, only more
 slowly, and the trace says so: `imageTrace.make` returns the note in `warnings` and the status bar
 shows it (the [results optimization](https://helpx.adobe.com/illustrator/using/image-trace-results-optimization.html)
@@ -96,8 +136,9 @@ most 1024 pixels on a side: a larger decoded raster is averaged down in whole-nu
 image is traced at 513, and a 16,000 × 12,000 image, decoded at 9,459 × 7,094, is traced at 946 × 710), and the trace names both sizes in `warnings`. Flat Logo gives that note in place
 of the slower-trace note for an image over 1500 pixels and in place of the 64-megapixel note. An image at most
 1024 pixels on a side is traced at its own size, also when the named `logoColors` differ slightly from the
-image's colors. Only an image with more than 150,000 different pixel values that are not exactly one traced
-color is averaged down further: the factor doubles until at most 150,000 remain or the working copy has at
+image's colors. Only an image with more than 150,000 different pixel values to unmix (values that are
+not exactly one traced color, and values that are, at pixels outside a flat area) is averaged down
+further: the factor doubles until at most 150,000 remain or the working copy has at
 most 16,384 pixels (at most six times). A trace that would
 make more than 8,000,000 anchor points (2,000,000 on the web) is refused to protect memory, with advice:
 raise Noise, lower Paths or Colors, or pick a lower-fidelity preset. A trace keeps

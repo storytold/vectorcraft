@@ -75,16 +75,18 @@ fn cmyk_dict(w: u32, h: u32, more: &str) -> String {
 
 const INVERTED: &str = "/Decode [1 0 1 0 1 0 1 0]";
 
-/// An image XObject of a written PDF: its colour space and the components of its ICC profile,
-/// its Decode array, its filter and its stream data.
+/// An image XObject of a written PDF: its colour space and the components and bytes of its ICC
+/// profile, its Decode array, its filter, its stream data and whether it has a soft mask.
 #[derive(Debug)]
 struct Written {
     space: String,
     icc_n: Option<u8>,
+    icc: Option<Vec<u8>>,
     decode: Vec<f32>,
     filter: Option<String>,
     data: Vec<u8>,
     width: u32,
+    smask: bool,
 }
 
 fn written(pdf: &[u8]) -> Vec<Written> {
@@ -96,22 +98,26 @@ fn written(pdf: &[u8]) -> Vec<Written> {
         if d.get::<Name<'_>>(b"Subtype").is_none_or(|n| n.as_ref() != b"Image") {
             continue;
         }
-        let (space, icc_n) = match (d.get::<Name<'_>>(b"ColorSpace"), d.get::<Array<'_>>(b"ColorSpace")) {
-            (Some(n), _) => (n.as_str().to_string(), None),
+        let (space, icc_n, icc) = match (d.get::<Name<'_>>(b"ColorSpace"), d.get::<Array<'_>>(b"ColorSpace")) {
+            (Some(n), _) => (n.as_str().to_string(), None, None),
             (_, Some(a)) => {
                 let mut it = a.flex_iter();
                 let name = it.next::<Name<'_>>().unwrap().as_str().to_string();
-                (name, it.next::<Stream<'_>>().and_then(|s| s.dict().get::<u8>(b"N")))
+                let profile = it.next::<Stream<'_>>();
+                let n = profile.as_ref().and_then(|s| s.dict().get::<u8>(b"N"));
+                (name, n, profile.map(|s| s.decoded().unwrap().into_owned()))
             }
-            _ => (String::new(), None),
+            _ => (String::new(), None, None),
         };
         out.push(Written {
             space,
             icc_n,
+            icc,
             decode: d.get::<Array<'_>>(b"Decode").map(|a| a.iter::<f32>().collect()).unwrap_or_default(),
             filter: d.get::<Name<'_>>(b"Filter").map(|n| n.as_str().to_string()),
             data: s.raw_data().to_vec(),
             width: d.get::<u32>(b"Width").unwrap_or(0),
+            smask: d.get::<Stream<'_>>(b"SMask").is_some(),
         });
     }
     out
@@ -322,6 +328,76 @@ fn image_doc(blob: ImageBlob, w: u32, h: u32) -> Document {
     d
 }
 
+/// An image placed from a DCS file prints each of its plates on its own ink: a spot plate on its
+/// spot ink's plate, or as its process equivalent when spots print as process. Its composite, the
+/// CMYK samples every other reader sees, never prints on a separation.
+#[test]
+fn a_dcs_image_prints_each_plate_on_its_own_ink() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    let plate = |name: &str, cmyk: [f32; 4], data: [u8; 2]| InkPlate { name: name.into(), cmyk, data: data.to_vec() };
+    let s = Separated::new(2, 1, vec![plate("Cyan", [0.0; 4], [255, 0]), plate("Spot Orange", [0.0, 0.6, 1.0, 0.0], [128, 0])]).unwrap();
+    let mut d = image_doc(ImageBlob::separated_tiff(&s, None, &[]).unwrap(), 2, 1);
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(0.0, 0.6, 1.0, 0.0)), global: true, spot: true });
+    let plates = |spots_to_process: bool| {
+        let settings: PrintSettings = serde_json::from_value(json!({"output": {"mode": "separations", "spotsToProcess": spots_to_process}})).unwrap();
+        let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+        let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+        let coverage: Vec<Vec<u8>> = job
+            .plates
+            .iter()
+            .map(|p| {
+                let NodeKind::Image(im) = &p.layers[0].children().unwrap()[0].kind else { panic!("an image") };
+                p.image_blob(im).and_then(|b| b.coverage()).unwrap().2
+            })
+            .collect();
+        names.into_iter().zip(coverage).collect::<Vec<_>>()
+    };
+    let own = plates(false);
+    let get = |all: &[(String, Vec<u8>)], name: &str| all.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+    assert_eq!(get(&own, "Cyan"), Some(vec![255, 0]));
+    assert_eq!(get(&own, "Magenta"), Some(vec![0, 0]), "the spot ink stays off the process plates");
+    assert_eq!(get(&own, "Yellow"), Some(vec![0, 0]));
+    assert_eq!(get(&own, "Spot Orange"), Some(vec![128, 0]));
+    let process = plates(true);
+    assert_eq!(get(&process, "Spot Orange"), None);
+    assert_eq!(get(&process, "Magenta"), Some(vec![77, 0]), "60% of the spot plate's 50%");
+    assert_eq!(get(&process, "Yellow"), Some(vec![128, 0]));
+}
+
+/// A DCS spot plate that prints as process prints as the document's swatch of its ink does (the
+/// swatch kept in place of the plate's), not as the equivalent its file gives.
+#[test]
+fn a_dcs_spot_plate_printing_as_process_takes_the_documents_swatch() {
+    use vectorcraft_doc::separated::{InkPlate, Separated};
+    let plate = |name: &str, cmyk: [f32; 4], data: [u8; 2]| InkPlate { name: name.into(), cmyk, data: data.to_vec() };
+    let s = Separated::new(2, 1, vec![plate("Cyan", [0.0; 4], [255, 0]), plate("Spot Orange", [0.0, 0.6, 1.0, 0.0], [0, 128])]).unwrap();
+    let mut d = image_doc(ImageBlob::separated_tiff(&s, None, &[]).unwrap(), 2, 1);
+    let plates = |d: &Document, spots_to_process: bool| {
+        let settings: PrintSettings = serde_json::from_value(json!({"output": {"mode": "separations", "spotsToProcess": spots_to_process}})).unwrap();
+        let names: Vec<String> = print_inks(d, &settings).0.into_iter().map(|i| i.name).collect();
+        let job = plan(d, &PrintOptions { settings, ..Default::default() }).unwrap();
+        let coverage = job.plates.iter().map(|p| {
+            let NodeKind::Image(im) = &p.layers[0].children().unwrap()[0].kind else { panic!("an image") };
+            p.image_blob(im).and_then(|b| b.coverage()).unwrap().2
+        });
+        names.into_iter().zip(coverage).collect::<Vec<_>>()
+    };
+    let get = |all: &[(String, Vec<u8>)], name: &str| all.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone());
+    // A spot swatch of the ink in another color.
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), global: true, spot: true });
+    let process = plates(&d, true);
+    assert_eq!(get(&process, "Cyan"), Some(vec![255, 128]), "the swatch's cyan");
+    assert_eq!(get(&process, "Magenta"), Some(vec![0, 0]), "not the file's magenta");
+    assert_eq!(get(&process, "Yellow"), Some(vec![0, 0]));
+    // A process swatch of the ink's name: the job prints no plate for it.
+    d.swatches.retain(|w| w.name != "Spot Orange");
+    d.swatches.push(Swatch { name: "Spot Orange".into(), paint: Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0)), global: true, spot: false });
+    let own = plates(&d, false);
+    assert_eq!(get(&own, "Spot Orange"), None);
+    assert_eq!(get(&own, "Black"), Some(vec![0, 128]), "the swatch's black");
+    assert_eq!(get(&own, "Yellow"), Some(vec![0, 0]));
+}
+
 #[test]
 fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_cmyk() {
     let ink = [0u8, 102, 255, 0];
@@ -377,9 +453,230 @@ fn the_output_settings_convert_cmyk_images_and_compression_recompresses_them_in_
     assert_eq!(blob.cmyk().unwrap().data, flat(ink, 16));
 }
 
+/// A version 2.1 output profile of CMYK colors with a one-tag table (`cprt`), its header and table
+/// consistent with its size; `edit` changes it after it is made.
+fn cmyk_profile(edit: impl FnOnce(&mut Vec<u8>)) -> Vec<u8> {
+    let mut icc = vec![0u8; 156];
+    icc[0..4].copy_from_slice(&156u32.to_be_bytes());
+    icc[8..12].copy_from_slice(&[2, 0x10, 0, 0]);
+    icc[12..16].copy_from_slice(b"prtr");
+    icc[16..20].copy_from_slice(b"CMYK");
+    icc[20..24].copy_from_slice(b"Lab ");
+    icc[36..40].copy_from_slice(b"acsp");
+    icc[128..132].copy_from_slice(&1u32.to_be_bytes());
+    icc[132..136].copy_from_slice(b"cprt");
+    icc[136..140].copy_from_slice(&144u32.to_be_bytes());
+    icc[140..144].copy_from_slice(&12u32.to_be_bytes());
+    icc[144..156].copy_from_slice(b"text\0\0\0\0VC\0\0");
+    edit(&mut icc);
+    icc
+}
+
+/// `inks` (four bytes a pixel) as a CMYK JPEG carrying `icc` in its `ICC_PROFILE` segments.
+fn cmyk_jpeg_with(inks: &[u8], w: u16, h: u16, icc: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut e = jpeg_encoder::Encoder::new(&mut out, 100);
+    e.add_icc_profile(icc).unwrap();
+    e.encode(inks, w, h, jpeg_encoder::ColorType::Cmyk).unwrap();
+    out
+}
+
+/// A CMYK TIFF of `w` × `h` pixels of `ink` carrying `icc` as its tag 34675 (written as Open
+/// stores a CMYK JPEG that carries one).
+fn cmyk_tiff_with(ink: [u8; 4], w: u16, h: u16, icc: &[u8]) -> ImageBlob {
+    let jpg = cmyk_jpeg_with(&flat(ink, usize::from(w) * usize::from(h)), w, h, icc);
+    let (tiff, _) = vectorcraft_doc::cmyk::turned_cmyk(&jpg, image::metadata::Orientation::NoTransforms, None).unwrap();
+    let blob = ImageBlob::new("image/tiff", tiff);
+    assert_eq!(blob.cmyk_icc_profile().as_deref(), Some(icc), "the TIFF carries the profile");
+    blob
+}
+
+/// A CMYK image whose numbers are kept is written in an ICC-based space of the CMYK profile it
+/// carries, byte for byte, when the Profiles setting or the standard includes source profiles:
+/// a TIFF written again, a JPEG kept as it is or compressed again, and an image with its mask as
+/// its soft mask. Its inks are those it had. Without source profiles it is DeviceCMYK, and a
+/// converted image never carries the profile its old numbers were in.
+#[test]
+fn a_cmyk_image_that_keeps_its_numbers_carries_its_cmyk_profile() {
+    let ink = [0u8, 102, 255, 0];
+    let icc = cmyk_profile(|_| {});
+    let tiff = cmyk_tiff_with(ink, 4, 4, &icc);
+    let tiff_inks = tiff.cmyk().unwrap().data;
+    let d = image_doc(tiff, 4, 4);
+    let export = |d: &Document, s: serde_json::Value| {
+        let out = export_with_report(d, &opts(s.clone())).unwrap_or_else(|e| panic!("{s}: {e}"));
+        let w: Vec<Written> = written(&out.bytes).into_iter().filter(|w| w.space != "DeviceGray").collect();
+        assert_eq!(w.len(), 1, "{s}: {w:?}");
+        (w.into_iter().next().unwrap(), out.bytes)
+    };
+    let tagged = |w: &Written, s: &serde_json::Value| {
+        assert_eq!((w.space.as_str(), w.icc_n), ("ICCBased", Some(4)), "{s}");
+        assert!(w.icc.as_deref() == Some(icc.as_slice()), "{s}: the image's own profile, byte for byte");
+    };
+    for s in [
+        json!({"output": {"profiles": "all"}}),
+        json!({"output": {"profiles": "taggedSource"}}),
+        json!({"standard": "pdfX4"}),
+        json!({"standard": "pdfX3"}),
+        json!({"output": {"profiles": "all", "conversion": "preserveNumbers", "destination": DEVICE_CMYK}}),
+    ] {
+        let (w, bytes) = export(&d, s.clone());
+        tagged(&w, &s);
+        assert_eq!(blobs(&import(&bytes).unwrap())[0].cmyk().unwrap().data, tiff_inks, "{s}: the inks as they were");
+    }
+    // Without source profiles, untagged; PDF/X-1a images are always DeviceCMYK.
+    for s in [json!({}), json!({"output": {"profiles": "destination"}}), json!({"standard": "pdfX1a", "output": {"profiles": "all"}})] {
+        let (w, _) = export(&d, s.clone());
+        assert!(w.icc.as_deref() != Some(icc.as_slice()), "{s}: {w:?}");
+    }
+    let (w, _) = export(&d, json!({"standard": "pdfX1a", "output": {"profiles": "all"}}));
+    assert_eq!(w.space, "DeviceCMYK");
+    // Converted to another CMYK profile: its new numbers aren't in the old profile.
+    let (w, _) = export(&d, json!({"output": {"profiles": "all", "conversion": "destination", "destination": DEVICE_CMYK}}));
+    assert!(w.icc.as_deref() != Some(icc.as_slice()), "{w:?}");
+
+    // A CMYK JPEG kept as it is carries the profile only when source profiles are included, and
+    // PDF/X-1a writes it untagged.
+    let jpg = cmyk_jpeg_with(&flat(ink, 64 * 64), 64, 64, &icc);
+    let d = image_doc(ImageBlob::new("image/jpeg", jpg.clone()), 64, 64);
+    let s = json!({"output": {"profiles": "all"}});
+    let (w, _) = export(&d, s.clone());
+    tagged(&w, &s);
+    assert!(w.data == jpg, "the JPEG data unchanged");
+    for s in [json!({"standard": "pdfX1a"}), json!({})] {
+        let (w, _) = export(&d, s.clone());
+        assert_eq!((w.space.as_str(), w.filter.as_deref()), ("DeviceCMYK", Some("DCTDecode")), "{s}");
+        assert!(w.data == jpg, "{s}: the JPEG data unchanged");
+    }
+    // Resampled and compressed again, it keeps the profile.
+    let s = json!({"output": {"profiles": "all"}, "compression": {"color": {"downsample": "bicubic", "ppi": 72.0, "abovePpi": 100.0}}});
+    let (w, bytes) = export(&d, s.clone());
+    tagged(&w, &s);
+    assert_eq!((w.width, w.filter.as_deref()), (40, Some("DCTDecode")), "{s}");
+    assert!(blobs(&import(&bytes).unwrap())[0].cmyk().unwrap().data.as_chunks::<4>().0.iter().all(|p| close(p, &ink, 3)));
+
+    // With its mask as its soft mask.
+    let mut d = masked_doc(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, false);
+    d.images.insert("img".into(), cmyk_tiff_with(ink, 2, 2, &icc));
+    let s = json!({"output": {"profiles": "all"}});
+    let (w, bytes) = export(&d, s.clone());
+    tagged(&w, &s);
+    assert!(w.smask, "{w:?}");
+    assert!(!String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "no luminosity soft mask");
+}
+
+/// A CMYK JPEG kept as it is whose header declares far more pixels than the app reads is left out
+/// with a warning, as other images that large are.
+#[test]
+fn a_kept_cmyk_jpeg_declaring_too_many_pixels_is_left_out() {
+    let mut jpg = cmyk_jpeg_with(&flat([0, 102, 255, 0], 4), 2, 2, &cmyk_profile(|_| {}));
+    // Height and width of the SOF0 segment (after its marker, length and precision): 16384 × 16384.
+    let sof = jpg.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
+    jpg[sof + 5..sof + 9].copy_from_slice(&[0x40, 0, 0x40, 0]);
+    assert_eq!(ImageBlob::new("image/jpeg", jpg.clone()).header_size(), Some((16384, 16384)));
+    let d = image_doc(ImageBlob::new("image/jpeg", jpg), 2, 2);
+    for s in [
+        json!({"compression": {"color": {"downsample": "none"}}}),
+        json!({"output": {"profiles": "all"}, "compression": {"color": {"downsample": "none"}}}),
+    ] {
+        let out = export_with_report(&d, &opts(s.clone())).unwrap();
+        assert!(written(&out.bytes).is_empty(), "{s}");
+        assert!(out.warnings.iter().any(|w| w.contains("couldn't be decoded")), "{s}: {:?}", out.warnings);
+    }
+}
+
+/// The profile each transparency group of written PDF `bytes` blends in: its ICC-based space's
+/// profile, or `None` for DeviceCMYK.
+fn group_profiles(bytes: &[u8]) -> Vec<Option<Vec<u8>>> {
+    let text = String::from_utf8_lossy(bytes);
+    let file = Pdf::new(Arc::new(bytes.to_vec())).unwrap();
+    let groups: Vec<&str> = text.split("/Group<<").skip(1).filter(|g| g.contains("/S/Transparency")).collect();
+    assert!(!groups.is_empty(), "{text}");
+    groups
+        .into_iter()
+        .map(|group| {
+            let cs = group.split("/CS").nth(1).unwrap();
+            if cs.starts_with("/DeviceCMYK") {
+                return None;
+            }
+            let cs: i32 = cs.trim_start().split(' ').next().unwrap().parse().unwrap();
+            let space = text.split(&format!("\n{cs} 0 obj\n")).nth(1).unwrap();
+            let stream: i32 = space.strip_prefix("[/ICCBased ").unwrap().split(' ').next().unwrap().parse().unwrap();
+            let profile = file.xref().get::<Stream<'_>>(craft_pdf::syntax::object::ObjectIdentifier::new(stream, 0)).unwrap();
+            Some(profile.decoded().unwrap().into_owned())
+        })
+        .collect()
+}
+
+/// Transparency in a tagged CMYK document blends in the document's CMYK profile space, not in the
+/// space of the profile a CMYK image carries, whichever the file holds first.
+#[test]
+fn tagged_cmyk_documents_blend_in_their_own_profile_beside_an_image_profile() {
+    let icc = cmyk_profile(|_| {});
+    let document = cms::icc_bytes(&cms::active_settings().cmyk).unwrap().to_vec();
+    // A transparent CMYK rectangle over the image, and the image itself transparent.
+    let mut d = image_doc(cmyk_tiff_with([0, 102, 255, 0], 4, 4, &icc), 4, 4);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)),
+        Appearance::basic(Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), Paint::None, 0.0),
+    );
+    n.opacity = 0.5;
+    let l = d.layers[0].id;
+    d.insert(Some(l), 1, n).unwrap();
+    let mut alone = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
+    alone.images.insert("img".into(), cmyk_tiff_with([0, 102, 255, 0], 4, 4, &icc));
+    let image =
+        ImageObject { key: "img".into(), width: 4, height: 4, xf: Affine::scale(10.0), link: None, placement: Default::default(), pixels: None };
+    let mut n = Node::new(alone.alloc_id(), NodeKind::Image(Box::new(image)));
+    n.opacity = 0.5;
+    let l = alone.layers[0].id;
+    alone.insert(Some(l), 0, n).unwrap();
+    for d in [d, alone] {
+        let out = export_with_report(&d, &opts(json!({"output": {"profiles": "all"}}))).unwrap();
+        let w = written(&out.bytes);
+        assert!(w.iter().any(|w| w.icc.as_deref() == Some(icc.as_slice())), "the image's own profile: {w:?}");
+        for profile in group_profiles(&out.bytes) {
+            assert!(profile.as_ref().is_none_or(|p| *p == document), "the group blends in the document's CMYK profile or DeviceCMYK");
+        }
+    }
+}
+
+/// Only a well-formed CMYK profile tags an image: one whose size, signature, class, colour space
+/// or tag table is wrong leaves it untagged.
+#[test]
+fn a_cmyk_image_with_a_malformed_profile_is_written_untagged() {
+    let tag = |icc: Vec<u8>| crate::images::cmyk_icc(&ImageBlob::new("image/jpeg", cmyk_jpeg_with(&flat([0, 102, 255, 0], 4), 2, 2, &icc)));
+    let good = cmyk_profile(|_| {});
+    assert_eq!(tag(good.clone()), Some(good));
+    let bad: [(&str, Vec<u8>); 7] = [
+        ("declared size", cmyk_profile(|i| i[0..4].copy_from_slice(&200u32.to_be_bytes()))),
+        ("signature", cmyk_profile(|i| i[36..40].copy_from_slice(b"xxxx"))),
+        ("device link class", cmyk_profile(|i| i[12..16].copy_from_slice(b"link"))),
+        ("RGB colour space", cmyk_profile(|i| i[16..20].copy_from_slice(b"RGB "))),
+        ("tag beyond the end", cmyk_profile(|i| i[136..140].copy_from_slice(&150u32.to_be_bytes()))),
+        ("table beyond the end", cmyk_profile(|i| i[128..132].copy_from_slice(&3u32.to_be_bytes()))),
+        ("header only", cmyk_profile(|i| i.truncate(100))),
+    ];
+    for (what, icc) in bad {
+        assert_eq!(tag(icc), None, "{what}");
+    }
+    // And the image is written untagged.
+    let icc = cmyk_profile(|i| i[36..40].copy_from_slice(b"xxxx"));
+    let d = image_doc(cmyk_tiff_with([0, 102, 255, 0], 4, 4, &icc), 4, 4);
+    let out = export_with_report(&d, &opts(json!({"output": {"profiles": "taggedSource"}}))).unwrap();
+    let w = written(&out.bytes);
+    assert_eq!((w.len(), w[0].space.as_str()), (1, "DeviceCMYK"), "{w:?}");
+}
+
 /// A Press Quality export of a 2 × 2 CMYK image masked by PNG `mask` on its own pixel grid
 /// (`clip`, `invert`): the file, and the decoded soft mask of each CMYK image (`None`: it has none).
 fn export_masked(mask: Vec<u8>, clip: bool, invert: bool) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
+    export_smasks(&masked_doc(mask, clip, invert))
+}
+
+/// A document of a 2 × 2 CMYK image masked by PNG `mask` (key `alpha`) on its own pixel grid.
+fn masked_doc(mask: Vec<u8>, clip: bool, invert: bool) -> Document {
     let ink = [0u8, 102, 255, 0];
     let mut d = Document::new_with_mode(100.0, 100.0, ColorMode::Cmyk);
     d.images.insert("img".into(), ImageBlob::cmyk_tiff(&Inks::new(2, 2, flat(ink, 4)).unwrap()).unwrap());
@@ -400,8 +697,14 @@ fn export_masked(mask: Vec<u8>, clip: bool, invert: bool) -> (Vec<u8>, Vec<Optio
     let n = Node::new(d.alloc_id(), image("img")).with_mask(Some(Box::new(mask)));
     let l = d.layers[0].id;
     d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+/// A Press Quality export of `d`: the file, and the decoded soft mask of each CMYK image (`None`:
+/// it has none).
+fn export_smasks(d: &Document) -> (Vec<u8>, Vec<Option<Vec<u8>>>) {
     let press = builtin_presets().into_iter().find(|p| p.name == "Press Quality").unwrap().settings;
-    let out = export_with_report(&d, &PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() }).unwrap();
+    let out = export_with_report(d, &PdfOptions { settings: press, created: Some(1_700_000_000), ..Default::default() }).unwrap();
     let file = Pdf::new(Arc::new(out.bytes.clone())).unwrap();
     let smasks = file
         .objects()
@@ -438,6 +741,34 @@ fn a_cmyk_image_masked_by_a_grey_image_of_its_grid_writes_it_as_its_smask() {
     let (bytes, smasks) = export_masked(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, true);
     assert_eq!(smasks, [None]);
     assert!(String::from_utf8_lossy(&bytes).contains("/S/Luminosity"), "a luminosity soft mask");
+}
+
+/// A grey mask image with a color mask masks the CMYK image with the pixels it shows: its hidden
+/// pixels are clear in the image's `/SMask`.
+#[test]
+fn a_color_masked_grid_mask_image_writes_the_pixels_it_shows_as_the_smask() {
+    let mut d = masked_doc(png(image::GrayImage::from_raw(2, 2, vec![255, 128, 0, 64]).unwrap()), true, false);
+    // The last pixel hidden.
+    d.images.insert(
+        "shown".into(),
+        ImageBlob::new("image/png", png(image::GrayAlphaImage::from_raw(2, 2, vec![255, 255, 128, 255, 0, 255, 64, 0]).unwrap())),
+    );
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut mask = d.node(id).unwrap().extras().mask.clone().unwrap();
+    let art = std::sync::Arc::make_mut(&mut mask.art);
+    art.extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
+        key: "shown".into(),
+        from: "alpha".into(),
+        background: vectorcraft_doc::color_mask::MaskBackground::Colors,
+        colors: vec![[64, 64, 64]],
+        contiguous: false,
+        measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+        tolerance: 0.0,
+        softness: 0.0,
+    }));
+    d.node_mut(id).unwrap().extras_mut().mask = Some(mask);
+    let (_, smasks) = export_smasks(&d);
+    assert_eq!(smasks, [Some(vec![255, 128, 0, 0])]);
 }
 
 /// A pixelated CMYK image (an envelope's with Anti-Alias off) masked by a grey image of its grid
@@ -576,6 +907,26 @@ fn dithered_and_perceptual_gradients_of_cmyk_stops_are_written_as_cmyk_images() 
     let w = written(&export_with_report(&d, &opts(json!({"output": {"conversion": "destination", "destination": SRGB}}))).unwrap().bytes);
     assert_eq!(w.len(), 1, "{w:?}");
     assert_ne!(w[0].space, "DeviceCMYK", "converted to RGB");
+}
+
+/// The colors between two stops mixed around the hue wheel are not mixes of the stops' inks: a
+/// gradient of CMYK stops mixed that way is an RGB image, in a linear, radial, conic or diamond
+/// gradient.
+#[test]
+fn hue_wheel_gradients_of_cmyk_stops_are_written_as_rgb_images() {
+    for method in [GradientMethod::HueClockwise, GradientMethod::HueCounterclockwise] {
+        for mode in [ColorMode::Cmyk, ColorMode::Rgb] {
+            for kind in [GradientKind::Linear, GradientKind::Radial, GradientKind::Conic, GradientKind::Diamond] {
+                let stops = vec![GradientStop::new(0.0, Color::cmyk(0.0, 1.0, 1.0, 0.0)), GradientStop::new(1.0, Color::cmyk(1.0, 1.0, 0.0, 0.0))];
+                let d = gradient_doc(mode, Gradient { method, ..Gradient::new(kind, stops) });
+                let out = export_with_report(&d, &opts(json!({}))).unwrap();
+                let w = written(&out.bytes);
+                assert_eq!(w.len(), 1, "{method:?} {mode:?} {kind:?}: one opaque image: {w:?}");
+                assert_eq!(w[0].space, "DeviceRGB", "{method:?} {mode:?} {kind:?}");
+                assert!(out.warnings.iter().any(|m| m.contains("exported as images")), "{method:?} {mode:?} {kind:?}: {:?}", out.warnings);
+            }
+        }
+    }
 }
 
 /// A stop in another model, or linked to a spot swatch, keeps the RGB image.

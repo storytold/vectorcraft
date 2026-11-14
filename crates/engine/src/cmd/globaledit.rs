@@ -20,6 +20,9 @@
 //!   and they lie the same way relative to each other: the group as a whole is moved or scaled.
 //!   With Appearance on, each of those objects must have the same fill and stroke too; with Size,
 //!   the groups the same width and height.
+//! - Selecting one of the repeated objects with the Selection tool highlights the similar objects
+//!   at once, before Global Edit starts. Here they are the objects Start Global Edit would take
+//!   with the current Global Edit Options ([`similar`]).
 //! - While Global Edit is on, an edit made to one of the found objects is made to all of them,
 //!   each in proportion to its own size: halving the height of a 100 pt object halves a 20 pt
 //!   match to 10 pt. Stop Global Edit (or Escape) ends it.
@@ -45,6 +48,10 @@
 //!   former order gains the same item at the same place (or loses the one at that place). A
 //!   member with another order, and any other change to the list (items moved, or several added
 //!   or removed at once), takes the model's whole list of fills and strokes.
+//!
+//! A path directly in a graph series that takes an edit from another member (a graph's paths are
+//! members only while the graph is isolated) also has what changed stored on its graph, so that
+//! every path of the series takes it when the graph is drawn again (docs/mcp.md).
 //!
 //! Members that are hidden or locked at the time are left as they are. An edit that would take any
 //! member past the canvas (beyond [`vectorcraft_doc::MAX_COORD`]) is refused whole, as one that
@@ -429,15 +436,23 @@ fn can_toggle(s: &Session) -> std::result::Result<(), String> {
     let [id] = st.selection.objects.as_slice() else {
         return Err(if st.selection.is_empty() { "nothing selected" } else { "select one object" }.into());
     };
-    // A group's contents are checked when Global Edit starts: measuring them here would walk
-    // every object in it each time the menu or the Properties panel asks. Other objects are
-    // measured ([`supported`]), not reduced to their form: the Control bar asks every frame.
-    match st.doc.node(*id) {
-        Some(n) if n.extras().mask.is_none() && plain_group(n) => Ok(()),
-        Some(n) if supported(n) => Ok(()),
-        _ => Err(UNSUPPORTED.into()),
-    }
+    // The object, a group's contents included, is measured ([`supported`]), not reduced to its
+    // form, and the answer is kept until the document's revision moves: the Control bar asks
+    // every frame, and a group's walk takes time with the anchors in it.
+    let ok = match st.global_edit_support.get() {
+        Some((rev, key, ok)) if rev == st.revision && key == *id => ok,
+        _ => {
+            let ok = st.doc.node(*id).is_some_and(supported);
+            st.global_edit_support.set(Some((st.revision, *id, ok)));
+            ok
+        }
+    };
+    if ok { Ok(()) } else { Err(UNSUPPORTED.into()) }
 }
+
+/// [`can_toggle`]'s answer for the one selected object: the revision and the object it was found
+/// for, and whether Global Edit supports it.
+pub type SupportCache = std::cell::Cell<Option<(u64, NodeId, bool)>>;
 
 fn toggle(s: &mut Session, p: &Value) -> Result<Value> {
     if s.doc()?.global_edit.is_some() {
@@ -775,23 +790,73 @@ pub(crate) fn propagate(before: &Document, d: &mut Document, ge: &GlobalEdit, se
         }
         super::object::keep_compound_aligned(d, *id, Scaling::default());
     }
+    keep_series_changes(before, d, &edited);
     edited
+}
+
+/// Store on their graphs what the members `edited`, and the objects in them, took on the paths directly in a graph
+/// series, for the graph's next redraw. The edited member is left to the edit's own command.
+fn keep_series_changes(before: &Document, d: &mut Document, edited: &[NodeId]) {
+    let mut taken = vec![];
+    for id in edited {
+        if let Some(n) = d.node(*id) {
+            n.walk(&mut |c: &Node| taken.push(c.id));
+        }
+    }
+    super::appearance::capture_series_changes(before, d, &taken);
 }
 
 /// The outlines of the members of the active document's Global Edit that are not selected, hold
 /// no selected object and sit inside no selected object, in their layer's colour: the canvas
-/// highlights them while Global Edit is on.
+/// highlights them while Global Edit is on. While it is off, with one supported object selected,
+/// they are the outlines of the objects Start Global Edit would take with the Global Edit Options
+/// ([`similar`]).
 pub fn highlights(s: &Session) -> Outlines {
     let Some(st) = s.active() else { return vec![] };
-    let Some(ge) = &st.global_edit else { return vec![] };
+    let Some(ge) = &st.global_edit else { return similar(s) };
     if let Some((rev, out)) = &*ge.outlines.borrow()
         && *rev == st.revision
     {
         return out.clone();
     }
+    let out = outlines(st, &ge.members);
+    *ge.outlines.borrow_mut() = Some((st.revision, out.clone()));
+    out
+}
+
+/// [`similar`]'s outlines as of a document revision and the options they were found with.
+pub type SimilarCache = std::cell::RefCell<Option<(u64, Options, Outlines)>>;
+
+/// Before Global Edit starts: with one supported object selected, the outlines of the other
+/// objects Start Global Edit would take now with the session's Global Edit Options, so the canvas
+/// shows them as soon as the object is selected. None while an interaction (a drag) is in
+/// progress, or when fewer than two objects would be taken. Kept per document revision and
+/// options, as finding them walks the whole document.
+pub fn similar(s: &Session) -> Outlines {
+    let Some(st) = s.active() else { return vec![] };
+    if st.global_edit.is_some() || st.interaction.is_some() || st.selection.objects.len() != 1 {
+        return vec![];
+    }
+    let o = &s.global_edit_options;
+    if let Some((rev, opts, out)) = &*st.similar_outlines.borrow()
+        && *rev == st.revision
+        && opts == o
+    {
+        return out.clone();
+    }
+    let out = match matches(s, o) {
+        Ok(m) if m.len() >= 2 => outlines(st, &m),
+        _ => vec![],
+    };
+    *st.similar_outlines.borrow_mut() = Some((st.revision, o.clone(), out.clone()));
+    out
+}
+
+/// The outlines of `members` that are not selected, hold no selected object and sit inside no
+/// selected object, in their layer's color.
+fn outlines(st: &crate::DocState, members: &[(NodeId, Affine)]) -> Outlines {
     let symbols = st.doc.symbol_boxes();
-    let out: Vec<_> = ge
-        .members
+    members
         .iter()
         .filter_map(|(id, _)| {
             let n = st.doc.node(*id).filter(|n| !holds(n, &st.selection.objects))?;
@@ -804,9 +869,7 @@ pub fn highlights(s: &Session) -> Outlines {
             };
             Some((path, st.doc.layer_color(*id)))
         })
-        .collect();
-    *ge.outlines.borrow_mut() = Some((st.revision, out.clone()));
-    out
+        .collect()
 }
 
 #[cfg(test)]
@@ -951,8 +1014,7 @@ mod tests {
                 continue;
             }
             asked += 1;
-            let today = n.extras().mask.is_none() && plain_group(&n) || by_form(&n);
-            assert_eq!(can_toggle(&s).is_ok(), today, "seed {seed}");
+            assert_eq!(can_toggle(&s).is_ok(), by_form(&n), "seed {seed}");
             match s.execute(C, &json!({})) {
                 Ok(_) => {
                     assert!(by_form(&n), "seed {seed}");

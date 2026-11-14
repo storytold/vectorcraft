@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_color::{BlendMode, Color, GradientKind, GradientPaint, Paint};
+use vectorcraft_color::{BlendMode, Color, GradientGeom, GradientKind, GradientPaint, Paint};
 use vectorcraft_doc::{AppearanceItem, CharStyle, Document, Justify, LineCap, LiveShape, Node, NodeId, NodeKind, StrokeAlign, StrokeLayer, TextKind};
 use vectorcraft_effects::RasterFx;
 use vectorcraft_geom::shapes::{self, CornerKind};
@@ -177,11 +177,18 @@ pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
         .iter()
         .map(|t| match t.strip_prefix('-') {
             Some(off) => (off, 0),
-            None => (t.as_str(), 1),
+            // `tag=N` picks the font's alternate N: CSS takes the number as the feature's value.
+            None => {
+                let on = t.strip_prefix('+').unwrap_or(t);
+                match on.split_once('=').map(|(tag, n)| (tag, n.parse::<u32>())) {
+                    Some((tag, Ok(n))) => (tag, n),
+                    _ => (on, 1),
+                }
+            }
         })
         // A feature tag is four letters or digits: anything else could end the CSS string.
         .filter(|(tag, _)| tag.len() == 4 && tag.bytes().all(|b| b.is_ascii_alphanumeric()))
-        .map(|(tag, on)| format!("\"{tag}\" {on}"))
+        .map(|(tag, value)| format!("\"{tag}\" {value}"))
         .collect();
     // Proportional Metrics: `palt` (SVG writes vertical type as outlines).
     if st.proportional_metrics {
@@ -197,6 +204,14 @@ pub(crate) fn type_props(st: &CharStyle, len: &dyn Fn(f64) -> String) -> Props {
         _ => {}
     }
     p
+}
+
+/// The decimals, at least `least` and at most 12, for numbers that place a period of length
+/// `period` repeated out to `reach` (in the same units): each period then rounds by at most
+/// 10^-decimals, and over the `reach / period` periods that adds up to at most a hundredth of one.
+fn period_decimals(period: f64, reach: f64, least: u8) -> u8 {
+    let d = (100.0 * reach / (period * period)).log10().ceil();
+    if d.is_nan() || d == f64::INFINITY { 12 } else { d.clamp(f64::from(least), 12.0) as u8 }
 }
 
 /// A colour at `opacity`: `#rrggbb` when opaque, else `rgba()`.
@@ -240,13 +255,22 @@ impl CssUnits {
 
     /// `points` in these units (`0` without a unit).
     fn len(self, points: f64) -> String {
-        let per_point = match self {
+        self.len_to(points, 3)
+    }
+
+    /// One point in these units.
+    fn per_point(self) -> f64 {
+        match self {
             CssUnits::Px | CssUnits::Pt => 1.0,
             CssUnits::Mm => 25.4 / 72.0,
             CssUnits::Cm => 2.54 / 72.0,
             CssUnits::In => 1.0 / 72.0,
-        };
-        match fmt_num(points * per_point, 3) {
+        }
+    }
+
+    /// [`Self::len`] with `decimals` decimals.
+    fn len_to(self, points: f64, decimals: u8) -> String {
+        match fmt_num(points * self.per_point(), decimals) {
             zero if zero == "0" => zero,
             v => format!("{v}{}", self.name()),
         }
@@ -555,13 +579,41 @@ impl Rules<'_> {
         }
     }
 
-    /// A linear, radial or conic gradient over `b` at `opacity`, with the stops SVG export writes
-    /// (midpoints as stops of their own). `None` for freeform gradients.
+    /// A linear, radial, conic or diamond gradient over `b` at `opacity`, with the stops SVG export
+    /// writes (midpoints as stops of their own). `None` for freeform gradients.
     fn gradient(&mut self, g: &GradientPaint, b: Rect, opacity: f32) -> Option<String> {
         let geom = g.resolve(b);
-        let stops = |pos: &dyn Fn(f32) -> f64| {
+        // A linear, radial or diamond gradient that repeats or reflects: a repeating gradient of
+        // one cycle (a run, or a run and its mirror) over that cycle's placement
+        // (https://www.w3.org/TR/css-images-3/#repeating-gradients). A conic one: its stops
+        // repeated around the turn.
+        let kind = g.gradient.kind;
+        let unrolled = g.gradient.unrolled();
+        let (gradient, geom, repeating) = match g.gradient.cycle() {
+            Some((cycle, runs)) if kind != GradientKind::Conic => {
+                // CSS radials start at their center: the cycle is scaled about it.
+                let centered = GradientGeom { focal: None, ..geom };
+                let cycle_geom = centered.period(kind, g.gradient.repeat_count()).levels_scaled(kind, f64::from(runs));
+                let geom = GradientGeom { focal: geom.focal, ..cycle_geom };
+                (std::borrow::Cow::Owned(cycle), geom, "repeating-")
+            }
+            _ => (unrolled, geom, ""),
+        };
+        // A repeating gradient's period is the span from its first stop to its last, repeated
+        // across the box (from 0% to `reach`%): its positions get at least four decimals, and more
+        // when the box holds so many periods that their rounding would add up to more than a
+        // hundredth of one ([`period_decimals`]).
+        let span = gradient.expanded().next().zip(gradient.expanded().last()).map(|(a, z)| (a.0, z.0));
+        let decimals = |pos: &dyn Fn(f32) -> f64, reach: f64| match span {
+            Some((a, z)) if !repeating.is_empty() => {
+                let (p0, p1) = (pos(a) * 100.0, pos(z) * 100.0);
+                period_decimals((p1 - p0).abs(), p0.abs().max((reach - p0).abs()), 4)
+            }
+            _ => 2,
+        };
+        let stops = |pos: &dyn Fn(f32) -> f64, decimals: u8| {
             let stops: Vec<String> =
-                g.gradient.expanded().map(|(t, c, o, _)| format!("{} {}%", color_css(&c, o * opacity), fmt_num(pos(t) * 100.0, 2))).collect();
+                gradient.expanded().map(|(t, c, o, _)| format!("{} {}%", color_css(&c, o * opacity), fmt_num(pos(t) * 100.0, decimals))).collect();
             stops.join(", ")
         };
         match g.gradient.kind {
@@ -578,20 +630,40 @@ impl Rules<'_> {
                 let line = (b.width() * dir.x).abs() + (b.height() * dir.y).abs();
                 let from = (geom.start - b.center()).dot(dir);
                 let pos = |t: f32| if line > 1e-9 { (from + t as f64 * length) / line + 0.5 } else { t as f64 };
-                Some(format!("linear-gradient({}deg, {})", fmt_num(angle, 2), stops(&pos)))
+                Some(format!("{repeating}linear-gradient({}deg, {})", fmt_num(angle, 2), stops(&pos, decimals(&pos, 100.0))))
             }
-            GradientKind::Radial => {
+            // CSS has no diamond gradient: the ellipse through the square's corners stands in.
+            GradientKind::Radial | GradientKind::Diamond => {
                 let r = (geom.end - geom.start).hypot();
-                if geom.focal.is_some() {
+                if g.gradient.kind == GradientKind::Diamond {
+                    self.warn("diamond gradients are written as radial gradients through their corners");
+                } else if geom.focal.is_some() {
                     self.warn("radial gradients start at their centre (an off-centre focal point is left out)");
                 }
+                // The positions are a share of the radius, and the box reaches out to its farthest
+                // corner. A repeating gradient's period scales with its radius, so the radius gets
+                // the decimals that keep the periods in place out to that corner too.
+                let units = self.opts.units;
+                let small = r * geom.aspect.abs().min(1.0);
+                let far = [(b.x0, b.y0), (b.x1, b.y0), (b.x0, b.y1), (b.x1, b.y1)]
+                    .into_iter()
+                    .map(|(x, y)| (Point::new(x, y) - geom.start).hypot())
+                    .fold(0.0, f64::max);
+                let reach = if small > 1e-12 { 100.0 * far / small } else { 0.0 };
+                let pos = |t: f32| t as f64;
+                let len = match span {
+                    Some((a, z)) if !repeating.is_empty() => {
+                        period_decimals(small * f64::from(z - a).abs() * units.per_point(), far * units.per_point(), 3)
+                    }
+                    _ => 3,
+                };
                 let shape = if (geom.aspect - 1.0).abs() < 1e-9 {
-                    format!("circle {}", self.len(r))
+                    format!("circle {}", units.len_to(r, len))
                 } else {
-                    format!("ellipse {} {}", self.len(r), self.len(r * geom.aspect))
+                    format!("ellipse {} {}", units.len_to(r, len), units.len_to(r * geom.aspect, len))
                 };
                 let at = format!("at {} {}", self.len(geom.start.x - b.x0), self.len(geom.start.y - b.y0));
-                Some(format!("radial-gradient({shape} {at}, {})", stops(&|t| t as f64)))
+                Some(format!("{repeating}radial-gradient({shape} {at}, {})", stops(&pos, decimals(&pos, reach))))
             }
             GradientKind::Conic => {
                 // CSS sweeps clockwise from the `from` angle, 0deg straight up
@@ -604,7 +676,7 @@ impl Rules<'_> {
                 if (geom.aspect.abs() - 1.0).abs() > 1e-9 && geom.unit_frame().is_some() {
                     self.warn("conic gradients are written circular (an elliptical sweep is left out)");
                 }
-                let mut stops: Vec<(f32, Color, f32)> = g.gradient.expanded().map(|(t, c, o, _)| (t, c, o)).collect();
+                let mut stops: Vec<(f32, Color, f32)> = gradient.expanded().map(|(t, c, o, _)| (t, c, o)).collect();
                 if geom.is_mirrored() {
                     stops.reverse();
                     stops.iter_mut().for_each(|s| s.0 = 1.0 - s.0);

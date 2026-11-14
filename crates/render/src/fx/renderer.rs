@@ -381,7 +381,8 @@ impl Renderer {
             return;
         }
         let gctx = GeomContext { doc: Some(f.symbols.document()), ..GeomContext::of(paints) };
-        let rfx = effects::raster_effects(&n.appearance.effects);
+        // `paints` hides the Transform effects that did not move `g`.
+        let rfx = effects::raster_effects(&paints.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
         let reach = g.bounding_box().inflate(outset, outset);
@@ -662,14 +663,20 @@ impl Renderer {
         // shortcut: art kept by `fx_arts` isn't made again when only a swatch's kind (spot or
         // process) changes, which Duotone reads; editing the object makes it again.
         let swatches = |name: &str| effects::addons::duotone::swatch_kind(doc, name);
-        let adjusted = effects::adjust(&art, outer, &swatches, &mut |key, map| {
-            let mut h = std::hash::DefaultHasher::new();
-            std::hash::Hash::hash(&format!("{map:?}"), &mut h);
-            let hash = std::hash::Hasher::finish(&h);
-            let derived = format!("{key}\u{0}adjust\u{0}{hash:016x}");
-            wanted.push((key.to_string(), derived.clone(), hash, map.clone()));
-            Some(derived)
-        });
+        let adjusted = effects::adjust(
+            &art,
+            outer,
+            &swatches,
+            &mut |key, map| {
+                let mut h = std::hash::DefaultHasher::new();
+                std::hash::Hash::hash(&format!("{map:?}"), &mut h);
+                let hash = std::hash::Hasher::finish(&h);
+                let derived = format!("{key}\u{0}adjust\u{0}{hash:016x}");
+                wanted.push((key.to_string(), derived.clone(), hash, map.clone()));
+                Some(derived)
+            },
+            &|key| doc.images.contains_key(key),
+        );
         for (key, derived, hash, map) in wanted {
             self.adjusted_image(&key, derived, hash, &map);
         }
@@ -920,12 +927,18 @@ impl Renderer {
     }
 }
 
-/// `n` with the gradients of its fills and strokes moved along with its effects by `carry`, or
-/// `None` when they stay where they are.
+/// `n` with the gradients of its fills and strokes moved along with its effects by `carry`, and
+/// the Transform effects the geometry pass left out hidden ([`effects::Carry::hide_skipped`]), so
+/// its raster effects and those of its fills and strokes stay with its art; `None` when it stays
+/// as it is.
 fn carried(n: &Node, carry: &effects::Carry) -> Option<Arc<Node>> {
-    carry.moves(&n.appearance).then(|| {
+    let moves = carry.moves(&n.appearance);
+    (moves || carry.skipped()).then(|| {
         let mut m = n.clone();
-        carry.apply(&mut m.appearance);
+        if moves {
+            carry.apply(&mut m.appearance);
+        }
+        carry.hide_skipped(&mut m.appearance.effects);
         Arc::new(m)
     })
 }
@@ -936,6 +949,42 @@ mod tests {
     use crate::RenderOptions;
     use vectorcraft_color::Color;
     use vectorcraft_doc::{Document, color::BlendMode};
+
+    /// The node a path is painted from hides a Transform effect left out past the effect budget,
+    /// so the drop shadow before it is drawn with its own offset and blur, as the art stays.
+    #[test]
+    fn a_path_paints_from_the_transforms_that_moved_it() {
+        use vectorcraft_geom::{Anchor, PathData, Point, SubPath};
+        let anchors = (0..=30_000)
+            .map(|i| {
+                let x = 2.0 * f64::from(i);
+                Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+            })
+            .collect();
+        let path = PathData::single(SubPath::new(anchors, true));
+        let mut n = Node::path(
+            vectorcraft_doc::NodeId(1),
+            path.clone(),
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vectorcraft_color::Paint::None, 0.0),
+        );
+        n.appearance.effects = vec![
+            vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 10, "y": 5, "blur": 4}), visible: true },
+            vectorcraft_doc::Effect {
+                id: "distort.transform".into(),
+                params: serde_json::json!({"scaleH": 100000, "scaleV": 100000}),
+                visible: true,
+            },
+        ];
+        let doc = Document::new(100.0, 100.0);
+        let bp = path.to_bezpath();
+        let (g, carry) = effected_path_carrying(&doc, &n, &bp);
+        assert_eq!(g.bounding_box(), bp.bounding_box(), "the art stays where it is");
+        let paints = carried(&n, &carry).expect("the Transform effect is hidden");
+        match effects::raster_effects(&paints.appearance.effects).first() {
+            Some(RasterFx::DropShadow { dx, dy, blur, .. }) => assert!((*dx, *dy, *blur) == (10.0, 5.0, 4.0), "{dx} {dy} {blur}"),
+            other => panic!("expected a drop shadow, got {other:?}"),
+        }
+    }
 
     #[test]
     fn uncached_darkness_shadow_subtracts_before_separate_opacity() {

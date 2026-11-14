@@ -79,6 +79,35 @@ fn a_butt_capped_open_path_is_measured_where_it_paints() {
 }
 
 #[test]
+fn beveled_corners_are_measured_where_they_paint() {
+    let mut tip = BezPath::new();
+    tip.move_to((0.0, 100.0));
+    tip.line_to((20.0, 0.0));
+    tip.line_to((40.0, 100.0));
+    tip.close_path();
+    let mut chevron = BezPath::new();
+    chevron.move_to((0.0, 100.0));
+    chevron.line_to((20.0, 0.0));
+    chevron.line_to((40.0, 100.0));
+    // A rectangle with no width turns back at its top and bottom.
+    let flat = vectorcraft_geom::shapes::rectangle(Rect::new(3.0, 100.0, 3.0, 150.0)).to_bezpath();
+    let ps = paths();
+    for (name, bp) in [("tip", &tip), ("chevron", &chevron), ("zigzag", &ps[1]), ("triangle", &ps[2]), ("flat", &flat)] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            for (join, limit) in [(LineJoin::Bevel, 10.0), (LineJoin::Miter, 1.0), (LineJoin::Miter, 2.0), (LineJoin::Miter, 10.0)] {
+                let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 20.0);
+                (st.cap, st.join, st.miter_limit) = (cap, join, limit);
+                let painted = outline_region(&PathData::from_bezpath(bp), FillRule::NonZero, &st).to_bezpath().bounding_box();
+                let bounds = st.bounds_on(bp, bp.bounding_box());
+                for (got, want) in [(bounds.x0, painted.x0), (bounds.y0, painted.y0), (bounds.x1, painted.x1), (bounds.y1, painted.y1)] {
+                    assert!((got - want).abs() < 0.05, "{name} {cap:?} {join:?} {limit}: measured {bounds:?}, paints {painted:?}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn bounds_and_clicks_cover_what_every_stroke_paints() {
     let profiles = [None, Some(WidthProfile::lens()), Some(WidthProfile { points: vec![(0.0, 2.0, 0.5), (0.6, 0.8, 1.6), (1.0, 1.2, 0.3)] })];
     for (pi, bp) in paths().iter().enumerate() {
@@ -99,14 +128,27 @@ fn bounds_and_clicks_cover_what_every_stroke_paints() {
     }
 }
 
+/// Custom heads: one wholly behind its tip, and a long one reaching as far in front of its tip as
+/// behind it (its tip sits halfway along it past the end point with Extend).
+fn custom_heads() -> Vec<Arrowhead> {
+    use vectorcraft_geom::{Point as P, SubPath};
+    let head = |name: &str, pts: &[(f64, f64)]| {
+        let pts: Vec<P> = pts.iter().map(|&(x, y)| P::new(x, y)).collect();
+        let path = PathData::single(SubPath::polyline(&pts, true));
+        Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new(name.into(), path)))
+    };
+    vec![head("Wedge", &[(0.0, 0.0), (3.0, 2.0), (3.0, -1.0)]), head("Spindle", &[(-10.0, 0.0), (0.0, 2.0), (10.0, 0.0), (0.0, -2.0)])]
+}
+
 #[test]
 fn bounds_and_clicks_cover_every_arrowhead() {
     let bp = &paths()[0];
-    for kind in Arrowhead::ALL {
+    for kind in Arrowhead::ALL.into_iter().chain(custom_heads()) {
         for align in [ArrowAlign::Extend, ArrowAlign::Tip] {
             for (scale, cap) in [(50.0, LineCap::Round), (100.0, LineCap::Butt), (300.0, LineCap::Square)] {
                 let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 3.0);
-                (st.start_arrow, st.end_arrow, st.arrow_align, st.arrow_scale, st.cap) = (Some(kind), Some(kind), align, (scale, scale), cap);
+                (st.start_arrow, st.end_arrow, st.arrow_align, st.arrow_scale, st.cap) =
+                    (Some(kind.clone()), Some(kind.clone()), align, (scale, scale), cap);
                 check(bp, &st, &format!("{kind:?} {align:?} {scale}%"));
             }
         }

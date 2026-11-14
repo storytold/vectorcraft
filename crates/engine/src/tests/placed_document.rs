@@ -1042,6 +1042,57 @@ fn saving_a_document_refreshes_its_placed_copies_inside_symbols_and_patterns() {
     assert_eq!(hashes, [hash.clone(), hash], "the symbol's, then the pattern's");
 }
 
+/// Saving a document reads it again for its placed copy in the art of a stored brush of another
+/// open document, the only place that document shows it.
+#[test]
+fn saving_a_document_refreshes_its_placed_copy_in_a_stored_brush() {
+    let dir = Folder::new("placed-refresh-brush");
+    let src = dir.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.execute("brush.new", &json!({"type": "scatter", "name": "Logos", "ids": [id.0]})).unwrap();
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let parent = s.active_index().unwrap();
+    s.execute("document.open", &json!({"path": src})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#1414e6"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+    let hash = Some(vectorcraft_doc::links::hash_bytes(&std::fs::read(&src).unwrap()));
+    let doc = &s.documents()[parent];
+    assert_eq!(doc.history.undo.last().unwrap().label, "Update Links");
+    let brush = vectorcraft_brush::find(&doc.doc, "Logos").unwrap();
+    let mut hashes = vec![];
+    brush.art()[0].walk(&mut |n| {
+        if let NodeKind::PlacedDocument(p) = &n.kind {
+            hashes.push(p.link.hash.clone());
+        }
+    });
+    assert_eq!(hashes, [hash]);
+}
+
+/// A placed document kept only in a stored brush's art, whose file is gone and of which the
+/// document holds only the preview, is output as its preview with the warning that says so.
+#[test]
+fn a_placed_document_in_a_stored_brush_without_its_file_is_output_as_its_preview() {
+    let dir = Folder::new("placed-brush-preview");
+    let src = dir.file("logo.vectorcraft");
+    // Content of its own: files read are cached by content, and this one is removed.
+    source(&src, 100.0, 50.0, RED, 3);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    s.execute("brush.new", &json!({"type": "scatter", "name": "Logos", "ids": [id.0]})).unwrap();
+    // The copy in the layers has the save keep only the preview.
+    let doc_path = dir.file("poster.vectorcraft");
+    save(&mut s, &doc_path);
+    std::fs::remove_file(&src).unwrap();
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"].as_array().map(Vec::len), Some(1), "{r}");
+    s.execute("edit.clear", &json!({"ids": [id.0]})).unwrap();
+    let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+    assert!(svg["warnings"].to_string().contains("1 placed document output as its preview"), "{svg}");
+}
+
 #[test]
 fn link_info_gives_the_artboards_size_not_pixels() {
     let dir = Folder::new("placed-info");
@@ -1058,6 +1109,135 @@ fn link_info_gives_the_artboards_size_not_pixels() {
         (Some("ok"), Some("logo.vectorcraft"), json!([200.0, 200.0])),
         "{i}"
     );
+}
+
+/// A confined caller's Link Info of a placed document whose file is outside its read roots has no
+/// `link`, `path` or `location`, and keeps the file's name.
+#[test]
+fn link_info_leaves_out_a_placed_documents_path_outside_the_read_roots() {
+    let away = Folder::new("placed-lrr-away");
+    let home = Folder::new("placed-lrr-home");
+    let src = away.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[]).unwrap().unwrap();
+    let i = crate::file_access::confine(Some(&roots), || s.execute("links.info", &json!({"id": id.0}))).unwrap();
+    assert!(!i.to_string().contains("placed-lrr-away"), "{i}");
+    assert_eq!(
+        (i["fileName"].as_str(), i["document"].as_bool(), i["status"].as_str()),
+        (Some("logo.vectorcraft"), Some(true), Some("missing")),
+        "{i}"
+    );
+    let l = crate::file_access::confine(Some(&roots), || s.execute("links.list", &json!({}))).unwrap();
+    assert!(!l.to_string().contains("placed-lrr-away") && l["links"][0]["name"] == "logo.vectorcraft", "{l}");
+    let i = s.execute("links.info", &json!({"id": id.0})).unwrap();
+    assert_eq!((&i["link"], &i["path"]), (&json!(src), &json!(src)), "unconfined: {i}");
+}
+
+/// `document.inspect` and `document.json` for a confined caller: the document's file, a placed
+/// document and a linked image outside the read roots are not named by path, and the document
+/// keeps its links.
+#[test]
+fn document_replies_leave_out_paths_outside_the_read_roots() {
+    let away = Folder::new("doc-lrr-away");
+    let home = Folder::new("doc-lrr-home");
+    let src = away.file("logo.vectorcraft");
+    source(&src, 100.0, 50.0, RED, 0);
+    let pic = away.file("photo.png");
+    write(&pic, &crate::tests_links::png(60, 30, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &src);
+    let r = s.execute("file.place", &json!({"path": pic, "at": [50, 50]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    s.execute("variable.define", &json!({"name": "Photo", "kind": "image"})).unwrap();
+    s.execute("dataset.new", &json!({"name": "Row", "values": {"Photo": pic}})).unwrap();
+    let image = r["ids"][0].as_u64().unwrap();
+    // A linked JavaScript file outside the read roots, and one given as a URL.
+    let script = away.file("menu.js");
+    write(&script, b"void 0;");
+    let url = "https://example.com/scripts/menu.js";
+    for file in [script.as_str(), url] {
+        s.execute("svgInteractivity.addFile", &json!({"file": file})).unwrap();
+    }
+    let poster = away.file("poster.vectorcraft");
+    save(&mut s, &poster);
+    // The folder Export for Screens wrote to, and a pattern of the linked image being edited: its
+    // definition before editing is kept beside the tile art.
+    let out = away.file("out");
+    s.execute("document.exportForScreens", &json!({"folder": out, "formats": [{"format": "svg"}]})).unwrap();
+    let pattern = s.execute("object.pattern.make", &json!({"ids": [image], "edit": false})).unwrap()["name"].clone();
+    s.execute("object.pattern.edit", &json!({"name": pattern})).unwrap();
+    assert!(s.doc().unwrap().doc.pattern_edit.as_ref().is_some_and(|e| e.original.is_some()));
+    let ask = |s: &mut Session, root: &std::path::Path, cmd: &str| {
+        let roots = crate::file_access::AutomationRoots::new(&[root], &[]).unwrap().unwrap();
+        crate::file_access::confine(Some(&roots), || s.execute(cmd, &json!({}))).unwrap()
+    };
+    let inspect = ask(&mut s, &home.0, "document.inspect");
+    assert!(!inspect.to_string().contains("doc-lrr-away"), "{inspect}");
+    assert!(inspect["path"].is_null() && inspect["uid"].is_u64(), "{inspect}");
+    let model = ask(&mut s, &home.0, "document.json").to_string();
+    assert!(!model.contains("doc-lrr-away"), "{model}");
+    for name in ["logo.vectorcraft", "photo.png"] {
+        assert!(model.contains(&format!("\"path\":\"{name}\"")), "{name}: {model}");
+    }
+    assert!(model.contains("{\"image\":\"photo.png\"}"), "{model}");
+    assert!(model.contains(&format!("\"svg_scripts\":[\"menu.js\",\"{url}\"]")), "{model}");
+    // The document keeps its links, and a caller whose read roots hold the files sees every path.
+    assert_eq!(placed(&s, id).link.path, src);
+    assert_eq!(s.doc().unwrap().doc.svg_scripts, [script.as_str(), url]);
+    for model in [ask(&mut s, &away.0, "document.json"), s.execute("document.json", &json!({})).unwrap()] {
+        let model = model.to_string();
+        for path in [&src, &pic, &out, &script] {
+            assert!(model.contains(&json!(path).to_string()), "{path}: {model}");
+        }
+    }
+    assert_eq!(ask(&mut s, &away.0, "document.inspect")["path"], json!(poster));
+    assert_eq!(s.execute("document.inspect", &json!({})).unwrap()["path"], json!(poster));
+}
+
+/// `document.json` for a confined caller: a linked image in a brush's art outside the read roots
+/// is named by its file name, a stored brush entry that does not read as a brush is left out, and a
+/// link inside them whose stored relative path leads outside them loses that relative path.
+#[test]
+fn document_json_checks_brush_art_and_relative_paths_against_the_read_roots() {
+    let away = Folder::new("doc-brr-away");
+    let home = Folder::new("doc-brr-home");
+    let pic = away.file("photo.png");
+    write(&pic, &crate::tests_links::png(60, 30, BLUE));
+    let near_pic = home.file("near.png");
+    write(&near_pic, &crate::tests_links::png(20, 10, RED));
+    let mut s = session();
+    let r = s.execute("file.place", &json!({"path": pic, "at": [50, 50]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    let image = r["ids"][0].as_u64().unwrap();
+    let r = s.execute("file.place", &json!({"path": near_pic, "at": [150, 50]})).unwrap();
+    assert_eq!(r["linked"], true, "{r}");
+    s.execute("brush.new", &json!({"type": "art", "name": "Photo Band", "ids": [image]})).unwrap();
+    save(&mut s, &home.file("poster.vectorcraft"));
+    {
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        let lib = d.unknown.get_mut(vectorcraft_brush::DOC_KEY).and_then(Value::as_array_mut).unwrap();
+        lib.push(json!({"name": "Broken Band", "type": "unknown kind", "note": pic}));
+        d.update_links(|l| {
+            if l.name() == "near.png" {
+                l.relative = Some("../doc-brr-away/near.png".into());
+            }
+        });
+    }
+    let unconfined = s.execute("document.json", &json!({})).unwrap().to_string();
+    for part in [json!(pic).to_string(), "Broken Band".into(), "../doc-brr-away/near.png".into()] {
+        assert!(unconfined.contains(&part), "{part}: {unconfined}");
+    }
+    let roots = crate::file_access::AutomationRoots::new(&[&home.0], &[]).unwrap().unwrap();
+    let model = crate::file_access::confine(Some(&roots), || s.execute("document.json", &json!({}))).unwrap();
+    let text = model.to_string();
+    assert!(!text.contains("doc-brr-away") && !text.contains("Broken Band"), "{text}");
+    assert!(text.contains("\"path\":\"photo.png\"") && text.contains("Photo Band"), "{text}");
+    assert!(text.contains(&json!(near_pic).to_string()), "{text}");
+    // The document keeps its brushes and links.
+    let stored = s.doc().unwrap().doc.unknown.get(vectorcraft_brush::DOC_KEY).unwrap().to_string();
+    assert!(stored.contains("Broken Band") && stored.contains(&json!(pic).to_string()), "{stored}");
 }
 
 /// Save As reads its defaults from the catalog; using them must retain current editable links.

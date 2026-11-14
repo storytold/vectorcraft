@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{GraphicStyle, Knockout, Node};
+use vectorcraft_doc::{GraphicStyle, Knockout, Node, Shared};
 
 use crate::*;
 
@@ -200,6 +200,77 @@ fn redefine_leaves_unlinked_and_edited_objects_alone() {
     assert_eq!(fill(&s, d), Paint::solid(Color::from_hex("#00ff00").unwrap()));
     assert_eq!(node(&s, d).extras().graphic_style, None);
     assert!(s.execute("graphicStyle.redefine", &json!({"id": c.0})).is_err());
+}
+
+/// Applying a style to several objects gives them one shared copy of its appearance; editing one
+/// object gives that one its own, and the saved file is the same as with a copy for each.
+#[test]
+fn applying_a_style_shares_one_appearance() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "appearance.clear", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    run(&mut s, "paint.setStroke", json!({"color": "#0000ff"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Rough"}));
+    let rough = style(&s, "Rough");
+    let ids = [rect(&mut s, 100.0), rect(&mut s, 200.0), rect(&mut s, 300.0)];
+    let [b, c, d] = ids;
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough", "ids": [b.0, c.0, d.0]}));
+    let shared = |s: &Session, x: NodeId, y: NodeId| Shared::ptr_eq(&node(s, x).appearance, &node(s, y).appearance);
+    assert!(shared(&s, b, c) && shared(&s, c, d), "one appearance for every object");
+    for id in ids {
+        assert_eq!(node(&s, id).appearance, rough.appearance);
+        assert_eq!(node(&s, id).extras().graphic_style, Some(rough.id));
+    }
+    // The saved file is the same as one where each object has its own copy.
+    let doc = s.doc().unwrap().doc.clone();
+    let mut copies = (*doc).clone();
+    for id in ids {
+        let n = copies.node_mut(id).unwrap();
+        n.appearance = Shared::new((*n.appearance).clone());
+    }
+    assert!(!Shared::ptr_eq(&copies.node(b).unwrap().appearance, &copies.node(c).unwrap().appearance));
+    for pretty in [false, true] {
+        assert_eq!(vectorcraft_format::save(&doc, pretty), vectorcraft_format::save(&copies, pretty));
+    }
+
+    // Editing one object leaves the others and the style as they were.
+    set_fill(&mut s, b, "#ff0000");
+    assert!(!shared(&s, b, c) && shared(&s, c, d));
+    assert_eq!(fill(&s, b), Paint::solid(Color::from_hex("#ff0000").unwrap()));
+    assert_eq!(node(&s, c).appearance, rough.appearance);
+    assert_eq!(style(&s, "Rough"), rough);
+    assert_eq!(linked(&mut s, "Rough"), vec![a.0, c.0, d.0]);
+
+    // Undo and redo restore the values, still shared.
+    run(&mut s, "edit.undo", json!({}));
+    assert!(shared(&s, b, c) && node(&s, b).appearance == rough.appearance);
+    run(&mut s, "edit.undo", json!({}));
+    for id in ids {
+        assert_ne!(node(&s, id).appearance, rough.appearance);
+        assert_eq!(node(&s, id).extras().graphic_style, None);
+    }
+    run(&mut s, "edit.redo", json!({}));
+    assert!(shared(&s, b, c) && shared(&s, c, d) && node(&s, d).appearance == rough.appearance);
+}
+
+/// Redefine Graphic Style gives the objects still linked one shared copy of the new appearance.
+#[test]
+fn redefine_shares_one_appearance() {
+    let mut s = session();
+    let (a, b, c) = linked_three(&mut s);
+    let d = rect(&mut s, 300.0);
+    run(&mut s, "graphicStyle.apply", json!({"name": "S"}));
+    set_fill(&mut s, d, "#00ff00");
+    set_fill(&mut s, a, "#0000ff");
+    run(&mut s, "graphicStyle.redefine", json!({"name": "S", "id": a.0}));
+    let (nb, nc) = (node(&s, b), node(&s, c));
+    assert!(Shared::ptr_eq(&nb.appearance, &nc.appearance));
+    assert_eq!(nb.appearance, style(&s, "S").appearance);
+    // The edited object keeps its own look.
+    assert_eq!(fill(&s, d), Paint::solid(Color::from_hex("#00ff00").unwrap()));
+    assert!(!Shared::ptr_eq(&node(&s, d).appearance, &nb.appearance));
 }
 
 #[test]

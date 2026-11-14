@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use vectorcraft_doc::{Document, ImageObject, LinkInfo, Node, NodeKind};
 use vectorcraft_geom::Rect;
-use vectorcraft_svg::{ImportOptions, MAX_NESTED_SVG_IMAGES, SvgError, import_with, import_with_report, import_within};
+use vectorcraft_svg::{ImportOptions, MAX_NESTED_SVG_IMAGES, MAX_NESTED_SVG_READS, SvgError, import_with, import_with_report, import_within};
 use vectorcraft_testkit::raster::{Image, assert_similar, render_artboard};
 
 fn svg(body: &str) -> String {
@@ -214,6 +214,185 @@ fn svgz_images_import_as_vector_art() {
     assert_eq!(boxes.len(), 2, "{:?}", art(&d));
     assert!((boxes[0].x0 - 10.0).abs() < 1e-6 && (boxes[0].width() - 20.0).abs() < 1e-6, "{boxes:?}");
     assert!((boxes[1].x0 - 100.0).abs() < 1e-6 && (boxes[1].height() - 20.0).abs() < 1e-6, "{boxes:?}");
+}
+
+/// An SVG file of 20 × 20 holding a 5 × 5 rectangle and `images`.
+fn svg_file(images: &str) -> String {
+    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="5" height="5"/>{images}</svg>"#)
+}
+
+/// Reads as [`read`] does, counting the reads of each file name.
+fn counting(reads: &std::sync::Mutex<Vec<String>>) -> impl Fn(&str) -> Option<(Vec<u8>, LinkInfo)> + Sync + '_ {
+    move |path: &str| {
+        if let Ok(mut reads) = reads.lock() {
+            reads.push(Path::new(path).file_name().unwrap().to_string_lossy().into_owned());
+        }
+        read(path)
+    }
+}
+
+/// A raster an SVG file links to is read from that file's folder and stays linked, in its place in
+/// the SVG file's art.
+#[test]
+fn a_raster_linked_from_a_linked_svg_file_is_read_from_its_folder() {
+    let dir = folder("nested-link");
+    let bytes = png(40, 20);
+    std::fs::write(dir.join("img").join("photo.png"), &bytes).unwrap();
+    std::fs::write(dir.join("img").join("inner.svg"), svg_file(r#"<image href="photo.png" x="2" y="4" width="10" height="5"/>"#)).unwrap();
+    let (d, w) = open_in(&dir, r#"<image href="img/inner.svg" x="10" y="10" width="20" height="20"/>"#);
+    assert!(w.is_empty(), "{w:?}");
+    assert_eq!(rects(&d), 1, "the SVG file's art");
+    let [(_, im)] = images(&d)[..] else { panic!("{:?}", art(&d)) };
+    let link = im.link.as_ref().unwrap();
+    assert_eq!(Path::new(&link.path), dir.join("img").join("photo.png"));
+    assert_eq!(*d.images[&im.key].bytes, bytes, "the file's pixels");
+    let b = im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, 40.0, 20.0));
+    assert!((b.x0 - 12.0).abs() < 1e-6 && (b.y0 - 14.0).abs() < 1e-6 && (b.width() - 10.0).abs() < 1e-6, "{b:?}");
+}
+
+/// One href in two SVG files of different folders names two files: each shows its own.
+#[test]
+fn one_href_in_svg_files_of_different_folders_shows_each_folders_file() {
+    let dir = folder("nested-same-href");
+    let (outer, inner) = (png(4, 4), png(6, 6));
+    std::fs::write(dir.join("photo.png"), &outer).unwrap();
+    std::fs::write(dir.join("img").join("photo.png"), &inner).unwrap();
+    std::fs::write(dir.join("img").join("inner.svg"), svg_file(r#"<image href="photo.png" width="10" height="10"/>"#)).unwrap();
+    let (d, w) = open_in(&dir, r#"<image href="photo.png" width="10" height="10"/><image href="img/inner.svg" x="50" width="20" height="20"/>"#);
+    assert!(w.is_empty(), "{w:?}");
+    let [(_, a), (_, b)] = images(&d)[..] else { panic!("{:?}", art(&d)) };
+    assert_eq!(Path::new(&a.link.as_ref().unwrap().path), dir.join("photo.png"));
+    assert_eq!(*d.images[&a.key].bytes, outer);
+    assert_eq!(Path::new(&b.link.as_ref().unwrap().path), dir.join("img").join("photo.png"));
+    assert_eq!(*d.images[&b.key].bytes, inner);
+}
+
+/// A raster an SVG file links to that can't be read (missing, or refused by the reader) gets the
+/// placeholder, stretched to its box, its link and a warning, as one the imported SVG links to.
+#[test]
+fn a_missing_raster_linked_from_a_linked_svg_file_keeps_a_placeholder() {
+    let dir = folder("nested-missing");
+    std::fs::write(dir.join("img").join("secret.png"), png(4, 4)).unwrap();
+    let links = r#"<image href="gone.png" x="2" y="4" width="10" height="5"/><image href="secret.png" x="2" y="12" width="4" height="4"/>"#;
+    std::fs::write(dir.join("img").join("inner.svg"), svg_file(links)).unwrap();
+    let refusing = |path: &str| if path.ends_with("secret.png") { None } else { read(path) };
+    let folder = dir.to_string_lossy();
+    let body = r#"<image href="img/inner.svg" x="10" y="10" width="20" height="20"/>"#;
+    let (d, w) = import_with(&svg(body), &ImportOptions { folder: Some(&folder), read: Some(&refusing) }).unwrap();
+    for name in ["gone.png", "secret.png"] {
+        assert!(w.iter().any(|w| w.contains(&format!("'{name}' not found"))), "{name}: {w:?}");
+    }
+    let [(_, gone), (_, secret)] = images(&d)[..] else { panic!("{:?}", art(&d)) };
+    assert_eq!(Path::new(&gone.link.as_ref().unwrap().path), dir.join("img").join("gone.png"));
+    assert_eq!(Path::new(&secret.link.as_ref().unwrap().path), dir.join("img").join("secret.png"));
+    assert!(d.images[&gone.key].is_proxy() && d.images[&secret.key].is_proxy(), "placeholders, not the files");
+    let b = gone.xf.transform_rect_bbox(Rect::new(0.0, 0.0, gone.width as f64, gone.height as f64));
+    assert!((b.x0 - 12.0).abs() < 1e-6 && (b.width() - 10.0).abs() < 1e-6 && (b.height() - 5.0).abs() < 1e-6, "{b:?}");
+}
+
+/// An SVG file that links to itself, or to an SVG file that links back to it, is read once each
+/// time it is shown: the link back gets the placeholder and a warning.
+#[test]
+fn svg_files_that_link_back_keep_a_placeholder_where_they_lead_back() {
+    let dir = folder("nested-cycle");
+    std::fs::write(dir.join("img").join("self.svg"), svg_file(r#"<image href="self.svg" width="10" height="10"/>"#)).unwrap();
+    std::fs::write(dir.join("img").join("a.svg"), svg_file(r#"<image href="b.svg" width="10" height="10"/>"#)).unwrap();
+    std::fs::write(dir.join("img").join("b.svg"), svg_file(r#"<image href="./a.svg" width="10" height="10"/>"#)).unwrap();
+    let folder = dir.to_string_lossy();
+    for (body, files, back) in [("img/self.svg", vec!["self.svg"], "self.svg"), ("img/a.svg", vec!["a.svg", "b.svg"], "./a.svg")] {
+        let reads = std::sync::Mutex::new(vec![]);
+        let counted = counting(&reads);
+        let body = format!(r#"<image href="{body}" width="20" height="20"/><image href="./{body}" x="50" width="20" height="20"/>"#);
+        let (d, w) = import_with(&svg(&body), &ImportOptions { folder: Some(&folder), read: Some(&counted) }).unwrap();
+        assert_eq!(*reads.lock().unwrap(), [files.clone(), files.clone()].concat());
+        let warning = format!("linked image '{back}' leads back to an SVG file that shows it: a placeholder keeps its place until it is relinked");
+        assert_eq!(w, [warning.clone(), warning]);
+        assert_eq!(rects(&d), 2 * files.len(), "each file's art once in each place");
+        let found = images(&d);
+        assert_eq!(found.len(), 2);
+        for (_, im) in found {
+            assert!(d.images[&im.key].is_proxy());
+            assert_eq!(Path::new(&im.link.as_ref().unwrap().path), dir.join("img").join(back.trim_start_matches("./")));
+        }
+    }
+}
+
+/// Two SVG files that link to each other, each shown by the imported SVG, each show the other
+/// once, then the placeholder of the link back to themselves.
+#[test]
+fn svg_files_that_link_to_each_other_each_lead_back_to_themselves() {
+    let dir = folder("nested-cycle-both");
+    std::fs::write(dir.join("img").join("a.svg"), svg_file(r#"<image href="b.svg" width="10" height="10"/>"#)).unwrap();
+    std::fs::write(dir.join("img").join("b.svg"), svg_file(r#"<image href="a.svg" width="10" height="10"/>"#)).unwrap();
+    let (d, w) = open_in(&dir, r#"<image href="img/a.svg" width="20" height="20"/><image href="img/b.svg" x="50" width="20" height="20"/>"#);
+    assert_eq!(w.len(), 2, "{w:?}");
+    assert_eq!(rects(&d), 4, "each file's art once in each place");
+    let [(_, a), (_, b)] = images(&d)[..] else { panic!("{:?}", art(&d)) };
+    assert_eq!(Path::new(&a.link.as_ref().unwrap().path), dir.join("img").join("a.svg"));
+    assert_eq!(Path::new(&b.link.as_ref().unwrap().path), dir.join("img").join("b.svg"));
+}
+
+/// An SVG file shown twice, and a raster that two SVG files link to, are read once.
+#[test]
+fn a_repeated_linked_svg_file_is_read_once() {
+    let dir = folder("nested-repeat");
+    std::fs::write(dir.join("img").join("photo.png"), png(4, 4)).unwrap();
+    std::fs::write(dir.join("img").join("a.svg"), svg_file(r#"<image href="photo.png" width="10" height="10"/>"#)).unwrap();
+    std::fs::write(
+        dir.join("img").join("b.svg"),
+        svg_file(r#"<image href="a.svg" width="10" height="10"/><image href="photo.png" width="10" height="10"/>"#),
+    )
+    .unwrap();
+    let reads = std::sync::Mutex::new(vec![]);
+    let counted = counting(&reads);
+    let folder = dir.to_string_lossy();
+    let body = r#"<image href="img/a.svg" width="20" height="20"/><image href="./img/a.svg" width="20" height="20"/><image href="img/b.svg" width="20" height="20"/>"#;
+    let (d, w) = import_with(&svg(body), &ImportOptions { folder: Some(&folder), read: Some(&counted) }).unwrap();
+    assert!(w.is_empty(), "{w:?}");
+    let mut reads = reads.lock().unwrap().clone();
+    reads.sort();
+    assert_eq!(reads, ["a.svg", "b.svg", "photo.png"]);
+    let found = images(&d);
+    assert_eq!(found.len(), 4);
+    assert!(found.iter().all(|(_, im)| Path::new(&im.link.as_ref().unwrap().path) == dir.join("img").join("photo.png")));
+}
+
+/// A chain of SVG files, each linking to the next, is read only as deep as SVG images may nest:
+/// past it the images are left out, with a warning.
+#[test]
+fn a_chain_of_linked_svg_files_stops_at_the_depth_cap() {
+    let dir = folder("nested-chain");
+    let levels = vectorcraft_svg::MAX_ELEMENT_DEPTH;
+    for i in 0..levels {
+        std::fs::write(dir.join("img").join(format!("{i}.svg")), svg_file(&format!(r#"<image href="{}.svg" width="10" height="10"/>"#, i + 1)))
+            .unwrap();
+    }
+    let reads = std::sync::Mutex::new(vec![]);
+    let counted = counting(&reads);
+    let folder = dir.to_string_lossy();
+    let (d, w) =
+        import_with(&svg(r#"<image href="img/0.svg" width="20" height="20"/>"#), &ImportOptions { folder: Some(&folder), read: Some(&counted) })
+            .unwrap();
+    let reads = reads.lock().unwrap().len();
+    assert!(reads <= levels / 2 + 4, "{reads} reads");
+    assert!(rects(&d) < levels / 2, "{}", rects(&d));
+    assert!(w.iter().any(|w| w.contains("nest more than")), "{w:?}");
+}
+
+/// An SVG file reached first inside an SVG file where it nests too deep to be shown, then from the
+/// imported SVG, shows the raster it links to where it fits.
+#[test]
+fn an_svg_file_too_deep_in_one_place_shows_its_links_in_another() {
+    let dir = folder("nested-deep-then-shallow");
+    let depth = vectorcraft_svg::MAX_ELEMENT_DEPTH;
+    let nest = |n: usize, inner: &str| format!("{}{inner}{}", "<g>".repeat(n), "</g>".repeat(n));
+    std::fs::write(dir.join("img").join("photo.png"), png(4, 4)).unwrap();
+    std::fs::write(dir.join("img").join("deep.svg"), svg_file(&nest(depth * 2 / 3, r#"<image href="a.svg" width="10" height="10"/>"#))).unwrap();
+    std::fs::write(dir.join("img").join("a.svg"), svg_file(&nest(depth / 2, r#"<image href="photo.png" width="10" height="10"/>"#))).unwrap();
+    let (d, w) = open_in(&dir, r#"<image href="img/deep.svg" width="20" height="20"/><image href="img/a.svg" x="50" width="20" height="20"/>"#);
+    assert!(w.iter().any(|w| w.contains("nest more than")), "{w:?}");
+    let [(_, im)] = images(&d)[..] else { panic!("{:?} {w:?}", art(&d)) };
+    assert_eq!(Path::new(&im.link.as_ref().unwrap().path), dir.join("img").join("photo.png"));
 }
 
 const SVG_NS: &str = r#"xmlns="http://www.w3.org/2000/svg""#;
@@ -681,6 +860,87 @@ fn nested_svg_images_past_count_cap_are_left_out() {
     let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500">{images}</svg>"#);
     let (_d, warnings) = import_with(&svg, &ImportOptions::default()).unwrap();
     assert!(warnings.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))));
+}
+
+/// Nested SVG images that can't be read: text that isn't XML, and an SVG without a size.
+const BROKEN_SVG_IMAGES: [&str; 2] =
+    [r#"<svg xmlns="http://www.w3.org/2000/svg" width="10"#, r#"<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"/>"#];
+const SMALL_SVG_IMAGE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="5" height="5"/></svg>"#;
+
+/// `broken` images showing the broken SVG images in turn from data URLs, then `good` images
+/// showing a rectangle.
+fn broken_then_good(broken: usize, good: usize) -> String {
+    let broken: String = (0..broken).map(|i| image_of("image/svg+xml", BROKEN_SVG_IMAGES[i % 2])).collect();
+    format!(r#"<svg {SVG_NS} width="500" height="500">{broken}{}</svg>"#, image_of("image/svg+xml", SMALL_SVG_IMAGE).repeat(good))
+}
+
+/// Only nested SVG images that decode count toward `MAX_NESTED_SVG_IMAGES`: an image after that
+/// many broken ones, from data URLs or a linked file shown again and again, is imported, and the
+/// images past that many decoded ones are still left out.
+#[test]
+fn broken_nested_svg_images_do_not_use_up_the_image_allowance() {
+    let allowance = |w: &[String]| w.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images")));
+    let (d, w) = import_with(&broken_then_good(MAX_NESTED_SVG_IMAGES + 10, 1), &ImportOptions::default()).unwrap();
+    assert_eq!(rects(&d), 1, "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("left out")), "{w:?}");
+    let (d, w) = import_with(&broken_then_good(10, MAX_NESTED_SVG_IMAGES + 1), &ImportOptions::default()).unwrap();
+    assert_eq!(rects(&d), MAX_NESTED_SVG_IMAGES, "{w:?}");
+    assert!(allowance(&w), "{w:?}");
+
+    let dir = folder("brokensvgimages");
+    std::fs::write(dir.join("img").join("broken.svg"), BROKEN_SVG_IMAGES[0]).unwrap();
+    std::fs::write(dir.join("img").join("good.svg"), SMALL_SVG_IMAGE).unwrap();
+    let reads = std::sync::atomic::AtomicUsize::new(0);
+    let counted = |path: &str| {
+        reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        read(path)
+    };
+    let body = format!(
+        r#"{}<image href="img/good.svg" width="10" height="10"/>"#,
+        r#"<image href="img/broken.svg" width="10" height="10"/>"#.repeat(MAX_NESTED_SVG_IMAGES + 10)
+    );
+    let folder = dir.to_string_lossy();
+    let (d, w) = import_with(&svg(&body), &ImportOptions { folder: Some(&folder), read: Some(&counted) }).unwrap();
+    assert_eq!(rects(&d), 1, "{w:?}");
+    assert!(!w.iter().any(|w| w.contains("left out")), "{w:?}");
+    assert_eq!(reads.into_inner(), 2, "each file is read once");
+}
+
+/// Every nested SVG image read, decoded or not, counts toward `MAX_NESTED_SVG_READS`: past it,
+/// images are left out with a warning, also when `<use>` shows one broken linked file many times.
+#[test]
+fn nested_svg_images_are_read_at_most_max_nested_svg_reads_times() {
+    let past = |w: &[String]| w.iter().any(|w| w.contains(&format!("read at most {MAX_NESTED_SVG_READS} times")));
+    let (d, w) = import_with(&broken_then_good(MAX_NESTED_SVG_READS - 1, 1), &ImportOptions::default()).unwrap();
+    assert_eq!(rects(&d), 1, "{w:?}");
+    assert!(!past(&w), "{w:?}");
+    let (d, w) = import_with(&broken_then_good(MAX_NESTED_SVG_READS, 1), &ImportOptions::default()).unwrap();
+    assert_eq!(rects(&d), 0, "{w:?}");
+    assert!(past(&w), "{w:?}");
+    assert!(!w.iter().any(|w| w.contains(&format!("more than {MAX_NESTED_SVG_IMAGES} nested SVG images"))), "{w:?}");
+
+    let dir = folder("brokensvguses");
+    std::fs::write(dir.join("img").join("broken.svg"), BROKEN_SVG_IMAGES[0]).unwrap();
+    std::fs::write(dir.join("img").join("good.svg"), SMALL_SVG_IMAGE).unwrap();
+    let uses = r##"<use href="#broken"/>"##.repeat(2 * MAX_NESTED_SVG_READS);
+    let body = format!(
+        r#"<defs><g id="broken"><image href="img/broken.svg" width="10" height="10"/></g></defs>{uses}<image href="img/good.svg" width="10" height="10"/>"#
+    );
+    let (d, w) = open_in(&dir, &body);
+    assert_eq!(rects(&d), 0, "{w:?}");
+    assert!(past(&w), "{w:?}");
+}
+
+/// A nested SVG image that can't be read and is left out gives no warning about its text.
+#[test]
+fn broken_nested_svg_images_do_not_warn_about_their_text() {
+    let text = |svg: &str| {
+        let file = format!(r#"<svg {SVG_NS} width="50" height="50">{}</svg>"#, image_of("image/svg+xml", svg));
+        let (_, w) = import_with(&file, &ImportOptions::default()).unwrap();
+        w.iter().any(|w| w.contains("text inside an SVG image"))
+    };
+    assert!(!text(r#"<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"><text>Hi</text></svg>"#));
+    assert!(text(r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text>Hi</text></svg>"#));
 }
 
 /// #3566: entity references in element content count toward the expansion limit, as in

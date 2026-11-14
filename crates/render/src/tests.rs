@@ -25,8 +25,10 @@ mod knockout;
 mod layeropts;
 mod longstroke;
 mod memory;
+mod meshwarp;
 mod movedstroke;
 mod objectfx;
+mod paintedbrush;
 mod placed_document;
 mod rasterize;
 mod setup;
@@ -1258,6 +1260,45 @@ fn undecodable_image_in_nested_opacity_mask_leaves_out_outer_object() {
     let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
     let img = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
     assert_eq!(img.pixel(70, 70), [255, 255, 255, 255], "the incomplete inner mask invalidates the outer mask");
+}
+
+/// The drop shadows of a blend's steps draw under an opacity mask with Clip off, where the mask
+/// art leaves them uncovered, as they draw without the mask; with Clip on they are hidden.
+#[test]
+fn blend_step_shadows_draw_under_an_unclipped_opacity_mask() {
+    use vectorcraft_doc::live::{BlendSpacing, BlendSpec};
+    use vectorcraft_doc::{NodeKind, OpacityMask};
+
+    let shadow = vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({"x": 15, "y": 15, "blur": 0}), visible: true };
+    let blend = |d: &mut Document, mask: Option<bool>| {
+        let end = |d: &mut Document, x: f64| {
+            let mut n = rect_node(d, Rect::new(x, 10.0, x + 10.0, 20.0), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+            n.appearance.effects.push(shadow.clone());
+            Arc::new(n)
+        };
+        let ends = vec![end(d, 10.0), end(d, 70.0)];
+        let spec = BlendSpec { spacing: BlendSpacing::Steps(2), ..Default::default() };
+        let mut n = Node::new(d.alloc_id(), NodeKind::Blend { children: ends, spec: Box::new(spec) });
+        if let Some(clip) = mask {
+            let white = rect_node(d, Rect::new(0.0, 0.0, 5.0, 5.0), Paint::solid(Color::WHITE), Paint::None, 0.0);
+            n.extras_mut().mask = Some(Box::new(OpacityMask::new(white, clip)));
+        }
+        n
+    };
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let draw = |mask: Option<bool>| {
+        let mut d = Document::new(120.0, 60.0);
+        let n = blend(&mut d, mask);
+        d.insert(Some(d.layers[0].id), 0, n).unwrap();
+        Renderer::new().render(&d, 120, 60, Affine::IDENTITY, &opts)
+    };
+    let (plain, unclipped, clipped) = (draw(None), draw(Some(false)), draw(Some(true)));
+    for (x, y) in [(30, 30), (90, 32)] {
+        assert!(plain.pixel(x, y)[0] < 128, "the shadow draws at ({x}, {y}) without a mask: {:?}", plain.pixel(x, y));
+        assert_eq!(unclipped.pixel(x, y), plain.pixel(x, y), "the shadow draws at ({x}, {y}) under the unclipped mask");
+        assert_eq!(clipped.pixel(x, y), [255, 255, 255, 255], "the clipped mask hides the shadow at ({x}, {y})");
+    }
+    assert_eq!(unclipped.pixel(15, 15), plain.pixel(15, 15), "the first end draws under the unclipped mask");
 }
 
 /// #3580: each opacity mask is rendered over its object's pixels, not over the whole frame. 300

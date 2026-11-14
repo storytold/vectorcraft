@@ -330,7 +330,8 @@ pub(crate) fn node(d: &mut Document, s: &Source, link: LinkInfo, bounding: bool)
 }
 
 /// `d` for output: linked images and placed documents that keep only their previews get their
-/// files back, else output as their previews, with a warning.
+/// files back, else output as their previews, with a warning. The art of the stored brushes counts
+/// too.
 pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
     let (d, mut warnings) = super::super::links::full_linked_images(d, Default::default());
     let doc = match &d {
@@ -339,7 +340,7 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
     };
     let mut need: Vec<PlacedDocument> = vec![];
     let mut seen = std::collections::HashSet::new();
-    doc.visit_placed(|_, p| {
+    super::super::links::with_brush_art(doc).visit_placed(|_, p| {
         if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && seen.insert(p.key.clone()) {
             need.push(p.clone());
         }
@@ -370,7 +371,7 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
                 "{n} placed documents output as their previews: their files can't be found, or changed since they were read (relink or update them)"
             ),
         });
-        out.placed_as_previews(&previews);
+        super::super::links::editing_brush_art(&mut out, |out| out.placed_as_previews(&previews));
     }
     (Cow::Owned(out), warnings)
 }
@@ -378,8 +379,10 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
 /// Placed document `id` of `d` replaced by an editable copy of its art, as placing its file
 /// without Link gives (its resources joining `d`, renamed where `d` uses a name for something
 /// else), keeping the object's id, place, name and transparency: Break Link and Object › Expand.
+/// A placed document in opacity-mask art or in the art of a symbol, graph design or pattern is
+/// replaced where it is stored.
 pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
-    let n = d.node(id).cloned().ok_or(EngineError::NoNode(id))?;
+    let n = d.stored_node(id).map(|(n, _)| Node::clone(n)).ok_or(EngineError::NoNode(id))?;
     let NodeKind::PlacedDocument(p) = &n.kind else { return Err(bad(cmd, format!("object {} is not a placed document", id.0))) };
     let blob = d.images.get(&p.key).ok_or_else(|| bad(cmd, format!("object {} has lost its file's contents: relink it", id.0)))?;
     let bytes = vectorcraft_doc::placed_document::full_bytes(p, blob)
@@ -395,6 +398,10 @@ pub(crate) fn expand(d: &mut Document, id: NodeId, cmd: &str) -> Result<()> {
     let art = super::transformed(Node::new(d.alloc_id(), NodeKind::Group { children, clip: a.clip.is_some() }), m);
     let mut out = n.clone();
     out.kind = art.kind;
+    if d.node(id).is_none() {
+        *d.stored_node_mut(id).ok_or(EngineError::NoNode(id))? = out;
+        return Ok(());
+    }
     let (par, index, _) = d.position(id).ok_or(EngineError::NoNode(id))?;
     d.remove(id)?;
     d.insert(par, index, out)?;

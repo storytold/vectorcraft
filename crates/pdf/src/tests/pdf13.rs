@@ -69,7 +69,7 @@ fn pdf_1_3_files_are_encrypted_with_40_bit_rc4() {
     let o = options(json!({"compatibility": "1.3", "security": {"openPassword": "open", "permissionsPassword": "owner", "plaintextMetadata": true}}));
     let r = export_with_report(&doc(1.0), &o).unwrap();
     assert!(String::from_utf8_lossy(&r.bytes).contains("/Filter/Standard/V 1/R 2/Length 40/P "));
-    assert!(r.warnings.iter().any(|w| w.contains("PDF 1.3 encryption covers the metadata too")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("PDF 1.3 encryption covers the metadata too")), "{:?}", r.setting_notes);
     assert!(matches!(import(&r.bytes), Err(PdfError::NeedsPassword)));
     for password in ["open", "owner"] {
         let opened = import_with_report(&r.bytes, &ImportOptions { password: Some(password.into()), ..Default::default() }).unwrap();

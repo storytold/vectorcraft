@@ -24,6 +24,8 @@ const PDF: &str = "http://ns.adobe.com/pdf/1.3/"; // brand-ok: the XMP namespace
 /// The File Info fields a PDF gives, each `None` when the file gives none (or only blank text).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FileInfo {
+    /// XMP `dc:title` (its `x-default` item, else its first), else Info `Title`.
+    pub title: Option<String>,
     /// XMP `dc:creator` (its names joined with ", "), else Info `Author`.
     pub author: Option<String>,
     /// XMP `dc:description` (its `x-default` item, else its first), else Info `Subject`.
@@ -53,6 +55,7 @@ pub(crate) fn file_info_in(pdf: &Pdf) -> FileInfo {
     let mut f = packet(pdf).and_then(|p| xmp(&p)).unwrap_or_default();
     let info = pdf.metadata();
     let text = |b: &Option<Vec<u8>>| b.as_deref().map(text_string).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    f.title = f.title.or_else(|| text(&info.title));
     f.author = f.author.or_else(|| text(&info.author));
     f.description = f.description.or_else(|| text(&info.subject));
     f.keywords = f.keywords.or_else(|| text(&info.keywords).map(|k| split(&k)).filter(|k| !k.is_empty()));
@@ -90,6 +93,7 @@ fn xmp(packet: &[u8]) -> Option<FileInfo> {
     let creators = get(DC, "creator");
     let subjects = get(DC, "subject");
     Some(FileInfo {
+        title: first(DC, "title"),
         author: (!creators.is_empty()).then(|| creators.join(", ")),
         description: first(DC, "description"),
         keywords: if subjects.is_empty() { first(PDF, "Keywords").map(|k| split(&k)).filter(|k| !k.is_empty()) } else { Some(subjects) },

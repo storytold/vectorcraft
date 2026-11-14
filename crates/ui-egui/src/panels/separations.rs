@@ -76,7 +76,7 @@ fn plates_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 
 /// A dropdown of the `kind` profiles after `extra` (a built-in entry, shown in the UI language);
 /// profile names are shown as they are. Returns the chosen name.
-fn profile_dropdown(ui: &mut Ui, id: &str, current: &str, kind: ProfileKind, extra: Option<&str>) -> Option<String> {
+pub(crate) fn profile_dropdown(ui: &mut Ui, id: &str, current: &str, kind: ProfileKind, extra: Option<&str>) -> Option<String> {
     let names: Vec<String> =
         extra.map(str::to_string).into_iter().chain(cms::profiles().into_iter().filter(|p| p.kind == kind).map(|p| p.name)).collect();
     let refs: Vec<&str> = names.iter().map(|n| super::label_or_name(n, extra == Some(n.as_str()))).collect();
@@ -103,7 +103,7 @@ fn settings_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The section's rows: the RGB and CMYK working spaces, intent, black point compensation, Load
 /// Profile… and Gamut Check, and the profile the active document is assigned.
 fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let st = cms::active_settings();
+    let st = cms::working_settings();
     widgets::section_header(ui, tl!("Color Settings"));
     ui.horizontal(|ui| {
         ui.label(tl!("RGB:"));

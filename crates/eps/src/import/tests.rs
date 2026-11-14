@@ -7,6 +7,9 @@ use vectorcraft_color::{Color, GradientKind, Paint};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 
+use crate::import::graphics::{GState, Out, tilings_compared};
+use crate::import::interp::Interp;
+use crate::import::obj::Obj;
 use crate::import::{Dsc, import};
 use crate::{EpsOptions, Level, Preview, Raster};
 
@@ -369,12 +372,19 @@ fn dash_patterns_hold_at_most_65535_entries() {
 
 /// Saved and copied graphics states share the dash pattern, and `setdash`, `currentdash` and
 /// each stroke count the entries they read or copy against the budgets. Under a pattern of
-/// 65,535 entries, 4,000,000 passes of `gsave grestore` and 2,000,000 passes of
-/// `gstate currentgstate setgstate` finish, and loops of `setdash`, `currentdash` and `strokepath`
-/// run out of a budget.
+/// 65,535 entries, the states that `gsave`, `grestore`, `gstate`, `currentgstate` and `setgstate`
+/// save, make or set hold that one pattern, 4,000,000 passes of `gsave grestore` and 2,000,000
+/// passes of `gstate currentgstate setgstate` finish, and loops of `setdash`, `currentdash` and
+/// `strokepath` run out of a budget.
 #[test]
 fn work_on_the_longest_dash_pattern_ends_soon() {
     let dash = "0 0 10 10 rectfill /a 65535 array def 0 1 65534 { a exch 1 put } for a 0 setdash";
+    let shared = run_looking(&format!("{dash} gsave gsave grestore gstate gstate currentgstate dup setgstate"), |it| {
+        let Some(saved) = it.saved.last().map(|g| g.dash.clone()) else { return false };
+        let made: Vec<_> = it.stack.iter().filter_map(|o| if let Obj::GState(g) = o { Some(g.dash.clone()) } else { None }).collect();
+        saved.len() == 65_535 && made.len() == 2 && made.iter().chain([&it.g.dash]).all(|m| std::rc::Rc::ptr_eq(m, &saved))
+    });
+    assert!(shared);
     for body in ["4000000 { gsave grestore } repeat", "2000000 { gstate currentgstate setgstate } repeat"] {
         let r = read_soon(&format!("{dash} {body} 20 20 10 10 rectfill"));
         assert_eq!(objects(&r.document).len(), 2, "{body}: {:?}", r.warnings);
@@ -530,13 +540,15 @@ fn non_finite_arithmetic_is_undefinedresult() {
     assert!(!objects(&r.document).is_empty(), "{:?}", r.warnings);
 }
 
-/// Tiling patterns and spot inks are found again through a hash of what tells them apart, so a
-/// program that makes 200,000 patterns and 200,001 inks reads within [`read_soon`]'s 20 seconds.
-/// Patterns are named Pattern 1, Pattern 2 and so on in the order they are made. A pattern made
-/// again from its prototype is the same pattern, and so is an uncolored pattern set again in a
-/// color it was set in before.
+/// Tiling patterns are found again through a hash of what tells them apart. A program that sets
+/// 200,000 different patterns and also sets 200,001 spot inks reads them all, and its 200,000
+/// pattern lookups compare at most 200,000 earlier patterns in all; going through every pattern
+/// made so far would compare about 2 × 10^10. The test does not count or time the spot ink
+/// lookups. Patterns are named Pattern 1, Pattern 2 and so on in the order they are made. A
+/// pattern made again from its prototype is the same pattern, and so is an uncolored pattern set
+/// again in a color it was set in before.
 #[test]
-fn many_tiling_patterns_and_spot_inks_read_in_linear_time() {
+fn many_tiling_patterns_are_found_again_through_a_hash() {
     let r = read(
         "/pp { pop 0 0 1 1 rectfill } def \
          /a << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep 2 /YStep 2 /PaintProc /pp load >> def \
@@ -560,7 +572,7 @@ fn many_tiling_patterns_and_spot_inks_read_in_linear_time() {
     assert!(names.iter().all(|n| d.swatch(n).is_some_and(|s| matches!(s.paint, Paint::Pattern { .. }))));
     // 100,000 patterns whose cells differ, an uncolored pattern in 100,000 tints of an ink that is
     // white at every tint (only the tint tells those patterns apart), and 200,000 more inks.
-    let r = read_soon(
+    let (r, compared) = read_counting_tilings(
         "0 1 99999 { /i exch def << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep i 2 add /YStep 1 \
          /PaintProc { pop 0 0 1 1 rectfill } >> matrix makepattern setpattern } for \
          [/Separation (Spot) /DeviceGray { pop 1 }] setcolorspace \
@@ -568,6 +580,7 @@ fn many_tiling_patterns_and_spot_inks_read_in_linear_time() {
          matrix makepattern def 0 1 99999 { 100000 div p setpattern } for \
          0 1 199999 { /i exch def [/Separation i 8 string cvs /DeviceGray {}] setcolorspace } for 0 0 1 1 rectfill",
     );
+    assert!(compared <= 200_000, "{compared} patterns compared");
     let d = &r.document;
     assert_eq!(d.patterns.len(), 200_000);
     assert!(d.patterns.iter().enumerate().all(|(i, p)| p.name == format!("Pattern {}", i + 1)));
@@ -1112,19 +1125,51 @@ fn hostile_executable_files_and_type_loops_are_refused() {
     blue("currentfile cvx exec currentfile flushfile 0 0 1 setrgbcolor");
 }
 
-/// Reads `body` as [`read`] does, on a thread of its own, and fails the test when reading takes
-/// more than 20 s.
+/// How long [`read_soon`] and [`read_counting_tilings`] wait, in seconds: a guard against a read
+/// that never ends. The budgets, limits and counts each test names decide what it checks.
+const NEVER_ENDS: u64 = 300;
+
+/// Reads `body` as [`read`] does, on a thread of its own, and fails the test when reading has not
+/// finished after [`NEVER_ENDS`] seconds.
 fn read_soon(body: &str) -> crate::Imported {
-    read_within(body, 20)
+    read_within(body, NEVER_ENDS)
 }
 
 /// Reads `body` as [`read`] does, on a thread of its own, and fails the test when reading takes
 /// more than `secs` seconds.
 fn read_within(body: &str, secs: u64) -> crate::Imported {
+    read_counting(body, secs).0
+}
+
+/// [`read_soon`], with how many patterns the tiling pattern lookups compared while reading.
+fn read_counting_tilings(body: &str) -> (crate::Imported, u64) {
+    read_counting(body, NEVER_ENDS)
+}
+
+/// [`read_within`], with how many patterns the tiling pattern lookups compared while reading.
+fn read_counting(body: &str, secs: u64) -> (crate::Imported, u64) {
     let (tx, rx) = std::sync::mpsc::channel();
     let ps = eps(body);
-    std::thread::spawn(move || tx.send(import(&ps)).ok());
-    rx.recv_timeout(std::time::Duration::from_secs(secs)).unwrap_or_else(|_| panic!("reading {body} did not finish")).unwrap()
+    std::thread::spawn(move || tx.send((import(&ps), tilings_compared())).ok());
+    let (read, compared) = rx.recv_timeout(std::time::Duration::from_secs(secs)).unwrap_or_else(|_| panic!("reading {body} did not finish"));
+    (read.unwrap(), compared)
+}
+
+/// Runs the program of `body` in an interpreter of its own on the 100 × 100 page of [`eps`]'s
+/// bounding box, and returns what `look` finds in the interpreter when the program has ended. It
+/// does not read the file's comments or make a document. The test fails when the program stops on
+/// an error.
+fn run_looking<T>(body: &str, look: fn(&Interp) -> T) -> T {
+    let file = eps(body);
+    let ps = super::program(&file).unwrap();
+    let mut doc = Document::new(100.0, 100.0);
+    doc.layers.clear();
+    let page = vectorcraft_geom::Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 100.0]);
+    let mut it = Interp::new(ps, GState::default(), Out::new(doc, page, Rect::new(0.0, 0.0, 100.0, 100.0)));
+    assert!(it.run().is_ok(), "running {body} failed");
+    let found = look(&it);
+    it.release();
+    found
 }
 
 /// Reads `body` after a square: the square stays, and the program runs out of the operation

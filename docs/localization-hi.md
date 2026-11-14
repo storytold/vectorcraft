@@ -25,6 +25,28 @@ Hindi integer counts use the first plural form for 0 and 1 and the second for 2+
 Both `@plural` and `@msgplural` rows have two forms. The latter translate status messages when
 displayed; the engine, control channel and MCP continue to return English messages.
 
+In diagnostics, "a number of points" is a numeric value in the point unit: write संख्या and
+पॉइंट, never कई अंक ("many digits"). Keep every bound and alternative the English lists, and
+every clause such as "all" or "what follows it". Type as a text object is टाइप (एरिया टाइप,
+पॉइंट टाइप), not प्रकार, which stays for a kind. `hindi_rows_use_the_glossary_term_for_what_their_english_names`
+in `crates/ui-egui/src/i18n/tests.rs` checks the save, swatch, crop, resolution and path terms
+and the point unit in every row.
+
+A variable is वेरिएबल (plural वेरिएबल्स) in every sense: a data-merge variable and the
+variable library, a variable font, a variable stroke width and an environment variable. It is
+never चर, परिवर्तनीय or वैरिएबल. Joining paths, anchor points, point type or the lines of a
+paragraph is जोड़ें (जोड़ने के लिए in a purpose clause); शामिल हों is kept for joining the
+community. The stroke corner names (Bevel Join, Miter Join, Round Join) and the Join tool keep
+जॉइन. `hindi_rows_use_one_term_for_a_variable_and_for_joining_paths` checks both terms in every
+row.
+
+A sentence keeps no English connecting word such as "or", "must" or "give": write या, होना
+चाहिए and दें. Parameter names, enum values and command IDs stay in English, and a list of
+accepted values such as `(left|right|top|bottom)` keeps the English's spelling and its `|`
+separators. `hindi_rows_keep_no_english_words_in_their_sentences` checks every row outside
+backticks, quotes, braces and brackets, and `hindi_messages_keep_their_lists_of_accepted_values`
+checks every `@msg` row's lists.
+
 ## Terminology
 
 | English | Hindi |
@@ -42,8 +64,11 @@ displayed; the engine, control channel and MCP continue to return English messag
 | Fill / Stroke | फ़िल / स्ट्रोक |
 | Gradient / Mesh / Blend | ग्रेडिएंट / मेश / ब्लेंड |
 | Pattern / Swatch | पैटर्न / स्वॉच |
+| Type (text object) / Crop / Resolution | टाइप / क्रॉप / रिज़ॉल्यूशन |
 | Appearance / Graphic style | अपीयरेंस / ग्राफ़िक स्टाइल |
 | Symbol / Envelope | सिंबल / एन्वेलप |
+| Variable / Variables / Variable library | वेरिएबल / वेरिएबल्स / वेरिएबल लाइब्रेरी |
+| Join (paths, points, type, lines) | जोड़ें |
 | Clipping mask / Opacity mask | क्लिपिंग मास्क / ओपेसिटी मास्क |
 | Image Trace / Live Paint | इमेज ट्रेस / लाइव पेंट |
 | Shape Builder / Pathfinder | शेप बिल्डर / पाथफ़ाइंडर |
@@ -61,6 +86,10 @@ The draft has 7,877 unique rows, including 2,537 `@msg`, 45 `@msgplural` and 38 
 Its source set combines the sibling catalogs with the current test scanner's UI/undo and error
 message dumps, so it includes runtime labels outside the literal scanner. Row count is not a
 percentage of the application's entire interface.
+On 2026-11-13 the catalog has 8,782 rows, including 3,014 `@msg`, 47 `@msgplural` and 41
+`@plural` rows. A wording pass on that date corrected 193 rows outside the plug-in
+messages for meaning, dropped clauses, English left in place and the save, swatch, crop,
+resolution, path and type terms. It is not a native proofread.
 
 The comparison covers release `v0.21.1` (`f6aa4309`) and current `main` (`3c7d9e1f`). Their
 non-English catalogs have no missing Hindi keys except the names deliberately kept in English.
@@ -69,8 +98,12 @@ main added paragraph labels, spine-index validation and two error messages: six 
 Main's workspace version is still 0.21.0; this PR does not change release versioning.
 
 `cargo test -p vectorcraft-ui-egui --lib i18n::tests` passes all 55 tests in Ubuntu 24.04 (WSL).
-The untranslated report has no Hindi section, meaning it found no missing Hindi rows among the
-categories it checks. This does not check dynamically assembled strings that the scanners miss.
+On 2026-11-14 the untranslated report on main (`f793044f83`) has a Hindi section with 608
+missing rows: 28 menu strings, 30 `tl!` strings, 11 undo labels and 539 messages. Its
+`every language` section lists 68 more that every checked language lacks, Hindi included: 10 menu
+strings, 2 undo labels and 56 messages. These include labels for newer features and command
+parameter, script and file import or export errors, which show in English until a catalog row
+is added. The report does not check dynamically assembled strings that the scanners miss.
 Additional checks compare placeholders, backtick-delimited identifiers and numeric values.
 The native Hindi UI fallback test also passes with the installed Nirmala UI font. A running
 desktop preview was checked in Hindi, including the New Document dialog and File menu.

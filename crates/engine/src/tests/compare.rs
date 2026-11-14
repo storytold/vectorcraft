@@ -36,7 +36,7 @@ fn error(s: &mut Session, p: Value) -> String {
 
 #[test]
 fn an_export_compares_equal_and_a_moved_square_counts_the_pixels_it_changed() {
-    let dir = vectorcraft_testkit::temp_dir("compare-moved");
+    let dir = vectorcraft_testkit::TempDir::new("compare-moved");
     let png = path_in(&dir, "art.png");
     let (mut s, id) = session();
     export(&mut s, &png);
@@ -54,12 +54,11 @@ fn an_export_compares_equal_and_a_moved_square_counts_the_pixels_it_changed() {
     assert_eq!(r["rmse"].as_f64(), Some(rmse), "{r}");
     // Above every difference, nothing is over.
     assert_eq!(compare(&mut s, json!({"path": png, "threshold": 1}))["over"], json!(0));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn the_image_and_the_render_are_flattened_on_the_background() {
-    let dir = vectorcraft_testkit::temp_dir("compare-background");
+    let dir = vectorcraft_testkit::TempDir::new("compare-background");
     let png = path_in(&dir, "clear.png");
     // Transparent everywhere, with red in the color channels that the alpha hides.
     image::RgbaImage::from_pixel(80, 40, image::Rgba([255, 0, 0, 0])).save(&png).unwrap();
@@ -81,12 +80,11 @@ fn the_image_and_the_render_are_flattened_on_the_background() {
     assert_eq!((r["rmse"].as_f64(), r["over"].as_u64()), (Some(rmse(255.0)), Some(1600)), "{r}");
     // A threshold just above 128/255 leaves the gray differences out.
     assert_eq!(compare(&mut s, json!({"path": png, "background": "#808080", "threshold": 0.51}))["over"], json!(0));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn an_image_of_other_proportions_is_refused_and_one_pixel_is_allowed() {
-    let dir = vectorcraft_testkit::temp_dir("compare-size");
+    let dir = vectorcraft_testkit::TempDir::new("compare-size");
     let (mut s, _) = session();
     let square = path_in(&dir, "square.png");
     image::RgbaImage::from_pixel(30, 30, image::Rgba([255; 4])).save(&square).unwrap();
@@ -96,12 +94,11 @@ fn an_image_of_other_proportions_is_refused_and_one_pixel_is_allowed() {
     image::RgbaImage::from_pixel(80, 41, image::Rgba([255; 4])).save(&taller).unwrap();
     let r = compare(&mut s, json!({"path": taller}));
     assert_eq!((r["width"].as_u64(), r["height"].as_u64(), r["total"].as_u64()), (Some(80), Some(41), Some(3280)), "{r}");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn an_export_whose_height_was_rounded_compares_equal() {
-    let dir = vectorcraft_testkit::temp_dir("compare-rounded");
+    let dir = vectorcraft_testkit::TempDir::new("compare-rounded");
     let png = path_in(&dir, "art.png");
     // 20.25 pt at 2 pixels a point is 40.5 rows, which the export rounds to 41.
     let mut s = Session::new();
@@ -112,7 +109,6 @@ fn an_export_whose_height_was_rounded_compares_equal() {
     export(&mut s, &png);
     let r = compare(&mut s, json!({"path": png}));
     assert_eq!(r, json!({"width": 80, "height": 41, "rmse": 0.0, "over": 0, "total": 3280, "threshold": 0.08}));
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -151,7 +147,7 @@ fn a_linked_image_is_drawn_from_its_file_as_a_png_export_draws_it() {
 
 #[test]
 fn an_image_that_cannot_be_decoded_and_a_missing_font_warn_as_a_png_export_does() {
-    let dir = vectorcraft_testkit::temp_dir("compare-warnings");
+    let dir = vectorcraft_testkit::TempDir::new("compare-warnings");
     let png = path_in(&dir, "art.png");
     let (mut s, _) = session();
     export(&mut s, &png);
@@ -167,12 +163,11 @@ fn an_image_that_cannot_be_decoded_and_a_missing_font_warn_as_a_png_export_does(
     assert!(warnings.iter().any(|w| w == "an image couldn't be decoded and is missing from the picture"), "{r}");
     assert!(warnings.iter().any(|w| w.as_str().unwrap().contains("Nonexistent Sans Probe")), "{r}");
     assert!(warnings.iter().any(|w| w.as_str().unwrap().contains("doesn't fit its frame")), "{r}");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn diff_path_writes_each_pixels_differences() {
-    let dir = vectorcraft_testkit::temp_dir("compare-diff");
+    let dir = vectorcraft_testkit::TempDir::new("compare-diff");
     let png = path_in(&dir, "art.png");
     let diff = path_in(&dir, "diff.png");
     let (mut s, id) = session();
@@ -188,12 +183,11 @@ fn diff_path_writes_each_pixels_differences() {
     }
     let changed = img.pixels().filter(|p| p.0[0] != 0).count();
     assert_eq!(changed as u64, r["over"].as_u64().unwrap());
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn missing_unreadable_and_malformed_inputs_are_errors() {
-    let dir = vectorcraft_testkit::temp_dir("compare-errors");
+    let dir = vectorcraft_testkit::TempDir::new("compare-errors");
     let (mut s, _) = session();
     let png = path_in(&dir, "art.png");
     export(&mut s, &png);
@@ -216,14 +210,13 @@ fn missing_unreadable_and_malformed_inputs_are_errors() {
         let e = error(&mut s, p.clone());
         assert!(e.contains(want), "{p}: {e}");
     }
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// A planar TIFF whose header claims more strips than the decoder can count (2^31 + 1 rows a strip
 /// each, times 5 planes) is refused as too large to draw, without a panic.
 #[test]
 fn a_tiff_with_more_strips_than_can_be_counted_is_too_large() {
-    let dir = vectorcraft_testkit::temp_dir("compare-strips");
+    let dir = vectorcraft_testkit::TempDir::new("compare-strips");
     let (mut s, _) = session();
     let plane = |v: u16| vec![v; 6];
     let channels = [plane(200), plane(40), plane(10), plane(0), plane(90)];
@@ -247,12 +240,11 @@ fn a_tiff_with_more_strips_than_can_be_counted_is_too_large() {
     std::fs::write(&tif, &file).unwrap();
     let e = error(&mut s, json!({"path": tif}));
     assert_eq!(e, "invalid parameters for `document.compare`: an image of 3 × 2147483649 pixels is too large to draw");
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn the_image_and_the_difference_image_stay_inside_the_automation_roots() {
-    let dir = vectorcraft_testkit::temp_dir("compare-roots");
+    let dir = vectorcraft_testkit::TempDir::new("compare-roots");
     for d in ["in", "out", "elsewhere"] {
         std::fs::create_dir_all(dir.join(d)).unwrap();
     }
@@ -272,5 +264,4 @@ fn the_image_and_the_difference_image_stay_inside_the_automation_roots() {
     assert!(!std::path::Path::new(&stray).exists());
     let kept = path_in(&dir.join("out"), "diff.png");
     assert_eq!(run(json!({"path": inside, "diffPath": kept})).unwrap()["diffPath"], json!(kept));
-    let _ = std::fs::remove_dir_all(dir);
 }

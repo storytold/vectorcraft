@@ -152,16 +152,18 @@ pub(super) fn color_palette(used: &[Used], params: &TraceParams) -> Vec<[f64; 3]
     // Full Tone: split until no colour box is wider than 96 (few colours) … 8 (many) levels per
     // channel, which is one histogram bin.
     let full_tone = || refine(used, centers(&median_cut(used, FULL_TONE_MAX, 96.0 - 88.0 * detail)));
+    // A Limited palette of 9 to 16 colors keeps a nearly flat dark ground in one color (see [`kmeans_rgb`]).
+    let limited = || kmeans_rgb(used, k, if FEW_COLORS.contains(&k) { LEAST_APART } else { 0.0 });
     match params.palette {
-        Palette::Limited => kmeans_rgb(used, k),
+        Palette::Limited => limited(),
         Palette::FullTone => full_tone(),
         Palette::Automatic => match flat_colors(used, detail) {
-            Some(n) => kmeans_rgb(used, n),
+            Some(n) => kmeans_rgb(used, n, 0.0),
             None => full_tone(),
         },
         Palette::DocumentLibrary if !params.swatches.is_empty() => library_colors(used, &params.swatches, k),
         // No library colours to use: as Limited.
-        Palette::DocumentLibrary => kmeans_rgb(used, k),
+        Palette::DocumentLibrary => limited(),
     }
 }
 
@@ -228,9 +230,25 @@ pub(super) fn centers(boxes: &[ColorBox]) -> Vec<[f64; 3]> {
     boxes.iter().map(|b| b.mean).collect()
 }
 
-/// Median cut to `k` colours, then weighted k-means refinement over histogram bins.
-fn kmeans_rgb(used: &[Used], k: usize) -> Vec<[f64; 3]> {
-    refine(used, centers(&median_cut(used, k, 0.0)))
+/// How far apart (Oklab × 100) the two sides of a cut must be to look different: below about 3
+/// they look alike (see [`oklab`]).
+const LEAST_APART: f64 = 3.0;
+
+/// The color counts of a Limited palette whose cuts are weighed by [`LEAST_APART`].
+const FEW_COLORS: std::ops::RangeInclusive<usize> = 9..=16;
+
+/// The darkest colors (Oklab lightness × 100 below this) are the ones whose cuts are weighed.
+const DARK: f64 = 30.0;
+
+/// The grayest colors (Oklab chroma × 100 below this) are the ones whose cuts are weighed.
+const GRAY: f64 = 3.0;
+
+/// Median cut to `k` colors, then weighted k-means refinement over histogram bins. With `apart`
+/// above 0, a cut whose two sides are dark grays less than `apart` apart has its gain scaled down
+/// (see [`median_cut_apart`]). A large, nearly flat dark ground then keeps one color, and the
+/// color it would have taken goes to another cut.
+fn kmeans_rgb(used: &[Used], k: usize, apart: f64) -> Vec<[f64; 3]> {
+    refine(used, centers(&median_cut_apart(used, k, 0.0, apart)))
 }
 
 /// Divisive clustering in the manner of median cut, but each box is cut where that leaves its two
@@ -240,6 +258,13 @@ fn kmeans_rgb(used: &[Used], k: usize) -> Vec<[f64; 3]> {
 /// and leaves two smaller colours in one box. Boxes are cut while there are fewer than `k` and
 /// some box spans more than `spread` levels of a channel.
 pub(super) fn median_cut(used: &[Used], k: usize, spread: f64) -> Vec<ColorBox> {
+    median_cut_apart(used, k, spread, 0.0)
+}
+
+/// [`median_cut`], except when both sides of a cut have a dark gray mean color (see [`DARK`] and
+/// [`GRAY`]) and the two means lie `d` (Oklab × 100) apart with `d` < `apart`: then the cut's gain
+/// is scaled by (`d` / `apart`)². With `apart` 0 it is [`median_cut`].
+fn median_cut_apart(used: &[Used], k: usize, spread: f64, apart: f64) -> Vec<ColorBox> {
     if used.is_empty() {
         return vec![ColorBox { mean: [255.0; 3], weight: 0.0, peak: 0.0 }];
     }
@@ -248,6 +273,16 @@ pub(super) fn median_cut(used: &[Used], k: usize, spread: f64) -> Vec<ColorBox> 
         bins: Vec<usize>,
         best: Option<(f64, Vec<usize>, usize)>,
     }
+    // How much of a cut's gain counts when its sides' mean colors are `a` and `b`: all of it when
+    // they look different or either is not a dark gray, less as two dark grays look more alike.
+    let dark_gray = |c: [f64; 3]| c[0] < DARK && c[1].hypot(c[2]) < GRAY;
+    let seen = |a: [f64; 3], b: [f64; 3]| {
+        let (a, b) = (oklab(a), oklab(b));
+        if !dark_gray(a) || !dark_gray(b) {
+            return 1.0;
+        }
+        ((0..3).map(|q| (a[q] - b[q]).powi(2)).sum::<f64>() / (apart * apart)).min(1.0)
+    };
     let plan = |bins: Vec<usize>| {
         let mut best: Option<(f64, Vec<usize>, usize)> = None;
         let widest = (0..3)
@@ -261,14 +296,27 @@ pub(super) fn median_cut(used: &[Used], k: usize, spread: f64) -> Vec<ColorBox> 
                 let mut sorted = bins.clone();
                 sorted.sort_by(|x, y| used[*x].1[ch].total_cmp(&used[*y].1[ch]));
                 let (total, sum): (f64, f64) = sorted.iter().fold((0.0, 0.0), |a, &i| (a.0 + used[i].2, a.1 + used[i].1[ch] * used[i].2));
-                let (mut w, mut s) = (0.0, 0.0);
+                // The sums of each side's colors are kept only when cuts are weighed by `apart`.
+                let weigh = apart > 0.0;
+                let all = if weigh { sorted.iter().fold([0.0; 3], |a, &i| [0, 1, 2].map(|q| a[q] + used[i].1[q] * used[i].2)) } else { [0.0; 3] };
+                let (mut w, mut s, mut side) = (0.0, 0.0, [0.0; 3]);
                 let mut cut: Option<(f64, usize)> = None;
                 for (j, &i) in sorted.iter().enumerate().take(sorted.len() - 1) {
                     w += used[i].2;
                     s += used[i].1[ch] * used[i].2;
+                    if weigh {
+                        for (acc, v) in side.iter_mut().zip(used[i].1) {
+                            *acc += v * used[i].2;
+                        }
+                    }
                     let rest = total - w;
                     if w > 0.0 && rest > 0.0 {
-                        let gain = w * rest / total * (s / w - (sum - s) / rest).powi(2);
+                        let mut gain = w * rest / total * (s / w - (sum - s) / rest).powi(2);
+                        // A scaled gain is never more than the full one, so only a cut that gains more
+                        // than the best so far, on this channel and the ones before it, is scaled.
+                        if weigh && gain > cut.map_or(f64::NEG_INFINITY, |c| c.0).max(best.as_ref().map_or(f64::NEG_INFINITY, |b| b.0)) {
+                            gain *= seen(side.map(|v| v / w), [0, 1, 2].map(|q| (all[q] - side[q]) / rest));
+                        }
                         if cut.is_none_or(|c| gain > c.0) {
                             cut = Some((gain, j + 1));
                         }
@@ -339,4 +387,70 @@ fn refine(used: &[Used], mut centers: Vec<[f64; 3]>) -> Vec<[f64; 3]> {
         }
     }
     centers
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A large ground of three near-black grays (too close to tell apart) and a ramp of 120 colors.
+    fn ground_and_ramp() -> Vec<Used> {
+        let ground = [5.0, 7.0, 9.0].map(|g| [g; 3]).into_iter().map(|c| (c, 14_400.0));
+        let ramp = (0..120).map(|i| f64::from(i) * 255.0 / 119.0).map(|t| ([t, 255.0 - t, t / 2.0], 120.0));
+        ground.chain(ramp).enumerate().map(|(i, (c, n))| (i, c, n)).collect()
+    }
+
+    /// The same ground, six far-apart colors and a small pair of colors 60 levels apart: eight
+    /// boxes, so the ninth color goes to the ground or to the pair.
+    fn ground_and_pair() -> Vec<Used> {
+        let ground = [5.0, 7.0, 9.0].map(|g| ([g; 3], 14_400.0));
+        let far = [[255.0, 0.0, 0.0], [0.0, 255.0, 0.0], [0.0, 0.0, 255.0], [255.0, 255.0, 0.0], [0.0, 255.0, 255.0], [255.0; 3]].map(|c| (c, 120.0));
+        let pair = [([128.0, 64.0, 0.0], 30.0), ([128.0, 64.0, 60.0], 30.0)];
+        ground.into_iter().chain(far).chain(pair).enumerate().map(|(i, (c, n))| (i, c, n)).collect()
+    }
+
+    #[test]
+    fn only_a_limited_palette_of_nine_to_sixteen_colors_weighs_alike_sides() {
+        let used = ground_and_ramp();
+        let plain = |k: usize| refine(&used, centers(&median_cut(&used, k, 0.0)));
+        let palette = |palette: Palette, colors: u32| color_palette(&used, &TraceParams { palette, colors, ..TraceParams::default() });
+        // At 9 to 16 colors the ground keeps one color, so the palette differs from a plain median cut.
+        assert_ne!(palette(Palette::Limited, 16), plain(16));
+        assert_ne!(palette(Palette::DocumentLibrary, 16), plain(16));
+        // At 9 colors, the pair takes the ninth color instead of the ground.
+        let pair = ground_and_pair();
+        let plain_pair = refine(&pair, centers(&median_cut(&pair, 9, 0.0)));
+        for limited in [Palette::Limited, Palette::DocumentLibrary] {
+            let ninth = color_palette(&pair, &TraceParams { palette: limited, colors: 9, ..TraceParams::default() });
+            assert_ne!(ninth, plain_pair, "{limited:?}");
+        }
+        // Below 9 and above 16 colors, and for Full Tone and Automatic, the palette is a plain median cut's.
+        for colors in [2, 3, 6, 8, 17, 24, 32, 64, 256] {
+            assert_eq!(palette(Palette::Limited, colors), plain(colors as usize), "{colors} colors");
+            assert_eq!(palette(Palette::DocumentLibrary, colors), plain(colors as usize), "{colors} colors");
+        }
+        let detail = (TraceParams::default().color_detail / 100.0).clamp(0.0, 1.0);
+        assert_eq!(palette(Palette::FullTone, 16), refine(&used, centers(&median_cut(&used, FULL_TONE_MAX, 96.0 - 88.0 * detail))));
+        let automatic = match flat_colors(&used, detail) {
+            Some(n) => plain(n),
+            None => refine(&used, centers(&median_cut(&used, FULL_TONE_MAX, 96.0 - 88.0 * detail))),
+        };
+        assert_eq!(palette(Palette::Automatic, 16), automatic);
+    }
+
+    #[test]
+    fn a_dark_colored_figure_on_a_nearly_flat_dark_ground_keeps_its_color() {
+        // Dark navy text (a few pixels) on the near-black ground: only cuts between two dark grays
+        // are weighed, so the navy still gets a color of its own.
+        let navy = [10.0, 20.0, 70.0];
+        let mut used = ground_and_ramp();
+        used.push((used.len(), navy, 400.0));
+        let palette = color_palette(&used, &TraceParams { palette: Palette::Limited, colors: 16, ..TraceParams::default() });
+        let near = |c: [f64; 3]| {
+            let (a, b) = (oklab(c), oklab(navy));
+            (0..3).map(|q| (a[q] - b[q]).powi(2)).sum::<f64>().sqrt()
+        };
+        let nearest = palette.iter().map(|&c| near(c)).fold(f64::INFINITY, f64::min);
+        assert!(nearest < LEAST_APART, "nearest {nearest} in {palette:?}");
+    }
 }

@@ -182,6 +182,10 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     if menu_item(ui, tl!("Show Find Field"), true, find) {
         set_pstate(ui.ctx(), "swatch-show-find", !find);
     }
+    let recent = app.ui.swatches_show_recent_colors;
+    if menu_item(ui, tl!("Show Recent Colors"), true, recent) {
+        app.ui.swatches_show_recent_colors = !recent;
+    }
     ui.separator();
     if menu_item(ui, tl!("Swatch Options…"), opts.is_some(), false)
         && let Some(n) = opts

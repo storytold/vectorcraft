@@ -310,6 +310,131 @@ fn flattening_a_rope_counts_against_the_heap() {
 }
 
 #[test]
+fn operators_and_builtins_count_a_flattened_rope_against_the_heap() {
+    // Three ropes of about 524,288 units, each 1 MiB once flat, with a 3 MiB heap.
+    let build = "var s = 'x'; for (var i = 0; i < 19; i++) s = s + s; var t = s + 'y', u = s + 'z';";
+    let limits = Limits { heap_bytes: 3 << 20, ..Limits::default() };
+    let not_stopped: Vec<_> =
+        ["X < 'a'", "X == 1", "+X", "X[0]", "({})[{ toString: function () { return X; } }]", "JSON.stringify(0, null, X)", "[1].join(X)"]
+            .into_iter()
+            .filter(|read| {
+                let src = format!("{build} {}; {}; {}; 0", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
+                let result = Realm::with_options(Options::default(), limits.clone()).run(&src);
+                !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
+            })
+            .collect();
+    assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
+}
+
+#[test]
+fn a_flattened_temporary_stays_counted_while_the_next_copy_is_made() {
+    // Ropes of 262,145 units, each about half the heap once flat: one fits, two don't. Each is
+    // made by a function, so nothing but the native code holds it while it is flattened.
+    let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; }";
+    let limits = Limits { heap_bytes: 4 * 262_146, ..Limits::default() };
+    let run = |read: &str| Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} {read}; 0"));
+    assert!(run("f('a')[0]").is_ok(), "one flattened copy fits");
+    let not_stopped: Vec<_> = [
+        "({ valueOf: function () { return f('a'); } }) < ({ valueOf: function () { return f('b'); } })",
+        "JSON.stringify({ toJSON: function () { return f('a'); } })",
+        "[1, 2].join({ toString: function () { return f('a'); } })",
+        "[{ toString: function () { return f('a'); } }].join('')",
+    ]
+    .into_iter()
+    .filter(|read| !matches!(run(read), Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap)))
+    .collect();
+    assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
+}
+
+#[test]
+fn a_converted_rope_counts_what_it_holds_while_its_copy_is_made() {
+    // `mk` returns a rope whose left half is a flat string of about half the heap, held by
+    // nothing else. Its flattened copy is the other half, so the two don't fit together.
+    let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; } \
+                 function mk() { var a = f('a'); a[0]; return a + 'b'; }";
+    let limits = Limits { heap_bytes: 4 * 262_146, ..Limits::default() };
+    let not_stopped: Vec<_> = [
+        "+({ valueOf: mk })",
+        "({})[{ toString: mk }]",
+        "({ valueOf: mk }) == 1",
+        "++({ get x() { return mk(); } }).x",
+        "JSON.stringify(0, null, (function () { var o = new String(''); o.toString = mk; return o; })())",
+    ]
+    .into_iter()
+    .filter(|read| {
+        let result = Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} {read}; 0"));
+        !matches!(result, Err(ref e) if e.kind == RunErrorKind::Limit(LimitKind::Heap))
+    })
+    .collect();
+    assert!(not_stopped.is_empty(), "not stopped by the heap limit: {not_stopped:?}");
+}
+
+#[test]
+fn a_string_object_counts_its_flattened_rope_against_the_heap() {
+    // The same three ropes, each wrapped in a String object and read by index.
+    let build = "var s = 'x'; for (var i = 0; i < 19; i++) s = s + s; var t = s + 'y', u = s + 'z'; \
+                 String.prototype.first = function () { return this[0]; };";
+    let limits = Limits { heap_bytes: 3 << 20, ..Limits::default() };
+    // Wrapping alone reads no units, so it makes no copy.
+    let lengths =
+        Realm::with_options(Options::default(), limits.clone()).run(&format!("{build} Object(s).length + new String(t).length + Object(u).length"));
+    assert_eq!(lengths, Ok(JsValue::Number(1_572_866.0)));
+    // Two copies fit. The third read finds no room for its copy and reads the unit along the
+    // rope, so the live heap stays within the limit.
+    for (read, expected) in [
+        ("Object(X)[0]", "xxx"),
+        ("new String(X)[0]", "xxx"),
+        ("0 in Object(X)", "truetruetrue"),
+        ("Object(X).hasOwnProperty(0)", "truetruetrue"),
+        ("X.first()", "xxx"),
+        ("Object(X)[524288]", "undefinedyz"),
+    ] {
+        let src = format!("{build} '' + ({}) + ({}) + ({})", read.replace('X', "s"), read.replace('X', "t"), read.replace('X', "u"));
+        let mut realm = Realm::with_options(Options::default(), limits.clone());
+        assert_eq!(realm.run(&src), Ok(JsValue::String(expected.into())), "{read}");
+        let interp = realm.interp();
+        interp.collect_garbage();
+        assert!(interp.heap.bytes <= limits.heap_bytes, "{read}: {} bytes live", interp.heap.bytes);
+    }
+    let wrapped =
+        Realm::with_options(Options::default(), Limits::default()).run(&format!("{build} Object(t)[524288] + new String(u)[524288] + t.first()"));
+    assert_eq!(wrapped, Ok(JsValue::String("yzx".into())));
+}
+
+#[test]
+fn a_string_object_takes_fuel_for_the_rope_it_flattens() {
+    let limits = Limits { fuel: 40_000, ..Limits::default() };
+    let build = "var s = ' '; for (var i = 0; i < 20; i++) s = s + s; Object(s).length";
+    assert!(Realm::with_options(Options::default(), limits.clone()).run(build).is_ok());
+    for read in ["Object(s)[0]", "0 in new String(s)"] {
+        let e = fail_with(Realm::with_options(Options::default(), limits.clone()), &format!("{build}; {read}"));
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "{read}: {e:?}");
+    }
+    // A run that ends with an error right after the read leaves the next run its whole fuel.
+    let mut realm = Realm::with_options(Options::default(), Limits { fuel: 100_000, ..Limits::default() });
+    let defined = realm.run("var s = ' '; for (var i = 0; i < 20; i++) s = s + s; Object.defineProperty(new String(s), 0, { value: 'a' })");
+    assert!(matches!(defined, Err(ref e) if e.kind == RunErrorKind::Thrown), "{defined:?}");
+    assert!(realm.run("for (var j = 0; j < 5000; j++) {} j").is_ok());
+}
+
+#[test]
+fn a_call_keeps_its_operands_while_a_string_receiver_is_boxed() {
+    // `g` leaves a garbage string, so the heap is close to its limit when the rope receiver of a
+    // non-strict function is boxed. The callee and the argument object are off the stack by
+    // then, and must survive anything boxing the receiver does.
+    let build = "var s = 'x'; for (var i = 0; i < 17; i++) s = s + s; function f(c) { return s + c; } \
+                 function mk() { var a = f('a'); a[0]; return a + 'b'; } 0";
+    let mut realm = Realm::with_options(Options::default(), Limits::default());
+    assert_eq!(realm.run(build), Ok(JsValue::Number(0.0)));
+    let interp = realm.interp();
+    interp.collect_garbage();
+    interp.limits.heap_bytes = interp.heap.bytes + 2 * crate::heap::string_bytes(131_073) + (64 << 10);
+    interp.reset_gc_threshold();
+    let src = "(function () { var g = f('g'); g[0]; })(); (function (o) { return o.x; }).call(mk(), { x: 1 })";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(1.0)));
+}
+
+#[test]
 fn compiling_a_pattern_counts_against_the_heap() {
     let src = "var s = '[\\\\s\\\\S]a*'; for (var i = 0; i < 14; i++) s = s + s; new RegExp(s).source.length";
     let e = fail_with(Realm::with_options(Options::default(), Limits { heap_bytes: 2 << 20, ..Limits::default() }), src);

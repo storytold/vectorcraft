@@ -485,6 +485,194 @@ pub fn cluster(colors: &[Color], weights: &[f32], n: usize) -> Vec<Vec<usize>> {
     rows
 }
 
+/// The distinct colors [`theme_palette`] clusters, at most.
+const THEME_CANDIDATES: usize = 4096;
+
+/// The color palette of the weighted colors `samples` (color, weight), for Recolor Artwork's Color
+/// Theme Picker: at most `n` colors. The same color given twice counts once with both weights,
+/// and past [`THEME_CANDIDATES`] distinct colors, colors close in Lab merge into the heaviest of
+/// them first.
+/// The colors are grouped as [`cluster`] groups them, each group shows its heaviest color (a color
+/// of `samples`, in its own model; on a tie the one given first), and the heaviest group comes
+/// first (on a tie the group whose first color was given first). Samples without a positive,
+/// finite weight are left out, so no samples give no colors.
+pub fn theme_palette(samples: &[(Color, f32)], n: usize) -> Vec<Color> {
+    let mut index: std::collections::HashMap<ColorKey, usize> = std::collections::HashMap::new();
+    let mut colors: Vec<Color> = vec![];
+    let mut weights: Vec<f32> = vec![];
+    for (c, w) in samples {
+        if !(w.is_finite() && *w > 0.0) {
+            continue;
+        }
+        let i = *index.entry(ColorKey::of(c)).or_insert_with(|| {
+            colors.push(*c);
+            weights.push(0.0);
+            colors.len() - 1
+        });
+        weights[i] += w;
+    }
+    if colors.is_empty() || n == 0 {
+        return vec![];
+    }
+    // At most THEME_CANDIDATES colors are clustered: past that, colors in the same cube of Lab
+    // space merge into the heaviest of them, the cubes doubling in size until few enough remain.
+    if colors.len() > THEME_CANDIDATES {
+        let labs: Vec<[f32; 3]> = colors
+            .iter()
+            .map(|c| {
+                let l = c.to_lab();
+                [l.l, l.a, l.b]
+            })
+            .collect();
+        let mut side = 2.0f32;
+        loop {
+            let mut cube: std::collections::HashMap<[i32; 3], usize> = std::collections::HashMap::new();
+            let (mut top, mut sum): (Vec<usize>, Vec<f32>) = (vec![], vec![]);
+            for (i, lab) in labs.iter().enumerate() {
+                let k = lab.map(|v| (v / side).floor() as i32);
+                match cube.get(&k) {
+                    Some(&j) => {
+                        sum[j] += weights[i];
+                        if weights[i] > weights[top[j]] {
+                            top[j] = i;
+                        }
+                    }
+                    None => {
+                        cube.insert(k, top.len());
+                        top.push(i);
+                        sum.push(weights[i]);
+                    }
+                }
+            }
+            if top.len() <= THEME_CANDIDATES {
+                colors = top.iter().map(|&i| colors[i]).collect();
+                weights = sum;
+                break;
+            }
+            side *= 2.0;
+        }
+    }
+    let mut groups: Vec<(f32, usize, Color)> = cluster(&colors, &weights, n)
+        .into_iter()
+        .filter_map(|g| {
+            let total: f32 = g.iter().map(|&i| weights[i]).sum();
+            let top = g.iter().copied().fold(None::<usize>, |best, i| match best {
+                Some(b) if weights[b] >= weights[i] => Some(b),
+                _ => Some(i),
+            })?;
+            Some((total, *g.first()?, colors[top]))
+        })
+        .collect();
+    groups.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+    groups.into_iter().map(|g| g.2).collect()
+}
+
+/// Colors that [`weigh`] moves from one row to another as one: a color they are shown by, how
+/// often the art uses them and the row they are in. A fixed unit (such as the color a row is
+/// shown by) stays in its row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WeighUnit {
+    pub color: Color,
+    pub uses: f64,
+    pub row: usize,
+    pub fixed: bool,
+}
+
+/// The unit-by-row comparisons one [`weigh`] makes, at most.
+const WEIGH_WORK: usize = 50_000_000;
+
+/// The uses of `u` that count: a positive finite number, else 0.
+fn unit_uses(u: &WeighUnit) -> f64 {
+    if u.uses.is_finite() && u.uses > 0.0 { u.uses } else { 0.0 }
+}
+
+/// Each row's share of the uses of `units`, in percent (0 for every row when nothing is used).
+/// Units whose row is past `rows`, or whose uses are not a positive finite number, count nothing.
+pub fn row_shares(units: &[WeighUnit], rows: usize) -> Vec<f64> {
+    let mut sums = vec![0.0; rows];
+    for u in units {
+        if let Some(s) = sums.get_mut(u.row) {
+            *s += unit_uses(u);
+        }
+    }
+    let total: f64 = sums.iter().sum();
+    if total <= 0.0 {
+        return vec![0.0; rows];
+    }
+    sums.iter().map(|s| s / total * 100.0).collect()
+}
+
+/// For Recolor Artwork's Prominent Colors (our own rule): the row each of `units` goes to so that
+/// each row's share of the uses comes as near its share of `weights` as whole units allow. One
+/// unit moves at a time, while a move brings the rows' shares nearer their weights (the sum of
+/// every row's distance from its weight falls); of those moves, the one taken is the unit nearest
+/// in Lab (CIEDE2000) to the color of the row it goes to (`anchors`), compared with the row it
+/// leaves; on a tie, the move that brings the shares nearest. Fixed units, units in a row past
+/// `anchors` and units used no times stay where they are. Weights that are negative or not finite
+/// count as 0; when no weight is positive, every unit stays. The moves stop after
+/// [`WEIGH_WORK`] comparisons of a unit with a row, and when the movable units times the rows pass
+/// it, every unit stays.
+pub fn weigh(units: &[WeighUnit], anchors: &[Color], weights: &[f64]) -> Vec<usize> {
+    let mut row: Vec<usize> = units.iter().map(|u| u.row).collect();
+    let n = anchors.len();
+    let given = |r: usize| weights.get(r).copied().filter(|x| x.is_finite() && *x > 0.0).unwrap_or(0.0);
+    // Scaled by the largest weight first, so the sum stays finite.
+    let top = (0..n).map(given).fold(0.0, f64::max);
+    let w = |r: usize| if top > 0.0 { given(r) / top } else { 0.0 };
+    let sum_w: f64 = (0..n).map(w).sum();
+    let movable: Vec<usize> = (0..units.len()).filter(|&i| !units[i].fixed && units[i].row < n && unit_uses(&units[i]) > 0.0).collect();
+    let per_pass = movable.len().saturating_mul(n);
+    if sum_w <= 0.0 || n < 2 || movable.is_empty() || per_pass > WEIGH_WORK {
+        return row;
+    }
+    let mut sums = vec![0.0; n];
+    for u in units.iter().filter(|u| u.row < n) {
+        sums[u.row] += unit_uses(u);
+    }
+    let total: f64 = sums.iter().sum();
+    let target: Vec<f64> = (0..n).map(|r| w(r) / sum_w * total).collect();
+    let anchor_labs: Vec<Lab> = anchors.iter().map(|c| c.to_lab()).collect();
+    // Each movable unit's distance to each row's color.
+    let dist: Vec<Vec<f32>> = movable
+        .iter()
+        .map(|&i| {
+            let l = units[i].color.to_lab();
+            anchor_labs.iter().map(|a| delta_e2000(*a, l)).collect()
+        })
+        .collect();
+    // A move must bring the shares nearer by more than rounding.
+    let eps = total * 1e-9;
+    for _ in 0..WEIGH_WORK / per_pass {
+        let mut best: Option<(f32, f64, usize, usize)> = None;
+        for (m, &i) in movable.iter().enumerate() {
+            let (a, x) = (row[i], unit_uses(&units[i]));
+            let before_a = (sums[a] - target[a]).abs();
+            let after_a = (sums[a] - x - target[a]).abs();
+            for b in (0..n).filter(|&b| b != a) {
+                let gain = before_a + (sums[b] - target[b]).abs() - after_a - (sums[b] + x - target[b]).abs();
+                if gain <= eps {
+                    continue;
+                }
+                let cost = dist[m][b] - dist[m][a];
+                let better = match best {
+                    None => true,
+                    Some((c, g, ..)) => cost < c || (cost == c && gain > g),
+                };
+                if better {
+                    best = Some((cost, gain, m, b));
+                }
+            }
+        }
+        let Some((_, _, m, b)) = best else { break };
+        let i = movable[m];
+        let x = unit_uses(&units[i]);
+        sums[row[i]] -= x;
+        sums[b] += x;
+        row[i] = b;
+    }
+    row
+}
+
 /// A set of colours to snap to (Limit to Library), with their Lab values cached.
 #[derive(Clone, Debug, Default)]
 pub struct Palette(Vec<(Color, Lab)>);
@@ -691,6 +879,39 @@ mod tests {
         assert!(cluster(&[], &[], 3).is_empty());
     }
 
+    /// The Color Theme Picker's palette: similar colors merge, each group shows its heaviest
+    /// color in its own model, and the heaviest group comes first.
+    #[test]
+    fn theme_palette_takes_the_heaviest_color_of_each_group_heaviest_first() {
+        let red = Color::rgb(1.0, 0.0, 0.0);
+        let pink = Color::rgb(1.0, 0.2, 0.2);
+        let blue = Color::cmyk(1.0, 0.8, 0.0, 0.0);
+        let navy = Color::cmyk(1.0, 0.9, 0.0, 0.3);
+        let samples = [(pink, 1.0), (blue, 2.0), (red, 3.0), (navy, 2.5), (red, 0.5)];
+        // Blue and navy weigh 4.5, and so do red (3 + 0.5, its two samples add up) and pink.
+        assert_eq!(theme_palette(&samples, 2), vec![red, navy], "a tie: the group given first");
+        let samples = [(pink, 1.0), (blue, 2.0), (red, 3.0), (navy, 1.0)];
+        assert_eq!(theme_palette(&samples, 2), vec![red, blue], "heaviest group first, its heaviest color");
+        assert_eq!(theme_palette(&samples, 9).len(), 4, "never more colors than given");
+        assert_eq!(theme_palette(&samples, 1), vec![red]);
+        assert!(theme_palette(&samples, 0).is_empty());
+        assert!(theme_palette(&[(red, 0.0), (blue, f32::NAN), (pink, -1.0)], 3).is_empty(), "no weight, no colors");
+        assert!(theme_palette(&[], 3).is_empty());
+    }
+
+    /// Past 4,096 distinct colors, close colors merge before clustering: the palette still keeps
+    /// a heavy color apart from thousands of light ones.
+    #[test]
+    fn theme_palette_merges_close_colors_past_its_candidate_limit() {
+        let mut samples: Vec<(Color, f32)> = (0..20_000).map(|i| (Color::rgb(0.0, 0.0, 0.3 + 0.7 * i as f32 / 20_000.0), 0.001)).collect();
+        samples.extend((0..20_000).map(|i| (Color::rgb(1.0, 0.8 * i as f32 / 20_000.0, 0.0), 0.0001)));
+        samples.push((Color::rgb(0.0, 1.0, 0.0), 50.0));
+        let p = theme_palette(&samples, 3);
+        assert_eq!(p.len(), 3);
+        assert_eq!(p[0], Color::rgb(0.0, 1.0, 0.0), "the heavy green first, exactly as given");
+        assert!(p[1].to_hsb()[0] > 180.0 && p[2].to_hsb()[0] < 90.0, "then the blues, then the reds and oranges: {p:?}");
+    }
+
     #[test]
     fn hue_shift_with_own_model_puts_every_colour_of_the_row_in_the_new_model() {
         let to = Color::cmyk(0.0, 1.0, 1.0, 0.0);
@@ -795,5 +1016,56 @@ mod tests {
         assert!(matches!(r, Color::Cmyk { .. }));
         assert!(matches!(Rng::new(3).saturation_brightness(Color::lab(50.0, 40.0, 20.0)), Color::Lab { .. }));
         assert_eq!(Rng::new(3).saturation_brightness(Color::gray(0.4)).to_hsb()[1], 0.0, "greys stay grey");
+    }
+
+    fn unit(color: Color, uses: f64, row: usize, fixed: bool) -> WeighUnit {
+        WeighUnit { color, uses, row, fixed }
+    }
+
+    #[test]
+    fn row_shares_are_percent_of_the_uses() {
+        let units = [unit(Color::rgb(1.0, 0.0, 0.0), 3.0, 0, true), unit(Color::rgb(0.0, 0.0, 1.0), 1.0, 1, true), unit(Color::WHITE, 5.0, 4, false)];
+        assert_eq!(row_shares(&units, 2), vec![75.0, 25.0]);
+        assert_eq!(row_shares(&[], 2), vec![0.0, 0.0]);
+        assert_eq!(row_shares(&[unit(Color::WHITE, f64::NAN, 0, false)], 1), vec![0.0]);
+    }
+
+    #[test]
+    fn weigh_moves_the_nearest_colors_toward_the_weights() {
+        let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+        let units = [
+            unit(red, 1.0, 0, true),
+            unit(Color::rgb(0.9, 0.1, 0.3), 1.0, 0, false),
+            unit(Color::rgb(0.5, 0.0, 0.8), 1.0, 0, false),
+            unit(blue, 1.0, 1, true),
+        ];
+        // Equal weights: the reddish purple, nearer blue than the red-pink is, moves.
+        assert_eq!(weigh(&units, &[red, blue], &[1.0, 1.0]), vec![0, 0, 1, 1]);
+        // Most of the weight on blue: both movable colors go, the row's own color stays.
+        assert_eq!(weigh(&units, &[red, blue], &[0.0, 1.0]), vec![0, 1, 1, 1]);
+        // Weights already met, or none positive: nothing moves.
+        assert_eq!(weigh(&units, &[red, blue], &[3.0, 1.0]), vec![0, 0, 0, 1]);
+        assert_eq!(weigh(&units, &[red, blue], &[0.0, f64::NAN]), vec![0, 0, 0, 1]);
+        assert_eq!(weigh(&units, &[red, blue], &[1e308, 1e308]), vec![0, 0, 1, 1], "huge weights act as equal ones");
+        assert_eq!(weigh(&units, &[red], &[1.0]), vec![0, 0, 0, 1], "a row past the anchors keeps its units");
+    }
+
+    #[test]
+    fn weigh_takes_whole_units_and_stops_when_no_move_helps() {
+        let (red, blue) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0));
+        // A heavy unit: moving it would overshoot by more than staying misses.
+        let units = [unit(red, 1.0, 0, true), unit(Color::rgb(0.8, 0.0, 0.2), 10.0, 0, false), unit(blue, 10.0, 1, true)];
+        assert_eq!(weigh(&units, &[red, blue], &[1.0, 1.4]), vec![0, 0, 1]);
+        assert_eq!(weigh(&units, &[red, blue], &[1.0, 20.0]), vec![0, 1, 1]);
+        // Many units: the result still follows the weights.
+        let many: Vec<WeighUnit> = (0..400).map(|i| unit(Color::rgb(i as f32 / 400.0, 0.2, 1.0 - i as f32 / 400.0), 1.0, 0, i == 0)).collect();
+        let rows = weigh(&many, &[Color::rgb(0.0, 0.2, 1.0), Color::rgb(1.0, 0.2, 0.0)], &[1.0, 3.0]);
+        assert_eq!(rows.iter().filter(|r| **r == 1).count(), 300);
+        assert!(rows[399] == 1 && rows[1] == 0, "the reddest colors go to the red row");
+        // Past the work limit (8,000 units by 7,000 rows) nothing moves.
+        let units: Vec<WeighUnit> = (0..8_000).map(|i| unit(Color::WHITE, 1.0, 0, i == 0)).collect();
+        let anchors = vec![Color::BLACK; 7_000];
+        let weights = vec![1.0; 7_000];
+        assert!(weigh(&units, &anchors, &weights).iter().all(|r| *r == 0));
     }
 }

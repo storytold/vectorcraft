@@ -1,14 +1,19 @@
 //! Action set files: the Actions panel menu's Save Actions… and Load Actions….
 //!
-//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1, 2 or 3, "name",
+//! An action set file (`.vcactions`) is JSON: `{"format": "vcactions", "version": 1 to 6, "name",
 //! "actions": [{"name", "steps": [{"command", "params", "excluded"?}], "key"?, "color"?}]}`. Each step is a
 //! command id and its params, as `command.batch` takes them, or a stop: the command `action.stop`
-//! with `{"message", "allowContinue"}`. `key` is the action's function key
+//! with `{"message", "allowContinue"}`. A Select Object step is the command `select.byNote` with
+//! `{"note", "caseSensitive", "wholeWord"}`, and a Select Path step is the command `select.storedPath`
+//! with `{"id", "fingerprint"}`. `key` is the action's function key
 //! (`{"key": 1 to 15, "cmd", "shift"}`) and `color` its Button Mode color; an action without them,
 //! or with a value that is not one, has none. `excluded: true` keeps a step but skips it during
 //! playback. Sets with exclusions use version 2 so older builds refuse them rather than replay
-//! excluded steps, and sets with stops use version 3 so older builds refuse them rather than fail
-//! at a stop. Other sets use version 1, and earlier version 1 and 2 files still work.
+//! excluded steps, sets with stops use version 3 so older builds refuse them rather than fail at a
+//! stop, sets with Select Object steps use version 4, sets with Select Path steps use version 5 and
+//! sets with View menu steps ([`crate::menus::plays_in_app`]), whose params are an object, use
+//! version 6 so older builds refuse them rather than fail at that step. Other sets use version 1, and
+//! earlier version 1 to 5 files still work.
 //! Load Actions… also reads the action sets another app saves as text (`.aia`, through
 //! `actionSet.read`).
 
@@ -31,12 +36,13 @@ pub const ACTIONS_EXT: &str = "vcactions";
 pub(super) const MAX_SET_FILE: usize = 8 << 20;
 
 /// The most actions [`read_set`] reads from one file.
-const MAX_SET_ACTIONS: usize = 1000;
+pub(super) const MAX_SET_ACTIONS: usize = 1000;
 
 /// The most steps [`read_set`] reads in one action.
-const MAX_ACTION_STEPS: usize = 10_000;
+pub(super) const MAX_ACTION_STEPS: usize = 10_000;
 
-/// The most left-out steps that Load Actions… lists for an action set another app saved.
+/// The most left-out steps that Load Actions… lists for an action set another app saved, and the
+/// most steps with an unknown command it lists for an action set file.
 const MAX_SKIPPED: usize = 1000;
 
 /// An action set file: a header, the set's name and its actions.
@@ -74,17 +80,118 @@ fn is_false(value: &bool) -> bool {
     !value
 }
 
+/// A step as [`write_set`] writes it when it is included: [`FileStep`] without `excluded`.
+#[derive(Serialize)]
+struct IncludedStep<'a> {
+    command: &'a str,
+    params: &'a Value,
+}
+
+/// The bytes that excluding one step adds to the text [`write_set`] writes: a comma, a line
+/// break, the indent and `"excluded": true`.
+pub(super) const EXCLUDED_BYTES: usize = 28;
+
+/// The bytes more that a step adds to the text [`write_set`] writes as an action's first step than
+/// [`step_bytes`] counts: a line break on each side of the step and the indent of the closing
+/// bracket, in place of a comma and a line break.
+pub(super) const FIRST_STEP_BYTES: usize = 6;
+
+/// The bytes that the included step `(command, params)` adds to the text [`write_set`] writes when
+/// it goes after the last step of an action. As the action's first step it adds
+/// [`FIRST_STEP_BYTES`] more.
+pub(super) fn step_bytes(command: &str, params: &Value) -> usize {
+    /// Counts the bytes and the line breaks written to it.
+    #[derive(Default)]
+    struct Count {
+        bytes: usize,
+        breaks: usize,
+    }
+    impl std::io::Write for Count {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.bytes += buf.len();
+            self.breaks += buf.iter().filter(|&&b| b == b'\n').count();
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut count = Count::default();
+    if serde_json::to_writer_pretty(&mut count, &IncludedStep { command, params }).is_err() {
+        return MAX_SET_FILE + 1;
+    }
+    // In the file every line of the step is indented by 8 more spaces, and a comma and a line break
+    // come before it.
+    count.bytes + 8 * (count.breaks + 1) + 2
+}
+
 /// The params of the stops in a step: a stop's own, or those of the stops a `command.batch` step
 /// holds, which playback runs as its own steps.
 fn stops_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
-    if command == super::STOP_STEP {
+    steps_in(super::STOP_STEP, command, params)
+}
+
+/// The params of the Select Object steps in a step, as [`stops_in`] finds stops.
+fn select_objects_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
+    steps_in(super::SELECT_OBJECT_STEP, command, params)
+}
+
+/// The params of the steps that run command `kind` in a step: the step's own, or those of the
+/// steps a `command.batch` step holds, which playback runs as its own steps.
+fn steps_in<'a>(kind: &str, command: &str, params: &'a Value) -> Vec<&'a Value> {
+    if command == kind {
         return vec![params];
     }
     if command != "command.batch" {
         return vec![];
     }
     let steps = params.get("commands").and_then(Value::as_array).into_iter().flatten();
-    steps.filter(|step| super::is_stop(step)).map(|step| step.get("params").unwrap_or(&Value::Null)).collect()
+    steps.filter(|step| step.get("command").and_then(Value::as_str) == Some(kind)).map(|step| step.get("params").unwrap_or(&Value::Null)).collect()
+}
+
+/// The params of the Select Path steps in a step, as [`stops_in`] finds stops.
+fn select_paths_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
+    steps_in(super::SELECT_PATH_STEP, command, params)
+}
+
+/// The params of the View menu steps ([`crate::menus::plays_in_app`]) in a step, as [`stops_in`]
+/// finds stops.
+fn ui_steps_in<'a>(command: &str, params: &'a Value) -> Vec<&'a Value> {
+    if crate::menus::plays_in_app(command) {
+        return vec![params];
+    }
+    if command != "command.batch" {
+        return vec![];
+    }
+    let steps = params.get("commands").and_then(Value::as_array).into_iter().flatten();
+    steps
+        .filter(|step| step.get("command").and_then(Value::as_str).is_some_and(crate::menus::plays_in_app))
+        .map(|step| step.get("params").unwrap_or(&Value::Null))
+        .collect()
+}
+
+/// A folder preference whose value in a step running `command` with `params` names a folder
+/// ([`vectorcraft_engine::cmd::prefscmds::names_a_folder`]): in a `prefs.set` step, given as
+/// `{key, value}` or in `values`, and in a `command.batch` step, in any of its commands at any depth.
+/// Every such value is found, also one under `values` that `{key, value}` replaces when the step runs,
+/// because [`write_set`] writes the params as they are.
+fn folder_pref_in(command: &str, params: &Value) -> Option<String> {
+    use vectorcraft_engine::cmd::prefscmds::names_a_folder;
+    match command {
+        "prefs.set" => {
+            let names = |key: &str, value: &Value| value.as_str().is_some_and(|v| names_a_folder(key, v));
+            let pair = params.get("key").and_then(Value::as_str).filter(|key| params.get("value").is_some_and(|v| names(key, v)));
+            let values = params.get("values").and_then(Value::as_object).into_iter().flatten();
+            pair.map(str::to_string).or_else(|| values.filter(|(key, v)| names(key, v)).map(|(key, _)| key.clone()).next())
+        }
+        "command.batch" => {
+            let mut steps = params.get("commands").and_then(Value::as_array).into_iter().flatten();
+            steps.find_map(|step| {
+                folder_pref_in(step.get("command").and_then(Value::as_str).unwrap_or_default(), step.get("params").unwrap_or(&Value::Null))
+            })
+        }
+        _ => None,
+    }
 }
 
 /// `set` as the text of an action set file.
@@ -104,11 +211,18 @@ pub fn write_set(set: &ActionSet) -> String {
             color: a.color.clone(),
         })
         .collect();
-    let has_stop = set.actions.iter().flat_map(|a| &a.steps).any(|(command, params)| !stops_in(command, params).is_empty());
-    let version = match (has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
-        (true, _) => 3,
-        (false, true) => 2,
-        (false, false) => 1,
+    let steps = || set.actions.iter().flat_map(|a| &a.steps);
+    let has_select_object = steps().any(|(command, params)| !select_objects_in(command, params).is_empty());
+    let has_select_path = steps().any(|(command, params)| !select_paths_in(command, params).is_empty());
+    let has_stop = steps().any(|(command, params)| !stops_in(command, params).is_empty());
+    let has_ui_step = steps().any(|(command, params)| !ui_steps_in(command, params).is_empty());
+    let version = match (has_select_path, has_select_object, has_stop, set.actions.iter().any(|a| !a.excluded_steps.is_empty())) {
+        _ if has_ui_step => 6,
+        (true, ..) => 5,
+        (false, true, ..) => 4,
+        (false, false, true, _) => 3,
+        (false, false, false, true) => 2,
+        (false, false, false, false) => 1,
     };
     let file = SetFile { format: ACTIONS_EXT.into(), version, name: set.name.clone(), actions };
     serde_json::to_string_pretty(&file).unwrap_or_default()
@@ -123,7 +237,7 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     if f.format != ACTIONS_EXT {
         return Err("not an action set file".into());
     }
-    if !matches!(f.version, 1..=3) {
+    if !matches!(f.version, 1..=6) {
         return Err("the action set file needs a later version of VectorCraft".into());
     }
     if f.actions.len() > MAX_SET_ACTIONS {
@@ -134,6 +248,18 @@ pub fn read_set(text: &str, name: &str) -> Result<ActionSet, String> {
     }
     let mut stops = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| stops_in(&s.command, &s.params));
     if stops.any(|p| super::stop_params(p).is_err()) {
+        return Err("not an action set file".into());
+    }
+    let mut select_paths = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| select_paths_in(&s.command, &s.params));
+    if select_paths.any(|p| vectorcraft_engine::stored_path_params(p).is_err()) {
+        return Err("not an action set file".into());
+    }
+    let mut select_objects = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| select_objects_in(&s.command, &s.params));
+    if select_objects.any(|p| super::select_object_params(p).is_err()) {
+        return Err("not an action set file".into());
+    }
+    let mut ui_steps = f.actions.iter().flat_map(|a| &a.steps).flat_map(|s| ui_steps_in(&s.command, &s.params));
+    if ui_steps.any(|p| !p.is_object()) {
         return Err("not an action set file".into());
     }
     let actions = f
@@ -180,7 +306,9 @@ pub(super) fn set_file_stem(name: &str) -> String {
 /// the set (the web downloads it) → `{path}`. `id` is the panel's own set id ([`ActionSet::id`]),
 /// which the panel menu passes: the set with this id is saved wherever it is when the file dialog
 /// answers, and `set` is not read. A set that [`read_set`] would refuse (larger than 8 MiB as a
-/// file, more than 1,000 actions, an action with more than 10,000 steps) is not written.
+/// file, more than 1,000 actions, an action with more than 10,000 steps) is not written, nor is a set
+/// with a step that sets a folder preference to a folder ([`folder_pref_in`]), which names a folder
+/// on this computer: the error names the action and the preference.
 pub fn save_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let len = app.ui.action_sets.len();
     let set = match (p.get("id"), p.get("set")) {
@@ -191,6 +319,11 @@ pub fn save_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         (_, Some(v)) => v.as_u64().and_then(|i| usize::try_from(i).ok()).filter(|&i| i < len).ok_or("no such action set")?,
     };
     let Some(s) = app.ui.action_sets.get(set) else { return Err("no such action set".into()) };
+    let folder =
+        s.actions.iter().find_map(|a| a.steps.iter().find_map(|(command, params)| folder_pref_in(command, params)).map(|key| (&a.name, key)));
+    if let Some((action, key)) = folder {
+        return Err(format!("the action “{}” sets the folder preference {}; delete that step to save the set", action, key));
+    }
     let text = write_set(s);
     // What Save Actions… writes, Load Actions… reads back.
     read_set(&text, "")?;
@@ -329,6 +462,8 @@ fn load_aia(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
     }
     let AiaLoad { mut set, skipped, left_out } = aia_set(&read, "Actions");
     set.name = free_set_name(&app.ui.action_sets, &set.name);
+    // The set must save as a file that Load Actions… reads, which can be larger than the file read.
+    super::edit_keeps_set_loadable(app, None, &set)?;
     let (name, actions) = (set.name.clone(), set.actions.len());
     app.ui.action_sets.push(set);
     if left_out > 0 {
@@ -350,14 +485,22 @@ fn load_aia(app: &mut VectorcraftApp, params: Value) -> Result<Value, String> {
 /// same name as one in the panel gets the next free number (`Print 2`). Loaded actions keep their
 /// function keys. The current set and the other sets stay as they are →
 /// `{set: index, name, actions: n}`. Where the host can read part of a file (the desktop), a file
-/// larger than 8 MiB is refused after its first 8 MiB and one byte are read.
+/// larger than 8 MiB is refused after its first 8 MiB and one byte are read. A set that Save
+/// Actions… would write as a file Load Actions… refuses (larger than 8 MiB, as a file with less
+/// white space or a name that gets a number can give) is refused too, and no set is added.
+///
+/// A step whose command is not known now ([`super::KnownCommands`]), excluded or not, and a command
+/// of a `command.batch` step that is not, still loads as it is. The answer then also lists them,
+/// and the status bar names the first and how many there are → `{…, unknownCommands: [{action,
+/// actionIndex, step, stepIndex, batchStep?, command}] (at most 1,000), unknownCount: n}`.
 ///
 /// An action set another app saved as text (`.aia`, read with `actionSet.read`) comes in with its
 /// actions and the steps that stand for a VectorCraft command ([`step_name`], [`step_commands`]),
 /// with no params; a step that is off in the file is excluded from playback. A set with no name is
 /// called after the file, else `Actions`. The other steps are left out and listed, and the status
 /// bar says how many → `{set, name, actions, skipped: [{action, step}] (at most 1,000), leftOut: n}`.
-/// Such a file that `actionSet.read` marks `truncated` is refused, and no set is added.
+/// Such a file that `actionSet.read` marks `truncated` is refused, and so is one whose set Save
+/// Actions… would write larger than 8 MiB; then no set is added.
 pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let (text, stem) = match p.get("data") {
         Some(Value::String(data)) => {
@@ -398,7 +541,49 @@ pub fn load_set(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     };
     let mut set = read_set(&text, if stem.is_empty() { "Actions" } else { &stem })?;
     set.name = free_set_name(&app.ui.action_sets, &set.name);
+    // A number added to the name can make a file at the limit larger than it.
+    super::edit_keeps_set_loadable(app, None, &set)?;
+    let (unknown, unknown_count, first) = unknown_commands(&set);
     let (name, actions) = (set.name.clone(), set.actions.len());
     app.ui.action_sets.push(set);
-    Ok(json!({ "set": app.ui.action_sets.len() - 1, "name": name, "actions": actions }))
+    let mut answer = json!({ "set": app.ui.action_sets.len() - 1, "name": name, "actions": actions });
+    if let Some((action, step, command)) = first {
+        app.status(crate::i18n::msg_n(
+            unknown_count as u64,
+            "Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`",
+            "Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`",
+            &[
+                ("name", &super::shown_text(&name)),
+                ("action", &super::shown_text(&action)),
+                ("step", &step),
+                ("command", &super::shown_text(&command)),
+            ],
+        ));
+        answer["unknownCommands"] = json!(unknown);
+        answer["unknownCount"] = json!(unknown_count);
+    }
+    Ok(answer)
+}
+
+/// The steps of `set` whose command is not known now ([`super::KnownCommands`]), excluded steps
+/// included: the first [`MAX_SKIPPED`] as `[{action, actionIndex, step, stepIndex, batchStep?,
+/// command}]` (`step` and `batchStep` count from 1, the indexes from 0), how many there are, and the
+/// first one's action name, place ([`super::step_place`]) and command.
+fn unknown_commands(set: &ActionSet) -> (Vec<Value>, usize, Option<(String, String, String)>) {
+    let known = super::KnownCommands::now();
+    let (mut listed, mut count, mut first) = (vec![], 0usize, None);
+    for (a, action) in set.actions.iter().enumerate() {
+        for (step, in_batch, command) in action.unknown_commands(&known, false) {
+            count += 1;
+            first.get_or_insert_with(|| (action.name.clone(), super::step_place(step, in_batch), command.to_string()));
+            if listed.len() < MAX_SKIPPED {
+                let mut entry = json!({ "action": action.name, "actionIndex": a, "step": step + 1, "stepIndex": step, "command": command });
+                if let Some(j) = in_batch {
+                    entry["batchStep"] = json!(j + 1);
+                }
+                listed.push(entry);
+            }
+        }
+    }
+    (listed, count, first)
 }

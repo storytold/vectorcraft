@@ -44,7 +44,8 @@ pub struct Running {
     token: CancelToken,
     /// A newer trace of the same object took its place: it ends without a word.
     superseded: bool,
-    /// Colour layers traced and in all (0 while the image is prepared).
+    /// How far the trace has got and in all, as the trace counts it (color layers, or finer steps for Overlapping
+    /// with Fills; 0 in all while the image is prepared).
     steps: Arc<[AtomicU64; 2]>,
     /// The Image Trace panel started it, and takes its result ([`crate::panels::image_trace::traced`]).
     from_panel: bool,
@@ -59,7 +60,7 @@ impl Running {
         !self.hidden && !self.token.is_cancelled()
     }
 
-    /// The share of its colour layers traced, once they are known.
+    /// The share of the trace done, once its steps are known.
     fn fraction(&self) -> Option<f32> {
         let [done, total] = &*self.steps;
         let (done, total) = (done.load(Ordering::Relaxed), total.load(Ordering::Relaxed));

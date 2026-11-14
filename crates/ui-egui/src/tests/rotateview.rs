@@ -117,7 +117,8 @@ fn control_rotate_view_keeps_press_coordinates_and_shift_snapping_across_request
         send(&mut app, &ctx, "ui.pointer", json!({"mods": {"shift": true}, "events": [{"kind": "drag", "x": x, "y": y}]}));
         assert_eq!(app.view().unwrap().rotation, 45.0, "the same document point does not turn again as the view changes");
     }
-    send(&mut app, &ctx, "ui.pointer", json!({"events": [{"kind": "up", "x": x, "y": y}]}));
+    // Null `mods` keep the default, as an omitted value does.
+    send(&mut app, &ctx, "ui.pointer", json!({"mods": null, "events": [{"kind": "up", "x": x, "y": y, "mods": null}]}));
     assert_eq!(app.view().unwrap().rotation, 45.0);
 }
 

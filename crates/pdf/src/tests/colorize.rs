@@ -133,6 +133,39 @@ fn colorized_images_are_downsampled() {
     assert!(text.contains("/Width 150") && !text.contains("/Width 600"), "resampled to 150 ppi");
 }
 
+/// The pieces of a colorized image under a mesh warp, placed at different widths, paint one
+/// colorized image and its one soft mask, with downsampling off and on.
+#[test]
+fn a_colorized_warped_image_is_written_once_for_all_its_pieces() {
+    for compression in [serde_json::json!({}), serde_json::json!({"gray": {"downsample": "bicubic", "ppi": 150}})] {
+        let mut d = Document::new(100.0, 100.0);
+        let gray = image::GrayImage::from_fn(600, 600, |x, y| image::Luma([((x + y) % 200) as u8]));
+        let mut png = vec![];
+        gray.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        d.images.insert("pic".into(), ImageBlob::png(png));
+        let im = ImageObject {
+            key: "pic".into(),
+            width: 600,
+            height: 600,
+            xf: Affine::scale(72.0 / 600.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(d.alloc_id(), NodeKind::Image(Box::new(im.clone())));
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0))));
+        // 0.5 to 1.5 times as wide from left to right.
+        let stretch = |p: vectorcraft_geom::Point| vectorcraft_geom::Point::new(p.x * (0.5 + p.x / 144.0), p.y);
+        let warped = vectorcraft_doc::live::mesh_warp_image(&n, &im, &stretch, 4, false, false);
+        d.insert(d.default_layer(), 0, warped).unwrap();
+        let settings: PdfSettings = serde_json::from_value(serde_json::json!({ "compression": compression })).unwrap();
+        let out = export_with_report(&d, &PdfOptions { settings, ..Default::default() }).unwrap().bytes;
+        let found = images(&out);
+        assert_eq!(found.len(), 2, "{compression}: the colorized image and its soft mask, not {found:?}");
+        assert!(found.contains(&("DeviceRGB".into(), vec![], true)), "{compression}: {found:?}");
+    }
+}
+
 /// Printed separations keep a colorized image's pixels on every plate and separate its color:
 /// a spot-colorized image prints on its ink's plate only. An uncolorized image of the same pixels
 /// is separated as before.
@@ -165,6 +198,76 @@ fn separations_print_the_image_on_its_ink_plate() {
         if name == "Ink" {
             assert_eq!(plain, &[0, 0], "{name}: the uncolorized image");
         }
+    }
+}
+
+/// Printed separations separate a colorized image with a color mask as it shows: the pixels the
+/// mask hides print on no plate.
+#[test]
+fn separations_print_a_color_masked_image_as_it_shows() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    // The black pixel hidden.
+    let mut png = vec![];
+    image::GrayAlphaImage::from_raw(2, 1, vec![0, 0, 255, 255])
+        .unwrap()
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    d.images.insert("shown".into(), ImageBlob::png(png));
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
+        key: "shown".into(),
+        from: "pic".into(),
+        background: vectorcraft_doc::color_mask::MaskBackground::Colors,
+        colors: vec![[0, 0, 0]],
+        contiguous: false,
+        measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+        tolerance: 0.0,
+        softness: 0.0,
+    }));
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+    assert!(!job.plates.is_empty());
+    for p in &job.plates {
+        let n = &p.layers[0].children().unwrap()[0];
+        let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+        assert_eq!(p.image_blob(im).and_then(|b| b.coverage()).unwrap().2, [0, 0], "the hidden black pixel prints on no plate");
+    }
+}
+
+/// A colorized image with a color mask keeps its colorize paint on the plates when its masked
+/// pixels take it, as on the canvas, though its own pixels are a preview that doesn't.
+#[test]
+fn separations_colorize_masked_pixels_whose_own_pixels_are_a_preview() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+    d.images.insert("pic".into(), ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview) });
+    let mut png = vec![];
+    image::GrayAlphaImage::from_raw(2, 1, vec![0, 0, 255, 255])
+        .unwrap()
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    d.images.insert("shown".into(), ImageBlob::png(png));
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().color_mask = Some(Box::new(vectorcraft_doc::color_mask::ColorMask {
+        key: "shown".into(),
+        from: "pic".into(),
+        background: vectorcraft_doc::color_mask::MaskBackground::Colors,
+        colors: vec![[0, 0, 0]],
+        contiguous: false,
+        measure: vectorcraft_doc::color_mask::MaskMatch::Distance,
+        tolerance: 0.0,
+        softness: 0.0,
+    }));
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let job = plan(&d, &PrintOptions { settings, ..Default::default() }).unwrap();
+    assert!(!job.plates.is_empty());
+    for p in &job.plates {
+        let n = &p.layers[0].children().unwrap()[0];
+        let NodeKind::Image(im) = &n.kind else { panic!("an image") };
+        assert!(n.extras().colorize.is_some(), "the masked pixels take the colorize paint");
+        assert_eq!(p.image_blob(im).and_then(|b| b.coverage()).unwrap().2, [0, 0], "separated as the masked pixels");
     }
 }
 

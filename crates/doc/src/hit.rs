@@ -569,7 +569,7 @@ fn clip_contains(clip: &Node, p: Point) -> bool {
 
 /// The regions `clip` clips to ([`Node::clip_shapes`]), text counted by its frame as in
 /// [`clip_contains`].
-fn clip_regions(clip: &Node) -> Vec<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)> {
+pub fn clip_regions(clip: &Node) -> Vec<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)> {
     let frame = |n: &Node| {
         let b = n.geometric_bounds()?;
         Some(Node::path(n.id, vectorcraft_geom::shapes::rectangle(b), Default::default()))
@@ -640,7 +640,7 @@ fn source_of(n: &Node, scope: Option<NodeId>) -> bool {
 /// Do clicks and marquees skip the child `i` of `parent` with `scope` isolated? For a Shaper
 /// Group that is its original shapes (its first child), or, in Construction mode, when they are
 /// isolated, the art the group shows.
-fn shaper_hides(parent: &Node, i: usize, scope: Option<NodeId>) -> bool {
+pub fn shaper_hides(parent: &Node, i: usize, scope: Option<NodeId>) -> bool {
     parent.extras().shaper.is_some() && (i == 0) != source_of(parent, scope)
 }
 
@@ -795,6 +795,10 @@ thread_local! {
     static LEAVES_TESTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// What a click at `p` hits on leaf object `n`: its outline, strokes and fills, its frame or its
+/// bounds, by kind. Raster effects (drop shadows, glows, blurs) do not take clicks: the area they
+/// paint beyond the object is left out here and in [`cull_reach`], so a click there reaches the
+/// object under it.
 fn hit_leaf(n: &Node, p: Point, opt: HitOptions, symbols: &SymbolBoxes) -> Option<HitKind> {
     #[cfg(test)]
     LEAVES_TESTED.with(|c| c.set(c.get() + 1));
@@ -1352,7 +1356,7 @@ fn marquee_with(doc: &Document, r: Rect, scope: Option<NodeId>, leaves: bool, wh
 /// The part of a marquee `r` in which it can touch the children of `parent`. For a clip group or a
 /// layer with a clipping mask, this is what [`marquee_in_clip`] returns for its clipping path (None
 /// when the marquee misses it); otherwise it is all of `r`.
-fn marquee_in(parent: &Node, r: Rect) -> Option<Rect> {
+pub fn marquee_in(parent: &Node, r: Rect) -> Option<Rect> {
     match parent.children().and_then(|c| c.first()) {
         Some(clip) if parent.clips() => marquee_in_clip(clip, r),
         _ => Some(r),

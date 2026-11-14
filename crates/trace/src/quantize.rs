@@ -8,7 +8,7 @@ mod denoise;
 mod palette;
 mod rare;
 
-use cut_edge::{choosing_pixels, compact, settled};
+use cut_edge::{choosing_pixels, compact, settled, settled_wide, settles_wide};
 pub(crate) use cut_edge::{continuous_tone, settle_cut_edges};
 pub use denoise::denoise;
 pub(crate) use denoise::denoise_keeping;
@@ -91,7 +91,8 @@ pub(crate) fn quantize_keeping(img: &Raster, params: &TraceParams) -> (Quantized
                 let g = l.round().clamp(0.0, 255.0) as u8;
                 [g, g, g]
             });
-            (settled(merge_mixed(compact(labels, palette.collect()), img.width as usize, img.height as usize, &[]), img, &own), vec![])
+            let q = merge_mixed(compact(labels, palette.collect()), img.width as usize, img.height as usize, &[]);
+            (if settles_wide(params) { settled_wide(q, img, &own, true) } else { settled(q, img, &own) }, vec![])
         }
         // Logo mode traces without quantising; asked directly, it quantises like Color.
         Mode::Color | Mode::Logo => {
@@ -170,7 +171,7 @@ pub(crate) fn quantize_keeping(img: &Raster, params: &TraceParams) -> (Quantized
                 if library { q } else { merge_mixed(q, img.width as usize, img.height as usize, &rare) }
             };
             let q = reduce(params.colors);
-            let q = settled(q, img, &own);
+            let q = if settles_wide(params) { settled_wide(q, img, &own, false) } else { settled(q, img, &own) };
             rare.retain(|c| q.palette.contains(c));
             (q, rare)
         }

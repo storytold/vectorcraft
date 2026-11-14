@@ -169,6 +169,44 @@ fn solid_effects_apply_to_a_group_and_its_members_stay_editable() {
     assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
 }
 
+/// Extrude & Bevel is refused, and nothing changes, on a path whose fill's and strokes' solids each
+/// fit but together pass the limit of their faces; with one stroke the effect applies.
+#[test]
+fn extrude_is_refused_when_its_solids_together_are_too_complex() {
+    use vectorcraft_doc::color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, AppearanceItem};
+    let (mut s, id) = session_with_rect();
+    let points: Vec<vectorcraft_geom::Point> = (0..16_384)
+        .map(|k| {
+            let (sin, cos) = (k as f64 * std::f64::consts::TAU / 16_384.0).sin_cos();
+            vectorcraft_geom::Point::new(20_000.0 + 10_000.0 * cos, 20_000.0 + 10_000.0 * sin)
+        })
+        .collect();
+    let polygon = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&points, true));
+    let painted = |strokes: usize| {
+        let mut items = Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0).items;
+        let stroke = AppearanceItem::Stroke(vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::WHITE), 20.0));
+        items.extend(std::iter::repeat_n(stroke, strokes));
+        items
+    };
+    let set = |s: &mut Session, strokes: usize| {
+        let n = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap();
+        let NodeKind::Path { path, live, .. } = &mut n.kind else { panic!("a path") };
+        *path = polygon.clone();
+        *live = None;
+        n.appearance.items = painted(strokes);
+    };
+    // The fill's solid and each stroke's fit on their own; sixty strokes' together do not.
+    set(&mut s, 60);
+    let before = s.doc().unwrap().doc.clone();
+    let err = s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap_err().to_string();
+    assert!(err.contains("The 3D surface is too complex; simplify the shape"), "{err}");
+    assert_eq!(s.doc().unwrap().doc, before, "nothing changed");
+    set(&mut s, 1);
+    s.execute("effect.apply", &json!({"effect": "threeD.extrude", "ids": [id.0], "item": null})).unwrap();
+    assert!(effects::solid_art(&node(&s, id)).is_some());
+}
+
 /// A group of a clipping group (a rectangle clipped by an ellipse) and a rectangle: the session,
 /// the clipping group and the group.
 fn group_with_a_clipping_group() -> (Session, NodeId, NodeId) {
@@ -626,6 +664,50 @@ fn warp_options_non_warp_target_rejection_is_atomic() {
     assert!(!state.is_dirty());
 }
 
+/// `effect.setParams` refuses a `visible` that is not true or false, when called and when a step
+/// plays, and the effect, the document and the undo history stay as they were. `null` leaves the
+/// visibility as it is.
+#[test]
+fn set_params_refuses_a_visible_that_is_not_true_or_false() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "distort.roughen", "item": null})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    for visible in [json!(1), json!(0), json!("false"), json!([])] {
+        let p = json!({"index": 0, "item": null, "visible": visible, "params": {"size": 9}});
+        for replay in [false, true] {
+            let r = if replay { s.replay("effect.setParams", &p) } else { s.execute("effect.setParams", &p) };
+            let err = r.err().map(|e| e.to_string()).unwrap_or_default();
+            assert!(err.contains("`visible` must be true or false"), "{visible} (replay {replay}): {err}");
+            let state = s.doc().unwrap();
+            assert_eq!(state.doc, before, "{visible} (replay {replay})");
+            assert_eq!(state.history.undo.len(), undo, "{visible} (replay {replay})");
+            assert!(!state.is_dirty());
+        }
+    }
+    s.execute("effect.setParams", &json!({"index": 0, "item": null, "visible": null, "params": {"size": 9}})).unwrap();
+    let n = node(&s, id);
+    assert!(n.appearance.effects[0].visible);
+    assert_eq!(n.appearance.effects[0].params["size"], 9);
+}
+
+/// The effect `effect.setParams` checks the parameters against is the one it leaves: a Warp's new
+/// style and a 3D effect's new type, and the effect as it is otherwise.
+#[test]
+fn set_params_checks_the_effect_it_leaves() {
+    use super::edited_effect_id;
+    assert_eq!(edited_effect_id("warp.arc", None, Some("flag")), "warp.flag");
+    assert_eq!(edited_effect_id("warp.arc", None, None), "warp.arc");
+    assert_eq!(edited_effect_id("distort.roughen", None, Some("flag")), "distort.roughen");
+    assert_eq!(edited_effect_id("threeD.extrude", Some("threeD.revolve"), None), "threeD.revolve");
+    assert_eq!(edited_effect_id("warp.arc", Some("threeD.revolve"), None), "warp.arc");
+    let (mut s, _) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": "warp.arc", "item": null})).unwrap();
+    let p = json!({"index": 0, "item": null, "warpStyle": "flag", "params": {"bend": 25}});
+    assert_eq!(super::set_params_effects(&s, &p), ["warp.flag"]);
+}
+
 #[test]
 fn list_remove_and_set_params() {
     let (mut s, id) = session_with_rect();
@@ -880,4 +962,57 @@ fn move_takes_several_effects_that_land_together_in_order() {
     let before = node(&s, id).appearance;
     assert!(s.execute("effect.move", &json!({"from": [0, 9], "to": 0, "fromItem": null, "ids": [id.0]})).is_err());
     assert_eq!(node(&s, id).appearance, before);
+}
+
+/// A 3D effect's shadow is set with `effect.setParams` in one undo step, saved in the native file,
+/// drawn in exports and kept as a path by Expand Appearance; settings out of range are refused
+/// without an undo step.
+#[test]
+fn a_3d_shadow_is_one_undo_step_saved_exported_and_expanded() {
+    let (mut s, id) = session_with_rect();
+    s.execute("effect.apply", &json!({"effect": effects::EXTRUDE, "ids": [id.0], "item": null})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    for (params, why) in [
+        (json!({"shadowBounds": 401}), "shadowBounds must be a number from 10 to 400"),
+        (json!({"shadowPosition": "left"}), "shadowPosition must be behind or below"),
+    ] {
+        let before = s.doc().unwrap().doc.clone();
+        let e = s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap_err().to_string();
+        assert!(e.contains(why), "{params}: {e}");
+        assert_eq!(s.doc().unwrap().doc, before);
+    }
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    let params = json!({"shadow": true, "shadowPosition": "below", "shadowDistance": 20, "shadowBounds": 150});
+    s.execute("effect.setParams", &json!({"ids": [id.0], "index": 0, "item": null, "params": params})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let art = effects::solid_art(&node(&s, id)).unwrap();
+    let shadow = art.children().unwrap()[0].clone();
+    assert!(matches!(shadow.kind, NodeKind::Path { .. }));
+    // Saved and opened again, the effect keeps its shadow settings and draws the same shadow.
+    let doc = &s.doc().unwrap().doc;
+    let restored = vectorcraft_format::load(&vectorcraft_format::save(doc, false)).unwrap();
+    let fx = &restored.node(id).unwrap().appearance.effects[0];
+    for (key, value) in params.as_object().unwrap() {
+        assert_eq!(fx.params.get(key), Some(value), "{key}");
+    }
+    assert_eq!(effects::solid_art(restored.node(id).unwrap()).unwrap(), art);
+    // SVG export draws it: one more shape than without the shadow.
+    let shapes = |s: &mut Session| {
+        let svg = s.execute("document.serialize", &json!({"format": "svg"})).unwrap();
+        let svg = svg["data"].as_str().or_else(|| svg["text"].as_str()).map(str::to_string).unwrap_or_else(|| svg.to_string());
+        vectorcraft_testkit::svg_shapes(&svg)
+    };
+    let with = shapes(&mut s);
+    s.execute("edit.undo", &json!({})).unwrap();
+    let without = shapes(&mut s);
+    assert_eq!(with, without + 1);
+    s.execute("edit.redo", &json!({})).unwrap();
+    s.execute("effect.expandAppearance", &json!({"ids": [id.0]})).unwrap();
+    let mut shadows = 0;
+    s.doc().unwrap().doc.walk(|n| {
+        if n.path_data().is_some() && n.path_data() == shadow.path_data() && n.appearance.items == shadow.appearance.items {
+            shadows += 1;
+        }
+    });
+    assert_eq!(shadows, 1);
 }

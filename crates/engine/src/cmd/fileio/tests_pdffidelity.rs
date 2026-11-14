@@ -59,7 +59,7 @@ fn live_texts(s: &Session) -> Vec<String> {
 #[test]
 fn pdf_place_keeps_live_text_from_bytes_and_unlinked_paths() {
     let bytes = live_text_pdf();
-    let dir = vectorcraft_testkit::temp_dir("pdf-place-live-text");
+    let dir = vectorcraft_testkit::TempDir::new("pdf-place-live-text");
     let path = dir.join("text.pdf");
     std::fs::write(&path, &bytes).unwrap();
     for source in [json!({"name": "text.pdf", "dataBase64": vectorcraft_format::base64_encode(&bytes)}), json!({"path": path, "link": false})] {
@@ -71,7 +71,6 @@ fn pdf_place_keeps_live_text_from_bytes_and_unlinked_paths() {
         assert_eq!(live_texts(&s), ["Second page"], "{r}");
         assert!(!r["warnings"].to_string().contains("outlines"), "{r}");
     }
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

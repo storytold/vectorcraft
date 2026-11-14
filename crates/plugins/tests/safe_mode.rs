@@ -58,9 +58,9 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 fn in_safe_mode_nothing_loads_or_runs() {
     let _f = fresh();
     // Installed before Safe Mode was turned on.
-    let before = registry::install(Plugin::load(&filter("test.safe.before"), Limits::default()).unwrap());
+    let before = registry::install(Plugin::load(&filter("test.safe.before"), Limits::default()).unwrap()).unwrap();
     let fx = build(&tpl::returning(&tpl::manifest("test.safe.effect", "effect", "{}"), r#"{"objects":[]}"#));
-    registry::install(Plugin::load(&fx, Limits::default()).unwrap());
+    registry::install(Plugin::load(&fx, Limits::default()).unwrap()).unwrap();
     let dir = temp_dir("gate");
     std::fs::write(dir.join("a.wasm"), filter("test.safe.folder")).unwrap();
 

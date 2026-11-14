@@ -4,7 +4,7 @@ use super::common::{
 };
 use super::{
     Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, ParamCurve, PathData, Point, Result, Session, SubPath,
-    Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, id_param, json, number_or, po,
+    Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
 };
 
 /// Split a filled path into connected pieces (each outer contour with its holes).
@@ -170,7 +170,7 @@ pub(in super::super) fn erase_outline(pd: &PathData, step: f64, remove: &dyn Fn(
 
 pub(super) fn split(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "path.split";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = usize_opt(p, "subpath", C)?.unwrap_or(0);
     let anchor = usize_opt(p, "anchor", C)?;
     let seg = usize_opt(p, "segment", C)?;

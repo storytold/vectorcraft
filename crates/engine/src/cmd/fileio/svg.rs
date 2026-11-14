@@ -91,6 +91,12 @@ pub const OPTIONS: &[FormatOption] = &[
         description: "embed the fonts type uses as @font-face, subset to the characters used (whole when the font's licence forbids subsetting, left out with a warning when it forbids embedding)",
     },
     FormatOption {
+        name: "variableData",
+        ty: "boolean",
+        default: "false",
+        description: "Include Variable Data: write the text variables, the data sets and the type object each text variable is bound to as a variable library (variableSets) that document.open and variable.loadLibrary read back; variables of other kinds, and what is past the limits variable.loadLibrary reads (256 text variables, 1,000 data sets, 8 MiB), are left out with a warning",
+    },
+    FormatOption {
         name: "svg",
         ty: "object",
         default: "null",
@@ -198,6 +204,7 @@ pub(super) fn encode(doc: &Document, p: &Value, compressed: bool) -> Result<Enco
                 enc.warnings.push(w);
             }
         }
+        enc.add_setting_notes(out.setting_notes);
         enc.files.push((artboard, if compressed { vectorcraft_svg::compress_bytes(&bytes) } else { bytes }));
     }
     // Live type names its fonts; outlines and embedded fonts are the fallback font's.

@@ -184,8 +184,14 @@ fn too_many_pages() -> PdfError {
 }
 
 /// The pages of `doc` (whose layers are those that print) as `set` lays them out, the tiles of
-/// each artboard when tiling, and warnings (art that doesn't fit the imageable area).
-pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<String>) -> Result<(Vec<Layout>, Vec<TileGrid>), PdfError> {
+/// each artboard when tiling. `warnings` gets what doesn't print (art outside the imageable area,
+/// an artboard with no area), and `setting_notes` the copies per sheet that don't fit.
+pub(crate) fn layout(
+    doc: &Document,
+    set: &PrintSettings,
+    warnings: &mut Vec<String>,
+    setting_notes: &mut Vec<String>,
+) -> Result<(Vec<Layout>, Vec<TileGrid>), PdfError> {
     let marks = set.marks.printer_marks();
     let bleed = set.bleed.of(doc);
     let (pw, ph) = set.paper();
@@ -278,7 +284,7 @@ pub(crate) fn layout(doc: &Document, set: &PrintSettings, warnings: &mut Vec<Str
             let fit = set.copies_per_sheet.then(|| (fitting(imageable.width(), extent.0, gutter), fitting(imageable.height(), extent.1, gutter)));
             let grid = match fit {
                 Some((cols, rows)) if cols < 1.0 || rows < 1.0 => {
-                    warnings.push(format!("{what} with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"));
+                    setting_notes.push(format!("{what} with its bleed and marks doesn't fit the imageable area: it prints one copy per sheet"));
                     None
                 }
                 Some((cols, rows)) if cols * rows > MAX_COPIES_PER_SHEET as f64 => {

@@ -1,5 +1,6 @@
 //! Touch gestures on the canvas (Preferences › Devices › Enable Touch Gestures, #585): a tap with
-//! two fingers undoes, one with three redoes.
+//! two fingers undoes, one with three redoes. In the Touch workspace a tap with two fingers
+//! switches between selection and drawing modes instead ([`TOGGLE_MODE`]).
 //!
 //! egui hands every finger's contact over as [`egui::Event::Touch`] (winit reads them from the
 //! system: `WM_POINTER` on Windows), and makes the first finger the mouse pointer too. So the first
@@ -121,13 +122,50 @@ impl Taps {
     }
 }
 
-/// The command a tap of `fingers` runs: two undo, three redo.
-pub(crate) fn tap_command(fingers: usize) -> Option<&'static str> {
+/// The command a tap of `fingers` runs: two undo, three redo. In the Touch workspace (`touch_workspace`)
+/// two switch between the Selection tool and the last drawing tool ([`TOGGLE_MODE`]).
+pub(crate) fn tap_command(fingers: usize, touch_workspace: bool) -> Option<&'static str> {
     match fingers {
+        2 if touch_workspace => Some(TOGGLE_MODE),
         2 => Some("edit.undo"),
         3 => Some("edit.redo"),
         _ => None,
     }
+}
+
+/// Switch between selection and drawing modes: the Selection tool, and back to the drawing tool
+/// chosen last.
+pub const TOGGLE_MODE: &str = "tool.toggleTouchMode";
+
+/// The drawing tool a switch out of selection mode chooses when none has been chosen in this window.
+pub const FIRST_DRAWING_TOOL: &str = "pencil";
+
+/// A tool of selection mode: one that selects objects or parts of them.
+fn selects(id: &str) -> bool {
+    vectorcraft_tools::catalog::is_selection_tool(id) || matches!(id, "magicWand" | "lasso" | "perspectiveSelection")
+}
+
+/// A tool of drawing mode: any tool but those of selection mode and those that only move, turn or
+/// zoom the view.
+pub(crate) fn is_drawing_tool(id: &str) -> bool {
+    !selects(id) && !matches!(id, "hand" | "rotateView" | "zoom" | "printTiling")
+}
+
+/// [`TOGGLE_MODE`]: from a tool of selection mode, choose the drawing tool chosen last (none yet:
+/// [`FIRST_DRAWING_TOOL`]); from any other tool, keep it as the drawing tool and choose the
+/// Selection tool. → `{tool}`, the tool now active.
+pub(crate) fn toggle_mode(app: &mut crate::VectorcraftApp) -> serde_json::Value {
+    let now = app.session.tool_id().to_string();
+    let next = if selects(&now) {
+        app.ui.touch_drawing_tool.clone().unwrap_or_else(|| FIRST_DRAWING_TOOL.to_string())
+    } else {
+        if is_drawing_tool(&now) {
+            app.ui.touch_drawing_tool = Some(now);
+        }
+        "selection".to_string()
+    };
+    app.select_tool(&next);
+    serde_json::json!({"tool": app.session.tool_id()})
 }
 
 #[cfg(test)]
@@ -155,7 +193,20 @@ mod tests {
         }
         let ends: Vec<_> = [4, 5, 6].into_iter().map(|n| t.feed(id(n), TouchPhase::End, p, 1.2)).collect();
         assert_eq!(ends, [None, None, Some(Touch::Tap(3))]);
-        assert_eq!((tap_command(2), tap_command(3), tap_command(1)), (Some("edit.undo"), Some("edit.redo"), None));
+        assert_eq!((tap_command(2, false), tap_command(3, false), tap_command(1, false)), (Some("edit.undo"), Some("edit.redo"), None));
+        assert_eq!((tap_command(2, true), tap_command(3, true), tap_command(1, true)), (Some(TOGGLE_MODE), Some("edit.redo"), None));
+    }
+
+    #[test]
+    fn drawing_tools_are_neither_selection_nor_view_tools() {
+        for id in ["pencil", "pen", "rectangle", "paintbrush", "type", "eraser", "shapeBuilder"] {
+            assert!(is_drawing_tool(id), "{id}");
+        }
+        let selecting = ["selection", "directSelection", "groupSelection", "magicWand", "lasso", "perspectiveSelection"];
+        for id in selecting.into_iter().chain(["hand", "rotateView", "zoom", "printTiling"]) {
+            assert!(!is_drawing_tool(id), "{id}");
+        }
+        assert!(vectorcraft_tools::tool_info(FIRST_DRAWING_TOOL).is_some_and(|t| is_drawing_tool(t.id)));
     }
 
     #[test]

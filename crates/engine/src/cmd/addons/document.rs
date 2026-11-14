@@ -132,8 +132,10 @@ fn export_all_open(s: &mut Session, p: &Value) -> Result<Value> {
     let active = s.active;
     for i in 0..s.docs.len() {
         // Each document in turn is the one Save a Copy writes; switching tabs this way leaves every
-        // document's tool and interaction alone, and the active one comes back below.
+        // document's tool and interaction alone, and the active one comes back below. Its colors
+        // are written through its own profiles.
         s.active = Some(i);
+        s.sync_front_profiles();
         let Ok(st) = s.doc() else { continue };
         let title = st.doc.title.clone();
         let stem = fileio::file_stem(st.path.as_deref().unwrap_or(&title));
@@ -160,6 +162,7 @@ fn export_all_open(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     s.active = active;
+    s.sync_front_profiles();
     Ok(json!({ "files": files, "failed": failed, "format": format.id }))
 }
 

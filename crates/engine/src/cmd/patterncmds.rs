@@ -14,6 +14,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::pattern::{self, Overlap, PATTERN_EDIT_LAYER, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType, pattern_paint};
+use vectorcraft_doc::swatches::PaintFn;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, Selection};
 use vectorcraft_geom::{Point, Rect};
 
@@ -54,7 +55,15 @@ pub fn specs() -> Vec<CommandSpec> {
             in_pattern_edit,
             pattern_done
         ),
-        cmd!("object.pattern.cancel", "Cancel", [], None, "{} leave pattern editing mode, discarding changes", in_pattern_edit, pattern_cancel),
+        cmd!(
+            "object.pattern.cancel",
+            "Cancel",
+            [],
+            None,
+            "{} leave pattern editing mode, discarding changes; a pattern made for this edit is removed with its swatches, and every paint of it, new art's fill and stroke included, becomes none",
+            in_pattern_edit,
+            pattern_cancel
+        ),
         cmd!(
             "object.pattern.saveCopy",
             "Save a Copy",
@@ -78,7 +87,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Delete Pattern",
             [],
             None,
-            "{name} delete a pattern swatch (objects painted with it lose that paint)",
+            "{name} delete a pattern and its swatches; every paint of it, new art's fill and stroke included, becomes none → {unpainted: the number of document paints cleared}",
             has_doc,
             pattern_delete
         ),
@@ -403,24 +412,94 @@ pub(crate) fn finish_edit(d: &mut Document, sel: &mut Selection) -> Result<Strin
     Ok(pe.pattern)
 }
 
+/// Leave pattern editing mode, discarding the changes (`object.pattern.cancel`). An existing
+/// pattern gets its definition back, its name included when Pattern Options renamed it while it was
+/// edited and no other pattern, swatch or color group has taken that name since. A new pattern is
+/// removed with its swatches, and every paint of it left in the document and in the fill, stroke
+/// and appearance new art takes becomes no paint ([`forget_pattern`]).
 fn pattern_cancel(s: &mut Session, _: &Value) -> Result<Value> {
-    s.edit("Cancel Pattern Editing", |d, sel| {
+    let changed = s.edit("Cancel Pattern Editing", |d, sel| {
         let (pe, _) = leave_edit(d, sel)?;
         match pe.original {
-            Some(orig) => {
+            Some(mut orig) => {
+                if orig.name != pe.pattern && (d.pattern(&orig.name).is_some() || swatch_name_clash(d, &pe.pattern, &orig.name)) {
+                    orig.name = pe.pattern.clone();
+                }
+                let back = (orig.name != pe.pattern).then(|| orig.name.clone());
                 if let Some(def) = d.pattern_mut(&pe.pattern) {
                     *def = orig;
                 }
+                if let Some(old) = &back {
+                    rename_pattern_uses(d, &pe.pattern, old);
+                }
+                Ok(back.map(|old| (pe.pattern, Some(old))))
             }
             None => {
-                d.patterns.retain(|p| p.name != pe.pattern);
-                d.swatches.retain(|sw| !matches!(&sw.paint, Paint::Pattern { pattern, .. } if *pattern == pe.pattern));
+                forget_pattern(d, &pe.pattern);
+                Ok(Some((pe.pattern, None)))
             }
         }
-        Ok(())
     })?;
     after_edit_mode(s, None)?;
+    if let Some((name, to)) = changed {
+        map_new_art_paints(s, &mut pattern_paints(&name, to.as_deref()))?;
+    }
     ok()
+}
+
+/// A [`PaintFn`] that puts a paint of pattern `to` in place of each paint of pattern `name`, with
+/// its placement kept, or no paint for `to` `None`.
+fn pattern_paints<'a>(name: &'a str, to: Option<&'a str>) -> impl FnMut(&Paint) -> Option<Paint> + 'a {
+    move |p| match p {
+        Paint::Pattern { pattern, xf } if pattern == name => Some(match to {
+            Some(n) => Paint::Pattern { pattern: n.to_string(), xf: *xf },
+            None => Paint::None,
+        }),
+        _ => None,
+    }
+}
+
+/// Remove pattern `name` from `d`: its definition and every swatch, grouped or not, whose paint is
+/// the pattern. Every paint of the pattern left anywhere in the document (the art, opacity masks,
+/// type, symbol definitions, graph designs, graphs' stored series and label paints, other patterns'
+/// tiles, graphic and character styles and the art of brushes) becomes no paint. Returns the number of such paints.
+fn forget_pattern(d: &mut Document, name: &str) -> usize {
+    d.patterns.retain(|p| p.name != name);
+    let is_it = |sw: &vectorcraft_color::Swatch| matches!(&sw.paint, Paint::Pattern { pattern, .. } if pattern == name);
+    d.swatches.retain(|sw| !is_it(sw));
+    for g in &mut d.swatch_groups {
+        g.swatches.retain(|sw| !is_it(sw));
+    }
+    super::swatch::map_all_paints(d, &mut pattern_paints(name, None))
+}
+
+/// Apply `f` to the fill and stroke new art takes and to the paints of its template appearance. A
+/// change is recorded with the step just made, so Undo and Redo put these paints back with the
+/// document.
+fn map_new_art_paints(s: &mut Session, f: &mut PaintFn) -> Result<()> {
+    let start = super::colormgmt::new_art_colors_before(s)?;
+    let old = s.paint.clone();
+    let pd = &mut s.paint;
+    let template = pd.appearance.iter_mut().flat_map(|a| a.items.iter_mut()).map(|it| match it {
+        vectorcraft_doc::AppearanceItem::Fill(f) => &mut f.paint,
+        vectorcraft_doc::AppearanceItem::Stroke(s) => &mut s.paint,
+    });
+    for p in [&mut pd.fill, &mut pd.stroke].into_iter().chain(template) {
+        if let Some(q) = f(p) {
+            *p = q;
+        }
+    }
+    if s.paint != old {
+        super::colormgmt::record_new_art_colors(s, start)?;
+        // The step takes the paints the command finally leaves, after the selection's appearance
+        // is inherited.
+        let st = s.doc()?;
+        if st.interaction.is_none() {
+            let uid = st.uid;
+            s.batch_paint_docs.push(uid);
+        }
+    }
+    Ok(())
 }
 
 fn pattern_save_copy(s: &mut Session, p: &Value) -> Result<Value> {
@@ -524,6 +603,9 @@ fn pattern_options(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
+    if let Some(nn) = &new_name {
+        map_new_art_paints(s, &mut pattern_paints(&name, Some(nn)))?;
+    }
     Ok(json!({ "name": out_name }))
 }
 
@@ -552,47 +634,19 @@ fn swatch_name_clash(d: &Document, old: &str, new: &str) -> bool {
 }
 
 /// Rename a pattern in swatches, paints and the edit record. Of the swatches named `old`, only the
-/// pattern's own take the new name.
+/// pattern's own take the new name. The paints are renamed wherever [`forget_pattern`] clears them.
 fn rename_pattern_uses(d: &mut Document, old: &str, new: &str) {
-    let fix = |p: &mut Paint| {
-        if let Paint::Pattern { pattern, .. } = p
-            && pattern == old
-        {
-            *pattern = new.to_string();
-        }
-    };
-    for sw in d.swatches.iter_mut().chain(d.swatch_groups.iter_mut().flat_map(|g| g.swatches.iter_mut())) {
+    for sw in d.swatches_iter_mut() {
         if sw.name == old && pattern_name(&sw.paint).is_some_and(|p| p == old) {
             sw.name = new.to_string();
         }
-        fix(&mut sw.paint);
     }
     if let Some(pe) = &mut d.pattern_edit
         && pe.pattern == old
     {
         pe.pattern = new.to_string();
     }
-    let ids = nodes_using(d, Some(old));
-    for id in ids {
-        if let Some(n) = d.node_mut(id) {
-            for it in n.appearance.items.iter_mut() {
-                match it {
-                    vectorcraft_doc::AppearanceItem::Fill(f) => fix(&mut f.paint),
-                    vectorcraft_doc::AppearanceItem::Stroke(s) => fix(&mut s.paint),
-                }
-            }
-        }
-    }
-}
-
-fn nodes_using(d: &Document, name: Option<&str>) -> Vec<NodeId> {
-    let mut ids = vec![];
-    d.walk(|n| {
-        if pattern::uses_pattern(n, name) {
-            ids.push(n.id);
-        }
-    });
-    ids
+    super::swatch::map_all_paints(d, &mut pattern_paints(old, Some(new)));
 }
 
 fn pattern_delete(s: &mut Session, p: &Value) -> Result<Value> {
@@ -604,29 +658,8 @@ fn pattern_delete(s: &mut Session, p: &Value) -> Result<Value> {
     if editing(s).is_some_and(|e| e.pattern == name) {
         return Err(bad(C, "finish editing the pattern first"));
     }
-    let n = s.edit("Delete Pattern", |d, _| {
-        d.patterns.retain(|p| p.name != name);
-        let is_it = |sw: &vectorcraft_color::Swatch| matches!(&sw.paint, Paint::Pattern { pattern, .. } if *pattern == name);
-        d.swatches.retain(|sw| !is_it(sw));
-        for g in &mut d.swatch_groups {
-            g.swatches.retain(|sw| !is_it(sw));
-        }
-        let ids = nodes_using(d, Some(&name));
-        for id in &ids {
-            if let Some(n) = d.node_mut(*id) {
-                for it in n.appearance.items.iter_mut() {
-                    let p = match it {
-                        vectorcraft_doc::AppearanceItem::Fill(f) => &mut f.paint,
-                        vectorcraft_doc::AppearanceItem::Stroke(s) => &mut s.paint,
-                    };
-                    if matches!(p, Paint::Pattern { pattern, .. } if *pattern == name) {
-                        *p = Paint::None;
-                    }
-                }
-            }
-        }
-        Ok(ids.len())
-    })?;
+    let n = s.edit("Delete Pattern", |d, _| Ok(forget_pattern(d, &name)))?;
+    map_new_art_paints(s, &mut pattern_paints(&name, None))?;
     Ok(json!({ "unpainted": n }))
 }
 

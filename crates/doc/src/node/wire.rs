@@ -55,6 +55,8 @@ impl Serialize for Node {
             e.symbol_overrides.is_empty(),
             e.envelope_edit_margin.is_none(),
             is_default(&e.pixel_aligned),
+            e.color_mask.is_none(),
+            is_default(&e.warp_piece),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -98,6 +100,8 @@ impl Serialize for Node {
         field!("symbol_overrides", &e.symbol_overrides);
         field!("envelope_edit_margin", &e.envelope_edit_margin);
         field!("pixel_aligned", &e.pixel_aligned);
+        field!("color_mask", &e.color_mask);
+        field!("warp_piece", &e.warp_piece);
         st.end()
     }
 }
@@ -241,6 +245,10 @@ pub(super) struct NodeWire {
     envelope_edit_margin: Option<[f32; 4]>,
     #[serde(default)]
     pixel_aligned: bool,
+    #[serde(default)]
+    color_mask: Option<Box<crate::color_mask::ColorMask>>,
+    #[serde(default)]
+    warp_piece: bool,
 }
 
 impl From<NodeWire> for Node {
@@ -269,6 +277,8 @@ impl From<NodeWire> for Node {
             symbol_overrides: w.symbol_overrides,
             envelope_edit_margin: w.envelope_edit_margin,
             pixel_aligned: w.pixel_aligned,
+            color_mask: w.color_mask,
+            warp_piece: w.warp_piece,
         };
         Node {
             id: w.id,

@@ -89,6 +89,10 @@ pub enum Error {
     /// Safe Mode is on ([`safe_mode`]): no plug-in loads or runs.
     #[error("Safe Mode is on: plug-ins don't load or run until VectorCraft starts normally")]
     SafeMode,
+    /// The module lists permissions that no recorded grant gives this very module
+    /// ([`registry::approved`]): it names them, comma-separated.
+    #[error("needs approval: it asks for {0}, which the user grants when installing it on its own")]
+    NeedsApproval(String),
     #[error("{0}")]
     Io(String),
 }

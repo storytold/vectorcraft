@@ -7,7 +7,7 @@ use std::fmt::Write;
 
 use vectorcraft_color::{Color, Gradient};
 use vectorcraft_doc::{LAYER_COLORS, LayerColor, LineCap, LineJoin, StrokeLayer};
-use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, SubPath};
+use vectorcraft_geom::{Affine, Anchor, AnchorKind, PathData, Point, Shape, SubPath};
 
 use crate::ps;
 
@@ -103,11 +103,81 @@ pub(crate) fn unit(v: f32) -> f32 {
     if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
 }
 
+/// `color` as a reader reads it back from the values written for it ([`ps::written`]): RGB values
+/// clamped to 0..1, L to 0..100 and a and b to -128..127, each to four decimals; other colors
+/// unchanged.
+pub(crate) fn as_written(color: Color) -> Color {
+    let w = |v: f32| ps::written(f64::from(v)) as f32;
+    match color {
+        Color::Rgb { r, g, b } => Color::rgb(w(unit(r)), w(unit(g)), w(unit(b))),
+        Color::Lab { l, a, b } => Color::lab(w(l.clamp(0.0, 100.0)), w(a.clamp(-128.0, 127.0)), w(b.clamp(-128.0, 127.0))),
+        c => c,
+    }
+}
+
+/// The RGB values written for `color`, clamped to 0..1: an RGB color's own values (in the working
+/// RGB space, as a reader reads them back), any other color's display RGB.
+pub(crate) fn rgb_values(color: Color) -> [f32; 3] {
+    match color {
+        Color::Rgb { r, g, b } => [r, g, b].map(unit),
+        c => c.to_rgb().map(unit),
+    }
+}
+
 /// The average colour of a gradient's stops (in RGB).
 pub(crate) fn average(g: &Gradient) -> Color {
     let n = g.stops.len().max(1) as f32;
     let sum = g.stops.iter().map(|s| s.color.to_rgb()).fold([0.0f32; 3], |a, c| [a[0] + c[0], a[1] + c[1], a[2] + c[2]]);
     Color::rgb(unit(sum[0] / n), unit(sum[1] / n), unit(sum[2] / n))
+}
+
+/// The pixels an image's part keeps past the edge of the region that shows it, on each side: as
+/// many as smoothing reads from beside a pixel, and one more.
+const WINDOW_MARGIN: f64 = 2.0;
+
+/// The part of an image of `w` × `h` pixels, which `to_doc` places in the document, that regions
+/// `clips` (each in the document, the image cut to all of them) show, with [`WINDOW_MARGIN`] pixels
+/// more on each side: `[x0, y0, x1, y1]`, in pixels from the top left. One pixel of the image, the
+/// nearest to where the regions are, when they show none of it. `None` when that part has half the
+/// image's pixels or more, or when `to_doc` can't be undone; the whole image is written then.
+pub(crate) fn image_window(clips: &[kurbo::BezPath], to_doc: Affine, (w, h): (u32, u32)) -> Option<[u32; 4]> {
+    if clips.is_empty() || w == 0 || h == 0 || !to_doc.is_finite() || to_doc.determinant().abs() < 1e-12 {
+        return None;
+    }
+    let to_pixels = to_doc.inverse();
+    let (mut x0, mut y0, mut x1, mut y1) = (0.0, 0.0, f64::from(w), f64::from(h));
+    for clip in clips {
+        let b = (to_pixels * clip.clone()).bounding_box();
+        if !b.is_finite() {
+            return None;
+        }
+        x0 = f64::max(x0, b.x0.floor() - WINDOW_MARGIN);
+        y0 = f64::max(y0, b.y0.floor() - WINDOW_MARGIN);
+        x1 = f64::min(x1, b.x1.ceil() + WINDOW_MARGIN);
+        y1 = f64::min(y1, b.y1.ceil() + WINDOW_MARGIN);
+    }
+    if x0 >= x1 || y0 >= y1 {
+        let (x, y) = ((x0 as u32).min(w - 1), (y0 as u32).min(h - 1));
+        return Some([x, y, x + 1, y + 1]);
+    }
+    if 2.0 * (x1 - x0) * (y1 - y0) >= f64::from(w) * f64::from(h) {
+        return None;
+    }
+    Some([x0 as u32, y0 as u32, x1 as u32, y1 as u32])
+}
+
+/// The rows `y0..y1` and columns `x0..x1` (`window`) of `samples`, `w` pixels a row of `channels`
+/// bytes each, rows from the top.
+pub(crate) fn window_samples(samples: &[u8], w: u32, channels: usize, [x0, y0, x1, y1]: [u32; 4]) -> Vec<u8> {
+    let row = w as usize * channels;
+    let (from, to) = (x0 as usize * channels, x1 as usize * channels);
+    let mut out = Vec::with_capacity((y1 - y0) as usize * (to - from));
+    for y in y0 as usize..y1 as usize {
+        if let Some(part) = samples.get(y * row + from..y * row + to) {
+            out.extend_from_slice(part);
+        }
+    }
+    out
 }
 
 /// The stroke's width, cap, join, miter limit and dashes: `w J j M d`.

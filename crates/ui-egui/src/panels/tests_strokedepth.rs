@@ -100,9 +100,52 @@ fn every_arrowhead_preview_draws_its_head() {
     };
     let plain = (ink(None, false), ink(None, true));
     for a in Arrowhead::ALL {
-        assert!(ink(Some(a), false) > plain.0 + 20, "{a:?} at the end");
-        assert!(ink(Some(a), true) > plain.1 + 20, "{a:?} at the start");
+        assert!(ink(Some(a.clone()), false) > plain.0 + 20, "{a:?} at the end");
+        assert!(ink(Some(a.clone()), true) > plain.1 + 20, "{a:?} at the start");
     }
+    // So does a custom head: a 4 × 4 square behind its tip.
+    let pts = [(0.0, -2.0), (4.0, -2.0), (4.0, 2.0), (0.0, 2.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    let square = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true));
+    let custom = Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new("Square".into(), square)));
+    assert!(ink(Some(custom.clone()), false) > plain.0 + 20);
+    assert!(ink(Some(custom), true) > plain.1 + 20);
+}
+
+#[test]
+fn a_long_custom_arrowhead_preview_fits_in_its_box() {
+    use vectorcraft_doc::Arrowhead;
+    // 40 units long and 4 wide, reaching 4 units past its tip.
+    let pts = [(-4.0, -2.0), (36.0, -2.0), (36.0, 2.0), (-4.0, 2.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    let bar = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true));
+    // 120 units across: smaller than the smallest head weight can draw it.
+    let pts = [(0.0, -60.0), (4.0, -60.0), (4.0, 60.0), (0.0, 60.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    let wall = vectorcraft_geom::PathData::single(vectorcraft_geom::SubPath::polyline(&pts, true));
+    let heads = [bar, wall].map(|p| Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new("Bar".into(), p))));
+    for (head, start) in heads.iter().flat_map(|h| [(h, false), (h, true)]) {
+        let d = stroke::arrow_doc(Some(head.clone()), start, 56.0, 22.0).unwrap();
+        // Rendered well beyond the 56 × 22 pt box, at 1 pixel a point: all the ink is inside it.
+        let img = vectorcraft_render::Renderer::new().render_region(&d, vectorcraft_geom::Rect::new(-100.0, -50.0, 156.0, 72.0), 1.0, false);
+        let ink: Vec<(u32, u32)> = (0..256).flat_map(|x| (0..122).map(move |y| (x, y))).filter(|&(x, y)| img.pixel(x, y)[3] > 64).collect();
+        assert!(ink.len() > 40, "start {start}: the line and head draw");
+        let outside: Vec<&(u32, u32)> = ink.iter().filter(|&&(x, y)| !(100..156).contains(&x) || !(50..72).contains(&y)).collect();
+        assert!(outside.is_empty(), "start {start}: {} pixels outside the box, e.g. {:?}", outside.len(), outside.first());
+    }
+}
+
+#[test]
+fn the_arrowhead_menu_renders_only_the_previews_in_view() {
+    let ctx = egui::Context::default();
+    let mut app = app_with_line();
+    let t = frame_events(&ctx, &mut app, vec![], stroke::show);
+    let label = text_rect(&t, "Arrowheads:");
+    let sp = ctx.global_style().spacing.item_spacing.x;
+    click(&ctx, &mut app, egui::pos2(label.right() + 2.0 * sp + 64.0 + 32.0, label.center().y), stroke::show);
+    frame_events(&ctx, &mut app, vec![], stroke::show);
+    frame_events(&ctx, &mut app, vec![], stroke::show);
+    let previews = ctx.tex_manager().read().allocated().filter(|(_, m)| m.name.contains(":arrow:") && m.name.ends_with(":false")).count();
+    // The button's and the rows' in the 360 pt list, not one for each of the menu's heads.
+    let rows = vectorcraft_doc::Arrowhead::ALL.len() + 1;
+    assert!(previews > 5 && previews < rows / 2 + 5, "{previews} previews for {rows} rows");
 }
 
 #[test]

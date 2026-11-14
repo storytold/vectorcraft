@@ -184,7 +184,9 @@ impl Session {
         if changed.is_empty() {
             return Ok(none());
         }
-        let ids: Vec<u64> = changed.iter().flat_map(|(_, ids)| ids.iter().copied()).collect();
+        // Each once: a DCS file and its plate files list the same objects.
+        let mut seen = HashSet::new();
+        let ids: Vec<u64> = changed.iter().flat_map(|(_, ids)| ids.iter().copied()).filter(|id| seen.insert(*id)).collect();
         let mode = if update { "automatically" } else { self.prefs.update_links.as_str() };
         match mode {
             "automatically" => {

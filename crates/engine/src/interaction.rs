@@ -27,6 +27,9 @@ pub struct Interaction {
     /// A transform or a perspective edit with `copy` keeps the copies it made of the snapshot here
     /// ([`PreviewCopies`]).
     pub(crate) copies: Option<Arc<PreviewCopies>>,
+    /// The bounding box of `selection` in `doc`, measured once for a move drag
+    /// ([`crate::Session::move_drag_box`]): each step offsets it by the drag's move.
+    pub(crate) move_box: std::sync::OnceLock<Option<vectorcraft_doc::OrientedBox>>,
 }
 
 /// What Object → Transform → Transform Again (⌘D) repeats ([`SessionState::last_transform`]).

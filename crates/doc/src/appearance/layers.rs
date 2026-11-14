@@ -193,8 +193,10 @@ impl StrokeLayer {
     /// How far the start (`end == false`) or end arrowhead can reach from its end point (0
     /// without one): the head's diagonal, or with [`ArrowAlign::Extend`] its length, plus the cap.
     pub fn head_reach(&self, end: bool) -> f64 {
-        let head = if end { self.end_arrow } else { self.start_arrow };
-        head.map_or(0.0, |k| k.reach() * self.arrow_weight(end) + self.width / 2.0)
+        let head = if end { &self.end_arrow } else { &self.start_arrow };
+        // A custom head can paint in front of its tip, which Extend puts past the end point.
+        let reach = |k: &Arrowhead| if self.arrow_align == ArrowAlign::Extend { k.reach().max(k.length()) } else { k.reach() };
+        head.as_ref().map_or(0.0, |k| reach(k) * self.arrow_weight(end) + self.width / 2.0)
     }
     /// How far the arrowheads can reach from the path's end points (0 without heads).
     pub fn arrow_reach(&self) -> f64 {

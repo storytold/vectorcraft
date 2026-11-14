@@ -784,8 +784,7 @@ fn save_preset_row(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) 
 /// ones → the names added
 /// (none on the web, where the picked file arrives later and imports through `io::open_bytes`).
 pub(crate) fn import_presets(app: &mut VectorcraftApp) -> Result<Vec<String>, String> {
-    if let Some(f) = app.services.open_async.as_mut() {
-        f();
+    if crate::picks::open_async(app) {
         return Ok(vec![]);
     }
     let pick = crate::FilePick { filters: vec![crate::FilePick::filter("Export presets", fileio::SCREEN_EXPORT_PRESET_EXTS)], ..Default::default() };
