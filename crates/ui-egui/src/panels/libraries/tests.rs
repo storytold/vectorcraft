@@ -525,3 +525,16 @@ fn libraries_are_exported_and_imported_from_the_panel_menu() {
     assert_eq!(names, ["Brand", "Brand (2)"]);
     assert_eq!(app.ui.status, "Imported library Brand (2)");
 }
+
+/// A graphic's thumbnail shrunk for its tile keeps the color of the art beside clear pixels: the
+/// clear black beside it does not darken it.
+#[test]
+fn a_shrunk_thumbnail_keeps_its_color_beside_clear_pixels() {
+    let img = image::RgbaImage::from_fn(64, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) });
+    let small = shrunk_thumbnail(image::DynamicImage::ImageRgba8(img), 16);
+    assert_eq!(small.dimensions(), (16, 1));
+    let m = |c: u8, a: u8| (u16::from(c) * u16::from(a) / 255) as u8;
+    for p in small.pixels() {
+        assert!(p[3] > 0 && [200, 30, 30].iter().zip(p.0).all(|(&want, c)| m(c, p[3]).abs_diff(m(want, p[3])) <= 1), "{p:?}");
+    }
+}
