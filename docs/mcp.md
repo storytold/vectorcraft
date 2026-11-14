@@ -5134,8 +5134,12 @@ when its symbol or a symbol nested in its art holds an instance of itself, and w
 nest 32 deep in its art. PDF and EPS export and the SVG of an artboard leave out art outside the page or artboard, and
 Skip Blank Artboards skips an artboard with no art on it. For both, the box of an instance whose art holds brushed
 strokes grows by 16 times the widest stroke (at least 1 pt) of the objects in its art that have a brushed stroke,
-plus 8 pt. The SVG of an artboard also keeps an object whose effects paint onto the artboard, and an object that holds
-an instance when the effects in the symbol's art, or the instance's own, paint onto it.
+plus 8 pt. PDF and EPS export and Skip Blank Artboards grow the box of an object with a visible, painted brushed stroke the
+same way, by its own widest stroke, and the box of an object that holds one by the largest such room among them (of a
+clip group, only its clipping path counts). Print with Ignore Artboards frames the page around the art with the same
+room for brushed objects and for instances whose art holds brushed strokes. The SVG of an artboard also keeps an
+object whose effects paint onto the artboard, and an object that holds an instance when the effects in the symbol's
+art, or the instance's own, paint onto it.
 
 ## Expand
 
