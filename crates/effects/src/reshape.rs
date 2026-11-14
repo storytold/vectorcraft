@@ -845,7 +845,7 @@ fn as_art_opts(
 
 /// `art`, the art made of `n`, with `n`'s name, visibility, transparency, opacity mask and
 /// remaining (raster) effects.
-fn dressed(mut art: Node, n: &Node) -> Node {
+pub(crate) fn dressed(mut art: Node, n: &Node) -> Node {
     art.name = n.name.clone();
     art.visible = n.visible;
     art.opacity = n.opacity;

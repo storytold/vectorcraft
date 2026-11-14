@@ -1396,6 +1396,29 @@ fn crop_keeps_an_instance_whose_art_reaches_the_region() {
 }
 
 #[test]
+fn symbol_art_effects_are_written_where_they_draw() {
+    // A line and the symbol's line below it, each moved 100 pt right by a Transform effect, start
+    // at the same x.
+    let moved = |mut n: Node| {
+        n.appearance.effects.push(vectorcraft_doc::Effect {
+            id: "distort.transform".into(),
+            params: serde_json::json!({"moveH": 100.0}),
+            visible: true,
+        });
+        n
+    };
+    let mut d = doc_with(|d| {
+        let line = path(d, shapes::line((10.0, 10.0).into(), (20.0, 10.0).into()), Paint::None, Paint::solid(Color::BLACK), 1.0);
+        vec![moved(line), Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY })]
+    });
+    let art = path(&mut d, shapes::line((10.0, 40.0).into(), (20.0, 40.0).into()), Paint::None, Paint::solid(Color::BLACK), 1.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(moved(art)) });
+    let starts: Vec<f64> = entities(&export(&d, &opts(&d)).unwrap()).iter().map(|e| all(e, 10).into_iter().fold(f64::INFINITY, f64::min)).collect();
+    assert_eq!(starts.len(), 2, "{starts:?}");
+    assert!((starts[0] - starts[1]).abs() < 1e-6, "{starts:?}");
+}
+
+#[test]
 fn symbols_fanning_out_into_empty_symbols_stop_at_the_symbol_budget() {
     // Five levels of 100 instances of the level below, ending in an empty symbol: 10^10 empty
     // instances, which write no entities, past the million objects tests export with.

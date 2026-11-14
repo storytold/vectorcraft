@@ -45,8 +45,9 @@ fn export_with_report_inner(doc: &Document, opts: &PdfOptions, left_out: &mut Ha
     let set = &opts.settings;
     set.check()?;
     vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
-    // Live geometry effects export as their result; raster effects are reported below.
-    let baked = vectorcraft_effects::bake_document(doc);
+    // Live geometry effects export as their result, in symbols' art too; raster effects are
+    // reported below.
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, true);
     // Baking stops early when cancelled, leaving a half-baked copy that must not be written.
     vectorcraft_doc::cancel::check().map_err(|_| PdfError::Cancelled)?;
     let doc = baked.as_ref().unwrap_or(doc);

@@ -17,7 +17,8 @@
 //! object of its own, a stroke a path stroked by it alone (brushed strokes their brush art, made by
 //! the caller).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use vectorcraft_doc::color::Paint;
@@ -26,7 +27,7 @@ use vectorcraft_geom::{Affine, FillRule, PathData, Rect, Vec2};
 
 use crate::distort::{transform_move, transform_offsets};
 use crate::group::{has_own_paint, paints};
-use crate::reshape::{as_art, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
+use crate::reshape::{as_art, dressed, geometry_effects, glyph_outlines, outline_nested_text, reshape_leaves};
 use crate::{
     GeomContext, adjust_in_document, apply_geometry_carrying, crop_marks_art, evaluate_container, has_adjustment, has_crop_marks, has_geometry,
     has_item_geometry, has_pathfinder, is_pathfinder, merged_params, needs_outline, outline_text, reshape,
@@ -113,13 +114,105 @@ thread_local! {
     /// The objects of symbol art that [`bake_document`] has baked for instances inside the art of
     /// other instances, counted against [`crate::SYMBOL_ART_MAX_NODES`].
     static NESTED_NODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// While [`bake_document_placing_symbols`] bakes: the symbols whose instances become their
+    /// placed art ([`placed_symbol_art`]).
+    static PLACING: std::cell::RefCell<Option<Rc<Placing>>> = const { std::cell::RefCell::new(None) };
+    /// The objects of symbol art that [`placed_symbol_art`] has placed for one export, counted
+    /// against [`vectorcraft_doc::MAX_SYMBOL_NODES`].
+    static PLACED_NODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The symbols whose instances [`bake_document_placing_symbols`] replaces by their placed art, and
+/// how that art is placed through 9-slice guides.
+struct Placing {
+    /// The names of the symbols whose art draws something that baking changes, directly or through
+    /// the instances of other such symbols in it ([`drawn_symbols`]).
+    symbols: HashSet<String>,
+    /// Whether 9-slice cells are clipped ([`Document::place_symbol_art`]) or not
+    /// ([`Document::place_symbol_art_unclipped`]).
+    clip_slices: bool,
+}
+
+/// The names of the symbols of `d` whose art needs baking ([`needs_bake`]), and of those whose art
+/// holds an instance of one of them at any depth.
+fn drawn_symbols(d: &Document) -> HashSet<String> {
+    let mut out: HashSet<String> = d.symbols.iter().filter(|s| needs_bake(&s.art)).map(|s| s.name.clone()).collect();
+    if out.is_empty() {
+        return out;
+    }
+    let uses: Vec<(&str, Vec<String>)> = d
+        .symbols
+        .iter()
+        .filter(|s| !out.contains(&s.name))
+        .map(|s| {
+            let mut names = vec![];
+            s.art.walk(&mut |c| {
+                if let NodeKind::SymbolInstance { symbol, .. } = &c.kind {
+                    names.push(symbol.clone());
+                }
+            });
+            (s.name.as_str(), names)
+        })
+        .collect();
+    loop {
+        let before = out.len();
+        for (name, names) in &uses {
+            if !out.contains(*name) && names.iter().any(|x| out.contains(x)) {
+                out.insert((*name).to_string());
+            }
+        }
+        if out.len() == before {
+            return out;
+        }
+    }
+}
+
+/// Does `n`'s subtree hold an instance of a symbol that [`bake_document_placing_symbols`] replaces
+/// by its placed art? False outside it.
+fn holds_placed_symbol(n: &Node) -> bool {
+    fn walk(n: &Node, symbols: &HashSet<String>) -> bool {
+        matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if symbols.contains(symbol))
+            || n.children().is_some_and(|ch| ch.iter().any(|c| walk(c, symbols)))
+    }
+    PLACING.with(|p| p.borrow().as_ref().is_some_and(|p| walk(n, &p.symbols)))
+}
+
+/// Symbol instance `n`, while [`bake_document_placing_symbols`] bakes and its symbol is one it
+/// places, as the art it draws: the symbol's art with the instance's own appearance changes
+/// ([`vectorcraft_doc::symbol_overrides::dynamic_art`]), placed by the instance as the exporters
+/// place it, in a group with the instance's id, name, visibility, transparency, opacity mask and
+/// raster effects. The art is placed before its effects are baked, as the canvas draws it, so an
+/// instance that scales its art does not scale what its effects do. `None` for other objects,
+/// for instances nested [`vectorcraft_doc::depth::MAX_DEPTH`] deep in such art, and once the art
+/// placed for one export would pass [`vectorcraft_doc::MAX_SYMBOL_NODES`] objects; those
+/// instances stay as they are.
+fn placed_symbol_art(d: &Document, n: &Node) -> Option<Node> {
+    let NodeKind::SymbolInstance { symbol, xf } = &n.kind else { return None };
+    let clip = PLACING.with(|p| p.borrow().as_ref().filter(|p| p.symbols.contains(symbol)).map(|p| p.clip_slices))?;
+    if INSTANCE_DEPTH.with(|c| c.get()) >= vectorcraft_doc::depth::MAX_DEPTH {
+        return None;
+    }
+    let sym = d.symbols.iter().find(|s| s.name == *symbol)?;
+    let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
+    let most = match d.symbol_slice_map(symbol, *xf) {
+        Some(m) if clip => m.most_placed(&art, d),
+        Some(m) => m.most_placed_unclipped(&art, d),
+        None => art.count_with_masks() as u64,
+    };
+    let spent = PLACED_NODES.with(|c| c.get()).saturating_add(most);
+    if spent > vectorcraft_doc::MAX_SYMBOL_NODES {
+        return None;
+    }
+    PLACED_NODES.with(|c| c.set(spent));
+    let placed = if clip { d.place_symbol_art(symbol, &art, *xf) } else { d.place_symbol_art_unclipped(symbol, &art, *xf) }?;
+    Some(dressed(Node::group(n.id, vec![Arc::new(placed)]), n))
 }
 
 /// `n` with its geometry effects evaluated (`None` = unchanged).
 fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
     // A cancelled export leaves the rest of the document as it is: the caller drops the result.
     // A ruler guide draws nothing and stays as it is, last in its layer.
-    if n.is_ruler_guide() || !needs_bake(n) || vectorcraft_doc::cancel::is_cancelled() {
+    if n.is_ruler_guide() || !(needs_bake(n) || holds_placed_symbol(n)) || vectorcraft_doc::cancel::is_cancelled() {
         return None;
     }
     // Colour adjustments: the object recoloured (inside it too), then baked as it is.
@@ -174,6 +267,14 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
         if instance {
             INSTANCE_DEPTH.with(|c| c.set(c.get() - 1));
         }
+        return Some(baked.unwrap_or(m));
+    }
+    // Symbol instances whose art draws live effects, when the caller asks for them: the art
+    // placed, then baked.
+    if let Some(m) = placed_symbol_art(d, n) {
+        INSTANCE_DEPTH.with(|c| c.set(c.get() + 1));
+        let baked = bake_node(d, &m);
+        INSTANCE_DEPTH.with(|c| c.set(c.get() - 1));
         return Some(baked.unwrap_or(m));
     }
     // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its
@@ -693,8 +794,38 @@ fn bake_appearance_pieces(doc: Option<&Document>, n: &mut Node, outline_strokes:
 /// resources of its placed documents' art added ([`Document::with_placed_art`]); `None` when
 /// there is nothing to do (export it as is).
 pub fn bake_document(doc: &Document) -> Option<Document> {
+    bake(doc, None)
+}
+
+/// [`bake_document`], and every symbol instance whose symbol's art draws something baking changes
+/// (live geometry effects, color adjustments and the rest [`needs_bake`] counts, in its own art or
+/// in the art of the symbols it places) replaced by that art as the instance places it, baked
+/// ([`placed_symbol_art`]), so the art draws as on the canvas wherever the instance is. For
+/// exporters that write each instance's art in its place (PDF, print, EPS, DXF), rather than
+/// writing each symbol once. `clip_slices`: whether 9-slice cells are clipped
+/// ([`Document::place_symbol_art`]) or not ([`Document::place_symbol_art_unclipped`]), as the
+/// exporter places other instances. The symbols' own art is left as it is.
+pub fn bake_document_placing_symbols(doc: &Document, clip_slices: bool) -> Option<Document> {
+    bake(doc, Some(clip_slices))
+}
+
+/// Restores what [`bake`] changes in the thread's baking state when it ends.
+struct Restore(Option<Rc<Placing>>, u64);
+
+impl Drop for Restore {
+    fn drop(&mut self) {
+        PLACING.with(|p| *p.borrow_mut() = self.0.take());
+        PLACED_NODES.with(|c| c.set(self.1));
+    }
+}
+
+/// [`bake_document`], or with `placing` [`bake_document_placing_symbols`] with that `clip_slices`.
+fn bake(doc: &Document, placing: Option<bool>) -> Option<Document> {
     let placed = doc.with_placed_art();
-    if !placed.layers.iter().any(|l| needs_bake(l)) {
+    let placing = placing.map(|clip_slices| Placing { symbols: drawn_symbols(&placed), clip_slices }).filter(|p| !p.symbols.is_empty());
+    // A bake inside another one (of art an effect makes) places symbols only when it asks to.
+    let _restore = Restore(PLACING.with(|p| p.replace(placing.map(Rc::new))), PLACED_NODES.with(|c| c.replace(0)));
+    if !placed.layers.iter().any(|l| needs_bake(l) || holds_placed_symbol(l)) {
         return match placed {
             std::borrow::Cow::Owned(d) => Some(d),
             std::borrow::Cow::Borrowed(_) => None,

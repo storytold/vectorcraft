@@ -1025,3 +1025,110 @@ fn exporting_a_path_with_a_transform_gives_each_copy_its_own_gradient() {
     // Three squares of their own, not one path spanning all three.
     assert_eq!(gradient_pieces(d.node(NodeId(50)).unwrap()), vec![10.0; 3]);
 }
+
+/// A 10 × 10 square at (10, 40), with id `id`, that a Transform effect moves 100 pt right.
+fn moved_square(id: u64) -> Node {
+    let mut n = Node::path(NodeId(id), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::default_art());
+    n.appearance.effects.push(fx("distort.transform", json!({"moveH": 100.0})));
+    n
+}
+
+fn instance(id: u64, symbol: &str, xf: vectorcraft_geom::Affine) -> Node {
+    Node::new(NodeId(id), NodeKind::SymbolInstance { symbol: symbol.into(), xf })
+}
+
+fn add_symbol(d: &mut Document, name: &str, art: Node) {
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: name.into(), art: Arc::new(art) });
+}
+
+fn bounds(d: &Document, id: u64) -> Rect {
+    d.node(NodeId(id)).and_then(|n| n.geometric_bounds()).unwrap_or_else(|| panic!("node {id} has bounds"))
+}
+
+fn near_rect(a: Rect, b: Rect) -> bool {
+    [(a.x0, b.x0), (a.y0, b.y0), (a.x1, b.x1), (a.y1, b.y1)].iter().all(|(x, y)| (x - y).abs() < 1e-6)
+}
+
+/// Each instance draws its symbol's art with the art's effects applied where the instance places
+/// it: an instance that doubles the art's size moves it the effect's 100 pt, as the canvas draws
+/// it, not 200 pt. Plain baking leaves the instances and the symbols' art as they are.
+#[test]
+fn placing_symbols_bakes_their_art_where_each_instance_places_it() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "S", Affine::IDENTITY));
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, instance(901, "S", Affine::translate((0.0, 100.0)) * Affine::scale(2.0))).unwrap();
+    add_symbol(&mut d, "S", moved_square(800));
+    assert!(bake_document(&d).is_none(), "nothing in the layers needs baking");
+    let out = bake_document_placing_symbols(&d, true).unwrap();
+    assert!(matches!(out.node(NodeId(900)).unwrap().kind, NodeKind::Group { .. }));
+    assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 40.0, 120.0, 50.0)), "{:?}", bounds(&out, 900));
+    assert!(near_rect(bounds(&out, 901), Rect::new(120.0, 180.0, 140.0, 200.0)), "{:?}", bounds(&out, 901));
+    assert_eq!(out.symbols[0].art.appearance.effects.len(), 1, "the symbol's art keeps its effect");
+}
+
+/// An instance of a symbol whose art holds an instance of another symbol with effects draws that
+/// art with its effects too.
+#[test]
+fn placing_symbols_reaches_the_art_of_nested_instances() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Outer", Affine::IDENTITY));
+    add_symbol(&mut d, "Inner", moved_square(800));
+    add_symbol(&mut d, "Outer", Node::group(NodeId(801), vec![Arc::new(instance(802, "Inner", Affine::translate((0.0, 100.0))))]));
+    let out = bake_document_placing_symbols(&d, true).unwrap();
+    assert!(near_rect(bounds(&out, 900), Rect::new(110.0, 140.0, 120.0, 150.0)), "{:?}", bounds(&out, 900));
+}
+
+/// A symbol whose art holds an instance of itself is placed until the depth limit, and the export
+/// ends.
+#[test]
+fn placing_a_symbol_that_holds_itself_stops() {
+    use vectorcraft_geom::Affine;
+    let mut d = doc_with(instance(900, "Loop", Affine::IDENTITY));
+    add_symbol(
+        &mut d,
+        "Loop",
+        Node::group(NodeId(801), vec![Arc::new(moved_square(800)), Arc::new(instance(802, "Loop", Affine::translate((0.0, 1.0))))]),
+    );
+    let out = bake_document_placing_symbols(&d, true).unwrap();
+    let mut lefts = vec![];
+    out.node(NodeId(900)).unwrap().walk(&mut |n| lefts.extend(n.path_data().and_then(|p| p.bounds()).map(|b| b.x0)));
+    assert!(lefts.len() > 1 && lefts.iter().all(|x| (x - 110.0).abs() < 1e-6), "{lefts:?}");
+    let mut depth = 0;
+    let mut n = out.node(NodeId(900)).unwrap();
+    while let Some(next) = n.children().and_then(|ch| ch.last()) {
+        n = next;
+        depth += 1;
+    }
+    assert!(depth <= 3 * (vectorcraft_doc::depth::MAX_DEPTH + 1), "{depth}");
+}
+
+/// A dynamic symbol instance's own paint for an object of the art applies before the object's
+/// effects are baked: a fill whose own Transform effect makes the square a group of pieces still
+/// paints in the instance's red, and its sibling keeps the symbol's paint.
+#[test]
+fn placing_symbols_keeps_dynamic_instances_changes() {
+    use vectorcraft_geom::Affine;
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let mut square = Node::path(NodeId(800), shapes::rectangle(Rect::new(10.0, 40.0, 20.0, 50.0)), Appearance::default_art());
+    if let Some(AppearanceItem::Fill(f)) = square.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_))) {
+        f.effects.push(fx("distort.transform", json!({"moveH": 100.0})));
+    }
+    let sibling = Node::path(NodeId(801), shapes::rectangle(Rect::new(10.0, 60.0, 20.0, 70.0)), Appearance::default_art());
+    let mut inst = instance(900, "D", Affine::IDENTITY);
+    inst.extras_mut().symbol_overrides = vec![vectorcraft_doc::SymbolOverride { path: vec![0], fill: Some(red.clone()), ..Default::default() }];
+    let mut d = doc_with(inst);
+    add_symbol(&mut d, "D", Node::group(NodeId(802), vec![Arc::new(square), Arc::new(sibling)]));
+    d.symbols[0].dynamic = true;
+    let out = bake_document_placing_symbols(&d, true).unwrap();
+    let mut fills = vec![];
+    out.node(NodeId(900)).unwrap().walk(&mut |n| {
+        if n.path_data().is_some()
+            && let Some(b) = n.geometric_bounds()
+        {
+            fills.push((b.x0.round(), b.y0.round(), n.appearance.fill_paint()));
+        }
+    });
+    assert!(fills.contains(&(110.0, 40.0, red)), "{fills:?}");
+    assert!(fills.contains(&(10.0, 60.0, Paint::solid(Color::WHITE))), "{fills:?}");
+}

@@ -246,6 +246,26 @@ fn an_instance_whose_brush_art_reaches_the_page_is_written() {
     assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(-15.0, 30.0, 5.0, 70.0), 0.01), "{:?}", l[0].geometric_bounds());
 }
 
+/// The live effects in a symbol's art apply where the instance places the art, as on the canvas:
+/// the symbol's square at (10, 40), which a Transform effect moves 100 pt right, is written at
+/// (110, 40).
+#[test]
+fn symbol_art_effects_are_written_where_they_draw() {
+    let mut d = doc(200.0, 100.0);
+    let mut square = rect_node(Rect::new(10.0, 40.0, 20.0, 50.0), Color::rgb(1.0, 0.0, 0.0));
+    square.appearance.effects.push(vectorcraft_doc::Effect {
+        id: "distort.transform".into(),
+        params: serde_json::json!({"moveH": 100.0}),
+        visible: true,
+    });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Moved".into(), art: Arc::new(square) });
+    add(&mut d, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Moved".into(), xf: Affine::IDENTITY }));
+    let out = roundtrip(&d);
+    let l = leaves(&out);
+    assert_eq!(l.len(), 1);
+    assert!(close(l[0].geometric_bounds().unwrap(), Rect::new(110.0, 40.0, 120.0, 50.0), 0.01), "{:?}", l[0].geometric_bounds());
+}
+
 /// An instance of a symbol with 9-slice guides, scaled to 200 × 150, is written as the canvas
 /// draws it: its 10 × 10 corner square stays 10 × 10 and its 10 × 10 center square becomes 30 × 20.
 #[test]
