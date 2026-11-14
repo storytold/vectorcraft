@@ -3130,6 +3130,34 @@ fn a_narrow_control_bar_shows_the_style_link_without_the_opacity_field() {
     assert!(style_only, "some width has room for the Style link and its chip but not the Opacity link and its field");
 }
 
+/// With nothing selected, a bar too narrow for the Document Setup button still shows the narrower
+/// Preferences button when it has room for it.
+#[test]
+fn a_narrow_control_bar_shows_preferences_without_document_setup() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200})).unwrap();
+    app.run("select.set", json!({ "ids": [] })).unwrap();
+    for group in ["fillStroke", "opacity", "graphicStyle"] {
+        app.run("window.control.options", json!({"group": group, "visible": false})).unwrap();
+    }
+    let ctx = egui::Context::default();
+    ctx.enable_accesskit();
+    crate::theme::install_fonts(&ctx);
+    let shows = |nodes: &[egui::accesskit::Node], name: &str| nodes.iter().any(|n| n.label().is_some_and(|l| l == name));
+    let (mut both, mut preferences_only) = (false, false);
+    for w in (150..=900).step_by(2) {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w as f32, 300.0));
+        control_bar_frame_in(&mut app, &ctx, screen, vec![]);
+        let nodes = control_bar_frame_in(&mut app, &ctx, screen, vec![]);
+        let (setup, preferences) = (shows(&nodes, "Document Setup"), shows(&nodes, "Preferences"));
+        both |= setup && preferences;
+        preferences_only |= preferences && !setup;
+    }
+    assert!(both, "a wide bar shows Document Setup and Preferences");
+    assert!(preferences_only, "some width has room for Preferences but not Document Setup");
+}
+
 /// The Anchor Points group holds Convert and Anchors for direct-selected anchors; off, the bar keeps
 /// its Anchor Point label.
 #[test]

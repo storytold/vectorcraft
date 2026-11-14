@@ -364,9 +364,10 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
         group_end(ui);
     }
     if nothing {
-        // Each button shows only while the bar has room left for it.
-        if group_on(app, "documentOptions") && ui.available_width() >= DOCUMENT_SETUP_WIDTH {
-            if widgets::flat_button(ui, tl!("Document Setup"), DOCUMENT_SETUP_WIDTH).clicked() {
+        // Each button shows only while the bar has room left for it, so Preferences can show
+        // when Document Setup did not fit.
+        if group_on(app, "documentOptions") {
+            if ui.available_width() >= DOCUMENT_SETUP_WIDTH && widgets::flat_button(ui, tl!("Document Setup"), DOCUMENT_SETUP_WIDTH).clicked() {
                 app.run("file.documentSetup", json!({})).ok();
             }
             if ui.available_width() >= PREFERENCES_WIDTH && widgets::flat_button(ui, tl!("Preferences"), PREFERENCES_WIDTH).clicked() {
