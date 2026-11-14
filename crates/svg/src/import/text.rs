@@ -965,6 +965,12 @@ impl Ctx {
         "normal".into()
     }
 
+    /// Whether the computed `direction` of element `n` is `rtl`, in any letter case (CSS keywords
+    /// are ASCII case-insensitive, https://www.w3.org/TR/css-values-3/#keywords).
+    fn is_rtl(&self, n: XNode) -> bool {
+        self.prop(n, "direction").is_some_and(|d| d.trim().eq_ignore_ascii_case("rtl"))
+    }
+
     /// The Character Direction of the characters of element `n` inside a `<text>`, and what it
     /// leaves out (SVG 1.1 §10.7.4,
     /// https://www.w3.org/TR/SVG11/text.html#RelationshipWithBi-directionality, and CSS Writing
@@ -987,7 +993,7 @@ impl Ctx {
         let inherited = parent.as_ref().and_then(|p| p.style.char_direction);
         let mut notes = parent.map_or_else(Vec::new, |p| p.bidi_notes.clone());
         let rtl = |rtl: bool| Some(if rtl { ParaDirection::RightToLeft } else { ParaDirection::LeftToRight });
-        let own = || rtl(self.prop(n, "direction").is_some_and(|d| d.trim() == "rtl"));
+        let own = || rtl(self.is_rtl(n));
         let (dir, note) = match bidi.as_str() {
             "embed" => (own(), None),
             "bidi-override" => (own(), Some(BIDI_OVERRIDE)),
@@ -1376,7 +1382,7 @@ impl Ctx {
         // With `unicode-bidi: plaintext`, the text runs in the direction of its first strong
         // character, and each paragraph in that of its own ([`pin_first_strong`]).
         let plaintext = self.unicode_bidi(t) == "plaintext";
-        let rtl = if plaintext { self.first_strong_rtl(t) == Some(true) } else { self.prop(t, "direction").is_some_and(|d| d.trim() == "rtl") };
+        let rtl = if plaintext { self.first_strong_rtl(t) == Some(true) } else { self.is_rtl(t) };
         let pin = |obj: &mut TextObject| {
             pin_direction(obj, rtl);
             if plaintext {
@@ -1403,7 +1409,7 @@ impl Ctx {
                 let chunk: String = cs.chars[i..end].iter().map(|c| c.0).collect();
                 text_first_strong_rtl(&chunk) == Some(true)
             };
-            let rtl = if plaintext { chunk_rtl() } else { self.prop(el, "direction").is_some_and(|d| d.trim() == "rtl") };
+            let rtl = if plaintext { chunk_rtl() } else { self.is_rtl(el) };
             if !vertical && rtl { 1.0 - a } else { a }
         };
         let anchor = anchor_of(0);
