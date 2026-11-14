@@ -12,7 +12,8 @@ use crate::DocState;
 use super::super::{Result, Session, bad, check_switches, edit, number_or, switch_or, text_param};
 use super::encode::single_artboard;
 use super::{
-    ARTBOARD_PARAMS, Format, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded, write_or_return,
+    ARTBOARD_PARAMS, Format, check_linked_scripts, default_name, encode_all, encode_with_warnings, merge, with_black_output, writable, write_encoded,
+    write_or_return,
 };
 
 /// The keys the export commands take for every format, beside the path, the format and the
@@ -52,6 +53,7 @@ pub(super) fn export_reads(f: &Format, legacy: bool, key: &str) -> bool {
 
 pub(super) fn serialize(s: &mut Session, p: &Value) -> Result<Value> {
     let f = writable("document.serialize", Some(text_param(p, "format", "document.serialize")?.unwrap_or("vectorcraft")), None)?;
+    check_linked_scripts("document.serialize", f.id, s.doc()?)?;
     let unused = unused_option_notes("document.serialize", f, p);
     let expanded = expand_presets(s, "document.serialize", p)?;
     let p = with_black_output(s, &expanded);
@@ -95,6 +97,7 @@ pub(super) fn export(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, "document.export")?;
     }
     let f = writable("document.export", text_param(p, "format", "document.export")?, path)?;
+    check_linked_scripts("document.export", f.id, s.doc()?)?;
     let unused = unused_option_notes("document.export", f, p);
     let expanded = expand_presets(s, "document.export", p)?;
     let p = with_black_output(s, &expanded);
@@ -354,6 +357,7 @@ pub(super) fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
         super::check_not_lossy_overwrite(s.doc()?, path, p, C)?;
     }
     let f = writable(C, text_param(p, "format", C)?, path)?;
+    check_linked_scripts(C, f.id, s.doc()?)?;
     let unused = unused_option_notes(C, f, p);
     let expanded = expand_presets(s, C, p)?;
     let p = with_black_output(s, &expanded);

@@ -3115,6 +3115,29 @@ digits	Malayalam	Malaiàlam
 	Pattern Borders	Vores de motiu
 	Pattern Brush	Pinzell de motiu
 	missing from the Brushes panel	absent del tauler Pinzells
+	built in	integrat
+	embedding not allowed	incrustació no permesa
+	embedding for editing	incrustació per a l’edició
+	embedding for preview and print	incrustació per a la visualització i la impressió
+	embedding allowed	incrustació permesa
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	substituït: es mostra amb {family} {style} ({detail})
+	missing: shown in {family} {style}	absent: es mostra amb {family} {style}
+	missing	absent
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Degradat lineal
+	Radial gradient	Degradat radial
+	Conic gradient	Degradat cònic
+	Diamond gradient	Degradat de rombe
+	Freeform gradient	Degradat de forma lliure
+@plural	{n} instance|{n} instances	{n} instància|{n} instàncies
+@plural	{n} row|{n} rows	{n} fila|{n} files
+@plural	{n} column|{n} columns	{n} columna|{n} columnes
 	Pattern Brush Options	Opcions del pinzell de motiu
 	Pattern Editing	Edició de motius
 	Pattern Options	Opcions del motiu
@@ -4613,6 +4636,11 @@ digits	Malayalam	Malaiàlam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Configuració de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Configuració de Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Configuració de Warichu…
+	Warichu Settings	Configuració de Warichu
+	Lines:	Línies:
+	Line Gap:	Separació entre línies:
 	Composite Fonts…	Tipus de lletra compostos…
 	Composite Fonts	Tipus de lletra compostos
 	Export Composite Fonts	Exporta tipus de lletra compostos
@@ -5255,6 +5283,9 @@ digits	Malayalam	Malaiàlam
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` ha de ser [x, y, width, height]: quatre nombres finits, amb amplada i alçada no negatives
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` ha de ser `auto` o un codi d’idioma com `en` o `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` ha de ser un color #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` ha de ser un color #rrggbb o el nom d’un color de capa
+@msg	unknown Live Paint option `{key}`	opció de pintura interactiva desconeguda `{key}`
+@msg	unknown Shape Builder option `{key}`	opció del constructor de formes desconeguda `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` ha de ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` ha de ser un nombre
 @msg	`{key}` must be a number not below 0	`{key}` ha de ser un nombre no inferior a 0
@@ -5555,6 +5586,10 @@ digits	Malayalam	Malaiàlam
 @msg	Couldn't place {name}: {e}	No s’ha pogut col·locar {name}: {e}
 @msg	Couldn't read {name}: {e}	No s’ha pogut llegir {name}: {e}
 @msg	Couldn't save recovery data: {e}	No s’han pogut desar les dades de recuperació: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació de {title}: {e}. Les còpies es desen a {folder}, la carpeta de recuperació per defecte; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació de {title}: {e}. Les còpies es desen a {folder}, la carpeta definida a Preferències; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació: {e}. Les còpies es desen a {folder}, la carpeta de recuperació per defecte; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No s’han pogut desar les dades de recuperació: {e}. Les còpies es desen a {folder}, la carpeta definida a Preferències; per fer servir una altra carpeta, configureu Preferències → Gestió de fitxers → Recuperació de dades → Carpeta (recoveryFolder)
 @msg	Create from Guides: the document has no artboard	Crea a partir de guies: el document no té cap tauler
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Crea a partir de guies: les guies fan més de {MAX_PIECES} talls
 @msg	Create from Selection: the selection has no area	Crea a partir de la selecció: la selecció no té àrea
@@ -5571,6 +5606,7 @@ digits	Malayalam	Malaiàlam
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	S’ha descartat {n} document recuperat|S’han descartat {n} documents recuperats
 @msg	divide into 1 to {MAX_PIECES} slices	divideix en 1 a {MAX_PIECES} talls
 @msg	Divide Objects Below: select a path	Divideix els objectes de sota: seleccioneu un traçat
+@msg	select a path	seleccioneu un traçat
 @msg	Divide Objects Below: select exactly one path	Divideix els objectes de sota: seleccioneu exactament un traçat
 @msg	docking action contains an unknown panel or an excessive split path	l’acció d’acoblament conté un panell desconegut o un camí de divisió excessiu
 @msg	Downloaded {what}	S’ha baixat {what}
@@ -5643,6 +5679,7 @@ digits	Malayalam	Malaiàlam
 @msg	invalid parameters for `{cmd}`: {msg}	paràmetres no vàlids per a `{cmd}`: {msg}
 @msg	invalid PDF setting: {0}	configuració del PDF no vàlida: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): s’escriu amb un UserUnit de {unit}, de manera que les aplicacions que ignoren UserUnit la mostren tantes vegades més petita: activeu «Escriu les pàgines de més de 200 in a mida real, en punts»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la pàgina del tauler {n} fa {size}, més que el límit de pàgina del PDF de 14.400 pt (200 in): les pàgines {label} s’escriuen sense UserUnit, en punts, i les aplicacions que respecten el límit retallen la pàgina a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	el PDF 1.5 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per mantenir la mida: el fitxer s’escriu com a PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	el PDF 1.4 no té UserUnit, que una pàgina de més de 14.400 pt (200 in) necessita per quedar dins del límit de pàgina de 14.400 unitats del PDF/A-2: el fitxer s’escriu com a PDF 1.6
@@ -5696,6 +5733,8 @@ digits	Malayalam	Malaiàlam
 @msg	library panel `{given}` isn't open	el panell de biblioteca `{given}` no està obert
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les imatges enllaçades mostren la previsualització de baixa resolució desada al fitxer fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
 @msg	linked type areas past VectorCraft's limits were left out	s’han omès les àrees de text enllaçades que superen els límits de VectorCraft
+@msg	the Line Breaking setting of legacy type was left out	s’ha omès l’ajust de salt de línia del text en format antic
+@msg	the Japanese layout rules of legacy type were left out	s’han omès les regles de composició japonesa del text en format antic
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	el text que canvia de direcció d’escriptura dins d’un objecte de text s’obre en la direcció del seu primer caràcter
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el text usat com a màscara en àrees enllaçades, en text ajustat o en un traçat compost no retalla
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les imatges enllaçades sense previsualització al fitxer mostren un marcador de posició fins que es trobin els seus fitxers: torneu-les a enllaçar al panell Enllaços
@@ -5926,6 +5965,7 @@ digits	Malayalam	Malaiàlam
 @msg	onto must name a panel floating in another group	onto ha de nomenar un panell que floti en un altre grup
 @msg	open a document with data sets	obre un document amb conjunts de dades
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	S’ha obert amb {n} nota: {first}|S’ha obert amb {n} notes: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. S’ha obert amb {n} nota: {first}|{notice}. S’ha obert amb {n} notes: {first}
 @msg	Opened {url}	Obert {url}
 @msg	Outline Stroke: no stroked paths selected	Contorneja el traç: no hi ha cap traçat amb traç seleccionat
 @msgplural	Packaged {n} file|Packaged {n} files	S’ha empaquetat {n} fitxer|S’han empaquetat {n} fitxers
@@ -6834,6 +6874,8 @@ anchor	Points:	Punts:
 	Anchor Inspector	Inspector de punts d’ancoratge
 	Add Points at Crossings	Afegeix punts als encreuaments
 	Split at Crossings	Divideix als encreuaments
+	Trim at Crossings Tool	Eina de retallar als encreuaments
+	Trim at Crossings	Retalla als encreuaments
 	Extend Path	Allarga el traçat
 	Measure & Inspect	Mesura i inspecciona
 	Set Anchor	Defineix el punt d’ancoratge
@@ -7424,3 +7466,9 @@ breakText	Glyphs	Glifs
 	Margin	Marge
 	Box	Caixa
 	Swatch	Mostra
+	Banner Hems and Grommets…	Vores i ullets de pancarta…
+	Banner Hems and Grommets	Vores i ullets de pancarta
+	Hem	Vora
+	Grommets	Ullets
+	Grommet Inset	Distància dels ullets a la vora
+	Diameter	Diàmetre

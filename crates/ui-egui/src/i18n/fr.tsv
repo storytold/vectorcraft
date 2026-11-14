@@ -2184,6 +2184,29 @@ font-technology	Variable	Variables
 	Bristle Brush	Forme Soies
 	Pattern Brush	Forme de motif
 	missing from the Brushes panel	absente du panneau Formes
+	built in	intégrée
+	embedding not allowed	incorporation interdite
+	embedding for editing	incorporation pour la modification
+	embedding for preview and print	incorporation pour l’aperçu et l’impression
+	embedding allowed	incorporation autorisée
+	{file}; {embedding}	{file}, {embedding}
+	substituted: shown in {family} {style} ({detail})	remplacée, affichée en {family} {style} ({detail})
+	missing: shown in {family} {style}	absente, affichée en {family} {style}
+	missing	absente
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Dégradé linéaire
+	Radial gradient	Dégradé radial
+	Conic gradient	Dégradé conique
+	Diamond gradient	Dégradé en losange
+	Freeform gradient	Dégradé de forme libre
+@plural	{n} instance|{n} instances	{n} occurrence|{n} occurrences
+@plural	{n} row|{n} rows	{n} ligne|{n} lignes
+@plural	{n} column|{n} columns	{n} colonne|{n} colonnes
 	Select art to make a scatter, art or pattern brush.	Sélectionnez une illustration pour créer une forme diffuse, artistique ou de motif.
 	Brush Art	Illustration de la forme
 	New Calligraphic Brush	Nouvelle forme calligraphique
@@ -3635,6 +3658,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Paramètres Tate-chu-yoko…
 	Tate-chu-yoko Settings	Paramètres Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Paramètres Warichu…
+	Warichu Settings	Paramètres Warichu
+	Lines:	Lignes :
+	Line Gap:	Écart entre les lignes :
 	Composite Fonts…	Polices composites…
 	Composite Fonts	Polices composites
 	Export Composite Fonts	Exporter des polices composites
@@ -4342,6 +4370,10 @@ axis	Both	Les deux
 @msg	Couldn't paste: the document it was pasted in was reverted	Impossible de coller, car le document de destination a été rétabli à la version précédente
 @msg	Couldn't read {name}: {e}	Impossible de lire {name} : {e}
 @msg	Couldn't save recovery data: {e}	Impossible d’enregistrer les données de récupération : {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Impossible d’enregistrer les données de récupération de {title} : {e}. Les copies sont enregistrées dans {folder}, le dossier de récupération par défaut ; pour utiliser un autre dossier, définissez Préférences → Gestion des fichiers → Récupération des données → Dossier (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Impossible d’enregistrer les données de récupération de {title} : {e}. Les copies sont enregistrées dans {folder}, le dossier défini dans les Préférences ; pour utiliser un autre dossier, définissez Préférences → Gestion des fichiers → Récupération des données → Dossier (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Impossible d’enregistrer les données de récupération : {e}. Les copies sont enregistrées dans {folder}, le dossier de récupération par défaut ; pour utiliser un autre dossier, définissez Préférences → Gestion des fichiers → Récupération des données → Dossier (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Impossible d’enregistrer les données de récupération : {e}. Les copies sont enregistrées dans {folder}, le dossier défini dans les Préférences ; pour utiliser un autre dossier, définissez Préférences → Gestion des fichiers → Récupération des données → Dossier (recoveryFolder)
 @msg	Create Outlines: select text objects	Vectoriser : sélectionnez des objets texte
 @msg	Create from Guides: the document has no artboard	Créer d’après les repères : le document n’a pas de plan de travail
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Créer d’après les repères : les repères forment plus de {MAX_PIECES} tranches
@@ -4351,6 +4383,7 @@ axis	Both	Les deux
 @msg	Plug-ins can't be loaded from {path}: {e}	Impossible de charger les plug-ins depuis {path} ({e})
 @msg	direct-select anchor points to cut at (not the end points of open paths)	sélectionnez avec l’outil Sélection directe les points d’ancrage où couper (pas les extrémités des tracés ouverts)
 @msg	Divide Objects Below: select a path	Diviser les objets inférieurs : sélectionnez un tracé
+@msg	select a path	sélectionnez un tracé
 @msg	Divide Objects Below: select exactly one path	Diviser les objets inférieurs : sélectionnez exactement un tracé
 @msg	Downloaded {what}	{what} téléchargé
 @msg	Expand Appearance: the selection has a basic appearance	Décomposer l’aspect : la sélection a un aspect de base
@@ -4427,6 +4460,9 @@ axis	Both	Les deux
 @msg	`{keep}` is not a side of this axis	`{keep}` n’est pas un côté de cet axe
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` doit être `auto` ou un code de langue comme `en` ou `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` doit être une couleur #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` doit être une couleur #rrggbb ou le nom d’une couleur de calque
+@msg	unknown Live Paint option `{key}`	option de peinture dynamique inconnue `{key}`
+@msg	unknown Shape Builder option `{key}`	option du concepteur de forme inconnue `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` doit être une couleur #rrggbb
 @msg	`{key}` must be a number	`{key}` doit être un nombre
 @msg	`{key}` must be a number, not {v}	`{key}` doit être un nombre, pas {v}
@@ -4585,6 +4621,7 @@ axis	Both	Les deux
 @msg	internal error in `{cmd}`: {msg} (the document was left as it was before; please report this bug)	erreur interne dans `{cmd}` : {msg} (le document est resté tel qu’il était ; veuillez signaler ce bogue)
 @msg	internal error: {msg} (please report this bug)	erreur interne : {msg} (veuillez signaler ce bogue)
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : elle est écrite avec une UserUnit de {unit}, donc les applications qui ignorent UserUnit l’affichent autant de fois plus petite
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : elle est écrite avec une UserUnit de {unit}, donc les applications qui ignorent UserUnit l’affichent autant de fois plus petite : activez « Écrire les pages de plus de 200 in en taille réelle, en points »
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la page du plan de travail {n} mesure {size}, plus que la limite de page PDF de 14 400 pt (200 in) : les pages {label} sont écrites sans UserUnit, en points, et les applications qui respectent la limite coupent la page à 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 n’a pas d’UserUnit, dont une page de plus de 14 400 pt (200 in) a besoin pour garder sa taille : le fichier est écrit en PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 n’a pas d’UserUnit, dont une page de plus de 14 400 pt (200 in) a besoin pour rester dans la limite de page de PDF/A-2, 14 400 unités : le fichier est écrit en PDF 1.6
@@ -5024,6 +5061,7 @@ axis	Both	Les deux
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} document récupéré supprimé|{n} documents récupérés supprimés
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} document récupéré restauré : enregistrez-le pour le conserver|{n} documents récupérés restaurés : enregistrez-les pour les conserver
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Ouvert avec {n} remarque : {first}|Ouvert avec {n} remarques : {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Ouvert avec {n} remarque : {first}|{notice}. Ouvert avec {n} remarques : {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} enregistré avec {n} remarque : {first}|{path} enregistré avec {n} remarques : {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} image incorporée ; il en manque {missing} : rétablissez d’abord leurs liens|{n} images incorporées ; il en manque {missing} : rétablissez d’abord leurs liens
 @msgplural	Embedded {n} image|Embedded {n} images	{n} image incorporée|{n} images incorporées
@@ -5103,6 +5141,8 @@ axis	Both	Les deux
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	une image incorporée de {_1} × {_2} pixels a été réduite à {_3} × {_4} pixels pour conserver les calques
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	les images liées affichent l’aperçu basse résolution enregistré dans le fichier tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
 @msg	linked type areas past VectorCraft's limits were left out	les zones de texte liées au-delà des limites de VectorCraft ont été omises
+@msg	the Line Breaking setting of legacy type was left out	le réglage de coupure de ligne du texte à l’ancien format a été omis
+@msg	the Japanese layout rules of legacy type were left out	les règles de composition japonaise du texte à l’ancien format ont été omises
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	le texte qui change de sens d’écriture dans un objet texte s’ouvre dans le sens de son premier caractère
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	le texte utilisé comme masque dans des zones liées, un habillage de texte ou un tracé transparent ne découpe pas
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	les images liées sans aperçu dans le fichier affichent un espace réservé tant que leurs fichiers ne sont pas trouvés : liez-les à nouveau dans le panneau Liens
@@ -6860,6 +6900,8 @@ anchor	Points:	Points :
 	Anchor Inspector	Inspecteur de points d’ancrage
 	Add Points at Crossings	Ajouter des points aux croisements
 	Split at Crossings	Scinder aux croisements
+	Trim at Crossings Tool	Outil Rogner aux croisements
+	Trim at Crossings	Rogner aux croisements
 	Extend Path	Prolonger le tracé
 	Measure & Inspect	Mesurer et inspecter
 	Set Anchor	Définir le point d’ancrage
@@ -7438,3 +7480,9 @@ breakText	Glyphs	Glyphes
 	Margin	Marge
 	Box	Cadre
 	Swatch	Nuance
+	Banner Hems and Grommets…	Ourlets et œillets de banderole…
+	Banner Hems and Grommets	Ourlets et œillets de banderole
+	Hem	Ourlet
+	Grommets	Œillets
+	Grommet Inset	Distance des œillets au bord
+	Diameter	Diamètre
