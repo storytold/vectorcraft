@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Assets",
             [],
             None,
-            "{assets?: [asset id…] (default all but the 3D assets, which assets.export3D writes), folder?, zip?, openLocation?, formats?, preset?, settings?, prefix?, subfolders?, antiAlias?} each asset's art alone, cropped to it, in every format row: document.exportForScreens {assets} at the document's export settings (document.exportSettings) under the ones given; with subfolders false every file goes into the folder itself, mobile and density rows too → what document.exportForScreens returns (no folder: the files, or one zip, as dataBase64). Leaves the remembered settings as they are (assets.settings.set changes them)",
+            "{assets?: [asset id…] (default all but the 3D assets, which assets.export3D writes), folder?, zip?, openLocation?, formats?, preset?, settings?, prefix?, subfolders?, antiAlias?} each asset's art alone, cropped to it, in every format row: document.exportForScreens {assets} at the document's export settings (document.exportSettings) under the ones given; with subfolders false every file goes into the folder itself, mobile and density rows too → what document.exportForScreens returns (no folder: the files, or one zip, as dataBase64; warnings name a key in the rows or settings given that only another format takes, not one in the remembered settings). Leaves the remembered settings as they are (assets.settings.set changes them)",
             has_doc,
             export
         ),
@@ -429,7 +429,7 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
         }
         q.insert("assets".into(), json!(all));
     }
-    export_screens(s, &Value::Object(q)).map_err(|e| of_cmd(C, e))
+    export_screens(s, &Value::Object(q), p).map_err(|e| of_cmd(C, e))
 }
 
 fn settings_set(s: &mut Session, p: &Value) -> Result<Value> {

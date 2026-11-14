@@ -204,18 +204,25 @@ fn cmd_layers() -> Result<(), String> {
 }
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
-/// shell, and the web app (its wasm-only code is compiled by nothing else).
-fn wasm_set() -> Result<Vec<String>, String> {
-    let crates = layers::from_metadata(&metadata()?)?;
-    Ok(crates
+/// shell, and the web app (its wasm-only code is compiled by nothing else). Each comes with its
+/// package id, which `-p` takes where the name would be ambiguous: craft-libs builds against this
+/// repo's geom and pathops by git, so the graph can hold a second, older copy of a workspace crate.
+fn wasm_set() -> Result<Vec<(String, String)>, String> {
+    let meta = metadata()?;
+    let ids: std::collections::HashMap<&str, &str> =
+        meta["packages"].as_array().into_iter().flatten().filter_map(|p| Some((p["name"].as_str()?, p["id"].as_str()?))).collect();
+    layers::from_metadata(&meta)?
         .into_iter()
         .filter(|c| match layers::classify(&c.name) {
             Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
             Some(layers::Class::Standalone) => true,
             _ => layers::short_name(&c.name) == "web",
         })
-        .map(|c| c.name)
-        .collect())
+        .map(|c| {
+            let id = ids.get(c.name.as_str()).ok_or_else(|| format!("cargo metadata: no package id for {}", c.name))?.to_string();
+            Ok((c.name, id))
+        })
+        .collect()
 }
 
 /// One `cargo check` over the whole wasm set: the crates share one build, and `--keep-going`
@@ -224,10 +231,11 @@ fn cmd_wasm() -> Result<(), String> {
     let set = wasm_set()?;
     let mut c = cargo();
     c.args(["check", "--target", "wasm32-unknown-unknown", "--keep-going"]);
-    for pkg in &set {
-        c.args(["-p", pkg]);
+    for (_, id) in &set {
+        c.args(["-p", id]);
     }
-    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), set.join(", ")))
+    let names: Vec<&str> = set.iter().map(|(name, _)| name.as_str()).collect();
+    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), names.join(", ")))
 }
 
 /// Whether `cargo nextest` is installed.

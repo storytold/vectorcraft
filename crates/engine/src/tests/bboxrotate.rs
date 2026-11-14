@@ -560,6 +560,125 @@ fn reset_bounding_box_then_release_intertwine() {
     reset_then_release("object.intertwine.make", "object.intertwine.release");
 }
 
+/// A symbol of two rectangles, the first turned `inner` degrees before the symbol is made, placed
+/// as an instance that is then turned 20°.
+fn turned_instance(inner: f64) -> (Session, NodeId) {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+    let b = rect(&mut s, 150.0, 220.0, 100.0, 50.0);
+    if inner != 0.0 {
+        sel(&mut s, &[a]);
+        s.execute("object.rotate", &json!({"angle": inner})).unwrap();
+    }
+    sel(&mut s, &[a, b]);
+    let inst = id_of(&s.execute("symbol.new", &json!({"name": "Pair"})).unwrap());
+    sel(&mut s, &[inst]);
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    assert!(near(angle(&s, inst), 20.0));
+    (s, inst)
+}
+
+/// Break Link and Expand with the parameters that turn instance `inst` into its art.
+fn expand_instance(s: &mut Session, command: &str, inst: NodeId) {
+    sel(s, &[inst]);
+    let params = if command == "symbol.breakLink" { json!({"ids": [inst.0]}) } else { json!({"object": true, "fill": false, "stroke": false}) };
+    s.execute(command, &params).unwrap();
+    assert!(s.doc().unwrap().doc.node(inst).is_none_or(|n| !matches!(n.kind, vectorcraft_doc::NodeKind::SymbolInstance { .. })), "{command}");
+}
+
+/// The angles of the objects inside the document's only top-level object, that object included.
+fn art_angles(s: &Session) -> Vec<f64> {
+    let d = &s.doc().unwrap().doc;
+    let layer = d.layers.first().unwrap();
+    let top = layer.children().unwrap();
+    assert_eq!(top.len(), 1);
+    let mut out = vec![];
+    subtree_angles(&top[0], &mut out);
+    out
+}
+
+#[test]
+fn reset_bounding_box_then_expand_symbol_instance() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let (mut s, inst) = turned_instance(0.0);
+        assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+        assert_eq!(angle(&s, inst), 0.0);
+        expand_instance(&mut s, command, inst);
+        let angles = art_angles(&s);
+        assert!(angles.len() >= 2 && angles.iter().all(|a| near(*a, 0.0)), "{command}: {angles:?}");
+        s.execute("select.all", &json!({})).unwrap();
+        assert_eq!(selection_box(&s).angle, 0.0, "{command}");
+    }
+}
+
+#[test]
+fn expanding_a_turned_symbol_instance_keeps_its_angle() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let (mut s, inst) = turned_instance(0.0);
+        expand_instance(&mut s, command, inst);
+        let angles = art_angles(&s);
+        assert!(angles.len() >= 2 && angles.iter().all(|a| near(*a, 20.0)), "{command}: {angles:?}");
+    }
+}
+
+#[test]
+fn reset_bounding_box_then_expand_keeps_the_angles_inside_the_symbol() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        let (mut s, inst) = turned_instance(30.0);
+        s.execute("object.resetBoundingBox", &json!({})).unwrap();
+        expand_instance(&mut s, command, inst);
+        // The turned rectangle keeps the 30° it had in the symbol; the rest stand square.
+        let mut angles = art_angles(&s);
+        angles.sort_by(f64::total_cmp);
+        assert!(near(*angles.last().unwrap(), 30.0) && angles[..angles.len() - 1].iter().all(|a| near(*a, 0.0)), "{command}: {angles:?}");
+    }
+}
+
+/// The group that an instance's opacity adds around the art of a one-object symbol stands as the
+/// instance's box does, turned or reset.
+#[test]
+fn expanding_a_faded_symbol_instance_gives_its_group_the_instance_box() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        for reset in [false, true] {
+            let mut s = session();
+            let a = rect(&mut s, 100.0, 100.0, 100.0, 50.0);
+            sel(&mut s, &[a]);
+            let inst = id_of(&s.execute("symbol.new", &json!({"name": "One"})).unwrap());
+            sel(&mut s, &[inst]);
+            s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+            s.execute("object.setProps", &json!({"ids": [inst.0], "opacity": 50})).unwrap();
+            if reset {
+                s.execute("object.resetBoundingBox", &json!({})).unwrap();
+            }
+            expand_instance(&mut s, command, inst);
+            let want = if reset { 0.0 } else { 20.0 };
+            let angles = art_angles(&s);
+            assert!(angles.len() == 2 && angles.iter().all(|a| near(*a, want)), "{command}, reset {reset}: {angles:?}");
+        }
+    }
+}
+
+/// A mirrored instance: turned 170° and then reflected, its box stands 180° from the box its
+/// transform gives in one step. The art takes the instance's box, and stands square after a reset.
+#[test]
+fn expanding_a_reflected_symbol_instance_keeps_its_box() {
+    for command in ["symbol.breakLink", "object.expand"] {
+        for reset in [false, true] {
+            let (mut s, inst) = turned_instance(0.0);
+            s.execute("object.rotate", &json!({"angle": 150})).unwrap();
+            s.execute("object.reflect", &json!({"axis": "horizontal"})).unwrap();
+            assert!(near(angle(&s, inst), -170.0), "{}", angle(&s, inst));
+            if reset {
+                s.execute("object.resetBoundingBox", &json!({})).unwrap();
+            }
+            let want = angle(&s, inst);
+            expand_instance(&mut s, command, inst);
+            let angles = art_angles(&s);
+            assert!(angles.len() >= 2 && angles.iter().all(|a| near(*a, want)), "{command}, reset {reset}: {angles:?}");
+        }
+    }
+}
+
 #[test]
 fn reset_bounding_box_then_release_linked_opacity_mask() {
     let mut s = session();

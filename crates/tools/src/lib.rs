@@ -624,8 +624,16 @@ mod cursor_tests {
     /// Use Precise Cursors turns it into the crosshair.
     #[test]
     fn drawing_tools_show_their_own_cursor() {
-        let (d, _) = doc_with_rect();
+        let (d, rect) = doc_with_rect();
         let away = Point::new(400.0, 400.0);
+        // The Smooth tool shows its own cursor only with a selected path (Not Allowed without one).
+        let mut selected = Selection::default();
+        selected.set([rect]);
+        let paint = paint();
+        let cursor_of = |id: &str| match id {
+            "smooth" => create(id).cursor(&cx(&d, &selected, &paint), away, Mods::default()),
+            _ => cursor_at(id, &d, away),
+        };
         for (id, c) in [
             ("lasso", Cursor::Lasso),
             (addons::enclosing_lasso::ID, Cursor::Lasso),
@@ -651,7 +659,7 @@ mod cursor_tests {
             ("symbolStyler", Cursor::SymbolStyler),
             ("mesh", Cursor::MeshAdd),
         ] {
-            assert_eq!(cursor_at(id, &d, away), c, "{id}");
+            assert_eq!(cursor_of(id), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
             // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
             // Live Paint Bucket's bucket is drawn.

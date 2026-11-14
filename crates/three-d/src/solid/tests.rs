@@ -225,12 +225,12 @@ fn a_flat_facet_measures_its_depth_on_its_plane() {
 /// eye, has no plane: its drawing no longer matches the plane's projection there.
 #[test]
 fn a_face_reaching_past_the_eye_has_no_plane() {
-    use super::build::{Builder, Order};
+    use super::build::{Builder, Keep, Order};
     let (_, b) = shape(&square(0.0, 0.0, 100.0));
     let camera = Camera::new(View { perspective: 50.0, ..front() }, b, 0.0);
     let eye = camera.center_and_eye().1.unwrap();
     for (far, has_plane) in [(eye / 2.0, true), (2.0 * eye, false)] {
-        let mut builder = Builder { camera: &camera, closed: false, hidden: false, facets: vec![], mesh: None };
+        let mut builder = Builder::new(&camera, false, false, Keep::Facets);
         let corners = vec![V3(-10.0, -10.0, 0.0), V3(10.0, -10.0, 0.0), V3(0.0, 10.0, far)];
         builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth).unwrap();
         assert_eq!(builder.facets.len(), 1, "{far}");
@@ -253,6 +253,78 @@ fn a_bevel_inside_shrinks_the_cap_and_outside_grows_the_walls() {
     assert!(outside.iter().any(|f| close(signed_area(&f.contours[0]).abs(), 100.0 * 100.0, 1e-6)), "the cap is the art");
     // The chamfer's faces lean towards the light differently from the cap.
     assert!(inside.iter().any(|f| !close(f.brightness, inside[inside.len() - 1].brightness, 1e-3)));
+}
+
+/// A bevel past a sharp corner is cut square, as a bevel join cuts a stroke, instead of running
+/// out to a spike along the corner's bisector: seen straight on, no point of the solid lies further
+/// from the art than the miters of its corners of about 90° (14.6 pt for a 10 pt bevel), where the
+/// sharp corner's spike reached 40 pt. The bevel opens the corner of a thin spike (with its
+/// neighbor in the same compound path) when it is outside, and of a narrow notch when it is inside;
+/// the other two cases, where the inset edges meet, keep their limited miters and are checked too.
+#[test]
+fn a_bevel_cuts_sharp_corners_square() {
+    let poly = |pts: &[(f64, f64)]| {
+        let mut b = BezPath::new();
+        b.move_to(pts[0]);
+        pts[1..].iter().for_each(|p| b.line_to(*p));
+        b.close_path();
+        b
+    };
+    let spike = [(50.0, 0.0), (56.0, 100.0), (44.0, 100.0)];
+    let block = [(80.0, 40.0), (120.0, 40.0), (120.0, 100.0), (80.0, 100.0)];
+    let notched = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (52.0, 100.0), (50.0, 20.0), (48.0, 100.0), (0.0, 100.0)];
+    let mut both = poly(&spike);
+    both.extend(poly(&block).elements().iter().copied());
+    let bevel = Bevel { width: 10.0, height: 10.0, ..Bevel::default() };
+    let mut far_cases = vec![];
+    for (name, art, outline) in [("spike", both, vec![spike.to_vec(), block.to_vec()]), ("notch", poly(&notched), vec![notched.to_vec()])] {
+        let (p, b) = shape(&art);
+        let outline: Vec<Vec<Point>> = outline.iter().map(|r| r.iter().map(|q| Point::new(q.0, q.1)).collect()).collect();
+        for inside in [false, true] {
+            for shape in [BevelShape::Classic, BevelShape::Rounded] {
+                let o = Extrude { bevel: Some(Bevel { inside, shape, ..bevel }), ..Extrude::default() };
+                let f = extrude(&p, FillRule::NonZero, b, o, front()).unwrap();
+                let far = f.iter().flat_map(|f| f.contours.iter().flatten()).map(|q| edge_distance(&outline, *q)).fold(0.0, f64::max);
+                if far > 15.0 {
+                    far_cases.push(format!("{name} inside {inside} {shape:?}: a point {far} pt from the art"));
+                }
+                assert!(f.iter().all(|f| f.normal.iter().all(|v| v.is_finite())), "{name} inside {inside} {shape:?}");
+            }
+            // Turned, every face still has a normal it can be lit and sorted by.
+            let o = Extrude { bevel: Some(Bevel { inside, ..bevel }), ..Extrude::default() };
+            let f = extrude(&p, FillRule::NonZero, b, o, View::default()).unwrap();
+            assert!(f.iter().all(|f| f.normal.iter().all(|v| v.is_finite()) && f.brightness.is_finite()), "{name} inside {inside}");
+        }
+    }
+    assert!(far_cases.is_empty(), "{far_cases:#?}");
+}
+
+/// With the bevel outside, the cap is the outline itself, so a corner cut square keeps its two
+/// points together there: the cap's outline draws no straight segment of no length at that corner.
+#[test]
+fn a_cap_draws_no_empty_segment_at_a_corner_cut_square() {
+    use vectorcraft_geom::kurbo::PathEl;
+    let mut art = BezPath::new();
+    art.move_to((50.0, 0.0));
+    art.line_to((56.0, 100.0));
+    art.curve_to((56.0, 120.0), (44.0, 120.0), (44.0, 100.0));
+    art.close_path();
+    let (p, b) = shape(&art);
+    let o = Extrude { bevel: Some(Bevel { width: 10.0, height: 10.0, ..Bevel::default() }), ..Extrude::default() };
+    let f = extrude(&p, FillRule::NonZero, b, o, front()).unwrap();
+    let cap = f.iter().find(|f| f.depth == f64::MAX && f.outline.is_some()).unwrap();
+    let mut at = None;
+    for el in cap.path().to_bezpath().elements() {
+        match *el {
+            PathEl::MoveTo(q) => at = Some(q),
+            PathEl::LineTo(q) => {
+                assert_ne!(at, Some(q), "a segment of no length at {q:?}");
+                at = Some(q);
+            }
+            PathEl::QuadTo(_, q) | PathEl::CurveTo(_, _, q) => at = Some(q),
+            PathEl::ClosePath => {}
+        }
+    }
 }
 
 #[test]

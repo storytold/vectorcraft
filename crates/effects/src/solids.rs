@@ -7,7 +7,7 @@ use vectorcraft_doc::color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId, NodeKind, OpacityMask};
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect, Vec2};
 use vectorcraft_pathops::BoolOp;
-use vectorcraft_three_d::{Bevel, BevelShape, DepthPlane, Extrude, Facet, Inflate, MAX_OBJECT_FACES, Mesh, PlanarFace, View};
+use vectorcraft_three_d::{Bevel, BevelShape, DepthPlane, Extrude, Facet, Inflate, MAX_OBJECT_FACES, Mesh, MeshedSolid, PlanarFace, View};
 
 #[cfg(test)]
 use vectorcraft_doc::color::Color;
@@ -223,6 +223,10 @@ pub(crate) fn solid_paint_sources(n: &Node) -> (Vec<Option<&AppearanceItem>>, Ve
 }
 
 fn facets(id: &str, path: &PathData, rule: FillRule, bounds: Rect, p: &Value) -> Result<Vec<Facet>, String> {
+    #[cfg(test)]
+    if !is_plane(id) {
+        SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + 1));
+    }
     let view = view_options(p);
     match id {
         EXTRUDE => vectorcraft_three_d::extrude(path, rule, bounds, extrude_options(p), view),
@@ -292,7 +296,7 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
         let mut shapes = members(n, label)?;
         reshape_members(n, before, &mut shapes);
         let b = union_bounds(&shapes).ok_or_else(|| format!("{label} requires a group holding a shape with at least two anchors"))?;
-        shapes.iter().try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))?;
+        check_profiles(id, p, &shapes, b)?;
         check_solids(id, p, &shapes)?;
         return cast_shadow(id, p, &shapes).map(|_| ());
     }
@@ -309,10 +313,22 @@ fn validate_solid_for(doc: Option<&Document>, n: &Node, id: &str, p: &Value, at:
         None => (geometry(&path, before, &ctx), solid_paints(n)),
     };
     let b = path.bounds().ok_or_else(anchors)?;
-    facets(id, &path, rule, b, p)?;
     let shapes = [Profile { path, rule, items, opacity: 1.0, scopes: vec![] }];
+    check_profiles(id, p, &shapes, b)?;
     check_solids(id, p, &shapes)?;
     cast_shadow(id, p, &shapes).map(|_| ())
+}
+
+/// Do the solids 3D effect `id` with parameters `p` builds from the profiles of `shapes` about `b`
+/// build? Only the profiles no solid of [`check_solids`] is built from are built here: every
+/// shape's for Rotate, and for Extrude & Bevel and Inflate the profile of a shape with no fill,
+/// whose solids are its strokes' outlines or none. A filled shape's profile is its fill's solid,
+/// which [`check_solids`] builds once, about the bounds the effect draws it about.
+fn check_profiles(id: &str, p: &Value, shapes: &[Profile], b: Rect) -> Result<(), String> {
+    shapes
+        .iter()
+        .filter(|s| is_plane(id) || !s.items.iter().any(|i| matches!(i, AppearanceItem::Fill(_))))
+        .try_for_each(|s| facets(id, &s.path, s.rule, b, p).map(|_| ()))
 }
 
 /// Do the solids 3D effect `id` with parameters `p` builds from the fills and strokes of `shapes`
@@ -559,10 +575,8 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         .into_iter()
         .map(|face| {
             // Adjacent facets, antialiased on their own, would leave hairline seams: a narrow
-            // stroke of the same paint closes them. No wider than the facet is thick, though: seen
-            // at a grazing angle a facet can be thinner than the stroke, and its stroke would then
-            // paint over its neighbours.
-            let seam = (face.thickness() / 2.0).clamp(0.05, 0.75);
+            // stroke of the same paint closes them ([`seam_width`]).
+            let seam = seam_width(&face);
             if let Some(g) = face.rgb_gradient
                 && (paint.color().is_some() || matches!(paint, Paint::Gradient(_)))
             {
@@ -590,6 +604,13 @@ fn surface(n: &Node, facets: Vec<Facet>, paint: &Paint, opacity: f32, blend: Ble
         group.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(coverage, true)));
     }
     group
+}
+
+/// The width of the stroke of a facet's own paint that closes the seams between `face` and its
+/// neighbors. No wider than the facet is thick: seen at a grazing angle a facet can be thinner than
+/// the stroke, and its stroke would then paint over its neighbors.
+pub(crate) fn seam_width(face: &Facet) -> f64 {
+    (face.thickness() / 2.0).clamp(0.05, 0.75)
 }
 
 /// Is a surface of `facets` in `paint` one composite of all its facets when [`surface`] draws it
@@ -656,8 +677,11 @@ fn solid_parts(shapes: &[Profile], fallback: Rect) -> (Vec<Part<'_>>, Rect) {
 
 #[cfg(test)]
 thread_local! {
-    /// How many solids [`built_solids`] has built on this thread, for the tests.
+    /// How many solids [`built_solids`] and [`meshes_for`] have built on this thread, for the tests.
     static SOLIDS_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many Extrude & Bevel (Classic included) and Inflate solids [`facets`] and
+    /// [`built_solids`] have built on this thread, for the tests.
+    static SOLID_GEOMETRY_BUILT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The solids Extrude & Bevel (Classic included) or Inflate `id` with parameters `p` builds from
@@ -687,7 +711,11 @@ fn built_solids<'a>(
         #[cfg(test)]
         SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
         let built = match inflated.as_mut() {
-            Some(each) => each.next().unwrap_or_else(|| Ok(vec![])),
+            Some(each) => {
+                #[cfg(test)]
+                SOLID_GEOMETRY_BUILT.with(|n| n.set(n.get() + 1));
+                each.next().unwrap_or_else(|| Ok(vec![]))
+            }
             None => facets(id, area, *rule, bounds, p),
         };
         let result = match built {
@@ -1259,6 +1287,35 @@ fn draw_order(faces: &[Placed], sealed: bool) -> Vec<usize> {
     // face moved to a stroke face's depth goes before it.
     order.sort_by(|&a, &b| keys[a].0.total_cmp(&keys[b].0).then(keys[b].1.cmp(&keys[a].1)));
     local_order(faces, order)
+}
+
+/// The order, back to front, of the faces of one or more Revolve surfaces `faces`, given back to
+/// front by depth: each face's polygon on the drawing, its plane and its depth. When two
+/// overlapping faces are drawn the wrong way round for their depths where they overlap, every pair
+/// of overlapping faces with a convex polygon and a plane goes in the order of its depths there,
+/// the face nearer the viewer after the other ([`local_order`]), and each step draws the face that
+/// comes first in the given order of those whose faces before are drawn, so a face without a plane
+/// or a convex polygon can also move. Otherwise the order given.
+pub(crate) fn surface_order<'a>(faces: impl IntoIterator<Item = (&'a [Point], Option<DepthPlane>, f64)>) -> Vec<usize> {
+    let placed: Vec<Placed> = faces
+        .into_iter()
+        .map(|(points, plane, depth)| {
+            let local = plane.is_some() && convex(points).is_some();
+            // Every face counts as one of a stroke's on one shape, so each overlapping pair is compared.
+            Placed {
+                depth,
+                side: true,
+                away: false,
+                bounds: polygon_bounds(points),
+                member: 0,
+                paints: Paints::Other,
+                outline: if local { points.to_vec() } else { vec![] },
+                plane: plane.filter(|_| local),
+            }
+        })
+        .collect();
+    let order = (0..placed.len()).collect();
+    local_order(&placed, order)
 }
 
 /// `shapes`, the members of group or layer `n`, reshaped by the visible geometry effects `before`
@@ -2039,31 +2096,35 @@ fn meshes_for(fx: &Effect, shapes: &[Profile], total: &mut usize, limit: usize) 
         return Ok(out);
     }
     let (parts, bounds) = solid_parts(shapes, b);
-    // The solids the art draws, past the limits of the object's solids together as it is
-    // ([`built_solids`]), each built and its faces counted as the loop reaches it, then dropped.
-    let drawn = built_solids(&fx.id, &p, &parts, bounds, MAX_OBJECT_FACES).map(|r| r.map(|f| f.is_some()));
-    // Inflate lays out every puff at once (they share one eye); each Inflate and Extrude & Bevel
-    // solid and its mesh are built as the loop reaches them.
+    // Inflate lays out every puff at once (they share one eye). Each Inflate and Extrude & Bevel
+    // solid is built once, as the loop reaches it: its facets decide whether the art draws it, as
+    // [`built_solids`] does, and its faces before projection make its mesh.
     let mut inflated = (fx.id == INFLATE).then(|| {
         let shapes: Vec<(&PathData, FillRule)> = parts.iter().map(|(_, _, area, rule, _, _)| (area, *rule)).collect();
-        vectorcraft_three_d::inflate_meshes(&shapes, bounds, inflate_options(&p), view)
+        vectorcraft_three_d::inflate_meshed(&shapes, bounds, inflate_options(&p), view)
     });
     let extrude = if fx.id == CLASSIC_EXTRUDE { classic_extrude_options(&p) } else { extrude_options(&p) };
-    for ((item, member, area, rule, _, _), drawn) in parts.iter().zip(drawn) {
+    let mut kept = 0usize;
+    for (item, member, area, rule, _, _) in &parts {
         let item: &AppearanceItem = item;
-        if !drawn? {
-            // A stroke the art leaves out is left out of the meshes too; Inflate's next puff
-            // still belongs to the next part.
-            if let Some(built) = inflated.as_mut() {
-                built.next();
-            }
-            continue;
-        }
-        let mesh = match inflated.as_mut() {
-            Some(built) => built.next().unwrap_or_else(|| Ok(Mesh::default())),
-            None => vectorcraft_three_d::extrude_mesh(area, *rule, bounds, extrude, view),
+        #[cfg(test)]
+        SOLIDS_BUILT.with(|n| n.set(n.get() + 1));
+        let built = match inflated.as_mut() {
+            Some(each) => each.next().unwrap_or_else(|| Ok(MeshedSolid::default())),
+            None => vectorcraft_three_d::extrude_meshed(area, *rule, bounds, extrude, view),
         };
-        match mesh {
+        // A stroke the art leaves out is left out of the meshes too. The faces of the solids kept
+        // count together against the object's limit.
+        let solid = match built {
+            Ok(solid) => solid,
+            Err(_) if matches!(item, AppearanceItem::Stroke(_)) => continue,
+            Err(e) => return Err(e),
+        };
+        kept = kept.saturating_add(solid.facets.len());
+        if kept > MAX_OBJECT_FACES {
+            return Err(vectorcraft_three_d::TOO_COMPLEX_SOLID.to_string());
+        }
+        match solid.mesh() {
             Ok(mesh) => {
                 let (paint, opacity, _) = paint_of(item, *member);
                 keep(&mut out, mesh, mesh_color(&paint, opacity))?;
@@ -2174,3 +2235,6 @@ mod tests_sources;
 
 #[cfg(test)]
 mod tests_shadow;
+
+#[cfg(test)]
+mod tests_revolve_order;

@@ -234,11 +234,10 @@ impl<'a> Reader<'a> {
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
-        // A ruler guide is written as a straight `(N) *` guide path on its layer.
+        // A ruler guide is written as a straight `(N) *` guide path on its layer, shown or hidden.
         if guide
             && op == "N"
             && !hidden
-            && !gs.hidden
             && !clip
             && self.pattern.is_none()
             && matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))

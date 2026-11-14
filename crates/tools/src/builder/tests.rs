@@ -920,6 +920,43 @@ fn shape_builder_shift_drag_shows_no_scissors_or_stroke_highlight() {
     assert_eq!(t.cursor(&cx, Point::new(75.0, 75.0), shift), Cursor::ShapeBuilder);
 }
 
+/// When the pointer leaves the canvas, the Shape Builder's region or stroke highlight and its
+/// cursor swatch preview go.
+#[test]
+fn shape_builder_hover_ended_drops_the_highlight_and_the_swatch_preview() {
+    let (d, s) = corner_rects();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = ShapeBuilderTool::default();
+    for (key, v) in [("pickColorFrom", json!("swatches")), ("cursorSwatchPreview", json!(true)), ("clickStrokeSplitsPath", json!(true))] {
+        t.set_option(key, &v);
+    }
+    // Over a region, then over a stroke a click would split.
+    for (x, y) in [(25.0, 25.0), (-1.0, 25.0)] {
+        t.pointer(&cx, &ev(PointerKind::Move, x, y));
+        let ov = t.overlays(&cx);
+        assert!(ov.iter().any(|o| matches!(o, Overlay::Swatch { .. })) && ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+        t.hover_ended(&cx);
+        assert!(t.overlays(&cx).is_empty());
+    }
+}
+
+/// A map of a large selection that arrives after the pointer leaves the canvas highlights nothing
+/// under the point where the pointer was last seen.
+#[test]
+fn shape_builder_map_arriving_after_hover_ended_highlights_nothing() {
+    let (d, s) = square_row(40);
+    let p = paint();
+    let cx = ToolContext { revision: (1, 1), ..cx(&d, &s, &p) };
+    let mut t = ShapeBuilderTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 15.0, 10.0));
+    assert!(t.waiting() && t.hover.is_none(), "the map is built on another thread");
+    t.hover_ended(&cx);
+    t.poll(&cx, true);
+    assert!(!t.waiting());
+    assert!(t.hover.is_none() && t.overlays(&cx).is_empty(), "{:?}", t.hover);
+}
+
 #[test]
 fn shape_builder_stroke_options_round_trip_and_pick_the_side_under_the_pointer() {
     let (d, s) = corner_rects();
@@ -1591,6 +1628,21 @@ fn live_paint_selection_hover_builds_no_map_of_the_selection() {
     assert_eq!(t.hover, LpHover::None);
     assert_eq!(t.cache.builds, 0);
     assert!(!t.waiting());
+}
+
+/// When the pointer leaves the canvas, the Live Paint Selection tool's highlight goes.
+#[test]
+fn live_paint_selection_hover_ended_drops_the_highlight() {
+    let (d, ..) = live_group_doc();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = LivePaintSelectionTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, 75.0, 25.0));
+    let ov = t.overlays(&cx);
+    assert!(ov.iter().any(|o| matches!(o, Overlay::Path { .. })), "{ov:?}");
+    t.hover_ended(&cx);
+    assert!(t.overlays(&cx).is_empty());
 }
 
 /// A Live Paint Selection click pressed with `down`: the press does nothing, and the release does

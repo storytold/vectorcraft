@@ -1181,7 +1181,7 @@ mod tests {
         assert!(nodes > 0);
         let draft = |i: usize| brush::BrushDraft {
             name: format!("Brush {i}"),
-            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string(), plain: false },
+            kind: brush::DraftKind::Art { brush: vectorcraft_brush::ArtBrush::default(), art: "A".to_string(), settings: None },
         };
         let drafts: Vec<_> = (0..5).map(draft).collect();
         let (kept, left_out) = brush::finish_brushes_within(drafts.clone(), &reader.brush_art, None, 3 * nodes);

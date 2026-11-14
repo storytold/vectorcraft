@@ -21,8 +21,10 @@ mod outline;
 mod rings;
 
 #[cfg(test)]
+pub(crate) use build::EXTRUDED;
+#[cfg(test)]
 use build::{Camera, cuts, edge_distance, newell, section};
-pub(crate) use build::{Face3, extrude_faces, plane_faces};
+pub(crate) use build::{Face3, Keep, extrude_faces, plane_faces};
 pub use build::{extrude, plane};
 pub use face_map::{FaceMap, extrude_face_map, plane_face_map};
 #[cfg(test)]
@@ -293,8 +295,8 @@ pub struct Facet {
     /// (its front). `None` for every other facet.
     pub end: Option<PlanarFace>,
     /// The face's plane in view space and the projection it was drawn with, for its depth at a
-    /// point of the drawing ([`Facet::depth_at`]). `None` for Revolve's faces and for a face whose
-    /// corners lie more than 0.001 pt off one plane (a piece of a twisted wall).
+    /// point of the drawing ([`Facet::depth_at`]). `None` for a face whose corners lie more than
+    /// 0.001 pt off one plane (a piece of a twisted wall) or reach the eye.
     pub plane: Option<DepthPlane>,
     /// The contours in view space, before projection, for tests that measure depths.
     #[cfg(test)]
@@ -365,7 +367,7 @@ impl Facet {
         PathData::from_bezpath(&bp)
     }
 
-    /// Revolve's face `face` as a facet: its polygon, curved outline, depth, normal and lighting.
+    /// Revolve's face `face` as a facet: its polygon, curved outline, depth, plane, normal and lighting.
     /// A face that joins the profile's ends round the axis is a side; a cap is an end.
     pub(crate) fn of_face(face: crate::Face) -> Self {
         Facet {
@@ -380,7 +382,7 @@ impl Facet {
             // A revolved cap is not one of the planar faces graphics map onto.
             end: None,
             away: false,
-            plane: None,
+            plane: face.plane,
             #[cfg(test)]
             view: vec![],
         }

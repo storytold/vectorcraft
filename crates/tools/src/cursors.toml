@@ -453,6 +453,7 @@ group = "Navigation"
 shown_when = [
     "The Rotate, Reflect, Scale and Shear tools with nothing selected.",
     "Puppet Warp off the mesh, where no pin can go.",
+    "The Smooth tool, and the Pencil or Blob Brush where Alt gives the Smooth tool, when no path is selected that the Smooth tool can act on: a drag changes nothing.",
 ]
 hotspot = "The centre."
 designer = false
@@ -690,10 +691,10 @@ look = "Only a small dot at the centre, as the Blob Brush's: the tip outline dra
 id = "Smooth"
 group = "Drawing and editing tools"
 shown_when = [
-    "The Smooth tool: a drag along a selected path smooths it.",
-    "The Pencil tool with Alt key toggles to Smooth Tool on: with Alt held before a stroke begins to draw, and through a drag that smooths.",
-    "The Paintbrush tool with Alt held before a press while a path is selected that the Smooth tool can act on (an editable path, not a guide, with three or more anchors on one of its subpaths), and through a drag that smooths.",
-    "The Blob Brush tool with Alt held before a press, or before the drag has moved from the press point, and through a drag that smooths.",
+    "The Smooth tool while a path is selected that it can act on (an editable path, not a guide, with three or more anchors on one of its subpaths), wherever the pointer is: a drag along the path smooths it. With no such path selected, Not Allowed shows.",
+    "The Pencil tool with Alt key toggles to Smooth Tool on and such a path selected: with Alt held before a stroke begins to draw, and through a drag that smooths.",
+    "The Paintbrush tool with Alt held before a press while such a path is selected, and through a drag that smooths.",
+    "The Blob Brush tool with such a path selected: with Alt held before a press, or before the drag has moved from the press point, and through a drag that smooths.",
 ]
 hotspot = "The tip."
 

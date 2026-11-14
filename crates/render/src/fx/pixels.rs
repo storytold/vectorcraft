@@ -412,7 +412,7 @@ impl Renderer {
     /// brush library it reads; for images and placed documents their pixels and files, the
     /// layer's Dim Images and the options they are drawn with (with
     /// [`crate::RenderOptions::kept_images_only`], also which pixels and undecodable notes the
-    /// image store holds); for type the fonts, whether overprinting shows
+    /// image store holds); for type the fonts and the hyphenation exceptions, whether overprinting shows
     /// ([`crate::proof::overprints`]) and Document Setup's substitution highlights; and the
     /// plug-ins installed, with the names of the document's swatches and patterns and its pattern
     /// definitions (a plug-in's painted pieces can name them), when an object in it has a plug-in
@@ -457,7 +457,7 @@ impl Renderer {
                 f.doc.setup.highlight_substituted_glyphs,
                 o.highlight_alternate_glyphs,
             ));
-            (vectorcraft_text::FontDb::global().generation(), crate::proof::overprints(f.opts), highlights).hash(&mut h);
+            (vectorcraft_text::layout_inputs(), crate::proof::overprints(f.opts), highlights).hash(&mut h);
         }
         if reads.plugins || (doc.plugins && (reads.symbols || reads.patterns)) {
             (effects::plugin_revision(), doc.names, doc.patterns).hash(&mut h);

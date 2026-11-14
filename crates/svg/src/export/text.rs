@@ -283,6 +283,11 @@ impl Writer<'_> {
                 self.warn("type on a path with Insert Aki is outlined to keep its look");
                 return self.text_outlines(n, t);
             }
+            // Tsume does as well.
+            if t.runs.iter().any(|r| r.style.tsume != 0.0) {
+                self.warn("type on a path with Tsume is outlined to keep its look");
+                return self.text_outlines(n, t);
+            }
             // A `<textPath>` holds the characters of the text, not the bullets or numbers drawn
             // before them.
             if !lay.markers.is_empty() {
@@ -715,13 +720,13 @@ const PLACE_TOLERANCE: f64 = 1e-6;
 /// starts a new segment at each character the layout draws elsewhere than a reader continuing
 /// the segment would ([`reader_advances`]): a Justify All line's letter gaps, the gaps between
 /// the characters of a justified Japanese line, and the spacing Mojikumi changes. Text with Insert
-/// Aki does so on every line, with `fewer` too.
+/// Aki or Tsume does so on every line, with `fewer` too.
 fn text_lines(t: &TextObject, lay: &vectorcraft_text::TextLayout, fewer: bool) -> Vec<Line> {
     let plain = t.plain_text();
     let mut lines = Vec::with_capacity(lay.lines.len());
     let (mut kerned, mut unkerned) = (None, None);
-    // Insert Aki moves characters from where a reader draws them, with `fewer` too.
-    let aki = t.runs.iter().any(|r| r.style.aki_left != 0.0 || r.style.aki_right != 0.0);
+    // Insert Aki and Tsume move characters from where a reader draws them, with `fewer` too.
+    let aki = t.runs.iter().any(|r| r.style.aki_left != 0.0 || r.style.aki_right != 0.0 || r.style.tsume != 0.0);
     for line in &lay.lines {
         let para = plain.as_bytes().get(..line.start).map_or(0, |b| b.iter().filter(|&&c| c == b'\n').count());
         let style = t.para_at(para);
@@ -885,11 +890,12 @@ fn reader_advances(t: &TextObject, lay: &vectorcraft_text::TextLayout, kerning: 
         if !kerning {
             r.style.kerning.get_or_insert(0.0);
         }
-        // A reader puts no space before a line's first character (`kerningBefore`) and no Insert
-        // Aki: the segment starts that much further along instead.
+        // A reader puts no space before a line's first character (`kerningBefore`), no Insert
+        // Aki and no Tsume: the segment starts that much further along instead.
         r.style.kerning_before = 0.0;
         r.style.aki_left = 0.0;
         r.style.aki_right = 0.0;
+        r.style.tsume = 0.0;
     }
     let relaid;
     let glyphs = if set == *t {

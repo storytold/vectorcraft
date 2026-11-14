@@ -491,16 +491,10 @@ pub(crate) fn text_within<'a>(bytes: &'a [u8], unpacked: &std::sync::atomic::Ato
     match craft_svg::svgz::inflate(bytes, most) {
         Ok(raw) => {
             unpacked.fetch_add(raw.len() as u64, Ordering::Relaxed);
-            craft_svg::svgz::decode(&raw)
-                .map(|t| std::borrow::Cow::Owned(t.into_owned()))
-                .map_err(|_| not_utf8())
+            craft_svg::svgz::decode(&raw).map(|t| std::borrow::Cow::Owned(t.into_owned())).map_err(|_| not_utf8())
         }
-        Err(craft_svg::svgz::Error::TooLarge(_)) => {
-            Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20)))
-        }
-        Err(craft_svg::svgz::Error::Corrupt(e)) => {
-            Err(SvgError::Parse(format!("not a valid SVGZ file: {e}")))
-        }
+        Err(craft_svg::svgz::Error::TooLarge(_)) => Err(SvgError::TooBig(format!("the SVGZ file unpacks to more than {} MB", most >> 20))),
+        Err(craft_svg::svgz::Error::Corrupt(e)) => Err(SvgError::Parse(format!("not a valid SVGZ file: {e}"))),
         Err(craft_svg::svgz::Error::Encoding) => Err(not_utf8()),
         Err(e) => Err(SvgError::Parse(e.to_string())),
     }

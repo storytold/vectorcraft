@@ -99,7 +99,7 @@ struct Drag {
     began: bool,
 }
 
-/// The type object's layout, keyed by the font database's generation and the object.
+/// The type object's layout, keyed by [`vectorcraft_text::layout_inputs`] and the object.
 type CachedLayout = ((u64, TextObject), Arc<TextLayout>);
 
 #[derive(Default)]
@@ -196,9 +196,10 @@ fn char_box(t: &TextObject, lay: &TextLayout, gi: usize) -> Option<CharBox> {
 }
 
 impl TouchTypeTool {
-    /// Layout of `t`, cached by content (overlays run every frame) and by the fonts available.
+    /// Layout of `t`, cached by content (overlays run every frame), by the fonts available and by
+    /// the hyphenation exceptions.
     fn layout(&self, t: &TextObject) -> Arc<TextLayout> {
-        let fonts = FontDb::global().generation();
+        let fonts = vectorcraft_text::layout_inputs();
         let mut c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(((g, k), l)) = c.as_ref()
             && *g == fonts

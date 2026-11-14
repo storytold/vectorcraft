@@ -387,6 +387,21 @@ impl<'p> Builder<'p> {
                         only = fold_stop_opacity(&only, &m).unwrap_or_else(|| only.with_mask(Some(Box::new(m))));
                     }
                     Some(only)
+                } else if let [only] = children.as_slice()
+                    && matches!(only.kind, NodeKind::Group { clip: false, .. })
+                    && only.knockout == Knockout::On
+                    && only.opacity >= 0.999
+                    && only.blend == BlendMode::Normal
+                    && !only.isolate
+                    && only.extras().mask.is_none()
+                    && mask.is_none()
+                    && !knockout
+                {
+                    // A knockout group drawn in a form that carries its opacity, blend mode or
+                    // isolation: one knockout group with them.
+                    let mut only = (**only).clone();
+                    (only.opacity, only.blend, only.isolate) = (opacity, blend, isolate);
+                    Some(only)
                 } else {
                     let mut g = Node::group(self.id(), children);
                     (g.opacity, g.blend, g.isolate) = (opacity, blend, isolate);

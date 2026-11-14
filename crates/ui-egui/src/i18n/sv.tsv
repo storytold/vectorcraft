@@ -693,6 +693,8 @@ font-technology	Variable	Variabla
 	Crop Image	Beskär bild
 	Image Tools	Bildverktyg
 	Remove Background…	Ta bort bakgrund…
+	Draw (Pencil)	Rita (blyertspenna)
+	Place Image	Placera bild
 	Remove Background	Ta bort bakgrund
 	Background	Bakgrund
 	Edge Color	Kantfärg
@@ -2601,6 +2603,7 @@ font-technology	Variable	Variabla
 	Proportional Metrics	Proportionella mått
 	Insert Aki Left	Infoga aki till vänster
 	Insert Aki Right	Infoga aki till höger
+	Tsume	Tsume
 	Character Direction	Teckenriktning
 	Digits	Siffror
 	Arabic	Arabiska
@@ -4397,6 +4400,7 @@ axis	Both	Båda
 @msg	`select` must be true or false	`select` måste vara true eller false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` och `maxAnchors` måste vara heltal
 @msg	`{key}` must be a number not below 0	`{key}` måste vara ett tal som inte är under 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` måste vara fyra tal som inte är under 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` måste vara [x, y, width, height]: fyra ändliga tal, där bredd och höjd inte är negativa
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` är större än `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	ange minst en av `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4641,6 +4645,7 @@ axis	Both	Båda
 @msg	no action set to save	ingen åtgärdsuppsättning att spara
 @msg	the action set file can't be read in full	filen med åtgärdsuppsättning kan inte läsas helt
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Läste in ”{name}”: {n} steg utelämnades|Läste in ”{name}”: {n} steg utelämnades
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Läste in ”{name}”: {n} steg har ett okänt kommando och behölls: ”{action}”, steg {step}, `{command}`|Läste in ”{name}”: {n} steg har okända kommandon och behölls; det första: ”{action}”, steg {step}, `{command}`
 @msg	not an action set file	inte en fil med åtgärdsuppsättning
 @msg	the action set file is larger than 8 MiB	filen med åtgärdsuppsättningen är större än 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: referensen skulle bli större än {MAX_BYTES} byte
@@ -4875,6 +4880,7 @@ axis	Both	Båda
 @msg	tool shortcuts must be a single key (optionally with Shift)	kortkommandon för verktyg måste vara en enda tangent (eventuellt med Shift)
 @msg	truncated	avkortad
 @msg	unknown command `{0}`	okänt kommando `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	steg {step} i ”{action}” kör det okända kommandot `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	okänt kommando `{0}`; menade du `{1}`?
 @msg	unknown effect `{id}`	okänd effekt `{id}`
 @msg	unknown format	okänt format
@@ -5235,6 +5241,7 @@ effect	Soft	Mjuk
 	VectorCraft Title Bar on Every Desktop	VectorCrafts namnlist på alla skrivbord
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Miljövariabeln VECTORCRAFT_TITLEBAR väljer namnlisten så länge den är angiven.
 	System Title Bar takes precedence over this option while it is on.	Systemets namnlist har företräde framför det här alternativet så länge den är på.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Så länge VectorCrafts namnlist på alla skrivbord är av ritar det här skrivbordet fönstrets namnlist, oavsett om det här alternativet är på eller av.
 	Value Axis	Värdeaxel
 	On Left Side	På vänster sida
 	On Right Side	På höger sida
@@ -6439,11 +6446,11 @@ axis	Y Axis	Y-axel
 @msg	a painted live effect returns only `objects`	en målande live-effekt returnerar bara `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills` och `strokes`
 @msg	a read-only object was left out	ett skrivskyddat objekt utelämnades
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {"id"} eller som det gavs
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {{"id": …}} eller som det gavs
 @msg	a string	en sträng
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en kontur har bara `paint`, `width`, `join`, `cap` och `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	en kontur måste vara {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	en effekt måste vara {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	en kontur måste vara {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	en effekt måste vara {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	en effekt på en fyllning returnerar bara `fills`
 @msg	an effect on a stroke returns only `strokes`	en effekt på en kontur returnerar bara `strokes`
 @msg	an object must be a JSON object	ett objekt måste vara ett JSON-objekt
@@ -6580,6 +6587,8 @@ axis	Y Axis	Y-axel
 	Action Options…	Alternativ för åtgärd…
 	Action Options	Alternativ för åtgärd
 	Playback Options…	Uppspelningsalternativ…
+	Button Mode	Knappläge
+	No actions.	Inga åtgärder.
 	Insert Stop…	Infoga stopp…
 	Insert Stop	Infoga stopp
 	Record Stop	Spela in stopp
@@ -6988,7 +6997,7 @@ anchor	Points:	Punkter:
 	VectorCraft Updates	Uppdateringar för VectorCraft
 	Yonroku-ban	Yonroku-ban
 @msg	image '{key}' has no pixels and was left out	bilden '{key}' har inga pixlar och utelämnades
-@msg	not an RTF file: it doesn't start with {\\rtf	inte en RTF-fil: den börjar inte med {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	inte en RTF-fil: den börjar inte med {{\\rtf
 shape	Open	Öppen
 
 # Color Effects add-on: Select by Color Kind.
@@ -7545,7 +7554,7 @@ digits	Hindi	Hindi
 @msg	`{what}` is longer than {MAX_TEXT} bytes	`{what}` är längre än {MAX_TEXT} byte
 @msg	`{what}` must be text	`{what}` måste vara text
 @msg	`align` is start, center or end	`align` är start, center eller end
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` måste vara en array av par [delbana, ankarpunkt]
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` måste vara en array av par [subpath, anchor]
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` måste lista ankarpunktsindex (0, 1, 2…), inte {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` måste lista ankarpunktsindex (0, 1, 2…), inte {v}
 @msg	`artboards` must be a list of artboard indices	`artboards` måste vara en lista med ritytsindex
@@ -7587,7 +7596,7 @@ digits	Hindi	Hindi
 @msg	`expand` must be true or false	`expand` måste vara true eller false
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` måste vara 1 till 1000 sökvägar till typsnittsfiler som den senaste text.findFontFiles-sökningen hittade
 @msg	`folder` must be an absolute folder path	`folder` måste vara en absolut mappsökväg
-@msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` måste vara ett objekt med axeltaggar och värden, till exempel {"wght"}
+@msg	`fontAxes` must be an object of axis tags and values, such as {{"wght": 650}}	`fontAxes` måste vara ett objekt med axeltaggar och värden, till exempel {{"wght": 650}}
 @msg	`format` must be a string	`format` måste vara en sträng
 @msg	`format` must be one of {_1}	`format` måste vara något av {_1}
 @msg	`fractions` is chop or scale	`fractions` är chop eller scale
@@ -7610,12 +7619,12 @@ digits	Hindi	Hindi
 @msg	`index` must be a point index	`index` måste vara ett punktindex
 @msg	`index` must be a whole number or null	`index` måste vara ett heltal eller null
 @msg	`indices` must be a non-empty array of item indices	`indices` måste vara en icke-tom array av objektindex
-@msg	`items` is a list of {kind, item}	`items` är en lista med {kind, item}
+@msg	`items` is a list of {{kind, item}}	`items` är en lista med {{kind, item}}
 @msg	`items` is empty	`items` är tom
 @msg	`items` must be a list of {{id, anchors?}}, not {v}	`items` måste vara en lista med {{id, anchors?}}, inte {v}
-@msg	`items` must be a list of {id, points}	`items` måste vara en lista med {id, points}
+@msg	`items` must be a list of {{id, points}}	`items` måste vara en lista med {{id, points}}
 @msg	`items` must be an array of {{id, corners?}}, not {v}	`items` måste vara en array av {{id, corners?}}, inte {v}
-@msg	`items` must be an array of {id, anchors}	`items` måste vara en array av {id, anchors}
+@msg	`items` must be an array of {{id, anchors}}	`items` måste vara en array av {{id, anchors}}
 @msg	`kashida` must be "none", "short", "medium", "long" or "stylistic"	`kashida` måste vara "none", "short", "medium", "long" eller "stylistic"
 @msg	`kind` is one of {_1}	`kind` är något av {_1}
 @msg	`kind` must be "round", "invertedRound" or "chamfer", not {v}	`kind` måste vara "round", "invertedRound" eller "chamfer", inte {v}
@@ -7781,7 +7790,7 @@ digits	Hindi	Hindi
 @msg	artboard {i} doesn't print	rityta {i} skrivs inte ut
 @msg	artboard is a 0-based index	artboard är ett 0-baserat index
 @msg	artboard must be a 0-based index	artboard måste vara ett 0-baserat index
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout måste vara {layout?, columns?, spacing?, rightToLeft?}
+@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout måste vara {{layout?, columns?, spacing?, rightToLeft?}}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns måste vara 1 eller mer
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout måste vara gridByRow, gridByColumn, row eller column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft måste vara true eller false
@@ -7929,13 +7938,13 @@ digits	Hindi	Hindi
 @msg	DXF scale must be a positive number up to {_1}, not {scale}	DXF-skalan måste vara ett positivt tal upp till {_1}, inte {scale}
 @msg	dxf unit `{u}`: a unit such as mm, cm, in or pt	dxf-enhet `{u}`: en enhet som mm, cm, in eller pt
 @msg	dxf: {e}	dxf: {e}
-@msg	each format is an object {format, scale?, suffix?}	varje format är ett objekt {format, scale?, suffix?}
+@msg	each format is an object {{format, scale?, suffix?}}	varje format är ett objekt {{format, scale?, suffix?}}
 @msg	each item needs an id	varje objekt behöver ett id
 @msg	each match needs `kind`	varje matchning behöver `kind`
 @msg	each match needs a `name`	varje matchning behöver ett `name`
-@msg	each of `fonts` is {family, style?}; 1 to 1000 of them	varje post i `fonts` är {family, style?}; 1 till 1000 stycken
+@msg	each of `fonts` is {{family, style?}}; 1 to 1000 of them	varje post i `fonts` är {{family, style?}}; 1 till 1000 stycken
 @msg	each of `items` is {{id, corners?}} with an object id, not {it}	varje post i `items` är {{id, corners?}} med ett objekt-id, inte {it}
-@msg	each of `items` is {kind, item}	varje post i `items` är {kind, item}
+@msg	each of `items` is {{kind, item}}	varje post i `items` är {{kind, item}}
 @msg	each row needs `from`	varje rad behöver `from`
 @msg	each stop needs a position	varje stopp behöver en position
 @msg	each subpath needs an anchors array	varje delbana behöver en anchors-array
@@ -7953,8 +7962,8 @@ digits	Hindi	Hindi
 @msg	EPS Save writes all artwork: use document.export for selected-only EPS	När du sparar som EPS skrivs allt bildmaterial: använd document.export för EPS med bara det markerade
 @msg	every numbered name for the result is taken	alla numrerade namn för resultatet är upptagna
 @msg	expanded SVG styles exceed the import size limit	de expanderade SVG-stilarna överskrider storleksgränsen för import
-@msg	expected {"dataBase64"}	förväntade {"dataBase64"}
-@msg	expected {"objects"}	förväntade {"objects"}
+@msg	expected {{"dataBase64": "…"}}	förväntade {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	förväntade {{"objects": [...]}}
 @msg	export `{name}`: {e}	export av `{name}`: {e}
 @msg	Export for Screens writes png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai or vectorcraft	Exportera för skärmar skriver png, png8, jpg, webp, gif, tiff, bmp, tga, psd, svg, svgz, pdf, eps, ai eller vectorcraft
 @msg	export presets file is larger than {MAX_PRESET_FILE_BYTES} bytes	filen med exportförinställningar är större än {MAX_PRESET_FILE_BYTES} byte
@@ -7967,7 +7976,7 @@ digits	Hindi	Hindi
 @msg	featureChanges must be a list of tags	featureChanges måste vara en lista med taggar
 @msg	features must be a list of tags	features måste vara en lista med taggar
 @msg	fidelity must be 0..100	fidelity måste vara 0..100
-@msg	files must be {name, dataBase64}	files måste vara {name, dataBase64}
+@msg	files must be {{name, dataBase64}}	files måste vara {{name, dataBase64}}
 @msg	fit must be none|autoHeight|shrinkText|block, got {id}	fit måste vara none|autoHeight|shrinkText|block, fick {id}
 @msg	Flare click coordinates must be finite numbers	Klickkoordinaterna för Ljusreflex måste vara ändliga tal
 @msg	flattener: {e}	utplattning: {e}
@@ -7985,7 +7994,7 @@ digits	Hindi	Hindi
 @msg	frequency must be between 1 and 300 lines per inch	frequency måste vara mellan 1 och 300 linjer per tum
 @msg	from and to must be finite	from och to måste vara ändliga
 @msg	from must be [x0, y0, x1, y1]	from måste vara [x0, y0, x1, y1]
-@msg	give {key, value} or {values}	ange {key, value} eller {values}
+@msg	give {{key, value}} or {{values}}	ange {{key, value}} eller {{values}}
 @msg	give `before` or `after`, not both	ange `before` eller `after`, inte båda
 @msg	give `char` or `text`	ange `char` eller `text`
 @msg	give `colors`, or `color` and `rule`	ange `colors`, eller `color` och `rule`
@@ -8000,7 +8009,7 @@ digits	Hindi	Hindi
 @msg	give `id` and `anchors`, or `items`, not both	ange `id` och `anchors`, eller `items`, inte båda
 @msg	give `id` or `guide`, not both	ange `id` eller `guide`, inte båda
 @msg	give `length` or `to`	ange `length` eller `to`
-@msg	give `matches`: [{kind, name, target}]	ange `matches`: [{kind, name, target}]
+@msg	give `matches`: [{{kind, name, target}}]	ange `matches`: [{{kind, name, target}}]
 @msg	give `name` (or edit a pattern)	ange `name` (eller redigera ett mönster)
 @msg	give `name` or `names`	ange `name` eller `names`
 @msg	give `path` (a .wasm file) or `dataBase64` (the module)	ange `path` (en .wasm-fil) eller `dataBase64` (modulen)
@@ -8036,7 +8045,7 @@ digits	Hindi	Hindi
 @msg	give the preset a `name`	ge förinställningen ett `name`
 @msg	give the preset a name	ge förinställningen ett namn
 @msg	give the preset a name (1–64 characters)	ge förinställningen ett namn (1–64 tecken)
-@msg	give the settings to change, e.g. {"formats"}]}	ange inställningarna som ska ändras, t.ex. {"formats"}]}
+@msg	give the settings to change, e.g. {{"formats": [{{"format": "png", "scale": "2x"}}]}}	ange inställningarna som ska ändras, t.ex. {{"formats": [{{"format": "png", "scale": "2x"}}]}}
 @msg	give the style a name	ge stilen ett namn
 @msg	give two or more style `names`	ange två eller fler stilnamn i `names`
 @msg	give two or more swatches	ange två eller fler färgrutor
@@ -8070,7 +8079,7 @@ digits	Hindi	Hindi
 @msg	instruction budget	instruktionsbudget
 @msg	invalid `color`	ogiltig `color`
 @msg	invalid anchor index {v}: expected a non-negative integer	ogiltigt ankarindex {v}: ett icke-negativt heltal förväntades
-@msg	invalid anchor reference {v}: expected [subpath, anchor]	ogiltig ankarreferens {v}: [delbana, ankare] förväntades
+@msg	invalid anchor reference {v}: expected [subpath, anchor]	ogiltig ankarreferens {v}: [subpath, anchor] förväntades
 @msg	invalid angle	ogiltig vinkel
 @msg	invalid brush: {e}	ogiltig pensel: {e}
 @msg	invalid color	ogiltig färg
@@ -8141,7 +8150,7 @@ digits	Hindi	Hindi
 @msg	missing `library`	`library` saknas
 @msg	missing `library` (see graphicStyle.libraries)	`library` saknas (se graphicStyle.libraries)
 @msg	missing `library` (see swatch.library.list)	`library` saknas (se swatch.library.list)
-@msg	missing `map` (rows [{from, to}] or {current})	`map` saknas (rader [{from, to}] eller {current})
+@msg	missing `map` (rows [{{from, to}}] or {{current: new}})	`map` saknas (rader [{{from, to}}] eller {{current: new}})
 @msg	missing `matrix` [a,b,c,d,e,f]	`matrix` [a,b,c,d,e,f] saknas
 @msg	missing `name` (see gradient.presets.list)	`name` saknas (se gradient.presets.list)
 @msg	missing `offset` (a distance in points)	`offset` saknas (ett avstånd i punkter)
@@ -8159,7 +8168,7 @@ digits	Hindi	Hindi
 @msg	missing `value`	`value` saknas
 @msg	missing anchor	ankare saknas
 @msg	missing anchors	ankare saknas
-@msg	missing anchors [[subpath, anchor]…]	ankare saknas [[delbana, ankare]…]
+@msg	missing anchors [[subpath, anchor]…]	ankare saknas [[subpath, anchor]…]
 @msg	missing array `{key}`	arrayen `{key}` saknas
 @msg	missing case	skiftläge saknas
 @msg	missing color	färg saknas
@@ -8433,7 +8442,7 @@ digits	Hindi	Hindi
 @msg	print settings: {e}	utskriftsinställningar: {e}
 @msg	procedures nest too deeply	procedurerna är nästlade för djupt
 @msg	procedures nested too deeply	procedurerna nästlades för djupt
-@msg	quotes must be {double?, single?}	quotes måste vara {double?, single?}
+@msg	quotes must be {{double?, single?}}	quotes måste vara {{double?, single?}}
 @msg	quotes.{k} must be an opening and a closing quote, e.g. "“”"	quotes.{k} måste vara ett inledande och ett avslutande citattecken, t.ex. "“”"
 @msg	rasterEffectsPpi must be 1–2400 (72 screen, 150 medium, 300 high)	rasterEffectsPpi måste vara 1–2400 (72 skärm, 150 medel, 300 hög)
 @msg	rating must be a whole number from 0 to {MAX_RATING}	rating måste vara ett heltal från 0 till {MAX_RATING}
@@ -8545,13 +8554,13 @@ digits	Hindi	Hindi
 @msg	SVG is not UTF-8, UTF-16 or ISO 8859-1	SVG-filen är inte i UTF-8, UTF-16 eller ISO 8859-1
 @msg	swatchConflict must be "merge" or "add", not {v}	swatchConflict måste vara "merge" eller "add", inte {v}
 @msg	Switch x/y is for scatter graphs	Växla x/y gäller spridningsdiagram
-@msg	text must be {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}	text måste vara {characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}
+@msg	text must be {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}}	text måste vara {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}}
 @msg	Text options: {e}	Textalternativ: {e}
 @msg	text transform is collapsed or unrepresentable	texttransformeringen är kollapsad eller kan inte återges
 @msg	text.{key} `{v}`: use "{_1}" or "{_2}"	text.{key} `{v}`: använd "{_1}" eller "{_2}"
 @msg	text.replaceSpaces must be a whole number from 2 to 100	text.replaceSpaces måste vara ett heltal från 2 till 100
 @msg	textureImage: {e}	textureImage: {e}
-@msg	textureImage: give {path} or {name, dataBase64} of an image file, or a texture as effect.list gives it	textureImage: ange {path} eller {name, dataBase64} för en bildfil, eller en textur så som effect.list anger den
+@msg	textureImage: give {{path}} or {{name, dataBase64}} of an image file, or a texture as effect.list gives it	textureImage: ange {{path}} eller {{name, dataBase64}} för en bildfil, eller en textur så som effect.list anger den
 @msg	that makes more than {MAX_PIECES} slices	det ger fler än {MAX_PIECES} skivor
 @msg	that object is not in the overlap	det objektet ingår inte i överlappningen
 @msg	the action set ids are not a list	åtgärdsuppsättningarnas id:n är inte en lista
@@ -8901,6 +8910,12 @@ digits	Hindi	Hindi
 @msg	open the practice sample of `{id}` first (see learn.openSample)	öppna först övningsexemplet för `{id}` (se learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	slutför först `{id}` (se learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` är den sista självstudien i sin färdighet
+	Reset progress	Återställ framsteg
+	Mark Tutorial Step	Markera steg i självstudie
+	Reset Learn Progress	Återställ inlärningsframsteg
+@msg	missing `step` (see learn.show)	`step` saknas (se learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` måste vara ett stegnummer från 0 till {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` är slutförd (se learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Uppdatera uppskjutna effekter
@@ -8967,3 +8982,119 @@ digits	Hindi	Hindi
 	Grommets	Öljetter
 	Grommet Inset	Öljetternas avstånd från kanten
 	Diameter	Diameter
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D-effekter kräver ändliga koordinater inom 100 miljoner punkter
+@msg	3D effects require one to ten lights	3D-effekter kräver en till tio ljuskällor
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP-djup {_1}: 1, 4, 8, 16, 24 eller 32 bitar per pixel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP-kodningen misslyckades: {width} × {height} pixlar passar inte formatet eller pixelbufferten
+@msg	GIF encoding failed: the palette image is malformed	GIF-kodningen misslyckades: palettbilden är felaktigt uppbyggd
+@msg	GIF encoding failed: {e}	GIF-kodningen misslyckades: {e}
+@msg	JPEG colour profile: {e}	JPEG-färgprofil: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	JPEG encoding failed: {e}	JPEG-kodningen misslyckades: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	PNG encoding failed: the palette image is malformed	PNG-kodningen misslyckades: palettbilden är felaktigt uppbyggd
+@msg	PNG encoding failed: {e}	PNG-kodningen misslyckades: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG-kodningen misslyckades: {width} × {height} pixlar är inte en giltig bildstorlek
+@msg	PSD colour profile: {e}	PSD-färgprofil: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	Revolve profile contains invalid coordinates	Profilen för Rotera runt axel innehåller ogiltiga koordinater
+@msg	Revolve profile is too complex	Profilen för Rotera runt axel är för komplex
+@msg	Revolve projection is not finite	Projektionen för Rotera runt axel är inte ändlig
+@msg	Revolve requires finite profile coordinates within 100 million points	Rotera runt axel kräver ändliga profilkoordinater inom 100 miljoner punkter
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Ytan för Rotera runt axel är för komplex; minska Segment eller förenkla profilen
+@msg	Revolve surface is too complex; simplify the profile	Ytan för Rotera runt axel är för komplex; förenkla profilen
+@msg	Revolve visibility cannot split the projected boundary	Synlighetsberäkningen för Rotera runt axel kan inte dela den projicerade gränsen
+@msg	Revolve visibility creates too many fragments	Synlighetsberäkningen för Rotera runt axel skapar för många fragment
+@msg	Revolve visibility creates too many vector anchors	Synlighetsberäkningen för Rotera runt axel skapar för många vektorankarpunkter
+@msg	Revolve visibility exceeds its geometry work limit	Synlighetsberäkningen för Rotera runt axel överskrider sin gräns för geometriarbete
+@msg	Revolve visibility exceeds its spatial index limit	Synlighetsberäkningen för Rotera runt axel överskrider sin gräns för det rumsliga indexet
+@msg	Revolve visibility has too many boundary crossings	Synlighetsberäkningen för Rotera runt axel har för många gränskorsningar
+@msg	Revolve visibility has too many input anchors	Synlighetsberäkningen för Rotera runt axel har för många inkommande ankarpunkter
+@msg	Revolve visibility requires convex cap sectors	Synlighetsberäkningen för Rotera runt axel kräver konvexa sektorer i locken
+@msg	Revolve visibility requires finite projected faces	Synlighetsberäkningen för Rotera runt axel kräver ändliga projicerade ytor
+@msg	SVG options: {e}	SVG-alternativ: {e}
+@msg	Save for Web settings: {e}	Inställningar för Spara för webben: {e}
+@msg	TIFF colour profile: {e}	TIFF-färgprofil: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	TIFF encoding failed: {e}	TIFF-kodningen misslyckades: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa-djup {_1}: 16, 24 eller 32 bitar per pixel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	The 3D projection is not finite	3D-projektionen är inte ändlig
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D-skuggan är för komplex; stäng av Skuggor eller förenkla grafiken
+@msg	The shape contains invalid coordinates	Formen innehåller ogiltiga koordinater
+@msg	Too many Revolve faces for visibility evaluation	För många ytor i Rotera runt axel för synlighetsberäkningen
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft läser högst {ASE_MAX_ENTRIES} färger och grupper från en fil för färgruteutbyte, och det här biblioteket har {entries}
+@msg	WebP encoding failed: {e}	WebP-kodningen misslyckades: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`index` must be a whole number	`index` måste vara ett heltal
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` är smallThumb, mediumThumb, largeThumb, smallList eller largeList
+@msg	a line can't run from a point to itself	en linje kan inte gå från en punkt till sig själv
+@msg	a line needs at least two points	en linje behöver minst två punkter
+@msg	a number cannot be read	ett tal kan inte läsas
+@msg	a swatch exchange block is too long	ett block i en fil för färgruteutbyte är för långt
+@msg	a swatch exchange name is too long	ett namn i en fil för färgruteutbyte är för långt
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	en bild på {sw} × {sh} kan inte skalas om till {width} × {height} pixlar
+@msg	a {width} × {height} image is too large	en bild på {width} × {height} är för stor
+@msg	a {width} × {height} image: {e}	en bild på {width} × {height}: {e}
+@msg	an image could not be written: {e}	en bild kunde inte skrivas: {e}
+@msg	an image that couldn't be read was left out	en bild som inte kunde läsas utelämnades
+@msg	can't open “{name}”: {e}	kan inte öppna ”{name}”: {e}
+@msg	cannot align zip entries to {align} bytes	kan inte justera zip-posterna till {align} byte
+@msg	cannot open the automation {kind} root `{_1}`: {e}	kan inte öppna automatiseringens rotmapp ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	kan inte läsa profilen: {0}
+@msg	color book version {version} isn't supported (only 1)	färgboksversion {version} stöds inte (endast 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	färgböcker i färgrymden {other} stöds inte (endast RGB, CMYK och Lab)
+@msg	file name too long to zip: {_1}	filnamnet är för långt för att zippas: {_1}
+@msg	file name too long to zip: {name}	filnamnet är för långt för att zippas: {name}
+@msg	freeform line {i}: {e}	fri linje {i}: {e}
+@msg	freeform point {i}: {e}	fri punkt {i}: {e}
+@msg	give `{key}` or `{other}`, not both	ange `{key}` eller `{other}`, inte båda
+@msg	grayscale profiles can't be working spaces yet	gråskaleprofiler kan inte vara arbetsfärgrymder än
+@msg	input contains NaN or infinite coordinates	indata innehåller NaN eller oändliga koordinater
+@msg	input path could not be closed	den inkommande banan kunde inte slutas
+@msg	invalid ICC profile: {0}	ogiltig ICC-profil: {0}
+@msg	invalid scale {scale}	ogiltig skala {scale}
+@msg	its localized names take more than {_1} KB	dess lokaliserade namn tar mer än {_1} KB
+@msg	its objects are nested too deep ({e})	dess objekt är kapslade för djupt ({e})
+@msg	its tag table lists the `{_1}` tag more than once	dess taggtabell listar taggen `{_1}` mer än en gång
+@msg	not a graphic style library: {e}	inte ett bibliotek med grafiska stilar: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	inte ett färgrutebibliotek (.vcswatches eller .gpl)
+@msg	not a swatch library (format `{_1}`)	inte ett färgrutebibliotek (format `{_1}`)
+@msg	not a swatch library: {e}	inte ett färgrutebibliotek: {e}
+@msg	not an action set file ({e})	inte en fil med åtgärdsuppsättning ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	profilens färgrymd {other} är inte RGB, CMYK eller Gray
+@msg	regular expression too large	det reguljära uttrycket är för stort
+@msg	script file is not UTF-8 text: {value}	skriptfilen är inte UTF-8-text: {value}
+@msg	stop {i}: {e}	stopp {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	version {major}.{minor} av filer för färgruteutbyte stöds inte (endast 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	färgboken innehåller fler än {ASE_MAX_ENTRIES} färger
+@msg	the color book is cut short	färgboken är avkortad
+@msg	the color book's names take more than {_1} MB	färgbokens namn tar mer än {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	bilden skulle bli {w} × {h} pixlar; rasterexporter är begränsade till {MAX_RASTER_SIDE} pixlar per sida och {_1} megapixel: sänk skalan eller upplösningen
+@msg	the optimised image can't be read back: {e}	den optimerade bilden kan inte läsas tillbaka: {e}
+@msg	the pixel buffer doesn't match the image size	pixelbufferten stämmer inte med bildens storlek
+@msg	the preview: {e}	förhandsgranskningen: {e}
+@msg	the request may not read the New Document profiles folder	begäran får inte läsa mappen med profiler för nytt dokument
+@msg	the shapes are too degenerate to combine	formerna är för degenererade för att kombineras
+@msg	the shapes cross themselves and each other too often to combine	formerna korsar sig själva och varandra för ofta för att kombineras
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	filen för färgruteutbyte innehåller fler än {ASE_MAX_ENTRIES} färger och grupper
+@msg	the swatch exchange file is cut short	filen för färgruteutbyte är avkortad
+@msg	the {_1} plate can't be read: {e}	plåten {_1} kan inte läsas: {e}
+@msg	this binary DXF file is damaged or cut short	den här binära DXF-filen är skadad eller avkortad
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	det här är en DWG-ritning, som inte kan läsas: spara den från CAD-appen som DXF och öppna den
+@msg	too many classes	för många klasser
+@msg	too many groups	för många grupper
+@msg	too many layers for PSD (at most 32767)	för många lager för PSD (högst 32767)
+@msg	too many swatch exchange blocks	för många block i filen för färgruteutbyte
+@msg	unknown colour profile: {0}	okänd färgprofil: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} krockar med namnet på en inbyggd profil
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixlar är för stort för GIF (högst 65535 pixlar per sida): sänk upplösningen
+@msg	{_1}: no usable transform to/from sRGB	{_1}: ingen användbar transformering till/från sRGB
+@msg	{name} is not a CMYK profile	{name} är inte en CMYK-profil
+@msg	{name} is not an RGB profile	{name} är inte en RGB-profil
+@msg	{path}: could not be read	{path}: kunde inte läsas
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixlar är för stort för JPEG (högst 65535 pixlar per sida): sänk upplösningen
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixlar är för stort för Targa (högst 65535 pixlar per sida): sänk upplösningen
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen

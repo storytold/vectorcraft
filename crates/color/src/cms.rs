@@ -9,13 +9,16 @@
 //!   any CMYK `.icc` the user loads goes through `moxcms` (LUT-based profiles).
 //! * The **active settings** are process-wide: the working settings (Edit → Color Settings), with
 //!   the profiles [`use_document_profiles`] last put in place of the working spaces;
-//!   [`crate::Color::to_rgb`] uses them. Code that needs deterministic numbers builds its own [`Cms`] with [`Cms::new`].
+//!   [`crate::Color::to_rgb`] uses them. [`with_active`] puts other settings in their place on one
+//!   thread, as for a document drawn through its own profiles ([`for_document`]). Code that needs
+//!   deterministic numbers builds its own [`Cms`] with [`Cms::new`].
 
 pub mod display;
 pub mod generic;
 pub mod icc;
 pub mod lab;
 
+use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
@@ -910,9 +913,32 @@ static WORKING: RwLock<Option<Arc<Cms>>> = RwLock::new(None);
 static RGB_IS_SRGB: AtomicBool = AtomicBool::new(true);
 static CMYK_IS_DEVICE: AtomicBool = AtomicBool::new(false);
 
+thread_local! {
+    /// The settings [`with_active`] put in place of the active settings on this thread.
+    static SCOPED: RefCell<Option<Arc<Cms>>> = const { RefCell::new(None) };
+    /// [`SCOPED`]'s flags for the fast paths: [`SCOPED_SET`] while it is set, [`SCOPED_SRGB`] when
+    /// its RGB space is sRGB, and [`SCOPED_DEVICE`] when its CMYK space is device CMYK.
+    static SCOPED_FLAGS: Cell<u8> = const { Cell::new(0) };
+}
+const SCOPED_SET: u8 = 1;
+const SCOPED_SRGB: u8 = 2;
+const SCOPED_DEVICE: u8 = 4;
+
 /// The active color-management context: the working settings, with the profiles
-/// [`use_document_profiles`] last put in place of the working spaces.
+/// [`use_document_profiles`] last put in place of the working spaces. Inside [`with_active`] on
+/// this thread: the settings it was given.
 pub fn active() -> Arc<Cms> {
+    if SCOPED_FLAGS.with(Cell::get) & SCOPED_SET != 0
+        && let Some(c) = SCOPED.with(|s| s.borrow().clone())
+    {
+        return c;
+    }
+    installed()
+}
+
+/// The active settings of the process, as [`use_document_profiles`] or [`set_active`] last put them
+/// in place.
+fn installed() -> Arc<Cms> {
     if let Some(c) = ACTIVE.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
         return c.clone();
     }
@@ -954,14 +980,8 @@ pub fn set_active(settings: &ColorSettings) -> Result<(), CmsError> {
 /// the active settings changed.
 pub fn use_document_profiles(rgb: Option<&str>, cmyk: Option<&str>) -> bool {
     let working = working();
-    let mut st = working.settings.clone();
-    if let Some(p) = rgb.and_then(profile).filter(|p| p.kind == ProfileKind::Rgb) {
-        st.rgb = p.name;
-    }
-    if let Some(p) = cmyk.and_then(profile).filter(|p| p.kind == ProfileKind::Cmyk) {
-        st.cmyk = p.name;
-    }
-    if st == active().settings {
+    let st = document_settings(&working.settings, rgb, cmyk);
+    if st == installed().settings {
         return false;
     }
     if st == working.settings {
@@ -976,6 +996,72 @@ pub fn use_document_profiles(rgb: Option<&str>, cmyk: Option<&str>) -> bool {
     true
 }
 
+/// The working settings `working` with the profiles a document is assigned (`None`: none) in place
+/// of the working spaces, as [`use_document_profiles`] takes them.
+fn document_settings(working: &ColorSettings, rgb: Option<&str>, cmyk: Option<&str>) -> ColorSettings {
+    let mut st = working.clone();
+    if let Some(p) = rgb.and_then(profile).filter(|p| p.kind == ProfileKind::Rgb) {
+        st.rgb = p.name;
+    }
+    if let Some(p) = cmyk.and_then(profile).filter(|p| p.kind == ProfileKind::Cmyk) {
+        st.cmyk = p.name;
+    }
+    st
+}
+
+/// How many contexts [`for_document`] keeps.
+const DOCUMENT_CONTEXTS: usize = 8;
+
+/// The color-management context a document assigned the profiles `rgb` and `cmyk` (`None`: none)
+/// draws through: the one [`use_document_profiles`] would make active for it. A context that is the
+/// active or the working one is that one; the others are kept for the same working settings and
+/// loaded profiles, so the same document gets the same context again. A profile that cannot be
+/// loaded gives the working settings.
+pub fn for_document(rgb: Option<&str>, cmyk: Option<&str>) -> Arc<Cms> {
+    static KEPT: Mutex<Vec<(u64, Arc<Cms>)>> = Mutex::new(Vec::new());
+    let working = working();
+    let st = document_settings(&working.settings, rgb, cmyk);
+    let installed = installed();
+    if st == installed.settings {
+        return installed;
+    }
+    if st == working.settings {
+        return working;
+    }
+    let generation = profiles_generation();
+    let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+    kept.retain(|(g, c)| *g == generation && c.working.as_ref().is_some_and(|w| Arc::ptr_eq(w, &working)));
+    if let Some((_, c)) = kept.iter().find(|(_, c)| c.settings == st) {
+        return c.clone();
+    }
+    let Ok(mut cms) = Cms::new(&st) else { return working };
+    cms.working = Some(working);
+    let cms = Arc::new(cms);
+    if kept.len() >= DOCUMENT_CONTEXTS {
+        kept.remove(0);
+    }
+    kept.push((generation, cms.clone()));
+    cms
+}
+
+/// Run `f` with `cms` as the active settings on this thread ([`active`], [`crate::Color::to_rgb`]
+/// and the conversions that read them), as when drawing a document other than the front one
+/// through its own profiles. Other threads, and this thread after `f`, keep the settings they had.
+pub fn with_active<R>(cms: Arc<Cms>, f: impl FnOnce() -> R) -> R {
+    /// Puts back the settings this thread had before, when `f` returns or unwinds.
+    struct Restore(Option<Arc<Cms>>, u8);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            SCOPED.with(|s| *s.borrow_mut() = self.0.take());
+            SCOPED_FLAGS.with(|c| c.set(self.1));
+        }
+    }
+    let flags = SCOPED_SET | if cms.rgb_is_srgb() { SCOPED_SRGB } else { 0 } | if matches!(cms.cmyk, CmykSpace::Device) { SCOPED_DEVICE } else { 0 };
+    let before = SCOPED.with(|s| s.borrow_mut().replace(cms));
+    let _restore = Restore(before, SCOPED_FLAGS.with(|c| c.replace(flags)));
+    f()
+}
+
 fn install(cms: Arc<Cms>) {
     RGB_IS_SRGB.store(cms.rgb_is_srgb(), Ordering::Relaxed);
     CMYK_IS_DEVICE.store(matches!(cms.cmyk, CmykSpace::Device), Ordering::Relaxed);
@@ -984,10 +1070,16 @@ fn install(cms: Arc<Cms>) {
 
 /// Fast path for [`Color::to_rgb`]: RGB colours need no conversion while the working space is sRGB.
 pub(crate) fn rgb_is_srgb() -> bool {
-    RGB_IS_SRGB.load(Ordering::Relaxed)
+    match SCOPED_FLAGS.with(Cell::get) {
+        f if f & SCOPED_SET != 0 => f & SCOPED_SRGB != 0,
+        _ => RGB_IS_SRGB.load(Ordering::Relaxed),
+    }
 }
 pub(crate) fn cmyk_is_device() -> bool {
-    CMYK_IS_DEVICE.load(Ordering::Relaxed)
+    match SCOPED_FLAGS.with(Cell::get) {
+        f if f & SCOPED_SET != 0 => f & SCOPED_DEVICE != 0,
+        _ => CMYK_IS_DEVICE.load(Ordering::Relaxed),
+    }
 }
 
 #[cfg(test)]

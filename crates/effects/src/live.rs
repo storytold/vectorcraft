@@ -23,15 +23,22 @@ pub fn text_outliner() -> Outliner<'static> {
 /// Type outlined, or a symbol instance as its symbol's art (from `doc`) placed by the instance,
 /// through the symbol's 9-slice guides when it has them ([`Document::place_symbol_art`], `None`
 /// past its object limit). As an [`OutlineHook`](crate::OutlineHook), it gives compound shapes and
-/// Pathfinder operations the symbol instances among their members.
+/// Pathfinder operations the symbol instances among their members. The group around the art takes
+/// the instance's box angle, and the art's boxes turn with it, as Break Link turns them.
 pub fn outline_object(doc: Option<&Document>, n: &Node) -> Option<Node> {
     match &n.kind {
         NodeKind::SymbolInstance { symbol, xf } => {
             let doc = doc?;
             let sym = doc.symbols.iter().find(|s| s.name == *symbol)?;
             let art = vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n);
-            let art = doc.place_symbol_art(symbol, &art, *xf)?;
-            Some(Node::group(n.id, vec![Arc::new(art)]))
+            let mut art = doc.place_symbol_art(symbol, &art, *xf)?;
+            let turn = vectorcraft_doc::orient::placed_turn(n.bbox_angle, *xf);
+            if turn != 0.0 {
+                art.turn_boxes(turn);
+            }
+            let mut out = Node::group(n.id, vec![Arc::new(art)]);
+            out.bbox_angle = n.bbox_angle;
+            Some(out)
         }
         _ => outline_text(n),
     }

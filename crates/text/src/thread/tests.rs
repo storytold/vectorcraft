@@ -397,6 +397,80 @@ fn a_continued_paragraph_fills_the_frame_it_continues_into() {
     assert_eq!(checked, 16);
 }
 
+/// Area type in a frame `w` wide down to `y` and `narrow` wide below it, down to `bottom`.
+fn stepped_frame(w: f64, narrow: f64, y: f64, bottom: f64) -> TextObject {
+    let mut t = frame(0.0);
+    let path = kurbo::BezPath::from_vec(vec![
+        kurbo::PathEl::MoveTo((0.0, 0.0).into()),
+        kurbo::PathEl::LineTo((w, 0.0).into()),
+        kurbo::PathEl::LineTo((w, y).into()),
+        kurbo::PathEl::LineTo((narrow, y).into()),
+        kurbo::PathEl::LineTo((narrow, bottom).into()),
+        kurbo::PathEl::LineTo((0.0, bottom).into()),
+        kurbo::PathEl::ClosePath,
+    ]);
+    t.kind = TextKind::Area { frame: PathData::from_bezpath(&path) };
+    t
+}
+
+/// A paragraph of mixed type sizes that a stepped frame cannot hold goes on in the next frame. The
+/// every-line composer breaks the lines the first frame holds as one paragraph, as in a frame tall
+/// enough for all of it and not as the single-line composer breaks them, and the first frame
+/// takes the text of those lines. The next frame sets the rest at its own width, without the
+/// first-line indent, and no character is lost or repeated. The frames take the same shares as
+/// when each is measured with the whole rest of the story.
+#[test]
+fn a_mixed_size_paragraph_continued_from_a_shaped_frame_is_composed_in_both() {
+    use vectorcraft_doc::Composer;
+    let db = FontDb::global();
+    let small = CharStyle { size: 12.0, ..CharStyle::default() };
+    let big = CharStyle { size: 36.0, ..CharStyle::default() };
+    let probe = layout(db, &TextObject::point(vectorcraft_geom::Point::ZERO, "Destroy all creatures with toughness X or", small.clone()));
+    let w = probe.lines[0].x1 - probe.lines[0].x0 + 2.0;
+    let story = vec![
+        TextRun { text: "Destroy all creatures with toughness ".into(), style: small.clone(), inline: None },
+        TextRun { text: "X".into(), style: big, inline: None },
+        TextRun { text: " or less. Then draw a card for each creature destroyed this way.\nSecond paragraph.".into(), style: small, inline: None },
+    ];
+    let text: String = story.iter().map(|r| r.text.as_str()).collect();
+    let (a, tall) = (stepped_frame(w, w * 0.5, 40.0, 85.0), stepped_frame(w, w * 0.5, 40.0, 300.0));
+    let b = sized(200.0, w * 0.75, 300.0);
+    let texts = |lay: &crate::TextLayout, shown: &str| lay.lines.iter().map(|l| shown[l.start..l.end].trim_end().to_string()).collect::<Vec<_>>();
+    let shares = |composer: Composer, indent: f64| {
+        let para = ParaStyle { composer, first_line_indent: indent, ..Default::default() };
+        let paras = [para.clone(), para];
+        let parts = distribute(db, &[&a, &b], &story, &paras);
+        assert_eq!(parts.iter().map(|p| p.continues).collect::<Vec<_>>(), [false, true], "{composer:?}");
+        let joined: String = parts.iter().flat_map(|p| &p.runs).map(|r| r.text.as_str()).collect();
+        assert_eq!(joined, text, "{composer:?}: no character lost or repeated");
+        same_as_whole_rest(db, &[&a, &b], &story, &paras, &format!("{composer:?}, indent {indent}"));
+        let shown = |p: &Slice| p.runs.iter().map(|r| r.text.as_str()).collect::<String>();
+        let lays: Vec<_> = [&a, &b].iter().zip(&parts).map(|(f, p)| laid(db, f, p)).collect();
+        assert!(lays.iter().all(|l| !l.overflow), "{composer:?}: each frame holds its share");
+        let whole =
+            laid(db, &tall, &Slice { runs: story.clone(), paras: paras.to_vec(), list_count: 0, list_level_counts: vec![], continues: false });
+        let first = texts(&lays[0], &shown(&parts[0]));
+        // The first frame takes the text of the lines it sets.
+        assert_eq!(shown(&parts[0]).split_whitespace().collect::<Vec<_>>(), first.join(" ").split_whitespace().collect::<Vec<_>>());
+        (first, texts(&whole, &text), lays, parts)
+    };
+    for indent in [0.0, 20.0] {
+        let (every, whole, lays, parts) = shares(Composer::EveryLine, indent);
+        assert!(every.len() >= 2, "{every:?}");
+        assert_eq!(every, whole[..every.len()], "indent {indent}");
+        if indent == 0.0 {
+            assert_eq!(every, ["Destroy all creatures with toughness", "X or less. Then", "draw a card for each"]);
+            let (greedy, ..) = shares(Composer::SingleLine, indent);
+            assert_eq!(greedy, ["Destroy all creatures with toughness X", "or less. Then draw a", "card for each", "creature destroyed"]);
+        }
+        // The next frame starts at its left edge, and its lines keep within it.
+        assert!((line_start(&lays[1], 0) - 200.0).abs() < 1e-6, "{}", line_start(&lays[1], 0));
+        assert!(lays[1].lines.iter().all(|l| l.x1 <= 200.0 + w * 0.75 + 1e-6), "{:?}", lays[1].lines);
+        assert!((line_start(&lays[0], 0) - indent).abs() < 1e-6, "{}", line_start(&lays[0], 0));
+        assert!(parts[1].continues && lays[1].lines.len() >= 2, "{:?}", lays[1].lines);
+    }
+}
+
 /// `frames` holding the runs of `parts`, for [`continued`].
 fn filled(frames: &[&TextObject], parts: &[Slice]) -> Vec<TextObject> {
     frames

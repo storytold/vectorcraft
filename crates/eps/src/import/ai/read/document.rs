@@ -1147,7 +1147,7 @@ impl<'a> Reader<'a> {
                 continue;
             }
             let Some(st) = self.styles.get(&name) else { continue };
-            let Some(mut appearance) = appearance_from_art_style(st) else { continue };
+            let Some(mut appearance) = appearance_from_art_style(st, &self.gradients) else { continue };
             // A Large Canvas copy's styles are at its art's scale ([`Self::ensure_space`]).
             if let Some(s) = self.large_canvas.filter(|s| *s != 1.0) {
                 appearance.scale_strokes(s);
@@ -1445,7 +1445,8 @@ fn ruler_guide(a: Point, b: Point, centre: Option<(f64, f64)>, boards: &[Rect]) 
 }
 
 /// Makes the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
-/// ruler guide nodes with the same ids, moved to the top of their layer in their order.
+/// ruler guide nodes with the same ids, names, locks and visibility, moved to the top of their layer
+/// in their order.
 fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, depth: usize) {
     if depth > MAX_DEPTH {
         return;
@@ -1458,7 +1459,11 @@ fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Gu
         let mut guides = vec![];
         kids.retain(|k| match pick(k.id) {
             Some(g) => {
-                guides.push(Arc::new(Node::new(k.id, NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard })));
+                let mut n = Node::new(k.id, NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard });
+                n.name = k.name.clone();
+                n.locked = k.locked;
+                n.visible = k.visible;
+                guides.push(Arc::new(n));
                 false
             }
             None => true,
