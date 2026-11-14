@@ -8913,3 +8913,12 @@ breakText	Glyphs	Гліфи
 @msg	turn on at least one side	увімкніть принаймні одну сторону
 @msg	with no hem and no grommets there is nothing to mark	без підгину й люверсів немає чого розмічати
 @msg	{saving} failed: {e}	{saving}: не вдалося: {e}
+
+# Width tool options and the width profile chart (#1854).
+	Lock Line Weight	Зафіксувати товщину лінії
+	Lock Point Reordering	Зафіксувати порядок точок
+	Snap to Curve Nodes	Прив’язка до вузлів кривої
+	Snap to Widths on Same Curve	Прив’язка до ширин тієї ж кривої
+	Reset Profile	Скинути профіль
+	Width profile: drag a point to change its width or place, click to add one, double-click one to remove it	Профіль ширини: перетягніть точку, щоб змінити ширину або положення, клацніть, щоб додати точку, двічі клацніть, щоб видалити її
+	Click Adds Width Points	Клацання додає точки ширини

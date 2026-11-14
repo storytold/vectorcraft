@@ -516,6 +516,9 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return crop_options(app, ui);
     }
+    if app.session.tool_id() == "width" {
+        return width_options(app, ui);
+    }
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
@@ -529,6 +532,32 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some((value, _)) = widgets::dropdown(ui, ("cb-tool", key), shown, &labels, 96.0).and_then(|i| choices.get(i)) {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
+    }
+    crate::chrome::group_separator(ui);
+}
+
+/// The Width tool's options (#1854): its locks and snaps (`tool.setOption`) and Reset Profile,
+/// which gives the selected strokes one width again.
+fn width_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let options = [
+        ("clickAdds", tl!("Click Adds Width Points")),
+        ("lockWeight", tl!("Lock Line Weight")),
+        ("lockOrder", tl!("Lock Point Reordering")),
+        ("snapNodes", tl!("Snap to Curve Nodes")),
+        ("snapWidths", tl!("Snap to Widths on Same Curve")),
+    ];
+    let opts = app.session.tool_options();
+    for (key, label) in options {
+        let on = opts[key].as_bool().unwrap_or(false);
+        if widgets::check(ui, label, on, true) {
+            app.run("tool.setOption", json!({ "key": key, "value": !on })).ok();
+        }
+    }
+    let profiled = app.session.active().is_some_and(|st| {
+        st.selection.objects.iter().any(|id| st.doc.node(*id).and_then(|n| n.appearance.stroke()).is_some_and(|s| s.profile.is_some()))
+    });
+    if ui.add_enabled(profiled, egui::Button::new(tl!("Reset Profile"))).clicked() {
+        app.run("stroke.widthProfile.set", json!({ "points": null })).ok();
     }
     crate::chrome::group_separator(ui);
 }

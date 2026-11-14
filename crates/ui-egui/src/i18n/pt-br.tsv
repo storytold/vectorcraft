@@ -9377,3 +9377,12 @@ swatch	Yellow Green	Verde-amarelado
 @msg	turn on at least one side	ative pelo menos um lado
 @msg	with no hem and no grommets there is nothing to mark	sem bainha e sem ilhoses não há nada para marcar
 @msg	{saving} failed: {e}	{saving} falhou: {e}
+
+# Width tool options and the width profile chart (#1854).
+	Lock Line Weight	Bloquear Espessura da Linha
+	Lock Point Reordering	Bloquear Ordem dos Pontos
+	Snap to Curve Nodes	Ajustar aos Nós da Curva
+	Snap to Widths on Same Curve	Ajustar às Larguras da Mesma Curva
+	Reset Profile	Redefinir Perfil
+	Width profile: drag a point to change its width or place, click to add one, double-click one to remove it	Perfil de largura: arraste um ponto para mudar sua largura ou posição, clique para adicionar um, clique duas vezes para removê-lo
+	Click Adds Width Points	Clique Adiciona Pontos de Largura

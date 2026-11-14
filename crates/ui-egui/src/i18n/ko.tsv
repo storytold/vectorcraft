@@ -7083,3 +7083,12 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+
+# Width tool options and the width profile chart (#1854).
+	Lock Line Weight	선 두께 잠금
+	Lock Point Reordering	점 순서 잠금
+	Snap to Curve Nodes	곡선 노드에 스냅
+	Snap to Widths on Same Curve	같은 곡선의 폭에 스냅
+	Reset Profile	프로필 재설정
+	Width profile: drag a point to change its width or place, click to add one, double-click one to remove it	폭 프로필: 점을 드래그하면 폭이나 위치가 바뀌고, 클릭하면 점이 추가되며, 두 번 클릭하면 제거됩니다
+	Click Adds Width Points	클릭하여 폭 점 추가

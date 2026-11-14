@@ -9145,3 +9145,12 @@ breakText	Glyphs	字形
 @msg	{what} can't be intertwined	{what} 不能交织
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 连同出血和标记在纸张上放不下
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 会打印成超过 {MAX_TILES} 个拼贴：请将其缩小
+
+# Width tool options and the width profile chart (#1854).
+	Lock Line Weight	锁定线条粗细
+	Lock Point Reordering	锁定点的顺序
+	Snap to Curve Nodes	对齐到曲线节点
+	Snap to Widths on Same Curve	对齐到同一曲线上的宽度
+	Reset Profile	重置配置文件
+	Width profile: drag a point to change its width or place, click to add one, double-click one to remove it	宽度配置文件：拖动点可更改其宽度或位置，单击可添加点，双击可删除点
+	Click Adds Width Points	单击添加宽度点

@@ -7436,3 +7436,12 @@ breakText	Glyphs	Glifos
 	Grommets	Ojales
 	Grommet Inset	Distancia de los ojales al borde
 	Diameter	Diámetro
+
+# Width tool options and the width profile chart (#1854).
+	Lock Line Weight	Bloquear grosor de línea
+	Lock Point Reordering	Bloquear orden de puntos
+	Snap to Curve Nodes	Ajustar a nodos de la curva
+	Snap to Widths on Same Curve	Ajustar a anchos de la misma curva
+	Reset Profile	Restablecer perfil
+	Width profile: drag a point to change its width or place, click to add one, double-click one to remove it	Perfil de anchura: arrastre un punto para cambiar su anchura o posición, haga clic para añadir uno y doble clic para quitarlo
+	Click Adds Width Points	Clic añade puntos de anchura
