@@ -527,6 +527,10 @@ pub struct GraphSpec {
     /// Bounds of the art when it was last generated (detects moves/scales of the graph group).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placed: Option<Rect>,
+    /// Bounds of the art other than type when it was last generated ([`art_bounds`]). Moves and scales of the graph
+    /// group are measured on these when present; graphs saved without them are measured on [`Self::placed`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placed_art: Option<Rect>,
 }
 
 fn at_most_one(n: &usize) -> bool {
@@ -610,6 +614,32 @@ impl GraphSpec {
     }
 }
 
+/// The geometric bounds of a graph's art `children` leaving out their type: the plot, axes, tick marks and legend
+/// swatches without the labels. None when there is nothing else. [`GraphSpec::placed_art`] keeps these.
+pub fn art_bounds(children: &[std::sync::Arc<crate::Node>]) -> Option<Rect> {
+    children.iter().filter_map(|c| art_bounds_of(c).0).reduce(|a, b| a.union(b))
+}
+
+/// The geometric bounds of `n` leaving out the type in it, and whether there was type to leave out. A group without type
+/// gives its own bounds, so a clipping group gives the bounds of its clip.
+fn art_bounds_of(n: &crate::Node) -> (Option<Rect>, bool) {
+    if matches!(n.kind, crate::NodeKind::Text(_)) {
+        return (None, true);
+    }
+    let Some(children) = n.children() else { return (n.geometric_bounds(), false) };
+    let mut bounds: Option<Rect> = None;
+    let mut had_type = false;
+    for c in children {
+        let (b, t) = art_bounds_of(c);
+        had_type |= t;
+        bounds = match (bounds, b) {
+            (Some(a), Some(b)) => Some(a.union(b)),
+            (a, b) => a.or(b),
+        };
+    }
+    if had_type { (bounds, true) } else { (n.geometric_bounds(), false) }
+}
+
 impl Default for GraphSpec {
     fn default() -> Self {
         Self {
@@ -659,6 +689,7 @@ impl Default for GraphSpec {
             connect_points: true,
             edge_to_edge: false,
             placed: None,
+            placed_art: None,
         }
     }
 }
