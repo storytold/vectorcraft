@@ -317,12 +317,18 @@ pub fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
     if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
 }
 
-/// Is `text` a number written with a thousands comma, as `1,000` or `12,500 mm`: one to three
-/// digits (not a lone 0), a comma, exactly three digits, then at most a unit? Read as a decimal it
-/// would be a thousand times too small, so the field refuses it instead (`0,125` and `1,25` are
-/// decimals).
+/// Does `text` hold a number written with a thousands comma, as `1,000` or `12,500 mm`: one to
+/// three digits (not a lone 0), a comma, exactly three digits, then at most a unit? Read as a
+/// decimal it would be a thousand times too small, so the field refuses it instead (`0,125` and
+/// `1,25` are decimals). Each number of a sum is checked on its own, so `1,000 mm+1 mm` and
+/// `+1,000` are refused too.
 fn thousands(text: &str) -> bool {
-    let number = text.trim().trim_start_matches('-');
+    text.split(['+', '-', '*', '/']).any(thousands_number)
+}
+
+/// Is `number`, one number of a field value, written with a thousands comma ([`thousands`])?
+fn thousands_number(number: &str) -> bool {
+    let number = number.trim();
     let Some((whole, rest)) = number.split_once(',') else { return false };
     let (part, unit) = rest.split_at(rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len()));
     (1..=3).contains(&whole.len())
