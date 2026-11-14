@@ -599,11 +599,26 @@ fn paint_ref(item: &AppearanceItem) -> &Paint {
     }
 }
 
-/// Paint copies `surface` makes for `facets`: two per facet (fill and seam stroke), six when colored
-/// lights give each facet derived paints (`lighting::solid_surface`).
+/// Are `facets` drawn over an underlay of themselves ([`crate::lighting::sealed`],
+/// [`crate::lighting::solid_surface`])? Under colored lights, when any facet takes a smooth light
+/// ramp.
+fn underlaid(facets: &[Facet], colored: bool) -> bool {
+    colored && facets.iter().any(|f| f.rgb_gradient.is_some())
+}
+
+/// The most paint copies `surface` makes for one facet ([`facet_copies`]).
+const MAX_FACET_COPIES: usize = 12;
+
+/// Paint copies `surface` makes for `facets`: two per facet (fill and seam stroke), twice that when
+/// the facets lie over an underlay of themselves, and [`MAX_FACET_COPIES`] when colored lights also
+/// give each facet derived paints in three channels (`lighting::solid_surface`).
 fn facet_copies(facets: &[Facet], paint: &Paint, colored: bool) -> usize {
-    let derived = colored && paint.color().is_some() && facets.iter().any(|f| f.rgb_gradient.is_some());
-    facets.len().saturating_mul(if derived { 6 } else { 2 })
+    let per_facet = match (underlaid(facets, colored), paint.color().is_some()) {
+        (true, true) => MAX_FACET_COPIES,
+        (true, false) => 4,
+        (false, _) => 2,
+    };
+    facets.len().saturating_mul(per_facet)
 }
 
 /// The area `item` paints on `path`, and the rule that fills it: the path itself for a fill, the
@@ -789,14 +804,14 @@ fn rects_overlap(a: Rect, b: Rect) -> bool {
 
 /// How many faces [`cut_stroke_faces`] may add to solids painted by `items` that hold `faces` faces
 /// and whose paint copies take `paint_bytes` so far: as many as keep the faces within
-/// [`MAX_OBJECT_FACES`] and the copies within the allowance, each added face counted as six copies
-/// of the costliest stroke's paint.
+/// [`MAX_OBJECT_FACES`] and the copies within the allowance, each added face counted as
+/// [`MAX_FACET_COPIES`] copies of the costliest stroke's paint.
 fn cut_room<'a>(items: impl Iterator<Item = &'a AppearanceItem>, faces: usize, paint_bytes: usize) -> usize {
     let per_face = items
         .filter(|item| matches!(item, AppearanceItem::Stroke(_)))
         .map(|item| {
             let mut copies = 0usize;
-            crate::revolve::paint_copies_add(&mut copies, 6, paint_ref(item));
+            crate::revolve::paint_copies_add(&mut copies, MAX_FACET_COPIES, paint_ref(item));
             copies
         })
         .max()
@@ -1606,6 +1621,10 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
         placed_graphics(doc, n.id, (&fx.id, &p), bounds, &filled, masks)
     };
     let members: Vec<usize> = solids.iter().map(|s| s.4).collect();
+    // Which surfaces lie over an underlay of their facets, in one order or whole
+    // ([`in_one_order`], [`underlaid_surface`]).
+    let seals: Vec<bool> = solids.iter().map(|(.., f, _)| underlaid(f, colored)).collect();
+    let seal = |range: std::ops::Range<usize>| seals.get(range).is_some_and(|s| s.iter().any(|s| *s));
     let surfaces: Vec<BuiltSurface> = solids
         .into_iter()
         .map(|(item, member, scopes, f, shape)| {
@@ -1637,19 +1656,37 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
                 run.push(s);
             }
             let flat = run.iter().all(|s| plain(s) && s.1.opacity >= 1.0 && s.1.blend == BlendMode::Normal && s.1.extras().mask.is_none());
+            let range = first..first + run.len();
             if ordered(member) && flat {
                 let scopes = run.first().map_or(&[][..], |s| s.2);
-                out.push((scopes, Arc::new(Node::group(n.id, in_one_order(n.id, run, first, &arts, sealed)))));
+                let seals = seals.get(range).unwrap_or_default();
+                out.push((scopes, Arc::new(Node::group(n.id, in_one_order(n.id, run, first, &arts, sealed, seals)))));
             } else {
-                out.extend(with_graphics(run.into_iter().map(|(_, s, scopes, _)| (scopes, Arc::new(s))).collect(), first, &arts));
+                let run = run.into_iter().zip(range).map(|((_, s, scopes, _), k)| (scopes, Arc::new(underlaid_surface(n.id, s, seal(k..k + 1)))));
+                out.extend(with_graphics(run.collect(), first, &arts));
             }
         }
         return Some(masked(n.id, out));
     }
     if !opaque || !surfaces.iter().all(plain) {
+        let surfaces =
+            surfaces.into_iter().enumerate().map(|(k, (d, s, scopes, e))| (d, underlaid_surface(n.id, s, seal(k..k + 1)), scopes, e)).collect();
         return Some(whole_surfaces(surfaces, &arts).into_iter().map(|(_, s)| s).collect());
     }
-    Some(vec![Arc::new(Node::group(n.id, in_one_order(n.id, surfaces, 0, &arts, sealed)))])
+    Some(vec![Arc::new(Node::group(n.id, in_one_order(n.id, surfaces, 0, &arts, sealed, &seals)))])
+}
+
+/// A plain `surface` ([`surface`]: a group of its facets) over an underlay of its facets when
+/// `seal`, keeping the surface's opacity, blend mode and opacity mask.
+fn underlaid_surface(id: NodeId, surface: Node, seal: bool) -> Node {
+    let NodeKind::Group { children, clip: false } = &surface.kind else { return surface };
+    let Some(mut out) = seal.then(|| crate::lighting::sealed(id, children)).flatten() else { return surface };
+    out.opacity = surface.opacity;
+    out.blend = surface.blend;
+    if let Some(mask) = surface.extras().mask.clone() {
+        out.extras_mut().mask = Some(mask);
+    }
+    out
 }
 
 /// The faces of `surfaces` (plain groups of their faces, [`surfaces_for`]'s from index `first`) in
@@ -1657,7 +1694,16 @@ fn surfaces_for(doc: Option<&Document>, n: &Node, fx: &Effect, shapes: &[Profile
 /// surfaces right after the last face it is drawn on, of the surfaces that share it. A surface in a gradient with transparent stops
 /// carries an opacity mask: its faces go in runs ([`in_runs`]), each carrying the mask, and each of
 /// its graphics carries the mask too ([`with_graphics`]), so a graphic is hidden where its cap is.
-fn in_one_order(id: NodeId, surfaces: Vec<BuiltSurface<'_>>, first: usize, arts: &[(usize, PlanarFace, Arc<Node>)], sealed: bool) -> Vec<Arc<Node>> {
+/// The faces of the surfaces that `seals` marks lie over underlays of themselves
+/// ([`underlaid_runs`], [`underlaid_surface`]).
+fn in_one_order(
+    id: NodeId,
+    surfaces: Vec<BuiltSurface<'_>>,
+    first: usize,
+    arts: &[(usize, PlanarFace, Arc<Node>)],
+    sealed: bool,
+    seals: &[bool],
+) -> Vec<Arc<Node>> {
     let masks: Vec<Option<Box<OpacityMask>>> = surfaces.iter().map(|(_, s, _, _)| s.extras().mask.clone()).collect();
     let arts: Vec<&(usize, PlanarFace, Arc<Node>)> = arts.iter().filter(|(at, ..)| (first..first + surfaces.len()).contains(at)).collect();
     let (mut placed, mut faces, mut ends) = (vec![], vec![], vec![]);
@@ -1696,7 +1742,46 @@ fn in_one_order(id: NodeId, surfaces: Vec<BuiltSurface<'_>>, first: usize, arts:
             (masks.len(), art)
         }));
     }
-    if masks.iter().any(Option::is_some) { in_runs(id, drawn, &masks) } else { drawn.into_iter().map(|(_, face)| face).collect() }
+    let takes_underlay = |surface: usize| seals.get(surface) == Some(&true);
+    if masks.iter().any(Option::is_some) {
+        // The faces of a surface without a mask are sealed run by run before the masked surfaces'
+        // faces go in runs of their own, each holding one surface's faces, sealed with its mask.
+        let unmasked = underlaid_runs(id, drawn, |s| takes_underlay(s) && masks.get(s).is_some_and(Option::is_none));
+        return in_runs(id, unmasked, &masks)
+            .into_iter()
+            .map(|run| match &run.kind {
+                NodeKind::Group { clip: false, .. } if seals.iter().any(|s| *s) && run.extras().mask.is_some() => {
+                    Arc::new(underlaid_surface(id, (*run).clone(), true))
+                }
+                _ => run,
+            })
+            .collect();
+    }
+    underlaid_runs(id, drawn, takes_underlay).into_iter().map(|(_, face)| face).collect()
+}
+
+/// `faces` in their drawing order, each with the index of its surface. Each run of consecutive
+/// faces of one surface that `seal` takes lies over an underlay of its own faces, clipped to their
+/// outline ([`crate::lighting::sealed`]), so no underlay reaches under another surface's faces or a
+/// graphic drawn between them. A sealed run keeps its surface's index.
+fn underlaid_runs(id: NodeId, faces: Vec<(usize, Arc<Node>)>, seal: impl Fn(usize) -> bool) -> Vec<(usize, Arc<Node>)> {
+    let mut out = Vec::with_capacity(faces.len());
+    let mut run: Vec<Arc<Node>> = vec![];
+    let mut faces = faces.into_iter().peekable();
+    while let Some((surface, face)) = faces.next() {
+        run.push(face);
+        if faces.peek().is_some_and(|(next, _)| *next == surface) {
+            continue;
+        }
+        match seal(surface).then(|| crate::lighting::sealed(id, &run)).flatten() {
+            Some(sealed) => {
+                out.push((surface, Arc::new(sealed)));
+                run.clear();
+            }
+            None => out.extend(run.drain(..).map(|face| (surface, face))),
+        }
+    }
+    out
 }
 
 /// `faces` in their back-to-front order, each with the index of its surface, where some surfaces

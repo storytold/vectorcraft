@@ -535,6 +535,89 @@ fn a_colored_inflate_in_gradients_draws_its_faces_in_one_order() {
     assert_eq!(drawn(&solid, Some(colored)).0, 2);
 }
 
+/// Under a colored light, the faces of an Inflate in gradients, in one order, lie over underlays
+/// run by run: each run of consecutive faces of one surface (the fill's or the dashed stroke's)
+/// over an underlay of its own faces, so no underlay reaches under the other surface's faces.
+#[test]
+fn a_colored_inflate_in_gradients_lies_over_underlays_of_each_surfaces_runs() {
+    use vectorcraft_doc::color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let gradient = |c: Color| {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+            GradientKind::Linear,
+            vec![GradientStop::new(0.0, c), GradientStop::new(1.0, Color::WHITE)],
+        ))))
+    };
+    let mut n = stroked(&letter_c());
+    for item in &mut n.appearance.items {
+        match item {
+            AppearanceItem::Fill(f) => f.paint = gradient(RED),
+            AppearanceItem::Stroke(s) => {
+                s.paint = gradient(BLUE);
+                s.dash = Some(vectorcraft_doc::Dash { pattern: vec![12.0, 12.0], offset: 0.0, align_corners: false });
+            }
+        }
+    }
+    let p = json!({"rotationX": -20, "rotationY": -40, "rotationZ": 0, "depth": 60});
+    let cut = drawn_parts(&n, INFLATE, &p).len();
+    let mut lit = p.clone();
+    lit["lights"] = json!([{"color": "#ff8080"}]);
+    n.appearance.effects.push(fx(INFLATE, lit));
+    // Which surface a face belongs to, by the first stop of its paint (a composed face's own paint,
+    // or a path face's shaded one): red for the fill's, blue for the stroke's.
+    fn surface_of(face: &Node) -> Option<Color> {
+        let item = match &face.kind {
+            NodeKind::Path { .. } => face.appearance.items.first()?,
+            _ => face.children()?.get(1)?.children()?.first()?.appearance.items.first()?,
+        };
+        let Paint::Gradient(g) = item.paint() else { return None };
+        let [r, _, b] = g.gradient.stops.first()?.color.to_rgb();
+        Some(if r > b { RED } else { BLUE })
+    }
+    // The faces in `order`, and the surface of each run over an underlay, looking into the groups
+    // that carry a surface's opacity mask.
+    fn runs(order: &[Arc<Node>], faces: &mut usize, surfaces: &mut Vec<Color>) {
+        for child in order {
+            let NodeKind::Group { children, clip } = &child.kind else {
+                assert!(surface_of(child).is_some(), "a face");
+                *faces += 1;
+                continue;
+            };
+            if !clip {
+                assert!(child.extras().mask.is_some(), "a masked run");
+                runs(children, faces, surfaces);
+                continue;
+            }
+            // A composed face isolates its colors; a run's faces are not isolated together.
+            if children[1].isolate {
+                assert!(surface_of(child).is_some(), "a composed face");
+                *faces += 1;
+                continue;
+            }
+            let stack = children[1].children().unwrap();
+            let (under, own) = stack.split_at(stack.len() / 2);
+            assert_eq!(under.len(), own.len(), "one underlay face for each face");
+            let colors: Vec<_> = own.iter().map(|f| surface_of(f).unwrap()).collect();
+            assert!(colors.iter().all(|c| *c == colors[0]), "a run holds one surface's faces");
+            surfaces.push(colors[0]);
+            *faces += own.len();
+        }
+    }
+    let (mut faces, mut surfaces) = (0, vec![]);
+    runs(solid_art(&n).unwrap().children().unwrap()[0].children().unwrap(), &mut faces, &mut surfaces);
+    assert!(faces >= cut, "{faces} faces, {cut} under a white light, whose cells are not triangulated");
+    assert!(surfaces.contains(&RED) && surfaces.contains(&BLUE), "{surfaces:?}");
+    // With transparent stops in the fill's gradient, the fill's faces go in masked runs; the
+    // stroke's faces, without a mask, still lie over underlays of their own runs.
+    if let Some(AppearanceItem::Fill(f)) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Fill(_)))
+        && let Paint::Gradient(g) = &mut f.paint
+    {
+        g.gradient.stops.iter_mut().for_each(|s| s.opacity = 0.5);
+    }
+    let (mut faces, mut surfaces) = (0, vec![]);
+    runs(solid_art(&n).unwrap().children().unwrap()[0].children().unwrap(), &mut faces, &mut surfaces);
+    assert!(faces >= cut && surfaces.contains(&RED) && surfaces.contains(&BLUE), "{faces} faces, {surfaces:?}");
+}
+
 /// A face of a stroke that leaves gaps passing through the plane of its fill's wall where they
 /// overlap is cut along the line where their depths meet, into the piece in front of the wall and
 /// the piece behind it; a face on one side of the wall, another shape's stroke, a covering stroke
@@ -622,7 +705,7 @@ fn cutting_stays_within_the_face_limit_and_the_paint_allowance() {
     let items = stroked(&letter_c()).appearance.items.clone();
     let stroke = items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))).unwrap();
     let mut one = 0usize;
-    crate::revolve::paint_copies_add(&mut one, 6, paint_ref(stroke));
+    crate::revolve::paint_copies_add(&mut one, MAX_FACET_COPIES, paint_ref(stroke));
     let max = crate::revolve::MAX_PAINT_COPIES;
     assert_eq!(cut_room(items.iter(), 10, 0), (MAX_OBJECT_FACES - 10).min(max / one));
     assert_eq!(cut_room(items.iter(), MAX_OBJECT_FACES + 5, 0), 0);
