@@ -29,7 +29,7 @@ pub const ID: &str = "links";
 /// Seconds between two looks at the linked files (they change outside the app).
 const RECHECK: f64 = 2.0;
 const SHOW: [(&str, &str); 4] = [("all", "Show All"), ("missing", "Show Missing"), ("modified", "Show Modified"), ("embedded", "Show Embedded")];
-const SORT: [(&str, &str); 3] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status")];
+const SORT: [(&str, &str); 4] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status"), ("size", "Sort by Size")];
 const THUMBS: [(f32, &str); 4] = [(0.0, "No Thumbnails"), (18.0, "Small Thumbnails"), (28.0, "Medium Thumbnails"), (44.0, "Large Thumbnails")];
 
 /// The panel's options (flyout).

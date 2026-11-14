@@ -66,7 +66,10 @@ use serde_json::{Value, json};
 
 pub use action_batch::batch_overwrites_one_file;
 pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
-pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, Note, NoteKind, encode, encode_all, encode_with_notes, encode_with_warnings, note_texts};
+pub use encode::{
+    ARTBOARD_PARAMS, ArtboardPick, Encoded, Note, NoteKind, encode, encode_all, encode_with_notes, encode_with_warnings, export_art_bounds,
+    note_texts,
+};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{EXPORT_PARAMS, export_crop, isolated};

@@ -297,8 +297,8 @@ fn a_shortcut_runs_what_its_menu_item_runs() {
 /// Vector Halftone, Rearrange All Artboards, Pathfinder Options, the Object › Plug-ins dialogs
 /// (Arrange in Grid, Replace with Top Object, the size, opacity and sort dialogs of the Arrange
 /// add-on, Set Corners…, Divide into Dashes, Find Nearest Swatch, the swatch legend, the type
-/// tools, the select add-on and Select by Link Status…), four "…" items whose menu entry gives
-/// params, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
+/// tools, the select add-on and Select by Link Status…), three "…" items whose menu entry gives
+/// params, Smart Punctuation…, Edit Custom Dictionary…, Composite Fonts…, Recolor Artwork…, the Edit menu's preset
 /// dialogs and Apply SVG Filter….
 const MENU_DIALOG_COMMANDS: [&str; 39] = [
     "object.path.smooth",
