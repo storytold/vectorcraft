@@ -8682,7 +8682,7 @@ impl ArtBrushOptions {
 
 /// A path with the Calligraphic brush, and one with an Art brush in Tints whose art bends along the
 /// path, come back as those paths with the brush on their stroke at its weight, not as their drawn
-/// look; a path with the Art brush that keeps its art's colors comes back as its drawn look.
+/// look; so does a path with the Art brush that keeps its art's colors.
 #[test]
 fn brushed_paths_are_read_back_brushed() {
     let mut doc = brushes_document();
@@ -8702,8 +8702,63 @@ fn brushed_paths_are_read_back_brushed() {
     assert_eq!(art[1].path_data(), ours[1].path_data());
     brushed(&mut doc, "Plain ribbon", (20.0, 180.0), (280.0, 180.0), 1.0);
     let out = export_ai_editing(&doc, &opts()).unwrap();
-    assert!(out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
-    assert!(matches!(read_back(&doc).layers[0].children().unwrap()[2].kind, NodeKind::Group { .. }));
+    assert!(!out.warnings.iter().any(|w| w == writer::STROKES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let n = &back.layers[0].children().unwrap()[2];
+    assert!(matches!(n.kind, NodeKind::Path { .. }), "{n:#?}");
+    assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("Plain ribbon"));
+}
+
+/// Art brushes at another width, flipped along or across, scaled proportionately or stretched
+/// between guides (flipped along too, or at guides the written numbers round) are written with those
+/// options, and a path with each comes back as the path with the brush on its stroke, except Scale
+/// Proportionately's, which is written as its brush's art.
+#[test]
+fn art_brushes_with_options_are_read_back_with_them() {
+    use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind};
+    let thirds = ArtScale::BetweenGuides { start: 1.0 / 3.0, end: 2.0 / 3.0 };
+    let options: Vec<(&str, ArtBrush)> = vec![
+        ("Wide", ArtBrush { width: 250.0, ..ArtBrush::default() }),
+        ("Along", ArtBrush { flip_along: true, ..ArtBrush::default() }),
+        ("Across", ArtBrush { flip_across: true, ..ArtBrush::default() }),
+        ("Proportional", ArtBrush { scale: ArtScale::Proportional, width: 50.0, ..ArtBrush::default() }),
+        ("Guides", ArtBrush { scale: ArtScale::BetweenGuides { start: 0.25, end: 0.5 }, ..ArtBrush::default() }),
+        ("Guides along", ArtBrush { scale: ArtScale::BetweenGuides { start: 0.25, end: 0.5 }, flip_along: true, ..ArtBrush::default() }),
+        ("Thirds", ArtBrush { scale: thirds, flip_along: true, ..ArtBrush::default() }),
+    ];
+    let lib: Vec<Brush> = options
+        .iter()
+        .map(|(name, a)| Brush { name: (*name).into(), kind: BrushKind::Art(ArtBrush { art: brush_art_node(), ..a.clone() }) })
+        .collect();
+    let mut doc = Document::new(300.0, 200.0);
+    vectorcraft_brush::store(&mut doc, &lib);
+    for (i, b) in lib.iter().enumerate() {
+        let y = 20.0 + 25.0 * i as f64;
+        brushed(&mut doc, &b.name, (20.0, y), (280.0, y), 1.0);
+    }
+    let out = export_ai_editing(&doc, &opts()).unwrap();
+    assert!(!out.warnings.iter().any(|w| w == writer::BRUSHES), "{:?}", out.warnings);
+    let back = read_back(&doc);
+    let got = vectorcraft_brush::library(&back);
+    assert_eq!(got.len(), lib.len());
+    for (g, w) in got.iter().zip(&lib) {
+        let (BrushKind::Art(g), BrushKind::Art(w)) = (&g.kind, &w.kind) else { panic!("art") };
+        if w.scale == thirds {
+            let ArtScale::BetweenGuides { start, end } = g.scale else { panic!("guides: {g:?}") };
+            assert!((start - 1.0 / 3.0).abs() < 1e-6 && (end - 2.0 / 3.0).abs() < 1e-6, "{g:?}");
+            assert_eq!(ArtBrushOptions::of(&ArtBrush { scale: thirds, ..g.clone() }), ArtBrushOptions::of(w));
+        } else {
+            assert_eq!(ArtBrushOptions::of(g), ArtBrushOptions::of(w));
+        }
+    }
+    for (n, b) in back.layers[0].children().unwrap().iter().zip(&lib) {
+        if b.name == "Proportional" {
+            assert!(matches!(n.kind, NodeKind::Group { .. }), "{}: the brush's art: {n:#?}", b.name);
+            continue;
+        }
+        assert!(matches!(n.kind, NodeKind::Path { .. }), "{}: {n:#?}", b.name);
+        assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some(b.name.as_str()));
+    }
 }
 
 /// A compound path with the Calligraphic brush comes back as that compound path with the brush on its
@@ -9007,8 +9062,8 @@ fn brushes_write_the_same_bytes_again() {
 /// beside a brush that comes back, and each changed from a brush that comes back by the one setting
 /// that leaves it out: an Art brush whose art is a group with a fill of its own, a Scatter brush whose
 /// art is a path without points, an Art brush whose art is a group without members, Pattern and Bristle
-/// brushes, Art brushes flipped along or across, overlapping, at another width, with a width that
-/// varies, in another direction or scale, Art and Scatter brushes in Tints and Shades or Hue Shift, a
+/// brushes, Art brushes overlapping, with a width that varies, in another direction or with guides
+/// that leave no art between them, Art and Scatter brushes in Tints and Shades or Hue Shift, a
 /// brush whose name holds a slash and a second brush of a name. A brush left out doesn't take its
 /// name from a later one.
 #[test]
@@ -9032,13 +9087,10 @@ fn brushes_the_reader_cant_read_are_left_out() {
         ("empty group", art_with(&|a| a.art = Node::group(vectorcraft_doc::NodeId(1), vec![]))),
         ("pattern", BrushKind::Pattern(PatternBrush::default())),
         ("bristle", BrushKind::Bristle(Bristle::default())),
-        ("flipped along", art_with(&|a| a.flip_along = true)),
-        ("flipped across", art_with(&|a| a.flip_across = true)),
         ("overlap", art_with(&|a| a.overlap = true)),
-        ("width", art_with(&|a| a.width = 50.0)),
         ("width varies", art_with(&|a| a.width_mode = Some(Variation::Pressure))),
         ("direction", art_with(&|a| a.direction = Direction::RightToLeft)),
-        ("proportional", art_with(&|a| a.scale = ArtScale::Proportional)),
+        ("guides with no art between them", art_with(&|a| a.scale = ArtScale::BetweenGuides { start: 0.5, end: 0.5 })),
         ("art tints and shades", art_with(&|a| a.colorization = Colorization::TintsAndShades)),
         ("art hue shift", art_with(&|a| a.colorization = hue)),
         (
@@ -9248,8 +9300,8 @@ fn an_empty_brushes_panel_comes_back_empty() {
 }
 
 /// A path with one of a new document's brushes writes the brushes the reader reads, and keeps its
-/// brush. The new document's Art brush with other options, its Pattern brushes and its Bristle
-/// brushes are left out with a warning, so the file opens without them.
+/// brush. The new document's Pattern brushes and its Bristle brushes are left out with a warning,
+/// so the file opens without them.
 #[test]
 fn a_new_documents_brush_on_a_path_writes_the_brushes() {
     let mut doc = Document::new(300.0, 200.0);
@@ -9259,7 +9311,7 @@ fn a_new_documents_brush_on_a_path_writes_the_brushes() {
     let back = read_back(&doc);
     let n = &back.layers[0].children().unwrap()[0];
     assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("3 pt. Round"));
-    let left_out = ["Arrow", "Chain", "Stitches", "Diamonds", "Bristle Round", "Bristle Flat Fan"];
+    let left_out = ["Chain", "Stitches", "Diamonds", "Bristle Round", "Bristle Flat Fan"];
     let want: Vec<&str> = vectorcraft_brush::defaults().iter().map(|b| b.name.as_str()).filter(|n| !left_out.contains(n)).collect();
     let lib = vectorcraft_brush::library(&back);
     assert_eq!(lib.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), want);
