@@ -25,6 +25,13 @@ pub(super) const SPEC: DialogSpec =
 pub(super) const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];
 /// Their labels, then `Other` (any resolution).
 pub(super) const RESOLUTION_LABELS: [&str; 4] = ["Screen (72 ppi)", "Medium (150 ppi)", "High (300 ppi)", "Other"];
+/// The resolution range accepted by the custom field and remembered between exports.
+const PPI_RANGE: std::ops::RangeInclusive<f64> = 1.0..=4608.0;
+
+fn valid_ppi(ppi: f64) -> bool {
+    ppi.is_finite() && PPI_RANGE.contains(&ppi)
+}
+
 /// Background param values.
 const BACKGROUNDS: [&str; 3] = ["transparent", "white", "black"];
 /// Their labels, then `Other` (a colour).
@@ -54,8 +61,14 @@ fn format_of(d: &Dialog) -> Option<&'static Format> {
 /// choice) are `params`.
 pub fn open(app: &mut VectorcraftApp, f: &Format, mut params: Value) {
     let size = app.session.active().and_then(|st| export_size(&st.doc, &params));
+    let ppi = params
+        .get("ppi")
+        .and_then(Value::as_f64)
+        .filter(|ppi| valid_ppi(*ppi))
+        .or_else(|| app.ui.raster_export_ppi.filter(|ppi| valid_ppi(*ppi)))
+        .unwrap_or(72.0);
     if let Some(o) = params.as_object_mut() {
-        o.insert("ppi".into(), json!(72));
+        o.insert("ppi".into(), json!(ppi));
         o.extend(defaults(app, f));
         if let Some((w, h)) = size {
             o.insert("__size".into(), json!([w, h]));
@@ -144,7 +157,7 @@ fn body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                 d.fields.insert("__otherPpi".into(), json!(i == 3));
             }
             if preset.is_none()
-                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, 1.0..=4608.0, " ppi", 0, 80.0)
+                && let Some(v) = widgets::range_field(ui, "ro-ppi-other", ppi, PPI_RANGE, " ppi", 0, 80.0)
             {
                 d.fields.insert("ppi".into(), json!(v));
             }
@@ -339,6 +352,11 @@ pub(super) fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, ids: &[&str],
 /// Write the file(s) with the chosen options.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let (format, path) = (d.str("format"), d.str("path"));
+    let ppi = d.fields.get("ppi").and_then(Value::as_f64).filter(|ppi| valid_ppi(*ppi));
     app.ui.dialog = None;
-    io::export(app, Some(&format), Some(path), &form::params(d))
+    let result = io::export(app, Some(&format), Some(path), &form::params(d))?;
+    if let Some(ppi) = ppi {
+        app.ui.raster_export_ppi = Some(ppi);
+    }
+    Ok(result)
 }

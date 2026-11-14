@@ -556,6 +556,9 @@ pub struct UiState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab_hid: Option<TabHid>,
     pub view: ViewFlags,
+    /// Last resolution accepted by raster export options, in pixels per inch.
+    #[serde(default)]
+    pub raster_export_ppi: Option<f64>,
     pub dialog: Option<Dialog>,
     /// Messages to show in a dialog once the open one is closed (`dialogs::confirm::tell`), in
     /// the order they came.
@@ -1156,6 +1159,7 @@ impl Default for UiState {
             dock: true,
             tab_hid: None,
             view: ViewFlags::default(),
+            raster_export_ppi: None,
             dialog: None,
             told: vec![],
             answering_control: false,
