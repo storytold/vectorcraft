@@ -471,10 +471,11 @@ impl SourceStyle {
 /// How far, in points, a place on an edge may be from its source path and still be on it.
 const ON_SOURCE: f64 = 0.05;
 
-/// Does stroke row `i` have settings that depend on where along its path a piece of it lies:
-/// dashes, arrowheads, a width profile or a brush?
+/// Does stroke row `i` have settings that depend on where along its path a piece of it lies or
+/// which way it runs: dashes, arrowheads, a width profile, a brush, or a gradient along or across
+/// the stroke?
 fn depends_on_place(i: &AppearanceItem) -> bool {
-    matches!(i, AppearanceItem::Stroke(s) if s.dash.is_some() || s.start_arrow.is_some() || s.end_arrow.is_some() || s.profile.is_some() || s.brush.is_some())
+    matches!(i, AppearanceItem::Stroke(s) if s.dash.is_some() || s.start_arrow.is_some() || s.end_arrow.is_some() || s.profile.is_some() || s.brush.is_some() || s.gradient_mode != vectorcraft_doc::StrokeGradientMode::Within)
 }
 
 /// One subpath's segments with the length along it where each starts, then its whole length, and

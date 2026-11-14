@@ -2753,6 +2753,37 @@ fn live_paint_make_fits_dashes_and_arrowheads_to_each_edge() {
     assert_eq!(edges, vec![rows]);
 }
 
+/// When Make cuts a stroke whose only setting that depends on direction is a gradient along or
+/// across it, each edge runs the way its source path does, so the gradient keeps its direction.
+#[test]
+fn live_paint_make_keeps_the_direction_of_gradient_strokes() {
+    use vectorcraft_doc::StrokeGradientMode;
+    for mode in [StrokeGradientMode::Along, StrokeGradientMode::Across] {
+        for (x0, x1) in [(-20.0, 120.0), (120.0, -20.0)] {
+            let mut s = session();
+            let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            let l = line(&mut s, (x0, 50.0), (x1, 50.0));
+            let gradient = Paint::Gradient(Box::new(vectorcraft_color::GradientPaint::new(vectorcraft_color::Gradient::default())));
+            set_rows(&mut s, l, vec![stroke_row(gradient, 2.0, |st| st.gradient_mode = mode)]);
+            s.execute("select.set", &json!({"ids": [a.0, l.0]})).unwrap();
+            let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+            let pieces: Vec<(f64, f64)> = vectorcraft_tools::builder::edges(&node(&s, g))
+                .iter()
+                .filter_map(|e| {
+                    e.appearance.stroke().filter(|st| st.gradient_mode == mode)?;
+                    let sp = e.path_data()?.subpaths.first()?;
+                    Some((sp.anchors.first()?.p.x, sp.anchors.last()?.p.x))
+                })
+                .collect();
+            assert_eq!(pieces.len(), 3, "{mode:?}, from {x0}");
+            assert!(
+                pieces.iter().all(|&(p, q)| (q - p).signum() == (x1 - x0).signum()),
+                "{mode:?}, from {x0}: each piece runs the way the line does: {pieces:?}"
+            );
+        }
+    }
+}
+
 /// Make gives each face every fill row of its source that draws, in order and with their
 /// opacity, blending mode, overprint and effects, and the source's gradients keep their fit on
 /// the source; Expand keeps the rows, and Undo and Redo bring the group back with them.
