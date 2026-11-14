@@ -8001,7 +8001,6 @@ breakText	Glyphs	Glifák
 @msg	anchor `smooth` must be true or false	horgonypont, `smooth`: true vagy false kell
 @msg	anchor `{key}` must be [x, y]	horgonypont, `{key}`: [x, y] kell
 @msg	anchor `{key}` must be a number	horgonypont, `{key}`: szám kell
-@msg	angle and roundness must be finite	angle és roundness: véges érték kell
 @msg	angles must be a list as long as pins (degrees or null)	angles: a pins listával azonos hosszúságú lista kell (fok vagy null)
 @msg	appearance must be flat|center|edge	appearance: flat|center|edge kell
 @msg	apply is "fill" or "stroke", not `{other}`	apply: "fill" vagy "stroke", ez nem az: `{other}`

@@ -7086,7 +7086,6 @@ axis	Y Axis	Y 軸
 @msg	anchor `smooth` must be true or false	アンカーの `smooth` には true または false を指定してください
 @msg	anchor `{key}` must be [x, y]	アンカーの `{key}` には [x, y] を指定してください
 @msg	anchor `{key}` must be a number	アンカーの `{key}` には数値を指定してください
-@msg	angle and roundness must be finite	angle と roundness には有限の値を指定してください
 @msg	angles must be a list as long as pins (degrees or null)	angles には pins と同じ長さのリスト (度数または null) を指定してください
 @msg	appearance must be flat|center|edge	appearance には flat|center|edge のいずれかを指定してください
 @msg	apply is "fill" or "stroke", not `{other}`	apply には "fill" または "stroke" を指定してください (`{other}` は指定できません)
@@ -9000,7 +8999,6 @@ breakText	Glyphs	字形
 @msg	`fidelity` must be from 0.01 to 100 pt	`fidelity` は 0.01～100 pt の範囲で指定してください
 @msg	style must be "pencil" or "brush"	style は "pencil" または "brush" を指定してください
 @msg	extend end must be "start" or "end"	extend の端は "start" または "end" を指定してください
-@msg	connect end must be "start" or "end"	connect の端は "start" または "end" を指定してください
 @msg	`count` must be a whole number from 1 to {MAX_BRIDGES_PER_ISLAND}	`count` には 1 から {MAX_BRIDGES_PER_ISLAND} の整数を指定してください
 	Weed Box and Lines…	カス取り枠とライン…
 	Weed Box and Lines	カス取り枠とライン
