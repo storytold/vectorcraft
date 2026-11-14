@@ -696,17 +696,24 @@ pub(crate) fn capture_label_anti_alias(doc: &mut Document, ids: &[NodeId], metho
 pub(crate) fn capture_label_styles(doc: &mut Document, ids: &[NodeId], change: &dyn Fn(&mut CharStyle)) -> bool {
     let mut changed = false;
     for (graph, role) in label_kinds(doc, ids) {
-        let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
-        let mut style = label_style(&spec.label_styles, role);
-        change(&mut style);
-        let slot = match role {
-            Role::Value => &mut spec.label_styles.values,
-            Role::Category => &mut spec.label_styles.categories,
-            Role::Legend => &mut spec.label_styles.legend,
-        };
-        changed |= slot.as_ref() != Some(&style);
-        *slot = Some(style);
+        changed |= store_label_style(doc, graph, role, change);
     }
+    changed
+}
+
+/// Apply `change` to the style graph `graph` keeps for its labels of kind `role` (or the default one). Returns whether
+/// the kept style changed.
+fn store_label_style(doc: &mut Document, graph: NodeId, role: Role, change: &dyn Fn(&mut CharStyle)) -> bool {
+    let Some(spec) = doc.node_mut(graph).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { return false };
+    let mut style = label_style(&spec.label_styles, role);
+    change(&mut style);
+    let slot = match role {
+        Role::Value => &mut spec.label_styles.values,
+        Role::Category => &mut spec.label_styles.categories,
+        Role::Legend => &mut spec.label_styles.legend,
+    };
+    let changed = slot.as_ref() != Some(&style);
+    *slot = Some(style);
     changed
 }
 
@@ -875,6 +882,144 @@ pub(crate) fn capture_label_text(
         }
     }
     Ok(changed)
+}
+
+/// The character fill and stroke attributes a kind of graph label keeps when a recolor, or a stroke or gradient edit
+/// aimed at the characters, changes them on its labels ([`capture_label_changes`]). Each entry copies one attribute
+/// from the first style to the second and returns whether they differed.
+const RUN_PAINT: [fn(&CharStyle, &mut CharStyle) -> bool; 8] = [
+    |a, b| keep(&a.fill, &mut b.fill),
+    |a, b| keep(&a.stroke, &mut b.stroke),
+    |a, b| keep(&a.stroke_width, &mut b.stroke_width),
+    |a, b| keep(&a.stroke_cap, &mut b.stroke_cap),
+    |a, b| keep(&a.stroke_join, &mut b.stroke_join),
+    |a, b| keep(&a.stroke_miter_limit, &mut b.stroke_miter_limit),
+    |a, b| keep(&a.stroke_dash, &mut b.stroke_dash),
+    |a, b| keep(&a.stroke_align, &mut b.stroke_align),
+];
+
+/// Copy `from` to `to`. Returns whether they differed.
+fn keep<T: Clone + PartialEq>(from: &T, to: &mut T) -> bool {
+    let differs = from != to;
+    if differs {
+        to.clone_from(from);
+    }
+    differs
+}
+
+/// The [`RUN_PAINT`] attributes an edit changed on the characters of graph label `now` (`was`: the label before the
+/// edit), as the label's style and the indexes of the changed entries. An attribute counts only when every character
+/// of the label shows it alike, and the fill only when `fill` is set. A placed gradient is kept without its placement,
+/// so it fits each label it lands on. The stroke weight and dashes are kept as the label shows them: the graph draws its
+/// labels again without the label's own scale.
+fn run_paint_change(was: &Node, now: &Node, fill: bool) -> Option<(CharStyle, Vec<usize>)> {
+    let (NodeKind::Text(was), NodeKind::Text(now)) = (&was.kind, &now.kind) else { return None };
+    let first_now = &now.runs.first()?.style;
+    // Changed: some character showed something else before the edit, whichever run it is in.
+    let changed: Vec<usize> = RUN_PAINT
+        .iter()
+        .enumerate()
+        .filter(|(i, copy)| {
+            (fill || *i != 0)
+                && now.runs.iter().all(|r| !copy(first_now, &mut r.style.clone()))
+                && was.runs.iter().any(|r| copy(first_now, &mut r.style.clone()))
+        })
+        .map(|(i, _)| i)
+        .collect();
+    if changed.is_empty() {
+        return None;
+    }
+    let unplaced = crate::cmd::gradient::unplaced;
+    let mut style = first_now.clone();
+    (style.fill, style.stroke) = (unplaced(&style.fill), unplaced(&style.stroke));
+    // Character strokes are drawn in text space, scaled by the type's transform.
+    if let Some(k) = vectorcraft_doc::Scaling::factor(now.xf).filter(|k| k.is_finite() && *k > 1e-12) {
+        let mut st = style.stroke_layer();
+        crate::inspect::scale_layer(&mut st, k);
+        style.set_stroke_layer(&st);
+    }
+    Some((style, changed))
+}
+
+/// Does graph `g` pick the fill of its legend labels itself, white on a dark wedge and black on the others: a pie with
+/// Legends in Wedges whose legend labels keep no fill of their own?
+pub(super) fn picks_legend_fill(g: &GraphSpec) -> bool {
+    g.kind == GraphKind::Pie
+        && g.legend
+        && g.pie_legend_in_wedges
+        && !g.label_styles.legend.as_ref().is_some_and(|st| st.fill != Paint::solid(Color::BLACK))
+}
+
+/// The graph labels among `roots` and inside them, for an edit that reaches graph labels without naming them.
+pub(crate) fn labels_in(doc: &Document, roots: &[NodeId]) -> Vec<NodeId> {
+    let mut texts = Vec::new();
+    for id in roots {
+        let Some(root) = doc.node(*id) else { continue };
+        root.walk(&mut |n| {
+            if matches!(n.kind, NodeKind::Text(_)) {
+                texts.push(n.id);
+            }
+        });
+    }
+    // Graph labels are type: without type among `roots`, the graph's labels are not looked up.
+    if texts.is_empty() {
+        return texts;
+    }
+    let labels = graph_labels(doc);
+    texts.retain(|id| labels.contains_key(id));
+    // Nested roots (a graph and one of its labels) reach a label twice.
+    texts.sort_unstable();
+    texts.dedup();
+    texts
+}
+
+/// Keep for every label of their kind what an edit changed on graph labels `ids` (`before`: the document before the
+/// edit): with `rows`, the object rows ([`capture_label_rows`]) of the labels whose rows changed, and the character fill
+/// and stroke attributes ([`RUN_PAINT`]) that changed on all of a label's characters, on the kind's kept style. The
+/// frontmost label of a kind sets what that kind keeps, whatever order `ids` are in. On a graph that colors its legend
+/// labels itself ([`picks_legend_fill`]), their fill is kept only when the legend labels among `ids` end up with one
+/// fill. Called inside the same edit, so they undo together. Returns whether what a graph keeps changed.
+pub(crate) fn capture_label_changes(before: &Document, doc: &mut Document, ids: &[NodeId], rows: bool) -> bool {
+    if !ids.iter().any(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))) {
+        return false;
+    }
+    let labels = graph_labels(doc);
+    let mut picked: Vec<NodeId> = ids.iter().copied().filter(|id| labels.contains_key(id)).collect();
+    // A later label's capture replaces an earlier one's: take them in paint order, each once.
+    picked.sort_by_cached_key(|id| doc.index_path(*id));
+    picked.dedup();
+    let picks_fill = |graph: NodeId| doc.node(graph).and_then(|n| n.extras().graph.as_deref()).is_some_and(picks_legend_fill);
+    // On a pie that colors its legend labels black or white by their wedge, a recolor of the whole pie flips them both
+    // ways: their fill is kept only when every legend label the edit reached ends up with the same one.
+    let mut wedge_fills: HashMap<NodeId, Vec<Paint>> = HashMap::new();
+    for id in &picked {
+        let (Some(&(graph, Role::Legend)), Some(NodeKind::Text(t))) = (labels.get(id), doc.node(*id).map(|n| &n.kind)) else { continue };
+        if picks_fill(graph) {
+            wedge_fills.entry(graph).or_default().extend(t.runs.iter().map(|r| r.style.fill.clone()));
+        }
+    }
+    let one_fill = |graph: NodeId| wedge_fills.get(&graph).is_none_or(|f| f.windows(2).all(|w| w[0] == w[1]));
+    let mut changed_rows = Vec::new();
+    let mut characters = Vec::new();
+    for (id, kind) in picked.iter().filter_map(|id| Some((*id, *labels.get(id)?))) {
+        let (Some(was), Some(now)) = (before.node(id), doc.node(id)) else { continue };
+        if rows && label_rows(was) != label_rows(now) {
+            changed_rows.push(id);
+        }
+        let fill = kind.1 != Role::Legend || one_fill(kind.0);
+        characters.extend(run_paint_change(was, now, fill).map(|change| (kind, change)));
+    }
+    let mut changed = capture_label_rows(doc, &changed_rows);
+    for ((graph, role), (style, entries)) in &characters {
+        changed |= store_label_style(doc, *graph, *role, &|st| {
+            for i in entries {
+                if let Some(copy) = RUN_PAINT.get(*i) {
+                    copy(style, st);
+                }
+            }
+        });
+    }
+    changed
 }
 
 /// The graphs and kinds of label among `ids`, each once.
