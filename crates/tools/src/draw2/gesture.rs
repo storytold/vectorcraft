@@ -1516,9 +1516,9 @@ impl Tool for GestureTool {
             };
             let mut area = self.area.take().filter(|a| a.fits(key, &self.points)).unwrap_or_else(|| AreaPreview::new(key, self.points[0]));
             area.step(&self.points, pressures);
-            for path in area.paths(&self.points) {
-                o.push(Overlay::Path { path, color, width: 1.0, dashed: false });
-            }
+            let paths = area.paths(&self.points);
+            o.extend(paths.settled.into_iter().map(|path| Overlay::SharedPath { path, color, width: 1.0 }));
+            o.extend(paths.live.into_iter().map(|path| Overlay::Path { path, color, width: 1.0, dashed: false }));
             self.area_pending.set(area.pending(&self.points));
             self.area.set(Some(area));
         } else if let Some(pressures) = self.size_pressures() {
