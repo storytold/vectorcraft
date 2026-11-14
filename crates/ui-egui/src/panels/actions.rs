@@ -3512,6 +3512,48 @@ mod tests {
         }
     }
 
+    /// `ui.actionSet.save` refuses a set with a step that sets a folder preference to a folder, as
+    /// `{key, value}`, in `values` or in a batch step's commands at any depth, with an error that names
+    /// the action and the preference, and writes no file. An empty folder, a scratch disk choice and
+    /// other preferences save.
+    #[test]
+    fn save_actions_refuses_a_step_that_sets_a_folder_preference() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/x.vcactions");
+        let step = |command: &str, params: Value| (command.to_string(), params);
+        let nested = json!({"commands": [{"command": "command.batch", "params": {"commands": [
+            {"command": "prefs.set", "params": {"values": {"fontsFolder": "fonts"}}},
+        ]}}]});
+        for (steps, key) in [
+            (vec![step("prefs.set", json!({"key": "scratchPrimary", "value": "scratch"}))], "scratchPrimary"),
+            (vec![step("prefs.set", json!({"values": {"uiAccent": "green", "templatesFolder": "/Users/me/Templates"}}))], "templatesFolder"),
+            (
+                vec![
+                    step("object.move", json!({"dx": 1, "dy": 0})),
+                    step(
+                        "command.batch",
+                        json!({"commands": [{"command": "prefs.set", "params": {"key": "scratchSecondary", "value": " /Volumes/Fast "}}]}),
+                    ),
+                ],
+                "scratchSecondary",
+            ),
+            (vec![step("command.batch", nested)], "fontsFolder"),
+        ] {
+            app.ui.action_sets[1] = ActionSet::new("Other", vec![Action::new("Scratch", steps)]);
+            let e = app.run(SAVE_SET, json!({"set": 1, "path": "/sets/x.vcactions"})).unwrap_err();
+            assert_eq!(e, format!("the action “Scratch” sets the folder preference {key}; delete that step to save the set"));
+            assert!(files.borrow().is_empty(), "no file is written for {key}");
+        }
+        let kept = vec![
+            step("prefs.set", json!({"values": {"scratchPrimary": "None", "scratchSecondary": " Startup ", "fontsFolder": "", "uiAccent": "green"}})),
+            step("prefs.set", json!({"key": "pluginsFolder", "value": ""})),
+            step("x.y", json!({"key": "fontsFolder", "value": "fonts"})),
+        ];
+        app.ui.action_sets[1] = ActionSet::new("Other", vec![Action::new("Scratch", kept)]);
+        assert_eq!(app.run(SAVE_SET, json!({"set": 1, "path": "/sets/x.vcactions"})).unwrap(), json!({"path": "/sets/x.vcactions"}));
+        assert!(files.borrow().contains_key("/sets/x.vcactions"));
+    }
+
     /// A file that is not an action set file, or is too large, is refused with a message, and no
     /// set is added.
     #[test]

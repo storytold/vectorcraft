@@ -5789,6 +5789,7 @@ effect	Soft	Weich
 @msg	no such color	keine solche Farbe
 @msg	{_1} cannot be used on Windows	{_1} kann unter Windows nicht verwendet werden
 @msg	more than one action is named “{_1}”	mehr als eine Aktion heißt „{_1}“
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	die Aktion „{_1}“ legt die Ordnervoreinstellung {_2} fest; löschen Sie diesen Schritt, um den Satz zu speichern
 @msg	no symbol named `{n}`	kein Symbol namens `{n}`
 	Smudge Stick…	Wischstift…
 	Smudge Stick	Wischstift
