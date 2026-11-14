@@ -141,6 +141,50 @@ fn art_brush_proportional_keeps_aspect() {
     assert!(near(bounds(&out).height(), 8.0, 1e-6));
 }
 
+/// Scale Proportionately art is scaled across by the stroke weight and the Width, as Stretch art
+/// is, on top of the scale the path length gives it.
+#[test]
+fn art_brush_proportional_grows_with_weight() {
+    let brush = |width: f64, overlap: bool| {
+        let mut b = art_brush(rect_art(100.0, 4.0), ArtScale::Proportional);
+        if let BrushKind::Art(a) = &mut b.kind {
+            (a.width, a.overlap) = (width, overlap);
+        }
+        b
+    };
+    let draw = |b: &Brush, bp: &BezPath, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, bp, st);
+    // 3 pt stroke → 3× wider than at 1 pt (8 pt); the length still follows the path.
+    let b = bounds(&draw(&brush(100.0, false), &line(0.0, 0.0, 200.0, 0.0), &stroke(3.0)));
+    assert!(near(b.height(), 24.0, 1e-6) && near(b.x0, 0.0, 1e-6) && near(b.x1, 200.0, 1e-6), "{b:?}");
+    // The Width (50 %) applies on top of the stroke weight.
+    let b = bounds(&draw(&brush(50.0, false), &line(0.0, 0.0, 200.0, 0.0), &stroke(3.0)));
+    assert!(near(b.height(), 12.0, 1e-6), "{b:?}");
+    // A path twice as long at twice the weight (as Scale Strokes & Effects at 200 % leaves it):
+    // 2× from the length and 2× from the weight.
+    let b = bounds(&draw(&brush(100.0, false), &line(0.0, 0.0, 400.0, 0.0), &stroke(2.0)));
+    assert!(near(b.height(), 32.0, 1e-6), "{b:?}");
+    // With Overlap, each run between corners is scaled by its own length and by the weight: the
+    // 100 pt run 4 pt × 3 across, the 50 pt run 2 pt × 3.
+    let mut bent = BezPath::new();
+    bent.move_to((0.0, 0.0));
+    bent.line_to((100.0, 0.0));
+    bent.line_to((100.0, 50.0));
+    let out = draw(&brush(100.0, true), &bent, &stroke(3.0));
+    assert_eq!(out.len(), 2);
+    let (r0, r1) = (out[0].geometric_bounds().unwrap(), out[1].geometric_bounds().unwrap());
+    assert!(near(r0.height(), 12.0, 1e-6) && near(r1.width(), 6.0, 1e-6), "{r0:?} {r1:?}");
+    // A width that follows the pen: 50 % at the lightest pressure, 300 % at the heaviest, times
+    // the 2 pt weight (4 pt art on a 100 pt path: 4 pt across at 100 %, 1 pt either side).
+    let mut pen = brush(50.0, false);
+    if let BrushKind::Art(a) = &mut pen.kind {
+        (a.width_mode, a.width_max) = (Some(Variation::Pressure), Some(300.0));
+    }
+    let ramp = StrokeLayer { width: 2.0, ..pressed(vec![(0.0, 0.0), (1.0, 1.0)]) };
+    let out = draw(&pen, &line(0.0, 0.0, 100.0, 0.0), &ramp);
+    assert!(near(half_width(&out, 0.0, 1.0), 2.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 12.0, 0.2), "{}", half_width(&out, 99.0, 100.0));
+}
+
 #[test]
 fn art_brush_between_guides_keeps_ends() {
     // Head (last 20 % of a 100 pt art) keeps its 20 pt length on a 300 pt path.

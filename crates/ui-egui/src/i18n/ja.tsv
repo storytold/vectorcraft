@@ -4715,6 +4715,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	objects can't be nested more than 32 deep	オブジェクトは 32 階層より深く入れ子にできません
 @msg	the SVG's elements are nested more than {0} deep	SVG の要素が {0} 階層より深く入れ子になっています
 @msg	unknown command `{0}`	`{0}` は不明なコマンドです
+@msg	step {step} of “{action}” runs the unknown command `{command}`	「{action}」のステップ {step} は不明なコマンド `{command}` を実行します
 @msg	unknown command `{0}`; did you mean `{1}`?	`{0}` は不明なコマンドです。`{1}` のことですか?
 @msg	`{what}` closes nothing	`{what}` に対応する開始部分がありません
 @msg	`{what}` closes something it didn't open	`{what}` が対応しない開始部分を閉じています
@@ -5064,6 +5065,7 @@ swatch	Bright Violet	ビビッドバイオレット
 @msg	no action set to save	保存するアクションセットがありません
 @msg	the action set file can't be read in full	アクションセットファイルをすべて読み込めません
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	「{name}」を読み込みました。{n} 個のステップは省きました
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	「{name}」を読み込みました。不明なコマンドのステップ {n} 個はそのまま残しました。最初は「{action}」のステップ {step}、`{command}` です
 @msg	not an action set file	アクションセットファイルではありません
 @msg	the action set file is larger than 8 MiB	アクションセットファイルが 8 MiB を超えています
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: リファレンスが {MAX_BYTES} バイトを超えます

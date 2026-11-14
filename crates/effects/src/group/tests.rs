@@ -747,9 +747,9 @@ fn a_baked_group_that_keeps_its_type_applies_its_members_effects_first() {
     assert!((w - 250.0).abs() < 1e-6, "{w}");
 }
 
-/// A clip group's clipping path keeps its own effects; the clipped members take theirs first.
+/// A clip group's clipping path and the clipped members take their own effects first.
 #[test]
-fn a_clipping_path_keeps_its_own_effects_under_a_groups_effects() {
+fn a_clipping_path_takes_its_own_effects_before_a_groups_effects() {
     let mut clip = with_effect(square_at_100(), offset_10());
     clip.id = NodeId(2);
     if let NodeKind::Path { clipping, .. } = &mut clip.kind {
@@ -762,7 +762,9 @@ fn a_clipping_path_keeps_its_own_effects_under_a_groups_effects() {
     let clip_group = art.children().unwrap()[0].clone();
     let ch = clip_group.children().unwrap();
     assert!(matches!(ch[0].kind, NodeKind::Path { clipping: true, .. }), "{:?}", ch[0].kind);
-    assert_eq!(crate::reshape::geometry_effects(&ch[0]).len(), 1, "the clipping path keeps its Offset Path");
+    assert!(crate::reshape::geometry_effects(&ch[0]).is_empty(), "the clipping path's Offset Path is applied");
+    let w = ch[0].geometric_bounds().unwrap().width();
+    assert!((w - 60.0).abs() < 0.5, "grown by 10 on each side, then scaled to 50 %: {w}");
     assert!(matches!(ch[1].kind, NodeKind::Group { .. }) && crate::reshape::geometry_effects(&ch[1]).is_empty(), "the member is drawn as its art");
 }
 

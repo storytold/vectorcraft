@@ -278,6 +278,60 @@ fn spot_gradients_keep_a_trace_of_process_ink_at_a_light_stop() {
     }
 }
 
+/// [`gold_gradient_pdf`] with spot swatch "Leaf" (C100 Y100) in the document too.
+fn gold_and_leaf_gradient_pdf(stops: Vec<GradientStop>, perceptual: bool) -> String {
+    let mut d = doc(ColorMode::Cmyk, &[]);
+    d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+    d.swatches.push(Swatch { name: "Leaf".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 1.0, 0.0)), global: true, spot: true });
+    let mut g = Gradient::new(GradientKind::Linear, stops);
+    if perceptual {
+        g.method = GradientMethod::Perceptual;
+    }
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+    let l = d.layers[0].id;
+    let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 30.0)), Appearance::basic(paint, Paint::None, 0.0));
+    d.insert(Some(l), 0, n).unwrap();
+    String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned()
+}
+
+#[test]
+fn gradients_name_only_the_spot_inks_of_stops_that_color_what_draws() {
+    let black = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 1.0)) };
+    let paper = |offset: f32| GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 0.0));
+    let leaf = |offset: f32, tint: f32| {
+        let mut s = GradientStop::new(offset, Color::cmyk(1.0, 0.0, 1.0, 0.0).tinted(tint));
+        s.swatch = Some("Leaf".into());
+        s.tint = tint;
+        s
+    };
+    let clear_gold = GradientStop { opacity: 0.0, ..gold_stop(0.4, 1.0) };
+    for perceptual in [false, true] {
+        // Gold in a stretch where every stop is clear, and Gold out of order, where the stops at 0
+        // and 0.8 cover the stretches next to it: Gold colors nothing, so no Gold plate.
+        let clear = vec![black(0.0, 1.0), black(0.2, 0.0), clear_gold.clone(), black(0.6, 0.0), black(1.0, 1.0)];
+        let out_of_order = vec![black(0.0, 1.0), black(0.8, 1.0), gold_stop(0.2, 1.0), black(0.4, 1.0), black(1.0, 1.0)];
+        // Gold at a tint of 0 prints no Gold ink.
+        let no_tint = vec![gold_stop(0.0, 0.0), black(1.0, 1.0)];
+        for (what, stops) in [("clear", clear), ("out of order", out_of_order), ("tint 0", no_tint)] {
+            let text = gold_gradient_pdf(stops, perceptual);
+            assert!(!text.contains("/Gold"), "{what}, perceptual {perceptual}: {text}");
+            assert!(!text.contains("/DeviceN") && !text.contains("/Separation"), "{what}, perceptual {perceptual}: {text}");
+        }
+        // Without the Gold stop out of order, Leaf's tints over paper are a Separation shading.
+        let leaf_only = vec![leaf(0.0, 1.0), leaf(0.8, 0.5), gold_stop(0.2, 1.0), paper(0.4), paper(1.0)];
+        let text = gold_and_leaf_gradient_pdf(leaf_only, perceptual);
+        assert!(text.contains("[/Separation/Leaf/") && !text.contains("/Gold") && !text.contains("/DeviceN"), "perceptual {perceptual}: {text}");
+        // A clear Gold stop next to an opaque one colors the stretch between them.
+        let text = gold_gradient_pdf(vec![black(0.0, 1.0), clear_gold.clone(), black(1.0, 1.0)], perceptual);
+        assert!(text.contains("[/DeviceN[/Black/Gold]"), "perceptual {perceptual}: {text}");
+    }
+    // Gold at a tint of 0 over a 30% cyan plate (a DeviceN gradient read from a PDF) keeps its
+    // process plate in the same space.
+    let plated = GradientStop { plates: Some([0.3, 0.0, 0.0, 0.0]), ..gold_stop(1.0, 0.0) };
+    let text = gold_gradient_pdf(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), plated], false);
+    assert!(text.contains("[/DeviceN[/Cyan/Gold]"), "{text}");
+}
+
 #[test]
 fn converting_to_rgb_turns_cmyk_into_rg() {
     let ink = Color::cmyk(0.0, 1.0, 1.0, 0.0);

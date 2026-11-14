@@ -1265,7 +1265,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.smoothAuto",
         "Auto-Smooth",
         "",
-        "{} the open Smooth slider (Object › Path › Smooth and the canvas context menu's Smooth… open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
+        "{} the open Smooth slider (Object › Path › Smooth, the canvas context menu's Smooth… and the Contextual Task Bar's Smooth open it: dialog `smoothSlider` with field `level` 0..100, object.path.smooth's level, opening at the level object.path.smooth {auto: true} picks, previewed on the canvas until ui.dialog.confirm keeps it as one undo step) moves to the level object.path.smooth {auto: true} picks and previews it → {level}; an error when the slider isn't open",
     ),
     (
         "ui.simplifyMoreOptions",

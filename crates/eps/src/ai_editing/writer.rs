@@ -281,6 +281,17 @@ pub(super) struct Writer<'a> {
     /// How many more envelopes may be written live: as many as the reader checks in one file
     /// ([`crate::import::ENVELOPE_CHECKS`]).
     envelopes_left: usize,
+    /// The image read last and its pixels ([`images::Samples::of`], `None` when they can't be
+    /// read): the pieces of a warped image, which follow one another, read them once.
+    last_samples: Option<(vectorcraft_doc::ImageBlob, Option<images::Read>)>,
+    /// The images written whole so far, by the address of their data (which each entry keeps), each
+    /// with the index of its samples in [`Self::payloads`].
+    whole_images: HashMap<usize, (Arc<Vec<u8>>, usize)>,
+    /// The outlines of the clipping groups the art being written is in, in the document (empty in
+    /// a definition, an opacity mask's art and a brush's art, which are written apart from them).
+    shown: Vec<vectorcraft_geom::BezPath>,
+    /// The copy of an image that the last [`Self::image`] wrote as a window, when it did.
+    windowed: Option<images::Windowed>,
 }
 
 impl<'a> Writer<'a> {
@@ -348,6 +359,10 @@ impl<'a> Writer<'a> {
             definition_objects: 0,
             definition_symbol_nodes: 0,
             max_objects: crate::import::MAX_EDITING_OBJECTS,
+            last_samples: None,
+            whole_images: HashMap::new(),
+            shown: vec![],
+            windowed: None,
         }
     }
 
@@ -414,14 +429,20 @@ impl<'a> Writer<'a> {
 
     /// Art written since `c` as `lines` is not used: the objects and symbol art charged since are
     /// given back, except those of the definitions written since, and the images `lines` marks
-    /// are emptied (the others keep their indices).
+    /// are emptied (the others keep their indices). An image whose whole copy is among them is no
+    /// longer written whole ([`Self::whole_images`]).
     fn give_back(&mut self, c: Charges, lines: &str) {
         self.objects = c.objects + (self.definition_objects - c.kept_objects);
         self.symbol_nodes = c.symbol_nodes + (self.definition_symbol_nodes - c.kept_symbol_nodes);
+        let mut emptied = HashSet::new();
         for index in lines.split(PAYLOAD).skip(1).step_by(2) {
-            if let Some(p) = index.parse::<usize>().ok().and_then(|i| self.payloads.get_mut(i)) {
+            if let Some((i, p)) = index.parse::<usize>().ok().and_then(|i| Some((i, self.payloads.get_mut(i)?))) {
                 *p = Vec::new();
+                emptied.insert(i);
             }
+        }
+        if !emptied.is_empty() {
+            self.whole_images.retain(|_, (_, i)| !emptied.contains(i));
         }
     }
 
@@ -643,8 +664,17 @@ impl<'a> Writer<'a> {
         }
         self.effects(n);
         self.state(n.locked, !n.visible);
-        let xy = Xy::of(n);
+        let mut xy = Xy::of(n);
+        if masked_warp_pieces(n) {
+            // The reader gives the pieces no mark, and a knockout group's member then knocks out
+            // what it paints without its opacity mask: each piece would hide the pieces below it.
+            // Without knockout, a partly transparent image draws its alpha twice only where the
+            // pieces overlap.
+            xy.knockout = Knockout::Off;
+        }
         let start = self.body.len();
+        // An image's copy written as the part that its opacity mask, among other regions, shows.
+        let mut mask_window = None;
         match &n.kind {
             NodeKind::Layer { .. } => {}
             NodeKind::Group { children, clip: true } => self.clip_group(children, xy),
@@ -671,7 +701,25 @@ impl<'a> Writer<'a> {
             }
             NodeKind::Compound { rule, .. } => self.shape(n, &compound_path(n), *rule, xy),
             NodeKind::Text(_) => self.text(n, xy),
-            NodeKind::Image(im) => self.image(&self.doc.shown_image(n, im), xy),
+            NodeKind::Image(im) => {
+                // An opacity mask that clips shows the image within what its art paints only (its
+                // effects and its symbol instances' art included, as the renderer measures it).
+                let masked = n
+                    .extras()
+                    .mask
+                    .as_ref()
+                    .filter(|m| m.clip && !m.invert && !m.disabled && self.nest < MAX_NEST)
+                    .and_then(|m| vectorcraft_render::painted_bounds(self.doc, &m.art));
+                if let Some(b) = masked {
+                    self.shown.push(b.to_path(0.1));
+                }
+                self.windowed = None;
+                self.image(&self.doc.shown_image(n, im), xy);
+                if masked.is_some() {
+                    self.shown.pop();
+                    mask_window = self.windowed.take();
+                }
+            }
             NodeKind::SymbolInstance { symbol, xf } if self.live_instance_in_room(n, symbol, *xf) => self.symbol_instance(symbol, *xf, xy),
             NodeKind::SymbolInstance { symbol, xf } => {
                 if !self.open_group("u") {
@@ -737,9 +785,13 @@ impl<'a> Writer<'a> {
             // A group's dictionary goes between its end and its state block.
             let block = (self.block_end == self.body.len() && self.block_start >= start).then(|| self.body.split_off(self.block_start));
             self.block_end = usize::MAX;
-            self.dictionary(n);
+            let mask_written = self.dictionary(n);
             if let Some(b) = block {
                 self.body.push_str(&b);
+            }
+            // Without its opacity mask, the image shows whole.
+            if let Some(w) = mask_window.filter(|_| !mask_written) {
+                self.write_whole(w);
             }
         }
         // An envelope's plugin `XP` follows its distorted art, after the art's state block.
@@ -773,25 +825,28 @@ impl<'a> Writer<'a> {
     /// is bound to variables ([`Self::bound_variables`]; without a name, it gets an XML id and an
     /// empty `AIArtName`), has text wrap options ([`Self::text_wrap`]), has an opacity mask
     /// (`AI9_Mask`, see [`Self::mask`]), or is a symbol's art (its symbol's entries first, see
-    /// [`Self::define_symbol`]).
-    fn dictionary(&mut self, n: &Node) {
+    /// [`Self::define_symbol`]). False when `n` has an opacity mask that is left out: nested too
+    /// deep, or its art doesn't fit.
+    fn dictionary(&mut self, n: &Node) -> bool {
         let name = n.name.as_deref().filter(|s| !s.is_empty());
         let wrap = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look);
         let placed = std::mem::take(&mut self.placed);
         let typed = std::mem::take(&mut self.typed);
         let bound = self.bound_variables(n, placed, typed);
         let mut mask = n.extras().mask.as_deref();
+        let mut mask_written = true;
         // Masks nested too deep are left out (an empty mask would hide the object).
         if mask.is_some() && self.nest >= MAX_NEST {
             self.warn(DEEP_MASKS);
             mask = None;
+            mask_written = false;
         }
         let entries = match &self.root_entries {
             Some((id, _)) if *id == n.id => self.root_entries.take().map(|(_, e)| e),
             _ => None,
         };
         if name.is_none() && mask.is_none() && bound.is_empty() && entries.is_none() && wrap.is_none() {
-            return;
+            return mask_written;
         }
         let start = self.body.len();
         let has_id = name.is_some() || !bound.is_empty();
@@ -817,13 +872,15 @@ impl<'a> Writer<'a> {
         // A mask whose art doesn't fit is left out, and with nothing else in it the dictionary too.
         if let Some(m) = mask
             && !self.mask(m)
-            && !has_id
-            && !has_entries
-            && wrap.is_none()
         {
-            return self.body.truncate(start);
+            if !has_id && !has_entries && wrap.is_none() {
+                self.body.truncate(start);
+                return false;
+            }
+            mask_written = false;
         }
         self.body.push_str("%_;\n%_\n");
+        mask_written
     }
 
     /// Text wrap options, as entries of their object's dictionary: the offset in art space's points
@@ -866,6 +923,7 @@ impl<'a> Writer<'a> {
     fn mask(&mut self, m: &OpacityMask) -> bool {
         let outer = std::mem::take(&mut self.body);
         let (state, gs, clip) = (self.state, self.gs, self.clip.take());
+        let shown_by = std::mem::take(&mut self.shown);
         let (charges, bound) = (self.charges(), self.bound.len());
         (self.state, self.gs) = (Some((false, false)), Some(Xy::OPAQUE));
         // The canvas draws the art's root even when it is hidden, and the reader puts a hidden object
@@ -905,6 +963,7 @@ impl<'a> Writer<'a> {
         self.hidden -= 1;
         self.nest -= 1;
         let lines = std::mem::replace(&mut self.body, outer);
+        self.shown = shown_by;
         if self.left_out_since(charges) {
             // The art isn't written, nor are the variable bindings of its objects.
             self.give_back(charges, &lines);
@@ -990,9 +1049,11 @@ impl<'a> Writer<'a> {
             }
         }
         self.clip_paint_part(first, &path, rule, &fills);
+        self.shown.push(path.to_bezpath());
         for c in rest {
             self.node(c);
         }
+        self.shown.pop();
         self.clip_paint_part(first, &path, rule, &strokes);
         self.state(first.locked, !first.visible);
         let start = self.body.len();
@@ -1665,6 +1726,16 @@ fn clip_path(n: &Node) -> Option<(PathData, FillRule)> {
         _ => return None,
     };
     path.subpaths.iter().any(|sp| !sp.anchors.is_empty()).then_some((path, rule))
+}
+
+/// Is `n` a knockout group of the pieces of a mesh-warped image cut by opacity masks
+/// ([`vectorcraft_doc::live::mesh_warp_image`] with Preserve Shape Using Transparency)? Each piece
+/// knocks out its triangle ([`Node::knockout_outline`]); read from the data, a piece knocks out all
+/// that its image paints instead.
+fn masked_warp_pieces(n: &Node) -> bool {
+    n.knockout == Knockout::On
+        && matches!(&n.kind, NodeKind::Group { children, clip: false }
+            if !children.is_empty() && children.iter().all(|c| c.extras().warp_piece && c.extras().mask.is_some()))
 }
 
 /// `text`'s lines on `%_` lines, as a part of the data that readers of the printed form skip (an

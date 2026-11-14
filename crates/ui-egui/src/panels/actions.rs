@@ -85,6 +85,70 @@ impl Action {
             })
             .collect()
     }
+
+    /// The steps whose command `known` does not hold, in order, as (step index, the index of the
+    /// command in a `command.batch` step, command id). A `command.batch` step's own commands are
+    /// checked one by one, as playback runs them ([`Action::included_commands`]); a command of one
+    /// with no command id has the id "". With `included_only`, excluded steps are passed over.
+    pub(crate) fn unknown_commands<'a>(
+        &'a self,
+        known: &'a KnownCommands,
+        included_only: bool,
+    ) -> impl Iterator<Item = (usize, Option<usize>, &'a str)> + 'a {
+        self.steps.iter().enumerate().filter(move |(i, _)| !(included_only && self.excluded_steps.contains(i))).flat_map(
+            |(i, (command, params))| -> Vec<(usize, Option<usize>, &'a str)> {
+                match params.get("commands").and_then(Value::as_array) {
+                    Some(steps) if command == "command.batch" => steps
+                        .iter()
+                        .enumerate()
+                        .map(|(j, step)| (i, Some(j), step.get("command").and_then(Value::as_str).unwrap_or_default()))
+                        .filter(|(_, _, id)| !known.has(id))
+                        .collect(),
+                    _ if known.has(command) => vec![],
+                    _ => vec![(i, None, command.as_str())],
+                }
+            },
+        )
+    }
+}
+
+/// The command ids a step of an action can run now: the built-in engine commands, the commands the
+/// installed plug-ins add, the View menu commands the app plays itself ([`crate::menus::plays_in_app`])
+/// and stops ([`STOP_STEP`]).
+pub(crate) struct KnownCommands(std::collections::HashSet<&'static str>);
+
+impl KnownCommands {
+    /// The command ids known when it is called: a plug-in installed or removed later is not in it.
+    pub(crate) fn now() -> Self {
+        let engine = vectorcraft_engine::command_specs().iter().map(|c| c.id);
+        let plugins = vectorcraft_engine::cmd::plugin::command_specs().into_iter().map(|c| c.id);
+        Self(engine.chain(plugins).chain([STOP_STEP]).collect())
+    }
+
+    /// Whether a step can run command `id`.
+    pub(crate) fn has(&self, id: &str) -> bool {
+        self.0.contains(id) || crate::menus::plays_in_app(id)
+    }
+}
+
+/// The one-based place of a step that [`Action::unknown_commands`] gives: `3` for the third step,
+/// `3.2` for the second command of a `command.batch` third step.
+pub(crate) fn step_place(step: usize, in_batch: Option<usize>) -> String {
+    match in_batch {
+        Some(j) => format!("{}.{}", step + 1, j + 1),
+        None => (step + 1).to_string(),
+    }
+}
+
+/// `text` as a status message shows it: control characters become `�`, and text past 80
+/// characters ends in `…`.
+pub(crate) fn shown_text(text: &str) -> String {
+    const MAX: usize = 80;
+    let mut shown: String = text.chars().take(MAX).map(|c| if c.is_control() { '\u{fffd}' } else { c }).collect();
+    if text.chars().nth(MAX).is_some() {
+        shown.push('…');
+    }
+    shown
 }
 
 /// An action id no other action in this run has.
@@ -257,7 +321,10 @@ pub fn default_sets() -> Vec<ActionSet> {
 /// Accelerated runs every included step at once as a single undoable batch → what `command.batch`
 /// returns, {results}. Step by Step and Pause For run the first step now, each as its own undo step,
 /// and leave the rest to [`tick_playback`] → {results: [the first step's result], pending: the steps
-/// left}. While a paced playback is in progress, another action does not play.
+/// left}. While a paced playback is in progress, another action does not play. An action with an
+/// included step whose command is not known now ([`KnownCommands`]), a plug-in's command after the
+/// plug-in was removed for one, does not play: the error names the first such step and its command,
+/// and no step runs. An excluded step is not checked.
 ///
 /// An action with an included stop ([`STOP_STEP`]) plays up to the stop and waits there at any speed
 /// ([`continue_playback`]). At Accelerated, the steps between two stops are one undo step. → {results:
@@ -274,6 +341,13 @@ pub fn play(app: &mut VectorcraftApp, set: usize, idx: usize) -> Result<Value, S
     }
     if app.ui.action_playing.is_some() {
         return Err("an action is already playing".into());
+    }
+    // A step whose command is not known now would fail only when playback reaches it, after the
+    // steps before it changed the document.
+    let known = KnownCommands::now();
+    if let Some((step, in_batch, command)) = a.unknown_commands(&known, true).next() {
+        let (step, action, command) = (step_place(step, in_batch), shown_text(&a.name), shown_text(command));
+        return Err(format!("step {step} of “{action}” runs the unknown command `{command}`"));
     }
     let options = app.ui.action_playback;
     if has_stop(&commands) {
@@ -3907,6 +3981,112 @@ mod tests {
         assert_eq!(set_names(&app), before, "no set added");
     }
 
+    /// A step whose command is not known loads as it is, excluded or not and in a `command.batch`
+    /// step too, from `data` and from `path`: the answer lists each one and the status bar names the
+    /// first and how many there are. A set whose commands are all known loads with neither.
+    #[test]
+    fn load_actions_reports_steps_with_unknown_commands() {
+        let mut app = app_with_sets();
+        let files = with_files(&mut app, "/sets/unused.vcactions");
+        let batch = json!({"commands": [{"command": "object.move", "params": {"dx": 1, "dy": 0}}, {"command": "example.unknown.inner"}]});
+        let export = json!([
+            {"command": "object.move", "params": {"dx": 1, "dy": 0}},
+            {"command": "view.zoomIn", "params": {}},
+            {"command": STOP_STEP, "params": {"message": "", "allowContinue": false}},
+            {"command": "example.unknown.finish", "params": {"x": [1, 2]}},
+            {"command": "command.batch", "params": batch},
+            {"command": "example.unknown.off", "params": {}, "excluded": true},
+        ]);
+        let tidy = json!({"name": "Tidy", "steps": [{"command": "object.move", "params": {"dx": 1, "dy": 0}}]});
+        let file = json!({"format": "vcactions", "version": 6, "name": "Print", "actions": [tidy, {"name": "Export", "steps": export}]}).to_string();
+        let want = json!([
+            {"action": "Export", "actionIndex": 1, "step": 4, "stepIndex": 3, "command": "example.unknown.finish"},
+            {"action": "Export", "actionIndex": 1, "step": 5, "stepIndex": 4, "batchStep": 2, "command": "example.unknown.inner"},
+            {"action": "Export", "actionIndex": 1, "step": 6, "stepIndex": 5, "command": "example.unknown.off"},
+        ]);
+        let r = app.run(LOAD_SET, json!({"data": file})).unwrap();
+        assert_eq!(r, json!({"set": 3, "name": "Print", "actions": 2, "unknownCommands": want, "unknownCount": 3}));
+        assert_eq!(
+            app.ui.status,
+            "Loaded “Print”: 3 steps have unknown commands and were kept; the first: “Export”, step 4, `example.unknown.finish`"
+        );
+        let loaded = &app.ui.action_sets[3].actions[1];
+        assert_eq!(loaded.steps.len(), 6, "every step is kept");
+        assert_eq!(loaded.steps[3], ("example.unknown.finish".to_string(), json!({"x": [1, 2]})), "with its params");
+        assert_eq!(loaded.excluded_steps, BTreeSet::from([5]));
+        files.borrow_mut().insert("/sets/Print.vcactions".into(), file.into_bytes());
+        let r = app.run(LOAD_SET, json!({"path": "/sets/Print.vcactions"})).unwrap();
+        assert_eq!((r["name"].clone(), r["unknownCommands"].clone(), r["unknownCount"].clone()), (json!("Print 2"), want, json!(3)));
+        let saved = files::write_set(&app.ui.action_sets[4]);
+        assert!(saved.contains("example.unknown.finish") && saved.contains("example.unknown.inner"), "Save Actions… writes them back");
+        app.ui.status.clear();
+        let known = files::write_set(&app.ui.action_sets[1]);
+        assert_eq!(app.run(LOAD_SET, json!({"data": known})).unwrap(), json!({"set": 5, "name": "Mine 2", "actions": 2}));
+        assert_eq!(app.ui.status, "", "no message for a set whose commands are all known");
+        let empty = json!({"format": "vcactions", "version": 1, "name": "Empty", "actions": []}).to_string();
+        assert_eq!(app.run(LOAD_SET, json!({"data": empty})).unwrap(), json!({"set": 6, "name": "Empty", "actions": 0}));
+        assert_eq!(app.ui.status, "");
+    }
+
+    /// Load Actions… lists the first 1,000 steps with an unknown command and counts them all, and
+    /// the status bar shows an action name or command id with no control character and at most 80
+    /// characters, while the set and the answer keep them as they are. One step is named in the
+    /// singular.
+    #[test]
+    fn load_actions_bounds_what_it_reports_of_unknown_commands() {
+        let mut app = app_with_sets();
+        let steps = vec![json!({"command": "example.unknown"}); 1001];
+        let many = json!({"format": "vcactions", "version": 1, "name": "Many", "actions": [{"name": "A", "steps": steps}]});
+        let r = app.run(LOAD_SET, json!({"data": many.to_string()})).unwrap();
+        assert_eq!((r["unknownCommands"].as_array().map(Vec::len), r["unknownCount"].clone()), (Some(1000), json!(1001)));
+        assert_eq!(r["unknownCommands"][999], json!({"action": "A", "actionIndex": 0, "step": 1000, "stepIndex": 999, "command": "example.unknown"}));
+        let (name, id) = ("Odd\u{1b}[31m\nname", format!("example.\r\n{}", "x".repeat(200)));
+        let odd = json!({"format": "vcactions", "version": 1, "name": "Odd", "actions": [{"name": name, "steps": [{"command": id}]}]});
+        let r = app.run(LOAD_SET, json!({"data": odd.to_string()})).unwrap();
+        assert_eq!((r["unknownCommands"][0]["action"].clone(), r["unknownCommands"][0]["command"].clone()), (json!(name), json!(id)));
+        assert_eq!(app.ui.action_sets.last().unwrap().actions[0].steps[0].0, id, "the set keeps the id");
+        let shown_id = format!("example.\u{fffd}\u{fffd}{}…", "x".repeat(70));
+        assert_eq!(
+            app.ui.status,
+            format!("Loaded “Odd”: 1 step has an unknown command and was kept: “Odd\u{fffd}[31m\u{fffd}name”, step 1, `{shown_id}`")
+        );
+    }
+
+    /// An action with an included step whose command is not known does not play at any speed: no
+    /// step runs, and the error names the step, a `command.batch` step's command by its place in
+    /// the batch too. An excluded step with an unknown command does not stop it.
+    #[test]
+    fn an_action_with_an_unknown_command_does_not_play() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        let id = vectorcraft_doc::NodeId(
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap(),
+        );
+        app.run("select.set", json!({"ids": [id.0]})).unwrap();
+        let step = || ("object.move".to_string(), json!({"dx": 5, "dy": 0}));
+        let inner = json!({"commands": [{"command": "object.move", "params": {"dx": 5, "dy": 0}}, {"command": "example.unknown.inner"}]});
+        app.ui.action_sets = vec![ActionSet::new(
+            "Test",
+            vec![
+                Action::new("Move", vec![step(), ("example.unknown.finish".into(), json!({})), step()]),
+                Action::new("Batch", vec![step(), ("command.batch".into(), inner)]),
+            ],
+        )];
+        let x = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(id).unwrap().geometric_bounds().unwrap().x0;
+        let before = x(&app);
+        for speed in [PlaybackSpeed::Accelerated, PlaybackSpeed::Step] {
+            app.ui.action_playback.speed = speed;
+            assert_eq!(play(&mut app, 0, 0).unwrap_err(), "step 2 of “Move” runs the unknown command `example.unknown.finish`");
+            assert_eq!(play(&mut app, 0, 1).unwrap_err(), "step 2.2 of “Batch” runs the unknown command `example.unknown.inner`");
+            assert_eq!(x(&app), before, "no step ran");
+            assert!(app.ui.action_playing.is_none());
+        }
+        app.ui.action_playback.speed = PlaybackSpeed::Accelerated;
+        app.ui.action_sets[0].actions[0].excluded_steps.insert(1);
+        play(&mut app, 0, 0).unwrap();
+        assert!((x(&app) - before - 10.0).abs() < 1e-9, "both included moves ran");
+    }
+
     /// Where the host can read part of a file, Load Actions… reads one byte past 8 MiB: a larger
     /// file is refused without reading all of it, and a smaller one loads.
     #[test]
@@ -5086,7 +5266,9 @@ mod tests {
     fn a_failing_step_ends_a_paced_playback_with_its_error() {
         let (mut app, x) = app_with_three_moves();
         app.run(PLAYBACK_OPTIONS, json!({"speed": "step"})).unwrap();
-        app.ui.action_sets[0].actions[0].steps[1] = ("no.such.command".into(), json!({}));
+        // A Select Object step that finds no object fails as it plays.
+        app.ui.action_sets[0].actions[0].steps[1] =
+            (SELECT_OBJECT_STEP.into(), json!({"note": "missing", "caseSensitive": false, "wholeWord": false}));
         play(&mut app, 0, 0).unwrap();
         assert_eq!(frame(&mut app, 0.0), None, "the frame after Play draws the first step");
         assert_eq!(frame(&mut app, 0.0), None);
