@@ -1809,6 +1809,44 @@ fn an_eps_without_layers_keeps_its_symbols() {
     assert_eq!(symbol_names(&r.document), ["Bar", "Masked", "Dot"], "{:?}", r.warnings);
 }
 
+/// The box of the art of `d`'s first symbol (Bar, 12 × 2 about the origin in the editing data).
+fn bar_bounds(d: &Document) -> Option<vectorcraft_geom::Rect> {
+    d.symbols.first().and_then(|s| s.art.geometric_bounds())
+}
+
+/// A symbol library without layers whose editing data is drawn larger than its units comes in with
+/// its symbols' art as large as a document read from its layers has it: an EPS of a Large Canvas
+/// copy at its declared scale, and a `.ai` whose artboard is its PDF part's page at that scale or
+/// in the units of its `UserUnit`. One whose artboard is the page in points keeps its art's size.
+#[test]
+fn a_symbol_library_in_larger_units_comes_in_at_the_pages_size() {
+    let board = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
+        %_/Dictionary :\n%_0 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_100 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
+        %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
+    let library = |setup: &str| symbol_library().replace("%%BeginSetup\n", &format!("%%BeginSetup\n{setup}"));
+    let ten = Some(vectorcraft_geom::Rect::new(-60.0, -10.0, 60.0, 10.0));
+    let r = import(&eps(&page_square(50, 50), &library("%AI24_LargeCanvasScale: 10\n"))).unwrap();
+    assert_eq!(bar_bounds(&r.document), ten, "{:?}", r.warnings);
+    let large = format!("%AI24_LargeCanvasScale: 10\n{board}");
+    let (d, warnings, read) = crate::layered_ai(&private(&library(&large)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 1.0);
+    assert!(!read, "{warnings:?}");
+    assert_eq!(bar_bounds(&d), ten, "{warnings:?}");
+    let (d, warnings, _) = crate::layered_ai(&private(&library(board)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 10.0);
+    assert_eq!(bar_bounds(&d), ten, "{warnings:?}");
+    let points = board.replace("0 100 /Real", "0 1000 /Real").replace("100 0 /Real", "1000 0 /Real");
+    let (d, warnings, _) = crate::layered_ai(&private(&library(&points)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 10.0);
+    assert_eq!(bar_bounds(&d), Some(vectorcraft_geom::Rect::new(-6.0, -1.0, 6.0, 1.0)), "{warnings:?}");
+    // A library VectorCraft wrote (its `%%Creator`) has its symbols at their own size, whatever its
+    // scale.
+    let own =
+        |setup: &str| library(setup).replacen("%!PS-Adobe-3.0 \n", &format!("%!PS-Adobe-3.0 \n%%Creator: {}\n", crate::ai_editing::CREATOR_TEXT), 1);
+    let own_size = Some(vectorcraft_geom::Rect::new(-6.0, -1.0, 6.0, 1.0));
+    let r = import(&eps(&page_square(50, 50), &own("%AI24_LargeCanvasScale: 10\n"))).unwrap();
+    assert_eq!(bar_bounds(&r.document), own_size, "{:?}", r.warnings);
+    let (d, warnings, _) = crate::layered_ai(&private(&own(&large)), in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, true, 1.0);
+    assert_eq!(bar_bounds(&d), own_size, "{warnings:?}");
+}
+
 /// A `.ai` that comes in as its PDF part, and an EPS that comes in as its page, because their
 /// layers can't be used (their editing data is for another page) get the symbols defined before
 /// their layers.
@@ -2767,6 +2805,94 @@ fn a_large_canvas_eps_keeps_its_graphic_styles_at_the_pages_size() {
     assert_eq!(widths, [("Line", 2.0)]);
     let object = &d.layers[0].children().unwrap()[0];
     assert_eq!((object.appearance.stroke_width(), object.extras().graphic_style), (2.0, Some(1)), "{object:#?}");
+}
+
+/// The definition of the symbol Box: a rectangle 2 × 1 about the origin, stroked 0.4 wide.
+fn stroked_box_symbol() -> String {
+    let art = "0 0 0 1 K\n0.4 w\n-1 -0.5 m\n-1 0.5 L\n1 0.5 L\n1 -0.5 L\n-1 -0.5 L\nS\n";
+    format!("%AI5_Begin_NonPrinting\n{}%AI5_End_NonPrinting--\n", symbol_def("Box", art, 5))
+}
+
+/// The art of `d`'s symbol Box ([`stroked_box_symbol`]) is ten times as large, its stroke 4 wide,
+/// and its instance on `d`'s second layer, placed in the file at twice its size about (`x`, `y`),
+/// keeps that scale and draws a box of 40 × 20 about `center`.
+fn box_symbol_at_ten_times(d: &Document, center: (f64, f64), notes: &[String]) {
+    let art = &d.symbols.iter().find(|s| s.name == "Box").unwrap_or_else(|| panic!("{notes:?}")).art;
+    let b = art.geometric_bounds().unwrap();
+    let close = |r: vectorcraft_geom::Rect, e: [f64; 4]| [r.x0, r.y0, r.x1, r.y1].iter().zip(e).all(|(a, b)| (a - b).abs() < 1e-6);
+    assert!(close(b, [-10.0, -5.0, 10.0, 5.0]), "the art at the page's size: {b:?} {notes:?}");
+    let mut widths = vec![];
+    art.walk(&mut |n| {
+        if matches!(n.kind, NodeKind::Path { .. }) {
+            widths.push(n.appearance.stroke_width());
+        }
+    });
+    assert_eq!(widths, [4.0], "{notes:?}");
+    let instance = d.layers[1].children().unwrap().first().unwrap_or_else(|| panic!("{:#?} {notes:?}", d.layers));
+    let NodeKind::SymbolInstance { xf, .. } = &instance.kind else { panic!("an instance: {:?}", instance.kind) };
+    let [a, b0, c, d0, ..] = xf.as_coeffs();
+    assert!((a.hypot(b0) - 2.0).abs() < 1e-9 && (c.hypot(d0) - 2.0).abs() < 1e-9, "the instance's own scale: {xf:?}");
+    let (x, y) = center;
+    assert!(close(xf.transform_rect_bbox(b), [x - 20.0, y - 10.0, x + 20.0, y + 10.0]), "{:?}", xf.transform_rect_bbox(b));
+}
+
+/// The symbols of a Large Canvas editing copy come in at the page's size, as its art does: their
+/// art and its strokes ten times as large, and each instance with the scale the file gives it,
+/// drawn where and as large as before.
+#[test]
+fn a_large_canvas_eps_keeps_its_symbols_at_the_pages_size() {
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n2 0 0 -2 5 5 /RTransformMatrix\n;\n9 () XW";
+    let square = "0 0 1 0 k\n5 5 m\n5.4 5 L\n5.4 5.4 L\n5 5.4 L\nf";
+    let art = native_large_canvas(10.0, 10.0, &format!("{}{}{}", stroked_box_symbol(), layer("Art", true, square), layer("Box", false, instance)));
+    let r = import(&eps(&page_square(50, 50), &art)).unwrap();
+    assert_eq!(names(&r.document), ["Art", "Box"], "{:?}", r.warnings);
+    box_symbol_at_ten_times(&r.document, (50.0, 50.0), &r.warnings);
+}
+
+/// A large canvas `.ai` 100 units square at a scale of 10, with the symbol Box
+/// ([`stroked_box_symbol`]) and an instance of it at twice its size about (50, 50), its header
+/// carrying `creator` when given, read with its PDF part, on a page whose PDF part can't be read,
+/// and without a page.
+fn large_canvas_ai_box_reads(creator: Option<&str>) -> Vec<(&'static str, Document, Vec<String>)> {
+    let instance = "/SymbolInstance :\n(Box) /SymbolRef ,\n2 0 0 -2 50 50 /RTransformMatrix\n;\n9 () XW";
+    let layers = format!("{}{}{}", stroked_box_symbol(), layer("Art", true, &square(10, 10)), layer("Box", false, instance));
+    let mut art = native_large_canvas(100.0, 10.0, &layers);
+    if let Some(creator) = creator {
+        art = art.replacen("%!PS-Adobe-3.0 \n", &format!("%!PS-Adobe-3.0 \n%%Creator: {creator}\n"), 1);
+    }
+    let data = private(&art);
+    let (d, notes, read) = crate::layered_ai(&data, in_points(pdf_part(10.0, 86.0), 10.0), vec![], false, false, 1.0);
+    assert!(read, "{notes:?}");
+    let on_page = crate::ai_alone_on_page(&data, (1000.0, 1000.0), 10.0, Default::default()).unwrap();
+    let no_page = crate::ai_alone(&data).unwrap();
+    vec![("PDF part", d, notes), ("on a page", on_page.0, on_page.1), ("no page", no_page.0, no_page.1)]
+}
+
+/// A `.ai` whose editing data is read at its declared large canvas scale has its symbols scaled
+/// with the art, as an EPS has, however the file opens.
+#[test]
+fn a_large_canvas_ai_keeps_its_symbols_at_the_pages_size() {
+    for (how, d, notes) in large_canvas_ai_box_reads(None) {
+        let notes: Vec<String> = notes.into_iter().chain([how.to_string()]).collect();
+        box_symbol_at_ten_times(&d, (500.0, 500.0), &notes);
+    }
+}
+
+/// A large canvas `.ai` that VectorCraft wrote (its `%%Creator`) has its symbols defined at their
+/// own size, as its `.ai` save writes them: their art keeps that size, and the instance, scaled with
+/// the layers, draws the same box, however the file opens.
+#[test]
+fn a_large_canvas_ai_vectorcraft_wrote_keeps_its_symbols_at_their_own_size() {
+    for (how, d, notes) in large_canvas_ai_box_reads(Some(crate::ai_editing::CREATOR_TEXT)) {
+        let art = &d.symbols.iter().find(|s| s.name == "Box").unwrap_or_else(|| panic!("{how}: {notes:?}")).art;
+        let b = art.geometric_bounds().unwrap();
+        assert_eq!(b, vectorcraft_geom::Rect::new(-1.0, -0.5, 1.0, 0.5), "{how}: {notes:?}");
+        let instance = d.layers[1].children().unwrap().first().unwrap_or_else(|| panic!("{how}: {:#?} {notes:?}", d.layers));
+        let NodeKind::SymbolInstance { xf, .. } = &instance.kind else { panic!("{how}: an instance: {:?}", instance.kind) };
+        let drawn = xf.transform_rect_bbox(b);
+        let close = [drawn.x0 - 480.0, drawn.y0 - 490.0, drawn.x1 - 520.0, drawn.y1 - 510.0].iter().all(|v| v.abs() < 1e-6);
+        assert!(close, "{how}: {drawn:?}");
+    }
 }
 
 #[test]

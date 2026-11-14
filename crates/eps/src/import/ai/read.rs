@@ -215,6 +215,9 @@ pub struct Structure {
     pub text_patterns: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
+    /// The data's symbols are at their own size, whatever its scale: VectorCraft wrote it (its
+    /// `%%Creator` is [`crate::ai_editing::CREATOR_TEXT`]).
+    pub symbols_own_size: bool,
     /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an
     /// id two objects have.
     pub xml_ids: HashMap<String, Option<NodeId>>,
@@ -644,6 +647,8 @@ struct Reader<'a> {
     page_art: bool,
     /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
     canvas_scale: f64,
+    /// [`Structure::symbols_own_size`], from the header's `%%Creator`.
+    symbols_own_size: bool,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
@@ -818,6 +823,7 @@ impl<'a> Reader<'a> {
             large_canvas: None,
             page_art: false,
             canvas_scale: 1.0,
+            symbols_own_size: false,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),

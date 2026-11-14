@@ -79,6 +79,10 @@ impl<'a> Reader<'a> {
                 }
                 return Ok(());
             }
+            if let Some(v) = bytes.strip_prefix(b"%Creator:") {
+                self.symbols_own_size = v.trim_ascii() == crate::ai_editing::CREATOR_TEXT.as_bytes();
+                return Ok(());
+            }
             if bytes == b"%EndComments" {
                 self.header_done = true;
             }
