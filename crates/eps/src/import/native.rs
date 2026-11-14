@@ -47,9 +47,9 @@ mod layers;
 mod plan;
 mod slots;
 
-pub(crate) use build::scale_document;
 #[cfg(test)]
 use build::{Frame, MADE, prune_unseen};
+pub(crate) use build::{scale_document, scale_symbols};
 #[cfg(test)]
 use compare::{
     MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE, PageView, Shares, compare, compared, comparison_render, comparison_samples, differ, differ_in_colour,

@@ -276,3 +276,18 @@ fn a_turned_jpeg_in_an_svg_image_imports_upright() {
     let px = pixels(&d, &im);
     assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)));
 }
+
+/// A turned JPEG that a linked SVG file links to is turned too.
+#[test]
+fn a_turned_jpeg_linked_from_a_linked_svg_file_imports_upright() {
+    let dir = folder("nested-file");
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub").join("photo.jpg"), jpeg(Some(6))).unwrap();
+    let inner = r#"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><image href="photo.jpg" width="80" height="80"/></svg>"#;
+    std::fs::write(dir.join("sub").join("inner.svg"), inner).unwrap();
+    let (d, im) = import_one(r#"<image href="sub/inner.svg" width="80" height="80"/>"#, Some(&dir));
+    assert_eq!((im.width, im.height), (8, 16));
+    assert!(near(placed(&im), Rect::new(20.0, 0.0, 60.0, 80.0)), "{:?}", placed(&im));
+    let px = pixels(&d, &im);
+    assert!(red(px.get_pixel(4, 3)) && !red(px.get_pixel(4, 12)));
+}
