@@ -7110,3 +7110,120 @@ breakText	Glyphs	Glyph
 	Grommets	Khoen
 	Grommet Inset	Khoảng cách từ mép đến khoen
 	Diameter	Đường kính
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	Hiệu ứng 3D yêu cầu tọa độ hữu hạn trong phạm vi 100 triệu điểm
+@msg	3D effects require one to ten lights	Hiệu ứng 3D yêu cầu từ một đến mười nguồn sáng
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Độ sâu BMP {_1}: chỉ hỗ trợ 1, 4, 8, 16, 24 hoặc 32 bit mỗi điểm ảnh
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Mã hóa BMP thất bại: {width} × {height} điểm ảnh không vừa với định dạng hoặc bộ đệm điểm ảnh
+@msg	GIF encoding failed: the palette image is malformed	Mã hóa GIF thất bại: ảnh bảng màu bị sai định dạng
+@msg	GIF encoding failed: {e}	Mã hóa GIF thất bại: {e}
+@msg	JPEG colour profile: {e}	Hồ sơ màu JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Mã hóa JPEG thất bại: bộ đệm điểm ảnh không khớp với kích thước ảnh
+@msg	JPEG encoding failed: {e}	Mã hóa JPEG thất bại: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Mã hóa PNG thất bại: bộ đệm điểm ảnh không khớp với kích thước ảnh
+@msg	PNG encoding failed: the palette image is malformed	Mã hóa PNG thất bại: ảnh bảng màu bị sai định dạng
+@msg	PNG encoding failed: {e}	Mã hóa PNG thất bại: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Mã hóa PNG thất bại: {width} × {height} điểm ảnh không phải là kích thước ảnh hợp lệ
+@msg	PSD colour profile: {e}	Hồ sơ màu PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Mã hóa PSD thất bại: bộ đệm điểm ảnh không khớp với kích thước ảnh
+@msg	Revolve profile contains invalid coordinates	Biên dạng Xoay tròn chứa tọa độ không hợp lệ
+@msg	Revolve profile is too complex	Biên dạng Xoay tròn quá phức tạp
+@msg	Revolve projection is not finite	Phép chiếu của Xoay tròn không hữu hạn
+@msg	Revolve requires finite profile coordinates within 100 million points	Xoay tròn yêu cầu tọa độ biên dạng hữu hạn trong phạm vi 100 triệu điểm
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Bề mặt Xoay tròn quá phức tạp; hãy giảm Đoạn hoặc đơn giản hóa biên dạng
+@msg	Revolve surface is too complex; simplify the profile	Bề mặt Xoay tròn quá phức tạp; hãy đơn giản hóa biên dạng
+@msg	Revolve visibility cannot split the projected boundary	Tính toán phần nhìn thấy của Xoay tròn không thể tách đường biên đã chiếu
+@msg	Revolve visibility creates too many fragments	Tính toán phần nhìn thấy của Xoay tròn tạo ra quá nhiều mảnh
+@msg	Revolve visibility creates too many vector anchors	Tính toán phần nhìn thấy của Xoay tròn tạo ra quá nhiều điểm neo vectơ
+@msg	Revolve visibility exceeds its geometry work limit	Tính toán phần nhìn thấy của Xoay tròn vượt quá giới hạn khối lượng tính toán hình học
+@msg	Revolve visibility exceeds its spatial index limit	Tính toán phần nhìn thấy của Xoay tròn vượt quá giới hạn chỉ mục không gian
+@msg	Revolve visibility has too many boundary crossings	Tính toán phần nhìn thấy của Xoay tròn có quá nhiều điểm cắt đường biên
+@msg	Revolve visibility has too many input anchors	Tính toán phần nhìn thấy của Xoay tròn có quá nhiều điểm neo đầu vào
+@msg	Revolve visibility requires convex cap sectors	Tính toán phần nhìn thấy của Xoay tròn yêu cầu các hình quạt nắp lồi
+@msg	Revolve visibility requires finite projected faces	Tính toán phần nhìn thấy của Xoay tròn yêu cầu các mặt chiếu hữu hạn
+@msg	SVG options: {e}	Tùy chọn SVG: {e}
+@msg	Save for Web settings: {e}	Cài đặt Lưu cho Web: {e}
+@msg	TIFF colour profile: {e}	Hồ sơ màu TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Mã hóa TIFF thất bại: bộ đệm điểm ảnh không khớp với kích thước ảnh
+@msg	TIFF encoding failed: {e}	Mã hóa TIFF thất bại: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Độ sâu Targa {_1}: chỉ hỗ trợ 16, 24 hoặc 32 bit mỗi điểm ảnh
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Mã hóa Targa thất bại: bộ đệm điểm ảnh không khớp với kích thước ảnh
+@msg	The 3D projection is not finite	Phép chiếu 3D không hữu hạn
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Bóng đổ 3D quá phức tạp; hãy tắt Bóng đổ hoặc đơn giản hóa hình vẽ
+@msg	The shape contains invalid coordinates	Hình dạng chứa tọa độ không hợp lệ
+@msg	Too many Revolve faces for visibility evaluation	Quá nhiều mặt Xoay tròn để tính toán phần nhìn thấy
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft đọc tối đa {ASE_MAX_ENTRIES} màu và nhóm từ một tệp trao đổi mẫu màu, còn thư viện này có {entries}
+@msg	WebP encoding failed: {e}	Mã hóa WebP thất bại: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`index` must be a whole number	`index` phải là số nguyên
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` phải là smallThumb, mediumThumb, largeThumb, smallList hoặc largeList
+@msg	a line can't run from a point to itself	một đường không thể đi từ một điểm đến chính nó
+@msg	a line needs at least two points	một đường cần ít nhất hai điểm
+@msg	a number cannot be read	không thể đọc một số
+@msg	a swatch exchange block is too long	một khối trong tệp trao đổi mẫu màu quá dài
+@msg	a swatch exchange name is too long	một tên trong tệp trao đổi mẫu màu quá dài
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	không thể đổi kích thước ảnh {sw} × {sh} thành {width} × {height} điểm ảnh
+@msg	a {width} × {height} image is too large	ảnh {width} × {height} quá lớn
+@msg	a {width} × {height} image: {e}	ảnh {width} × {height}: {e}
+@msg	an image could not be written: {e}	không thể ghi một ảnh: {e}
+@msg	an image that couldn't be read was left out	một ảnh không đọc được đã bị bỏ qua
+@msg	can't open “{name}”: {e}	không thể mở “{name}”: {e}
+@msg	cannot align zip entries to {align} bytes	không thể căn các mục zip theo {align} byte
+@msg	cannot open the automation {kind} root `{_1}`: {e}	không thể mở thư mục gốc {kind} tự động `{_1}`: {e}
+@msg	cannot read profile: {0}	không thể đọc hồ sơ màu: {0}
+@msg	color book version {version} isn't supported (only 1)	không hỗ trợ sổ màu phiên bản {version} (chỉ 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	không hỗ trợ sổ màu trong không gian màu {other} (chỉ RGB, CMYK và Lab)
+@msg	file name too long to zip: {_1}	tên tệp quá dài để nén zip: {_1}
+@msg	file name too long to zip: {name}	tên tệp quá dài để nén zip: {name}
+@msg	freeform line {i}: {e}	đường tự do {i}: {e}
+@msg	freeform point {i}: {e}	điểm tự do {i}: {e}
+@msg	give `{key}` or `{other}`, not both	hãy cung cấp `{key}` hoặc `{other}`, không phải cả hai
+@msg	grayscale profiles can't be working spaces yet	hồ sơ màu thang xám chưa thể dùng làm không gian làm việc
+@msg	input contains NaN or infinite coordinates	đầu vào chứa tọa độ NaN hoặc vô hạn
+@msg	input path could not be closed	không thể đóng đường dẫn đầu vào
+@msg	invalid ICC profile: {0}	hồ sơ ICC không hợp lệ: {0}
+@msg	invalid scale {scale}	tỷ lệ không hợp lệ {scale}
+@msg	its localized names take more than {_1} KB	các tên bản địa hóa của nó chiếm hơn {_1} KB
+@msg	its objects are nested too deep ({e})	các đối tượng của nó lồng nhau quá sâu ({e})
+@msg	its tag table lists the `{_1}` tag more than once	bảng thẻ của nó liệt kê thẻ `{_1}` nhiều hơn một lần
+@msg	not a graphic style library: {e}	không phải thư viện kiểu đồ họa: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	không phải thư viện mẫu màu (.vcswatches hoặc .gpl)
+@msg	not a swatch library (format `{_1}`)	không phải thư viện mẫu màu (định dạng `{_1}`)
+@msg	not a swatch library: {e}	không phải thư viện mẫu màu: {e}
+@msg	not an action set file ({e})	không phải tệp bộ hành động ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	không gian màu {other} của hồ sơ không phải RGB, CMYK hoặc Gray
+@msg	regular expression too large	biểu thức chính quy quá lớn
+@msg	script file is not UTF-8 text: {value}	tệp tập lệnh không phải văn bản UTF-8: {value}
+@msg	stop {i}: {e}	điểm dừng {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	không hỗ trợ tệp trao đổi mẫu màu phiên bản {major}.{minor} (chỉ 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	sổ màu chứa hơn {ASE_MAX_ENTRIES} màu
+@msg	the color book is cut short	sổ màu bị cắt ngắn
+@msg	the color book's names take more than {_1} MB	các tên trong sổ màu chiếm hơn {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	ảnh sẽ có kích thước {w} × {h} điểm ảnh; xuất raster bị giới hạn ở {MAX_RASTER_SIDE} điểm ảnh mỗi cạnh và {_1} megapixel: hãy giảm tỷ lệ hoặc độ phân giải
+@msg	the optimised image can't be read back: {e}	không thể đọc lại ảnh đã tối ưu hóa: {e}
+@msg	the pixel buffer doesn't match the image size	bộ đệm điểm ảnh không khớp với kích thước ảnh
+@msg	the preview: {e}	bản xem trước: {e}
+@msg	the request may not read the New Document profiles folder	yêu cầu không được phép đọc thư mục hồ sơ Tài liệu mới
+@msg	the shapes are too degenerate to combine	các hình dạng quá suy biến để kết hợp
+@msg	the shapes cross themselves and each other too often to combine	các hình dạng tự cắt và cắt nhau quá nhiều lần để kết hợp
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	tệp trao đổi mẫu màu chứa hơn {ASE_MAX_ENTRIES} màu và nhóm
+@msg	the swatch exchange file is cut short	tệp trao đổi mẫu màu bị cắt ngắn
+@msg	the {_1} plate can't be read: {e}	không thể đọc bản in {_1}: {e}
+@msg	this binary DXF file is damaged or cut short	tệp DXF nhị phân này bị hỏng hoặc bị cắt ngắn
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	đây là bản vẽ DWG, không thể đọc được: hãy lưu nó dưới dạng DXF từ ứng dụng CAD rồi mở tệp đó
+@msg	too many classes	quá nhiều lớp ký tự
+@msg	too many groups	quá nhiều nhóm
+@msg	too many layers for PSD (at most 32767)	quá nhiều lớp cho PSD (tối đa 32767)
+@msg	too many swatch exchange blocks	quá nhiều khối trong tệp trao đổi mẫu màu
+@msg	unknown colour profile: {0}	hồ sơ màu không xác định: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} trùng với tên hồ sơ màu có sẵn
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} điểm ảnh quá lớn cho GIF (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
+@msg	{_1}: no usable transform to/from sRGB	{_1}: không có phép chuyển đổi dùng được sang/từ sRGB
+@msg	{name} is not a CMYK profile	{name} không phải hồ sơ màu CMYK
+@msg	{name} is not an RGB profile	{name} không phải hồ sơ màu RGB
+@msg	{path}: could not be read	{path}: không thể đọc
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho JPEG (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} điểm ảnh quá lớn cho Targa (tối đa 65535 điểm ảnh mỗi cạnh): hãy giảm độ phân giải
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} điểm ảnh quá lớn cho PSD (tối đa {MAX_SIDE} điểm ảnh mỗi cạnh): hãy giảm độ phân giải
