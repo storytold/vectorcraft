@@ -358,7 +358,7 @@ fn a_preview_stops_at_its_point_limit_within_one_path() {
 }
 
 /// As on the web (no thread): Generate returns with the run going and nothing made; each frame
-/// makes one part (the image decoded, a style's colour layers found, one layer traced), the styles
+/// makes one part (the image decoded, a style's color layers found, one layer traced), the styles
 /// are made in order, and the last part's frame shows them all.
 #[test]
 fn on_the_web_generate_makes_one_part_a_frame() {
@@ -388,7 +388,7 @@ fn on_the_web_generate_makes_one_part_a_frame() {
     assert_eq!((undo_steps(&app), root_count(&app)), (steps, roots), "Generate changes nothing");
 }
 
-/// On the web, Cancel takes effect inside a style: after the image's colour layers are found and
+/// On the web, Cancel takes effect inside a style: after the image's color layers are found and
 /// one is traced, the run is dropped, and nothing is shown or changed.
 #[test]
 fn on_the_web_cancel_stops_a_style_part_way() {
@@ -397,7 +397,7 @@ fn on_the_web_cancel_stops_a_style_part_way() {
     app.concept_runs.styles = vec!["flatColor".into()];
     let (steps, roots) = (undo_steps(&app), root_count(&app));
     generate(&mut app).unwrap();
-    // The image decoded, its colour layers found, and the first layer traced.
+    // The image decoded, its color layers found, and the first layer traced.
     for _ in 0..3 {
         poll(&mut app);
         assert_eq!(made_so_far(&app), Some(0), "the one style is still being made");

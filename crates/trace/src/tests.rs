@@ -1017,7 +1017,8 @@ fn a_watched_trace_counts_its_layers_and_stops_when_told() {
 }
 
 /// A trace made a part at a time finds its layers in the first part and traces one layer a part
-/// after it, and gives what one call gives, Auto Grouping, Logo mode and the anchor budget included.
+/// after it (all of them in the second part for Overlapping with Fills, which stacks them), and
+/// gives what one call gives, Auto Grouping, Logo mode and the anchor budget included.
 #[test]
 fn a_trace_made_a_part_at_a_time_matches_one_made_at_once() {
     fn parts(img: &Raster, p: &TraceParams, max: usize) -> (usize, Result<TraceResult, TraceError>) {

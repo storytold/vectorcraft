@@ -218,8 +218,6 @@ fn trace_paths(img: &Raster, params: &TraceParams, max_anchors: usize, steps: St
         // A layer takes about ten bytes a pixel of its box while it is traced (its mask, the labels
         // of its components, the stack that fills them, its edges): as many layers at a time as fit
         // in half a gigabyte, so that a large image is not traced at the cost of gigabytes.
-        // (Overlapping labels a layer's mask once more before it is traced, with its labels and stack
-        // freed before the trace starts.)
         let at_a_time = ((512 << 20) / (p.largest() * 10)).max(1);
         let total = p.layers.len() as u64;
         if !steps(0, total) {
@@ -262,7 +260,7 @@ impl std::ops::Deref for Source<'_> {
     }
 }
 
-/// A trace with its colour layers found and ordered, none of them traced yet.
+/// A trace with its color layers found and ordered, none of them traced yet.
 struct Prepared<'a> {
     src: Source<'a>,
     /// A copy with a JPEG's block edges (see `deblock`) or a photo's noise (see `smooth`) smoothed
@@ -359,7 +357,7 @@ impl Prepared<'_> {
 }
 
 /// A trace made a part at a time, for a caller with no thread to trace on that must let other
-/// work run between the parts (the web build). The first [`TraceSteps::step`] finds the colour
+/// work run between the parts (the web build). The first [`TraceSteps::step`] finds the color
 /// layers and each later one traces one layer, bottom first, one at a time (Overlapping with
 /// Fills, without Create Strokes, traces all of them in the second step, as its layers are traced
 /// together); the result is the one [`trace_within`] gives.
@@ -409,13 +407,14 @@ impl TraceSteps {
             let paths = prepared.job(0).stacked(&prepared.layers, prepared.largest(), &|_, _| true)?;
             return Ok(Some(grouped((*prepared).finish_stacked(paths), &self.img, &self.params)));
         }
-        let Some(&(r, ci)) = prepared.layers.get(traced.len()) else { return Ok(None) };
-        let (paths, anchors) = {
+        // With every layer traced already the result is finished below.
+        let mut anchors = anchors;
+        if let Some(&(r, ci)) = prepared.layers.get(traced.len()) {
             let job = prepared.job(anchors);
             let paths = job.layer(r, ci);
-            (paths, job.anchors.load(Ordering::Relaxed))
-        };
-        traced.push(Some(paths.ok_or(TraceError::TooComplex { max: self.max_anchors })?));
+            anchors = job.anchors.load(Ordering::Relaxed);
+            traced.push(Some(paths.ok_or(TraceError::TooComplex { max: self.max_anchors })?));
+        }
         if traced.len() < prepared.layers.len() {
             self.state = StepState::Layers(prepared, traced, anchors);
             return Ok(None);
@@ -424,7 +423,7 @@ impl TraceSteps {
     }
 }
 
-/// Finds the colour layers of `src` traced with `params` and the order they stack in, telling
+/// Finds the color layers of `src` traced with `params` and the order they stack in, telling
 /// `steps(0, 0)` after each stage; Logo mode traces the whole image at once.
 fn prepare<'a>(src: Source<'a>, params: &TraceParams, max_anchors: usize, steps: Steps) -> Result<Begun<'a>, TraceError> {
     let (w, h) = (src.width as usize, src.height as usize);

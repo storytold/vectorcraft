@@ -9,7 +9,7 @@
 //! are named as that provider names its styles. The results stay in this session
 //! until Insert Selected puts the ticked ones in the document as one undo step
 //! (`conceptVector.insert`). The web build has no thread for it, so it makes one part a frame
-//! (the built-in provider: the image decoded, a style's colour layers found, or one colour layer
+//! (the built-in provider: the image decoded, a style's color layers found, or one color layer
 //! traced, or all of them for a style that stacks its layers), and Cancel takes effect before the
 //! next part. Unit tests that set neither
 //! `off_the_ui_thread` nor `by_frames` run the command at once.

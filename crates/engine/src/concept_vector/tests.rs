@@ -387,7 +387,7 @@ fn malformed_results_panics_and_cancels_keep_no_job_and_change_nothing() {
 }
 
 /// A part at a time (the web build's way): the built-in provider decodes the image in one part,
-/// finds a style's colour layers in another and traces one layer a part (all of them in one part
+/// finds a style's color layers in another and traces one layer a part (all of them in one part
 /// for a style that stacks them), and makes the variations
 /// one call makes; Cancel takes effect before the next part, inside a style.
 #[test]
@@ -404,7 +404,7 @@ fn the_built_in_styles_are_made_a_part_at_a_time() {
             first_style_parts = calls;
         }
     }
-    // The decode, the layers found, and the four colours' layers each a part.
+    // The decode, the layers found, and the four colors' layers each a part.
     assert!(first_style_parts >= 5, "{first_style_parts} parts before the first style was made");
     assert_eq!(parts.made(), run.run(&|_, _| true).unwrap());
 
@@ -662,6 +662,14 @@ fn insert_goes_beside_the_image_in_a_group_with_art_far_away() {
     let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["flatColor"]})).unwrap();
     let placed = bounds(&s, r["ids"][0].as_u64().unwrap());
     assert!(placed.x0 >= 1000.0 + GAP, "painted clipping path: {placed:?}");
+
+    // Hidden, the clipping path still paints its stroke, so the row still goes past it.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("object.hide", &json!({"ids": [mask]})).unwrap();
+    assert!(!s.doc().unwrap().doc.node(NodeId(mask)).unwrap().visible);
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["flatColor"]})).unwrap();
+    let placed = bounds(&s, r["ids"][0].as_u64().unwrap());
+    assert!(placed.x0 >= 1000.0 + GAP, "hidden painted clipping path: {placed:?}");
 }
 
 /// An Image Trace object whose art paints past its image (here a drop shadow) keeps the row clear

@@ -162,7 +162,7 @@ impl super::Provider for TraceStyles {
         Ok(out)
     }
 
-    /// The image decoded in the first part; then for each style, its colour layers found in one
+    /// The image decoded in the first part; then for each style, its color layers found in one
     /// part and each layer traced in a part of its own ([`tr::TraceSteps`]), or all of them in
     /// one part where the style stacks them (Overlapping with Fills).
     fn parts(&self, request: &Request) -> Option<Box<dyn Parts>> {

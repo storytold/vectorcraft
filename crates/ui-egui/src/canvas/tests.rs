@@ -10256,14 +10256,12 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
     app.run("file.place", json!({"name": "half.png", "dataBase64": data, "link": false, "at": [200, 150]})).unwrap();
     app.select_tool("selection");
     let ctx = egui::Context::default();
-    let click_first = |app: &mut VectorcraftApp| {
-        frame(app, &ctx, vec![]);
-        frame(app, &ctx, vec![]);
-        let bar = task_bar_rect(&ctx).expect("the task bar shows");
-        // Left to right: the frame's margin, the handle and its spacing, then the first button, in
-        // the middle of the first row (the frame's margin and half a 30 pt row), since an image's
-        // actions can wrap onto a second row.
-        let at = pos2(bar.left() + 8.0 + 4.0 + 6.0 + 12.0, bar.top() + 7.0 + 15.0);
+    // Clicks the button labeled `label`, which must be the bar's first. In this 800 pt window an
+    // image's four actions take two rows, so the button is found by its label, not by its place.
+    let click_first = |app: &mut VectorcraftApp, label: &str| {
+        let labels = task_bar_labels(app, &ctx);
+        assert_eq!(labels.first().map(|(t, _)| t.as_str()), Some(label), "{labels:?}");
+        let at = labels[0].1.center();
         let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
         frame(app, &ctx, vec![button(true)]);
@@ -10274,11 +10272,11 @@ fn the_task_bar_traces_an_image_then_expands_the_trace() {
         st.selection.objects.first().and_then(|id| st.doc.node(*id)).cloned().unwrap()
     };
     assert!(matches!(first(&app).kind, NodeKind::Image(_)));
-    click_first(&mut app);
+    click_first(&mut app, "Image Trace");
     assert_eq!(first(&app).name.as_deref(), Some("Image Trace"), "the image was traced");
     assert_eq!(app.ui.open_panel, None, "the Image Trace panel is left as it was");
 
-    click_first(&mut app);
+    click_first(&mut app, "Expand");
     let expanded = first(&app);
     assert_ne!(expanded.name.as_deref(), Some("Image Trace"), "the trace was expanded");
     let mut images = 0;
