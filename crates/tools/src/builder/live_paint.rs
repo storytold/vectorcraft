@@ -180,8 +180,8 @@ enum LpPaint {
 /// double-click or triple-click paints as it arrives, as its own undo step, and the paint compared
 /// is the one the face or edge had before the first of its clicks that painted it. A first click
 /// that made the Live Paint group counts when the face it filled is the clicked face. Shift and the
-/// options choose a face or an edge as for a click; with Alt held a double-click or triple-click
-/// paints nothing. With Space held for the view tools, a click, double-click or triple-click paints
+/// options choose a face or an edge as for a click; with Alt or Cmd/Ctrl held a double-click or
+/// triple-click paints nothing. With Space held for the view tools, a click, double-click or triple-click paints
 /// nothing and no face or edge is highlighted.
 ///
 /// The Left and Right arrow keys without Shift, Alt or Cmd/Ctrl set the active paint (the fill,
@@ -352,8 +352,9 @@ impl LivePaintBucketTool {
     /// What a double-click (`scope` "connected", 2 `clicks`) or a triple-click ("samePaint", 3) at
     /// `p` runs: the command a click there runs, with `scope`, and the paint it compares as `match`.
     fn multi_click(&self, cx: &ToolContext, p: Point, mods: Mods, scope: &str, clicks: usize) -> Vec<Action> {
-        // With Alt held, or with Space held for the view tools, a double-click or triple-click paints nothing.
-        if mods.alt || mods.space {
+        // With Alt held, with Space held for the view tools, or with Cmd/Ctrl held (its presses went
+        // to the selection tool Cmd lends), a double-click or triple-click paints nothing.
+        if mods.alt || mods.space || mods.cmd {
             return vec![];
         }
         let point = json!([p.x, p.y]);

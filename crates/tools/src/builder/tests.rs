@@ -1150,6 +1150,7 @@ fn bucket_double_and_triple_click_widen_what_a_click_paints() {
     let space = Mods { space: true, ..Default::default() };
     for k in [PointerKind::DoubleClick, PointerKind::TripleClick] {
         assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(alt)).is_empty(), "{k:?}");
+        assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(Mods { cmd: true, ..Default::default() })).is_empty(), "{k:?} with Cmd");
         assert!(t.pointer(&cx, &ev(k, 75.0, 25.0).with_mods(space)).is_empty(), "{k:?} with Space");
         assert!(t.pointer(&cx, &ev(k, 51.0, 25.0).with_mods(Mods { shift: true, ..space })).is_empty(), "{k:?} with Shift and Space");
     }

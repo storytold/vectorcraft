@@ -3536,7 +3536,8 @@ already walks Image Trace. Short agent entry points:
   Shift-click runs `livePaint.fill`. With both off, a click runs nothing. With `highlight` off, the face or edge under
   the pointer is not outlined.
   A double-click runs the command a click there runs with `scope: "connected"`, and a triple-click with
-  `scope: "samePaint"`; Alt held runs nothing. With Space held (`mods.space`, the view tools), a press, a
+  `scope: "samePaint"`; Alt held runs nothing, and so does Cmd/Ctrl (`mods.cmd`), whose presses go to the selection
+  tool Cmd lends. With Space held (`mods.space`, the view tools), a press, a
   double-click or a triple-click runs nothing, and a move outlines no face or edge. On a face, `connected` fills the face and every face reached from it
   across edges that draw no stroke (hidden, stroke paint none, or weight 0); a stroked edge, a hidden face, a gap
   that Gap Detection closes and the group's outside stop it. `samePaint` fills every face

@@ -3046,6 +3046,28 @@ fn live_paint_bucket_double_click_floods_across_unstroked_edges() {
     assert_eq!([a, b, c, d].map(|f| fill_of(&s, f)), [green.clone(), green.clone(), green, white]);
 }
 
+/// With Cmd held, the Live Paint Bucket's presses go to the selection tool Cmd lends, and the
+/// double-click and triple-click that follow them paint nothing.
+#[test]
+fn live_paint_bucket_cmd_double_and_triple_click_paint_nothing() {
+    let mut s = session();
+    let g = live_squares(&mut s, &[0.0, 50.0, 100.0]);
+    let faces = faces_at(&s, g, &[(25.0, 25.0), (75.0, 25.0), (125.0, 25.0)]);
+    let all = edges_in(&s, g, Rect::new(-1.0, -1.0, 151.0, 51.0));
+    paint_parts(&mut s, &all, &Paint::None, &[]);
+    let before: Vec<Paint> = faces.iter().map(|f| fill_of(&s, *f)).collect();
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::from_hex("#00ff00").unwrap());
+    let cmd = Mods { cmd: true, ..Default::default() };
+    let (down, up) = (PointerKind::Down, PointerKind::Up);
+    for kind in [down, up, down, up, PointerKind::DoubleClick, down, up, PointerKind::TripleClick] {
+        s.pointer(&PointerEvent::new(kind, 75.0, 25.0).with_mods(cmd), v).unwrap();
+    }
+    assert_eq!(faces.iter().map(|f| fill_of(&s, *f)).collect::<Vec<_>>(), before);
+    assert_eq!(s.tool_id(), "livePaintBucket");
+}
+
 /// The flood crosses curved edges, and reaches a face 0.012 pt wide.
 #[test]
 fn live_paint_bucket_double_click_floods_curved_and_narrow_faces() {
