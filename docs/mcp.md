@@ -3938,6 +3938,9 @@ For `edit.colors.*`, `fill: false` leaves colorized image fills unchanged. `reco
 `edit.colors.toGrayscale` and `edit.colors.adjustBalance` with `mode: "gray"` and `convert: true` store an embedded image
 with one gray channel, so a PDF writes it in gray.
 `includePatterns: false` leaves patterns out. The Blend commands also grade gradient meshes, which keep their shading.
+The `edit.colors.*` commands, including the Blend commands, and `recolor.apply`, `paint.invert`, `paint.complement`,
+`addon.color.filter` and `addon.color.applyNearestSwatch` record no undo step when they change nothing, for example
+`edit.colors.invert` with `fill: false` and `stroke: false`, or a Blend whose objects already have the graded fills.
 `edit.colors.saturate` needs `intensity`, a number from -100 to 100 (a number outside the range counts as its nearest
 end). Without one, or with `null`, it answers `` missing number `intensity` ``; with a value that is not a number, such as
 `"40"`, it answers `` `intensity` must be a number, not "40" ``. Either way it changes nothing.
@@ -11120,7 +11123,7 @@ the other colour adjustments (Effect › Color Adjustments); each colour keeps i
 `addon.color.filter {effect, params?, fill?, stroke?, includeImages?, includePatterns?, ids?}` applies any colour
 adjustment, the add-on's or one of Effect › Color Adjustments', to the colours themselves instead of as a live effect:
 fills, strokes, type, gradient meshes, embedded images and pattern tiles, as `edit.colors.invert` reaches them, as one
-undo step. Missing `params` take the effect's dialog defaults; the objects' own effects stay as they are.
+undo step (none when nothing changes). Missing `params` take the effect's dialog defaults; the objects' own effects stay as they are.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"addon.color.exposure","params":{"exposure":1.5}}}}
@@ -11287,7 +11290,7 @@ spot, deltaE}]}]}` (`values` as a default swatch name reads them: `C=10 M=20 Y=3
 `addon.color.applyNearestSwatch {library?, fill?, stroke?, ids?}` (Object › Plug-ins › Color Effects › Find Nearest
 Swatch…, whose dialog lists each colour's three closest swatches with their difference; Apply runs it) gives each solid
 colour and gradient stop of the selected objects' fills and strokes (and gradient meshes) the colour of its nearest
-swatch, as one undo step. A global or spot swatch's colour links to it. The library's swatches the colours take are
+swatch, as one undo step (none when nothing changes). A global or spot swatch's colour links to it. The library's swatches the colours take are
 added to the document's first, as `swatch.library.add` adds them, so a spot colour from a colour book stays spot;
 images and patterns keep their colours. → `{changed, swatches: [the document swatches the colours took], added}`
 
