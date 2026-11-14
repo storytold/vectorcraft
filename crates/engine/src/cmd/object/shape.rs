@@ -149,9 +149,22 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let angle = |k: &str| Ok::<_, EngineError>(number(k, |_| true, "an angle in degrees")?.map(|a| a.rem_euclid(360.0)));
     let length = |k: &str| number(k, |x| x > 0.0 && x <= crate::MAX_COORD, "a length in points above 0");
-    let radius = number("radius", |r| r >= 0.0, "a radius of 0 or more")?;
+    // Saved steps ([`Session::replay`]) can hold values a direct call refuses, recorded before these
+    // checks: a negative radius is 0, a whole side count of 0 or more is brought into 3 to 1000, and
+    // a fractional or negative one is ignored. A whole number written as 5.0 counts as 5, as in a
+    // direct call.
+    let replaying = s.replaying();
+    let radius = if replaying {
+        number("radius", |_| true, "a number")?.map(|r| r.max(0.0))
+    } else {
+        number("radius", |r| r >= 0.0, "a radius of 0 or more")?
+    };
     // A polygon's side count: a whole number from 3 to 1000.
-    let sides = number("sides", |n| n.fract() == 0.0 && (3.0..=1000.0).contains(&n), "a whole number from 3 to 1000")?.map(|n| n as u64);
+    let sides = if replaying {
+        number("sides", |_| true, "a number")?.filter(|n| n.fract() == 0.0 && *n >= 0.0).map(|n| n.min(1000.0) as u64)
+    } else {
+        number("sides", |n| n.fract() == 0.0 && (3.0..=1000.0).contains(&n), "a whole number from 3 to 1000")?.map(|n| n as u64)
+    };
     // An ellipse's pie (Ellipse Properties: Pie Start and End Angle, degrees; Invert Pie swaps them).
     let (pie_start, pie_end) = (angle("pieStart")?, angle("pieEnd")?);
     let invert = p.get("invertPie").and_then(Value::as_bool) == Some(true);

@@ -48,6 +48,54 @@ pub(crate) fn fit_size(w: u32, h: u32, max: u64) -> (u32, u32) {
     (nw, nh)
 }
 
+/// The `w × h` RGBA8 `rgba` reduced to `nw × nh` (at most `w × h`): each pixel covers a block of
+/// whole source pixels, and every source pixel falls in exactly one block. A pixel's alpha is the
+/// mean of its block's alphas, and its color is the block's colors weighted by their alpha, so a
+/// clear pixel next to an opaque one does not darken or tint it. A wholly clear block (every alpha
+/// 0) keeps the plain mean of its colors.
+pub(crate) fn box_reduced(rgba: &[u8], w: u32, h: u32, nw: u32, nh: u32) -> Vec<u8> {
+    let span = |i: u32, n: u32, of: u32| {
+        let at = |i: u32| usize::try_from(u64::from(i) * u64::from(of) / u64::from(n.max(1))).unwrap_or(usize::MAX);
+        let start = at(i);
+        start..at(i + 1).max(start + 1)
+    };
+    let cols: Vec<_> = (0..nw).map(|x| span(x, nw, w)).collect();
+    let mut out = Vec::with_capacity(nw as usize * nh as usize * 4);
+    // Per output column: the alpha-weighted color sums, the alpha sum and the plain color sums.
+    let mut sums = vec![[0u64; 7]; cols.len()];
+    let row_len = w as usize * 4;
+    for ty in 0..nh {
+        let rows = span(ty, nh, h);
+        sums.fill([0; 7]);
+        for y in rows.clone() {
+            let Some(row) = rgba.get(y * row_len..(y + 1) * row_len) else { break };
+            for (s, c) in sums.iter_mut().zip(&cols) {
+                let px = row.get(c.start * 4..c.end * 4).unwrap_or_default();
+                for &[r, g, b, a] in px.as_chunks::<4>().0 {
+                    let a64 = u64::from(a);
+                    s[0] += u64::from(r) * a64;
+                    s[1] += u64::from(g) * a64;
+                    s[2] += u64::from(b) * a64;
+                    s[3] += a64;
+                    s[4] += u64::from(r);
+                    s[5] += u64::from(g);
+                    s[6] += u64::from(b);
+                }
+            }
+        }
+        for (s, c) in sums.iter().zip(&cols) {
+            let count = (rows.len() * c.len()).max(1) as u64;
+            let mean = |v: u64, n: u64| u8::try_from((v + n / 2) / n).unwrap_or(u8::MAX);
+            if s[3] == 0 {
+                out.extend_from_slice(&[mean(s[4], count), mean(s[5], count), mean(s[6], count), 0]);
+            } else {
+                out.extend_from_slice(&[mean(s[0], s[3]), mean(s[1], s[3]), mean(s[2], s[3]), mean(s[3], count)]);
+            }
+        }
+    }
+    out
+}
+
 /// An RGBA8 raster (row-major, top row first).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Raster {
@@ -150,12 +198,14 @@ impl Raster {
         let mut limits = image::Limits::default();
         limits.max_alloc = Some(if cfg!(target_arch = "wasm32") { 512 << 20 } else { MAX_SOURCE_PIXELS * 4 });
         reader.limits(limits);
-        let img = reader.decode().map_err(decode_err)?.into_rgba8();
+        Ok(Self::fitted(&reader.decode().map_err(decode_err)?.into_rgba8(), MAX_PIXELS))
+    }
+    /// `img` scaled down, aspect kept, to the largest size of at most `max` pixels.
+    pub(crate) fn fitted(img: &image::RgbaImage, max: u64) -> Self {
         let (w, h) = img.dimensions();
-        let (nw, nh) = fit_size(w, h, MAX_PIXELS);
+        let (nw, nh) = fit_size(w, h, max);
         // Box-filtered: every source pixel counts, so thin lines and anti-aliased edges survive.
-        let small = image::imageops::thumbnail(&img, nw, nh);
-        Ok(Self { width: nw, height: nh, rgba: small.into_raw() })
+        Self { width: nw, height: nh, rgba: box_reduced(img.as_raw(), w, h, nw, nh) }
     }
     /// Encode as PNG.
     pub fn encode_png(&self) -> Vec<u8> {

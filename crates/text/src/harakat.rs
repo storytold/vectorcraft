@@ -56,6 +56,7 @@ pub(crate) fn paint_only(a: &CharStyle, b: &CharStyle) -> bool {
         kerning_before: _,
         aki_left: _,
         aki_right: _,
+        tsume: _,
         optical_kerning,
         baseline_shift,
         h_scale,
