@@ -10736,6 +10736,67 @@ fn type_with_an_art_brush_keeps_its_drawn_look() {
     assert_eq!(brushed, 0, "{:?}", r.warnings);
 }
 
+/// Each copy a Scatter brush places is its section's art turned over before the copy's rotation:
+/// the side of the section with y up goes down the page with the rotation at 0° to the page, and
+/// to the right of the path's direction when the rotation follows the path. A rotation turns the
+/// copy counterclockwise on the page, from the page or from the path's direction.
+#[test]
+fn a_scatter_brushs_copies_are_its_art_turned_over() {
+    // Size, spacing 100% and scatter 0%, fixed; the rotation 0° or 90°, to the page or following
+    // the path.
+    let still = "2 /Lopsided art/ 5 1 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0";
+    let turned = "2 /Lopsided art/ 5 1 0 0 / 0 1 1 0 1 1 0 0 0 0 90 90 0 0 0";
+    let along = "2 /Lopsided art/ 5 1 0 0 / 0 1 1 0 1 1 0 0 0 0 0 0 0 1 0";
+    let def = format!(
+        "{}{}{}{}",
+        lopsided_art("Lopsided art"),
+        plugin_object(SCATTER, "Still", still),
+        plugin_object(SCATTER, "Turned", turned),
+        plugin_object(SCATTER, "Along", along)
+    );
+    let r = read_ok(&format!("{def}{}", layer(&(rect_path(0.0, 0.0, 10.0, 10.0) + "f\n"))));
+    let lib = vectorcraft_brush::library(&r.doc);
+    let stroke = vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::BLACK), 1.0);
+    // The art is 40 by 8, so copies are 40 apart along a line 100 long, centered at 20, 60 and 100
+    // from its start.
+    let pieces = |name: &str, from: (f64, f64), to: (f64, f64)| {
+        let b = lib.iter().find(|b| b.name == name).unwrap();
+        let line = kurbo::BezPath::from_vec(vec![kurbo::PathEl::MoveTo(Point::new(from.0, from.1)), kurbo::PathEl::LineTo(Point::new(to.0, to.1))]);
+        vectorcraft_brush::stroke_pieces(&r.doc, b, &line, &stroke)
+    };
+    let filled = |pieces: &[Node], x: f64, y: f64| {
+        pieces.iter().any(|n| {
+            let mut hit = false;
+            n.walk(&mut |c| hit |= c.path_data().is_some_and(|p| kurbo::Shape::winding(&p.to_bezpath(), Point::new(x, y)) != 0));
+            hit
+        })
+    };
+    let still = pieces("Still", (0.0, 0.0), (100.0, 0.0));
+    assert_eq!(still.len(), 3, "{still:#?}");
+    // The copy at 60 spans 40 to 80: the narrow block is its first 10, the wide block all of it.
+    assert!(filled(&still, 70.0, -2.0) && !filled(&still, 70.0, 2.0), "the wide block is above the line");
+    assert!(filled(&still, 45.0, 2.0), "the narrow block is below it");
+    // Turned 90° to the page, the copy at 60 stands across the line from 40 above it to 80 below
+    // it: the wide block on the left, the narrow block on the right at its bottom 10.
+    let turned = pieces("Turned", (0.0, 0.0), (100.0, 0.0));
+    assert_eq!(turned.len(), 3, "{turned:#?}");
+    assert!(filled(&turned, 58.0, 0.0) && !filled(&turned, 62.0, 0.0), "the wide block is left of the copy's middle");
+    assert!(filled(&turned, 62.0, 15.0) && !filled(&turned, 62.0, -15.0), "the narrow block is at its bottom");
+    // Right to left with the rotation following the path, the copy at 40 (20 to 60) is turned half
+    // way round: its narrow block is its last 10.
+    let along = pieces("Along", (100.0, 0.0), (0.0, 0.0));
+    assert_eq!(along.len(), 3, "{along:#?}");
+    assert!(filled(&along, 30.0, 2.0) && !filled(&along, 30.0, -2.0), "the wide block is below the line");
+    assert!(filled(&along, 55.0, -2.0), "the narrow block is above it, at the copy's other end");
+    // Up the page with the rotation following the path, the copy at y 40 (20 to 60) is turned a
+    // quarter round: the wide block on the left of the line, the narrow block on its right at its
+    // bottom 10, where the line starts.
+    let up = pieces("Along", (0.0, 100.0), (0.0, 0.0));
+    assert_eq!(up.len(), 3, "{up:#?}");
+    assert!(filled(&up, -2.0, 40.0) && !filled(&up, 2.0, 40.0), "the wide block is left of the line");
+    assert!(filled(&up, 2.0, 55.0) && !filled(&up, 2.0, 25.0), "the narrow block is right of it, at the copy's bottom");
+}
+
 use read::{GRAPH_PLAIN, GRAPH_UNENDED};
 use vectorcraft_doc::{GraphKind, TickLength};
 
