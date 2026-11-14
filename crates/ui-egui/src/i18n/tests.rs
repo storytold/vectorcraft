@@ -1902,6 +1902,43 @@ fn ukrainian_plurals_have_three_forms() {
     assert!(count >= 13, "Ukrainian plural rows missing");
 }
 
+/// Ukrainian shows the image encoders', color profiles', swatch exchange files', Revolve's, DXF
+/// import's, the script engine's and the parameter checks' errors in Ukrainian, with their values,
+/// backticked names and accepted values kept as the English writes them.
+#[test]
+fn ukrainian_translates_encoder_profile_swatch_revolve_and_parameter_errors() {
+    for (english, ukrainian) in [
+        (
+            "PNG encoding failed: 0 × 0 pixels is not a valid image size",
+            "Не вдалося закодувати PNG: 0 × 0 пікселів не є допустимим розміром зображення",
+        ),
+        (
+            "70000 × 10 pixels is too large for GIF (at most 65535 pixels a side): lower the resolution",
+            "розмір 70000 × 10 пікселів завеликий для GIF (не більше 65535 пікселів на сторону): зменште роздільну здатність",
+        ),
+        ("profile colour space XYZ is not RGB, CMYK or Gray", "колірний простір профілю XYZ не є RGB, CMYK чи Gray"),
+        (
+            "color books in color space HSB aren't supported (only RGB, CMYK and Lab)",
+            "книги кольорів у колірному просторі HSB не підтримуються (лише RGB, CMYK і Lab)",
+        ),
+        ("the swatch exchange file holds more than 65536 colors and groups", "файл обміну зразками містить понад 65536 кольорів і груп"),
+        (
+            "Revolve surface is too complex; reduce Segments or simplify the profile",
+            "Обертання: поверхня надто складна; зменште «Сегменти» або спростіть профіль",
+        ),
+        ("regular expression too large", "регулярний вираз завеликий"),
+        ("this binary DXF file is damaged or cut short", "цей двійковий файл DXF пошкоджено або обрізано"),
+        (
+            "`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList",
+            "`view` має бути smallThumb, mediumThumb, largeThumb, smallList або largeList",
+        ),
+        ("give `fill` or `stroke`, not both", "укажіть `fill` або `stroke`, але не обидва"),
+        ("stop 2: oops", "точка переходу 2: oops"),
+    ] {
+        assert_eq!(message(uk(), english), ukrainian);
+    }
+}
+
 /// Catalogs written with spaces between words keep a fragment's leading and trailing spaces: the
 /// hint bar and a few labels are joined from pieces (" to finish", "Press ").
 #[test]
