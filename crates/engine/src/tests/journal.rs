@@ -611,15 +611,18 @@ fn edit_copy_and_cut_read_the_recorded_artboards() {
         s.execute("select.none", &json!({})).unwrap();
         assert!(matches!(s.execute(id, &json!({})), Err(crate::EngineError::Disabled(..))), "{id}");
         let before = documents(&s);
-        for bad in [
-            json!({"selectedArtboards": [9]}),
-            json!({"selectedArtboards": []}),
-            json!({"selectedArtboards": "1"}),
-            json!({"selectedArtboards": null}),
-            json!({"selectedArtboards": [1], "art": "yes"}),
+        for (bad, want) in [
+            (json!({"selectedArtboards": [9]}), "no such artboard"),
+            (json!({"selectedArtboards": []}), "`selectedArtboards` must be a non-empty list of artboard indices"),
+            (json!({"selectedArtboards": "1"}), "`selectedArtboards` must be a list of artboard indices"),
+            (json!({"selectedArtboards": null}), "`selectedArtboards` must be a list of artboard indices"),
+            (json!({"selectedArtboards": [1, "0"]}), "`selectedArtboards` must contain whole numbers"),
+            (json!({"selectedArtboards": [1, -1]}), "`selectedArtboards` must contain whole numbers"),
+            (json!({"selectedArtboards": [1], "art": "yes"}), "`art` must be true or false"),
         ] {
             let err = s.execute(id, &bad).unwrap_err().to_string();
-            assert!(err.contains(id) || err.contains("no such artboard"), "{id} {bad}: {err}");
+            assert!(err.ends_with(want), "{id} {bad}: {err}");
+            assert!(err.contains(id) || want == "no such artboard", "{id} {bad}: {err}");
             assert_eq!(documents(&s), before, "{id} {bad}");
             assert!(s.clipboard.artboards.is_empty(), "{id} {bad}");
         }

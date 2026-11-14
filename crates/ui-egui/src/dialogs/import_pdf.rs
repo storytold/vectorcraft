@@ -2,7 +2,8 @@
 //! asks which pages (a preview with page navigation), the box to crop to and the password.
 //!
 //! Fields: `mode` (`open` | `place`), `name`, `path?`, `pageCount`, `page` (the page shown, and the
-//! one placed; 1-based), `allPages` and `range` (open), `cropTo` and `password`. `__locked` is set
+//! one placed; 1-based), `allPages`, `range` and `linkPages` (open: Import PDF Pages as Links, for
+//! a file read from a path and opened without a password), `cropTo` and `password`. `__locked` is set
 //! until the password is accepted: OK then unlocks the file. `__place` keeps the other `file.place`
 //! params (Link, Template, `at`…). The file's bytes stay out of the fields, in
 //! [`crate::state::UiState::dialog_file`].
@@ -142,6 +143,7 @@ pub fn offer(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<St
         "page": 1,
         "allPages": true,
         "range": "",
+        "linkPages": false,
         "cropTo": CropTo::default().id(),
         "password": "",
         "__locked": locked,
@@ -183,6 +185,17 @@ fn password(d: &Dialog) -> Option<String> {
     Some(d.str("password")).filter(|p| !p.is_empty())
 }
 
+/// Can the pages open linked: the file was read from a path (a linked page is read from its
+/// file again) and opens without a password (`document.open`'s `linkPages` refuses one).
+fn can_link(d: &Dialog) -> bool {
+    d.fields.get("path").and_then(Value::as_str).is_some() && password(d).is_none()
+}
+
+/// Import PDF Pages as Links is checked, and can be.
+fn links_on(d: &Dialog) -> bool {
+    d.bool("linkPages") && can_link(d)
+}
+
 /// OK: unlock the file with the password, else open the pages or place the page.
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let file = app.ui.dialog_file.clone().ok_or("the PDF is no longer loaded")?;
@@ -212,6 +225,9 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
         let range = d.str("range");
         if !d.bool("allPages") && !range.trim().is_empty() {
             p["pages"] = json!(range);
+        }
+        if links_on(&d) {
+            p["linkPages"] = json!(true);
         }
         io::open_document(app, &name, &file.bytes, path, &p).map(|_| ())
     };
@@ -291,6 +307,10 @@ fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
                     }
                 });
                 widgets::dim_label(ui, tl!("e.g. 1-3, 5"));
+                ui.add_space(10.0);
+                if widgets::check(ui, tl!("Import PDF pages as links"), links_on(d), can_link(d)) {
+                    d.fields.insert("linkPages".into(), json!(!d.bool("linkPages")));
+                }
             }
         });
     });

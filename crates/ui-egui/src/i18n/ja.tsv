@@ -463,6 +463,18 @@ digits	Malayalam	マラヤーラム数字
 	Title Case	単語の先頭のみ大文字
 	Sentence case	文頭のみ大文字
 	Smart Punctuation…	欧文用字形の自動置換…
+	Smart Punctuation	欧文用字形の自動置換
+	ff, fi, ffi Ligatures	ff、fi、ffi 合字
+	ff, fl, ffl Ligatures	ff、fl、ffl 合字
+	Smart Quotes	スマート引用符
+	Smart Spaces	スマートスペース
+	En, Em Dashes	EN ダッシュと EM ダッシュ
+	Ellipses	省略記号
+	Expert Fractions	エキスパート分数
+	Replace In	置換範囲
+	Selected Text Only	選択したテキストのみ
+	Entire Document	ドキュメント全体
+	Report Results	結果を表示
 	Create Outlines	アウトラインを作成
 	Optical Margin Alignment	最適なマージン揃え
 	Dynamic Text	ダイナミックテキスト
@@ -1566,6 +1578,9 @@ antiAlias	Sharp	シャープ
 	The selected character's font is not available.	選択した文字のフォントを使用できません。
 	No alternates for the selected character.	選択した文字には異体字がありません。
 	Double-click to replace	ダブルクリックで置換
+	Click to replace	クリックで置換
+	Show all alternates in the Glyphs panel	字形パネルですべての異体字を表示
+	Show Character Alternates	文字の異体字を表示
 	Select one character with the Type tool first.	先に文字ツールで文字を 1 つ選択してください。
 	{glyph} is a glyph of {font}, not of the font the selected text is set in ({text_font}).	{glyph} は {font} のグリフで、選択したテキストのフォント ({text_font}) のものではありません。
 	{glyph} belongs to {base} (U+{base_code}) {place}; your selection is {sel} (U+{code}).	{glyph} は {base} (U+{base_code}) の{place}のグリフです。選択中の文字は {sel} (U+{code}) です。
@@ -1843,6 +1858,7 @@ antiAlias	Sharp	シャープ
 	Format	形式
 	Format Options	形式オプション
 	Format Settings	形式の設定
+	Format Settings…	形式の設定…
 	Format:	形式:
 	Formats:	形式:
 	Fractions	分数
@@ -2080,6 +2096,7 @@ antiAlias	Sharp	シャープ
 	Images:	イメージ:
 	Import Keyboard Shortcuts…	キーボードショートカットを読み込み…
 	Import PDF	PDF を読み込み
+	Import PDF pages as links	PDF ページをリンクとして読み込み
 	Import PDF Presets	PDF プリセットを読み込み
 	Import Perspective Grid Presets	遠近グリッドプリセットを読み込み
 	Import Print Presets	プリントプリセットを読み込み
@@ -4032,6 +4049,7 @@ file-filter	Templates	テンプレート
 	Small Thumbnails	小さいサムネール
 	Smooth Color	スムーズカラー
 	Social Square Post 1080×1080	ソーシャル正方形投稿 1080×1080
+	Sort by Size	サイズ順に並べ替え
 	Sort by Status	状態順に並べ替え
 	Specified Distance	距離
 	Specified Steps	ステップ数
@@ -7846,6 +7864,7 @@ axis	Y Axis	Y 軸
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF ファイルが大きすぎて、文字として配置できません (最大 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG を展開すると、入れ子の SVG 画像が {0} 個を超えます
 @msg	the SVG expands to more than {0} objects	SVG を展開すると、オブジェクトが {0} 個を超えます
+@msg	the SVG's styles expand to more than {0} MB	SVG のスタイルを展開すると {0} MB を超えます
 @msg	the SVG has no drawable objects	SVG に描画できるオブジェクトがありません
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ ファイルを展開すると {_1} MB を超えます
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文書のプロパティが {MAX_PAGES} ページを超えており、多すぎて配置できません
@@ -8181,7 +8200,7 @@ axis	Y Axis	Y 軸
 @plural	Result: {n}|Results: {n}	結果: {n}
 @msg	select one object	オブジェクトを 1 つ選択してください
 @msg	Global Edit works on paths, compound paths, symbol instances and groups of them	グローバル編集はパス、複合パス、シンボルインスタンスとそれらのグループに使用できます
-@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	類似するオブジェクトが見つかりません（回転または反転したコピーは一致しません）。グローバル編集オプションを変更してもう一度試してください
+@msg	no similar objects found (reflected copies are not matched); change the Global Edit Options and try again	類似するオブジェクトが見つかりません（反転したコピーは一致しません）。グローバル編集オプションを変更してもう一度試してください
 @msg	Global Edit is off	グローバル編集はオフです
 @msg	only an object of the Global Edit other than the one it started from can be left out	除外できるのは、グローバル編集を開始したオブジェクト以外のオブジェクトだけです
 @msg	`artboards`: all or a range such as 1, 3-5, not {v}	`artboards`: all または 1, 3-5 のような範囲を指定してください ({v} ではなく)
@@ -8978,6 +8997,9 @@ breakText	Glyphs	字形
 	Open Tutorial Sample	チュートリアルのサンプルを開く
 	Finish Tutorial	チュートリアルを完了
 	Next Tutorial	次のチュートリアル
+	Show Learn Tab	学ぶのタブを表示
+	Show Skill	スキルを表示
+	Back One Level	1 つ上の階層に戻る
 	Back to Skills	スキルに戻る
 @msg	tutorial `{id}` has no practice sample	チュートリアル `{id}` には練習用サンプルがありません
 @msg	open the practice sample of `{id}` first (see learn.openSample)	先に `{id}` の練習用サンプルを開いてください (learn.openSample を参照)
@@ -9018,6 +9040,9 @@ breakText	Glyphs	字形
 	Grommets	ハトメ
 	Grommet Inset	端からハトメまでの距離
 	Diameter	直径
+	Nest Shapes…	図形のネスティング…
+	Nest Shapes	図形のネスティング
+	Roll	ロール
 
 # Messages no catalog translated yet: image export and color profiles, color books and swatch exchange files, 3D and Revolve, and script, zip, line and file errors.
 @msg	3D effects require finite coordinates within 100 million points	3D 効果には 1 億ポイント以内の有限の座標が必要です

@@ -1586,6 +1586,53 @@ fn symbol_art_past_the_object_limit_picks_nothing() {
     assert!(symbol_part_outline(&d, n, &[0]).is_some());
 }
 
+/// Picking and outlining an object of a 9-slice instance's art, and placing that art, read the
+/// symbol list once for each call, however many instances the art holds.
+#[test]
+fn picking_in_9_slice_art_reads_the_symbol_list_once() {
+    let mut d = Document::new(400.0, 400.0);
+    for i in 0..2_000 {
+        let dot = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 1.0, 1.0)), Appearance::default_art());
+        d.symbols.push(crate::Symbol { dynamic: false, name: format!("Dot {i}"), art: Arc::new(dot) });
+    }
+    // A frame, a group of 20 squares in its top left cell, and 20 instances of the dots across
+    // the guides.
+    let square = |d: &mut Document, x: f64, y: f64| {
+        Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x, y, x + 4.0, y + 4.0)), Appearance::default_art()))
+    };
+    let corner: Vec<_> = (0..20).map(|i| square(&mut d, f64::from(i % 5) * 4.0, f64::from(i / 5) * 4.0)).collect();
+    let dot = |d: &mut Document, i: u32| {
+        let xf = vectorcraft_geom::Affine::translate((f64::from(i) * 4.5 + 5.0, 48.0)) * vectorcraft_geom::Affine::scale(4.0);
+        Arc::new(Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: format!("Dot {i}"), xf }))
+    };
+    let across: Vec<_> = (0..20).map(|i| dot(&mut d, i)).collect();
+    let frame = Arc::new(Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default_art()));
+    let mut kids = vec![frame, Arc::new(Node::group(d.alloc_id(), corner))];
+    kids.extend(across);
+    let root = Node::group(d.alloc_id(), kids);
+    d.symbols.push(crate::Symbol { dynamic: true, name: "Panel".into(), art: Arc::new(root) });
+    d.set_symbol_nine_slice("Panel", Some(crate::SymbolNineSlice::default()));
+    let xf = vectorcraft_geom::Affine::scale_non_uniform(2.0, 1.5);
+    let inst = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Panel".into(), xf });
+    let art = d.symbols[2_000].art.clone();
+    let symbols = d.symbols.len();
+    let read = || crate::symbols::SYMBOLS_READ.with(std::cell::Cell::get);
+    let reads = |f: &dyn Fn()| {
+        let before = read();
+        f();
+        read() - before
+    };
+    // Picking also tests the placed art with boxes of its own, as a click outside symbols does.
+    let n = reads(&|| assert_eq!(symbol_part_at(&d, &inst, Point::new(2.0, 2.0), HitOptions::default()).map(|p| p[0]), Some(1)));
+    assert!(n <= 2 * symbols, "picking read {n} symbols");
+    let n = reads(&|| assert!(symbol_part_outline(&d, &inst, &[2]).is_some()));
+    assert!(n <= symbols, "outlining read {n} symbols");
+    let n = reads(&|| assert!(d.place_symbol_art("Panel", &art, xf).is_some()));
+    assert!(n <= symbols, "placing read {n} symbols");
+    let n = reads(&|| assert!(d.place_symbol_art_unclipped("Panel", &art, xf).is_some()));
+    assert!(n <= symbols, "placing without clips read {n} symbols");
+}
+
 /// A clip group that lies in one 9-slice cell is moved by that cell as one piece, everything in it
 /// included, so an object in it is picked and outlined there even when placing that object through
 /// the guides on its own would pass [`crate::MAX_SYMBOL_NODES`] objects.
