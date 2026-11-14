@@ -613,6 +613,42 @@ fn a_grants_change_without_its_lock_changes_nothing() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Reading and changing the grants file wait for a lock another handle holds only for a bounded
+/// number of tries: then a read gives no grants and a change fails with the file unchanged. A lock
+/// released while it waits is taken.
+#[test]
+fn a_grants_change_waits_for_a_held_lock_a_bounded_number_of_tries() {
+    use crate::script::files::{LOCK_TRIES, WHILE_GRANTS_LOCKED, revoke_grants, stored_grants};
+    let base = folder("grants-lock-held");
+    let data = base.join("settings/Script Data");
+    let grant = json!({"script": "/s.jsx", "sha256": "0", "code": [], "path": "/p", "write": false, "folder": false});
+    let text = json!({"version": 1, "grants": [grant]}).to_string();
+    write(&base.join("settings/Script Grants.json"), text.as_bytes());
+    let held = std::fs::File::options().create(true).truncate(false).read(true).write(true).open(base.join("settings/Script Grants.lock")).unwrap();
+    held.lock().unwrap();
+    let waits = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counted = waits.clone();
+    WHILE_GRANTS_LOCKED.set(Some(Box::new(move || counted.set(counted.get() + 1))));
+    assert_eq!(stored_grants(&data), Vec::<Value>::new(), "grants are not read without the lock");
+    assert_eq!(waits.get(), LOCK_TRIES - 1);
+    waits.set(0);
+    let refused = revoke_grants(&data, None, None);
+    assert_eq!(refused.map_err(|e| e.kind()), Err(std::io::ErrorKind::TimedOut));
+    assert_eq!(waits.get(), LOCK_TRIES - 1, "it waits between tries and gives up after the last");
+    assert_eq!(std::fs::read_to_string(base.join("settings/Script Grants.json")).unwrap(), text);
+    let mut released = Some(held);
+    let counted = waits.clone();
+    waits.set(0);
+    WHILE_GRANTS_LOCKED.set(Some(Box::new(move || {
+        counted.set(counted.get() + 1);
+        drop(released.take());
+    })));
+    assert_eq!(revoke_grants(&data, None, None).unwrap(), 1, "a lock released while it waits is taken");
+    assert_eq!(waits.get(), 1);
+    WHILE_GRANTS_LOCKED.set(None);
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `rename` of a file an earlier run wrote names both its old and its new path in `written`.
 #[test]
 fn a_renamed_file_names_its_old_and_new_paths_in_written() {

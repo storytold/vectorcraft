@@ -900,10 +900,10 @@ fn read_head(real: &Path, max: usize) -> std::io::Result<Vec<u8>> {
 }
 
 /// The grants the grants file at `store` holds; none when it is missing or cannot be read. A grant
-/// that is not well formed is left out. It is read under [`lock_store`]'s lock when that can be
-/// taken, so it is read between two changes.
+/// that is not well formed is left out. It is read under [`lock_store`]'s lock, so it is read
+/// between two changes, and none are read when the lock cannot be taken.
 fn read_store(store: &Path) -> Vec<serde_json::Value> {
-    let _lock = lock_store(store).ok();
+    let Ok(_lock) = lock_store(store) else { return Vec::new() };
     load_store(store, false).unwrap_or_default()
 }
 
@@ -983,9 +983,20 @@ fn write_store(store: &Path, grants: Vec<serde_json::Value>) -> std::io::Result<
     })
 }
 
+/// How many times [`lock_store`] tries to take the grants file's lock, [`LOCK_PAUSE`] apart, before
+/// it gives up.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const LOCK_TRIES: u32 = 20;
+
+/// The wait between two tries of [`lock_store`].
+#[cfg(not(target_arch = "wasm32"))]
+const LOCK_PAUSE: std::time::Duration = std::time::Duration::from_millis(50);
+
 /// The lock file beside the grants file at `store` (`Script Grants.lock`), locked until it is
-/// dropped and waiting while another process holds it, so that processes that read and change the
-/// grants file take turns. A change is not made when the lock cannot be taken.
+/// dropped, so that processes that read and change the grants file take turns. While another
+/// process or handle holds it, the lock is tried [`LOCK_TRIES`] times, [`LOCK_PAUSE`] apart, and
+/// then the result is `Err` with [`std::io::ErrorKind::TimedOut`]. A change is not made when the
+/// lock cannot be taken.
 #[cfg(not(target_arch = "wasm32"))]
 fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
     let lock = store.with_extension("lock");
@@ -993,11 +1004,38 @@ fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
         .parent()
         .map_or(Ok(()), std::fs::create_dir_all)
         .and_then(|()| std::fs::File::options().create(true).truncate(false).read(true).write(true).open(&lock));
-    let file = opened.and_then(|f| f.lock().map(|()| f));
+    let file = opened.and_then(take_lock);
     if let Err(e) = &file {
         log::warn!("can't lock {}: {e}", lock.display());
     }
     file
+}
+
+/// `file`, locked within [`lock_store`]'s tries.
+#[cfg(not(target_arch = "wasm32"))]
+fn take_lock(file: std::fs::File) -> std::io::Result<std::fs::File> {
+    let mut tries = 1;
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(std::fs::TryLockError::Error(e)) => return Err(e),
+            Err(std::fs::TryLockError::WouldBlock) if tries >= LOCK_TRIES => {
+                return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "another process holds the lock"));
+            }
+            Err(std::fs::TryLockError::WouldBlock) => tries += 1,
+        }
+        #[cfg(test)]
+        if WHILE_GRANTS_LOCKED.with_borrow_mut(|w| w.as_mut().map(|waiting| waiting()).is_some()) {
+            continue;
+        }
+        std::thread::sleep(LOCK_PAUSE);
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: runs on this thread in place of each wait of [`lock_store`] for a lock that is held.
+    pub(crate) static WHILE_GRANTS_LOCKED: std::cell::RefCell<Option<Box<dyn FnMut()>>> = const { std::cell::RefCell::new(None) };
 }
 
 /// The browser has no folders to keep anything in.
