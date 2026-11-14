@@ -1560,6 +1560,27 @@ fn doc_json(s: &mut Server) -> Value {
 }
 
 #[test]
+fn add_text_rejects_invalid_path_effects_before_editing() {
+    let mut s = server();
+    let path = id_of(&call(&mut s, 1, "draw_path", json!({"d": "M40 400 C150 300 250 500 360 400 Z"})));
+    let before = call(&mut s, 2, "doc_inspect", json!({}));
+    for (args, message) in [
+        (json!({"text": "Type", "path": path, "pathEffect": "not-an-effect"}), "not-an-effect"),
+        (json!({"text": "Type", "path": path, "pathEffect": 42}), "must be a string"),
+        (json!({"text": "Type", "path": path, "mode": "area", "pathEffect": "skew"}), "requires type on a path"),
+        (json!({"text": "Type", "x": 10, "y": 20, "pathEffect": "skew"}), "requires type on a path"),
+    ] {
+        let reply = call(&mut s, 3, "add_text", args);
+        assert_eq!(reply["isError"], true, "{reply}");
+        assert!(text_of(&reply).contains(message), "{reply}");
+        assert_eq!(call(&mut s, 4, "doc_inspect", json!({})), before, "path, selection and history must stay intact");
+    }
+    let made = call(&mut s, 5, "add_text", json!({"text": "Type", "path": path, "pathEffect": "skew"}));
+    assert_eq!(made["isError"], false, "{made}");
+    assert!(doc_json(&mut s).to_string().contains("\"pathEffect\":\"skew\""));
+}
+
+#[test]
 fn text_effect_pathfinder_transform_graph_and_wrap_tools() {
     let mut s = server();
     // Text: point, area and on a path with an effect.
