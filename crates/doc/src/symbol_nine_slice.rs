@@ -614,6 +614,8 @@ impl NineSliceMap {
     /// `n`, whose box at the natural size is `b`, drawn in each cell it reaches: a clip group of
     /// the cell around a copy placed by the cell's map, all in a group with `n`'s id. `n` placed
     /// by `center` when it draws symbol art ([`draws_symbol_art`]), and in [`Self::place_unclipped`].
+    /// The clip groups and clip paths take the angle of the cell map that places them. The group
+    /// and each copy keep `n`'s box angle, turned by the map that places them.
     ///
     /// The drop shadows, outer glows and blurs ([`PAINTED_EFFECTS`]) at the end of `n`'s own
     /// effects, after its last other visible effect, go on that group with its opacity, blending
@@ -647,11 +649,15 @@ impl NineSliceMap {
                 area.transform(local);
                 let mut clip = Node::new(NodeId(0), NodeKind::Path { path: area, rule: FillRule::NonZero, live: None, clipping: true, guide: false });
                 clip.appearance = Appearance::default().into();
+                clip.bbox_angle = crate::orient::transformed_angle(0.0, local);
                 let copy = transformed(n, local * self.natural);
-                cells.push(Arc::new(Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(copy)], clip: true })));
+                let mut cell = Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(copy)], clip: true });
+                cell.bbox_angle = crate::orient::transformed_angle(0.0, local);
+                cells.push(Arc::new(cell));
             }
         }
         let mut out = Node::group(n.id, cells);
+        out.bbox_angle = crate::orient::transformed_angle(n.bbox_angle, center);
         out.visible = n.visible;
         out.locked = n.locked;
         out.name = n.name.clone();
