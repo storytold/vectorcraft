@@ -9019,6 +9019,7 @@ breakText	Glyphs	Glyfy
 @msg	the RTF file is too large to place as type (at most {_1} MB)	soubor RTF je příliš velký na umístění jako text (nejvýše {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG se rozvine na více než {0} vnořených obrázků SVG
 @msg	the SVG expands to more than {0} objects	SVG se rozvine na více než {0} objektů
+@msg	the SVG's styles expand to more than {0} MB	styly SVG se rozvinou na více než {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	soubor SVG je větší než {MAX_IMPORT_BYTES} bajtů
 @msg	the SVG has no drawable objects	SVG nemá žádné vykreslitelné objekty
 @msg	the SVGZ file unpacks to more than {_1} MB	soubor SVGZ se rozbalí na více než {_1} MB

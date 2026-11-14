@@ -8870,6 +8870,7 @@ breakText	Glyphs	Glify
 @msg	the RTF file is too large to place as type (at most {_1} MB)	plik RTF jest zbyt duży, aby umieścić go jako tekst (najwyżej {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG rozwija się do ponad {0} zagnieżdżonych obrazów SVG
 @msg	the SVG expands to more than {0} objects	SVG rozwija się do ponad {0} obiektów
+@msg	the SVG's styles expand to more than {0} MB	style SVG rozwijają się do ponad {0} MB
 @msg	the SVG has no drawable objects	SVG nie zawiera obiektów, które można narysować
 @msg	the SVGZ file unpacks to more than {_1} MB	plik SVGZ po rozpakowaniu ma ponad {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	dokument Word ma ponad {MAX_PAGES} stron właściwości, zbyt wiele, aby go umieścić

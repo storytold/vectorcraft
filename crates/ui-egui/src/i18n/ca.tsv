@@ -6337,6 +6337,7 @@ digits	Malayalam	Malaiàlam
 @msg	the spine has no segments	l’espina no té segments
 @msg	the stroke has no weight	el traç no té gruix
 @msg	the SVG's elements are nested more than {0} deep	els elements de l’SVG estan imbricats a més de {0} nivells de profunditat
+@msg	the SVG's styles expand to more than {0} MB	els estils de l’SVG s’expandeixen a més de {0} MB
 @msg	the target layer is locked or hidden	la capa de destinació està blocada o amagada
 @msg	the thumbnail image is malformed	la imatge de la miniatura està mal formada
 @msg	the top object must be a path, compound path or text object to use as a clipping mask	l’objecte superior ha de ser un traçat, un traçat compost o un objecte de text per fer-lo servir com a màscara de retall

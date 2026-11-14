@@ -7840,6 +7840,7 @@ axis	Y Axis	Y 軸
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF ファイルが大きすぎて、文字として配置できません (最大 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG を展開すると、入れ子の SVG 画像が {0} 個を超えます
 @msg	the SVG expands to more than {0} objects	SVG を展開すると、オブジェクトが {0} 個を超えます
+@msg	the SVG's styles expand to more than {0} MB	SVG のスタイルを展開すると {0} MB を超えます
 @msg	the SVG has no drawable objects	SVG に描画できるオブジェクトがありません
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ ファイルを展開すると {_1} MB を超えます
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文書のプロパティが {MAX_PAGES} ページを超えており、多すぎて配置できません

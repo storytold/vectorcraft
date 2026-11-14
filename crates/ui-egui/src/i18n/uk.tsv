@@ -8498,6 +8498,7 @@ breakText	Glyphs	Гліфи
 @msg	the RTF file is too large to place as type (at most {_1} MB)	файл RTF завеликий, щоб помістити його як текст (не більше {_1} МБ)
 @msg	the SVG expands to more than {0} nested SVG images	SVG розгортається у понад {0} вкладених зображень SVG
 @msg	the SVG expands to more than {0} objects	SVG розгортається у понад {0} об’єктів
+@msg	the SVG's styles expand to more than {0} MB	стилі SVG розгортаються у понад {0} МБ
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	файл SVG більший за {MAX_IMPORT_BYTES} байтів
 @msg	the SVG has no drawable objects	SVG не містить об’єктів, які можна намалювати
 @msg	the SVGZ file unpacks to more than {_1} MB	файл SVGZ розпаковується у понад {_1} МБ

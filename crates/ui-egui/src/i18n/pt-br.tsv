@@ -9082,6 +9082,7 @@ swatch	Yellow Green	Verde-amarelado
 @msg	the RTF file is too large to place as type (at most {_1} MB)	o arquivo RTF é grande demais para ser colocado como texto (no máximo {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	o SVG se expande em mais de {0} imagens SVG aninhadas
 @msg	the SVG expands to more than {0} objects	o SVG se expande em mais de {0} objetos
+@msg	the SVG's styles expand to more than {0} MB	os estilos do SVG se expandem para mais de {0} MB
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	o arquivo SVG tem mais de {MAX_IMPORT_BYTES} bytes
 @msg	the SVG has no drawable objects	o SVG não tem objetos desenháveis
 @msg	the SVGZ file unpacks to more than {_1} MB	o arquivo SVGZ é descompactado em mais de {_1} MB
