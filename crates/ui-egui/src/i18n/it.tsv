@@ -8933,3 +8933,9 @@ breakText	Glyphs	Glifi
 	Grommets	Occhielli
 	Grommet Inset	Distanza degli occhielli dal bordo
 	Diameter	Diametro
+
+# Original procedural circuit brushes.
+	Tech Circuit	Circuiti tecnologici
+	Circuit Trace	Pista del circuito
+	Bus Lines	Linee del bus
+	Terminal Nodes	Nodi terminali

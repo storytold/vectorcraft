@@ -115,7 +115,8 @@ fn the_builtin_libraries_are_original_brushes_generated_in_code() {
             "scatter-shapes",
             "game-trails",
             "energy-beams",
-            "dry-media"
+            "dry-media",
+            "tech-circuit"
         ]
     );
     assert!(libs.iter().all(|l| l["category"] == "builtIn"));
@@ -215,6 +216,87 @@ fn line_to(x: f64) -> vectorcraft_geom::BezPath {
 
 fn black_stroke() -> vectorcraft_doc::StrokeLayer {
     vectorcraft_doc::StrokeLayer::new(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), 1.0)
+}
+
+/// Original circuit art and repeat tiles survive adding, applying and saving a library.
+#[test]
+fn the_tech_circuit_library_constructs_adds_and_applies_each_brush() {
+    let mut s = session();
+    let listed = run(&mut s, "brush.libraries", json!({}));
+    let entry = listed["libraries"].as_array().unwrap().iter().find(|l| l["id"] == "tech-circuit").unwrap();
+    assert_eq!((entry["name"].as_str(), entry["category"].as_str(), entry["count"].as_u64()), (Some("Tech Circuit"), Some("builtIn"), Some(3)));
+    let (_, lib) = cmd::brushlib::library(&s, "Tech Circuit").unwrap();
+    let expected = [("Circuit Trace", "art"), ("Bus Lines", "pattern"), ("Terminal Nodes", "pattern")];
+    assert_eq!(lib.brushes.iter().map(|b| (b.name.as_str(), b.kind.type_id())).collect::<Vec<_>>(), expected);
+    let path = run(&mut s, "shape.line", json!({"x1": 10, "y1": 20, "x2": 210, "y2": 20}))["id"].as_u64().unwrap();
+    let curve = {
+        let mut p = line_to(40.0);
+        p.curve_to((60.0, -40.0), (140.0, 40.0), (200.0, 0.0));
+        p
+    };
+    let corner = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 0.0, 80.0, 60.0)).to_bezpath();
+    for b in &lib.brushes {
+        let mut sanitized = b.clone();
+        sanitized.sanitize();
+        assert_eq!(&sanitized, b, "{} changes on load", b.name);
+        for tile in b.art() {
+            let pts = anchors(&[tile]);
+            assert!(!pts.is_empty() && pts.len() <= 100, "{}", b.name);
+            assert!(pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()));
+            tile.walk(&mut |n| {
+                if let Some(p) = n.path_data() {
+                    assert!(p.subpaths.iter().all(|s| s.closed));
+                }
+            });
+        }
+        if let BrushKind::Pattern(p) = &b.kind {
+            assert_eq!(p.colorization, vectorcraft_brush::Colorization::Tints);
+            assert_eq!(p.spacing, 0.0, "conductors join adjacent tiles");
+            if b.name == "Bus Lines" {
+                let lanes = p.side.children().unwrap();
+                assert_eq!(lanes.len(), 3);
+                let boxes: Vec<_> = lanes.iter().map(|n| n.path_data().unwrap().bounds().unwrap()).collect();
+                for r in &boxes {
+                    assert_eq!((r.x0, r.x1), (0.0, 24.0));
+                }
+                assert!(boxes.windows(2).all(|r| r[0].y1 < r[1].y0), "lanes stay separate");
+            }
+            if b.name == "Terminal Nodes" {
+                let mut rings = 0;
+                p.side.walk(&mut |n| {
+                    if matches!(n.kind, NodeKind::Compound { rule: vectorcraft_geom::FillRule::EvenOdd, .. }) {
+                        rings += 1;
+                    }
+                });
+                assert_eq!(rings, 1, "a hollow circular test point per tile");
+            }
+        }
+        for p in [line_to(200.0), line_to(2.0), curve.clone(), corner.clone()] {
+            let pieces = vectorcraft_brush::stroke_pieces(&lib.doc, b, &p, &black_stroke());
+            let pts = anchors(&pieces.iter().collect::<Vec<_>>());
+            assert!(!pts.is_empty() && pts.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "{}", b.name);
+        }
+        let before = undo_len(&s);
+        let r = run(&mut s, "brush.addFromLibrary", json!({"library": "tech-circuit", "name": b.name, "apply": true, "ids": [path]}));
+        assert_eq!(strs(&r["added"]), [b.name.as_str()]);
+        assert_eq!(r["applied"], json!([path]));
+        assert_eq!(undo_len(&s), before + 1);
+        assert_eq!(brush(&s, &b.name), *b);
+        assert_eq!(doc(&s).node(NodeId(path)).unwrap().appearance.stroke().unwrap().brush.as_deref(), Some(b.name.as_str()));
+        run(&mut s, "edit.undo", json!({}));
+        assert!(vectorcraft_brush::find(doc(&s), &b.name).is_none());
+        run(&mut s, "edit.redo", json!({}));
+        let before = undo_len(&s);
+        let again = run(&mut s, "brush.addFromLibrary", json!({"library": "tech-circuit", "name": b.name}));
+        assert!(strs(&again["added"]).is_empty());
+        assert_eq!(strs(&again["existing"]), [b.name.as_str()]);
+        assert_eq!(undo_len(&s), before);
+    }
+    let names: Vec<&str> = expected.iter().map(|(name, _)| *name).collect();
+    let saved = run(&mut s, "brush.saveLibrary", json!({"names": names}));
+    let bytes = vectorcraft_format::base64_decode(saved["dataBase64"].as_str().unwrap()).unwrap();
+    let reopened = vectorcraft_format::load(&bytes).unwrap();
+    assert_eq!(vectorcraft_brush::library(&reopened), lib.brushes);
 }
 
 /// Ink and Wash: a tapered ink art brush, a brush pen whose size follows the pen pressure and two

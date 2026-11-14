@@ -4680,3 +4680,9 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	Repeat Objects	પુનરાવર્તિત ઑબ્જેક્ટ્સ
 @msg	`{path}` must be one of {_1}, not {got}	`{path}` એ {_1}માંથી એક હોવું જોઈએ, {got} નહીં
 	Path Length	પાથની લંબાઈ
+
+# Original procedural circuit brushes.
+	Tech Circuit	ટેક સર્કિટ
+	Circuit Trace	સર્કિટ પથ
+	Bus Lines	બસ રેખાઓ
+	Terminal Nodes	ટર્મિનલ નોડ્સ

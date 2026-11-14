@@ -7704,3 +7704,9 @@ shape	Open	Открытый
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для JPEG (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для Targa (не более 65535 пикселей по стороне): уменьшите разрешение
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение
+
+# Original procedural circuit brushes.
+	Tech Circuit	Технические схемы
+	Circuit Trace	Дорожка схемы
+	Bus Lines	Линии шины
+	Terminal Nodes	Контактные узлы

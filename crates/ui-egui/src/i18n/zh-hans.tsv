@@ -9268,3 +9268,9 @@ breakText	Glyphs	字形
 @msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素对 JPEG 而言过大 (每边最多 65535 像素)：请降低分辨率
 @msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素对 Targa 而言过大 (每边最多 65535 像素)：请降低分辨率
 @msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率
+
+# Original procedural circuit brushes.
+	Tech Circuit	电子电路
+	Circuit Trace	电路走线
+	Bus Lines	总线
+	Terminal Nodes	端子节点

@@ -7534,3 +7534,9 @@ breakText	Glyphs	Merkit
 	Grommets	Purjerenkaat
 	Grommet Inset	Purjerenkaiden etäisyys reunasta
 	Diameter	Halkaisija
+
+# Original procedural circuit brushes.
+	Tech Circuit	Tekniset virtapiirit
+	Circuit Trace	Piirijohdin
+	Bus Lines	Väylälinjat
+	Terminal Nodes	Liitäntäpisteet

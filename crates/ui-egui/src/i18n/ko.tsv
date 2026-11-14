@@ -8904,3 +8904,9 @@ breakText	Glyphs	글리프
 @msg	{what} would print more than {MAX_COPIES_PER_SHEET} copies on a sheet: scale it up	{what}은(는) 한 장에 {MAX_COPIES_PER_SHEET}개보다 많이 인쇄됩니다: 크기를 키우세요
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}은(는) 타일 {MAX_TILES}개보다 많이 나뉘어 인쇄됩니다: 크기를 줄이세요
 @msg	{what} {i} out of range	{what} {i}이(가) 범위를 벗어났습니다
+
+# Original procedural circuit brushes.
+	Tech Circuit	전자 회로
+	Circuit Trace	회로 배선
+	Bus Lines	버스 배선
+	Terminal Nodes	단자 노드

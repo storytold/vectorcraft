@@ -8900,3 +8900,9 @@ breakText	Glyphs	Glyphen
 	Grommets	Ösen
 	Grommet Inset	Randabstand der Ösen
 	Diameter	Durchmesser
+
+# Original procedural circuit brushes.
+	Tech Circuit	Technische Schaltungen
+	Circuit Trace	Leiterbahn
+	Bus Lines	Busleitungen
+	Terminal Nodes	Anschlussknoten

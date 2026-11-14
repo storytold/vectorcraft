@@ -7483,3 +7483,9 @@ breakText	Glyphs	Glifák
 	Grommets	Ringlik
 	Grommet Inset	Ringlik távolsága a széltől
 	Diameter	Átmérő
+
+# Original procedural circuit brushes.
+	Tech Circuit	Műszaki áramkörök
+	Circuit Trace	Vezetősáv
+	Bus Lines	Buszvonalak
+	Terminal Nodes	Csatlakozási pontok

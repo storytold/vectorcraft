@@ -9166,3 +9166,9 @@ breakText	Glyphs	Glify
 @msg	{what} can't be intertwined	{what} nie można przeplatać
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} nie mieści się na papierze wraz ze spadem i znacznikami
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}: wydruk zająłby ponad {MAX_TILES} kafelków: zmniejsz skalę
+
+# Original procedural circuit brushes.
+	Tech Circuit	Obwody techniczne
+	Circuit Trace	Ścieżka obwodu
+	Bus Lines	Linie magistrali
+	Terminal Nodes	Węzły końcowe

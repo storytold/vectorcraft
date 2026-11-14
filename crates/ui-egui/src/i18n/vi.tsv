@@ -7110,3 +7110,9 @@ breakText	Glyphs	Glyph
 	Grommets	Khoen
 	Grommet Inset	Khoảng cách từ mép đến khoen
 	Diameter	Đường kính
+
+# Original procedural circuit brushes.
+	Tech Circuit	Mạch công nghệ
+	Circuit Trace	Đường mạch
+	Bus Lines	Đường bus
+	Terminal Nodes	Nút đầu cuối

@@ -7452,3 +7452,9 @@ breakText	Glyphs	Γλύφοι
 	Grommets	Τρουκς
 	Grommet Inset	Απόσταση τρουκς από την άκρη
 	Diameter	Διάμετρος
+
+# Original procedural circuit brushes.
+	Tech Circuit	Τεχνολογικά κυκλώματα
+	Circuit Trace	Διαδρομή κυκλώματος
+	Bus Lines	Γραμμές διαύλου
+	Terminal Nodes	Τερματικοί κόμβοι

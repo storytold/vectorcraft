@@ -8961,3 +8961,9 @@ breakText	Glyphs	字符
 @msg	{what} can't be intertwined	{what} 無法交織
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 連同出血和標記無法容納於紙張
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 會列印在超過 {MAX_TILES} 個拼貼上：請縮小
+
+# Original procedural circuit brushes.
+	Tech Circuit	電子電路
+	Circuit Trace	電路走線
+	Bus Lines	匯流排
+	Terminal Nodes	端子節點
