@@ -665,6 +665,8 @@ font-technology	Variable	Μεταβλητές
 	Crop Image	Περικοπή εικόνας
 	Image Tools	Εργαλεία εικόνας
 	Remove Background…	Αφαίρεση φόντου…
+	Draw (Pencil)	Σχεδίαση (μολύβι)
+	Place Image	Τοποθέτηση εικόνας
 	Remove Background	Αφαίρεση φόντου
 	Background	Φόντο
 	Edge Color	Χρώμα άκρης
@@ -2562,6 +2564,7 @@ axis	Both	Και τα δύο
 @msg	`select` must be true or false	Το `select` πρέπει να είναι true ή false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	Τα `minAnchors` και `maxAnchors` πρέπει να είναι ακέραιοι αριθμοί
 @msg	`{key}` must be a number not below 0	Το `{key}` πρέπει να είναι αριθμός όχι μικρότερος από 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	Το `{key}` πρέπει να είναι τέσσερις αριθμοί όχι μικρότεροι από 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	Το `{key}` πρέπει να είναι [x, y, width, height]: τέσσερις πεπερασμένοι αριθμοί, με πλάτος και ύψος όχι αρνητικά
 @msg	`{min_key}` is greater than `{max_key}`	Το `{min_key}` είναι μεγαλύτερο από το `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	δώστε τουλάχιστον ένα από τα `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`

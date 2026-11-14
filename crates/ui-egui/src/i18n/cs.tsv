@@ -207,6 +207,8 @@
 	Crop Image	Oříznout obraz
 	Image Tools	Nástroje obrazu
 	Remove Background…	Odstranit pozadí…
+	Draw (Pencil)	Kreslit (tužka)
+	Place Image	Umístit obraz
 	Remove Background	Odstranit pozadí
 	Background	Pozadí
 	Edge Color	Barva okraje
@@ -4802,6 +4804,7 @@ imageTrace	Outline	Obrys
 @msg	`select` must be true or false	`select` musí být true nebo false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` a `maxAnchors` musí být celá čísla
 @msg	`{key}` must be a number not below 0	`{key}` musí být číslo nejméně 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` musí být čtyři čísla nejméně 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` musí být [x, y, width, height]: čtyři konečná čísla, šířka a výška nesmí být záporné
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` je větší než `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	zadejte alespoň jeden z parametrů `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`

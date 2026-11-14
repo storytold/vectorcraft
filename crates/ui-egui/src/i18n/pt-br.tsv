@@ -631,6 +631,8 @@ antiAlias	Sharp	Nítido
 	Crop Image	Recortar Imagem
 	Image Tools	Ferramentas de imagem
 	Remove Background…	Remover Fundo…
+	Draw (Pencil)	Desenhar (Lápis)
+	Place Image	Colocar Imagem
 	Remove Background	Remover Fundo
 	Background	Fundo
 	Edge Color	Cor da Borda
@@ -3956,6 +3958,7 @@ axis	Both	Ambos
 @msg	`select` must be true or false	`select` deve ser true ou false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` e `maxAnchors` devem ser números inteiros
 @msg	`{key}` must be a number not below 0	`{key}` deve ser um número não inferior a 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` deve ser quatro números não inferiores a 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` deve ser [x, y, width, height]: quatro números finitos, com largura e altura não negativas
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` é maior que `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	informe pelo menos um de `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`

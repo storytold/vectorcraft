@@ -213,10 +213,12 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   weight, where the object's brush settings are the brush's own and its angle is on the page (#372, from a
   user's file of 6D Art Pen strokes: all 455 of its brushed styles), and a Calligraphic brush's Tilt, Bearing and
   Rotation (codes 4, 5 and 6) come in as those channels instead of Random. Others keep their drawn look.
-  Paths with an Art brush open the same way when the brush stretches art of solid-filled paths along the path,
-  unflipped, at 100% in Tints, and the path has none of its own settings, variable width, effects or a swatch
-  stroke. Other Art brushes (None or another colorization, another width, Proportional, between guides, flipped,
-  art with strokes, gradients or patterns) and type with an Art brush keep the drawn look.
+  Paths with an Art brush open the same way when the brush bends art of solid-filled paths along the path, and
+  the path has none of its own settings, variable width, effects or a swatch stroke in Tints. The brush may be
+  in None or Tints, at a fixed width, stretched to the path or between guides, and flipped along or across.
+  Other Art brushes (Tints and Shades or Hue Shift, a width that follows the pen, Scale Proportionately, guides
+  that leave no art between them, a `Spacing`, `Adjustment` or `FoldAdjustment` other than 0, 1 and 1, art with
+  strokes, gradients or patterns) and type with an Art brush keep the drawn look.
 
 - **Done (2026-11-12):** Explicitly requested editing data retains a single artboard larger than a capped 14,400 pt PDF page (#6865); the default import and other size mismatches remain unchanged. Synthetic importer regression; scores unchanged.
 - **Missing:** faithful layer and group structure from the editing data in real files (#951: 109 layers instead
