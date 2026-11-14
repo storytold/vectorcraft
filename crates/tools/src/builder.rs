@@ -143,6 +143,38 @@ fn step_swatch(list: &[&Swatch], fill: &Paint, last: Option<usize>, forward: boo
     }
 }
 
+/// Is no Shift, Alt, Cmd or Ctrl held? The arrows step swatches only then.
+fn plain(mods: Mods) -> bool {
+    !(mods.shift || mods.alt || mods.cmd || mods.ctrl)
+}
+
+/// The color swatch the Right (`forward`) or Left arrow key picks for the current `paint`, with its
+/// index in [`color_swatches`] (see [`step_swatch`]); None when the document has no color swatch.
+fn pick_swatch(doc: &Document, paint: &Paint, last: Option<usize>, forward: bool) -> Option<(usize, String)> {
+    let list = color_swatches(doc);
+    step_swatch(&list, paint, last, forward).and_then(|i| Some((i, list.get(i)?.name.clone())))
+}
+
+/// The cursor swatch preview for the current `paint` with the pointer at `at`: the swatch before
+/// it, `paint` itself (ringed, while it is a solid color) and the swatch after it, side by side above
+/// the pointer. With `matched_only`, the swatches beside it show only while `paint` is one of the
+/// color swatches; otherwise the last and the first swatch stand beside a color that is none of them.
+fn swatch_chips(cx: &ToolContext, at: Point, paint: &Paint, last: Option<usize>, matched_only: bool) -> Vec<Overlay> {
+    let list = color_swatches(cx.doc);
+    let rgba = |p: &Paint| match p {
+        Paint::Solid { color, .. } => Some(color.to_rgba8(1.0)),
+        _ => None,
+    };
+    let beside = !matched_only || swatch_index(&list, paint, last).is_some();
+    let chip = |forward| beside.then(|| step_swatch(&list, paint, last, forward)).flatten().and_then(|i| rgba(&list.get(i)?.paint));
+    let (before, after) = (chip(false), chip(true));
+    let y = at.y - cx.tol(22.0);
+    [(before, -16.0, false), (rgba(paint), 0.0, true), (after, 16.0, false)]
+        .into_iter()
+        .filter_map(|(color, dx, selected)| Some(Overlay::Swatch { p: Point::new(at.x + cx.tol(dx), y), color: color?, selected }))
+        .collect()
+}
+
 /// Shape Builder tool: drag across regions to merge them. Holding Alt (Option) switches to erase
 /// mode while it is held: the pointer shows a minus, what a click or drag would delete highlights in
 /// red, and the gesture deletes the regions it touches, the pieces of open paths and the edges
@@ -425,20 +457,7 @@ impl ShapeBuilderTool {
     /// The cursor swatch preview: the swatch before the current fill, the current fill (ringed)
     /// and the swatch after it, side by side above the pointer.
     fn swatch_chips(&self, cx: &ToolContext) -> Vec<Overlay> {
-        let Some(at) = self.at else { return vec![] };
-        let list = color_swatches(cx.doc);
-        let fill = &cx.paint.fill;
-        let rgba = |p: &Paint| match p {
-            Paint::Solid { color, .. } => Some(color.to_rgba8(1.0)),
-            _ => None,
-        };
-        let chip = |forward| step_swatch(&list, fill, self.picked, forward).and_then(|i| rgba(&list.get(i)?.paint));
-        let (before, after) = (chip(false), chip(true));
-        let y = at.y - cx.tol(22.0);
-        [(before, -16.0, false), (rgba(fill), 0.0, true), (after, 16.0, false)]
-            .into_iter()
-            .filter_map(|(color, dx, selected)| Some(Overlay::Swatch { p: Point::new(at.x + cx.tol(dx), y), color: color?, selected }))
-            .collect()
+        self.at.map(|at| swatch_chips(cx, at, &cx.paint.fill, self.picked, false)).unwrap_or_default()
     }
 }
 
@@ -676,6 +695,14 @@ impl Tool for ShapeBuilderTool {
         self.finish_edit(cx)
     }
 
+    /// The pointer hovers nothing for the tool: its highlight, the stroke a click would split and
+    /// the cursor swatch preview go, and a map that arrives afterwards highlights nothing.
+    fn hover_ended(&mut self, _cx: &ToolContext) {
+        self.hover = None;
+        self.stroke = None;
+        self.at = None;
+    }
+
     fn poll(&mut self, cx: &ToolContext, wait: bool) -> Vec<Action> {
         let mut acts = self.poll_merge(cx, wait);
         if !acts.is_empty() || self.dragging {
@@ -712,9 +739,15 @@ impl Tool for ShapeBuilderTool {
         (self.opts.swatches && !self.dragging && matches!(key, ToolKey::Left | ToolKey::Right)) || (self.dragging && key == ToolKey::Escape)
     }
 
-    fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+    /// The arrows pick swatches only without modifiers; Shift, Alt and Cmd/Ctrl arrows keep their
+    /// shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, mods: Mods) -> bool {
+        self.claims_key(cx, key) && (key == ToolKey::Escape || plain(mods))
+    }
+
+    fn key(&mut self, cx: &ToolContext, key: ToolKey, mods: Mods) -> Vec<Action> {
         // While a merge is being computed, the arrows leave the current fill it takes as it was.
-        if !self.claims_key(cx, key) || self.editing() {
+        if !self.claims_key_with(cx, key, mods) || self.editing() {
             return vec![];
         }
         if key == ToolKey::Escape {
@@ -726,13 +759,12 @@ impl Tool for ShapeBuilderTool {
             (self.marquee, self.hover, self.far) = (None, None, false);
             return vec![];
         }
-        let list = color_swatches(cx.doc);
-        let Some((i, s)) = step_swatch(&list, &cx.paint.fill, self.picked, key == ToolKey::Right).and_then(|i| Some((i, list.get(i)?))) else {
+        let Some((i, name)) = pick_swatch(cx.doc, &cx.paint.fill, self.picked, key == ToolKey::Right) else {
             return vec![];
         };
         self.picked = Some(i);
         // The current fill only (no `ids`): the selected art keeps its own.
-        vec![Action::Exec("paint.setFill".into(), json!({ "swatch": s.name, "ids": [] }))]
+        vec![Action::Exec("paint.setFill".into(), json!({ "swatch": name, "ids": [] }))]
     }
 
     fn options(&self) -> Value {

@@ -1170,6 +1170,12 @@ impl Session {
         self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key(cx, key))
     }
 
+    /// Does the active tool take `key`, pressed with `mods` held, ahead of the shortcuts bound to it
+    /// (see `Tool::claims_key_with`)?
+    pub fn tool_claims_key_with(&mut self, key: ToolKey, mods: Mods, view: ViewInfo) -> bool {
+        self.plane_key(key).is_some() || self.with_tool_cx(view, |t, cx| t.claims_key_with(cx, key, mods))
+    }
+
     /// Has the active tool started something that Escape ends while no button is pressed (see
     /// `Tool::ends_on_escape`)?
     pub fn tool_ends_on_escape(&mut self, view: ViewInfo) -> bool {

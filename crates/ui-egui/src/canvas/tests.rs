@@ -680,9 +680,17 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
         frame(app, &ctx, events);
         app.canvas.hover_cursor.map(|(_, _, cursor)| cursor)
     };
+    // The cursor swatch preview's chips go and come back with Alt too.
+    let chips = |app: &mut VectorcraftApp| {
+        let view = app.view_info();
+        app.session.overlays(view).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Swatch { .. })).count()
+    };
     assert_eq!(shown(&mut app, vec![Event::PointerMoved(at)]), Some(Cursor::LivePaintBucket));
+    assert!(chips(&mut app) > 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::ALT)]), Some(Cursor::Eyedropper));
+    assert_eq!(chips(&mut app), 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE)]), Some(Cursor::LivePaintBucket));
+    assert!(chips(&mut app) > 0);
 }
 
 /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the
@@ -10356,7 +10364,7 @@ fn task_bar_labels(app: &mut VectorcraftApp, ctx: &egui::Context) -> Vec<(String
 /// With the Artboard tool, the Contextual Task Bar sits under the selected artboards and offers
 /// Resize, Duplicate, Rearrange All (with two or more artboards) and Export instead of the
 /// selected objects' actions. With the Selection tool it offers the objects' actions again, and
-/// with nothing selected it doesn't show.
+/// with nothing in the document the blank canvas actions.
 #[test]
 fn the_task_bar_offers_the_artboard_tools_actions() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -10364,7 +10372,7 @@ fn the_task_bar_offers_the_artboard_tools_actions() {
     app.select_tool("selection");
     let ctx = egui::Context::default();
     let names = |app: &mut VectorcraftApp| task_bar_labels(app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
-    assert!(names(&mut app).is_empty() && task_bar_rect(&ctx).is_none(), "nothing selected: no bar");
+    assert_eq!(names(&mut app), ["Draw (Pencil)", "Place Image"], "a blank canvas");
 
     app.select_tool("artboard");
     crate::panels::artboards::select(&mut app, 1);
