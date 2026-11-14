@@ -65,8 +65,8 @@ pub(super) const SPEC: DialogSpec = DialogSpec {
 /// grid options lists one, and the radial and mirror pages do not. Type on a Path Options does
 /// too (#5360), as public tutorials of the dialog show, and Type Tools › Release Type on a Path
 /// works the same way (#5532), and so do Image Tools › Remove Background and Color Mask and
-/// Cutting Tools › Weed Box and Lines and Banner Hems and Grommets. (Cancel rolls a preview back
-/// whichever dialog started it.)
+/// Cutting Tools › Weed Box and Lines, Banner Hems and Grommets and Nest Shapes. (Cancel rolls a
+/// preview back whichever dialog started it.)
 fn previews(d: &Dialog) -> bool {
     match d.str("__command").as_str() {
         "object.repeat.options" => d.fields.contains_key("gridType"),
@@ -75,7 +75,8 @@ fn previews(d: &Dialog) -> bool {
         | crate::addons::image::REMOVE_BACKGROUND
         | crate::addons::image::COLOR_MASK
         | crate::addons::cutting::WEED
-        | crate::addons::cutting::BANNER => true,
+        | crate::addons::cutting::BANNER
+        | crate::addons::cutting::NEST => true,
         _ => false,
     }
 }
@@ -123,6 +124,7 @@ fn lengths(command: &str) -> &'static [&'static str] {
         "perspective.grid.set" => &["cell", "distance"],
         crate::addons::cutting::WEED => &["margin", "spacing", "gap", "weight"],
         crate::addons::cutting::BANNER => &["hem", "spacing", "grommetInset", "diameter", "weight"],
+        crate::addons::cutting::NEST => &["width", "height", "margin", "spacing"],
         "object.repeat.options" => &["radius", "hSpacing", "vSpacing"],
         "text.areaOptions" => &["width", "height", "gutter", "rowGutter", "inset", "firstBaselineMin", "lineGap"],
         "type.pathOptions" => &["spacing"],
@@ -150,6 +152,7 @@ fn order(command: &str) -> &'static [&'static str] {
         crate::addons::cutting::BANNER => {
             &["hem", "top", "right", "bottom", "left", "grommets", "spacing", "grommetInset", "diameter", "weight", "swatch"]
         }
+        crate::addons::cutting::NEST => &["roll", "width", "height", "margin", "spacing", "rotate", "usePreviewBounds"],
         // The public Trap options' order.
         "object.pathfinder.trap" => &["thickness", "heightWidth", "tintReduction", "trapsWithProcessColor", "reverseTraps"],
         "addon.color.printFixes" => &["inkLimit", "excludePureBlack", "removeWhiteOverprint", "overprintBlack", "textOnly", "fill", "stroke"],
@@ -517,7 +520,7 @@ mod tests {
     }
 
     /// Text Wrap Options › Offset is a distance, and its range is the one `object.textWrap.options`
-    /// keeps an Offset to.
+    /// accepts: the command takes the range's ends and refuses an Offset outside them.
     #[test]
     fn text_wrap_offset_is_a_distance_within_the_commands_range() {
         assert!(lengths("object.textWrap.options").contains(&"offset"));
@@ -531,8 +534,11 @@ mod tests {
         s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
         s.execute("select.all", &json!({})).unwrap();
         s.execute("object.textWrap.make", &json!({})).unwrap();
-        for (sent, end) in [(5000.0, *range.end()), (-5000.0, *range.start())] {
-            assert_eq!(s.execute("object.textWrap.options", &json!({ "offset": sent })).unwrap()["offset"], json!(end));
+        for end in [*range.end(), *range.start()] {
+            assert_eq!(s.execute("object.textWrap.options", &json!({ "offset": end })).unwrap()["offset"], json!(end));
+        }
+        for sent in [5000.0, -5000.0] {
+            assert!(s.execute("object.textWrap.options", &json!({ "offset": sent })).is_err(), "{sent}");
         }
     }
 

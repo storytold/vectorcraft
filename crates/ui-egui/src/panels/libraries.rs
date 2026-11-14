@@ -30,6 +30,7 @@ use std::collections::HashMap;
 use egui::{Rect, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
+use vectorcraft_doc::resample::{Resample, fitted};
 use vectorcraft_engine::cmd::library::{ItemKind, LIBRARY_EXT, LIBRARY_EXTS, Library, LibraryGraphic};
 
 use crate::theme::Tokens;
@@ -831,8 +832,7 @@ fn thumbnail(ctx: &egui::Context, library: &str, item: &str, png: &str, px: u32)
     }
     let tex =
         vectorcraft_format::base64_decode(png).and_then(|png| image::load_from_memory_with_format(&png, image::ImageFormat::Png).ok()).map(|img| {
-            let img = if img.width().max(img.height()) > px { img.resize(px, px, image::imageops::FilterType::Triangle) } else { img };
-            let rgba = img.to_rgba8();
+            let rgba = shrunk_thumbnail(img, px);
             let image = egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw());
             ctx.load_texture(format!("library-{library}-{item}-{px}"), image, egui::TextureOptions::LINEAR)
         });
@@ -844,6 +844,13 @@ fn thumbnail(ctx: &egui::Context, library: &str, item: &str, png: &str, px: u32)
         c.insert(key, tex.clone());
     });
     tex
+}
+
+/// Thumbnail `img` shrunk smoothly to at most `px` pixels a side, its colors weighted by its alpha
+/// so that clear pixels don't darken the edges of the art, as RGBA.
+fn shrunk_thumbnail(img: image::DynamicImage, px: u32) -> image::RgbaImage {
+    let img = if img.width().max(img.height()) > px { fitted(img, px, px, Resample::Filter(image::imageops::FilterType::Triangle)) } else { img };
+    img.into_rgba8()
 }
 
 /// Graphic `item` of `library`'s thumbnail in `r` (the chip a dragged graphic shows at the pointer).
