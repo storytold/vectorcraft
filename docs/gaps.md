@@ -34,6 +34,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-14 | minor | G5: Weather Icons joins Basic Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons as a sixth built-in symbol library (Sun, Moon, Cloud, Rain, Thunder, Snow; original procedural vector symbols generated in code, no default 9-slice); estimate decremented (5–15 → 4–14 h). |
 | 2026-11-14 | minor | G12: Layers panel row context menu (Options…, Duplicate, Delete, Lock Others/Show All/Hide Others/Unlock All, Locate Object, Collect for Export) with selection handling and undo tracking. Scores and estimates unchanged. |
 | 2026-11-13 | minor | PDF import: preserve Type 3 font text runs as named groups `<g>`, or as live text in `TextAs::Text` mode if `/ToUnicode` exists on non-colour fonts (`TextAs::Outlines` produces grouped outlines) (#6740); scores and estimates unchanged. |
 | 2026-11-08 | minor | #3380, deletion only: preserve gradient placement and exact surviving geometry; consume owned subpaths with a shared original-node snapshot; consolidate status/evidence and document command/helper contracts. Compound behavior and the existing M2 status entry are retained. Endpoint highlighting remains open; scores and estimates unchanged. |
@@ -93,7 +94,7 @@ stage ([ROADMAP.md](../ROADMAP.md)).
 | 8 | [G2 Photoshop-style raster effects and the Effect Gallery](#g2-photoshop-style-raster-effects-and-the-effect-gallery) | 0 | no | [effects-parity.md](effects-parity.md) |
 | 9 | [G13 Illustrator 2026 (30.x) additions](#g13-illustrator-2026-30x-additions) | 13–23 | no | [target-app-parity.md](target-app-parity.md) |
 | 10 | [G14 Pen hardware beyond Windows pressure](#g14-pen-hardware-beyond-windows-pressure) | 4–10 | Wayland pressure | [hardware-parity.md](hardware-parity.md) |
-| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 5–15 | no | [target-app-parity.md](target-app-parity.md) |
+| 11 | [G5 Brushes, symbols and libraries](#g5-brushes-symbols-and-libraries) | 4–14 | no | [target-app-parity.md](target-app-parity.md) |
 | 12 | [G3 3D and Materials](#g3-3d-and-materials) | 25–45 | no | [effects-parity.md](effects-parity.md) |
 | 13 | [G7 Views and windows](#g7-views-and-windows) | 15–25 | no | [ui-parity.md](ui-parity.md) |
 | 14 | [G6 Automation and scripting](#g6-automation-and-scripting) | 4–8 | no | [target-app-parity.md](target-app-parity.md) |
@@ -636,10 +637,10 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   symbol static drops them; stored in the native format.
   Color eyedropper for scatter, art and pattern brushes (Hue Shift colorization; samples canvas art);
   symbol libraries ([public source](https://helpx.adobe.com/illustrator/desktop/manage-objects/traces-mockups-symbols/create-or-import-symbol-libraries.html)): Window › Symbol Libraries and the Symbols panel's Symbol
-  Libraries Menu open each library in a library panel of its own (five original libraries generated in code,
+  Libraries Menu open each library in a library panel of its own (six original libraries generated in code,
   Basic Shapes, UI Frames with default 9-slice guides on Panel, Button and Bar, Map Markers with Pin,
-  Flag, Crosshair and Checkpoint, Inventory Icons with Sword, Shield, Potion, Key and Gem, and Skill Icons with
-  Attack, Defend, Heal, Buff and Ult; User Defined; Other
+  Flag, Crosshair and Checkpoint, Inventory Icons with Sword, Shield, Potion, Key and Gem, Skill Icons with
+  Attack, Defend, Heal, Buff and Ult, and Weather Icons with Sun, Moon, Cloud, Rain, Thunder and Snow; User Defined; Other
   Library… reads the symbols of any document VectorCraft opens); a click
   adds a symbol to the document's Symbols with its Symbol Options and the resources it uses, as one undo
   step, and dragging one onto the canvas also places it; Save Symbols / Save Symbol Library writes the
@@ -671,9 +672,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
   painted with the texture effects; User Defined; Other Library…; `graphicStyle.libraries`,
   `graphicStyle.addFromLibrary`).
 - **Missing:** more built-in brush libraries beyond the eight shipped (and further graphic-style libraries beyond the ten shipped, and further symbol libraries beyond Basic
-  Shapes, UI Frames, Map Markers, Inventory Icons and Skill Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
+  Shapes, UI Frames, Map Markers, Inventory Icons, Skill Icons and Weather Icons; original, generated in code, never Adobe's); dynamic symbols' `.ai` read and write;
   Global Edit of rotated copies as matches.
-- **Estimate:** 5–15 h.
+- **Estimate:** 4–14 h.
 
 ## G3 3D and Materials
 
