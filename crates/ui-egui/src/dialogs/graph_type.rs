@@ -412,12 +412,14 @@ fn settle(d: &mut Dialog) {
             continue;
         }
         let ((lo, hi), count) = (bounds(d, axis), divisions(d, axis));
+        // A value that is not a number stays, and `graph.setType` refuses it.
+        let missing = |d: &Dialog, key: &str| d.fields.get(key).is_none_or(Value::is_null);
         for (key, value) in [(axis.min, json!(lo)), (axis.max, json!(hi))] {
-            if number(d, key).is_none() {
+            if missing(d, key) {
                 d.fields.insert(key.into(), value);
             }
         }
-        if number(d, axis.ticks).is_none_or(|n| n < 1.0) {
+        if missing(d, axis.ticks) || number(d, axis.ticks).is_some_and(|n| n < 1.0) {
             d.fields.insert(axis.ticks.into(), json!(count));
         }
     }
@@ -1148,6 +1150,21 @@ mod tests {
         assert_eq!(problem(app.ui.dialog.as_ref().unwrap()), None);
         set(&mut app, RIGHT_SERIES, json!([1]));
         assert!(problem(app.ui.dialog.as_ref().unwrap()).is_some());
+        // A value that is not a number is not replaced by a calculated one: the command refuses it.
+        open(&mut app).unwrap();
+        set(&mut app, "axisMax", json!("ten"));
+        settle(app.ui.dialog.as_mut().unwrap());
+        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["axisMax"], "ten");
+        let before = steps(&app);
+        assert!(crate::dialogs::confirm(&mut app).is_err());
+        assert_eq!((steps(&app), query(&mut app)["axisMax"].as_f64()), (before, Some(20.0)));
+        open(&mut app).unwrap();
+        for (key, value) in [("rightOverrideValues", json!(true)), ("rightAxisMin", json!(5)), ("rightAxisMax", json!(1))] {
+            set(&mut app, key, value);
+        }
+        set(&mut app, "valueAxis", json!("both"));
+        set(&mut app, "separateScales", json!(true));
+        set(&mut app, RIGHT_SERIES, json!([1]));
         // A pie graph has no value axis to refuse.
         set(&mut app, "type", json!("pie"));
         assert_eq!(problem(app.ui.dialog.as_ref().unwrap()), None);

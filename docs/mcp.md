@@ -10144,8 +10144,10 @@ the whole graph, as the command applies them; `type` or `valueAxis` is `null` wh
 OK then leaves each series as it is. OK runs `graph.setType` with the fields: `legend` for every type but pie,
 and the three pie options for a pie graph. When the selection changed while the dialog was open, it also sends `id`, and
 `seriesIndexes` while series are picked and a `type` or `valueAxis` goes to them, so it changes the graph and the series
-the dialog opened on. With Separate Scales, a value axis side that no series is on draws the other side's scale, and
-its Override Calculated Values is dimmed. With nothing changed it closes without a step of history. An overridden value
+the dialog opened on. A value axis side without a scale of its own (the right side without Separate Scales, or with
+Separate Scales a side that no series is on) shows the tick values of the scale drawn on it, and its Override Calculated
+Values is dimmed. A value of `axisMin`, `axisMax` or `ticks` (or of the right axis' three) that is not a number is sent
+as it is, and `graph.setType` refuses it. With nothing changed it closes without a step of history. An overridden value
 axis whose maximum is not more than its minimum is the error "Maximum must be more than Minimum." and the dialog stays
 open. The types the dialog dims for picked series (those that cannot go in the graph), the options it dims for a type
 and the pages it lists are VectorCraft's own rules.
