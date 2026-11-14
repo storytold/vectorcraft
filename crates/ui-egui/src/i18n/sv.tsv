@@ -212,6 +212,7 @@ font-technology	Variable	Variabla
 	Apply Last Gradient	Använd senaste gradienten
 	Apply Paragraph Style	Använd styckestil
 	Apply SVG Filter…	Använd SVG-filter…
+	Apply SVG Filter	Använd SVG-filter
 	Apply to All	Använd på alla
 @plural	Apply to All ({n} more missing)|Apply to All ({n} more missing)	Använd på alla ({n} till saknas)|Använd på alla ({n} till saknas)
 	Arc	Båge
@@ -462,6 +463,7 @@ font-technology	Variable	Variabla
 	Not a script for the reference app	Inte ett skript för referensappen
 	Some lists were cut short at their limit.	Vissa listor kortades av vid gränsvärdet.
 	Check Spelling…	Kontrollera stavning…
+	Check Spelling	Kontrollera stavning
 	Choose a folder	Välj en mapp
 	Choose…	Välj…
 	Circle	Cirkel
@@ -3491,6 +3493,7 @@ digits	Malayalam	Malayalam
 	Superscript (on the roadmap)	Upphöjd (planeras)
 	Superscript:	Upphöjd:
 	SVG Filters	SVG-filter
+	SVG Filter	SVG-filter
 	SVG Interactivity	SVG-interaktivitet
 	Event:	Händelse:
 	JavaScript:	JavaScript:
@@ -5483,6 +5486,7 @@ lighting	Light	Ljus
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} i `{GRAPHICS}` måste vara ett tal från {lo} till {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` måste vara en matris
 @msg	Graphics map onto the Plane, Extrude and Revolve object types	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel
+	Graphics map onto the Plane, Extrude and Revolve object types.	Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel.
 @msg	Revolve maps graphics onto its side: map them onto the front	Rotera runt axel placerar grafik på sin mantelyta: placera den på framsidan
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Grafiken är för komplex för den här ytan: förenkla symbolernas teckning eller minska Segment
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` tar högst {MAX_GRAPHICS} grafiker

@@ -309,6 +309,22 @@ fn catalan_reads_as_catalan() {
     assert_eq!(message(ca, nested), "l’ordre `object.group` no està disponible ara mateix: no hi ha res seleccionat");
 }
 
+/// The Swedish catalog names the SVG Filter and Check Spelling commands without their ellipsis,
+/// the SVG Filter undo step, and the 3D and Materials panel's note with its period.
+#[test]
+fn swedish_svg_filter_spelling_and_3d_labels_are_complete() {
+    let sv = Lang::from_code("sv").expect("sv registered");
+    for (en, want) in [
+        ("Apply SVG Filter", "Använd SVG-filter"),
+        ("Check Spelling", "Kontrollera stavning"),
+        ("SVG Filter", "SVG-filter"),
+        ("Graphics map onto the Plane, Extrude and Revolve object types.", "Grafik placeras på objekttyperna Plan, Extrudera och Rotera runt axel."),
+    ] {
+        assert_eq!(sv.catalog().plain(en), Some(want), "{en}");
+    }
+    assert_eq!(crate::panels::history::step_name(sv, "SVG Filter").as_deref(), Some("SVG-filter"));
+}
+
 #[test]
 fn font_height_reference_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
