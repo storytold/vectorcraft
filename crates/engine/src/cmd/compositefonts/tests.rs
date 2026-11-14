@@ -478,6 +478,75 @@ fn an_opened_file_measures_its_type_in_its_own_composite_fonts() {
     assert_eq!(actual.cached_bounds, Some(expected));
 }
 
+/// The label of dimension `id` in `doc`.
+fn label(doc: &vectorcraft_doc::Document, id: u64) -> vectorcraft_doc::TextObject {
+    let node = doc.node(NodeId(id)).unwrap();
+    node.children().unwrap().iter().find_map(|n| if let NodeKind::Text(t) = &n.kind { Some((**t).clone()) } else { None }).unwrap()
+}
+
+/// The center of label `t`'s measured box on the page.
+fn label_center(t: &vectorcraft_doc::TextObject) -> vectorcraft_geom::Point {
+    t.xf * t.cached_bounds.unwrap().center()
+}
+
+/// Whether every character of label `t` is filled in CMYK.
+fn label_in_cmyk(t: &vectorcraft_doc::TextObject) -> bool {
+    !t.runs.is_empty() && t.runs.iter().all(|r| matches!(r.style.fill.color(), Some(vectorcraft_color::Color::Cmyk { .. })))
+}
+
+/// The native file of a CMYK document whose composite font `name` sets Roman at full size, with a
+/// dimension whose label is set in it and whose label's characters are saved in RGB, so opening
+/// the file draws the dimension again → (the file, the dimension's id, the center of its label as
+/// drawn in the document's own composite font).
+fn dimension_file(name: &str) -> (Vec<u8>, u64, vectorcraft_geom::Point) {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400, "colorMode": "cmyk"})).unwrap();
+    let mut full = font(name);
+    full["parts"]["roman"]["size"] = json!(100);
+    s.execute("type.compositeFonts.set", &json!({"fonts": [full]})).unwrap();
+    let line = s.execute("shape.line", &json!({"x1": 100, "y1": 100, "x2": 172, "y2": 100})).unwrap()["id"].as_u64().unwrap();
+    let id = s
+        .execute(
+            "dimension.create",
+            &json!({"source": {"kind": "segment", "edge": {"node": line, "subpath": 0, "segment": 0}},
+                    "options": {"units": "in", "precision": 2, "fontFamily": name, "fontSize": 20}}),
+        )
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    let mut doc = (*s.doc().unwrap().doc).clone();
+    let drawn = label(&doc, id);
+    assert!(label_in_cmyk(&drawn));
+    let center = label_center(&drawn);
+    let mut label_id = None;
+    doc.node(NodeId(id)).unwrap().walk(&mut |n| {
+        if matches!(n.kind, NodeKind::Text(_)) {
+            label_id = Some(n.id);
+        }
+    });
+    if let Some(NodeKind::Text(t)) = doc.node_mut(label_id.unwrap()).map(|n| &mut n.kind) {
+        for r in &mut t.runs {
+            r.style.fill = vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb8(0, 0, 0));
+        }
+    }
+    (vectorcraft_format::save_file(&doc), id, center)
+}
+
+/// A file whose dimensions are drawn again when it opens (their art is not in the document's color
+/// mode) draws their labels in its own composite fonts, not in those of the front document, which
+/// defines the label's font name with Roman at half size: each label stays centered on its anchor.
+#[test]
+fn an_opened_file_draws_its_dimension_labels_in_its_own_composite_fonts() {
+    let (bytes, id, center) = dimension_file("CF Dimension");
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Dimension")]})).unwrap();
+    let file = crate::cmd::fileio::read_for_open("dimension.vectorcraft", &bytes, None, &json!({}), false, false).unwrap();
+    crate::cmd::fileio::open_read(&mut s, file).unwrap();
+    let opened = label(&s.doc().unwrap().doc, id);
+    assert!(label_in_cmyk(&opened));
+    assert!((label_center(&opened) - center).hypot() < 1e-6, "{:?} vs {center:?}", label_center(&opened));
+}
+
 /// Threaded type read from a file flows through its frames in the file's own composite fonts, when
 /// no open document defines them.
 #[test]
@@ -534,6 +603,40 @@ fn a_document_replaced_in_the_back_is_measured_when_the_front_one_closes() {
     assert!((actual.cached_bounds.unwrap().width() - width).abs() < 1e-6);
     let expected = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &actual).bounds;
     assert_eq!(actual.cached_bounds, Some(expected));
+}
+
+/// A document replaced in front (File › Revert) whose dimensions are drawn again draws their labels
+/// in its new composite fonts, not in those it had before.
+#[test]
+fn a_document_replaced_in_front_draws_its_dimension_labels_in_its_own_composite_fonts() {
+    let (bytes, id, center) = dimension_file("CF Reverted");
+    let mut s = session();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Reverted")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    let replaced = label(&s.doc().unwrap().doc, id);
+    assert!(label_in_cmyk(&replaced));
+    assert!((label_center(&replaced) - center).hypot() < 1e-6, "{:?} vs {center:?}", label_center(&replaced));
+}
+
+/// A document replaced in the back draws its dimension labels in its own composite fonts, while the
+/// front document keeps its definition of the same name registered; the labels stay where they are
+/// when the document comes to the front.
+#[test]
+fn a_document_replaced_in_the_back_draws_its_dimension_labels_in_its_own_composite_fonts() {
+    let (bytes, id, center) = dimension_file("CF Back Dimension");
+    let mut s = session();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font("CF Back Dimension")]})).unwrap();
+    assert!(s.replace_document(0, vectorcraft_format::load(&bytes).unwrap()));
+    assert_eq!(s.active_index(), Some(1));
+    let front = vectorcraft_text::FontDb::global().composite_font("CF Back Dimension").unwrap();
+    assert_eq!(front.parts.get(vectorcraft_doc::CharClass::Roman).size, 50.0);
+    let replaced = label(&s.documents()[0].doc, id);
+    assert!(label_in_cmyk(&replaced));
+    assert!((label_center(&replaced) - center).hypot() < 1e-6, "{:?} vs {center:?}", label_center(&replaced));
+    assert!(s.set_active(0));
+    let shown = label(&s.doc().unwrap().doc, id);
+    assert!((label_center(&shown) - center).hypot() < 1e-6, "{:?} vs {center:?}", label_center(&shown));
 }
 
 /// The type of document `index` with id `id`, wherever its tab is.

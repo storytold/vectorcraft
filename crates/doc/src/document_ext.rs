@@ -128,8 +128,8 @@ impl Document {
     }
 
     /// The roots of every tree of the document's art: the layers, symbol definitions, graph designs,
-    /// pattern swatches and the original of the pattern being edited. Opacity masks hang off nodes
-    /// in these trees.
+    /// pattern swatches, the original of the pattern being edited and [`Self::mounted_art`].
+    /// Opacity masks hang off nodes in these trees.
     pub fn art_roots(&self) -> impl Iterator<Item = &Arc<Node>> {
         self.layers
             .iter()
@@ -137,6 +137,7 @@ impl Document {
             .chain(self.graph_designs.iter().map(|g| &g.art))
             .chain(self.patterns.iter().flat_map(|p| p.art.iter()))
             .chain(self.pattern_edit.iter().filter_map(|pe| pe.original.as_ref()).flat_map(|p| p.art.iter()))
+            .chain(self.mounted_art.iter().map(|(n, _)| n))
     }
 
     /// [`Self::art_roots`], to change.
@@ -147,6 +148,7 @@ impl Document {
             .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
             .chain(self.patterns.iter_mut().flat_map(|p| p.art.iter_mut()))
             .chain(self.pattern_edit.iter_mut().filter_map(|pe| pe.original.as_mut()).flat_map(|p| p.art.iter_mut()))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n))
     }
 
     /// Does `wants` hold for a node anywhere in the document's art ([`Self::art_roots`]) or its
