@@ -109,7 +109,7 @@ impl Edits {
 
     /// `svg` with the edits made; overlapping ones and ranges off character boundaries are
     /// skipped.
-    fn apply(mut self, svg: &str) -> Cow<'_, str> {
+    pub(super) fn apply(mut self, svg: &str) -> Cow<'_, str> {
         self.list.append(&mut self.id_edits);
         for (at, has_style, decls) in std::mem::take(&mut self.styles).into_values() {
             self.insert(at, if has_style { decls } else { format!(" style=\"{}\"", decls.strip_prefix(';').unwrap_or(&decls)) });

@@ -4,6 +4,10 @@
 //! (missing, remote, not an image) becomes a placeholder that keeps the link and its place, so it
 //! can be relinked, and a warning.
 //!
+//! A linked SVG file's own `<image>` links are read the same way, relative paths from that file's
+//! folder, within the same limits; an href that leads back to an SVG file showing it gets the
+//! placeholder and a warning.
+//!
 //! A raster image, linked or a data URL, whose orientation (EXIF, or a TIFF's Orientation tag)
 //! turns or flips its pixels is turned before usvg gets it, so it is sized, fitted and stored as
 //! it is shown.
@@ -35,6 +39,9 @@ pub const MAX_NESTED_SVG_TEXT: u64 = 512 << 20;
 pub(in crate::import) struct Files {
     /// What usvg gets for each linked href.
     sources: HashMap<String, Source>,
+    /// The SVG images usvg is reading, innermost last: a linked SVG file, whose own links an href
+    /// inside it is looked up in, or `None` for a data URL.
+    within: Mutex<Vec<Option<Arc<SvgFile>>>>,
     /// The link of each linked raster or placeholder, by the address of the bytes usvg got.
     links: HashMap<usize, Linked>,
     /// An SVG image had text (which isn't imported).
@@ -84,8 +91,42 @@ type RasterKind = fn(Arc<Vec<u8>>) -> ImageKind;
 enum Source {
     /// A raster file of the kind usvg reads it as.
     Raster(RasterKind, Arc<Vec<u8>>),
-    /// An SVG file's text (unpacked when it is SVGZ), parsed by usvg as an image.
-    Svg(Arc<str>),
+    /// An SVG file, parsed by usvg as an image.
+    Svg(Arc<SvgFile>),
+}
+
+/// A linked SVG file as usvg reads it.
+struct SvgFile {
+    /// Its text (unpacked when it is SVGZ), placeholders stretched to their boxes.
+    text: Arc<str>,
+    /// What usvg gets for each href its own `<image>` elements link to.
+    sources: HashMap<String, Source>,
+}
+
+/// The state of [`Files::read`] across the SVG files it reads the links of.
+struct Reading<'a, 'w> {
+    opts: &'a ImportOptions<'a>,
+    warnings: &'w mut Vec<String>,
+    /// The placeholder's bytes, made once.
+    placeholder: Option<Option<Vec<u8>>>,
+    /// What each file read gave, by the file: hrefs spelled differently (`a.png`, `./a.png`,
+    /// `%61.png`), and in different SVG files, share one read and one copy of its bytes. An SVG
+    /// file with a link inside it that led back to an SVG file isn't kept: what it shows depends
+    /// on where it is.
+    by_file: HashMap<String, Result<Source, &'static str>>,
+    /// The SVG files whose links are being read, innermost last, by [`identity`].
+    active: Vec<String>,
+    /// A link led back to one of them while the file being read was read.
+    led_back: bool,
+    /// How many linked SVG files were read for their links, and the bytes of their text.
+    svg_reads: usize,
+    svg_text: u64,
+}
+
+/// What the link to an SVG file being read is compared by, to find a link back to it: its path
+/// with links and `..` resolved, or the path as given when that can't be found.
+fn identity(file: &str) -> String {
+    std::fs::canonicalize(file).map_or_else(|_| file.to_string(), |p| p.to_string_lossy().into_owned())
 }
 
 /// A linked raster image (or the placeholder of a missing one).
@@ -164,54 +205,120 @@ impl Files {
     /// relinked.
     pub(in crate::import) fn read(svg: &str, xml: &roxmltree::Document, opts: &ImportOptions, edits: &mut Edits, warnings: &mut Vec<String>) -> Self {
         let mut files = Files::default();
-        let mut placeholder = None;
-        // What each file read gave, by the file: hrefs spelled differently (`a.png`, `./a.png`,
-        // `%61.png`) share one read and one copy of its bytes.
-        let mut by_file: HashMap<String, Result<Source, &str>> = HashMap::new();
+        let mut reading =
+            Reading { opts, warnings, placeholder: None, by_file: HashMap::new(), active: vec![], led_back: false, svg_reads: 0, svg_text: 0 };
+        files.sources = files.links_of(svg, xml, opts.folder, None, edits, &mut reading);
+        files
+    }
+
+    /// What usvg gets for each href the `<image>` elements of `xml` (the text `svg`) link to,
+    /// relative paths taken from `folder`. `inside` is how deep the SVG images `xml` shows nest in
+    /// it and the SVGs around it, measured when an SVG file is read (`None` for `xml` itself).
+    fn links_of(
+        &mut self,
+        svg: &str,
+        xml: &roxmltree::Document,
+        folder: Option<&str>,
+        mut inside: Option<usize>,
+        edits: &mut Edits,
+        reading: &mut Reading<'_, '_>,
+    ) -> HashMap<String, Source> {
+        let mut sources: HashMap<String, Source> = HashMap::new();
         for n in xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "image") {
             let Some(h) = href(n).filter(|h| !h.trim_start().starts_with("data:")) else { continue };
-            if !files.sources.contains_key(h) {
-                let (path, file) = target(h, opts.folder);
+            if !sources.contains_key(h) {
+                let (path, file) = target(h, folder);
                 // A failed read is cached too, but each href gets its own placeholder: its own link
                 // path (an Arc shared between hrefs would share the first href's link) and warning.
-                let cached = file.as_ref().and_then(|f| by_file.get(f)).cloned();
+                let back = !reading.active.is_empty() && file.as_deref().is_some_and(|f| reading.active.contains(&identity(f)));
+                let cached = file.as_ref().and_then(|f| reading.by_file.get(f)).cloned();
                 let source = match cached {
+                    _ if back => {
+                        reading.led_back = true;
+                        Err("leads back to an SVG file that shows it")
+                    }
                     Some(source) => source,
                     None => {
-                        let read = file.clone().and_then(|file| opts.read.and_then(|read| read(&file)));
-                        let source = match read {
-                            Some((bytes, link)) => files.source(bytes, link).ok_or("is not an image VectorCraft reads"),
-                            None => Err("not found"),
+                        let read = file.clone().and_then(|file| reading.opts.read.and_then(|read| read(&file)));
+                        let around = std::mem::replace(&mut reading.led_back, false);
+                        let source = match (read, file.as_deref()) {
+                            (Some((bytes, link)), Some(f)) => match self.source(bytes, link) {
+                                Some(Source::Svg(text)) => {
+                                    let inside = *inside.get_or_insert_with(|| depth::height(xml, MAX_ELEMENT_DEPTH).unwrap_or(MAX_ELEMENT_DEPTH));
+                                    // Past what may be read of the SVG files, the image is left out (noted).
+                                    let Some(source) = self.svg_file(text, f, inside, reading) else {
+                                        reading.led_back = around;
+                                        continue;
+                                    };
+                                    Ok(source)
+                                }
+                                source => source.ok_or("is not an image VectorCraft reads"),
+                            },
+                            _ => Err("not found"),
                         };
-                        if let Some(file) = file {
-                            by_file.insert(file, source.clone());
+                        // Kept unless a link inside it led back to an SVG file.
+                        let led_back = reading.led_back;
+                        reading.led_back |= around;
+                        if let Some(file) = file
+                            && !led_back
+                        {
+                            reading.by_file.insert(file, source.clone());
                         }
                         source
                     }
                 };
                 let source = source.or_else(|why| {
-                    warnings.push(format!("linked image '{h}' {why}: a placeholder keeps its place until it is relinked"));
-                    let bytes = Arc::new(placeholder.get_or_insert_with(missing_placeholder).clone().ok_or(why)?);
-                    files.links.insert(key(&bytes), Linked { link: LinkInfo::new(path), missing: true });
+                    reading.warnings.push(format!("linked image '{h}' {why}: a placeholder keeps its place until it is relinked"));
+                    let bytes = Arc::new(reading.placeholder.get_or_insert_with(missing_placeholder).clone().ok_or(why)?);
+                    self.links.insert(key(&bytes), Linked { link: LinkInfo::new(path), missing: true });
                     Ok::<_, &str>(Source::Raster(ImageKind::PNG, bytes))
                 });
                 let Ok(source) = source else { continue };
-                files.sources.insert(h.to_string(), source);
+                sources.insert(h.to_string(), source);
             }
-            if files.placeholder(h) {
+            if sources.get(h).is_some_and(|s| self.missing(s)) {
                 edits.set(svg, n, "preserveAspectRatio", "none");
             }
         }
-        files
+        sources
+    }
+
+    /// Linked SVG file `file`, read as `svg`, with the files its own `<image>` elements link to
+    /// read from its folder; `inside` is how deep it nests in the SVGs around it. Its links aren't
+    /// read when it nests too deep to be shown, or when it isn't XML. `None`, noted, once the SVG
+    /// files read for their links pass [`MAX_NESTED_SVG_READS`] or [`MAX_NESTED_SVG_TEXT`].
+    fn svg_file(&mut self, svg: Arc<SvgFile>, file: &str, inside: usize, reading: &mut Reading<'_, '_>) -> Option<Source> {
+        let left = MAX_ELEMENT_DEPTH.saturating_sub(inside);
+        if !svg.text.contains("image") || depth::xml_deeper_than(&svg.text, left) {
+            return Some(Source::Svg(svg));
+        }
+        reading.svg_reads += 1;
+        reading.svg_text = reading.svg_text.saturating_add(svg.text.len() as u64);
+        if reading.svg_reads > MAX_NESTED_SVG_READS || reading.svg_text > MAX_NESTED_SVG_TEXT {
+            self.too_much_svg_read.store(true, Ordering::Relaxed);
+            return None;
+        }
+        // Read from its own handle: the text stays borrowed while `svg` may be given back.
+        let text = svg.text.clone();
+        let Ok(xml) = super::parse(&text) else { return Some(Source::Svg(svg)) };
+        let Some(height) = depth::height(&xml, left) else { return Some(Source::Svg(svg)) };
+        let folder = Path::new(file).parent().map(|p| p.to_string_lossy().into_owned());
+        let mut edits = Edits::default();
+        reading.active.push(identity(file));
+        let sources = self.links_of(&text, &xml, folder.as_deref(), Some(inside + height), &mut edits, reading);
+        reading.active.pop();
+        let text = Arc::from(edits.apply(&text).as_ref());
+        Some(Source::Svg(Arc::new(SvgFile { text, sources })))
     }
 
     /// What usvg gets for a file read (`bytes`, linked by `link`): a raster as [`shown`] gives it
-    /// (formats usvg doesn't read are stored as PNG) or an SVG; `None` for anything else.
+    /// (formats usvg doesn't read are stored as PNG) or an SVG, its own links not read yet; `None`
+    /// for anything else.
     fn source(&mut self, bytes: Vec<u8>, link: LinkInfo) -> Option<Source> {
         let Ok(format) = image::guess_format(&bytes) else {
             // Unpacked once, here, within what the SVGZ images may unpack to.
             let text = crate::text_within(&bytes, &self.unpacked).ok()?;
-            return text.contains("<svg").then(|| Source::Svg(Arc::from(text.as_ref())));
+            return text.contains("<svg").then(|| Source::Svg(Arc::new(SvgFile { text: Arc::from(text.as_ref()), sources: HashMap::new() })));
         };
         let (kind, bytes) = self.keep(shown(Arc::new(bytes), format)?);
         self.links.insert(key(&bytes), Linked { link, missing: false });
@@ -236,9 +343,21 @@ impl Files {
         self.cmyk.lock().ok()?.get(&key(b)).map(|(_, tiff)| tiff.clone())
     }
 
-    /// Does href `h` show a placeholder?
-    fn placeholder(&self, h: &str) -> bool {
-        matches!(self.sources.get(h), Some(Source::Raster(_, b)) if self.links.get(&key(b)).is_some_and(|l| l.missing))
+    /// Is `source` a placeholder?
+    fn missing(&self, source: &Source) -> bool {
+        matches!(source, Source::Raster(_, b) if self.links.get(&key(b)).is_some_and(|l| l.missing))
+    }
+
+    /// What usvg gets for href `h` where it is read: inside a linked SVG file, from that file's
+    /// own links; outside any SVG image, from the imported SVG's. Inside an SVG data URL, which
+    /// has no folder of its own, nothing.
+    fn find(&self, h: &str) -> Option<Source> {
+        let within = self.within.lock().ok()?;
+        let sources = match within.last() {
+            None => &self.sources,
+            Some(file) => &file.as_ref()?.sources,
+        };
+        sources.get(h).or_else(|| sources.get(h.trim())).cloned()
     }
 
     /// The link of the image whose data usvg got as `kind`.
@@ -308,9 +427,9 @@ impl Files {
                 let (kind, bytes) = self.keep(shown(bytes, format)?);
                 Some(kind(bytes))
             }),
-            resolve_string: Box::new(move |h, opts| match self.sources.get(h).or_else(|| self.sources.get(h.trim()))? {
-                Source::Raster(kind, bytes) => Some(kind(bytes.clone())),
-                Source::Svg(text) => self.svg(text, opts),
+            resolve_string: Box::new(move |h, opts| match self.find(h)? {
+                Source::Raster(kind, bytes) => Some(kind(bytes)),
+                Source::Svg(file) => self.svg(&file.text.clone(), Some(file), opts),
             }),
         }
     }
@@ -320,7 +439,7 @@ impl Files {
     /// noted.
     fn svg_data(&self, bytes: &[u8], opts: &usvg::Options) -> Option<ImageKind> {
         match crate::text_within(bytes, &self.unpacked) {
-            Ok(text) => self.svg(&text, opts),
+            Ok(text) => self.svg(&text, None, opts),
             Err(e) => leave_out(&self.too_big, matches!(e, SvgError::TooBig(_))),
         }
     }
@@ -329,8 +448,9 @@ impl Files {
     /// can't read, when it isn't SVG or when its elements nest deeper than the SVGs around it
     /// leave: usvg reads it while it reads them, on the same stack. Only a decoded image, with the
     /// images decoded inside it, counts toward [`MAX_NESTED_SVG_IMAGES`]; every image read counts
-    /// toward [`MAX_NESTED_SVG_READS`] and [`MAX_NESTED_SVG_TEXT`].
-    fn svg(&self, text: &str, opts: &usvg::Options) -> Option<ImageKind> {
+    /// toward [`MAX_NESTED_SVG_READS`] and [`MAX_NESTED_SVG_TEXT`]. `file` is the linked SVG file
+    /// the text is, whose own links the hrefs in it are looked up in.
+    fn svg(&self, text: &str, file: Option<Arc<SvgFile>>, opts: &usvg::Options) -> Option<ImageKind> {
         let decoded = self.svg_images.load(Ordering::Relaxed);
         if decoded >= MAX_NESTED_SVG_IMAGES {
             return leave_out(&self.too_many_svg_images, true);
@@ -345,7 +465,7 @@ impl Files {
         // The image's place is taken while usvg reads it, so the images inside it get what is left.
         // usvg reads them all on this thread, so no other read comes between these steps.
         self.svg_images.store(decoded + 1, Ordering::Relaxed);
-        let tree = self.svg_tree(text, opts);
+        let tree = self.svg_tree(text, file, opts);
         if tree.is_none() {
             self.svg_images.store(decoded, Ordering::Relaxed);
         }
@@ -353,7 +473,7 @@ impl Files {
     }
 
     /// [`Files::svg`]'s image once it is counted.
-    fn svg_tree(&self, text: &str, opts: &usvg::Options) -> Option<ImageKind> {
+    fn svg_tree(&self, text: &str, file: Option<Arc<SvgFile>>, opts: &usvg::Options) -> Option<ImageKind> {
         // Measured as the SVG holding it is (`import`): the text before the XML reader.
         let used = self.depth.load(Ordering::Relaxed);
         let left = MAX_ELEMENT_DEPTH.saturating_sub(used);
@@ -365,7 +485,27 @@ impl Files {
         // usvg's parser would overflow on it, as on the SVG holding it (`import`).
         super::convolve_matrices_ok(&xml).ok()?;
         self.depth.store(used + height, Ordering::Relaxed);
-        let tree = usvg::Tree::from_data_nested(text.as_bytes(), opts);
+        let within = self.within.lock().ok().map(|mut w| w.push(file)).is_some();
+        // usvg's `Tree::from_data_nested`, except that hrefs to files go to the resolver.
+        let nested = usvg::Options {
+            resources_dir: None,
+            dpi: opts.dpi,
+            font_size: opts.font_size,
+            languages: opts.languages.clone(),
+            shape_rendering: opts.shape_rendering,
+            text_rendering: opts.text_rendering,
+            image_rendering: opts.image_rendering,
+            default_size: opts.default_size,
+            image_href_resolver: ImageHrefResolver {
+                resolve_data: Box::new(|mime, bytes, o| (opts.image_href_resolver.resolve_data)(mime, bytes, o)),
+                resolve_string: Box::new(|h, o| (opts.image_href_resolver.resolve_string)(h, o)),
+            },
+            ..usvg::Options::default()
+        };
+        let tree = usvg::Tree::from_str(text, &nested);
+        if within && let Ok(mut w) = self.within.lock() {
+            w.pop();
+        }
         self.depth.store(used, Ordering::Relaxed);
         let tree = tree.ok()?;
         self.note_text(text);
