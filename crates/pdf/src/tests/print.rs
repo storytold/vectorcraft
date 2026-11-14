@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use vectorcraft_color::{Color, Paint, Swatch};
+use vectorcraft_color::{Color, Freeform, FreeformPoint, Gradient, GradientKind, GradientPaint, GradientStop, Paint, Swatch};
 use vectorcraft_doc::{Appearance, Artboard, Document, LayerColor, Node, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 use vectorcraft_testkit::raster::render_region;
@@ -534,6 +534,70 @@ fn cmyk_and_a_spot_separate_into_five_plates() {
     let p = pages(&job(&d, json!({"output": {"mode": "separations", "spotsToProcess": true}})).bytes);
     assert_eq!(p.len(), 4);
     assert_eq!(inks(&p[2]), [0.0, 40.0], "the gold's yellow");
+}
+
+/// A 100 pt CMYK document with spot swatch `Gold` and a square filled with gradient `g`.
+fn gold_gradient_doc(g: GradientPaint) -> Document {
+    let mut d = doc(100.0, 100.0, &[(Rect::new(0.0, 0.0, 50.0, 50.0), Paint::Gradient(Box::new(g)))]);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+    d
+}
+
+/// The grey of each plate of a separation of `d` (job options `v`), in percent: of the first
+/// gradient stop, and of the first freeform point when there is one. No plate keeps a link or
+/// process plates.
+fn gradient_plates(d: &Document, v: serde_json::Value) -> Vec<(f32, Option<f32>)> {
+    let opts = PrintOptions { settings: settings(v), ..Default::default() };
+    let gray = |c: &Color| match c {
+        Color::Gray { k } => (k * 100.0).round(),
+        c => panic!("{c:?}"),
+    };
+    let plan = plan(d, &opts).unwrap();
+    plan.plates
+        .iter()
+        .map(|p| {
+            let mut found = vec![];
+            p.walk(|n| {
+                if let Some(Paint::Gradient(g)) = n.appearance.fill().map(|f| &f.paint) {
+                    let s = &g.gradient.stops[0];
+                    assert_eq!((s.swatch.as_deref(), s.tint, s.plates), (None, 1.0, None), "the stop is unlinked");
+                    found.push((gray(&s.color), g.freeform.as_ref().and_then(|f| f.points.first()).map(|q| gray(&q.color))));
+                }
+            });
+            assert_eq!(found.len(), 1);
+            found[0]
+        })
+        .collect()
+}
+
+#[test]
+fn a_spot_gradient_stop_prints_its_process_plates() {
+    let mut mixed = GradientStop::new(0.0, Color::cmyk(0.25, 0.1, 0.8, 0.05));
+    (mixed.swatch, mixed.tint, mixed.plates) = (Some("Gold".into()), 0.5, Some([0.25, 0.0, 0.4, 0.0]));
+    let g = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![mixed, GradientStop::new(1.0, Color::cmyk(0.0, 0.0, 0.0, 0.0))]));
+    let d = gold_gradient_doc(g);
+    let first = |v| gradient_plates(&d, v).into_iter().map(|(s, _)| s).collect::<Vec<_>>();
+    assert_eq!(first(json!({"output": {"mode": "separations"}})), [25.0, 0.0, 40.0, 0.0, 50.0], "Cyan, Magenta, Yellow, Black, Gold");
+    // Spots as process: the plates layered with the gold tint's process inks (0, 10, 40, 5).
+    assert_eq!(first(json!({"output": {"mode": "separations", "spotsToProcess": true}})), [25.0, 10.0, 64.0, 5.0]);
+}
+
+#[test]
+fn a_freeform_gradients_points_separate_into_plates() {
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Freeform, vec![GradientStop::new(0.0, Color::cmyk(0.0, 0.0, 0.0, 1.0))]));
+    let point = FreeformPoint::new(vectorcraft_geom::Point::new(25.0, 25.0), Color::cmyk(0.0, 0.6, 0.0, 0.0));
+    g.freeform = Some(Freeform { points: vec![point], ..Default::default() });
+    let d = gold_gradient_doc(g);
+    let set = json!({"output": {"mode": "separations"}});
+    let points = gradient_plates(&d, set.clone()).into_iter().map(|(_, p)| p).collect::<Vec<_>>();
+    assert_eq!(points, [Some(0.0), Some(60.0), Some(0.0), Some(0.0), Some(0.0)], "the point's magenta, on its plate only");
+    // Each plate draws the square in the grey of the point's ink on it.
+    let plan = plan(&d, &PrintOptions { settings: settings(set), ..Default::default() }).unwrap();
+    let drawn: Vec<u8> = plan.plates.iter().map(|p| render_region(p, Rect::new(0.0, 0.0, 50.0, 50.0), 1.0).over_white(25, 25)[0]).collect();
+    for (plate, (v, ink)) in drawn.iter().zip([0.0, 0.6, 0.0, 0.0, 0.0]).enumerate() {
+        assert!((f32::from(*v) - 255.0 * (1.0 - ink)).abs() <= 3.0, "plate {plate}: {drawn:?}");
+    }
 }
 
 #[test]

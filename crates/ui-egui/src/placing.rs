@@ -178,6 +178,23 @@ pub struct Placing {
     pub(crate) reading: std::sync::Arc<[std::sync::atomic::AtomicUsize; 2]>,
 }
 
+impl Placing {
+    /// Unit tests: wait until the reader thread has finished every read started so far. The thread
+    /// runs its jobs in order, so a job sent after them runs once they have handed back their files.
+    #[cfg(test)]
+    pub(crate) fn wait_for_reads(&self) {
+        if let Some(reader) = &self.reader {
+            let (tx, rx) = channel();
+            let marker: Job = Box::new(move || {
+                let _ = tx.send(());
+            });
+            if reader.send(marker).is_ok() {
+                let _ = rx.recv();
+            }
+        }
+    }
+}
+
 struct PendingSwatch {
     clipboard: Clipboard,
     insertion: Insertion,
