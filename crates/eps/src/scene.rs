@@ -931,18 +931,21 @@ impl<'a> Scene<'a> {
     /// process inks the stops use, in CMYK order, and the spot inks, in the order the stops name
     /// them. Paper white adds no ink, a gray stop is black ink, and a spot stop's process plates
     /// print with its ink. An off-center midpoint is a stop
-    /// with the inks halfway between its two stops. `None` for a gradient without a spot ink, and,
-    /// with a warning, for one whose inks can't be kept or that is mixed by the Perceptual method
-    /// or around the hue wheel; it is then written in process colors.
+    /// with the inks halfway between its two stops. Stop opacity is left out, so the stops that
+    /// color a stretch ([`vectorcraft_color::Gradient::reached_stops`]) name the inks, a spot ink
+    /// only above a tint of 0 or with process plates; the others are written with no ink. `None` for a gradient without a
+    /// spot ink, and, with a warning, for one whose inks can't be kept or that is mixed by the
+    /// Perceptual method or around the hue wheel; it is then written in process colors.
     fn ink_stops(&mut self, g: &vectorcraft_color::Gradient) -> Option<(GradientSpace, RawStops)> {
         let doc = self.doc;
         let spot_of = |s: &vectorcraft_color::GradientStop| -> Option<String> {
             s.swatch.as_deref().filter(|n| doc.swatch(n).is_some_and(|w| w.spot)).map(str::to_string)
         };
+        let reached = g.reached_stops();
         // The spot inks, collected up to one more than a DeviceN space can hold.
         let mut names: Vec<String> = vec![];
-        for s in &g.stops {
-            if let Some(n) = spot_of(s)
+        for (s, &r) in g.stops.iter().zip(&reached) {
+            if let Some(n) = spot_of(s).filter(|_| r && (s.tint > 0.0 || s.plates.is_some()))
                 && !names.contains(&n)
             {
                 names.push(n);
@@ -971,9 +974,10 @@ impl<'a> Scene<'a> {
         };
         // Each stop's ink coverage: the four process inks, then one tint per spot ink.
         let mut inks: Vec<Vec<f32>> = Vec::with_capacity(g.stops.len());
-        for s in &g.stops {
+        for (s, &r) in g.stops.iter().zip(&reached) {
             let mut v = vec![0.0; 4 + names.len()];
             match spot_of(s) {
+                _ if !r => {}
                 Some(n) => {
                     if let Some(i) = names.iter().position(|m| *m == n) {
                         v[4 + i] = unit(s.tint);
@@ -1116,7 +1120,10 @@ impl<'a> Scene<'a> {
         // keep no swatch links: the warning [`Self::ink_stops`] gives the others.
         if g.gradient.method.is_hue() && g.gradient.is_spread() && g.gradient.spread == vectorcraft_color::GradientSpread::Reflect {
             let doc = self.doc;
-            if g.gradient.stops.iter().any(|s| s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))) {
+            let spot = |s: &vectorcraft_color::GradientStop| {
+                (s.tint > 0.0 || s.plates.is_some()) && s.swatch.as_deref().is_some_and(|n| doc.swatch(n).is_some_and(|w| w.spot))
+            };
+            if g.gradient.stops.iter().zip(g.gradient.reached_stops()).any(|(s, r)| r && spot(s)) {
                 self.warn(SPOT_GRADIENTS_HUE);
             }
         }

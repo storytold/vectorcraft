@@ -4425,6 +4425,7 @@ font-technology	Variable	ცვლადი
 @msg	no action set to save	შესანახი მოქმედებების ნაკრები არ არის
 @msg	the action set file can't be read in full	მოქმედებების ნაკრების ფაილის სრულად წაკითხვა შეუძლებელია
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	ჩაიტვირთა „{name}“; გამოტოვებული ნაბიჯები: {n}
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	ჩაიტვირთა „{name}“; შენახული ნაბიჯები უცნობი ბრძანებით: {n}; პირველი: „{action}“, ნაბიჯი {step}, `{command}`
 @msg	not an action set file	ეს არ არის მოქმედებების ნაკრების ფაილი
 @msg	the action set file is larger than 8 MiB	მოქმედებების ნაკრების ფაილი 8 MiB-ზე დიდია
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: ცნობარი {MAX_BYTES} ბაიტზე დიდი იქნებოდა
@@ -4644,6 +4645,7 @@ font-technology	Variable	ცვლადი
 @msg	tool shortcuts must be a single key (optionally with Shift)	ხელსაწყოს მალსახმობი ერთი კლავიში უნდა იყოს (სურვილისამებრ Shift-ით)
 @msg	truncated	შეკვეცილია
 @msg	unknown command `{0}`	უცნობი ბრძანება `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	„{action}“, ნაბიჯი {step}: უცნობი ბრძანება `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	უცნობი ბრძანება `{0}`; იქნებ `{1}` იგულისხმეთ?
 @msg	unknown effect `{id}`	უცნობი ეფექტი `{id}`
 @msg	unknown format	უცნობი ფორმატი
@@ -7584,6 +7586,12 @@ font-script	Japanese	იაპონური
 @msg	open the practice sample of `{id}` first (see learn.openSample)	ჯერ გახსენით `{id}` გაკვეთილის სავარჯიშო ნიმუში (იხ. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	ჯერ დაასრულეთ `{id}` (იხ. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` თავისი უნარის ბოლო გაკვეთილია
+	Reset progress	პროგრესის ჩამოყრა
+	Mark Tutorial Step	გაკვეთილის ნაბიჯის მონიშვნა
+	Reset Learn Progress	სწავლის პროგრესის ჩამოყრა
+@msg	missing `step` (see learn.show)	აკლია `step` (იხ. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` უნდა იყოს ნაბიჯის ნომერი 0-დან {last}-მდე
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` დასრულებულია (იხ. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	გადადებული ეფექტების განახლება

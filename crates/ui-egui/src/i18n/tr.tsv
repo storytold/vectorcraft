@@ -4049,6 +4049,14 @@ axis	Both	Her İkisi
 @msg	a script is running: stop it or wait for it to finish	bir betik çalışıyor: durdurun veya bitmesini bekleyin
 @msg	this is a compiled script, which cannot be run; use its source text	bu derlenmiş bir betik, çalıştırılamaz; kaynak metnini kullanın
 @msg	the script is not UTF-8 text	betik UTF-8 metni değil
+@msg	script file is not UTF-8 text: {value}	betik dosyası UTF-8 metni değil: {value}
+@msg	a number cannot be read	bir sayı okunamıyor
+@msg	regular expression too large	düzenli ifade çok büyük
+@msg	too many classes	çok fazla karakter sınıfı
+@msg	too many groups	çok fazla grup
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` smallThumb, mediumThumb, largeThumb, smallList veya largeList olmalıdır
 @msg	the script is too large to run	betik çalıştırılamayacak kadar büyük
 @msg	a drag or an undo group is open; finish it before running a script	bir sürükleme veya geri alma grubu açık; betiği çalıştırmadan önce tamamlayın
 @msg	the script left a document that cannot be kept	betik, saklanamayan bir belge bıraktı
@@ -4241,6 +4249,7 @@ axis	Both	Her İkisi
 @msg	`{key}` must be a string	`{key}` bir dize olmalıdır
 @msg	`{key}` must be a profile name or null	`{key}` bir profil adı ya da null olmalıdır
 @msg	`{key}` must be a whole number	`{key}` bir tam sayı olmalıdır
+@msg	`index` must be a whole number	`index` bir tam sayı olmalıdır
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında bir tam sayı olmalıdır ({x}'yi aldı)
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}`, {min} ile {max} arasında olmalıdır ({x}'yi aldı)
 @msg	`{key}` must be one of {_1}	`{key}`, {_1}'den biri olmalıdır
@@ -4355,6 +4364,12 @@ axis	Both	Her İkisi
 @msg	file version {0} is newer than this VectorCraft supports ({VERSION})	dosya sürümü {0}, VectorCraft'ın desteklediğinden daha yenidir ({VERSION})
 @msg	freeform point {i} needs `at` [x, y] and a valid `color`	serbest biçimli nokta {i} için `at` [x, y] ve geçerli bir `color` gerekir
 @msg	freeform line {i} must be an array of point indices	Serbest biçimli çizgi {i}, bir nokta indeks dizisi olmalıdır
+@msg	freeform line {i}: {e}	serbest biçimli çizgi {i}: {e}
+@msg	freeform point {i}: {e}	serbest biçimli nokta {i}: {e}
+@msg	a line can't run from a point to itself	bir çizgi bir noktadan aynı noktaya uzanamaz
+@msg	a line needs at least two points	bir çizgi en az iki nokta gerektirir
+@msg	stop {i}: {e}	durak {i}: {e}
+@msg	give `{key}` or `{other}`, not both	`{key}` veya `{other}` verin, ikisini birden değil
 @msg	give both `start` and `end` [x, y] (or neither)	hem `start` hem de `end` [x, y] verin (ya da hiçbirini)
 @msg	give corners of the path: anchors where its sides meet at an angle	yolun köşelerini verin: kenarlarının belli bir açıyla buluştuğu noktalara sabitleyin
 @msg	give horizontal or vertical	yatay veya dikey ver
@@ -4479,7 +4494,9 @@ axis	Both	Her İkisi
 @msg	no action set to save	kaydedilecek eylem seti yok
 @msg	the action set file can't be read in full	eylem seti dosyası tamamen okunamıyor
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	“{name}” yüklendi: {n} adım atlandı
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	“{name}” yüklendi: bilinmeyen komutlu {n} adım korundu; ilki: “{action}”, adım {step}, `{command}`
 @msg	not an action set file	bir eylem seti dosyası değil
+@msg	not an action set file ({e})	bir eylem seti dosyası değil ({e})
 @msg	the action set file is larger than 8 MiB	eylem seti dosyası 8 MiB'den büyük
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: başvuru {MAX_BYTES} bayttan büyük olur
 @msg	the action set file holds more than 1,000 actions	eylem seti dosyası 1.000'den fazla eylem içeriyor
@@ -4513,6 +4530,34 @@ axis	Both	Her İkisi
 @msg	not a VectorCraft file: {0}	bir VectorCraft dosyası değil: {0}
 @msg	not a VectorCraft shortcut set (missing `overrides`)	VectorCraft kısayol seti değil (`overrides` eksik)
 @msg	not a graphic style library (format `{_1}`)	grafik stili kitaplığı değil (`{_1}` biçimi)
+@msg	not a graphic style library: {e}	grafik stili kitaplığı değil: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	renk örneği kitaplığı değil (.vcswatches veya .gpl)
+@msg	not a swatch library (format `{_1}`)	renk örneği kitaplığı değil (`{_1}` biçimi)
+@msg	not a swatch library: {e}	renk örneği kitaplığı değil: {e}
+# Swatch exchange files, color books and color profiles.
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft bir renk örneği değişim dosyasından en fazla {ASE_MAX_ENTRIES} renk ve grup okur; bu kitaplıkta {entries} tane var
+@msg	a swatch exchange block is too long	bir renk örneği değişim bloğu çok uzun
+@msg	a swatch exchange name is too long	bir renk örneği değişim adı çok uzun
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	renk örneği değişim sürümü {major}.{minor} desteklenmiyor (yalnızca 1.x)
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	renk örneği değişim dosyası {ASE_MAX_ENTRIES} renk ve gruptan fazlasını içeriyor
+@msg	the swatch exchange file is cut short	renk örneği değişim dosyası kısa kesildi
+@msg	too many swatch exchange blocks	çok fazla renk örneği değişim bloğu
+@msg	color book version {version} isn't supported (only 1)	renk kitabı sürümü {version} desteklenmiyor (yalnızca 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	{other} renk alanındaki renk kitapları desteklenmiyor (yalnızca RGB, CMYK ve Lab)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	renk kitabı {ASE_MAX_ENTRIES} renkten fazlasını içeriyor
+@msg	the color book is cut short	renk kitabı kısa kesildi
+@msg	the color book's names take more than {_1} MB	renk kitabının adları {_1} MB'tan fazla yer kaplıyor
+@msg	cannot read profile: {0}	profil okunamıyor: {0}
+@msg	invalid ICC profile: {0}	geçersiz ICC profili: {0}
+@msg	unknown colour profile: {0}	bilinmeyen renk profili: {0}
+@msg	its localized names take more than {_1} KB	yerelleştirilmiş adları {_1} KB'tan fazla yer kaplıyor
+@msg	its tag table lists the `{_1}` tag more than once	etiket tablosu `{_1}` etiketini birden fazla kez listeliyor
+@msg	profile colour space {other} is not RGB, CMYK or Gray	profil renk alanı {other}; RGB, CMYK veya Gray değil
+@msg	grayscale profiles can't be working spaces yet	gri tonlamalı profiller henüz çalışma alanı olarak kullanılamaz
+@msg	{_1} clashes with a built-in profile name	{_1}, yerleşik bir profil adıyla çakışıyor
+@msg	{_1}: no usable transform to/from sRGB	{_1}: sRGB'ye veya sRGB'den kullanılabilir bir dönüşüm yok
+@msg	{name} is not a CMYK profile	{name} bir CMYK profili değil
+@msg	{name} is not an RGB profile	{name} bir RGB profili değil
 @msg	not a shortcut set: the text doesn't start with a slash name and an opening brace	bir kısayol seti değil: metin eğik çizgi adı ve açılış paranteziyle başlamıyor
 @msg	not a stored central record	saklanan merkezi bir kayıt değil
 @msg	not a valid plug-in module: {0}	geçerli bir eklenti modülü değil: {0}
@@ -4697,11 +4742,14 @@ axis	Both	Her İkisi
 @msg	this file's PostScript couldn't be read ({why}): {what}	bu dosyanın PostScript'i okunamadı ({why}): {what}
 @msg	this format holds one artboard: export several as PDF or with document.exportForScreens	bu formatta bir çalışma yüzeyi bulunur: birkaçını PDF olarak veya document.exportForScreens ile dışa aktarın
 @msg	this is a DWG drawing, which can't be read: save it from the CAD app as an ASCII DXF and open that	bu okunamayan bir DWG çizimidir: CAD uygulamasından ASCII DXF olarak kaydedin ve açın.
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	bu okunamayan bir DWG çizimidir: CAD uygulamasından DXF olarak kaydedin ve onu açın
+@msg	this binary DXF file is damaged or cut short	bu ikili DXF dosyası hasarlı veya kısa kesilmiş
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	bu bir PostScript dosyasıdır (eski bir formatta kaydedilmiş veya PDF uyumluluğu olmayan bir .ai veya bir EPS dosyası), PDF değil: Dosya › Aç ve Dosya › Yerleştir, EPS olarak oku
 @msg	this is not a PostScript file	bu bir PostScript dosyası değil
 @msg	tool shortcuts must be a single key (optionally with Shift)	araç kısayolları tek tuş olmalıdır (isteğe bağlı olarak Shift ile)
 @msg	truncated	kesik
 @msg	unknown command `{0}`	bilinmeyen komut `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	“{action}” eylemi, adım {step}: bilinmeyen `{command}` komutunu çalıştırıyor
 @msg	unknown command `{0}`; did you mean `{1}`?	bilinmeyen komut `{0}`; `{1}` mi demek istediniz?
 @msg	unknown effect `{id}`	bilinmeyen etki `{id}`
 @msg	unknown format	bilinmeyen format
@@ -4952,6 +5000,16 @@ axis	Both	Her İkisi
 @msg	automation path rejected: cannot resolve {path}: {e}	otomasyon yolu reddedildi: {path} çözülemiyor: {e}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	otomasyon yolu reddedildi: var olmayan bir klasörün altında üst öğe geçişi: {path}
 @msg	automation path rejected: reserved device names are not allowed: {path}	otomasyon yolu reddedildi: ayrılmış cihaz adlarına izin verilmiyor: {path}
+@msg	cannot open the automation {kind} root `{_1}`: {e}	otomasyon {kind} kökü `{_1}` açılamıyor: {e}
+@msg	cannot align zip entries to {align} bytes	zip girdileri {align} bayta hizalanamıyor
+@msg	file name too long to zip: {_1}	dosya adı zip için çok uzun: {_1}
+@msg	file name too long to zip: {name}	dosya adı zip için çok uzun: {name}
+@msg	can't open “{name}”: {e}	“{name}” açılamıyor: {e}
+@msg	{path}: could not be read	{path}: okunamadı
+@msg	the request may not read the New Document profiles folder	isteğin Yeni Belge profilleri klasörünü okuma izni yok
+@msg	its objects are nested too deep ({e})	nesneleri çok derin iç içe geçmiş ({e})
+@msg	an image that couldn't be read was left out	okunamayan bir görüntü dışarıda bırakıldı
+@msg	the {_1} plate can't be read: {e}	{_1} baskı plakası okunamıyor: {e}
 @msg	Multichannel PSD files can't be read: save it in RGB, CMYK or Grayscale mode	Çok kanallı PSD dosyaları okunamıyor: RGB, CMYK veya Gri Tonlama modunda kaydedin
 @msg	not a PSD file	PSD dosyası değil
 @msg	the PSD file has an unknown colour mode ({m})	PSD dosyasında bilinmeyen bir renk modu var ({m})
@@ -4983,6 +5041,42 @@ axis	Both	Her İkisi
 @msg	the JPEG XL container is too large to read	JPEG XL kapsayıcısı okunamayacak kadar büyük
 @msg	CMYK JPEG XL images can't be read	CMYK JPEG XL görüntüleri okunamıyor
 @msg	the JPEG XL file can't be read: {e}	JPEG XL dosyası okunamıyor: {e}
+# Image export: encoders, sizes and options.
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP derinliği {_1}: piksel başına 1, 4, 8, 16, 24 veya 32 bit olmalıdır
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP kodlaması başarısız oldu: {width} × {height} piksel biçime veya piksel arabelleğine sığmıyor
+@msg	GIF encoding failed: the palette image is malformed	GIF kodlaması başarısız oldu: palet görüntüsü bozuk biçimli
+@msg	GIF encoding failed: {e}	GIF kodlaması başarısız oldu: {e}
+@msg	JPEG colour profile: {e}	JPEG renk profili: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
+@msg	JPEG encoding failed: {e}	JPEG kodlaması başarısız oldu: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
+@msg	PNG encoding failed: the palette image is malformed	PNG kodlaması başarısız oldu: palet görüntüsü bozuk biçimli
+@msg	PNG encoding failed: {e}	PNG kodlaması başarısız oldu: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG kodlaması başarısız oldu: {width} × {height} piksel geçerli bir görüntü boyutu değil
+@msg	PSD colour profile: {e}	PSD renk profili: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
+@msg	TIFF colour profile: {e}	TIFF renk profili: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
+@msg	TIFF encoding failed: {e}	TIFF kodlaması başarısız oldu: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa derinliği {_1}: piksel başına 16, 24 veya 32 bit olmalıdır
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa kodlaması başarısız oldu: piksel arabelleği görüntü boyutuyla eşleşmiyor
+@msg	WebP encoding failed: {e}	WebP kodlaması başarısız oldu: {e}
+@msg	the pixel buffer doesn't match the image size	piksel arabelleği görüntü boyutuyla eşleşmiyor
+@msg	too many layers for PSD (at most 32767)	PSD için çok fazla katman (en fazla 32767)
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} piksel GIF için çok büyük (kenar başına en fazla 65535 piksel): çözünürlüğü düşürün
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} piksel JPEG için çok büyük (kenar başına en fazla 65535 piksel): çözünürlüğü düşürün
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} piksel Targa için çok büyük (kenar başına en fazla 65535 piksel): çözünürlüğü düşürün
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} piksel PSD için çok büyük (kenar başına en fazla {MAX_SIDE} piksel): çözünürlüğü düşürün
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	görüntü {w} × {h} piksel olurdu; raster dışa aktarmalar kenar başına {MAX_RASTER_SIDE} piksel ve {_1} megapiksel ile sınırlıdır: ölçeği veya çözünürlüğü düşürün
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	{sw} × {sh} boyutundaki bir görüntü {width} × {height} piksele yeniden boyutlandırılamaz
+@msg	a {width} × {height} image is too large	{width} × {height} boyutundaki bir görüntü çok büyük
+@msg	a {width} × {height} image: {e}	{width} × {height} boyutundaki bir görüntü: {e}
+@msg	an image could not be written: {e}	bir görüntü yazılamadı: {e}
+@msg	invalid scale {scale}	geçersiz ölçek {scale}
+@msg	SVG options: {e}	SVG seçenekleri: {e}
+@msg	Save for Web settings: {e}	Web için Kaydet ayarları: {e}
+@msg	the optimised image can't be read back: {e}	en iyileştirilmiş görüntü geri okunamıyor: {e}
+@msg	the preview: {e}	önizleme: {e}
 	Video	video
 	De-Interlace…	Taramasızlaştırma…
 	De-Interlace	Taramasızlaştırma
@@ -5270,6 +5364,31 @@ lighting	Light	Işık
 @msg	{label} draws no faces for this object	{label} bu nesne için hiçbir yüz çizmez
 @msg	the wireframe has more than {MAX_WIRE_EDGES} edges	tel kafeste {MAX_WIRE_EDGES} kenardan fazla var
 @msg	The 3D surface is too complex; simplify the shape	3 boyutlu yüzey çok karmaşık; şekli basitleştir
+@msg	3D effects require finite coordinates within 100 million points	3D efektleri 100 milyon pt sınırı içinde sonlu koordinatlar gerektirir
+@msg	3D effects require one to ten lights	3D efektleri bir ile on arasında ışık gerektirir
+@msg	The 3D projection is not finite	3D izdüşümü sonlu değil
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D gölgesi çok karmaşık; Gölgeler'i kapatın veya resmi basitleştirin
+@msg	The shape contains invalid coordinates	Şekil geçersiz koordinatlar içeriyor
+@msg	Revolve profile contains invalid coordinates	Döndür profili geçersiz koordinatlar içeriyor
+@msg	Revolve profile is too complex	Döndür profili çok karmaşık
+@msg	Revolve projection is not finite	Döndür izdüşümü sonlu değil
+@msg	Revolve requires finite profile coordinates within 100 million points	Döndür, 100 milyon pt sınırı içinde sonlu profil koordinatları gerektirir
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Döndür yüzeyi çok karmaşık; Segmentler değerini azaltın veya profili basitleştirin
+@msg	Revolve surface is too complex; simplify the profile	Döndür yüzeyi çok karmaşık; profili basitleştirin
+@msg	Revolve visibility cannot split the projected boundary	Döndür görünürlüğü izdüşümü alınan sınırı bölemiyor
+@msg	Revolve visibility creates too many fragments	Döndür görünürlüğü çok fazla parça oluşturuyor
+@msg	Revolve visibility creates too many vector anchors	Döndür görünürlüğü çok fazla vektör bağlantı noktası oluşturuyor
+@msg	Revolve visibility exceeds its geometry work limit	Döndür görünürlüğü geometri işlem sınırını aşıyor
+@msg	Revolve visibility exceeds its spatial index limit	Döndür görünürlüğü uzamsal dizin sınırını aşıyor
+@msg	Revolve visibility has too many boundary crossings	Döndür görünürlüğünde çok fazla sınır kesişimi var
+@msg	Revolve visibility has too many input anchors	Döndür görünürlüğünde çok fazla girdi bağlantı noktası var
+@msg	Revolve visibility requires convex cap sectors	Döndür görünürlüğü dışbükey kapak dilimleri gerektirir
+@msg	Revolve visibility requires finite projected faces	Döndür görünürlüğü sonlu izdüşüm yüzleri gerektirir
+@msg	Too many Revolve faces for visibility evaluation	Görünürlük değerlendirmesi için çok fazla Döndür yüzü var
+@msg	input contains NaN or infinite coordinates	girdi NaN veya sonsuz koordinatlar içeriyor
+@msg	input path could not be closed	girdi yolu kapatılamadı
+@msg	the shapes are too degenerate to combine	şekiller birleştirilemeyecek kadar yozlaşmış
+@msg	the shapes cross themselves and each other too often to combine	şekiller kendilerini ve birbirlerini birleştirilemeyecek kadar sık kesiyor
 	Transform Objects	Nesneleri Dönüştür
 @msg	unknown parameter `{key}`; did you mean `{near}`?	bilinmeyen parametre `{key}`; `{near}` mi demek istediniz?
 @msg	unknown parameter `{key}`; the command takes no parameters	bilinmeyen parametre `{key}`; komut hiçbir parametre almaz
@@ -7426,6 +7545,12 @@ breakText	Glyphs	Glifler
 @msg	open the practice sample of `{id}` first (see learn.openSample)	önce `{id}` öğreticisinin alıştırma örneğini açın (bkz. learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	önce `{id}` öğreticisini bitirin (bkz. learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}`, becerisinin son öğreticisidir
+	Reset progress	İlerlemeyi sıfırla
+	Mark Tutorial Step	Öğretici Adımını İşaretle
+	Reset Learn Progress	Öğrenme İlerlemesini Sıfırla
+@msg	missing `step` (see learn.show)	`step` eksik (bkz. learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step`, 0 ile {last} arasında bir adım numarası olmalıdır
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` bitirildi (bkz. learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Ertelenen Efektleri Yenile
