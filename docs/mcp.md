@@ -8253,7 +8253,8 @@ undo step. Object › Transform › Scale, the Scale tool and the Transform pane
 text reflows along it.
 `text.setPathHandle {id, subpath?, anchor, which: "in"|"out", x, y, independent?}` moves a direction handle of one
 of its anchors, as `path.setHandle` moves a path's (Direct Selection dragging a handle of the path, #3565), in one
-undo step.
+undo step. A call of `text.reshapeArea`, `text.reshapePath` or `text.setPathHandle` that changes nothing (`dx` and
+`dy` both 0, or a handle moved to where it already is) adds no undo step and keeps redo.
 
 ```json
 {"name":"run_command","arguments":{"command":"text.reshapeArea","params":{"id":42,"anchors":[[0,2]],"dx":40,"dy":60}}}
@@ -8318,7 +8319,10 @@ the end of the path), and `fit`, `fitScale` and `dynamicText` (Block is on) for 
 Given for several area types (`ids`, or a selection of several), `text.areaOptions` changes only the options given on
 each one: each frame keeps its other options (it used to take the first frame's), and `fitMinPercent` alone changes only
 the frames that already shrink text to fit. Options that change nothing (the vertical alignment already set, say) add
-no undo step and keep redo.
+no undo step and keep redo. The same holds for `text.setText` when no object changes (the text it already has, in one
+style, every paragraph with the first one's attributes and no ruby), `text.setStyle` when no character, paragraph or
+graph label style changes, `type.ruby` with the same reading and options again or `remove` where there is no ruby, and
+`text.fitHeadline` on a first line that already has the tracking it would set.
 
 Text that doesn't fit is drawn up to the last line that does, so a one-line headline in a frame lower than its line
 draws nothing. The commands that make type or change what it holds say so in their own reply: `text.create`,
