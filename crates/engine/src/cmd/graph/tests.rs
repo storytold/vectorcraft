@@ -6473,6 +6473,21 @@ fn the_frontmost_axis_line_sets_what_its_recolor_keeps() {
     assert_eq!(kept.as_deref(), Some("#00ffff"), "the inverted red of the frontmost line");
 }
 
+/// An appearance moved from an axis line to one behind it is kept for every axis line, not the cleared source's.
+#[test]
+fn an_appearance_moved_to_an_axis_line_behind_is_kept() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    let (back, front) = (lines[0].id, lines[lines.len() - 1].id);
+    s.execute("paint.setStroke", &json!({"ids": [front.0], "color": "#ff0000"})).unwrap();
+    s.execute("appearance.transfer", &json!({"source": front.0, "target": back.0})).unwrap();
+    let kept = spec(&s, id).label_styles.axis_rows.unwrap().paint.stroke.and_then(|p| p.color()).map(|c| c.to_hex());
+    assert_eq!(kept.as_deref(), Some("#ff0000"), "the moved red, not the cleared source");
+    assert!(redrawn_line_looks(&mut s, id).iter().all(|l| l.0 == "#ff0000"));
+}
+
 /// A radar graph's spoke brought in front of its rings is still a spoke: what is set on it is kept for the spokes.
 #[test]
 fn a_radar_spoke_moved_in_front_of_the_rings_keeps_its_kind() {

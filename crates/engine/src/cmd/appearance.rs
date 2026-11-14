@@ -974,8 +974,9 @@ fn transfer(s: &mut Session, p: &Value) -> Result<Value> {
         rows.extend(painted_rows(d, both_kinds(&targets)));
         let painted = super::graph::capture_series_top_paints(d, &rows);
         let object = super::graph::capture_series_object_opacity(d, &changed);
-        // The targets last: on two labels of one kind, the target's rows are the ones the kind keeps.
-        let labels = super::graph::capture_label_rows(d, &changed);
+        // The targets last: on two labels of one kind, the target's rows are the ones the kind keeps. Graph lines are
+        // taken in paint order, so the targets are captured again on their own, after a cleared source in front of them.
+        let labels = super::graph::capture_label_rows(d, &changed) | super::graph::capture_label_rows(d, &targets);
         let all: Vec<NodeId> = from.iter().chain(&targets).chain(&group).copied().collect();
         Ok(count_changed(d, &before, &all) + usize::from(kept || painted || object || labels))
     })?;
