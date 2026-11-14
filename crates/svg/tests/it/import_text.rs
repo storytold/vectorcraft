@@ -300,6 +300,84 @@ fn text_path_becomes_type_on_a_path() {
 }
 
 #[test]
+fn text_on_a_closed_path_wraps_past_the_path_start() {
+    // A closed path 400 long: text anchored before its start, or offset past its end, wraps
+    // around the path instead of stopping at its start or end.
+    let d = open(
+        r##"<path id="p" d="M50 50 H150 V150 H50 Z" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#p">Wave</textPath></text>
+        <text font-size="20"><textPath href="#p" startOffset="440">Wave</textPath></text>
+        <text font-size="20" direction="rtl"><textPath href="#p">Wave</textPath></text>
+        <text font-size="20" text-anchor="middle"><textPath href="#p">Wave</textPath></text>
+        <text font-size="20"><textPath href="#p" startOffset="-40">Wave</textPath></text>
+        <text font-size="20"><textPath href="#p" startOffset="-10%">Wave</textPath></text>
+        <path id="q" d="M50 50 H150 V150 H50 Z M200 50 H300 V150 H200 Z" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#q">Wave</textPath></text>
+        <path id="o" d="M50 50 H150 V150 H50" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#o">Wave</textPath></text>
+        <text font-size="20"><textPath href="#o" startOffset="440">Wave</textPath></text>"##,
+    );
+    let t = texts(&d);
+    assert_eq!(t.len(), 9);
+    let start_of = |t: &TextObject| match t.kind {
+        TextKind::OnPath { start, .. } => start,
+        _ => panic!("{:?}", t.kind),
+    };
+    let width: f64 = layout(FontDb::global(), t[0]).glyphs.iter().map(|g| g.advance).sum();
+    assert!(width > 0.0);
+    // Ending at the path's start: the text starts its width before the end of the loop.
+    assert!(close(start_of(t[0]), 1.0 - width / 400.0, 1e-6), "{} {width}", start_of(t[0]));
+    assert!(close(start_of(t[1]), 0.1, 1e-9), "{}", start_of(t[1]));
+    // Right-to-left text starts at its edge toward the path's end, here the path's start.
+    assert!(close(start_of(t[2]), 1.0 - width / 400.0, 1e-6), "{} {width}", start_of(t[2]));
+    // Centered on the path's start: half the text before it, half after.
+    assert!(close(start_of(t[3]), 1.0 - width / 800.0, 1e-6), "{} {width}", start_of(t[3]));
+    // A negative startOffset, in user units or as a percentage, counts back from the path's end.
+    assert!(close(start_of(t[4]), 0.9, 1e-9), "{}", start_of(t[4]));
+    assert!(close(start_of(t[5]), 0.9, 1e-9), "{}", start_of(t[5]));
+    // A path of two closed subpaths, and an open path, do not wrap: the text starts at the path's
+    // start or end.
+    assert_eq!(start_of(t[6]), 0.0);
+    assert_eq!(start_of(t[7]), 0.0);
+    assert_eq!(start_of(t[8]), 1.0);
+
+    // Laid out, the end-anchored text draws every glyph up the left side and ends at the start
+    // point; the centered text crosses the start point from the left side onto the top.
+    let lay = layout(FontDb::global(), t[0]);
+    assert!(!lay.overflow);
+    assert_eq!(lay.glyphs.len(), 4);
+    for g in &lay.glyphs {
+        let o = t[0].xf * g.origin;
+        assert!(close(o.x, 50.0, 0.05) && o.y > 50.0 && o.y < 150.0, "{o:?}");
+    }
+    let last = lay.glyphs.last().map(|g| t[0].xf * (g.origin + baseline_dir(g.angle) * g.advance));
+    assert!(last.is_some_and(|p| close(p.x, 50.0, 0.05) && close(p.y, 50.0, 0.05)), "{last:?}");
+    let lay = layout(FontDb::global(), t[3]);
+    assert!(!lay.overflow);
+    assert_eq!(lay.glyphs.len(), 4);
+    let first = t[3].xf * lay.glyphs[0].origin;
+    assert!(close(first.x, 50.0, 0.05) && first.y > 50.0, "{first:?}");
+    let last = t[3].xf * lay.glyphs[3].origin;
+    assert!(close(last.y, 50.0, 0.05) && last.x > 50.0, "{last:?}");
+
+    // Text longer than the loop draws its first characters, whatever its anchor.
+    let d = open(
+        r##"<path id="s" d="M0 0 H20 V20 H0 Z" fill="none" stroke="black"/>
+        <text font-size="20" text-anchor="end"><textPath href="#s">Wave Wave Wave</textPath></text>"##,
+    );
+    let t = only_text(&d);
+    let lay = layout(FontDb::global(), t);
+    assert!(lay.overflow);
+    assert!(!lay.glyphs.is_empty() && lay.glyphs.len() < 14, "{}", lay.glyphs.len());
+    assert!(lay.glyphs.iter().enumerate().all(|(i, g)| g.byte == i), "{:?}", lay.glyphs.iter().map(|g| g.byte).collect::<Vec<_>>());
+}
+
+/// The unit vector along a glyph's baseline.
+fn baseline_dir(angle: f64) -> vectorcraft_geom::Vec2 {
+    vectorcraft_geom::Vec2::new(angle.cos(), angle.sin())
+}
+
+#[test]
 fn per_character_positions_rotation_and_shifts() {
     let d = open(r#"<text x="10 30 60" y="50" rotate="15 -30" dy="0 -4" font-size="12">abcd</text>"#);
     let t = only_text(&d);
@@ -587,6 +665,12 @@ fn unicode_bidi_values_the_text_model_cannot_hold_are_reported() {
         (r#"<tspan display="none">&#x5D0;&#x5D1;</tspan>ab"#.to_string(), "ab", Ltr),
         (format!("<tspan>{far}</tspan>"), "\u{5D0}", Rtl),
         (format!("<tspan>\n</tspan>12 <tspan>{far}</tspan>"), "\u{5D0}", Rtl),
+        // An isolate that opens in one text node and closes in a later one is skipped whole.
+        ("&#x2067;ab<tspan>&#x2069;&#x5D0;</tspan>".to_string(), "\u{5D0}", Rtl),
+        ("&#x2067;ab<tspan>cd</tspan>&#x2069;&#x5D0;".to_string(), "\u{5D0}", Rtl),
+        // An isolate that opens in a nested `plaintext` element and closes after it hides the rest of that element.
+        (r#"<tspan unicode-bidi="plaintext">&#x2067;ab</tspan>&#x2069;&#x5D0;"#.to_string(), "\u{5D0}", Rtl),
+        (r#"<tspan unicode-bidi="plaintext">&#x2067;ab</tspan>&#x2069;&#x5D0;"#.to_string(), "ab", Ltr),
     ] {
         let (d, _) =
             import_with_report(&svg(&format!(r#"<text y="40">x <tspan direction="ltr" unicode-bidi="plaintext">{body}</tspan></text>"#))).unwrap();
