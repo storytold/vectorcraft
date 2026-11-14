@@ -1844,11 +1844,16 @@ fn rename(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     if std::fs::rename(&from, &to).is_err() {
         return Ok(error(WRITE_FAILED));
     }
-    // Open objects of the file, or of files in the folder, write to the new path.
-    for file in disk.open.values_mut() {
-        if let Some(rest) = file.target.as_deref().and_then(|t| t.strip_prefix(&from).ok()) {
-            file.target = Some(if rest.as_os_str().is_empty() { to.clone() } else { to.join(rest) });
+    // Open objects of the file, or of files in the folder, write to the new path, and the rules for
+    // reading apply to them there.
+    let moved = |p: &mut Option<std::path::PathBuf>| {
+        if let Some(rest) = p.as_deref().and_then(|t| t.strip_prefix(&from).ok()) {
+            *p = Some(if rest.as_os_str().is_empty() { to.clone() } else { to.join(rest) });
         }
+    };
+    for file in disk.open.values_mut() {
+        moved(&mut file.target);
+        moved(&mut file.read_from);
     }
     // The old path no longer holds the file, so the report names it as well as the new one.
     disk.wrote(&from);
