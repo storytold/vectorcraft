@@ -1408,10 +1408,18 @@ impl Ctx {
             let em = self.font_size(tp);
             let offset = tp.attribute("startOffset").and_then(|v| self.length(v, em, len)).unwrap_or(0.0) + dx[0];
             let width = if anchor > 0.0 { advance(&point_text(&cells)) } else { 0.0 };
-            // Text that would start before the path's beginning starts at it, with all its glyphs
-            // on the path (SVG does not draw the glyphs that fall off it).
-            let start = Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| s.clamp(0.0, 1.0));
-            obj.kind = TextKind::OnPath { path: PathData::from_bezpath(&bp), start, end: None };
+            // On a path of one closed subpath, text that starts before the path's start or past its
+            // end wraps around the path. Otherwise it starts at the path's start or end.
+            let path = PathData::from_bezpath(&bp);
+            let wraps = path.subpaths.len() == 1 && path.is_closed();
+            let wrap = |s: f64| {
+                // `rem_euclid` can round a tiny negative value up to 1.
+                let s = s.rem_euclid(1.0);
+                if s < 1.0 { s } else { 0.0 }
+            };
+            let start =
+                Some((offset - anchor * width) / len).filter(|s| s.is_finite()).map_or(0.0, |s| if wraps { wrap(s) } else { s.clamp(0.0, 1.0) });
+            obj.kind = TextKind::OnPath { path, start, end: None };
             obj.xf = Affine::IDENTITY;
         } else if vertical {
             // Type on a vertical path: dy is extra advance, dx shifts across the column.
