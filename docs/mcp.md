@@ -622,9 +622,12 @@ RGB fields in percent, as a double-click right of an RGB field does, and `false`
 and answers true when the fields show in percent.
 `ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
 strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
-shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
-the list return an error and change nothing. The command returns `{view, channel}`, and both settings are kept with
-the preferences.
+shows the wheel again. `{"harmony": true, "harmonyRule": "triad"}` puts a marker on the wheel's ring for each other
+color of a Color Guide harmony rule, as Show Harmony and Harmony Rule do; the wheel takes the 15 rules whose colors
+each have a hue of their own (not `monochromatic`, `shades`, `complementary2`, `triad2`, `triad3` or
+`highContrast2`). Keys left out keep their values. Params that are not an object, another key or a value off
+the list return an error and change nothing. The command returns `{view, channel, harmony, harmonyRule}`, and the
+settings are kept with the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

@@ -917,6 +917,40 @@ pub fn hue_ring(ui: &mut Ui, id: impl std::hash::Hash, name: &str, size: f32, hu
     out
 }
 
+/// Markers on a [`hue_ring`] drawn in `rect`, one for each HSB of `colors` at its hue, filled with
+/// its color and smaller than the ring's own marker. Each marker is a button that screen readers
+/// read as `name` with the color's hex value. A click gives it the keyboard focus, and a click,
+/// Enter or Space on the focused marker, or a screen reader's click returns its index. A drag that
+/// starts on a marker moves the ring's hue as a drag on the band does.
+pub fn ring_markers(ui: &mut Ui, id: &str, rect: Rect, colors: &[[f32; 3]], name: &str) -> Option<usize> {
+    let t = Tokens::get(ui.ctx());
+    let c = rect.center();
+    let mid = rect.width().min(rect.height()) / 2.0 - RING_MARGIN - RING_WIDTH / 2.0;
+    let radius = RING_WIDTH / 2.0 - 2.0;
+    let painter = ui.painter_at(rect);
+    let mut picked = None;
+    for (i, hsb) in colors.iter().enumerate() {
+        let p = wheel_pos(c, mid, hsb[0], 1.0);
+        let resp = ui.interact(Rect::from_center_size(p, Vec2::splat(RING_WIDTH)), id_with(ui.scope_id(), (id, i)), Sense::click());
+        focus_on_press(&resp);
+        let fill = hsb32(*hsb);
+        painter.circle(p, radius, fill, Stroke::new(1.0, Color32::WHITE));
+        painter.circle_stroke(p, radius + 1.0, Stroke::new(1.0, Color32::BLACK));
+        if ui.memory(|m| m.has_focus(resp.id)) {
+            painter.circle_stroke(p, radius + 3.0, Stroke::new(1.0, t.accent));
+        }
+        let hex = format!("#{:02x}{:02x}{:02x}", fill.r(), fill.g(), fill.b());
+        resp.widget_info(|| egui::WidgetInfo {
+            current_text_value: Some(hex.clone()),
+            ..egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), name)
+        });
+        if resp.clicked() {
+            picked = Some(i);
+        }
+    }
+    picked
+}
+
 /// Hue sectors and saturation rings of the [`segmented_wheel`]: patches 15° of hue by 20%
 /// saturation wide, the sectors centered on red at 0°.
 const WHEEL_SECTORS: u32 = 24;
