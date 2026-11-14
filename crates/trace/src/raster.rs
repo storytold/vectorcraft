@@ -35,6 +35,11 @@ pub const MAX_SOURCE_PIXELS: u64 = 192 << 20;
 pub(crate) fn trace_header(bytes: &[u8], max_pixels: u64, max_alloc: u64) -> Result<Option<craft_image_codecs::RasterInspection>, TraceError> {
     use craft_image_codecs::{ChannelLayout, Format, Limits, PngDecodeRows, RasterColorType, RasterInspection};
     let decode_err = |e: craft_image_codecs::CodecError| TraceError::Decode(e.to_string());
+    // Refuse a GIF frame larger than its logical screen before inspection's
+    // plausibility check can turn the caller's size refusal into a decode error.
+    if gif_first_frame_pixels(bytes).is_some_and(|pixels| pixels > max_pixels) {
+        return Err(TraceError::TooLarge { width: 0, height: 0, max: max_pixels >> 20 });
+    }
     if craft_image_codecs::detect(bytes) != Some(Format::Png) {
         return craft_image_codecs::inspect_raster(bytes).map_err(decode_err);
     }

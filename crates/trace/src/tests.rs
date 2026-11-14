@@ -3973,6 +3973,7 @@ fn a_gif_frame_larger_than_its_screen_is_refused_before_decoding() {
     gif.extend([2, 1, 0, 0, 0x3B]);
     assert!(matches!(Raster::decode(&gif), Err(TraceError::TooLarge { .. })), "{:?}", Raster::decode(&gif).err());
     assert!(matches!(Raster::decode_to_fit(&gif), Err(TraceError::TooLarge { .. })));
+    assert!(matches!(decode_alpha(&gif), Err(TraceError::TooLarge { .. })));
 }
 
 // Synthetic PNG chunks for transparency/orientation regression fixtures.

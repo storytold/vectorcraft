@@ -167,10 +167,13 @@ fn parse(xml: &str, name: &str, cmd: &str) -> Result<El> {
         ..Options::default()
     }
     .strict();
-    opts.parse(xml.as_bytes()).map_err(|e| match e {
+    let doc = opts.parse(xml.as_bytes()).map_err(|e| match e {
         craft_xml::Error::TooDeep(_) => bad(cmd, format!("`{name}` in the Word document nests elements more than {MAX_NESTING} deep")),
         _ => bad(cmd, format!("`{name}` in the Word document is not well-formed XML: {e}")),
-    })
+    })?;
+    crate::cmd::xmlattrs::validate(xml.as_bytes(), opts.limits)
+        .map_err(|e| bad(cmd, format!("`{name}` in the Word document is not well-formed XML: {e}")))?;
+    Ok(doc)
 }
 
 /// The part that the first relationship of part `source` (`""`: the package) whose type ends in

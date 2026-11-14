@@ -2481,6 +2481,9 @@ fn malformed_variable_libraries_are_refused() {
         ("not well-formed XML", "<variableSets><variableSet>".to_string()),
         ("not well-formed XML", ok.replace("<p>x</p>", "<p>A&missing;B</p>")),
         ("not well-formed XML", ok.replace("</variableSets>", "")),
+        ("not well-formed XML", ok.replace("varName=\"Name\"", "varName=\"Name\" varName=\"Other\"")),
+        ("not well-formed XML", ok.replace("<variable ", "<variable xmlns:a=\"urn:test\" xmlns:b=\"urn:test\" a:id=\"1\" b:id=\"2\" ")),
+        ("missing `varName`", ok.replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Name\"")),
         ("no `variableSets` element", "<svg><variables/></svg>".to_string()),
         ("declares no variables", "<variableSets><variableSet><variables/></variableSet></variableSets>".to_string()),
         ("is declared twice", library(&[("Name", "textcontent"), ("Name", "textcontent")], &[])),
@@ -3173,4 +3176,15 @@ fn an_svg_without_readable_variable_data_opens_its_art() {
         assert!(d.variables.variables.is_empty());
         assert_eq!(vectorcraft_testkit::svg_shapes(&vectorcraft_svg::export(d, &Default::default())), 1, "the art opens");
     }
+}
+
+#[test]
+fn variable_library_attributes_keep_their_namespace() {
+    let mut s = session();
+    let xml = library(&[("Name", "textcontent")], &[("A", &[("Name", &["x"])])])
+        .replace("varName=\"Name\"", "xmlns:m=\"urn:metadata\" m:varName=\"Other\" varName=\"Name\"");
+    let loaded = s.execute("variable.loadLibrary", &json!({"xml": xml})).unwrap();
+    assert_eq!(loaded["variables"], json!(["Name"]));
+    let sets = s.execute("dataset.list", &json!({})).unwrap();
+    assert_eq!(sets["datasets"][0]["values"], json!({"Name": {"text": "x"}}));
 }

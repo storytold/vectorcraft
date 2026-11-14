@@ -199,7 +199,7 @@ impl Library {
 fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
     let xml = without_doctype(xml, cmd)?;
     let opts = craft_xml::Options {
-        names: craft_xml::Names::Local,
+        names: craft_xml::Names::AsWritten,
         limits: craft_xml::Limits { max_depth: MAX_LIBRARY_NESTING, max_nodes: MAX_LIBRARY_NODES as usize, ..craft_xml::Limits::DEFAULT },
         ..craft_xml::Options::default()
     }
@@ -208,12 +208,13 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
         craft_xml::Error::TooDeep(_) => bad(cmd, format!("the variable library nests elements more than {MAX_LIBRARY_NESTING} deep")),
         _ => bad(cmd, format!("the variable library is not well-formed XML: {e}")),
     })?;
-    let Some(root) = std::iter::once(&doc).chain(doc.descendants()).find(|n| n.is("variableSets")) else {
+    crate::cmd::xmlattrs::validate(xml.as_bytes(), opts.limits).map_err(|e| bad(cmd, format!("the variable library is not well-formed XML: {e}")))?;
+    let Some(root) = std::iter::once(&doc).chain(doc.descendants()).find(|n| n.is(craft_xml::Local("variableSets"))) else {
         return Err(bad(cmd, "the file holds no `variableSets` element"));
     };
-    let sets: Vec<&craft_xml::El> = root.children("variableSet").collect();
+    let sets: Vec<&craft_xml::El> = root.children(craft_xml::Local("variableSet")).collect();
     let (mut text, mut other, mut declared, mut refs) = (Vec::new(), Vec::new(), BTreeSet::new(), Vec::new());
-    for var in sets.iter().flat_map(|s| s.children("variables")).flat_map(|v| v.children("variable")) {
+    for var in sets.iter().flat_map(|s| s.children(craft_xml::Local("variables"))).flat_map(|v| v.children(craft_xml::Local("variable"))) {
         let name = named(var.attr("varName"), "varName", cmd)?;
         if !declared.insert(name.clone()) {
             return Err(bad(cmd, format!("variable `{name}` is declared twice")));
@@ -239,7 +240,7 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
     }
     let text_names: BTreeSet<&str> = text.iter().map(String::as_str).collect();
     let (mut datasets, mut seen) = (Vec::new(), BTreeSet::new());
-    for row in sets.iter().flat_map(|s| s.children("sampleDataSets")).flat_map(|d| d.children("sampleDataSet")) {
+    for row in sets.iter().flat_map(|s| s.children(craft_xml::Local("sampleDataSets"))).flat_map(|d| d.children(craft_xml::Local("sampleDataSet"))) {
         let name = named(row.attr("dataSetName"), "dataSetName", cmd)?;
         if !seen.insert(name.clone()) {
             return Err(bad(cmd, format!("data set `{name}` is declared twice")));
@@ -249,7 +250,7 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
         }
         let (mut values, mut held) = (BTreeMap::new(), BTreeSet::new());
         for el in row.elements() {
-            let var = el.name.as_str();
+            let var = el.local();
             if !declared.contains(var) {
                 return Err(bad(cmd, format!("data set `{name}` holds a value for `{var}`, which the library doesn't declare")));
             }
@@ -259,7 +260,7 @@ fn parse_library(xml: &str, cmd: &str) -> Result<Library> {
             if !text_names.contains(var) {
                 continue;
             }
-            let paras: Vec<String> = el.children("p").map(craft_xml::El::deep_text).collect();
+            let paras: Vec<String> = el.children(craft_xml::Local("p")).map(craft_xml::El::deep_text).collect();
             if !paras.is_empty() {
                 values.insert(var.to_string(), DataValue::Text(paras.join("\n")));
             }
