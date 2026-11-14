@@ -334,6 +334,27 @@ fn catalan_reads_as_catalan() {
     assert_eq!(message(ca, nested), "l’ordre `object.group` no està disponible ara mateix: no hi ha res seleccionat");
 }
 
+/// Brazilian Portuguese spells Relink "Revincular", and no row calls a process color a
+/// selection color ("cor de seleção").
+#[test]
+fn brazilian_portuguese_spells_relink_and_process_color() {
+    let pt = Lang::from_code("pt-br").expect("pt-br registered");
+    let (entries, _) = parse_entries(pt.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let portuguese = translation.to_lowercase();
+        if portuguese.contains("revinculcar") {
+            wrong.push(format!("Relink in {src:?} -> {translation:?}"));
+        }
+        if src.to_lowercase().contains("process colo") && (portuguese.contains("cor de seleção") || portuguese.contains("cores de seleção")) {
+            wrong.push(format!("process color in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Brazilian Portuguese rows are wrong:\n{}", wrong.len(), wrong.join("\n"));
+    assert_eq!(tr(pt, "Relink…"), "Revincular…");
+    assert!(message(pt, "`{name}` is a process colour: tints apply to global and spot colours").to_lowercase().contains("cor de processo"));
+}
+
 #[test]
 fn font_height_reference_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
