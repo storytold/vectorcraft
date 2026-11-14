@@ -1525,6 +1525,7 @@ font-technology	Variable	Değişken
 	Images:	Görseller:
 	Import Keyboard Shortcuts…	Klavye Kısayollarını İçe Aktar…
 	Import PDF	PDF'yi içe aktar
+	Import PDF pages as links	PDF sayfalarını bağlantı olarak içe aktar
 	Import PDF Presets	PDF Hazır Ayarlarını İçe Aktar
 	Import Perspective Grid Presets	Perspektif Izgarası Ön Ayarlarını İçe Aktar
 	Import Print Presets	Yazdırma Ön Ayarlarını İçe Aktar
@@ -3243,6 +3244,18 @@ digits	Malayalam	Malayalam
 	Smart Guides (View → Smart Guides)	Akıllı Kılavuzlar (Görünüm → Akıllı Kılavuzlar)
 	Smart Guides (⌘U)	Akıllı Kılavuzlar (⌘U)
 	Smart Punctuation…	Akıllı Noktalama…
+	Smart Punctuation	Akıllı Noktalama
+	ff, fi, ffi Ligatures	ff, fi, ffi Bitişik Harfleri
+	ff, fl, ffl Ligatures	ff, fl, ffl Bitişik Harfleri
+	Smart Quotes	Akıllı Tırnaklar
+	Smart Spaces	Akıllı Boşluklar
+	En, Em Dashes	En ve Em Tireler
+	Ellipses	Üç Noktalar
+	Expert Fractions	Uzman Kesirleri
+	Replace In	Değiştirilecek Yer
+	Selected Text Only	Yalnızca Seçili Metin
+	Entire Document	Tüm Belge
+	Report Results	Sonuçları Bildir
 	Smooth	Pürüzsüz
 	Corner	Köşe
 	Relative	akraba
@@ -3271,6 +3284,7 @@ digits	Malayalam	Malayalam
 	Solid	Katı
 	Sort by Kind	Türe göre sırala
 	Sort by Name	Ada Göre Sırala
+	Sort by Size	Boyuta göre sırala
 	Sort by Status	Duruma göre sırala
 	Source code on GitHub	GitHub'daki kaynak kodu
 	Source Sans 3	Kaynak Sans 3
@@ -4620,6 +4634,7 @@ axis	Both	Her İkisi
 @msg	result would exceed the canvas (coordinates out of range)	sonuç tuvali aşacaktır (koordinatlar aralık dışındadır)
 @msg	objects can't be nested more than 32 deep	nesneler 32'den fazla derinliğe yerleştirilemez
 @msg	the SVG's elements are nested more than {0} deep	SVG'nin öğeleri {0} derinliğinden daha fazla yuvalanmıştır
+@msg	the SVG's styles expand to more than {0} MB	SVG'nin stilleri genişletildiğinde {0} MB'tan fazla yer kaplıyor
 @msg	scale must be a number from {_1} to {_2}, not {_3}	scale {_1} ile {_2} arasında bir sayı olmalıdır, {_3} değil
 @msg	scale must be a number from {_1} to {_2}, not {s}	scale {_1} ile {_2} arasında bir sayı olmalıdır, {s} değil
 @msg	select (or target) objects whose appearance isn't basic	Görünümü temel olmayan nesneleri seçin (veya hedefleyin)
