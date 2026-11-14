@@ -678,18 +678,28 @@ fn instances_as_art(doc: Option<&Document>, n: &mut Node, outline: OutlineHook, 
     }
 }
 
+/// Type `t` in a clip group's clipping path as its outlines ([`outline_text`]) with its
+/// visibility, or with geometry effects as a path of the region they give it, which is what
+/// [`crate::clip_outline`] clips by.
+pub(crate) fn clipping_text_outline(t: &Node) -> Option<Node> {
+    if let Some(p) = crate::clip::with_clip_effects_applied(t) {
+        return Some(p);
+    }
+    let o = outline_text(t)?;
+    Some(Node { visible: t.visible, ..o })
+}
+
 /// Replace type anywhere inside `n` by its outlines, as art that keeps the type's look
 /// ([`as_art`]). Type in a clip group's clipping path (all of `n` when `clipping` is set) becomes
-/// its plain outlines ([`outline_text`]) with its visibility, which is what
-/// [`crate::clip_outline`] clips by. The swatches and patterns that live-effect plug-ins painting
-/// their pieces name are looked up in `doc`.
+/// its outlines with its visibility and effects ([`clipping_text_outline`]). The swatches and
+/// patterns that live-effect plug-ins painting their pieces name are looked up in `doc`.
 pub(crate) fn outline_nested_text(doc: Option<&Document>, n: &mut Node, clipping: bool) {
     let clips = n.clips();
     let Some(ch) = n.children_mut() else { return };
     for (i, c) in ch.iter_mut().enumerate() {
         let clipping = clipping || (clips && i == 0);
         let art = match &c.kind {
-            NodeKind::Text(_) if clipping => outline_text(c).map(|o| Node { visible: c.visible, ..o }),
+            NodeKind::Text(_) if clipping => clipping_text_outline(c),
             NodeKind::Text(_) => as_art(doc, c, None),
             _ => None,
         };

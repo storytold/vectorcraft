@@ -664,6 +664,17 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let b = n.visual_bounds_with(symbols)?;
             let b = match &n.kind {
                 NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
+                // The geometry effects in a clipping path move or grow the region it clips to
+                // ([`effects::clip_outline`]) past its plain shape, and its stroke paints along it.
+                NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => match children.first() {
+                    Some(c) if effects::needs_bake(c) => {
+                        let s = c.appearance.outset();
+                        let region = effects::clip_outline(c).map(|(bp, _)| bp.bounding_box().inflate(s, s));
+                        let painted = if has_fx(c) { visual_bounds(symbols, c) } else { None };
+                        vectorcraft_geom::union_opt(vectorcraft_geom::union_opt(Some(b), region), painted).unwrap_or(b)
+                    }
+                    _ => b,
+                },
                 _ => b,
             };
             let a = live_content_reach(symbols, n);

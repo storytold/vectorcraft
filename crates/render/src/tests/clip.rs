@@ -96,6 +96,42 @@ fn nothing_to_clip_by_hides_the_art() {
 }
 
 #[test]
+fn the_clipping_paths_geometry_effects_shape_the_clip() {
+    // A Transform effect moving the left half 50 pt right: the right half shows instead.
+    let mut d = Document::new(100.0, 100.0);
+    let mut clip = Node::path(d.alloc_id(), rect(Rect::new(0.0, 0.0, 50.0, 100.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+    clip.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 50}), visible: true });
+    let r = clipped(d, Arc::new(clip));
+    assert_eq!(r.pixel(25, 50), CLEAR, "the clipping path's own place");
+    assert_eq!(r.pixel(75, 50), BLACK, "where its effect moves it");
+}
+
+#[test]
+fn a_view_of_only_the_moved_clip_draws_the_clipped_art() {
+    // The clipping path covers x 0 to 50 and its Transform effect moves it to x 50 to 100; the
+    // view shows x 60 to 100, past the clipping path's own shape.
+    let mut d = Document::new(100.0, 100.0);
+    let mut clip = Node::path(d.alloc_id(), rect(Rect::new(0.0, 0.0, 50.0, 100.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+    clip.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params: serde_json::json!({"moveH": 50}), visible: true });
+    let art = Node::path(d.alloc_id(), rect(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let members = vec![Arc::new(clip), Arc::new(art)];
+    let g = Node::new(d.alloc_id(), NodeKind::Group { children: members.clone(), clip: true });
+    // The same in a sublayer that clips by its first object.
+    let mut sublayer = (*d.layers[0]).clone();
+    sublayer.id = d.alloc_id();
+    if let NodeKind::Layer { children, clip, .. } = &mut sublayer.kind {
+        (*children, *clip) = (members, true);
+    }
+    for clipping in [g, sublayer] {
+        let mut d = d.clone();
+        let l = d.layers[0].id;
+        d.insert(Some(l), 0, clipping).unwrap();
+        let r = Renderer::new().render(&d, 40, 100, Affine::translate((-60.0, 0.0)), &RenderOptions::default());
+        assert_eq!(r.pixel(20, 50), BLACK, "x 80, inside the moved clip");
+    }
+}
+
+#[test]
 fn clip_regions_are_cached_per_clipping_path() {
     let mut d = Document::new(100.0, 100.0);
     let clip = path(&mut d, rect(Rect::new(0.0, 0.0, 50.0, 100.0)), FillRule::NonZero);

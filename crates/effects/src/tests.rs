@@ -4,6 +4,7 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Shape, SubPath, shapes};
 
 use super::*;
 
+mod clipfx;
 mod imageoutline;
 mod painted;
 mod rasterfollow;

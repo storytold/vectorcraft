@@ -838,9 +838,10 @@ pub fn evaluate_container(doc: Option<&Document>, n: &Node) -> Option<Node> {
 /// Replace each visible member of `n` with geometry or Pathfinder effects of its own, at every
 /// depth of its groups and layers, by the art it draws ([`evaluate_container`],
 /// [`crate::reshape::own_effects_art`]), so the geometry effects of `n` reshape what its members
-/// draw. A clip group's clipping path stays as it is, and so do images, symbol instances and the
-/// other objects that `own_effects_art` leaves alone, and a group or layer with a 3D effect with
-/// everything in it. Calls nested in one another, through the
+/// draw. A clip group's clipping path only takes the geometry effects in it into its geometry
+/// ([`crate::clip::with_clip_effects_applied`]). Images, symbol instances and the other objects
+/// that `own_effects_art` leaves alone stay as they are, and so does a group or layer with a 3D
+/// effect with everything in it. Calls nested in one another, through the
 /// groups and layers it walks and the art it evaluates (symbol art and Pathfinder members
 /// included), stop at [`vectorcraft_doc::depth::MAX_DEPTH`] deep, and together they replace at
 /// most [`crate::SYMBOL_ART_MAX_NODES`] members: past either limit, members stay as they are.
@@ -848,6 +849,13 @@ pub(crate) fn members_as_drawn(doc: Option<&Document>, n: &mut Node) {
     let Some(_frame) = DrawnFrame::enter() else { return };
     let clip = usize::from(n.clips());
     let Some(ch) = n.children_mut() else { return };
+    // The clipping path's own geometry effects shape it before the effects around it do.
+    if clip == 1
+        && let Some(first) = ch.first_mut()
+        && let Some(applied) = crate::clip::with_clip_effects_applied(first)
+    {
+        *first = Arc::new(applied);
+    }
     for c in ch.iter_mut().skip(clip).filter(|c| c.visible) {
         if !DrawnFrame::take_member() {
             return;
