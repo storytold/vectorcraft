@@ -517,7 +517,7 @@ mod tests {
     }
 
     /// Text Wrap Options › Offset is a distance, and its range is the one `object.textWrap.options`
-    /// keeps an Offset to.
+    /// accepts: the command takes the range's ends and refuses an Offset outside them.
     #[test]
     fn text_wrap_offset_is_a_distance_within_the_commands_range() {
         assert!(lengths("object.textWrap.options").contains(&"offset"));
@@ -531,8 +531,11 @@ mod tests {
         s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
         s.execute("select.all", &json!({})).unwrap();
         s.execute("object.textWrap.make", &json!({})).unwrap();
-        for (sent, end) in [(5000.0, *range.end()), (-5000.0, *range.start())] {
-            assert_eq!(s.execute("object.textWrap.options", &json!({ "offset": sent })).unwrap()["offset"], json!(end));
+        for end in [*range.end(), *range.start()] {
+            assert_eq!(s.execute("object.textWrap.options", &json!({ "offset": end })).unwrap()["offset"], json!(end));
+        }
+        for sent in [5000.0, -5000.0] {
+            assert!(s.execute("object.textWrap.options", &json!({ "offset": sent })).is_err(), "{sent}");
         }
     }
 
