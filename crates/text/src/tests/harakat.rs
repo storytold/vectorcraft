@@ -403,13 +403,15 @@ fn check_optical_tsume(db: &FontDb, family: &str) {
         }
         t
     };
-    let xs = |t: &TextObject| layout(db, t).glyphs.iter().map(|g| g.xf.as_coeffs()[4]).collect::<Vec<_>>();
+    // Each glyph's place and advance: where a mark's ink leaves no blank space on the left, the
+    // Tsume of the line's first cluster only narrows its advance and moves no glyph.
+    let xs = |t: &TextObject| layout(db, t).glyphs.iter().flat_map(|g| [g.xf.as_coeffs()[4], g.advance]).collect::<Vec<_>>();
     assert!(xs(&set(true, None)).iter().zip(xs(&set(false, None))).any(|(a, b)| (a - b).abs() > 1e-6), "{family}: Optical moves the pair");
     // Each letter in turn: the first one's cluster ends the pair, the second one's starts it.
     for letter in [0, 4] {
         let moved = |optical: bool| xs(&set(optical, Some(letter))).iter().zip(xs(&set(optical, None))).map(|(a, b)| a - b).collect::<Vec<_>>();
         let (without, with_optical) = (moved(false), moved(true));
-        assert!(without.iter().any(|m| m.abs() > 1e-3), "{family} {letter}: Tsume moves the glyphs: {without:?}");
+        assert!(without.iter().any(|m| m.abs() > 1e-3), "{family} {letter}: Tsume moves or narrows the glyphs: {without:?}");
         assert!(
             without.len() == with_optical.len() && without.iter().zip(&with_optical).all(|(a, b)| (a - b).abs() < 1e-6),
             "{family} {letter}: {without:?} {with_optical:?}"
