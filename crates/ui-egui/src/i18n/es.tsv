@@ -1046,6 +1046,7 @@ font-technology	Variable	Variables
 	Enable text access for screen readers	Permitir el acceso al texto para lectores de pantalla
 	Enable Touch Gestures	Activar gestos táctiles
 	Switch Selection and Drawing Modes	Cambiar entre modos de selección y dibujo
+	Select Last Selection Tool	Elegir la última herramienta de selección
 	Enable Touch Workspace	Activar espacio de trabajo táctil
 	Encoding	Codificación
 	Encoding:	Codificación:

@@ -1332,3 +1332,19 @@ fn dialog_set_refuses_a_field_the_dialog_does_not_have() {
     app.ui.dialog = None;
     assert_eq!(input_request(&mut app, "ui.dialog.set", json!({"field": "name", "value": "A"}))["error"], "no dialog open");
 }
+
+/// `engine.commands` lists each UI command's default shortcut on this platform: Select Last
+/// Selection Tool shows Ctrl+` (`Cmd+~`) on Windows and Linux and none on macOS.
+#[test]
+fn the_command_list_shows_this_platforms_default_shortcut() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let r = input_request(&mut app, "engine.commands", json!({}));
+    let row = r["result"].as_array().unwrap().iter().find(|c| c["id"] == "tool.selectLastSelection").cloned();
+    let row = row.unwrap_or_else(|| panic!("listed: {r}"));
+    assert_eq!(row["shortcut"], if crate::keymap::platform().is_mac() { "" } else { "Cmd+~" }, "{row}");
+    for p in [craft_keymap::Platform::Windows, craft_keymap::Platform::Linux] {
+        assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", p), "Cmd+~", "{p:?}");
+    }
+    assert_eq!(crate::shortcut_editor::ui_command_default("tool.selectLastSelection", "Cmd+~", craft_keymap::Platform::Mac), "");
+    assert_eq!(crate::shortcut_editor::ui_command_default("view.zoomIn", "Cmd+=", craft_keymap::Platform::Mac), "Cmd+=");
+}

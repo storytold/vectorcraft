@@ -1326,6 +1326,7 @@ font-technology	Variable	Változó
 	Enable text access for screen readers	Szöveghozzáférés engedélyezése képernyőolvasóknak
 	Enable Touch Gestures	Érintési kézmozdulatok
 	Switch Selection and Drawing Modes	Váltás a kijelölési és a rajzolási mód között
+	Select Last Selection Tool	Az utoljára használt kijelölőeszköz kiválasztása
 	Enable Touch Workspace	Érintőképernyős munkaterület
 	Encoding	Kódolás
 	Encoding:	Kódolás:

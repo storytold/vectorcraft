@@ -46,6 +46,11 @@ const HOST_COMMANDS: &[(&str, &str, &str)] = &[
     ),
     ("tool.select", "Select Tool", "{tool} e.g. selection, directSelection, pen, rectangle, ellipse, polygon, star, lineSegment"),
     (
+        "tool.selectLastSelection",
+        "Select Last Selection Tool",
+        "{} choose the selection tool chosen last (Selection, Direct Selection or Group Selection; none yet: the Selection tool) → {tool}",
+    ),
+    (
         "tool.setOption",
         "Tool Option",
         "{key?, value? | values?: {key: value…}, tool?: id (default: the active tool)} → the tool's options (`{}` reads them); kept options last across tool switches",
@@ -164,6 +169,7 @@ impl Headless {
             "file.export" => self.export(params),
             "file.exportForScreens" => self.session.execute("document.exportForScreens", params).map_err(|e| e.to_string()),
             "tool.select" => self.select_tool(params),
+            "tool.selectLastSelection" => self.select_last_selection_tool(),
             "tool.setOption" => self.session.set_tool_option_cmd(params),
             _ => self.session.execute(id, params).map_err(|e| e.to_string()),
         }
@@ -204,6 +210,15 @@ impl Headless {
             return Err(format!("unknown tool `{t}` (see ui.tool.list)"));
         }
         self.session.select_tool(t, self.view).map_err(|e| e.to_string())?;
+        Ok(json!({"tool": self.session.tool_id()}))
+    }
+
+    /// `tool.selectLastSelection`: the selection tool chosen last, kept when it is already active.
+    fn select_last_selection_tool(&mut self) -> Result<Value, String> {
+        let id = self.session.last_selection_tool();
+        if self.session.tool_id() != id {
+            self.session.select_tool(id, self.view).map_err(|e| e.to_string())?;
+        }
         Ok(json!({"tool": self.session.tool_id()}))
     }
 

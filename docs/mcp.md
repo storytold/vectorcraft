@@ -1515,7 +1515,8 @@ vectorcraft-cli run --cmd file.new --params '{"width":800,"height":600}' \
 
 `run` prints one JSON line per step (`open`, `cmd`, `export`) and exits non-zero on the first failure, naming the step
 (counting from 0, as `"$N"` references do) and its command. `--params` applies to the `--cmd` just before it. `run`
-also accepts the host commands `file.open`, `file.save`, `file.export`, `file.exportForScreens` and `tool.select`.
+also accepts the host commands `file.open`, `file.save`, `file.export`, `file.exportForScreens`, `tool.select` and
+`tool.selectLastSelection`.
 `run --in`, `convert` and `info` read every format `document.open` reads (`vectorcraft-cli --help` lists them).
 
 ### Steps from a file or standard input
@@ -5282,6 +5283,15 @@ A `pointer_gesture` with `mods: {cmd: true}` held at the press, with any tool bu
 macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`), or Direct Selection with the Pen,
 Curvature and anchor tools until one is chosen; the release gives the tool back as it was, so the Pen goes on drawing
 the path it had begun while that stays selected. Its reply's `tool` is the tool given back.
+
+`tool.selectLastSelection` (Select Last Selection Tool, `{}`) chooses the selection tool chosen last, as Ctrl+` does on
+Windows and Linux ([the help page](https://helpx.adobe.com/illustrator/using/default-keyboard-shortcuts.html) lists the
+shortcut among those for selections). Only Selection, Direct Selection and Group Selection count: choosing Magic Wand,
+Lasso or any other tool leaves the remembered one as it was. Before any of the three is chosen it chooses the Selection
+tool; with the remembered tool already active it keeps it, so running it again does not cycle. It returns `{tool}` and
+adds no undo step. On macOS it has no default shortcut, because the system uses Command+` to switch between an app's
+windows; Edit › Keyboard Shortcuts can assign one. The Selection tool as the first choice and the macOS default are
+VectorCraft's own rules. The headless backend and `vectorcraft-cli run` run it too.
 
 ```json
 {"name":"pointer_gesture","arguments":{"tool":"pen","events":[{"kind":"down","x":100,"y":300},{"kind":"up","x":100,"y":300},{"kind":"down","x":200,"y":300},{"kind":"drag","x":250,"y":300},{"kind":"up","x":250,"y":300}]}}

@@ -239,6 +239,7 @@ fn wrap(r: Result<Value, String>) -> Outcome {
 pub fn all_commands(app: &VectorcraftApp) -> Value {
     let mut v: Vec<Value> = app.session.commands().into_iter().map(|c| serde_json::to_value(c).unwrap_or_default()).collect();
     for (id, label, sc, params) in crate::menus::UI_COMMANDS {
+        let sc = crate::shortcut_editor::ui_command_default(id, sc, crate::keymap::platform());
         v.push(json!({"id": id, "label": label, "shortcut": sc, "params": params, "enabled": crate::menus::enabled(app, id), "ui": true}));
     }
     Value::Array(v)

@@ -1017,6 +1017,7 @@ font-technology	Variable	可變
 	Enable text access for screen readers	啟用螢幕閱讀器的文字存取
 	Enable Touch Gestures	啟用觸控手勢
 	Switch Selection and Drawing Modes	切換選取與繪圖模式
+	Select Last Selection Tool	切換到上次使用的選取工具
 	Enable Touch Workspace	啟用觸控工作區
 	Encoding	編碼
 	Encoding:	編碼：

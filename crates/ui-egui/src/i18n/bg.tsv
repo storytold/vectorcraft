@@ -1023,6 +1023,7 @@ font-technology	Variable	Променливи
 	Enable text access for screen readers	Разрешаване на достъп до текст за екранни четци
 	Enable Touch Gestures	Разрешаване на докосващи жестове
 	Switch Selection and Drawing Modes	Превключване между режим на селекция и рисуване
+	Select Last Selection Tool	Избор на последния инструмент за селекция
 	Enable Touch Workspace	Разрешаване на работно пространство за докосване
 	Encoding	Кодиране
 	Encoding:	Кодиране:

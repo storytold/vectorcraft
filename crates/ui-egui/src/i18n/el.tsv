@@ -993,6 +993,7 @@ font-technology	Variable	Μεταβλητές
 	Enable text access for screen readers	Ενεργοποίηση πρόσβασης κειμένου για αναγνώστες οθόνης
 	Enable Touch Gestures	Ενεργοποίηση χειρονομιών αφής
 	Switch Selection and Drawing Modes	Εναλλαγή λειτουργιών επιλογής και σχεδίασης
+	Select Last Selection Tool	Επιλογή του τελευταίου εργαλείου επιλογής
 	Enable Touch Workspace	Ενεργοποίηση χώρου εργασίας αφής
 	Encoding	Κωδικοποίηση
 	Encoding:	Κωδικοποίηση:
