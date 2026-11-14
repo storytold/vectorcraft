@@ -7370,8 +7370,12 @@ result carries the same files as a zip (`{name: "<name>.zip", dataBase64}`, entr
 document, objects, graphicStyles, brushes, spotColors, patterns, gradients, symbols, fonts, fontDetails, linkedImages,
 embeddedImages, repeats), `fonts` (the fonts the document's type uses, the type in opacity masks and in the art of
 its symbols and pattern swatches included, which the fonts and fontDetails categories list; with `selectionOnly`, the
-fonts of the selected type), `fontDetails` (`[{font, match, family, style, file, embedding}]`: each font of `fonts`,
-in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
+fonts of the selected type), `fontUses` (`[{font, type, uses}]`: each font of `fonts`, in order, as the fonts
+category's rows give it, such as `TrueType; 2 uses`: `type` is `truetype` or `opentype` by the outlines of the face
+the type is drawn in (`glyf`, or `CFF` or `CFF2`), `unknown` for a font not installed in the family and style it
+names; `uses` is the number of text objects set in the font, each counted once however many of its runs use it, the
+type in a mask or in a symbol's or pattern's art once however many objects show it), `fontDetails`
+(`[{font, match, family, style, file, embedding}]`: each font of `fonts`, in order, as the fontDetails category's rows give it: `match` is `exact`, `style` (a style the family lacks, shown in
 `family` `style`), `missingWithFallback` (not installed, shown in `family` `style`) or `missing`; `file` is the face's
 file name, null for a built-in face; `embedding` is `allowed`, `editing`, `previewPrint` or `forbidden`, null when no
 face is found), `imageObjects` (`[{name, width, height, linked, file}]`: the image objects in the order the

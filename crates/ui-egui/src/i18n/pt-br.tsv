@@ -1809,6 +1809,9 @@ antiAlias	Sharp	Nítido
 	embedding for preview and print	incorporação para visualização e impressão
 	embedding allowed	incorporação permitida
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tipo desconhecido
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} uso|{n} usos
 	substituted: shown in {family} {style} ({detail})	substituída: exibida em {family} {style} ({detail})
 	missing: shown in {family} {style}	ausente: exibida em {family} {style}
 	missing	ausente

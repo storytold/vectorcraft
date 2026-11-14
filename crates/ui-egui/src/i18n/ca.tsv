@@ -3123,6 +3123,9 @@ digits	Malayalam	Malaiàlam
 	embedding for preview and print	incrustació per a la visualització i la impressió
 	embedding allowed	incrustació permesa
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tipus desconegut
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} ús|{n} usos
 	substituted: shown in {family} {style} ({detail})	substituït: es mostra amb {family} {style} ({detail})
 	missing: shown in {family} {style}	absent: es mostra amb {family} {style}
 	missing	absent

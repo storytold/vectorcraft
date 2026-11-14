@@ -104,7 +104,7 @@ fn brush_value(value: &str) -> &str {
 /// Row `k` of Document Info section `id` (`label` and `value` as `document.info` gives them, the
 /// label a name when `named`) with its value in the interface language, built from what
 /// `document.info` (`info`) gives as values: the
-/// units, the raster effects resolution, each brush's type, each font's file, match and
+/// units, the raster effects resolution, each brush's type, each font's type and uses, each font's file, match and
 /// embedding permission, each image's size and file, each Repeat object's kind and counts, and the
 /// kinds of the gradients no swatch names. Names (fonts, files, faces, swatches) stay as they are.
 /// None when the row's value is shown as `document.info` gives it, or the values do not match the
@@ -124,6 +124,7 @@ fn shown_value(info: &Value, id: &str, k: usize, (label, value): (&str, &str), n
             _ => None,
         },
         "brushes" => Some(brush_value(value).to_string()),
+        "fonts" => font_use_value(entry("fontUses")?),
         "fontDetails" => font_detail_value(entry("fontDetails")?),
         "linkedImages" | "embeddedImages" => {
             let linked = id == "linkedImages";
@@ -139,6 +140,19 @@ fn shown_value(info: &Value, id: &str, k: usize, (label, value): (&str, &str), n
 /// [`crate::i18n::fill_once`]: a name that holds `{…}` text stays as it is.
 fn fill(template: &str, args: &[(&str, &str)]) -> String {
     crate::i18n::fill_once(template, args)
+}
+
+/// A `fontUses` entry as Fonts shows it: the font's type (the format names TrueType and OpenType
+/// stay as they are) and its number of uses in the language's plural forms.
+fn font_use_value(e: &Value) -> Option<String> {
+    let kind = match e["type"].as_str()? {
+        "truetype" => "TrueType",
+        "opentype" => "OpenType",
+        "unknown" => tl!("unknown type"),
+        _ => return None,
+    };
+    let uses = crate::i18n::tn(e["uses"].as_u64()?, "{n} use", "{n} uses");
+    Some(fill(tl!("{type}; {uses}"), &[("type", kind), ("uses", &uses)]))
 }
 
 /// A `fontDetails` entry as Font Details shows it: the font's file (or that it is built in) and
@@ -416,7 +430,7 @@ mod tests {
         assert!(objects.contains("\nOBJECTS\n") && objects.contains("Paths: 1") && objects.contains("Text Objects: 1"), "{objects}");
         assert!(!objects.contains("\nDOCUMENT\n") && !objects.contains("\nFONTS\n"), "only Objects: {objects}");
         let fonts = saved_from_menu(&mut app, "fonts", false);
-        assert!(fonts.contains("\nFONTS\n") && fonts.contains("Source Sans 3"), "{fonts}");
+        assert!(fonts.contains("\nFONTS\nSource Sans 3 Regular: TrueType; 1 use\n"), "{fonts}");
         assert!(!fonts.contains("\nOBJECTS\n") && !fonts.contains("\nFONT DETAILS\n"), "only Fonts: {fonts}");
         let all = saved_from_menu(&mut app, "", false);
         assert!(
@@ -551,6 +565,49 @@ mod tests {
         assert!(saved.contains("(the selection only)") && saved.contains("\nGRADIENT OBJECTS\nGlow: Linear gradient, Radial gradient\n"), "{saved}");
         let report = app.session.execute("document.info", &json!({"format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
         assert!(report.contains("Units: Millimeters\n") && report.contains("Radial Repeat, 6 instances"), "{report}");
+    }
+
+    /// Fonts shows each font's type and number of uses in the interface language, in the
+    /// language's plural forms; the format names TrueType and OpenType and the font names stay as
+    /// they are, and `document.info` and the saved report keep the English values.
+    #[test]
+    fn font_types_and_uses_show_in_the_interface_language() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hi"})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 50, "text": "Hi"})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 80, "text": "Gone", "font": "Qx Absent Family"})).unwrap();
+        let info = app.session.execute("document.info", &json!({})).unwrap();
+        let rows = |info: &Value| shown_rows(info, "fonts");
+        let english = vec![
+            ("Qx Absent Family Regular".to_string(), "unknown type; 1 use".to_string()),
+            ("Source Sans 3 Regular".into(), "TrueType; 2 uses".into()),
+        ];
+        assert_eq!(rows(&info), english);
+        let fonts = |app: &mut VectorcraftApp| {
+            crate::tests_labels::painted_text(app, |app, ui| {
+                set_pstate(ui.ctx(), "docinfo-category", "fonts".to_string());
+                show(app, ui);
+            })
+        };
+        let Some(de) = crate::i18n::Lang::from_code("de") else { panic!("no German catalog") };
+        crate::i18n::set_current(de);
+        let (german, painted) = (rows(&info), fonts(&mut app));
+        let one_opentype = font_use_value(&json!({"type": "opentype", "uses": 1}));
+        let Some(ru) = crate::i18n::Lang::from_code("ru") else { panic!("no Russian catalog") };
+        crate::i18n::set_current(ru);
+        let russian = [1, 3, 5].map(|n| font_use_value(&json!({"type": "truetype", "uses": n})));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(german[0], ("Qx Absent Family Regular".to_string(), "unbekannter Typ; 1 Verwendung".to_string()));
+        assert_eq!(german[1], ("Source Sans 3 Regular".to_string(), "TrueType; 2 Verwendungen".to_string()));
+        assert!(painted.contains("Source Sans 3 Regular") && painted.contains("TrueType; 2 Verwendungen"), "{painted}");
+        assert_eq!(one_opentype.as_deref(), Some("OpenType; 1 Verwendung"));
+        assert_eq!(russian.map(Option::unwrap_or_default), ["TrueType; 1 использование", "TrueType; 3 использования", "TrueType; 5 использований"]);
+        // An unknown type id is shown as `document.info` gives the row.
+        assert_eq!(font_use_value(&json!({"type": "bitmap", "uses": 1})), None);
+        let report =
+            app.session.execute("document.info", &json!({"category": "fonts", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(report.contains("Source Sans 3 Regular: TrueType; 2 uses\n"), "{report}");
     }
 
     /// A Repeat object's counts take each language's plural forms, and a grid that draws fewer

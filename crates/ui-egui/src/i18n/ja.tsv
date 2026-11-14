@@ -2448,6 +2448,9 @@ antiAlias	Sharp	シャープ
 	embedding for preview and print	プレビューと印刷用に埋め込み可
 	embedding allowed	埋め込み可
 	{file}; {embedding}	{file}、{embedding}
+	unknown type	不明な種類
+	{type}; {uses}	{type}、{uses}
+@plural	{n} use|{n} uses	使用 {n} 回
 	substituted: shown in {family} {style} ({detail})	代替: {family} {style} で表示 ({detail})
 	missing: shown in {family} {style}	見つかりません: {family} {style} で表示
 	missing	見つかりません

@@ -3416,6 +3416,9 @@ theme	Appearance	Motiv
 	embedding for preview and print	vkládání pro náhled a tisk
 	embedding allowed	vkládání povoleno
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	neznámý typ
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} použití|{n} použití|{n} použití
 	substituted: shown in {family} {style} ({detail})	nahrazeno: zobrazeno písmem {family} {style} ({detail})
 	missing: shown in {family} {style}	chybí: zobrazeno písmem {family} {style}
 	missing	chybí

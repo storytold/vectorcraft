@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontUses: [{font, type: truetype|opentype|unknown, uses}] (each font of fonts, in order: truetype or opentype by the outlines (glyf, or CFF or CFF2) of the face its type is drawn in, unknown for a font not installed in the family and style it names; uses: the text objects set in it, each once however many of its runs use the font, the type in a mask or in a symbol's or pattern's art once however many objects show it; the fonts category's rows give them as `TrueType; 2 uses`), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -144,6 +144,44 @@ fn font_detail(used: &super::fonts::UsedFont) -> (Value, (String, String)) {
     (entry, (label, detail))
 }
 
+/// The type of a font as Fonts lists it: `truetype` or `opentype` by the outlines of the face the
+/// type is drawn in (in the version the type names), `unknown` for a font that is not installed in
+/// the family and style it names, or whose face holds neither kind of outline.
+fn font_type(used: &super::fonts::UsedFont) -> &'static str {
+    let db = vectorcraft_text::FontDb::global();
+    let (family, style, version) = used;
+    match db.resolve(family, style) {
+        Some((f, vectorcraft_text::FontMatch::Exact)) => match db.face_version(family, style, version.as_deref()).unwrap_or(f).outline_format() {
+            Some(vectorcraft_text::OutlineFormat::TrueType) => "truetype",
+            Some(vectorcraft_text::OutlineFormat::Cff) => "opentype",
+            None => "unknown",
+        },
+        _ => "unknown",
+    }
+}
+
+/// A font as Fonts lists it: its `fontUses` entry and its row, which gives the font's type and its
+/// number of uses (`uses`: the text objects set in it).
+fn font_use(used: &super::fonts::UsedFont, uses: usize) -> (Value, (String, String)) {
+    let label = super::fonts::font_label(used);
+    let kind = font_type(used);
+    let name = match kind {
+        "truetype" => "TrueType",
+        "opentype" => "OpenType",
+        _ => "unknown type",
+    };
+    let count = if uses == 1 { "1 use".to_string() } else { format!("{uses} uses") };
+    (json!({ "font": label, "type": kind, "uses": uses }), (label, format!("{name}; {count}")))
+}
+
+/// Counts text object `t` once for each font its runs are set in.
+fn count_fonts(fonts: &mut BTreeMap<super::fonts::UsedFont, usize>, t: &vectorcraft_doc::TextObject) {
+    let own: BTreeSet<super::fonts::UsedFont> = t.runs.iter().map(|r| super::fonts::font_of(&r.style)).collect();
+    for font in own {
+        *fonts.entry(font).or_default() += 1;
+    }
+}
+
 /// An image object as Document Info lists it: (name, width, height, linked file).
 type ImageRow = (String, u32, u32, Option<String>);
 
@@ -179,14 +217,14 @@ fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, S
 }
 
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
-/// `document.info` reports), its fonts and their Font Details rows, its image objects, the rows of
+/// `document.info` reports), the rows of its fonts and their Font Details rows, its image objects, the rows of
 /// the brushes its art uses, the rows of its Repeat objects and the rows of its objects filled or
 /// stroked with a spot color, with a pattern and with a gradient.
 #[allow(clippy::too_many_arguments)]
 fn sections(
     d: &Document,
     info: &Value,
-    fonts: &BTreeSet<super::fonts::UsedFont>,
+    fonts: &[(String, String)],
     font_details: &[(String, String)],
     images: &[ImageRow],
     brushes: &[(String, String)],
@@ -240,7 +278,7 @@ fn sections(
                 "patterns" => pattern_objects.to_vec(),
                 "gradients" => gradient_objects.to_vec(),
                 "symbols" => names("symbols"),
-                "fonts" => fonts.iter().map(|f| (super::fonts::font_label(f), String::new())).collect(),
+                "fonts" => fonts.to_vec(),
                 "fontDetails" => font_details.to_vec(),
                 "linkedImages" => {
                     images.iter().filter_map(|(name, w, h, link)| Some((name.clone(), format!("{w} × {h} px — {}", link.as_ref()?)))).collect()
@@ -605,7 +643,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     // The paths' total length, as Document Info › Objects shows it (the length of a cut line, a
     // strip of LEDs along the letters, #1958).
     let mut path_length = 0.0;
-    let mut fonts = BTreeSet::new();
+    // Each font with the number of text objects set in it.
+    let mut fonts: BTreeMap<super::fonts::UsedFont, usize> = BTreeMap::new();
     let mut images: BTreeMap<String, Value> = BTreeMap::new();
     let mut image_rows: Vec<ImageRow> = vec![];
     // Whether the request being served may read each linked file (a relative path read from the
@@ -680,9 +719,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 NodeKind::Compound { .. } => Some("compoundPaths"),
                 NodeKind::Text(t) => {
-                    for run in &t.runs {
-                        fonts.insert((run.style.font_family.clone(), run.style.font_style.clone(), run.style.font_version.clone()));
-                    }
+                    count_fonts(&mut fonts, t);
                     Some("textObjects")
                 }
                 NodeKind::Image(im) => {
@@ -765,12 +802,16 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     // The document's fonts include those of the type in opacity masks and in the art of its
-    // symbols and patterns, as Find Font lists them.
+    // symbols and patterns, as Find Font lists them. Each of those text objects counts once, however
+    // many objects show it.
     if !selection_only {
-        fonts.extend(super::fonts::art_texts_of(d).into_iter().flat_map(|(_, t, _)| t.runs.iter().map(|r| super::fonts::font_of(&r.style))));
+        for (_, t, _) in super::fonts::art_texts_of(d) {
+            count_fonts(&mut fonts, t);
+        }
     }
-    let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
-    let (font_entries, font_rows): (Vec<Value>, Vec<(String, String)>) = fonts.iter().map(font_detail).unzip();
+    let font_names: Vec<String> = fonts.keys().map(super::fonts::font_label).collect();
+    let (font_uses, font_use_rows): (Vec<Value>, Vec<(String, String)>) = fonts.iter().map(|(f, n)| font_use(f, *n)).unzip();
+    let (font_entries, font_rows): (Vec<Value>, Vec<(String, String)>) = fonts.keys().map(font_detail).unzip();
     // The image objects in walk order, as Linked Images and Embedded Images list them: `file` is a
     // linked image's row value (its path, or its file name alone when the request may not read it),
     // and null for an embedded one.
@@ -798,6 +839,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "objects": counts,
         "pathLength": path_length,
         "fonts": font_names,
+        "fontUses": font_uses,
         "fontDetails": font_entries,
         "images": images,
         "imageObjects": image_objects,
@@ -822,7 +864,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     });
     // The document's name: its file's, else its title.
     out["document"]["name"] = json!(st.title());
-    let sections = sections(d, &out, &fonts, &font_rows, &image_rows, &brush_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
+    let sections =
+        sections(d, &out, &font_use_rows, &font_rows, &image_rows, &brush_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
     if text {
         return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
     }
@@ -944,6 +987,67 @@ mod tests {
         );
         s.execute("select.set", &json!({"ids": [plain.0]})).unwrap();
         assert_eq!(fonts(&mut s, json!({"selectionOnly": true})), json!(["Source Sans 3 Regular"]));
+    }
+
+    /// Fonts gives each font's type and its number of uses: the text objects set in it, each once
+    /// however many of its runs use the font. The type in a symbol's art counts once however many
+    /// instances show it, and the type in an opacity mask once. With Selection Only it counts the
+    /// selected type alone. A font that is not installed has an unknown type. The rows, the report
+    /// and `fontUses` give the same facts, in the order of `fonts`.
+    #[test]
+    fn info_fonts_give_each_font_s_type_and_uses() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+        let id = |v: Value| NodeId(v["id"].as_u64().unwrap());
+        let text =
+            |s: &mut Session, font: &str, y: f64| id(s.execute("text.create", &json!({"x": 10, "y": y, "text": "Hello", "font": font})).unwrap());
+        // Two runs in Source Sans 3 Regular in one text object, a second object in it, and one in Inter.
+        let twice = text(&mut s, "Source Sans 3", 20.0);
+        s.execute("text.setRangeStyle", &json!({"id": twice.0, "start": 0, "end": 2, "size": 30})).unwrap();
+        assert!(matches!(&s.doc().unwrap().doc.node(twice).unwrap().kind, NodeKind::Text(t) if t.runs.len() == 2));
+        let other = text(&mut s, "Source Sans 3", 50.0);
+        text(&mut s, "Inter", 80.0);
+        text(&mut s, "Qx Absent Family", 110.0);
+        // A symbol whose art holds type in Inter, shown by two instances, and a mask holding type in Inter.
+        let in_symbol = text(&mut s, "Inter", 140.0);
+        s.execute("symbol.new", &json!({"name": "Mark", "ids": [in_symbol.0]})).unwrap();
+        s.execute("symbol.place", &json!({"name": "Mark", "x": 100, "y": 100})).unwrap();
+        let masked = id(s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap());
+        let in_mask = text(&mut s, "Inter", 170.0);
+        s.edit("Mask", |d, _| {
+            let art = d.remove(in_mask)?;
+            d.node_mut(masked).unwrap().extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new((*art).clone(), true)));
+            Ok(())
+        })
+        .unwrap();
+        let i = s.execute("document.info", &json!({"category": "fonts"})).unwrap();
+        assert_eq!(i["fonts"], json!(["Inter Regular", "Qx Absent Family Regular", "Source Sans 3 Regular"]));
+        assert_eq!(
+            i["fontUses"],
+            json!([
+                {"font": "Inter Regular", "type": "truetype", "uses": 3},
+                {"font": "Qx Absent Family Regular", "type": "unknown", "uses": 1},
+                {"font": "Source Sans 3 Regular", "type": "truetype", "uses": 2},
+            ])
+        );
+        assert_eq!(
+            i["sections"][0]["rows"],
+            json!([
+                ["Inter Regular", "TrueType; 3 uses"],
+                ["Qx Absent Family Regular", "unknown type; 1 use"],
+                ["Source Sans 3 Regular", "TrueType; 2 uses"],
+            ])
+        );
+        let report = s.execute("document.info", &json!({"category": "fonts", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(report.contains("\nFONTS\nInter Regular: TrueType; 3 uses\nQx Absent Family Regular: unknown type; 1 use\n"), "{report}");
+        // Selection Only: the selected type's fonts and uses.
+        s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "fonts"})).unwrap();
+        assert_eq!(i["fontUses"], json!([{"font": "Source Sans 3 Regular", "type": "truetype", "uses": 1}]));
+        assert_eq!(i["sections"][0]["rows"], json!([["Source Sans 3 Regular", "TrueType; 1 use"]]));
+        s.execute("select.none", &json!({})).unwrap();
+        let i = s.execute("document.info", &json!({"selectionOnly": true, "category": "fonts"})).unwrap();
+        assert_eq!((i["fontUses"].clone(), i["sections"][0]["rows"].clone()), (json!([]), json!([])));
     }
 
     /// Document Info › Objects gives the paths' total length in the document's units (#1958): an

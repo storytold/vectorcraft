@@ -2438,6 +2438,9 @@ antiAlias	Sharp	날카롭게
 	embedding for preview and print	미리 보기 및 인쇄용 포함
 	embedding allowed	포함 허용
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	알 수 없는 유형
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n}회 사용
 	substituted: shown in {family} {style} ({detail})	대체됨: {family} {style}(으)로 표시({detail})
 	missing: shown in {family} {style}	없음: {family} {style}(으)로 표시
 	missing	없음

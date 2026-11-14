@@ -715,4 +715,54 @@ impl FontFace {
         use skrifa::raw::TableProvider;
         self.skrifa().is_some_and(|f| f.glyf().is_ok())
     }
+    /// The kind of outlines the face's glyphs are drawn from ([`outline_format_of`]).
+    pub fn outline_format(&self) -> Option<OutlineFormat> {
+        self.skrifa().and_then(|f| outline_format_of(&f))
+    }
+}
+
+/// The kind of outlines a face's glyphs are drawn from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutlineFormat {
+    /// Quadratic outlines in a `glyf` table.
+    TrueType,
+    /// PostScript outlines in a `CFF ` or `CFF2` table.
+    Cff,
+}
+
+/// The kind of outlines `font`'s glyphs are drawn from: TrueType when it has a `glyf` table, else
+/// CFF when it has a `CFF ` or `CFF2` table. None for a font with neither (outlines in `VARC`
+/// alone, color bitmaps only).
+pub(crate) fn outline_format_of(font: &skrifa::FontRef<'_>) -> Option<OutlineFormat> {
+    let has = |tag: &[u8; 4]| font.table_data(skrifa::Tag::new(tag)).is_some();
+    if has(b"glyf") {
+        Some(OutlineFormat::TrueType)
+    } else if has(b"CFF ") || has(b"CFF2") {
+        Some(OutlineFormat::Cff)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The outline format comes from the tables the font holds.
+    #[test]
+    fn outline_format_follows_the_outline_tables() {
+        let format = |tables: &[(&[u8; 4], &[u8])]| {
+            let font = crate::fontdb::sfnt_of(tables).unwrap_or_default();
+            outline_format_of(&skrifa::FontRef::new(&font).unwrap())
+        };
+        let table = [0_u8; 4];
+        assert_eq!(format(&[(b"glyf", &table), (b"loca", &table)]), Some(OutlineFormat::TrueType));
+        assert_eq!(format(&[(b"CFF ", &table)]), Some(OutlineFormat::Cff));
+        assert_eq!(format(&[(b"CFF2", &table)]), Some(OutlineFormat::Cff));
+        assert_eq!(format(&[(b"VARC", &table)]), None);
+        assert_eq!(format(&[(b"sbix", &table)]), None);
+        // The built-in faces are TrueType.
+        let face = crate::FontDb::global().resolve("Source Sans 3", "Regular").map(|(f, _)| f).unwrap();
+        assert_eq!(face.outline_format(), Some(OutlineFormat::TrueType));
+    }
 }

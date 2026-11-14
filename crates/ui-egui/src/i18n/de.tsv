@@ -2162,6 +2162,9 @@ file-filter	Templates	Vorlagen
 	embedding for preview and print	Einbetten für Vorschau und Druck
 	embedding allowed	Einbetten erlaubt
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	unbekannter Typ
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} Verwendung|{n} Verwendungen
 	substituted: shown in {family} {style} ({detail})	ersetzt: angezeigt in {family} {style} ({detail})
 	missing: shown in {family} {style}	fehlt: angezeigt in {family} {style}
 	missing	fehlt

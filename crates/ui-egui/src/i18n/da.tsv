@@ -3149,6 +3149,9 @@ theme	Appearance	Udseende
 	embedding for preview and print	indlejring til visning og udskrivning
 	embedding allowed	indlejring tilladt
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	ukendt type
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} anvendelse|{n} anvendelser
 	substituted: shown in {family} {style} ({detail})	erstattet: vist med {family} {style} ({detail})
 	missing: shown in {family} {style}	mangler: vist med {family} {style}
 	missing	mangler

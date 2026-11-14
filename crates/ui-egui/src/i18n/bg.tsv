@@ -2128,6 +2128,9 @@ font-technology	Variable	Променливи
 	embedding for preview and print	вграждане за преглед и печат
 	embedding allowed	вграждането е разрешено
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	неизвестен тип
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} употреба|{n} употреби
 	substituted: shown in {family} {style} ({detail})	заместен: показан с {family} {style} ({detail})
 	missing: shown in {family} {style}	липсва: показан с {family} {style}
 	missing	липсва

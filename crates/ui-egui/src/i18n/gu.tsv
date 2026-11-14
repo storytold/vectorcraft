@@ -4551,6 +4551,9 @@ antiAlias	Sharp	શાર્પ
 	embedding for preview and print	પ્રીવ્યૂ અને પ્રિન્ટ માટે એમ્બેડ કરવાની મંજૂરી
 	embedding allowed	એમ્બેડ કરવાની મંજૂરી છે
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	અજ્ઞાત પ્રકાર
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} ઉપયોગ|{n} ઉપયોગ
 	substituted: shown in {family} {style} ({detail})	બદલાયેલ: {family} {style}માં બતાવ્યું ({detail})
 	missing: shown in {family} {style}	ગુમ: {family} {style}માં બતાવ્યું
 	missing	ગુમ
