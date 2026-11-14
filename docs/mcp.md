@@ -795,6 +795,16 @@ The other commands given a series group's id edit the group itself, and the grap
 `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
 group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
 
+The graph draws the art of a column or marker design in a series again from the design, so the commands that add,
+change, move or remove fill and stroke rows, effects or graphic styles leave that art out: the `appearance.*` commands
+listed above, `effect.apply`, `appearance.addEffect` and the other `effect.*` commands that edit, move or remove an
+effect, `graphicStyle.apply` (and `graphicStyle.addFromLibrary` with `apply`), `transparency.set` with a fill or stroke
+`item`, and `appearance.copyFrom` as the target. The art is any object inside a series group other than a path directly
+in it, whether given by id, selected, or reached through `target: "contents"`. The commands edit the other objects they
+are given, and a command whose objects are all design art is an error. `appearance.transfer` with design art as its
+`target`, or as its `source` without `copy`, is an error. The paint commands leave the art out as well, without an
+error. To change the art, edit the design with `graph.design`.
+
 The graph also stores a paint or stroke weight that one of these commands changes on the topmost visible fill or stroke
 of a path directly in a series: a weight set with `stroke.set`, `stroke.weightUp` or `stroke.weightDown`; a gradient
 made, placed or edited with `paint.editGradient`, `paint.setGradientGeom`, `paint.freeform.addPoint`,
