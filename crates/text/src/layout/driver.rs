@@ -191,12 +191,13 @@ pub fn envelope_ink(t: &TextObject, m: Affine, projection: Option<(vectorcraft_g
 /// Make envelopes map type from [`envelope_ink`], measured again when the fonts or the hyphenation
 /// exceptions change (the first registration stays, see `vectorcraft_doc::live::set_type_ink`).
 pub fn register_envelope_ink() {
-    vectorcraft_doc::live::set_type_ink(envelope_ink, envelope_ink_inputs);
+    vectorcraft_doc::live::set_type_ink(envelope_ink, layout_inputs);
 }
 
-/// A number that changes whenever what [`envelope_ink`] reads besides the type changes: the
-/// installed fonts and the hyphenation exceptions.
-pub(crate) fn envelope_ink_inputs() -> u64 {
+/// A number that changes when the fonts ([`FontDb::generation`]) or the hyphenation exceptions
+/// (Preferences › Hyphenation › Exceptions) change. Caches of layouts made with the global font
+/// database, and of art made from them, key on it.
+pub fn layout_inputs() -> u64 {
     FontDb::global().generation().rotate_left(32) ^ crate::hyphen::exceptions_generation()
 }
 
