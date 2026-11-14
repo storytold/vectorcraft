@@ -8832,7 +8832,8 @@ fn other_guide_paths_stay_guide_paths() {
         guide_line(0.0, 30.0, 200.0, 30.0, "S"),
         guide_line(-7885.0, -7796.0, 8498.0, 8587.0, "N"),
         format!("u\n{}U\n", guide_line(-7885.0, 40.0, 8498.0, 40.0, "N")),
-        format!("1 Xw\n{}0 Xw\n", guide_line(-7885.0, 40.0, 8498.0, 40.0, "N")),
+        format!("1 Xw\n{}0 Xw\n", guide_line(20.0, 40.0, 80.0, 40.0, "N")),
+        format!("1 A\n{}0 A\n", guide_line(-7885.0, 40.0, 8498.0, 40.0, "S")),
         "-7885 40 m\n306 40 L\n8498 40 L\n(N) *\n".to_string(),
     ];
     for body in cases {
@@ -8840,6 +8841,35 @@ fn other_guide_paths_stay_guide_paths() {
         assert!(doc.ruler_guides().is_empty(), "{body}");
         assert_eq!(art(&doc).len(), 1, "{body}");
     }
+}
+
+/// A hidden (`1 Xw`), locked (`1 A`) or named ruler guide path is a ruler guide that keeps its own
+/// visibility, lock and name, across the canvas or an artboard, on a shown layer.
+#[test]
+fn hidden_locked_and_named_guide_paths_are_ruler_guides() {
+    let body = format!(
+        "1 Xw\n{}0 Xw\n1 A\n{}0 A\n{}%_/ArtDictionary :\n%_(Mark) /String (AIArtName) ,\n%_;\n%_\n1 Xw\n{}0 Xw\n",
+        guide_line(-7885.0, 40.0, 8498.0, 40.0, "N"),
+        guide_line(25.0, 8587.0, 25.0, -7796.0, "N"),
+        guide_line(-7885.0, 90.0, 8498.0, 90.0, "N"),
+        guide_line(0.0, 30.0, 200.0, 30.0, "N"),
+    );
+    let doc = read(canvas_stream(&layer(&body)).as_bytes()).unwrap().doc;
+    let top = &doc.layers[0];
+    assert!(top.visible);
+    let kids = top.children().unwrap();
+    assert_eq!(kids.len(), 4);
+    assert!(kids.iter().all(|c| c.is_ruler_guide()), "no guide path is left");
+    let got: Vec<_> = doc.ruler_guides().into_iter().map(|g| (g.vertical, g.pos, g.artboard, g.layer, g.hidden, g.locked, g.name)).collect();
+    let want = [
+        (false, 60.0, None, Some(top.id), true, false, None),
+        (true, 25.0, None, Some(top.id), false, true, None),
+        (false, 10.0, None, Some(top.id), false, false, Some("Mark".to_string())),
+        (false, 70.0, Some(1), Some(top.id), true, false, None),
+    ];
+    assert_eq!(got, want);
+    // The nodes themselves carry the state, so the Layers rows show it.
+    assert_eq!(kids.iter().map(|k| (k.visible, k.locked)).collect::<Vec<_>>(), [(false, false), (true, true), (true, false), (false, false)]);
 }
 
 /// The layer whose `Lb` has `ops` as its options (the first one in the file).
