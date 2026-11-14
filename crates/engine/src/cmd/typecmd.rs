@@ -23,7 +23,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Vertical",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set vertical writing for the selected type and every frame of its threads → {vertical, ids}",
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads; no undo step when every object is already vertical → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, true)
         ),
@@ -32,7 +32,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads → {vertical, ids}",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads; no undo step when every object is already horizontal → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -59,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Optical Margin Alignment",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered → {on, ids}",
+            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered; no undo step when every object already has the setting → {on, ids}",
             has_selection,
             optical_margin_alignment
         ),
@@ -68,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "System Layout",
             [],
             None,
-            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting → {on}",
+            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting. No undo step when the document and every text object already have the setting → {on}",
             has_doc,
             system_layout
         ),
@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fractional Widths",
             [],
             None,
-            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters → {on, ids}",
+            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters. No undo step when every object already has the setting → {on, ids}",
             has_selection,
             fractional_widths
         ),
@@ -157,24 +157,30 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 /// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
-/// every frame of their threads, in one undo step.
+/// every frame of their threads, in one undo step (none when nothing changes).
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
-    s.edit("Text Orientation", |d, _| {
+    // When every object already has the orientation, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Text Orientation", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.vertical = vertical;
-            refresh_bounds(t);
+            if t.vertical != vertical {
+                t.vertical = vertical;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"vertical": vertical, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Type › Optical Margin Alignment: set `on` (without it, the opposite of the first object's
-/// setting) on every selected text object and every frame of their threads, in one undo step.
+/// setting) on every selected text object and every frame of their threads, in one undo step
+/// (none when nothing changes).
 fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Optical Margin Alignment")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
@@ -182,29 +188,38 @@ fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let on = switch_or(p, "on", !first.unwrap_or(false), "type.opticalMarginAlignment")?;
-    s.edit("Optical Margin Alignment", |d, _| {
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Optical Margin Alignment", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.optical_margin = on;
-            refresh_bounds(t);
+            if t.optical_margin != on {
+                t.optical_margin = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Character panel menu › System Layout: set `on` (without it, the opposite of the document's
-/// setting) on the document and every text object, in one undo step. Off is the default.
+/// setting) on the document and every text object, in one undo step (none when nothing changes).
+/// Off is the default.
 fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
     let current = s.doc()?.doc.setup.system_layout;
     let on = switch_or(p, "on", !current, "type.systemLayout")?;
-    s.edit("System Layout", |d, _| {
+    // When the document and every text object already have the setting, the document and its undo
+    // history stay as they are.
+    super::colorcmds::edit_if_changed(s, "System Layout", |_, d| {
+        let mut changed = d.setup.system_layout != on;
         d.setup.system_layout = on;
         let mut ids = vec![];
         d.walk(|n| {
-            if matches!(n.kind, NodeKind::Text(_)) {
+            if matches!(&n.kind, NodeKind::Text(t) if t.system_layout != on) {
                 ids.push(n.id);
             }
         });
@@ -214,15 +229,16 @@ fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
             };
             t.system_layout = on;
             refresh_bounds(t);
+            changed = true;
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({ "on": on }))
 }
 
 /// Character panel menu › Fractional Widths: set `on` (without it, the opposite of the first
 /// object's setting) on every selected text object and every frame of their threads, in one undo
-/// step. On is the default.
+/// step (none when nothing changes). On is the default.
 fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Fractional Widths")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
@@ -230,15 +246,20 @@ fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let on = switch_or(p, "on", !first.unwrap_or(true), "type.fractionalWidths")?;
-    s.edit("Fractional Widths", |d, _| {
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Fractional Widths", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.fractional_widths = on;
-            refresh_bounds(t);
+            if t.fractional_widths != on {
+                t.fractional_widths = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
