@@ -22,7 +22,7 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
     });
 }
 
-/// The Home screen's column: welcome, New / Open, Recent Files, presets and community links.
+/// The Home screen's column: welcome, New / Open, Recent Files, Learn, presets and community links.
 fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // The welcome and the New / Open buttons sit centred, as PhotoCraft's Home screen does (#4684).
@@ -46,6 +46,7 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
         });
     });
     recent(app, ui);
+    learn(app, ui);
     ui.add_space(28.0);
     ui.label(egui::RichText::new(tl!("Quickly start a new file")).font(theme::semibold(14.0)).color(t.text));
     ui.add_space(10.0);
@@ -66,6 +67,40 @@ fn home_content(app: &mut VectorcraftApp, ui: &mut Ui) {
         ui.add_space(10.0);
         crate::community::links_centered(app, ui);
     });
+}
+
+/// The id of the Home screen's Quick skill guide card.
+const LEARN_GUIDE_ID: &str = "home-quick-skill-guide";
+
+/// The Home screen's Learn section: the Quick skill guide card, which shows the Learn panel's list
+/// of skills, and the Learn panel's tutorials under their skills, each a button that shows the
+/// panel at its steps (`learn.show`). Neither opens, closes or switches a document, and the panel
+/// shows beside the Home screen.
+fn learn(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use crate::panels::learn::{catalog, guide_card};
+    let t = Tokens::get(ui.ctx());
+    ui.add_space(28.0);
+    ui.label(egui::RichText::new(tl!("Learn")).font(theme::semibold(14.0)).color(t.text));
+    ui.add_space(10.0);
+    guide_card(app, ui, egui::Id::unique(LEARN_GUIDE_ID), t.panel);
+    let mut open = None;
+    for skill in catalog::SKILLS {
+        ui.add_space(10.0);
+        ui.label(egui::RichText::new(skill.title).size(12.0).color(t.text_dim));
+        ui.add_space(4.0);
+        ui.horizontal_wrapped(|ui| {
+            for tutorial in skill.tutorials {
+                if widgets::secondary_button(ui, tutorial.title).clicked() {
+                    open = Some(tutorial.id);
+                }
+            }
+        });
+    }
+    if let Some(id) = open
+        && let Err(e) = app.run("learn.show", json!({ "tutorial": id }))
+    {
+        app.status(e);
+    }
 }
 
 /// The Home screen's Recent Files (#663): the first of File › Open Recent Files, each its name and

@@ -502,16 +502,16 @@ mod tests {
     }
 
     /// Process-wide store used by `prefs.set` / restore. Each change makes envelopes measure type
-    /// again.
+    /// again, and caches of layouts lay type out again.
     #[test]
     fn set_hyphenation_exceptions_round_trips_the_source_string() {
-        let inputs = crate::layout::envelope_ink_inputs();
+        let inputs = crate::layout_inputs();
         set_hyphenation_exceptions("typography, hap-pen");
         assert_eq!(hyphenation_exceptions(), "typography, hap-pen");
-        let changed = crate::layout::envelope_ink_inputs();
-        assert_ne!(changed, inputs, "the envelope inputs change with the exceptions");
+        let changed = crate::layout_inputs();
+        assert_ne!(changed, inputs, "the layout inputs change with the exceptions");
         set_hyphenation_exceptions("");
         assert!(hyphenation_exceptions().is_empty());
-        assert_ne!(crate::layout::envelope_ink_inputs(), changed, "and again when they are cleared");
+        assert_ne!(crate::layout_inputs(), changed, "and again when they are cleared");
     }
 }

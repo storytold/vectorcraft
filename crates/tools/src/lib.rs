@@ -182,6 +182,11 @@ pub trait Tool: Send {
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
         false
     }
+    /// [`Self::claims_key`] for a press with `mods` held. By default the modifiers do not matter;
+    /// a tool that takes a key only without modifiers leaves the modified presses to the shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> bool {
+        self.claims_key(cx, key)
+    }
     /// Has the tool started something that Escape ends while no button is pressed (a path being
     /// drawn, the Blend tool's first pick)? That Escape ends nothing else, such as isolation mode or
     /// a rotated view.
@@ -599,6 +604,7 @@ pub(crate) mod testutil {
             construction_angles: guides::construction_angles(guides::DEFAULT_CONSTRUCTION_ANGLES),
             screen: None,
             plane_widget: Some(Default::default()),
+            plane_targets: distort::perspective::widget::PlaneTargets::ALL,
             precise_cursors: false,
             global_edit: &[],
         }
@@ -619,8 +625,16 @@ mod cursor_tests {
     /// Use Precise Cursors turns it into the crosshair.
     #[test]
     fn drawing_tools_show_their_own_cursor() {
-        let (d, _) = doc_with_rect();
+        let (d, rect) = doc_with_rect();
         let away = Point::new(400.0, 400.0);
+        // The Smooth tool shows its own cursor only with a selected path (Not Allowed without one).
+        let mut selected = Selection::default();
+        selected.set([rect]);
+        let paint = paint();
+        let cursor_of = |id: &str| match id {
+            "smooth" => create(id).cursor(&cx(&d, &selected, &paint), away, Mods::default()),
+            _ => cursor_at(id, &d, away),
+        };
         for (id, c) in [
             ("lasso", Cursor::Lasso),
             (addons::enclosing_lasso::ID, Cursor::Lasso),
@@ -646,7 +660,7 @@ mod cursor_tests {
             ("symbolStyler", Cursor::SymbolStyler),
             ("mesh", Cursor::MeshAdd),
         ] {
-            assert_eq!(cursor_at(id, &d, away), c, "{id}");
+            assert_eq!(cursor_of(id), c, "{id}");
             assert_eq!(c.precise(), Cursor::Crosshair, "{id}");
             // The Blob Brush's and the Eraser's dot is drawn: their tip outline goes round it. The
             // Live Paint Bucket's bucket is drawn.
@@ -660,7 +674,10 @@ mod cursor_tests {
         // Away from a selected path the Pencil shows its new-path cursor, drawn with a star; its
         // own cursor, for drawing and for a selected path under the pointer, borrows the crosshair.
         assert_eq!(cursor_at("pencil", &d, away), Cursor::PencilNew);
-        assert_eq!(Cursor::PencilNew.precise(), Cursor::Crosshair);
+        // Its badged cursors too: Use Precise Cursors shows the plain crosshair.
+        for c in [Cursor::PencilNew, Cursor::PencilClose, Cursor::PencilStraight, Cursor::PencilContinue, Cursor::PaintbrushClose] {
+            assert_eq!(c.precise(), Cursor::Crosshair, "{c:?}");
+        }
         assert_eq!(Cursor::PencilNew.stand_in(), None);
         assert_eq!(Cursor::Pencil.precise(), Cursor::Crosshair);
         assert_eq!(Cursor::Pencil.stand_in(), Some(Cursor::Crosshair));

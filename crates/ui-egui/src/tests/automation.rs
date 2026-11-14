@@ -945,6 +945,62 @@ fn ui_inspect_leaves_out_relative_paths_in_recorded_steps() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `ui.inspect` leaves out of a recorded `prefs.set` step the value of a folder preference outside the
+/// read root, given as `{key, value}` or in `values`, also in a batch step's commands at any depth: a
+/// bare name or a subfolder (in the working folder, outside the root), a path with spaces around it and
+/// a `file:` URL. A folder inside the root, an empty value, a scratch disk choice, other preferences and
+/// another command's params stay, and the UI state is not changed.
+#[test]
+fn ui_inspect_leaves_out_folder_preferences_in_recorded_prefs_steps() {
+    let (mut app, tx, base) = confined("inspect-prefs-steps");
+    let (inside, outside) = (s(base.join("in")), s(base.join("outside")));
+    let url = if outside.starts_with('/') { format!("file://{outside}") } else { format!("file:///{}", outside.replace('\\', "/")) };
+    let folders = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+    let mut steps: Vec<Value> = folders.iter().map(|k| json!(["prefs.set", {"key": k, "value": "scratch"}])).collect();
+    steps.push(json!(["prefs.set", {"values": folders.iter().map(|k| (k.to_string(), json!("tmp/scratch"))).collect::<serde_json::Map<_, _>>()}]));
+    steps.push(json!(["prefs.set", {"values": {
+        "scratchPrimary": format!(" {outside} "), "fontsFolder": url, "pluginsFolder": format!(" {url}"), "recoveryFolder": "Startup",
+        "templatesFolder": inside, "scratchSecondary": " None ", "uiAccent": "green",
+    }}]));
+    steps.push(json!(["prefs.set", {"key": "scratchPrimary", "value": "Startup"}]));
+    steps.push(json!(["prefs.set", {"key": "recoveryFolder", "value": ""}]));
+    steps.push(json!(["prefs.set", {"key": "fontsFolder", "value": inside}]));
+    let batch = |commands: Value| json!({"commands": commands});
+    let inner = batch(json!([{"command": "prefs.set", "params": {"values": {"scratchSecondary": "tmp/scratch", "uiAccent": "red"}}}]));
+    steps.push(json!([
+        "command.batch",
+        batch(json!([
+            {"command": "prefs.set", "params": {"key": "scratchPrimary", "value": "scratch"}},
+            {"command": "command.batch", "params": inner},
+        ]))
+    ]));
+    steps.push(json!(["x.y", {"key": "scratchPrimary", "value": "scratch"}]));
+    let set: crate::panels::actions::ActionSet =
+        serde_json::from_value(json!({"name": "set", "actions": [{"name": "prefs", "steps": steps}]})).unwrap();
+    app.ui.action_sets = vec![set];
+    let r = request(&mut app, &tx, "ui.inspect", json!({}));
+    let shown = &r["result"]["ui"]["action_sets"][0]["actions"][0]["steps"];
+    let mut want: Vec<Value> = folders.iter().map(|k| json!(["prefs.set", {"key": k}])).collect();
+    want.push(json!(["prefs.set", {"values": {}}]));
+    want.push(json!(["prefs.set", {"values": {"templatesFolder": inside, "scratchSecondary": " None ", "uiAccent": "green"}}]));
+    want.push(json!(["prefs.set", {"key": "scratchPrimary", "value": "Startup"}]));
+    want.push(json!(["prefs.set", {"key": "recoveryFolder", "value": ""}]));
+    want.push(json!(["prefs.set", {"key": "fontsFolder", "value": inside}]));
+    let inner = batch(json!([{"command": "prefs.set", "params": {"values": {"uiAccent": "red"}}}]));
+    want.push(json!([
+        "command.batch",
+        batch(json!([
+            {"command": "prefs.set", "params": {"key": "scratchPrimary"}},
+            {"command": "command.batch", "params": inner},
+        ]))
+    ]));
+    want.push(json!(["x.y", {"key": "scratchPrimary", "value": "scratch"}]));
+    assert_eq!(shown, &json!(want), "{r}");
+    assert!(!r.to_string().contains("tmp/scratch") && !r.to_string().contains(&outside.replace('\\', "\\\\")), "{r}");
+    assert_eq!(app.ui.action_sets[0].actions[0].steps[0].1, json!({"key": "fontsFolder", "value": "scratch"}), "the UI state is not changed");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Two libraries loaded from outside the read root under the same file name, only the second of them
 /// in a library panel: `ui.inspect` and `swatch.library.list` show the second under the same id, and
 /// that id finds it.

@@ -29,7 +29,7 @@ pub const ID: &str = "links";
 /// Seconds between two looks at the linked files (they change outside the app).
 const RECHECK: f64 = 2.0;
 const SHOW: [(&str, &str); 4] = [("all", "Show All"), ("missing", "Show Missing"), ("modified", "Show Modified"), ("embedded", "Show Embedded")];
-const SORT: [(&str, &str); 3] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status")];
+const SORT: [(&str, &str); 4] = [("name", "Sort by Name"), ("kind", "Sort by Kind"), ("status", "Sort by Status"), ("size", "Sort by Size")];
 const THUMBS: [(f32, &str); 4] = [(0.0, "No Thumbnails"), (18.0, "Small Thumbnails"), (28.0, "Medium Thumbnails"), (44.0, "Large Thumbnails")];
 
 /// The panel's options (flyout).
@@ -360,8 +360,8 @@ fn badge(ui: &Ui, r: egui::Rect, status: &str) {
 }
 
 /// The tooltip of row `r`. A row outside the layer tree also names where it is stored
-/// (`links.list`'s `owner`): the symbol, graph design or pattern whose art holds it, and the object
-/// whose opacity mask holds it, by `mask` (that object's name) or else by its id.
+/// (`links.list`'s `owner`): the symbol, graph design, pattern or brush whose art holds it, and the
+/// object whose opacity mask holds it, by `mask` (that object's name) or else by its id.
 pub(super) fn status_tip(r: &Value, mask: Option<String>) -> String {
     let tip = file_tip(r);
     let owner = &r["owner"];
@@ -370,6 +370,7 @@ pub(super) fn status_tip(r: &Value, mask: Option<String>) -> String {
         Some("symbol") => Some(tl!("Symbols")),
         Some("graphDesign") => Some(tl!("Graph Design")),
         Some("pattern") => Some(tl!("Pattern")),
+        Some("brush") => Some(tl!("Brushes")),
         _ => None,
     };
     let tip = match art {

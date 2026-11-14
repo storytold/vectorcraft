@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Assets",
             [],
             None,
-            "{assets?: [asset id…] (default all but the 3D assets, which assets.export3D writes), folder?, zip?, openLocation?, formats?, preset?, settings?, prefix?, subfolders?, antiAlias?} each asset's art alone, cropped to it, in every format row: document.exportForScreens {assets} at the document's export settings (document.exportSettings) under the ones given; with subfolders false every file goes into the folder itself, mobile and density rows too → what document.exportForScreens returns (no folder: the files, or one zip, as dataBase64). Leaves the remembered settings as they are (assets.settings.set changes them)",
+            "{assets?: [asset id…] (default all but the 3D assets, which assets.export3D writes), folder?, zip?, openLocation?, formats?, preset?, settings?, prefix?, subfolders?, antiAlias?} each asset's art alone, cropped to it, in every format row: document.exportForScreens {assets} at the document's export settings (document.exportSettings) under the ones given; with subfolders false every file goes into the folder itself, mobile and density rows too → what document.exportForScreens returns (no folder: the files, or one zip, as dataBase64; warnings name a key in the rows or settings given that only another format takes, not one in the remembered settings). Leaves the remembered settings as they are (assets.settings.set changes them)",
             has_doc,
             export
         ),
@@ -89,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Asset Export Settings",
             [],
             None,
-            "{exportPreset?: (a preset of document.exportPresets.list: its formats or preset, its format settings over the saved ones, its prefix (none when it has none), its folders (or subfolders: rows or none) with subfolders on for rows, and antiAlias; the other keys go over it), formats?, preset?: mobile|density|\"\" (none), settings?, prefix?, subfolders?, antiAlias?} change the export settings the Asset Export panel and Export for Screens share (document.exportSettings; the values of document.exportForScreens; null removes one): formats replace a preset, a preset replaces the formats → {settings}. Not an undo step",
+            "{exportPreset?: (a preset of document.exportPresets.list: its formats or preset, its format settings over the saved ones, its prefix (none when it has none), its folders (or subfolders: rows or none) with subfolders on for rows, and antiAlias; the other keys go over it), formats?, preset?: mobile|density|\"\" (none), settings?, prefix?, subfolders?: true|false (Create Sub-folders: true sorts the files into a folder per row; false puts assets.export's files in the folder itself and, given without exportPreset, sets a remembered folder per format or item to none as well), antiAlias?, openLocation?: true|false (Open Location after Export: remembered in document.exportSettings, not in presets or the reply; given alone to a document without settings, Create Sub-folders stays on)} change the export settings the Asset Export panel and Export for Screens share (document.exportSettings; the values of document.exportForScreens; null removes one): formats replace a preset, a preset replaces the formats → {settings}. Not an undo step",
             has_doc,
             settings_set
         ),
@@ -429,25 +429,41 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
         }
         q.insert("assets".into(), json!(all));
     }
-    export_screens(s, &Value::Object(q)).map_err(|e| of_cmd(C, e))
+    export_screens(s, &Value::Object(q), p).map_err(|e| of_cmd(C, e))
 }
 
 fn settings_set(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "assets.settings.set";
     let o = p.as_object().ok_or_else(|| bad(C, "give the settings to change, e.g. {\"formats\": [{\"format\": \"png\", \"scale\": \"2x\"}]}"))?;
-    if let Some(k) = o.keys().find(|k| !SCREEN_SETTINGS_KEYS.contains(&k.as_str()) && k.as_str() != "exportPreset") {
-        return Err(bad(C, format!("`{k}` isn't an export setting: {}", SCREEN_SETTINGS_KEYS.join(", "))));
+    if let Some(k) = o.keys().find(|k| !SCREEN_SETTINGS_KEYS.contains(&k.as_str()) && !matches!(k.as_str(), "exportPreset" | "openLocation")) {
+        return Err(bad(C, format!("`{k}` isn't an export setting: {}, openLocation", SCREEN_SETTINGS_KEYS.join(", "))));
+    }
+    for k in ["subfolders", "openLocation"] {
+        if o.get(k).is_some_and(|v| !v.is_boolean() && !v.is_null()) {
+            return Err(bad(C, format!("`{k}` is true or false")));
+        }
     }
     let mut settings = s.doc()?.doc.export_settings.clone();
     let mut given = o.clone();
+    // Create Sub-folders is on for a document without settings (Export for Screens opens so), and
+    // Open Location after Export set on its own leaves it on.
+    if settings.is_empty() && o.len() == 1 && o.get("openLocation").is_some_and(Value::is_boolean) {
+        given.insert("subfolders".into(), json!(true));
+    }
     if let Some(name) = given.remove("exportPreset") {
         let name = name.as_str().ok_or_else(|| bad(C, "`exportPreset` is the name of a preset of document.exportPresets.list"))?;
         with_screen_export_preset(s, C, &mut settings, name)?;
     }
     // Create Sub-folders is Export for Screens' folder per row: the dialog opens on the choice.
+    // Turned off on its own (the panel menu), it also ends a remembered folder per format or item;
+    // with an export preset, that preset's folder per format or item stays.
+    let folders = settings.get("folders").and_then(Value::as_str).map(str::to_string);
+    let sorted = folders.as_deref().is_some_and(|f| f != "none");
     match given.get("subfolders").and_then(Value::as_bool) {
         Some(true) => _ = settings.insert("folders".into(), json!("rows")),
-        Some(false) if settings.get("folders").and_then(Value::as_str) == Some("rows") => _ = settings.insert("folders".into(), json!("none")),
+        Some(false) if folders.as_deref() == Some("rows") || (sorted && !o.contains_key("exportPreset")) => {
+            _ = settings.insert("folders".into(), json!("none"))
+        }
         _ => {}
     }
     overlay(&mut settings, &given);

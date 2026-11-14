@@ -1043,6 +1043,51 @@ fn create_outlines_matches_text_bounds() {
     assert!(s.doc().unwrap().doc.node(t).is_some());
 }
 
+/// The type object's own fills and strokes (not its characters') become paths of its whole outline,
+/// with ids of their own: those below the Characters row under the glyph paths, the others over
+/// them, in their order. The group keeps no appearance of its own, and Undo brings the type back.
+#[test]
+fn create_outlines_keeps_the_objects_own_fills_and_strokes() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    for (cmd, p) in [
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("appearance.addStroke", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 1, "color": "#0000ff", "weight": 5})),
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 2, "color": "#00ff00", "opacity": 50})),
+        // The red fill paints below the characters; the stroke and the green fill over them.
+        ("appearance.moveItem", json!({"from": "contents", "to": 1})),
+    ] {
+        s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+    }
+    let own = node(&s, t).appearance.items.clone();
+    assert_eq!(own.len(), 3);
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert!(g.appearance.items.is_empty(), "the group paints nothing of its own");
+    let ch = g.children().unwrap();
+    assert_eq!(ch.len(), 4, "a path below, the two glyphs, a path above");
+    let (first, last) = (&ch[0], &ch[3]);
+    assert_eq!(first.appearance.items, own[..1], "the item below the characters");
+    assert_eq!(last.appearance.items, own[1..], "the items over them, in their order");
+    for c in [first, last] {
+        assert!(matches!(c.kind, NodeKind::Path { .. }), "{:?}", c.kind);
+        assert!(c.id != t && c.id != g.id, "a fresh id");
+    }
+    assert!(first.id != last.id);
+    for c in &ch[1..3] {
+        assert_eq!(c.appearance.fill_paint(), Paint::solid(Color::BLACK), "the characters keep their own paint");
+    }
+    // The whole-outline paths cover both glyphs.
+    let glyphs = ch[1].geometric_bounds().unwrap().union(ch[2].geometric_bounds().unwrap());
+    assert!(close(first.geometric_bounds().unwrap(), glyphs, 1e-6), "{:?} vs {glyphs:?}", first.geometric_bounds());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, t).appearance.items, own, "one undo step brings the type back");
+}
+
 /// Colour bitmap glyphs (emoji) become embedded images where they sat; glyphs showing one image
 /// share its pixels.
 #[test]

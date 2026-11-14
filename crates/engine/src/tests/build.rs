@@ -1490,6 +1490,93 @@ fn shape_builder_open_filled_paths_cut_without_open_filled_as_closed() {
     assert!((area(&s, NodeId(r["merged"].as_u64().unwrap())) - 5000.0).abs() < 1e-6);
 }
 
+/// The fill rows of an open path's appearance (bottom first) for the open-path tests below, with
+/// a 1 pt black stroke on top: a painted fill under an unpainted top fill, a painted fill that is
+/// hidden, one with an opacity of 0, and a painted fill under a hidden painted top fill.
+fn open_path_fill_stacks() -> [(&'static str, Vec<AppearanceItem>, bool); 4] {
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    let fill = |p: Paint, visible: bool, opacity: f32| {
+        let mut f = FillLayer::new(p);
+        f.visible = visible;
+        f.opacity = opacity;
+        AppearanceItem::Fill(f)
+    };
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = || Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let stroke = || AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 1.0));
+    [
+        ("a painted fill under an unpainted top fill", vec![fill(red(), true, 1.0), fill(Paint::None, true, 1.0), stroke()], true),
+        ("a hidden painted fill", vec![fill(red(), false, 1.0), stroke()], false),
+        ("a painted fill with an opacity of 0", vec![fill(red(), true, 0.0), stroke()], false),
+        ("a painted fill under a hidden painted top fill", vec![fill(red(), true, 1.0), fill(blue(), false, 1.0), stroke()], true),
+    ]
+}
+
+/// Consider Open Filled Paths as Closed: an open path counts as filled when any of its fill rows
+/// draws (shown, painted and above 0% opacity), whichever row is on top. The map, a merge inside
+/// the area and what a merge keeps of the path follow the rows that draw; with the option off, none
+/// of the paths closes.
+#[test]
+fn shape_builder_closes_open_paths_by_the_fill_rows_that_draw() {
+    for (what, items, closes) in open_path_fill_stacks() {
+        let mut s = session();
+        let r = s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}]})).unwrap();
+        let p = NodeId(r["id"].as_u64().unwrap());
+        s.edit("t", |d, _| {
+            d.node_mut(p).unwrap().appearance.items = items;
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [p.0]})).unwrap();
+        let r = s.execute("shapeBuilder.regions", &json!({})).unwrap();
+        assert_eq!(
+            (r["regions"].as_array().unwrap().len(), r["lines"].as_array().unwrap().len()),
+            if closes { (1, 0) } else { (0, 1) },
+            "{what}: {r}"
+        );
+        let r = s.execute("shapeBuilder.regions", &json!({"openFilledAsClosed": false})).unwrap();
+        assert_eq!((r["regions"].as_array().unwrap().len(), r["lines"].as_array().unwrap().len()), (0, 1), "{what}, option off: {r}");
+        let n = node(&s, p);
+        for on in [true, false] {
+            let inputs = vectorcraft_tools::builder::merge_inputs(&[&n], on);
+            assert_eq!(inputs.iter().map(|i| i.fill_closes).collect::<Vec<_>>(), vec![closes && on], "{what}, option {on}");
+        }
+        let merged = s.execute("shapeBuilder.merge", &json!({"points": [[75, 25]]}));
+        if closes {
+            assert!((area(&s, NodeId(merged.unwrap()["merged"].as_u64().unwrap())) - 5000.0).abs() < 1e-6, "{what}");
+        } else {
+            assert!(merged.is_err(), "{what}: the open path encloses no region");
+        }
+    }
+}
+
+/// Clicking Stroke Splits the Path on the middle side of an open U cuts it along the outline its
+/// drawn fill closes: with a fill row that draws, what is left runs on from the cut round the
+/// implied closing edge (the top side, then the bottom side); without one, what is left is the
+/// open path's two ends in path order (the bottom side, then the top side).
+#[test]
+fn shape_builder_stroke_split_closes_open_paths_by_the_fill_rows_that_draw() {
+    for (what, items, closes) in open_path_fill_stacks() {
+        let mut s = session();
+        let r =
+            s.execute("path.create", &json!({"anchors": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100}]})).unwrap();
+        let p = NodeId(r["id"].as_u64().unwrap());
+        s.edit("t", |d, _| {
+            d.node_mut(p).unwrap().appearance.items = items;
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [p.0]})).unwrap();
+        let r = s.execute("shapeBuilder.merge", &json!({"points": [[101, 50]], "splitStroke": true})).unwrap();
+        let out = ids(&r);
+        assert_eq!(shapes_of(&s, &out), vec![(false, 4, 200.0), (false, 2, 100.0)], "{what}");
+        let (rest, _) = outline(&node(&s, out[0]));
+        let starts: Vec<(f64, f64)> = rest.subpaths.iter().map(|sp| (sp.anchors[0].p.x.round(), sp.anchors[0].p.y.round())).collect();
+        let order = if closes { vec![(100.0, 100.0), (0.0, 0.0)] } else { vec![(0.0, 0.0), (100.0, 100.0)] };
+        assert_eq!(starts, order, "{what}");
+    }
+}
+
 /// Pick Color From Color Swatches: the merged shape takes the current fill, not the fill of the
 /// object under the first point; setting the current fill without `ids` leaves the selection's.
 #[test]
@@ -1746,6 +1833,203 @@ fn shape_builder_arrow_keys_pass_swatches_of_the_same_color() {
     s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
     let after = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[(a + 2) % names.len()].paint.clone();
     assert_eq!(s.paint.fill, after, "the swatch after Twin B");
+}
+
+/// The colors of the cursor swatch preview's chips, left to right, and which one is ringed.
+fn swatch_chips(s: &mut Session, v: ViewInfo) -> Vec<([u8; 4], bool)> {
+    let mut chips: Vec<(f64, [u8; 4], bool)> = s
+        .overlays(v)
+        .into_iter()
+        .filter_map(|o| match o {
+            vectorcraft_tools::Overlay::Swatch { p, color, selected } => Some((p.x, color, selected)),
+            _ => None,
+        })
+        .collect();
+    chips.sort_by(|a, b| a.0.total_cmp(&b.0));
+    chips.into_iter().map(|(_, c, sel)| (c, sel)).collect()
+}
+
+/// A solid paint's color as the chips draw it.
+fn chip_color(p: &Paint) -> [u8; 4] {
+    match p {
+        Paint::Solid { color, .. } => color.to_rgba8(1.0),
+        _ => panic!("not a solid color: {p:?}"),
+    }
+}
+
+/// Live Paint Bucket: Left and Right step the active paint through the document's color swatches
+/// (the selected art keeps its paint), the Cursor Swatch Preview (on at first) shows the active
+/// paint ringed between the swatches before and after it, and with it off the arrows still step.
+#[test]
+fn live_paint_bucket_arrow_keys_step_the_active_paint_through_the_swatches() {
+    let mut s = session();
+    let (a, _) = two(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    assert_eq!(s.tool_options_of("livePaintBucket")["cursorSwatchPreview"], json!(true));
+    assert!(s.tool_claims_key(ToolKey::Right, v) && s.tool_claims_key(ToolKey::Left, v));
+    assert!(!s.tool_claims_key(ToolKey::Up, v), "Up and Down keep their own use");
+    let list: Vec<(String, Paint)> =
+        vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| (sw.name.clone(), sw.paint.clone())).collect();
+    assert!(list.len() >= 4);
+    let n = list.len();
+    let stroke = s.paint.stroke.clone();
+    s.execute("paint.setFill", &json!({"swatch": list[0].0, "ids": []})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[2].1);
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[1].1);
+    assert_eq!(s.paint.stroke, stroke, "the stroke stays");
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its fill");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&list[0].1), false), (chip_color(&list[1].1), true), (chip_color(&list[2].1), false)]);
+    let alt = Mods { alt: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0).with_mods(alt), v).unwrap();
+    assert!(swatch_chips(&mut s, v).is_empty(), "Alt samples with the eyedropper and shows no chips");
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    // Past the first swatch, Left wraps around to the last.
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[n - 1].1);
+    assert_eq!(swatch_chips(&mut s, v).iter().map(|c| c.0).collect::<Vec<_>>(), [&list[n - 2].1, &list[n - 1].1, &list[0].1].map(chip_color));
+    // With the Stroke proxy in front, the arrows step the stroke and the chips show it.
+    s.execute("paint.toggleActive", &json!({"fill": false})).unwrap();
+    let fill = s.paint.fill.clone();
+    s.execute("paint.setStroke", &json!({"swatch": list[1].0, "ids": []})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!((&s.paint.fill, &s.paint.stroke), (&fill, &list[2].1));
+    assert!(!s.fill_active, "the Stroke proxy stays in front");
+    assert_eq!(swatch_chips(&mut s, v)[1], (chip_color(&list[2].1), true));
+    assert_eq!(node(&s, a).appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), "A keeps its paint");
+    // Cursor Swatch Preview off hides the chips; the arrows still step.
+    s.set_tool_option_cmd(&json!({"tool": "livePaintBucket", "values": {"cursorSwatchPreview": false}})).unwrap();
+    assert!(swatch_chips(&mut s, v).is_empty());
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, list[3].1);
+}
+
+/// The Live Paint Bucket and the Shape Builder take Left and Right for swatches only without
+/// modifiers: Shift, Alt and Cmd/Ctrl arrows are left to their shortcuts and change no paint.
+#[test]
+fn swatch_arrow_keys_leave_modified_arrows_to_the_shortcuts() {
+    let mut s = session();
+    two(&mut s);
+    let v = ViewInfo::default();
+    let first = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[0].name.clone();
+    s.execute("paint.setFill", &json!({"swatch": first, "ids": []})).unwrap();
+    for tool in ["livePaintBucket", "shapeBuilder"] {
+        s.select_tool(tool, v).unwrap();
+        if tool == "shapeBuilder" {
+            s.set_tool_option_cmd(&json!({"tool": tool, "values": {"pickColorFrom": "swatches"}})).unwrap();
+        }
+        let fill = s.paint.fill.clone();
+        assert!(s.tool_claims_key_with(ToolKey::Right, Mods::default(), v), "{tool}");
+        for m in [Mods { shift: true, ..Default::default() }, Mods { alt: true, ..Default::default() }, Mods { cmd: true, ..Default::default() }] {
+            for key in [ToolKey::Left, ToolKey::Right] {
+                assert!(!s.tool_claims_key_with(key, m, v), "{tool} {key:?} {m:?}");
+                s.tool_key(key, m, v).unwrap();
+                assert_eq!(s.paint.fill, fill, "{tool} {key:?} {m:?}");
+            }
+        }
+        s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+        assert_ne!(s.paint.fill, fill, "{tool}: a plain Right steps");
+    }
+}
+
+/// Two swatches of the same color: the Bucket's arrows step through both, and the fill and the
+/// stroke each step on from the swatch picked for them.
+#[test]
+fn live_paint_bucket_arrow_keys_pass_swatches_of_the_same_color_for_fill_and_stroke() {
+    let mut s = session();
+    two(&mut s);
+    for name in ["Twin A", "Twin B"] {
+        s.execute("swatch.new", &json!({"name": name, "color": "#123456"})).unwrap();
+    }
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    let names: Vec<String> = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| sw.name.clone()).collect();
+    let a = names.iter().position(|n| n == "Twin A").unwrap();
+    assert_eq!(names[a + 1], "Twin B");
+    let after = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc)[(a + 2) % names.len()].paint.clone();
+    // The fill goes to Twin B.
+    s.execute("paint.setFill", &json!({"swatch": "Twin A", "ids": []})).unwrap();
+    let twin = s.paint.fill.clone();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, twin, "Twin B");
+    // The stroke starts at Twin A: Right goes to Twin B, then past it.
+    s.execute("paint.setStroke", &json!({"swatch": "Twin A", "ids": []})).unwrap();
+    assert!(!s.fill_active);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, twin, "Twin B for the stroke");
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.stroke, after, "the swatch after Twin B");
+    // Back on the fill, which is still Twin B: Right goes past it.
+    s.execute("paint.toggleActive", &json!({"fill": true})).unwrap();
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, after, "the fill steps on from Twin B");
+}
+
+/// A color that is no swatch shows alone and Right picks the first swatch, Left the last; a paint
+/// that is not a solid color shows no chip; one swatch steps to itself; with no color swatch the
+/// tool leaves the arrows alone; during a fill drag the arrows change nothing.
+#[test]
+fn live_paint_bucket_arrow_keys_handle_unmatched_paint_few_swatches_and_drags() {
+    let mut s = session();
+    live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 300.0, 300.0), v).unwrap();
+    let list: Vec<Paint> = vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).iter().map(|sw| sw.paint.clone()).collect();
+    let odd = Paint::solid(Color::rgb8(0x12, 0x34, 0x57));
+    assert!(!list.contains(&odd));
+    s.paint.fill = odd.clone();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&odd), true)]);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[0]);
+    s.paint.fill = odd.clone();
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[list.len() - 1]);
+    s.paint.fill = Paint::None;
+    assert!(swatch_chips(&mut s, v).is_empty());
+
+    // During a fill drag the arrows are not taken and change nothing.
+    s.paint.fill = list[0].clone();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    assert!(s.tool_busy());
+    assert!(!s.tool_claims_key(ToolKey::Right, v));
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, list[0]);
+    assert!(swatch_chips(&mut s, v).is_empty(), "no chips during a drag");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 25.0, 50.0), v).unwrap();
+
+    // One color swatch: both arrows pick it, and it stands on both sides of itself.
+    let one = list[0].clone();
+    s.edit("t", |d, _| {
+        d.swatch_groups.clear();
+        d.swatches.retain(|sw| sw.paint == one);
+        d.swatches.truncate(1);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(vectorcraft_tools::builder::color_swatches(&s.doc().unwrap().doc).len(), 1);
+    s.paint.fill = odd;
+    s.tool_key(ToolKey::Left, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
+    s.pointer(&PointerEvent::new(PointerKind::Move, 301.0, 300.0), v).unwrap();
+    assert_eq!(swatch_chips(&mut s, v), vec![(chip_color(&one), false), (chip_color(&one), true), (chip_color(&one), false)]);
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
+
+    // No color swatch: the arrows are left to the canvas and the paint stays.
+    s.edit("t", |d, _| {
+        d.swatches.clear();
+        Ok(())
+    })
+    .unwrap();
+    assert!(!s.tool_claims_key(ToolKey::Right, v) && !s.tool_claims_key(ToolKey::Left, v));
+    s.tool_key(ToolKey::Right, Mods::default(), v).unwrap();
+    assert_eq!(s.paint.fill, one);
 }
 
 #[test]
@@ -2446,6 +2730,193 @@ fn live_paint_stroke_edge() {
     assert!(s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [300, 300]})).is_err());
 }
 
+/// The undo and redo depths, the unsaved state and the revision of the active document.
+fn history_state(s: &Session) -> (usize, usize, bool, u64) {
+    let st = s.doc().unwrap();
+    (st.history.undo.len(), st.history.redo.len(), st.is_dirty(), st.revision)
+}
+
+/// Draw a rectangle and undo it, so a redo step is waiting, then mark the document saved with `g`
+/// alone selected.
+fn redo_waiting_and_saved(s: &mut Session, g: NodeId) {
+    rect(s, 300.0, 300.0, 10.0, 10.0);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [g.0]})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+}
+
+/// The active document and its [`history_state`].
+type Snapshot = (vectorcraft_doc::Document, (usize, usize, bool, u64));
+
+fn snapshot(s: &Session) -> Snapshot {
+    ((*s.doc().unwrap().doc).clone(), history_state(s))
+}
+
+/// After a Live Paint edit that changed nothing: the document, the undo and redo steps, the saved
+/// state and the revision are as `before`, and Redo still brings back the rectangle
+/// [`redo_waiting_and_saved`] undid. Undoes the rectangle again, marks the document saved and
+/// takes a new `before`.
+fn assert_unchanged(s: &mut Session, before: &mut Snapshot, what: &str) {
+    assert!(*s.doc().unwrap().doc == before.0, "{what}: the document is as it was");
+    assert_eq!(history_state(s), before.1, "{what}: no undo step, the redo step kept, still saved");
+    let children = layer_children(s);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(layer_children(s), children + 1, "{what}: Redo brings back the rectangle");
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.doc_mut().unwrap().mark_saved();
+    *before = snapshot(s);
+}
+
+#[test]
+fn live_paint_fill_same_paint_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let drag = json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#00ff00"});
+    s.execute("livePaint.fill", &drag).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    // A color used since stays the newest recent color and the last color.
+    let blue = Color::rgb(0.0, 0.0, 1.0);
+    s.remember_paint_now(&Paint::solid(blue));
+    let recent = (s.recent_colors.clone(), s.last_solid);
+    let mut before = snapshot(&s);
+    let click = s.execute("livePaint.fill", &json!({"group": g.0, "point": [75, 50], "color": "#00ff00"})).unwrap();
+    let face = vectorcraft_tools::builder::face_at(&node(&s, g), Point::new(75.0, 50.0)).unwrap().id;
+    assert_eq!(click, json!({"group": g.0, "face": face.0}), "the usual reply");
+    assert_unchanged(&mut s, &mut before, "a click on a face with the paint");
+    s.execute("livePaint.fill", &drag).unwrap();
+    assert_unchanged(&mut s, &mut before, "a drag over faces with the paint");
+    // Without a group, the click finds the Live Paint group among the selected objects.
+    s.execute("livePaint.fill", &json!({"point": [125, 50], "color": "#00ff00"})).unwrap();
+    assert_unchanged(&mut s, &mut before, "a click in the selected group");
+    assert_eq!((s.recent_colors.clone(), s.last_solid), recent, "the recent colors are as they were");
+    // A drag that reaches one face without the paint is one undo step and remembers the color.
+    let red = Paint::solid(Color::from_hex("#ff0000").unwrap());
+    for x in [25, 75] {
+        s.execute("livePaint.fill", &json!({"group": g.0, "point": [x, 50], "color": "#ff0000"})).unwrap();
+    }
+    s.remember_paint_now(&Paint::solid(blue));
+    let depth = s.doc().unwrap().history.undo.len();
+    s.execute("livePaint.fill", &json!({"group": g.0, "point": [25, 50], "points": [[25, 50], [125, 50]], "color": "#ff0000"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), depth + 1);
+    assert_eq!(Paint::solid(s.last_solid), red);
+    let gn = node(&s, g);
+    for x in [25.0, 75.0, 125.0] {
+        assert_eq!(vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().appearance.fill_paint(), red, "{x}");
+    }
+}
+
+#[test]
+fn live_paint_bucket_click_with_the_face_paint_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("livePaintBucket", v).unwrap();
+    s.paint.fill = Paint::solid(Color::rgb(0.0, 1.0, 1.0));
+    let click = |s: &mut Session, x: f64| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, 50.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, 50.0), v).unwrap();
+    };
+    click(&mut s, 125.0);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    click(&mut s, 125.0);
+    assert_unchanged(&mut s, &mut before, "a Bucket click on a face with the paint");
+    // A drag over faces with the paint changes nothing either.
+    click(&mut s, 25.0);
+    click(&mut s, 75.0);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 25.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 125.0, 50.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 125.0, 50.0), v).unwrap();
+    assert_unchanged(&mut s, &mut before, "a Bucket drag over faces with the paint");
+}
+
+#[test]
+fn live_paint_stroke_edge_same_paint_and_width_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let call = json!({"group": g.0, "point": [100, 50], "color": "#ff0000", "width": 3});
+    let first = s.execute("livePaint.strokeEdge", &call).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    s.remember_paint_now(&Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let last = s.last_solid;
+    let mut before = snapshot(&s);
+    assert_eq!(s.execute("livePaint.strokeEdge", &call).unwrap(), first, "the usual reply");
+    assert_unchanged(&mut s, &mut before, "an edge with the paint and the width");
+    assert_eq!(s.last_solid, last, "the last color is as it was");
+    // Another width is an edit.
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100, 50], "color": "#ff0000", "width": 2})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
+#[test]
+fn live_paint_gap_options_same_values_are_no_op() {
+    let mut s = session();
+    let g = live_square_with_a_gap(&mut s);
+    let set = json!({"detect": true, "size": "small", "color": "#123456"});
+    let first = s.execute("livePaint.gapOptions", &set).unwrap();
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    assert_eq!(s.execute("livePaint.gapOptions", &set).unwrap(), first, "the usual reply");
+    assert_unchanged(&mut s, &mut before, "the options the group has");
+    s.execute("livePaint.gapOptions", &json!({})).unwrap();
+    assert_unchanged(&mut s, &mut before, "no options given");
+    // Close Gaps With Paths with a gap to close is an edit.
+    let r = s.execute("livePaint.gapOptions", &json!({"closeGaps": true})).unwrap();
+    assert_eq!(r["closed"], 1);
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
+#[test]
+fn live_paint_gap_options_close_without_gaps_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let r = s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true})).unwrap();
+    assert_eq!((ids(&r), &r["faces"], &r["closed"], gaps_of(&r).len()), (vec![g], &json!(3), &json!(0), 0));
+    assert_unchanged(&mut s, &mut before, "no gap to close");
+    // With other options, the faces keep their ids when no path is added.
+    let faces = |s: &Session| vectorcraft_tools::builder::faces(&node(s, g)).iter().map(|f| f.id).collect::<Vec<_>>();
+    let ids_before = faces(&s);
+    s.execute("livePaint.gapOptions", &json!({"id": g.0, "closeGaps": true, "color": "#00ff00"})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+    assert_eq!(faces(&s), ids_before);
+}
+
+#[test]
+fn live_paint_make_existing_group_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    redo_waiting_and_saved(&mut s, g);
+    let mut before = snapshot(&s);
+    let r = s.execute("livePaint.make", &json!({})).unwrap();
+    assert_eq!((NodeId(r["id"].as_u64().unwrap()), &r["faces"]), (g, &json!(3)));
+    assert_eq!(r["edges"].as_u64().unwrap(), vectorcraft_tools::builder::edges(&node(&s, g)).len() as u64);
+    assert_unchanged(&mut s, &mut before, "Make with the group alone");
+}
+
+#[test]
+fn live_paint_merge_single_group_is_no_op() {
+    let mut s = session();
+    let g = live(&mut s);
+    let other = rect(&mut s, 300.0, 0.0, 50.0, 50.0);
+    redo_waiting_and_saved(&mut s, g);
+    // Given by id, the group is selected without an undo step.
+    s.execute("select.set", &json!({"ids": [other.0]})).unwrap();
+    let before = snapshot(&s);
+    let r = s.execute("livePaint.merge", &json!({"ids": [g.0]})).unwrap();
+    assert_eq!((NodeId(r["id"].as_u64().unwrap()), &r["faces"]), (g, &json!(3)));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![g]);
+    assert!(*s.doc().unwrap().doc == before.0);
+    let (undo, redo, dirty, _) = history_state(&s);
+    assert_eq!((undo, redo, dirty), (before.1.0, before.1.1, before.1.2));
+    // A path to add is an edit.
+    s.execute("livePaint.merge", &json!({"ids": [g.0, other.0]})).unwrap();
+    assert_eq!(history_state(&s).0, before.1.0 + 1);
+}
+
 /// Shape Builder refuses an on/off option that is not true or false and a tolerance or gap that is
 /// not a number, given as text or as another value of the wrong kind, naming the key; the document
 /// and the undo history stay as they were. True, false and null still work.
@@ -2561,6 +3032,262 @@ fn live_paint_release_and_expand() {
     let r = s.execute("livePaint.release", &json!({})).unwrap();
     assert_eq!(ids(&r), vec![a, b]);
     assert!((area(&s, a) - 10000.0).abs() < 1.0);
+}
+
+/// Set the appearance rows of the face of Live Paint group `g` at `face` (or the edge nearest
+/// `edge`) to `items`, and give it `opacity`; returns that child's id.
+fn set_live_part(s: &mut Session, g: NodeId, face: Option<(f64, f64)>, edge: Option<(f64, f64)>, items: Vec<AppearanceItem>, opacity: f32) -> NodeId {
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let n = node(s, g);
+    let part = match (face, edge) {
+        (Some((x, y)), _) => face_at(&n, Point::new(x, y)),
+        (_, Some((x, y))) => edge_near(&n, Point::new(x, y), 0.5),
+        _ => None,
+    };
+    let id = part.unwrap().id;
+    s.edit("t", |d, _| {
+        let c = d.node_mut(id).unwrap();
+        c.appearance.items = items;
+        c.opacity = opacity;
+        Ok(())
+    })
+    .unwrap();
+    id
+}
+
+/// Expand keeps a face or edge when a fill or stroke row draws it, whatever row is on top: a
+/// painted lower row under an unpainted top row is kept, and a part whose only painted row is
+/// hidden, transparent or 0 pt wide, or whose own opacity is 0, is dropped.
+#[test]
+fn live_paint_expand_keeps_the_faces_and_edges_that_draw() {
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let stroke = |p: Paint, w: f64| AppearanceItem::Stroke(StrokeLayer::new(p, w));
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let hidden = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.visible = false,
+            AppearanceItem::Stroke(st) => st.visible = false,
+        }
+        i
+    };
+    let clear = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.opacity = 0.0,
+            AppearanceItem::Stroke(st) => st.opacity = 0.0,
+        }
+        i
+    };
+    let mut s = session();
+    let g = live(&mut s);
+    let lower_fill = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![fill(red()), fill(Paint::None)], 1.0);
+    let hidden_fill = set_live_part(&mut s, g, Some((125.0, 50.0)), None, vec![hidden(fill(red()))], 1.0);
+    let clear_fill = set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![clear(fill(red()))], 1.0);
+    let lower_stroke = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke(red(), 2.0), stroke(Paint::None, 1.0)], 1.0);
+    let hidden_stroke = set_live_part(&mut s, g, None, Some((150.0, 50.0)), vec![hidden(stroke(red(), 2.0))], 1.0);
+    let thin_stroke = set_live_part(&mut s, g, None, Some((100.0, 50.0)), vec![stroke(red(), 0.0)], 1.0);
+    let clear_stroke = set_live_part(&mut s, g, None, Some((50.0, 50.0)), vec![clear(stroke(red(), 2.0))], 1.0);
+    let clear_edge = set_live_part(&mut s, g, None, Some((75.0, 0.0)), vec![stroke(red(), 2.0)], 0.0);
+    let parts = [lower_fill, hidden_fill, clear_fill, lower_stroke, hidden_stroke, thin_stroke, clear_stroke, clear_edge];
+    assert_eq!(parts.iter().collect::<std::collections::HashSet<_>>().len(), parts.len());
+    let before = node(&s, g);
+    s.execute("livePaint.expand", &json!({})).unwrap();
+    let n = node(&s, g);
+    let kept: Vec<NodeId> = n.children().unwrap().iter().map(|c| c.id).collect();
+    let has = |id: NodeId| kept.contains(&id);
+    assert!(has(lower_fill) && has(lower_stroke), "a painted lower row draws: {kept:?}");
+    for id in [hidden_fill, clear_fill, hidden_stroke, thin_stroke, clear_stroke, clear_edge] {
+        assert!(!has(id), "{id:?} draws nothing: {kept:?}");
+    }
+    // The kept parts keep every row.
+    let rows = |n: &Node, id: NodeId| n.children().unwrap().iter().find(|c| c.id == id).unwrap().appearance.items.clone();
+    assert_eq!(rows(&n, lower_fill), rows(&before, lower_fill));
+    assert_eq!(rows(&n, lower_stroke), rows(&before, lower_stroke));
+}
+
+/// `livePaint.info` lists every fill and stroke row of each face and edge, bottom first, and says
+/// which rows draw by Expand's rule, while `fill`, `stroke` and `width` stay the top rows.
+#[test]
+fn live_paint_info_lists_every_appearance_row() {
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let stroke = |p: Paint, w: f64| AppearanceItem::Stroke(StrokeLayer::new(p, w));
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let blue = || Paint::solid(Color::rgb(0.0, 0.0, 1.0));
+    let green = || Paint::solid(Color::rgb(0.0, 1.0, 0.0));
+    let hidden = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.visible = false,
+            AppearanceItem::Stroke(st) => st.visible = false,
+        }
+        i
+    };
+    let faded = |mut i: AppearanceItem, o: f32| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.opacity = o,
+            AppearanceItem::Stroke(st) => st.opacity = o,
+        }
+        i
+    };
+    let mut s = session();
+    let g = live(&mut s);
+    // A drawn lower fill and a half-opaque stroke under an unpainted top fill.
+    let lower = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![fill(red()), faded(stroke(blue(), 2.0), 0.5), fill(Paint::None)], 1.0);
+    let quiet = set_live_part(&mut s, g, Some((125.0, 50.0)), None, vec![hidden(fill(red())), faded(fill(red()), 0.0)], 1.0);
+    let bare = set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![], 1.0);
+    // Two strokes with a fill between them.
+    let two = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke(red(), 4.0), fill(green()), stroke(blue(), 2.0)], 1.0);
+    let thin = set_live_part(&mut s, g, None, Some((100.0, 50.0)), vec![stroke(red(), 0.0)], 1.0);
+    let clear_edge = set_live_part(&mut s, g, None, Some((75.0, 0.0)), vec![stroke(red(), 2.0)], 0.0);
+    let hidden_edge = set_live_part(&mut s, g, None, Some((150.0, 50.0)), vec![stroke(red(), 2.0)], 1.0);
+    s.edit("t", |d, _| {
+        d.node_mut(hidden_edge).unwrap().visible = false;
+        Ok(())
+    })
+    .unwrap();
+    let parts = [lower, quiet, bare, two, thin, clear_edge, hidden_edge];
+    assert_eq!(parts.iter().collect::<std::collections::HashSet<_>>().len(), parts.len());
+
+    let info = s.execute("livePaint.info", &json!({"group": g.0})).unwrap();
+    let part = |key: &str, id: NodeId| info[key].as_array().unwrap().iter().find(|p| p["id"] == id.0).unwrap().clone();
+    let fill_row = |i: usize, p: Paint, o: f64, v: bool, drawn: bool| json!({"index": i, "kind": "fill", "paint": p.label(), "opacity": o, "visible": v, "drawn": drawn});
+    let stroke_row = |i: usize, p: Paint, o: f64, v: bool, w: f64, drawn: bool| json!({"index": i, "kind": "stroke", "paint": p.label(), "opacity": o, "visible": v, "width": w, "drawn": drawn});
+
+    let f = part("faces", lower);
+    assert_eq!(f["fill"], json!(Paint::None.label()), "fill stays the top fill");
+    assert!(f["bounds"].is_array());
+    assert_eq!(
+        f["appearance"],
+        json!([fill_row(0, red(), 1.0, true, true), stroke_row(1, blue(), 0.5, true, 2.0, true), fill_row(2, Paint::None, 1.0, true, false)])
+    );
+    assert_eq!(part("faces", quiet)["appearance"], json!([fill_row(0, red(), 1.0, false, false), fill_row(1, red(), 0.0, true, false)]));
+    assert_eq!(part("faces", bare)["appearance"], json!([]));
+
+    let e = part("edges", two);
+    assert_eq!((e["stroke"].clone(), e["width"].clone()), (json!(blue().label()), json!(2.0)), "stroke and width stay the top stroke's");
+    assert_eq!(
+        e["appearance"],
+        json!([stroke_row(0, red(), 1.0, true, 4.0, true), fill_row(1, green(), 1.0, true, true), stroke_row(2, blue(), 1.0, true, 2.0, true)])
+    );
+    assert_eq!(part("edges", thin)["appearance"], json!([stroke_row(0, red(), 1.0, true, 0.0, false)]));
+    for id in [clear_edge, hidden_edge] {
+        assert_eq!(part("edges", id)["appearance"], json!([stroke_row(0, red(), 1.0, true, 2.0, false)]), "a part that is not shown draws no row");
+    }
+}
+
+/// Merge carries a face's whole appearance when one of its rows draws, and carries nothing from a
+/// face that draws nothing.
+#[test]
+fn live_paint_merge_carries_the_faces_that_draw() {
+    use vectorcraft_doc::FillLayer;
+    use vectorcraft_tools::builder::face_at;
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let green = || Paint::solid(Color::rgb(0.0, 1.0, 0.0));
+    let mut s = session();
+    let g = live(&mut s);
+    let rows = vec![fill(green()), fill(Paint::None)];
+    set_live_part(&mut s, g, Some((25.0, 50.0)), None, rows.clone(), 1.0);
+    let mut only_hidden = fill(green());
+    if let AppearanceItem::Fill(f) = &mut only_hidden {
+        f.visible = false;
+    }
+    set_live_part(&mut s, g, Some((125.0, 50.0)), None, vec![only_hidden], 1.0);
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    assert_eq!(face_at(&n, Point::new(25.0, 50.0)).unwrap().appearance.items, rows, "the drawn lower fill is carried");
+    let b = face_at(&n, Point::new(125.0, 50.0)).unwrap();
+    assert_eq!(b.appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)), "the face takes its source's fill again");
+    assert!(b.appearance.has_drawn_fill());
+}
+
+/// Merge rebuilds the faces and edges as other paths, so the appearance it carries to them leaves
+/// the strokes' pen pressure behind and keeps the rest.
+#[test]
+fn live_paint_merge_leaves_pen_pressure_behind() {
+    use vectorcraft_doc::{FillLayer, PressureProfile, StrokeLayer};
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let pressed = || {
+        let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 3.0);
+        st.pressure = PressureProfile::from_samples([(0.0, 0.2), (0.5, 1.0), (1.0, 0.2)]);
+        assert!(st.pressure.is_some());
+        st
+    };
+    let green = AppearanceItem::Fill(FillLayer::new(Paint::solid(Color::rgb(0.0, 1.0, 0.0))));
+    let mut s = session();
+    let g = live(&mut s);
+    set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![green.clone(), AppearanceItem::Stroke(pressed())], 1.0);
+    set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![AppearanceItem::Stroke(pressed())], 1.0);
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    let mut plain = pressed();
+    plain.pressure = None;
+    let face = &face_at(&n, Point::new(75.0, 50.0)).unwrap().appearance.items;
+    assert_eq!(face, &vec![green, AppearanceItem::Stroke(plain.clone())]);
+    assert_eq!(edge_near(&n, Point::new(0.0, 50.0), 0.5).unwrap().appearance.items, vec![AppearanceItem::Stroke(plain)]);
+}
+
+/// The gradients Merge carries to the rebuilt faces and edges keep their fit on the old outline,
+/// lower rows included.
+#[test]
+fn live_paint_merge_keeps_the_fit_of_carried_gradients() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let stops = vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, Color::WHITE)];
+    let unplaced = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let gradient = || Paint::Gradient(Box::new(unplaced.clone()));
+    let mut s = session();
+    let g = live(&mut s);
+    let rows = vec![AppearanceItem::Fill(FillLayer::new(gradient())), AppearanceItem::Fill(FillLayer::new(Paint::None))];
+    let face = set_live_part(&mut s, g, Some((25.0, 50.0)), None, rows, 1.0);
+    let edge = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![AppearanceItem::Stroke(StrokeLayer::new(gradient(), 2.0))], 1.0);
+    let before = node(&s, g);
+    let old = |id: NodeId| before.children().unwrap().iter().find(|c| c.id == id).unwrap().clone();
+    let (old_face, old_edge) = (old(face), old(edge));
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    let geom = |items: &[AppearanceItem]| match items[0].paint() {
+        Paint::Gradient(gp) => gp.geom,
+        p => panic!("a gradient, not {p:?}"),
+    };
+    let face_bounds = old_face.geometric_bounds().unwrap();
+    let new_face = face_at(&n, Point::new(25.0, 50.0)).unwrap();
+    assert_eq!(geom(&new_face.appearance.items), Some(unplaced.resolve(face_bounds)), "the lower-row fill keeps its fit");
+    let AppearanceItem::Stroke(st) = &old_edge.appearance.items[0] else { panic!("a stroke") };
+    let edge_box = st.paint_bounds(old_edge.geometric_bounds().unwrap());
+    let new_edge = edge_near(&n, Point::new(0.0, 50.0), 0.5).unwrap();
+    assert_eq!(geom(&new_edge.appearance.items), Some(unplaced.resolve(edge_box)), "the stroke keeps its fit");
+}
+
+/// Merge carries a face's or edge's visibility, opacity and blending mode to the rebuilt part with
+/// its appearance: a half-transparent face drawn by a stroke alone stays half transparent, and a
+/// hidden edge stays hidden.
+#[test]
+fn live_paint_merge_keeps_the_visibility_opacity_and_blending_of_carried_parts() {
+    use vectorcraft_color::BlendMode;
+    use vectorcraft_doc::StrokeLayer;
+    use vectorcraft_tools::builder::{edge_near, face_at};
+    let stroke = || AppearanceItem::Stroke(StrokeLayer::new(Paint::solid(Color::BLACK), 2.0));
+    let mut s = session();
+    let g = live(&mut s);
+    let face = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![stroke()], 0.5);
+    let edge = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke()], 1.0);
+    s.edit("t", |d, _| {
+        d.node_mut(face).unwrap().blend = BlendMode::Multiply;
+        d.node_mut(edge).unwrap().visible = false;
+        Ok(())
+    })
+    .unwrap();
+    let c = rect(&mut s, 120.0, 120.0, 100.0, 20.0);
+    s.execute("livePaint.merge", &json!({"ids": [g.0, c.0]})).unwrap();
+    let n = node(&s, g);
+    let f = face_at(&n, Point::new(25.0, 50.0)).unwrap();
+    assert_eq!((f.appearance.items.clone(), f.opacity, f.blend, f.visible), (vec![stroke()], 0.5, BlendMode::Multiply, true));
+    let e = edge_near(&n, Point::new(0.0, 50.0), 0.5).unwrap();
+    assert_eq!((e.appearance.items.clone(), e.visible), (vec![stroke()], false), "the hidden edge stays hidden");
 }
 
 fn live_group_only(s: &mut Session) -> NodeId {
@@ -3097,9 +3824,10 @@ fn live_paint_tool_options_refuse_invalid_values_and_change_nothing() {
     let colors = [json!(3), json!("nope"), json!("#12345"), json!("#00ff0080"), json!("00ff0080"), json!("#0f08"), json!(null)];
     let widths = [json!("wide"), json!(null), json!(true)];
     let switches = [json!("true"), json!(null), json!(1)];
-    for (tool, keys) in
-        [("livePaintBucket", &["paintFills", "paintStrokes", "highlight"][..]), ("livePaintSelection", &["selectFills", "selectStrokes"][..])]
-    {
+    for (tool, keys) in [
+        ("livePaintBucket", &["paintFills", "paintStrokes", "cursorSwatchPreview", "highlight"][..]),
+        ("livePaintSelection", &["selectFills", "selectStrokes"][..]),
+    ] {
         let mut bad: Vec<(&str, Value)> = keys.iter().flat_map(|k| switches.iter().map(move |v| (*k, v.clone()))).collect();
         bad.extend(colors.iter().map(|v| ("color", v.clone())));
         bad.extend(widths.iter().map(|v| ("width", v.clone())));
@@ -3308,6 +4036,37 @@ fn live_paint_bucket_alt_shift_gradient_samples_active_stroke_only() {
 }
 
 #[test]
+fn live_paint_selection_double_click_selects_the_faces_no_stroked_edge_parts() {
+    let mut s = session();
+    let g = live(&mut s);
+    // The edge between the middle and right faces draws no stroke.
+    s.execute("livePaint.strokeEdge", &json!({"group": g.0, "point": [100.0, 50.0], "none": true})).unwrap();
+    let v = ViewInfo::default();
+    s.select_tool("livePaintSelection", v).unwrap();
+    let gn = node(&s, g);
+    let face = |x: f64| vectorcraft_tools::builder::face_at(&gn, Point::new(x, 50.0)).unwrap().id;
+    let before = s.doc().unwrap().doc.clone();
+    let double_click = |s: &mut Session, x: f64, m: Mods| {
+        for kind in [PointerKind::Down, PointerKind::Up, PointerKind::Down, PointerKind::Up, PointerKind::DoubleClick] {
+            s.pointer(&PointerEvent::new(kind, x, 50.0).with_mods(m), v).unwrap();
+        }
+        let mut ids = s.doc().unwrap().selection.objects.clone();
+        ids.sort();
+        ids
+    };
+    let sorted = |mut ids: Vec<NodeId>| {
+        ids.sort();
+        ids
+    };
+    assert_eq!(double_click(&mut s, 125.0, Mods::default()), sorted(vec![face(75.0), face(125.0)]));
+    // The stroked edge at x = 50 parts the left face from the others.
+    assert_eq!(double_click(&mut s, 25.0, Mods::default()), vec![face(25.0)]);
+    // Shift-double-click adds the faces reached to the selection.
+    assert_eq!(double_click(&mut s, 75.0, Mods { shift: true, ..Default::default() }), sorted(vec![face(25.0), face(75.0), face(125.0)]));
+    assert_eq!(s.doc().unwrap().doc, before, "selecting changes no paint");
+}
+
+#[test]
 fn live_paint_selection_marquee_selects_what_it_touches() {
     let mut s = session();
     let g = live(&mut s);
@@ -3431,6 +4190,58 @@ fn shape_builder_uses_the_filled_faces_of_a_live_paint_group() {
     // The outline of 0..150 × 0..100 and the edge at x = 100 keep their strokes; the edge at x = 50
     // between the merged faces is removed.
     assert!((stroked_length(&s, &out) - 600.0).abs() < 1.0, "{}", stroked_length(&s, &out));
+}
+
+/// The Shape Builder takes a Live Paint face or edge when any of its fill or stroke rows draws,
+/// whichever row is on top: a painted lower row under an unpainted top row counts, and a part
+/// whose only painted row is hidden, transparent or (for an edge) 0 pt wide, or whose own opacity
+/// is 0, does not.
+#[test]
+fn shape_builder_takes_the_live_paint_faces_and_edges_that_draw() {
+    use vectorcraft_doc::{FillLayer, StrokeLayer};
+    let fill = |p: Paint| AppearanceItem::Fill(FillLayer::new(p));
+    let stroke = |p: Paint, w: f64| AppearanceItem::Stroke(StrokeLayer::new(p, w));
+    let red = || Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let hidden = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.visible = false,
+            AppearanceItem::Stroke(st) => st.visible = false,
+        }
+        i
+    };
+    let clear = |mut i: AppearanceItem| {
+        match &mut i {
+            AppearanceItem::Fill(f) => f.opacity = 0.0,
+            AppearanceItem::Stroke(st) => st.opacity = 0.0,
+        }
+        i
+    };
+    let mut s = session();
+    let g = live(&mut s);
+    let lower_fill = set_live_part(&mut s, g, Some((25.0, 50.0)), None, vec![fill(red()), fill(Paint::None)], 1.0);
+    let hidden_fill = set_live_part(&mut s, g, Some((125.0, 50.0)), None, vec![hidden(fill(red()))], 1.0);
+    let clear_fill = set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![clear(fill(red()))], 1.0);
+    let lower_stroke = set_live_part(&mut s, g, None, Some((0.0, 50.0)), vec![stroke(red(), 2.0), stroke(Paint::None, 1.0)], 1.0);
+    let hidden_stroke = set_live_part(&mut s, g, None, Some((150.0, 50.0)), vec![hidden(stroke(red(), 2.0))], 1.0);
+    let thin_stroke = set_live_part(&mut s, g, None, Some((100.0, 50.0)), vec![stroke(red(), 0.0)], 1.0);
+    let clear_stroke = set_live_part(&mut s, g, None, Some((50.0, 50.0)), vec![clear(stroke(red(), 2.0))], 1.0);
+    let clear_edge = set_live_part(&mut s, g, None, Some((75.0, 0.0)), vec![stroke(red(), 2.0)], 0.0);
+    let parts = [lower_fill, hidden_fill, clear_fill, lower_stroke, hidden_stroke, thin_stroke, clear_stroke, clear_edge];
+    assert_eq!(parts.iter().collect::<std::collections::HashSet<_>>().len(), parts.len());
+    let d = s.doc().unwrap();
+    let (_, leaves) = vectorcraft_tools::builder::shape_builder_shapes(&d.doc, &[g], true);
+    let taken: Vec<NodeId> = leaves.iter().map(|l| l.id).collect();
+    assert!(taken.contains(&lower_fill) && taken.contains(&lower_stroke), "a painted lower row draws: {taken:?}");
+    for id in [hidden_fill, clear_fill, hidden_stroke, thin_stroke, clear_stroke, clear_edge] {
+        assert!(!taken.contains(&id), "{id:?} draws nothing: {taken:?}");
+    }
+    // A face with a painted fill whose own opacity is 0 is left out too.
+    let mut s = session();
+    let g = live(&mut s);
+    let clear_face = set_live_part(&mut s, g, Some((75.0, 50.0)), None, vec![fill(red())], 0.0);
+    let d = s.doc().unwrap();
+    let (_, leaves) = vectorcraft_tools::builder::shape_builder_shapes(&d.doc, &[g], true);
+    assert!(!leaves.iter().any(|l| l.id == clear_face), "a face with an opacity of 0 draws nothing");
 }
 
 /// An edge that closes on itself is a line around its face, not a second shape over it.
@@ -3842,6 +4653,41 @@ fn a_trace_run_hands_its_trace_to_the_command() {
     assert!(s.trace_hand_off.is_none(), "dropped");
     let bb = outline(&traced_paths(&node(&s, NodeId(moved["id"].as_u64().unwrap())))[0]).0.bounds().unwrap();
     assert!((bb.center().x - 160.0).abs() < 1.5, "traced where the image is now: {bb:?}");
+}
+
+/// A trace made in one document applies only there: in another document with the same image,
+/// object and settings, the run no longer applies, and both trace commands drop the trace handed
+/// in and trace that document's own image, as one undo step.
+#[test]
+fn a_trace_run_applies_only_in_its_own_document() {
+    let p = json!({"params": {"ignoreWhite": true}});
+    for command in ["imageTrace.make", "imageTrace.makeAndExpand"] {
+        let mut direct = session();
+        image_doc(&mut direct);
+        let want = direct.execute(command, &p).unwrap();
+        let mut s = session();
+        let img = image_doc(&mut s);
+        let a = s.active_index().unwrap();
+        let copy = (*s.doc().unwrap().doc).clone();
+        let run = cmd::TraceRun::prepare(&s, command, &p).unwrap();
+        let traced = run.run(&|_, _| true).unwrap();
+        let b = s.add_document(copy, None);
+        assert_ne!(s.documents()[a].uid, s.documents()[b].uid);
+        assert!(!run.current(&s), "{command}: another document");
+        assert!(s.set_active(a));
+        assert!(run.current(&s), "{command}: its own document");
+        assert!(s.set_active(b));
+        traced.hand_in(&mut s);
+        let got = s.execute(run.command(), run.params()).unwrap();
+        assert!(s.trace_hand_off.is_none(), "{command}: dropped");
+        assert_eq!(got, want, "{command}");
+        let g = NodeId(got["id"].as_u64().unwrap());
+        assert_eq!(node(&s, g), node(&direct, g), "{command}");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: one undo step");
+        assert!(s.set_active(a));
+        assert!(matches!(node(&s, img).kind, NodeKind::Image(_)), "{command}: the first document is untouched");
+    }
 }
 
 /// A plug-in run that calls Image Trace and then fails leaves a trace handed in for the command in
