@@ -1099,13 +1099,18 @@ fn fill_and_stroke(s: &Session, id: NodeId) -> (Paint, Paint) {
 /// in the batch, and one drawn after it, the same fill and stroke. Returns the batch's rectangle's
 /// fill and stroke.
 fn batch_matches_steps(steps: &[(&str, Value)]) -> (Paint, Paint) {
+    batch_matches_steps_from(brand_defaults_session, steps)
+}
+
+/// [`batch_matches_steps`] with both sessions made by `setup`.
+fn batch_matches_steps_from(setup: impl Fn() -> Session, steps: &[(&str, Value)]) -> (Paint, Paint) {
     let shape = ("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10}));
-    let mut one_by_one = brand_defaults_session();
+    let mut one_by_one = setup();
     for (id, p) in steps {
         run(&mut one_by_one, id, p.clone());
     }
     let single = rect(&mut one_by_one);
-    let mut batched = brand_defaults_session();
+    let mut batched = setup();
     let commands: Vec<Value> = steps.iter().chain([&shape]).map(|(id, p)| json!({"command": id, "params": p})).collect();
     let r = run(&mut batched, "command.batch", json!({ "commands": commands }));
     let in_batch = NodeId(r["results"][steps.len()]["id"].as_u64().unwrap());
@@ -1131,6 +1136,43 @@ fn swatch_steps_in_a_batch_change_the_new_art_paints_as_commands_do() {
     assert_eq!(batch_matches_steps(&[("swatch.merge", json!({"names": ["Other", "Brand"]}))]), (other.clone(), other));
     let gray = linked("#ababab", "Brand");
     assert_eq!(batch_matches_steps(&[("swatch.editGroup", json!({"group": "G", "colors": ["#ababab"]}))]), (gray.clone(), gray));
+}
+
+#[test]
+fn spot_colors_options_in_a_batch_change_the_new_art_paints_as_the_command_does() {
+    let _g = crate::tests_colormgmt::GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let lab = Color::Lab { l: 55.0, a: 60.0, b: 40.0 };
+    let cms = vectorcraft_color::cms::active();
+    let cmyk = cms.convert(&lab, vectorcraft_color::cms::Model::Cmyk, cms.settings().intent);
+    assert!(matches!(cmyk, Color::Cmyk { .. }));
+    // The default fill and stroke for new art are linked to 40 % of the Lab spot swatch "Lab Ink".
+    let lab_ink_defaults = |use_lab: bool| {
+        let mut s = session();
+        run(&mut s, "swatch.new", json!({"name": "Lab Ink", "color": {"l": 55, "a": 60, "b": 40}, "spot": true}));
+        run(&mut s, "swatch.spotOptions", json!({ "useLab": use_lab }));
+        run(&mut s, "select.set", json!({"ids": []}));
+        run(&mut s, "paint.setFill", json!({"swatch": "Lab Ink", "tint": 40}));
+        run(&mut s, "paint.setStroke", json!({"swatch": "Lab Ink", "tint": 40}));
+        s
+    };
+    let ink = |color: Color| Paint::Solid { color: color.tinted(0.4), swatch: Some("Lab Ink".into()), tint: 0.4 };
+    assert_eq!(lab_ink_defaults(true).paint.fill, ink(lab));
+    let to_cmyk = [("swatch.spotOptions", json!({"useLab": false}))];
+    assert_eq!(batch_matches_steps_from(|| lab_ink_defaults(true), &to_cmyk), (ink(cmyk), ink(cmyk)));
+    assert_eq!(lab_ink_defaults(false).paint.fill, ink(cmyk));
+    let to_lab = [("swatch.spotOptions", json!({"useLab": true}))];
+    assert_eq!(batch_matches_steps_from(|| lab_ink_defaults(false), &to_lab), (ink(lab), ink(lab)));
+}
+
+#[test]
+fn default_swatches_replace_in_a_batch_unlinks_the_new_art_paints_as_the_command_does() {
+    // Brand and Other are not default swatches, so replacing the swatches drops the links to them.
+    let blue = Paint::solid(Color::from_hex("#2a6fb0").unwrap());
+    let replace = [("swatch.resetDefaults", json!({"replace": true}))];
+    assert_eq!(batch_matches_steps(&replace), (blue.clone(), blue));
+    // Without replace the swatches stay, and so do the links.
+    let link = linked("#2a6fb0", "Brand");
+    assert_eq!(batch_matches_steps(&[("swatch.resetDefaults", json!({}))]), (link.clone(), link));
 }
 
 #[test]
