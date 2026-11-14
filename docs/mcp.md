@@ -3521,7 +3521,8 @@ already walks Image Trace. Short agent entry points:
   at the pointer selects under these rules: the arrow with a filled square for a face, with a short line for an edge,
   and with an x for nothing. It keeps the look it had at the press until the release.
   The Live Paint Bucket's options (`tool.setOption {tool: "livePaintBucket", values}`; double-clicking the tool opens
-  them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `highlight` (on), `color` (the
+  them, dialog `livePaintBucketOptions`) are `paintFills` (on), `paintStrokes` (off), `cursorSwatchPreview` (on),
+  `highlight` (on), `color` (the
   highlight color, `#rrggbb` or a layer color's name; `#ff2a2a`) and `width` (the face highlight's width, 1 to 20 screen
   pixels; 4; an edge's highlight is half as wide). The dialog's OK gives an error for a `color` with an alpha part
   (`#rrggbbaa` or `#rgba`) and changes nothing. `tool.setOption` gives an error that names the option and sets none of
@@ -3534,6 +3535,14 @@ already walks Image Trace. Short agent entry points:
   `livePaint.strokeEdge` when an edge is within 4 screen pixels of the pointer and `livePaint.fill` otherwise, and
   Shift-click runs `livePaint.fill`. With both off, a click runs nothing. With `highlight` off, the face or edge under
   the pointer is not outlined.
+  With the Live Paint Bucket selected and no drag in progress, Left and Right without Shift, Alt or Cmd/Ctrl (which
+  keep their shortcuts) run `paint.setFill {swatch, ids: []}` (or
+  `paint.setStroke` when the Stroke proxy is in front) with the color swatch before or after the active paint in the
+  Swatches panel, wrapping around at the ends; from a color that is no swatch, Right picks the first swatch and Left
+  the last, and with no color swatch the tool does not take the keys. The selected art keeps its paint. With
+  `cursorSwatchPreview` on, the active paint shows as a ringed chip above the pointer between the swatches before and
+  after it, except during a fill drag or with Alt held; a solid color that is no swatch shows alone, and a paint that is not a solid color shows no chip. Left and
+  Right step the swatches with `cursorSwatchPreview` off too.
   `livePaint.merge` keeps the bottom Live Paint group's id, name, lock, visibility, transparency, appearance, opacity
   mask and graphic style link. With a Live Paint group among the objects, `livePaint.make` adds the others to it as
   `livePaint.merge` does, and so does `livePaint.fill {ids}` when `point` is outside that group's faces.
@@ -9902,8 +9911,8 @@ The Shape Builder tool's options are its Shape Builder Tool Options (dialog `sha
 `openFilledAsClosed` (on: a filled open path bounds a region as if an invisible edge closed it; off: it cuts regions
 as an unfilled path does), `pickColorFrom` (`artwork`, the default: a merged shape takes the appearance, opacity and
 blending mode of the front-most selected object under the drag's first point, else of the one under its last point,
-else of the front-most selected object; `swatches`: the current fill, and the Left and Right arrow keys step the
-current fill through the document's color swatches), `cursorSwatchPreview` (off; with `swatches`, chips above the
+else of the front-most selected object; `swatches`: the current fill, and the Left and Right arrow keys without
+Shift, Alt or Cmd/Ctrl step the current fill through the document's color swatches), `cursorSwatchPreview` (off; with `swatches`, chips above the
 pointer show the current fill and the swatches before and after it), `selection` (`freeform`, the default, or
 `straightLine`: a drag touches what the line from its first point to the pointer crosses), `highlightFill` (on by
 default; when it is off, merge mode shades no regions), `gapDetection` (off) with `gapLength` (pt, 0 to 72; 3), `clickStrokeSplitsPath` (In Merge Mode,
