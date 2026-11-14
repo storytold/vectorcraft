@@ -845,6 +845,7 @@ fn run_ui_part8(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
         "ui.navigatorPanelOptions" => crate::panels::navigator::set_options(app, p),
         "ui.layersExpand" => crate::panels::layers::expand(app, p),
         "ui.layersFilter" => crate::panels::layers::set_filter(app, p),
+        "ui.panelView" => crate::panels::set_view(app, p),
         "ui.flattenTransparencyDialog" => {
             crate::dialogs::flatten::open(app);
             Ok(Value::Null)
