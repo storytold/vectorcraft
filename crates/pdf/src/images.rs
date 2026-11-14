@@ -21,7 +21,8 @@ use image::{DynamicImage, ExtendedColorType, ImageDecoder, ImageFormat, ImageRea
 use krilla::image::{BitsPerComponent, CustomImage, Image, ImageColorspace};
 
 use vectorcraft_doc::ImageBlob;
-use vectorcraft_doc::cmyk::jpeg_components;
+use vectorcraft_doc::cmyk::{Inks, jpeg_components};
+use vectorcraft_doc::resample::{Resample, premultiply, resized, unpremultiply};
 
 use crate::output::{CmykPixels, Pixels};
 use crate::{CompressionSettings, Downsample, ImageCodec, JpegQuality, MonoCodec};
@@ -225,15 +226,29 @@ fn jpeg_quality(r: &Rule, jpeg: bool) -> Option<u8> {
     }
 }
 
-/// `img` resampled to `w` × `h` pixels as `r` says.
+/// How `r` resamples an image.
+fn resampling(r: &Rule) -> Resample {
+    match r.downsample {
+        Downsample::Average => Resample::Average,
+        Downsample::Subsample => Resample::Filter(FilterType::Nearest),
+        Downsample::Bicubic | Downsample::None => Resample::Filter(FilterType::CatmullRom),
+    }
+}
+
+/// `img` resampled to `w` × `h` pixels as `r` says, the colors of an image with alpha weighted by
+/// it ([`resized`]).
 fn resample(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> DynamicImage {
+    resized(img, w, h, resampling(r))
+}
+
+/// The four channels of `img` resampled to `w` × `h` pixels as `r` says, each on its own.
+fn resample_channels(img: DynamicImage, r: &Rule, (w, h): (u32, u32)) -> DynamicImage {
     if (w, h) == (img.width(), img.height()) {
         return img;
     }
-    match r.downsample {
-        Downsample::Average => img.thumbnail_exact(w, h),
-        Downsample::Subsample => img.resize_exact(w, h, FilterType::Nearest),
-        Downsample::Bicubic | Downsample::None => img.resize_exact(w, h, FilterType::CatmullRom),
+    match resampling(r) {
+        Resample::Average => img.thumbnail_exact(w, h),
+        Resample::Filter(f) => img.resize_exact(w, h, f),
     }
 }
 
@@ -343,17 +358,10 @@ pub(crate) fn recode_cmyk(
     let Some(inks) = blob.cmyk() else {
         return Recoded { image: None, warning: Some(if jpeg { CMYK_KEPT } else { CMYK_RGB }) };
     };
-    let dims = (inks.width, inks.height);
-    let (width, height) = sized(&rule, dims, size);
-    let alpha = match alpha.map(|a| image::GrayImage::from_raw(inks.width, inks.height, a)) {
-        Some(Some(a)) => Some(resample(DynamicImage::ImageLuma8(a), &rule, (width, height)).into_luma8().into_raw()),
-        Some(None) => return Recoded { image: None, warning: None },
-        None => None,
-    };
-    // The four inks resample as the four channels of an RGBA image do.
-    let inks = match image::RgbaImage::from_raw(inks.width, inks.height, inks.data) {
-        Some(img) => resample(DynamicImage::ImageRgba8(img), &rule, (width, height)).into_rgba8().into_raw(),
-        None => return Recoded { image: None, warning: Some(CMYK_RGB) },
+    let (width, height) = sized(&rule, (inks.width, inks.height), size);
+    let (inks, alpha) = match resampled_inks(inks, alpha, &rule, (width, height)) {
+        Ok(r) => r,
+        Err(warning) => return Recoded { image: None, warning },
     };
     let (samples, space) = match convert {
         Some(p) => p.convert(&inks),
@@ -363,6 +371,36 @@ pub(crate) fn recode_cmyk(
     let image = jpeg_quality(&rule, jpeg).filter(|_| alpha.is_none()).and_then(|q| to_jpeg(&samples, space, width, height, q, interpolate));
     let image = image.or_else(|| lossless(samples, alpha, space, width, height, interpolate));
     Recoded { image, warning: rule.instead }
+}
+
+/// Ink amounts (four bytes a pixel) and their alpha (one byte a pixel), if any.
+type InksAndAlpha = (Vec<u8>, Option<Vec<u8>>);
+
+/// Ink amounts `inks` and their `alpha` (one sample a pixel) resampled to `to` as `r` says. The
+/// inks under clear pixels don't count where neighbors blend: they are multiplied by the alpha
+/// before resampling and divided by the resampled alpha after. `Err` with the warning when they
+/// can't be read.
+fn resampled_inks(inks: Inks, alpha: Option<Vec<u8>>, r: &Rule, to: (u32, u32)) -> Result<InksAndAlpha, Option<&'static str>> {
+    let dims = (inks.width, inks.height);
+    let weighted = to != dims && resampling(r) != Resample::Filter(FilterType::Nearest);
+    let mut data = inks.data;
+    let alpha = match alpha.map(|a| image::GrayImage::from_raw(dims.0, dims.1, a)) {
+        Some(Some(a)) => {
+            if weighted {
+                premultiply(&mut data, a.as_raw());
+            }
+            Some(resample(DynamicImage::ImageLuma8(a), r, to).into_luma8().into_raw())
+        }
+        Some(None) => return Err(None),
+        None => None,
+    };
+    // The four inks resample as the four channels of an RGBA image do, each on its own.
+    let img = image::RgbaImage::from_raw(dims.0, dims.1, data).ok_or(Some(CMYK_RGB))?;
+    let mut inks = resample_channels(DynamicImage::ImageRgba8(img), r, to).into_rgba8().into_raw();
+    if let Some(a) = alpha.as_deref().filter(|_| weighted) {
+        unpremultiply(&mut inks, a);
+    }
+    Ok((inks, alpha))
 }
 
 /// The most one image read here may allocate (bytes), as the image reader allows by default.
@@ -421,4 +459,27 @@ fn to_jpeg(samples: &[u8], space: ImageColorspace, width: u32, height: u32, qual
         ImageColorspace::DeviceN => return None,
     }
     Image::from_jpeg(out.into(), interpolate).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The inks of a CMYK image with alpha, resampled, keep the amounts of the opaque pixels: the
+    /// inks under the clear pixels beside them don't thin them out.
+    #[test]
+    fn resampled_inks_keep_the_amounts_beside_clear_pixels() {
+        let data = [[40, 80, 120, 160], [0, 0, 0, 0]].repeat(8).concat();
+        let alpha = [255, 0].repeat(8);
+        for method in ["average", "bicubic"] {
+            let c: CompressionSettings = serde_json::from_value(serde_json::json!({"color": {"downsample": method}})).unwrap();
+            let inks = Inks::new(16, 1, data.clone()).unwrap();
+            let (inks, alpha) = resampled_inks(inks, Some(alpha.clone()), &rule(&c, Kind::Color), (4, 1)).unwrap();
+            let alpha = alpha.unwrap();
+            let m = |c: u8, a: u8| (u16::from(c) * u16::from(a) / 255) as u8;
+            for (p, &a) in inks.as_chunks::<4>().0.iter().zip(&alpha) {
+                assert!(a > 0 && p.iter().zip([40, 80, 120, 160]).all(|(&c, want)| m(c, a).abs_diff(m(want, a)) <= 1), "{method}: {p:?} at {a}");
+            }
+        }
+    }
 }

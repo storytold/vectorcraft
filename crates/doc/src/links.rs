@@ -229,7 +229,8 @@ fn proxy_png(bytes: &[u8]) -> Option<Vec<u8>> {
 
 /// Decoded image `img` shrunk to fit [`PROXY_SIZE`] as a PNG.
 fn proxy_of(img: &image::DynamicImage) -> Option<Vec<u8>> {
-    let small = img.thumbnail(PROXY_SIZE, PROXY_SIZE);
+    let (w, h) = crate::resample::fit_size(img.width(), img.height(), PROXY_SIZE, PROXY_SIZE);
+    let small = crate::resample::averaged(img, w, h);
     let mut png = Vec::new();
     small.write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
     Some(png)
@@ -727,5 +728,20 @@ mod tests {
         image(&mut d, "b", None);
         image(&mut d, "c", None);
         assert_eq!(d.linked_only_images().into_iter().collect::<Vec<_>>(), ["a"]);
+    }
+
+    /// The preview of an image with clear pixels keeps the color of its opaque ones: the clear
+    /// black beside them does not darken them, whichever way the preview is made.
+    #[test]
+    fn a_preview_keeps_the_color_beside_clear_pixels() {
+        let mut full = vec![];
+        image::RgbaImage::from_fn(1024, 4, |x, _| if x % 2 == 0 { image::Rgba([200, 30, 30, 255]) } else { image::Rgba([0, 0, 0, 0]) })
+            .write_to(&mut Cursor::new(&mut full), image::ImageFormat::Png)
+            .unwrap();
+        for blob in [ImageBlob::png(full.clone()).with_proxy(), ImageBlob::png(full.clone()).checked_with_proxy(true).unwrap()] {
+            let p = image::load_from_memory(blob.proxy.as_ref().unwrap()).unwrap().into_rgba8();
+            assert_eq!(p.dimensions(), (PROXY_SIZE, 1));
+            assert!(p.pixels().all(|q| q.0 == [200, 30, 30, 128]), "{:?}", p.get_pixel(0, 0));
+        }
     }
 }
