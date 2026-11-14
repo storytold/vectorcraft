@@ -4431,6 +4431,7 @@ axis	Both	Оба
 @msg	Plug-ins can't be loaded from {path}: {e}	Не удается загрузить модули из {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	выделите прямым выделением опорные точки для разреза (не конечные точки открытых контуров)
 @msg	Divide Objects Below: select a path	Разделение объектов ниже: выделите контур
+@msg	select a path	выделите контур
 @msg	Divide Objects Below: select exactly one path	Разделение объектов ниже: выделите ровно один контур
 @msg	Downloaded {what}	Скачано: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Разбор оформления: у выделения основное оформление
@@ -5190,6 +5191,8 @@ axis	Both	Оба
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	встроенное изображение {_1} × {_2} пикселей уменьшено до {_3} × {_4} пикселей, чтобы сохранить слои
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	linked type areas past VectorCraft's limits were left out	связанные текстовые области за пределами ограничений VectorCraft пропущены
+@msg	the Line Breaking setting of legacy type was left out	настройка разрыва строк текста старого формата пропущена
+@msg	the Japanese layout rules of legacy type were left out	японские правила вёрстки текста старого формата пропущены
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, меняющий направление письма внутри текстового объекта, открывается в направлении своего первого символа
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, используемый как маска в связанных областях, обтекающем тексте или составном контуре, не обрезает
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	связанные изображения без просмотра в файле показываются как заполнитель, пока их файлы не найдены: восстановите связи на панели «Связи»
@@ -5819,6 +5822,7 @@ lighting	Light	Свет
 @msg	no such color	такого цвета нет
 @msg	{_1} cannot be used on Windows	Сочетание {_1} нельзя использовать в Windows
 @msg	more than one action is named “{_1}”	несколько действий называются «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	действие «{_1}» задаёт настройку папки {_2}; удалите этот шаг, чтобы сохранить набор
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
 	Smudge Stick…	Растушёвка…
 	Smudge Stick	Растушёвка

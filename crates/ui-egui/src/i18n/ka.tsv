@@ -4098,6 +4098,7 @@ font-technology	Variable	ცვლადი
 @msg	Plug-ins can't be loaded from {path}: {e}	პლაგინების ჩატვირთვა ვერ ხერხდება აქედან: {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	პირდაპირი მონიშვნით მონიშნეთ საყრდენი წერტილები, სადაც გაიჭრება (არა ღია ტრაექტორიების ბოლო წერტილები)
 @msg	Divide Objects Below: select a path	ქვედა ობიექტების დაყოფა: მონიშნეთ ტრაექტორია
+@msg	select a path	მონიშნეთ ტრაექტორია
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
@@ -5185,6 +5186,8 @@ font-technology	Variable	ცვლადი
 	Stacked	დასტად
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები ფაილში შენახულ დაბალი გარჩევადობის მინიატურას აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft-ის ლიმიტების მიღმა დაკავშირებული ტექსტის არეები გამოტოვებულია
+@msg	the Line Breaking setting of legacy type was left out	ძველი ფორმატის ტექსტის სტრიქონის გადატანის პარამეტრი გამოტოვებულია
+@msg	the Japanese layout rules of legacy type were left out	ძველი ფორმატის ტექსტის იაპონური განლაგების წესები გამოტოვებულია
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	ტექსტი, რომელიც ტექსტური ობიექტის შიგნით ცვლის წერის მიმართულებას, იხსნება მისი პირველი სიმბოლოს მიმართულებით
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	დაკავშირებულ არეებში, გარსშემოვლებულ ტექსტში ან შედგენილ ტრაექტორიაში ნიღბად გამოყენებული ტექსტი არ ჭრის
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები, რომელთა მინიატურაც ფაილში არ არის, ადგილის შემნახველს აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
@@ -5937,6 +5940,7 @@ imageTrace	Outline	კონტური
 @msg	no such color	ასეთი ფერი არ არის
 @msg	{_1} cannot be used on Windows	{_1} ვერ გამოიყენება Windows-ში
 @msg	more than one action is named “{_1}”	„{_1}“ ერთზე მეტი მოქმედების სახელია
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	მოქმედება „{_1}“ აყენებს საქაღალდის პარამეტრს {_2}; ნაკრების შესანახად წაშალეთ ეს ნაბიჯი
 @msg	no symbol named `{n}`	სიმბოლო სახელით `{n}` არ არის
 @msg	no saved selection recalled	შენახული მონიშვნა გამოძახებული არ არის
 @msg	The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or start with WGPU_BACKEND set	VectorCraft-ის ბოლო გაშვება ფანჯრის გამოჩენამდე შეწყდა (გრაფიკული პროცესორი: {name}), ამიტომ VectorCraft გაეშვა: {summary}. ამ გრაფიკული პროცესორის ხელახლა საცდელად შეცვალეთ პარამეტრები › წარმადობა › გრაფიკული პროცესორი ან გაუშვით WGPU_BACKEND ცვლადის მითითებით

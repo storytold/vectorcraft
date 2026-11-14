@@ -4704,6 +4704,7 @@ imageTrace	Outline	Obrys
 @msg	Plug-ins can't be loaded from {path}: {e}	Zásuvné moduly nelze načíst z {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	nástrojem Přímý výběr vyberte kotevní body, kde se má cesta rozdělit (ne koncové body otevřených cest)
 @msg	Divide Objects Below: select a path	Rozdělit objekty pod: vyberte cestu
+@msg	select a path	vyberte cestu
 @msg	Divide Objects Below: select exactly one path	Rozdělit objekty pod: vyberte právě jednu cestu
 @msg	Downloaded {what}	Staženo: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Rozložit vzhled: výběr má základní vzhled
@@ -5461,6 +5462,8 @@ imageTrace	Outline	Obrys
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	vložený obrázek o rozměrech {_1} × {_2} pixelů byl zmenšen na {_3} × {_4} pixelů, aby se zachovaly vrstvy
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	propojené obrázky se zobrazují jako náhled v nízkém rozlišení uložený v souboru, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
 @msg	linked type areas past VectorCraft's limits were left out	propojené textové oblasti nad limity aplikace VectorCraft byly vynechány
+@msg	the Line Breaking setting of legacy type was left out	nastavení zalamování řádků textu ve starém formátu bylo vynecháno
+@msg	the Japanese layout rules of legacy type were left out	japonská pravidla sazby textu ve starém formátu byla vynechána
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	text, který mění směr psaní uvnitř textového objektu, se otevře ve směru svého prvního znaku
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	text použitý jako maska v propojených oblastech, obtékaném textu nebo složené cestě neořezává
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	propojené obrázky bez náhledu v souboru se zobrazují jako zástupný symbol, dokud se nenajdou jejich soubory: znovu je propojte v panelu Propojení
@@ -6213,6 +6216,7 @@ mark-style	Japanese	Japonské
 @msg	no such color	taková barva neexistuje
 @msg	{_1} cannot be used on Windows	Zkratku {_1} nelze ve Windows použít
 @msg	more than one action is named “{_1}”	název „{_1}“ má více než jedna akce
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	akce „{_1}“ nastavuje předvolbu složky {_2}; chcete-li sadu uložit, tento krok smažte
 @msg	no symbol named `{n}`	žádný symbol s názvem `{n}`
 	Smudge Stick…	Rozmazávací tyčinka…
 	Smudge Stick	Rozmazávací tyčinka

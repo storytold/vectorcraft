@@ -4861,6 +4861,8 @@ axis	Both	И двете
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	вградено изображение от {_1} × {_2} пиксела беше намалено до {_3} × {_4} пиксела, за да се запазят слоевете
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	свързаните картини показват записания във файла предварителен преглед с ниска резолюция, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
 @msg	linked type areas past VectorCraft's limits were left out	свързаните текстови области извън ограниченията на VectorCraft бяха пропуснати
+@msg	the Line Breaking setting of legacy type was left out	настройката за прекъсване на редовете на текста в стария формат беше пропусната
+@msg	the Japanese layout rules of legacy type were left out	японските правила за оформление на текста в стария формат бяха пропуснати
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, който сменя посоката на писане в рамките на текстов обект, се отваря в посоката на първия си знак
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, използван като маска в свързани области, обтичащ текст или съставен път, не изрязва
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	свързаните картини без предварителен преглед във файла показват заместител, докато файловете им бъдат намерени: презакачете ги в панела „Връзки“
@@ -5900,6 +5902,7 @@ theme	Appearance	Външен вид
 @msg	no such color	няма такъв цвят
 @msg	{_1} cannot be used on Windows	{_1} не може да се използва в Windows
 @msg	more than one action is named “{_1}”	повече от едно действие се казва „{_1}“
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	действието „{_1}“ задава предпочитанието за папка {_2}; изтрийте тази стъпка, за да запазите набора
 @msg	no symbol named `{n}`	няма символ с име `{n}`
 	Smudge Stick…	Размазваща пръчка…
 	Smudge Stick	Размазваща пръчка
