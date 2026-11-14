@@ -162,7 +162,7 @@ pub(crate) fn show_opened(app: &mut VectorcraftApp, notice: Option<String>, note
 
 /// The notes of the open `r`, those of what reading the file left out (its document's
 /// `import_losses`) first, each group in the order the import gave them.
-fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
+pub(crate) fn open_notes(app: &VectorcraftApp, r: &Value) -> Vec<String> {
     let notes = notes_of(r);
     let index = r["index"].as_u64().and_then(|i| usize::try_from(i).ok());
     let losses = index.and_then(|i| app.session.documents().get(i)).map(|st| st.import_losses.as_slice()).unwrap_or_default();
