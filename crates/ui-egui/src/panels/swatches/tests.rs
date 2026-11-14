@@ -533,6 +533,50 @@ fn dragging_tiles_reorders_and_moves_into_groups_as_one_undo_step_each() {
     assert_eq!((names_of(&app, None), app.session.doc().unwrap().history.undo.len()), (before, undo));
 }
 
+/// Press `pointer` at `from`, drag to `to` and release there, a frame per step from `time`. Returns
+/// whether a drag-and-drop payload was held over `to` before the release.
+fn drag_by(app: &mut VectorcraftApp, ctx: &egui::Context, from: Pos2, to: Pos2, pointer: PointerButton, time: f64) -> bool {
+    let button = |pos, pressed| Event::PointerButton { pos, button: pointer, pressed, modifiers: Modifiers::NONE };
+    frame(app, ctx, vec![Event::PointerMoved(from), button(from, true)], time, show);
+    frame(app, ctx, vec![Event::PointerMoved(from + vec2(6.0, 4.0))], time + 0.1, show);
+    frame(app, ctx, vec![Event::PointerMoved(to)], time + 0.2, show);
+    let held = egui::DragAndDrop::has_any_payload(ctx);
+    frame(app, ctx, vec![Event::PointerMoved(to), button(to, false)], time + 0.3, show);
+    frame(app, ctx, vec![], time + 0.4, show);
+    held
+}
+
+#[test]
+fn only_a_primary_drag_moves_swatches_and_groups() {
+    let mut app = app();
+    let ctx = context();
+    frame(&mut app, &ctx, vec![], 0.0, show);
+    frame(&mut app, &ctx, vec![], 0.5, show);
+    let undo = app.session.doc().unwrap().history.undo.len();
+    let (before, grays) = (names_of(&app, None), names_of(&app, Some("Grays")));
+    let groups = |app: &VectorcraftApp| app.session.active().unwrap().doc.swatch_groups.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    let group_order = groups(&app);
+    let mut time = 1.0;
+    for pointer in [PointerButton::Secondary, PointerButton::Middle] {
+        // A swatch onto the left half of Red, and onto a folder.
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), pointer, time);
+        assert!(!held, "a {pointer:?} drag carries no swatch");
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Grays"), pointer, time + 1.0);
+        assert!(!held, "a {pointer:?} drag carries no swatch into a group");
+        // A group onto another group.
+        let held = drag_by(&mut app, &ctx, tile_center(&ctx, "Grays"), tile_center(&ctx, "Brights") - vec2(4.0, 0.0), pointer, time + 2.0);
+        assert!(!held, "a {pointer:?} drag carries no group");
+        assert_eq!((names_of(&app, None), names_of(&app, Some("Grays")), groups(&app)), (before.clone(), grays.clone(), group_order.clone()));
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo, "a {pointer:?} drag records no undo step");
+        time += 3.0;
+    }
+    // The primary button still moves the swatch.
+    assert!(drag_by(&mut app, &ctx, tile_center(&ctx, "Amber"), tile_center(&ctx, "Red") - vec2(4.0, 0.0), PointerButton::Primary, time));
+    let n = names_of(&app, None);
+    assert_eq!(n[n.iter().position(|x| x == "Red").unwrap() - 1], "Amber");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 1);
+}
+
 #[test]
 fn art_dropped_on_the_panel_becomes_a_pattern_swatch() {
     let mut app = app();
@@ -958,4 +1002,34 @@ fn show_recent_colors_hides_and_shows_the_swatches_row() {
         serde_json::from_value::<crate::UiState>(prefs).unwrap().swatches_show_recent_colors
     };
     assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
+}
+
+/// In a panel made taller the swatch list fills the space above the panel's footer instead of
+/// scrolling inside 150 or 200 pt (#1638); outside a sized panel it keeps those heights.
+#[test]
+fn the_list_fills_a_tall_panel_above_its_footer() {
+    let mut app = app();
+    for i in 0..60 {
+        app.run("swatch.new", json!({"name": format!("Tone {i:02}"), "color": format!("#{:02x}3060", i * 4)})).unwrap();
+    }
+    let ctx = context();
+    set_pstate(&ctx, "swatch-view", View::SmallList);
+    // The clip rect of the first swatch row's name: the list's visible area.
+    let mut list = |bottom: Option<f32>| {
+        let mut clip = None;
+        for _ in 0..3 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(280.0, 760.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, bottom);
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| show(&mut app, ui));
+            });
+            out.textures_delta.clear();
+            clip = out.shapes.iter().find(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == "Tone 00")).map(|c| c.clip_rect);
+        }
+        clip.expect("the first new swatch's row is drawn")
+    };
+    let tall = list(Some(700.0));
+    assert!(tall.height() > 400.0 && tall.bottom() <= 700.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
+    let loose = list(None);
+    assert!(loose.height() <= 150.5, "unsized, the list keeps its height: {loose:?}");
 }

@@ -55,6 +55,8 @@ pub enum WheelOwner {
     Control,
     /// The Character popover attached to this Control bar link.
     ControlPopover(egui::Id),
+    /// The Contextual Task Bar's type controls.
+    TaskBar,
 }
 
 impl WheelOwner {
@@ -67,6 +69,12 @@ impl WheelOwner {
             Self::Control => return app.ui.control_bar && app.ui.screen_mode < 2,
             Self::ControlPopover(anchor) => {
                 return app.ui.control_bar && app.ui.screen_mode < 2 && widgets::popover_is_open(ctx, anchor);
+            }
+            Self::TaskBar => {
+                return app.ui.task_bar
+                    && app.ui.screen_mode < 3
+                    && crate::canvas::task_bar_shows_type(app)
+                    && crate::canvas::task_bar_shows_fonts(ctx);
             }
             Self::Character => "character",
             Self::Properties => {
@@ -90,6 +98,9 @@ impl WheelOwner {
 pub struct MenuLook<'a> {
     /// Show each family's sample (Preferences › Type › Enable in-menu font previews).
     pub samples: bool,
+    /// Preferences › Type › Show samples on white: each sample is drawn in dark type on a white
+    /// area, whatever the interface's brightness (off by default).
+    pub on_white: bool,
     /// Preferences › Type › Show Font Names in English (on by default).
     pub english_names: bool,
     /// Row height in points (Font Preview Size).
@@ -103,12 +114,24 @@ pub struct MenuLook<'a> {
     pub wheel: bool,
     /// Its owner, so a field hidden before the next layout cannot capture wheel input.
     pub wheel_owner: Option<WheelOwner>,
+    /// The name screen readers give the closed field when no label stands beside it.
+    pub name: Option<&'a str>,
 }
 
 impl Default for MenuLook<'static> {
-    /// Samples on, English names, medium rows, no favourites, no wheel.
+    /// Samples on in the theme's colors, English names, medium rows, no favorites, no wheel.
     fn default() -> Self {
-        Self { samples: true, english_names: true, row: ROW, favorites: &[], recent: &[], wheel: false, wheel_owner: None }
+        Self {
+            samples: true,
+            on_white: false,
+            english_names: true,
+            row: ROW,
+            favorites: &[],
+            recent: &[],
+            wheel: false,
+            wheel_owner: None,
+            name: None,
+        }
     }
 }
 
@@ -121,12 +144,14 @@ impl<'a> MenuLook<'a> {
         };
         Self {
             samples: app.session.prefs.font_preview,
+            on_white: app.session.prefs.font_samples_on_white,
             english_names: app.session.prefs.font_names_in_english,
             row,
             favorites: &app.ui.favorite_fonts,
             recent: app.recent_fonts(),
             wheel: false,
             wheel_owner: None,
+            name: None,
         }
     }
 }
@@ -296,8 +321,9 @@ struct MenuState {
     /// The highlighted row and the query and filters it belongs to.
     highlight: Option<usize>,
     query: String,
-    /// The filters (kept from one opening to the next): script (0..[`SCRIPTS`]), kind, font
-    /// technology (variable fonts only) and favourites only.
+    /// The filters (kept from one opening to the next, and the same in every font menu:
+    /// [`Filters`]): script (0..[`SCRIPTS`]), kind, font technology (variable fonts only) and
+    /// favorites only.
     script: usize,
     class: Option<FontClass>,
     variable_only: bool,
@@ -320,6 +346,35 @@ struct MenuState {
     wheel_target: Option<WheelTarget>,
 }
 
+/// The filters of [`MenuState`], one set for every font menu (the Character panel's, the Control
+/// bar's, the Properties panel's…): a filter chosen in one menu is on in all of them. They last
+/// for the session.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Filters {
+    script: usize,
+    class: Option<FontClass>,
+    variable_only: bool,
+    favorites_only: bool,
+}
+
+impl Filters {
+    fn of(st: &MenuState) -> Self {
+        Self { script: st.script, class: st.class, variable_only: st.variable_only, favorites_only: st.favorites_only }
+    }
+
+    fn apply(self, st: &mut MenuState) {
+        st.script = self.script;
+        st.class = self.class;
+        st.variable_only = self.variable_only;
+        st.favorites_only = self.favorites_only;
+    }
+}
+
+/// Where the filters every font menu shares are kept ([`Filters`]).
+fn filters_id() -> egui::Id {
+    egui::Id::unique("font-menu-filters")
+}
+
 /// The font family menu showing `current`, `width` points wide, rows sampling `sample` (the
 /// selected text; `None`: a generic sample).
 pub fn font_menu(
@@ -332,7 +387,12 @@ pub fn font_menu(
 ) -> Option<FontPick> {
     let state_id = ui.scope_id().with(&id).with("font-menu");
     let mut st: MenuState = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
-    let target = ui.data(|d| d.get_temp(wheel_fields_id(ui.ctx().viewport_id()).with("target")));
+    ui.data(|d| d.get_temp::<Filters>(filters_id())).unwrap_or_default().apply(&mut st);
+    // The viewport is read outside `ui.data`. The closure of `ui.data` runs with the context
+    // locked, and a second lock taken inside it blocks once a font-sample thread is waiting to
+    // request a repaint.
+    let wheel_fields = wheel_fields_id(ui.ctx().viewport_id());
+    let target = ui.data(|d| d.get_temp(wheel_fields.with("target")));
     let target_changed = st.wheel_target != target;
     if target_changed {
         st.wheel_order = None;
@@ -343,12 +403,12 @@ pub fn font_menu(
     // The search field and filters stay in place over the rows, which scroll. The rows are all
     // one height (a family's styles too), so only those in view are laid out: there are thousands
     // of families.
-    let (field, shown) = widgets::combo_menu_field(ui, &id, current, width, |menu| {
+    let (field, shown) = widgets::combo_menu_field_named(ui, &id, look.name, current, width, |menu| {
         menu.height(height).show_rows_with_header(
             |ui| {
                 // Wider than a narrow field, so the filters keep their rows and long names show.
                 ui.set_min_width(menu_width(ui, state, look));
-                header(ui, state_id, state, current, look)
+                header(ui, vectorcraft_text::FontDb::global(), state_id, state, current, look)
             },
             look.row,
             |h| h.rows.len(),
@@ -400,10 +460,8 @@ pub fn font_menu(
                 out = Some(FontPick::Wheel(steps));
             }
         }
-        let queued = ui.data(|d| {
-            d.get_temp::<WheelFields>(wheel_fields_id(ui.ctx().viewport_id()))
-                .is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id))
-        });
+        let queued =
+            ui.data(|d| d.get_temp::<WheelFields>(wheel_fields).is_some_and(|fields| fields.queued.iter().any(|event| event.field == field.id)));
         if drawn || (!field.contains_pointer() && !queued) {
             st.wheel_order = None;
             ui.data_mut(|d| d.remove::<f32>(field.id.with("wheel")));
@@ -412,7 +470,10 @@ pub fn font_menu(
     if matches!(out, Some(FontPick::Chosen(..))) {
         st.previewed = None;
     }
-    ui.data_mut(|d| d.insert_temp(state_id, st));
+    ui.data_mut(|d| {
+        d.insert_temp(filters_id(), Filters::of(&st));
+        d.insert_temp(state_id, st);
+    });
     out
 }
 
@@ -932,6 +993,8 @@ pub(crate) fn take_raw_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
 
 /// What the menu's header hands its rows.
 struct Listed<'s> {
+    /// The fonts listed: [`vectorcraft_text::FontDb::global`] outside the unit tests.
+    db: &'s vectorcraft_text::FontDb,
     st: &'s mut MenuState,
     /// The rows listed.
     rows: Arc<[Row]>,
@@ -947,14 +1010,28 @@ struct Listed<'s> {
 /// [`craft_ui::combo::Menu::show_rows_with_header`] lays them out.
 #[cfg(test)]
 fn list(ui: &mut Ui, state_id: egui::Id, st: &mut MenuState, current: &str, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
-    let h = header(ui, state_id, st, current, look);
+    list_of(ui, vectorcraft_text::FontDb::global(), state_id, st, current, sample, look).inner
+}
+
+/// [`list`] of the families in `db`, with the rows' scroll area as laid out.
+#[cfg(test)]
+fn list_of(
+    ui: &mut Ui,
+    db: &vectorcraft_text::FontDb,
+    state_id: egui::Id,
+    st: &mut MenuState,
+    current: &str,
+    sample: Option<&str>,
+    look: MenuLook,
+) -> egui::scroll_area::ScrollAreaOutput<Option<FontPick>> {
+    let h = header(ui, db, state_id, st, current, look);
     let total = h.rows.len();
-    egui::ScrollArea::vertical().max_height(ui.available_height()).show_rows(ui, look.row, total, |ui, range| rows(ui, range, h, sample, look)).inner
+    egui::ScrollArea::vertical().max_height(ui.available_height()).show_rows(ui, look.row, total, |ui, range| rows(ui, range, h, sample, look))
 }
 
 /// The top of the open menu, which stays in place: the search field, the filters, and the rows
-/// they list.
-fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &str, look: MenuLook) -> Listed<'s> {
+/// of `db` they list.
+fn header<'s>(ui: &mut Ui, db: &'s vectorcraft_text::FontDb, state_id: egui::Id, st: &'s mut MenuState, current: &str, look: MenuLook) -> Listed<'s> {
     let t = Tokens::get(ui.ctx());
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
     // Each time the menu opens: no query, the current family highlighted and in view (the
@@ -987,7 +1064,6 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     let query = widgets::search_field(ui, field, tl!("Search")).to_lowercase();
     let refilter = filters(ui, st, &t);
     let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-    let db = vectorcraft_text::FontDb::global();
     // The current family by its own name (a document may name it in Japanese: ヒラギノ角ゴシック),
     // as it was before any preview.
     let current = db.canonical(&st.current, "").0;
@@ -1054,7 +1130,7 @@ fn header<'s>(ui: &mut Ui, state_id: egui::Id, st: &'s mut MenuState, current: &
     // The scroll bar beside the rows, not over them: a floating one covered the stars at their
     // right ends, so a favourite was hard to click (#2277).
     ui.spacing_mut().scroll = widgets::list_scroll_style();
-    Listed { st, rows, current: current.to_string(), enter, keyed, opening }
+    Listed { db, st, rows, current: current.to_string(), enter, keyed, opening }
 }
 
 /// One of the filters' chips.
@@ -1128,28 +1204,29 @@ fn filters(ui: &mut Ui, st: &mut MenuState, t: &Tokens) -> bool {
 /// [`WINDOW_SHARE`] of the window. The menu is never narrower than its field.
 fn menu_width(ui: &Ui, st: &MenuState, look: MenuLook) -> f32 {
     let sample = if look.samples { SAMPLE_W } else { 0.0 };
-    let names = name_width(ui, look.english_names, &st.rows).min(NAME_MAX);
+    let names = name_width(ui, vectorcraft_text::FontDb::global(), look.english_names, &st.rows).min(NAME_MAX);
     let row = DISCLOSURE + names + NAME_GAP + sample + STAR + 2.0 + widgets::list_scroll_style().allocated_width();
     // Rounding in the chips' widths must not wrap the widest row.
     let filters = if st.filters > 0.0 { st.filters.ceil() + 1.0 } else { 0.0 };
     filters.max(row).min(ui.ctx().content_rect().width() * WINDOW_SHARE)
 }
 
-/// The width of the widest name the menu lists after the disclosure triangle: the family names as
-/// Show Font Names in English shows them, and the style names among `rows` after their indent.
-fn name_width(ui: &Ui, english: bool, rows: &[Row]) -> f32 {
+/// The width of the widest name the menu lists after the disclosure triangle: the family names of
+/// `db` as Show Font Names in English shows them, and the style names among `rows` after their
+/// indent.
+fn name_width(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool, rows: &[Row]) -> f32 {
     let font = egui::FontId::proportional(NAME_SIZE);
     let measure = |name: &str| ui.painter().layout_no_wrap(name.to_string(), font.clone(), Color32::WHITE).size().x;
     let styles = rows.iter().filter_map(Row::style).map(|s| STYLE_INDENT + measure(s)).fold(0.0, f32::max);
-    family_name_width(ui, english).max(styles)
+    family_name_width(ui, db, english).max(styles)
 }
 
-/// What the widest family name was measured for: the font list's generation, Show Font Names in
-/// English, and the number of fonts the interface draws with, which grows as faces for other
-/// scripts are added to it.
-fn family_name_key(ui: &Ui, english: bool) -> (u64, bool, usize) {
+/// What the widest family name was measured for: the font database and its generation, Show Font
+/// Names in English, and the number of fonts the interface draws with, which grows as faces for
+/// other scripts are added to it.
+fn family_name_key(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool) -> (u64, u64, bool, usize) {
     let faces = ui.ctx().fonts(|f| f.definitions().font_data.len());
-    (vectorcraft_text::FontDb::global().generation(), english, faces)
+    (db.id(), db.generation(), english, faces)
 }
 
 /// The id under which the widest family name's width is kept with its [`family_name_key`].
@@ -1157,16 +1234,15 @@ fn family_name_id() -> egui::Id {
     egui::Id::unique("font-menu-name-width")
 }
 
-/// The width of the widest family name the menu lists, labeled as Show Font Names in English
-/// (`english`) labels it; worked out again only when its [`family_name_key`] changes.
-fn family_name_width(ui: &Ui, english: bool) -> f32 {
-    let key = family_name_key(ui, english);
-    if let Some((k, w)) = ui.data(|d| d.get_temp::<((u64, bool, usize), f32)>(family_name_id()))
+/// The width of the widest family name the menu lists from `db`, labeled as Show Font Names in
+/// English (`english`) labels it; worked out again only when its [`family_name_key`] changes.
+fn family_name_width(ui: &Ui, db: &vectorcraft_text::FontDb, english: bool) -> f32 {
+    let key = family_name_key(ui, db, english);
+    if let Some((k, w)) = ui.data(|d| d.get_temp::<((u64, u64, bool, usize), f32)>(family_name_id()))
         && k == key
     {
         return w;
     }
-    let db = vectorcraft_text::FontDb::global();
     let w = widest_label(ui, db.menu_family_list().iter().map(|f| db.family_display_name(f, english)).collect());
     ui.data_mut(|d| d.insert_temp(family_name_id(), (key, w)));
     w
@@ -1231,13 +1307,13 @@ fn heading_row(ui: &mut Ui, row_h: f32, label: &str, t: &Tokens) {
 /// The rows of the open menu in `range`, the ones in view: the menu's one scrolling part, under
 /// the search field and filters (#555).
 fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Option<&str>, look: MenuLook) -> Option<FontPick> {
-    let Listed { st, rows, current, enter, keyed, opening } = h;
+    let Listed { db, st, rows, current, enter, keyed, opening } = h;
     let current = current.as_str();
     let row_h = look.row;
     let t = Tokens::get(ui.ctx());
-    let db = vectorcraft_text::FontDb::global();
+    let ink = sample_ink(look.on_white, t.text);
     let favorite = |f: &str| look.favorites.iter().any(|x| x.eq_ignore_ascii_case(f));
-    let widest = name_width(ui, look.english_names, &rows);
+    let widest = name_width(ui, db, look.english_names, &rows);
     if rows.is_empty() {
         // A filter or a font rescan can remove the row whose font was previewed.
         // Do not leave that font applied while the list has no candidate to highlight.
@@ -1315,9 +1391,12 @@ fn rows(ui: &mut Ui, range: std::ops::Range<usize>, h: Listed<'_>, sample: Optio
         ui.painter_at(name_rect).text(name_rect.left_center(), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(NAME_SIZE), t.text);
         // The sample takes the row's whole height.
         let sample_rect = egui::Rect::from_min_max(rect.min + vec2(name_w, 0.0), rect.max - vec2(STAR + 2.0, 0.0));
-        if !look.samples {
-        } else if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, sample_rect.height()) {
-            paint_sample(ui, sample_rect, &tex, t.text);
+        if look.samples {
+            // The paper is drawn while the sample is still rendering, and for a family whose sample fails.
+            let area = sample_area(ui, sample_rect, ink, PAPER_INSET);
+            if let Some(tex) = sample_texture(ui.ctx(), family, row.style(), sample, area.height()) {
+                paint_sample(ui, area, &tex, ink);
+            }
         }
         if resp.clicked() && !on_triangle && !on_star {
             chosen = row.pick();
@@ -1366,19 +1445,67 @@ pub(crate) const MENU_SAMPLE_SIZE: egui::Vec2 = vec2(90.0, 16.0);
 
 /// A generic sample of `family` drawn in `slot` (the room a Type → Font item of the in-window
 /// menu bar keeps for it; the native macOS menu shows names only).
-pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str) {
-    if let Some(tex) = sample_texture(ui.ctx(), family, None, None, slot.height()) {
-        paint_sample(ui, slot, &tex, Tokens::get(ui.ctx()).text_dim);
+/// With `on_white` (Show samples on white), the sample is drawn in dark type on a white slot.
+pub(crate) fn menu_item_sample(ui: &Ui, slot: egui::Rect, family: &str, on_white: bool) {
+    let ink = sample_ink(on_white, Tokens::get(ui.ctx()).text_dim);
+    let area = sample_area(ui, slot, ink, 0.0);
+    if let Some(tex) = sample_texture(ui.ctx(), family, None, None, area.height()) {
+        paint_sample(ui, area, &tex, ink);
     }
 }
 
-/// Draw sample `tex` (tinted `tint`) at the left of `area`, centred vertically, cut at its right.
-fn paint_sample(ui: &Ui, area: egui::Rect, tex: &egui::TextureHandle, tint: Color32) {
+/// What a sample is drawn on with Show samples on white.
+pub(crate) const SAMPLE_PAPER: Color32 = Color32::WHITE;
+
+/// How a sample is drawn: in `theme` (an interface text color) on the menu's own background, or,
+/// with Show samples on white, in the Light brightness's text color on [`SAMPLE_PAPER`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SampleInk {
+    pub ink: Color32,
+    pub paper: Option<Color32>,
+}
+
+pub(crate) fn sample_ink(on_white: bool, theme: Color32) -> SampleInk {
+    if on_white {
+        SampleInk { ink: Tokens::for_brightness(crate::theme::Brightness::Light).text, paper: Some(SAMPLE_PAPER) }
+    } else {
+        SampleInk { ink: theme, paper: None }
+    }
+}
+
+/// Space between the left edge of a sample's paper and its type.
+const PAPER_PAD: f32 = 3.0;
+
+/// Space above and below a menu row's paper, where the row's highlight color shows.
+pub(crate) const PAPER_INSET: f32 = 2.0;
+
+/// The part of `slot` a sample is drawn in: `slot` itself, or, when `ink` has paper, the paper
+/// painted in `slot` with `inset` points left above and below it.
+fn sample_area(ui: &Ui, slot: egui::Rect, ink: SampleInk, inset: f32) -> egui::Rect {
+    let Some(paper) = ink.paper else { return slot };
+    let area = slot.shrink2(vec2(0.0, inset));
+    if area.is_positive() {
+        ui.painter_at(slot).rect_filled(area, 2.0, paper);
+    }
+    area
+}
+
+/// Draw sample `tex` at the left of `area`, centered vertically, cut at its right; on paper,
+/// [`PAPER_PAD`] in from its left edge.
+fn paint_sample(ui: &Ui, area: egui::Rect, tex: &egui::TextureHandle, ink: SampleInk) {
+    let painter = ui.painter_at(area);
+    let mut start = area.left_center();
+    if ink.paper.is_some() {
+        start.x += PAPER_PAD;
+    }
     let size = tex.size_vec2() / ui.ctx().pixels_per_point();
-    let at = egui::Rect::from_min_size(area.left_center() - vec2(0.0, size.y * 0.5), size);
+    let at = egui::Rect::from_min_size(start - vec2(0.0, size.y * 0.5), size);
     let shown = at.intersect(area);
+    if !shown.is_positive() {
+        return;
+    }
     let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2((shown.width() / size.x).clamp(0.0, 1.0), 1.0));
-    ui.painter_at(area).image(tex.id(), shown, uv, tint);
+    painter.image(tex.id(), shown, uv, ink.ink);
 }
 
 type Key = (String, String, String, u32);
@@ -1515,18 +1642,20 @@ pub(crate) fn render_sample_for_test(family: &str, text: &str, px: u32) -> Optio
 }
 
 /// Waits for the samples rendering on this thread's behalf and keeps them, so the next frame
-/// draws them.
+/// draws them. Returns `false` when no sample was rendering.
 #[cfg(all(test, not(target_arch = "wasm32")))]
-pub(crate) fn wait_for_samples(ctx: &egui::Context) {
+pub(crate) fn wait_for_samples(ctx: &egui::Context) -> bool {
     SAMPLES.with(|s| {
         let mut s = s.borrow_mut();
         let pending: Vec<_> = s.pending.drain().collect();
+        let waited = !pending.is_empty();
         for (key, rx) in pending {
             let tex =
                 rx.recv().ok().flatten().map(|img| ctx.load_texture(format!("font-sample-{}-{}", key.0, key.3), img, egui::TextureOptions::LINEAR));
             s.ready.insert(key, tex);
         }
-    });
+        waited
+    })
 }
 
 // ---------- applying a pick ----------

@@ -102,12 +102,13 @@ impl Color {
     pub fn to_lab(&self) -> cms::Lab {
         cms::active().lab(self)
     }
-    /// Colour-managed CMYK in the working CMYK space with `intent` (see [`Color::to_cmyk`] for the
-    /// profile-free formula).
+    /// Color-managed CMYK in the active CMYK space (the front document's assigned CMYK profile, else
+    /// the working CMYK space) with `intent` (see [`Color::to_cmyk`] for the profile-free formula).
     pub fn to_cmyk_managed(&self, intent: cms::Intent) -> [f32; 4] {
         cms::active().to_cmyk(self, intent)
     }
-    /// Gamut warning: true when this colour can't be reproduced in the working CMYK space.
+    /// Gamut warning: true when this color can't be reproduced in the active CMYK space (the front
+    /// document's assigned CMYK profile, else the working CMYK space).
     pub fn out_of_gamut(&self) -> bool {
         cms::active().out_of_gamut(self)
     }

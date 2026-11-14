@@ -1663,6 +1663,108 @@ fn tate_chu_yoko_settings_are_character_attributes_saved_only_when_set() {
     assert_eq!(offsets(&s), before);
 }
 
+/// Warichu and Warichu Settings (Character panel menu, East Asian options): character attributes
+/// saved only when they differ from their defaults (off, 2 lines, no gap, 50%, Auto). Both
+/// commands set them in one undo step, a call that changes nothing records none, a bad value is
+/// refused naming the key before anything changes, the file and character styles keep them, and
+/// SVG and PDF write type with warichu as outlines.
+#[test]
+fn warichu_is_a_character_attribute_set_saved_and_exported() {
+    use vectorcraft_doc::WarichuAlign;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "ab cdef g"})).unwrap()["id"].as_u64().unwrap();
+    let runs = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.runs.clone(),
+        _ => panic!("text"),
+    };
+    let settings = |s: &Session| {
+        runs(s)
+            .iter()
+            .map(|r| (r.text.clone(), r.style.warichu, r.style.warichu_lines, r.style.warichu_gap, r.style.warichu_scale, r.style.warichu_align))
+            .collect::<Vec<_>>()
+    };
+    let saved = serde_json::to_value(&runs(&s)[0].style).unwrap();
+    assert!(["warichu", "warichuLines", "warichuGap", "warichuScale", "warichuAlign"].iter().all(|k| saved.get(*k).is_none()), "{saved}");
+    let plain_svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    let plain_pdf = vectorcraft_pdf::export(&s.doc().unwrap().doc, &vectorcraft_pdf::PdfOptions::uncompressed()).unwrap();
+    let text_ops = |pdf: &[u8]| {
+        let s = String::from_utf8_lossy(pdf);
+        s.contains("Tj") || s.contains("TJ")
+    };
+    assert!(plain_svg.contains("<text") && text_ops(&plain_pdf));
+
+    // text.setFormat with the values the characters already have changes nothing and records no
+    // undo step.
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    s.execute("text.setFormat", &json!({"warichu": false, "warichuLines": 2, "warichuAlign": "auto"})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo);
+    s.execute("select.set", &json!({"ids": []})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let p = json!({"id": id, "start": 3, "end": 7, "warichu": true, "warichuLines": 3, "warichuGap": 2.5, "warichuScale": 40, "warichuAlign": "justifyAll"});
+    s.execute("text.setRangeStyle", &p).unwrap();
+    let want = vec![
+        ("ab ".to_string(), false, 2, 0.0, 50.0, WarichuAlign::Auto),
+        ("cdef".to_string(), true, 3, 2.5, 40.0, WarichuAlign::JustifyAll),
+        (" g".to_string(), false, 2, 0.0, 50.0, WarichuAlign::Auto),
+    ];
+    assert_eq!(settings(&s), want);
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+    let saved = serde_json::to_value(&runs(&s)[1].style).unwrap();
+    assert_eq!(
+        [&saved["warichu"], &saved["warichuLines"], &saved["warichuGap"], &saved["warichuScale"], &saved["warichuAlign"]],
+        [&json!(true), &json!(3), &json!(2.5), &json!(40.0), &json!("justifyAll")]
+    );
+    // Saved and reopened as they were.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&s.doc().unwrap().doc, false)).unwrap();
+    let NodeKind::Text(t) = &back.node(NodeId(id)).unwrap().kind else { panic!("text") };
+    assert_eq!(
+        t.runs.iter().map(|r| (r.style.warichu, r.style.warichu_lines, r.style.warichu_align)).collect::<Vec<_>>(),
+        [(false, 2, WarichuAlign::Auto), (true, 3, WarichuAlign::JustifyAll), (false, 2, WarichuAlign::Auto)]
+    );
+    // A character style captured from the characters carries them.
+    let attrs = super::super::textstyles::char_attrs(&runs(&s)[1].style);
+    assert_eq!(
+        (attrs["warichu"].clone(), attrs["warichuLines"].clone(), attrs["warichuAlign"].clone()),
+        (json!(true), json!(3), json!("justifyAll"))
+    );
+    // Exports draw the stacked lines as outlines.
+    let svg = vectorcraft_svg::export(&s.doc().unwrap().doc, &Default::default());
+    assert!(!svg.contains("<text"), "{svg}");
+    let pdf = vectorcraft_pdf::export(&s.doc().unwrap().doc, &vectorcraft_pdf::PdfOptions::uncompressed()).unwrap();
+    assert!(!text_ops(&pdf));
+
+    // Undo takes the whole change back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(settings(&s).iter().all(|r| !r.1 && r.2 == 2));
+    s.execute("edit.redo", &json!({})).unwrap();
+
+    // text.setFormat sets the selected objects' characters.
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    s.execute("text.setFormat", &json!({"warichuScale": 70})).unwrap();
+    assert!(settings(&s).iter().all(|r| r.4 == 70.0));
+
+    let before = settings(&s);
+    for (cmd, p, want) in [
+        ("text.setFormat", json!({"warichuLines": 7}), "`warichuLines` must be a whole number from 1 to 6"),
+        ("text.setFormat", json!({"warichuLines": 2.5}), "`warichuLines` must be a whole number from 1 to 6"),
+        ("text.setFormat", json!({"warichuScale": 5}), "`warichuScale` must be from 10 to 100"),
+        ("text.setFormat", json!({"warichuGap": -1}), "`warichuGap` must be from 0 to 100"),
+        ("text.setRangeStyle", json!({"id": id, "warichuGap": "2"}), "`warichuGap` must be a number"),
+        ("text.setRangeStyle", json!({"id": id, "warichu": "yes"}), "`warichu` must be true or false"),
+        (
+            "text.setRangeStyle",
+            json!({"id": id, "warichuAlign": "middle"}),
+            "`warichuAlign` must be one of \"auto\", \"left\", \"center\", \"right\", \"justifyLeft\", \"justifyCenter\", \"justifyRight\", \"justifyAll\"",
+        ),
+    ] {
+        let e = s.execute(cmd, &p).unwrap_err();
+        assert!(matches!(&e, EngineError::BadParams { msg, .. } if msg == want), "{cmd} {p}: {e}");
+    }
+    assert_eq!(settings(&s), before);
+}
+
 /// Insert Aki Left and Right (Character panel, East Asian options): character attributes in
 /// thousandths of an em, 0 by default and saved only when not 0. Both commands set either side
 /// alone, keeping the other side of every run, in one undo step; a value that is not a number or
@@ -2106,6 +2208,60 @@ fn new_type_is_composed_with_line_end_half_width_punctuation() {
     let old: vectorcraft_doc::ParaStyle = serde_json::from_value(json!({"justify": "Left"})).unwrap();
     assert_eq!(old.mojikumi, Mojikumi::None);
     assert!(serde_json::to_value(&old).unwrap().get("mojikumi").is_none());
+}
+
+/// `text.setFormat {mojikumi}` takes each predefined Mojikumi set as one undo step, refuses any
+/// other value without changing the type, and each set survives a native save and reopen and a
+/// paragraph style that captures it.
+#[test]
+fn every_predefined_mojikumi_set_is_set_saved_and_carried_by_styles() {
+    use vectorcraft_doc::Mojikumi;
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let id = s.execute("text.create", &json!({"x": 10, "y": 50, "text": "「雅楽」。"})).unwrap()["id"].as_u64().unwrap();
+    let para = |s: &Session| match &s.doc().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => t.para.clone(),
+        _ => panic!("text"),
+    };
+    s.execute("select.set", &json!({"ids": [id]})).unwrap();
+    let sets = [
+        ("yakumonoHankaku", Mojikumi::YakumonoHankaku),
+        ("gyomatsuYakumonoHankaku", Mojikumi::GyomatsuYakumonoHankaku),
+        ("gyomatsuYakumonoZenkaku", Mojikumi::GyomatsuYakumonoZenkaku),
+        ("yakumonoZenkaku", Mojikumi::YakumonoZenkaku),
+        ("none", Mojikumi::None),
+        ("lineEndHalf", Mojikumi::LineEndHalf),
+    ];
+    for (key, set) in sets {
+        s.execute("text.setFormat", &json!({"mojikumi": key})).unwrap();
+        assert_eq!(para(&s).mojikumi, set, "{key}");
+        let doc = s.doc().unwrap().doc.clone();
+        let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+        match &back.node(NodeId(id)).unwrap().kind {
+            NodeKind::Text(t) => assert_eq!(t.para.mojikumi, set, "{key} saved"),
+            _ => panic!("text"),
+        }
+        let style = format!("Spacing {key}");
+        s.execute("paraStyle.new", &json!({"name": style, "attrs": {"mojikumi": key}})).unwrap();
+        s.execute("text.setFormat", &json!({"mojikumi": if set == Mojikumi::None { "lineEndHalf" } else { "none" }})).unwrap();
+        s.execute("paraStyle.apply", &json!({"name": style, "id": id})).unwrap();
+        assert_eq!(para(&s).mojikumi, set, "{key} from a paragraph style");
+    }
+    // One undo step back to the set before.
+    s.execute("text.setFormat", &json!({"mojikumi": "yakumonoHankaku"})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(para(&s).mojikumi, Mojikumi::LineEndHalf);
+    // A value that is no set, or not a string, is refused and leaves the type as it was.
+    s.execute("text.setFormat", &json!({"mojikumi": "gyomatsuYakumonoZenkaku"})).unwrap();
+    for bad in [json!("YakumonoHankaku"), json!("lineEnd"), json!(""), json!(1)] {
+        assert!(s.execute("text.setFormat", &json!({"mojikumi": bad, "leftIndent": 12})).is_err(), "{bad}");
+        let p = para(&s);
+        assert_eq!((p.mojikumi, p.left_indent), (Mojikumi::GyomatsuYakumonoZenkaku, 0.0), "{bad}");
+    }
+    // A null value leaves the set as it is.
+    s.execute("text.setFormat", &json!({"mojikumi": null, "leftIndent": 12})).unwrap();
+    let p = para(&s);
+    assert_eq!((p.mojikumi, p.left_indent), (Mojikumi::GyomatsuYakumonoZenkaku, 12.0));
 }
 
 #[test]

@@ -635,6 +635,209 @@ fn a_library_style_named_with_spaces_comes_in_trimmed() {
     assert_eq!((text.runs[0].style.size, text.runs[0].style.style_name.as_deref()), (31.0, Some("Body")));
 }
 
+/// The size of the first run of text object `id`.
+fn run_size(s: &Session, id: &Value) -> f64 {
+    match &s.doc().unwrap().doc.node(NodeId(id.as_u64().unwrap())).unwrap().kind {
+        vectorcraft_doc::NodeKind::Text(t) => t.runs[0].style.size,
+        _ => 0.0,
+    }
+}
+
+/// Add to Character Styles puts a library character style into the document's character styles
+/// without applying it, with or without type selected, in one undo step; the same style there is
+/// reused without a step, and a name taken by other attributes gets a number. A bad call changes
+/// nothing.
+#[test]
+fn a_library_character_style_is_added_to_the_document_without_applying_it() {
+    let mut s = session();
+    let data = json!({"name": "Kept", "charStyles": [{"name": "Headline", "attrs": {"size": 31.0}}, {"name": "Broken", "attrs": {"size": "big"}}]});
+    let lib = run(&mut s, "library.import", json!({"data": data.to_string()}))["id"].as_str().unwrap().to_string();
+    let styles = |s: &Session| s.doc().unwrap().doc.char_styles.iter().map(|c| c.name.clone()).collect::<Vec<_>>();
+    let undo = |s: &Session| s.doc().unwrap().history.undo.len();
+    // Nothing selected.
+    let before = undo(&s);
+    let r = run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Headline"}));
+    assert_eq!((r["style"].as_str(), r["existing"].as_bool()), (Some("Headline"), Some(false)));
+    assert_eq!(styles(&s), ["Headline"]);
+    assert_eq!(undo(&s), before + 1, "one undo step");
+    let attrs = &s.doc().unwrap().doc.char_styles[0].attrs;
+    assert_eq!(attrs.get("size"), Some(&json!(31.0)));
+    // Selected type keeps its look.
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Body", "size": 9}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    let before = undo(&s);
+    let r = run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Headline"}));
+    assert_eq!((r["style"].as_str(), r["existing"].as_bool()), (Some("Headline"), Some(true)));
+    assert_eq!((undo(&s), run_size(&s, &t), styles(&s).len()), (before, 9.0, 1), "reused: no step, the type unchanged");
+    // Another style of that name: numbered, still not applied.
+    run(&mut s, "charStyle.setAttrs", json!({"name": "Headline", "attrs": {"size": 5}}));
+    let r = run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Headline"}));
+    assert_eq!((r["style"].as_str(), r["existing"].as_bool()), (Some("Headline 2"), Some(false)));
+    assert_eq!(run_size(&s, &t), 9.0);
+    let vectorcraft_doc::NodeKind::Text(text) = &s.doc().unwrap().doc.node(NodeId(t.as_u64().unwrap())).unwrap().kind else { panic!("not text") };
+    assert_eq!(text.runs[0].style.style_name, None, "no style applied");
+    // Undo takes the added style back alone.
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(styles(&s), ["Headline"]);
+    // Bad calls: nothing changes.
+    let before = (undo(&s), styles(&s));
+    for bad in [
+        json!({"library": lib}),
+        json!({"library": lib, "item": 3}),
+        json!({"library": lib, "item": "Nope"}),
+        json!({"library": "Nope", "item": "Headline"}),
+        json!({"library": lib, "item": "Broken"}),
+        json!({"recorded": {"name": "X", "attrs": "damaged"}}),
+    ] {
+        assert!(s.execute("library.addToCharacterStyles", &bad).is_err(), "{bad}");
+        assert_eq!((undo(&s), styles(&s)), before, "{bad}");
+    }
+    // Without a document it isn't available.
+    run(&mut s, "file.close", json!({}));
+    assert!(s.active().is_none());
+    assert!(s.execute("library.addToCharacterStyles", &json!({"library": lib, "item": "Headline"})).is_err());
+}
+
+/// A library character style whose fill links to a swatch the document lacks is added and applied
+/// with the color it shows, unlinked at full tint; a global swatch of that name in the document
+/// keeps the link and gives its color.
+#[test]
+fn a_library_character_style_linked_to_a_missing_swatch_is_added_unlinked() {
+    let base = vectorcraft_color::Color::rgb(0.2, 0.4, 0.6);
+    let shown = base.tinted(0.5);
+    let linked = vectorcraft_color::Paint::Solid { color: shown, swatch: Some("Brand".into()), tint: 0.5 };
+    let data = json!({"name": "Kept", "charStyles": [{"name": "Accent", "attrs": {"size": 20.0, "fill": linked}}]});
+    let mut s = session();
+    let lib = run(&mut s, "library.import", json!({"data": data.to_string()}))["id"].as_str().unwrap().to_string();
+    let fill = |s: &Session, name: &str| {
+        let st = s.doc().unwrap().doc.char_styles.iter().find(|c| c.name == name).map(|c| c.attrs.clone()).unwrap();
+        serde_json::from_value::<vectorcraft_color::Paint>(st["fill"].clone()).unwrap()
+    };
+    run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Accent"}));
+    assert_eq!(fill(&s, "Accent"), vectorcraft_color::Paint::Solid { color: shown, swatch: None, tint: 1.0 });
+    // Apply as well, on selected type.
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Body", "size": 9}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    let r = run(&mut s, "library.use", json!({"library": lib, "kind": "charStyle", "item": "Accent"}));
+    assert_eq!(r["style"], "Accent", "the added style is reused");
+    assert_eq!(run_size(&s, &t), 20.0);
+    // A document with a global swatch of that name keeps the link.
+    run(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    let other = vectorcraft_color::Color::rgb(0.8, 0.1, 0.1);
+    run(&mut s, "swatch.new", json!({"name": "Brand", "color": other, "global": true}));
+    run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Accent"}));
+    let vectorcraft_color::Paint::Solid { swatch, tint, .. } = fill(&s, "Accent") else { panic!("not a solid fill") };
+    assert_eq!((swatch.as_deref(), tint), (Some("Brand"), 0.5));
+    // The style with the document's swatch color is the same style: added again, it is reused.
+    let r = run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Accent"}));
+    assert_eq!((r["style"].as_str(), r["existing"].as_bool()), (Some("Accent"), Some(true)));
+}
+
+/// A library style is compared with the document's in the form the document stores it in, so a
+/// style whose file writes a size as a whole number is reused, by Add to Character Styles and by a
+/// click alike.
+#[test]
+fn a_library_style_is_reused_whatever_form_its_file_writes_it_in() {
+    let data = json!({"name": "Kept", "charStyles": [{"name": "Whole", "attrs": {"size": 31}}], "paraStyles": [{"name": "Para", "attrs": {"left_indent": 4}}]});
+    let mut s = session();
+    let lib = run(&mut s, "library.import", json!({"data": data.to_string()}))["id"].as_str().unwrap().to_string();
+    run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Whole"}));
+    let r = run(&mut s, "library.addToCharacterStyles", json!({"library": lib, "item": "Whole"}));
+    assert_eq!((r["style"].as_str(), r["existing"].as_bool()), (Some("Whole"), Some(true)));
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Body", "size": 9}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    for (kind, item) in [("charStyle", "Whole"), ("paraStyle", "Para"), ("paraStyle", "Para")] {
+        assert_eq!(run(&mut s, "library.use", json!({"library": lib, "kind": kind, "item": item}))["style"], item);
+    }
+    let d = &s.doc().unwrap().doc;
+    assert_eq!((d.char_styles.len(), d.para_styles.iter().filter(|p| p.name.starts_with("Para")).count()), (1, 1));
+}
+
+/// Rename gives a library item a new name, trimmed, in its place and its group; a character style
+/// keeps its attributes, a graphic its id. Another item of its kind with that name, an empty or
+/// too long name, a name that isn't text and an unknown item or library are errors that change
+/// nothing; a name with path characters is a name like any other; the item's own name writes
+/// nothing; and the document's history is not touched.
+#[test]
+fn library_items_are_renamed_in_place() {
+    let (mut s, g, c, st) = brand();
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 120, "text": "Body", "size": 9}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    let other = run(&mut s, "library.add", json!({"kind": "charStyle", "name": "Body"}))["name"].as_str().unwrap().to_string();
+    run(&mut s, "library.createGroup", json!({"name": "Brand", "items": [{"kind": "charStyle", "item": st}, {"kind": "fillColor", "item": c}]}));
+    let undo = s.doc().unwrap().history.undo.len();
+    let attrs = run(&mut s, "library.get", json!({}))["charStyles"][0]["attrs"].clone();
+    let r = run(&mut s, "library.renameItem", json!({"kind": "charStyle", "item": st, "name": "  Title  "}));
+    assert_eq!((r["item"].as_str(), r["name"].as_str()), (Some("Title"), Some("Title")));
+    let got = run(&mut s, "library.get", json!({}));
+    assert_eq!(got["charStyles"][0], json!({"name": "Title", "attrs": attrs}), "first still, the attributes kept");
+    assert_eq!(got["charStyles"][1]["name"], other.as_str());
+    assert_eq!(groups(&mut s), [("Brand".into(), refs(&[("charStyle", "Title"), ("color", &c)]))]);
+    // A colour keeps its group under its new name; a graphic keeps its id.
+    run(&mut s, "library.renameItem", json!({"kind": "strokeColor", "item": c, "name": "Navy"}));
+    assert_eq!(groups(&mut s), [("Brand".into(), refs(&[("charStyle", "Title"), ("color", "Navy")]))]);
+    let r = run(&mut s, "library.renameItem", json!({"kind": "graphic", "item": "Logo", "name": "Mark"}));
+    assert_eq!(r["item"], g.as_str());
+    let graphic = run(&mut s, "library.get", json!({}))["graphics"][0].clone();
+    assert_eq!((graphic["id"].as_str(), graphic["name"].as_str()), (Some(g.as_str()), Some("Mark")));
+    // Path characters are kept.
+    run(&mut s, "library.renameItem", json!({"kind": "charStyle", "item": "Title", "name": "a/b\\c:d"}));
+    assert_eq!(style_order_of(&mut s)[0], "a/b\\c:d");
+    // Errors change nothing.
+    let before = run(&mut s, "library.get", json!({}));
+    let long = "x".repeat(257);
+    for bad in [
+        json!({"kind": "charStyle", "item": "a/b\\c:d", "name": other}),
+        json!({"kind": "charStyle", "item": "a/b\\c:d", "name": "   "}),
+        json!({"kind": "charStyle", "item": "a/b\\c:d", "name": long}),
+        json!({"kind": "charStyle", "item": "a/b\\c:d", "name": 5}),
+        json!({"kind": "charStyle", "item": "a/b\\c:d"}),
+        json!({"kind": "charStyle", "item": "Nope", "name": "X"}),
+        json!({"kind": "paraStyle", "item": "a/b\\c:d", "name": "X"}),
+        json!({"kind": "brush", "item": "a/b\\c:d", "name": "X"}),
+        json!({"library": "Nope", "kind": "charStyle", "item": "a/b\\c:d", "name": "X"}),
+    ] {
+        assert!(s.execute("library.renameItem", &bad).is_err(), "{bad}");
+        assert_eq!(run(&mut s, "library.get", json!({})), before, "{bad}");
+    }
+    // A style of another kind may have the name, and 256 characters are allowed.
+    run(&mut s, "library.renameItem", json!({"kind": "charStyle", "item": "a/b\\c:d", "name": "Navy"}));
+    run(&mut s, "library.renameItem", json!({"kind": "charStyle", "item": "Navy", "name": "y".repeat(256)}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo, "no document undo step");
+}
+
+/// The current library's character style names, in order.
+fn style_order_of(s: &mut Session) -> Vec<String> {
+    order(s, "charStyles", "name")
+}
+
+/// A rename is kept in the library's file; renaming an item to its own name writes nothing; and a
+/// rename whose file can't be written is taken back.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_library_item_rename_is_saved_or_taken_back() {
+    let dir = vectorcraft_testkit::TempDir::new("library-rename-item");
+    let folder = dir.to_string_lossy().to_string();
+    let mut s = session();
+    s.libraries.set_dir(Some(folder.clone()));
+    let lib = run(&mut s, "library.create", json!({"name": "Kept"}))["id"].as_str().unwrap().to_string();
+    let t = run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Body", "size": 12}))["id"].clone();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    run(&mut s, "library.add", json!({"kind": "charStyle", "name": "Body"}));
+    run(&mut s, "library.renameItem", json!({"kind": "charStyle", "item": "Body", "name": "Text"}));
+    let mut t2 = session();
+    t2.libraries.set_dir(Some(folder.clone()));
+    assert_eq!(style_order_of(&mut t2), ["Text"], "kept in the file");
+    // The file can't be written (a folder stands where it goes): its own name still succeeds, as
+    // it writes nothing; a new name fails and is taken back.
+    let file = dir.join(format!("{lib}.vclibrary"));
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+    run(&mut s, "library.renameItem", json!({"kind": "charStyle", "item": "Text", "name": " Text "}));
+    assert!(s.execute("library.renameItem", &json!({"kind": "charStyle", "item": "Text", "name": "Copy"})).is_err());
+    assert_eq!(style_order_of(&mut s), ["Text"], "taken back");
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn libraries_are_kept_in_files_across_sessions() {
@@ -852,7 +1055,8 @@ fn a_new_item_is_added_where_it_is_dropped() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn an_add_that_cannot_be_placed_makes_no_library() {
-    let folder = vectorcraft_testkit::temp_dir("library-add-unplaced").to_string_lossy().to_string();
+    let dir = vectorcraft_testkit::TempDir::new("library-add-unplaced");
+    let folder = dir.to_string_lossy().to_string();
     let mut s = session();
     s.libraries.set_dir(Some(folder.clone()));
     for bad in [json!({"kind": "fillColor", "color": "#808080", "group": "Nope"}), json!({"kind": "fillColor", "color": "#808080", "after": "Nope"})]
@@ -959,7 +1163,7 @@ fn a_library_of_one_repeated_name_imports_numbered() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_library_is_exported_to_a_file_and_imported_from_it() {
-    let dir = vectorcraft_testkit::temp_dir("library-export");
+    let dir = vectorcraft_testkit::TempDir::new("library-export");
     let path = dir.join("Brand.vclibrary").to_string_lossy().to_string();
     let (mut s, g, ..) = brand();
     run(&mut s, "library.createGroup", json!({"name": "Logos", "items": [{"kind": "graphic", "item": g}]}));

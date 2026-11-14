@@ -42,6 +42,8 @@ impl Writer<'_> {
         art.walk(&mut |n| {
             let NodeKind::Image(im) = &n.kind else { return };
             let Some(Paint::Solid { color, .. }) = n.extras().colorize.as_deref() else { return };
+            let shown = self.doc.shown_image(n, im);
+            let im = &*shown;
             if self.doc.image_blob(im).is_none_or(|blob| blob.gray_source().is_none()) {
                 return;
             }
@@ -176,12 +178,14 @@ impl Writer<'_> {
         let mut seen: HashMap<(String, u32, u32), (usize, vectorcraft_doc::ImageObject)> = HashMap::new();
         art.walk(&mut |c| {
             if let NodeKind::Image(im) = &c.kind {
+                let shown = self.doc.shown_image(c, im);
+                let im = &*shown;
                 if matches!(c.extras().colorize.as_deref(), Some(Paint::Solid { .. }))
                     && self.doc.image_blob(im).is_none_or(|b| b.gray_source().is_some())
                 {
                     return;
                 }
-                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, (**im).clone())).0 += 1;
+                seen.entry((im.key.clone(), im.width, im.height)).or_insert_with(|| (0, im.clone())).0 += 1;
             }
         });
         let mut repeated: Vec<_> = seen.into_iter().filter(|(k, (n, _))| *n > 1 && !self.shared_images.contains_key(k)).collect();
@@ -525,9 +529,9 @@ impl Writer<'_> {
             self.warn(if freeform {
                 "freeform gradients are written as images clipped to their shapes"
             } else if conic {
-                "conic gradients with translucent stops, dither or the Perceptual method are written as images clipped to their shapes"
+                "conic gradients with translucent stops, dither or a method other than Classic are written as images clipped to their shapes"
             } else if g.gradient.kind == GradientKind::Diamond {
-                "diamond gradients with translucent stops, dither, the Perceptual method or no extent are written as images clipped to their shapes"
+                "diamond gradients with translucent stops, dither, a method other than Classic or no extent are written as images clipped to their shapes"
             } else {
                 "linear and radial gradients drawn as pixels are written as images clipped to their shapes"
             });

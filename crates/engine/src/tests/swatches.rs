@@ -282,20 +282,24 @@ fn document_color_mode_converts_the_paints_a_graph_keeps() {
     for target in [series, label] {
         run(&mut s, "paint.setFill", json!({"color": "#ff0000", "ids": [target.0]}));
     }
+    // A fill row on the label, which the graph keeps with the label's rows.
+    run(&mut s, "appearance.addFill", json!({"ids": [label.0]}));
     let kept = |s: &Session| -> Vec<Color> {
         let g = doc(s).node(id).unwrap().extras().graph.as_deref().unwrap().clone();
+        let rows = [&g.label_styles.values_rows, &g.label_styles.categories_rows, &g.label_styles.legend_rows];
+        let rows: Vec<Color> = rows.into_iter().flatten().filter_map(|r| r.paint.fill.as_ref()?.color()).collect();
         let labels = [g.label_styles.values, g.label_styles.categories, g.label_styles.legend];
         let labels = labels.into_iter().flatten().map(|st| st.fill.color().unwrap());
-        g.series_paints.iter().filter_map(|p| p.fill.as_ref()?.color()).chain(labels).collect()
+        g.series_paints.iter().filter_map(|p| p.fill.as_ref()?.color()).chain(labels).chain(rows).collect()
     };
     let before = kept(&s);
-    assert_eq!(before, [Color::rgb(1.0, 0.0, 0.0); 2]);
+    assert_eq!(before, [Color::rgb(1.0, 0.0, 0.0); 3]);
     let undo = s.doc().unwrap().history.undo.len();
 
     run(&mut s, "file.documentColorMode", json!({"mode": "cmyk"}));
     let cmyk = first_fill(doc(&s).node(red).unwrap());
     assert!(matches!(cmyk, Color::Cmyk { .. }), "{cmyk:?}");
-    assert_eq!(kept(&s), [cmyk; 2]);
+    assert_eq!(kept(&s), [cmyk; 3]);
     assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
     // Drawn again from new data, the series keeps the converted color.
     run(&mut s, "graph.setData", json!({"id": id.0, "rows": [[2, 3], [4, 5]]}));

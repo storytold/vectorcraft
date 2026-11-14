@@ -127,7 +127,7 @@ fn a_plain_click_sets_where_a_shift_click_range_starts() {
     let ctx = context();
     app.run("window.swatchLibrary", json!({"library": "pastels"})).unwrap();
     let (_, lib) = SwatchLibraries::get(&app, "pastels").unwrap();
-    let order: Vec<String> = SwatchLibraries::rows(&lib, "").iter().map(|r| r.name.to_string()).collect();
+    let order: Vec<String> = SwatchLibraries::rows(&lib, "pastels", "").iter().map(|r| r.name.to_string()).collect();
     click(&mut app, &ctx, &order[1], Modifiers::NONE, 0.0);
     click(&mut app, &ctx, &order[4], Modifiers::SHIFT, 2.0);
     assert_eq!(selection(&ctx, "library:swatches:pastels"), order[1..=4], "the range starts at the plain click");
@@ -689,4 +689,33 @@ fn the_panel_menu_has_persistent() {
     for item in ["Add to Swatches", "Small List View", "Show Find Field", "Previous Library", "Persistent", "Close Library"] {
         assert!(text.contains(item), "{item}: {text}");
     }
+}
+
+/// In a panel made taller the library list fills the space above the panel's footer instead of
+/// scrolling inside 220 pt (#2992); outside a sized panel it keeps that height.
+#[test]
+fn the_list_fills_a_tall_panel_above_its_footer() {
+    let mut app = app();
+    let ctx = context();
+    app.run("window.swatchLibrary", json!({"library": "web-safe-216"})).unwrap();
+    let panel = "library:swatches:web-safe-216";
+    app.run("ui.libraryPanel", json!({"panel": panel, "view": "smallList"})).unwrap();
+    // The clip rect of the rows' names (the colors' hex codes): the list's visible area.
+    let mut list = |bottom: Option<f32>| {
+        let mut clip = None;
+        for _ in 0..3 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 800.0))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let info = egui::UiStackInfo::default().with_tag_value(widgets::PANEL_FOOTER, bottom);
+                ui.scope_builder(egui::UiBuilder::new().ui_stack_info(info), |ui| crate::dock::panel_body(&mut app, ui, panel, 256.0, 760.0));
+            });
+            out.textures_delta.clear();
+            clip = out.shapes.iter().find(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text().starts_with('#'))).map(|c| c.clip_rect);
+        }
+        clip.expect("a row is drawn")
+    };
+    let tall = list(Some(700.0));
+    assert!(tall.height() > 400.0 && tall.bottom() <= 700.0 - 31.0, "the list fills the panel above its footer: {tall:?}");
+    let loose = list(None);
+    assert!(loose.height() <= 220.5, "unsized, the list keeps its height: {loose:?}");
 }

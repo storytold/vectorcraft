@@ -76,12 +76,13 @@ pub(crate) fn see_through_images(doc: &Document) -> BTreeSet<String> {
     doc.images.iter().filter(|(_, b)| see_through(b)).map(|(k, _)| k.clone()).collect()
 }
 
-/// `n` shows an image of `keys` (itself or inside).
+/// `n` shows an image of `keys` (itself or inside), a color-masked image's masked pixels counted as
+/// what it shows.
 pub(super) fn draws_image(n: &Node, keys: &BTreeSet<String>) -> bool {
     !keys.is_empty()
         && n.visible
         && match &n.kind {
-            NodeKind::Image(im) => keys.contains(&im.key),
+            NodeKind::Image(im) => keys.contains(&im.key) || Document::color_mask_of(n).is_some_and(|m| m.made_for(im) && keys.contains(&m.key)),
             _ => n.children().is_some_and(|ch| ch.iter().any(|c| draws_image(c, keys))),
         }
 }
@@ -134,6 +135,9 @@ fn touch(a: &Rect, b: &Rect) -> bool {
 struct Sets {
     parent: Vec<usize>,
     seeded: Vec<bool>,
+    /// How many open boxes the sweep's boxes met.
+    #[cfg(test)]
+    meets: usize,
 }
 
 impl Sets {
@@ -179,17 +183,25 @@ impl Sets {
 /// tops that knows the lowest bottom below each of its branches, so each box meets only the open
 /// boxes it overlaps, not every open one (many objects stacked in a column, sharing their
 /// horizontal extent, would otherwise compare every pair). An open box inside a later box of
-/// its group, ending no further right, is closed early: whatever overlaps it overlaps that box.
-/// Fails only when cancelled ([`vectorcraft_doc::cancel`]).
+/// its group, ending no further right, is closed early, and a box inside an open box of its group,
+/// ending no further right, isn't opened: whatever overlaps it overlaps that box. Fails only when
+/// cancelled ([`vectorcraft_doc::cancel`]).
 pub(super) fn overlapping(bounds: &[Option<Rect>]) -> Result<Vec<Vec<usize>>, Cancelled> {
     Ok(sweep(bounds, None)?.groups())
 }
 
 /// [`overlapping`]'s sweep. With `see_through`, two boxes are joined only when one of them is
-/// see-through, and an open box is closed early only inside a later see-through box.
+/// see-through, and an open box is closed early, or a box isn't opened, only inside a see-through
+/// box. The open
+/// see-through boxes and the open boxes without transparency are then in trees of their own, and
+/// a box without transparency meets only the see-through ones.
 fn sweep(bounds: &[Option<Rect>], see_through: Option<&[bool]>) -> Result<Sets, Cancelled> {
-    let mut sets = Sets { parent: (0..bounds.len()).collect(), seeded: (0..bounds.len()).map(|i| see_through.is_some_and(|s| s[i])).collect() };
-    let joins = |a: usize, b: usize| see_through.is_none_or(|s| s[a] || s[b]);
+    let mut sets = Sets {
+        parent: (0..bounds.len()).collect(),
+        seeded: (0..bounds.len()).map(|i| see_through.is_some_and(|s| s[i])).collect(),
+        #[cfg(test)]
+        meets: 0,
+    };
     let boxes: Vec<(usize, Rect)> = bounds.iter().enumerate().filter_map(|(i, b)| b.filter(finite).map(|b| (i, b))).collect();
     let n = boxes.len();
     // Each box's place in the tree: by top (then index).
@@ -200,9 +212,11 @@ fn sweep(bounds: &[Option<Rect>], see_through: Option<&[bool]>) -> Result<Sets, 
     for (pos, &k) in by_top.iter().enumerate() {
         leaf[k] = pos;
     }
-    // The lowest bottom of the open boxes below each node (−∞: none open).
+    // The lowest bottom of the open boxes below each node (−∞: none open), in the tree of the
+    // boxes without transparency (every box without `see_through`) and the see-through boxes'.
     let size = n.next_power_of_two().max(1);
-    let mut low = vec![f64::NEG_INFINITY; 2 * size];
+    let mut low = [vec![f64::NEG_INFINITY; 2 * size], if see_through.is_some() { vec![f64::NEG_INFINITY; 2 * size] } else { vec![] }];
+    let tree = |k: usize| usize::from(see_through.is_some_and(|s| s[boxes[k].0]));
     let set = |low: &mut [f64], pos: usize, v: f64| {
         let mut i = pos + size;
         low[i] = v;
@@ -225,43 +239,63 @@ fn sweep(bounds: &[Option<Rect>], see_through: Option<&[bool]>) -> Result<Sets, 
         while let Some(&c) = by_right.get(closing)
             && boxes[c].1.x1 < b.x0
         {
-            set(&mut low, leaf[c], f64::NEG_INFINITY);
+            set(&mut low[tree(c)], leaf[c], f64::NEG_INFINITY);
             closing += 1;
         }
-        // The open boxes with their top at most this bottom and their bottom at least this top.
+        // The open boxes it joins with their top at most this bottom and their bottom at least
+        // this top: every one, or with `see_through` the see-through ones and, for a see-through
+        // box, the others too.
+        let shadows = see_through.is_none_or(|s| s[boxes[k].0]);
+        let looks: &[usize] = match see_through {
+            None => &[0],
+            Some(_) if shadows => &[0, 1],
+            Some(_) => &[1],
+        };
         let below = tops.partition_point(|t| *t <= b.y1);
         met.clear();
-        stack.clear();
-        stack.push((1, 0, size));
-        while let Some((node, lo, hi)) = stack.pop() {
-            work += 1;
-            if work.is_multiple_of(4096) {
-                vectorcraft_doc::cancel::check()?;
+        for &t in looks {
+            stack.clear();
+            stack.push((1, 0, size));
+            while let Some((node, lo, hi)) = stack.pop() {
+                work += 1;
+                if work.is_multiple_of(4096) {
+                    vectorcraft_doc::cancel::check()?;
+                }
+                if lo >= below || low[t][node] < b.y0 {
+                    continue;
+                }
+                if hi - lo == 1 {
+                    met.push(by_top[lo]);
+                    continue;
+                }
+                let mid = (lo + hi) / 2;
+                stack.push((2 * node + 1, mid, hi));
+                stack.push((2 * node, lo, mid));
             }
-            if lo >= below || low[node] < b.y0 {
-                continue;
-            }
-            if hi - lo == 1 {
-                met.push(by_top[lo]);
-                continue;
-            }
-            let mid = (lo + hi) / 2;
-            stack.push((2 * node + 1, mid, hi));
-            stack.push((2 * node, lo, mid));
         }
+        #[cfg(test)]
+        {
+            sets.meets += met.len();
+        }
+        // An open box it met that holds it, ending no further right, and that joins whatever it
+        // overlaps: whatever later overlaps this box overlaps that one and joins it, so this box
+        // isn't opened.
+        let holder = met.iter().copied().find(|&o| {
+            let ob = boxes[o].1;
+            see_through.is_none_or(|s| s[boxes[o].0]) && b.x1 <= ob.x1 && ob.y0 <= b.y0 && b.y1 <= ob.y1
+        });
         // Whatever overlaps a box inside this one overlaps this one, and joins it when this one is
         // see-through.
-        let shadows = see_through.is_none_or(|s| s[boxes[k].0]);
         for &o in &met {
-            if joins(boxes[k].0, boxes[o].0) {
-                sets.join(boxes[k].0, boxes[o].0);
-            }
+            sets.join(boxes[k].0, boxes[o].0);
             let ob = boxes[o].1;
-            if shadows && ob.x1 <= b.x1 && b.y0 <= ob.y0 && ob.y1 <= b.y1 {
-                set(&mut low, leaf[o], f64::NEG_INFINITY);
+            if shadows && Some(o) != holder && ob.x1 <= b.x1 && b.y0 <= ob.y0 && ob.y1 <= b.y1 {
+                set(&mut low[tree(o)], leaf[o], f64::NEG_INFINITY);
             }
         }
-        set(&mut low, leaf[k], b.y1);
+        if holder.is_none() {
+            set(&mut low[tree(k)], leaf[k], b.y1);
+        }
     }
     Ok(sets)
 }
@@ -391,6 +425,11 @@ mod tests {
 
     /// What [`overlapping`] gives, comparing every pair.
     fn every_pair(bounds: &[Option<Rect>]) -> Vec<Vec<usize>> {
+        every_pair_joining(bounds, |_, _| true)
+    }
+
+    /// The groups of `bounds` comparing every pair, joining overlapping pairs that `joins`.
+    fn every_pair_joining(bounds: &[Option<Rect>], joins: impl Fn(usize, usize) -> bool) -> Vec<Vec<usize>> {
         let n = bounds.len();
         let mut group: Vec<usize> = (0..n).collect();
         let hit = |a: &Rect, b: &Rect| a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
@@ -400,6 +439,7 @@ mod tests {
                 for j in 0..n {
                     if let (Some(a), Some(b)) = (bounds[i], bounds[j])
                         && hit(&a, &b)
+                        && joins(i, j)
                         && group[j] < group[i]
                     {
                         group[i] = group[j];
@@ -461,6 +501,69 @@ mod tests {
         // Boxes that aren't finite overlap nothing.
         let odd = [Some(Rect::new(0.0, 0.0, 10.0, 10.0)), Some(Rect::new(f64::NAN, 0.0, 10.0, 10.0)), Some(Rect::new(5.0, 5.0, 20.0, 20.0))];
         assert_eq!(overlapping(&odd).unwrap(), vec![vec![0, 2], vec![1]]);
+    }
+
+    /// `n` boxes sharing their left and top edges, each inside the one before.
+    fn shrinking_nest(n: usize) -> Vec<Option<Rect>> {
+        (0..n).map(|i| Some(Rect::new(0.0, 0.0, 2.0 * (n - i) as f64, 2.0 * (n - i) as f64))).collect()
+    }
+
+    /// Each box of a nest that shrinks to the right and bottom meets only the outermost box, which
+    /// stays open and holds it, not every box around it.
+    #[test]
+    fn a_shrinking_nest_meets_only_its_outermost_box() {
+        let n = 512;
+        let bounds = shrinking_nest(n);
+        let mut sets = sweep(&bounds, None).unwrap();
+        assert_eq!(sets.meets, n - 1);
+        assert_eq!(sets.groups(), every_pair(&bounds));
+        assert_eq!(sets.groups(), vec![(0..n).collect::<Vec<_>>()]);
+        // Equal boxes: the later one isn't opened and the earlier one stays open for the third.
+        let same = [Some(Rect::new(0.0, 0.0, 10.0, 10.0)), Some(Rect::new(0.0, 0.0, 10.0, 10.0)), Some(Rect::new(9.0, 9.0, 20.0, 20.0))];
+        assert_eq!(overlapping(&same).unwrap(), vec![vec![0, 1, 2]]);
+        // With transparency, an opaque box isn't opened inside a see-through box, and boxes inside
+        // an opaque box are opened: an opaque box that overlaps only the inner one still joins it
+        // when that one is see-through.
+        let see = [true, false];
+        let mut sets = sweep(&bounds[..2], Some(&see)).unwrap();
+        assert_eq!(sets.groups(), vec![vec![0, 1]]);
+        let held = [Some(Rect::new(0.0, 0.0, 20.0, 20.0)), Some(Rect::new(0.0, 0.0, 10.0, 10.0)), Some(Rect::new(5.0, 5.0, 8.0, 8.0))];
+        let mut sets = sweep(&held, Some(&[false, true, false])).unwrap();
+        assert_eq!(sets.groups(), vec![vec![0, 1, 2]]);
+        let mut sets = sweep(&held, Some(&[true, false, false])).unwrap();
+        assert_eq!(sets.groups(), vec![vec![0, 1, 2]]);
+        let mut sets = sweep(&held, Some(&[false, false, true])).unwrap();
+        assert_eq!(sets.groups(), vec![vec![0, 1, 2]]);
+        let mut sets = sweep(&held, Some(&[false, false, false])).unwrap();
+        assert_eq!(sets.groups(), vec![vec![0], vec![1], vec![2]]);
+    }
+
+    /// Boxes nested at shared corners and placed at random, some see-through, group with and
+    /// without transparency as comparing every pair groups them.
+    #[test]
+    fn nested_and_scattered_boxes_group_as_comparing_every_pair() {
+        let mut seed = 0x51_7cc1_b727_220au64;
+        let mut next = |m: f64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % 1000) as f64 / 1000.0 * m
+        };
+        for round in 0..40 {
+            let n = 6 + round * 3;
+            let bounds: Vec<Option<Rect>> = (0..n)
+                .map(|_| {
+                    // Corners on a coarse grid so that edges are often shared and boxes often nest.
+                    let (x, y) = ((next(6.0).floor()) * 10.0, (next(6.0).floor()) * 10.0);
+                    let (w, h) = ((next(5.0).floor() + 1.0) * 10.0, (next(5.0).floor() + 1.0) * 10.0);
+                    Some(Rect::new(x, y, x + w, y + h))
+                })
+                .collect();
+            assert_eq!(overlapping(&bounds).unwrap(), every_pair(&bounds), "round {round}");
+            let see: Vec<bool> = (0..n).map(|_| next(1.0) < 0.3).collect();
+            let mut sets = sweep(&bounds, Some(&see)).unwrap();
+            assert_eq!(sets.groups(), every_pair_joining(&bounds, |i, j| see[i] || see[j]), "round {round}, with transparency");
+        }
     }
 
     /// A filled rectangle, unstroked.
@@ -580,6 +683,62 @@ mod tests {
         assert_eq!(groups.len(), n - 2);
         // Without transparency every box is a group of its own.
         assert_eq!(flatten_groups(&reach, &painted, &vec![false; n], 0.0).unwrap().len(), n);
+    }
+
+    /// A small see-through box, then `n` opaque boxes nested around it, each inside the one
+    /// before and sharing its left and top edges.
+    fn nest_around_a_see_through_box(n: usize) -> (Vec<Option<Rect>>, Vec<bool>) {
+        let mut bounds = vec![Some(Rect::new(0.0, 0.0, 1.0, 1.0))];
+        bounds.extend((0..n).map(|i| Some(Rect::new(0.0, 0.0, 2.0 * (n - i) as f64 + 1.0, 2.0 * (n - i) as f64 + 1.0))));
+        let mut see = vec![false; n + 1];
+        see[0] = true;
+        (bounds, see)
+    }
+
+    /// Opaque boxes nested in each other around a see-through box each meet only the see-through
+    /// box, not the open opaque boxes they can't join, and all join it.
+    #[test]
+    fn nested_opaque_boxes_meet_only_the_see_through_box() {
+        let n = 512;
+        let (bounds, see) = nest_around_a_see_through_box(n);
+        let mut sets = sweep(&bounds, Some(&see)).unwrap();
+        assert_eq!(sets.meets, n);
+        assert_eq!(sets.groups(), vec![(0..=n).collect::<Vec<_>>()]);
+        // The unfiltered sweep that runs before it meets each box once too.
+        let mut sets = sweep(&bounds, None).unwrap();
+        assert_eq!(sets.meets, n);
+        assert_eq!(sets.groups(), vec![(0..=n).collect::<Vec<_>>()]);
+        let (painted, see) = nest_around_a_see_through_box(40);
+        let reach: Vec<Option<Rect>> = painted.iter().map(|b| b.map(|b| b.inflate(1.0, 1.0))).collect();
+        for fringe in [0.0, 0.7] {
+            let groups = flatten_groups(&reach, &painted, &see, fringe).unwrap();
+            check(&reach, &painted, &see, fringe, &groups, &format!("nest, fringe {fringe}"));
+            assert_eq!(groups, vec![(0..=40).collect::<Vec<_>>()]);
+        }
+    }
+
+    /// An opaque box inside a later see-through box is closed: later boxes meet the see-through
+    /// box instead, and join the opaque one through it.
+    #[test]
+    fn a_see_through_box_closes_an_opaque_box_inside_it() {
+        // An opaque box, a see-through box around it, a see-through box over both and an opaque
+        // box over the first.
+        let bounds = [
+            Some(Rect::new(0.0, 0.0, 10.0, 10.0)),
+            Some(Rect::new(0.0, 0.0, 20.0, 20.0)),
+            Some(Rect::new(5.0, 5.0, 30.0, 30.0)),
+            Some(Rect::new(8.0, 8.0, 12.0, 12.0)),
+        ];
+        let see = [false, true, true, false];
+        let mut sets = sweep(&bounds, Some(&see)).unwrap();
+        // The second box meets the first; the third meets the second; the fourth meets the second
+        // and the third.
+        assert_eq!(sets.meets, 4);
+        assert_eq!(sets.groups(), vec![vec![0, 1, 2, 3]]);
+        // Opaque boxes alone meet nothing.
+        let mut sets = sweep(&bounds, Some(&[false; 4])).unwrap();
+        assert_eq!(sets.meets, 0);
+        assert_eq!(sets.groups().len(), 4);
     }
 
     /// An opaque box between a member and its group's top that paints over the member joins, and

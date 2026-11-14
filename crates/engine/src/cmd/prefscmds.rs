@@ -212,6 +212,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("fontNamesInEnglish", "Type", "Options", "Show Font Names in English", bool),
     p!("autoSizeAreaType", "Type", "Options", "Auto Size New Area Type", bool),
     p!("fontPreview", "Type", "Options", "Enable in-menu font previews", bool),
+    p!("fontSamplesOnWhite", "Type", "Options", "Show samples on white", bool),
     p!("fontPreviewSize", "Type", "Options", "Font Preview Size", choice(&[("small", "Small"), ("medium", "Medium"), ("large", "Large")])),
     p!("recentFontsCount", "Type", "Options", "Number of Recent Fonts", int(1, 15)),
     p!("missingGlyphProtection", "Type", "Options", "Enable Missing Glyph Protection", bool),
@@ -367,6 +368,7 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),
     p!("linuxDisplayServer", "Performance", "", "Linux Display Server", choice(LINUX_DISPLAY_SERVERS)),
+    p!("monitorProfileDisplay", "Performance", "", "Use Monitor Profile for Canvas", bool),
     // File Handling
     p!("backgroundSave", "File Handling", "", "Enable Background Save", bool),
     p!("backgroundExport", "File Handling", "", "Enable Background Export", bool),
@@ -453,10 +455,10 @@ pub fn spec(key: &str) -> Option<&'static PrefSpec> {
 /// Preferences kept as one object with a command of their own instead of [`PREF_SPECS`] rows (they
 /// aren't in the Preferences dialog): the Eyedropper Options (`eyedropper.setOptions`), the
 /// Perspective Grid Options (`perspective.widget.options`), the Pathfinder Options
-/// (`object.pathfinder.options`) and the Snap to Glyph options (`view.snapToGlyph.options`).
-/// `prefs.get` and `prefs.set` take them by key (a partial object updates what it names) and
-/// `prefs.reset` without a category resets them.
-pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap"];
+/// (`object.pathfinder.options`), the Snap to Glyph options (`view.snapToGlyph.options`) and the
+/// Pixel Snapping Options (`view.snapToPixel.options`). `prefs.get` and `prefs.set` take them by key
+/// (a partial object updates what it names) and `prefs.reset` without a category resets them.
+pub const PREF_GROUPS: &[&str] = &["eyedropper", "perspectiveWidget", "pathfinder", "glyphSnap", "pixelSnap"];
 
 /// Validate a value for preference group `key` against `current`.
 fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<Value, String> {
@@ -474,6 +476,10 @@ fn validate_group(key: &str, current: &Value, v: &Value) -> std::result::Result<
         }
         "glyphSnap" => {
             let cur: vectorcraft_tools::GlyphSnap = serde_json::from_value(current.clone()).unwrap_or_default();
+            cur.merged(v).map(|o| json!(o))
+        }
+        "pixelSnap" => {
+            let cur: vectorcraft_tools::PixelSnap = serde_json::from_value(current.clone()).unwrap_or_default();
             cur.merged(v).map(|o| json!(o))
         }
         "perspectiveWidget" => {
@@ -787,7 +793,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export Preferences",
             [],
             None,
-            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder and glyphSnap groups, without the folder preferences fontsFolder, pluginsFolder, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
+            "{path?} write the preferences as a JSON file {format: \"vectorcraft-preferences\", version: 1, prefs: {key: value, …}}: every preference prefs.list lists and the eyedropper, perspectiveWidget, pathfinder, glyphSnap and pixelSnap groups, without the folder preferences fontsFolder, pluginsFolder, scratchPrimary, scratchSecondary, recoveryFolder and templatesFolder and without saved presets; a file over 1 MB, which prefs.import would refuse, is an error and is not written → {path, count}; without path → {data: the file's text, count}",
             always,
             export
         ),
@@ -796,7 +802,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Preferences",
             [],
             None,
-            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). Every value is checked first, as prefs.set checks it: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
+            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). Every value is checked first, as prefs.set checks it: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference (for scratchPrimary and scratchSecondary, a folder; the choices Startup and None are read) is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
             always,
             import
         ),
@@ -812,8 +818,20 @@ pub const PREFS_VERSION: u64 = 1;
 /// The largest preferences file `prefs.import` reads.
 const MAX_PREFS_FILE_BYTES: usize = 1 << 20;
 
-/// Folder preferences, which name folders on one computer: a preferences file leaves them out.
-const FOLDER_PREFS: &[&str] = &["fontsFolder", "pluginsFolder", "recoveryFolder", "templatesFolder"];
+/// Folder preferences, which name folders on one computer: a preferences file leaves them out, and
+/// under automation read roots one outside them is not shown.
+pub const FOLDER_PREFS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
+
+/// The scratch disk choices that are not folders.
+pub const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
+
+/// Does `value`, set as preference `key`, name a folder: is `key` a folder preference
+/// ([`FOLDER_PREFS`]) and `value`, trimmed as the app uses it, neither empty (the default folder)
+/// nor a scratch disk choice ([`SCRATCH_CHOICES`])?
+pub fn names_a_folder(key: &str, value: &str) -> bool {
+    let path = value.trim();
+    FOLDER_PREFS.contains(&key) && !path.is_empty() && !(key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path))
+}
 
 /// The preferences `prefs.export` writes: every [`PREF_SPECS`] key but the [`FOLDER_PREFS`], and
 /// the [`PREF_GROUPS`].
@@ -862,7 +880,9 @@ fn read_prefs_file(bytes: &[u8]) -> std::result::Result<Map<String, Value>, Stri
     if prefs.is_empty() {
         return Err("the file holds no preferences".into());
     }
-    if let Some(key) = prefs.keys().find(|k| FOLDER_PREFS.contains(&k.as_str())) {
+    // A scratch disk choice or an empty scratch disk names no folder, and is read.
+    let folder = |k: &str, v: &Value| FOLDER_PREFS.contains(&k) && (!k.starts_with("scratch") || v.as_str().is_some_and(|v| names_a_folder(k, v)));
+    if let Some(key) = prefs.iter().find(|(k, v)| folder(k, v)).map(|(k, _)| k) {
         return Err(format!("`{key}` names a folder, which preferences files leave out"));
     }
     Ok(prefs.clone())
@@ -887,14 +907,8 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "imported": values.len() }))
 }
 
-/// The preferences that name a folder: the [`FOLDER_PREFS`] and the scratch disks.
-const PATH_PREFS: [&str; 6] = ["fontsFolder", "pluginsFolder", "scratchPrimary", "scratchSecondary", "recoveryFolder", "templatesFolder"];
-
-/// The scratch disk choices that are not folders.
-const SCRATCH_CHOICES: [&str; 2] = ["Startup", "None"];
-
 /// The preferences as `prefs.get`, `prefs.list`, `prefs.set` and `prefs.reset` show them to the
-/// request being served. Under automation read roots, a folder preference ([`PATH_PREFS`]) outside
+/// request being served. Under automation read roots, a folder preference ([`FOLDER_PREFS`]) outside
 /// them is `null`, as `ui.inspect` leaves it out, and an export preset's `folder` outside them is
 /// left out. An empty value (the default folder) and a scratch
 /// disk choice ([`SCRATCH_CHOICES`]) are shown. Without roots the preferences are shown as they are.
@@ -905,7 +919,7 @@ fn shown_prefs(prefs: &Prefs) -> Value {
     }
     // The app trims a folder before it uses it.
     let hidden = |path: &str| !path.trim().is_empty() && crate::file_access::check_read(path.trim()).is_err();
-    for key in PATH_PREFS {
+    for key in FOLDER_PREFS {
         let Some(path) = all[key].as_str() else { continue };
         if hidden(path) && !(key.starts_with("scratch") && SCRATCH_CHOICES.contains(&path.trim())) {
             all[key] = Value::Null;

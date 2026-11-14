@@ -2,7 +2,8 @@
 //! gamut checks and soft-proof transforms.
 //!
 //! * **RGB working spaces** are ICC matrix/shaper profiles via [`moxcms`] (sRGB, Wide Gamut RGB
-//!   (1998 primaries), Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB.
+//!   (1998 primaries), Display P3, ProPhoto RGB) or user `.icc` files. Display output is sRGB;
+//!   the desktop canvas converts it into the display's own profile last ([`display`]).
 //! * **CMYK spaces:** [`GENERIC_CMYK`] is our own documented parametric press model
 //!   ([`generic`]); [`DEVICE_CMYK`] is the old profile-free formula (kept for exact legacy numbers);
 //!   any CMYK `.icc` the user loads goes through `moxcms` (LUT-based profiles).
@@ -10,6 +11,7 @@
 //!   the profiles [`use_document_profiles`] last put in place of the working spaces;
 //!   [`crate::Color::to_rgb`] uses them. Code that needs deterministic numbers builds its own [`Cms`] with [`Cms::new`].
 
+pub mod display;
 pub mod generic;
 pub mod icc;
 pub mod lab;
@@ -531,7 +533,7 @@ impl Cms {
         }
     }
 
-    /// Gamut warning: can this colour be printed in the working CMYK space?
+    /// Gamut warning: can this color be printed in this context's CMYK space?
     pub fn out_of_gamut(&self, c: &Color) -> bool {
         self.gamut_error(c) > GAMUT_THRESHOLD
     }

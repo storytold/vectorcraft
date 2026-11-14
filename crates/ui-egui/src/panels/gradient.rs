@@ -380,20 +380,35 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// The narrowest the Method menu is drawn (points): the width it had for Classic and Perceptual.
+const METHOD_MENU_MIN: f32 = 104.0;
+/// The room the Method menu keeps beside its longest name for its arrow and margins (points).
+const METHOD_MENU_PAD: f32 = 40.0;
+
 /// The Method row (Illustrator 30): how a linear or radial gradient mixes the colours between its
-/// stops, Classic or Perceptual.
+/// stops, Classic or Perceptual. Hue Clockwise and Hue Counterclockwise, VectorCraft's own
+/// methods, mix them around the hue wheel one way or the other.
 fn method_row(app: &mut VectorcraftApp, ui: &mut Ui, g: &GradientPaint, is_grad: bool) {
-    let methods = [(GradientMethod::Classic, tl!("Classic")), (GradientMethod::Perceptual, tl!("Perceptual"))];
+    let methods = [
+        (GradientMethod::Classic, tl!("Classic")),
+        (GradientMethod::Perceptual, tl!("Perceptual")),
+        (GradientMethod::HueClockwise, tl!("Hue Clockwise")),
+        (GradientMethod::HueCounterclockwise, tl!("Hue Counterclockwise")),
+    ];
     let current = g.gradient.method;
     let shown = methods.iter().find(|(m, _)| *m == current).map_or("", |(_, l)| *l);
     ui.horizontal(|ui| {
         widgets::dim_label(ui, tl!("Method:"));
         let labels = methods.map(|(_, l)| l);
-        let chosen = ui.add_enabled_ui(is_grad, |ui| widgets::dropdown_names(ui, "grad-method", shown, &labels, 104.0)).inner;
+        // Wide enough for the longest method name in the interface language and the arrow beside
+        // it, within the room the row has.
+        let widest = labels.iter().map(|l| widgets::text_width(ui, egui::RichText::new(*l).size(12.0))).fold(0.0, f32::max);
+        let width = (widest + METHOD_MENU_PAD).clamp(METHOD_MENU_MIN, ui.available_width().max(METHOD_MENU_MIN));
+        let chosen = ui.add_enabled_ui(is_grad, |ui| widgets::dropdown_names(ui, "grad-method", shown, &labels, width)).inner;
         if let Some((m, _)) = chosen.and_then(|i| methods.get(i))
             && *m != current
         {
-            edit(app, json!({"method": m.label().to_lowercase()}), Live::Released);
+            edit(app, json!({"method": m.id()}), Live::Released);
         }
     });
 }
