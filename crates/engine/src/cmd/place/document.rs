@@ -330,7 +330,8 @@ pub(crate) fn node(d: &mut Document, s: &Source, link: LinkInfo, bounding: bool)
 }
 
 /// `d` for output: linked images and placed documents that keep only their previews get their
-/// files back, else output as their previews, with a warning.
+/// files back, else output as their previews, with a warning. The art of the stored brushes counts
+/// too.
 pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
     let (d, mut warnings) = super::super::links::full_linked_images(d, Default::default());
     let doc = match &d {
@@ -339,7 +340,7 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
     };
     let mut need: Vec<PlacedDocument> = vec![];
     let mut seen = std::collections::HashSet::new();
-    doc.visit_placed(|_, p| {
+    super::super::links::with_brush_art(doc).visit_placed(|_, p| {
         if doc.images.get(&p.key).is_some_and(ImageBlob::is_proxy) && seen.insert(p.key.clone()) {
             need.push(p.clone());
         }
@@ -370,7 +371,7 @@ pub(crate) fn full_documents(d: &Document) -> (Cow<'_, Document>, Vec<String>) {
                 "{n} placed documents output as their previews: their files can't be found, or changed since they were read (relink or update them)"
             ),
         });
-        out.placed_as_previews(&previews);
+        super::super::links::editing_brush_art(&mut out, |out| out.placed_as_previews(&previews));
     }
     (Cow::Owned(out), warnings)
 }

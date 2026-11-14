@@ -229,7 +229,7 @@ impl<'a> Collector<'a> {
             Some((d, base)) => super::links::linked_files(d, base),
             None => super::links::linked_files(doc, LinkBase::file(Some(source))),
         };
-        doc.visit_placed(|_, p| {
+        super::links::with_brush_art(doc).visit_placed(|_, p| {
             let page = (p.link.page.unwrap_or(1), p.bounding, p.page_box);
             let pages = placed.entry(p.link.path.clone()).or_default();
             if !pages.contains(&page) {
@@ -389,16 +389,20 @@ impl<'a> Collector<'a> {
         }
         if self.opts.relink {
             // The child files have already been rewritten; the hash and size of each
-            // target must reflect the *packaged* bytes rather than the original.
-            doc.update_links(|link: &mut LinkInfo| {
-                if let Some(copy) = local.get(&link.path) {
-                    let relative = relative_in_package(destination, &copy.name);
-                    link.path = self.root.as_ref().map_or_else(|| copy.name.clone(), |r| r.join(&copy.name).to_string_lossy().into_owned());
-                    link.relative = Some(relative);
-                    link.size = copy.size;
-                    link.hash = copy.hash.clone();
-                    link.modified = None;
-                }
+            // target must reflect the *packaged* bytes rather than the original. The links in the
+            // art of the stored brushes are written back into the brush library.
+            let root = &self.root;
+            super::links::editing_brush_art(doc, |doc| {
+                doc.update_links(|link: &mut LinkInfo| {
+                    if let Some(copy) = local.get(&link.path) {
+                        let relative = relative_in_package(destination, &copy.name);
+                        link.path = root.as_ref().map_or_else(|| copy.name.clone(), |r| r.join(&copy.name).to_string_lossy().into_owned());
+                        link.relative = Some(relative);
+                        link.size = copy.size;
+                        link.hash = copy.hash.clone();
+                        link.modified = None;
+                    }
+                })
             });
         }
         if let Some(s) = self.sections.get_mut(section) {

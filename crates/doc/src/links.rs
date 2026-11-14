@@ -248,14 +248,15 @@ fn walk_all<'a>(n: &'a Node, f: &mut impl FnMut(&'a Node)) {
 
 impl Document {
     /// Visit every image object: in the layers, then in symbol definitions and pattern swatches,
-    /// opacity-mask art included.
+    /// then in [`Document::mounted_art`], opacity-mask art included.
     pub fn visit_images<'a>(&'a self, mut f: impl FnMut(&'a Node, &'a ImageObject)) {
         let roots = self
             .layers
             .iter()
             .chain(self.symbols.iter().map(|s| &s.art))
             .chain(self.graph_designs.iter().map(|g| &g.art))
-            .chain(self.patterns.iter().flat_map(|p| &p.art));
+            .chain(self.patterns.iter().flat_map(|p| &p.art))
+            .chain(self.mounted_art.iter().map(|(n, _)| n));
         for root in roots {
             walk_all(root, &mut |n| {
                 if let NodeKind::Image(im) = &n.kind {
@@ -384,7 +385,8 @@ impl Align {
 
 impl Document {
     /// Rewrite linked file locations in both raster images and placed VectorCraft documents,
-    /// including those inside symbols, patterns and opacity masks. Used to make packages portable.
+    /// including those inside symbols, patterns, opacity masks and [`Document::mounted_art`]. Used to
+    /// make packages portable.
     pub fn update_links(&mut self, mut f: impl FnMut(&mut LinkInfo)) {
         fn walk(n: &mut Arc<Node>, f: &mut dyn FnMut(&mut LinkInfo)) {
             let n = Arc::make_mut(n);
@@ -409,7 +411,8 @@ impl Document {
             .iter_mut()
             .chain(self.symbols.iter_mut().map(|s| &mut s.art))
             .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n));
         for root in roots {
             walk(root, &mut f);
         }
@@ -471,7 +474,8 @@ impl Document {
             .iter_mut()
             .chain(self.symbols.iter_mut().map(|s| &mut s.art))
             .chain(self.graph_designs.iter_mut().map(|g| &mut g.art))
-            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art));
+            .chain(self.patterns.iter_mut().flat_map(|p| &mut p.art))
+            .chain(self.mounted_art.iter_mut().map(|(n, _)| n));
         for root in roots {
             update(root, &pick, &mut f);
         }

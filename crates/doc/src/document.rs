@@ -79,6 +79,7 @@ impl Document {
             index: _,
             guide_cache: _,
             inline_cycles: _,
+            mounted_art: _,
         } = self;
         *version == other.version
             && *title == other.title
@@ -264,6 +265,7 @@ impl Document {
             index: Default::default(),
             guide_cache: Default::default(),
             inline_cycles: Default::default(),
+            mounted_art: vec![],
         };
         let id = d.alloc_id();
         d.layers.push(Arc::new(Node::layer(id, "Layer 1", LayerColor::Preset(0))));
