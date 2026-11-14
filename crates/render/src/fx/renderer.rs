@@ -389,7 +389,7 @@ impl Renderer {
         let bounds = rasterize_bounds(f.symbols, n, &rfx);
         // Under Rasterize the content reaches as far as its fills' and strokes' raster effects paint.
         let reach = bounds.map_or(reach, |b| reach.union(b));
-        let content = Content { node: n, owner: None, cache: Some(0), reach, outline: Some((g, rule)), bounds, kept: None };
+        let content = Content { node: n, owner: None, cache: Some(0), reach, object: reach, outline: Some((g, rule)), bounds, kept: None };
         let mut items = items;
         self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.paint_items(c, fr, paints, g, rule, &gctx, items.as_deref_mut()));
         ctx.set_transform(Affine::IDENTITY);
@@ -446,7 +446,16 @@ impl Renderer {
                     None => rasterize_bounds(f.symbols, a, &rfx),
                 };
                 let reach = bounds.map_or(reach, |b| reach.union(b));
-                let content = Content { node: a, owner: Some(a), cache, reach, outline: region.as_deref().map(|r| (&r.0, r.1)), bounds, kept: None };
+                let content = Content {
+                    node: a,
+                    owner: Some(a),
+                    cache,
+                    reach,
+                    object: reach,
+                    outline: region.as_deref().map(|r| (&r.0, r.1)),
+                    bounds,
+                    kept: None,
+                };
                 self.raster_fx(ctx, f, &content, &rfx, &mut |r, c, fr| r.draw_fx_art(c, fr, a, &art));
                 ctx.set_transform(Affine::IDENTITY);
             }
@@ -770,6 +779,7 @@ impl Renderer {
                     owner: content.owner,
                     cache: None,
                     reach: content.reach,
+                    object: content.object,
                     outline: content.outline,
                     bounds: content.bounds,
                     kept: kept.as_ref(),
@@ -782,6 +792,7 @@ impl Renderer {
                     owner: content.owner,
                     cache: content.cache.filter(|_| !over),
                     reach,
+                    object: content.object,
                     outline,
                     bounds: spread,
                     kept: content.kept.filter(|_| split == at),

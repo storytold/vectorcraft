@@ -1696,6 +1696,16 @@ one opens as before and draws it as `rgb`:
 → invalid parameters for `effect.setParams`: `channel` must be one of rgb, red, green, blue
 ```
 
+Radial Blur's Blur Center, `centerX` and `centerY`, must each be a number from 0 to 1: the share of the object's bounds
+across from its left edge and down from its top edge (0.5 each, the object's center, by default). The effect turns or
+zooms about that point, which moves and scales with the object. `effect.apply` and `effect.setParams` refuse any other
+value themselves in the same way, and a document saved with one draws it at the nearest edge:
+
+```json
+{"id": "effect.setParams", "params": {"index": 0, "params": {"centerX": 1.5}}}
+→ invalid parameters for `effect.setParams`: `centerX` must be a number from 0 to 1
+```
+
 A number outside the range the effect documents is still stored as given and clamped when the effect draws. A
 plug-in effect's parameters are resolved against its manifest instead. `effect.setParams` as a step of
 `command.batch` is checked when the step runs, against the effects the steps before it added, and the batch then
