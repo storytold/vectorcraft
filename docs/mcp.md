@@ -1107,8 +1107,9 @@ follows as after Export As: Save PDF without its Artboards section, SVG Options 
 options, EPS Options, DXF Options without Export Selected Art Only, Text Export Options with Selection Only on, or an
 exporter plug-in's parameters. Other formats are written at once. OK writes the selection alone, cropped to it, as
 `document.exportSelection` writes it, with the chosen options. While a dialog is open the call returns `null`, and
-OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). To
-write without a dialog, pass `path` or any option. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
+OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). Any
+option skips the options dialog, but without `path` the save panel still picks the file. To write without a
+dialog, pass `path`. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
