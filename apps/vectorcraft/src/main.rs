@@ -107,7 +107,7 @@ use titlebar::opted_into_system_title_bar;
 #[cfg(windows)]
 use titlebar::set_taskbar_icon;
 #[cfg(all(test, feature = "wgpu"))]
-use titlebar::{app_draws_frame, opted_into_app_title_bar, start_frame, system_title_bar_applies};
+use titlebar::{app_draws_frame, caption_layout_from, opted_into_app_title_bar, start_frame, system_title_bar_applies};
 use titlebar::{custom_titlebar, native_options, titlebar_from_env};
 
 struct App {
@@ -367,7 +367,7 @@ fn main() -> std::process::ExitCode {
     };
     #[cfg(feature = "wgpu")]
     let crash = left_out.crash.clone();
-    let custom_titlebar = custom_titlebar(saved.as_ref());
+    let (custom_titlebar, caption_layout) = custom_titlebar(saved.as_ref());
     let options = native_options(custom_titlebar);
     // winit picks Wayland whenever `WAYLAND_DISPLAY` is set; Preferences › Performance › Linux
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
@@ -595,6 +595,7 @@ fn main() -> std::process::ExitCode {
                 }
                 app.titlebar_from_env = titlebar_from_env();
                 app.custom_titlebar = custom_titlebar;
+                app.caption_layout = caption_layout;
                 app.desktop_frame = !custom_titlebar;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());

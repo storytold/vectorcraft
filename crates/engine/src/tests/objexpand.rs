@@ -712,6 +712,159 @@ fn type_in_symbol_art_reports_a_gradient_only_when_it_expands() {
     }
 }
 
+/// Selected type "Hi" at 64 pt whose characters have no paint, with fills and strokes of its own:
+/// each of `items` is an `appearance.setItem` edit of a new object-level stroke when it has a
+/// `weight`, else of a new object-level fill; the first `below` of them paint below the characters.
+fn type_with_own_paint(s: &mut Session, items: &[Value], below: usize) -> NodeId {
+    let t = run(s, "text.create", json!({"x": 25, "y": 110, "text": "Hi", "size": 64}))["id"].as_u64().unwrap();
+    run(s, "select.set", json!({"ids": [t]}));
+    run(s, "paint.setFill", json!({"none": true}));
+    run(s, "paint.setStroke", json!({"none": true}));
+    for (i, item) in items.iter().enumerate() {
+        let add = if item.get("weight").is_some() { "appearance.addStroke" } else { "appearance.addFill" };
+        run(s, add, json!({"target": "object"}));
+        let mut p = item.clone();
+        p["index"] = json!(i);
+        run(s, "appearance.setItem", p);
+    }
+    run(s, "appearance.moveItem", json!({"from": "contents", "to": below}));
+    NodeId(t)
+}
+
+fn blue_stroke() -> Value {
+    json!({"color": "#0000ff", "weight": 5})
+}
+
+fn red_blue() -> Value {
+    json!({"gradient": {"kind": "linear", "stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}})
+}
+
+/// Create Outlines draws what the type drew: a gradient fill of the type object's own, below its
+/// characters, keeps one gradient across both glyphs over the layout's box, and its stroke stays
+/// over them.
+#[test]
+fn create_outlines_draws_the_type_objects_own_paint() {
+    let mut s = session();
+    type_with_own_paint(&mut s, &[red_blue(), blue_stroke()], 1);
+    let before = render(&s);
+    run(&mut s, "type.createOutlines", json!({}));
+    let after = render(&s);
+    let n = differing(&before, &after, 24);
+    assert!(n < 40, "{n} pixels differ");
+    assert!(differing(&before, &render(&session()), 24) > 1000, "the type paints something");
+}
+
+/// `object.expand.info` reports the type object's own stroke, pattern fill and gradient fill, which
+/// Object turns into paths of its whole outline: a gradient only when that outline's box needs no
+/// more runs than are written.
+#[test]
+fn type_objects_own_stroke_pattern_and_gradient_are_reported() {
+    let mut s = session();
+    type_with_own_paint(&mut s, &[blue_stroke()], 0);
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!((info["object"].clone(), info["stroke"].clone(), info["fill"].clone()), (json!(true), json!(true), json!(false)), "{info}");
+
+    let mut s = session();
+    pattern_rect(&mut s, Rect::new(150.0, 150.0, 190.0, 190.0), false);
+    let t = type_with_own_paint(&mut s, &[json!({"swatch": "Dots"})], 0);
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!((info["fill"].clone(), info["gradient"].clone(), info["stroke"].clone()), (json!(true), json!(false), json!(false)), "{info}");
+
+    // 0.4 pt runs across about 80 pt: under the limit; 0.02 pt runs: far over it.
+    for (len, expands) in [(40.0, true), (2.0, false)] {
+        let mut s = session();
+        let gradient = json!({"gradient": {"kind": "linear", "spread": "repeat", "repeats": 100, "start": [25, 100], "end": [25.0 + len, 100],
+            "stops": [{"offset": 0, "color": "#ffff00"}, {"offset": 1, "color": "#004080"}]}});
+        type_with_own_paint(&mut s, &[gradient], 0);
+        let info = run(&mut s, "object.expand.info", json!({}));
+        assert_eq!((info["gradient"].clone(), info["fill"].clone()), (json!(expands), json!(expands)), "{len}: {info}");
+        run(&mut s, "object.expand", json!({}));
+        let (gradients, texts) = gradients_and_type(&s);
+        assert_eq!(texts, 0, "{len}: outlined");
+        assert_eq!(gradients == 0, expands, "{len}: {gradients} gradient fills left");
+    }
+}
+
+/// Type with only spaces has no outline for its own stroke or pattern fill to go on, so
+/// `object.expand.info` reports neither.
+#[test]
+fn type_without_an_outline_reports_no_own_stroke_or_fill() {
+    let mut s = session();
+    pattern_rect(&mut s, Rect::new(150.0, 150.0, 190.0, 190.0), false);
+    let t = run(&mut s, "text.create", json!({"x": 25, "y": 110, "text": "   ", "size": 64}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids": [t]}));
+    run(&mut s, "paint.setFill", json!({"none": true}));
+    run(&mut s, "paint.setStroke", json!({"none": true}));
+    for (i, item) in [json!({"swatch": "Dots"}), blue_stroke()].into_iter().enumerate() {
+        let add = if item.get("weight").is_some() { "appearance.addStroke" } else { "appearance.addFill" };
+        run(&mut s, add, json!({"target": "object"}));
+        let mut p = item;
+        p["index"] = json!(i);
+        run(&mut s, "appearance.setItem", p);
+    }
+    let info = run(&mut s, "object.expand.info", json!({}));
+    assert_eq!(
+        (info["object"].clone(), info["stroke"].clone(), info["fill"].clone(), info["gradient"].clone()),
+        (json!(true), json!(false), json!(false), json!(false)),
+        "{info}"
+    );
+}
+
+/// How many objects in the document have a visible stroke with paint and weight.
+fn painted_strokes(s: &Session) -> usize {
+    let mut n = 0;
+    s.doc().unwrap().doc.walk(|c| {
+        n += usize::from(
+            c.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(st) if st.visible && !st.paint.is_none() && st.width > 0.0)),
+        );
+    });
+    n
+}
+
+/// A visible stroke under a topmost stroke with no paint still has something for Stroke to
+/// outline, on type's own appearance and on a path: `object.expand.info` reports it, and Expand
+/// outlines it.
+#[test]
+fn a_stroke_under_an_unpainted_stroke_is_reported_and_outlined() {
+    let mut s = session();
+    type_with_own_paint(&mut s, &[blue_stroke(), json!({"none": true, "weight": 1})], 0);
+    let mut r = session();
+    run(&mut r, "shape.rectangle", json!({"x": 40, "y": 40, "width": 100, "height": 80}));
+    run(&mut r, "paint.setStroke", json!({"color": "#0000ff"}));
+    run(&mut r, "stroke.set", json!({"weight": 4}));
+    run(&mut r, "appearance.addStroke", json!({"target": "object"}));
+    let top = node(&r, selected(&r).id).appearance.items.len() - 1;
+    run(&mut r, "appearance.setItem", json!({"index": top, "none": true}));
+    for (what, s) in [("type", &mut s), ("path", &mut r)] {
+        let info = run(s, "object.expand.info", json!({}));
+        assert_eq!(info["stroke"], json!(true), "{what}: {info}");
+        run(s, "object.expand", json!({}));
+        assert_eq!(painted_strokes(s), 0, "{what}: the stroke is outlined");
+    }
+}
+
+/// Expand keeps the type object's own stroke and gradient fill through Object: Stroke outlines the
+/// stroke and Fill expands the gradient, and with those options off they stay live on the path of
+/// the whole outline. The picture stays the same either way.
+#[test]
+fn expand_keeps_the_type_objects_own_paint() {
+    for (opts, live) in [(json!({}), false), (json!({"fill": false, "stroke": false}), true)] {
+        let mut s = session();
+        type_with_own_paint(&mut s, &[red_blue(), blue_stroke()], 1);
+        let before = render(&s);
+        run(&mut s, "object.expand", opts.clone());
+        let after = render(&s);
+        assert!(mean_diff(&before, &after) < 2.0, "{opts}: {}", mean_diff(&before, &after));
+        let (gradients, texts) = gradients_and_type(&s);
+        assert_eq!(texts, 0, "{opts}: outlined");
+        assert_eq!(gradients == 1, live, "{opts}: {gradients} gradient fills");
+        let mut strokes = 0;
+        s.doc().unwrap().doc.walk(|n| strokes += usize::from(!n.appearance.stroke_paint().is_none()));
+        assert_eq!(strokes == 1, live, "{opts}: {strokes} strokes");
+    }
+}
+
 #[test]
 fn the_mesh_option_makes_a_mesh_that_paints_the_gradient() {
     for gradient in [

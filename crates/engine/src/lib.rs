@@ -33,6 +33,7 @@ pub use cmd::params::{check_keys, check_params};
 pub use cmd::pathops::auto_simplify_level;
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::select::{path_fingerprint, storable_selection, stored_path_params, stored_path_step};
+pub use cmd::textwrap::TEXT_WRAP_OFFSET_RANGE;
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use cmd::{EyedropperOptions, PathfinderOptions};
 pub use journal::Journal;

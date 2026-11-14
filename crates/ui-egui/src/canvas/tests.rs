@@ -680,9 +680,17 @@ fn bucket_modifier_only_hover_updates_the_visible_cursor() {
         frame(app, &ctx, events);
         app.canvas.hover_cursor.map(|(_, _, cursor)| cursor)
     };
+    // The cursor swatch preview's chips go and come back with Alt too.
+    let chips = |app: &mut VectorcraftApp| {
+        let view = app.view_info();
+        app.session.overlays(view).iter().filter(|o| matches!(o, vectorcraft_tools::Overlay::Swatch { .. })).count()
+    };
     assert_eq!(shown(&mut app, vec![Event::PointerMoved(at)]), Some(Cursor::LivePaintBucket));
+    assert!(chips(&mut app) > 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::ALT)]), Some(Cursor::Eyedropper));
+    assert_eq!(chips(&mut app), 0);
     assert_eq!(shown(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE)]), Some(Cursor::LivePaintBucket));
+    assert!(chips(&mut app) > 0);
 }
 
 /// The Image Trace panel's eye-button hold ends when the pointer is released, even when the
@@ -7364,6 +7372,48 @@ fn cmd_space_zooms_and_space_pans_whatever_the_tool() {
     let after = *app.view().unwrap();
     assert_eq!(after.zoom, before.zoom);
     assert!((after.center.x - (before.center.x - 30.0 / before.zoom)).abs() < 1e-6, "{before:?} → {after:?}");
+}
+
+/// While the Type tool edits text, Space types a space: held, it shows no hand and a drag with it
+/// does not pan the view. Cmd+Space still zooms.
+#[test]
+fn space_types_a_space_while_editing_text_and_does_not_pan() {
+    use egui::{CursorIcon, Event, Modifiers};
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.prefs.placeholder_text = false;
+    let ctx = egui::Context::default();
+    let id = start_typing(&mut app, &ctx);
+    let at = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap()).to_screen(Point::new(100.0, 100.0));
+    let space = |pressed, modifiers| Event::Key { key: egui::Key::Space, physical_key: None, pressed, repeat: false, modifiers };
+    let button = |pos, pressed, modifiers| Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+    // The cursor the canvas sets over a window without the focus, as in
+    // `the_rotate_cursor_shows_for_space_shift_and_the_rotate_view_tool`.
+    let shown = |app: &mut VectorcraftApp| {
+        let screen_rect = Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0)));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect, focused: false, ..Default::default() }, |ui| show(app, ui));
+        out.textures_delta.clear();
+        out.platform_output.cursor_icon
+    };
+    typing_frame(&mut app, &ctx, vec![Event::Text("a".into())]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at), space(true, Modifiers::NONE), Event::Text(" ".into())]);
+    assert_eq!(plain(&app, id), "a ", "Space types a space");
+    assert_ne!(shown(&mut app), CursorIcon::Grab, "held while editing, Space shows no hand");
+    let before = *app.view().unwrap();
+    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::NONE)]);
+    typing_frame(&mut app, &ctx, vec![Event::PointerMoved(at + vec2(30.0, 0.0))]);
+    typing_frame(&mut app, &ctx, vec![button(at + vec2(30.0, 0.0), false, Modifiers::NONE)]);
+    let after = *app.view().unwrap();
+    assert_eq!((after.center, after.zoom, after.rotation), (before.center, before.zoom, before.rotation), "a drag with Space held does not pan");
+    assert!(app.session.tool_wants_text(), "editing goes on");
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::NONE)]);
+    // Cmd+Space still lends the Zoom tool.
+    typing_frame(&mut app, &ctx, vec![Event::ModifiersChanged(Modifiers::COMMAND), space(true, Modifiers::COMMAND), Event::PointerMoved(at)]);
+    assert_eq!(shown(&mut app), CursorIcon::ZoomIn, "Cmd+Space shows the magnifier");
+    typing_frame(&mut app, &ctx, vec![button(at, true, Modifiers::COMMAND)]);
+    typing_frame(&mut app, &ctx, vec![button(at, false, Modifiers::COMMAND)]);
+    assert_eq!(app.view().unwrap().zoom, crate::state::next_zoom(before.zoom, true), "Cmd+Space click zooms in");
+    typing_frame(&mut app, &ctx, vec![space(false, Modifiers::COMMAND), Event::ModifiersChanged(Modifiers::NONE)]);
+    assert_eq!(plain(&app, id), "a ", "the text is as typed");
 }
 
 #[test]

@@ -100,6 +100,17 @@ impl Exporter<'_> {
         }
     }
 
+    /// [`Self::measured_children`] of a plain group or layer. When they are the pieces of a
+    /// mesh-warped image, every piece, on the page or not, takes part in the one size its pixels
+    /// are resampled for ([`Self::warp_image_size`]).
+    fn group_children(&mut self, s: &mut Surface, children: &[std::sync::Arc<Node>], page: Rect, measured: &[Measured]) {
+        let outer = self.warp_image_size(children).map(|w| self.warp_size.replace(w));
+        self.measured_children(s, children, page, measured);
+        if let Some(outer) = outer {
+            self.warp_size = outer;
+        }
+    }
+
     /// A luminosity mask that is 1 − the knockout shape of `c`, whose box is in `measured`: white,
     /// then black through an alpha mask of `c` (at full object opacity without its own mask, unless
     /// those define its shape).
@@ -268,7 +279,7 @@ impl Exporter<'_> {
         }
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
-                self.measured_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()));
+                self.group_children(s, children, page, measured.map_or(&[], |m| m.members.as_slice()));
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
                 // The region every output clips to; nothing to clip by hides the clipped art. The

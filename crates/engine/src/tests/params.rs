@@ -400,6 +400,43 @@ fn stroke_set_refuses_an_unknown_key() {
     }
 }
 
+/// `object.setLiveShape` names every key it reads, and each of its `items` takes `id` and
+/// `corners` alone: another key, at the top level, in an item or in a batch step, is refused
+/// instead of being ignored.
+#[test]
+fn set_live_shape_refuses_an_unknown_key() {
+    const ID: &str = "object.setLiveShape";
+    assert!(!UNCHECKED.contains(&ID));
+    let e = refusal(ID, json!({"id": 3, "path": [[0, 0], [1, 1]], "radius": 5}));
+    assert!(e.starts_with("unknown parameter `path`; the command takes: ") && e.contains("relativeRadii"), "{e}");
+    let e = refusal(ID, json!({"radiuss": 5}));
+    assert_eq!(e, "unknown parameter `radiuss`; did you mean `radius`?");
+    let e = refusal(ID, json!({"items": [{"id": 3, "corners": [0]}, {"id": 4, "corner": [0]}], "radius": 5}));
+    assert_eq!(e, "unknown parameter `items[1].corner`; did you mean `items[1].corners`?");
+    let e = refusal(ID, json!({"items": [{"id": 3, "radius": 5}]}));
+    assert_eq!(e, "unknown parameter `items[0].radius`; the command takes: items[0].id, items[0].corners");
+    let step = |params| json!({"commands": [{"command": "select.all", "params": {}}, {"command": ID, "params": params}]});
+    for (bad, key) in [(json!({"path": "x"}), "path"), (json!({"items": [{"id": 3, "kind": "chamfer"}]}), "items[0].kind")] {
+        match check_params("command.batch", &step(bad.clone())) {
+            Err(EngineError::BadParams { cmd, msg }) => {
+                assert!(cmd == ID && msg.starts_with(&format!("unknown parameter `{key}`")), "{bad}: {cmd} {msg}")
+            }
+            other => panic!("{bad}: {other:?}"),
+        }
+    }
+    for ok in [
+        json!({"items": [{"id": 3, "corners": [0, 2]}, {"id": 4}], "radius": 5}),
+        json!({"corners": [0], "kind": "chamfer", "radius": 2, "relativeRadii": false}),
+        json!({"id": 3, "radius": 5}),
+        json!({"ids": [3], "sides": 6, "polygonAngle": 15, "polygonRadius": 20, "sideLength": null, "makeSidesEqual": true}),
+        json!({"pieStart": 30, "pieEnd": 90, "invertPie": true}),
+        json!({"items": null}),
+    ] {
+        assert!(check_params(ID, &ok).is_ok(), "{ok}");
+        assert!(check_params("command.batch", &step(ok.clone())).is_ok(), "{ok}");
+    }
+}
+
 /// An object id given as something other than a whole number (`"5"`, `-1`) is refused as such,
 /// naming its key, not as a missing id; an id left out is still a missing one.
 #[test]

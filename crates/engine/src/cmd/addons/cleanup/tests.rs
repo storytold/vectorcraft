@@ -502,7 +502,7 @@ fn removing_many_selected_objects_looks_at_each_root_once_a_pass() {
 
 #[test]
 fn deleting_many_empty_artboards_walks_the_artboards_and_guides_once() {
-    use super::checks::ARTBOARD_PASSES;
+    use crate::cmd::layer::ARTBOARD_PASSES;
     let mut s = session();
     rect(&mut s, 200.0, 20.0, 80.0, 60.0);
     let (keep, gone) = s

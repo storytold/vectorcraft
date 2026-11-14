@@ -540,6 +540,134 @@ fn a_justified_right_to_left_line_with_a_tab_spans_its_measure() {
     assert!((l.lines[0].x1 - 300.0).abs() < 1e-6, "{}", l.lines[0].x1);
 }
 
+/// Right-to-left area type `text` in a frame `width` wide, aligned as `justify`, with tab stops at
+/// `stops` (position and alignment).
+fn rtl_tabbed(text: &str, width: f64, stops: &[(f64, TabAlign)], justify: Justify) -> TextLayout {
+    let mut t = area(text, width, justify, no_ranges());
+    t.para.tabs = stops.iter().map(|&(position, align)| TabStop { position, align, leader: String::new(), align_on: '.' }).collect();
+    layout(db(), &t)
+}
+
+/// Where the glyphs of line `k` that are not spaces start and end, as drawn.
+fn drawn_extent(l: &TextLayout, text: &str, k: usize) -> (f64, f64) {
+    let ink = l.glyphs.iter().filter(|g| g.line == k && !text[g.byte..].starts_with(' '));
+    ink.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), g| (lo.min(g.origin.x), hi.max(g.origin.x + g.advance)))
+}
+
+/// A right-to-left line with a tab is measured as it is drawn: right aligned (and Auto, which
+/// aligns it right) it ends on the frame's right edge, and centered it leaves as much room at
+/// each side.
+#[test]
+fn a_right_to_left_line_with_a_tab_is_aligned_as_it_is_drawn() {
+    let text = "אב גד\tהו זח";
+    for justify in [Justify::Right, Justify::Auto, Justify::Center] {
+        let l = rtl_tabbed(text, 300.0, &[(150.0, TabAlign::Left)], justify);
+        assert_eq!(l.lines.len(), 1, "{justify:?}");
+        let (left, right) = drawn_extent(&l, text, 0);
+        if justify == Justify::Center {
+            assert!((left - (300.0 - right)).abs() < 1e-6, "{justify:?}: centered as drawn: {left} {right}");
+        } else {
+            assert!((right - 300.0).abs() < 1e-6, "{justify:?}: ends on the right edge: {right}");
+        }
+        assert!((l.lines[0].x1 - right).abs() < 1e-6, "{justify:?}: the line's record ends where it is drawn: {}", l.lines[0].x1);
+    }
+}
+
+/// Point type: a right-aligned right-to-left line with a tab ends at the origin as drawn.
+#[test]
+fn right_aligned_right_to_left_point_type_with_a_tab_ends_at_its_origin() {
+    let text = "אב גד\tהו זח";
+    let mut t = point(text, no_ranges());
+    t.para.justify = Justify::Right;
+    t.para.tabs = vec![TabStop { position: 150.0, align: TabAlign::Left, leader: String::new(), align_on: '.' }];
+    let l = layout(db(), &t);
+    let (_, right) = drawn_extent(&l, text, 0);
+    assert!(right.abs() < 1e-6, "ends at the origin: {right}");
+}
+
+/// A right-to-left line with a tab breaks where it fits as drawn: in a frame it fits only in the
+/// order of its text, it wraps, and every line stays inside the frame.
+#[test]
+fn a_right_to_left_line_with_a_tab_wraps_when_it_does_not_fit_as_drawn() {
+    // א (0), ב (2), space (4), ג (5), ד (7), tab (9), ה (10), ו (12), space (14), ז (15), ח (17).
+    let text = "אב גד\tהו זח";
+    let wide = rtl_tabbed(text, 1000.0, &[(150.0, TabAlign::Left)], Justify::Left);
+    let span = |from: usize, to: usize| -> f64 { wide.glyphs.iter().filter(|g| (from..to).contains(&g.byte)).map(|g| g.advance).sum() };
+    // Drawn, the text before the tab comes after it: the line is 150 pt and that text wide.
+    let (before, after) = (span(0, 9), span(10, 19));
+    assert!(before > after + 1.0, "the test needs the text before the tab wider: {before} {after}");
+    let width = 150.0 + (before + after) / 2.0;
+    let l = rtl_tabbed(text, width, &[(150.0, TabAlign::Left)], Justify::Right);
+    assert!(l.lines.len() >= 2, "wraps: {} line(s)", l.lines.len());
+    for k in 0..l.lines.len() {
+        let (left, right) = drawn_extent(&l, text, k);
+        assert!(left >= -1e-6 && right <= width + 1e-6, "line {k} stays in the frame: {left} {right} (frame {width})");
+    }
+}
+
+/// Right, center and decimal stops align the text drawn after the tab, which in a right-to-left
+/// line is the text before it.
+#[test]
+fn right_to_left_tab_stops_align_the_text_drawn_after_them() {
+    // מ (0), מ (2), tab (4), ו (5), ו (7): drawn, וו comes first and ממ after the tab.
+    let text = "ממ\tוו";
+    let mem = |l: &TextLayout| -> (f64, f64) {
+        l.glyphs
+            .iter()
+            .filter(|g| g.byte < 4)
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), g| (lo.min(g.origin.x), hi.max(g.origin.x + g.advance)))
+    };
+    let right = rtl_tabbed(text, 300.0, &[(150.0, TabAlign::Right)], Justify::Left);
+    assert!((mem(&right).1 - 150.0).abs() < 1e-6, "right stop: ends on the stop: {:?}", mem(&right));
+    let center = rtl_tabbed(text, 300.0, &[(150.0, TabAlign::Center)], Justify::Left);
+    let (lo, hi) = mem(&center);
+    assert!(((lo + hi) / 2.0 - 150.0).abs() < 1e-6, "center stop: centered on the stop: {lo} {hi}");
+    // 1 (0), . (1), 5 (2), tab (3), מ (4), מ (6): drawn, ממ comes first and 1.5 after the tab.
+    let decimal = rtl_tabbed("1.5\tממ", 300.0, &[(150.0, TabAlign::Decimal)], Justify::Left);
+    assert!((at(&decimal, 1).origin.x - 150.0).abs() < 1e-6, "decimal stop: the point on the stop: {}", at(&decimal, 1).origin.x);
+}
+
+/// Two tabs around a left-to-right run in a right-to-left line: each takes its stop in drawing
+/// order, and the right-aligned line ends on the right edge as drawn.
+#[test]
+fn a_right_to_left_line_with_two_tabs_and_a_latin_run_ends_on_the_right_edge() {
+    // מ (0), מ (2), tab (4), A B space C D (5..10), tab (10), ו (11), ו (13).
+    let text = "ממ\tAB CD\tוו";
+    let l = rtl_tabbed(text, 300.0, &[(80.0, TabAlign::Left), (160.0, TabAlign::Left)], Justify::Right);
+    assert_eq!(l.lines.len(), 1);
+    let (_, right) = drawn_extent(&l, text, 0);
+    assert!((right - 300.0).abs() < 1e-6, "ends on the right edge: {right}");
+    assert!(at(&l, 5).origin.x < at(&l, 6).origin.x, "the Latin run keeps its order");
+}
+
+/// A right-to-left line with a tab and more breaks than are measured as drawn stays one line when
+/// it fits the frame.
+#[test]
+fn a_long_right_to_left_line_with_a_tab_that_fits_stays_one_line() {
+    let text = format!("א\t{}", "ב ".repeat(400));
+    let l = rtl_tabbed(&text, 100_000.0, &[(150.0, TabAlign::Left)], Justify::Right);
+    assert_eq!(l.lines.len(), 1, "one line");
+}
+
+/// A right-to-left line with a tab and more breaks than are measured one by one still wraps when
+/// it fits only in the order of its text, and every line stays inside the frame.
+#[test]
+fn a_right_to_left_line_with_a_tab_and_many_breaks_wraps_when_it_does_not_fit_as_drawn() {
+    // אב גד, a tab, הו, 400 soft hyphens (each a break), a space and זח.
+    let text = format!("אב גד\tהו{} זח", "\u{AD}".repeat(400));
+    let wide = rtl_tabbed(&text, 10_000.0, &[(150.0, TabAlign::Left)], Justify::Left);
+    let span = |from: usize, to: usize| -> f64 { wide.glyphs.iter().filter(|g| (from..to).contains(&g.byte)).map(|g| g.advance).sum() };
+    let (before, after) = (span(0, 9), span(10, text.len()));
+    assert!(before > after + 1.0, "the test needs the text before the tab wider: {before} {after}");
+    let width = 150.0 + (before + after) / 2.0;
+    let l = rtl_tabbed(&text, width, &[(150.0, TabAlign::Left)], Justify::Right);
+    assert!(l.lines.len() >= 2, "wraps: {} line(s)", l.lines.len());
+    for k in 0..l.lines.len() {
+        let (left, right) = drawn_extent(&l, &text, k);
+        assert!(left >= -1e-6 && right <= width + 1e-6, "line {k} stays in the frame: {left} {right} (frame {width})");
+    }
+}
+
 /// Point type has no measure to fill: a justified line with a tab keeps its natural width.
 #[test]
 fn justified_point_type_with_a_tab_keeps_its_width() {
