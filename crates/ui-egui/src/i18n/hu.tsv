@@ -3015,6 +3015,9 @@ file-filter	Templates	Sablonok
 	embedding for preview and print	beágyazás előnézethez és nyomtatáshoz
 	embedding allowed	beágyazás engedélyezett
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	ismeretlen típus
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} használat
 	substituted: shown in {family} {style} ({detail})	helyettesítve: megjelenítés ezzel: {family} {style} ({detail})
 	missing: shown in {family} {style}	hiányzik: megjelenítés ezzel: {family} {style}
 	missing	hiányzik

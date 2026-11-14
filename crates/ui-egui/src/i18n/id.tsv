@@ -3146,6 +3146,9 @@ theme	Appearance	Tampilan
 	embedding for preview and print	penyematan untuk pratinjau dan cetak
 	embedding allowed	penyematan diizinkan
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	jenis tidak dikenal
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} penggunaan
 	substituted: shown in {family} {style} ({detail})	diganti: ditampilkan dengan {family} {style} ({detail})
 	missing: shown in {family} {style}	tidak ada: ditampilkan dengan {family} {style}
 	missing	tidak ada

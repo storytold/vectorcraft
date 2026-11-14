@@ -3302,6 +3302,9 @@ file-filter	Templates	範本
 	embedding for preview and print	允許內嵌以供預覽和列印
 	embedding allowed	允許內嵌
 	{file}; {embedding}	{file}；{embedding}
+	unknown type	未知類型
+	{type}; {uses}	{type}；{uses}
+@plural	{n} use|{n} uses	使用 {n} 次
 	substituted: shown in {family} {style} ({detail})	已替代：以 {family} {style} 顯示 ({detail})
 	missing: shown in {family} {style}	遺失：以 {family} {style} 顯示
 	missing	遺失

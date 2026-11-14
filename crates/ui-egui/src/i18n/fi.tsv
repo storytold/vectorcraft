@@ -3352,6 +3352,9 @@ theme	Appearance	Ulkoasu
 	embedding for preview and print	upottaminen esikatselua ja tulostusta varten
 	embedding allowed	upottaminen sallittu
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tuntematon tyyppi
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} käyttö|{n} käyttöä
 	substituted: shown in {family} {style} ({detail})	korvattu: näytetään fontilla {family} {style} ({detail})
 	missing: shown in {family} {style}	puuttuu: näytetään fontilla {family} {style}
 	missing	puuttuu

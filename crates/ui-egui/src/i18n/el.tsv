@@ -1833,6 +1833,9 @@ font-technology	Variable	Μεταβλητές
 	embedding for preview and print	ενσωμάτωση για προεπισκόπηση και εκτύπωση
 	embedding allowed	η ενσωμάτωση επιτρέπεται
 	{file}; {embedding}	{file}· {embedding}
+	unknown type	άγνωστος τύπος
+	{type}; {uses}	{type}· {uses}
+@plural	{n} use|{n} uses	{n} χρήση|{n} χρήσεις
 	substituted: shown in {family} {style} ({detail})	αντικαταστάθηκε: εμφανίζεται με {family} {style} ({detail})
 	missing: shown in {family} {style}	λείπει: εμφανίζεται με {family} {style}
 	missing	λείπει

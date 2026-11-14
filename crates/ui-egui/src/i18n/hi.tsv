@@ -3403,6 +3403,9 @@ antiAlias	Sharp	शार्प
 	embedding for preview and print	पूर्वावलोकन और प्रिंट के लिए एम्बेडिंग
 	embedding allowed	एम्बेडिंग की अनुमति है
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	अज्ञात प्रकार
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} उपयोग|{n} उपयोग
 	substituted: shown in {family} {style} ({detail})	प्रतिस्थापित: {family} {style} में दिखाया गया ({detail})
 	missing: shown in {family} {style}	अनुपलब्ध: {family} {style} में दिखाया गया
 	missing	अनुपलब्ध

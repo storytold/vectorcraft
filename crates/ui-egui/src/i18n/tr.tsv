@@ -6148,6 +6148,9 @@ theme	Appearance	Görünüm
 	embedding for preview and print	önizleme ve yazdırma için gömme
 	embedding allowed	gömmeye izin veriliyor
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	bilinmeyen tür
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} kullanım
 	substituted: shown in {family} {style} ({detail})	yerine konan: {family} {style} ile gösteriliyor ({detail})
 	missing: shown in {family} {style}	eksik: {family} {style} ile gösteriliyor
 	missing	eksik

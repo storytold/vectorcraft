@@ -3363,6 +3363,9 @@ theme	Appearance	Izgled
 	embedding for preview and print	ugrađivanje za pregled i štampu
 	embedding allowed	ugrađivanje dozvoljeno
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	nepoznata vrsta
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} upotreba|{n} upotrebe|{n} upotreba
 	substituted: shown in {family} {style} ({detail})	zamijenjen: prikazan fontom {family} {style} ({detail})
 	missing: shown in {family} {style}	nedostaje: prikazan fontom {family} {style}
 	missing	nedostaje

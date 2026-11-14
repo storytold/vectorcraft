@@ -3292,6 +3292,9 @@ theme	Appearance	Wygląd
 	embedding for preview and print	osadzanie do podglądu i drukowania
 	embedding allowed	osadzanie dozwolone
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	nieznany typ
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} użycie|{n} użycia|{n} użyć
 	substituted: shown in {family} {style} ({detail})	zastąpiony: wyświetlany krojem {family} {style} ({detail})
 	missing: shown in {family} {style}	brak: wyświetlany krojem {family} {style}
 	missing	brak

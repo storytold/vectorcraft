@@ -2223,6 +2223,9 @@ file-filter	Templates	Шаблоны
 	embedding for preview and print	внедрение для просмотра и печати
 	embedding allowed	внедрение разрешено
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	неизвестный тип
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} использование|{n} использования|{n} использований
 	substituted: shown in {family} {style} ({detail})	заменен: показан шрифтом {family} {style} ({detail})
 	missing: shown in {family} {style}	отсутствует: показан шрифтом {family} {style}
 	missing	отсутствует

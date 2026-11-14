@@ -2093,6 +2093,9 @@ file-filter	Templates	模板
 	embedding for preview and print	允许嵌入以供预览和打印
 	embedding allowed	允许嵌入
 	{file}; {embedding}	{file}；{embedding}
+	unknown type	未知类型
+	{type}; {uses}	{type}；{uses}
+@plural	{n} use|{n} uses	使用 {n} 次
 	substituted: shown in {family} {style} ({detail})	已替换：以 {family} {style} 显示 ({detail})
 	missing: shown in {family} {style}	缺失：以 {family} {style} 显示
 	missing	缺失

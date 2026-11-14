@@ -2989,6 +2989,9 @@ theme	Appearance	იერსახე
 	embedding for preview and print	ჩაშენება გადახედვისა და ბეჭდვისთვის
 	embedding allowed	ჩაშენება დაშვებულია
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	უცნობი ტიპი
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} გამოყენება
 	substituted: shown in {family} {style} ({detail})	ჩანაცვლებულია: ნაჩვენებია შრიფტით {family} {style} ({detail})
 	missing: shown in {family} {style}	აკლია: ნაჩვენებია შრიფტით {family} {style}
 	missing	აკლია

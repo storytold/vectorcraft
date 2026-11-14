@@ -2832,6 +2832,9 @@ digits	Hindi	Hindi
 	embedding for preview and print	nhúng để xem trước và in
 	embedding allowed	cho phép nhúng
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	loại không xác định
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} lần dùng
 	substituted: shown in {family} {style} ({detail})	đã thay thế: hiển thị bằng {family} {style} ({detail})
 	missing: shown in {family} {style}	thiếu: hiển thị bằng {family} {style}
 	missing	thiếu

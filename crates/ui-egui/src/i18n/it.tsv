@@ -2236,6 +2236,9 @@ file-filter	Templates	Modelli
 	embedding for preview and print	incorporamento per anteprima e stampa
 	embedding allowed	incorporamento consentito
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	tipo sconosciuto
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} utilizzo|{n} utilizzi
 	substituted: shown in {family} {style} ({detail})	sostituito: mostrato con {family} {style} ({detail})
 	missing: shown in {family} {style}	mancante: mostrato con {family} {style}
 	missing	mancante

@@ -2190,6 +2190,9 @@ font-technology	Variable	Variables
 	embedding for preview and print	incorporation pour l’aperçu et l’impression
 	embedding allowed	incorporation autorisée
 	{file}; {embedding}	{file}, {embedding}
+	unknown type	type inconnu
+	{type}; {uses}	{type}, {uses}
+@plural	{n} use|{n} uses	{n} utilisation|{n} utilisations
 	substituted: shown in {family} {style} ({detail})	remplacée, affichée en {family} {style} ({detail})
 	missing: shown in {family} {style}	absente, affichée en {family} {style}
 	missing	absente

@@ -2137,6 +2137,9 @@ font-technology	Variable	Variabla
 	embedding for preview and print	inbäddning för förhandsvisning och utskrift
 	embedding allowed	inbäddning tillåten
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	okänd typ
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} användning|{n} användningar
 	substituted: shown in {family} {style} ({detail})	ersatt: visas med {family} {style} ({detail})
 	missing: shown in {family} {style}	saknas: visas med {family} {style}
 	missing	saknas

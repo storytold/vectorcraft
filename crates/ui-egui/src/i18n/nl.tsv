@@ -3663,6 +3663,9 @@ theme	Appearance	Vormgeving
 	embedding for preview and print	insluiten voor voorvertoning en afdrukken
 	embedding allowed	insluiten toegestaan
 	{file}; {embedding}	{file}; {embedding}
+	unknown type	onbekend type
+	{type}; {uses}	{type}; {uses}
+@plural	{n} use|{n} uses	{n} keer gebruikt|{n} keer gebruikt
 	substituted: shown in {family} {style} ({detail})	vervangen: weergegeven in {family} {style} ({detail})
 	missing: shown in {family} {style}	ontbreekt: weergegeven in {family} {style}
 	missing	ontbreekt
