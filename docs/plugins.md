@@ -269,7 +269,13 @@ capability model proposed for PhotoCraft plug-ins
   while `plugin.install` checks a module, the install is refused, before anything is written to the `Plug-ins` folder,
   if the other plug-in would need `replace: true` or the changed grant no longer approves the module. A
   `plugin.remove` in another session waits until the install has written the `Plug-ins` folder, and then removes the
-  module and its grant. Loading the `Plug-ins` folder or a plug-ins folder in another session waits for it too. When
+  module and its grant. Loading the `Plug-ins` folder or a plug-ins folder in another session waits for it too.
+  Another process using the same `Plug-ins` folder, for example `vectorcraft-cli` beside the app, waits as well: each
+  window or process locks `disabled.lock` in the folder while it reads and changes the stored modules, `grants.json`,
+  `disabled.json` and the plug-ins' settings and caches. An install therefore keeps a module with its own grant, and a
+  grant or setting written in one process does not undo one written in another. When `disabled.lock` can't be
+  locked, `plugin.install` and `plugin.remove` fail and change nothing, `plugin.setEnabled` keeps its change in the
+  process until a later change can be saved, and loading the folder writes nothing to it. When
   an install of a module that lists no permissions can't
   write the module to the `Plug-ins` folder, or can't remove the grant from `grants.json`, the folder keeps the module
   it held and `grants.json` keeps the grant. The new module runs until the session ends. When the grant can't be

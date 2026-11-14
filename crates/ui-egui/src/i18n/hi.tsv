@@ -8863,6 +8863,12 @@ theme	Appearance	अपीयरेंस
 @msg	open the practice sample of `{id}` first (see learn.openSample)	पहले `{id}` का अभ्यास नमूना खोलें (learn.openSample देखें)
 @msg	finish `{id}` first (see learn.finish)	पहले `{id}` पूरा करें (learn.finish देखें)
 @msg	`{id}` is the last tutorial in its skill	`{id}` अपने कौशल का अंतिम ट्यूटोरियल है
+	Reset progress	प्रगति रीसेट करें
+	Mark Tutorial Step	ट्यूटोरियल चरण चिह्नित करें
+	Reset Learn Progress	सीखने की प्रगति रीसेट करें
+@msg	missing `step` (see learn.show)	लापता `step` (learn.show देखें)
+@msg	`step` must be a step number from 0 to {last}	`step` 0 से {last} तक की चरण संख्या होनी चाहिए
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` पूरा हो चुका है (learn.resetProgress देखें)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	स्थगित इफ़ेक्ट्स रिफ्रेश करें

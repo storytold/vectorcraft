@@ -66,7 +66,8 @@ Measurements follow the art they measure through moves, scaling and anchor and h
 undo and redo included. When the art is reflected, the line of a linked linear dimension goes to
 the reflected side, as far past the outermost point as before. This does not happen for art whose
 anchors and handles all lie on one line, such as a straight line, which a half turn puts in the
-same place as a reflection. Deleting the art, changing its number of anchors or whether it is
+same place as a reflection. An unlinked aligned dimension that is reflected, or scaled by a
+negative factor, has its line on the reflected side of its points. Deleting the art, changing its number of anchors or whether it is
 closed, turning an angle's arm into a curve, or making a measured circle or arc no longer circular
 leaves its dimensions where they were, no longer linked, in the same undo step, rather than
 attaching them to a different edge. Undo links them again. A linked dimension moved on its own
