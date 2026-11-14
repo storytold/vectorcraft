@@ -167,13 +167,17 @@ pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weig
 /// "Stroke"): a click toggles the Stroke panel in a popover under it, and a drag scrubs the weight
 /// field after it ([`crate::scrub`]).
 pub(crate) fn link(app: &mut VectorcraftApp, ui: &mut Ui, label: &str) {
-    let t = Tokens::get(ui.ctx());
     // A drag on it scrubs the weight field after it (#4088).
-    let resp = crate::scrub::link_label(ui, egui::RichText::new(label).size(12.0).color(t.text).underline()).on_hover_text(tl!("Stroke options"));
+    let resp = crate::scrub::link_label(ui, link_text(ui, label)).on_hover_text(tl!("Stroke options"));
     widgets::popover(&resp, resp.clicked(), |ui| {
         ui.set_width(260.0);
         show(app, ui);
     });
+}
+
+/// The text of the Stroke [`link`] labeled `label`, as it draws it and the Control bar measures it.
+pub(crate) fn link_text(ui: &Ui, label: &str) -> egui::RichText {
+    egui::RichText::new(label).size(12.0).color(Tokens::get(ui.ctx()).text).underline()
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -491,12 +495,15 @@ pub fn paint_profile(ui: &Ui, r: Rect, points: Option<&[(f64, f64, f64)]>, color
     ui.painter().with_clip_rect(r).add(egui::Shape::mesh(mesh));
 }
 
+/// The width of the [`profile_dropdown`] button.
+pub(crate) const PROFILE_DROPDOWN_WIDTH: f32 = 100.0;
+
 /// The Profile dropdown (Stroke panel, Control bar): the stroke's own silhouette on the button
 /// (a custom profile too), the built-in profiles and then the saved ones in the list. Returns the
 /// id or name picked.
 pub(crate) fn profile_dropdown(app: &VectorcraftApp, ui: &mut Ui, cur: Option<&WidthProfile>) -> Option<String> {
     let t = Tokens::get(ui.ctx());
-    let (r, resp) = ui.allocate_exact_size(vec2(100.0, 24.0), Sense::click());
+    let (r, resp) = ui.allocate_exact_size(vec2(PROFILE_DROPDOWN_WIDTH, 24.0), Sense::click());
     ui.painter().rect_filled(r, t.cr(), t.input);
     ui.painter().rect_stroke(r, t.cr(), Stroke::new(1.0, if resp.hovered() { t.text } else { t.input_border }), StrokeKind::Inside);
     let body = Rect::from_min_max(r.min + vec2(6.0, 5.0), pos2(r.right() - 20.0, r.bottom() - 5.0));
