@@ -319,18 +319,32 @@ pub(super) fn target_paths(doc: &Document, sel: &Selection, area: Rect) -> Vec<N
     out
 }
 
+/// Any visible non-None fill, including one below a topmost None.
+pub(super) fn has_fill(n: &Node) -> bool {
+    n.appearance.items.iter().any(|item| item.is_fill() && item.visible() && !item.paint().is_none())
+}
+
+/// A visible painted stroke keeps open paths on the existing outline-erasure route.
+pub(super) fn has_painted_stroke(n: &Node) -> bool {
+    n.appearance.items.iter().any(
+        |item| matches!(item, vectorcraft_doc::AppearanceItem::Stroke(stroke) if stroke.visible && !stroke.paint.is_none() && stroke.width > 0.0),
+    )
+}
+
 /// [`target_paths`] for the tools that cut fills, with each target's geometry and fill rule: the
 /// members of a compound path whose members are all closed paths give the compound path itself,
 /// once, so its fill (holes included) is cut as one shape under its own fill rule.
-pub(super) fn fill_targets(doc: &Document, sel: &Selection, area: Rect) -> Result<Vec<(NodeId, PathData, FillRule)>> {
-    let closed_compound = |n: &Node| {
+/// With `open_fills`, an open compound with a visible fill and no painted visible stroke does too.
+pub(super) fn fill_targets(doc: &Document, sel: &Selection, area: Rect, open_fills: bool) -> Result<Vec<(NodeId, PathData, FillRule)>> {
+    let area_compound = |n: &Node| {
+        let filled = open_fills && has_fill(n) && !has_painted_stroke(n);
         matches!(&n.kind, NodeKind::Compound { children, .. }
-            if children.iter().all(|c| matches!(&c.kind, NodeKind::Path { path, .. } if path.is_closed())))
+            if children.iter().all(|c| matches!(&c.kind, NodeKind::Path { path, .. } if path.is_closed() || filled)))
     };
     let editable = doc.editable();
     let mut out: Vec<(NodeId, PathData, FillRule)> = vec![];
     for id in target_paths(doc, sel, area) {
-        let compound = doc.parent_of(id).and_then(|p| doc.node(p)).filter(|p| closed_compound(p) && editable(p.id));
+        let compound = doc.parent_of(id).and_then(|p| doc.node(p)).filter(|p| area_compound(p) && editable(p.id));
         let target = compound.map_or(id, |c| c.id);
         if out.iter().any(|t| t.0 == target) {
             continue;

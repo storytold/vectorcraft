@@ -1,10 +1,10 @@
 use super::common::{
-    dist_to_polyline, fill_targets, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region, replace_with_pieces, samples_param,
-    sibling_with, size_pressure, target_paths, usize_opt,
+    dist_to_polyline, fill_targets, has_fill, has_painted_stroke, ids_json, path_mut, path_of, points_param, poly_bounds, pressure_region,
+    replace_with_pieces, samples_param, sibling_with, size_pressure, target_paths, usize_opt,
 };
 use super::{
-    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, ParamCurve, PathData, Point, Result, Session, SubPath,
-    Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
+    Anchor, AnchorKind, Beside, BezPath, BoolOp, Cap, EngineError, FillRule, Join, NodeId, NodeKind, ParamCurve, PathData, Point, Result, Session,
+    SubPath, Value, bad, eraser_area, eraser_tip, f64_or, fill_contains, json, number_or, object_param, po,
 };
 
 /// Split a filled path into connected pieces (each outer contour with its holes).
@@ -244,7 +244,7 @@ pub(super) fn knife(s: &mut Session, p: &Value) -> Result<Value> {
     let st = s.doc()?;
     let strip = po::outline_stroke(&PathData::single(SubPath::polyline(&pts, false)), KNIFE_GAP, Cap::Butt, Join::Round, 4.0);
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, 1.0))? {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, 1.0), false)? {
         if !pd.is_closed() {
             continue;
         }
@@ -305,8 +305,13 @@ pub(super) fn erase_region(s: &mut Session, p: &Value) -> Result<Value> {
         None => dist_to_polyline(&round, squash * q) <= r,
     };
     let mut plan: Vec<(NodeId, Vec<PathData>)> = vec![];
-    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach))? {
-        if pd.is_closed() {
+    for (id, pd, rule) in fill_targets(&st.doc, &st.selection, poly_bounds(&pts, reach), true)? {
+        // An unaggregated compound member keeps the outline route: its own appearance does not
+        // paint it. Eligible fill-only compounds were collected as one parent target above.
+        let compound_member =
+            st.doc.parent_of(id).and_then(|parent| st.doc.node(parent)).is_some_and(|parent| matches!(parent.kind, NodeKind::Compound { .. }));
+        let filled_open = !compound_member && st.doc.node(id).is_some_and(|node| has_fill(node) && !has_painted_stroke(node));
+        if pd.is_closed() || filled_open {
             if po::area(&po::boolean(&pd, rule, &region, FillRule::NonZero, BoolOp::Intersect), FillRule::NonZero) <= 1e-6 {
                 continue;
             }
