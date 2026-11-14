@@ -7058,9 +7058,14 @@ the document; so does `object.expand`.
 Placing a text file (`.txt`) sets it as area type: `file.place {path | name+dataBase64, text?: {characterSet?:
 "unicode" | "ansi", platform?: "windows" | "mac", removeLineReturns?, removeParagraphReturns?, replaceSpaces?: n}}`
 (Text Import Options). Unicode reads UTF-8, or UTF-16 with a byte-order mark; ANSI reads Windows-1252 (Mac Roman on
-`mac`). `removeLineReturns` joins the lines of each block into one paragraph, `removeParagraphReturns` drops blank
-lines, `replaceSpaces: 3` turns runs of 3 or more spaces into tabs. The frame fills `rect`, the replaced object's
-bounds, or the artboard less a 36 pt margin.
+`mac`). Unicode reads a file without a byte-order mark as UTF-16 by the rule `dataset.import` uses: at least half of
+its two-byte units hold a NUL byte, in the byte order that reads a line break, or for a file with one line, big-endian
+when more of its units start with a NUL byte than end with one, and little-endian otherwise. Any other file is read as
+UTF-8, else as the platform's 8-bit set: one with fewer NUL bytes, one with an odd length, one where both byte orders
+read a line break, and one that isn't valid UTF-16 in that order or holds a NUL character. `removeLineReturns` joins
+the lines of each block into one paragraph, `removeParagraphReturns` drops blank lines, `replaceSpaces: 3` turns runs
+of 3 or more spaces into tabs. The frame fills `rect`, the replaced object's bounds, or the artboard less a 36 pt
+margin.
 
 ```json
 {"name":"run_command","arguments":{"command":"file.place","params":{"path":"/tmp/notes.txt","text":{"removeLineReturns":true,"removeParagraphReturns":true}}}}
