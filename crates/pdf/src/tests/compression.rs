@@ -379,14 +379,16 @@ fn image_data(pdf: &[u8]) -> Vec<Vec<u8>> {
 
 /// A PNG or JPEG embedded as it is whose gray or RGB profile is malformed is written without it,
 /// the JPEG with its JPEG data unchanged: a profile whose header declares another size, one without
-/// the `acsp` signature, and one whose tag table runs past its end.
+/// the `acsp` signature, one whose tag table runs past its end, and one cut short after 64 bytes.
 #[test]
 fn a_malformed_profile_is_left_out_of_a_png_or_jpeg_kept_as_it_is() {
     for (space, img, device) in [(b"RGB ", colour(), "DeviceRGB"), (b"GRAY", colour().grayscale(), "DeviceGray")] {
-        let mut malformed = [icc_profile(space, 600), icc_profile(space, 600), icc_profile(space, 600)];
+        let mut malformed = [icc_profile(space, 600), icc_profile(space, 600), icc_profile(space, 600), icc_profile(space, 600)];
         malformed[0][..4].copy_from_slice(&601u32.to_be_bytes());
         malformed[1][36..40].copy_from_slice(b"xxxx");
         malformed[2][128..132].copy_from_slice(&100u32.to_be_bytes());
+        malformed[3].truncate(64);
+        malformed[3][..4].copy_from_slice(&64u32.to_be_bytes());
         for (i, icc) in malformed.iter().enumerate() {
             for (format, mime, filter) in [(ImageFormat::Png, "image/png", "FlateDecode"), (ImageFormat::Jpeg, "image/jpeg", "DCTDecode")] {
                 let what = format!("{device}, {format:?}, malformed profile {i}");

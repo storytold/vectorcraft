@@ -333,9 +333,10 @@ pub(super) fn embed(blob: &vectorcraft_doc::ImageBlob, interpolate: bool, sixtee
     let bytes = blob.bytes.as_ref().clone();
     // The PDF writer keeps a gray or RGB image's ICC profile: without `profiles`, or when the
     // profile is malformed, such a JPEG is written without its profile, and an image of another
-    // format is decoded and written without it.
-    let strip = crate::images::source_icc(&bytes).is_some_and(|icc| match vectorcraft_doc::cmyk::icc_color_space(&icc).as_ref() {
-        Some(space @ (b"GRAY" | b"RGB ")) => !profiles || !crate::images::valid_icc(&icc, *space),
+    // format is decoded and written without it. The color space is read from the header's bytes
+    // 16..20 even in a profile cut short, as the PDF writer reads it.
+    let strip = crate::images::source_icc(&bytes).is_some_and(|icc| match icc.get(16..20) {
+        Some(space @ (b"GRAY" | b"RGB ")) => !profiles || <[u8; 4]>::try_from(space).is_ok_and(|s| !crate::images::valid_icc(&icc, s)),
         _ => false,
     });
     let direct = match blob.mime.as_str() {
