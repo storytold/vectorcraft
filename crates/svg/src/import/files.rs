@@ -68,6 +68,9 @@ pub(in crate::import) struct Files {
     svg_text: AtomicU64,
     /// SVG images were left out for exceeding [`MAX_NESTED_SVG_READS`] or [`MAX_NESTED_SVG_TEXT`].
     too_much_svg_read: AtomicBool,
+    /// Images linked from linked SVG files were left out, their files not read, past the same
+    /// limits for the files read for links.
+    too_much_linked: AtomicBool,
     /// The CMYK TIFF stored in place of a turned CMYK image, by the address of the PNG usvg got
     /// (kept here too, so the address stays its own).
     cmyk: Mutex<HashMap<usize, (Bytes, Bytes)>>,
@@ -110,17 +113,57 @@ struct Reading<'a, 'w> {
     /// The placeholder's bytes, made once.
     placeholder: Option<Option<Vec<u8>>>,
     /// What each file read gave, by the file: hrefs spelled differently (`a.png`, `./a.png`,
-    /// `%61.png`), and in different SVG files, share one read and one copy of its bytes. An SVG
-    /// file with a link inside it that led back to an SVG file isn't kept: what it shows depends
-    /// on where it is.
-    by_file: HashMap<String, Result<Source, &'static str>>,
+    /// `%61.png`), and in different SVG files, share one read and one copy of its bytes. Only an
+    /// SVG file whose art depends on where it is shown ([`Reading::placed`]) isn't kept, and a
+    /// raster read past the limits, which is left out.
+    by_file: HashMap<String, Outcome>,
     /// The SVG files whose links are being read, innermost last, by [`identity`].
     active: Vec<String>,
-    /// A link led back to one of them while the file being read was read.
-    led_back: bool,
-    /// How many linked SVG files were read for their links, and the bytes of their text.
+    /// What the file being read gives depends on where it is shown: a link inside it led back to
+    /// an SVG file around it, or an SVG file inside it nests too deep there for its links to be
+    /// read.
+    placed: bool,
+    /// How many linked SVG files were read for their links, and the bytes of every linked SVG
+    /// file read and of every file read for the links of a linked SVG file. Rasters the imported
+    /// SVG links to aren't counted.
     svg_reads: usize,
     svg_text: u64,
+}
+
+impl Reading<'_, '_> {
+    /// The files read for links passed [`MAX_NESTED_SVG_READS`] or [`MAX_NESTED_SVG_TEXT`].
+    fn spent(&self) -> bool {
+        self.svg_reads > MAX_NESTED_SVG_READS || self.svg_text > MAX_NESTED_SVG_TEXT
+    }
+}
+
+/// What reading a linked file gave: what usvg gets, or why it can't be read.
+#[derive(Clone)]
+struct Outcome {
+    source: Result<Source, &'static str>,
+    /// An SVG file whose own links weren't read, past [`Reading::spent`]: inside a linked SVG
+    /// file it is left out, and where the imported SVG links to it, it is shown without them.
+    capped: bool,
+}
+
+impl Outcome {
+    fn not_read(why: &'static str) -> Self {
+        Outcome { source: Err(why), capped: false }
+    }
+
+    fn shown(source: Source) -> Self {
+        Outcome { source: Ok(source), capped: false }
+    }
+}
+
+/// Does SVG text `text` have an `<image>` that links to a file (not a data URL)?
+fn links_files(text: &str) -> bool {
+    super::parse(text).is_ok_and(|xml| xml.descendants().any(|n| n.is_element() && n.tag_name().name() == "image" && file_href(n).is_some()))
+}
+
+/// The href of `<image>` element `n`, unless it is a data URL.
+fn file_href<'a>(n: roxmltree::Node<'a, '_>) -> Option<&'a str> {
+    href(n).filter(|h| !h.trim_start().starts_with("data:"))
 }
 
 /// What the link to an SVG file being read is compared by, to find a link back to it: its path
@@ -206,7 +249,7 @@ impl Files {
     pub(in crate::import) fn read(svg: &str, xml: &roxmltree::Document, opts: &ImportOptions, edits: &mut Edits, warnings: &mut Vec<String>) -> Self {
         let mut files = Files::default();
         let mut reading =
-            Reading { opts, warnings, placeholder: None, by_file: HashMap::new(), active: vec![], led_back: false, svg_reads: 0, svg_text: 0 };
+            Reading { opts, warnings, placeholder: None, by_file: HashMap::new(), active: vec![], placed: false, svg_reads: 0, svg_text: 0 };
         files.sources = files.links_of(svg, xml, opts.folder, None, edits, &mut reading);
         files
     }
@@ -224,48 +267,43 @@ impl Files {
         reading: &mut Reading<'_, '_>,
     ) -> HashMap<String, Source> {
         let mut sources: HashMap<String, Source> = HashMap::new();
+        let nested = !reading.active.is_empty();
         for n in xml.descendants().filter(|n| n.is_element() && n.tag_name().name() == "image") {
-            let Some(h) = href(n).filter(|h| !h.trim_start().starts_with("data:")) else { continue };
+            let Some(h) = file_href(n) else { continue };
             if !sources.contains_key(h) {
                 let (path, file) = target(h, folder);
                 // A failed read is cached too, but each href gets its own placeholder: its own link
                 // path (an Arc shared between hrefs would share the first href's link) and warning.
-                let back = !reading.active.is_empty() && file.as_deref().is_some_and(|f| reading.active.contains(&identity(f)));
+                let back = nested && file.as_deref().is_some_and(|f| reading.active.contains(&identity(f)));
                 let cached = file.as_ref().and_then(|f| reading.by_file.get(f)).cloned();
-                let source = match cached {
+                let outcome = match cached {
                     _ if back => {
-                        reading.led_back = true;
-                        Err("leads back to an SVG file that shows it")
+                        reading.placed = true;
+                        Some(Outcome::not_read("leads back to an SVG file that shows it"))
                     }
-                    Some(source) => source,
+                    Some(outcome) => Some(outcome),
                     None => {
-                        let read = file.clone().and_then(|file| reading.opts.read.and_then(|read| read(&file)));
-                        let around = std::mem::replace(&mut reading.led_back, false);
-                        let source = match (read, file.as_deref()) {
-                            (Some((bytes, link)), Some(f)) => match self.source(bytes, link) {
-                                Some(Source::Svg(text)) => {
-                                    let inside = *inside.get_or_insert_with(|| depth::height(xml, MAX_ELEMENT_DEPTH).unwrap_or(MAX_ELEMENT_DEPTH));
-                                    // Past what may be read of the SVG files, the image is left out (noted).
-                                    let Some(source) = self.svg_file(text, f, inside, reading) else {
-                                        reading.led_back = around;
-                                        continue;
-                                    };
-                                    Ok(source)
-                                }
-                                source => source.ok_or("is not an image VectorCraft reads"),
-                            },
-                            _ => Err("not found"),
-                        };
-                        // Kept unless a link inside it led back to an SVG file.
-                        let led_back = reading.led_back;
-                        reading.led_back |= around;
-                        if let Some(file) = file
-                            && !led_back
+                        let around = std::mem::replace(&mut reading.placed, false);
+                        let outcome = self.file(file.as_deref(), xml, &mut inside, reading);
+                        // Kept unless what it shows depends on where it is.
+                        let placed = reading.placed;
+                        reading.placed |= around;
+                        if let (Some(file), Some(outcome)) = (file, &outcome)
+                            && !placed
                         {
-                            reading.by_file.insert(file, source.clone());
+                            reading.by_file.insert(file, outcome.clone());
                         }
-                        source
+                        outcome
                     }
+                };
+                // Inside a linked SVG file, past what may be read, the image is left out (noted).
+                let source = match outcome {
+                    None => continue,
+                    Some(Outcome { capped: true, .. }) if nested => {
+                        self.too_much_svg_read.store(true, Ordering::Relaxed);
+                        continue;
+                    }
+                    Some(outcome) => outcome.source,
                 };
                 let source = source.or_else(|why| {
                     reading.warnings.push(format!("linked image '{h}' {why}: a placeholder keeps its place until it is relinked"));
@@ -283,32 +321,73 @@ impl Files {
         sources
     }
 
-    /// Linked SVG file `file`, read as `svg`, with the files its own `<image>` elements link to
-    /// read from its folder; `inside` is how deep it nests in the SVGs around it. Its links aren't
-    /// read when it nests too deep to be shown, or when it isn't XML. `None`, noted, once the SVG
-    /// files read for their links pass [`MAX_NESTED_SVG_READS`] or [`MAX_NESTED_SVG_TEXT`].
-    fn svg_file(&mut self, svg: Arc<SvgFile>, file: &str, inside: usize, reading: &mut Reading<'_, '_>) -> Option<Source> {
-        let left = MAX_ELEMENT_DEPTH.saturating_sub(inside);
-        if !svg.text.contains("image") || depth::xml_deeper_than(&svg.text, left) {
-            return Some(Source::Svg(svg));
-        }
-        reading.svg_reads += 1;
-        reading.svg_text = reading.svg_text.saturating_add(svg.text.len() as u64);
-        if reading.svg_reads > MAX_NESTED_SVG_READS || reading.svg_text > MAX_NESTED_SVG_TEXT {
-            self.too_much_svg_read.store(true, Ordering::Relaxed);
+    /// What reading linked file `file` gives, linked from `xml`, whose SVG images nest `inside`
+    /// deep (measured here when an SVG file is read); `None` for an image left out, noted. Inside
+    /// a linked SVG file each file read counts toward [`MAX_NESTED_SVG_TEXT`] before it is looked
+    /// at, and once the files read for links pass [`MAX_NESTED_SVG_READS`] or
+    /// [`MAX_NESTED_SVG_TEXT`] no file is read there; a raster whose read passes them is left out
+    /// undecoded. Every file the imported SVG links to is read.
+    fn file(&mut self, file: Option<&str>, xml: &roxmltree::Document, inside: &mut Option<usize>, reading: &mut Reading<'_, '_>) -> Option<Outcome> {
+        let (Some(file), Some(read)) = (file, reading.opts.read) else { return Some(Outcome::not_read("not found")) };
+        let nested = !reading.active.is_empty();
+        if nested && reading.spent() {
+            self.too_much_linked.store(true, Ordering::Relaxed);
             return None;
+        }
+        let Some((bytes, link)) = read(file) else { return Some(Outcome::not_read("not found")) };
+        let counted = if nested { bytes.len() as u64 } else { 0 };
+        reading.svg_text = reading.svg_text.saturating_add(counted);
+        if nested && reading.spent() && image::guess_format(&bytes).is_ok() {
+            self.too_much_linked.store(true, Ordering::Relaxed);
+            return None;
+        }
+        match self.source(bytes, link) {
+            Some(Source::Svg(svg)) => {
+                let inside = *inside.get_or_insert_with(|| depth::height(xml, MAX_ELEMENT_DEPTH).unwrap_or(MAX_ELEMENT_DEPTH));
+                Some(self.svg_file(svg, file, inside, counted, reading))
+            }
+            source => Some(source.map_or_else(|| Outcome::not_read("is not an image VectorCraft reads"), Outcome::shown)),
+        }
+    }
+
+    /// Linked SVG file `file`, read as `svg`, with the files its own `<image>` elements link to
+    /// read from its folder; `inside` is how deep it nests in the SVGs around it, and `counted` the
+    /// bytes of it already counted toward [`MAX_NESTED_SVG_TEXT`]. Its text counts toward
+    /// [`MAX_NESTED_SVG_TEXT`], and reading its links toward [`MAX_NESTED_SVG_READS`]; once they
+    /// are passed, its links aren't read ([`Outcome::capped`], noted when it links to files). Its
+    /// links aren't read either when it nests too deep to be shown, or when it isn't XML.
+    fn svg_file(&mut self, svg: Arc<SvgFile>, file: &str, inside: usize, counted: u64, reading: &mut Reading<'_, '_>) -> Outcome {
+        reading.svg_text = reading.svg_text.saturating_add((svg.text.len() as u64).saturating_sub(counted));
+        let links = svg.text.contains("image");
+        reading.svg_reads += usize::from(links);
+        if reading.spent() {
+            if links && links_files(&svg.text) {
+                self.too_much_linked.store(true, Ordering::Relaxed);
+            }
+            return Outcome { source: Ok(Source::Svg(svg)), capped: true };
+        }
+        let left = MAX_ELEMENT_DEPTH.saturating_sub(inside);
+        if !links {
+            return Outcome::shown(Source::Svg(svg));
+        }
+        if depth::xml_deeper_than(&svg.text, left) {
+            reading.placed = true;
+            return Outcome::shown(Source::Svg(svg));
         }
         // Read from its own handle: the text stays borrowed while `svg` may be given back.
         let text = svg.text.clone();
-        let Ok(xml) = super::parse(&text) else { return Some(Source::Svg(svg)) };
-        let Some(height) = depth::height(&xml, left) else { return Some(Source::Svg(svg)) };
+        let Ok(xml) = super::parse(&text) else { return Outcome::shown(Source::Svg(svg)) };
+        let Some(height) = depth::height(&xml, left) else {
+            reading.placed = true;
+            return Outcome::shown(Source::Svg(svg));
+        };
         let folder = Path::new(file).parent().map(|p| p.to_string_lossy().into_owned());
         let mut edits = Edits::default();
         reading.active.push(identity(file));
         let sources = self.links_of(&text, &xml, folder.as_deref(), Some(inside + height), &mut edits, reading);
         reading.active.pop();
         let text = Arc::from(edits.apply(&text).as_ref());
-        Some(Source::Svg(Arc::new(SvgFile { text, sources })))
+        Outcome::shown(Source::Svg(Arc::new(SvgFile { text, sources })))
     }
 
     /// What usvg gets for a file read (`bytes`, linked by `link`): a raster as [`shown`] gives it
@@ -388,6 +467,12 @@ impl Files {
         if self.too_much_svg_read.load(Ordering::Relaxed) {
             notes.push(format!(
                 "SVG images were left out: nested SVG images, valid or not, are read at most {MAX_NESTED_SVG_READS} times and {} MB of text",
+                MAX_NESTED_SVG_TEXT >> 20
+            ));
+        }
+        if self.too_much_linked.load(Ordering::Relaxed) {
+            notes.push(format!(
+                "images linked from linked SVG files were left out: once {MAX_NESTED_SVG_READS} SVG files or {} MB have been read for their links, the files they link to aren't read",
                 MAX_NESTED_SVG_TEXT >> 20
             ));
         }
@@ -768,6 +853,131 @@ mod tests {
         };
         assert!(!read("2147483647"));
         assert!(read("1"));
+    }
+
+    /// An SVG file of 2 × 2 showing `hrefs`.
+    fn linking(hrefs: &[&str]) -> Vec<u8> {
+        let images: String = hrefs.iter().map(|h| format!(r#"<image href="{h}" width="1" height="1"/>"#)).collect();
+        format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2">{images}</svg>"#).into_bytes()
+    }
+
+    /// The links of the SVG showing `hrefs` read as [`Files::read`] reads them, the files `served`
+    /// by name, with the SVG files and bytes read for links starting at `reads` and `text`: the
+    /// names of the files read, in order, and the files.
+    fn read_links(hrefs: &[&str], served: &[(&str, Vec<u8>)], reads: usize, text: u64) -> (Vec<String>, Files) {
+        let log = Mutex::new(vec![]);
+        let read = |path: &str| {
+            let name = Path::new(path).file_name()?.to_string_lossy().into_owned();
+            log.lock().ok()?.push(name.clone());
+            served.iter().find(|(n, _)| *n == name).map(|(_, bytes)| (bytes.clone(), LinkInfo::new(path)))
+        };
+        let folder = std::env::temp_dir().join("vectorcraft-svg-limits");
+        let folder = folder.to_string_lossy();
+        let opts = ImportOptions { folder: Some(&folder), read: Some(&read) };
+        let svg = String::from_utf8(linking(hrefs)).unwrap();
+        let xml = super::super::parse(&svg).unwrap();
+        let mut warnings = vec![];
+        let mut reading = Reading {
+            opts: &opts,
+            warnings: &mut warnings,
+            placeholder: None,
+            by_file: HashMap::new(),
+            active: vec![],
+            placed: false,
+            svg_reads: reads,
+            svg_text: text,
+        };
+        let mut files = Files::default();
+        files.sources = files.links_of(&svg, &xml, opts.folder, None, &mut Edits::default(), &mut reading);
+        (log.into_inner().unwrap(), files)
+    }
+
+    fn png() -> Vec<u8> {
+        let mut out = vec![];
+        image::RgbaImage::new(1, 1).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
+        out
+    }
+
+    fn linked_note() -> String {
+        format!(
+            "images linked from linked SVG files were left out: once {MAX_NESTED_SVG_READS} SVG files or {} MB have been read for their links, the files they link to aren't read",
+            MAX_NESTED_SVG_TEXT >> 20
+        )
+    }
+
+    /// Every file read for a linked SVG file's links counts toward [`MAX_NESTED_SVG_TEXT`], a
+    /// raster too, after the linked SVG file's own text: the file that passes it is left out, and
+    /// no file after it is read.
+    #[test]
+    fn linked_files_past_the_text_limit_are_not_read() {
+        let a = linking(&["one.png", "two.png", "three.png"]);
+        let served = [("a.svg", a.clone()), ("one.png", png()), ("two.png", png()), ("three.png", png())];
+        let (log, files) = read_links(&["a.svg"], &served, 0, MAX_NESTED_SVG_TEXT - (png().len() + a.len()) as u64);
+        assert_eq!(log, ["a.svg", "one.png", "two.png"]);
+        let Some(Source::Svg(a)) = files.sources.get("a.svg") else { panic!("a.svg is shown") };
+        assert!(a.sources.contains_key("one.png") && a.sources.len() == 1, "{:?}", a.sources.keys());
+        assert_eq!(files.left_out(), [linked_note()]);
+    }
+
+    /// Once more than [`MAX_NESTED_SVG_READS`] SVG files are read for their links, the SVG file
+    /// past it is left out inside a linked SVG file, and no file a linked SVG file links to is
+    /// read (a nested link past the limit); rasters the imported SVG links to still are.
+    #[test]
+    fn linked_files_past_the_read_limit_are_not_read() {
+        let served = [("a.svg", linking(&["b.svg", "two.png"])), ("b.svg", linking(&["one.png"])), ("one.png", png()), ("two.png", png())];
+        let (log, files) = read_links(&["a.svg", "two.png"], &served, MAX_NESTED_SVG_READS - 1, 0);
+        assert_eq!(log, ["a.svg", "b.svg", "two.png"]);
+        let Some(Source::Svg(a)) = files.sources.get("a.svg") else { panic!("a.svg is shown") };
+        assert!(a.sources.is_empty(), "{:?}", a.sources.keys());
+        assert!(matches!(files.sources.get("two.png"), Some(Source::Raster(..))));
+        assert_eq!(files.left_out().len(), 2, "{:?}", files.left_out());
+        assert!(files.left_out().contains(&linked_note()));
+    }
+
+    /// Reading the SVG files the imported SVG links to, and their links, counts toward the
+    /// limits: past them, such a file is still shown, but the files it links to aren't read.
+    #[test]
+    fn svg_files_the_imported_svg_links_to_are_shown_without_their_links_past_the_limits() {
+        let served = [("a.svg", linking(&["one.png"])), ("one.png", png())];
+        for (reads, text) in [(MAX_NESTED_SVG_READS, 0), (0, MAX_NESTED_SVG_TEXT)] {
+            let (log, files) = read_links(&["a.svg"], &served, reads, text);
+            assert_eq!(log, ["a.svg"], "one.png isn't read");
+            let Some(Source::Svg(a)) = files.sources.get("a.svg") else { panic!("a.svg is shown") };
+            assert!(a.sources.is_empty(), "{:?}", a.sources.keys());
+            assert_eq!(files.left_out(), [linked_note()]);
+        }
+        // More of them than the limit: those past it are shown without their links.
+        let names: Vec<String> = (0..MAX_NESTED_SVG_READS + 2).map(|i| format!("s{i}.svg")).collect();
+        let hrefs: Vec<&str> = names.iter().map(String::as_str).collect();
+        let mut served: Vec<(&str, Vec<u8>)> = hrefs.iter().map(|h| (*h, linking(&["one.png"]))).collect();
+        served.push(("one.png", png()));
+        let (log, files) = read_links(&hrefs, &served, 0, 0);
+        assert_eq!(log.len(), hrefs.len() + 1, "one.png is read once");
+        let with_links = hrefs.iter().filter(|h| matches!(files.sources.get(**h), Some(Source::Svg(s)) if s.sources.contains_key("one.png")));
+        assert_eq!(with_links.count(), MAX_NESTED_SVG_READS);
+        assert!(hrefs.iter().all(|h| matches!(files.sources.get(*h), Some(Source::Svg(_)))), "all shown");
+        assert_eq!(files.left_out(), [linked_note()]);
+    }
+
+    /// An SVG file read once is kept by its file wherever it was read: another spelling of its
+    /// href doesn't read it again, past the limits too.
+    #[test]
+    fn an_svg_file_is_read_once_past_the_limits() {
+        let served = [("a.svg", linking(&["one.png"])), ("one.png", png())];
+        let (log, files) = read_links(&["a.svg", "./a.svg", "%61.svg"], &served, MAX_NESTED_SVG_READS, 0);
+        assert_eq!(log, ["a.svg"]);
+        assert!(["a.svg", "./a.svg", "%61.svg"].iter().all(|h| matches!(files.sources.get(*h), Some(Source::Svg(_)))));
+        // Read inside a linked SVG file, where its read passes the text limit: left out there,
+        // and shown, not read again, where the imported SVG links to it.
+        let x = linking(&["a.svg"]);
+        let served = [("x.svg", x.clone()), ("a.svg", linking(&["one.png"])), ("one.png", png())];
+        let (log, files) = read_links(&["x.svg", "./a.svg"], &served, 0, MAX_NESTED_SVG_TEXT - x.len() as u64);
+        assert_eq!(log, ["x.svg", "a.svg"]);
+        let Some(Source::Svg(x)) = files.sources.get("x.svg") else { panic!("x.svg is shown") };
+        assert!(x.sources.is_empty(), "{:?}", x.sources.keys());
+        let Some(Source::Svg(a)) = files.sources.get("./a.svg") else { panic!("a.svg is shown") };
+        assert!(a.sources.is_empty(), "{:?}", a.sources.keys());
+        assert_eq!(files.left_out().len(), 2, "{:?}", files.left_out());
     }
 
     /// The nested SVG images read, decoded or not, take at most [`MAX_NESTED_SVG_TEXT`] bytes of

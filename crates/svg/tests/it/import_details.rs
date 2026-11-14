@@ -379,6 +379,22 @@ fn a_chain_of_linked_svg_files_stops_at_the_depth_cap() {
     assert!(w.iter().any(|w| w.contains("nest more than")), "{w:?}");
 }
 
+/// An SVG file reached first inside an SVG file where it nests too deep to be shown, then from the
+/// imported SVG, shows the raster it links to where it fits.
+#[test]
+fn an_svg_file_too_deep_in_one_place_shows_its_links_in_another() {
+    let dir = folder("nested-deep-then-shallow");
+    let depth = vectorcraft_svg::MAX_ELEMENT_DEPTH;
+    let nest = |n: usize, inner: &str| format!("{}{inner}{}", "<g>".repeat(n), "</g>".repeat(n));
+    std::fs::write(dir.join("img").join("photo.png"), png(4, 4)).unwrap();
+    std::fs::write(dir.join("img").join("deep.svg"), svg_file(&nest(depth * 2 / 3, r#"<image href="a.svg" width="10" height="10"/>"#))).unwrap();
+    std::fs::write(dir.join("img").join("a.svg"), svg_file(&nest(depth / 2, r#"<image href="photo.png" width="10" height="10"/>"#))).unwrap();
+    let (d, w) = open_in(&dir, r#"<image href="img/deep.svg" width="20" height="20"/><image href="img/a.svg" x="50" width="20" height="20"/>"#);
+    assert!(w.iter().any(|w| w.contains("nest more than")), "{w:?}");
+    let [(_, im)] = images(&d)[..] else { panic!("{:?} {w:?}", art(&d)) };
+    assert_eq!(Path::new(&im.link.as_ref().unwrap().path), dir.join("img").join("photo.png"));
+}
+
 const SVG_NS: &str = r#"xmlns="http://www.w3.org/2000/svg""#;
 
 /// An image showing `svg`, from a base64 data URL of type `mime` (none when empty).
