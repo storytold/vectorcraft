@@ -64,7 +64,7 @@ plus review. Native-speaker review is human work and isn't in the hours.
 | Bulgarian | `bg` | 5,245 rows, 763 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial | full; AI-drafted, native review pending |
 | Greek | `el` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | full; native review welcome |
 | Georgian | `ka` | 5,200 rows (counted 2026-10-21): menus, panels, dialogs, plurals (one count-neutral form) and messages, tested complete; reviewed by a native speaker | full |
-| Turkish | `tr` | 5,558 rows, 880 of them `@msg` (counted 2026-10-28); 6 menu strings and the default swatch names still fall back to English | full |
+| Turkish | `tr` | 9,175 rows, 3,446 of them `@msg` and 48 `@msgplural` (counted 2026-11-13); 41 messages, 62 menu strings, 26 `tl!` literals, 13 undo labels and the default swatch names still fall back to English | full |
 | Indonesian | `id` | 5,531 rows, 788 of them `@msg` (counted 2026-10-28): menus and `tl!` literals complete when counted; its messages are partial; one plural form | full |
 | Catalan | `ca` | 5,626 rows, 881 of them `@msg` (counted 2026-10-28): menus, `tl!` literals and messages complete when counted; one/other plurals; every `ca-*` locale resolves here | full; AI-drafted, native review welcome |
 
