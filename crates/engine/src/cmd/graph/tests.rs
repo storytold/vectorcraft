@@ -5692,8 +5692,9 @@ fn a_recolor_that_evens_out_a_labels_characters_is_kept_for_its_kind() {
     assert!(looks.iter().any(|(t, _, fill)| t == "0" && fill == "#000000"), "{looks:?}");
 }
 
-/// Stroke options set with `stroke.set` and a gradient made with `paint.editGradient` on a label's characters are kept
-/// for every label of its kind, the gradient without its placement.
+/// Stroke options set with `stroke.set` and a gradient made with `paint.editGradient` and placed with
+/// `paint.setGradientGeom` on a label's characters are kept for every label of its kind, the gradient without its
+/// placement.
 #[test]
 fn stroke_and_gradient_edits_on_a_labels_characters_are_kept_for_its_kind() {
     let mut s = Session::new();
@@ -5704,7 +5705,10 @@ fn stroke_and_gradient_edits_on_a_labels_characters_are_kept_for_its_kind() {
     s.execute("paint.setStroke", &json!({"ids": [v.0], "color": "#ff0000"})).unwrap();
     s.execute("stroke.set", &json!({"ids": [v.0], "weight": 3, "cap": "round"})).unwrap();
     s.execute("paint.editGradient", &json!({"ids": [v.0], "kind": "linear", "stroke": false})).unwrap();
-    assert!(matches!(label_run_style(&s, id, "Axes", "4").fill, Paint::Gradient(_)), "the edit makes a gradient");
+    let placement = json!({"ids": [v.0], "stroke": false, "start": [100, 100], "end": [200, 100], "aspect": 50});
+    s.execute("paint.setGradientGeom", &placement).unwrap();
+    let fill = label_run_style(&s, id, "Axes", "4").fill;
+    assert!(matches!(&fill, Paint::Gradient(g) if g.geom.is_some()), "the edited label's gradient is placed: {fill:?}");
     label_looks(&mut s, id);
     let st = label_run_style(&s, id, "Axes", "0");
     assert_eq!((st.stroke_width, st.stroke_cap), (3.0, vectorcraft_doc::LineCap::Round));
