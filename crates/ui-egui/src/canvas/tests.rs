@@ -9329,8 +9329,8 @@ fn frame_moves_stop_at_the_button_up() {
     let up = egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c), egui::Event::PointerMoved(d)];
     let feed = StylusFeed::default();
-    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
-    let after = PenPose { tilt: Some([50.0, 0.0]), rotation: None };
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), ..PenPose::default() };
+    let after = PenPose { tilt: Some([50.0, 0.0]), ..PenPose::default() };
     for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, after), (0.8, after)] {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
@@ -9355,7 +9355,7 @@ fn frame_moves_keep_the_last_move_when_the_button_went_up_elsewhere() {
     let up = egui::Event::PointerButton { pos: up_at, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
     let events = vec![egui::Event::PointerMoved(a), egui::Event::PointerMoved(b), up, egui::Event::PointerMoved(c)];
     let feed = StylusFeed::default();
-    let at_b = PenPose { tilt: Some([20.0, 0.0]), rotation: None };
+    let at_b = PenPose { tilt: Some([20.0, 0.0]), ..PenPose::default() };
     for (p, pose) in [(0.4, PenPose::default()), (0.6, at_b), (0.7, PenPose::default())] {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
@@ -9381,7 +9381,7 @@ fn frame_moves_keeps_touch_feed_and_mouse_samples_with_their_pressure() {
     assert_eq!(mouse, [(a, None, None), (b, None, None)], "the last move follows the normal pointer path");
     // A macOS pen: the feed kept a pressure and a pose for each move, the last for the last.
     let feed = StylusFeed::default();
-    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: None };
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), ..PenPose::default() };
     for (p, pose) in [(0.9, leaning), (0.3, leaning), (0.0, PenPose::default()), (0.5, leaning)] {
         feed.set_move(crate::stylus::PenSample { pressure: p, pose, ..Default::default() });
     }
@@ -9860,7 +9860,7 @@ fn the_hosts_pen_tilt_and_rotation_reach_the_paintbrush() {
         assert_eq!(cmd, "path.freehand");
         p["points"].as_array().unwrap().iter().map(|s| [3, 4, 5].map(|i| s.get(i).and_then(serde_json::Value::as_f64))).collect()
     };
-    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: Some(45.0) };
+    let leaning = PenPose { tilt: Some([30.0, 0.0]), rotation: Some(45.0), wheel: None };
     let points = stroke(&mut app, 260.0, Some(leaning));
     assert!(!points.is_empty() && points.iter().all(|p| *p == [Some(30.0), Some(0.0), Some(45.0)]), "{points:?}");
     // With the view rotated 90° clockwise, a pen leaning to the right of the screen leans up the
@@ -9891,7 +9891,7 @@ fn moves_in_the_release_frame_reach_the_paintbrush_with_their_tilt() {
     let moved = |tilt: f32| {
         feed.set_move(crate::stylus::PenSample {
             pressure: 0.5,
-            pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) },
+            pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0), wheel: None },
             ..Default::default()
         })
     };
@@ -9934,8 +9934,11 @@ fn the_last_move_of_a_frame_keeps_its_own_tilt() {
     let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
     let at = |x: f64| xf.to_screen(Point::new(x, 300.0));
     let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-    let sample =
-        |tilt: f32| crate::stylus::PenSample { pressure: 0.5, pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0) }, ..Default::default() };
+    let sample = |tilt: f32| crate::stylus::PenSample {
+        pressure: 0.5,
+        pose: PenPose { tilt: Some([tilt, 0.0]), rotation: Some(0.0), wheel: None },
+        ..Default::default()
+    };
     feed.set_move(sample(10.0));
     frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at(300.0)), button(at(300.0), true)]);
     feed.set_move(sample(20.0));

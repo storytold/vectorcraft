@@ -22,11 +22,13 @@ pub(super) struct Sample {
     tilt: Option<[f64; 2]>,
     /// Barrel rotation, degrees clockwise.
     rotation: Option<f64>,
+    /// The airbrush finger wheel, 0..1.
+    wheel: Option<f64>,
 }
 
 /// The keys of a point's pen values, in the order a point given as an array holds them after its
 /// x and y.
-const PEN_KEYS: [&str; 4] = ["pressure", "tiltX", "tiltY", "rotation"];
+const PEN_KEYS: [&str; 5] = ["pressure", "tiltX", "tiltY", "rotation", "wheel"];
 
 /// The point `[x, y, …]` or `{x, y, …}` that `v` holds, or an error when its x or y is not a finite
 /// number.
@@ -40,16 +42,16 @@ pub(super) fn point_entry(v: &Value, cmd: &str) -> Result<Point> {
 }
 
 /// [`points_param`] with what a pen read at each point, as far as it is given:
-/// `[[x,y,pressure,tiltX,tiltY,rotation]…]` or `[{x,y,pressure,tiltX,tiltY,rotation}…]`. Pressure
-/// is 0..1; tilt in degrees, each −90..90 (one of the two without the other is 0); rotation in
-/// degrees clockwise. A point whose x or y is not a number, or whose pressure, tilt or rotation is
-/// neither a number nor null, is an error.
+/// `[[x,y,pressure,tiltX,tiltY,rotation,wheel]…]` or `[{x,y,pressure,tiltX,tiltY,rotation,wheel}…]`.
+/// Pressure is 0..1; tilt in degrees, each −90..90 (one of the two without the other is 0);
+/// rotation in degrees clockwise; the wheel 0..1 (clamped). A point whose x or y is not a number,
+/// or whose pressure, tilt, rotation or wheel is neither a number nor null, is an error.
 pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Sample>> {
     let a = p.get(key).and_then(Value::as_array).ok_or_else(|| bad(cmd, format!("missing array `{key}`")))?;
     let pts: Vec<Sample> = a
         .iter()
         .map(|v| {
-            let mut pen = [None; 4];
+            let mut pen = [None; 5];
             for (i, (key, slot)) in PEN_KEYS.iter().zip(&mut pen).enumerate() {
                 let given = match v {
                     Value::Array(xy) => xy.get(i + 2),
@@ -61,9 +63,10 @@ pub(super) fn samples_param(p: &Value, key: &str, cmd: &str) -> Result<Vec<Sampl
                     Some(v) => return Err(bad(cmd, format!("`{key}` must be a number, not {v}"))),
                 };
             }
-            let [pressure, tx, ty, rotation] = pen;
+            let [pressure, tx, ty, rotation, wheel] = pen;
             let tilt = (tx.is_some() || ty.is_some()).then(|| [tx, ty].map(|t| t.unwrap_or(0.0).clamp(-90.0, 90.0)));
-            Ok(Sample { pt: point_entry(v, cmd)?, pressure, tilt, rotation })
+            let wheel = wheel.map(|w| w.clamp(0.0, 1.0));
+            Ok(Sample { pt: point_entry(v, cmd)?, pressure, tilt, rotation, wheel })
         })
         .collect::<Result<_>>()?;
     if pts.is_empty() {
@@ -94,6 +97,15 @@ fn stroke_pressure(samples: &[Sample]) -> Option<PressureProfile> {
         return None;
     }
     PressureProfile::from_samples(along(samples).into_iter().zip(samples).map(|(t, s)| (t, s.pressure.unwrap_or(1.0))))
+}
+
+/// Where an airbrush pen's finger wheel was set along a freehand stroke, when any of its samples
+/// has it; samples without it count as the middle of its travel, which draws a brush's own value.
+fn stroke_wheel(samples: &[Sample]) -> Option<PressureProfile> {
+    if samples.iter().all(|s| s.wheel.is_none()) {
+        return None;
+    }
+    PressureProfile::from_samples(along(samples).into_iter().zip(samples).map(|(t, s)| (t, s.wheel.unwrap_or(PressureProfile::MID))))
 }
 
 /// A pen that leans less than this many degrees from upright leans no way in particular: its
@@ -135,24 +147,31 @@ fn stroke_pose(samples: &[Sample]) -> (Option<PressureProfile>, Option<AngleProf
     (tilt.flatten(), bearing.flatten(), rotation.flatten())
 }
 
-/// What a pen recorded along a stroke ([`StrokeLayer`]'s `pressure`, `tilt`, `bearing` and
-/// `rotation`).
+/// What a pen recorded along a stroke ([`StrokeLayer`]'s `pressure`, `tilt`, `bearing`,
+/// `rotation` and `wheel`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct PenRecord {
     pressure: Option<PressureProfile>,
     tilt: Option<PressureProfile>,
     bearing: Option<AngleProfile>,
     rotation: Option<AngleProfile>,
+    wheel: Option<PressureProfile>,
 }
 
 impl PenRecord {
     /// What a freehand stroke's samples recorded.
     pub(super) fn of_samples(samples: &[Sample]) -> Self {
         let (tilt, bearing, rotation) = stroke_pose(samples);
-        Self { pressure: stroke_pressure(samples), tilt, bearing, rotation }
+        Self { pressure: stroke_pressure(samples), tilt, bearing, rotation, wheel: stroke_wheel(samples) }
     }
     pub(super) fn of(st: &StrokeLayer) -> Self {
-        Self { pressure: st.pressure.clone(), tilt: st.tilt.clone(), bearing: st.bearing.clone(), rotation: st.rotation.clone() }
+        Self {
+            pressure: st.pressure.clone(),
+            tilt: st.tilt.clone(),
+            bearing: st.bearing.clone(),
+            rotation: st.rotation.clone(),
+            wheel: st.wheel.clone(),
+        }
     }
     pub(super) fn is_empty(&self) -> bool {
         *self == Self::default()
@@ -165,6 +184,7 @@ impl PenRecord {
             tilt: PressureProfile::extended(self.tilt.as_ref(), old_len, added.tilt.as_ref(), added_len),
             bearing: AngleProfile::extended(self.bearing.as_ref(), old_len, added.bearing.as_ref(), added_len),
             rotation: AngleProfile::extended(self.rotation.as_ref(), old_len, added.rotation.as_ref(), added_len),
+            wheel: PressureProfile::extended(self.wheel.as_ref(), old_len, added.wheel.as_ref(), added_len),
         }
     }
     /// The record along the path reversed.
@@ -174,6 +194,7 @@ impl PenRecord {
             tilt: self.tilt.as_ref().map(PressureProfile::reversed),
             bearing: self.bearing.as_ref().map(AngleProfile::reversed),
             rotation: self.rotation.as_ref().map(AngleProfile::reversed),
+            wheel: self.wheel.as_ref().map(PressureProfile::reversed),
         }
     }
     /// Keep the record on stroke `st`.
@@ -182,6 +203,7 @@ impl PenRecord {
         st.tilt = self.tilt;
         st.bearing = self.bearing;
         st.rotation = self.rotation;
+        st.wheel = self.wheel;
     }
 }
 

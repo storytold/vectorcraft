@@ -10,8 +10,9 @@
 //! Smart Guides ([`DrawSnap`]: an anchor, a path, in line with the art), hovering too; the points
 //! between follow the hand. The Paintbrush records the pen pressure of each point (a stroke a pen
 //! pressed less than fully on sends `[x, y, pressure]` points) for pressure-sensitive brushes, and
-//! the pen's tilt and barrel rotation where the pen reads them (`[x, y, pressure, tiltX, tiltY,
-//! rotation]` points, `null` for what a point lacks) for brushes that vary with them. The Blob
+//! the pen's tilt, barrel rotation and airbrush finger wheel where the pen reads them (`[x, y,
+//! pressure, tiltX, tiltY, rotation, wheel]` points, `null` for what a point lacks) for brushes
+//! that vary with them. The Blob
 //! Brush and Eraser also record pressure when their Size varies with Pressure. The other tools
 //! collect the drag polyline (shown as an overlay) and run one command on release. With Shift
 //! held, the Blob Brush's points stay on the horizontal or
@@ -91,7 +92,7 @@ pub struct GestureTool {
     /// The pen pressure of each of `points` (the Paintbrush, and the Blob Brush and the Eraser
     /// with `size_pressure`).
     pressures: Vec<f32>,
-    /// The pen's tilt and rotation at each of `points` (the Paintbrush only).
+    /// The pen's tilt, rotation and wheel at each of `points` (the Paintbrush only).
     poses: Vec<Option<PenPose>>,
     active: bool,
     began: bool,
@@ -893,7 +894,8 @@ impl GestureTool {
         self.id != "pencil" || self.live_preview
     }
 
-    /// Add a stroke sample, with the pen's pressure, tilt and rotation of the event `ev` there.
+    /// Add a stroke sample, with the pen's pressure, tilt, rotation and wheel of the event `ev`
+    /// there.
     fn push(&mut self, p: Point, ev: &PointerEvent) {
         if let Some(last) = self.points.last() {
             self.length += last.distance(p);
@@ -1058,20 +1060,28 @@ impl GestureTool {
         (self.varies_size() && self.size_pressure && !self.smoothing && pressed).then_some(self.pressures.as_slice())
     }
 
-    /// The stroke's points: `[x, y, pressure, tiltX, tiltY, rotation]` when a pen read its tilt or
-    /// rotation anywhere along it (`null` for what a point lacks, and for the pressure of a stroke
+    /// The stroke's points: `[x, y, pressure, tiltX, tiltY, rotation, wheel]` when a pen read its
+    /// wheel anywhere along it, else `[x, y, pressure, tiltX, tiltY, rotation]` when it read its
+    /// tilt or rotation anywhere (`null` for what a point lacks, and for the pressure of a stroke
     /// pressed fully all along), else `[x, y, pressure]` when a pen pressed less than fully
     /// anywhere (a mouse always presses fully), else `[x, y]`.
     fn stroke_json(&self) -> Value {
         let n = self.points.len();
         let pressed = self.pressures.len() == n && self.pressures.iter().any(|p| *p < 1.0);
-        let posed = self.poses.len() == n && self.poses.iter().flatten().any(|q| q.tilt.is_some() || q.rotation.is_some());
+        let poses = || self.poses.iter().flatten();
+        let wheeled = self.poses.len() == n && poses().any(|q| q.wheel.is_some());
+        let posed = wheeled || (self.poses.len() == n && poses().any(|q| q.tilt.is_some() || q.rotation.is_some()));
         let round = |v: f32, k: f64| (f64::from(v) * k).round() / k;
         if posed {
             let points = self.points.iter().zip(&self.pressures).zip(&self.poses).map(|((p, f), q)| {
                 let q = q.unwrap_or_default();
                 let (tilt, rotation) = (q.tilt.map(|t| t.map(|v| round(v, 100.0))), q.rotation.map(|r| round(r, 100.0)));
-                json!([p.x, p.y, pressed.then(|| round(*f, 1000.0)), tilt.map(|t| t[0]), tilt.map(|t| t[1]), rotation])
+                let pressure = pressed.then(|| round(*f, 1000.0));
+                if wheeled {
+                    json!([p.x, p.y, pressure, tilt.map(|t| t[0]), tilt.map(|t| t[1]), rotation, q.wheel.map(|w| round(w, 1000.0))])
+                } else {
+                    json!([p.x, p.y, pressure, tilt.map(|t| t[0]), tilt.map(|t| t[1]), rotation])
+                }
             });
             Value::Array(points.collect())
         } else if pressed {

@@ -1152,6 +1152,64 @@ fn pressure_varies_angle_and_roundness() {
     assert!(near(h, expected, 0.05), "{h} vs {expected}");
 }
 
+/// A stroke that recorded an airbrush pen's finger wheel going from `from` to `to` along it.
+fn wheeled(from: f64, to: f64) -> StrokeLayer {
+    StrokeLayer { wheel: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, from), (1.0, to)] }), ..stroke(1.0) }
+}
+
+/// Stylus Wheel: a Calligraphic brush's size goes from size − variation at one end of the finger
+/// wheel to size + variation at the other, a Scatter brush's size from its first value to its
+/// second, and an Art brush's width from Width to the second width. Each reads only the wheel: the
+/// pressure, tilt, bearing or rotation recorded instead leaves the value half way.
+#[test]
+fn the_stylus_wheel_varies_sizes_and_widths() {
+    let doc = Document::new(1.0, 1.0);
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    let c = Calligraphic {
+        size: 6.0,
+        variation: [0.0, 0.0, 4.0],
+        modes: Some([Variation::Fixed, Variation::Fixed, Variation::StylusWheel]),
+        ..Default::default()
+    };
+    let nib = Brush { name: "w".into(), kind: BrushKind::Calligraphic(c) };
+    let out = stroke_pieces(&doc, &nib, &bp, &wheeled(0.0, 1.0));
+    // Round nib: 2 pt across at the start, 10 pt at the end, 6 pt half way.
+    assert!(near(half_width(&out, 0.5, 1.5), 1.0, 0.1), "{}", half_width(&out, 0.5, 1.5));
+    assert!(near(half_width(&out, 98.5, 99.5), 5.0, 0.1), "{}", half_width(&out, 98.5, 99.5));
+    assert!(near(half_width(&out, 49.5, 50.5), 3.0, 0.1), "{}", half_width(&out, 49.5, 50.5));
+    let others = [
+        pressed(vec![(0.0, 0.0), (1.0, 1.0)]),
+        StrokeLayer { tilt: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, 0.0), (1.0, 1.0)] }), ..stroke(1.0) },
+        posed(None, Some(90.0), Some(-90.0)),
+    ];
+    for st in &others {
+        let h = bounds(&stroke_pieces(&doc, &nib, &bp, st)).height();
+        assert!(near(h, 6.0, 0.05), "{st:?}: {h}");
+    }
+    // Scatter size 50 % to 300 % of 4 pt art: 2 pt at one end of the wheel, 12 pt at the other.
+    let spray = sized_scatter(50.0, 300.0, Variation::StylusWheel);
+    let h: Vec<f64> =
+        stroke_pieces(&doc, &spray, &line(0.0, 0.0, 400.0, 0.0), &wheeled(1.0, 0.0)).iter().map(|n| n.geometric_bounds().unwrap().height()).collect();
+    assert!(near(h[0], 12.0, 0.2) && h[h.len() - 1] < 3.0, "{h:?}");
+    // Art width 50 % to 300 % of 4 pt art.
+    let mut ribbon = art_brush(rect_art(10.0, 4.0), ArtScale::Stretch);
+    if let BrushKind::Art(a) = &mut ribbon.kind {
+        (a.width, a.width_mode, a.width_max) = (50.0, Some(Variation::StylusWheel), Some(300.0));
+    }
+    let out = stroke_pieces(&doc, &ribbon, &bp, &wheeled(1.0, 0.0));
+    assert!(near(half_width(&out, 0.0, 1.0), 6.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 99.0, 100.0), 1.0, 0.1), "{}", half_width(&out, 99.0, 100.0));
+    for st in &others {
+        let h = bounds(&stroke_pieces(&doc, &ribbon, &bp, st)).height();
+        assert!(near(h, 7.0, 1e-6), "{st:?}: {h}");
+    }
+    // A definition keeps the mode by name.
+    let lib = parse_library(&serde_json::json!([
+        {"name": "a", "type": "art", "art": rect_art(10.0, 4.0), "width_mode": "stylusWheel", "width_max": 300.0},
+    ]));
+    assert!(matches!(&lib[0].kind, BrushKind::Art(a) if a.width_mode == Some(Variation::StylusWheel)));
+}
+
 /// A stroke that recorded the pen's tilt (`tilt`: 0 upright to 1 flat), bearing and barrel
 /// rotation (degrees counter-clockwise), each the same all along it where given.
 fn posed(tilt: Option<f64>, bearing: Option<f64>, rotation: Option<f64>) -> StrokeLayer {
@@ -1218,7 +1276,7 @@ fn bearing_and_rotation_turn_the_nib() {
 #[test]
 fn pen_modes_without_a_recording_draw_the_value_itself() {
     let horizontal = line(0.0, 0.0, 100.0, 0.0);
-    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation] {
+    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel] {
         let c = Calligraphic { angle: 90.0, roundness: 50.0, size: 10.0, variation: [90.0, 50.0, 6.0], modes: Some([mode; 3]) };
         let b = Brush { name: "n".into(), kind: BrushKind::Calligraphic(c) };
         let h = bounds(&stroke_pieces(&Document::new(1.0, 1.0), &b, &horizontal, &stroke(1.0))).height();
@@ -1265,7 +1323,7 @@ fn a_mouse_stroke_draws_pen_modes_as_pressure_did() {
     };
     let (calli_before, scatter_before) = (calli(Variation::Pressure), scattered(Variation::Pressure));
     assert!(!calli_before.is_empty() && !scatter_before.is_empty());
-    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation] {
+    for mode in [Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel] {
         assert_eq!(calli(mode), calli_before, "{mode:?}");
         assert_eq!(scattered(mode), scatter_before, "{mode:?}");
     }
@@ -1333,8 +1391,12 @@ fn brushes_without_modes_vary_randomly_as_before() {
         stroke_pieces(&Document::new(1.0, 1.0), &old, &bp, &pressed(vec![(0.0, 0.0), (1.0, 1.0)]))
     );
     // Modes are saved by name.
-    assert_eq!(serde_json::to_value(Variation::ALL).unwrap(), serde_json::json!(["fixed", "random", "pressure", "tilt", "bearing", "rotation"]));
-    assert!(Variation::ALL.iter().all(|v| Variation::parse(v.id()) == Some(*v)));
+    assert_eq!(
+        serde_json::to_value(Variation::ALL).unwrap(),
+        serde_json::json!(["fixed", "random", "pressure", "tilt", "bearing", "rotation", "stylusWheel"])
+    );
+    assert!(Variation::ALL.iter().all(|v| Variation::parse(v.id()) == Some(*v) && serde_json::to_value(v).unwrap() == v.id()));
+    assert!(!Variation::offered(false).contains(&Variation::StylusWheel) && Variation::offered(true).contains(&Variation::StylusWheel));
 }
 
 /// Junk definitions and pressure never panic and never draw non-finite art.

@@ -310,8 +310,9 @@ fn calligraphic_body(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 d.fields.insert(key.into(), json!(v));
             }
             let mode = Variation::parse(&d.str(&mode_key(key))).unwrap_or_default();
-            let labels = Variation::ALL.map(Variation::label);
-            if let Some(m) = widgets::dropdown(ui, ("brush-mode", key), mode.label(), &labels, 104.0).and_then(|i| Variation::ALL.get(i)) {
+            let offered = Variation::offered(key == "size");
+            let labels: Vec<&str> = offered.iter().map(|m| m.label()).collect();
+            if let Some(m) = widgets::dropdown(ui, ("brush-mode", key), mode.label(), &labels, 104.0).and_then(|i| offered.get(i)) {
                 d.fields.insert(mode_key(key), json!(m.id()));
             }
             label(ui, tl!("Variation:"));

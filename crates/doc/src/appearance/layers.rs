@@ -108,6 +108,11 @@ pub struct StrokeLayer {
     /// pressure, it stays with this path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotation: Option<AngleProfile>,
+    /// Where the finger wheel of an airbrush pen was set along the stroke: 0 at one end of its
+    /// travel to 1 at the other. Brushes with Stylus Wheel variation vary with it. Like the
+    /// pressure, it stays with this path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wheel: Option<PressureProfile>,
 }
 
 /// How a gradient on a stroke is laid out (the Gradient panel's Stroke buttons). Saved by variant
@@ -181,6 +186,7 @@ impl StrokeLayer {
             tilt: None,
             bearing: None,
             rotation: None,
+            wheel: None,
         }
     }
     /// Weight of the start (`end == false`) or end arrowhead: stroke weight × its scale, at least

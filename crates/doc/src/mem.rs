@@ -320,7 +320,8 @@ pub fn appearance_heap_bytes(a: &Appearance) -> usize {
                     AppearanceItem::Stroke(s) => {
                         s.dash.as_ref().map_or(0, |d| vec_bytes(&d.pattern))
                             + s.profile.as_ref().map_or(0, |p| vec_bytes(&p.points))
-                            + s.pressure.as_ref().map_or(0, |p| vec_bytes(&p.points))
+                            + [&s.pressure, &s.tilt, &s.wheel].into_iter().flatten().map(|p| vec_bytes(&p.points)).sum::<usize>()
+                            + [&s.bearing, &s.rotation].into_iter().flatten().map(|p| vec_bytes(&p.points)).sum::<usize>()
                             + s.brush.as_ref().map_or(0, String::capacity)
                     }
                     _ => 0,
@@ -389,6 +390,27 @@ mod tests {
             d.insert(Some(layer), usize::MAX, Node::path(id, r, Appearance::default_art())).unwrap();
         }
         d
+    }
+
+    #[test]
+    fn every_pen_recording_of_a_stroke_counts() {
+        use crate::{AngleProfile, PressureProfile};
+        let plain = Appearance::default_art();
+        let base = appearance_heap_bytes(&plain);
+        let ramp = || PressureProfile { points: (0..100).map(|i| (f64::from(i) / 99.0, 0.5)).collect() };
+        let turn = || AngleProfile { points: (0..100).map(|i| (f64::from(i) / 99.0, 10.0)).collect() };
+        for i in 0..5 {
+            let mut a = plain.clone();
+            let s = a.stroke_mut().unwrap();
+            match i {
+                0 => s.pressure = Some(ramp()),
+                1 => s.tilt = Some(ramp()),
+                2 => s.bearing = Some(turn()),
+                3 => s.rotation = Some(turn()),
+                _ => s.wheel = Some(ramp()),
+            }
+            assert!(appearance_heap_bytes(&a) >= base + 100 * size_of::<(f64, f64)>(), "recording {i}");
+        }
     }
 
     #[test]

@@ -8817,8 +8817,9 @@ fn an_art_brush_whose_art_doesnt_bend_keeps_its_paths_look() {
 }
 
 /// Settings the other tests don't use come back: a Calligraphic brush varying with tilt and bearing,
-/// a Scatter brush keeping its art's colors whose rotation doesn't follow the path, and brushes whose
-/// modes aren't given (the reader gives them, the same ones).
+/// a Scatter brush keeping its art's colors whose rotation doesn't follow the path, a Calligraphic
+/// and a Scatter brush whose size follows an airbrush pen's finger wheel, and brushes whose modes
+/// aren't given (the reader gives them, the same ones).
 #[test]
 fn more_brush_settings_are_read_back() {
     use vectorcraft_brush::{Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
@@ -8842,8 +8843,20 @@ fn more_brush_settings_are_read_back() {
     let lib = vec![
         Brush { name: "Tilted".into(), kind: BrushKind::Calligraphic(tilted.clone()) },
         Brush { name: "Still".into(), kind: BrushKind::Scatter(scatter.clone()) },
-        Brush { name: "Unset nib".into(), kind: BrushKind::Calligraphic(Calligraphic { modes: None, ..tilted }) },
-        Brush { name: "Unset spray".into(), kind: BrushKind::Scatter(Scatter { modes: None, ..scatter }) },
+        Brush { name: "Unset nib".into(), kind: BrushKind::Calligraphic(Calligraphic { modes: None, ..tilted.clone() }) },
+        Brush { name: "Unset spray".into(), kind: BrushKind::Scatter(Scatter { modes: None, ..scatter.clone() }) },
+        Brush {
+            name: "Wheel nib".into(),
+            kind: BrushKind::Calligraphic(Calligraphic { modes: Some([Variation::Fixed, Variation::Fixed, Variation::StylusWheel]), ..tilted }),
+        },
+        Brush {
+            name: "Wheel spray".into(),
+            kind: BrushKind::Scatter(Scatter {
+                size: (40.0, 160.0),
+                modes: Some([Variation::StylusWheel, Variation::Fixed, Variation::Fixed, Variation::Fixed]),
+                ..scatter
+            }),
+        },
     ];
     let mut doc = Document::new(300.0, 200.0);
     vectorcraft_brush::store(&mut doc, &lib);

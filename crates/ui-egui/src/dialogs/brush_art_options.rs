@@ -254,7 +254,8 @@ fn scatter_mode(d: &Dialog, key: &str) -> Variation {
     Variation::parse(&d.str(&mode_key(key))).unwrap_or_default()
 }
 
-/// How an art brush's width varies: Fixed, or with the pen's pressure, tilt, bearing or rotation.
+/// How an art brush's width varies: Fixed, or with the pen's pressure, tilt, bearing, rotation or
+/// wheel.
 fn art_width_mode(d: &Dialog) -> Variation {
     Variation::parse(&d.str("widthMode")).filter(|m| m.follows_pen()).unwrap_or(Variation::Fixed)
 }
@@ -434,7 +435,6 @@ fn flips(ui: &mut egui::Ui, d: &mut Dialog) {
 
 fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
     let labels = [tl!("Size:"), tl!("Spacing:"), tl!("Scatter:"), tl!("Rotation:")];
-    let modes = Variation::ALL.map(Variation::label);
     egui::Grid::new("brush-options-scatter").num_columns(4).spacing([8.0, 8.0]).show(ui, |ui| {
         for (((key, suffix), range), text) in SCATTER.into_iter().zip(Scatter::RANGES).zip(labels) {
             super::swatch_options::label(ui, text);
@@ -448,7 +448,9 @@ fn scatter_body(ui: &mut egui::Ui, d: &mut Dialog) {
                     }
                 });
             }
-            if let Some(m) = widgets::dropdown(ui, ("brush-scatter-mode", key), mode.label(), &modes, 104.0).and_then(|i| Variation::ALL.get(i)) {
+            let offered = Variation::offered(key == "size");
+            let modes: Vec<&str> = offered.iter().map(|m| m.label()).collect();
+            if let Some(m) = widgets::dropdown(ui, ("brush-scatter-mode", key), mode.label(), &modes, 104.0).and_then(|i| offered.get(i)) {
                 d.fields.insert(mode_key(key), json!(m.id()));
             }
             ui.end_row();
@@ -467,7 +469,7 @@ fn art_body(ui: &mut egui::Ui, d: &mut Dialog) {
         super::form::slider_field_named(ui, d, "width", tl!("Width:"), range.0..=range.1, "%", &|_| rail);
         let mode = art_width_mode(d);
         number(ui, d, "widthMax", range, "%", mode.follows_pen());
-        let modes = [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation];
+        let modes = [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel];
         if let Some(m) = widgets::dropdown(ui, "brush-art-width-mode", mode.label(), &modes.map(Variation::label), 104.0).and_then(|i| modes.get(i)) {
             d.fields.insert("widthMode".into(), json!(m.id()));
         }

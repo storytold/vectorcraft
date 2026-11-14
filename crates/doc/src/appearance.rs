@@ -127,8 +127,8 @@ impl Appearance {
     pub fn stroke_mut(&mut self) -> Option<&mut StrokeLayer> {
         self.items.iter_mut().rev().find_map(|i| if let AppearanceItem::Stroke(s) = i { Some(s) } else { None })
     }
-    /// This appearance for other art: the pen pressure, tilt, bearing and rotation its strokes
-    /// were drawn with stay with them.
+    /// This appearance for other art: the pen pressure, tilt, bearing, rotation and wheel its
+    /// strokes were drawn with stay with them.
     pub fn without_pressure(mut self) -> Self {
         for it in &mut self.items {
             if let AppearanceItem::Stroke(s) = it {
@@ -136,6 +136,7 @@ impl Appearance {
                 s.tilt = None;
                 s.bearing = None;
                 s.rotation = None;
+                s.wheel = None;
             }
         }
         self
