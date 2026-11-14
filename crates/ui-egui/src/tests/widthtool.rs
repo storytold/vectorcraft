@@ -25,5 +25,13 @@ fn the_hint_bar_explains_the_width_tool() {
     app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
     app.run("tool.select", json!({"tool": "width"})).unwrap();
     let text = painted_text(&mut app, chrome::hint_bar).replace('\n', "");
-    assert!(text.contains("add a width point") && text.contains("one side") && text.contains("remove points"), "{text}");
+    assert!(
+        text.contains("add a width point")
+            && text.contains("one side")
+            && text.contains("move the profile")
+            && text.contains("Alt+Shift+Drag")
+            && text.contains("scale one side of the profile")
+            && text.contains("remove points"),
+        "{text}"
+    );
 }
