@@ -26,7 +26,7 @@ pub use perspective::perspective_click;
 use perspective::{
     attach, edit_text, grid_set, grid_show, persp_draw, persp_move, persp_nudge, persp_transform, plane_match, plane_move, plane_set, release,
 };
-pub(crate) use perspective::{finish_edit_text, grid_of, perspective_rewrite, silent, store_grid, transform_again};
+pub(crate) use perspective::{finish_edit_text, grid_kept, grid_of, perspective_rewrite, silent, store_grid, transform_again};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -107,7 +107,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Perspective Grid Preset",
             [],
             None,
-            "{kind: 1|2|3 (its normal view) | name: a preset (see perspective.presets.list)} reset the grid to the preset fitted to the first artboard (and show it; attached objects stay attached)",
+            "{kind: 1|2|3 (its normal view) | name: a preset (see perspective.presets.list)} reset the grid to the preset fitted to the first artboard (and show it; attached objects stay attached). No undo step when the document already holds that grid; when only whether it shows or its active plane differs, those are set without one",
             has_doc,
             super::perspgrid::grid_preset
         ),
