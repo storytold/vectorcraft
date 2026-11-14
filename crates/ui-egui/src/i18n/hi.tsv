@@ -1140,6 +1140,8 @@ antiAlias	Sharp	शार्प
 	Crop Image	इमेज क्रॉप करें
 	Image Tools	इमेज टूल
 	Remove Background…	पृष्ठभूमि हटाएँ…
+	Draw (Pencil)	ड्रा (पेंसिल)
+	Place Image	इमेज प्लेस करें
 	Remove Background	पृष्ठभूमि हटाएँ
 	Background	पृष्ठभूमि
 	Edge Color	किनारे का रंग
@@ -5942,6 +5944,7 @@ antiAlias	Sharp	शार्प
 @msg	`{key}` must be a number	`{key}` एक संख्या होना चाहिए
 @msg	`{key}` must be a number {_1}..{_2}	`{key}` {_1}..{_2} की एक संख्या होना चाहिए
 @msg	`{key}` must be a number not below 0	`{key}` 0 से कम नहीं होने वाली संख्या होना चाहिए
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` 0 से कम नहीं होने वाली चार संख्याएँ होनी चाहिए: [tl, tr, br, bl]
 @msg	`{key}` must be a number, not {v}	`{key}` एक संख्या होना चाहिए, {v} नहीं
 @msg	`{key}` must be a profile name or null	`{key}` को प्रोफ़ाइल नाम या null होना चाहिए
 @msg	`{key}` must be a string	`{key}` एक स्ट्रिंग होना चाहिए

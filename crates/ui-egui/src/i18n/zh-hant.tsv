@@ -667,6 +667,8 @@ font-technology	Variable	可變
 	Crop Image	裁切影像
 	Image Tools	影像工具
 	Remove Background…	移除背景…
+	Draw (Pencil)	繪製 (鉛筆)
+	Place Image	置入影像
 	Remove Background	移除背景
 	Background	背景
 	Edge Color	邊緣顏色
@@ -2409,6 +2411,7 @@ file-filter	Templates	範本
 @msg	`select` must be true or false	`select` 必須是 true 或 false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` 和 `maxAnchors` 必須是整數
 @msg	`{key}` must be a number not below 0	`{key}` 必須是不小於 0 的數字
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` 必須是四個不小於 0 的數字：[tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` 必須是 [x, y, width, height]：四個有限數字，寬度和高度不能為負
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` 大於 `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	請至少提供下列其中之一：`name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
