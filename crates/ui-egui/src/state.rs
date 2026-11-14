@@ -734,6 +734,10 @@ pub struct UiState {
     /// of an RGB field, `ui.colorPanel`, [`crate::panels::color::deserialize_rgb_percent`]).
     #[serde(default, deserialize_with = "crate::panels::color::deserialize_rgb_percent")]
     pub color_rgb_percent: bool,
+    /// Color Wheel panel: the wheel or the box, and the box's channel (`ui.colorWheel`,
+    /// [`crate::panels::color_wheel::deserialize_settings`]).
+    #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
+    pub color_wheel: crate::panels::color_wheel::Settings,
     /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
     /// row (#6617; read as [`Self::color_show_recent_colors`] is). Separate from the Color panel's.
     #[serde(default = "yes", deserialize_with = "crate::panels::color::deserialize_show_recent_colors")]
@@ -1206,6 +1210,7 @@ impl Default for UiState {
             color_hide_options: false,
             color_show_recent_colors: true,
             color_rgb_percent: false,
+            color_wheel: Default::default(),
             swatches_show_recent_colors: true,
             svg_options: Value::Null,
             place_link: true,

@@ -518,6 +518,11 @@ antiAlias	Sharp	锐利
 	Saturation and brightness	饱和度和亮度
 	Color field	颜色区域
 	{name1} {value1}, {name2} {value2}	{name1} {value1}，{name2} {value2}
+	Wheel View	色轮视图
+	Box View	方块视图
+	Box Channel	方块色版
+	Color box	颜色方块
+	Color Wheel Options	色轮选项
 	Color Type:	颜色类型：
 	Color:	颜色：
 	Colorize	上色
@@ -4692,6 +4697,8 @@ imageTrace	Outline	轮廓
 @msg	No saved views (View → New View…)	没有已保存的视图 (视图 → 新建视图…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command` 必须是其菜单项会打开对话框的命令 (请参阅 ui.menuDialog)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` 必须是 grayscale、rgb、hsb、cmyk 或 websafe
+@msg	`view` must be wheel or box	`view` 必须是 wheel 或 box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必须是 hue、saturation、brightness、red、green 或 blue
 @msg	`{key}` must be true or false	`{key}` 必须是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同时为 true
 @msg	`select` must be true or false	`select` 必须是 true 或 false

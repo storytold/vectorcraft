@@ -659,6 +659,11 @@
 	Saturation and brightness	გაჯერება და სიკაშკაშე
 	Color field	ფერის ველი
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	წრის ხედი
+	Box View	კვადრატის ხედი
+	Box Channel	კვადრატის არხი
+	Color box	ფერის კვადრატი
+	Color Wheel Options	ფერთა წრის პარამეტრები
 	CSS Properties	CSS თვისებები
 	Document Info	დოკუმენტის ინფორმაცია
 	Flattener Preview	გაბრტყელების წინასწარი ნახვა
@@ -5787,6 +5792,8 @@ imageTrace	Outline	კონტური
 	Color Panel Options	ფერის პანელის პარამეტრები
 @msg	`{key}` must be an array of these names: {_1}	`{key}` უნდა იყოს ამ სახელების მასივი: {_1}
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` უნდა იყოს grayscale, rgb, hsb, cmyk ან websafe
+@msg	`view` must be wheel or box	`view` უნდა იყოს wheel ან box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` უნდა იყოს hue, saturation, brightness, red, green ან blue
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), not a PDF: File › Open and File › Place read it as EPS	ეს PostScript ფაილია (ძველ ფორმატში ან PDF-თან თავსებადობის გარეშე შენახული .ai, ან EPS ფაილი) და არა PDF: ფაილი › გახსნა და ფაილი › განთავსება მას EPS-ად კითხულობს
 # Upstream sync 2026-10-16 (3): Intertwine, symbol registration, gradient span, data sets, Batch.
 	Intertwine	გადახლართვა

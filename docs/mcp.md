@@ -620,6 +620,11 @@ applied colors still join the list while it is hidden. `ui.colorPanel {"rgbPerce
 RGB fields in percent, as a double-click right of an RGB field does, and `false` shows them from 0 to 255 again.
 `ui.colorRgbPercent` (Toggle RGB Percent in the command palette and Keyboard Shortcuts) switches between the two
 and answers true when the fields show in percent.
+`ui.colorWheel {"view": "box", "channel": "red"}` shows the Color Wheel panel's box (a color field with the channel's
+strip at its right) in place of the wheel, as the panel menu's Box View and Box Channel do, and `"view": "wheel"`
+shows the wheel again. Keys left out keep their values. Params that are not an object, another key or a value off
+the list return an error and change nothing. The command returns `{view, channel}`, and both settings are kept with
+the preferences.
 
 In remote desktop mode, `invoke_menu` with `{"command":"ui.sampleScreenColor","params":{}}` shows the system's
 screen color sampler and returns `null` before a color is picked: the system's sampler on macOS, the XDG desktop

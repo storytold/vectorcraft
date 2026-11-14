@@ -499,23 +499,67 @@ pub fn channel_slider_valued(
     size: Vec2,
     track: &dyn Fn(f32) -> Color32,
 ) -> (Option<f32>, Live) {
+    let id = id_with(ui.scope_id(), id);
+    let (_, picked, phase) = channel_rail(ui, id, name, shown, value, true, size, track);
+    (picked, phase)
+}
+
+/// [`channel_slider_valued`] that also responds to the keyboard and to screen readers' actions as
+/// the rail of [`color_slider_stepped`] does: a click or a drag gives it the keyboard focus, and
+/// while it has the focus ↑ and → raise the number `shown` holds and ↓ and ← lower it. When not
+/// `marked`, the rail draws no arrows and screen readers read 0, as [`hue_ring`] does, while the
+/// keys and actions still step from `shown`. Returns the new value from 0 to 1 that a click or a
+/// drag gives, its phase, and the number in `shown`'s units that a key or an action gives.
+#[allow(clippy::too_many_arguments)]
+pub fn channel_slider_stepped(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    marked: bool,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Option<f32>, Live, Option<f64>) {
+    let id = id_with(ui.scope_id(), id);
+    let read = if marked { shown.clone() } else { shown.as_ref().map(|s| SliderValue { value: 0.0, text: None, ..s.clone() }) };
+    let (resp, picked, phase) = channel_rail(ui, id, name, read, value, marked, size, track);
+    let stepped = slider_keys(ui, &resp, shown);
+    (picked, phase, stepped.filter(|_| picked.is_none()))
+}
+
+/// The vertical rail of [`channel_slider_valued`] with the id `id`, with its arrows at `value`
+/// when `marked`: its response, the new value from 0 to 1 that a click or drag gives and the
+/// phase.
+#[allow(clippy::too_many_arguments)]
+fn channel_rail(
+    ui: &mut Ui,
+    id: egui::Id,
+    name: &str,
+    shown: Option<SliderValue>,
+    value: f32,
+    marked: bool,
+    size: Vec2,
+    track: &dyn Fn(f32) -> Color32,
+) -> (Response, Option<f32>, Live) {
     let t = Tokens::get(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
-    let resp = ui.interact(rect, id_with(ui.scope_id(), id), Sense::click_and_drag());
+    let resp = ui.interact(rect, id, Sense::click_and_drag());
     let bar = rect.shrink2(vec2(6.0, 0.0));
     gradient_strip(ui, bar, (bar.height() / 2.0).ceil().max(2.0) as usize, true, track);
     ui.painter().rect_stroke(bar, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
     let y = bar.bottom() - value.clamp(0.0, 1.0) * bar.height();
     let fill = if resp.dragged() || resp.hovered() { t.text_strong } else { t.icon };
-    for (x, d) in [(rect.left(), 1.0), (rect.right(), -1.0)] {
+    for (x, d) in [(rect.left(), 1.0), (rect.right(), -1.0)].into_iter().filter(|_| marked) {
         let tip = pos2(x + d * 5.0, y);
         ui.painter().add(egui::Shape::convex_polygon(vec![tip, pos2(x, y + 4.0 * d), pos2(x, y - 4.0 * d)], fill, Stroke::NONE));
     }
     slider_info(ui, &resp, name, shown);
-    match pointer_phase(&resp) {
+    let (picked, phase) = match pointer_phase(&resp) {
         Some((p, phase)) => (Some(((bar.bottom() - p.y) / bar.height()).clamp(0.0, 1.0)), phase),
         None => (None, Live::Idle),
-    }
+    };
+    (resp, picked, phase)
 }
 
 /// A hex colour field (`E67828`, no `#`) after a `#` label. Returns the text on commit when it

@@ -697,6 +697,11 @@
 	Saturation and brightness	Nasycenie i jasność
 	Color field	Pole koloru
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Widok koła
+	Box View	Widok kwadratu
+	Box Channel	Kanał kwadratu
+	Color box	Kwadrat koloru
+	Color Wheel Options	Opcje koła kolorów
 	CSS Properties	Właściwości CSS
 	Document Info	Informacje o dokumencie
 	Flattener Preview	Podgląd spłaszczania
@@ -4631,6 +4636,8 @@ imageTrace	Outline	Kontur
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` jest większe niż `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	podaj co najmniej jeden z parametrów `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` musi mieć wartość grayscale, rgb, hsb, cmyk lub websafe
+@msg	`view` must be wheel or box	`view` musi mieć wartość wheel lub box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musi mieć wartość hue, saturation, brightness, red, green lub blue
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` to wbudowany obszar roboczy; wybierz inną nazwę

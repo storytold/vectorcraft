@@ -739,6 +739,11 @@
 	Saturation and brightness	Kylläisyys ja kirkkaus
 	Color field	Värikenttä
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Ympyränäkymä
+	Box View	Ruutunäkymä
+	Box Channel	Ruudun kanava
+	Color box	Väriruutu
+	Color Wheel Options	Väriympyrän asetukset
 	CSS Properties	CSS-ominaisuudet
 	Document Info	Asiakirjan tiedot
 	Flattener Preview	Litistyksen esikatselu
@@ -6102,6 +6107,8 @@ mark-style	Japanese	Japanilainen
 @msg	Unknown dimension option {k}	Tuntematon mitoitusasetus {k}
 @msg	Unknown dimension orientation	Tuntematon mitan suunta
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`-arvon on oltava grayscale, rgb, hsb, cmyk tai websafe
+@msg	`view` must be wheel or box	`view`-arvon on oltava wheel tai box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio

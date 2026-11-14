@@ -101,11 +101,22 @@ impl Channel {
             Channel::Green => "G",
         }
     }
-    fn is_hsb(self) -> bool {
+    /// The channel's name, translated: Hue, Saturation, Brightness, Red, Green or Blue.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Channel::Hue => tl!("Hue"),
+            Channel::Saturation => tl!("Saturation"),
+            Channel::Brightness => tl!("Brightness"),
+            Channel::Red => tl!("Red"),
+            Channel::Green => tl!("Green"),
+            Channel::Blue => tl!("Blue"),
+        }
+    }
+    pub(crate) fn is_hsb(self) -> bool {
         matches!(self, Channel::Hue | Channel::Saturation | Channel::Brightness)
     }
     /// Indices of (slider, field x, field y) into the channel's space: [h, s, b] or [r, g, b].
-    fn axes(self) -> (usize, usize, usize) {
+    pub(crate) fn axes(self) -> (usize, usize, usize) {
         match self {
             Channel::Hue => (0, 1, 2),
             Channel::Saturation => (1, 0, 2),
@@ -117,7 +128,7 @@ impl Channel {
     }
     /// The color field's axes (across, up) as keys and screen readers see them: hue in degrees,
     /// saturation and brightness in percent, red, green and blue from 0 to 255.
-    fn field_axes(self) -> [widgets::FieldAxis<'static>; 2] {
+    pub(crate) fn field_axes(self) -> [widgets::FieldAxis<'static>; 2] {
         let axis = |i: usize| {
             let (name, units, suffix) = match (self.is_hsb(), i) {
                 (true, 0) => (tl!("Hue"), 360.0, "°"),
@@ -393,10 +404,19 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
                             let track = |z: f32| c32(&Picked::of(slider_color(channel, z, x, y)).snapped(web).color);
                             let (v, suffix, max) = channel_value(channel, &p);
                             let shown = widgets::SliderValue::field(v as f64, 0.0..=max as f64, suffix, 0);
-                            if let (Some(z), _) =
-                                widgets::channel_slider_valued(ui, "cp-slider", tl!(channel.label()), Some(shown), z, vec2(SLIDER_W, side), &track)
-                            {
-                                pick = Some(field_pick(channel, z, x, y));
+                            match widgets::channel_slider_stepped(
+                                ui,
+                                "cp-slider",
+                                tl!(channel.label()),
+                                Some(shown),
+                                z,
+                                true,
+                                vec2(SLIDER_W, side),
+                                &track,
+                            ) {
+                                (Some(z), ..) => pick = Some(field_pick(channel, z, x, y)),
+                                (None, _, Some(v)) => pick = Some(field_pick(channel, (v / max as f64) as f32, x, y)),
+                                _ => {}
                             }
                         }
                     });

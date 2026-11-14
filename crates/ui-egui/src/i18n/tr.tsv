@@ -553,6 +553,11 @@ font-technology	Variable	Değişken
 	Saturation and brightness	Doygunluk ve parlaklık
 	Color field	Renk seçim alanı
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Tekerlek Görünümü
+	Box View	Kutu Görünümü
+	Box Channel	Kutu Kanalı
+	Color box	Renk kutusu
+	Color Wheel Options	Renk Tekerleği Seçenekleri
 	Color Type:	Renk Türü:
 	Color:	Renk:
 	Colorize	Renklendir
@@ -4254,6 +4259,8 @@ axis	Both	Her İkisi
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}`, `{max_key}` değerinden büyük
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	şunlardan en az birini verin: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` grayscale, rgb, hsb, cmyk veya websafe olmalıdır
+@msg	`view` must be wheel or box	`view` wheel veya box olmalıdır
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` hue, saturation, brightness, red, green veya blue olmalıdır
 @msg	`{k}` must be [x, y]	`{k}` [x, y] olmalıdır
 @msg	`{name}` has no options	`{name}`nin seçeneği yok
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` yerleşik bir çalışma alanıdır; başka bir isim seç

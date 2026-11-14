@@ -756,6 +756,11 @@ digits	Malayalam	말라얄람어
 	Saturation and brightness	채도 및 밝기
 	Color field	색상 필드
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	휠 보기
+	Box View	상자 보기
+	Box Channel	상자 채널
+	Color box	색상 상자
+	Color Wheel Options	색상환 옵션
 	CSS Properties	CSS 속성
 	Document Info	문서 정보
 	Flattener Preview	병합 미리 보기
@@ -4936,6 +4941,8 @@ theme	Appearance	외관
 @msg	No saved views (View → New View…)	저장된 보기가 없습니다(보기 → 새 보기…)
 @msg	`command` must be a command whose menu item opens a dialog (see ui.menuDialog)	`command`는 메뉴 항목이 대화상자를 여는 명령이어야 합니다(ui.menuDialog 참조)
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode`은(는) grayscale, rgb, hsb, cmyk, websafe 중 하나여야 합니다
+@msg	`view` must be wheel or box	`view`은(는) wheel, box 중 하나여야 합니다
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`은(는) hue, saturation, brightness, red, green, blue 중 하나여야 합니다
 @msg	`{key}` must be true or false	`{key}`은(는) true 또는 false여야 합니다
 @msg	`top` and `below` can't both be true	`top`과 `below`를 동시에 true로 지정할 수 없습니다
 @msg	`select` must be true or false	`select`은(는) true 또는 false여야 합니다

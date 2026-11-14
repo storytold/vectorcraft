@@ -532,6 +532,11 @@ font-technology	Variable	Μεταβλητές
 	Saturation and brightness	Κορεσμός και φωτεινότητα
 	Color field	Πεδίο χρώματος
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
+	Wheel View	Προβολή τροχού
+	Box View	Προβολή τετραγώνου
+	Box Channel	Κανάλι τετραγώνου
+	Color box	Τετράγωνο χρώματος
+	Color Wheel Options	Επιλογές χρωματικού τροχού
 	Color Type:	Τύπος χρώματος:
 	Color:	Χρώμα:
 	Colorize	Χρωματισμός
@@ -6091,6 +6096,8 @@ effect	Points	Σημεία
 @msg	Unknown dimension option {k}	Άγνωστη επιλογή διάστασης {k}
 @msg	Unknown dimension orientation	Άγνωστος προσανατολισμός διάστασης
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	το `mode` πρέπει να είναι grayscale, rgb, hsb, cmyk ή websafe
+@msg	`view` must be wheel or box	το `view` πρέπει να είναι wheel ή box
+@msg	`channel` must be hue, saturation, brightness, red, green or blue	το `channel` πρέπει να είναι hue, saturation, brightness, red, green ή blue
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης
