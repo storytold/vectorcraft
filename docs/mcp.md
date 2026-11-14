@@ -10576,6 +10576,10 @@ threaded frame, which composes them again at its own widths. Such a paragraph fa
 frame has no room for its first line, or when the search for its breaks passes VectorCraft's own limits (1,000,000
 lines tried and 2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the
 paragraphs of a frame).
+Single-line measures each line's room the same way: a line that takes in a taller character is placed again across its
+new height and broken again in the room there. When that leaves the taller character for the next line, the line is
+set at its own height where the room there is no narrower, with the words before that character that fit there, and
+otherwise stays where it was placed.
 The UI command `type.lineComposer` (Cmd+Alt+Shift+C, in remote mode `press_key {key: "C", mods: {cmd: true, alt: true,
 shift: true}}` or `invoke_menu`) sets `singleLine` when every paragraph of the selected type (or every paragraph the
 Type tool's selection touches) uses Every-line, else `everyLine`, and returns the composer it set.
