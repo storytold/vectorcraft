@@ -128,6 +128,11 @@ pub struct DocState {
     empty_artboards: std::cell::RefCell<EmptyArtboards>,
     /// What [`DocState::any_art_to_fit`] last measured. Not saved.
     art_to_fit: std::cell::RefCell<Option<ArtToFit>>,
+    /// The document as [`crate::Session::replace_document`] left it in a tab in the back, with its
+    /// type measured in its own composite fonts, and the lowercased names of those fonts. When the
+    /// same document comes to the front, its type set in them is not measured again. While this
+    /// reference lasts, its allocation holds no other document. Not saved.
+    pub(crate) measured_in_own: Option<(std::sync::Weak<Document>, std::collections::HashSet<String>)>,
 }
 
 /// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
@@ -345,6 +350,7 @@ impl DocState {
             empty_artboards: Default::default(),
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),
+            measured_in_own: None,
         }
     }
     /// `measure`'s answer for the document now. `measure` runs once for each version of the document,

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use vectorcraft_color::cms::Cms;
 use vectorcraft_color::swatch::{REGISTRATION, Swatch};
 use vectorcraft_color::{BlendMode, Color, Paint};
-use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LayerColor, Node, NodeId, NodeKind, OpacityMask, StrokeLayer};
+use vectorcraft_doc::{AppearanceItem, Document, FillLayer, Knockout, LayerColor, Node, NodeId, NodeKind, OpacityMask, StrokeLayer, TextWrap};
 use vectorcraft_effects::stroke;
 use vectorcraft_geom::{Affine, FillRule, PathData, Shape, SubPath};
 use vectorcraft_pathops::BoolOp;
@@ -56,6 +56,7 @@ pub(super) const CLIPPING: &str = "clipping groups and clipping layers whose cli
 pub(super) const CLIP_PAINT: &str = "the fills and strokes of clipping paths that a plain fill and line can't draw are written as paths of their own inside the clipping (fills under the clipped art, strokes over it) in the editing data for other apps";
 pub(super) const CLIP_PAINT_MASKS: &str = "the opacity masks of clipping paths whose fills and strokes are written as paths of their own stay on the clipping path, not on those paths, in the editing data for other apps";
 pub(super) const LIVE: &str = "blends, meshes, repeats, placed documents and intertwines are written as their art in the editing data for other apps";
+pub(super) const GRAPHS: &str = "graphs are written as their art, without their data or settings, in the editing data for other apps";
 pub(super) const STROKES: &str = "strokes a plain line can't draw (inside or outside the path, variable width, dots, dashes fitted to corners, gradients, patterns, arrowheads) are written as filled outlines, and brushed strokes as their brush's art, in the editing data for other apps";
 pub(super) const ITEM_TRANSPARENCY: &str =
     "the opacity and blending modes of single fills and strokes are left out of the editing data for other apps";
@@ -263,6 +264,10 @@ pub(super) struct Writer<'a> {
     /// An object's drawn look is being written: no object in it is written with a style, and its
     /// effects are the style's.
     in_look: bool,
+    /// How many parts of art drawn for an object (a live object's art, a symbol instance's art, a
+    /// brushed stroke's pieces) the art being written is in. Text wrap options are written only
+    /// outside them, since only the document's own objects wrap type.
+    drawn: u32,
     /// The brushes written ([`brushes`]).
     brush_set: brushes::Brushes,
     /// Brushes may be written; false on a large canvas, where they are left out.
@@ -340,6 +345,7 @@ impl<'a> Writer<'a> {
             styled: HashMap::new(),
             styles: styles::Styles::default(),
             in_look: false,
+            drawn: 0,
             brush_set: brushes::Brushes::default(),
             brushes_live: true,
             deform: false,
@@ -638,6 +644,9 @@ impl<'a> Writer<'a> {
         if self.in_symbol {
             self.wrote_fixed |= symbols::redrawn(n);
         }
+        if n.extras().graph.is_some() && !self.in_look {
+            self.warn(GRAPHS);
+        }
         // On the layers or in an opacity mask's art, outside art cut to a clipping object: with its
         // art style, when it has one.
         if !self.in_look
@@ -748,7 +757,9 @@ impl<'a> Writer<'a> {
                         art.locked = false;
                         art.name = None;
                         self.nest += 1;
+                        self.drawn += 1;
                         self.node(&art);
+                        self.drawn -= 1;
                         self.nest -= 1;
                     } else {
                         self.warn(SYMBOL_LIMIT);
@@ -796,9 +807,11 @@ impl<'a> Writer<'a> {
         if self.nest < MAX_NEST {
             let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
             self.nest += 1;
+            self.drawn += 1;
             for c in g.children().map(Vec::as_slice).unwrap_or_default() {
                 self.node(c);
             }
+            self.drawn -= 1;
             self.nest -= 1;
         }
         self.end_group("U", xy);
@@ -806,11 +819,13 @@ impl<'a> Writer<'a> {
 
     /// `n`'s `/ArtDictionary`, after it, when it has a name (`AI10_ArtUID`, see [`Self::take_id`]),
     /// is bound to variables ([`Self::bound_variables`]; without a name, it gets an XML id and an
-    /// empty `AIArtName`), has an opacity mask (`AI9_Mask`, see [`Self::mask`]), or is a symbol's
-    /// art (its symbol's entries first, see [`Self::define_symbol`]). False when `n` has an opacity
-    /// mask that is left out: nested too deep, or its art doesn't fit.
+    /// empty `AIArtName`), has text wrap options ([`Self::text_wrap`]), has an opacity mask
+    /// (`AI9_Mask`, see [`Self::mask`]), or is a symbol's art (its symbol's entries first, see
+    /// [`Self::define_symbol`]). False when `n` has an opacity mask that is left out: nested too
+    /// deep, or its art doesn't fit.
     fn dictionary(&mut self, n: &Node) -> bool {
         let name = n.name.as_deref().filter(|s| !s.is_empty());
+        let wrap = n.extras().wrap.filter(|_| self.drawn == 0 && !self.in_look);
         let placed = std::mem::take(&mut self.placed);
         let typed = std::mem::take(&mut self.typed);
         let bound = self.bound_variables(n, placed, typed);
@@ -826,7 +841,7 @@ impl<'a> Writer<'a> {
             Some((id, _)) if *id == n.id => self.root_entries.take().map(|(_, e)| e),
             _ => None,
         };
-        if name.is_none() && mask.is_none() && bound.is_empty() && entries.is_none() {
+        if name.is_none() && mask.is_none() && bound.is_empty() && entries.is_none() && wrap.is_none() {
             return mask_written;
         }
         let start = self.body.len();
@@ -847,11 +862,14 @@ impl<'a> Writer<'a> {
                 self.bound.push((n.id, id, bound));
             }
         }
+        if let Some(w) = wrap {
+            self.text_wrap(w);
+        }
         // A mask whose art doesn't fit is left out, and with nothing else in it the dictionary too.
         if let Some(m) = mask
             && !self.mask(m)
         {
-            if !has_id && !has_entries {
+            if !has_id && !has_entries && wrap.is_none() {
                 self.body.truncate(start);
                 return false;
             }
@@ -859,6 +877,17 @@ impl<'a> Writer<'a> {
         }
         self.body.push_str("%_;\n%_\n");
         mask_written
+    }
+
+    /// Text wrap options, as entries of their object's dictionary: the offset in art space's points
+    /// (`AI11TextWrapOffset`, `/Real`; a value that isn't finite is written as the default 6 pt,
+    /// and one past the -1000 to 1000 pt the reader keeps as the nearer end of that range) and
+    /// Invert Wrap (`AI11TextWrapInvert`, `/Bool`, 1 or 0), as the reader reads them back.
+    fn text_wrap(&mut self, w: TextWrap) {
+        let offset = if w.offset.is_finite() { w.offset.clamp(-1000.0, 1000.0) } else { TextWrap::default().offset };
+        self.body.push_str("%_");
+        ps::push_num(&mut self.body, offset);
+        let _ = writeln!(self.body, " /Real (AI11TextWrapOffset) ,\n%_{} /Bool (AI11TextWrapInvert) ,", u8::from(w.invert));
     }
 
     /// An `/ArtDictionary` whose `AI10_ArtUID` is `name` as an XML id.
@@ -1068,12 +1097,18 @@ impl<'a> Writer<'a> {
     }
 
     /// A container's members, the first one's outline cutting the others: its fills painted
-    /// behind them (cut to the region outside too), its strokes over them, not cut by it.
+    /// behind them (cut to the region outside too), its strokes over them, not cut by it. Its text
+    /// wrap options are written once: with its fills, or without fills with its strokes.
     fn clip_contents(&mut self, children: &[Arc<Node>]) {
         let Some((first, rest)) = children.split_first() else { return };
         // Nothing to clip by hides the clipped art.
         let Some((outline, rule)) = vectorcraft_effects::clip_outline(first) else { return };
-        let paint = first.clip_paint();
+        let mut paint = first.clip_paint();
+        if let (Some(_), Some(stroke)) = (&paint.fill, &mut paint.stroke)
+            && stroke.extras().wrap.is_some()
+        {
+            stroke.extras_mut().wrap = None;
+        }
         let outer = self.clip.clone();
         let region = self.cut(&PathData::from_bezpath(&outline), rule);
         self.clip = Some(region);
@@ -1163,9 +1198,11 @@ impl<'a> Writer<'a> {
             return true;
         }
         self.nest += 1;
+        self.drawn += 1;
         for piece in &art {
             self.node(piece);
         }
+        self.drawn -= 1;
         if let Some((locked, hidden)) = state {
             self.state(locked, hidden);
         }
@@ -1210,9 +1247,11 @@ impl<'a> Writer<'a> {
                 let region = self.cut(path, rule);
                 self.clip = Some(region);
                 self.nest += 1;
+                self.drawn += 1;
                 for t in &tiles {
                     self.node(t);
                 }
+                self.drawn -= 1;
                 if let Some((locked, hidden)) = state {
                     self.state(locked, hidden);
                 }
@@ -1405,7 +1444,9 @@ impl<'a> Writer<'a> {
                 art_node.transform(t.xf * ig.xf * doc.symbol_natural_xf(&art.symbol), true);
                 (art_node.visible, art_node.locked, art_node.name) = (true, false, None);
                 self.nest += 1;
+                self.drawn += 1;
                 self.node(&art_node);
+                self.drawn -= 1;
                 self.nest -= 1;
             }
         }

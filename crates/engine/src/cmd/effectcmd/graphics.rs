@@ -7,7 +7,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
 use vectorcraft_render::effects;
 
-use super::super::appearance::{appearance_targets, index_param, item_target};
+use super::super::appearance::{edit_targets, index_param, item_target};
 use super::super::brushsym::{normalize, selection_art, store_symbol};
 use super::super::{CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, has_doc, has_selection, str_param};
 use super::{effect_targets, ids_json};
@@ -95,7 +95,7 @@ fn map_graphic(s: &mut Session, p: &Value) -> Result<Value> {
         effect_targets(s, p, item, index, C)?
     } else {
         let mut out = vec![];
-        for id in appearance_targets(s, p)? {
+        for id in edit_targets(s, p)? {
             let (item, index) = d.node(id).and_then(first_three_d).ok_or_else(|| bad(C, format!("object {} needs a 3D effect", id.0)))?;
             out.push((id, item, index));
         }

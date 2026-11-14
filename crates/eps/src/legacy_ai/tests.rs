@@ -1535,12 +1535,12 @@ fn type_on_a_path_alignment_and_end_bracket_are_warned_as_left_out() {
     assert!(warned(&|t| t.kind = TextKind::OnPath { path: two(false), start: 0.25, end: None }));
 }
 
-/// Kerning other than Auto or 0, optical kerning, Optical Margin Alignment, System Layout,
-/// fractional widths off and an area type frame with a second subpath are not held by a legacy
-/// `.ai` text object: type with any of them is written as text, with the warning that they are
-/// left out.
+/// Optical kerning, Optical Margin Alignment, System Layout, fractional widths off and an area
+/// type frame with a second subpath are not held by a legacy `.ai` text object: type with any of
+/// them is written as text, with the warning that they are left out. Manual kerning is held
+/// (`Tk`), with no warning.
 #[test]
-fn kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
+fn optical_kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
     use vectorcraft_doc::{TextKind, TextObject};
     let warned = |edit: &dyn Fn(&mut TextObject)| {
         let mut doc = typed();
@@ -1554,7 +1554,8 @@ fn kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
     };
     assert!(!warned(&|_| {}));
     assert!(!warned(&|t| t.runs[0].style.kerning = Some(0.0)));
-    assert!(warned(&|t| t.runs[0].style.kerning = Some(50.0)));
+    assert!(!warned(&|t| t.runs[0].style.kerning = Some(50.0)));
+    assert!(!warned(&|t| t.runs[0].style.kerning_before = 50.0));
     assert!(warned(&|t| t.runs[0].style.optical_kerning = true));
     assert!(warned(&|t| t.optical_margin = true));
     assert!(warned(&|t| t.system_layout = true));
@@ -1565,6 +1566,67 @@ fn kerning_margins_widths_and_extra_frames_are_warned_as_left_out() {
     };
     assert!(!warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0)]) }));
     assert!(warned(&|t| t.kind = TextKind::Area { frame: PathData::new(vec![square(10.0), square(120.0)]) }));
+}
+
+/// Manual kerning is written as `0 value Tk` after each character that has it, the space before a
+/// paragraph's first character as `Tk` before it, and a soft hyphen as a discretionary hyphen
+/// (`T+`, §15.4.6.1 and §15.4.10.1); each reads back on the same characters.
+#[test]
+fn manual_kerning_and_soft_hyphens_are_written_and_read_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let kerned = CharStyle { kerning: Some(-80.0), ..plain.clone() };
+    let before = CharStyle { kerning_before: 40.0, ..plain.clone() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "AV", kerned.clone());
+    for (text, st) in [("A co\u{ad}op\n", &plain), ("W", &before), ("ord", &plain), ("d\u{ad}", &kerned)] {
+        t.runs.push(TextRun::new(text, st.clone()));
+    }
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    assert!(!out.warnings.iter().any(|w| w == TYPE || w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert!(text.contains("(A) Tx\n0 -80 Tk\n(V) Tx\n0 -80 Tk\n"), "{text}");
+    assert!(text.contains("(A co) Tx\nT+\n(op\\r) Tx\n"), "{text}");
+    assert!(text.contains("0 40 Tk\n(W) Tx\n"), "{text}");
+    // A soft hyphen with manual kerning keeps it too.
+    assert!(text.contains("(d) Tx\n0 -80 Tk\nT+\n0 -80 Tk\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let runs: Vec<(String, Option<f64>, f64)> = read[0].1.runs.iter().map(|r| (r.text.clone(), r.style.kerning, r.style.kerning_before)).collect();
+    let s = |x: &str| x.to_string();
+    assert_eq!(
+        runs,
+        [
+            (s("AV"), Some(-80.0), 0.0),
+            (s("A co\u{ad}op\n"), None, 0.0),
+            (s("W"), None, 40.0),
+            (s("ord"), None, 0.0),
+            (s("d\u{ad}"), Some(-80.0), 0.0)
+        ]
+    );
+}
+
+/// Manual kerning of 0 is written as `0 0 Tk` and reads back as manual kerning, not as the
+/// automatic kerning of a pair with no `Tk`.
+#[test]
+fn manual_kerning_of_zero_is_written_and_read_back() {
+    use vectorcraft_doc::{CharStyle, TextObject, TextRun};
+    let plain = style(12.0, Paint::solid(Color::BLACK));
+    let zero = CharStyle { kerning: Some(0.0), ..plain.clone() };
+    let mut t = TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "AV", zero);
+    t.runs.push(TextRun::new("To", plain));
+    let mut doc = Document::new(300.0, 200.0);
+    let layer = doc.layers[0].id;
+    let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+    doc.insert(Some(layer), usize::MAX, n).unwrap();
+    let out = write(&doc);
+    let text = String::from_utf8(out.bytes.clone()).unwrap();
+    assert!(text.contains("(A) Tx\n0 0 Tk\n(V) Tx\n0 0 Tk\n"), "{text}");
+    let read = texts(&crate::import(&out.bytes).unwrap().document);
+    let runs: Vec<(String, Option<f64>)> = read[0].1.runs.iter().map(|r| (r.text.clone(), r.style.kerning)).collect();
+    assert_eq!(runs, [("AV".to_string(), Some(0.0)), ("To".to_string(), None)]);
 }
 
 /// Type whose font size measures the cap height is written at the em size it is drawn at, with
