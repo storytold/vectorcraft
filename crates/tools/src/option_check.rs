@@ -65,9 +65,12 @@ pub fn string_or_null(key: &str, v: &Value) -> Result<(), String> {
 /// What `tool.setOption {tool?, key?, value?, values?}` sets: the tool named (none: the active
 /// tool) and the options, `key` and `value` among `values`. A parameter of the wrong type, a
 /// `value` without a `key` or a `key` without a `value`, and an option given both as `key` and in
-/// `values` are errors. With none of `key` and `values`, the options are empty: the command reads
-/// them.
+/// `values` are errors, and so are parameters that are not an object. With none of `key` and
+/// `values`, or with no parameters (null), the options are empty: the command reads them.
 pub fn set_option_params(p: &Value) -> Result<(Option<&str>, Map<String, Value>), String> {
+    if !p.is_object() && !p.is_null() {
+        return Err("the parameters must be an object".into());
+    }
     let tool = match p.get("tool") {
         None => None,
         Some(t) => Some(t.as_str().ok_or("`tool` must be a tool id")?),
@@ -139,6 +142,12 @@ mod tests {
         let empty = json!({});
         let (tool, values) = set_option_params(&empty).unwrap();
         assert!(tool.is_none() && values.is_empty());
+        // Omitted parameters arrive as null: a read, like `{}`.
+        let (tool, values) = set_option_params(&Value::Null).unwrap();
+        assert!(tool.is_none() && values.is_empty());
+        for bad in [json!(true), json!(7), json!([]), json!("x")] {
+            assert_eq!(set_option_params(&bad).err(), Some("the parameters must be an object".into()), "{bad}");
+        }
         assert_eq!(set_option_params(&json!({"tool": 3})).err(), Some("`tool` must be a tool id".into()));
         assert_eq!(set_option_params(&json!({"values": [1]})).err(), Some("`values` must be an object".into()));
         assert_eq!(set_option_params(&json!({"key": 3, "value": 1})).err(), Some("`key` must be a string".into()));

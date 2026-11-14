@@ -1049,6 +1049,26 @@ fn shape_builder_drops_a_press_held_during_a_merge() {
     }
 }
 
+/// `tool.setOption` without a tool, while a Cmd press is held during a merge, sets the Shape
+/// Builder's option: finishing the merge makes the press, which lends the selection tool, and the
+/// value still goes to the Shape Builder it was checked against.
+#[test]
+fn shape_builder_option_set_while_a_cmd_press_is_held_goes_to_the_shape_builder() {
+    let v = ViewInfo::default();
+    let mut s = session();
+    s.select_tool("shapeBuilder", v).unwrap();
+    s.set_tool_option_cmd(&json!({"key": "pickColorFrom", "value": "swatches"})).unwrap();
+    square_row(&mut s);
+    click_row(&mut s, v);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 305.0, 10.0).with_mods(Mods { cmd: true, ..Default::default() }), v).unwrap();
+    assert!(s.tool_editing(), "the press is held");
+    let out = s.set_tool_option_cmd(&json!({"key": "pickColorFrom", "value": "artwork"})).unwrap();
+    assert_eq!(s.tool_id(), "selection", "the held press lent the selection tool");
+    assert_eq!(s.lender.as_ref().map(|t| t.id()), Some("shapeBuilder"));
+    assert_eq!(out["pickColorFrom"], json!("artwork"));
+    assert_eq!(s.lender.as_ref().map(|t| t.options()["pickColorFrom"].clone()), Some(json!("artwork")));
+}
+
 /// A new revision of the document made outside a command while a merge is computed on another
 /// thread keeps the merge when the selected art is as it was (the next poll applies it, as the
 /// command computes it), and drops it when the art changed.

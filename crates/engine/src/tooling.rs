@@ -1319,12 +1319,15 @@ impl Session {
         {
             return Err(format!("unknown tool `{t}`"));
         }
-        let active = tool.is_none_or(|t| t == self.tool.id());
+        // The tool is named before the edit in progress is finished: finishing it can make a held
+        // Cmd press, which lends a selection tool and makes that the active tool.
+        let id = tool.unwrap_or(self.tool.id());
+        let active = id == self.tool.id();
         if values.is_empty() {
-            return Ok(self.tool_options_of(tool.unwrap_or(self.tool.id())));
+            return Ok(self.tool_options_of(id));
         }
         // Every value is checked before any is set, so an invalid one changes nothing.
-        vectorcraft_tools::builder::check_builder_options(tool.unwrap_or(self.tool.id()), &values)?;
+        vectorcraft_tools::builder::check_builder_options(id, &values)?;
         // The Place queue is read later, by a click outside any automation scope: its files must
         // be readable now, under the roots of whoever sets it.
         if let Some(entries) = values.get("queue").and_then(|q| q.get("entries")).and_then(Value::as_array) {
@@ -1332,7 +1335,7 @@ impl Session {
                 crate::file_access::check_read(path)?;
             }
         }
-        if tool.unwrap_or(self.tool_id()) == "dimension" {
+        if id == "dimension" {
             if let Some(style) = values.get("style") {
                 vectorcraft_doc::dimension::DimensionOptions::from_params(style.clone())?;
             }
@@ -1342,15 +1345,16 @@ impl Session {
                 return Err("Unknown dimension mode".into());
             }
         }
-        match tool.filter(|_| !active) {
-            Some(id) => vectorcraft_tools::option_check::check_values(self.make_tool(id).as_ref(), &values)?,
-            None => vectorcraft_tools::option_check::check_values(self.tool.as_ref(), &values)?,
+        if active {
+            vectorcraft_tools::option_check::check_values(self.tool.as_ref(), &values)?;
+        } else {
+            vectorcraft_tools::option_check::check_values(self.make_tool(id).as_ref(), &values)?;
         }
         // The active tool's merge being computed is applied with the options it was started with.
         if active {
             self.finish_tool_edit_later().map_err(|e| e.to_string())?;
         }
-        Ok(self.set_tool_options(tool, &values))
+        Ok(self.set_tool_options(Some(id), &values))
     }
 
     /// Let the active tool finish work a command from outside it ended ([`vectorcraft_tools::Tool::after_command`]):
