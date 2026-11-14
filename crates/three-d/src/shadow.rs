@@ -11,7 +11,7 @@ use std::ops::Range;
 
 use vectorcraft_geom::{BezPath, FillRule, PathData, Point, Rect};
 
-use crate::solid::{Face3, extrude_faces, inflate_faces, plane_faces};
+use crate::solid::{Face3, Keep, extrude_faces, inflate_faces, plane_faces};
 use crate::{Extrude, Inflate, MAX_SOLID_FACES, Revolve, V3, View, finite, perspective_scale};
 
 /// Where the shadow falls.
@@ -160,14 +160,14 @@ impl ShadowCaster {
 
     /// Add Extrude & Bevel's solid ([`crate::extrude`]).
     pub fn extrude(&mut self, path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<Range<usize>, String> {
-        let (_, faces, projection) = extrude_faces(path, rule, bounds, options, view, true)?;
-        self.add(faces, projection)
+        let (_, faces, projection) = extrude_faces(path, rule, bounds, options, view, Keep::Faces)?;
+        self.add(faces?, projection)
     }
 
     /// Add Rotate's plane ([`crate::plane`]).
     pub fn plane(&mut self, path: &PathData, rule: FillRule, bounds: Rect, view: View) -> Result<Range<usize>, String> {
-        let (_, faces, projection) = plane_faces(path, rule, bounds, view, true)?;
-        self.add(faces, projection)
+        let (_, faces, projection) = plane_faces(path, rule, bounds, view, Keep::Faces)?;
+        self.add(faces?, projection)
     }
 
     /// Add Inflate's solids for several shapes of one object ([`crate::inflate_together`]), each
@@ -182,15 +182,15 @@ impl ShadowCaster {
         options: Inflate,
         view: View,
     ) -> Vec<Result<Range<usize>, String>> {
-        let mut solids = inflate_faces(shapes, bounds, options, view, true);
+        let mut solids = inflate_faces(shapes, bounds, options, view, Keep::Faces);
         (0..shapes.len())
             .map(|i| {
                 if !casts.get(i).copied().unwrap_or(true) {
                     solids.pass();
                     return Ok(self.faces.len()..self.faces.len());
                 }
-                let (_, faces, projection) = solids.next().unwrap_or_else(|| Ok((vec![], vec![], None)))?;
-                self.add(faces, projection)
+                let (_, faces, projection) = solids.next().unwrap_or_else(|| Ok((vec![], Ok(vec![]), None)))?;
+                self.add(faces?, projection)
             })
             .collect()
     }

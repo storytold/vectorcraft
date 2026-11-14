@@ -225,12 +225,12 @@ fn a_flat_facet_measures_its_depth_on_its_plane() {
 /// eye, has no plane: its drawing no longer matches the plane's projection there.
 #[test]
 fn a_face_reaching_past_the_eye_has_no_plane() {
-    use super::build::{Builder, Order};
+    use super::build::{Builder, Keep, Order};
     let (_, b) = shape(&square(0.0, 0.0, 100.0));
     let camera = Camera::new(View { perspective: 50.0, ..front() }, b, 0.0);
     let eye = camera.center_and_eye().1.unwrap();
     for (far, has_plane) in [(eye / 2.0, true), (2.0 * eye, false)] {
-        let mut builder = Builder { camera: &camera, closed: false, hidden: false, facets: vec![], mesh: None };
+        let mut builder = Builder::new(&camera, false, false, Keep::Facets);
         let corners = vec![V3(-10.0, -10.0, 0.0), V3(10.0, -10.0, 0.0), V3(0.0, 10.0, far)];
         builder.face(vec![corners], V3(0.0, -far, 20.0), Order::Depth).unwrap();
         assert_eq!(builder.facets.len(), 1, "{far}");
@@ -1074,20 +1074,24 @@ fn a_flat_inflate_solved_as_taken_matches_one_solved_first() {
     ];
     for view in [front(), turned, View { perspective: 60.0, ..turned }, View { perspective: 100.0, rotation_y: 150.0, ..turned }] {
         for o in options {
-            for mesh in [false, true] {
+            for (keep, facets, mesh) in [(build::Keep::Facets, true, false), (build::Keep::Faces, false, true), (build::Keep::Both, true, true)] {
                 let solids = |first: bool| {
                     SOLVE_FIRST.with(|s| s.set(first));
-                    let out: Vec<Result<build::Built, String>> = inflate_faces(&shapes, b, o, view, mesh).collect();
+                    let out: Vec<Result<build::Built, String>> = inflate_faces(&shapes, b, o, view, keep).collect();
                     SOLVE_FIRST.with(|s| s.set(false));
                     out
                 };
                 let (taken, first) = (solids(false), solids(true));
                 assert_eq!(taken.len(), 5);
-                // Without a mesh the solid keeps its facets, with one its faces before projection.
-                let built = |r: &Result<build::Built, String>| r.as_ref().is_ok_and(|(f, m, _)| if mesh { !m.is_empty() } else { !f.is_empty() });
-                assert!(built(&taken[0]) && built(&taken[1]) && built(&taken[4]), "{o:?} {view:?} mesh {mesh}");
-                assert!(taken[2].as_ref().is_ok_and(|(f, m, p)| f.is_empty() && m.is_empty() && p.is_none()) && taken[3].is_err());
-                assert_eq!(format!("{taken:?}"), format!("{first:?}"), "{o:?} {view:?} mesh {mesh}");
+                // The solid keeps its facets, its faces before projection, or both, as asked.
+                let built = |r: &Result<build::Built, String>| {
+                    r.as_ref().is_ok_and(|(f, m, _)| (!facets || !f.is_empty()) && (!mesh || m.as_ref().is_ok_and(|m| !m.is_empty())))
+                };
+                assert!(built(&taken[0]) && built(&taken[1]) && built(&taken[4]), "{o:?} {view:?} facets {facets} mesh {mesh}");
+                assert!(
+                    taken[2].as_ref().is_ok_and(|(f, m, p)| f.is_empty() && m.as_ref().is_ok_and(Vec::is_empty) && p.is_none()) && taken[3].is_err()
+                );
+                assert_eq!(format!("{taken:?}"), format!("{first:?}"), "{o:?} {view:?} facets {facets} mesh {mesh}");
             }
         }
     }
