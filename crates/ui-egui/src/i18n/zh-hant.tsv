@@ -1327,6 +1327,7 @@ file-filter	Templates	範本
 	Format	格式
 	Format Options	格式選項
 	Format Settings	格式設定
+	Format Settings…	格式設定…
 	Format:	格式：
 	Formats:	格式：
 	Fractional Widths	小數字寬
@@ -1689,6 +1690,7 @@ file-filter	Templates	範本
 	Images:	影像：
 	Import Keyboard Shortcuts…	匯入鍵盤快速鍵…
 	Import PDF	匯入 PDF
+	Import PDF pages as links	將 PDF 頁面匯入為連結
 	Import PDF Presets	匯入 PDF 預設集
 	Import Perspective Grid Presets	匯入透視格點預設集
 	Import Print Presets	匯入列印預設集
@@ -4562,6 +4564,18 @@ digits	Malayalam	馬來亞拉姆數字
 	Smart Guides (View → Smart Guides)	智慧型參考線 (檢視 → 智慧型參考線)
 	Smart Guides (⌘U)	智慧型參考線 (⌘U)
 	Smart Punctuation…	智慧型標點…
+	Smart Punctuation	智慧型標點
+	ff, fi, ffi Ligatures	ff、fi、ffi 連字
+	ff, fl, ffl Ligatures	ff、fl、ffl 連字
+	Smart Quotes	智慧型引號
+	Smart Spaces	智慧型空格
+	En, Em Dashes	短破折號和長破折號
+	Ellipses	刪節號
+	Expert Fractions	專家分數
+	Replace In	取代範圍
+	Selected Text Only	僅限選取的文字
+	Entire Document	整份文件
+	Report Results	報告結果
 	Smooth	平滑
 	Corner	角點
 	Relative	相對
@@ -4592,6 +4606,7 @@ digits	Malayalam	馬來亞拉姆數字
 	Solid	實心
 	Sort by Kind	依類型排序
 	Sort by Name	依名稱排序
+	Sort by Size	依大小排序
 	Sort by Status	依狀態排序
 	Source code on GitHub	GitHub 上的原始碼
 	Source Sans 3	Source Sans 3
@@ -7122,6 +7137,9 @@ breakText	Glyphs	字符
 	Open Tutorial Sample	開啟教學課程範例
 	Finish Tutorial	完成教學課程
 	Next Tutorial	下一個教學課程
+	Show Learn Tab	顯示學習索引標籤
+	Show Skill	顯示技能
+	Back One Level	返回上一層
 	Back to Skills	返回技能
 @msg	tutorial `{id}` has no practice sample	教學課程 `{id}` 沒有練習範例
 @msg	open the practice sample of `{id}` first (see learn.openSample)	請先開啟 `{id}` 的練習範例 (請參閱 learn.openSample)
@@ -7162,6 +7180,9 @@ breakText	Glyphs	字符
 	Grommets	扣眼
 	Grommet Inset	扣眼邊距
 	Diameter	直徑
+	Nest Shapes…	形狀排料…
+	Nest Shapes	形狀排料
+	Roll	捲材
 
 # Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
 @msg	3D effects require finite coordinates within 100 million points	3D 效果需要位於 1 億點以內的有限座標
@@ -8781,6 +8802,7 @@ breakText	Glyphs	字符
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 檔案過大，無法置入為文字 (最多 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG 展開後超過 {0} 個巢狀 SVG 影像
 @msg	the SVG expands to more than {0} objects	SVG 展開後超過 {0} 個物件
+@msg	the SVG's styles expand to more than {0} MB	SVG 的樣式展開後超過 {0} MB
 @msg	the SVG has no drawable objects	SVG 中沒有可繪製的物件
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 檔案解壓縮後超過 {_1} MB
 @msg	the Word document has more than {MAX_PAGES} pages of properties, too many to place	Word 文件的屬性超過 {MAX_PAGES} 頁，數量過多而無法置入

@@ -689,29 +689,44 @@ impl ReadFile {
 /// ([`super::importer`]).
 pub fn read_for_open(name: &str, bytes: &[u8], path: Option<String>, p: &Value, update_links: bool, low_res_proxy_eps: bool) -> Result<ReadFile> {
     let opts = LoadOptions::from_params("document.open", p)?;
-    let (mut loaded, policy_changed) = match super::importer::pick(name, bytes, p)? {
-        Some(plugin) => {
-            let mut loaded = super::importer::load(name, bytes, &plugin, p)?;
-            let changed = apply_policies(&mut loaded);
-            (loaded, changed)
-        }
-        None => {
-            // The color mode `p` asks for converts the colors after the policies did, through the
-            // profiles the document keeps.
-            let mut loaded = load_with(name, bytes, &LoadOptions { color_mode: None, ..opts.clone() })?;
-            let changed = apply_policies(&mut loaded);
-            if let Some(mode) = opts.color_mode.filter(|m| *m != loaded.doc.color_mode) {
-                let doc = &mut loaded.doc;
-                vectorcraft_color::cms::with_active(super::super::colormgmt::doc_cms(doc), || {
-                    super::super::colormgmt::set_color_mode(doc, mode, true, None, opts.grays);
-                });
+    let (mut loaded, policy_changed) = if opts.link_pages {
+        let mut loaded = linked_pages(name, bytes, path.as_deref(), &opts)?;
+        let changed = apply_policies(&mut loaded);
+        (loaded, changed)
+    } else {
+        match super::importer::pick(name, bytes, p)? {
+            Some(plugin) => {
+                let mut loaded = super::importer::load(name, bytes, &plugin, p)?;
+                let changed = apply_policies(&mut loaded);
+                (loaded, changed)
             }
-            (loaded, changed)
+            None => {
+                // The color mode `p` asks for converts the colors after the policies did, through
+                // the profiles the document keeps.
+                let mut loaded = load_with(name, bytes, &LoadOptions { color_mode: None, ..opts.clone() })?;
+                let changed = apply_policies(&mut loaded);
+                if let Some(mode) = opts.color_mode.filter(|m| *m != loaded.doc.color_mode) {
+                    let doc = &mut loaded.doc;
+                    vectorcraft_color::cms::with_active(super::super::colormgmt::doc_cms(doc), || {
+                        super::super::colormgmt::set_color_mode(doc, mode, true, None, opts.grays);
+                    });
+                }
+                (loaded, changed)
+            }
         }
     };
     let links = crate::cmd::links::resolve(&mut loaded.doc, crate::cmd::links::LinkBase::file(path.as_deref()), update_links, low_res_proxy_eps);
     Session::refresh_text_bounds(&mut loaded.doc);
     Ok(ReadFile { loaded, opts, path, links, policy_changed })
+}
+
+/// The PDF `name` (`bytes`, read from `path`) opened with `linkPages`: its pages as placed documents
+/// linked to them ([`super::pdfimport::linked_pages`]), named after the file.
+fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, opts: &LoadOptions) -> Result<Loaded> {
+    let (mut doc, warnings) = super::pdfimport::linked_pages(name, bytes, path, opts)?;
+    doc.title = file_name(name);
+    let format = detect(name, bytes).ok_or_else(|| err(format!("can't open `{}`: not a PDF", file_name(name))))?;
+    Ok(Loaded { doc, format, warnings, restored: false, converted: false, preview_only: false, editing_data: false, native_pdf_compatible: None })
 }
 
 /// The second half of [`open_bytes_with`]: open a file [`read_for_open`] read as the new active

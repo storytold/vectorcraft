@@ -119,6 +119,45 @@ fn widthshow_matches_a_composite_character_by_font_number_and_code() {
     check(format!("{} {} sub abs 0.01 lt", end(2), 10.0 + 100.0 * wh));
 }
 
+/// `cshow` runs its procedure once for each character of a composite font, not for each byte,
+/// with the last byte of its code and its width, and with the descendant that draws it as the
+/// current font while `rootfont` gives the composite font (PLRM 3rd ed., `cshow` and `rootfont`).
+#[test]
+fn cshow_runs_once_for_each_composite_character_in_its_descendant() {
+    let (_, wh) = glyph('H');
+    let (_, wi) = glyph('I');
+    let check = |cond: String| super::tests::check(&format!("{} /Comp findfont 50 scalefont setfont {cond}", fonts()));
+    check("[ {pop pop} (\\000\\001\\000\\002) cshow ] dup length 2 eq exch aload pop 2 eq exch 1 eq and and".into());
+    check(format!("0 {{pop exch pop add}} (\\000\\001\\000\\002) cshow {} sub abs 0.01 lt", 50.0 * (wh + wi)));
+    check("{pop pop pop currentfont /FontName get /seen exch def rootfont /FontName get /root exch def} (\\000\\001) cshow seen /T42 eq root /Comp eq and".into());
+    check("{pop pop pop} (\\000\\001) cshow currentfont /FontName get /Comp eq".into());
+    // A character the procedure shows in the descendant is as wide as the composite font sets it.
+    check(format!(
+        "gsave nulldevice 10 20 moveto {{pop pop ( ) dup 0 4 -1 roll put show}} (\\000\\001\\000\\002) cshow currentpoint grestore pop {} sub abs 0.01 lt",
+        10.0 + 50.0 * (wh + wi)
+    ));
+    // A character in font number 1 still gives only the last byte of its code, not 258.
+    let two = fonts().replace("/Encoding [0] def", "/Encoding [0 0] def");
+    super::tests::check(&format!("{two} /Comp findfont 50 scalefont setfont [ {{pop pop}} (\\001\\002) cshow ] dup length 1 eq exch 0 get 2 eq and"));
+}
+
+/// A `cshow` procedure over a Type 42 descendant without a `FontMatrix` sees it current at the
+/// scale its characters are drawn at: another character it measures there is as wide as the
+/// composite font sets it, as with the identity.
+#[test]
+fn cshow_over_a_type42_descendant_without_a_matrix_sees_it_at_its_drawn_scale() {
+    let (_, wi) = glyph('I');
+    let with = fonts();
+    let without = with.replacen("/FontType 42 def /FontMatrix [1 0 0 1 0 0] def", "/FontType 42 def", 1);
+    assert_ne!(with, without);
+    for fonts in [with, without] {
+        super::tests::check(&format!(
+            "{fonts} /Comp findfont 50 scalefont setfont {{pop pop pop (\\002) stringwidth pop /w exch def}} (\\000\\001) cshow w {} sub abs 0.01 lt",
+            50.0 * wi
+        ));
+    }
+}
+
 /// `kshow` runs its procedure between each two characters of a composite font, with the values of
 /// their codes (font number times 256 plus code), and the next character follows where it moves
 /// the current point (PLRM 3rd ed., `kshow`).

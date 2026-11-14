@@ -456,6 +456,18 @@ digits	Malayalam	말라얄람어
 	Title Case	제목 대소문자
 	Sentence case	문장 대소문자
 	Smart Punctuation…	스마트 문장 부호…
+	Smart Punctuation	스마트 문장 부호
+	ff, fi, ffi Ligatures	ff, fi, ffi 합자
+	ff, fl, ffl Ligatures	ff, fl, ffl 합자
+	Smart Quotes	스마트 따옴표
+	Smart Spaces	스마트 공백
+	En, Em Dashes	엔 대시 및 엠 대시
+	Ellipses	줄임표
+	Expert Fractions	전문가 분수
+	Replace In	바꿀 범위
+	Selected Text Only	선택한 텍스트만
+	Entire Document	전체 문서
+	Report Results	결과 보고
 	Create Outlines	윤곽선 만들기
 	Optical Margin Alignment	시각적 여백 정렬
 	Dynamic Text	동적 텍스트
@@ -1827,6 +1839,7 @@ antiAlias	Sharp	날카롭게
 	Format	형식
 	Format Options	형식 옵션
 	Format Settings	형식 설정
+	Format Settings…	형식 설정…
 	Format:	형식:
 	Formats:	형식:
 	Fractions	분수
@@ -2064,6 +2077,7 @@ antiAlias	Sharp	날카롭게
 	Images:	이미지:
 	Import Keyboard Shortcuts…	단축키 가져오기…
 	Import PDF	PDF 가져오기
+	Import PDF pages as links	PDF 페이지를 링크로 가져오기
 	Import PDF Presets	PDF 프리셋 가져오기
 	Import Perspective Grid Presets	원근 격자 프리셋 가져오기
 	Import Print Presets	인쇄 프리셋 가져오기
@@ -4014,6 +4028,7 @@ file-filter	Templates	템플릿
 	Small Thumbnails	작은 축소판
 	Smooth Color	부드러운 색상
 	Social Square Post 1080×1080	소셜 정사각형 게시물 1080×1080
+	Sort by Size	크기순 정렬
 	Sort by Status	상태순 정렬
 	Specified Distance	지정 거리
 	Specified Steps	지정 단계
@@ -7066,6 +7081,9 @@ breakText	Glyphs	글리프
 	Open Tutorial Sample	튜토리얼 샘플 열기
 	Finish Tutorial	튜토리얼 완료
 	Next Tutorial	다음 튜토리얼
+	Show Learn Tab	학습 탭 표시
+	Show Skill	기술 표시
+	Back One Level	한 단계 뒤로
 	Back to Skills	기술로 돌아가기
 @msg	tutorial `{id}` has no practice sample	튜토리얼 `{id}`에 연습용 샘플이 없습니다
 @msg	open the practice sample of `{id}` first (see learn.openSample)	먼저 `{id}`의 연습용 샘플을 여세요(learn.openSample 참조)
@@ -7106,6 +7124,9 @@ breakText	Glyphs	글리프
 	Grommets	아일렛
 	Grommet Inset	가장자리에서 아일렛까지 거리
 	Diameter	지름
+	Nest Shapes…	도형 네스팅…
+	Nest Shapes	도형 네스팅
+	Roll	롤
 
 # Messages of the 3D effects, image export, color profiles, swatch exchange files, color books, DXF import,
 # path operations, libraries, scripts and zip files.
@@ -8613,6 +8634,7 @@ breakText	Glyphs	글리프
 @msg	the RTF file is too large to place as type (at most {_1} MB)	RTF 파일이 너무 커서 문자로 가져올 수 없습니다(최대 {_1} MB)
 @msg	the SVG expands to more than {0} nested SVG images	SVG를 확장하면 중첩된 SVG 이미지가 {0}개보다 많아집니다
 @msg	the SVG expands to more than {0} objects	SVG를 확장하면 개체가 {0}개보다 많아집니다
+@msg	the SVG's styles expand to more than {0} MB	SVG의 스타일을 확장하면 {0}MB를 넘습니다
 @msg	the SVG file is larger than {MAX_IMPORT_BYTES} bytes	SVG 파일이 {MAX_IMPORT_BYTES}바이트보다 큽니다
 @msg	the SVG has no drawable objects	SVG에 그릴 수 있는 개체가 없습니다
 @msg	the SVGZ file unpacks to more than {_1} MB	SVGZ 파일의 압축을 풀면 {_1} MB를 넘습니다
