@@ -349,6 +349,21 @@ fn image_spaces(pdf: &[u8]) -> Vec<Written> {
     out
 }
 
+/// The decoded samples of each image XObject of `pdf` other than soft masks.
+fn image_samples(pdf: &[u8]) -> Vec<Vec<u8>> {
+    let file = craft_pdf::syntax::Pdf::new(std::sync::Arc::new(pdf.to_vec())).unwrap();
+    let images: Vec<Stream<'_>> = file
+        .objects()
+        .into_iter()
+        .filter_map(|o| match o {
+            Object::Stream(s) if s.dict().get::<Name<'_>>(b"Subtype").is_some_and(|n| n.as_ref() == b"Image") => Some(s),
+            _ => None,
+        })
+        .collect();
+    let masks: Vec<Vec<u8>> = images.iter().filter_map(|s| s.dict().get::<Stream<'_>>(b"SMask")).map(|m| m.raw_data().to_vec()).collect();
+    images.iter().filter(|s| !masks.contains(&s.raw_data().to_vec())).map(|s| s.decoded().unwrap().into_owned()).collect()
+}
+
 /// A gray or RGB TIFF that carries an ICC profile of its colour space is written in an ICC-based
 /// colour space holding the same profile, at 16 bits a sample from PDF 1.5 on, with its alpha as
 /// a soft mask; and so is a tagged TIFF or PNG that is resampled or compressed with JPEG. Pixels
@@ -414,6 +429,18 @@ fn tagged_tiffs_keep_their_icc_profile() {
     ];
     for (what, d, settings, want) in cases {
         assert_eq!(export(&d, settings), want, "{what}");
+    }
+    // 16-bit samples are written big-endian from PDF 1.5 on, and reduced to 8 bits before it.
+    // Their high and low bytes differ, so a swapped or truncated stream does not match.
+    let deep = DynamicImage::ImageRgb16(image::ImageBuffer::from_fn(600, 600, |x, y| {
+        image::Rgb([((x * 109 + y) % 65_521) as u16, ((y * 257 + 3) ^ 0x5a) as u16, ((x * y) % 65_521) as u16])
+    }));
+    let sixteen: Vec<u8> = deep.to_rgb16().iter().flat_map(|v| v.to_be_bytes()).collect();
+    for (compatibility, want) in [("1.7", sixteen), ("1.4", deep.to_rgb8().into_raw())] {
+        let mut settings: PdfSettings = serde_json::from_value(json!({ "compatibility": compatibility })).unwrap();
+        settings.compression.compress_text = false;
+        let r = export_with_report(&tiff(&deep, &rgb), &PdfOptions { settings, ..Default::default() }).unwrap();
+        assert!(image_samples(&r.bytes) == [want], "16-bit samples, PDF {compatibility}");
     }
     // A gray image in an RGB profile stays RGB to keep it, resampled too.
     let neutral = tiff(&DynamicImage::ImageRgb8(colour().grayscale().to_rgb8()), &rgb);
