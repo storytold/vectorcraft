@@ -67,6 +67,13 @@ pub(crate) fn visual_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     if let Some(art) = painted_art(symbols, n) {
         return art.visual_bounds_with(symbols).map(|r| with_raster_reach(symbols, n, r));
     }
+    // Copies that each carry the raster effects listed before their Transform effect reach as far
+    // as each copy's raster effects paint, and the raster effects after it spread them all.
+    if effects::outer_effects(n).len() < n.appearance.effects.len()
+        && let Some(art) = effects::reshape(Some(symbols.document()), n, None)
+    {
+        return cull_bounds(symbols, &art);
+    }
     let bp = node_bezpath(n)?;
     let ctx = GeomContext { doc: Some(symbols.document()), ..GeomContext::of(n) };
     let (g, carry) = effected_path_carrying(symbols.document(), n, &bp);
@@ -623,7 +630,7 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let art = effects::evaluate_container(Some(symbols.document()), n);
             let art = art.as_ref().unwrap_or(n);
             let b = if art.clips() {
-                art.visual_bounds_with(symbols)
+                art.visual_bounds_with(symbols).map(|b| with_clip_region(symbols, art, b))
             } else {
                 art.children()?.iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, member(c)))
             }?;
@@ -671,11 +678,29 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let b = n.visual_bounds_with(symbols)?;
             let b = match &n.kind {
                 NodeKind::Text(t) => vectorcraft_geom::union_opt(Some(b), glyphs_box(t, n.appearance.outset())).unwrap_or(b),
-                _ => b,
+                _ => with_clip_region(symbols, n, b),
             };
             let a = live_content_reach(symbols, n);
             Some(b.inflate(a, a))
         }
+    }
+}
+
+/// `b`, the visual bounds of `n`, grown to the region a clip group's or clipping layer's clipping
+/// path clips to when geometry effects in it move or grow that region ([`effects::clip_outline`])
+/// past its plain shape, and to where its stroke paints along it. Other objects keep `b`.
+fn with_clip_region(symbols: &SymbolBoxes, n: &Node, b: Rect) -> Rect {
+    match &n.kind {
+        NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => match children.first() {
+            Some(c) if effects::needs_bake(c) => {
+                let s = c.appearance.outset();
+                let region = effects::clip_outline(c).map(|(bp, _)| bp.bounding_box().inflate(s, s));
+                let painted = if has_fx(c) { visual_bounds(symbols, c) } else { None };
+                vectorcraft_geom::union_opt(vectorcraft_geom::union_opt(Some(b), region), painted).unwrap_or(b)
+            }
+            _ => b,
+        },
+        _ => b,
     }
 }
 

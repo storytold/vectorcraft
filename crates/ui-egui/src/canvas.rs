@@ -15,6 +15,7 @@ use crate::stylus::StylusFeed;
 use crate::theme::{self, Tokens};
 use crate::{CacheKey, VectorcraftApp, now_ms, widgets};
 
+mod alternates_bar;
 mod artboards;
 mod context;
 mod contour_bar;
@@ -184,6 +185,11 @@ enum Drag {
 /// Whether the canvas is holding a pointer drag across frames.
 pub(crate) fn dragging(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<Drag>(drag_id()).is_some())
+}
+
+/// Whether the canvas is holding a Zoom tool drag: a marquee, which Space moves, or an animated zoom.
+pub(crate) fn dragging_zoom(ctx: &egui::Context) -> bool {
+    ctx.data(|d| matches!(d.get_temp::<Drag>(drag_id()), Some(Drag::ZoomBox { .. } | Drag::ZoomScrub { .. })))
 }
 
 /// The part of `outer` inside the scroll bars, and the part of that inside the rulers, which shows
@@ -436,6 +442,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if app.ui.screen_mode < 3 {
         contour_bar::contour_bar(app, ui, &xf);
+        // After the task bar, which the row of character alternates keeps clear of.
+        alternates_bar::alternates_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
         crate::free_transform::show(app, ui, xf.rect);

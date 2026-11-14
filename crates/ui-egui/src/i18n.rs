@@ -317,7 +317,7 @@ pub static LANGUAGES: [LangInfo; 29] = [
         complete_menus: true,
         catalog: OnceLock::new(),
     },
-    // Danish; every `da-*` locale (`da-DK`, `da_DK.UTF-8`…) resolves here.
+    // Danish: the whole interface and the status and error messages; every `da-*` locale (`da-DK`, `da_DK.UTF-8`…) resolves here.
     LangInfo {
         code: "da",
         name: "Dansk",
@@ -698,7 +698,7 @@ fn message_at(lang: Lang, s: &str, depth: usize) -> String {
         if depth <= 1 || quoted(v) {
             v.to_string()
         } else if v.starts_with(['{', '[']) {
-            lang.catalog().exact_message(v).unwrap_or(v).to_string()
+            exact_translation(lang.catalog(), v).unwrap_or_else(|| v.to_string())
         } else {
             message_at(lang, v, depth - 1)
         }
@@ -706,6 +706,12 @@ fn message_at(lang: Lang, s: &str, depth: usize) -> String {
     let values: Vec<(&str, String)> = caps.into_iter().map(|(k, v)| (k, nested(v))).collect();
     let args: Vec<(&str, &str)> = values.iter().map(|(k, v)| (*k, v.as_str())).collect();
     fill_once(template, &args)
+}
+
+/// The translation of a message with an exact `@msg` row in `catalog`, its `{{` and `}}` shown as
+/// `{` and `}`.
+fn exact_translation(catalog: &Catalog, s: &str) -> Option<String> {
+    catalog.exact_message(s).map(|tr| fill_once(tr, &[]))
 }
 
 /// Fill `{name}` placeholders in one pass: a value that holds `{name}` text stays as it is.

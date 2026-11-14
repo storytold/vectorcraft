@@ -129,15 +129,23 @@ fn options(d: &Dialog) -> Value {
 
 fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let opts = options(d);
-    if Mode::of(d) == Mode::Export && d.bool("useArtboards") {
+    let selection = d.bool(super::export_as::SELECTION_FIELD);
+    if Mode::of(d) == Mode::Export && d.bool("useArtboards") && !selection {
         let n = app.session.active().map_or(0, |st| st.doc.artboards.len());
         let pick: vectorcraft_engine::cmd::fileio::ArtboardPick = serde_json::from_value(opts.clone()).map_err(|e| e.to_string())?;
         pick.resolve(n)?;
     }
-    // Remembered for next time, without the document's artboard range.
+    // Remembered for next time, without the document's artboard range. Export Selection shows no
+    // Use Artboards, so the one remembered before stays.
     let mut last = opts.clone();
     if let Some(o) = last.as_object_mut() {
         o.remove("range");
+        if selection {
+            match app.ui.svg_options.get("useArtboards") {
+                Some(v) => o.insert("useArtboards".into(), v.clone()),
+                None => o.remove("useArtboards"),
+            };
+        }
     }
     app.ui.svg_options = last;
     app.ui.dialog = None;
@@ -145,6 +153,7 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     if let Some(p) = d.fields.get("path").filter(|p| p.is_string()) {
         params["path"] = p.clone();
     }
+    let params = super::export_as::exported(d, params);
     let id = match Mode::of(d) {
         Mode::Export => "file.export.svg",
         Mode::Save => "file.saveAs",
@@ -177,8 +186,11 @@ fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str, enabled: boo
 
 fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
     option_fields(ui, d, false);
+    // Export Selection writes the selection's crop, without artboards to choose.
     if Mode::of(d) == Mode::Export {
-        artboards(app, ui, d);
+        if !d.bool(super::export_as::SELECTION_FIELD) {
+            artboards(app, ui, d);
+        }
     } else {
         check(ui, d, "preserveEditing", tl!("Preserve Editing Capabilities"), true);
     }
