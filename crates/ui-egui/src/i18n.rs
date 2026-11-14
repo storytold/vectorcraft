@@ -694,9 +694,15 @@ fn message_at(lang: Lang, s: &str, depth: usize) -> String {
     let count = caps.iter().find(|(k, _)| *k == "n").and_then(|(_, v)| v.parse::<u64>().ok());
     let form = count.map_or(forms.len().saturating_sub(1), |n| (lang.0.plural)(n).min(forms.len().saturating_sub(1)));
     let Some(template) = forms.get(form) else { return s.to_string() };
-    let quoted = |v: &str| [('"', '"'), ('“', '”'), ('\'', '\''), ('`', '`')].iter().any(|(a, b)| s.contains(&format!("{a}{v}{b}")));
+    // A value is quoted when quotes surround it at its own place in `s`. The same text quoted at
+    // another place in `s` (a property named like the reason given for it) does not count.
+    let quoted = |v: &str| {
+        let at = (v.as_ptr() as usize).checked_sub(s.as_ptr() as usize);
+        let Some((before, after)) = at.and_then(|at| Some((s.get(..at)?, s.get(at + v.len()..)?))) else { return false };
+        [('"', '"'), ('“', '”'), ('\'', '\''), ('`', '`')].iter().any(|(a, b)| before.ends_with(*a) && after.starts_with(*b))
+    };
     let nested = |v: &str| {
-        if depth <= 1 || quoted(v) {
+        if depth <= 1 || v.is_empty() || quoted(v) {
             v.to_string()
         } else if v.starts_with(['{', '[']) {
             exact_translation(lang.catalog(), v).unwrap_or_else(|| v.to_string())

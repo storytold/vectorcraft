@@ -3368,6 +3368,12 @@ fn script_interpreter_core_errors_are_translated() {
             "cannot assign to property 'a': it is read-only",
             vec!["'a'"],
         ),
+        // A property named like the reason: the name stays as written, and the reason is translated.
+        (
+            "'use strict'; var o = {}; Object.defineProperty(o, 'it is read-only', {value: 1}); o['it is read-only'] = 2",
+            "cannot assign to property 'it is read-only': it is read-only",
+            vec!["'it is read-only'"],
+        ),
         (
             "'use strict'; var o = {}; Object.defineProperty(o, 'g', {get: function () { return 1; }}); o.g = 2",
             "cannot assign to property 'g': it has only a getter",

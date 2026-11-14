@@ -5130,19 +5130,6 @@ imageTrace	Outline	Körvonal
 @msg	$.evalFile requires a file path	A $.evalFile fájlútvonalat igényel
 @msg	$.evalFile: the timeout must be a finite number of milliseconds, 0 or more	$.evalFile: az időkorlátnak véges számú ezredmásodpercnek kell lennie, 0 vagy több
 @msg	$.evalFile: takes a file path and a timeout	$.evalFile: egy fájlútvonalat és egy időkorlátot vár
-@msg	assignment to a constant binding	értékadás konstans kötésnek
-@msg	invalid array length	érvénytelen tömbhossz
-@msg	array literal too long	a tömbliterál túl hosszú
-@msg	the value is not a function	az érték nem függvény
-@msg	apply was called on a value that is not a function	az apply olyan értéken lett meghívva, amely nem függvény
-@msg	the argument list is not an object	az argumentumlista nem objektum
-@msg	too many arguments	túl sok argumentum
-@msg	the value is not a constructor	az érték nem konstruktor
-@msg	cannot convert the object to a primitive value	az objektum nem alakítható primitív értékké
-@msg	cannot convert undefined or null to an object	az undefined és a null nem alakítható objektummá
-@msg	the right side of 'in' is not an object	az 'in' jobb oldala nem objektum
-@msg	the right side of 'instanceof' is not a function	az 'instanceof' jobb oldala nem függvény
-@msg	the function's prototype is not an object	a függvény prototípusa nem objektum
 @msg	Error: {e}	Error: {e}
 @msg	TypeError: {e}	TypeError: {e}
 @msg	ReferenceError: {e}	ReferenceError: {e}
