@@ -5878,7 +5878,12 @@ files or data sets, 8 folder levels, 256 steps. `action.batch` refuses `includeS
 `` `stopOnError` must be true or false ``, and `source`, `folder`, `destination`, `destinationFolder`,
 `datasetFileNaming` or `label` given as anything but a string with `` `label` must be a string ``, naming the key.
 It checks them, and that `source` is `folder` or `datasets`, before it makes the destination folder or opens a file.
-A null is read as a key left out. An action recorded in the Actions panel leaves the artboard out,
+A null is read as a key left out. When a step fails on a file or data set, that row's `error` names the step by its
+place in the `commands` sent, from 1, counting the Open steps the batch skips: with `commands` of an Open, an Unlock
+All and an Align, a failed Align gives `` action step 3 (`object.align`) failed: `` and the reason. The batch's own
+opening of a source file, choosing of a data set and destination save, export or close give their errors without a
+step number. This numbering is VectorCraft's own rule. A `prefs.import` step is refused before any file is opened,
+with `` commands[1]: `prefs.import` runs on its own, not as a batch step `` (counted from 0, as for an unknown command). An action recorded in the Actions panel leaves the artboard out,
 and its steps of these commands get the artboard that is active when the action plays. A press with the Selection,
 Direct Selection or Group Selection tool inside an artboard makes that artboard the active one; with the Selection
 tool, a Shift-click on an empty spot inside an artboard makes it active and keeps the selection. Choosing the Artboard
