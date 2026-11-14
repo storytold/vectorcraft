@@ -36,7 +36,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Invert Colors",
             ["Edit", "Edit Colors"],
             None,
-            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
+            "{fill?: true, stroke?: true, includeImages?: true, includePatterns?: true, ids?} replace each colour by its RGB inverse (keeps the colour model) in fills, strokes, text, gradient meshes (with fills), colorized image fills (their pixels stay unchanged), other embedded images (a recoloured copy) and pattern tiles (a new pattern swatch; the original stays), as one undo step (none when nothing changes). On a path directly in a graph series, the graph also stores the new paint of the topmost visible fill and stroke (docs/mcp.md) → {changed, notChanged: {locked, hidden} (when the selection is everything select.all takes: the locked and hidden objects it left out whose colors would have changed; an object both hidden and locked counts as hidden), warning?: set when notChanged counts any object}",
             has_selection,
             |s, p| recolor(s, p, "edit.colors.invert", "Invert Colors", &invert)
         ),
@@ -104,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Front to Back",
             ["Edit", "Edit Colors"],
             None,
-            "{} ≥3 filled objects (solid fills or gradient meshes, which keep their shading): intermediate fills graded between the frontmost and backmost fill → {changed}",
+            "{} ≥3 filled objects (solid fills or gradient meshes, which keep their shading): intermediate fills graded between the frontmost and backmost fill. On a path directly in a graph series, the graph also stores the new fill, as for the other Blend commands (docs/mcp.md); no undo step when no fill changes → {changed}",
             has_selection,
             |s, _| blend(s, BlendOrder::Stack)
         ),
@@ -113,7 +113,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Horizontally",
             ["Edit", "Edit Colors"],
             None,
-            "{} ≥3 filled objects or meshes: fills graded between the leftmost and rightmost → {changed}",
+            "{} ≥3 filled objects or meshes: fills graded between the leftmost and rightmost; no undo step when no fill changes → {changed}",
             has_selection,
             |s, _| blend(s, BlendOrder::Horizontal)
         ),
@@ -122,7 +122,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Blend Vertically",
             ["Edit", "Edit Colors"],
             None,
-            "{} ≥3 filled objects or meshes: fills graded between the topmost and bottommost → {changed}",
+            "{} ≥3 filled objects or meshes: fills graded between the topmost and bottommost; no undo step when no fill changes → {changed}",
             has_selection,
             |s, _| blend(s, BlendOrder::Vertical)
         ),
@@ -457,8 +457,8 @@ pub(crate) fn recolor_links(s: &mut Session, p: &Value, cmd: &str, label: &str, 
     run_pass(s, p, cmd, label, Recolor::with_links(Scope::of(p, cmd)?, f, links))
 }
 
-/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step named `label`;
-/// errors name the command `cmd`. The reply's `notChanged` counts the locked and hidden objects the
+/// Run `pass` on the `ids` param's objects (default: the selection) as one undo step named `label`,
+/// or none when the pass changes nothing; errors name the command `cmd`. The reply's `notChanged` counts the locked and hidden objects the
 /// selection left out ([`left_out`]) that the pass would have changed.
 fn run_pass(s: &mut Session, p: &Value, cmd: &str, label: &str, pass: Recolor) -> Result<Value> {
     let (ids, left) = match ids_param(p, "ids", cmd)? {
@@ -471,15 +471,58 @@ fn run_pass(s: &mut Session, p: &Value, cmd: &str, label: &str, pass: Recolor) -
         }
     };
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
-    let (n, not_changed) = s.edit(label, |d, _| {
+    let (n, not_changed) = edit_if_changed(s, label, |_, d| {
         let not_changed = NotChanged::of(pass.again().would_change(d, &left).into_iter().map(|(_, hidden)| hidden));
-        let n = pass.run(d, &ids);
-        super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
-        Ok((n, not_changed))
+        let n = keeping_series_paint(d, &ids, |d| {
+            let n = pass.run(d, &ids);
+            super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(cmd, e))?;
+            Ok(n)
+        })?;
+        Ok(((n, not_changed), n > 0))
     })?;
     let mut out = json!({ "changed": n });
     not_changed.report(&mut out);
     Ok(out)
+}
+
+/// [`Session::edit`] for an Edit Colors pass, which may change nothing: `f` runs on a copy of the
+/// document (it gets the document as it is too) and returns its result with whether it changed the
+/// copy. Only a changed copy becomes the document, as one undo step named `label`; otherwise the
+/// undo and redo steps and the saved state stay as they were.
+pub(crate) fn edit_if_changed<T>(s: &mut Session, label: &str, f: impl FnOnce(&Document, &mut Document) -> Result<(T, bool)>) -> Result<T> {
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    // A typing session ends here as `s.edit` would end it, before the copy is taken, so that the
+    // copy holds what was typed.
+    if !s.previewing && super::typing_in_progress(s) {
+        super::settle_interaction(s)?;
+    }
+    let before = s.doc()?.doc.clone();
+    let mut doc = (*before).clone();
+    let (v, changed) = f(&before, &mut doc)?;
+    // The document is shared with `before` no longer, so `s.edit` does not copy it again.
+    drop(before);
+    if changed {
+        s.edit(label, |d, _| {
+            *d = doc;
+            Ok(())
+        })?;
+    }
+    Ok(v)
+}
+
+/// Run `recolor` on `d` (it returns how many objects it changed) over `roots`, then store on their graphs what it changed
+/// on the graph series marks among `roots` and inside them, so the marks keep their new paint when the graph is drawn
+/// again.
+pub(crate) fn keeping_series_paint(d: &mut Document, roots: &[NodeId], recolor: impl FnOnce(&mut Document) -> Result<usize>) -> Result<usize> {
+    let marks = super::graph::series_marks_in(d, roots);
+    let before = (!marks.is_empty()).then(|| d.clone());
+    let n = recolor(d)?;
+    if let Some(before) = before.filter(|_| n > 0) {
+        super::appearance::capture_series_changes(&before, d, &marks);
+    }
+    Ok(n)
 }
 
 /// The objects a recolor of `roots` leaves out of the art the user meant to recolor, each with
@@ -581,11 +624,6 @@ fn pass_targets(s: &Session, p: &Value, cmd: &str) -> Result<Targets> {
 fn to_indexed(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.colors.toIndexed";
     let indexing = Indexing::of(s, p)?;
-    // A typing session ends here as `s.edit` would end it, before the copy is taken, so that the
-    // copy holds what was typed.
-    if !s.previewing && super::typing_in_progress(s) {
-        super::settle_interaction(s)?;
-    }
     let remake = |b: &ImageBlob| indexing.convert(b);
     let images = Scope { fill: false, stroke: false, images: true, patterns: false };
     let pass = Recolor { remake: Some(&remake), ..Recolor::new(images, &same) };
@@ -593,22 +631,18 @@ fn to_indexed(s: &mut Session, p: &Value) -> Result<Value> {
     // indexed PNG yet; it is not converted to find out. The empty PNG only gives it a new key.
     let would = |b: &ImageBlob| (!b.indexed_png() && b.pixel_size().is_some()).then(|| ImageBlob::png(vec![]));
     let (ids, left) = pass_targets(s, p, C)?;
-    let st = s.doc()?;
-    let colorized_ok = super::paint::check_colorized(&st.doc).is_ok();
-    let not_changed = NotChanged::of(
-        Recolor { remake: Some(&would), ..Recolor::new(images, &same) }.would_change(&st.doc, &left).into_iter().map(|(_, hidden)| hidden),
-    );
-    let mut doc = (*st.doc).clone();
-    let n = pass.run(&mut doc, &ids);
-    if let Some((w, h)) = indexing.too_large.get() {
-        return Err(bad(C, format!("an image of {w} × {h} pixels is too large to convert (at most {} pixels)", Indexing::MAX_PIXELS)));
-    }
-    if n > 0 {
-        s.edit("Convert to Indexed Color", |d, _| {
-            *d = doc;
-            super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(C, e))
-        })?;
-    }
+    let (n, not_changed) = edit_if_changed(s, "Convert to Indexed Color", |now, doc| {
+        let colorized_ok = super::paint::check_colorized(now).is_ok();
+        let not_changed = NotChanged::of(
+            Recolor { remake: Some(&would), ..Recolor::new(images, &same) }.would_change(now, &left).into_iter().map(|(_, hidden)| hidden),
+        );
+        let n = pass.run(doc, &ids);
+        if let Some((w, h)) = indexing.too_large.get() {
+            return Err(bad(C, format!("an image of {w} × {h} pixels is too large to convert (at most {} pixels)", Indexing::MAX_PIXELS)));
+        }
+        super::paint::check_colorized_kept(colorized_ok, doc).map_err(|e| bad(C, e))?;
+        Ok(((n, not_changed), n > 0))
+    })?;
     let mut out = json!({ "changed": n });
     not_changed.report(&mut out);
     Ok(out)
@@ -887,7 +921,7 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
     };
     let fills = Scope { fill: true, stroke: false, images: false, patterns: false };
     let colorized_ok = super::paint::check_colorized(&s.doc()?.doc).is_ok();
-    let changed = s.edit(label, |d, _| {
+    let run = |d: &mut Document| -> Result<usize> {
         let mut changed = 0;
         for (i, id) in ids.iter().enumerate().take(n - 1).skip(1) {
             let c = lerp_color(&first, &last, i as f32 / (n - 1) as f32).in_model(model);
@@ -906,7 +940,8 @@ fn blend(s: &mut Session, order: BlendOrder) -> Result<Value> {
         }
         super::paint::check_colorized_kept(colorized_ok, d).map_err(|e| bad(label, e))?;
         Ok(changed)
-    })?;
+    };
+    let changed = edit_if_changed(s, label, |_, d| keeping_series_paint(d, &ids, run).map(|n| (n, n > 0)))?;
     Ok(json!({ "changed": changed }))
 }
 

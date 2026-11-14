@@ -703,6 +703,8 @@ font-technology	Variable	Вариативные
 	Crop Image	Обрезать изображение
 	Image Tools	Инструменты изображения
 	Remove Background…	Удалить фон…
+	Draw (Pencil)	Рисовать (Карандаш)
+	Place Image	Поместить изображение
 	Remove Background	Удалить фон
 	Background	Фон
 	Edge Color	Цвет края
@@ -2226,6 +2228,29 @@ file-filter	Templates	Шаблоны
 	Bristle Brush	Щетинная кисть
 	Pattern Brush	Узорная кисть
 	missing from the Brushes panel	отсутствует в панели «Кисти»
+	built in	встроенный
+	embedding not allowed	внедрение запрещено
+	embedding for editing	внедрение для редактирования
+	embedding for preview and print	внедрение для просмотра и печати
+	embedding allowed	внедрение разрешено
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	заменен: показан шрифтом {family} {style} ({detail})
+	missing: shown in {family} {style}	отсутствует: показан шрифтом {family} {style}
+	missing	отсутствует
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Линейный градиент
+	Radial gradient	Радиальный градиент
+	Conic gradient	Конический градиент
+	Diamond gradient	Ромбовидный градиент
+	Freeform gradient	Произвольный градиент
+@plural	{n} instance|{n} instances	{n} экземпляр|{n} экземпляра|{n} экземпляров
+@plural	{n} row|{n} rows	{n} строка|{n} строки|{n} строк
+@plural	{n} column|{n} columns	{n} столбец|{n} столбца|{n} столбцов
 	Select art to make a scatter, art or pattern brush.	Выделите рисунок, чтобы создать кисть-распыление, художественную или узорную кисть.
 	Brush Art	Рисунок кисти
 	New Calligraphic Brush	Новая каллиграфическая кисть
@@ -2741,6 +2766,11 @@ digits	Malayalam	Малаялам
 	Rating:	Рейтинг:
 	Real World:	Реальный мир:
 	Real-time Drawing and Editing	Рисование и редактирование в реальном времени
+	Use Monitor Profile for Canvas	Использовать профиль монитора для холста
+	The canvas is drawn in sRGB.	Холст отображается в sRGB.
+	Canvas display profile:	Профиль дисплея для холста:
+	The system matches the window to the display's colors.	Система согласует цвета окна с дисплеем.
+	No usable display profile was found: the canvas is drawn in sRGB.	Подходящий профиль дисплея не найден: холст отображается в sRGB.
 	Rearrange All Artboards	Переставить все монтажные области
 	Rearrange	Переставить
 	Select All Artboards	Выделить все монтажные области
@@ -3679,6 +3709,11 @@ digits	Malayalam	Малаялам
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Параметры Tate-chu-yoko…
 	Tate-chu-yoko Settings	Параметры Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Параметры Warichu…
+	Warichu Settings	Параметры Warichu
+	Lines:	Строки:
+	Line Gap:	Интервал между строками:
 	Composite Fonts…	Составные шрифты…
 	Composite Fonts	Составные шрифты
 	Export Composite Fonts	Экспорт составных шрифтов
@@ -4394,6 +4429,10 @@ axis	Both	Оба
 @msg	Couldn't paste: the document it was pasted in was reverted	Не удалось вставить: документ, в который выполнялась вставка, был возвращён к сохранённой версии
 @msg	Couldn't read {name}: {e}	Не удалось прочитать {name}: {e}
 @msg	Couldn't save recovery data: {e}	Не удалось сохранить данные восстановления: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления для {title}: {e}. Копии сохраняются в {folder}, папку восстановления по умолчанию; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления для {title}: {e}. Копии сохраняются в {folder}, папку, заданную в настройках; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления: {e}. Копии сохраняются в {folder}, папку восстановления по умолчанию; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Не удалось сохранить данные восстановления: {e}. Копии сохраняются в {folder}, папку, заданную в настройках; чтобы использовать другую папку, задайте Настройки → Работа с файлами → Восстановление данных → Папка (recoveryFolder)
 @msg	Create Outlines: select text objects	Создание контуров: выделите текстовые объекты
 @msg	Create from Guides: the document has no artboard	Создание из направляющих: в документе нет монтажной области
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Создание из направляющих: направляющие образуют более {MAX_PIECES} фрагментов
@@ -4403,6 +4442,7 @@ axis	Both	Оба
 @msg	Plug-ins can't be loaded from {path}: {e}	Не удается загрузить модули из {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	выделите прямым выделением опорные точки для разреза (не конечные точки открытых контуров)
 @msg	Divide Objects Below: select a path	Разделение объектов ниже: выделите контур
+@msg	select a path	выделите контур
 @msg	Divide Objects Below: select exactly one path	Разделение объектов ниже: выделите ровно один контур
 @msg	Downloaded {what}	Скачано: {what}
 @msg	Expand Appearance: the selection has a basic appearance	Разбор оформления: у выделения основное оформление
@@ -4479,6 +4519,9 @@ axis	Both	Оба
 @msg	`{keep}` is not a side of this axis	`{keep}` не является стороной этой оси
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` должно быть `auto` или кодом языка, например `en` или `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` должно быть цветом #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` должно быть цветом #rrggbb или названием цвета слоя
+@msg	unknown Live Paint option `{key}`	неизвестный параметр быстрой заливки `{key}`
+@msg	unknown Shape Builder option `{key}`	неизвестный параметр создания фигур `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` должно быть цветом #rrggbb
 @msg	`{key}` must be a number	`{key}` должно быть числом
 @msg	`{key}` must be a number, not {v}	`{key}` должно быть числом, а не {v}
@@ -4494,6 +4537,7 @@ axis	Both	Оба
 @msg	`select` must be true or false	`select` должно быть true или false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` и `maxAnchors` должны быть целыми числами
 @msg	`{key}` must be a number not below 0	`{key}` должно быть числом не меньше 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` должно быть четырьмя числами не меньше 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` должно быть [x, y, width, height]: четыре конечных числа, ширина и высота не отрицательные
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` больше, чем `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	укажите хотя бы один из параметров `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4638,6 +4682,7 @@ axis	Both	Оба
 @msg	internal error: {msg} (please report this bug)	внутренняя ошибка: {msg} (пожалуйста, сообщите об этой ошибке)
 @msg	invalid PDF setting: {0}	недопустимый параметр PDF: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): она записывается с UserUnit {unit}, поэтому приложения, которые игнорируют UserUnit, показывают её во столько же раз меньше: включите «Записывать страницы длиннее 200 in в полном размере, в пунктах»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	страница монтажной области {n} имеет размер {size}, что больше ограничения PDF на размер страницы в 14 400 pt (200 in): страницы {label} записываются без UserUnit, в пунктах, и приложения, соблюдающие ограничение, обрезают страницу до 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	в PDF 1.5 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы сохранить размер: файл записывается как PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	в PDF 1.4 нет UserUnit, который нужен странице длиннее 14 400 pt (200 in), чтобы уложиться в предел страницы PDF/A-2 в 14 400 единиц: файл записывается как PDF 1.6
@@ -5078,6 +5123,7 @@ axis	Both	Оба
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Отменён {n} восстановленный документ|Отменено {n} восстановленных документа|Отменено {n} восстановленных документов
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Восстановлен {n} документ: сохраните его, чтобы оставить|Восстановлено {n} документа: сохраните их, чтобы оставить|Восстановлено {n} документов: сохраните их, чтобы оставить
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Открыто с {n} примечанием: {first}|Открыто с {n} примечаниями: {first}|Открыто с {n} примечаниями: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Открыто с {n} примечанием: {first}|{notice}. Открыто с {n} примечаниями: {first}|{notice}. Открыто с {n} примечаниями: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Сохранено: {path} с {n} примечанием: {first}|Сохранено: {path} с {n} примечаниями: {first}|Сохранено: {path} с {n} примечаниями: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Внедрено {n} изображение; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображения; отсутствует {missing}: сначала восстановите связи|Внедрено {n} изображений; отсутствует {missing}: сначала восстановите связи
 @msgplural	Embedded {n} image|Embedded {n} images	Внедрено {n} изображение|Внедрено {n} изображения|Внедрено {n} изображений
@@ -5157,6 +5203,8 @@ axis	Both	Оба
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	встроенное изображение {_1} × {_2} пикселей уменьшено до {_3} × {_4} пикселей, чтобы сохранить слои
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	связанные изображения показываются как сохранённый в файле просмотр низкого разрешения, пока их файлы не найдены: восстановите связи на панели «Связи»
 @msg	linked type areas past VectorCraft's limits were left out	связанные текстовые области за пределами ограничений VectorCraft пропущены
+@msg	the Line Breaking setting of legacy type was left out	настройка разрыва строк текста старого формата пропущена
+@msg	the Japanese layout rules of legacy type were left out	японские правила вёрстки текста старого формата пропущены
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	текст, меняющий направление письма внутри текстового объекта, открывается в направлении своего первого символа
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	текст, используемый как маска в связанных областях, обтекающем тексте или составном контуре, не обрезает
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	связанные изображения без просмотра в файле показываются как заполнитель, пока их файлы не найдены: восстановите связи на панели «Связи»
@@ -5326,6 +5374,7 @@ axis	Both	Оба
 	VectorCraft Title Bar on Every Desktop	Строка заголовка VectorCraft на любом рабочем столе
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Пока переменная среды VECTORCRAFT_TITLEBAR задана, строку заголовка выбирает она.
 	System Title Bar takes precedence over this option while it is on.	Пока включена «Системная строка заголовка», она имеет приоритет над этим параметром.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Пока «Строка заголовка VectorCraft на любом рабочем столе» выключена, этот рабочий стол рисует строку заголовка окна независимо от того, включён ли этот параметр.
 	Value Axis	Ось значений
 	On Left Side	Слева
 	On Right Side	Справа
@@ -5773,6 +5822,7 @@ lighting	Light	Свет
 @msg	no such color	такого цвета нет
 @msg	{_1} cannot be used on Windows	Сочетание {_1} нельзя использовать в Windows
 @msg	more than one action is named “{_1}”	несколько действий называются «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	действие «{_1}» задаёт настройку папки {_2}; удалите этот шаг, чтобы сохранить набор
 @msg	no symbol named `{n}`	нет символа с именем `{n}`
 	Smudge Stick…	Растушёвка…
 	Smudge Stick	Растушёвка
@@ -6174,6 +6224,8 @@ axis	Y Axis	Ось Y
 	Action Options…	Параметры действия…
 	Action Options	Параметры действия
 	Playback Options…	Параметры воспроизведения…
+	Button Mode	Режим кнопок
+	No actions.	Нет действий.
 	Insert Stop…	Вставить остановку…
 	Insert Stop	Вставить остановку
 	Record Stop	Записать остановку
@@ -6846,6 +6898,8 @@ anchor	Points:	Точки:
 	Anchor Inspector	Инспектор опорных точек
 	Add Points at Crossings	Добавить точки на пересечениях
 	Split at Crossings	Разрезать на пересечениях
+	Trim at Crossings Tool	Инструмент «Подрезка на пересечениях»
+	Trim at Crossings	Подрезать на пересечениях
 	Extend Path	Продлить контур
 	Measure & Inspect	Измерение и анализ
 	Set Anchor	Задать опорную точку
@@ -7536,3 +7590,125 @@ shape	Open	Открытый
 	Margin	Поле
 	Box	Рамка
 	Swatch	Образец
+	Banner Hems and Grommets…	Подгибы и люверсы баннера…
+	Banner Hems and Grommets	Подгибы и люверсы баннера
+	Hem	Подгиб
+	Grommets	Люверсы
+	Grommet Inset	Отступ люверсов от края
+	Diameter	Диаметр
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D-эффектам нужны конечные координаты в пределах 100 миллионов пунктов
+@msg	3D effects require one to ten lights	3D-эффектам нужно от одного до десяти источников света
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Глубина цвета BMP {_1}: допустимо 1, 4, 8, 16, 24 или 32 бита на пиксель
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Ошибка кодирования BMP: {width} × {height} пикселей не соответствует формату или буферу пикселей
+@msg	GIF encoding failed: the palette image is malformed	Ошибка кодирования GIF: изображение с палитрой имеет неверную структуру
+@msg	GIF encoding failed: {e}	Ошибка кодирования GIF: {e}
+@msg	JPEG colour profile: {e}	Цветовой профиль JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Ошибка кодирования JPEG: буфер пикселей не соответствует размеру изображения
+@msg	JPEG encoding failed: {e}	Ошибка кодирования JPEG: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Ошибка кодирования PNG: буфер пикселей не соответствует размеру изображения
+@msg	PNG encoding failed: the palette image is malformed	Ошибка кодирования PNG: изображение с палитрой имеет неверную структуру
+@msg	PNG encoding failed: {e}	Ошибка кодирования PNG: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Ошибка кодирования PNG: {width} × {height} пикселей — недопустимый размер изображения
+@msg	PSD colour profile: {e}	Цветовой профиль PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Ошибка кодирования PSD: буфер пикселей не соответствует размеру изображения
+@msg	Revolve profile contains invalid coordinates	Профиль вращения содержит недопустимые координаты
+@msg	Revolve profile is too complex	Профиль вращения слишком сложен
+@msg	Revolve projection is not finite	Проекция вращения не является конечной
+@msg	Revolve requires finite profile coordinates within 100 million points	Для вращения нужны конечные координаты профиля в пределах 100 миллионов пунктов
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Поверхность вращения слишком сложна; уменьшите «Сегменты» или упростите профиль
+@msg	Revolve surface is too complex; simplify the profile	Поверхность вращения слишком сложна; упростите профиль
+@msg	Revolve visibility cannot split the projected boundary	Расчёт видимости вращения не может разделить спроецированную границу
+@msg	Revolve visibility creates too many fragments	Расчёт видимости вращения создаёт слишком много фрагментов
+@msg	Revolve visibility creates too many vector anchors	Расчёт видимости вращения создаёт слишком много векторных опорных точек
+@msg	Revolve visibility exceeds its geometry work limit	Расчёт видимости вращения превышает свой предел геометрических вычислений
+@msg	Revolve visibility exceeds its spatial index limit	Расчёт видимости вращения превышает свой предел пространственного индекса
+@msg	Revolve visibility has too many boundary crossings	В расчёте видимости вращения слишком много пересечений границы
+@msg	Revolve visibility has too many input anchors	В расчёте видимости вращения слишком много входных опорных точек
+@msg	Revolve visibility requires convex cap sectors	Для расчёта видимости вращения нужны выпуклые секторы торцов
+@msg	Revolve visibility requires finite projected faces	Для расчёта видимости вращения нужны конечные спроецированные грани
+@msg	SVG options: {e}	Параметры SVG: {e}
+@msg	Save for Web settings: {e}	Параметры «Сохранить для web»: {e}
+@msg	TIFF colour profile: {e}	Цветовой профиль TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Ошибка кодирования TIFF: буфер пикселей не соответствует размеру изображения
+@msg	TIFF encoding failed: {e}	Ошибка кодирования TIFF: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Глубина цвета Targa {_1}: допустимо 16, 24 или 32 бита на пиксель
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Ошибка кодирования Targa: буфер пикселей не соответствует размеру изображения
+@msg	The 3D projection is not finite	3D-проекция не является конечной
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D-тень слишком сложна; отключите «Тени» или упростите графику
+@msg	The shape contains invalid coordinates	Фигура содержит недопустимые координаты
+@msg	Too many Revolve faces for visibility evaluation	Слишком много граней вращения для расчёта видимости
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читает из файла обмена образцами не более {ASE_MAX_ENTRIES} цветов и групп, а в этой библиотеке их {entries}
+@msg	WebP encoding failed: {e}	Ошибка кодирования WebP: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` принимает значения smallThumb, mediumThumb, largeThumb, smallList или largeList
+@msg	a line can't run from a point to itself	линия не может идти от точки к самой себе
+@msg	a line needs at least two points	линии нужны хотя бы две точки
+@msg	a number cannot be read	не удаётся прочитать число
+@msg	a swatch exchange block is too long	блок файла обмена образцами слишком длинный
+@msg	a swatch exchange name is too long	имя в файле обмена образцами слишком длинное
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	размер изображения {sw} × {sh} нельзя изменить до {width} × {height} пикселей
+@msg	a {width} × {height} image is too large	изображение {width} × {height} слишком велико
+@msg	a {width} × {height} image: {e}	изображение {width} × {height}: {e}
+@msg	an image could not be written: {e}	не удалось записать изображение: {e}
+@msg	an image that couldn't be read was left out	изображение, которое не удалось прочитать, пропущено
+@msg	can't open “{name}”: {e}	не удаётся открыть «{name}»: {e}
+@msg	cannot align zip entries to {align} bytes	не удаётся выровнять записи zip по {align} байт
+@msg	cannot open the automation {kind} root `{_1}`: {e}	не удаётся открыть корневую папку автоматизации ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	не удаётся прочитать профиль: {0}
+@msg	color book version {version} isn't supported (only 1)	версия цветовой книги {version} не поддерживается (только 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	цветовые книги в цветовом пространстве {other} не поддерживаются (только RGB, CMYK и Lab)
+@msg	file name too long to zip: {_1}	имя файла слишком длинное для zip: {_1}
+@msg	file name too long to zip: {name}	имя файла слишком длинное для zip: {name}
+@msg	freeform line {i}: {e}	произвольная линия {i}: {e}
+@msg	freeform point {i}: {e}	произвольная точка {i}: {e}
+@msg	give `{key}` or `{other}`, not both	укажите `{key}` или `{other}`, но не то и другое
+@msg	grayscale profiles can't be working spaces yet	профили оттенков серого пока не могут быть рабочими пространствами
+@msg	input contains NaN or infinite coordinates	входные данные содержат координаты NaN или бесконечные координаты
+@msg	input path could not be closed	не удалось замкнуть входной контур
+@msg	invalid ICC profile: {0}	недопустимый профиль ICC: {0}
+@msg	invalid scale {scale}	недопустимый масштаб {scale}
+@msg	its localized names take more than {_1} KB	его локализованные имена занимают более {_1} КБ
+@msg	its objects are nested too deep ({e})	его объекты вложены слишком глубоко ({e})
+@msg	its tag table lists the `{_1}` tag more than once	в его таблице тегов тег `{_1}` указан более одного раза
+@msg	not a graphic style library: {e}	не библиотека графических стилей: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	не библиотека образцов (.vcswatches или .gpl)
+@msg	not a swatch library (format `{_1}`)	не библиотека образцов (формат `{_1}`)
+@msg	not a swatch library: {e}	не библиотека образцов: {e}
+@msg	not an action set file ({e})	не файл набора действий ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	цветовое пространство профиля {other} не является RGB, CMYK или оттенками серого
+@msg	regular expression too large	регулярное выражение слишком велико
+@msg	script file is not UTF-8 text: {value}	файл скрипта не является текстом UTF-8: {value}
+@msg	stop {i}: {e}	точка перехода {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	версия файла обмена образцами {major}.{minor} не поддерживается (только 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	в цветовой книге больше {ASE_MAX_ENTRIES} цветов
+@msg	the color book is cut short	цветовая книга обрезана
+@msg	the color book's names take more than {_1} MB	имена цветовой книги занимают более {_1} МБ
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	изображение имело бы размер {w} × {h} пикселей; растровый экспорт ограничен {MAX_RASTER_SIDE} пикселями по стороне и {_1} мегапикселями: уменьшите масштаб или разрешение
+@msg	the optimised image can't be read back: {e}	оптимизированное изображение не удаётся прочитать обратно: {e}
+@msg	the pixel buffer doesn't match the image size	буфер пикселей не соответствует размеру изображения
+@msg	the preview: {e}	изображение для просмотра: {e}
+@msg	the request may not read the New Document profiles folder	запросу не разрешено читать папку профилей нового документа
+@msg	the shapes are too degenerate to combine	фигуры слишком вырождены для объединения
+@msg	the shapes cross themselves and each other too often to combine	фигуры слишком часто пересекают себя и друг друга для объединения
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	в файле обмена образцами больше {ASE_MAX_ENTRIES} цветов и групп
+@msg	the swatch exchange file is cut short	файл обмена образцами обрезан
+@msg	the {_1} plate can't be read: {e}	не удаётся прочитать пластину {_1}: {e}
+@msg	this binary DXF file is damaged or cut short	этот двоичный файл DXF повреждён или обрезан
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	это чертёж DWG, который невозможно прочитать: сохраните его из приложения CAD как DXF и откройте его
+@msg	too many classes	слишком много классов
+@msg	too many groups	слишком много групп
+@msg	too many layers for PSD (at most 32767)	слишком много слоёв для PSD (не более 32767)
+@msg	too many swatch exchange blocks	слишком много блоков в файле обмена образцами
+@msg	unknown colour profile: {0}	неизвестный цветовой профиль: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} совпадает с именем встроенного профиля
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} пикселей — слишком большой размер для GIF (не более 65535 пикселей по стороне): уменьшите разрешение
+@msg	{_1}: no usable transform to/from sRGB	{_1}: нет пригодного преобразования в sRGB или из sRGB
+@msg	{name} is not a CMYK profile	{name} — не профиль CMYK
+@msg	{name} is not an RGB profile	{name} — не профиль RGB
+@msg	{path}: could not be read	{path}: не удалось прочитать
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для JPEG (не более 65535 пикселей по стороне): уменьшите разрешение
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для Targa (не более 65535 пикселей по стороне): уменьшите разрешение
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение

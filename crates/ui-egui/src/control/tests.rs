@@ -293,6 +293,42 @@ fn an_absolute_path_outside_the_read_root_is_unreadable() {
     });
 }
 
+/// Under a read root, an absolute path or a `file:` URL outside it is written as a path also with
+/// whitespace around it, and a recorded step's text param loses it; a path inside the root stays.
+#[test]
+fn a_spaced_absolute_path_outside_the_read_root_is_left_out() {
+    let base = crate::tests_folder::Folder::new("unreadable-spaced");
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let inside = format!(" {} ", base.join("in").join("a.svg").to_string_lossy());
+    let mut params = json!({"target": " /outside/root/x", "name": "\tfile:///outside/root/x ", "keep": inside, "list": [" /outside/root/y"]});
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        assert!(super::unreadable_path_like(" /outside/root/x"));
+        assert!(super::unreadable_path_like("\tfile:///outside/root/x "));
+        assert!(!super::unreadable_path_like(&inside), "{inside}");
+        super::leave_out_unreadable_params(params.as_object_mut().unwrap());
+    });
+    assert_eq!(params, json!({"keep": inside, "list": []}));
+}
+
+/// Under a read root, an empty or blank value names no path, so a recorded step keeps it under a path
+/// param and in a path param's list, a folder preference reset in a `prefs.set` step's `values`
+/// included; a path outside the root is still left out.
+#[test]
+fn an_empty_path_param_stays_under_a_read_root() {
+    let base = crate::tests_folder::Folder::new("unreadable-empty");
+    std::fs::create_dir_all(base.join("in")).unwrap();
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[&base.join("in")], &[]).unwrap();
+    let mut params = json!({
+        "values": {"fontsFolder": "", "templatesFolder": " ", "recoveryFolder": "/outside/root/x"},
+        "path": "", "destinationFolder": " ", "files": ["", "/outside/root/y"],
+    });
+    vectorcraft_engine::file_access::confine(roots.as_ref(), || {
+        super::leave_out_unreadable_step("prefs.set", params.as_object_mut().unwrap());
+    });
+    assert_eq!(params, json!({"values": {"fontsFolder": "", "templatesFolder": " "}, "path": "", "destinationFolder": " ", "files": [""]}));
+}
+
 /// Without a read root, a `file:` URL that names another host may be read, and a recorded step keeps
 /// it.
 #[test]
@@ -413,6 +449,29 @@ fn a_hidden_library_at_the_top_of_the_file_system_keeps_its_shown_id() {
     assert_eq!(inspected["result"]["ui"]["color_guide_limit"], "loaded/b.svg", "{inspected}");
     assert_eq!(inspected["result"]["ui"]["open_panel"], "library:swatches:loaded/b.svg", "{inspected}");
     assert_eq!(docking["result"]["flyout"], "library:swatches:loaded/b.svg", "{docking}");
+}
+
+/// `ui.inspect` shows a recovery folder outside the read root that the status text names (a failed
+/// recovery copy) by its folder name, also in the paths under it: the folder in use, and one a
+/// failure named before the preference moved on. A readable one stays.
+#[test]
+fn a_recovery_folder_outside_the_read_root_is_hidden_in_the_status() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    app.session.recovery.set_default_folder(Some("/outside/recovery".into()));
+    let root = crate::tests_folder::Folder::new("recovery-status");
+    let roots = vectorcraft_engine::file_access::AutomationRoots::new(&[root.as_path()], &[]).unwrap();
+    let inspect = |app: &mut VectorcraftApp, status: String| {
+        app.ui.status = status;
+        let reply = vectorcraft_engine::file_access::confine(roots.as_ref(), || input_request(app, "ui.inspect", json!({})));
+        reply["result"]["ui"]["status"].clone()
+    };
+    let status = "Couldn't save recovery data: /outside/recovery/a-1 is not a folder. Copies go to /outside/recovery".to_string();
+    assert_eq!(inspect(&mut app, status), "Couldn't save recovery data: recovery/a-1 is not a folder. Copies go to recovery");
+    let inside = root.as_path().join("copies").to_string_lossy().into_owned();
+    app.session.prefs.recovery_folder = inside.clone();
+    app.recovery.named = vec!["/outside/earlier".into()];
+    assert_eq!(inspect(&mut app, "Copies go to /outside/earlier".into()), "Copies go to earlier");
+    assert_eq!(inspect(&mut app, format!("Copies go to {inside}")), json!(format!("Copies go to {inside}")));
 }
 
 /// A path outside the read root that a request sent is shown by its file name in a reply that succeeded

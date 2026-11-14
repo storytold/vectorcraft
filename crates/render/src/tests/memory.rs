@@ -320,13 +320,13 @@ fn kept_glyphs(r: &mut Renderer, d: &Document) -> Vec<Option<Arc<TextGeom>>> {
         .collect()
 }
 
-/// `f`'s result from a run during which the fonts did not change: other tests add fonts, and the
-/// renderer lays all type out again when the fonts change.
+/// `f`'s result from a run during which the fonts and the hyphenation exceptions did not change:
+/// other tests change them, and the renderer lays all type out again when they change.
 fn fonts_unchanged<T>(mut f: impl FnMut() -> T) -> T {
     loop {
-        let fonts = vectorcraft_text::FontDb::global().generation();
+        let inputs = vectorcraft_text::layout_inputs();
         let t = f();
-        if vectorcraft_text::FontDb::global().generation() == fonts {
+        if vectorcraft_text::layout_inputs() == inputs {
             return t;
         }
     }
@@ -931,6 +931,8 @@ fn brush_art_draws_edits_of_the_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
@@ -997,6 +999,8 @@ fn brush_art_draws_renamed_symbols_and_patterns_it_shows() {
         painted.transform(Affine::translate((0.0, 8.0)), true);
         let scatter = Node::group(d.alloc_id(), vec![Arc::new(instance), Arc::new(painted)]);
         let mut lib = vectorcraft_brush::library(&d);
+        // The default library has its own `Dots`, which a stroke would draw with first.
+        lib.retain(|b| b.name != "Dots");
         lib.push(Brush { name: "Dots".into(), kind: BrushKind::Scatter(Scatter { art: scatter, spacing: (150.0, 150.0), ..Default::default() }) });
         vectorcraft_brush::store(&mut d, &lib);
         let mut ap = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);

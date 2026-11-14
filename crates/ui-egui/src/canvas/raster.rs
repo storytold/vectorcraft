@@ -216,7 +216,7 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
         composed_frame(r, moved_pixels(k.pixels.as_ref()?, job.w, job.h, pan), parts, job)
     });
     let reused = copied.is_some();
-    let (img, moved) = copied.unwrap_or_else(|| {
+    let (mut img, moved) = copied.unwrap_or_else(|| {
         let img = r.render(&job.doc, job.w, job.h, job.view, &job.opts);
         let moved = r.stats.moved;
         (img, moved)
@@ -225,6 +225,8 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
         job.may_keep && moved == 0 && r.stats.view_sized == 0 && img.pixels.len() <= MAX_KEPT_BYTES && (img.width, img.height) == (job.w, job.h);
     *kept =
         keeps.then(|| KeptFrame { key: job.key.clone(), opts: job.opts.clone(), view: job.view, pixels: holds_pixels.then(|| img.pixels.clone()) });
+    // The kept frame stays sRGB, so the next frame's copied pixels are converted only once.
+    crate::display_profile::convert(job.display.as_deref(), &mut img.pixels);
     WorkerFrame { img, moved, reused }
 }
 
