@@ -6989,6 +6989,122 @@ breakText	Glyphs	Гліфи
 @msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту
 @msg	an importer always gets an import's budget: leave `budget` out	модуль імпорту завжди отримує бюджет імпорту: не вказуйте `budget`
 
+# Messages of the image encoders, color profiles, swatch exchange files and color books, 3D and Revolve, path operations, DXF import, the script engine and parameter checks.
+@msg	3D effects require finite coordinates within 100 million points	3D-ефектам потрібні скінченні координати в межах 100 мільйонів пунктів
+@msg	3D effects require one to ten lights	3D-ефектам потрібно від одного до десяти джерел світла
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Глибина BMP {_1}: 1, 4, 8, 16, 24 або 32 біти на піксель
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Не вдалося закодувати BMP: {width} × {height} пікселів не вміщується у формат або не відповідає буферу пікселів
+@msg	GIF encoding failed: the palette image is malformed	Не вдалося закодувати GIF: зображення з палітрою має неправильну структуру
+@msg	GIF encoding failed: {e}	Не вдалося закодувати GIF: {e}
+@msg	JPEG colour profile: {e}	Профіль кольору JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Не вдалося закодувати JPEG: буфер пікселів не відповідає розміру зображення
+@msg	JPEG encoding failed: {e}	Не вдалося закодувати JPEG: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Не вдалося закодувати PNG: буфер пікселів не відповідає розміру зображення
+@msg	PNG encoding failed: the palette image is malformed	Не вдалося закодувати PNG: зображення з палітрою має неправильну структуру
+@msg	PNG encoding failed: {e}	Не вдалося закодувати PNG: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Не вдалося закодувати PNG: {width} × {height} пікселів не є допустимим розміром зображення
+@msg	PSD colour profile: {e}	Профіль кольору PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Не вдалося закодувати PSD: буфер пікселів не відповідає розміру зображення
+@msg	Revolve profile contains invalid coordinates	Обертання: профіль містить неприпустимі координати
+@msg	Revolve profile is too complex	Обертання: профіль надто складний
+@msg	Revolve projection is not finite	Обертання: проєкція не скінченна
+@msg	Revolve requires finite profile coordinates within 100 million points	Обертання: потрібні скінченні координати профілю в межах 100 мільйонів пунктів
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Обертання: поверхня надто складна; зменште «Сегменти» або спростіть профіль
+@msg	Revolve surface is too complex; simplify the profile	Обертання: поверхня надто складна; спростіть профіль
+@msg	Revolve visibility cannot split the projected boundary	Обертання: обчислення видимості не може розділити спроєктовану межу
+@msg	Revolve visibility creates too many fragments	Обертання: обчислення видимості створює забагато фрагментів
+@msg	Revolve visibility creates too many vector anchors	Обертання: обчислення видимості створює забагато векторних опорних точок
+@msg	Revolve visibility exceeds its geometry work limit	Обертання: обчислення видимості перевищує межу геометричних обчислень
+@msg	Revolve visibility exceeds its spatial index limit	Обертання: обчислення видимості перевищує межу просторового індексу
+@msg	Revolve visibility has too many boundary crossings	Обертання: обчислення видимості має забагато перетинів меж
+@msg	Revolve visibility has too many input anchors	Обертання: обчислення видимості має забагато вхідних опорних точок
+@msg	Revolve visibility requires convex cap sectors	Обертання: обчисленню видимості потрібні опуклі сектори кришки
+@msg	Revolve visibility requires finite projected faces	Обертання: обчисленню видимості потрібні скінченні спроєктовані грані
+@msg	SVG options: {e}	Параметри SVG: {e}
+@msg	Save for Web settings: {e}	Параметри «Зберегти для Інтернету»: {e}
+@msg	TIFF colour profile: {e}	Профіль кольору TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Не вдалося закодувати TIFF: буфер пікселів не відповідає розміру зображення
+@msg	TIFF encoding failed: {e}	Не вдалося закодувати TIFF: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Глибина Targa {_1}: 16, 24 або 32 біти на піксель
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Не вдалося закодувати Targa: буфер пікселів не відповідає розміру зображення
+@msg	The 3D projection is not finite	3D-проєкція не скінченна
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D-тінь надто складна; вимкніть «Тіні» або спростіть ілюстрацію
+@msg	The shape contains invalid coordinates	Фігура містить неприпустимі координати
+@msg	Too many Revolve faces for visibility evaluation	Забагато граней обертання для обчислення видимості
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читає з файлу обміну зразками не більше {ASE_MAX_ENTRIES} кольорів і груп, а в цій бібліотеці їх {entries}
+@msg	WebP encoding failed: {e}	Не вдалося закодувати WebP: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` має бути smallThumb, mediumThumb, largeThumb, smallList або largeList
+@msg	a line can't run from a point to itself	лінія не може йти з точки в ту саму точку
+@msg	a line needs at least two points	лінії потрібні щонайменше дві точки
+@msg	a number cannot be read	не вдалося прочитати число
+@msg	a swatch exchange block is too long	блок файлу обміну зразками задовгий
+@msg	a swatch exchange name is too long	назва у файлі обміну зразками задовга
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	розмір зображення {sw} × {sh} не можна змінити на {width} × {height} пікселів
+@msg	a {width} × {height} image is too large	зображення {width} × {height} завелике
+@msg	a {width} × {height} image: {e}	зображення {width} × {height}: {e}
+@msg	an image could not be written: {e}	не вдалося записати зображення: {e}
+@msg	an image that couldn't be read was left out	зображення, яке не вдалося прочитати, пропущено
+@msg	can't open “{name}”: {e}	не вдалося відкрити «{name}»: {e}
+@msg	cannot align zip entries to {align} bytes	не вдається вирівняти записи архіву zip до {align} байтів
+@msg	cannot open the automation {kind} root `{_1}`: {e}	не вдається відкрити кореневу папку автоматизації ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	не вдалося прочитати профіль: {0}
+@msg	color book version {version} isn't supported (only 1)	версія книги кольорів {version} не підтримується (лише 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	книги кольорів у колірному просторі {other} не підтримуються (лише RGB, CMYK і Lab)
+@msg	file name too long to zip: {_1}	назва файлу задовга для архіву zip: {_1}
+@msg	file name too long to zip: {name}	назва файлу задовга для архіву zip: {name}
+@msg	freeform line {i}: {e}	довільна лінія {i}: {e}
+@msg	freeform point {i}: {e}	довільна точка {i}: {e}
+@msg	give `{key}` or `{other}`, not both	укажіть `{key}` або `{other}`, але не обидва
+@msg	grayscale profiles can't be working spaces yet	профілі відтінків сірого поки що не можуть бути робочими просторами
+@msg	input contains NaN or infinite coordinates	вхідні дані містять координати NaN або нескінченні координати
+@msg	input path could not be closed	не вдалося замкнути вхідний контур
+@msg	invalid ICC profile: {0}	неприпустимий профіль ICC: {0}
+@msg	invalid scale {scale}	неприпустимий масштаб {scale}
+@msg	its localized names take more than {_1} KB	його локалізовані назви займають понад {_1} КБ
+@msg	its objects are nested too deep ({e})	його об’єкти мають завелику вкладеність ({e})
+@msg	its tag table lists the `{_1}` tag more than once	його таблиця тегів містить тег `{_1}` більше одного разу
+@msg	not a graphic style library: {e}	це не бібліотека графічних стилів: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	це не бібліотека зразків (.vcswatches або .gpl)
+@msg	not a swatch library (format `{_1}`)	це не бібліотека зразків (формат `{_1}`)
+@msg	not a swatch library: {e}	це не бібліотека зразків: {e}
+@msg	not an action set file ({e})	це не файл набору дій ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	колірний простір профілю {other} не є RGB, CMYK чи Gray
+@msg	regular expression too large	регулярний вираз завеликий
+@msg	script file is not UTF-8 text: {value}	файл скрипта не є текстом UTF-8: {value}
+@msg	stop {i}: {e}	точка переходу {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	версія файлу обміну зразками {major}.{minor} не підтримується (лише 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	книга кольорів містить понад {ASE_MAX_ENTRIES} кольорів
+@msg	the color book is cut short	книгу кольорів обрізано
+@msg	the color book's names take more than {_1} MB	назви книги кольорів займають понад {_1} МБ
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	зображення мало б розмір {w} × {h} пікселів; растровий експорт обмежено {MAX_RASTER_SIDE} пікселями на сторону та {_1} мегапікселями: зменште масштаб або роздільну здатність
+@msg	the optimised image can't be read back: {e}	оптимізоване зображення не вдається прочитати знову: {e}
+@msg	the pixel buffer doesn't match the image size	буфер пікселів не відповідає розміру зображення
+@msg	the preview: {e}	попередній перегляд: {e}
+@msg	the request may not read the New Document profiles folder	запит не має права читати папку профілів нового документа
+@msg	the shapes are too degenerate to combine	фігури занадто вироджені для об’єднання
+@msg	the shapes cross themselves and each other too often to combine	фігури надто часто перетинають самі себе й одна одну, щоб їх можна було об’єднати
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	файл обміну зразками містить понад {ASE_MAX_ENTRIES} кольорів і груп
+@msg	the swatch exchange file is cut short	файл обміну зразками обрізано
+@msg	the {_1} plate can't be read: {e}	не вдалося прочитати форму {_1}: {e}
+@msg	this binary DXF file is damaged or cut short	цей двійковий файл DXF пошкоджено або обрізано
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	це креслення DWG, яке неможливо прочитати: збережіть його з CAD як DXF і відкрийте його
+@msg	too many classes	забагато класів
+@msg	too many groups	забагато груп
+@msg	too many layers for PSD (at most 32767)	забагато шарів для PSD (не більше 32767)
+@msg	too many swatch exchange blocks	забагато блоків обміну зразками
+@msg	unknown colour profile: {0}	невідомий профіль кольору: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} збігається з назвою вбудованого профілю
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	розмір {_1} × {_2} пікселів завеликий для GIF (не більше 65535 пікселів на сторону): зменште роздільну здатність
+@msg	{_1}: no usable transform to/from sRGB	{_1}: немає придатного перетворення в sRGB або з sRGB
+@msg	{name} is not a CMYK profile	{name} не є профілем CMYK
+@msg	{name} is not an RGB profile	{name} не є профілем RGB
+@msg	{path}: could not be read	{path}: не вдалося прочитати
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	розмір {width} × {height} пікселів завеликий для JPEG (не більше 65535 пікселів на сторону): зменште роздільну здатність
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	розмір {width} × {height} пікселів завеликий для Targa (не більше 65535 пікселів на сторону): зменште роздільну здатність
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	розмір {w} × {h} пікселів завеликий для PSD (не більше {MAX_SIDE} пікселів на сторону): зменште роздільну здатність
+
 # Copy Troubleshooting Info
 	Copy Troubleshooting Info	Копіювати відомості для усунення несправностей
 @msg	Copied the troubleshooting info	Відомості для усунення несправностей скопійовано
