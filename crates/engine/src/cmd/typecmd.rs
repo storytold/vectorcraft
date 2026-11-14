@@ -12,8 +12,8 @@ use vectorcraft_geom::{Affine, PathData, Vec2};
 use super::edit::selected_roots;
 use super::pathops::{length_given, number_given, shape_node};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, number_or, object_param,
-    ok, str_param, switch_or, targets, text_param,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, index_opt, number_or,
+    object_param, ok, str_param, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
@@ -1397,7 +1397,7 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setPathHandle";
     let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
-    let ai = p.get("anchor").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing anchor"))?;
+    let ai = index_opt(p, "anchor", C)?.ok_or_else(|| bad(C, "missing anchor"))?;
     let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
     let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
     let independent = switch_or(p, "independent", false, C)?;

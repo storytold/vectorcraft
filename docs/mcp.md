@@ -836,9 +836,13 @@ them sets what the graph stores. While Global Edit is on, a path directly in a s
 match (a graph's paths are matches only while the graph is isolated) has what changed on it stored for its series: the
 paint, weight, opacity and blend mode of the topmost visible fill and stroke, and the object's opacity and blend mode.
 `addon.arrange.randomizeOpacity` and `addon.arrange.sort` with `apply: "opacity"` store the object opacity, with the
-blend mode, of the frontmost path of a series whose opacity they change. A gradient is stored with its placement, and
-every path of the series takes that placement when the graph is drawn again. The graph does not store a stroke's
-dashes, caps, joins, arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
+blend mode, of the frontmost path of a series whose opacity they change. A gradient is stored with its placement relative
+to the box of the path it was stored from (a stroke's box is the path's bounds grown by half the weight), and every path
+of the series, the legend swatch included, takes it at the same place on its own box when the graph is drawn again, also
+after the data changes or the graph moves. The graph saves this as `fillUnitBox` and `strokeUnitBox` in its series
+paints. A gradient stored from a path with no width or no height is drawn at the place in the document where it was
+stored. So is a gradient a graph stored without these flags. The graph does not store a stroke's dashes, caps, joins,
+arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
 with the paint they had.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
@@ -1070,7 +1074,14 @@ apps (`editingData`), and always comes back with the warning `Preserve editing w
 bounds would replace the document's artboards when reopened`; with `pdfCompatible: false` it is refused, whatever
 `editingData` says. A legacy version 7 `.ai` (`aiVersion: "7"`) of the art's bounds is written as before.
 Export As PDF continues in the Save PDF dialog with Use Artboards on or off; with it off, the dialog has no
-Artboards section and the page is the bounds of the visible art.
+Artboards section and the page is the bounds of the visible art. `document.exportSelection` run in the app with no
+params or `{}` (a shortcut, or an automation call) opens the save panel, and the picked format's options dialog
+follows as after Export As: Save PDF without its Artboards section, SVG Options without its artboards, the raster
+options, EPS Options, DXF Options without Export Selected Art Only, Text Export Options with Selection Only on, or an
+exporter plug-in's parameters. Other formats are written at once. OK writes the selection alone, cropped to it, as
+`document.exportSelection` writes it, with the chosen options. While a dialog is open the call returns `null`, and
+OK returns what `file.exportAs` returns, which has no `format` or `bounds` (Text Export Options: `{path}`). To
+write without a dialog, pass `path` or any option. `file.exportAs {path, exportSelection: true, …options}` writes the selection the same way.
 
 Raster exports default to the document's raster effects resolution. An explicit `scale` sets pixels per
 point (72 times that value in ppi); `options.ppi` wins over either scale option. CLI `run --export` and
@@ -1801,6 +1812,13 @@ commands fail and change nothing, and `appearance.removeItem` removes nothing. A
 the item last. A text `start` or `end` is past the end of the text. `object.slice.divide` refuses such a `rows` or
 `columns`, `recolor.reduce` keeps each color in its own row for such a `colors`, and `layer.setProps` refuses such a
 `color`. `object.setBounds` reads a `reference` past 8 as 8, as `object.transformEach` does.
+An index or place given as a value that is not a whole number of 0 or more, such as `"3"`, `2.5`, `-1` or `true`, is
+refused with `` `anchor` must be a whole number ``, naming the key: `anchor` of `path.setHandle`, `path.moveAnchor` and
+`text.setPathHandle`, `segment` of `path.insertAnchor`, `to` of `artboard.reorder`, `library.moveGroup` and
+`graphicStyle.move`, `subpath` of `path.appendAnchor`, `path.close` and `path.reverse`, and `artboard` of
+`document.rulerOrigin`, `document.setRulerOrigin` and `document.resetRulerOrigin`. A required one left out or null is
+reported as missing (`missing anchor`). Left out or null, `subpath` takes the command's default and `artboard` is 0.
+Nothing changes and no undo step is recorded.
 The blend, envelope and gradient mesh commands refuse a string or another value that is not a number with the same
 message, as in `` `steps` must be a number, not "8" ``, and change nothing: `steps`, `distance` and `value` in
 `object.blend.make` and `object.blend.options`; `bend`, `h`, `v`, `horizontalDistortion` and `verticalDistortion` in
@@ -3697,7 +3715,9 @@ A graphic style holds an appearance (fills, strokes, effects) plus opacity, blen
 object's, type its characters'). `graphicStyle.apply {name, ids?}` gives the objects the style and links them;
 `add: true` adds the style on top of the existing appearance instead. Linked objects stay linked while they keep the
 style's look: editing their appearance or transparency breaks the link, and `graphicStyle.redefine {name?, id?}`
-updates only the objects still linked. `graphicStyle.list` returns each style with the ids linked to it and the
+updates only the objects still linked. The art of a column or marker design in a graph series is never linked:
+`graphicStyle.new` can make a style from it, and `graphicStyle.redefine` leaves its look as it was and unlinks it,
+whether it is the source or a linked object. `graphicStyle.list` returns each style with the ids linked to it and the
 style of the first selected object; `select.same.graphicStyle` selects an object's fellow users.
 Styles keep placed gradients relative to the bounds of the object they were made from, and each object a
 style is applied to gets them at the same place relative to its own bounds.
@@ -4805,7 +4825,10 @@ type, with the image under it. A group's or layer's own fills and strokes become
 members are expanded too. A symbol instance whose topmost fill or topmost stroke is visible, has an opacity above 0
 and has a geometry effect becomes a group of its art: that fill's effects reshape the filled shapes of the art and that
 stroke's effects reshape its stroked shapes, which keep their colors, as the canvas draws them (VectorCraft's own
-rule); the instance's other fills and strokes are dropped. The result is `{ids}`; when an image in the art can't be decoded, the images made from
+rule); the instance's other fills and strokes are dropped. A raster effect on that fill or stroke draws on the filled
+or stroked shapes of the art, and expanding makes it an image as for other objects; with no geometry effect, the
+instance stays an instance over a shadow or glow image, and a blur, feather or inner glow replaces it with the image.
+The result is `{ids}`; when an image in the art can't be decoded, the images made from
 raster effects do not show it, and the result also carries the `warning` that Flatten Transparency gives.
 A path's strokes stay strokes, as the
 [Expand objects](https://helpx.adobe.com/illustrator/desktop/manage-objects/arrange-objects/expand-objects.html) help
@@ -8797,6 +8820,28 @@ Insert Aki values; save it with Preserve Editing to keep them editable.
 {"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"akiRight":500}}}
 ```
 
+## Tsume
+
+`text.setFormat` and `text.setRangeStyle {tsume?}` set Tsume of the characters, a percentage that narrows the space
+around them ([the help page](https://helpx.adobe.com/illustrator/using/formatting-asian-characters.html)). The range,
+the default and how the space is measured are VectorCraft's own rules: the value is from 0 to 100, 0 by default and
+saved only when not 0, and it is the share of the blank space on each side of a character's ink, inside the
+character's own width, that is taken away. 50 halves that space, and 100 sets the ink against the characters before and
+after it; the glyph keeps its shape. A character without ink, such as a space, keeps its width. A ligature or a letter
+with its marks takes the value of its first character. Tracking, kerning and Insert Aki are added after it, and
+justification keeps it. Tsume applies to horizontal type; vertical type keeps its spacing. Character styles carry it
+(`charStyle.new`, `charStyle.setAttrs` and `charStyle.edit` refuse a value outside the range). A value that is not a
+number is refused with `` `tsume` must be a number ``, and one outside the range with `` `tsume` must be from 0 to
+100 ``. One undo step, and a call that gives the value the characters already have records none. With Show East Asian
+Options on, the Character panel shows a Tsume field, blank where the selected characters differ, with 0, 25, 50, 75 and
+100 in its menu, and a value typed past 100 sets 100; Reset Panel sets it to 0. Character Style Options shows it in
+Advanced Character Formats. Live SVG text places each character Tsume moves, and type on a path with Tsume is written
+as outlines.
+
+```json
+{"name":"run_command","arguments":{"command":"text.setRangeStyle","params":{"id":12,"start":0,"end":3,"tsume":50}}}
+```
+
 ## Composite Fonts
 
 A composite font sets each class of character in a font of its own
@@ -9500,7 +9545,7 @@ attribute map in one undo step. `to` is trimmed and must be unique. The command 
 while preserving local overrides; Undo/Redo restores the definition and its users. The `charStyleOptions`
 dialog exposes `name`, `font_family`, `font_style`, `size`, `leading`, `kerning`, `tracking`, `case`,
 `position`, `underline`, `strikethrough`, `charAlign`, `h_scale`, `v_scale`, `baseline_shift`, `tcyUpDown`,
-`tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
+`tcyLeftRight`, `rotation`, `akiLeft`, `akiRight`, `tsume`, `language`, `fill`, `fill_tint`, `stroke`, `stroke_tint`, `stroke_width`, `overprint_fill`, `overprint_stroke`,
 `ot_figure`, `ot_position`, `ot_liga`, `ot_calt`, `ot_dlig`, `ot_swsh`, `ot_salt`, `ot_titl`, `ot_ordn`, `ot_frac`,
 `ot_sets`, `section` (`general`, `basic`, `advanced`, `color` or `opentype`), and `preview`. An empty field leaves its
 attribute unset. `leading` and `kerning` also accept `Auto` to store an explicit automatic value.
@@ -9508,7 +9553,8 @@ Advanced Character Formats holds `h_scale` and `v_scale` (percent, 1 to 10000),
 `baseline_shift` (points, -1296 to 1296), the Tate-chu-yoko Settings `tcyUpDown` and `tcyLeftRight` (points,
 -1296 to 1296, as `text.setRangeStyle` takes them; an explicit 0 stays distinct from unset), `rotation` (degrees, stored from -180 to 180), Insert Aki Left and Right `akiLeft` and `akiRight` (thousandths of
 an em, with the Character panel's 0, 250, 500 and 1000 in their menus; a value typed below 0 or past 1000 sets 0 or
-1000) and `language` (a name or tag from Document
+1000), Tsume `tsume` (percent, with the Character panel's 0, 25, 50, 75 and 100 in its menu; a value typed below 0 or
+past 100 sets 0 or 100; an explicit 0 stays distinct from unset) and `language` (a name or tag from Document
 Setup's languages; English: USA stores the explicit default `null`, and a tag not in the list that the style
 already has is kept). Language sets the language the characters are shaped in; it does not change hyphenation
 or spelling.
@@ -10496,9 +10542,13 @@ give the same result there. A paragraph whose characters differ in line metrics 
 scale, or an inline graphic taller than the text) is composed with Every-line in area type of any shape, rows,
 columns and text wrap included. In a frame that is not a rectangle, or with text wrap, each line it tries is measured
 where the lines above it put it, across the line's own height, so a taller line that reaches where the frame is
-narrower, or beside a wrap object, gets the room there. Such a paragraph falls back to Single-line when the frame has
-no room for all of it, or when the search for its breaks passes VectorCraft's own limits (1,000,000 lines tried and
-2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the paragraphs of a frame).
+narrower, or beside a wrap object, gets the room there. When the frame has no room for all of such a paragraph, the
+lines it holds are still composed with the whole paragraph: VectorCraft measures the lines past the frame's end as
+wide as the span of the last line the frame holds, less their indents. Those lines overflow, or go on in the next
+threaded frame, which composes them again at its own widths. Such a paragraph falls back to Single-line when the
+frame has no room for its first line, or when the search for its breaks passes VectorCraft's own limits (1,000,000
+lines tried and 2,000,000 baseline steps for one paragraph, 2,000,000 lines and 4,000,000 steps for all the
+paragraphs of a frame).
 The UI command `type.lineComposer` (Cmd+Alt+Shift+C, in remote mode `press_key {key: "C", mods: {cmd: true, alt: true,
 shift: true}}` or `invoke_menu`) sets `singleLine` when every paragraph of the selected type (or every paragraph the
 Type tool's selection touches) uses Every-line, else `everyLine`, and returns the composer it set.

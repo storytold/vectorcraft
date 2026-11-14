@@ -46,6 +46,7 @@ font-technology	Variable	가변
 	Proportional Metrics	비례 메트릭
 	Insert Aki Left	앞 아키 삽입
 	Insert Aki Right	뒤 아키 삽입
+	Tsume	츠메
 	Character Direction	문자 방향
 	Digits	숫자
 	Arabic	아라비아어
@@ -235,6 +236,8 @@ digits	Malayalam	말라얄람어
 	Crop Image	이미지 자르기
 	Image Tools	이미지 도구
 	Remove Background…	배경 제거…
+	Draw (Pencil)	그리기(연필)
+	Place Image	이미지 가져오기
 	Remove Background	배경 제거
 	Background	배경
 	Edge Color	가장자리 색상
@@ -5978,8 +5981,8 @@ axis	Y Axis	Y축
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	내보내기 플러그인은 `extensions`를 1~{MAX_EXTENSIONS}개 선언합니다
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	그룹 밖의 매개변수는 최대 {MAX_UNGROUPED}개입니다. 나머지에는 `group`을 지정하세요
 @msg	can't encode the input	입력을 인코딩할 수 없습니다
-@msg	expected {"dataBase64"}	{"dataBase64"} 형식이어야 합니다
-@msg	expected {"objects"}	{"objects"} 형식이어야 합니다
+@msg	expected {{"dataBase64": "…"}}	{{"dataBase64": "…"}} 형식이어야 합니다
+@msg	expected {{"objects": [...]}}	{{"objects": [...]}} 형식이어야 합니다
 @msg	export `{name}`: {e}	모듈 내보내기 `{name}`: {e}
 @msg	extension {e} is listed twice	확장자 {e}이(가) 두 번 나열되었습니다
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	확장자 {e}: 점 없이 소문자와 숫자 1-16자를 사용하세요
@@ -6043,11 +6046,11 @@ axis	Y Axis	Y축
 @msg	a painted live effect returns only `objects`	페인트형 라이브 효과는 `objects`만 반환합니다
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	페인트형 라이브 효과의 조각에는 `path`, `fillRule`, `fills`, `strokes`만 있습니다
 @msg	a read-only object was left out	읽기 전용 개체가 빠졌습니다
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	읽기 전용 개체가 빠졌습니다: {"id"}만 있는 형태나 받은 그대로 반환하십시오
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	읽기 전용 개체가 빠졌습니다: {{"id": …}}만 있는 형태나 받은 그대로 반환하십시오
 @msg	a string	문자열
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	선에는 `paint`, `width`, `join`, `cap`, `miterLimit`만 있습니다
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	선은 {"paint", "width"?, "join"?, "cap"?, "miterLimit"?} 형태여야 합니다
-@msg	an effect must be {"id", "params"?, "visible"?}	효과는 {"id", "params"?, "visible"?} 형태여야 합니다
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	선은 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 형태여야 합니다
+@msg	an effect must be {{"id", "params"?, "visible"?}}	효과는 {{"id", "params"?, "visible"?}} 형태여야 합니다
 @msg	an effect on a fill returns only `fills`	칠에 적용된 효과는 `fills`만 반환합니다
 @msg	an effect on a stroke returns only `strokes`	선에 적용된 효과는 `strokes`만 반환합니다
 @msg	an object must be a JSON object	개체는 JSON 개체여야 합니다
