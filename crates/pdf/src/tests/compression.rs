@@ -455,18 +455,22 @@ fn tagged_tiffs_keep_their_icc_profile() {
         let spaces = export(&tiff(&colour(), &rgb), json!({"output": {"conversion": "destination", "destination": destination}}));
         assert!(spaces.len() == 1 && spaces[0].icc.as_deref() != Some(rgb.as_slice()), "converted to {destination}: {spaces:?}");
     }
-    // PDF/X-1a allows no ICC-based color spaces: a tagged gray TIFF, PNG or JPEG is written in
-    // DeviceGray, kept as it is, resampled or compressed with JPEG.
+    // PDF/X-1a allows no ICC-based color spaces: a tagged gray TIFF (8 or 16 bits), PNG or JPEG is
+    // written in DeviceGray, kept as it is, resampled or compressed with JPEG, and the file passes
+    // the PDF/X-1a check.
     let compressions = [json!({}), json!({"gray": {"downsample": "bicubic", "ppi": 150, "abovePpi": 225}}), json!({"gray": {"compression": "jpeg"}})];
+    let tiff16 = tiff(&DynamicImage::ImageLuma16(colour().to_luma16()), &gray);
     let png = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Png), "image/png");
     let jpeg = doc(tagged(&colour().grayscale(), &gray, ImageFormat::Jpeg), "image/jpeg");
-    for (format, d) in [("TIFF", tiff(&colour().grayscale(), &gray)), ("PNG", png), ("JPEG", jpeg)] {
+    for (format, d) in [("TIFF", tiff(&colour().grayscale(), &gray)), ("TIFF, 16 bits", tiff16), ("PNG", png), ("JPEG", jpeg)] {
         for compression in &compressions {
             let mut settings: PdfSettings =
                 serde_json::from_value(json!({"standard": "pdfX1a", "compatibility": "1.3", "compression": compression.clone()})).unwrap();
             settings.compression.compress_text = false;
             let r = export_with_report(&d, &PdfOptions { settings, ..Default::default() });
-            let spaces = image_spaces(&r.unwrap_or_else(|e| panic!("PDF/X-1a, {format}, {compression}: {e}")).bytes);
+            let bytes = r.unwrap_or_else(|e| panic!("PDF/X-1a, {format}, {compression}: {e}")).bytes;
+            crate::pdfx::verify(&bytes, Standard::PdfX1a).unwrap_or_else(|e| panic!("PDF/X-1a, {format}, {compression}: {e}"));
+            let spaces = image_spaces(&bytes);
             let gray = spaces.len() == 1 && spaces[0].space == "DeviceGray" && spaces[0].icc.is_none();
             assert!(gray, "PDF/X-1a, {format}, {compression}: {spaces:?}");
         }
