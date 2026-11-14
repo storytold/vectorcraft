@@ -1025,7 +1025,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
                     ItemTarget::Item { index, .. } => Some((id, Some(index))),
                     ItemTarget::Top => None,
                 }),
-                None => ids.first().map(|id| (*id, Some(index))),
+                None => targets.first().map(|id| (*id, Some(index))),
             };
             let mut changed = 0;
             edit_items(s, &targets, item, of, cmd, label, !stroke, |n, i| {
