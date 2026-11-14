@@ -8973,3 +8973,119 @@ digits	Hindi	Hindi
 	Grommets	Öljetter
 	Grommet Inset	Öljetternas avstånd från kanten
 	Diameter	Diameter
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D-effekter kräver ändliga koordinater inom 100 miljoner punkter
+@msg	3D effects require one to ten lights	3D-effekter kräver en till tio ljuskällor
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP-djup {_1}: 1, 4, 8, 16, 24 eller 32 bitar per pixel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP-kodningen misslyckades: {width} × {height} pixlar passar inte formatet eller pixelbufferten
+@msg	GIF encoding failed: the palette image is malformed	GIF-kodningen misslyckades: palettbilden är felaktigt uppbyggd
+@msg	GIF encoding failed: {e}	GIF-kodningen misslyckades: {e}
+@msg	JPEG colour profile: {e}	JPEG-färgprofil: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	JPEG encoding failed: {e}	JPEG-kodningen misslyckades: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	PNG encoding failed: the palette image is malformed	PNG-kodningen misslyckades: palettbilden är felaktigt uppbyggd
+@msg	PNG encoding failed: {e}	PNG-kodningen misslyckades: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG-kodningen misslyckades: {width} × {height} pixlar är inte en giltig bildstorlek
+@msg	PSD colour profile: {e}	PSD-färgprofil: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	Revolve profile contains invalid coordinates	Profilen för Rotera runt axel innehåller ogiltiga koordinater
+@msg	Revolve profile is too complex	Profilen för Rotera runt axel är för komplex
+@msg	Revolve projection is not finite	Projektionen för Rotera runt axel är inte ändlig
+@msg	Revolve requires finite profile coordinates within 100 million points	Rotera runt axel kräver ändliga profilkoordinater inom 100 miljoner punkter
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Ytan för Rotera runt axel är för komplex; minska Segment eller förenkla profilen
+@msg	Revolve surface is too complex; simplify the profile	Ytan för Rotera runt axel är för komplex; förenkla profilen
+@msg	Revolve visibility cannot split the projected boundary	Synlighetsberäkningen för Rotera runt axel kan inte dela den projicerade gränsen
+@msg	Revolve visibility creates too many fragments	Synlighetsberäkningen för Rotera runt axel skapar för många fragment
+@msg	Revolve visibility creates too many vector anchors	Synlighetsberäkningen för Rotera runt axel skapar för många vektorankarpunkter
+@msg	Revolve visibility exceeds its geometry work limit	Synlighetsberäkningen för Rotera runt axel överskrider sin gräns för geometriarbete
+@msg	Revolve visibility exceeds its spatial index limit	Synlighetsberäkningen för Rotera runt axel överskrider sin gräns för det rumsliga indexet
+@msg	Revolve visibility has too many boundary crossings	Synlighetsberäkningen för Rotera runt axel har för många gränskorsningar
+@msg	Revolve visibility has too many input anchors	Synlighetsberäkningen för Rotera runt axel har för många inkommande ankarpunkter
+@msg	Revolve visibility requires convex cap sectors	Synlighetsberäkningen för Rotera runt axel kräver konvexa sektorer i locken
+@msg	Revolve visibility requires finite projected faces	Synlighetsberäkningen för Rotera runt axel kräver ändliga projicerade ytor
+@msg	SVG options: {e}	SVG-alternativ: {e}
+@msg	Save for Web settings: {e}	Inställningar för Spara för webben: {e}
+@msg	TIFF colour profile: {e}	TIFF-färgprofil: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	TIFF encoding failed: {e}	TIFF-kodningen misslyckades: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa-djup {_1}: 16, 24 eller 32 bitar per pixel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa-kodningen misslyckades: pixelbufferten stämmer inte med bildens storlek
+@msg	The 3D projection is not finite	3D-projektionen är inte ändlig
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D-skuggan är för komplex; stäng av Skuggor eller förenkla grafiken
+@msg	The shape contains invalid coordinates	Formen innehåller ogiltiga koordinater
+@msg	Too many Revolve faces for visibility evaluation	För många ytor i Rotera runt axel för synlighetsberäkningen
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft läser högst {ASE_MAX_ENTRIES} färger och grupper från en fil för färgruteutbyte, och det här biblioteket har {entries}
+@msg	WebP encoding failed: {e}	WebP-kodningen misslyckades: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`index` must be a whole number	`index` måste vara ett heltal
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` är smallThumb, mediumThumb, largeThumb, smallList eller largeList
+@msg	a line can't run from a point to itself	en linje kan inte gå från en punkt till sig själv
+@msg	a line needs at least two points	en linje behöver minst två punkter
+@msg	a number cannot be read	ett tal kan inte läsas
+@msg	a swatch exchange block is too long	ett block i en fil för färgruteutbyte är för långt
+@msg	a swatch exchange name is too long	ett namn i en fil för färgruteutbyte är för långt
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	en bild på {sw} × {sh} kan inte skalas om till {width} × {height} pixlar
+@msg	a {width} × {height} image is too large	en bild på {width} × {height} är för stor
+@msg	a {width} × {height} image: {e}	en bild på {width} × {height}: {e}
+@msg	an image could not be written: {e}	en bild kunde inte skrivas: {e}
+@msg	an image that couldn't be read was left out	en bild som inte kunde läsas utelämnades
+@msg	can't open “{name}”: {e}	kan inte öppna ”{name}”: {e}
+@msg	cannot align zip entries to {align} bytes	kan inte justera zip-posterna till {align} byte
+@msg	cannot open the automation {kind} root `{_1}`: {e}	kan inte öppna automatiseringens rotmapp ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	kan inte läsa profilen: {0}
+@msg	color book version {version} isn't supported (only 1)	färgboksversion {version} stöds inte (endast 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	färgböcker i färgrymden {other} stöds inte (endast RGB, CMYK och Lab)
+@msg	file name too long to zip: {_1}	filnamnet är för långt för att zippas: {_1}
+@msg	file name too long to zip: {name}	filnamnet är för långt för att zippas: {name}
+@msg	freeform line {i}: {e}	fri linje {i}: {e}
+@msg	freeform point {i}: {e}	fri punkt {i}: {e}
+@msg	give `{key}` or `{other}`, not both	ange `{key}` eller `{other}`, inte båda
+@msg	grayscale profiles can't be working spaces yet	gråskaleprofiler kan inte vara arbetsfärgrymder än
+@msg	input contains NaN or infinite coordinates	indata innehåller NaN eller oändliga koordinater
+@msg	input path could not be closed	den inkommande banan kunde inte slutas
+@msg	invalid ICC profile: {0}	ogiltig ICC-profil: {0}
+@msg	invalid scale {scale}	ogiltig skala {scale}
+@msg	its localized names take more than {_1} KB	dess lokaliserade namn tar mer än {_1} KB
+@msg	its objects are nested too deep ({e})	dess objekt är kapslade för djupt ({e})
+@msg	its tag table lists the `{_1}` tag more than once	dess taggtabell listar taggen `{_1}` mer än en gång
+@msg	not a graphic style library: {e}	inte ett bibliotek med grafiska stilar: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	inte ett färgrutebibliotek (.vcswatches eller .gpl)
+@msg	not a swatch library (format `{_1}`)	inte ett färgrutebibliotek (format `{_1}`)
+@msg	not a swatch library: {e}	inte ett färgrutebibliotek: {e}
+@msg	not an action set file ({e})	inte en fil med åtgärdsuppsättning ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	profilens färgrymd {other} är inte RGB, CMYK eller Gray
+@msg	regular expression too large	det reguljära uttrycket är för stort
+@msg	script file is not UTF-8 text: {value}	skriptfilen är inte UTF-8-text: {value}
+@msg	stop {i}: {e}	stopp {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	version {major}.{minor} av filer för färgruteutbyte stöds inte (endast 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	färgboken innehåller fler än {ASE_MAX_ENTRIES} färger
+@msg	the color book is cut short	färgboken är avkortad
+@msg	the color book's names take more than {_1} MB	färgbokens namn tar mer än {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	bilden skulle bli {w} × {h} pixlar; rasterexporter är begränsade till {MAX_RASTER_SIDE} pixlar per sida och {_1} megapixel: sänk skalan eller upplösningen
+@msg	the optimised image can't be read back: {e}	den optimerade bilden kan inte läsas tillbaka: {e}
+@msg	the pixel buffer doesn't match the image size	pixelbufferten stämmer inte med bildens storlek
+@msg	the preview: {e}	förhandsgranskningen: {e}
+@msg	the request may not read the New Document profiles folder	begäran får inte läsa mappen med profiler för nytt dokument
+@msg	the shapes are too degenerate to combine	formerna är för degenererade för att kombineras
+@msg	the shapes cross themselves and each other too often to combine	formerna korsar sig själva och varandra för ofta för att kombineras
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	filen för färgruteutbyte innehåller fler än {ASE_MAX_ENTRIES} färger och grupper
+@msg	the swatch exchange file is cut short	filen för färgruteutbyte är avkortad
+@msg	the {_1} plate can't be read: {e}	plåten {_1} kan inte läsas: {e}
+@msg	this binary DXF file is damaged or cut short	den här binära DXF-filen är skadad eller avkortad
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	det här är en DWG-ritning, som inte kan läsas: spara den från CAD-appen som DXF och öppna den
+@msg	too many classes	för många klasser
+@msg	too many groups	för många grupper
+@msg	too many layers for PSD (at most 32767)	för många lager för PSD (högst 32767)
+@msg	too many swatch exchange blocks	för många block i filen för färgruteutbyte
+@msg	unknown colour profile: {0}	okänd färgprofil: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} krockar med namnet på en inbyggd profil
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pixlar är för stort för GIF (högst 65535 pixlar per sida): sänk upplösningen
+@msg	{_1}: no usable transform to/from sRGB	{_1}: ingen användbar transformering till/från sRGB
+@msg	{name} is not a CMYK profile	{name} är inte en CMYK-profil
+@msg	{name} is not an RGB profile	{name} är inte en RGB-profil
+@msg	{path}: could not be read	{path}: kunde inte läsas
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pixlar är för stort för JPEG (högst 65535 pixlar per sida): sänk upplösningen
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pixlar är för stort för Targa (högst 65535 pixlar per sida): sänk upplösningen
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pixlar är för stort för PSD (högst {MAX_SIDE} pixlar per sida): sänk upplösningen
