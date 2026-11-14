@@ -44,7 +44,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rectangle",
             [],
             None,
-            "{x, y, width, height: pt, 0 or more, radius?: pt, 0 or more, radii?: [tl,tr,br,bl], each 0 or more, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top-left corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height: pt (0 or more), radius?: pt (0 or more), radii?: [tl,tr,br,bl] (each 0 or more), startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top-left corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             rectangle
         ),
@@ -53,7 +53,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ellipse",
             [],
             None,
-            "{x, y, width, height: pt, 0 or more, startAngle?, endAngle?: degrees (counter-clockwise from 3 o'clock, as object.setLiveShape's pieStart and pieEnd; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
+            "{x, y, width, height: pt (0 or more), startAngle?, endAngle?: degrees (counter-clockwise from 3 o'clock, as object.setLiveShape's pieStart and pieEnd; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise about the centre (0: upright)} → {id}",
             has_doc,
             ellipse
         ),
@@ -62,7 +62,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Polygon",
             [],
             None,
-            "{cx, cy, radius: pt, 0 or more, sides=6: a whole number 3 to 1000, rounded=0, randomized=0: -10 to 10, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a corner straight up)} → {id}",
+            "{cx, cy, radius: pt (0 or more), sides=6: a whole number 3 to 1000, rounded=0, randomized=0: -10 to 10, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top corner; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a corner straight up)} → {id}",
             has_doc,
             polygon
         ),
@@ -71,7 +71,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Star",
             [],
             None,
-            "{cx, cy, radius1: pt, 0 or more, radius2?: pt, 0.01 to 1 times radius1 (default half of it), points=5: a whole number 3 to 1000, rounded=0, randomized=0: -10 to 10, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top point; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a point straight up)} → {id}",
+            "{cx, cy, radius1: pt (0 or more), radius2?: pt (0.01 to 1 times radius1; default half of it), points=5: a whole number 3 to 1000, rounded=0, randomized=0: -10 to 10, startAngle?, endAngle?: degrees (the part of the outline kept, clockwise from its first anchor, the top point; each side an equal share of 360; default 0 and 360), arcMode?: whole|pie|chord|arc, rotation?: deg clockwise (0: a point straight up)} → {id}",
             has_doc,
             star
         ),
@@ -80,7 +80,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Spiral",
             [],
             None,
-            "{cx, cy, radius: pt, 0 or more, turns=3: 0.01 to 1024, divergence=1: 0 to 1000, innerRadius=0: 0 to 0.999 of radius, clockwise=true} → {id}",
+            "{cx, cy, radius: pt (0 or more), turns=3: 0.01 to 1024, divergence=1: 0 to 1000, innerRadius=0: 0 to 0.999 of radius, clockwise=true} → {id}",
             has_doc,
             spiral
         ),
@@ -89,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "3D Box",
             [],
             None,
-            "{x, y, width, height: pt, 0 or more, angleX=30 (degrees about the level axis: positive tips the top away from you), angleY=30 (degrees about the upright axis: positive turns the right side away from you), angleZ=0 (degrees clockwise in the page), parallelX=false, parallelY=true, parallelZ=false} → {id}",
+            "{x, y, width, height: pt (0 or more), angleX=30 (degrees about the level axis: positive tips the top away from you), angleY=30 (degrees about the upright axis: positive turns the right side away from you), angleZ=0 (degrees clockwise in the page), parallelX=false, parallelY=true, parallelZ=false} → {id}",
             has_doc,
             box3d
         ),
@@ -98,7 +98,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Configure Shape",
             [],
             None,
-            "{ids?, radius?: pt, 0 or more (fitted to half each rectangle's shorter side), radii?: [tl,tr,br,bl], each 0 or more, startAngle?, endAngle?: degrees (as addon.shapes.rectangle, ellipse, polygon and star take them: an ellipse's counter-clockwise from 3 o'clock, the others' clockwise along the outline), arcMode?: whole|pie|chord|arc, sides?: a whole number 3 to 1000, isStar?, spokeRatio?: 0.01 to 1, rounded?, randomized?: -10 to 10, turns?: 0.01 to 1024, divergence?: 0 to 1000, innerRadius?: 0 to 0.999, angleX?, angleY?: degrees (as addon.shapes.box3d: positive tips the top, or turns the right side, away from you), angleZ?: degrees clockwise in the page, parallelX?, parallelY?, parallelZ?, reset?: bool} → {updated}",
+            "{ids?, radius?: pt (0 or more; fitted to half each rectangle's shorter side), radii?: [tl,tr,br,bl] (each 0 or more), startAngle?, endAngle?: degrees (as addon.shapes.rectangle, ellipse, polygon and star take them: an ellipse's counter-clockwise from 3 o'clock, the others' clockwise along the outline), arcMode?: whole|pie|chord|arc, sides?: a whole number 3 to 1000, isStar?, spokeRatio?: 0.01 to 1, rounded?, randomized?: -10 to 10, turns?: 0.01 to 1024, divergence?: 0 to 1000, innerRadius?: 0 to 0.999, angleX?, angleY?: degrees (as addon.shapes.box3d: positive tips the top, or turns the right side, away from you), angleZ?: degrees clockwise in the page, parallelX?, parallelY?, parallelZ?, reset?: bool} an omitted or null value keeps each shape's setting → {updated}",
             has_selection,
             configure
         ),

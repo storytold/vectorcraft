@@ -10876,9 +10876,10 @@ it ends up in front), baked with `effect.expandAppearance`, then `object.pathfin
 
 The `addon.shapes.*` commands draw rotatable 3D boxes (`addon.shapes.box3d`) and rectangles, ellipses, polygons, stars and
 spirals that keep their settings (`addon.shapes.rectangle`, `ellipse`, `polygon`, `star`, `spiral`), and
-`addon.shapes.configure` changes those settings on the selected shapes (or `ids`). An omitted or null value takes its
-default. A value outside its range is an error that names the parameter and the range, and the command then draws or
-changes nothing. The ranges are VectorCraft's own:
+`addon.shapes.configure` changes those settings on the selected shapes (or `ids`). In a drawing command, an omitted or
+null value takes the default in the table. In `configure`, an omitted or null value keeps each shape's setting. A value
+outside its range is an error that names the parameter and the range, and the command then draws or changes nothing.
+The ranges are VectorCraft's own:
 
 | Parameter | Commands | Range (default) |
 |---|---|---|
