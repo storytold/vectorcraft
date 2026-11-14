@@ -390,10 +390,11 @@ fn raster(format: image::ImageFormat) -> Option<RasterKind> {
 /// orientation ([`vectorcraft_doc::cmyk::exif_orientation`], read for PNG, JPEG, GIF, WebP and
 /// TIFF) leaves the pixels as stored. Otherwise the pixels are read ([`decoded`],
 /// [`tiff_pixels`]), turned or flipped as the orientation says, and written as PNG, so usvg sizes
-/// and fits the image as it is shown. A CMYK TIFF also keeps its inks as a CMYK TIFF
-/// ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]), and a CMYK JPEG or TIFF that is turned keeps them
-/// turned ([`vectorcraft_doc::cmyk::turned_cmyk`]). `None` when the pixels can't be read, and for
-/// a TIFF with more strips or tiles than the decoder can count
+/// and fits the image as it is shown, with the resolution the file declares
+/// ([`vectorcraft_doc::ppi::resolution`]), its axes swapped by a quarter turn. A CMYK TIFF also
+/// keeps its inks as a CMYK TIFF ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]), and a CMYK JPEG
+/// or TIFF that is turned keeps them turned ([`vectorcraft_doc::cmyk::turned_cmyk`]). `None` when
+/// the pixels can't be read, and for a TIFF with more strips or tiles than the decoder can count
 /// ([`vectorcraft_doc::cmyk::oversized_tiff`]), before any decoder opens it.
 fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     use image::ImageFormat as F;
@@ -409,9 +410,13 @@ fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     }
     let tiff = image::guess_format(&bytes).ok() == Some(F::Tiff);
     let mut img = if tiff { tiff_pixels(&bytes)? } else { decoded(&bytes, format)? };
+    let ppi = vectorcraft_doc::ppi::resolution(&bytes);
+    // The resolution describes the stored pixels; a quarter turn swaps its axes.
+    let quarter = orientation.is_some_and(|o| o.to_exif() >= 5);
+    let shown_ppi = ppi.map(|(x, y)| if quarter { (y, x) } else { (x, y) });
     let cmyk = match orientation {
-        Some(o) if matches!(format, F::Jpeg | F::Tiff) => vectorcraft_doc::cmyk::turned_cmyk(&bytes, o, None).map(|(tiff, _)| tiff),
-        None if tiff => vectorcraft_doc::cmyk::stored_cmyk_tiff(&bytes, None),
+        Some(o) if matches!(format, F::Jpeg | F::Tiff) => vectorcraft_doc::cmyk::turned_cmyk(&bytes, o, shown_ppi).map(|(tiff, _)| tiff),
+        None if tiff => vectorcraft_doc::cmyk::stored_cmyk_tiff(&bytes, ppi),
         _ => None,
     };
     if let Some(orientation) = orientation {
@@ -419,6 +424,9 @@ fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     }
     let mut png = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut png), F::Png).ok()?;
+    if let Some(ppi) = shown_ppi {
+        png = vectorcraft_doc::ppi::with_png_resolution(&png, ppi);
+    }
     Some(Shown { kind: ImageKind::PNG, bytes: Arc::new(png), cmyk })
 }
 

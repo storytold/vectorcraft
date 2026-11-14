@@ -55,6 +55,7 @@ mod pixels;
 pub use pixels::{GraySource, MAX_RASTER_ALLOC, PixelPick};
 pub mod placed_document;
 pub mod plugin_data;
+pub mod ppi;
 pub mod profiles;
 pub mod puppet;
 pub mod range;
