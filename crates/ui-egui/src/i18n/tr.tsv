@@ -4255,6 +4255,7 @@ axis	Both	Her İkisi
 @msg	`select` must be true or false	`select` true veya false olmalıdır
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` ve `maxAnchors` tam sayı olmalıdır
 @msg	`{key}` must be a number not below 0	`{key}` 0'dan küçük olmayan bir sayı olmalıdır
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` 0'dan küçük olmayan dört sayı olmalıdır: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` [x, y, width, height] olmalıdır: dört sonlu sayı, genişlik ve yükseklik negatif olmamalı
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}`, `{max_key}` değerinden büyük
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	şunlardan en az birini verin: `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -4711,11 +4712,11 @@ axis	Both	Her İkisi
 @msg	unknown effect `{id}`	bilinmeyen etki `{id}`
 @msg	unknown format	bilinmeyen format
 @msg	unknown format `{f}` (Save writes {_1})	bilinmeyen format `{f}` (Kaydet, {_1} yazar)
-@msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (noktalar, çizgiler)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	bilinmeyen gradyan türü `{k}` (doğrusal, radyal, konik, elmas, serbest biçimli)
+@msg	unknown freeform mode `{m}` (points, lines)	bilinmeyen serbest biçimli mod `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	bilinmeyen gradyan türü `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	bilinmeyen vurgu `{h}`
 @msg	unknown option `{path}.{k}`	bilinmeyen seçenek `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (koru, benzet veya at)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	bilinmeyen üst baskılar `{o}` (preserve, simulate veya discard)
 @msg	unknown panel `{raw}`	bilinmeyen panel `{raw}`
 @msg	panels can't be shown in Presentation Mode	Sunum Modunda paneller gösterilemez
 @msg	unknown preference `{key}`	bilinmeyen tercih `{key}`
@@ -4734,11 +4735,11 @@ axis	Both	Her İkisi
 @msg	`{key}` must be an object	`{key}` bir nesne olmalıdır
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` tek başına çalışır, toplu iş adımı olarak değil
 @msg	unknown preset (one of {_1})	bilinmeyen ön ayar ({_1}'den biri)
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	bilinmeyen ön ayar `{name}` (yüksek, orta, düşük veya kaydedilmiş bir ayar: bkz. flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	bilinmeyen ön ayar `{name}` (high, medium, low veya kaydedilmiş bir ayar: bkz. flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	bilinmeyen ön ayar `{name}` (bkz. flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	bilinmeyen ön ayar `{name}` (bkz. webExport.presets.list)
 @msg	unknown preset `{name}`: not a built-in or saved preset (see imageTrace.presets)	bilinmeyen ön ayar `{name}`: yerleşik ya da kayıtlı bir ön ayar değil (bkz. imageTrace.presets)
-@msg	unknown side `{other}` (left|right|top|bottom)	bilinmeyen taraf `{other}` (sol|sağ|üst|alt)
+@msg	unknown side `{other}` (left|right|top|bottom)	bilinmeyen taraf `{other}` (left|right|top|bottom)
 @msg	unknown tool `{tool}`	bilinmeyen araç `{tool}`
 @msg	unknown tool `{t}`	bilinmeyen araç `{t}`
 @msg	unknown tool or command `{key}`	bilinmeyen araç veya komut `{key}`
@@ -5047,6 +5048,7 @@ effect	Soft	Yumuşak
 	VectorCraft Title Bar on Every Desktop	Her Masaüstünde VectorCraft Başlık Çubuğu
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	VECTORCRAFT_TITLEBAR ortam değişkeni ayarlı olduğu sürece başlık çubuğunu o seçer.
 	System Title Bar takes precedence over this option while it is on.	Sistem Başlık Çubuğu açık olduğu sürece bu seçeneğe göre önceliklidir.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Her Masaüstünde VectorCraft Başlık Çubuğu kapalı olduğu sürece, bu seçenek açık da olsa kapalı da olsa pencerenin başlık çubuğunu bu masaüstü çizer.
 	Value Axis	Değer Ekseni
 	On Left Side	Sol Tarafta
 	On Right Side	Sağ Tarafta
@@ -6565,6 +6567,8 @@ axis	Y Axis	Y ekseni
 	Action Options…	Eylem Seçenekleri…
 	Action Options	Eylem Seçenekleri
 	Playback Options…	Oynatma Seçenekleri…
+	Button Mode	Düğme Modu
+	No actions.	Eylem yok.
 	Insert Stop…	Durak Ekle…
 	Insert Stop	Durak Ekle
 	Record Stop	Durak Kaydet

@@ -27,8 +27,9 @@ pub const ALIGNMENTS: [(Justify, &str, &str, &str); 7] = [
     (Justify::JustifyAll, "dc-para-justify-all", "Justify all lines", "justifyAll"),
 ];
 
-/// Paragraph attributes apply to the selected text objects' paragraphs or, while the Type tool
-/// edits text, to the paragraphs its selection (or caret) touches (ending its typing session).
+/// Paragraph attributes apply to the paragraphs of every frame of the selected stories or, while
+/// the Type tool edits text, to the paragraphs its selection (or caret) touches (ending its typing
+/// session).
 fn format(app: &mut VectorcraftApp, p: Value) {
     para_cmd(app, "text.setFormat", p);
 }
@@ -74,8 +75,16 @@ fn para_cmd(app: &mut VectorcraftApp, cmd: &str, p: Value) {
     run_on_paragraphs(app, cmd, p).ok();
 }
 
-/// Run `cmd` on the paragraphs the Paragraph panel acts on ([`format`]) and return its result.
-pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Value) -> Result<Value, String> {
+/// Run `cmd` on the paragraphs the Paragraph panel acts on ([`format`]) and return its result. With
+/// the Selection tool these are the paragraphs of every frame of the selected stories
+/// ([`super::character::selected_stories`]).
+pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, p: Value) -> Result<Value, String> {
+    run_on(app, cmd, p, true)
+}
+
+/// [`run_on_paragraphs`], with the Selection tool on the selected type objects alone unless
+/// `stories`.
+fn run_on(app: &mut VectorcraftApp, cmd: &str, mut p: Value, stories: bool) -> Result<Value, String> {
     if let Some((id, a, b)) = super::character::text_editing(app) {
         super::character::end_typing(app);
         match super::character::text_story(app) {
@@ -87,6 +96,8 @@ pub(crate) fn run_on_paragraphs(app: &mut VectorcraftApp, cmd: &str, mut p: Valu
                 p["end"] = json!(b);
             }
         }
+    } else if stories {
+        super::character::target_selected_stories(app, &mut p);
     }
     app.run(cmd, p)
 }
@@ -207,14 +218,10 @@ fn visit_paragraphs(app: &VectorcraftApp, mut f: impl FnMut(&ParaStyle)) {
         }
         return;
     }
-    for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        node.walk(&mut |c| {
-            if let NodeKind::Text(t) = &c.kind {
-                for i in 0..t.paragraph_count() {
-                    f(t.para_at(i));
-                }
-            }
-        });
+    for t in super::character::selected_story_texts(app) {
+        for i in 0..t.paragraph_count() {
+            f(t.para_at(i));
+        }
     }
 }
 
@@ -327,18 +334,8 @@ fn selected_paragraph_direction(app: &VectorcraftApp, fallback: &ParaStyle) -> O
     {
         return if collect_text_direction(text, Some((a, b)), &mut shared) { shared.or(default) } else { None };
     }
-    fn collect(node: &vectorcraft_doc::Node, shared: &mut Option<bool>) -> bool {
-        if let NodeKind::Text(text) = &node.kind {
-            return collect_text_direction(text, None, shared);
-        }
-        node.children().is_none_or(|children| children.iter().all(|child| collect(child, shared)))
-    }
-    for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        if !collect(node, &mut shared) {
-            return None;
-        }
-    }
-    shared.or(default)
+    let texts = super::character::selected_story_texts(app);
+    if texts.into_iter().all(|t| collect_text_direction(t, None, &mut shared)) { shared.or(default) } else { None }
 }
 
 /// A hyphenation option shared by every paragraph in scope, or `None` when they differ.
@@ -364,18 +361,8 @@ fn selected_alignment(app: &VectorcraftApp, fallback: &ParaStyle) -> Option<Just
     {
         return if collect_text_alignment(text, Some((a, b)), &mut shared) { shared.or(default) } else { None };
     }
-    fn collect(node: &vectorcraft_doc::Node, shared: &mut Option<Justify>) -> bool {
-        if let NodeKind::Text(text) = &node.kind {
-            return collect_text_alignment(text, None, shared);
-        }
-        node.children().is_none_or(|children| children.iter().all(|child| collect(child, shared)))
-    }
-    for node in st.selection.objects.iter().filter_map(|id| st.doc.node(*id)) {
-        if !collect(node, &mut shared) {
-            return None;
-        }
-    }
-    shared.or(default)
+    let texts = super::character::selected_story_texts(app);
+    if texts.into_iter().all(|t| collect_text_alignment(t, None, &mut shared)) { shared.or(default) } else { None }
 }
 
 /// The seven alignment buttons shared by Paragraph and Properties; no button is selected
@@ -491,7 +478,7 @@ pub(crate) fn number_sample(style: vectorcraft_doc::text::NumberStyle, n: u32) -
 /// the Type tool's anchor and caret past the characters inserted at or before them).
 pub(crate) fn convert_list_to_text(app: &mut VectorcraftApp) -> Result<Value, String> {
     text_style(app).ok_or("select some type first")?;
-    run_on_paragraphs(app, "text.convertListToText", json!({}))
+    run_on(app, "text.convertListToText", json!({}), false)
 }
 
 /// The Bullets button and the arrow beside it (Paragraph panel). The button makes the paragraphs

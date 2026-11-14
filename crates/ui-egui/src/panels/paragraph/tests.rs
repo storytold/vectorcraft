@@ -1055,3 +1055,58 @@ fn reset_panel_leaves_an_undo_group_open_in_another_document() {
     app.run("edit.undoGroup.end", json!({})).unwrap();
     assert_eq!(steps(app.session.active().unwrap()), a_steps, "the later edit is part of the Batch step");
 }
+
+/// With the Selection tool a selected frame of a threaded story stands for the whole story: the
+/// Paragraph panel's changes and Reset Panel reach its locked and hidden frames, each in one undo
+/// step, other type keeps its paragraphs, and the alignment buttons read every frame.
+#[test]
+fn selection_tool_paragraph_changes_reach_every_frame_of_the_story() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 900, "height": 300})).unwrap();
+    let story = "The quick brown fox jumps over the lazy dog.\n".repeat(12);
+    let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+    let a = app.run("text.create", area).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("text.thread.add", json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].as_u64().unwrap();
+    let c = app.run("text.thread.add", json!({"from": b, "rect": [400, 10, 150, 200]})).unwrap()["id"].as_u64().unwrap();
+    let other = app.run("text.create", json!({"x": 10, "y": 250, "text": "Other", "size": 12})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.set", json!({"ids": [b]})).unwrap();
+    app.run("object.lock", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [c]})).unwrap();
+    app.run("object.hide", json!({})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let paragraphs = |app: &VectorcraftApp, id: u64| match &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind {
+        NodeKind::Text(t) => (0..t.paragraph_count()).map(|i| t.para_at(i).clone()).collect::<Vec<_>>(),
+        _ => panic!("not text"),
+    };
+    let undo_steps = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
+    for id in [a, b, c] {
+        assert!(!paragraphs(&app, id).is_empty(), "frame {id} holds text");
+    }
+
+    let steps = undo_steps(&app);
+    format(&mut app, json!({"spaceBefore": 4}));
+    assert_eq!(undo_steps(&app), steps + 1, "one undo step");
+    for id in [a, b, c] {
+        assert!(paragraphs(&app, id).iter().all(|p| (p.space_before - 4.0).abs() < 1e-9), "frame {id} takes the space");
+    }
+    assert!(paragraphs(&app, other).iter().all(|p| p.space_before.abs() < 1e-9), "other type keeps its paragraphs");
+    assert_eq!(shared_para_field(&app, |p| p.space_before), Some(4.0));
+
+    align(&mut app, "center").unwrap();
+    for id in [a, b, c] {
+        assert!(paragraphs(&app, id).iter().all(|p| p.justify == Justify::Center), "frame {id} is centered");
+    }
+    assert!(paragraphs(&app, other).iter().all(|p| p.justify != Justify::Center));
+    assert_eq!(selected_alignment(&app, &ParaStyle::default()), Some(Justify::Center));
+    // A hidden frame aligned otherwise leaves no alignment button on.
+    app.run("text.setStyle", json!({"ids": [c], "justify": "right"})).unwrap();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert_eq!(selected_alignment(&app, &ParaStyle::default()), None);
+
+    let steps = undo_steps(&app);
+    reset_panel(&mut app);
+    assert_eq!(undo_steps(&app), steps + 1, "Reset Panel is one undo step");
+    for id in [a, b, c] {
+        assert!(paragraphs(&app, id).iter().all(|p| p.space_before.abs() < 1e-9 && p.justify == Justify::Auto), "frame {id} is reset");
+    }
+}

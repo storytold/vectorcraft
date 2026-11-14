@@ -618,6 +618,11 @@ pub struct UiState {
     /// Shift-click on a set's name added. Delete Selection deletes them. Not saved.
     #[serde(skip)]
     pub action_sets_selected: Vec<usize>,
+    /// The Actions panel shows its actions as buttons (panel menu › Button Mode,
+    /// [`crate::panels::actions::button_mode`]) instead of its list; kept with the UI preferences,
+    /// and off in preferences saved without it.
+    #[serde(default)]
+    pub action_button_mode: bool,
     /// Recording in progress: (set index, action name, journal length when recording started).
     #[serde(skip)]
     pub recording: Option<(usize, String, usize)>,
@@ -1171,6 +1176,7 @@ impl Default for UiState {
             action_sets: crate::panels::actions::default_sets(),
             action_set: None,
             action_sets_selected: vec![],
+            action_button_mode: false,
             recording: None,
             recording_into: None,
             recording_at: None,
