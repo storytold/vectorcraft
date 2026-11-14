@@ -21,7 +21,7 @@ use usvg::{ImageHrefResolver, ImageKind, roxmltree};
 use vectorcraft_doc::LinkInfo;
 use vectorcraft_doc::links::missing_placeholder;
 
-use super::{Edits, depth, href};
+use super::{Edits, budget, depth, href};
 use crate::{ImportOptions, MAX_ELEMENT_DEPTH, MAX_SVGZ, SvgError};
 
 /// Most nested SVG images an imported SVG may decode (#3564).
@@ -74,6 +74,12 @@ pub(in crate::import) struct Files {
     /// The CMYK TIFF stored in place of a turned CMYK image, by the address of the PNG usvg got
     /// (kept here too, so the address stays its own).
     cmyk: Mutex<HashMap<usize, (Bytes, Bytes)>>,
+    /// The bytes of style values usvg copies into the elements of the SVG and of the SVG images
+    /// read so far ([`budget`]).
+    styles: AtomicU64,
+    /// Why an SVG image refused the whole SVG: what usvg would make of it is past [`budget`]'s
+    /// limits. The first one.
+    refused: Mutex<Option<SvgError>>,
 }
 
 /// Encoded image bytes, shared.
@@ -479,6 +485,17 @@ impl Files {
         notes
     }
 
+    /// The SVG holding the images copies `bytes` of style values ([`budget::check`]): its images
+    /// copy at most what is left.
+    pub(in crate::import) fn copied_styles(&self, bytes: u64) {
+        self.styles.store(bytes, Ordering::Relaxed);
+    }
+
+    /// The error of the first SVG image past [`budget`]'s limits, which refuses the SVG holding it.
+    pub(in crate::import) fn refused(&self) -> Option<SvgError> {
+        self.refused.lock().ok().and_then(|r| r.clone())
+    }
+
     fn note_text(&self, svg: &str) {
         if svg.contains("<text") {
             self.text.store(true, Ordering::Relaxed);
@@ -559,6 +576,10 @@ impl Files {
 
     /// [`Files::svg`]'s image once it is counted.
     fn svg_tree(&self, text: &str, file: Option<Arc<SvgFile>>, opts: &usvg::Options) -> Option<ImageKind> {
+        // The SVG holding it is refused already: no more images are read.
+        if self.refused().is_some() {
+            return None;
+        }
         // Measured as the SVG holding it is (`import`): the text before the XML reader.
         let used = self.depth.load(Ordering::Relaxed);
         let left = MAX_ELEMENT_DEPTH.saturating_sub(used);
@@ -566,9 +587,25 @@ impl Files {
             return leave_out(&self.too_deep, true);
         }
         let xml = super::parse(text).ok()?;
+        // What usvg would make of it, measured as the SVG holding it is (`import`), before the
+        // style cascade of `depth::height`; its copied styles count with theirs while usvg reads
+        // it, and only when it decodes. Too deep, it is left out; past the other limits, the whole
+        // SVG is refused.
+        let spent = self.styles.load(Ordering::Relaxed);
+        let bytes = match budget::check(&xml, budget::MAX_COPIED_STYLES.saturating_sub(spent), left) {
+            Ok(bytes) => bytes,
+            Err(SvgError::TooDeep(_)) => return leave_out(&self.too_deep, true),
+            Err(e) => {
+                if let Ok(mut refused) = self.refused.lock() {
+                    refused.get_or_insert(e);
+                }
+                return None;
+            }
+        };
         let Some(height) = depth::height(&xml, left) else { return leave_out(&self.too_deep, true) };
         // usvg's parser would overflow on it, as on the SVG holding it (`import`).
         super::convolve_matrices_ok(&xml).ok()?;
+        self.styles.store(spent.saturating_add(bytes), Ordering::Relaxed);
         self.depth.store(used + height, Ordering::Relaxed);
         let within = self.within.lock().ok().map(|mut w| w.push(file)).is_some();
         // usvg's `Tree::from_data_nested`, except that hrefs to files go to the resolver.
@@ -592,7 +629,11 @@ impl Files {
             w.pop();
         }
         self.depth.store(used, Ordering::Relaxed);
-        let tree = tree.ok()?;
+        let Ok(tree) = tree else {
+            // Left out: neither it nor the images inside it count.
+            self.styles.store(spent, Ordering::Relaxed);
+            return None;
+        };
         self.note_text(text);
         Some(ImageKind::SVG(tree))
     }
@@ -615,10 +656,11 @@ fn raster(format: image::ImageFormat) -> Option<RasterKind> {
 /// orientation ([`vectorcraft_doc::cmyk::exif_orientation`], read for PNG, JPEG, GIF, WebP and
 /// TIFF) leaves the pixels as stored. Otherwise the pixels are read ([`decoded`],
 /// [`tiff_pixels`]), turned or flipped as the orientation says, and written as PNG, so usvg sizes
-/// and fits the image as it is shown. A CMYK TIFF also keeps its inks as a CMYK TIFF
-/// ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]), and a CMYK JPEG or TIFF that is turned keeps them
-/// turned ([`vectorcraft_doc::cmyk::turned_cmyk`]). `None` when the pixels can't be read, and for
-/// a TIFF with more strips or tiles than the decoder can count
+/// and fits the image as it is shown, with the resolution the file declares
+/// ([`vectorcraft_doc::ppi::resolution`]), its axes swapped by a quarter turn. A CMYK TIFF also
+/// keeps its inks as a CMYK TIFF ([`vectorcraft_doc::cmyk::stored_cmyk_tiff`]), and a CMYK JPEG
+/// or TIFF that is turned keeps them turned ([`vectorcraft_doc::cmyk::turned_cmyk`]). `None` when
+/// the pixels can't be read, and for a TIFF with more strips or tiles than the decoder can count
 /// ([`vectorcraft_doc::cmyk::oversized_tiff`]), before any decoder opens it.
 fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     use image::ImageFormat as F;
@@ -634,9 +676,13 @@ fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     }
     let tiff = image::guess_format(&bytes).ok() == Some(F::Tiff);
     let mut img = if tiff { tiff_pixels(&bytes)? } else { decoded(&bytes, format)? };
+    let ppi = vectorcraft_doc::ppi::resolution(&bytes);
+    // The resolution describes the stored pixels; a quarter turn swaps its axes.
+    let quarter = orientation.is_some_and(|o| o.to_exif() >= 5);
+    let shown_ppi = ppi.map(|(x, y)| if quarter { (y, x) } else { (x, y) });
     let cmyk = match orientation {
-        Some(o) if matches!(format, F::Jpeg | F::Tiff) => vectorcraft_doc::cmyk::turned_cmyk(&bytes, o, None).map(|(tiff, _)| tiff),
-        None if tiff => vectorcraft_doc::cmyk::stored_cmyk_tiff(&bytes, None),
+        Some(o) if matches!(format, F::Jpeg | F::Tiff) => vectorcraft_doc::cmyk::turned_cmyk(&bytes, o, shown_ppi).map(|(tiff, _)| tiff),
+        None if tiff => vectorcraft_doc::cmyk::stored_cmyk_tiff(&bytes, ppi),
         _ => None,
     };
     if let Some(orientation) = orientation {
@@ -644,6 +690,9 @@ fn shown(bytes: Arc<Vec<u8>>, format: image::ImageFormat) -> Option<Shown> {
     }
     let mut png = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut png), F::Png).ok()?;
+    if let Some(ppi) = shown_ppi {
+        png = vectorcraft_doc::ppi::with_png_resolution(&png, ppi);
+    }
     Some(Shown { kind: ImageKind::PNG, bytes: Arc::new(png), cmyk })
 }
 
