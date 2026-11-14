@@ -18,7 +18,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Document Info",
             ["Window", "Document Info"],
             None,
-            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), images, swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else Linear gradient, Radial gradient or Freeform gradient; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
+            "{selectionOnly?, category?: document|objects|graphicStyles|brushes|spotColors|patterns|gradients|symbols|fonts|fontDetails|linkedImages|embeddedImages|repeats (only that one in sections and the text), format?: \"text\" (→ {text}: the report Document Info › Save… and Package write)} → {document: {…, units (English), unitId: the units' Preferences › Units id (points, millimeters, feetInches, …), rasterEffectsPpi}, objects: {paths, compoundPaths, groups, …}, pathLength: pt (the paths' total length, compound paths' included, guides left out), fonts (the type in opacity masks and in the art of symbols and patterns included; with selectionOnly: the selected type's), fontDetails: [{font, match: exact|style|missingWithFallback|missing, family, style, file, embedding: allowed|editing|previewPrint|forbidden|null}] (each font of fonts, in order: how it was found, the face shown (null when none), that face's file name (null for a built-in face) and what its license allows), images, imageObjects: [{name, width, height, linked, file}] (the image objects in the order Linked Images and Embedded Images list them; file: what a linked image's row shows, null for an embedded one), swatches, graphicStyleNames (with selectionOnly: the styles the selected objects are linked to), brushNames (the brushes the art's drawn strokes use, each once; with selectionOnly: those the selected objects' strokes use), brushes: [{name, type: calligraphic|scatter|art|pattern|bristle|null}] (those brushes with their types; null: not in the Brushes panel), panelBrushNames (the Brushes panel's brushes), repeatObjects: [{id, name, type: radial|grid|mirror, instances, rows?, cols?}] (the Repeat objects, those in groups and other repeats included; with selectionOnly: those in the selection), spotObjects: [{id, name, spotColors}] (the objects filled or stroked with a spot color swatch, as a solid color or in the stops of a gradient that color a part of it above opacity 0 (a stop at opacity 0 counts only where it mixes with a stop above opacity 0 over a stretch of some width), at a tint above 0, and grayscale images colorized with one, each once, by the rules patternObjects follows, with the spot colors they use; Registration and process colors are not spot colors; objects.spots counts them), spotColorNames and spotColors (the spot colors those objects use), patternObjects: [{id, name, patterns}] (the objects filled or stroked with a pattern, each once, those in groups and type whose drawn characters use one included, hidden fills and strokes, fills and strokes at an opacity of 0, strokes with no width, guides, compound path members' own fills and strokes, images' fills and strokes without a shape and characters that draw nothing left out, with the patterns they use, which objects.patterns counts; with selectionOnly: those in the selection), patternNames (the patterns those objects use), gradientObjects: [{id, name, gradients, kinds}] (the objects filled or stroked with a gradient, by the same rules, with the gradients they use: a linked gradient swatch's name, else its kind's name, such as Linear gradient; kinds gives each one's kind, linear|radial|conic|diamond|freeform, when it is named by its kind, else null; objects.gradients counts them), gradientNames (the gradients those objects use), …, sections: [{id, title, rows: [[label, value]]}] (the panel's categories; fontDetails: each font's file and whether its license lets it be embedded)}. An image linked to a file outside the automation read roots has link null, and its Linked Images row names the file alone. brushNames, brushes, spotObjects, patternObjects and gradientObjects leave out hidden objects, objects at an opacity of 0 and the objects inside a hidden group or layer or one at an opacity of 0 (with selectionOnly too), their characters' paints and colorized images included; objects still counts them as paths, groups and the other kinds",
             has_doc,
             info
         ),
@@ -85,15 +85,63 @@ pub struct Section {
 /// What a font's `fsType` lets a copy of it do, read as exports read it ([`Embedding`]): the
 /// most permissive usage bit wins, and bitmap-only fonts may not be embedded.
 pub fn embedding_label(fs_type: u16) -> &'static str {
-    if Embedding::from_fs_type(fs_type) == Embedding::Forbidden {
-        "embedding not allowed"
-    } else if fs_type & 0x0008 != 0 {
-        "embedding for editing"
-    } else if fs_type & 0x0004 != 0 {
-        "embedding for preview and print"
-    } else {
-        "embedding allowed"
+    match embedding_id(fs_type) {
+        "forbidden" => "embedding not allowed",
+        "editing" => "embedding for editing",
+        "previewPrint" => "embedding for preview and print",
+        _ => "embedding allowed",
     }
+}
+
+/// [`embedding_label`] as the `embedding` value of a `fontDetails` entry: `forbidden`, `editing`,
+/// `previewPrint` or `allowed`.
+pub fn embedding_id(fs_type: u16) -> &'static str {
+    if Embedding::from_fs_type(fs_type) == Embedding::Forbidden {
+        "forbidden"
+    } else if fs_type & 0x0008 != 0 {
+        "editing"
+    } else if fs_type & 0x0004 != 0 {
+        "previewPrint"
+    } else {
+        "allowed"
+    }
+}
+
+/// A font as Font Details lists it: its `fontDetails` entry and its row. The row gives the file
+/// the font is drawn from (`built in` for a face with no file) and whether its license lets it be
+/// embedded; for a style the family lacks, the face shown in its place; for a font that is not
+/// installed, the face shown instead, or `missing`. The entry holds the same facts as values
+/// (`match`: `exact`, `style`, `missingWithFallback` or `missing`), so the panel can show them in
+/// the interface language.
+fn font_detail(used: &super::fonts::UsedFont) -> (Value, (String, String)) {
+    let db = vectorcraft_text::FontDb::global();
+    let (family, style, version) = used;
+    let label = super::fonts::font_label(used);
+    // Found by any of its names (in the version the type names); a style the family lacks shows in
+    // another.
+    let resolved = db.resolve(family, style).map(|(f, m)| (db.face_version(family, style, version.as_deref()).unwrap_or(f), m));
+    let (entry, detail) = match resolved {
+        Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => {
+            let file = f.path().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned());
+            let found = format!("{}; {}", file.as_deref().unwrap_or("built in"), embedding_label(f.fs_type()));
+            let substituted = m == vectorcraft_text::FontMatch::Style;
+            let entry = json!({
+                "font": label,
+                "match": if substituted { "style" } else { "exact" },
+                "family": f.family,
+                "style": f.style,
+                "file": file,
+                "embedding": embedding_id(f.fs_type()),
+            });
+            (entry, if substituted { format!("substituted: shown in {} {} ({found})", f.family, f.style) } else { found })
+        }
+        Some((f, _)) => (
+            json!({ "font": label, "match": "missingWithFallback", "family": f.family, "style": f.style, "file": null, "embedding": null }),
+            format!("missing: shown in {} {}", f.family, f.style),
+        ),
+        None => (json!({ "font": label, "match": "missing", "family": null, "style": null, "file": null, "embedding": null }), "missing".into()),
+    };
+    (entry, (label, detail))
 }
 
 /// An image object as Document Info lists it: (name, width, height, linked file).
@@ -131,14 +179,15 @@ fn repeat_entry(d: &Document, n: &Node, spec: &RepeatSpec) -> (Value, (String, S
 }
 
 /// The Document Info categories of `d` (only `category` when given) from `info` (what
-/// `document.info` reports), its fonts, its image objects, the rows of the brushes its art uses, the
-/// rows of its Repeat objects and the rows of its objects filled or stroked with a spot color, with a
-/// pattern and with a gradient.
+/// `document.info` reports), its fonts and their Font Details rows, its image objects, the rows of
+/// the brushes its art uses, the rows of its Repeat objects and the rows of its objects filled or
+/// stroked with a spot color, with a pattern and with a gradient.
 #[allow(clippy::too_many_arguments)]
 fn sections(
     d: &Document,
     info: &Value,
     fonts: &BTreeSet<super::fonts::UsedFont>,
+    font_details: &[(String, String)],
     images: &[ImageRow],
     brushes: &[(String, String)],
     repeats: &[(String, String)],
@@ -192,34 +241,7 @@ fn sections(
                 "gradients" => gradient_objects.to_vec(),
                 "symbols" => names("symbols"),
                 "fonts" => fonts.iter().map(|f| (super::fonts::font_label(f), String::new())).collect(),
-                "fontDetails" => {
-                    let db = vectorcraft_text::FontDb::global();
-                    fonts
-                        .iter()
-                        .map(|used| {
-                            let (family, style, version) = used;
-                            // Found by any of its names (in the version the type names); a style the
-                            // family lacks shows in another.
-                            let resolved =
-                                db.resolve(family, style).map(|(f, m)| (db.face_version(family, style, version.as_deref()).unwrap_or(f), m));
-                            let detail = match resolved {
-                                Some((f, m)) if m != vectorcraft_text::FontMatch::Missing => {
-                                    let file =
-                                        f.path().and_then(|p| p.file_name()).map_or_else(|| "built in".into(), |n| n.to_string_lossy().into_owned());
-                                    let found = format!("{file}; {}", embedding_label(f.fs_type()));
-                                    if m == vectorcraft_text::FontMatch::Style {
-                                        format!("substituted: shown in {} {} ({found})", f.family, f.style)
-                                    } else {
-                                        found
-                                    }
-                                }
-                                Some((f, _)) => format!("missing: shown in {} {}", f.family, f.style),
-                                None => "missing".into(),
-                            };
-                            (super::fonts::font_label(used), detail)
-                        })
-                        .collect()
-                }
+                "fontDetails" => font_details.to_vec(),
                 "linkedImages" => {
                     images.iter().filter_map(|(name, w, h, link)| Some((name.clone(), format!("{w} × {h} px — {}", link.as_ref()?)))).collect()
                 }
@@ -275,6 +297,39 @@ fn gradient_label(p: &Paint) -> Option<String> {
         Paint::Gradient(g) => Some(g.swatch.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| format!("{} gradient", g.gradient.kind.label()))),
         _ => None,
     }
+}
+
+/// Where [`gradient_label`]'s name for gradient paint `p` comes from: `swatch:<name>` for a
+/// gradient linked to a swatch, else `kind:<kind>` (`linear`, `radial`, `conic`, `diamond` or
+/// `freeform`). The two prefixes keep a swatch's name apart from a kind's name it reads like.
+fn gradient_source(p: &Paint) -> Option<String> {
+    match p {
+        Paint::Gradient(g) => Some(match g.swatch.as_deref().filter(|s| !s.is_empty()) {
+            Some(swatch) => format!("swatch:{swatch}"),
+            None => format!("kind:{}", g.gradient.kind.label().to_ascii_lowercase()),
+        }),
+        _ => None,
+    }
+}
+
+/// For each of `names` (an object's [`gradient_label`]s), the kind it names when only a kind
+/// gives that name: a name one of `sources` (the object's [`gradient_source`]s) gives as a kind's
+/// and none gives as a swatch's, else null. A swatch named like a kind keeps its name even where
+/// a gradient of that kind is listed under the same name.
+fn gradient_kinds(names: &[String], sources: &[String]) -> Vec<Value> {
+    names
+        .iter()
+        .map(|name| {
+            if sources.iter().any(|s| s.strip_prefix("swatch:") == Some(name.as_str())) {
+                return Value::Null;
+            }
+            sources
+                .iter()
+                .filter_map(|s| s.strip_prefix("kind:"))
+                .find(|k| vectorcraft_color::GradientKind::parse(k).is_some_and(|kind| *name == format!("{} gradient", kind.label())))
+                .map_or(Value::Null, |k| json!(k))
+        })
+        .collect()
 }
 
 /// The names of `d`'s spot color swatches: the swatches whose prints go to a plate of their own
@@ -486,9 +541,11 @@ fn node_and_drawn<'a>(d: &'a Document, path: &[usize]) -> Option<(&'a Node, bool
 /// The spot colors, the patterns and the gradients (`spots`: [`spot_swatches`]) that object `n`
 /// paints, each once: those of its own fills and strokes ([`own_paints`], `members` included), of
 /// its drawn characters and, for a grayscale or 1-bit image, of the color it is colorized with.
-fn object_paints(d: &Document, spots: &HashSet<&str>, members: &HashSet<*const Node>, n: &Node) -> [Vec<String>; 3] {
+/// The fourth list gives where each gradient comes from: a swatch or a kind ([`gradient_source`]).
+fn object_paints(d: &Document, spots: &HashSet<&str>, members: &HashSet<*const Node>, n: &Node) -> [Vec<String>; 4] {
     let (spot, pattern, gradient) = (|p: &Paint| spot_labels(spots, p), one_label(pattern_label), one_label(gradient_label));
-    let labels: [&PaintNames<'_>; 3] = [&spot, &pattern, &gradient];
+    let gradient_from = one_label(gradient_source);
+    let labels: [&PaintNames<'_>; 4] = [&spot, &pattern, &gradient, &gradient_from];
     let painted_runs = painted_runs(d, spots, n);
     let mut used = labels.map(|label| own_paints(d, n, members, painted_runs.as_ref(), label));
     // The characters' own paints: an inline graphic draws no outline and does not take its run's
@@ -654,8 +711,10 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(k) = k {
                 *counts.entry(k).or_default() += 1;
             }
-            // The spot colors, the patterns and the gradients this object paints, each once; none when it does not draw.
-            let [used_spots, used_patterns, used_gradients] = if drawn { object_paints(d, &spot_swatches, &members, n) } else { Default::default() };
+            // The spot colors, the patterns and the gradients this object paints, each once, and where each gradient comes from;
+            // none when it does not draw.
+            let [used_spots, used_patterns, used_gradients, used_sources] =
+                if drawn { object_paints(d, &spot_swatches, &members, n) } else { Default::default() };
             // Objects counts the objects that Spot Color Objects, Pattern Objects and Gradient Objects list.
             if !used_spots.is_empty() {
                 let name = n.display_name();
@@ -675,7 +734,8 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
                 let name = n.display_name();
                 gradients.extend(used_gradients.iter().cloned());
                 gradient_rows.push((name.clone(), used_gradients.join(", ")));
-                gradient_objects.push(json!({ "id": n.id.0, "name": name, "gradients": used_gradients }));
+                let kinds = gradient_kinds(&used_gradients, &used_sources);
+                gradient_objects.push(json!({ "id": n.id.0, "name": name, "gradients": used_gradients, "kinds": kinds }));
                 *counts.entry("gradients").or_default() += 1;
             }
             if n.extras().mask.is_some() {
@@ -710,6 +770,14 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         fonts.extend(super::fonts::art_texts_of(d).into_iter().flat_map(|(_, t, _)| t.runs.iter().map(|r| super::fonts::font_of(&r.style))));
     }
     let font_names: Vec<String> = fonts.iter().map(super::fonts::font_label).collect();
+    let (font_entries, font_rows): (Vec<Value>, Vec<(String, String)>) = fonts.iter().map(font_detail).unzip();
+    // The image objects in walk order, as Linked Images and Embedded Images list them: `file` is a
+    // linked image's row value (its path, or its file name alone when the request may not read it),
+    // and null for an embedded one.
+    let image_objects: Vec<Value> = image_rows
+        .iter()
+        .map(|(name, w, h, file)| json!({ "name": name, "width": w, "height": h, "linked": file.is_some(), "file": file }))
+        .collect();
     // Each brush the art uses with its type, found by name in the Brushes panel as the renderer finds it (the first of two
     // brushes with one name); a brush the panel does not hold draws as a plain stroke and has no type. A row names the type
     // as the New Brush dialog does (`Art Brush`), and the panel translates these values when it shows them.
@@ -727,7 +795,9 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
         "objects": counts,
         "pathLength": path_length,
         "fonts": font_names,
+        "fontDetails": font_entries,
         "images": images,
+        "imageObjects": image_objects,
         "symbols": symbols,
         "spotColors": spot,
         "spotColorNames": spot,
@@ -749,7 +819,7 @@ fn info(s: &mut Session, p: &Value) -> Result<Value> {
     });
     // The document's name: its file's, else its title.
     out["document"]["name"] = json!(st.title());
-    let sections = sections(d, &out, &fonts, &image_rows, &brush_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
+    let sections = sections(d, &out, &fonts, &font_rows, &image_rows, &brush_rows, &repeat_rows, &spot_rows, &pattern_rows, &gradient_rows, category);
     if text {
         return Ok(json!({ "text": report_text(&st.title(), selection_only, &sections) }));
     }
@@ -763,6 +833,7 @@ fn document_summary(d: &Document) -> Value {
         "title": d.title,
         "colorMode": match d.color_mode { ColorMode::Rgb => "RGB", ColorMode::Cmyk => "CMYK" },
         "units": d.units.label(),
+        "unitId": d.units.key(),
         "artboards": d.artboards.iter().map(|a| json!({ "name": a.name, "width": a.rect.width() / u, "height": a.rect.height() / u })).collect::<Vec<_>>(),
         "rasterEffectsPpi": d.raster_effects_ppi,
     })
@@ -1289,11 +1360,11 @@ mod tests {
         assert_eq!(
             i["gradientObjects"],
             json!([
-                {"id": a, "name": "Both", "gradients": ["Ramp", "Linear gradient"]},
-                {"id": b, "name": "<Rectangle>", "gradients": ["Radial gradient"]},
-                {"id": f, "name": "<Rectangle>", "gradients": ["Freeform gradient"]},
-                {"id": t, "name": "Type", "gradients": ["Ramp"]},
-                {"id": bar, "name": "Bar", "gradients": ["Ramp"]},
+                {"id": a, "name": "Both", "gradients": ["Ramp", "Linear gradient"], "kinds": [null, "linear"]},
+                {"id": b, "name": "<Rectangle>", "gradients": ["Radial gradient"], "kinds": ["radial"]},
+                {"id": f, "name": "<Rectangle>", "gradients": ["Freeform gradient"], "kinds": ["freeform"]},
+                {"id": t, "name": "Type", "gradients": ["Ramp"], "kinds": [null]},
+                {"id": bar, "name": "Bar", "gradients": ["Ramp"], "kinds": [null]},
             ])
         );
         assert_eq!(i["gradientNames"], json!(["Freeform gradient", "Linear gradient", "Radial gradient", "Ramp"]));
@@ -1800,6 +1871,112 @@ mod tests {
         assert_eq!(embedding_label(0x0003), "embedding not allowed");
         assert_eq!(embedding_label(0x0006), "embedding for preview and print");
         assert_eq!(embedding_label(0x000c), "embedding for editing");
+        // `fontDetails` names each permission by id.
+        assert_eq!(
+            [0, 0x0002, 0x0104, 0x0008, 0x0200, 0x000c].map(embedding_id),
+            ["allowed", "forbidden", "previewPrint", "editing", "forbidden", "editing"]
+        );
+    }
+
+    /// `fontDetails` gives each Font Details row's facts as values, in the rows' order: how the
+    /// font was found, the face shown, its file (null for a built-in face) and its embedding
+    /// permission. The rows and the report stay in English.
+    #[test]
+    fn info_exposes_structured_font_details_without_changing_english_rows() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 20, "text": "Hi"})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 50, "text": "Heavy", "font": "Source Sans 3", "style": "Black Wide"})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Gone", "font": "Qx Absent Family"})).unwrap();
+        let i = s.execute("document.info", &json!({"category": "fontDetails"})).unwrap();
+        let (entries, rows) = (i["fontDetails"].as_array().unwrap(), i["sections"][0]["rows"].as_array().unwrap());
+        assert_eq!(entries.iter().map(|e| e["font"].clone()).collect::<Vec<_>>(), rows.iter().map(|r| r[0].clone()).collect::<Vec<_>>());
+        let at = |prefix: &str| entries.iter().position(|e| e["font"].as_str().unwrap().starts_with(prefix)).unwrap();
+        let regular = at("Source Sans 3 Regular");
+        assert_eq!(
+            entries[regular],
+            json!({"font": "Source Sans 3 Regular", "match": "exact", "family": "Source Sans 3", "style": "Regular", "file": null, "embedding": "allowed"})
+        );
+        assert_eq!(rows[regular][1], "built in; embedding allowed");
+        let (wide, e) = (at("Source Sans 3 Black Wide"), &entries[at("Source Sans 3 Black Wide")]);
+        assert_eq!((e["match"].as_str(), e["family"].as_str()), (Some("style"), Some("Source Sans 3")), "{e}");
+        let file = e["file"].as_str().unwrap_or("built in");
+        let fs_type = [("allowed", 0), ("forbidden", 0x0002), ("previewPrint", 0x0004), ("editing", 0x0008)]
+            .into_iter()
+            .find_map(|(id, bits)| (e["embedding"] == id).then_some(bits))
+            .unwrap();
+        let found = format!("{file}; {}", embedding_label(fs_type));
+        assert_eq!(rows[wide][1], format!("substituted: shown in Source Sans 3 {} ({found})", e["style"].as_str().unwrap()));
+        let (gone, e) = (at("Qx Absent Family"), &entries[at("Qx Absent Family")]);
+        assert!(e["file"].is_null() && e["embedding"].is_null(), "{e}");
+        match e["match"].as_str() {
+            Some("missingWithFallback") => {
+                assert_eq!(rows[gone][1], format!("missing: shown in {} {}", e["family"].as_str().unwrap(), e["style"].as_str().unwrap()))
+            }
+            Some("missing") => assert_eq!((rows[gone][1].as_str(), e["family"].is_null()), (Some("missing"), true)),
+            m => panic!("{m:?}"),
+        }
+        let text = s.execute("document.info", &json!({"category": "fontDetails", "format": "text"})).unwrap()["text"].as_str().unwrap().to_string();
+        assert!(text.contains("Source Sans 3 Regular: built in; embedding allowed\n"), "{text}");
+    }
+
+    /// `document.unitId` names the document's units as Preferences › Units does, beside the English
+    /// `units`, and `imageObjects` lists the image objects in the order Embedded Images and Linked
+    /// Images list them, with the file a linked one shows (null for an embedded one).
+    #[test]
+    fn info_exposes_ordered_images_and_unit_id() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        s.edit("Units", |d, _| {
+            d.units = vectorcraft_doc::Unit::Millimeters;
+            Ok(())
+        })
+        .unwrap();
+        for x in [0.0, 50.0] {
+            let r = s.execute("shape.rectangle", &json!({"x": x, "y": 0, "width": 20, "height": 10})).unwrap()["id"].clone();
+            s.execute("select.set", &json!({"ids": [r]})).unwrap();
+            s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+        }
+        let i = s.execute("document.info", &json!({})).unwrap();
+        assert_eq!((i["document"]["units"].as_str(), i["document"]["unitId"].as_str()), (Some("Millimeters"), Some("millimeters")));
+        let section = |id: &str| i["sections"].as_array().unwrap().iter().find(|s| s["id"] == id).unwrap()["rows"].as_array().unwrap().clone();
+        assert!(section("document").iter().any(|r| *r == json!(["Units", "Millimeters"])));
+        let embedded = section("embeddedImages");
+        let objects = i["imageObjects"].as_array().unwrap();
+        assert_eq!(objects.len(), 2, "{objects:?}");
+        for (o, r) in objects.iter().zip(&embedded) {
+            assert_eq!((o["linked"].clone(), o["file"].clone(), o["name"].clone()), (json!(false), Value::Null, r[0].clone()), "{o}");
+            assert_eq!(r[1], format!("{} × {} px", o["width"], o["height"]));
+        }
+        assert!(section("linkedImages").is_empty());
+    }
+
+    /// A `gradientObjects` entry's `kinds` gives the kind of each gradient listed by its kind
+    /// rather than by a swatch, and null for a swatch's name, even one that reads like a kind and
+    /// one an object's gradient of that kind shares; a type object's characters count as its own.
+    #[test]
+    fn gradient_kinds_tell_kinds_from_swatch_names() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        let ramp = |kind: &str| json!({"kind": kind, "stops": [{"offset": 0, "color": "#000"}, {"offset": 1, "color": "#fff"}]});
+        s.execute("swatch.new", &json!({"name": "Radial gradient", "gradient": ramp("linear")})).unwrap();
+        let r = s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [r], "swatch": "Radial gradient"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [r], "gradient": ramp("conic")})).unwrap();
+        let t = s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [t], "gradient": ramp("diamond")})).unwrap();
+        // The swatch's name and a radial gradient's kind name are listed once, as the name.
+        let both = s.execute("shape.rectangle", &json!({"x": 20, "y": 0, "width": 10, "height": 10})).unwrap()["id"].clone();
+        s.execute("paint.setFill", &json!({"ids": [both], "swatch": "Radial gradient"})).unwrap();
+        s.execute("paint.setStroke", &json!({"ids": [both], "gradient": ramp("radial")})).unwrap();
+        let i = s.execute("document.info", &json!({})).unwrap();
+        let entry = |id: &Value| i["gradientObjects"].as_array().unwrap().iter().find(|e| e["id"] == *id).unwrap().clone();
+        assert_eq!(
+            (entry(&r)["gradients"].clone(), entry(&r)["kinds"].clone()),
+            (json!(["Radial gradient", "Conic gradient"]), json!([null, "conic"]))
+        );
+        assert_eq!((entry(&t)["gradients"].clone(), entry(&t)["kinds"].clone()), (json!(["Diamond gradient"]), json!(["diamond"])));
+        assert_eq!((entry(&both)["gradients"].clone(), entry(&both)["kinds"].clone()), (json!(["Radial gradient"]), json!([null])));
     }
 
     #[test]

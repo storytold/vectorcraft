@@ -383,17 +383,20 @@ impl<'a> Reader<'a> {
             // `(text) justified TS`, special characters (§22.6): the reader adds its characters like `Tx`.
             "Tx" | "Tj" | "TX" | "TS" => self.text_body(w, &vals),
             "Tr" | "Tf" | "Ts" | "Tz" | "Tt" | "TA" | "Tl" | "Ta" | "Ti" | "TC" | "TW" | "Tq" | "Th" | "TV" | "Tv" | "Ty" | "TY" | "Tg" | "Xb"
-            | "Xe" | "XB" => {
+            | "Xe" | "XB" | "XL" | "TG" | "Xu" | "Tu" => {
                 self.text_attr(w, &vals);
             }
-            // Attributes the reader doesn't keep (kerning pairs, line breaking and Japanese layout
-            // rules) and final-form positions (§15.3).
-            "Tk" | "TK" | "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" | "T+" | "T-" | "TG" | "Tu" | "Xu" => {}
+            // A kerning pair (`Tk`, `TK` in overflow text, §15.4.6.1) and discretionary hyphens
+            // (`T+`, `T-`, §15.4.10.1).
+            "Tk" | "TK" => self.text_kern(&vals),
+            "T+" => self.discretionary_hyphen(false),
+            "T-" => self.discretionary_hyphen(true),
+            // Final-form positions (§15.4.7: `Tc Tw Tm Td T* TR`, printing only), which the type's
+            // layout computes again.
+            "Tc" | "Tw" | "Tm" | "Td" | "T*" | "TR" => {}
             // `TM` (pop text matrix) and `Te` (end render), listed in §22.6, keep nothing either; the
             // reader takes `Te` with any number of operands.
             "TM" | "Te" => {}
-            // The hyphenation language (`XL`), which the reader doesn't keep either (§22).
-            "XL" => {}
             "TE" => self.te(&vals),
             "TZ" => self.tz(&vals),
             // An image whose samples follow in comment lines (read at `%AI5_EndRaster`).

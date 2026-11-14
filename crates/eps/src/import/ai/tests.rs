@@ -4284,6 +4284,119 @@ fn legacy_end_render_and_text_matrix_pop_read() {
     }
 }
 
+/// The text, manual kerning and space before each run of a legacy-format file's first text object.
+fn legacy_kerning(art: &str) -> Vec<(String, Option<f64>, f64)> {
+    legacy_texts(art)[0].runs.iter().map(|r| (r.text.clone(), r.style.kerning, r.style.kerning_before)).collect()
+}
+
+/// `autoKern kernValue Tk` (§15.4.6.1) spaces the character before it from the one after it: with
+/// `autoKern` 0 by `kernValue` (1/1000 em, kept to -1000 to 10,000) as the manual kerning after the
+/// character before it, with 1 by the automatic kerning; `TK` does the same in overflow text. At
+/// the start of a line it is the space before the line's first character.
+#[test]
+fn legacy_manual_pair_kerning_is_kept() {
+    let s = |x: &str| x.to_string();
+    let runs = legacy_kerning(&point_type("0 TA\n(A) Tx\n0 -80 Tk", "V"));
+    assert_eq!(runs, [(s("A"), Some(-80.0), 0.0), (s("V"), Some(0.0), 0.0)]);
+    // Inside a run, the character before it takes the value alone.
+    let runs = legacy_kerning(&point_type("(WAVE) Tx\n0 50 Tk", "S"));
+    assert_eq!(runs, [(s("WAV"), None, 0.0), (s("E"), Some(50.0), 0.0), (s("S"), None, 0.0)]);
+    // `autoKern` 1 gives the pair the automatic kerning, whatever its value.
+    let runs = legacy_kerning(&point_type("0 TA\n(AV) Tx\n1 -50 Tk", "A"));
+    assert_eq!(runs, [(s("A"), Some(0.0), 0.0), (s("V"), None, 0.0), (s("A"), Some(0.0), 0.0)]);
+    // Pairs with the same value in a row stay one run.
+    let runs = legacy_kerning(&point_type("0 TA\n(A) Tx\n0 50 Tk\n(B) Tx\n0 50 Tk", "C"));
+    assert_eq!(runs, [(s("AB"), Some(50.0), 0.0), (s("C"), Some(0.0), 0.0)]);
+    // At the start of the text and of a paragraph, the space before the line's first character.
+    let runs = legacy_kerning(&point_type("0 -30 Tk", "Hi"));
+    assert_eq!(runs, [(s("H"), None, -30.0), (s("i"), None, 0.0)]);
+    let runs = legacy_kerning(&point_type("(a\\r) Tx\n0 40 Tk", "b"));
+    assert_eq!(runs, [(s("a\n"), None, 0.0), (s("b"), None, 40.0)]);
+    let runs = legacy_kerning(&point_type("(a) Tx\n(\\r) TX\n0 40 TK", "b"));
+    assert_eq!(runs, [(s("a\n"), None, 0.0), (s("b"), None, 40.0)]);
+    // In overflow text.
+    let runs = legacy_kerning(&point_type("(ab) Tx\n0 25 TK", "c").replace("(c) Tx", "(c) TX"));
+    assert_eq!(runs, [(s("a"), None, 0.0), (s("b"), Some(25.0), 0.0), (s("c"), None, 0.0)]);
+    // Kept to the range `text.setRangeStyle` takes.
+    let runs = legacy_kerning(&point_type("(a) Tx\n0 -5000 Tk\n(b) Tx\n0 20000 Tk", "c"));
+    assert_eq!(runs, [(s("a"), Some(-1000.0), 0.0), (s("b"), Some(10_000.0), 0.0), (s("c"), None, 0.0)]);
+    // The pair is spaced as the kerning says.
+    let x = |art: &str| legacy_origins(&legacy_texts(art)[0])[1].0;
+    let (plain, kerned) = (x(&point_type("0 TA\n(A) Tx", "V")), x(&point_type("0 TA\n(A) Tx\n0 -80 Tk", "V")));
+    assert!((plain - kerned - 0.96).abs() < 1e-6, "{plain} {kerned}");
+}
+
+/// A `Tk` whose operands are missing or are not numbers, or whose flag is not 0 or 1, and a `Tk`
+/// outside a text object leave the type as it was.
+#[test]
+fn legacy_pair_kerning_with_bad_operands_leaves_the_type_as_it_was() {
+    let want = legacy_kerning(&point_type("(H) Tx", "i"));
+    for bad in ["0 Tk", "Tk", "/x 50 Tk", "0 /x Tk", "2 50 Tk", "0.5 50 Tk", "(0) 50 Tk"] {
+        assert_eq!(legacy_kerning(&point_type(&format!("(H) Tx\n{bad}"), "i")), want, "{bad}");
+    }
+    let outside = legacy_kerning(&format!("0 50 Tk\n{}", point_type("(H) Tx", "i")));
+    assert_eq!(outside, want);
+}
+
+/// `T+` (a discretionary hyphen, §15.4.10.1) is a soft hyphen where it stands, in overflow text
+/// too; `T-` makes the printed hyphen before it a soft hyphen, or adds one. Outside a text object
+/// they add nothing.
+#[test]
+fn legacy_discretionary_hyphens_are_soft_hyphens() {
+    for (art, text) in [
+        (point_type("(co) Tx\nT+", "operate"), "co\u{ad}operate"),
+        (point_type("(co-) Tx\nT-", "operate"), "co\u{ad}operate"),
+        (point_type("(co) Tx\nT-", "operate"), "co\u{ad}operate"),
+        (point_type("(co) Tx\nT+", "operate").replace("(operate) Tx", "(operate) TX"), "co\u{ad}operate"),
+        (format!("T+\nT-\n{}", point_type("", "co")), "co"),
+    ] {
+        let texts = legacy_texts(&art);
+        assert_eq!(texts[0].plain_text(), text, "{art}");
+    }
+}
+
+/// `languageID XL` (§22.6) is the characters' language, 0 (U.S. English) the default; it lasts into
+/// the next text object, and an ID that is not 0 to 11 leaves the language as it was.
+#[test]
+fn legacy_hyphenation_language_is_kept() {
+    let lang = |t: &vectorcraft_doc::TextObject| t.runs.iter().map(|r| r.style.language.clone()).collect::<Vec<_>>();
+    let texts = legacy_texts(&format!("{}{}", point_type("%_ 3 XL\n(a) Tx\n%_ 0 XL\n(b) Tx\n%_ 8 XL", "c"), point_type("", "d")));
+    assert_eq!(lang(&texts[0]), [Some("de".to_string()), None, Some("nb".to_string())]);
+    assert_eq!(lang(&texts[1]), [Some("nb".to_string())]);
+    for bad in ["12 XL", "-1 XL", "1.5 XL", "/x XL", "XL"] {
+        let texts = legacy_texts(&point_type(&format!("2 XL\n{bad}"), "a"));
+        assert_eq!(lang(&texts[0]), [Some("fr".to_string())], "{bad}");
+    }
+}
+
+/// The line breaking value (`TG`) and the Japanese layout rules (`Xu`, `Tu`, §22.6) are not kept:
+/// a visible text object read while one is set gives a warning, once for each in a file. A copy of
+/// a text object on `%_` lines gives none, and the final-form positions (§15.4.7) give none.
+#[test]
+fn legacy_line_breaking_and_japanese_layout_rules_are_warned_once() {
+    const LINE_BREAKING: &str = "the Line Breaking setting of legacy type was left out";
+    const JAPANESE_LAYOUT: &str = "the Japanese layout rules of legacy type were left out";
+    let r = legacy_read(&format!("{}{}", point_type("50 TG\n0 1 120 150 Xu", "a"), point_type("60 TG", "b")));
+    assert_eq!(r.warnings, [LINE_BREAKING, JAPANESE_LAYOUT]);
+    assert_eq!(legacy_read(&point_type("0 1 120 150 Tu", "a")).warnings, [JAPANESE_LAYOUT]);
+    let hidden: String = point_type("50 TG", "a").lines().map(|l| format!("%_{l}\n")).collect();
+    assert_eq!(legacy_read(&hidden).warnings, Vec::<String>::new());
+    let final_form = point_type("1 0 0 1 10 50 Tm\n0 0 Td\nT*\n0 Tc\n0 Tw\n1 0 0 1 0 0 TR\nTe\nTM", "Hi");
+    let r = legacy_read(&final_form);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert_eq!(art_texts(&r.doc)[0].plain_text(), "Hi");
+}
+
+/// `TG`, `Xu` and `Tu` with missing or non-numeric operands set nothing, so they give no warning.
+#[test]
+fn legacy_line_breaking_and_japanese_layout_rules_with_bad_operands_are_not_warned() {
+    for attrs in ["TG", "(a) TG", "1 120 150 Xu", "0 1 (a) 150 Xu", "Tu", "0 1 120 (a) Tu"] {
+        let r = legacy_read(&point_type(attrs, "a"));
+        assert!(r.warnings.is_empty(), "{attrs}: {:?}", r.warnings);
+        assert_eq!(art_texts(&r.doc)[0].plain_text(), "a", "{attrs}");
+    }
+}
+
 /// Spacing is kept to the ranges the Justification options take, a Minimum, Desired and Maximum
 /// out of order go back to their defaults, and hyphenation's letter counts and limit to the ranges
 /// `text.setFormat` takes.

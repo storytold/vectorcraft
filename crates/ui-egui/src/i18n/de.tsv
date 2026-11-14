@@ -2154,6 +2154,29 @@ file-filter	Templates	Vorlagen
 	Bristle Brush	Borstenpinsel
 	Pattern Brush	Musterpinsel
 	missing from the Brushes panel	fehlt im Bedienfeld „Pinsel“
+	built in	integriert
+	embedding not allowed	Einbetten nicht erlaubt
+	embedding for editing	Einbetten zum Bearbeiten
+	embedding for preview and print	Einbetten für Vorschau und Druck
+	embedding allowed	Einbetten erlaubt
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	ersetzt: angezeigt in {family} {style} ({detail})
+	missing: shown in {family} {style}	fehlt: angezeigt in {family} {style}
+	missing	fehlt
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} – {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Linearer Verlauf
+	Radial gradient	Radialer Verlauf
+	Conic gradient	Konischer Verlauf
+	Diamond gradient	Rautenverlauf
+	Freeform gradient	Freiformverlauf
+@plural	{n} instance|{n} instances	{n} Instanz|{n} Instanzen
+@plural	{n} row|{n} rows	{n} Zeile|{n} Zeilen
+@plural	{n} column|{n} columns	{n} Spalte|{n} Spalten
 	Select art to make a scatter, art or pattern brush.	Wählen Sie eine Grafik aus, um einen Spezial-, Bild- oder Musterpinsel zu erstellen.
 	Brush Art	Pinselgrafik
 	New Calligraphic Brush	Neuer Kalligrafiepinsel
@@ -4294,6 +4317,7 @@ theme	Appearance	Erscheinungsbild
 @msg	Plug-ins can't be loaded from {path}: {e}	Aus {path} können keine Plug-ins geladen werden: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	wählen Sie mit der Direktauswahl die Ankerpunkte aus, an denen geschnitten werden soll (nicht die Endpunkte offener Pfade)
 @msg	Divide Objects Below: select a path	Darunterliegende Objekte aufteilen: Wählen Sie einen Pfad aus
+@msg	select a path	Wählen Sie einen Pfad aus
 @msg	Divide Objects Below: select exactly one path	Darunterliegende Objekte aufteilen: Wählen Sie genau einen Pfad aus
 @msg	Downloaded {what}	{what} heruntergeladen
 @msg	Expand Appearance: the selection has a basic appearance	Aussehen umwandeln: Die Auswahl hat ein einfaches Aussehen
@@ -5054,6 +5078,8 @@ theme	Appearance	Erscheinungsbild
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ein eingebettetes Bild mit {_1} × {_2} Pixeln wurde auf {_3} × {_4} Pixel verkleinert, damit die Ebenen erhalten bleiben
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	verknüpfte Bilder zeigen die in der Datei gespeicherte Vorschau in niedriger Auflösung, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu
 @msg	linked type areas past VectorCraft's limits were left out	verkettete Textbereiche jenseits der Grenzen von VectorCraft wurden ausgelassen
+@msg	the Line Breaking setting of legacy type was left out	die Einstellung für den Zeilenumbruch von Text im alten Format wurde ausgelassen
+@msg	the Japanese layout rules of legacy type were left out	die japanischen Satzregeln von Text im alten Format wurden ausgelassen
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	Text, der innerhalb eines Textobjekts die Schreibrichtung wechselt, wird in der Richtung seines ersten Zeichens geöffnet
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	als Maske verwendeter Text in verketteten Bereichen, umfließendem Text oder einem zusammengesetzten Pfad beschneidet nicht
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	verknüpfte Bilder ohne Vorschau in der Datei zeigen einen Platzhalter, bis ihre Dateien gefunden werden: Verknüpfen Sie sie im Bedienfeld „Verknüpfungen“ neu

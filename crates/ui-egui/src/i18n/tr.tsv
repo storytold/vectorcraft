@@ -4159,6 +4159,7 @@ axis	Both	Her İkisi
 @msg	Plug-ins can't be loaded from {path}: {e}	Eklentiler {path} konumundan yüklenemiyor: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	kesilecek bağlantı noktalarını doğrudan seçin (açık yolların bitiş noktalarını değil)
 @msg	Divide Objects Below: select a path	Aşağıdaki Nesneleri Böl: bir yol seçin
+@msg	select a path	bir yol seçin
 @msg	Divide Objects Below: select exactly one path	Aşağıdaki Nesneleri Böl: tam olarak bir yol seçin
 @msg	Downloaded {what}	{what} indirildi
 @msg	Expand Appearance: the selection has a basic appearance	Görünümü Genişlet: seçimin temel bir görünümü vardır
@@ -4857,6 +4858,8 @@ axis	Both	Her İkisi
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	katmanları korumak için {_1} × {_2} piksellik gömülü bir resim {_3} × {_4} piksele küçültüldü
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	bağlantılı resimler, dosyaları bulunana kadar dosyaya kaydedilen düşük çözünürlüklü önizlemeyi gösterir: bunları Bağlantılar panelinde yeniden bağlayın
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft sınırlarını aşan bağlantılı metin alanları dışarıda bırakıldı
+@msg	the Line Breaking setting of legacy type was left out	eski biçimdeki metnin satır kesme ayarı atlandı
+@msg	the Japanese layout rules of legacy type were left out	eski biçimdeki metnin Japonca dizgi kuralları atlandı
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	bir metin nesnesi içinde yazı yönünü değiştiren metin, ilk karakterinin yönünde açılır
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	bağlantılı alanlarda, kaydırılan metinde veya bileşik yolda maske olarak kullanılan metin kırpmaz
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	dosyada önizlemesi olmayan bağlantılı resimler, dosyaları bulunana kadar bir yer tutucu gösterir: bunları Bağlantılar panelinde yeniden bağlayın
@@ -6137,6 +6140,29 @@ theme	Appearance	Görünüm
 	New Brush	Yeni Fırça
 	Pattern Brush	Desen Fırçası
 	missing from the Brushes panel	Fırçalar panelinde yok
+	built in	yerleşik
+	embedding not allowed	gömmeye izin verilmiyor
+	embedding for editing	düzenleme için gömme
+	embedding for preview and print	önizleme ve yazdırma için gömme
+	embedding allowed	gömmeye izin veriliyor
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	yerine konan: {family} {style} ile gösteriliyor ({detail})
+	missing: shown in {family} {style}	eksik: {family} {style} ile gösteriliyor
+	missing	eksik
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Doğrusal degrade
+	Radial gradient	Radyal degrade
+	Conic gradient	Konik degrade
+	Diamond gradient	Elmas degrade
+	Freeform gradient	Serbest biçimli degrade
+@plural	{n} instance|{n} instances	{n} örnek
+@plural	{n} row|{n} rows	{n} satır
+@plural	{n} column|{n} columns	{n} sütun
 	Pick Color From:	Rengi Buradan Al:
 	Scatter Brush	Serpme Fırçası
 	Select art to make a scatter, art or pattern brush.	Bir serpme, resim veya desen fırçası oluşturmak için çizim seçin.

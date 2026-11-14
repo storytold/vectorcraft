@@ -2982,6 +2982,29 @@ theme	Appearance	იერსახე
 	Bristle Brush	ჯაგრის ფუნჯი
 	Pattern Brush	პატერნის ფუნჯი
 	missing from the Brushes panel	ფუნჯების პანელში არ არის
+	built in	ჩაშენებული
+	embedding not allowed	ჩაშენება არ არის დაშვებული
+	embedding for editing	ჩაშენება რედაქტირებისთვის
+	embedding for preview and print	ჩაშენება გადახედვისა და ბეჭდვისთვის
+	embedding allowed	ჩაშენება დაშვებულია
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	ჩანაცვლებულია: ნაჩვენებია შრიფტით {family} {style} ({detail})
+	missing: shown in {family} {style}	აკლია: ნაჩვენებია შრიფტით {family} {style}
+	missing	აკლია
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	წრფივი გრადიენტი
+	Radial gradient	რადიალური გრადიენტი
+	Conic gradient	კონუსური გრადიენტი
+	Diamond gradient	რომბისებრი გრადიენტი
+	Freeform gradient	თავისუფალი ფორმის გრადიენტი
+@plural	{n} instance|{n} instances	{n} ეგზემპლარი
+@plural	{n} row|{n} rows	{n} მწკრივი
+@plural	{n} column|{n} columns	{n} სვეტი
 	Select art to make a scatter, art or pattern brush.	მონიშნეთ ნახატი გაფანტვის, მხატვრული ან პატერნის ფუნჯის შესაქმნელად.
 	Brush Art	ფუნჯის ნახატი
 	New Symbol	ახალი სიმბოლო
@@ -4075,6 +4098,7 @@ font-technology	Variable	ცვლადი
 @msg	Plug-ins can't be loaded from {path}: {e}	პლაგინების ჩატვირთვა ვერ ხერხდება აქედან: {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	პირდაპირი მონიშვნით მონიშნეთ საყრდენი წერტილები, სადაც გაიჭრება (არა ღია ტრაექტორიების ბოლო წერტილები)
 @msg	Divide Objects Below: select a path	ქვედა ობიექტების დაყოფა: მონიშნეთ ტრაექტორია
+@msg	select a path	მონიშნეთ ტრაექტორია
 @msg	Divide Objects Below: select exactly one path	ქვედა ობიექტების დაყოფა: მონიშნეთ ზუსტად ერთი ტრაექტორია
 @msg	Downloaded {what}	ჩამოტვირთულია: {what}
 @msg	Expand Appearance: the selection has a basic appearance	იერსახის გაშლა: მონიშნულს საბაზისო იერსახე აქვს
@@ -5162,6 +5186,8 @@ font-technology	Variable	ცვლადი
 	Stacked	დასტად
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები ფაილში შენახულ დაბალი გარჩევადობის მინიატურას აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში
 @msg	linked type areas past VectorCraft's limits were left out	VectorCraft-ის ლიმიტების მიღმა დაკავშირებული ტექსტის არეები გამოტოვებულია
+@msg	the Line Breaking setting of legacy type was left out	ძველი ფორმატის ტექსტის სტრიქონის გადატანის პარამეტრი გამოტოვებულია
+@msg	the Japanese layout rules of legacy type were left out	ძველი ფორმატის ტექსტის იაპონური განლაგების წესები გამოტოვებულია
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	ტექსტი, რომელიც ტექსტური ობიექტის შიგნით ცვლის წერის მიმართულებას, იხსნება მისი პირველი სიმბოლოს მიმართულებით
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	დაკავშირებულ არეებში, გარსშემოვლებულ ტექსტში ან შედგენილ ტრაექტორიაში ნიღბად გამოყენებული ტექსტი არ ჭრის
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	დაკავშირებული გამოსახულებები, რომელთა მინიატურაც ფაილში არ არის, ადგილის შემნახველს აჩვენებს, სანამ მათი ფაილები არ მოიძებნება: დაუკავშირეთ ისინი ხელახლა ბმულების პანელში

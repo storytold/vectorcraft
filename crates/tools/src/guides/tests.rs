@@ -952,3 +952,26 @@ fn a_drawn_point_lands_on_a_corner_of_a_glyphs_bounds() {
         assert!((q - tr).cross(dir).abs() < 1e-6, "angle {angle}: {q:?} is off the right edge");
     }
 }
+
+/// With Smart Guides off, View → Snap to Point still pulls a drawn point onto an anchor, but
+/// draws no Smart Guides: no "anchor" label, no lines.
+#[test]
+fn snap_to_point_without_smart_guides_shows_no_guides() {
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    // Within Snap to Point's 2 px of the anchor at (200, 200).
+    let at = Point::new(201.0, 199.0);
+    let off = ToolContext { smart_guides: false, snap_to_point: true, ..cx(&d, &s, &p) };
+    let mut snap = DrawSnap::default();
+    assert_eq!(snap.hover(&off, at, &[], None), Point::new(200.0, 200.0));
+    assert!(snap.guides().is_empty(), "{:?}", snap.guides());
+    assert_eq!(snap.press(&off, at, &[], None), Point::new(200.0, 200.0));
+    assert!(snap.guides().is_empty(), "{:?}", snap.guides());
+    // A dragged selection's grabbed point too.
+    let (q, ov) = Targets::snap_to_point(&off, &[]).unwrap().snap_point(at, 4.0);
+    assert_eq!((q, ov.len()), (Point::new(200.0, 200.0), 0), "{ov:?}");
+    // Smart Guides on: the same point says "anchor".
+    let mut snap = DrawSnap::default();
+    assert_eq!(snap.hover(&cx(&d, &s, &p), at, &[], None), Point::new(200.0, 200.0));
+    assert_eq!(labels(snap.guides()), ["anchor"]);
+}
