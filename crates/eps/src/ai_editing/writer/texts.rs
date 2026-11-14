@@ -204,7 +204,9 @@ pub(in crate::ai_editing) fn holds(n: &Node, t: &TextObject) -> bool {
             shape(t).as_ref().and_then(segments).is_some_and(|s| !(open && closed(&s)))
         }
     };
-    // Area type that flows around wrap objects: the data doesn't hold their wrap settings.
+    // Area type with wrap shapes: the text document doesn't hold them. The reader works them out
+    // again from the art above the type, which can wrap it differently (a live object written as
+    // its drawn pieces) or not at all.
     shape_ok
         && t.wrap.is_empty()
         && t.ruby.is_empty()
@@ -962,6 +964,7 @@ impl TextDoc {
                     matches!(t.kind, TextKind::Area { .. })
                         && t.vertical == vertical
                         && writable(n.id)
+                        // The text document doesn't hold wrap shapes (see `holds`).
                         && t.wrap.is_empty()
                         && plain(n)
                         && t.ruby.is_empty()
