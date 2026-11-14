@@ -226,7 +226,8 @@ pub(crate) fn render_job(r: &mut vectorcraft_render::Renderer, kept: &mut Option
     *kept =
         keeps.then(|| KeptFrame { key: job.key.clone(), opts: job.opts.clone(), view: job.view, pixels: holds_pixels.then(|| img.pixels.clone()) });
     // The kept frame stays sRGB, so the next frame's copied pixels are converted only once.
-    crate::display_profile::convert(job.display.as_deref(), &mut img.pixels);
+    let width = img.width;
+    crate::display_profile::convert_over(job.display.as_deref(), &mut img.pixels, width, job.view, job.key.over());
     WorkerFrame { img, moved, reused }
 }
 

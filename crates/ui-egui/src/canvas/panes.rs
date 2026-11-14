@@ -11,7 +11,7 @@ use super::grid::LineLook;
 use super::outline::{c32, node_outline, stroke_path, too_many_anchors};
 use super::view::fit_zoom;
 use super::{
-    Affine, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, cache_key,
+    Affine, CacheKey, Point, Rect, RulerScale, Sense, Stroke, StrokeKind, Tokens, Ui, VectorcraftApp, View, Xf, artboard_edges, backdrop, cache_key,
     dim_on_canvas, frame_options, frame_view, grid, guides_of, json, paint_paper, pixel_region, placed_key, plugin_key, pos2, rulers,
     shows_artboards, textured_quad, vec2, view_rects,
 };
@@ -29,7 +29,7 @@ type Slot = (u64, u32);
 pub struct Panes {
     /// Renders off the UI thread (None: on it, as on wasm).
     worker: Option<ThumbWorker<Slot, (Slot, CacheKey)>>,
-    worker_started: bool,
+    pub(crate) worker_started: bool,
     /// Renders on the UI thread when there is no worker.
     renderer: Option<vectorcraft_render::Renderer>,
     /// By slot: the render shown and what it shows.
@@ -109,13 +109,14 @@ impl Panes {
         if !current {
             let mut queued = false;
             if let Some(worker) = &self.worker {
-                let (job_doc, job_opts, job_display) = (doc.clone(), opts.clone(), display.clone());
+                let (job_doc, job_opts, job_display, job_key) = (doc.clone(), opts.clone(), display.clone(), key.clone());
                 queued = worker.submit(
                     slot,
                     (slot, key.clone()),
                     Box::new(move |r| {
                         let mut img = r.render(&job_doc, w, h, view, &job_opts);
-                        crate::display_profile::convert(job_display.as_deref(), &mut img.pixels);
+                        let width = img.width;
+                        crate::display_profile::convert_over(job_display.as_deref(), &mut img.pixels, width, view, job_key.over());
                         Some(img)
                     }),
                 );
@@ -127,7 +128,8 @@ impl Panes {
             }
             if !queued {
                 let mut img = self.renderer.get_or_insert_with(vectorcraft_render::Renderer::new).render(&doc, w, h, view, &opts);
-                crate::display_profile::convert(display.as_deref(), &mut img.pixels);
+                let width = img.width;
+                crate::display_profile::convert_over(display.as_deref(), &mut img.pixels, width, view, key.over());
                 self.upload(ctx, slot, key, &img);
             }
         }
@@ -328,6 +330,7 @@ pub(crate) fn pane(app: &mut VectorcraftApp, ui: &Ui, w: Win, cell: egui::Rect) 
     // The current document's drag and Image Trace hold are not this document's, and this view has
     // its own Outline or Preview.
     (key.dragging, key.trace_source, key.outline) = (false, None, v.outline);
+    key.backdrop = backdrop(app, st, v.outline);
     let opts = frame_options(app, &key, st.shown_mask(), smooth_images);
     let (fw, fh, view) = frame_view(pixel, (pw, ph), &drawn, ppp);
     let doc = st.doc.clone();
