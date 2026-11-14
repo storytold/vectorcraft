@@ -7528,7 +7528,6 @@ breakText	Glyphs	Glifák
 @msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	A VectorCraft legfeljebb {ASE_MAX_ENTRIES} színt és csoportot olvas be egy színmintacsere-fájlból, ebben a könyvtárban pedig ennyi van: {entries}
 @msg	WebP encoding failed: {e}	A WebP-kódolás sikertelen: {e}
 @msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
-@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
 @msg	`index` must be a whole number	`index`: egész szám kell
 @msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view`: smallThumb, mediumThumb, largeThumb, smallList vagy largeList lehet
 @msg	a line can't run from a point to itself	egy vonal nem futhat egy pontból önmagába
