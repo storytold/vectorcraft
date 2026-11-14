@@ -59,7 +59,7 @@ pub(super) fn make_slots(
     to_doc: Affine,
     warn: &mut Vec<String>,
 ) -> Vec<Option<Made>> {
-    let (mut taller, mut deeper, mut tabs_left_out) = (0, 0, false);
+    let (mut taller, mut deeper, mut tabs_left_out, mut kinsoku_left_out) = (0, 0, false, false);
     let made = infos
         .iter()
         .enumerate()
@@ -68,6 +68,7 @@ pub(super) fn make_slots(
             let story = stories.get(k)?.as_ref()?;
             let mut node = story.node(NodeId(0), info.frame, t, to_doc)?;
             tabs_left_out |= story.tabs_left_out();
+            kinsoku_left_out |= story.kinsoku_sets_left_out();
             let mut region = story.region(t, to_doc);
             // The first line where the file has it, in the text document's frame (that of a
             // copied object is its original's, as its lines are).
@@ -101,6 +102,9 @@ pub(super) fn make_slots(
     }
     if tabs_left_out {
         warn.push(crate::import::ate::TABS_LEFT_OUT.into());
+    }
+    if kinsoku_left_out {
+        warn.push(crate::import::ate::KINSOKU_SETS_LEFT_OUT.into());
     }
     made
 }
