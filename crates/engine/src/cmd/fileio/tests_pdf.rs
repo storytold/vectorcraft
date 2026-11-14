@@ -103,6 +103,48 @@ fn use_artboards_false_writes_one_page_of_the_arts_bounds() {
     }
 }
 
+/// A page of the art's bounds is measured on the layers the PDF draws: a non-printing layer that
+/// the PDF leaves out doesn't make it larger, unless `includeNonPrinting` or `createLayers` keeps
+/// the layer. A `.ai` file of the art's bounds, which keeps layers by default, measures it unless
+/// `createLayers` is off. A document whose only visible art doesn't print is refused.
+#[test]
+fn a_page_of_the_arts_bounds_leaves_out_non_printing_layers() {
+    let mut s = session(1);
+    let printing = s.doc().unwrap().doc.layers[0].id;
+    let notes = s.execute("layer.new", &json!({})).unwrap()["id"].clone();
+    s.execute("layer.setProps", &json!({"id": notes, "printable": false})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
+    let size = |bytes: &[u8]| vectorcraft_pdf::import(bytes).unwrap().artboards[0].rect.size();
+    let printed = size(&b64(&export(&mut s, json!({"useArtboards": false}))));
+    assert!(printed.width < 50.0 && printed.height < 40.0, "{printed:?}");
+    let through_export = s.execute("document.export", &as_export(&json!({"useArtboards": false}))).unwrap();
+    assert_eq!(size(&b64(&through_export)), printed);
+    let ai = |s: &mut Session, extra: Value| {
+        let mut p = json!({"format": "ai", "useArtboards": false});
+        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        size(&b64(&s.execute("document.export", &p).unwrap_or_else(|e| panic!("{p}: {e}"))))
+    };
+    assert_eq!(ai(&mut s, json!({"createLayers": false})), printed);
+    let kept = [
+        size(&b64(&export(&mut s, json!({"useArtboards": false, "includeNonPrinting": true})))),
+        size(&b64(&export(&mut s, json!({"useArtboards": false, "createLayers": true})))),
+        ai(&mut s, json!({})),
+    ];
+    for all in kept {
+        assert!(all.width > 200.0 && all.height > 200.0, "{all:?}");
+    }
+
+    // Only the non-printing layer shows: the PDF would draw nothing.
+    s.execute("layer.setProps", &json!({"id": printing, "visible": false})).unwrap();
+    for p in [json!({"useArtboards": false}), json!({"useArtboards": false, "includeNonPrinting": false})] {
+        let e = s.execute("document.exportPdf", &p).unwrap_err().to_string();
+        assert!(e.contains("no visible art"), "{p}: {e}");
+    }
+    let e = s.execute("document.export", &json!({"format": "ai", "useArtboards": false, "createLayers": false})).unwrap_err().to_string();
+    assert!(e.contains("no visible art"), "{e}");
+    assert!(size(&b64(&export(&mut s, json!({"useArtboards": false, "includeNonPrinting": true})))).width < 25.0);
+}
+
 /// In a PDF without a standard, the warning for a page longer than 14,400 pt written with a
 /// `UserUnit` above 1 names "Write pages longer than 200 in at full size in points": at PDF 1.5
 /// (written as 1.6) and later, through `document.exportPdf`, `document.export`, a page of the
