@@ -148,6 +148,28 @@ fn a_trace_shows_how_many_notes_it_has() {
     }
 }
 
+/// A trace without notes clears the message an earlier trace's notes left, with its hover notes,
+/// and leaves any other message, one with the same text set since included.
+#[test]
+fn a_trace_without_notes_clears_an_earlier_traces_notes() {
+    let mut app = app();
+    let earlier = "Traced with 2 notes: a note";
+    for (then, kept) in [(None, ""), (Some("Ready"), "Ready"), (Some(earlier), earlier)] {
+        app.status(earlier);
+        app.trace_runs.notes_status = Some((earlier.to_string(), app.ui.status_sets));
+        if let Some(then) = then {
+            app.status(then);
+        }
+        app.ui.status_notes = Some((app.ui.status.clone(), vec!["a note".to_string(), "another".to_string()]));
+        let v = app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+        assert_eq!(v["warnings"], json!([]), "{then:?}");
+        assert_eq!(app.ui.status, kept, "{then:?}");
+        assert_eq!(app.ui.status_notes.is_none(), kept.is_empty(), "{then:?}");
+        assert_eq!(app.trace_runs.notes_status, None, "{then:?}");
+        app.run("edit.undo", json!({})).unwrap();
+    }
+}
+
 /// Nothing to trace fails at once, before anything runs.
 #[test]
 fn nothing_to_trace_fails_at_once() {

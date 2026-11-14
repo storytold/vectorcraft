@@ -449,6 +449,27 @@ fn a_copy_note_does_not_replace_a_newer_message() {
     assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("Saved /out/a.vectorcraft", &None));
 }
 
+/// A message set while a Copy's formats are made on the worker stays even when its text is the
+/// Copy's: an empty status bar set again, or File › New clearing it.
+#[test]
+fn a_copy_note_does_not_replace_a_message_with_the_same_text() {
+    for then in ["status", "file.new"] {
+        let (mut app, board, hold) = app_with_busy_worker("");
+        vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &cut_short_png(), json!({}));
+        app.status("");
+        run(&mut app, "edit.copy", json!({}));
+        if then == "status" {
+            app.status("");
+        } else {
+            run(&mut app, "file.new", json!({}));
+        }
+        drop(hold);
+        background::wait_all(&mut app);
+        assert_eq!(written(&board), [TEXT, SVG, PNG], "{then}");
+        assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), ("", &None), "{then}");
+    }
+}
+
 /// Text copied in a field or with the Type tool after Copy, before the formats are written: they
 /// are not written, the system clipboard keeps the text, and Paste takes it.
 #[test]

@@ -75,6 +75,9 @@ pub struct TraceRuns {
     next_id: u64,
     /// Set by unit tests whose app traces off the UI thread.
     pub(crate) off_the_ui_thread: bool,
+    /// The status bar's message the latest Image Trace with notes left, with
+    /// [`crate::state::UiState::status_sets`] then.
+    pub(crate) notes_status: Option<(String, u64)>,
 }
 
 /// The status bar's line after an Image Trace with `n` notes, the first of them `first`.

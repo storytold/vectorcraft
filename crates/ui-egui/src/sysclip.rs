@@ -103,9 +103,10 @@ pub(crate) struct Publishing {
     /// The latest one's formats could not be written: what the system clipboard held when the
     /// write failed, and the text of those formats.
     unwritten: Option<(Held, String)>,
-    /// The status bar's message when the latest one ran. Its formats' notes replace the message
-    /// only while the status bar still shows it.
-    status: String,
+    /// The status bar's message when the latest one ran, with [`crate::state::UiState::status_sets`]
+    /// then. Its formats' notes replace the message only while the status bar still shows it and
+    /// nothing has set the status since.
+    status: (String, u64),
 }
 
 impl Publishing {
@@ -120,10 +121,17 @@ impl Publishing {
         self.latest.load(Ordering::SeqCst)
     }
 
-    /// `status` is the status bar's message the latest Copy or Cut left, which its formats' notes
+    /// `ui`'s status bar message is the one the latest Copy or Cut left, which its formats' notes
     /// may replace.
-    pub(crate) fn ran_with_status(&mut self, status: &str) {
-        status.clone_into(&mut self.status);
+    pub(crate) fn ran_with_status(&mut self, ui: &crate::state::UiState) {
+        ui.status.clone_into(&mut self.status.0);
+        self.status.1 = ui.status_sets;
+    }
+
+    /// Does `ui`'s status bar still show the message the latest Copy or Cut left, with nothing
+    /// setting the status since?
+    fn shows_status(&self, ui: &crate::state::UiState) -> bool {
+        ui.status == self.status.0 && ui.status_sets == self.status.1
     }
 }
 
@@ -225,7 +233,7 @@ impl VectorcraftApp {
         let n = latest.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
         self.clipboard_publishing.pending = true;
         self.clipboard_publishing.unwritten = None;
-        self.clipboard_publishing.ran_with_status(&self.ui.status);
+        self.clipboard_publishing.ran_with_status(&self.ui);
         // What the clipboard holds at the Copy or Cut: a copy made elsewhere before the write is newer.
         let before = self.services.system_clipboard.as_deref_mut().map(Held::now);
         let (tx, made) = channel();
@@ -277,7 +285,7 @@ impl VectorcraftApp {
                 // The PNG's and PDF's notes (an image that couldn't be decoded, type in the
                 // fallback font), unless another message has replaced the Copy or Cut's since.
                 Ok(warnings) => {
-                    if app.ui.status == app.clipboard_publishing.status {
+                    if app.clipboard_publishing.shows_status(&app.ui) {
                         show_copy_notes(app, cut, warnings);
                     }
                 }
