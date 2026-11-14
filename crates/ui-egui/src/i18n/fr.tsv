@@ -7568,7 +7568,7 @@ breakText	Glyphs	Glyphes
 @msg	`alignOn` must be a string	`alignOn` doit être une chaîne
 @msg	`align` is start, center or end	`align` vaut start, center ou end
 @msg	`align` must be a string	`align` doit être une chaîne
-@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` doit être une liste de paires [sous-tracé, point d’ancrage]
+@msg	`anchors` must be an array of [subpath, anchor] pairs	`anchors` doit être une liste de paires [subpath, anchor]
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {k}	`anchors` doit lister des indices de points d’ancrage (0, 1, 2…), pas {k}
 @msg	`anchors` must list anchor indices (0, 1, 2…), not {v}	`anchors` doit lister des indices de points d’ancrage (0, 1, 2…), pas {v}
 @msg	`answer` for this {kind} dialog must be one of: {_1}	`answer` pour cette boîte de dialogue {kind} doit valoir l’une de ces valeurs : {_1}
@@ -7632,7 +7632,7 @@ breakText	Glyphs	Glyphes
 @msg	`fidelity` must be from {lo} to {hi} pt	`fidelity` doit être compris entre {lo} et {hi} pt
 @msg	`files` must be 1 to 1000 paths of font files the last text.findFontFiles search found	`files` doit contenir de 1 à 1000 chemins de fichiers de police trouvés par la dernière recherche text.findFontFiles
 @msg	`focal` and `radius` cannot be used together	`focal` et `radius` ne peuvent pas être utilisés ensemble
-@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` doit être une liste de paires [sous-tracé, point d’ancrage]
+@msg	`focal` must be an array of [subpath, anchor] pairs	`focal` doit être une liste de paires [subpath, anchor]
 @msg	`focal` names [{si}, {ai}], which is not an anchor of the path	`focal` désigne [{si}, {ai}], qui n’est pas un point d’ancrage du tracé
 @msg	`folder` must be an absolute folder path	`folder` doit être le chemin absolu d’un dossier
 @msg	`fontAxes` must be an object of axis tags and values, such as {"wght"}	`fontAxes` doit être un objet de balises d’axe et de valeurs, comme {"wght"}
