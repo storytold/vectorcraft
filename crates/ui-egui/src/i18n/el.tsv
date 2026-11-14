@@ -2464,6 +2464,7 @@ axis	Both	Και τα δύο
 @msg	Plug-ins can't be loaded from {path}: {e}	Δεν είναι δυνατή η φόρτωση πρόσθετων από το {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	Επιλέξτε άμεσα τα σημεία αγκύρωσης όπου θα γίνει η αποκοπή (όχι τα τελικά σημεία ανοιχτών διαδρομών)
 @msg	Divide Objects Below: select a path	Διαίρεση αντικειμένων από κάτω: επιλέξτε μια διαδρομή
+@msg	select a path	επιλέξτε μια διαδρομή
 @msg	Divide Objects Below: select exactly one path	Διαίρεση αντικειμένων από κάτω: επιλέξτε ακριβώς μία διαδρομή
 @msg	Downloaded {what}	Έγινε λήψη του {what}
 @msg	Expand Appearance: the selection has a basic appearance	Επέκταση εμφάνισης: η επιλογή έχει βασική εμφάνιση
@@ -5102,6 +5103,8 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	μια ενσωματωμένη εικόνα {_1} × {_2} pixel μειώθηκε σε {_3} × {_4} pixel για να διατηρηθούν τα επίπεδα
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες εμφανίζουν την προεπισκόπηση χαμηλής ανάλυσης που έχει αποθηκευτεί, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
 @msg	linked type areas past VectorCraft's limits were left out	οι συνδεδεμένες περιοχές κειμένου πέρα από τα όρια του VectorCraft παραλείφθηκαν
+@msg	the Line Breaking setting of legacy type was left out	η ρύθμιση αλλαγής γραμμής του κειμένου παλιάς μορφής παραλείφθηκε
+@msg	the Japanese layout rules of legacy type were left out	οι ιαπωνικοί κανόνες διάταξης του κειμένου παλιάς μορφής παραλείφθηκαν
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	το κείμενο που αλλάζει κατεύθυνση γραφής μέσα σε ένα αντικείμενο κειμένου ανοίγει με την κατεύθυνση του πρώτου χαρακτήρα του
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	το κείμενο που χρησιμοποιείται ως μάσκα σε συνδεδεμένες περιοχές, σε κείμενο με αναδίπλωση ή σε σύνθετη διαδρομή δεν αποκόπτει
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	οι συνδεδεμένες εικόνες χωρίς προεπισκόπηση στο αρχείο εμφανίζουν ένα σύμβολο κράτησης θέσης, μέχρι να βρεθούν τα αρχεία τους: επανασυνδέστε τις στον πίνακα Σύνδεσμοι
@@ -6152,6 +6155,7 @@ effect	Points	Σημεία
 @msg	no such color	δεν υπάρχει τέτοιο χρώμα
 @msg	{_1} cannot be used on Windows	Το {_1} δεν μπορεί να χρησιμοποιηθεί στα Windows
 @msg	more than one action is named “{_1}”	περισσότερες από μία ενέργειες ονομάζονται «{_1}»
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	η ενέργεια «{_1}» ορίζει την προτίμηση φακέλου {_2}· διαγράψτε αυτό το βήμα για να αποθηκεύσετε το σύνολο
 @msg	no symbol named `{n}`	κανένα σύμβολο με όνομα `{n}`
 	Smudge Stick…	Μουτζούρα…
 	Smudge Stick	Μουτζούρα

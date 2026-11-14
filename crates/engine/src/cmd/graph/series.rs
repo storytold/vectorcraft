@@ -131,7 +131,7 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
     }
     let mut out = Vec::new();
     for id in ids {
-        // The series' own marks: the art of a marker design inside it keeps the design's paint (painting it would
+        // The series' own marks: the art of a graph design inside it keeps the design's paint (painting it would
         // last only until the graph is drawn again), so edit the design to change it.
         match members.get(id) {
             Some(r) if r.group == *id => {
@@ -139,7 +139,7 @@ pub(crate) fn paint_targets(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> {
                     out.extend(group.children().into_iter().flatten().filter(|m| matches!(m.kind, NodeKind::Path { .. })).map(|m| m.id));
                 }
             }
-            Some(r) if doc.parent_of(*id) != Some(r.group) => {}
+            Some(r) if doc.parent_of(*id) != Some(r.group) || doc.node(*id).is_some_and(|n| !matches!(n.kind, NodeKind::Path { .. })) => {}
             _ => out.push(*id),
         }
     }
@@ -157,18 +157,11 @@ pub(crate) fn series_group_marks(doc: &Document, ids: &[NodeId]) -> Vec<NodeId> 
 
 /// [`series_group_marks`] for the series groups `stands` accepts; the others pass through.
 pub(crate) fn series_group_marks_where(doc: &Document, ids: &[NodeId], stands: impl Fn(&Node) -> bool) -> Vec<NodeId> {
-    // A series group is a child of a graph with one of the graph's series indexes ([`series_members`]). Each id is
-    // looked up through its parent, with no pass over the document: the panels call this while they draw.
-    let is_series_group = |n: &Node| {
-        let Some(index) = n.extras().series_index.and_then(|i| usize::try_from(i).ok()) else { return false };
-        let graph = doc.parent_of(n.id).and_then(|parent| doc.node(parent)).and_then(|parent| parent.extras().graph.as_deref());
-        graph.is_some_and(|spec| index < series_count(spec))
-    };
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();
     for id in ids {
         match doc.node(*id) {
-            Some(group) if is_series_group(group) && stands(group) => {
+            Some(group) if is_series_group(doc, group) && stands(group) => {
                 let marks: Vec<NodeId> =
                     group.children().into_iter().flatten().filter(|m| matches!(m.kind, NodeKind::Path { .. })).map(|m| m.id).collect();
                 if marks.is_empty() { out.push(*id) } else { out.extend(marks) }
@@ -178,6 +171,26 @@ pub(crate) fn series_group_marks_where(doc: &Document, ids: &[NodeId], stands: i
     }
     out.retain(|id| seen.insert(*id));
     out
+}
+
+/// Whether `n` is a graph series group: a child of a graph with one of the graph's series indexes ([`series_members`]).
+/// It is looked up through its parent, with no pass over the document: the panels call this while they draw.
+fn is_series_group(doc: &Document, n: &Node) -> bool {
+    let Some(index) = n.extras().series_index.and_then(|i| usize::try_from(i).ok()) else { return false };
+    let graph = doc.parent_of(n.id).and_then(|parent| doc.node(parent)).and_then(|parent| parent.extras().graph.as_deref());
+    graph.is_some_and(|spec| index < series_count(spec))
+}
+
+/// Whether `id` is the art of a graph design drawn in a graph series (Object › Graph › Column or Marker): an object
+/// inside a series group other than a path directly in it. The graph draws that art again from the design.
+pub(crate) fn is_design_art(doc: &Document, id: NodeId) -> bool {
+    let Some(chain) = doc.ancestry(id) else { return false };
+    let Some(at) = chain.iter().position(|a| doc.node(*a).is_some_and(|n| is_series_group(doc, n))) else { return false };
+    match chain.len() - at {
+        1 => false,
+        2 => doc.node(id).is_some_and(|n| !matches!(n.kind, NodeKind::Path { .. })),
+        _ => true,
+    }
 }
 
 /// The paint of the topmost visible fill (`true`) or stroke (`false`) of `node`, and a stroke's weight (0 without paint).
