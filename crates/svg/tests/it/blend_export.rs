@@ -202,6 +202,174 @@ fn a_mask_region_keeps_the_shadows_of_the_masked_art() {
     }
 }
 
+fn drop_shadow() -> vectorcraft_doc::Effect {
+    vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: serde_json::json!({"x": 15, "y": 15, "blur": 0, "opacity": 100}),
+        visible: true,
+    }
+}
+
+/// Whether every `<g mask>` in `svg` starts with a hidden, unpainted rectangle over its mask's region,
+/// and whether any does.
+fn spanning_rects(svg: &str) -> (bool, bool) {
+    let xml = roxmltree::Document::parse_with_options(svg, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).unwrap();
+    let spans: Vec<bool> = xml
+        .descendants()
+        .filter(|n| n.has_tag_name("g") && n.has_attribute("mask"))
+        .map(|group| {
+            let id = group.attribute("mask").unwrap().trim_start_matches("url(#").trim_end_matches(')');
+            let mask = xml.descendants().find(|n| n.has_tag_name("mask") && n.attribute("id") == Some(id)).unwrap();
+            let first = group.children().find(|n| n.is_element()).unwrap();
+            first.has_tag_name("rect")
+                && first.attribute("fill") == Some("none")
+                && first.attribute("visibility") == Some("hidden")
+                && ["x", "y", "width", "height"].iter().all(|a| first.attribute(*a).is_some() && first.attribute(*a) == mask.attribute(*a))
+        })
+        .collect();
+    assert!(!spans.is_empty(), "no masked group in {svg}");
+    (spans.iter().all(|s| *s), spans.iter().any(|s| *s))
+}
+
+/// The number of paths `svg` imports as.
+fn imported_paths(svg: &str) -> usize {
+    let (back, warnings) = vectorcraft_svg::import_with_report(svg).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let mut paths = 0;
+    back.walk(|n| paths += usize::from(n.path_data().is_some()));
+    paths
+}
+
+/// A masked group whose content holds a raster effect (a drop shadow, blur, glow or feather, which
+/// paint past the shapes) starts with a hidden, unpainted rectangle over the mask's region, so that
+/// a reader that draws a masked group only inside the box of its shapes still draws it. Art without
+/// one gets none, brushed strokes (written as shapes) included, nor does an object whose own shadow
+/// is drawn outside the mask. Import leaves the rectangle out.
+#[test]
+fn a_masked_group_spans_its_region_when_its_art_paints_past_its_shapes() {
+    // How the red square sits under the mask.
+    #[derive(Debug, Clone, Copy)]
+    enum Case {
+        Alone,
+        InGroup,
+        InNestedGroup,
+        FillEffect,
+        HiddenInGroup,
+        Brushed,
+        InSymbol,
+        InBlend,
+    }
+    use Case::*;
+    for (case, shadowed, want) in [
+        (InGroup, true, true),
+        (InGroup, false, false),
+        (Alone, true, false),
+        (Alone, false, false),
+        (InNestedGroup, true, true),
+        (FillEffect, true, true),
+        (FillEffect, false, false),
+        (HiddenInGroup, true, false),
+        (Brushed, false, false),
+        (Brushed, true, true),
+        (InSymbol, true, true),
+        (InSymbol, false, false),
+        (InBlend, true, true),
+        (InBlend, false, false),
+    ] {
+        let mut d = Document::new(100.0, 60.0);
+        let mut red = rect(&mut d, Rect::new(10.0, 10.0, 30.0, 30.0), [255, 0, 0]);
+        if matches!(case, Brushed) {
+            let mut stroke = vectorcraft_doc::StrokeLayer::new(Paint::solid(Color::rgb8(0, 0, 200)), 8.0);
+            stroke.brush = Some("Bristle Round".into());
+            red.appearance.items.push(vectorcraft_doc::AppearanceItem::Stroke(stroke));
+        }
+        if shadowed {
+            match case {
+                FillEffect => red.appearance.items[0].effects_mut().push(drop_shadow()),
+                _ => red.appearance.effects.push(drop_shadow()),
+            }
+        }
+        let group = |d: &mut Document, n: Node| Node::group(d.alloc_id(), vec![n.into()]);
+        let mut masked = match case {
+            Alone | FillEffect => red,
+            InGroup | Brushed => group(&mut d, red),
+            InNestedGroup => {
+                let inner = group(&mut d, red);
+                group(&mut d, inner)
+            }
+            HiddenInGroup => {
+                red.visible = false;
+                group(&mut d, red)
+            }
+            InSymbol => {
+                d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Square".into(), art: std::sync::Arc::new(red) });
+                let instance = Node::new(d.alloc_id(), NodeKind::SymbolInstance { symbol: "Square".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+                group(&mut d, instance)
+            }
+            InBlend => {
+                let mut blue = rect(&mut d, Rect::new(60.0, 10.0, 80.0, 30.0), [0, 0, 255]);
+                blue.appearance.effects = red.appearance.effects.clone();
+                let blend = Node::new(d.alloc_id(), NodeKind::Blend { children: vec![red.into(), blue.into()], spec: Default::default() });
+                group(&mut d, blend)
+            }
+        };
+        let art = rect(&mut d, Rect::new(10.0, 10.0, 20.0, 30.0), [255, 255, 255]);
+        masked.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        add(&mut d, masked);
+        let svg = export(&d, &ExportOptions::default());
+        assert_eq!(spanning_rects(&svg).0, want, "{case:?}, shadowed {shadowed}:\n{svg}");
+        if matches!(case, Alone | InGroup | InNestedGroup | FillEffect) {
+            // The red square alone: no rectangle of the region's size comes back.
+            assert_eq!(imported_paths(&svg), 1, "{case:?}, shadowed {shadowed}:\n{svg}");
+        }
+    }
+    // Type can't be measured, so its mask's region covers any artwork: a group of type gets the
+    // rectangle only when it holds a raster effect, on the type or on a path beside it.
+    for (shadowed, path_shadowed) in [(false, false), (true, false), (false, true)] {
+        let mut d = Document::new(80.0, 40.0);
+        let style = CharStyle { size: 24.0, fill: Paint::solid(Color::BLACK), ..CharStyle::default() };
+        let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 30.0), "Wide", style))));
+        if shadowed {
+            t.appearance.effects.push(drop_shadow());
+        }
+        let mut red = rect(&mut d, Rect::new(50.0, 5.0, 60.0, 15.0), [255, 0, 0]);
+        if path_shadowed {
+            red.appearance.effects.push(drop_shadow());
+        }
+        let mut group = Node::group(d.alloc_id(), vec![t.into(), red.into()]);
+        let art = rect(&mut d, Rect::new(0.0, 0.0, 40.0, 40.0), [255, 255, 255]);
+        group.extras_mut().mask = Some(Box::new(OpacityMask::new(art, false)));
+        add(&mut d, group);
+        let svg = export(&d, &ExportOptions::default());
+        let want = shadowed || path_shadowed;
+        assert_eq!(svg.contains("visibility=\"hidden\""), want, "type {shadowed}, path {path_shadowed}:\n{svg}");
+    }
+}
+
+/// In a knockout group, each element is drawn inside the masks of the elements above it. When an
+/// element inside a mask's group has a drop shadow, that group starts with the same hidden,
+/// unpainted rectangle over the region, and import leaves it out.
+#[test]
+fn a_knockout_group_spans_its_masks_when_an_element_paints_past_its_shapes() {
+    for shadowed in [false, true] {
+        let mut d = Document::new(60.0, 60.0);
+        let mut below = rect(&mut d, Rect::new(5.0, 5.0, 25.0, 25.0), [200, 0, 0]);
+        if shadowed {
+            below.appearance.effects.push(drop_shadow());
+        }
+        let mut middle = rect(&mut d, Rect::new(15.0, 15.0, 35.0, 35.0), [0, 200, 0]);
+        middle.opacity = 0.5;
+        let mut top = rect(&mut d, Rect::new(20.0, 5.0, 30.0, 40.0), [0, 0, 200]);
+        top.opacity = 0.5;
+        let mut group = Node::group(d.alloc_id(), vec![below.into(), middle.into(), top.into()]);
+        group.knockout = vectorcraft_doc::Knockout::On;
+        add(&mut d, group);
+        let svg = export(&d, &ExportOptions::default());
+        assert_eq!(spanning_rects(&svg), (shadowed, shadowed), "shadowed {shadowed}:\n{svg}");
+        assert_eq!(imported_paths(&svg), 3, "shadowed {shadowed}:\n{svg}");
+    }
+}
+
 /// Type is measured by its layout or its path, and a reader sets live type in its own font, so a
 /// mask or knockout over type keeps the region that covers any artwork.
 #[test]

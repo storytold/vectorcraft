@@ -419,9 +419,64 @@ impl Writer<'_> {
         self.def(1, "</mask>");
         self.line(&format!("<g mask=\"url(#{mid})\">"));
         self.depth += 1;
+        self.spanning_rect(&bare, &region);
         self.node_body(&bare);
         self.depth -= 1;
         self.line("</g>");
+    }
+
+    /// Some readers draw a masked group only inside the bounding box of its shapes, which leaves
+    /// out a drop shadow, blur, glow or feather that paints past them. When `n`, written inside a
+    /// `<g mask>`, holds one ([`Self::holds_raster`]), a hidden, unpainted rectangle over the
+    /// mask's `region` makes that box cover what it paints.
+    fn spanning_rect(&mut self, n: &Node, region: &str) {
+        if self.holds_raster(n) {
+            self.line(&format!("<rect {region} fill=\"none\" visibility=\"hidden\"/>"));
+        }
+    }
+
+    /// Do `n`, its fills and strokes, its members at any depth, its symbols' art or the art its
+    /// live objects are written as have a visible raster effect (shadow, glow, blur, feather)?
+    /// Objects that aren't written (hidden ones, unless the options keep them) are skipped. The
+    /// walk keeps its own stack, and looks at each symbol's art once.
+    fn holds_raster(&self, n: &Node) -> bool {
+        let mut stack: Vec<std::sync::Arc<Node>> = vec![];
+        let mut symbols = std::collections::HashSet::new();
+        // Whether `n` itself has one; else its members, symbol art or expanded art go on the stack.
+        let mut visit = |n: &Node, stack: &mut Vec<std::sync::Arc<Node>>| {
+            if !(n.visible || self.opts.hidden_layers) {
+                return false;
+            }
+            if has_raster(&n.appearance.effects) || n.appearance.items.iter().any(|i| has_raster(i.effects())) {
+                return true;
+            }
+            // A live object is written as its expanded art ([`Self::node_body`]), which holds no
+            // live objects.
+            if vectorcraft_doc::live::is_live(n) {
+                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                if !vectorcraft_doc::live::is_live(&g) {
+                    stack.push(std::sync::Arc::new(g));
+                    return false;
+                }
+            }
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind
+                && symbols.insert(symbol.clone())
+                && let Some(s) = self.doc.symbols.iter().find(|s| s.name == *symbol)
+            {
+                stack.push(s.art.clone());
+            }
+            stack.extend(n.children().into_iter().flatten().cloned());
+            false
+        };
+        if visit(n, &mut stack) {
+            return true;
+        }
+        while let Some(c) = stack.pop() {
+            if visit(&c, &mut stack) {
+                return true;
+            }
+        }
+        false
     }
 
     /// What `write` writes to the body, taken out of it (written at `depth`, for `<defs>`).
@@ -618,11 +673,21 @@ impl Writer<'_> {
         // Each mask covers what the group's elements paint.
         let all: Vec<&Node> = elements.iter().map(|c| &***c).collect();
         let region = self.region_attrs(&all);
-        for (c, (before, _)) in rest.iter().zip(&written).rev() {
+        // The mask group of element i + 1 holds elements 0…i: it starts with a spanning rectangle
+        // when one of those paints past its shapes (`Self::spanning_rect`), as `past[i]` records.
+        let mut past = Vec::with_capacity(elements.len());
+        for c in &elements {
+            let any = past.last().copied().unwrap_or(false) || self.holds_raster(c);
+            past.push(any);
+        }
+        for (i, (c, (before, _))) in rest.iter().zip(&written).enumerate().rev() {
             self.symbol_nodes = *before;
             let mid = self.knockout_mask(c, &region);
             self.line(&format!("<g mask=\"url(#{mid})\">"));
             self.depth += 1;
+            if past.get(i).copied().unwrap_or(false) {
+                self.line(&format!("<rect {region} fill=\"none\" visibility=\"hidden\"/>"));
+            }
         }
         self.symbol_nodes = after;
         self.body.push_str(&first);
