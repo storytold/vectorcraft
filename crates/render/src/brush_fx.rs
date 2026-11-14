@@ -155,7 +155,7 @@ pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnO
 
 /// How far brush art can paint past `n`'s brushed strokes, or past the brushed strokes in the art
 /// of symbol instance `n`: `16 × w + 8`, where `w` is the widest stroke (at least 1) of `n` when it
-/// has a visible brushed stroke and of the objects in that art that have one
+/// has a visible brushed stroke with a paint and of the objects in that art that have one
 /// ([`SymbolBoxes::brush_width`]) or the pieces live-effect plug-ins paint for them
 /// ([`crate::fx::painted_brush_width`]), and 0 when neither has one. The room for `n`'s own strokes
 /// is [`vectorcraft_brush::reach`], which the exports leave too.
