@@ -4,6 +4,20 @@ use super::*;
 const ZH: fn() -> Lang = || Lang::from_code("zh-hant").expect("zh-hant registered");
 
 #[test]
+fn gujarati_resolves_locales_and_takes_the_singular_for_zero_and_one() {
+    // The catalog is present even when this web build cannot display it.
+    let gu = Lang(LANGUAGES.iter().find(|l| l.code == "gu").expect("gu registered"));
+    let selectable = gu.0.available().then_some(gu);
+    assert_eq!(Lang::from_code("gu"), selectable);
+    for tag in ["gu", "gu-IN", "gu_IN.UTF-8", "GU-in", "gu-Gujr-IN"] {
+        assert_eq!(lang_from_tag(tag), selectable, "{tag}");
+    }
+    assert_eq!(gu.name(), "ગુજરાતી");
+    assert_eq!([0, 1, 2, 21].map(gu.0.plural), [0, 0, 1, 1]);
+    assert_eq!(tr(gu, "Save"), "સાચવો");
+}
+
+#[test]
 fn hindi_resolves_locales_and_uses_zero_one_plurals() {
     let hi = Lang::from_code("hi").expect("hi registered");
     for tag in ["hi", "hi-IN", "hi_IN.UTF-8", "HI-in", "hi-Deva-IN"] {
@@ -207,6 +221,17 @@ fn tags_map_to_languages() {
     }
     assert_eq!(lang_from_tag(""), None);
     assert_eq!(lang_from_tag("_"), None);
+}
+
+#[test]
+fn gujarati_web_selection_requires_a_bundled_interface_font() {
+    let gu = LANGUAGES.iter().find(|l| l.code == "gu").expect("Gujarati catalog");
+    assert!(gu.available_with_fonts(false, false), "native installed-font fallback");
+    assert!(!gu.available_with_fonts(true, false), "web must not offer missing glyphs");
+    assert!(gu.available_with_fonts(true, true));
+    assert!(LANGUAGES[0].available_with_fonts(true, false), "English fallback");
+    assert_eq!(Lang::from_code("gu").is_some(), gu.available());
+    assert_eq!(Lang::for_picker().iter().any(|l| l.code() == "gu"), gu.available());
 }
 
 /// The Bosnian, Georgian, Ukrainian, Hungarian, Korean, Vietnamese, Swedish and Catalan tags of
@@ -839,6 +864,11 @@ fn is_devanagari(c: char) -> bool {
     matches!(c as u32, 0x0900..=0x097F | 0x1CD0..=0x1CFF | 0xA8E0..=0xA8FF)
 }
 
+#[cfg(feature = "interface-fonts")]
+fn is_gujarati(c: char) -> bool {
+    matches!(c as u32, 0x0A80..=0x0AFF)
+}
+
 /// The UI fonts draw every character the catalogs use, in every family the UI draws text with
 /// (the web build has no system fonts to fall back to). Chinese and Japanese characters come from
 /// the craft-fonts build input, which is optional: without it they are left to the installed
@@ -852,6 +882,7 @@ fn bundled_fonts_cover_the_catalogs() {
     let japanese_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_japanese());
     let georgian_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.is_georgian());
     let devanagari_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Deva"));
+    let gujarati_ui_font = vectorcraft_text::CRAFT_FONTS.iter().any(|f| f.scripts.contains(&"Gujr"));
     let ctx = egui::Context::default();
     crate::theme::install_fonts(&ctx);
     let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
@@ -875,6 +906,7 @@ fn bundled_fonts_cover_the_catalogs() {
                         && (cjk_checked || !is_cjk(*c))
                         && (georgian_ui_font || !is_georgian(*c))
                         && (devanagari_ui_font || !is_devanagari(*c))
+                        && (gujarati_ui_font || !is_gujarati(*c))
                 })
                 .collect();
             for family in &families {
@@ -4044,6 +4076,87 @@ fn translated_messages_keep_the_command_ids_their_english_names() {
         }
     }
     assert!(missing.is_empty(), "{} rows drop a command id their English names:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// Whether `word` is an ASCII name a command reads: a letter followed by letters, digits or
+/// underscores.
+fn is_ascii_name(word: &str) -> bool {
+    word.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// The field names and accepted values that `s` spells out of its backticked spans: each name of a
+/// comma-separated list in square brackets, such as `[x, y, width, height]` or
+/// `[[subpath, anchor]…]`; each `a|b|c` list of values, whole; and the values an `unknown …` or
+/// `bad model …` message lists in parentheses, such as `(none, standard or wedges)`, up to the first
+/// item that is not a single name, so `(high, medium, low or a saved one: see …)` gives `high`,
+/// `medium` and `low`, and `(or give its ids)` gives none.
+fn field_names_and_values(s: &str) -> Vec<String> {
+    let outside = s.split('`').step_by(2).collect::<Vec<_>>().join(" ");
+    let mut found = Vec::new();
+    for piece in outside.split('[').skip(1) {
+        let Some(end) = piece.find(']') else { continue };
+        let names: Vec<&str> = piece[..end].split(',').map(str::trim).collect();
+        if names.len() > 1 && names.iter().all(|name| is_ascii_name(name)) {
+            found.extend(names.into_iter().map(str::to_string));
+        }
+    }
+    let lists = outside.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '|'));
+    found.extend(lists.filter(|w| w.contains('|') && w.split('|').all(is_ascii_name)).map(str::to_string));
+    for (at, _) in outside.match_indices('(') {
+        let before = &outside[..at];
+        if !(holds_ascii_word(before, "unknown") || before.contains("bad model")) {
+            continue;
+        }
+        let Some(end) = outside[at..].find(')') else { continue };
+        let items = outside[at + 1..at + end].split(", ").flat_map(|item| item.split(" or "));
+        let values: Vec<&str> = items.map(str::trim).take_while(|item| is_ascii_name(item)).collect();
+        if values.len() > 1 {
+            found.extend(values.into_iter().map(str::to_string));
+        }
+    }
+    found
+}
+
+#[test]
+fn field_names_and_values_finds_bracketed_names_and_listed_values() {
+    assert_eq!(field_names_and_values("`{key}` must be [x, y, width, height]: four numbers"), ["x", "y", "width", "height"]);
+    assert_eq!(field_names_and_values("missing anchors [[subpath, anchor]…]"), ["subpath", "anchor"]);
+    assert_eq!(field_names_and_values("arrowScale must be [start, end]"), ["start", "end"]);
+    assert_eq!(field_names_and_values("unknown pieLegend {v} (none, standard or wedges)"), ["none", "standard", "wedges"]);
+    assert_eq!(field_names_and_values("unknown side `{other}` (left|right|top|bottom)"), ["left|right|top|bottom"]);
+    assert_eq!(field_names_and_values("bad model {other} (keep, new or document)"), ["keep", "new", "document"]);
+    assert_eq!(
+        field_names_and_values("unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)"),
+        ["high", "medium", "low"]
+    );
+    assert_eq!(field_names_and_values("unknown object (or give its ids)"), Vec::<String>::new());
+    assert_eq!(field_names_and_values("unknown color `{c}` (#rrggbb or a preset name)"), Vec::<String>::new());
+    assert_eq!(field_names_and_values("unknown resolution (72 screen, 150 medium, 300 high)"), Vec::<String>::new());
+    assert_eq!(field_names_and_values("the art is [1, 2] (left, right) and `[a, b]`"), Vec::<String>::new());
+}
+
+/// A translated status or error message keeps each field name and accepted value its English text
+/// spells out (see [`field_names_and_values`]), as the English spells it: the message tells a user
+/// what to pass, and a command reads only the English names and values.
+#[test]
+fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
+    let mut missing = Vec::new();
+    for l in &LANGUAGES {
+        let (entries, _) = parse_entries(l.source);
+        for (ctx, src, tr) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg" || ctx == "@msgplural") {
+            let plural = ctx == "@msgplural";
+            let english = if plural { src.rsplit('|').next().unwrap_or(src) } else { src.as_str() };
+            let forms: Vec<&str> = if plural { tr.split('|').collect() } else { vec![tr.as_str()] };
+            for form in forms {
+                for name in field_names_and_values(english) {
+                    if !holds_ascii_word(form, &name) {
+                        missing.push(format!("{}: {name} in {src:?} -> {form:?}", l.code));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{} rows drop a field name or value their English lists:\n{}", missing.len(), missing.join("\n"));
 }
 
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists

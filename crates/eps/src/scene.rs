@@ -92,6 +92,19 @@ struct ImageCode {
 }
 
 impl ImageCode {
+    /// A hash of everything that is written for the image: equal images have equal keys.
+    fn content_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (&self.prelude, &self.dict, self.filter, self.op, &self.ascii).hash(&mut h);
+        h.finish()
+    }
+
+    /// Is everything written for `other` the same as for this image?
+    fn same_image(&self, other: &ImageCode) -> bool {
+        self.prelude == other.prelude && self.dict == other.dict && self.filter == other.filter && self.op == other.op && self.ascii == other.ascii
+    }
+
     /// The operators and data that draw the image where it is placed.
     fn push_inline(&self, s: &mut String) {
         s.push_str(&self.prelude);
@@ -253,6 +266,9 @@ pub(crate) struct Scene<'a> {
     images: HashMap<String, Option<usize>>,
     /// The source key and solid paint together identify a colorized encoding.
     colorized_images: HashMap<(String, String), Option<usize>>,
+    /// Freeform gradients' images by [`ImageCode::content_key`] → their indices in `codes`: a field
+    /// encoded the same as one already kept draws from it.
+    fields: HashMap<u64, Vec<usize>>,
     /// The encoded images.
     codes: Vec<ImageCode>,
     /// Where in `body` each placement of an encoded image goes (in order) and the index of its code.
@@ -281,6 +297,7 @@ impl<'a> Scene<'a> {
             brushes: None,
             images: HashMap::new(),
             colorized_images: HashMap::new(),
+            fields: HashMap::new(),
             codes: vec![],
             placements: vec![],
             pending: 0,
@@ -478,7 +495,7 @@ impl<'a> Scene<'a> {
             _ => {}
         }
         self.note_losses(n);
-        let (was, placed) = (self.body.len(), self.placements.len());
+        let (was, placed, codes) = (self.body.len(), self.placements.len(), self.codes.len());
         match &n.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } => {
                 children.iter().for_each(|c| self.node(c, false));
@@ -511,7 +528,7 @@ impl<'a> Scene<'a> {
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = self.doc.symbols.iter().find(|s| &s.name == symbol)
                     && self.nest < MAX_NEST
-                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::dynamic_art(&sym.art, n), *xf)
+                    && let Some(art) = self.doc.place_symbol_art(symbol, &vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n), *xf)
                 {
                     self.nest += 1;
                     self.node(&art, true);
@@ -536,6 +553,7 @@ impl<'a> Scene<'a> {
         if self.size() > self.max_body {
             self.body.truncate(was);
             self.unplace(placed);
+            self.forget_fields(codes);
             self.warn(TOO_LARGE);
         }
     }
@@ -1364,6 +1382,14 @@ impl<'a> Scene<'a> {
         if !(long > 1e-9 && long.is_finite()) {
             return;
         }
+        let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
+        if !invertible(place) {
+            return;
+        }
+        if self.size().saturating_add(64) > self.max_body {
+            self.warn(TOO_LARGE);
+            return;
+        }
         let k = (self.doc.raster_effects_ppi / 72.0).min(MAX_FIELD_PX / long);
         let along = |len: f64| (len * k).ceil().clamp(1.0, MAX_FIELD_PX) as u16;
         let (cols, rows) = (along(area.width()), along(area.height()));
@@ -1383,9 +1409,43 @@ impl<'a> Scene<'a> {
             let rgba: Vec<u8> = field.display_grid(area, cols, rows).flat_map(|(c, a)| [q(c[0]), q(c[1]), q(c[2]), q(a)]).collect();
             self.encode_image(&rgba, w, h)
         };
-        let place = Affine::translate(area.origin().to_vec2()) * Affine::scale_non_uniform(area.width(), area.height());
-        if let Some(image) = image {
-            self.place_inline(&image, place);
+        let Some(image) = image else { return };
+        let key = image.content_key();
+        let found =
+            self.fields.get(&key).and_then(|bucket| bucket.iter().copied().find(|&i| self.codes.get(i).is_some_and(|c| c.same_image(&image))));
+        let i = match found {
+            Some(i) => i,
+            None => {
+                // A field that can't be placed isn't kept.
+                if self.size().saturating_add(image.inline_len).saturating_add(64) > self.max_body {
+                    self.warn(TOO_LARGE);
+                    return;
+                }
+                let i = self.add_code(image);
+                self.fields.entry(key).or_default().push(i);
+                i
+            }
+        };
+        self.place_image(i, place);
+    }
+
+    /// Forget the field images after the first `n` codes that no placement draws any longer, last
+    /// first, up to the first code that is drawn or isn't a field image.
+    fn forget_fields(&mut self, n: usize) {
+        while self.codes.len() > n {
+            let i = self.codes.len() - 1;
+            let Some(code) = self.codes.get(i) else { break };
+            if code.uses > 0 {
+                break;
+            }
+            let key = code.content_key();
+            let Some(bucket) = self.fields.get_mut(&key) else { break };
+            let Some(at) = bucket.iter().position(|&j| j == i) else { break };
+            bucket.swap_remove(at);
+            if bucket.is_empty() {
+                self.fields.remove(&key);
+            }
+            self.codes.pop();
         }
     }
 
@@ -1592,21 +1652,6 @@ impl<'a> Scene<'a> {
         if let Some(code) = self.codes.get_mut(i) {
             code.uses += 1;
         }
-        self.line("Q");
-    }
-
-    /// Draw `code`, an image drawn nowhere else, on the unit square mapped by `place`.
-    fn place_inline(&mut self, code: &ImageCode, place: Affine) {
-        if !invertible(place) {
-            return;
-        }
-        if self.size().saturating_add(code.inline_len).saturating_add(64) > self.max_body {
-            self.warn(TOO_LARGE);
-            return;
-        }
-        self.line("q");
-        let _ = writeln!(self.body, "{} cm", ps::matrix(place));
-        code.push_inline(&mut self.body);
         self.line("Q");
     }
 
