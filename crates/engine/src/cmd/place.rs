@@ -348,7 +348,7 @@ pub(crate) fn pdf_art(
     let clip = (!bounding).then_some(board);
     let frame = clip.or_else(|| shown_bounds(&symbols, &nodes));
     let frame = frame.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, format!("`{name}` has no art to place")))?;
-    Ok(document::DocumentArt { doc, nodes, clip, frame, warnings })
+    Ok(document::DocumentArt { doc, nodes, clip, frame, warnings, editing_data: alone })
 }
 
 /// The bounds of what `nodes` draw, as an export measures art

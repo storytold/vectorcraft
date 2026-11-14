@@ -100,6 +100,9 @@ pub(crate) struct DocumentArt {
     /// What is shown: the artboard, or the art's bounds.
     pub frame: Rect,
     pub warnings: Vec<String>,
+    /// Whether a PDF or `.ai` page was read from the file's editing data (its page only a
+    /// placeholder, or its PDF part unreadable) instead of from the page.
+    pub editing_data: bool,
 }
 
 /// Artboard `page` (1-based) of the VectorCraft document `name` (`bytes`, read from `path` when
@@ -145,7 +148,7 @@ pub(crate) fn document_art(
     let nodes = super::on_artboard(&symbols, &layers, board);
     let frame = if bounding { super::shown_bounds(&symbols, &nodes) } else { Some(board) };
     let frame = frame.filter(|r| r.width() > 0.0 || r.height() > 0.0).ok_or_else(|| bad(cmd, format!("`{file}` has no art to place")))?;
-    Ok(DocumentArt { doc: l.doc, nodes, clip: (!bounding).then_some(board), frame, warnings: l.warnings })
+    Ok(DocumentArt { doc: l.doc, nodes, clip: (!bounding).then_some(board), frame, warnings: l.warnings, editing_data: false })
 }
 
 /// The most placed documents read inside one another while their links are resolved.
@@ -223,6 +226,8 @@ pub(crate) struct Source {
     pub warnings: Vec<String>,
     /// The colour mode the file's art was read in (a PDF page painted mostly in CMYK reads in CMYK).
     pub color_mode: ColorMode,
+    /// [`DocumentArt::editing_data`].
+    pub editing_data: bool,
 }
 
 /// The VectorCraft document `name` (`bytes`, from `path` when there is one) read for showing
@@ -233,32 +238,36 @@ pub(crate) fn source(name: &str, bytes: &[u8], path: Option<&str>, page: u32, bo
 }
 
 /// [`source`] of the file whose bytes `bytes` holds, kept by the blob without a copy of its own:
-/// several pages of one file read this way share one copy of it.
+/// several pages of one file read this way share one copy of it, with its hash ([`hash_bytes`])
+/// worked out once for them all: `file` is the bytes and that hash.
 pub(crate) fn shared_source(
     name: &str,
-    bytes: &Arc<Vec<u8>>,
+    file: (&Arc<Vec<u8>>, &str),
     path: Option<&str>,
     page: u32,
     bounding: bool,
     page_box: PageBox,
     cmd: &str,
 ) -> Result<Source> {
-    read_source(name, bytes, Some(bytes), path, (page, bounding, page_box), cmd)
+    read_source(name, file.0, Some(file), path, (page, bounding, page_box), cmd)
 }
 
-/// [`source`], the blob keeping `shared` when given (else a copy of `bytes`); `shown` is the page
-/// (or artboard), whether the art's bounds are shown, and the page's box.
+/// [`source`], the blob keeping `shared`'s bytes when given (else a copy of `bytes`), and its hash
+/// used for the key (else `bytes` hashed); `shown` is the page (or artboard), whether the art's
+/// bounds are shown, and the page's box.
 fn read_source(
     name: &str,
     bytes: &[u8],
-    shared: Option<&Arc<Vec<u8>>>,
+    shared: Option<(&Arc<Vec<u8>>, &str)>,
     path: Option<&str>,
     shown: (u32, bool, PageBox),
     cmd: &str,
 ) -> Result<Source> {
     let (page, bounding, page_box) = shown;
+    let hash = shared.map_or_else(|| hash_bytes(bytes), |(_, h)| h.to_string());
+    let shared = shared.map(|(b, _)| b);
     // The same document placed the same way is read once (placing it again is free).
-    let key = key_for(&hash_bytes(bytes), page, bounding, page_box);
+    let key = key_for(&hash, page, bounding, page_box);
     // Resolving its links depends on where the file is and on what the caller may read, so a hit
     // needs the same path, and nothing is shared with or from a confined (automation) caller.
     let confined = crate::file_access::current().is_some();
@@ -284,10 +293,10 @@ fn read_source(
     };
     let art = group(a.nodes, a.clip);
     blob.proxy = preview(&a.doc, &art, a.frame).map(Arc::new);
-    let color_mode = a.doc.color_mode;
+    let (color_mode, editing_data) = (a.doc.color_mode, a.editing_data);
     // Drawing it needn't read it again.
     vectorcraft_doc::placed_document::prime(&shown, blob.bytes.clone(), (a.doc, art, a.frame));
-    let s = Source { blob, key, page_box, frame: a.frame, warnings: a.warnings, color_mode };
+    let s = Source { blob, key, page_box, frame: a.frame, warnings: a.warnings, color_mode, editing_data };
     if !confined {
         let mut m = lock_memo();
         if m.len() >= MEMO_SIZE {

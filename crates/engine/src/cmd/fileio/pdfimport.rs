@@ -253,10 +253,17 @@ pub(super) fn linked_pages(name: &str, bytes: &[u8], path: Option<&str>, o: &Loa
     let gap = ImportOptions::default().artboard_gap;
     // Every page's object keeps the same one copy of the file.
     let shared = Arc::new(bytes.to_vec());
+    // The file is hashed once for all its pages.
+    let hash = link.hash.clone().unwrap_or_else(|| vectorcraft_doc::links::hash_bytes(bytes));
     let (mut x, mut warnings, mut cmyk_pages) = (0.0, Vec::<String>::new(), 0);
     for (i, &index) in picked.iter().enumerate() {
         let page = index as u32 + 1;
-        let s = document::shared_source(name, &shared, Some(path), page, bounding, document::page_box(o.crop), C)?;
+        let s = document::shared_source(name, (&shared, &hash), Some(path), page, bounding, document::page_box(o.crop), C)?;
+        // A page that is only a placeholder (a `.ai` saved without PDF compatibility) shows the
+        // file's editing data, not a page of the file.
+        if s.editing_data {
+            return Err(bad(C, format!("linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file")));
+        }
         cmyk_pages += usize::from(s.color_mode == ColorMode::Cmyk);
         let mut node = document::node(&mut doc, &s, LinkInfo { page: Some(page), ..link.clone() }, bounding);
         if let NodeKind::PlacedDocument(p) = &mut node.kind {

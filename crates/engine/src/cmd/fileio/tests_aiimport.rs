@@ -1160,6 +1160,27 @@ fn an_ai_file_saved_without_its_pdf_part_places_from_its_editing_data() {
     assert!(e.contains("placeholder"), "{e}");
 }
 
+/// `document.open` with `linkPages` refuses a `.ai` saved without PDF compatibility, whose page is
+/// only a placeholder, and opens a PDF-compatible one.
+#[test]
+fn link_pages_refuses_an_ai_file_saved_without_its_pdf_part() {
+    let d = std::env::temp_dir().join(format!("vc-ailinkpages-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let file = |name: &str, page: &str| {
+        let path = d.join(name);
+        std::fs::write(&path, ai::ai(&compressed(&ai::sample_data()), page)).unwrap();
+        path.to_string_lossy().to_string()
+    };
+    let (plain, compatible) = (file("plain.ai", PLACEHOLDER), file("compatible.ai", "0 g 10 10 40 40 re f"));
+    let mut s = Session::new();
+    let e = s.execute("document.open", &json!({"path": plain, "linkPages": true})).unwrap_err().to_string();
+    assert!(e.contains("isn't a PDF or a PDF-compatible .ai file"), "{e}");
+    assert!(s.documents().is_empty(), "nothing opened");
+    s.execute("document.open", &json!({"path": compatible, "linkPages": true})).unwrap();
+    assert!(s.doc().unwrap().doc.has_placed());
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// A page of text alone, as text-only art has in its PDF part: no path is painted.
 const TEXT_ART: &str = "BT /F1 36 Tf 10 40 Td (Text only) Tj ET";
 
