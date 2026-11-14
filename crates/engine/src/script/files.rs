@@ -569,7 +569,7 @@ impl Disk {
 
     /// Adds grants of `paths` (with `write`, folders when `folder`) for this script to the grants
     /// file, with the code the run has evaluated so far, written whole to a file beside it that then
-    /// takes its place.
+    /// takes its place. The grants the run kept before are given the same code.
     fn keep(&self, paths: &[std::path::PathBuf], write: bool, folder: bool) -> Result<(), &'static str> {
         let (Some((script, hash)), Some(store)) = (&self.script, self.store_path()) else { return Err(NO_ALWAYS) };
         // A grants file that is there but cannot be read is left as it is.
@@ -577,6 +577,16 @@ impl Disk {
         let mut grants = try_read_store(&store).map_err(|_| NOT_SAVED)?;
         let script = shown(script);
         let code: Vec<&String> = self.ran.iter().collect();
+        // The grants this run kept before take the code evaluated since, as the run's end would
+        // have given them.
+        for g in &mut grants {
+            if g["script"] == *script
+                && g["sha256"] == *hash
+                && self.kept.iter().any(|(p, w, f)| g["path"] == *shown(p) && g["write"] == *w && g["folder"] == *f)
+            {
+                g["code"] = serde_json::json!(code);
+            }
+        }
         for p in paths {
             let path = shown(p);
             grants

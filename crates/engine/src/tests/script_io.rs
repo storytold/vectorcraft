@@ -1766,6 +1766,41 @@ fn script_file_grants_keep_the_code_evaluated_after_the_dialog() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A grant kept with Always before a second one is kept in the same run also keeps the code the
+/// run evaluated between the two, so the next run that evaluates it keeps both grants.
+#[test]
+fn script_file_grants_kept_earlier_in_a_run_keep_the_code_evaluated_before_a_later_grant() {
+    let base = folder("grantbetween");
+    let first = base.join("picked/a.txt");
+    let second = base.join("picked/b.txt");
+    write(&first, b"a");
+    write(&second, b"b");
+    let text = format!(
+        "var a = new File({:?}); var ka = a.open('r');\n\
+         if (!ka) File.openDialog('a');\n\
+         var between = eval('new File(a.fsName).open(\"r\")');\n\
+         var b = new File({:?}); var kb = b.open('r');\n\
+         if (!kb) File.openDialog('b');\n\
+         vc.log([ka, between, kb, new File(a.fsName).open('r')]);",
+        first.to_string_lossy(),
+        second.to_string_lossy()
+    );
+    let mut s = with_data(&base);
+    start_framed(&mut s, &base, &text);
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![first.to_string_lossy().into_owned()], always: true }));
+    assert!(pump_to_picker(&mut s).is_none());
+    assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec![second.to_string_lossy().into_owned()], always: true }));
+    assert_eq!(pump_to_picker(&mut s).unwrap().unwrap()["log"], json!([[false, true, false, true]]));
+    start_framed(&mut s, &base, &text);
+    assert_eq!(
+        pump_to_picker(&mut s).unwrap().unwrap()["log"],
+        json!([[true, true, true, true]]),
+        "the first grant keeps the code evaluated before the second"
+    );
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Code another script left in a named engine withdraws a script's kept grants in that engine.
 #[test]
 fn script_file_grants_are_withdrawn_by_code_another_script_left_in_the_engine() {
