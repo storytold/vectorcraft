@@ -849,6 +849,53 @@ fn nested_groups_with_effects_count_toward_the_depth_limit() {
     assert!(deepest.is_some_and(|d| crate::reshape::geometry_effects(&d).len() == 1), "the deepest member keeps its effect");
 }
 
+/// The members of a clipping path count toward the member limit: with room for two more members,
+/// the third member of a clipping group keeps its own effect as it is.
+#[test]
+fn clipping_path_members_past_the_member_limit_stay_as_they_are() {
+    let member = |id: u64| {
+        let mut m = with_effect(square_at_100(), offset_10());
+        m.id = NodeId(id);
+        Arc::new(m)
+    };
+    let clipping = Node::group(NodeId(20), vec![member(2), member(3), member(4)]);
+    let mut clipped = Node::new(NodeId(5), NodeKind::Group { children: vec![Arc::new(clipping), Arc::new(square_at_100())], clip: true });
+    // An enclosing call that has visited all the members it may but two.
+    let _outer = DrawnFrame::enter().unwrap();
+    DRAWN.with(|d| d.set((1, crate::SYMBOL_ART_MAX_NODES - 2)));
+    members_as_drawn(None, &mut clipped);
+    let clipping = clipped.children().unwrap()[0].clone();
+    let effects: Vec<usize> = clipping.children().unwrap().iter().map(|m| crate::reshape::geometry_effects(m).len()).collect();
+    assert_eq!(effects, [0, 0, 1], "the first two members take their Offset Path, the third keeps it");
+    let widths: Vec<f64> = clipping.children().unwrap().iter().map(|m| m.geometric_bounds().unwrap().width()).collect();
+    assert!((widths[0] - 120.0).abs() < 0.5 && (widths[1] - 120.0).abs() < 0.5 && (widths[2] - 100.0).abs() < 0.5, "{widths:?}");
+}
+
+/// A compound clipping path with an effect of its own takes that effect when the member limit is
+/// reached among its paths: with room for one more member, the first path (at 100 to 200) takes
+/// its Offset Path, the second (at 300 to 400) goes in as it is, and the compound path's Offset
+/// Path reshapes both, to 80 to 220 and 290 to 410.
+#[test]
+fn a_compound_clipping_path_takes_its_own_effect_at_the_member_limit() {
+    let member = |id: u64, x: f64| {
+        let path = Node::path(NodeId(id), shapes::rectangle(Rect::new(x, 100.0, x + 100.0, 200.0)), black());
+        Arc::new(with_effect(path, offset_10()))
+    };
+    let kind = NodeKind::Compound { children: vec![member(2, 100.0), member(3, 300.0)], rule: FillRule::NonZero };
+    let clipping = with_effect(Node::new(NodeId(20), kind), offset_10());
+    let mut clipped = Node::new(NodeId(5), NodeKind::Group { children: vec![Arc::new(clipping), Arc::new(square_at_100())], clip: true });
+    // An enclosing call that has visited all the members it may but one.
+    let _outer = DrawnFrame::enter().unwrap();
+    DRAWN.with(|d| d.set((1, crate::SYMBOL_ART_MAX_NODES - 1)));
+    members_as_drawn(None, &mut clipped);
+    let clipping = clipped.children().unwrap()[0].clone();
+    assert!(crate::reshape::geometry_effects(&clipping).is_empty(), "the compound path's Offset Path is in its geometry");
+    let subpaths = clipping.path_data().unwrap().subpaths.clone();
+    let bounds: Vec<(f64, f64)> = subpaths.into_iter().map(|sp| PathData::single(sp).bounds().unwrap()).map(|b| (b.x0, b.x1)).collect();
+    let near = |(a, b): (f64, f64), (x0, x1): (f64, f64)| (a - x0).abs() < 0.5 && (b - x1).abs() < 0.5;
+    assert!(bounds.len() == 2 && near(bounds[0], (80.0, 220.0)) && near(bounds[1], (290.0, 410.0)), "{bounds:?}");
+}
+
 /// An image or a symbol instance that a group's Transform effect moves takes the placed gradients
 /// of its own fills along, as a path does, and each copy takes them as many times as it takes the
 /// transform.
