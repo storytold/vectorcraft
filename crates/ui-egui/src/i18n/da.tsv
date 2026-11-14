@@ -194,6 +194,8 @@
 	Crop Image	Beskær billede
 	Image Tools	Billedværktøjer
 	Remove Background…	Fjern baggrund…
+	Draw (Pencil)	Tegn (blyant)
+	Place Image	Placér billede
 	Remove Background	Fjern baggrund
 	Background	Baggrund
 	Edge Color	Kantfarve
@@ -1507,6 +1509,7 @@ lighting	Light	Lys
 	Proportional Metrics	Proportionale metrikker
 	Insert Aki Left	Indsæt aki til venstre
 	Insert Aki Right	Indsæt aki til højre
+	Tsume	Tsume
 	Character Direction	Tegnretning
 	Digits	Cifre
 	Arabic	Arabisk
