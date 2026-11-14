@@ -234,8 +234,14 @@ pub fn is_objects_on_path(n: &Node) -> bool {
 /// The path of `n` if it is a path object an Objects on Path group can attach objects to: a path
 /// (not a guide) whose first subpath has a length ([`path_length`]).
 pub fn attachable_path(n: &Node) -> Option<&PathData> {
+    attachable(n).map(|(path, _)| path)
+}
+
+/// [`attachable_path`] with the path measured ([`Measured`]), from the one flattening that checks
+/// its length.
+pub fn attachable(n: &Node) -> Option<(&PathData, Measured)> {
     match &n.kind {
-        NodeKind::Path { path, guide: false, .. } if path_length(path).is_some() => Some(path),
+        NodeKind::Path { path, guide: false, .. } => Some((path, Measured::new(path)?)),
         _ => None,
     }
 }
@@ -301,19 +307,50 @@ pub fn path_length(path: &PathData) -> Option<(f64, bool)> {
 
 /// A path's first subpath flattened ([`Spine`]), with its length and whether it is closed, so that
 /// one flattening serves both measuring the path and finding points along it.
-struct Measured {
+pub struct Measured {
     spine: Spine,
     len: f64,
     closed: bool,
 }
 
+impl std::fmt::Debug for Measured {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Measured").field("len", &self.len).field("closed", &self.closed).finish_non_exhaustive()
+    }
+}
+
 impl Measured {
     /// `None` for a path without length, or with a length too large to be finite.
-    fn new(path: &PathData) -> Option<Self> {
+    pub fn new(path: &PathData) -> Option<Self> {
         let spine = Spine::new(path)?;
         let len = spine.length();
         let closed = path.subpaths.first().is_some_and(|s| s.closed);
         (len.is_finite() && len > 1e-9).then_some(Self { spine, len, closed })
+    }
+    /// The flattened first subpath, to measure along.
+    pub fn spine(&self) -> &Spine {
+        &self.spine
+    }
+    /// The length of the first subpath (points), as [`path_length`] gives it.
+    pub fn length(&self) -> f64 {
+        self.len
+    }
+    /// Is the first subpath closed?
+    pub fn closed(&self) -> bool {
+        self.closed
+    }
+    /// [`stops`] on this path.
+    pub fn stops(&self, n: usize, spacing: Option<f64>, start: f64) -> Vec<(Point, f64)> {
+        let (start, gap) = layout(self.len, self.closed, n, spacing, start);
+        (0..n).map(|i| self.spine.at_length(nth_length(self.len, self.closed, start, gap, i))).collect()
+    }
+    /// [`stop`] on this path: `None` for an `i` of `n` or more.
+    pub fn stop(&self, n: usize, spacing: Option<f64>, start: f64, i: usize) -> Option<(Point, f64)> {
+        if i >= n {
+            return None;
+        }
+        let (start, gap) = layout(self.len, self.closed, n, spacing, start);
+        Some(self.spine.at_length(nth_length(self.len, self.closed, start, gap, i)))
     }
 }
 
@@ -359,9 +396,7 @@ fn wrap(s: f64, len: f64) -> f64 {
 /// (radians, as `atan2` gives in the document's axes). They go along it as [`layout`] spaces them
 /// for Space `spacing` (`None`: Auto) from `start`. `None` for a path without length.
 pub fn stops(path: &PathData, n: usize, spacing: Option<f64>, start: f64) -> Option<Vec<(Point, f64)>> {
-    let Measured { spine, len, closed } = Measured::new(path)?;
-    let (start, gap) = layout(len, closed, n, spacing, start);
-    Some((0..n).map(|i| spine.at_length(nth_length(len, closed, start, gap, i))).collect())
+    Some(Measured::new(path)?.stops(n, spacing, start))
 }
 
 /// Where object `i` of `n` attaches along `path`, as [`stops`] places it, without the others.
@@ -370,9 +405,7 @@ pub fn stop(path: &PathData, n: usize, spacing: Option<f64>, start: f64, i: usiz
     if i >= n {
         return None;
     }
-    let Measured { spine, len, closed } = Measured::new(path)?;
-    let (start, gap) = layout(len, closed, n, spacing, start);
-    Some(spine.at_length(nth_length(len, closed, start, gap, i)))
+    Measured::new(path)?.stop(n, spacing, start, i)
 }
 
 /// The distance along a path of length `len` (closed or not) to object `i`, from `start` and

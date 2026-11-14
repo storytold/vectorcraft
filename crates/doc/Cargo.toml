@@ -8,6 +8,10 @@ description = "VectorCraft document model: artboards, layers, objects, appearanc
 [lints]
 workspace = true
 
+[features]
+# `vectorcraft_doc::blend::spines_built` for other crates' tests (dev-dependencies only).
+spine-count = []
+
 [dependencies]
 vectorcraft-geom = { workspace = true }
 vectorcraft-color = { workspace = true }

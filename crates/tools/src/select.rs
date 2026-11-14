@@ -48,9 +48,7 @@ use crate::bbox::{Handle, hit_handle, in_rotate_zone, move_delta, rotate_for_dra
 use crate::blendwidget::{self, BlendWidgetDrag};
 use crate::corners::{self, CornerDrag, over_widget};
 use crate::guides::{PointSnap, Targets, distance_guides, hold_on_path};
-use crate::objects_on_path::{
-    MemberDrag, MoveAllDrag, RotateAllDrag, SpaceDrag, member_hover, over_member, over_move_all, over_rotate_all, over_space,
-};
+use crate::objects_on_path::{MemberDrag, MoveAllDrag, RotateAllDrag, SpaceDrag, WidgetDrag, WidgetKind, member_hover, widget_at};
 use crate::pathtype::{self, BracketDrag, over_bracket};
 use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
@@ -1235,14 +1233,11 @@ impl Tool for SelectionTool {
         if blendwidget::over_widget(cx, p) {
             return Cursor::ArrowHollow;
         }
-        if over_rotate_all(cx, p) {
-            return Cursor::Rotate;
-        }
-        if over_space(cx, p) {
-            return Cursor::ArrowHollow;
-        }
-        if over_move_all(cx, p) || over_member(cx, p) {
-            return Cursor::Move;
+        match widget_at(cx, p) {
+            Some(WidgetKind::RotateAll) => return Cursor::Rotate,
+            Some(WidgetKind::Space) => return Cursor::ArrowHollow,
+            Some(WidgetKind::MoveAll | WidgetKind::Member) => return Cursor::Move,
+            None => {}
         }
         if over_bracket(cx, p) {
             return Cursor::PathBracket;
@@ -1617,20 +1612,13 @@ impl SelectionTool {
             self.state = State::BlendWidget(d);
             return Some(vec![]);
         }
-        if let Some(d) = RotateAllDrag::hit(cx, ev) {
-            self.state = State::RotateAll(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = SpaceDrag::hit(cx, ev) {
-            self.state = State::Space(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = MoveAllDrag::hit(cx, ev) {
-            self.state = State::MoveAll(d);
-            return Some(vec![]);
-        }
-        if let Some(d) = MemberDrag::hit(cx, ev) {
-            self.state = State::Member(d);
+        if let Some(d) = WidgetDrag::hit(cx, ev) {
+            self.state = match d {
+                WidgetDrag::RotateAll(d) => State::RotateAll(d),
+                WidgetDrag::Space(d) => State::Space(d),
+                WidgetDrag::MoveAll(d) => State::MoveAll(d),
+                WidgetDrag::Member(d) => State::Member(d),
+            };
             return Some(vec![]);
         }
         if let Some(b) = BracketDrag::hit(cx, ev) {
