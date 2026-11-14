@@ -747,9 +747,9 @@ fn a_baked_group_that_keeps_its_type_applies_its_members_effects_first() {
     assert!((w - 250.0).abs() < 1e-6, "{w}");
 }
 
-/// A clip group's clipping path keeps its own effects; the clipped members take theirs first.
+/// A clip group's clipping path and the clipped members take their own effects first.
 #[test]
-fn a_clipping_path_keeps_its_own_effects_under_a_groups_effects() {
+fn a_clipping_path_takes_its_own_effects_before_a_groups_effects() {
     let mut clip = with_effect(square_at_100(), offset_10());
     clip.id = NodeId(2);
     if let NodeKind::Path { clipping, .. } = &mut clip.kind {
@@ -762,7 +762,9 @@ fn a_clipping_path_keeps_its_own_effects_under_a_groups_effects() {
     let clip_group = art.children().unwrap()[0].clone();
     let ch = clip_group.children().unwrap();
     assert!(matches!(ch[0].kind, NodeKind::Path { clipping: true, .. }), "{:?}", ch[0].kind);
-    assert_eq!(crate::reshape::geometry_effects(&ch[0]).len(), 1, "the clipping path keeps its Offset Path");
+    assert!(crate::reshape::geometry_effects(&ch[0]).is_empty(), "the clipping path's Offset Path is applied");
+    let w = ch[0].geometric_bounds().unwrap().width();
+    assert!((w - 60.0).abs() < 0.5, "grown by 10 on each side, then scaled to 50 %: {w}");
     assert!(matches!(ch[1].kind, NodeKind::Group { .. }) && crate::reshape::geometry_effects(&ch[1]).is_empty(), "the member is drawn as its art");
 }
 
@@ -1756,4 +1758,39 @@ fn a_sublayers_ruler_guide_in_a_hidden_or_locked_group_stays_hidden_or_locked() 
         let guides: Vec<_> = art.children().into_iter().flatten().filter(|c| c.is_ruler_guide()).map(|c| (c.id, c.visible, c.locked)).collect();
         assert_eq!(guides, [(NodeId(20), !hidden, locked)], "hidden {hidden}, locked {locked}");
     }
+}
+
+/// A group's own Fill + Offset Path below its contents follows the outline of a clip group among
+/// its members, its clipping path, not the clipped art it hides outside that path (#7289).
+#[test]
+fn a_groups_own_fill_follows_a_clip_groups_clipping_path_not_its_hidden_art() {
+    let mut clip = square_at_100();
+    clip.id = NodeId(2);
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    // The clipped art reaches 100 pt past the clipping path on either side.
+    let hidden = Node::path(NodeId(3), shapes::rectangle(Rect::new(0.0, 100.0, 300.0, 200.0)), black());
+    let clipped = Node::new(NodeId(5), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(hidden)], clip: true });
+    let mut g = Node::group(NodeId(10), vec![Arc::new(clipped.clone())]);
+    let mut fill = vectorcraft_doc::FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    fill.effects.push(offset_10());
+    g.appearance.items = vec![AppearanceItem::Fill(fill)];
+    g.appearance.set_contents_at(1);
+    let near = |a: Rect, b: Rect| (a.x0 - b.x0).abs() < 0.5 && (a.y0 - b.y0).abs() < 0.5 && (a.x1 - b.x1).abs() < 0.5 && (a.y1 - b.y1).abs() < 0.5;
+    let expected = Rect::new(90.0, 90.0, 210.0, 210.0);
+
+    let art = evaluate_container(None, &g).unwrap();
+    let ch = art.children().unwrap();
+    assert_eq!(ch.len(), 2, "the fill's art below the clip group");
+    assert_eq!(ch[0].id, NodeId(10));
+    let b = drawn_bounds(&ch[0]).unwrap();
+    assert!(near(b, expected), "the offset fill hugs the clipping path: {b:?}");
+
+    // The clip group itself with that fill: the same outline.
+    let mut own = clipped;
+    own.appearance = g.appearance.clone();
+    assert_eq!(member_shapes(None, &own).len(), 1);
+    let b = member_shapes(None, &own)[0].0.bounds().unwrap();
+    assert!(near(b, Rect::new(100.0, 100.0, 200.0, 200.0)), "the clipping path's region: {b:?}");
 }
