@@ -1895,13 +1895,25 @@ fn rename(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     {
         return Ok(error(NAME_TAKEN));
     }
+    // Open objects hold real paths with the names the file system keeps, and `from` keeps the last
+    // name as given, which where case does not matter can differ in case: they are matched by the
+    // kept name. A link is renamed itself, and no object holds a path through it. When the kept
+    // name cannot be learned, nothing is renamed, so no object goes on under the old path's rules.
+    let kept = if was.file_type().is_symlink() {
+        from.clone()
+    } else {
+        match std::fs::canonicalize(&from) {
+            Ok(kept) => kept,
+            Err(_) => return Ok(error(WRITE_FAILED)),
+        }
+    };
     if std::fs::rename(&from, &to).is_err() {
         return Ok(error(WRITE_FAILED));
     }
     // Open objects of the file, or of files in the folder, write to the new path, and the rules for
     // reading apply to them there.
     let moved = |p: &mut Option<std::path::PathBuf>| {
-        if let Some(rest) = p.as_deref().and_then(|t| t.strip_prefix(&from).ok()) {
+        if let Some(rest) = p.as_deref().and_then(|t| t.strip_prefix(&kept).ok()) {
             *p = Some(if rest.as_os_str().is_empty() { to.clone() } else { to.join(rest) });
         }
     };

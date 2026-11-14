@@ -1192,6 +1192,28 @@ fn script_file_rename_does_not_move_the_settings_folder_named_in_another_case() 
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// Where case does not matter, a folder renamed under its name in another case still moves the open
+/// objects of the files in it: changes are written under the new name, not lost at the old one.
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn script_file_rename_of_a_folder_named_in_another_case_moves_its_open_files() {
+    let base = folder("renamecase");
+    let mut s = with_data(&base);
+    let r = run_in(
+        &mut s,
+        &base,
+        "var d = Folder.userData.fsName; new Folder(d + '/sub').create();\n\
+         var f = new File(d + '/sub/f.txt'); f.open('w'); f.write('kept');\n\
+         var out = [new Folder(d + '/SUB').rename('moved'), f.close(), f.error]; vc.log(out); vc.log(d);",
+    )
+    .unwrap();
+    let d = PathBuf::from(r["log"][1].as_str().unwrap());
+    assert_eq!(r["log"][0], json!([true, true, ""]));
+    assert_eq!(std::fs::read(d.join("moved/f.txt")).unwrap(), b"kept");
+    assert!(!d.join("sub").exists());
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// Where case matters, a rename to a name that differs in case alone does not replace the other file.
 #[cfg(target_os = "linux")]
 #[test]
