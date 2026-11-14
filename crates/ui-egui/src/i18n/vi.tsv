@@ -5805,6 +5805,7 @@ theme	Appearance	Giao diện
 @msg	no such color	không có màu như vậy
 @msg	{_1} cannot be used on Windows	không thể dùng {_1} trên Windows
 @msg	more than one action is named “{_1}”	có nhiều hành động tên là “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	hành động “{_1}” đặt tùy chọn thư mục {_2}; hãy xóa bước đó để lưu bộ
 @msg	no symbol named `{n}`	không có biểu tượng nào tên `{n}`
 	Smudge Stick…	Bút chì xóa mờ…
 	Smudge Stick	Bút chì xóa mờ

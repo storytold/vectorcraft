@@ -182,6 +182,11 @@ pub trait Tool: Send {
     fn claims_key(&self, _cx: &ToolContext, _key: ToolKey) -> bool {
         false
     }
+    /// [`Self::claims_key`] for a press with `mods` held. By default the modifiers do not matter;
+    /// a tool that takes a key only without modifiers leaves the modified presses to the shortcuts.
+    fn claims_key_with(&self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> bool {
+        self.claims_key(cx, key)
+    }
     /// Has the tool started something that Escape ends while no button is pressed (a path being
     /// drawn, the Blend tool's first pick)? That Escape ends nothing else, such as isolation mode or
     /// a rotated view.

@@ -598,3 +598,207 @@ fn compound_stroke_path_is_its_members_in_order() {
     assert_eq!(bp.elements(), expected.elements());
     assert!(!bp.elements().is_empty());
 }
+
+/// The sublayers in [`guide_layers`]'s chain, each inside the one before.
+const GUIDE_CHAIN: u64 = 30;
+
+/// How many children the layers of [`guide_layers`] hold: the layer's 6, 1 in the sublayer
+/// without a guide, 2 at each of the two places the shared sublayer lies, the innermost
+/// sublayer's 2 and 3 in each sublayer around it.
+const GUIDE_LAYER_CHILDREN: usize = 6 + 1 + 2 * 2 + 2 + (GUIDE_CHAIN as usize - 1) * 3;
+
+/// How many ruler guides the layers of [`guide_layers`] hold: one in each sublayer of the chain,
+/// one at each place the shared sublayer lies and the layer's own.
+const GUIDE_LAYER_GUIDES: usize = GUIDE_CHAIN as usize + 2 + 1;
+
+/// A layer holding, in order: [`GUIDE_CHAIN`] sublayers, each inside the one before and holding an
+/// object and a ruler guide; a sublayer with an object only; a sublayer with an object and a
+/// guide; an object; that last sublayer again; and a guide. Guides differ in direction, artboard
+/// and lock. Returns the layer, the sublayer without a guide and the one that lies twice.
+fn guide_layers() -> (Node, Arc<Node>, Arc<Node>) {
+    let rect = |id| Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::default_art()));
+    let guide = |id: u64| {
+        let kind = NodeKind::RulerGuide { vertical: id.is_multiple_of(2), pos: id as f64, artboard: id.is_multiple_of(3).then_some(7) };
+        let mut g = Node::new(NodeId(id), kind);
+        g.locked = id.is_multiple_of(5);
+        Arc::new(g)
+    };
+    let sublayer = |id, children: Vec<Arc<Node>>| {
+        let mut l = Node::layer(NodeId(id), "Sub", LayerColor::Preset(1));
+        if let Some(ch) = l.children_mut() {
+            *ch = children;
+        }
+        Arc::new(l)
+    };
+    let mut chain = sublayer(100, vec![rect(150), guide(200)]);
+    for depth in 1..GUIDE_CHAIN {
+        chain = sublayer(100 + depth, vec![rect(600 + depth), chain, guide(300 + depth)]);
+    }
+    let still = sublayer(500, vec![rect(501)]);
+    let twice = sublayer(510, vec![rect(511), guide(512)]);
+    let mut layer = Node::layer(NodeId(1), "Layer", LayerColor::Preset(0));
+    if let Some(ch) = layer.children_mut() {
+        *ch = vec![chain, Arc::clone(&still), Arc::clone(&twice), rect(2), Arc::clone(&twice), guide(3)];
+    }
+    (layer, still, twice)
+}
+
+/// Whether `a` and `b` hold the same children, none of them copied.
+fn same_children(a: &Node, b: &Node) -> bool {
+    let (a, b) = (a.children().unwrap(), b.children().unwrap());
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| Arc::ptr_eq(a, b))
+}
+
+/// Stripping the ruler guides of a layer looks at each child of the layer and of its sublayers
+/// once, however deep the sublayers nest. The art and its order stay, a sublayer without a guide is
+/// not copied, and a copy of the layer held elsewhere keeps its guides.
+#[test]
+fn stripping_ruler_guides_looks_at_each_child_of_nested_layers_once() {
+    use std::cell::Cell;
+    let (whole, still, twice) = guide_layers();
+    let ids = |n: &Node| {
+        let mut out = vec![];
+        n.walk(&mut |c| out.push(c.id));
+        out
+    };
+    let mut art = vec![];
+    whole.walk(&mut |c| {
+        if !c.is_ruler_guide() {
+            art.push(c.id);
+        }
+    });
+    assert_eq!(ids(&whole).len(), art.len() + GUIDE_LAYER_GUIDES);
+
+    let mut n = whole.clone();
+    let looked = Cell::new(0_usize);
+    let pick = |c: &Node| {
+        looked.set(looked.get() + 1);
+        c.is_ruler_guide()
+    };
+    let held = super::ops::held_guides(&n, &pick).unwrap();
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "each child of the layers is looked at once");
+    super::ops::strip_held(&mut n, held);
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "removing looks at nothing again");
+    assert_eq!(ids(&n), art, "the art stays, in its order");
+    let ch = n.children().unwrap();
+    assert!(Arc::ptr_eq(&ch[1], &still), "a sublayer without a guide is not copied");
+    assert!(Arc::ptr_eq(&ch[3], &whole.children().unwrap()[3]), "an object is not copied");
+    assert!(!Arc::ptr_eq(&ch[2], &twice) && !Arc::ptr_eq(&ch[4], &twice) && !Arc::ptr_eq(&ch[2], &ch[4]));
+    assert_eq!(
+        (ch[2].children().map(Vec::len), ch[4].children().map(Vec::len)),
+        (Some(1), Some(1)),
+        "a sublayer lying twice is stripped at both places"
+    );
+    // The copies held elsewhere (an undo step's, say) keep their guides.
+    assert_eq!(twice.children().map(Vec::len), Some(2));
+    assert_eq!(ids(&whole).len(), art.len() + GUIDE_LAYER_GUIDES);
+
+    // The method strips the same guides.
+    let mut same = whole.clone();
+    same.strip_ruler_guides();
+    assert_eq!(same, n);
+    assert!(Arc::ptr_eq(&same.children().unwrap()[1], &still));
+    // With no guide left there is nothing to remove, and nothing is copied.
+    let before = n.clone();
+    n.strip_ruler_guides();
+    assert!(same_children(&n, &before));
+    let mut empty = Node::layer(NodeId(900), "Empty", LayerColor::Preset(0));
+    empty.strip_ruler_guides();
+    assert_eq!(empty.children().map(Vec::len), Some(0));
+    // Only a layer holds ruler guides: a group is left as it is, on its own and in a layer.
+    let mut group = Node::group(NodeId(901), vec![Arc::clone(&twice)]);
+    assert!(super::ops::held_guides(&group, &Node::is_ruler_guide).is_none());
+    group.strip_ruler_guides();
+    assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
+    let group = Arc::new(group);
+    let mut around = Node::layer(NodeId(902), "Around", LayerColor::Preset(0));
+    around.children_mut().unwrap().push(Arc::clone(&group));
+    around.strip_ruler_guides();
+    assert!(Arc::ptr_eq(&around.children().unwrap()[0], &group));
+}
+
+/// Changing the positions of the ruler guides of a layer looks at each child of the layer and of
+/// its sublayers once, however deep the sublayers nest. Each guide is changed once, in the order
+/// the guides lie in, and keeps everything else about it; the art is unchanged, a sublayer without
+/// a guide is not copied, and a copy of the layer held elsewhere keeps its positions.
+#[test]
+fn mapping_ruler_guide_positions_looks_at_each_child_of_nested_layers_once() {
+    use std::cell::Cell;
+    let (whole, still, twice) = guide_layers();
+    let mut lines = vec![];
+    whole.walk(&mut |c| {
+        if let NodeKind::RulerGuide { vertical, pos, .. } = c.kind {
+            lines.push((vertical, pos));
+        }
+    });
+    assert_eq!(lines.len(), GUIDE_LAYER_GUIDES);
+    assert!(lines.iter().any(|l| l.0) && lines.iter().any(|l| !l.0), "guides in both directions");
+
+    let mut n = whole.clone();
+    let looked = Cell::new(0_usize);
+    let pick = |c: &Node| {
+        looked.set(looked.get() + 1);
+        c.is_ruler_guide()
+    };
+    let held = super::ops::held_guides(&n, &pick).unwrap();
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "each child of the layers is looked at once");
+    let mut seen = vec![];
+    super::ops::map_held(&mut n, held, &mut |vertical, pos| {
+        seen.push((vertical, *pos));
+        *pos = *pos * 2.0 + 1.0;
+    });
+    assert_eq!(looked.get(), GUIDE_LAYER_CHILDREN, "changing looks at nothing again");
+    assert_eq!(seen, lines, "each guide once, in the order the guides lie in");
+
+    // The same nodes in the same order: a guide differs in its position alone, and the art not
+    // at all.
+    let (mut was, mut now) = (vec![], vec![]);
+    whole.walk(&mut |c| was.push(c));
+    n.walk(&mut |c| now.push(c));
+    assert_eq!(was.len(), now.len());
+    for (a, b) in was.into_iter().zip(now) {
+        if a.is_layer() {
+            assert_eq!((b.id, b.is_layer(), b.children().map(Vec::len)), (a.id, true, a.children().map(Vec::len)));
+            continue;
+        }
+        let mut want = a.clone();
+        if let NodeKind::RulerGuide { pos, .. } = &mut want.kind {
+            *pos = *pos * 2.0 + 1.0;
+        }
+        assert_eq!(b, &want);
+    }
+    let ch = n.children().unwrap();
+    assert!(Arc::ptr_eq(&ch[1], &still), "a sublayer without a guide is not copied");
+    assert!(Arc::ptr_eq(&ch[3], &whole.children().unwrap()[3]), "an object is not copied");
+    assert!(!Arc::ptr_eq(&ch[2], &twice) && !Arc::ptr_eq(&ch[4], &twice) && !Arc::ptr_eq(&ch[2], &ch[4]));
+    // The copy held elsewhere keeps its position.
+    assert!(matches!(twice.children().unwrap()[1].kind, NodeKind::RulerGuide { pos, .. } if pos == 512.0));
+
+    // The method changes the same guides, each once.
+    let mut same = whole.clone();
+    let mut calls = 0;
+    same.map_ruler_guide_positions(&mut |_, pos| {
+        calls += 1;
+        *pos = *pos * 2.0 + 1.0;
+    });
+    assert_eq!((calls, &same), (GUIDE_LAYER_GUIDES, &n));
+    assert!(Arc::ptr_eq(&same.children().unwrap()[1], &still));
+    // A function that leaves the positions as they are is still called on each guide.
+    let mut kept = whole.clone();
+    let mut calls = 0;
+    kept.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert_eq!((calls, &kept), (GUIDE_LAYER_GUIDES, &whole));
+    // A layer without a guide, an empty layer and a group: nothing to change, nothing copied.
+    let mut bare = whole.clone();
+    bare.strip_ruler_guides();
+    let before = bare.clone();
+    let mut calls = 0;
+    bare.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert!(same_children(&bare, &before));
+    let mut empty = Node::layer(NodeId(900), "Empty", LayerColor::Preset(0));
+    empty.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    let mut group = Node::group(NodeId(901), vec![Arc::clone(&twice)]);
+    group.map_ruler_guide_positions(&mut |_, _| calls += 1);
+    assert!(Arc::ptr_eq(&group.children().unwrap()[0], &twice));
+    assert_eq!(calls, 0);
+}
