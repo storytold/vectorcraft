@@ -715,7 +715,8 @@ pub fn turned_cmyk(bytes: &[u8], orientation: image::metadata::Orientation, ppi:
 /// divided back out, and a pixel with no associated alpha has no color. 16-bit samples are
 /// converted at 16 bits, and only the result is rounded to 8 bits. The samples may be stored
 /// together or one plane per channel. A CMYK file with two or more samples past its inks and its
-/// ExtraSamples values is read when one of those values names an alpha. `None` for other images,
+/// ExtraSamples values (or with no ExtraSamples tag) is read too, opaque when none of those values
+/// names an alpha. `None` for other images,
 /// CMYK ones without alpha (their inks are read by [`ImageBlob::cmyk`]), ones larger than
 /// [`MAX_CMYK_PIXELS`], ones whose SamplesPerPixel is more than [`MAX_EXTRA_SAMPLES_PIXEL`] and
 /// ones whose samples, with the copy a planar file needs, the row the decoder reads each strip or
@@ -740,14 +741,14 @@ pub fn extra_samples_tiff_rgba(bytes: &[u8], rgb: impl Fn([f32; 4]) -> [f32; 3])
         Some(tiff::ColorType::CMYKA(8 | 16)) => (4, if extras.is_empty() { Some((0, false)) } else { named }),
         Some(tiff::ColorType::CMYK(8 | 16)) if named.is_some() => (4, named),
         Some(tiff::ColorType::Multiband { bit_depth: 8 | 16, num_samples: 2.. }) if matches!(photometric, Some(0 | 1)) => (1, named),
-        None if photometric == Some(5) && named.is_some() && uncounted.is_some_and(|c| c > 5) => (4, named),
+        None if photometric == Some(5) && uncounted.is_some_and(|c| c > 5) => (4, named),
         _ => return None,
     };
     let n = usize::try_from(pixels(w, h)?).ok()?;
     // The decoder gives a CMYK pixel its inks and at most one extra sample, and doesn't read
     // white-is-zero gray with extra samples: those are read as black-is-zero gray, every sample.
     let given = kind.map_or(0, |k| usize::from(k.num_samples()));
-    let (data, samples) = if photometric == Some(0) || alpha.is_some_and(|(i, _)| colour + i >= given) {
+    let (data, samples) = if photometric == Some(0) || kind.is_none() || alpha.is_some_and(|(i, _)| colour + i >= given) {
         let mut d = tiff::decoder::Decoder::new(as_black_is_zero(bytes)?).ok()?;
         let tiff::ColorType::Multiband { bit_depth: bits @ (8 | 16), num_samples } = d.colortype().ok()? else { return None };
         let samples = usize::from(num_samples);
@@ -1169,7 +1170,9 @@ mod tests {
     }
 
     /// A CMYK TIFF of six samples a pixel whose ExtraSamples has only one value: the sample after
-    /// the inks is alpha only when that value says so, and the sample after it is never alpha.
+    /// the inks is alpha only when that value says so, and the sample after it is never alpha. Files
+    /// with more samples than the decoder gives a color type read the same way, opaque when no
+    /// value names an alpha.
     #[test]
     fn a_cmyk_tiff_with_fewer_extra_sample_values_than_samples_reads_only_a_named_alpha() {
         let naive = |[c, m, y, k]: [f32; 4]| [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)];
@@ -1182,7 +1185,14 @@ mod tests {
         let wide = [255, 0, 0, 0, 9, 128, 17, 18];
         let px = extra_samples_tiff_rgba(&extras_tiff::<Cmyk8x8>(&[0, 2], &wide), naive).expect("reads");
         assert_eq!(px.into_raw(), [0, 255, 255, 128], "cyan at the alpha the second value names");
-        assert!(extra_samples_tiff_rgba(&extras_tiff::<Cmyk8x8>(&[0, 0], &wide), naive).is_none(), "no value names an alpha: not read");
+        let px = extra_samples_tiff_rgba(&extras_tiff::<Cmyk8x8>(&[0, 0], &wide), naive).expect("no value names an alpha: reads");
+        assert_eq!(px.into_raw(), [0, 255, 255, 255], "no value names an alpha: opaque cyan");
+        // Six samples and no ExtraSamples tag: the decoder gives the file no color type either.
+        let mut file = Cursor::new(Vec::new());
+        let mut enc = tiff::encoder::TiffEncoder::new(&mut file).unwrap();
+        enc.write_image::<Cmyk6x8>(1, 1, &wide[..6]).unwrap();
+        let px = extra_samples_tiff_rgba(&file.into_inner(), naive).expect("no ExtraSamples tag: reads");
+        assert_eq!(px.into_raw(), [0, 255, 255, 255], "no ExtraSamples tag: opaque cyan");
         // Seven samples with two values: the decoder reads it as CMYK with alpha.
         let px = extra_samples_tiff_rgba(&extras_tiff::<Cmyk7x8>(&[0, 2], &wide[..7]), naive).expect("reads");
         assert_eq!(px.into_raw(), [0, 255, 255, 128], "seven samples: cyan at the alpha the second value names");
