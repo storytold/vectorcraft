@@ -650,6 +650,8 @@ antiAlias	Sharp	锐利
 	Crop Image	裁剪图像
 	Image Tools	图像工具
 	Remove Background…	移除背景…
+	Draw (Pencil)	绘制 (铅笔)
+	Place Image	置入图像
 	Remove Background	移除背景
 	Background	背景
 	Edge Color	边缘颜色
@@ -4694,6 +4696,7 @@ imageTrace	Outline	轮廓
 @msg	`select` must be true or false	`select` 必须是 true 或 false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` 和 `maxAnchors` 必须是整数
 @msg	`{key}` must be a number not below 0	`{key}` 必须是不小于 0 的数字
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` 必须是四个不小于 0 的数字：[tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` 必须是 [x, y, width, height]：四个有限数字，宽度和高度不能为负
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` 大于 `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	请至少提供以下其中之一：`name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -5685,6 +5688,7 @@ effect	Vertical	垂直
 	VectorCraft Title Bar on Every Desktop	在所有桌面上使用 VectorCraft 标题栏
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	设置了环境变量 VECTORCRAFT_TITLEBAR 时，由它选择标题栏。
 	System Title Bar takes precedence over this option while it is on.	开启系统标题栏时，它优先于此选项。
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	未开启“在所有桌面上使用 VectorCraft 标题栏”时，无论此选项是否开启，此桌面都会绘制窗口的标题栏。
 	Value Axis	数值轴
 	On Left Side	左侧
 	On Right Side	右侧
@@ -6465,6 +6469,8 @@ axis	Y Axis	Y 轴
 	Action Options…	动作选项…
 	Action Options	动作选项
 	Playback Options…	播放选项…
+	Button Mode	按钮模式
+	No actions.	没有动作。
 	Insert Stop…	插入停止…
 	Insert Stop	插入停止
 	Record Stop	记录停止
@@ -9171,3 +9177,119 @@ breakText	Glyphs	字形
 @msg	{what} can't be intertwined	{what} 不能交织
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} 连同出血和标记在纸张上放不下
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what} 会打印成超过 {MAX_TILES} 个拼贴：请将其缩小
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D 效果需要 1 亿点以内的有限坐标
+@msg	3D effects require one to ten lights	3D 效果需要一到十个光源
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	BMP 位深度 {_1}：须为每像素 1、4、8、16、24 或 32 位
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	BMP 编码失败：{width} × {height} 像素与该格式或像素缓冲区不符
+@msg	GIF encoding failed: the palette image is malformed	GIF 编码失败：调板图像格式错误
+@msg	GIF encoding failed: {e}	GIF 编码失败：{e}
+@msg	JPEG colour profile: {e}	JPEG 颜色配置文件：{e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	JPEG 编码失败：像素缓冲区与图像尺寸不符
+@msg	JPEG encoding failed: {e}	JPEG 编码失败：{e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	PNG 编码失败：像素缓冲区与图像尺寸不符
+@msg	PNG encoding failed: the palette image is malformed	PNG 编码失败：调板图像格式错误
+@msg	PNG encoding failed: {e}	PNG 编码失败：{e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	PNG 编码失败：{width} × {height} 像素不是有效的图像尺寸
+@msg	PSD colour profile: {e}	PSD 颜色配置文件：{e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	PSD 编码失败：像素缓冲区与图像尺寸不符
+@msg	Revolve profile contains invalid coordinates	回转轮廓包含无效坐标
+@msg	Revolve profile is too complex	回转轮廓过于复杂
+@msg	Revolve projection is not finite	回转投影不是有限值
+@msg	Revolve requires finite profile coordinates within 100 million points	回转需要 1 亿点以内的有限轮廓坐标
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	回转表面过于复杂；请减少分段数或简化轮廓
+@msg	Revolve surface is too complex; simplify the profile	回转表面过于复杂；请简化轮廓
+@msg	Revolve visibility cannot split the projected boundary	回转可见性计算无法分割投影边界
+@msg	Revolve visibility creates too many fragments	回转可见性计算产生的碎片过多
+@msg	Revolve visibility creates too many vector anchors	回转可见性计算产生的矢量锚点过多
+@msg	Revolve visibility exceeds its geometry work limit	回转可见性计算超出几何运算上限
+@msg	Revolve visibility exceeds its spatial index limit	回转可见性计算超出空间索引上限
+@msg	Revolve visibility has too many boundary crossings	回转可见性计算中的边界交叉过多
+@msg	Revolve visibility has too many input anchors	回转可见性计算的输入锚点过多
+@msg	Revolve visibility requires convex cap sectors	回转可见性计算需要凸形端盖扇区
+@msg	Revolve visibility requires finite projected faces	回转可见性计算需要有限的投影面
+@msg	SVG options: {e}	SVG 选项：{e}
+@msg	Save for Web settings: {e}	存储为 Web 所用格式设置：{e}
+@msg	TIFF colour profile: {e}	TIFF 颜色配置文件：{e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	TIFF 编码失败：像素缓冲区与图像尺寸不符
+@msg	TIFF encoding failed: {e}	TIFF 编码失败：{e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Targa 位深度 {_1}：须为每像素 16、24 或 32 位
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Targa 编码失败：像素缓冲区与图像尺寸不符
+@msg	The 3D projection is not finite	3D 投影不是有限值
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D 阴影过于复杂；请关闭阴影或简化图稿
+@msg	The shape contains invalid coordinates	形状包含无效坐标
+@msg	Too many Revolve faces for visibility evaluation	回转的面过多，无法进行可见性计算
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft 最多从色板交换文件中读取 {ASE_MAX_ENTRIES} 个颜色和组，而此库有 {entries} 个
+@msg	WebP encoding failed: {e}	WebP 编码失败：{e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`：{why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` 必须是 smallThumb、mediumThumb、largeThumb、smallList 或 largeList
+@msg	a line can't run from a point to itself	曲线不能从一个点连到该点自身
+@msg	a line needs at least two points	曲线至少需要两个点
+@msg	a number cannot be read	无法读取数字
+@msg	a swatch exchange block is too long	色板交换文件中的某个块过长
+@msg	a swatch exchange name is too long	色板交换文件中的某个名称过长
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	无法将 {sw} × {sh} 的图像调整为 {width} × {height} 像素
+@msg	a {width} × {height} image is too large	{width} × {height} 的图像过大
+@msg	a {width} × {height} image: {e}	{width} × {height} 的图像：{e}
+@msg	an image could not be written: {e}	无法写入某个图像：{e}
+@msg	an image that couldn't be read was left out	已略去一个无法读取的图像
+@msg	can't open “{name}”: {e}	无法打开“{name}”：{e}
+@msg	cannot align zip entries to {align} bytes	无法将 zip 条目对齐到 {align} 字节
+@msg	cannot open the automation {kind} root `{_1}`: {e}	无法打开自动化 {kind} 根目录 `{_1}`：{e}
+@msg	cannot read profile: {0}	无法读取配置文件：{0}
+@msg	color book version {version} isn't supported (only 1)	不支持色谱版本 {version} (仅支持 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	不支持色彩空间为 {other} 的色谱 (仅支持 RGB、CMYK 和 Lab)
+@msg	file name too long to zip: {_1}	文件名过长，无法放入 zip：{_1}
+@msg	file name too long to zip: {name}	文件名过长，无法放入 zip：{name}
+@msg	freeform line {i}: {e}	自由曲线 {i}：{e}
+@msg	freeform point {i}: {e}	自由点 {i}：{e}
+@msg	give `{key}` or `{other}`, not both	请提供 `{key}` 或 `{other}`，不要同时提供两者
+@msg	grayscale profiles can't be working spaces yet	灰度配置文件目前还不能用作工作空间
+@msg	input contains NaN or infinite coordinates	输入包含 NaN 或无穷大坐标
+@msg	input path could not be closed	无法闭合输入路径
+@msg	invalid ICC profile: {0}	ICC 配置文件无效：{0}
+@msg	invalid scale {scale}	缩放比例 {scale} 无效
+@msg	its localized names take more than {_1} KB	其本地化名称超过 {_1} KB
+@msg	its objects are nested too deep ({e})	其对象嵌套过深 ({e})
+@msg	its tag table lists the `{_1}` tag more than once	其标签表多次列出 `{_1}` 标签
+@msg	not a graphic style library: {e}	不是图形样式库：{e}
+@msg	not a swatch library (.vcswatches or .gpl)	不是色板库 (.vcswatches 或 .gpl)
+@msg	not a swatch library (format `{_1}`)	不是色板库 (格式为 `{_1}`)
+@msg	not a swatch library: {e}	不是色板库：{e}
+@msg	not an action set file ({e})	不是动作组文件 ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	配置文件的色彩空间 {other} 不是 RGB、CMYK 或灰度
+@msg	regular expression too large	正则表达式过大
+@msg	script file is not UTF-8 text: {value}	脚本文件不是 UTF-8 文本：{value}
+@msg	stop {i}: {e}	色标 {i}：{e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	不支持色板交换文件版本 {major}.{minor} (仅支持 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	色谱包含的颜色超过 {ASE_MAX_ENTRIES} 种
+@msg	the color book is cut short	色谱数据不完整
+@msg	the color book's names take more than {_1} MB	色谱的名称超过 {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	图像将为 {w} × {h} 像素；栅格导出限制为每边 {MAX_RASTER_SIDE} 像素和 {_1} 百万像素：请降低缩放比例或分辨率
+@msg	the optimised image can't be read back: {e}	无法回读优化后的图像：{e}
+@msg	the pixel buffer doesn't match the image size	像素缓冲区与图像尺寸不符
+@msg	the preview: {e}	预览：{e}
+@msg	the request may not read the New Document profiles folder	此请求无权读取新建文档配置文件文件夹
+@msg	the shapes are too degenerate to combine	这些形状过于退化，无法合并
+@msg	the shapes cross themselves and each other too often to combine	这些形状的自身交叉和相互交叉过多，无法合并
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	色板交换文件包含的颜色和组超过 {ASE_MAX_ENTRIES} 个
+@msg	the swatch exchange file is cut short	色板交换文件不完整
+@msg	the {_1} plate can't be read: {e}	无法读取 {_1} 印版：{e}
+@msg	this binary DXF file is damaged or cut short	此二进制 DXF 文件已损坏或不完整
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	这是 DWG 图纸，无法读取：请在 CAD 应用中将其保存为 DXF，然后打开该文件
+@msg	too many classes	字符类过多
+@msg	too many groups	分组过多
+@msg	too many layers for PSD (at most 32767)	图层过多，PSD 无法容纳 (最多 32767 个)
+@msg	too many swatch exchange blocks	色板交换文件中的块过多
+@msg	unknown colour profile: {0}	未知的颜色配置文件：{0}
+@msg	{_1} clashes with a built-in profile name	{_1} 与内置配置文件名称冲突
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} 像素对 GIF 而言过大 (每边最多 65535 像素)：请降低分辨率
+@msg	{_1}: no usable transform to/from sRGB	{_1}：没有可用的与 sRGB 之间的转换
+@msg	{name} is not a CMYK profile	{name} 不是 CMYK 配置文件
+@msg	{name} is not an RGB profile	{name} 不是 RGB 配置文件
+@msg	{path}: could not be read	{path}：无法读取
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素对 JPEG 而言过大 (每边最多 65535 像素)：请降低分辨率
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} 像素对 Targa 而言过大 (每边最多 65535 像素)：请降低分辨率
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} 像素对 PSD 而言过大 (每边最多 {MAX_SIDE} 像素)：请降低分辨率

@@ -691,6 +691,8 @@ font-technology	Variable	Променливи
 	Crop Image	Изрязване на изображение
 	Image Tools	Инструменти за изображения
 	Remove Background…	Премахване на фона…
+	Draw (Pencil)	Рисуване (Молив)
+	Place Image	Вмъкване на изображение
 	Remove Background	Премахване на фона
 	Background	Фон
 	Edge Color	Цвят на ръба
@@ -4709,11 +4711,11 @@ axis	Both	И двете
 @msg	unknown effect `{id}`	непознат ефект `{id}`
 @msg	unknown format	непознат формат
 @msg	unknown format `{f}` (Save writes {_1})	непознат формат `{f}` (Запазването записва {_1})
-@msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (точки, линии)
-@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (линеен, радиален, конусен, ромбовиден, свободна форма)
+@msg	unknown freeform mode `{m}` (points, lines)	непознат режим на свободна форма `{m}` (points, lines)
+@msg	unknown gradient kind `{k}` (linear, radial, conic, diamond, freeform)	непознат вид градиент `{k}` (linear, radial, conic, diamond, freeform)
 @msg	unknown highlight `{h}`	непознат акцент `{h}`
 @msg	unknown option `{path}.{k}`	непозната опция `{path}.{k}`
-@msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (запазване, симулиране или отхвърляне)
+@msg	unknown overprints `{o}` (preserve, simulate or discard)	непознати надписи `{o}` (preserve, simulate или discard)
 @msg	unknown panel `{raw}`	непознат панел `{raw}`
 @msg	unknown preference `{key}`	непозната настройка `{key}`
 @msg	Preferences imported.	Настройките са импортирани.
@@ -4731,7 +4733,7 @@ axis	Both	И двете
 @msg	`{key}` must be an object	`{key}` трябва да бъде обект
 @msg	`prefs.import` runs on its own, not as a batch step	`prefs.import` се изпълнява самостоятелно, а не като стъпка от пакет
 @msg	unknown preset (one of {_1})	непозната предварителна настройка (една от {_1})
-@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (висока, средна, ниска или запазена: вижте flattener.presets.list)
+@msg	unknown preset `{name}` (high, medium, low or a saved one: see flattener.presets.list)	непозната предварителна настройка `{name}` (high, medium, low или запазена: вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see flattener.presets.list)	непозната предварителна настройка `{name}` (вижте flattener.presets.list)
 @msg	unknown preset `{name}` (see webExport.presets.list)	непозната предварителна настройка `{name}` (вижте webExport.presets.list)
 @msg	unknown side `{other}` (left|right|top|bottom)	непозната страна `{other}` (left|right|top|bottom)
@@ -5034,6 +5036,7 @@ effect	Soft	Меко
 	VectorCraft Title Bar on Every Desktop	Заглавна лента на VectorCraft на всеки работен плот
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Докато е зададена, променливата на средата VECTORCRAFT_TITLEBAR избира заглавната лента.
 	System Title Bar takes precedence over this option while it is on.	Докато е включена, „Заглавна лента на системата“ има предимство пред тази опция.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Докато „Заглавна лента на VectorCraft на всеки работен плот“ е изключена, този работен плот изчертава заглавната лента на прозореца независимо дали тази опция е включена.
 	Value Axis	Ос на стойностите
 	On Left Side	От лявата страна
 	On Right Side	От дясната страна
@@ -6064,6 +6067,8 @@ axis	Y Axis	Y ос
 	Action Options…	Опции на действието…
 	Action Options	Опции на действието
 	Playback Options…	Опции за възпроизвеждане…
+	Button Mode	Режим с бутони
+	No actions.	Няма действия.
 	Insert Stop…	Вмъкване на спиране…
 	Insert Stop	Вмъкване на спиране
 	Record Stop	Записване на спиране

@@ -684,6 +684,8 @@ font-technology	Variable	Variabel
 	Crop Image	Bild beschneiden
 	Image Tools	Bildwerkzeuge
 	Remove Background…	Hintergrund entfernen…
+	Draw (Pencil)	Zeichnen (Buntstift)
+	Place Image	Bild platzieren
 	Remove Background	Hintergrund entfernen
 	Background	Hintergrund
 	Edge Color	Randfarbe
@@ -4438,6 +4440,7 @@ theme	Appearance	Erscheinungsbild
 @msg	`select` must be true or false	`select` muss true oder false sein
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` und `maxAnchors` müssen ganze Zahlen sein
 @msg	`{key}` must be a number not below 0	`{key}` muss eine Zahl nicht kleiner als 0 sein
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` muss aus vier Zahlen nicht kleiner als 0 bestehen: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` muss [x, y, width, height] sein: vier endliche Zahlen, Breite und Höhe nicht negativ
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` ist größer als `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	geben Sie mindestens einen der Parameter `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors` an
@@ -5245,6 +5248,7 @@ theme	Appearance	Erscheinungsbild
 	VectorCraft Title Bar on Every Desktop	VectorCraft-Titelleiste auf jedem Desktop
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Solange die Umgebungsvariable VECTORCRAFT_TITLEBAR gesetzt ist, bestimmt sie die Titelleiste.
 	System Title Bar takes precedence over this option while it is on.	Solange Systemtitelleiste eingeschaltet ist, hat sie Vorrang vor dieser Option.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Solange VectorCraft-Titelleiste auf jedem Desktop ausgeschaltet ist, zeichnet dieser Desktop die Titelleiste des Fensters, ob diese Option ein- oder ausgeschaltet ist.
 # Brush Options: Scatter, Art and Pattern brushes.
 	Scatter Brush Options	Optionen für Spezialpinsel
 	Art Brush Options	Optionen für Bildpinsel
@@ -6218,6 +6222,8 @@ axis	Y Axis	Y-Achse
 	Action Options…	Aktionsoptionen…
 	Action Options	Aktionsoptionen
 	Playback Options…	Wiedergabeoptionen…
+	Button Mode	Schaltflächenmodus
+	No actions.	Keine Aktionen.
 	Insert Stop…	Stopp einfügen…
 	Insert Stop	Stopp einfügen
 	Record Stop	Stopp aufzeichnen
