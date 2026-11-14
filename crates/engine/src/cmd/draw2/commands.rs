@@ -110,7 +110,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Smooth",
             [],
             None,
-            "{points: [[x,y]…], radius?: pt (12), fidelity?: pt (2.5)} smooth selected paths near the drag → {ids, before, after}",
+            "{points: [[x,y]…], radius?: pt (12), fidelity?: pt (2.5; kept within 0.000078125 and about 3195, the Smooth tool's 0.05 to 100 px at the highest and the lowest zoom: the tool sends its Fidelity in screen pixels divided by the zoom)} smooth selected paths near the drag → {ids, before, after}",
             has_selection,
             smooth_region
         ),

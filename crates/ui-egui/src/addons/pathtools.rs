@@ -15,7 +15,7 @@ pub mod shared_edge;
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_geom::Point;
-use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor};
+use vectorcraft_tools::addons::{anchor_eraser, extend_path, measure_inspect, parametric_shape, slide_anchor, trim};
 
 use crate::VectorcraftApp;
 use crate::dialogs::DialogSpec;
@@ -60,6 +60,7 @@ pub fn menu() -> Vec<Item> {
         Item::Cmd("Set Corners…", set_corners::COMMAND, Value::Null),
         tool("Slide Anchor Along Path", slide_anchor::ID),
         Item::Cmd("Shared Edge Merge Tool", shared_edge::COMMAND, json!({})),
+        tool("Trim at Crossings Tool", trim::ID),
         Item::Sep,
         Item::Cmd("Anchor Inspector", "window.panel", json!({ "panel": ID })),
         Item::Cmd("Parametric Shape", "window.panel", json!({ "panel": shape::ID })),

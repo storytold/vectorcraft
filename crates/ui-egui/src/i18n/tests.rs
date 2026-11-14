@@ -113,6 +113,59 @@ fn hindi_rows_keep_the_meaning_of_their_english() {
     assert!(all.contains("3 आर्टबोर्ड में से 1") && all.contains("सभी आर्टबोर्ड रखने के लिए"), "{all}");
     let left_out = message(hi, "the file was read up to an error (bad xref): what follows it was left out");
     assert!(left_out.contains("उसके बाद का हिस्सा छोड़ दिया गया"), "{left_out}");
+    assert_eq!(message(hi, "unknown align `left`"), "अज्ञात संरेखण `left`");
+    assert_eq!(tr(hi, "Delete Library Group"), "लाइब्रेरी ग्रुप हटाएँ");
+    assert_eq!(message(hi, "not editing an opacity mask"), "ओपेसिटी मास्क संपादित नहीं किया जा रहा है");
+    assert_eq!(
+        message(hi, "a page thumbnail must be RGB pixels, 1 to 256 a side (got 0 × 4)"),
+        "पेज थंबनेल RGB पिक्सल का होना चाहिए, हर तरफ़ 1 से 256 (मिला 0 × 4)"
+    );
+    assert_eq!(message(hi, "invalid angle"), "अमान्य कोण");
+}
+
+/// Hindi messages keep every `a|b|c` list of accepted values exactly as their English writes it.
+#[test]
+fn hindi_messages_keep_their_lists_of_accepted_values() {
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in entries.iter().filter(|(ctx, _, _)| ctx == "@msg") {
+        let lists = src.split(|c: char| !(c.is_ascii_alphabetic() || c == '|')).filter(|w| w.contains('|') && w.split('|').all(|v| !v.is_empty()));
+        for list in lists.filter(|list| !translation.contains(*list)) {
+            wrong.push(format!("{list} in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi messages change a list of values:\n{}", wrong.len(), wrong.join("\n"));
+}
+
+/// Hindi rows leave no English connecting word in their sentences. Text in backticks, quotes,
+/// braces and brackets is a name, value or placeholder and keeps its English.
+#[test]
+fn hindi_rows_keep_no_english_words_in_their_sentences() {
+    const ENGLISH: [&str; 13] = ["or", "and", "the", "must", "give", "see", "use", "most", "is", "of", "be", "not", "an"];
+    let hi = Lang::from_code("hi").expect("hi registered");
+    let (entries, _) = parse_entries(hi.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let mut prose = String::new();
+        let mut close = None;
+        for c in translation.chars() {
+            match (close, c) {
+                (Some(end), _) if c == end => close = None,
+                (Some(_), _) => {}
+                (None, '`') => close = Some('`'),
+                (None, '"') => close = Some('"'),
+                (None, '“') => close = Some('”'),
+                (None, '{') => close = Some('}'),
+                (None, '[') => close = Some(']'),
+                (None, _) => prose.push(c),
+            }
+        }
+        if let Some(word) = prose.split(|c: char| !c.is_ascii_alphabetic()).find(|w| ENGLISH.contains(w)) {
+            wrong.push(format!("{word} in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Hindi rows keep an English word:\n{}", wrong.len(), wrong.join("\n"));
 }
 
 /// Locale tags name their language by region or script (in either case, with an encoding or
@@ -332,6 +385,22 @@ fn marquee_selection_labels_are_in_complete_catalogs() {
     }
 }
 
+/// Preferences › Performance › Use Monitor Profile for Canvas and the note under it.
+#[test]
+fn monitor_profile_labels_are_in_complete_catalogs() {
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for label in [
+            "Use Monitor Profile for Canvas",
+            "The canvas is drawn in sRGB.",
+            "Canvas display profile:",
+            "The system matches the window to the display's colors.",
+            "No usable display profile was found: the canvas is drawn in sRGB.",
+        ] {
+            assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
 /// The Control bar panel menu's items, its groups of options and the edges, and the label of the
 /// command that turns a group on or off.
 #[test]
@@ -390,6 +459,46 @@ fn document_info_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
         for label in &labels {
             assert!(lang.catalog().plain(label).is_some(), "{} is missing {label}", lang.code);
+        }
+    }
+}
+
+/// The values Document Info makes and shows in the interface language: the font states and
+/// embedding permissions, the templates of the font, image, raster effects and Repeat object
+/// values, the names of gradients named by their kind, and the counted instances, rows and columns.
+#[test]
+fn document_info_values_are_in_complete_catalogs() {
+    const VALUES: [&str; 20] = [
+        "built in",
+        "embedding not allowed",
+        "embedding for editing",
+        "embedding for preview and print",
+        "embedding allowed",
+        "{file}; {embedding}",
+        "substituted: shown in {family} {style} ({detail})",
+        "missing: shown in {family} {style}",
+        "missing",
+        "{width} × {height} px",
+        "{size} — {file}",
+        "{n} ppi",
+        "{kind}, {instances}",
+        "{kind}, {rows} × {cols}",
+        "{grid}, {instances}",
+        "Linear gradient",
+        "Radial gradient",
+        "Conic gradient",
+        "Diamond gradient",
+        "Freeform gradient",
+    ];
+    const COUNTED: [(&str, &str); 3] = [("{n} instance", "{n} instances"), ("{n} row", "{n} rows"), ("{n} column", "{n} columns")];
+    let gradient_kinds: Vec<String> = vectorcraft_color::GradientKind::ALL.iter().map(|k| format!("{} gradient", k.label())).collect();
+    assert!(gradient_kinds.iter().all(|k| VALUES.contains(&k.as_str())), "{gradient_kinds:?}");
+    for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
+        for value in VALUES {
+            assert!(lang.catalog().plain(value).is_some(), "{} is missing {value}", lang.code);
+        }
+        for (one, other) in COUNTED {
+            assert!(lang.catalog().plural(one, other, 0).is_some(), "{} is missing the row for {other}", lang.code);
         }
     }
 }
@@ -1377,7 +1486,8 @@ fn string_literals(e: &str, keep: impl Fn(&str, &str) -> bool) -> Vec<String> {
 
 /// For translators, `cargo test -p vectorcraft-ui-egui dump_source_strings` writes every English
 /// interface string to `VECTORCRAFT_I18N_DUMP=<file>`, and every status and error message as a
-/// catalog template to `VECTORCRAFT_I18N_DUMP_MESSAGES=<file>`, one per line.
+/// catalog template that [`untranslated_report`] checks to `VECTORCRAFT_I18N_DUMP_MESSAGES=<file>`,
+/// one per line.
 #[test]
 fn dump_source_strings() {
     if let Ok(path) = std::env::var("VECTORCRAFT_I18N_DUMP") {
@@ -1389,8 +1499,25 @@ fn dump_source_strings() {
         std::fs::write(path, text).expect("write dump");
     }
     if let Ok(path) = std::env::var("VECTORCRAFT_I18N_DUMP_MESSAGES") {
-        std::fs::write(path, message_literals().iter().map(|m| format!("{m}\n")).collect::<String>()).expect("write dump");
+        std::fs::write(path, message_dump()).expect("write dump");
     }
+}
+
+/// The text [`dump_source_strings`] writes to `VECTORCRAFT_I18N_DUMP_MESSAGES`.
+fn message_dump() -> String {
+    reported_messages().iter().map(|m| format!("{m}\n")).collect()
+}
+
+/// The translators' message dump lists every message the untranslated report checks, the
+/// phrases a parameter schema's error builds included.
+#[test]
+fn message_dump_lists_the_reported_messages() {
+    let dump = message_dump();
+    let lines: std::collections::BTreeSet<&str> = dump.lines().collect();
+    for phrase in SCHEMA_PHRASES {
+        assert!(lines.contains(phrase), "the dump skips {phrase:?}");
+    }
+    assert!(lines.contains("the color book is cut short"));
 }
 
 fn cs() -> Lang {
@@ -1531,7 +1658,7 @@ fn untranslated_report() {
     undo.extend(liquify.iter().filter_map(|k| vectorcraft_tools::distort::liquify::LiquifyKind::parse(k)).map(|k| format!("{} Tool", k.label())));
     assert_eq!(scan.formatted.iter().collect::<Vec<_>>(), ["{} Tool"], "step names built with format! (make them with Session::edit_named)");
     assert!(scan.templates.len() >= 3, "scan found only the templates {:?}", scan.templates);
-    let messages = message_literals();
+    let messages = reported_messages();
     assert!(messages.len() > 300, "scan found only {} messages", messages.len());
     let (swatches, groups) = vectorcraft_color::default_swatches(vectorcraft_color::cms::Model::Rgb);
     // The greys' `K=` values read the same in any language.
@@ -1630,6 +1757,36 @@ fn untranslated_report() {
         }
     }
     println!("{out}");
+}
+
+/// The status and error messages [`untranslated_report`] checks: the message literals of
+/// [`MESSAGE_CRATES`] and the phrases a parameter schema's error builds at run time
+/// ([`SCHEMA_PHRASES`]), which no literal holds.
+fn reported_messages() -> std::collections::BTreeSet<String> {
+    let mut messages = message_literals();
+    messages.extend(SCHEMA_PHRASES.iter().map(|p| p.to_string()));
+    messages
+}
+
+/// The untranslated report checks the messages of the effects and of the crates whose errors the
+/// engine and the effects pass on, and the phrases a parameter schema's error builds.
+#[test]
+fn untranslated_report_checks_every_message_crate_and_schema_phrase() {
+    let reported = reported_messages();
+    let passed_on = [
+        ("effects", "the SVG filter has no primitives"),
+        ("color", "not a swatch library (.vcswatches or .gpl)"),
+        ("render", "invalid scale {scale}"),
+        ("three-d", "3D effects require one to ten lights"),
+        ("pathops", "the shapes are too degenerate to combine"),
+    ];
+    for (krate, m) in passed_on {
+        assert!(message_literals_in(&[krate]).contains(m), "{krate}: {m}");
+        assert!(reported.contains(m), "the report skips {krate}: {m}");
+    }
+    for phrase in SCHEMA_PHRASES {
+        assert!(reported.contains(*phrase), "the report skips the schema phrase {phrase:?}");
+    }
 }
 
 /// The names [`MENU_KEEP_AS_IS`] lists are menu labels, and no catalog that keeps them in English
@@ -2327,6 +2484,10 @@ const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
     ("Saved /out/a.pdf with 1 note: a note", "Saved /out/a.pdf with 2 notes: a note"),
     ("Discarded 1 recovered document", "Discarded 2 recovered documents"),
     ("Restored 1 recovered document: save it to keep it", "Restored 2 recovered documents: save them to keep them"),
+    (
+        "1 linked image changed on disk: Update Links shows the new version. Opened with 1 note: a note",
+        "1 linked image changed on disk: Update Links shows the new version. Opened with 2 notes: a note",
+    ),
 ];
 
 /// The open, save and recovery status messages and the Global Edit options' Results line name a
@@ -2334,15 +2495,18 @@ const OPEN_SAVE_COUNTED_MESSAGES: &[(&str, &str)] = &[
 /// translates both, in the form its plural rule picks.
 #[test]
 fn open_save_and_recovery_messages_take_the_plural_form() {
-    use crate::io::{opened_with_notes, saved_status};
+    use crate::dialogs::missing_links::changed_on_disk_status;
+    use crate::io::{opened_after_notice, opened_with_notes, saved_status};
     use crate::panels::properties::global_edit_results;
     use crate::recovery::recovered_status;
     let saved = |path: &str, n: usize| saved_status(path, &serde_json::json!({ "warnings": vec!["a note"; n] }));
+    let notice = changed_on_disk_status(1);
     let made = [
         (opened_with_notes(1, "a note"), opened_with_notes(2, "a note")),
         (saved("/out/a.pdf", 1), saved("/out/a.pdf", 2)),
         (recovered_status(true, 1), recovered_status(true, 2)),
         (recovered_status(false, 1), recovered_status(false, 2)),
+        (opened_after_notice(&notice, 1, "a note"), opened_after_notice(&notice, 2, "a note")),
     ];
     for ((one, other), (want_one, want_other)) in made.iter().zip(OPEN_SAVE_COUNTED_MESSAGES) {
         assert_eq!((one.as_str(), other.as_str()), (*want_one, *want_other));
@@ -2354,7 +2518,18 @@ fn open_save_and_recovery_messages_take_the_plural_form() {
         for s in OPEN_SAVE_COUNTED_MESSAGES.iter().flat_map(|(one, other)| [one, other]) {
             assert_ne!(message(lang, s), *s, "{code}: {s}");
         }
+        // The line about linked files and the open's line are each shown as the catalog has them.
+        for n in [1, 2] {
+            let shown = message(lang, &opened_after_notice(&notice, n, "a note"));
+            let (link, open) = (message(lang, &notice), message(lang, &opened_with_notes(n, "a note")));
+            assert!(link != notice && shown.starts_with(&link) && shown.ends_with(&open), "{code}: {shown}");
+        }
     }
+    let unreadable = "2 linked files can't be read here: their previews show";
+    assert_eq!(
+        message(de(), &opened_after_notice(unreadable, 3, "a note")),
+        format!("{}. Mit 3 Hinweisen geöffnet: a note", message(de(), unreadable))
+    );
     for l in LANGUAGES.iter().filter(|l| l.complete_menus) {
         let lang = Lang::from_code(l.code).expect("registered");
         for n in [1, 2] {
@@ -2596,6 +2771,84 @@ fn f(i: &mut Interp, interp: &mut Interp) -> JsResult<Value> {
     assert_eq!(found, ["{what}: the object is not a File or a Folder", "File.seek: the mode must be 0, 1 or 2", "the path has an empty step"]);
 }
 
+/// The scan reads the message a `.map_err` closure returns, a literal, a `format!` string or a
+/// constant, whatever the closure's parameter, from each branch of an `if` and each arm of a
+/// `match`, and given to a variant of an enum whose name ends in `Fail`, and not a closure that
+/// passes the error on, a `json!` value's keys, nor the steps of a script result's path
+/// ([`NOT_MESSAGES`]).
+#[test]
+fn message_scan_reads_map_err_closures() {
+    let code = r#"
+fn f(text: &str, n: usize) -> Result<u32, String> {
+    let doc = parse(text).map_err(|e| format!("the filter isn't valid XML: {e}"))?;
+    let a = at(doc).map_err(|place| format!("[{i}]{place}"))?;
+    let b = at(doc).map_err(|place| format!(".{k}{place}"))?;
+    let c = at(doc).map_err(|e| format!("{name}: {e}"))?;
+    let n = u32::try_from(n).map_err(|_| "too many blocks".to_string())?;
+    let m = u16::try_from(n).map_err(move |(a, b)| LIMIT.into())?;
+    let k = read(doc).map_err(|e| e.to_string())?;
+    let j = read(doc).map_err(|e| bad(C, e))?;
+    let i = read(doc).map_err(|e| if e == "{x}" { CUT_SHORT.into() } else { e })?;
+    let h = read(doc).map_err(|e| match e {
+        Error::Io(_) => "the file can't be read".to_string(),
+        other => fail(json!({"objects": [other.to_string()]})),
+    })?;
+    let g = i32::try_from(n).map_err(|_| CompileFail::Syntax("the pattern is too large".into()))?;
+    let f = read(doc).map_err(|e| {
+        self.published = None;
+        format!("the clipboard can't be read: {e}")
+    })?;
+    Ok(n)
+}
+"#;
+    let consts =
+        [("LIMIT", "the name is too long"), ("CUT_SHORT", "the book is cut short")].map(|(k, v)| (k.to_string(), vec![v.to_string()])).into();
+    let want = [
+        "the pattern is too large",
+        "the filter isn't valid XML: {e}",
+        "{name}: {e}",
+        "too many blocks",
+        "the name is too long",
+        "the book is cut short",
+        "the file can't be read",
+        "the clipboard can't be read: {e}",
+    ];
+    assert_eq!(source_messages(code, &[], &consts), want);
+    assert!(message_literals_in(&["color"]).contains("the color book is cut short"));
+    assert!(message_literals_in(&["color"]).contains("not a swatch library: {e}"));
+    assert!(message_literals_in(&["js"]).contains("regular expression too large"));
+    assert!(message_literals_in(&["effects"]).contains("the SVG filter isn't valid XML: {e}"));
+}
+
+/// The scan reads the messages of an error handler that a `.map_err(name)` names: a closure bound
+/// to that name, up to its `;`, and a function of that name, each of its statements.
+#[test]
+fn message_scan_reads_named_map_err_handlers() {
+    let code = r#"
+fn encode(img: &Image) -> Result<Vec<u8>, String> {
+    let fail = |e: gif::EncodingError| format!("GIF encoding failed: {e}");
+    let gone = move |_| GONE.to_string();
+    let size = if img.is_empty() { WRONG.into() } else { 0 };
+    let mut enc = Encoder::new(img).map_err(fail)?;
+    enc.write(img).map_err(fail)?;
+    enc.check().map_err(gone)?;
+    enc.close().map_err(unreadable)?;
+    enc.into_inner().map_err(Error::Io)
+}
+
+fn unreadable(e: impl std::fmt::Display) -> String {
+    let e = e.to_string();
+    format!("the file can't be read: {e}")
+}
+"#;
+    let consts = [("GONE", "the encoder is gone"), ("WRONG", "the image is wrong")].map(|(k, v)| (k.to_string(), vec![v.to_string()])).into();
+    let want = ["GIF encoding failed: {e}", "the encoder is gone", "the file can't be read: {e}"];
+    assert_eq!(source_messages(code, &[], &consts), want);
+    let render = message_literals_in(&["render"]);
+    assert!(render.contains("GIF encoding failed: {e}") && render.contains("JPEG encoding failed: {e}"));
+    assert!(message_literals_in(&["engine"]).contains("Data Recovery can't keep copies in {path}: {e}"));
+}
+
 /// The scan stops at a test module whose `cfg` is `test` or `all(test, …)`, and reads on past a
 /// declaration of a test file and a module that is not only for tests.
 #[test]
@@ -2644,6 +2897,37 @@ fn plugin_limit_errors_are_translated() {
         let shown = message(lang, limits[3]);
         assert!(shown.contains("9000") && shown.contains("4096") && !shown.contains("output size"), "{code}: {shown}");
         assert_ne!(message(lang, grant), grant, "{code}");
+    }
+}
+
+/// The reason Object › Path's commands are unavailable while the selection holds no path has its
+/// own row in every language that translates every message, and shows translated both alone and
+/// inside the error a disabled command returns.
+#[test]
+fn selected_path_reason_is_translated() {
+    use serde_json::json;
+    use vectorcraft_engine::EngineError;
+    let reason = "select a path";
+    assert!(message_literals().contains(reason));
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.execute("text.create", &json!({"x": 10, "y": 10, "text": "Type"})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    let error = match s.execute("path.reverse", &json!({})) {
+        Err(e @ EngineError::Disabled(..)) => e.to_string(),
+        other => panic!("a selection of type alone: {other:?}"),
+    };
+    assert_eq!(error, "command `path.reverse` is not available right now: select a path");
+    assert_eq!(message(Lang::EN, &error), error);
+    for code in COMPLETE_MESSAGES {
+        let lang = Lang::from_code(code).expect("registered");
+        let (entries, _) = parse_entries(lang.0.source);
+        let row = entries.iter().find(|(ctx, src, _)| ctx == "@msg" && src == reason).map(|(_, _, tr)| tr.as_str());
+        let Some(row) = row else { panic!("{code}: no `@msg` row for {reason:?}") };
+        assert_ne!(row, reason, "{code}");
+        assert_eq!(message(lang, reason), row, "{code}");
+        let shown = message(lang, &error);
+        assert!(shown.contains(row) && !shown.contains(reason) && shown.contains("`path.reverse`"), "{code}: {shown}");
     }
 }
 
@@ -3753,8 +4037,13 @@ const COMPLETE_MESSAGES: &[&str] = &[
     "nl",
 ];
 
-/// Crates whose error and status messages reach the status bar.
-const MESSAGE_CRATES: &[&str] = &["ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace", "js"];
+/// Crates whose error and status messages reach the status bar, the crates whose errors the
+/// engine and the effects pass on included (effects, swatch libraries, raster sizes and encoders,
+/// 3D solids, path operations).
+const MESSAGE_CRATES: &[&str] = &[
+    "ui-egui", "engine", "doc", "format", "svg", "pdf", "eps", "text", "plugins", "metafile", "cad", "trace", "js", "effects", "color", "render",
+    "three-d", "pathops",
+];
 
 /// Where a message literal starts: a status, an error value, a `thiserror` message.
 const MESSAGE_MARKERS: &[&str] = &[".status(", "ui.status = ", "status = ", "Other(", "Err(", "ok_or(", "ok_or_else(|| ", "#[error("];
@@ -3799,9 +4088,10 @@ const NAME_VARIANTS: &[&str] = &["UnknownCommand", "Ps"];
 /// `EngineError::Disabled(command id, reason)`.
 const LATER_MESSAGE_VARIANTS: &[(&str, usize)] = &[("Disabled", 1)];
 
-/// Messages that are signals, not text for people, and the name of a plug-in export that an
-/// error message holds (`vc_manifest points outside memory`).
-const NOT_MESSAGES: &[&str] = &["quit", "cancelled", "vc_manifest"];
+/// Messages that are signals, not text for people, the name of a plug-in export that an error
+/// message holds (`vc_manifest points outside memory`), and the steps of the path to a script
+/// result's part that an error message holds (`vc.run: the result{place} is too large for a script`).
+const NOT_MESSAGES: &[&str] = &["quit", "cancelled", "vc_manifest", "[{i}]{place}", ".{k}{place}"];
 
 /// Every status and error message literal in [`MESSAGE_CRATES`] (test modules aside), as catalog
 /// templates: `{}` becomes `{_1}`, `{_2}` … and format specs are dropped (`{n:?}` → `{n}`).
@@ -3919,8 +4209,11 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 
 /// The message literals in `code` outside its comments, as catalog templates (see
 /// [`message_literals`]): the literal after each of [`MESSAGE_MARKERS`], the message argument of an
-/// error enum's variant (the first, as in `PsError::Limit(…)` and `Error::Manifest(…)`, or the one
+/// error enum's variant, an enum whose name ends in `Error` or `Fail` (the first argument, as in
+/// `PsError::Limit(…)`, `Error::Manifest(…)` and `CompileFail::Syntax(…)`, or the one
 /// [`LATER_MESSAGE_VARIANTS`] gives; not [`NAME_VARIANTS`]),
+/// the messages a `.map_err` closure returns (`.map_err(|e| format!("…: {e}"))`, see
+/// [`closure_returns`]) or the handler a `.map_err(name)` names returns (see [`handler_returns`]),
 /// and the message argument of each call in `helpers` (a call and the number of arguments before
 /// its message), a literal, a `format!` string or the name of one of `consts` (see
 /// [`str_consts`]), each one with or without a `&` before it. A key's name alone (`` `tint` ``)
@@ -3928,20 +4221,34 @@ fn named_const<'a>(rest: &str, consts: &'a std::collections::BTreeMap<String, Ve
 fn source_messages(code: &str, helpers: &[(&str, usize)], consts: &std::collections::BTreeMap<String, Vec<String>>) -> Vec<String> {
     let code = &without_comments(code);
     let after_markers = MESSAGE_MARKERS.iter().flat_map(|marker| code.match_indices(marker).map(|(at, _)| &code[at + marker.len()..]));
-    let in_variants = code.match_indices("Error::").filter_map(|(at, m)| {
+    let in_variants = ["Error::", "Fail::"].into_iter().flat_map(|enum_end| code.match_indices(enum_end)).filter_map(|(at, m)| {
         let rest = &code[at + m.len()..];
         let (variant, args) = rest.split_at(rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len()));
         let named = variant.starts_with(|c: char| c.is_ascii_uppercase()) && !NAME_VARIANTS.contains(&variant);
         let before = LATER_MESSAGE_VARIANTS.iter().find(|(v, _)| *v == variant).map_or(0, |&(_, n)| n);
         if named { skip_args(args.strip_prefix('(')?, before) } else { None }
     });
+    let in_map_err = code.match_indices(".map_err(").flat_map(|(at, m)| {
+        let rest = code[at + m.len()..].trim_start();
+        let params = rest.strip_prefix("move").map_or(rest, str::trim_start).strip_prefix('|');
+        params.and_then(|p| p.find('|').map(|end| &p[end + 1..])).map(closure_returns).unwrap_or_default()
+    });
+    let mut handlers = vec![];
+    for (at, m) in code.match_indices(".map_err(") {
+        let rest = &code[at + m.len()..];
+        let name = &rest[..rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(rest.len())];
+        if name.starts_with(|c: char| c.is_ascii_lowercase()) && rest[name.len()..].starts_with(')') && !handlers.contains(&name) {
+            handlers.push(name);
+        }
+    }
+    let in_handlers = handlers.into_iter().flat_map(|name| handler_returns(code, name));
     let in_helpers = helpers.iter().flat_map(|&(call, before)| {
         code.match_indices(call)
             .filter(|&(at, _)| call.starts_with('.') || !code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.'))
             .filter_map(move |(at, _)| skip_args(&code[at + call.len()..], before))
     });
     let mut out = vec![];
-    for rest in after_markers.chain(in_variants).chain(in_helpers) {
+    for rest in after_markers.chain(in_variants).chain(in_map_err).chain(in_handlers).chain(in_helpers) {
         let rest = rest.trim_start();
         let rest = rest.strip_prefix('&').map_or(rest, str::trim_start);
         let rest = rest.strip_prefix("format!(").map_or(rest, str::trim_start);
@@ -3990,6 +4297,94 @@ fn skip_args(args: &str, n: usize) -> Option<&str> {
         }
     }
     None
+}
+
+/// Where each value the error handler `name` of a `.map_err(name)` in `code` can return starts:
+/// the closure the file binds to that name (`let fail = |e| format!("…: {e}");`, up to its `;`)
+/// or the body of the function of that name (`fn unreadable(e: …) -> String { … }`), read as
+/// [`closure_returns`] reads a closure.
+fn handler_returns<'a>(code: &'a str, name: &str) -> Vec<&'a str> {
+    let (bound, declared) = (format!("let {name} = "), format!("fn {name}("));
+    let mut out = vec![];
+    for (at, m) in code.match_indices(bound.as_str()).chain(code.match_indices(declared.as_str())) {
+        if code[..at].ends_with(|c: char| c.is_alphanumeric() || c == '_') {
+            continue;
+        }
+        let rest = &code[at + m.len()..];
+        if m == bound {
+            let rest = rest.strip_prefix("move").map_or(rest, str::trim_start);
+            if let Some(body) = rest.strip_prefix('|').and_then(|p| p.find('|').map(|end| &p[end + 1..])) {
+                out.extend(closure_returns(statement(body)));
+            }
+        } else if let Some(open) = rest.find('{') {
+            out.extend(closure_returns(&rest[open + 1..]));
+        }
+    }
+    out
+}
+
+/// The statement `code` starts with, up to its `;` or the bracket that closes the block it is in.
+fn statement(code: &str) -> &str {
+    let (mut depth, mut chars) = (0usize, code.char_indices());
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => match depth.checked_sub(1) {
+                Some(d) => depth = d,
+                None => return &code[..at],
+            },
+            ';' if depth == 0 => return &code[..at],
+            '"' => loop {
+                match chars.next() {
+                    Some((_, '\\')) => {
+                        chars.next();
+                    }
+                    Some((_, '"')) | None => break,
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+    code
+}
+
+/// Where each value a closure can return starts, `body` being the text after its parameters: the
+/// body itself, each block or `if`/`else` branch in it (`{ ACB_CUT_SHORT.into() }`, not the
+/// `{` of a `json!({…})` value), each `match` arm (`=>`) and each statement after a `;` (the
+/// last expression of a block or a function body), up to the bracket that closes the call the
+/// closure is given to or the function.
+fn closure_returns(body: &str) -> Vec<&str> {
+    let mut out = vec![body];
+    let (mut depth, mut chars) = (0usize, body.char_indices());
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '(' | '[' => depth += 1,
+            '{' => {
+                depth += 1;
+                if !body[..at].trim_end().ends_with('(') {
+                    out.push(&body[at + 1..]);
+                }
+            }
+            ')' | ']' | '}' => match depth.checked_sub(1) {
+                Some(d) => depth = d,
+                None => break,
+            },
+            ';' => out.push(&body[at + 1..]),
+            '=' if body[at + 1..].starts_with('>') => out.push(&body[at + 2..]),
+            '"' => loop {
+                match chars.next() {
+                    Some((_, '\\')) => {
+                        chars.next();
+                    }
+                    Some((_, '"')) | None => break,
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Source up to its inline test module (`#[cfg(test)] mod tests {`, or a `cfg(all(test, …))` one);
