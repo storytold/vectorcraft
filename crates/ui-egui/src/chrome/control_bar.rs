@@ -30,7 +30,8 @@ pub fn anchor_controls(app: &VectorcraftApp) -> AnchorControls {
 
 /// What the Control bar and the Properties panel offer for selected anchors ([`anchor_controls`]):
 /// "Convert:" corner or smooth, then "Anchors:" remove, connect (Join) and cut. Each group is a
-/// row of its own: inline in the Control bar, one under the other in a panel.
+/// row of its own: inline in the Control bar, one under the other in a panel. In the Control bar's
+/// row, a group shows only while the row has room for its label and all its buttons.
 pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorControls) {
     let t = Tokens::get(ui.ctx());
     let mut run = None;
@@ -56,9 +57,14 @@ pub fn anchor_buttons(app: &mut VectorcraftApp, ui: &mut Ui, controls: AnchorCon
         AnchorControls::Convert => 1,
         AnchorControls::All => groups.len(),
     };
+    let in_row = ui.layout().main_dir() == egui::Direction::LeftToRight;
     for (label, buttons) in groups.into_iter().take(shown) {
+        let text = egui::RichText::new(label).size(12.0).color(t.text);
+        if in_row && ui.available_width() < row_width(ui, &[widgets::text_width(ui, text.clone())]) + buttons_width(ui, buttons.len()) {
+            break;
+        }
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(label).size(12.0).color(t.text));
+            ui.label(text);
             for &(icon, tip, id, to) in buttons {
                 if widgets::icon_button(ui, icon, tip, false, 24.0).clicked() {
                     run = Some((id, to.map_or_else(|| json!({}), |to| json!({ "to": to }))));
@@ -77,6 +83,12 @@ pub(super) const ISOLATION_BUTTON: &str = "cb-isolation";
 /// The room the Control bar needs for the Snapping menu next to the Artboard tool's controls; with
 /// less, the menu is left out so those controls still fit the narrowest window.
 const ARTBOARD_SNAPPING_WIDTH: f32 = 900.0;
+
+/// The width of [`snapping_menu`]'s button: its label, as a button draws it, and the button's padding.
+fn snapping_width(ui: &Ui) -> f32 {
+    let label = egui::WidgetText::from(tl!("Snapping")).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Button);
+    label.size().x + 2.0 * ui.spacing().button_padding.x
+}
 
 /// The Control bar's snapping quick access; every change uses its existing command, and Pixel
 /// Snapping Options… opens the dialog of `view.snapToPixel.options`.
@@ -115,9 +127,10 @@ fn snapping_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// while a symbol's art is the isolated layer. Otherwise, with one object selected that
 /// [`vectorcraft_tools::select::isolates`], it is Isolate Selected Object, which also isolates a
 /// path inside a group that Direct Selection selected. An envelope's contents get no button: the
-/// envelope's Edit Envelope and Edit Contents buttons show instead.
+/// envelope's Edit Envelope and Edit Contents buttons show instead. It is left out when the bar has
+/// no room left for it.
 fn isolation_button(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some(st) = app.session.active() else { return };
+    let Some(st) = app.session.active().filter(|_| ui.available_width() >= BUTTON) else { return };
     let (icon, tip, id) = if st.isolation.is_some() {
         if st.doc.pattern_edit.is_some() {
             return;
@@ -204,8 +217,27 @@ fn buttons_width(ui: &Ui, n: usize) -> f32 {
     (BUTTON + ui.spacing().item_spacing.x) * n as f32
 }
 
+/// The room controls `widths` wide take side by side in the bar's row, with the spacing after each.
+fn row_width(ui: &Ui, widths: &[f32]) -> f32 {
+    widths.iter().map(|w| w + ui.spacing().item_spacing.x).sum()
+}
+
+/// The size of the Control bar's Fill, Stroke and Graphic Style chips.
+const PAINT_CHIP: f32 = 22.0;
+
+/// The width each of those chips takes with the chevron after it.
+const CHIP_WIDTH: f32 = PAINT_CHIP + 16.0;
+
+/// The widths of the Control bar's stroke weight and Opacity fields.
+const WEIGHT_FIELD_WIDTH: f32 = 100.0;
+const OPACITY_FIELD_WIDTH: f32 = 56.0;
+
 /// The separator that ends a group of the Control bar's controls, as [`group_end_width`] measures it.
+/// It is left out when the bar has no room left for it.
 fn group_end(ui: &mut Ui) {
+    if ui.available_width() < group_end_width(ui) {
+        return;
+    }
     ui.add_space(GROUP_GAP);
     boundary(ui, separator);
 }
@@ -256,8 +288,11 @@ fn boundary(ui: &mut Ui, draw: impl FnOnce(&mut Ui)) {
 }
 
 /// The separator that ends a group of the Control bar's controls, drawn as `ui.separator()` draws
-/// one, and left out when no control follows it ([`boundary`]).
+/// one, and left out when no control follows it ([`boundary`]) or the row has no room left for it.
 pub(crate) fn group_separator(ui: &mut Ui) {
+    if ui.layout().main_dir() == egui::Direction::LeftToRight && ui.available_width() < separator_width(ui) {
+        return;
+    }
     boundary(ui, |ui| {
         ui.separator();
     });
@@ -319,11 +354,12 @@ fn groups_before_transform(app: &mut VectorcraftApp, ui: &mut Ui, objects: usize
         group_end(ui);
     }
     if nothing {
-        if group_on(app, "documentOptions") {
+        // Each button shows only while the bar has room left for it.
+        if group_on(app, "documentOptions") && ui.available_width() >= DOCUMENT_SETUP_WIDTH {
             if widgets::flat_button(ui, tl!("Document Setup"), DOCUMENT_SETUP_WIDTH).clicked() {
                 app.run("file.documentSetup", json!({})).ok();
             }
-            if widgets::flat_button(ui, tl!("Preferences"), PREFERENCES_WIDTH).clicked() {
+            if ui.available_width() >= PREFERENCES_WIDTH && widgets::flat_button(ui, tl!("Preferences"), PREFERENCES_WIDTH).clicked() {
                 app.run("edit.preferences", json!({})).ok();
             }
         }
@@ -545,55 +581,75 @@ fn panel_menu(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
 
 /// The Control bar's Fill and Stroke group: the fill and stroke chips, the Stroke link, the weight
 /// and the width profile, and the separator after them while a control follows ([`group_separator`]).
+/// Short of room, the bar leaves out the width profile first, then the Stroke link with the weight,
+/// then the two chips; each shows only while the bar has room for all of it.
 fn fill_and_stroke(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if ui.available_width() < row_width(ui, &[CHIP_WIDTH, CHIP_WIDTH]) {
+        return;
+    }
     let shown_stroke = crate::panels::current_stroke(app);
     let mixed = crate::panels::stroke_mixed(app, ui.ctx());
     let weight = stroke_panel::shown_weight(app, shown_stroke.as_ref(), &mixed);
-    crate::panels::paint_chip(app, ui, false, 22.0, true);
-    crate::panels::paint_chip(app, ui, true, 22.0, true);
+    crate::panels::paint_chip(app, ui, false, PAINT_CHIP, true);
+    crate::panels::paint_chip(app, ui, true, PAINT_CHIP, true);
     // The link opens the Stroke panel as a popover under it; then the weight spinner
     // (with presets) and the width profile.
-    stroke_panel::link(app, ui, tl!("Stroke:"));
-    stroke_panel::weight_field(app, ui, "cb-stroke", weight, 100.0);
-    if let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref())) {
-        app.run("stroke.set", json!({"profile": id})).ok();
+    let link = widgets::text_width(ui, stroke_panel::link_text(ui, tl!("Stroke:")));
+    if ui.available_width() >= row_width(ui, &[link, WEIGHT_FIELD_WIDTH]) {
+        stroke_panel::link(app, ui, tl!("Stroke:"));
+        stroke_panel::weight_field(app, ui, "cb-stroke", weight, WEIGHT_FIELD_WIDTH);
+        if ui.available_width() >= stroke_panel::PROFILE_DROPDOWN_WIDTH
+            && let Some(id) = stroke_panel::profile_dropdown(app, ui, shown_stroke.as_ref().and_then(|s| s.profile.as_ref()))
+        {
+            app.run("stroke.set", json!({"profile": id})).ok();
+        }
     }
-    ui.add_space(4.0);
-    group_separator(ui);
+    group_end(ui);
 }
 
 /// The Control bar's Opacity group (its link and field, showing `opacity`) and, with something
 /// `selected`, its Graphic Style group (Style, Recolor Artwork and Global Edit Options), each while
-/// the panel menu has it on, and the separator after them while a control follows.
+/// the panel menu has it on, and the separator after them while a control follows. Short of room,
+/// the bar leaves out Global Edit Options first, then Recolor Artwork, then the Style link with its
+/// chip, then the Opacity link with its field; each shows only while the bar has room for all of it.
 fn opacity_and_style(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, opacity: f32, selected: bool) {
     let (opacity_on, style_on) = (group_on(app, "opacity"), group_on(app, "graphicStyle") && selected);
+    let mut drawn = false;
     if opacity_on {
+        let text = egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline();
+        if ui.available_width() < row_width(ui, &[widgets::text_width(ui, text.clone()), OPACITY_FIELD_WIDTH]) {
+            return;
+        }
         // A click opens the Transparency panel; a drag scrubs the field (#4088).
-        if crate::scrub::link_label(ui, egui::RichText::new(tl!("Opacity:")).size(12.0).color(t.text).underline()).clicked() {
+        if crate::scrub::link_label(ui, text).clicked() {
             app.ui.open_panel = Some("transparency".into());
         }
-        if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, 56.0)
+        if let Some(o) = widgets::plain_field(ui, "cb-opacity", opacity as f64 * 100.0, "%", 0, OPACITY_FIELD_WIDTH)
             && selected
         {
             app.run("transparency.set", json!({"opacity": o.clamp(0.0, 100.0)})).ok();
         }
+        drawn = true;
     }
-    if style_on {
+    let text = egui::RichText::new(tl!("Style:")).size(12.0).color(t.text).underline();
+    if style_on && ui.available_width() >= GROUP_GAP + row_width(ui, &[widgets::text_width(ui, text.clone()), CHIP_WIDTH]) {
         // Style picker: the selection's graphic style; its menu applies another.
-        ui.add_space(4.0);
-        if ui.link(egui::RichText::new(tl!("Style:")).size(12.0).color(t.text).underline()).clicked() {
+        ui.add_space(GROUP_GAP);
+        if ui.link(text).clicked() {
             app.ui.open_panel = Some("graphicStyles".into());
         }
-        let resp = widgets::chip_button_named(ui, 22.0, true, tl!("Graphic Style"), |ui, r| crate::panels::graphic_styles::paint_linked(app, ui, r));
+        let resp =
+            widgets::chip_button_named(ui, PAINT_CHIP, true, tl!("Graphic Style"), |ui, r| crate::panels::graphic_styles::paint_linked(app, ui, r));
         egui::Popup::menu(&resp).show(|ui| crate::panels::graphic_styles::picker(app, ui));
         // Recolor Artwork, when the selection has colours to recolour.
         let colored = app.session.active().is_some_and(|st| crate::canvas::has_colors(&st.doc, &st.selection.objects));
-        if colored && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, 24.0).clicked() {
+        if colored && ui.available_width() >= BUTTON && widgets::icon_button(ui, "palette", tl!("Recolor Artwork"), false, BUTTON).clicked() {
             crate::menus::invoke(app, "ui.recolorDialog", json!({}));
         }
         global_edit_options(app, ui);
+        drawn = true;
     }
-    if opacity_on || style_on {
+    if drawn {
         group_separator(ui);
     }
 }
@@ -709,11 +765,16 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         }
         gripper(app, ui, t, bar, dock_room);
         if app.session.active().is_none() {
-            ui.label(egui::RichText::new(tl!("No Document")).color(t.text_dim));
+            let text = egui::RichText::new(tl!("No Document")).color(t.text_dim);
+            if ui.available_width() >= widgets::text_width(ui, text.clone()) {
+                ui.label(text);
+            }
             return;
         }
         // The Artboard tool's controls fill the narrowest window, so they keep it to themselves there.
-        if group_on(app, "snapping") && (app.session.tool_id() != "artboard" || ui.available_width() >= ARTBOARD_SNAPPING_WIDTH) {
+        // Any other tool's bar shows the menu while it has room for it.
+        let snapping_room = if app.session.tool_id() == "artboard" { ARTBOARD_SNAPPING_WIDTH } else { snapping_width(ui) };
+        if group_on(app, "snapping") && ui.available_width() >= snapping_room {
             snapping_menu(app, ui);
         }
         let Some(st) = app.session.active() else { return };
@@ -739,7 +800,10 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             _ => tl!(crate::panels::appearance::object_label(app)),
         };
         let has_first = first.is_some();
-        ui.label(egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text));
+        let label = egui::RichText::new(label).font(theme::semibold(12.0)).color(t.text);
+        if ui.available_width() >= widgets::text_width(ui, label.clone()) {
+            ui.label(label);
+        }
         // With the Artboard tool in use, the bar shows the active artboard's controls in place
         // of the object controls.
         let (artboard_options, transform) = (group_on(app, "artboardOptions"), group_on(app, "transform"));
@@ -755,7 +819,9 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
         if object_options {
             isolation_button(app, ui);
         }
-        ui.add_space(6.0);
+        if ui.available_width() >= 6.0 {
+            ui.add_space(6.0);
+        }
         // An image or an Image Trace object shows its own controls in place of Fill and Stroke,
         // and leaves Fill and Stroke out while the Image Options group is off too.
         let image = if group_on(app, "imageOptions") {
@@ -783,7 +849,12 @@ fn contents(app: &mut VectorcraftApp, ui: &mut Ui, t: &Tokens, bar: egui::Rect, 
             return;
         }
         // The Transform link opens the whole Transform panel (reference point, rotate,
-        // shear, options) in a popover; X/Y/W/H follow inline while the bar has room.
+        // shear, options) in a popover; X/Y/W/H follow inline while the bar has room. The
+        // groups ahead of the link keep its room, but those ahead of them can still take it.
+        if ui.available_width() < crate::panels::transform::link_width(ui) {
+            erase_trailing(ui);
+            return;
+        }
         crate::panels::transform::link(app, ui);
         // The bounding box, rotated with rotated objects: its centre and its own sides.
         if let Some(b) = app.selection_box()
