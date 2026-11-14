@@ -5055,6 +5055,7 @@ imageTrace	Outline	Obrys
 @msg	no action set to save	žádná sada akcí k uložení
 @msg	the action set file can't be read in full	soubor sady akcí nelze přečíst celý
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Načteno „{name}“: vynechán {n} krok|Načteno „{name}“: vynechány {n} kroky|Načteno „{name}“: vynecháno {n} kroků
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Načteno „{name}“: {n} krok má neznámý příkaz a byl ponechán: „{action}“, krok {step}, `{command}`|Načteno „{name}“: {n} kroky mají neznámé příkazy a byly ponechány; první: „{action}“, krok {step}, `{command}`|Načteno „{name}“: {n} kroků má neznámé příkazy a bylo ponecháno; první: „{action}“, krok {step}, `{command}`
 @msg	not an action set file	není to soubor sady akcí
 @msg	the action set file is larger than 8 MiB	soubor sady akcí je větší než 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: reference by byla větší než {MAX_BYTES} bajtů
@@ -5295,6 +5296,7 @@ imageTrace	Outline	Obrys
 @msg	tool shortcuts must be a single key (optionally with Shift)	zkratky nástrojů musí být jediná klávesa (volitelně se Shift)
 @msg	truncated	zkráceno
 @msg	unknown command `{0}`	neznámý příkaz `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	krok {step} akce „{action}“ spouští neznámý příkaz `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	neznámý příkaz `{0}`; mysleli jste `{1}`?
 @msg	unknown effect `{id}`	neznámý efekt `{id}`
 @msg	unknown format	neznámý formát
@@ -7443,6 +7445,122 @@ breakText	Glyphs	Glyfy
 @plural	{n} line cut|{n} lines cut	{n} řádek zkrácen|{n} řádky zkráceny|{n} řádků zkráceno
 @msg	`first` and `last` must be numbers of lines the console holds, first before last	`first` a `last` musí být čísla řádků, které konzole uchovává, `first` před `last`
 
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D efekty vyžadují konečné souřadnice v rozsahu 100 milionů bodů
+@msg	3D effects require one to ten lights	3D efekty vyžadují jedno až deset světel
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	hloubka BMP {_1}: 1, 4, 8, 16, 24 nebo 32 bitů na obrazový bod
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	kódování BMP selhalo: {width} × {height} obrazových bodů neodpovídá formátu ani vyrovnávací paměti obrazových bodů
+@msg	GIF encoding failed: the palette image is malformed	kódování GIF selhalo: obraz s paletou je chybně utvořený
+@msg	GIF encoding failed: {e}	kódování GIF selhalo: {e}
+@msg	JPEG colour profile: {e}	barevný profil JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	kódování JPEG selhalo: vyrovnávací paměť obrazových bodů neodpovídá velikosti obrazu
+@msg	JPEG encoding failed: {e}	kódování JPEG selhalo: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	kódování PNG selhalo: vyrovnávací paměť obrazových bodů neodpovídá velikosti obrazu
+@msg	PNG encoding failed: the palette image is malformed	kódování PNG selhalo: obraz s paletou je chybně utvořený
+@msg	PNG encoding failed: {e}	kódování PNG selhalo: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	kódování PNG selhalo: {width} × {height} obrazových bodů není platná velikost obrazu
+@msg	PSD colour profile: {e}	barevný profil PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	kódování PSD selhalo: vyrovnávací paměť obrazových bodů neodpovídá velikosti obrazu
+@msg	Revolve profile contains invalid coordinates	Profil rotačního tělesa obsahuje neplatné souřadnice
+@msg	Revolve profile is too complex	Profil rotačního tělesa je příliš složitý
+@msg	Revolve projection is not finite	Projekce rotačního tělesa není konečná
+@msg	Revolve requires finite profile coordinates within 100 million points	Rotační těleso vyžaduje konečné souřadnice profilu v rozsahu 100 milionů bodů
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Povrch rotačního tělesa je příliš složitý; snižte Segmenty nebo zjednodušte profil
+@msg	Revolve surface is too complex; simplify the profile	Povrch rotačního tělesa je příliš složitý; zjednodušte profil
+@msg	Revolve visibility cannot split the projected boundary	Výpočet viditelnosti rotačního tělesa nedokáže rozdělit promítnutou hranici
+@msg	Revolve visibility creates too many fragments	Výpočet viditelnosti rotačního tělesa vytváří příliš mnoho fragmentů
+@msg	Revolve visibility creates too many vector anchors	Výpočet viditelnosti rotačního tělesa vytváří příliš mnoho vektorových kotevních bodů
+@msg	Revolve visibility exceeds its geometry work limit	Výpočet viditelnosti rotačního tělesa překračuje svůj limit geometrických výpočtů
+@msg	Revolve visibility exceeds its spatial index limit	Výpočet viditelnosti rotačního tělesa překračuje svůj limit prostorového indexu
+@msg	Revolve visibility has too many boundary crossings	Výpočet viditelnosti rotačního tělesa má příliš mnoho průsečíků hranic
+@msg	Revolve visibility has too many input anchors	Výpočet viditelnosti rotačního tělesa má příliš mnoho vstupních kotevních bodů
+@msg	Revolve visibility requires convex cap sectors	Výpočet viditelnosti rotačního tělesa vyžaduje konvexní výseče podstav
+@msg	Revolve visibility requires finite projected faces	Výpočet viditelnosti rotačního tělesa vyžaduje konečné promítnuté stěny
+@msg	SVG options: {e}	Možnosti SVG: {e}
+@msg	Save for Web settings: {e}	Nastavení Uložit pro web: {e}
+@msg	TIFF colour profile: {e}	barevný profil TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	kódování TIFF selhalo: vyrovnávací paměť obrazových bodů neodpovídá velikosti obrazu
+@msg	TIFF encoding failed: {e}	kódování TIFF selhalo: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	hloubka Targa {_1}: 16, 24 nebo 32 bitů na obrazový bod
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	kódování Targa selhalo: vyrovnávací paměť obrazových bodů neodpovídá velikosti obrazu
+@msg	The 3D projection is not finite	3D projekce není konečná
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D stín je příliš složitý; vypněte Stíny nebo zjednodušte kresbu
+@msg	The shape contains invalid coordinates	Tvar obsahuje neplatné souřadnice
+@msg	Too many Revolve faces for visibility evaluation	Rotační těleso má příliš mnoho stěn pro výpočet viditelnosti
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft čte ze souboru pro výměnu vzorníku nejvýše {ASE_MAX_ENTRIES} barev a skupin a tato knihovna jich má {entries}
+@msg	WebP encoding failed: {e}	kódování WebP selhalo: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` je smallThumb, mediumThumb, largeThumb, smallList nebo largeList
+@msg	a line can't run from a point to itself	čára nemůže vést z bodu zpět do téhož bodu
+@msg	a line needs at least two points	čára potřebuje alespoň dva body
+@msg	a number cannot be read	číslo nelze přečíst
+@msg	a swatch exchange block is too long	blok souboru pro výměnu vzorníku je příliš dlouhý
+@msg	a swatch exchange name is too long	název v souboru pro výměnu vzorníku je příliš dlouhý
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	velikost obrazu {sw} × {sh} nelze změnit na {width} × {height} obrazových bodů
+@msg	a {width} × {height} image is too large	obraz {width} × {height} je příliš velký
+@msg	a {width} × {height} image: {e}	obraz {width} × {height}: {e}
+@msg	an image could not be written: {e}	obraz se nepodařilo zapsat: {e}
+@msg	an image that couldn't be read was left out	obraz, který nešlo přečíst, byl vynechán
+@msg	can't open “{name}”: {e}	nelze otevřít „{name}“: {e}
+@msg	cannot align zip entries to {align} bytes	položky zipu nelze zarovnat na {align} bajtů
+@msg	cannot open the automation {kind} root `{_1}`: {e}	nelze otevřít kořen automatizace pro {kind} `{_1}`: {e}
+@msg	cannot read profile: {0}	profil nelze přečíst: {0}
+@msg	color book version {version} isn't supported (only 1)	verze barevné knihy {version} není podporována (pouze 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	barevné knihy v barevném prostoru {other} nejsou podporovány (pouze RGB, CMYK a Lab)
+@msg	file name too long to zip: {_1}	název souboru je pro zip příliš dlouhý: {_1}
+@msg	file name too long to zip: {name}	název souboru je pro zip příliš dlouhý: {name}
+@msg	freeform line {i}: {e}	volná čára {i}: {e}
+@msg	freeform point {i}: {e}	volný bod {i}: {e}
+@msg	give `{key}` or `{other}`, not both	zadejte `{key}` nebo `{other}`, ne obojí
+@msg	grayscale profiles can't be working spaces yet	profily ve stupních šedi zatím nemohou být pracovními prostory
+@msg	input contains NaN or infinite coordinates	vstup obsahuje souřadnice NaN nebo nekonečné souřadnice
+@msg	input path could not be closed	vstupní cestu se nepodařilo uzavřít
+@msg	invalid ICC profile: {0}	neplatný profil ICC: {0}
+@msg	invalid scale {scale}	neplatné měřítko {scale}
+@msg	its localized names take more than {_1} KB	jeho lokalizované názvy zabírají více než {_1} KB
+@msg	its objects are nested too deep ({e})	jeho objekty jsou vnořené příliš hluboko ({e})
+@msg	its tag table lists the `{_1}` tag more than once	jeho tabulka značek uvádí značku `{_1}` více než jednou
+@msg	not a graphic style library: {e}	nejde o knihovnu grafických stylů: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	nejde o knihovnu vzorníku (.vcswatches nebo .gpl)
+@msg	not a swatch library (format `{_1}`)	nejde o knihovnu vzorníku (formát `{_1}`)
+@msg	not a swatch library: {e}	nejde o knihovnu vzorníku: {e}
+@msg	not an action set file ({e})	nejde o soubor sady akcí ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	barevný prostor profilu {other} není RGB, CMYK ani Gray
+@msg	regular expression too large	regulární výraz je příliš velký
+@msg	script file is not UTF-8 text: {value}	soubor skriptu není text v kódování UTF-8: {value}
+@msg	stop {i}: {e}	zarážka {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	verze souboru pro výměnu vzorníku {major}.{minor} není podporována (pouze 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	barevná kniha obsahuje více než {ASE_MAX_ENTRIES} barev
+@msg	the color book is cut short	barevná kniha je useknutá
+@msg	the color book's names take more than {_1} MB	názvy barevné knihy zabírají více než {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	obraz by měl {w} × {h} obrazových bodů; rastrové exporty jsou omezeny na {MAX_RASTER_SIDE} obrazových bodů na stranu a {_1} megapixelů: snižte měřítko nebo rozlišení
+@msg	the optimised image can't be read back: {e}	optimalizovaný obraz nelze zpětně přečíst: {e}
+@msg	the pixel buffer doesn't match the image size	vyrovnávací paměť obrazových bodů neodpovídá velikosti obrazu
+@msg	the preview: {e}	náhled: {e}
+@msg	the request may not read the New Document profiles folder	požadavek nesmí číst složku profilů nového dokumentu
+@msg	the shapes are too degenerate to combine	tvary jsou příliš degenerované na sloučení
+@msg	the shapes cross themselves and each other too often to combine	tvary protínají samy sebe i sebe navzájem příliš často na sloučení
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	soubor pro výměnu vzorníku obsahuje více než {ASE_MAX_ENTRIES} barev a skupin
+@msg	the swatch exchange file is cut short	soubor pro výměnu vzorníku je useknutý
+@msg	the {_1} plate can't be read: {e}	výtažek {_1} nelze přečíst: {e}
+@msg	this binary DXF file is damaged or cut short	tento binární soubor DXF je poškozený nebo useknutý
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	toto je výkres DWG, který nelze přečíst: uložte jej v aplikaci CAD jako DXF a otevřete ten
+@msg	too many classes	příliš mnoho tříd znaků
+@msg	too many groups	příliš mnoho skupin
+@msg	too many layers for PSD (at most 32767)	příliš mnoho vrstev pro PSD (nejvýše 32767)
+@msg	too many swatch exchange blocks	příliš mnoho bloků souboru pro výměnu vzorníku
+@msg	unknown colour profile: {0}	neznámý barevný profil: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} koliduje s názvem vestavěného profilu
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} obrazových bodů je pro GIF příliš mnoho (nejvýše 65535 obrazových bodů na stranu): snižte rozlišení
+@msg	{_1}: no usable transform to/from sRGB	{_1}: žádná použitelná transformace do sRGB nebo ze sRGB
+@msg	{name} is not a CMYK profile	{name} není profil CMYK
+@msg	{name} is not an RGB profile	{name} není profil RGB
+@msg	{path}: could not be read	{path}: nelze přečíst
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} obrazových bodů je pro JPEG příliš mnoho (nejvýše 65535 obrazových bodů na stranu): snižte rozlišení
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} obrazových bodů je pro Targa příliš mnoho (nejvýše 65535 obrazových bodů na stranu): snižte rozlišení
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} obrazových bodů je pro PSD příliš mnoho (nejvýše {MAX_SIDE} obrazových bodů na stranu): snižte rozlišení
+
 # Learn panel
 	Learn	Výuka
 	Explore tutorials	Prozkoumat výukové kurzy
@@ -7470,6 +7588,12 @@ breakText	Glyphs	Glyfy
 @msg	open the practice sample of `{id}` first (see learn.openSample)	nejprve otevřete cvičnou ukázku kurzu `{id}` (viz learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	nejprve dokončete `{id}` (viz learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` je poslední výukový kurz své dovednosti
+	Reset progress	Obnovit postup
+	Mark Tutorial Step	Označit krok výukového kurzu
+	Reset Learn Progress	Obnovit postup učení
+@msg	missing `step` (see learn.show)	chybí `step` (viz learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` musí být číslo kroku od 0 do {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` je dokončen (viz learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Obnovit odložené efekty

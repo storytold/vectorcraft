@@ -4879,6 +4879,7 @@ imageTrace	Outline	Kontur
 @msg	no action set to save	brak zestawu operacji do zapisania
 @msg	the action set file can't be read in full	nie można odczytać całego pliku zestawu operacji
 @msgplural	Loaded “{name}”: {n} step was left out|Loaded “{name}”: {n} steps were left out	Wczytano „{name}”: pominięto {n} krok|Wczytano „{name}”: pominięto {n} kroki|Wczytano „{name}”: pominięto {n} kroków
+@msgplural	Loaded “{name}”: {n} step has an unknown command and was kept: “{action}”, step {step}, `{command}`|Loaded “{name}”: {n} steps have unknown commands and were kept; the first: “{action}”, step {step}, `{command}`	Wczytano „{name}”: {n} krok ma nieznane polecenie i został zachowany: „{action}”, krok {step}, `{command}`|Wczytano „{name}”: {n} kroki mają nieznane polecenia i zostały zachowane; pierwszy: „{action}”, krok {step}, `{command}`|Wczytano „{name}”: {n} kroków ma nieznane polecenia i zostało zachowanych; pierwszy: „{action}”, krok {step}, `{command}`
 @msg	not an action set file	to nie jest plik zestawu operacji
 @msg	the action set file is larger than 8 MiB	plik zestawu operacji jest większy niż 8 MiB
 @msg	`{ID}`: the reference would be larger than {MAX_BYTES} bytes	`{ID}`: dokumentacja byłaby większa niż {MAX_BYTES} bajtów
@@ -5122,6 +5123,7 @@ imageTrace	Outline	Kontur
 @msg	tool shortcuts must be a single key (optionally with Shift)	skróty narzędzi muszą być pojedynczym klawiszem (opcjonalnie z Shift)
 @msg	truncated	obcięty
 @msg	unknown command `{0}`	nieznane polecenie `{0}`
+@msg	step {step} of “{action}” runs the unknown command `{command}`	krok {step} operacji „{action}” uruchamia nieznane polecenie `{command}`
 @msg	unknown command `{0}`; did you mean `{1}`?	nieznane polecenie `{0}`; czy chodziło o `{1}`?
 @msg	unknown effect `{id}`	nieznany efekt `{id}`
 @msg	unknown format	nieznany format
@@ -7327,6 +7329,12 @@ breakText	Glyphs	Glify
 @msg	open the practice sample of `{id}` first (see learn.openSample)	najpierw otwórz przykład do ćwiczeń samouczka `{id}` (patrz learn.openSample)
 @msg	finish `{id}` first (see learn.finish)	najpierw zakończ `{id}` (patrz learn.finish)
 @msg	`{id}` is the last tutorial in its skill	`{id}` to ostatni samouczek swojej umiejętności
+	Reset progress	Resetuj postępy
+	Mark Tutorial Step	Oznacz krok samouczka
+	Reset Learn Progress	Resetuj postępy nauki
+@msg	missing `step` (see learn.show)	brak `step` (patrz learn.show)
+@msg	`step` must be a step number from 0 to {last}	`step` musi być numerem kroku od 0 do {last}
+@msg	`{id}` is finished (see learn.resetProgress)	`{id}` jest zakończony (patrz learn.resetProgress)
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Odśwież odroczone efekty
@@ -9166,3 +9174,119 @@ breakText	Glyphs	Glify
 @msg	{what} can't be intertwined	{what} nie można przeplatać
 @msg	{what} doesn't fit the paper with its bleed and marks	{what} nie mieści się na papierze wraz ze spadem i znacznikami
 @msg	{what} would print on more than {MAX_TILES} tiles: scale it down	{what}: wydruk zająłby ponad {MAX_TILES} kafelków: zmniejsz skalę
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	Efekty 3D wymagają skończonych współrzędnych w zakresie 100 milionów punktów
+@msg	3D effects require one to ten lights	Efekty 3D wymagają od jednego do dziesięciu świateł
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Głębia BMP {_1}: 1, 4, 8, 16, 24 lub 32 bity na piksel
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Kodowanie BMP nie powiodło się: {width} × {height} pikseli nie mieści się w formacie ani w buforze pikseli
+@msg	GIF encoding failed: the palette image is malformed	Kodowanie GIF nie powiodło się: obraz z paletą jest nieprawidłowy
+@msg	GIF encoding failed: {e}	Kodowanie GIF nie powiodło się: {e}
+@msg	JPEG colour profile: {e}	Profil kolorów JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Kodowanie JPEG nie powiodło się: bufor pikseli nie odpowiada rozmiarowi obrazu
+@msg	JPEG encoding failed: {e}	Kodowanie JPEG nie powiodło się: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Kodowanie PNG nie powiodło się: bufor pikseli nie odpowiada rozmiarowi obrazu
+@msg	PNG encoding failed: the palette image is malformed	Kodowanie PNG nie powiodło się: obraz z paletą jest nieprawidłowy
+@msg	PNG encoding failed: {e}	Kodowanie PNG nie powiodło się: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Kodowanie PNG nie powiodło się: {width} × {height} pikseli to nieprawidłowy rozmiar obrazu
+@msg	PSD colour profile: {e}	Profil kolorów PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Kodowanie PSD nie powiodło się: bufor pikseli nie odpowiada rozmiarowi obrazu
+@msg	Revolve profile contains invalid coordinates	Profil efektu Obrót zawiera nieprawidłowe współrzędne
+@msg	Revolve profile is too complex	Profil efektu Obrót jest zbyt złożony
+@msg	Revolve projection is not finite	Rzut efektu Obrót nie jest skończony
+@msg	Revolve requires finite profile coordinates within 100 million points	Efekt Obrót wymaga skończonych współrzędnych profilu w zakresie 100 milionów punktów
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Powierzchnia efektu Obrót jest zbyt złożona; zmniejsz Segmenty lub uprość profil
+@msg	Revolve surface is too complex; simplify the profile	Powierzchnia efektu Obrót jest zbyt złożona; uprość profil
+@msg	Revolve visibility cannot split the projected boundary	Obliczanie widoczności efektu Obrót nie może podzielić rzutowanej granicy
+@msg	Revolve visibility creates too many fragments	Obliczanie widoczności efektu Obrót tworzy zbyt wiele fragmentów
+@msg	Revolve visibility creates too many vector anchors	Obliczanie widoczności efektu Obrót tworzy zbyt wiele wektorowych punktów kontrolnych
+@msg	Revolve visibility exceeds its geometry work limit	Obliczanie widoczności efektu Obrót przekracza swój limit obliczeń geometrycznych
+@msg	Revolve visibility exceeds its spatial index limit	Obliczanie widoczności efektu Obrót przekracza swój limit indeksu przestrzennego
+@msg	Revolve visibility has too many boundary crossings	Obliczanie widoczności efektu Obrót napotyka zbyt wiele przecięć granicy
+@msg	Revolve visibility has too many input anchors	Obliczanie widoczności efektu Obrót otrzymuje zbyt wiele wejściowych punktów kontrolnych
+@msg	Revolve visibility requires convex cap sectors	Obliczanie widoczności efektu Obrót wymaga wypukłych sektorów zakończenia
+@msg	Revolve visibility requires finite projected faces	Obliczanie widoczności efektu Obrót wymaga skończonych rzutowanych ścian
+@msg	SVG options: {e}	Opcje SVG: {e}
+@msg	Save for Web settings: {e}	Ustawienia Zapisz dla Internetu: {e}
+@msg	TIFF colour profile: {e}	Profil kolorów TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Kodowanie TIFF nie powiodło się: bufor pikseli nie odpowiada rozmiarowi obrazu
+@msg	TIFF encoding failed: {e}	Kodowanie TIFF nie powiodło się: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Głębia Targa {_1}: 16, 24 lub 32 bity na piksel
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Kodowanie Targa nie powiodło się: bufor pikseli nie odpowiada rozmiarowi obrazu
+@msg	The 3D projection is not finite	Rzut 3D nie jest skończony
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	Cień 3D jest zbyt złożony; wyłącz Cienie lub uprość grafikę
+@msg	The shape contains invalid coordinates	Kształt zawiera nieprawidłowe współrzędne
+@msg	Too many Revolve faces for visibility evaluation	Zbyt wiele ścian efektu Obrót do obliczenia widoczności
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft odczytuje z pliku wymiany próbek najwyżej {ASE_MAX_ENTRIES} kolorów i grup, a ta biblioteka ma ich {entries}
+@msg	WebP encoding failed: {e}	Kodowanie WebP nie powiodło się: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` ma wartość smallThumb, mediumThumb, largeThumb, smallList lub largeList
+@msg	a line can't run from a point to itself	linia nie może prowadzić od punktu do niego samego
+@msg	a line needs at least two points	linia wymaga co najmniej dwóch punktów
+@msg	a number cannot be read	nie można odczytać liczby
+@msg	a swatch exchange block is too long	blok pliku wymiany próbek jest zbyt długi
+@msg	a swatch exchange name is too long	nazwa w pliku wymiany próbek jest zbyt długa
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	nie można zmienić rozmiaru obrazu {sw} × {sh} na {width} × {height} pikseli
+@msg	a {width} × {height} image is too large	obraz {width} × {height} jest zbyt duży
+@msg	a {width} × {height} image: {e}	obraz {width} × {height}: {e}
+@msg	an image could not be written: {e}	nie udało się zapisać obrazu: {e}
+@msg	an image that couldn't be read was left out	pominięto obraz, którego nie udało się odczytać
+@msg	can't open “{name}”: {e}	nie można otworzyć „{name}”: {e}
+@msg	cannot align zip entries to {align} bytes	nie można wyrównać wpisów zip do {align} bajtów
+@msg	cannot open the automation {kind} root `{_1}`: {e}	nie można otworzyć katalogu głównego automatyzacji ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	nie można odczytać profilu: {0}
+@msg	color book version {version} isn't supported (only 1)	wersja księgi kolorów {version} nie jest obsługiwana (tylko 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	księgi kolorów w przestrzeni kolorów {other} nie są obsługiwane (tylko RGB, CMYK i Lab)
+@msg	file name too long to zip: {_1}	nazwa pliku jest zbyt długa dla archiwum zip: {_1}
+@msg	file name too long to zip: {name}	nazwa pliku jest zbyt długa dla archiwum zip: {name}
+@msg	freeform line {i}: {e}	dowolna linia {i}: {e}
+@msg	freeform point {i}: {e}	dowolny punkt {i}: {e}
+@msg	give `{key}` or `{other}`, not both	podaj `{key}` lub `{other}`, nie oba naraz
+@msg	grayscale profiles can't be working spaces yet	profile w skali szarości nie mogą jeszcze być przestrzeniami roboczymi
+@msg	input contains NaN or infinite coordinates	dane wejściowe zawierają współrzędne NaN lub nieskończone
+@msg	input path could not be closed	nie udało się zamknąć ścieżki wejściowej
+@msg	invalid ICC profile: {0}	nieprawidłowy profil ICC: {0}
+@msg	invalid scale {scale}	nieprawidłowa skala {scale}
+@msg	its localized names take more than {_1} KB	jego zlokalizowane nazwy zajmują ponad {_1} KB
+@msg	its objects are nested too deep ({e})	jego obiekty są zagnieżdżone zbyt głęboko ({e})
+@msg	its tag table lists the `{_1}` tag more than once	jego tablica znaczników wymienia znacznik `{_1}` więcej niż raz
+@msg	not a graphic style library: {e}	to nie jest biblioteka stylów graficznych: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	to nie jest biblioteka próbek (.vcswatches lub .gpl)
+@msg	not a swatch library (format `{_1}`)	to nie jest biblioteka próbek (format `{_1}`)
+@msg	not a swatch library: {e}	to nie jest biblioteka próbek: {e}
+@msg	not an action set file ({e})	to nie jest plik zestawu operacji ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	przestrzeń kolorów profilu {other} nie jest RGB, CMYK ani skalą szarości
+@msg	regular expression too large	wyrażenie regularne jest zbyt duże
+@msg	script file is not UTF-8 text: {value}	plik skryptu nie jest tekstem UTF-8: {value}
+@msg	stop {i}: {e}	punkt koloru {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	wersja pliku wymiany próbek {major}.{minor} nie jest obsługiwana (tylko 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	księga kolorów zawiera ponad {ASE_MAX_ENTRIES} kolorów
+@msg	the color book is cut short	księga kolorów jest ucięta
+@msg	the color book's names take more than {_1} MB	nazwy w księdze kolorów zajmują ponad {_1} MB
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	obraz miałby {w} × {h} pikseli; eksport rastrowy jest ograniczony do {MAX_RASTER_SIDE} pikseli na bok i {_1} megapikseli: zmniejsz skalę lub rozdzielczość
+@msg	the optimised image can't be read back: {e}	nie można ponownie odczytać zoptymalizowanego obrazu: {e}
+@msg	the pixel buffer doesn't match the image size	bufor pikseli nie odpowiada rozmiarowi obrazu
+@msg	the preview: {e}	podgląd: {e}
+@msg	the request may not read the New Document profiles folder	żądanie nie ma uprawnień do odczytu folderu profili nowego dokumentu
+@msg	the shapes are too degenerate to combine	kształty są zbyt zdegenerowane, aby je połączyć
+@msg	the shapes cross themselves and each other too often to combine	kształty zbyt często przecinają same siebie i siebie nawzajem, aby je połączyć
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	plik wymiany próbek zawiera ponad {ASE_MAX_ENTRIES} kolorów i grup
+@msg	the swatch exchange file is cut short	plik wymiany próbek jest ucięty
+@msg	the {_1} plate can't be read: {e}	nie można odczytać płyty {_1}: {e}
+@msg	this binary DXF file is damaged or cut short	ten binarny plik DXF jest uszkodzony lub ucięty
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	to rysunek DWG, którego nie można odczytać: zapisz go w programie CAD jako DXF i otwórz ten plik
+@msg	too many classes	zbyt wiele klas
+@msg	too many groups	zbyt wiele grup
+@msg	too many layers for PSD (at most 32767)	zbyt wiele warstw dla formatu PSD (najwyżej 32767)
+@msg	too many swatch exchange blocks	zbyt wiele bloków pliku wymiany próbek
+@msg	unknown colour profile: {0}	nieznany profil kolorów: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} koliduje z nazwą wbudowanego profilu
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} pikseli to za dużo dla formatu GIF (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
+@msg	{_1}: no usable transform to/from sRGB	{_1}: brak użytecznej transformacji do lub z sRGB
+@msg	{name} is not a CMYK profile	{name} nie jest profilem CMYK
+@msg	{name} is not an RGB profile	{name} nie jest profilem RGB
+@msg	{path}: could not be read	{path}: nie udało się odczytać
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu JPEG (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} pikseli to za dużo dla formatu Targa (najwyżej 65535 pikseli na bok): zmniejsz rozdzielczość
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} pikseli to za dużo dla formatu PSD (najwyżej {MAX_SIDE} pikseli na bok): zmniejsz rozdzielczość

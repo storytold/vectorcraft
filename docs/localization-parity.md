@@ -15,7 +15,7 @@ translation never fails a test or a build: the interface shows the English text 
 `cargo xtask ci` prints the untranslated report (`cargo xtask i18n-report` alone), which lists per language the
 strings missing from each catalog with the `complete_menus` flag and the messages missing from each language in
 the `COMPLETE_MESSAGES` list. Every non-English language marked "full" has the flag, and all of them except
-Bulgarian, Danish and Indonesian are in the list. No language has help content: there is no translated (or
+Bosnian, Bulgarian, Danish and Indonesian are in the list. No language has help content: there is no translated (or
 English) in-app help, and the docs are English.
 
 **Native review:** every catalog was written clean-room from the English meaning, most of it by agents
@@ -35,10 +35,10 @@ Chinese by `imachus`). Georgian and the original Gujarati catalog are recorded a
 | Gujarati | `gu` | 4,673 rows (2026-11-14): original 4,286 unchanged; all 387 additions contributor-reviewed and approved | menus and dialogs; status/error messages partial | installed Gujarati fonts on desktop; optional `Gujr` craft-fonts fallback; no Gujarati face in the pinned CI/release fonts or web startup list | original catalog reviewed by a native speaker; all 387 later additions approved by the contributor, with 11 wording corrections | contributor-reviewed catalog | remaining messages and a bundled Gujarati web font |
 | Arabic | `ar` | 0 | none | document text: bidi layout and Paragraph Direction; interface: no right-to-left layout, no Arabic shaping in egui | no | none | 25–40 |
 | French | `fr` | 9,166 rows, 3,436 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 178 missing messages for it | all | Latin | no | full | — (review) |
-| Portuguese | `pt-br` | 9,260 rows, 3,445 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 39 missing messages for it; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
+| Portuguese | `pt-br` | 9,378 rows, 3,563 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 55 missing messages for it, which open #7116, #7211, #7330, #7378 and #7405 translate; one/other plurals | all | Latin | contributor is a Brazilian Portuguese speaker; further native review welcome | full | — (review) |
 | Indonesian | `id` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one plural form | dialogs and tooltips all; 750 message rows (French has 796) | Latin | no | full | — (review) |
 | Japanese | `ja` | 4,004 / 4,020 (99.6%) | all | CJK UI font as above; Japanese IME; vertical type partial; Japanese crop marks and composition settings | no | full | — (review) |
-| German | `de` | 3,952 / 4,020 (98%; menus, literals and messages complete when counted) | all (3,433 `@msg` and 48 `@msgplural` rows, counted 2026-11-13: the untranslated report lists 48 missing messages for it) | Latin | contributor-written, not reviewed | full | — (review) |
+| German | `de` | 3,952 / 4,020 (98%; menus, literals and messages complete when counted) | all (3,563 `@msg` and 48 `@msgplural` rows, counted 2026-11-13: the untranslated report lists 52 missing messages for it, which open #7116, #7211 and #7378 translate) | Latin | contributor-written, not reviewed | full | — (review) |
 | Korean | `ko` | 4,870 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form | all (3,438 `@msg` and 48 `@msgplural` rows, counted 2026-11-13: the untranslated report lists 39 missing messages for it) | Hangul from an installed system font on the desktop (Apple SD Gothic Neo, Malgun Gothic, Noto Sans CJK KR…); the web build has no Korean UI font yet (craft-fonts); IME path exists | no (AI-drafted) | full | — (review; web font) |
 | Vietnamese | `vi` | 4,886 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form; 4,046 plain + 18 `@plural` + 28 contextual + 794 `@msg` | all | Latin with Vietnamese diacritics (stacked marks attach in precomposed, decomposed and keyboard forms, #4491; glyph tests pass) | contributor is a Vietnamese speaker; AI-assisted draft, further native review welcome | full | — (review) |
 
@@ -54,16 +54,16 @@ plus review. Native-speaker review is human work and isn't in the hours.
 |---|---|---|---|
 | Traditional Chinese (Taiwan) | `zh-hant` | 8,820 rows, 3,438 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it; menus, `tl!` literals and messages were complete when counted on 2026-10-21 (80% overall) | partial |
 | Italian | `it` | 8,757 rows, 3,422 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it | full |
-| Dutch | `nl` | 7,299 rows, 1,609 of them `@msg` and 47 `@msgplural` (counted 2026-11-13 on `main` at `9a1a158a3`): in `COMPLETE_MESSAGES`, and the untranslated report lists the same missing messages for it as for German; one/other plurals | full |
+| Dutch | `nl` | 3,447 `@msg` and 48 `@msgplural` rows (counted 2026-11-13): in `COMPLETE_MESSAGES`, and the untranslated report lists 41 missing messages for it; one/other plurals | full |
 | Danish | `da` | 5,279 rows, 750 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial; one/other plurals | full |
 | Russian | `ru` | 4,009 / 4,020 | full |
 | Ukrainian | `uk` | 8,802 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13); one/few/many plurals | full |
 | Hungarian | `hu` | 5,253 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one plural form | full |
 | Polish | `pl` | 9,044 rows, 3,439 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 46 missing messages for it, and 47 menu strings, 26 `tl!` literals, 11 undo labels and 45 swatch names; one/few/many plurals | full; native review pending |
 | Finnish | `fi` | 5,318 rows (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals, 797 `@msg` rows | full; AI-assisted, native proofreading pending |
-| Czech | `cs` | 9,155 rows, 3,445 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 40 missing messages for it | catalog complete; render-site gaps reduced; native review pending |
+| Czech | `cs` | 9,273 rows, 3,560 of them `@msg` and 48 `@msgplural` (counted 2026-11-13): the untranslated report lists 2 missing Czech messages, and 54 messages that no language has a row for | catalog complete; render-site gaps reduced; native review pending |
 | Bosnian | `bs` | 5,841 rows (counted 2026-10-30): menus, `tl!` literals and messages complete when counted; one/few/other plurals | full; AI-assisted, native review pending |
-| Swedish | `sv` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted; one/other plurals | full; native review welcome |
+| Swedish | `sv` | 8,991 rows, 3,106 of them `@msg` and 48 `@msgplural` (counted 2026-11-14): the untranslated report lists 518 missing messages for it, and 12 menu strings, 1 `tl!` literal and 3 undo labels; one/other plurals | full; native review welcome |
 | Bulgarian | `bg` | 5,245 rows, 763 of them `@msg` (counted 2026-10-21): menus and `tl!` literals complete when counted; its messages are partial | full; AI-drafted, native review pending |
 | Greek | `el` | 5,251 rows, 795 of them `@msg` (counted 2026-10-21): menus, `tl!` literals and messages complete when counted | full; native review welcome |
 | Georgian | `ka` | 5,200 rows (counted 2026-10-21): menus, panels, dialogs, plurals (one count-neutral form) and messages, tested complete; reviewed by a native speaker | full |

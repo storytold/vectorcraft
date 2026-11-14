@@ -109,25 +109,79 @@ fn only_a_radial_keeps_a_focal_point_through_a_plug_in() {
     }
 }
 
-/// A gradient stop's process plates handed back out of range are clamped to 0..1, each in its
+/// A gradient stop's process plates handed back out of range are read clamped to 0..1, each in its
 /// place, in a fill and in a stroke (a JSON number too large for `f32` is infinite); plates in range
 /// and a stop without plates are kept.
 #[test]
 fn gradient_stop_plates_are_clamped_through_a_plug_in() {
     use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
-    let (mut d, ids, _) = doc();
+    let (_, ids, _) = doc();
     let stops = vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(0.5, Color::gray(0.5)), GradientStop::new(1.0, Color::BLACK)];
     let mut p = serde_json::to_value(Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))))).unwrap();
-    p["gradient"]["stops"][0]["plates"] = json!([-0.5, 1.5, -1e300, 1e300]);
-    p["gradient"]["stops"][1]["plates"] = json!([0.25, 2.0, 0.75, -3.0]);
+    for (i, plates) in [(0, json!([-0.5, 1.5, -1e300, 1e300])), (1, json!([0.25, 2.0, 0.75, -3.0]))] {
+        p["gradient"]["stops"][i]["plates"] = plates;
+        p["gradient"]["stops"][i]["swatch"] = json!("Spot");
+    }
     let out = json!({"objects": [{"id": ids[0].0, "fills": [p.clone()], "strokes": [{"paint": p}]}]});
-    apply_output(&mut d, &ids, decode_json(out).unwrap(), None, &keep).unwrap();
-    let ap = &d.node(ids[0]).unwrap().appearance;
-    for (what, paint) in [("fill", ap.fill_paint()), ("stroke", ap.stroke_paint())] {
+    let out = decode_json(out).unwrap();
+    let fill = &out[0].fills.as_ref().unwrap()[0];
+    let stroke = &out[0].strokes.as_ref().unwrap()[0].paint;
+    for (what, paint) in [("fill", fill), ("stroke", stroke)] {
         let Paint::Gradient(g) = paint else { panic!("a gradient {what}") };
         let plates: Vec<_> = g.gradient.stops.iter().map(|s| s.plates).collect();
         assert_eq!(plates, [Some([0.0, 1.0, 0.0, 1.0]), Some([0.25, 1.0, 0.75, 0.0]), None], "{what}");
     }
+}
+
+/// A gradient linked to a gradient swatch, whose first stop is linked to a spot swatch at a tint
+/// with process plates.
+fn spot_gradient(color: Color) -> Paint {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let mut spot = GradientStop::new(0.0, color);
+    spot.midpoint = 0.3;
+    spot.opacity = 0.75;
+    spot.set_color(color, Some(("Spot".into(), 0.4)));
+    spot.plates = Some([0.1, 0.2, 0.3, 0.4]);
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, vec![spot, GradientStop::new(1.0, Color::BLACK)]));
+    g.swatch = Some("Blend".into());
+    Paint::Gradient(Box::new(g))
+}
+
+/// A changed gradient handed back loses each stop's spot link, tint and process plates, in a fill
+/// and in a stroke, and keeps the stop's color, offset, opacity and midpoint; a new stop handed back
+/// with plates and no link has none.
+#[test]
+fn changed_gradient_fill_and_stroke_drop_spot_plates() {
+    let (mut d, ids, _) = doc();
+    let a = ids[0];
+    let was = Color::cmyk(0.0, 0.5, 1.0, 0.0);
+    d.node_mut(a).unwrap().appearance.set_fill(spot_gradient(was));
+    d.node_mut(a).unwrap().appearance.set_stroke(spot_gradient(was));
+    let now = Color::cmyk(0.0, 0.25, 0.5, 0.0);
+    let mut p = serde_json::to_value(spot_gradient(now)).unwrap();
+    p["gradient"]["stops"][1]["plates"] = json!([0.5, 0.5, 0.5, 0.5]);
+    let out = json!({"objects": [{"id": a.0, "fills": [p.clone()], "strokes": [{"paint": p}]}]});
+    apply_output(&mut d, &[a], decode_json(out).unwrap(), None, &keep).unwrap();
+    let ap = &d.node(a).unwrap().appearance;
+    for (what, paint) in [("fill", ap.fill_paint()), ("stroke", ap.stroke_paint())] {
+        let Paint::Gradient(g) = paint else { panic!("a gradient {what}") };
+        assert_eq!(g.swatch, None, "{what}");
+        let stops: Vec<_> = g.gradient.stops.iter().map(|s| (s.offset, s.color, s.opacity, s.midpoint, s.swatch.clone(), s.tint, s.plates)).collect();
+        assert_eq!(stops, [(0.0, now, 0.75, 0.3, None, 1.0, None), (1.0, Color::BLACK, 1.0, 0.5, None, 1.0, None)], "{what}");
+    }
+}
+
+/// A gradient handed back as it was keeps its stops' spot links, tints and process plates.
+#[test]
+fn unchanged_gradient_paint_keeps_spot_plates() {
+    let (mut d, ids, _) = doc();
+    let a = ids[0];
+    d.node_mut(a).unwrap().appearance.set_fill(spot_gradient(Color::cmyk(0.0, 0.5, 1.0, 0.0)));
+    d.node_mut(a).unwrap().appearance.set_stroke(spot_gradient(Color::cmyk(0.0, 0.5, 1.0, 0.0)));
+    let input: Value = serde_json::from_slice(&encode_input(&d, &[a])).unwrap();
+    let before = d.clone();
+    apply_output(&mut d, &[a], decode(&serde_json::to_vec(&input).unwrap()).unwrap(), None, &keep).unwrap();
+    assert_eq!(d, before);
 }
 
 /// A plate that is not a number is 0; infinities go to the nearest end of 0..1.

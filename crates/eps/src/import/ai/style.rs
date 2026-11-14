@@ -216,7 +216,8 @@ pub(super) struct ArtStyle {
     pub simple_pattern: Option<StyleItem>,
     /// A style that is one paint: its fill and stroke, bottom first, each there when its
     /// `stroke fill Xd` turns it on (none when neither is on). `Err` when it turns on a fill or
-    /// stroke whose paint isn't read here (a gradient, a pattern, a color that isn't read) or has
+    /// stroke whose paint isn't read here (a gradient that names no swatch or isn't in a gradient
+    /// instance, a pattern, a color that isn't read) or has
     /// no `Xd`. `None` for a style with filters, whose paint is [`Self::items`].
     pub one_paint: Option<Result<Vec<StyleItem>, ()>>,
 }
@@ -313,6 +314,8 @@ struct Filter {
     gradient_of: Option<(Option<String>, f64)>,
     /// `(name) … [matrix] p`, and the numbers between the name and the matrix.
     pattern: Option<(String, Option<[f64; 6]>, Vec<f64>)>,
+    /// Its last fill paint, which replaces those before it.
+    fill_last: LastPaint,
     /// The plug-in object it refers to (`/GObjRef : (name) (plug-in) /PluginObject`): its name and
     /// plug-in name.
     plugin_object: Option<(String, String)>,
@@ -346,12 +349,22 @@ impl Default for Filter {
             gradient: false,
             gradient_of: None,
             pattern: None,
+            fill_last: LastPaint::None,
             plugin_object: None,
             xy: None,
             xy_group: None,
             data: None,
         }
     }
+}
+
+/// Which paint a filter's paint operators set last.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum LastPaint {
+    None,
+    Color,
+    Gradient,
+    Pattern,
 }
 
 /// Most filters read in one style.
@@ -662,7 +675,7 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V], names: &mut Names) {
         | "xz" => {
             let Some((p, _)) = paint::color_op_in(op, vals, names) else { return };
             if op.ends_with(|c: char| c.is_ascii_lowercase()) {
-                f.fill = Some(p);
+                (f.fill, f.fill_last) = (Some(p), LastPaint::Color);
             } else {
                 f.stroke = Some(p);
             }
@@ -719,7 +732,7 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V], names: &mut Names) {
         }
         // `flag (name) x y angle length a b c d tx ty Bg`.
         "Bg" => {
-            f.gradient = true;
+            (f.gradient, f.fill_last) = (true, LastPaint::Gradient);
             let at = vals.iter().rposition(|v| matches!(v, V::Str(_)));
             let name = at.and_then(|i| vals.get(i)).and_then(|v| names.text(v));
             let n: Vec<f64> = at.map_or(&[][..], |i| vals.get(i + 1..).unwrap_or_default()).iter().filter_map(V::num).collect();
@@ -728,7 +741,7 @@ fn paint_op(f: &mut Filter, op: &str, vals: &[V], names: &mut Names) {
         }
         "p" => {
             if let Some(pattern) = pattern_operands(vals, names) {
-                f.pattern = Some(pattern);
+                (f.pattern, f.fill_last) = (Some(pattern), LastPaint::Pattern);
             }
         }
         _ => {}
@@ -786,6 +799,11 @@ struct OnePaint {
     stroke_unread: bool,
     /// Inside a gradient instance (`flag Bb` … `BB`): whether it paints the stroke (flag 1).
     instance: Option<bool>,
+    /// The gradient swatch's name and angle of its last fill paint, when that is a gradient
+    /// instance's `Bg`.
+    fill_gradient: Option<(String, f64)>,
+    /// The same for its last stroke paint.
+    stroke_gradient: Option<(String, f64)>,
 }
 
 impl OnePaint {
@@ -811,9 +829,26 @@ impl OnePaint {
             _ => {}
         }
         paint_op(&mut self.paint, op, vals, names);
+        // A gradient instance's `Bg` names the swatch its fill or stroke paints with; any other
+        // paint of that side replaces it. Outside an instance, which side it paints isn't known.
+        let named = || match (op, &self.paint.gradient_of) {
+            ("Bg", Some((Some(name), angle))) => Some((name.clone(), *angle)),
+            _ => None,
+        };
+        match op {
+            "Bg" if self.instance == Some(true) => self.stroke_gradient = named(),
+            "Bg" if self.instance == Some(false) => self.fill_gradient = named(),
+            "Bg" => (self.fill_gradient, self.stroke_gradient) = (None, None),
+            "p" | "Xa" | "k" | "g" | "x" | "Xx" | "Xk" | "Xs" | "Xz" | "xa" | "xx" | "xk" | "xs" | "xz" => self.fill_gradient = None,
+            "P" | "XA" | "K" | "G" | "X" | "XX" | "XK" | "XS" | "XZ" => self.stroke_gradient = None,
+            _ => {}
+        }
     }
 
-    /// Its fill and stroke ([`ArtStyle::one_paint`]).
+    /// Its fill and stroke ([`ArtStyle::one_paint`]). A gradient fill is its [`StyleItem::Gradient`];
+    /// a gradient stroke's paint is a gradient that only names its swatch (`swatch`) at its angle,
+    /// with default stops: `read::ops`' `appearance_from_art_style` gives it the file's gradient of
+    /// that name.
     fn items(&self) -> Result<Vec<StyleItem>, ()> {
         let f = &self.paint;
         if !self.xd {
@@ -822,14 +857,22 @@ impl OnePaint {
         let (stroked, filled) = f.paints;
         let mut items = vec![];
         if filled {
-            match &f.fill {
-                Some(p) if !self.fill_unread => items.push(StyleItem::Fill(p.clone())),
+            match (&f.fill, &self.fill_gradient) {
+                (Some(p), _) if !self.fill_unread => items.push(StyleItem::Fill(p.clone())),
+                (_, Some((name, angle))) if self.fill_unread => items.push(StyleItem::Gradient { name: Some(name.clone()), angle: *angle }),
                 _ => return Err(()),
             }
         }
         if stroked {
-            match &f.stroke {
-                Some(p) if !self.stroke_unread => items.push(StyleItem::Stroke {
+            let named = self.stroke_gradient.as_ref().filter(|_| self.stroke_unread).map(|(name, angle)| {
+                Paint::Gradient(Box::new(vectorcraft_color::gradient::GradientPaint {
+                    angle: *angle,
+                    swatch: Some(name.clone()),
+                    ..vectorcraft_color::gradient::GradientPaint::new(vectorcraft_color::gradient::Gradient::default())
+                }))
+            });
+            match named.as_ref().or(f.stroke.as_ref().filter(|_| !self.stroke_unread)) {
+                Some(p) => items.push(StyleItem::Stroke {
                     paint: p.clone(),
                     width: f.width,
                     cap: f.cap,
@@ -1396,6 +1439,8 @@ fn paint_item(f: &Filter) -> Result<Option<StyleItem>, ()> {
     match f.name.as_str() {
         FILL if !f.paints.1 => Ok(None),
         FILL => match (&f.pattern, &f.gradient_of, &f.fill) {
+            (.., Some(p)) if f.fill_last == LastPaint::Color => Ok(Some(StyleItem::Fill(p.clone()))),
+            (_, Some((name, angle)), _) if f.fill_last == LastPaint::Gradient => Ok(Some(StyleItem::Gradient { name: name.clone(), angle: *angle })),
             (Some((name, matrix, controls)), ..) => Ok(Some(StyleItem::Pattern { name: name.clone(), matrix: *matrix, controls: controls.clone() })),
             (None, Some((name, angle)), _) => Ok(Some(StyleItem::Gradient { name: name.clone(), angle: *angle })),
             (None, None, _) if f.gradient => Ok(Some(StyleItem::Gradient { name: None, angle: 0.0 })),
@@ -1445,13 +1490,38 @@ fn offset_stroke(f: &Filter) -> Result<Option<StyleItem>, ()> {
     stroke_item(f, if inside { StrokeAlign::Inside } else { StrokeAlign::Outside })
 }
 
+/// The entries a Calligraphic brush's filter may hold, with the settings [`calligraphic_stroke`]
+/// reads. Any other entry keeps the drawn look.
+const CALLIGRAPHIC_ENTRIES: [&str; 14] = [
+    "StrokeStyle",
+    "DisplayString",
+    "Brush",
+    "Diameter",
+    "DiameterVariation",
+    "DiameterDependsOn",
+    "Roundness",
+    "RoundnessVariation",
+    "RoundnessDependsOn",
+    "Angle",
+    "AngleVariation",
+    "AngleDependsOn",
+    "AngleRelativeTo",
+    "Adobe Effect Expand Before Version", // brand-ok: the entry's name in the files
+];
+
 /// A Calligraphic brush's filter `f` as the stroke it paints: `None` when it isn't a stroke in a
-/// colour, names no Calligraphic brush, or its settings aren't all there as numbers. An angle
-/// relative to the path isn't read.
+/// color, names no Calligraphic brush, holds an entry or a width that isn't read, or its settings
+/// aren't all there as numbers. An angle relative to the path isn't read.
 fn calligraphic_stroke(f: &Filter) -> Option<StyleItem> {
     let real = |key: &str| entry(f, key, Kind::Real).ok().flatten();
     let code = |key: &str| entry(f, key, Kind::Int).ok().flatten();
-    if !f.paints.0 || f.gradient || f.pattern.is_some() || f.repeated {
+    if !f.paints.0
+        || f.gradient
+        || f.pattern.is_some()
+        || f.repeated
+        || !f.arrays.is_empty()
+        || !f.kinds.keys().all(|k| CALLIGRAPHIC_ENTRIES.contains(&k.as_str()))
+    {
         return None;
     }
     if entry(f, "AngleRelativeTo", Kind::Int).ok()?.unwrap_or(0.0) != 0.0 {
