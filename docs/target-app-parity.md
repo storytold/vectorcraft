@@ -2050,7 +2050,8 @@ refusals), `addons::cleanup::tests` in `vectorcraft-ui-egui` (the submenu and th
 
 With `ids`, the text tools act on the type the ids name even when it, or its group or layer, is locked or hidden, as
 `text.convertListToText` does; from the selection they still take only type that can be edited (VectorCraft's own
-rule). Tests: `named_locked_and_hidden_type` and the other `named_` tests in `cmd::addons::cleanup::text::tests`.
+rule). Tests: `named_locked_and_hidden_type`, `remove_breaks_named_locked_and_hidden_type` and
+`remove_breaks_named_story_with_a_locked_frame` in `cmd::addons::cleanup::text::tests`.
 
 ## Path Precision Tools add-on (2026-10-30)
 

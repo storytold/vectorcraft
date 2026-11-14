@@ -435,6 +435,23 @@ fn remove_breaks_named_story_with_a_locked_frame() {
     assert_eq!(obj(&s, a).plain_text(), "one two");
 }
 
+/// Type on a locked artboard stays as it is even when `ids` names it, with no undo step.
+#[test]
+fn remove_breaks_named_type_on_a_locked_artboard() {
+    let mut s = session();
+    let on_board = text(&mut s, json!({"x": 40, "y": 60, "text": "a\nb", "size": 12}));
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    let r = s.execute("addon.cleanup.removeBreaks", &json!({"kind": "paragraph", "ids": [on_board.0]}));
+    assert_eq!(other(r), "No paragraph breaks to remove");
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(obj(&s, on_board).plain_text(), "a\nb");
+}
+
 /// Break Text, Combine and Join Point Text, Set Alignment, Keep Position and Reset Text Transform
 /// act on the locked and hidden type that `ids` names (type in a locked layer included), each as
 /// one undo step, and leave it as it is when it is only selected.
