@@ -1322,6 +1322,37 @@ fn the_dialog_builds_the_preset_list_again_only_when_the_presets_change() {
 
 /// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
 #[test]
+fn same_frame_artboard_double_click_keeps_export_selection() {
+    for view in ["grid", "list"] {
+        for checked in [true, false] {
+            let (mut app, _) = app(2, true);
+            open(&mut app);
+            set(&mut app, "view", json!(view));
+            let mut h = ScreensFrame::new();
+            let out = h.settle(&mut app);
+            let name = app.session.active().unwrap().doc.artboards[0].name.clone();
+            let at = screen_text_at(&out, &format!("1  {name}"));
+            if !checked {
+                h.click(&mut app, at);
+                h.time += 1.0;
+                h.settle(&mut app);
+            }
+            let before = field(&app, "boards");
+            h.frame(&mut app, vec![egui::Event::PointerMoved(at)]);
+            let events = [true, false, true, false]
+                .into_iter()
+                .map(|pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() })
+                .collect();
+            h.frame(&mut app, events);
+            h.settle(&mut app);
+            assert!(h.ctx.egui_wants_keyboard_input(), "{view}, checked={checked}");
+            assert_eq!(field(&app, "boards"), before, "{view}, checked={checked}");
+        }
+    }
+}
+
+/// #7275: a double-click on an artboard name enters rename without leaving Export for Screens.
+#[test]
 fn switching_export_tabs_commits_an_artboard_name() {
     for view in ["grid", "list"] {
         let (mut app, log) = app(2, true);

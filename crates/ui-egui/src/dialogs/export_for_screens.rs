@@ -623,8 +623,14 @@ fn edit_artboard_name(
         if response.double_clicked() {
             *editing = Some((index, name.into(), true));
             ui.ctx().request_repaint();
+            // If both releases arrived this frame, the first click did not toggle the row.
+            // Otherwise, undo the toggle from the first click on this caption.
+            return !ui.input(|input| {
+                input.events.iter().filter(|event| {
+                    matches!(event, egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, .. } if rect.contains(*pos))
+                }).nth(1).is_some()
+            });
         }
-        // A double-click toggles twice, preserving the checked state while opening the editor.
         response.clicked()
     }
 }
