@@ -520,6 +520,8 @@ pub const FORMATS: &[Format] = &[
     reader("heif", "HEIC/HEIF", &["heic", "heif"], "image/heic", true),
     // jxl-oxide reads a JPEG XL file's first frame, which is stored as PNG. Exports don't write it.
     reader("jxl", "JPEG XL", &["jxl"], "image/jxl", true),
+    // QuickDraw pictures, read by `vectorcraft_metafile::import_pict` into paths, type and images.
+    reader("pict", "PICT", &["pct", "pic", "pict"], "image/x-pict", false),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -564,6 +566,9 @@ pub const OPEN_EXTS: &[&str] = &[
     "dxf",
     "emf",
     "wmf",
+    "pct",
+    "pic",
+    "pict",
     "plt",
     "hpgl",
     "hgl",
@@ -581,10 +586,10 @@ pub const OPEN_EXTS: &[&str] = &[
 /// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF or JPEG XL type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
-/// The packaging declares no type for HP-GL plot files either.
+/// The packaging declares no type for HP-GL plot files or PICT pictures either.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif", "jxl", "plt", "hpgl", "hgl", "hpg",
+    "heic", "heif", "jxl", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -658,6 +663,9 @@ pub const PLACE_EXTS: &[&str] = &[
     "dxf",
     "emf",
     "wmf",
+    "pct",
+    "pic",
+    "pict",
     "plt",
     "hpgl",
     "hgl",

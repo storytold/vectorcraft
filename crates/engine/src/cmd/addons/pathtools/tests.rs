@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use serde_json::{Value, json};
 use vectorcraft_doc::{LiveCorners, LiveShape, NodeId};
 use vectorcraft_geom::shapes::CornerKind;
-use vectorcraft_geom::{AnchorKind, PathData, Point};
+use vectorcraft_geom::{AnchorKind, PathData, Point, SubPath};
 use vectorcraft_tools::{PointerEvent, PointerKind};
 
 use crate::{Session, ViewInfo};
@@ -273,6 +273,152 @@ fn crossings_add_anchors_or_cut_in_one_step() {
     assert_eq!(r["ids"].as_array().unwrap().len(), 4, "{r}");
     assert_eq!(steps(&s), n + 1);
     refuses(&mut s, "addon.pathtools.crossings", &[json!({"cut": "yes"}), json!({"ids": [123456]})]);
+}
+
+/// A selected path with an open polyline subpath through each of `subs`; an empty list makes an
+/// empty subpath.
+fn compound(s: &mut Session, subs: &[&[(f64, f64)]]) -> NodeId {
+    let id = line(s, &[(0.0, 0.0), (1.0, 0.0)], false);
+    let pd =
+        PathData::new(subs.iter().map(|pts| SubPath::polyline(&pts.iter().map(|&(x, y)| Point::new(x, y)).collect::<Vec<_>>(), false)).collect());
+    s.edit("Test", |d, _| {
+        super::set_path(d, id, pd);
+        Ok(())
+    })
+    .unwrap();
+    select(s, &[id]);
+    id
+}
+
+/// The anchor points of each subpath of `pd`, rounded to a millionth.
+fn points(pd: &PathData) -> Vec<Vec<(f64, f64)>> {
+    let r = |v: f64| (v * 1e6).round() / 1e6;
+    pd.subpaths.iter().map(|sp| sp.anchors.iter().map(|a| (r(a.p.x), r(a.p.y))).collect()).collect()
+}
+
+/// A path's subpaths: A (0), an empty one (1), C (2) and D (3, the last).
+const SUBS: [&[(f64, f64)]; 4] =
+    [&[(0.0, 0.0), (100.0, 0.0), (200.0, 0.0)], &[], &[(0.0, 50.0), (100.0, 50.0)], &[(0.0, 100.0), (100.0, 100.0), (200.0, 100.0)]];
+
+/// Direct-select `segments` of `id` and the anchors `anchors`.
+fn select_segments(s: &mut Session, id: NodeId, anchors: &[(usize, usize)], segments: &[(usize, usize)]) {
+    s.select(|_, sel| {
+        sel.set([id]);
+        sel.anchors.insert(id, anchors.iter().copied().collect());
+        sel.segments.insert(id, segments.iter().copied().collect());
+    })
+    .unwrap();
+}
+
+#[test]
+fn picked_segments_reads_only_its_own_subpath() {
+    let set: BTreeSet<(usize, usize)> = [(0, 0), (0, 2), (1, 1), (3, 0), (3, 1)].into();
+    let sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(1.0, 0.0), Point::new(2.0, 0.0), Point::new(3.0, 0.0)], false);
+    let all: BTreeSet<usize> = (0..4).collect();
+    let picked = |si| super::picked_segments(Some(&set), si, &sp, &all).into_iter().collect::<Vec<_>>();
+    assert_eq!([picked(0), picked(1), picked(2), picked(3), picked(4)], [vec![0, 2], vec![1], vec![], vec![0, 1], vec![]]);
+    // Without direct-selected segments, the segments between two selected anchors.
+    let anchors: BTreeSet<usize> = [0, 1, 3].into();
+    for none in [None, Some(&BTreeSet::new())] {
+        assert_eq!(super::picked_segments(none, 0, &sp, &anchors).into_iter().collect::<Vec<_>>(), [0]);
+    }
+}
+
+#[test]
+fn places_by_subpath_keeps_the_order_and_leaves_out_missing_subpaths() {
+    let on = [(3, 1, 0.75), (0, 0, 0.5), (3, 1, 0.25), (7, 0, 0.5), (0, 1, 0.1), (3, 0, 0.5), (0, 0, 0.2)];
+    let by_sub = super::places_by_subpath(&on, 4);
+    assert_eq!(by_sub, [vec![(0, 0.5), (1, 0.1), (0, 0.2)], vec![], vec![], vec![(1, 0.75), (1, 0.25), (0, 0.5)]]);
+    // The same places as filtering the whole list for each subpath.
+    for (si, here) in by_sub.iter().enumerate() {
+        let filtered: Vec<(usize, f64)> = on.iter().filter(|(s, ..)| *s == si).map(|&(_, seg, t)| (seg, t)).collect();
+        assert_eq!(*here, filtered);
+    }
+    assert!(super::places_by_subpath(&on, 0).is_empty());
+}
+
+#[test]
+fn add_points_adds_to_the_selected_segments_of_each_subpath() {
+    let mut s = session();
+    let c = compound(&mut s, &SUBS);
+    let before = path(&s, c);
+    // The first segment of A and the second of D; a segment of C without its anchors selected.
+    select_segments(&mut s, c, &[(0, 0), (0, 1), (0, 2), (3, 0), (3, 1), (3, 2)], &[(0, 0), (2, 0), (3, 1)]);
+    let n = steps(&s);
+    assert_eq!(s.execute("addon.pathtools.addPoints", &json!({})).unwrap()["added"], json!(2));
+    let want = vec![
+        vec![(0.0, 0.0), (50.0, 0.0), (100.0, 0.0), (200.0, 0.0)],
+        vec![],
+        vec![(0.0, 50.0), (100.0, 50.0)],
+        vec![(0.0, 100.0), (100.0, 100.0), (150.0, 100.0), (200.0, 100.0)],
+    ];
+    let after = path(&s, c);
+    assert_eq!(points(&after), want);
+    assert_eq!(steps(&s), n + 1);
+    let st = s.doc().unwrap();
+    assert_eq!((st.selection.objects.clone(), st.selection.anchors.get(&c), st.selection.segments.get(&c)), (vec![c], None, None));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, c), before);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(path(&s, c), after);
+    // Without selected segments: those between two selected anchors, here on the last subpath only.
+    for segments in [None, Some(BTreeSet::new())] {
+        s.execute("edit.undo", &json!({})).unwrap();
+        s.select(|_, sel| {
+            sel.set([c]);
+            sel.anchors.insert(c, [(0, 0), (3, 1), (3, 2)].into());
+            sel.segments.remove(&c);
+            if let Some(set) = segments.clone() {
+                sel.segments.insert(c, set);
+            }
+        })
+        .unwrap();
+        assert_eq!(s.execute("addon.pathtools.addPoints", &json!({})).unwrap()["added"], json!(1));
+        assert_eq!(
+            points(&path(&s, c)),
+            [points(&before)[..3].to_vec(), vec![vec![(0.0, 100.0), (100.0, 100.0), (150.0, 100.0), (200.0, 100.0)]]].concat()
+        );
+    }
+}
+
+#[test]
+fn crossings_add_anchors_on_each_subpath_of_a_compound_path() {
+    let mut s = session();
+    // A and the last subpath cross both lines; the empty subpath and C, which ends short of them, do not.
+    let c = compound(&mut s, &[&[(0.0, 50.0), (200.0, 50.0)], &[], &[(0.0, 150.0), (40.0, 150.0)], &[(0.0, 250.0), (400.0, 250.0)]]);
+    let q = line(&mut s, &[(100.0, 0.0), (100.0, 300.0)], false);
+    let r = line(&mut s, &[(150.0, 0.0), (150.0, 300.0)], false);
+    select(&mut s, &[c, q, r]);
+    let n = steps(&s);
+    assert_eq!(s.execute("addon.pathtools.crossings", &json!({})).unwrap()["crossings"], json!(8));
+    let want = vec![
+        vec![(0.0, 50.0), (100.0, 50.0), (150.0, 50.0), (200.0, 50.0)],
+        vec![],
+        vec![(0.0, 150.0), (40.0, 150.0)],
+        vec![(0.0, 250.0), (100.0, 250.0), (150.0, 250.0), (400.0, 250.0)],
+    ];
+    assert_eq!(points(&path(&s, c)), want);
+    assert_eq!(points(&path(&s, q)), [vec![(100.0, 0.0), (100.0, 50.0), (100.0, 250.0), (100.0, 300.0)]]);
+    assert_eq!(steps(&s), n + 1);
+    s.execute("edit.undo", &json!({})).unwrap();
+    // Cut: the compound path keeps its pieces as subpaths, in order; each line becomes three paths.
+    let out = ids(&s.execute("addon.pathtools.crossings", &json!({"cut": true})).unwrap());
+    assert_eq!(out.len(), 7);
+    assert_eq!(out[0], c);
+    let pieces = vec![
+        vec![(0.0, 50.0), (100.0, 50.0)],
+        vec![(100.0, 50.0), (150.0, 50.0)],
+        vec![(150.0, 50.0), (200.0, 50.0)],
+        vec![],
+        vec![(0.0, 150.0), (40.0, 150.0)],
+        vec![(0.0, 250.0), (100.0, 250.0)],
+        vec![(100.0, 250.0), (150.0, 250.0)],
+        vec![(150.0, 250.0), (400.0, 250.0)],
+    ];
+    assert_eq!(points(&path(&s, c)), pieces);
+    let qs: Vec<Vec<Vec<(f64, f64)>>> = out[1..4].iter().map(|id| points(&path(&s, *id))).collect();
+    assert_eq!(qs, [[vec![(100.0, 0.0), (100.0, 50.0)]], [vec![(100.0, 50.0), (100.0, 250.0)]], [vec![(100.0, 250.0), (100.0, 300.0)]]]);
+    assert_eq!(steps(&s), n + 1);
 }
 
 // ---------- Parametric Shape Tool ----------
@@ -885,6 +1031,35 @@ fn divide_into_dashes_divides_only_the_selected_segments() {
     assert_eq!(path(&s, pieces[0]).bounds().unwrap().width(), 40.0);
     let layer: Vec<NodeId> = s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect();
     assert_eq!(layer, pieces, "in the path's place, in order");
+}
+
+#[test]
+fn divide_into_dashes_divides_the_selected_segments_of_each_subpath() {
+    let mut s = session();
+    let c = compound(&mut s, &SUBS);
+    let before = path(&s, c);
+    // The first segment of A and the second of D; a segment of C without its anchors selected.
+    select_segments(&mut s, c, &[(0, 0), (0, 1), (0, 2), (3, 0), (3, 1), (3, 2)], &[(0, 0), (2, 0), (3, 1)]);
+    let n = steps(&s);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 25})).unwrap();
+    assert_eq!(steps(&s), n + 1);
+    assert_eq!(r["dashes"], json!(8));
+    let made: Vec<Vec<Vec<(f64, f64)>>> = ids(&r).iter().map(|id| points(&path(&s, *id))).collect();
+    let piece = |x0: f64, x1: f64, y: f64| vec![vec![(x0, y), (x1, y)]];
+    let mut want = vec![vec![vec![], vec![(0.0, 50.0), (100.0, 50.0)]]];
+    want.extend([(0.0, 25.0), (25.0, 50.0), (50.0, 75.0), (75.0, 100.0)].map(|(a, b)| piece(a, b, 0.0)));
+    want.push(vec![vec![(100.0, 0.0), (200.0, 0.0)]]);
+    want.push(vec![vec![(0.0, 100.0), (100.0, 100.0)]]);
+    want.extend([(100.0, 125.0), (125.0, 150.0), (150.0, 175.0), (175.0, 200.0)].map(|(a, b)| piece(a, b, 100.0)));
+    assert_eq!(made, want, "what stays of the path, then each subpath's pieces in order");
+    assert_eq!(s.doc().unwrap().selection.objects, ids(&r));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&s, c), before);
+    // With no segments selected: those between two selected anchors, here on the last subpath only.
+    select_segments(&mut s, c, &[(0, 0), (3, 1), (3, 2)], &[]);
+    let r = s.execute("addon.pathtools.divideDashes", &json!({"dash": 25})).unwrap();
+    assert_eq!((ids(&r).len(), r["dashes"].clone()), (6, json!(4)));
+    assert_eq!(points(&path(&s, ids(&r)[0])), points(&before)[..3]);
 }
 
 #[test]

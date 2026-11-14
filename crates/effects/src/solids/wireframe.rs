@@ -4,13 +4,13 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use vectorcraft_doc::color::{Color, Paint};
-use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, Node, NodeId};
+use vectorcraft_doc::{Appearance, Document, Effect, Node, NodeId};
 use vectorcraft_geom::{Anchor, CubicBez, PathData, Point, SubPath};
 use vectorcraft_three_d::Facet;
 
 use super::{
-    INFLATE, Profile, ROTATE, facets, geometry, has_solid, inflate_options, is_container, is_plane, is_three_d, label_of, members, object_profile,
-    region, reshape_members, resolve, resolve_for, solid, solid_paints, solid_parts, union_bounds, view_options,
+    Profile, ROTATE, built_solids, facets, geometry, has_solid, is_container, is_plane, is_three_d, label_of, members, object_profile, region,
+    reshape_members, resolve, resolve_for, solid, solid_paint_sources, solid_parts, union_bounds,
 };
 use crate::{GeomContext, is_geometry};
 
@@ -105,16 +105,16 @@ fn solid_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec<PathData>, S
     let label = n.appearance.effects.iter().find(|e| e.visible && is_three_d(&e.id)).map_or("This effect", |e| label_of(&e.id));
     let (path, rule) = object_profile(n, label)?;
     let ctx = GeomContext::of(n);
-    let paints = solid_paints(n);
+    let (sources, paints) = solid_paint_sources(n);
     if let Some((index, fx)) = solid(&n.appearance.effects) {
         let path = geometry(&path, n.appearance.effects.get(..index).unwrap_or_default(), &ctx);
         return facet_paths(fx, &[Profile { path, rule, items: paints, opacity: 1.0, scopes: vec![] }]);
     }
     let path = geometry(&path, &n.appearance.effects, &ctx);
     let mut out = vec![];
-    for item in &paints {
+    for (source, item) in sources.into_iter().zip(&paints) {
         if let Some((index, fx)) = solid(item.effects()) {
-            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(item));
+            let p = geometry(&path, item.effects().get(..index).unwrap_or_default(), &ctx.item(source.unwrap_or(item)));
             let faces = facet_paths(fx, &[Profile { path: p, rule, items: vec![item.clone()], opacity: 1.0, scopes: vec![] }])?;
             out.extend(reshaped(faces, item.effects().get(index + 1..).unwrap_or_default(), &GeomContext { doc, ..ctx }));
         }
@@ -125,7 +125,8 @@ fn solid_face_paths(doc: Option<&Document>, n: &Node) -> Result<Vec<PathData>, S
 /// The outlines of the facets effect `fx` builds from `shapes`, as `art_for` builds them: Rotate and
 /// Rotate (Classic) turn every fill and stroke; Extrude & Bevel and Inflate build a solid from each shape's
 /// top fill and from the outline of each stroke. A stroke whose solid is past the limits is left out,
-/// as it is left out of the drawn art.
+/// as it is left out of the drawn art; past the limits of the object's solids together, the result
+/// is an error, as the canvas draws the source art.
 fn facet_paths(fx: &Effect, shapes: &[Profile]) -> Result<Vec<PathData>, String> {
     let label = label_of(&fx.id);
     let b = union_bounds(shapes).ok_or_else(|| format!("{label} requires a shape with at least two anchors"))?;
@@ -141,18 +142,9 @@ fn facet_paths(fx: &Effect, shapes: &[Profile]) -> Result<Vec<PathData>, String>
         return Ok(out);
     }
     let (parts, bounds) = solid_parts(shapes, b);
-    let built: Vec<Result<Vec<Facet>, String>> = if fx.id == INFLATE {
-        let shapes: Vec<(&PathData, vectorcraft_geom::FillRule)> = parts.iter().map(|(_, _, area, rule, ..)| (area, *rule)).collect();
-        vectorcraft_three_d::inflate_together(&shapes, bounds, inflate_options(&p), view_options(&p))
-    } else {
-        parts.iter().map(|(_, _, area, rule, ..)| facets(&fx.id, area, *rule, bounds, &p)).collect()
-    };
-    for ((item, ..), f) in parts.iter().zip(built) {
-        match f {
-            Ok(f) => out.extend(f.iter().map(Facet::path)),
-            Err(_) if matches!(item, AppearanceItem::Stroke(_)) => {}
-            Err(e) => return Err(e),
-        }
+    // The solids the art draws, each past the limits of the object's solids together as it is.
+    for f in built_solids(&fx.id, &p, &parts, bounds, vectorcraft_three_d::MAX_OBJECT_FACES) {
+        out.extend(f?.iter().flatten().map(Facet::path));
     }
     Ok(out)
 }

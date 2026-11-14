@@ -5,9 +5,11 @@
 //! Colour settings and the proof view are process-wide (`vectorcraft_color::cms::active`,
 //! `vectorcraft_render::proof::view`). A document's assigned profiles are stored in
 //! `Document::color_profiles` (files before format v3: `Document.unknown["colorProfiles"]`) and
-//! take the place of the working spaces in the active settings when assigned, and when the working
-//! settings change while the document is in front ([`use_front_profiles`]); the working spaces stay
-//! as Edit → Color Settings set them.
+//! take the place of the working spaces in the active settings while the document is in front
+//! ([`use_front_profiles`]): when they are assigned, when the working settings change, and when the
+//! document comes to the front or its assignment comes back (an open, a switch, a close, a revert,
+//! an undo or a rollback, [`Session::sync_front_profiles`]); the working spaces stay as Edit → Color
+//! Settings set them.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -88,7 +90,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Gamut Warning",
             [],
             None,
-            "{ids?|id?, colors?: [color] (#rrggbbaa and #rgba are refused)} colours that can't be printed in the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
+            "{ids?|id?, colors?: [color] (#rrggbbaa and #rgba are refused)} colors that can't be printed in the document's assigned CMYK profile, else the working CMYK (selection, or the whole document when nothing is selected) → {checked, outOfGamut: [{hex, deltaE, count}]}",
             has_doc,
             gamut_check
         ),
@@ -181,7 +183,7 @@ fn touch_all(s: &mut Session) {
 /// Make the active settings the working settings with the profiles the front document is assigned
 /// in place of the working spaces (none, or no document open: the working spaces). The open
 /// documents redraw when the active settings change.
-fn use_front_profiles(s: &mut Session) {
+pub(crate) fn use_front_profiles(s: &mut Session) {
     let (rgb, cmyk) = s.active().map(|d| doc_profiles(&d.doc)).unwrap_or_default();
     if cms::use_document_profiles(rgb.as_deref(), cmyk.as_deref()) {
         touch_all(s);
@@ -397,7 +399,9 @@ pub(crate) fn commit_new_art_colors(s: &mut Session) -> Result<()> {
     Ok(())
 }
 
-fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaults) -> Result<()> {
+/// Record new-art paints `before` and the session's current ones with the step just made (or the
+/// interaction or undo group in progress), so Undo puts `before` back and Redo the current ones.
+pub(super) fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaults) -> Result<()> {
     let after = s.paint.clone();
     if before != after || s.batch_stash.is_some() || s.doc()?.undo_group.is_some() {
         let st = s.doc_mut()?;
@@ -422,7 +426,9 @@ fn record_new_art_colors(s: &mut Session, before: vectorcraft_tools::PaintDefaul
     Ok(())
 }
 
-fn new_art_colors_before(s: &Session) -> Result<vectorcraft_tools::PaintDefaults> {
+/// The new-art paints an undo step that starts now puts back: those at the start of the undo group
+/// or interaction in progress, else the session's current ones.
+pub(super) fn new_art_colors_before(s: &Session) -> Result<vectorcraft_tools::PaintDefaults> {
     let st = s.doc()?;
     Ok(st.undo_group.as_ref().map(|g| &g.paint).or_else(|| st.interaction.as_ref().map(|it| &it.paint)).cloned().unwrap_or_else(|| s.paint.clone()))
 }
@@ -659,6 +665,11 @@ fn map_graph_colors(g: &mut vectorcraft_doc::GraphSpec, f: &mut dyn FnMut(&Color
     for st in [&mut styles.values, &mut styles.categories, &mut styles.legend].into_iter().flatten() {
         map_paint_colors(&mut st.fill, f);
         map_paint_colors(&mut st.stroke, f);
+    }
+    for r in [&mut styles.values_rows, &mut styles.categories_rows, &mut styles.legend_rows].into_iter().flatten() {
+        for paint in [&mut r.paint.fill, &mut r.paint.stroke].into_iter().flatten() {
+            map_paint_colors(paint, f);
+        }
     }
 }
 

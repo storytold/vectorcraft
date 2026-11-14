@@ -151,11 +151,14 @@ fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     r
 }
 
-/// Say in the status bar when `file.new`'s result `r` reports a profile it could not read.
+/// Say in the status bar when `file.new`'s result `r` reports a profile it could not read, or
+/// color profiles its file carries that can't be used.
 fn report_profile(app: &mut VectorcraftApp, r: &Value) {
     if let Some(e) = r.get("profileError") {
         let (name, reason) = (e["profile"].as_str().unwrap_or_default(), e["reason"].as_str().unwrap_or_default());
         app.status(format!("The {name} profile could not be read, so the new document has the default settings: {reason}"));
+    } else if let Some(w) = r["warnings"].as_array().filter(|w| !w.is_empty()) {
+        app.status(w.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("; "));
     }
 }
 
@@ -1590,6 +1593,15 @@ mod tests {
         for label in ["Number of Artboards:", "Done"] {
             assert!(screen.contains_rect(h.get_by_label(label).rect()), "{label} is off screen");
         }
+    }
+
+    /// A color profile in the profile's file that can't be used, which `file.new` reports, shows in
+    /// the status bar.
+    #[test]
+    fn profile_warnings_show_in_the_status_bar() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        super::report_profile(&mut app, &json!({"index": 0, "warnings": ["the color profile X can't be used"]}));
+        assert_eq!(app.ui.status, "the color profile X can't be used");
     }
 
     /// Manage Profiles lists a row per profile; Reset is off until a profile has been edited, Escape

@@ -115,6 +115,41 @@ fn a_scaled_nine_slice_instance_is_written_as_the_canvas_draws_it() {
     assert_similar(&canvas, &resvg_render(&svg, 300, 200), 24.0, 0.002);
 }
 
+/// A scaled instance of a symbol whose left 9-slice guide lies outside its art is written as the
+/// canvas draws it: the corner square is in the stretched center column. Reading the file back
+/// gives that art and no 9-slice guides, which SVG has no place for.
+#[test]
+fn a_nine_slice_instance_with_a_guide_outside_its_art_is_written_as_drawn() {
+    let mut d = Document::new(300.0, 200.0);
+    let fill = |c: Color| Appearance::basic(Paint::solid(c), Paint::None, 0.0);
+    let rects = [(Rect::new(0.0, 0.0, 100.0, 100.0), Color::rgb8(220, 220, 220)), (Rect::new(0.0, 0.0, 10.0, 10.0), Color::BLACK)];
+    let art: Vec<Arc<Node>> = rects.iter().map(|(r, c)| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(*r), fill(*c)))).collect();
+    let group = Node::group(d.alloc_id(), art);
+    d.symbols.push(Symbol { dynamic: false, name: "Panel".into(), art: Arc::new(group) });
+    d.set_symbol_nine_slice("Panel", vectorcraft_doc::SymbolNineSlice::new(-0.25, 0.25, 0.25, 0.25));
+    instance(&mut d, "Panel", Affine::translate((20.0, 20.0)) * Affine::scale_non_uniform(2.0, 1.5));
+    let svg = export(&d, &ExportOptions::default());
+    assert_eq!(svg.matches("<use ").count(), 0, "{svg}");
+    let canvas = render_artboard(&d);
+    let dark = |im: &Image, x: u32, y: u32| im.rgba[((y * im.width + x) * 4) as usize] < 60;
+    // The corner square covers 20..43.3 across: the center column runs 0..75 in the art and
+    // 0..175 in the instance. With the guide inside the art it would end at x = 30.
+    assert!(dark(&canvas, 40, 25) && !dark(&canvas, 46, 25) && !dark(&canvas, 40, 32));
+    assert_similar(&canvas, &resvg_render(&svg, 300, 200), 24.0, 0.002);
+    let back = import(&svg).unwrap();
+    assert!(back.unknown.get(vectorcraft_doc::SYMBOL_NINE_SLICE).is_none());
+    let mut boxes = vec![];
+    back.walk(|n| {
+        if let NodeKind::Path { path, .. } = &n.kind {
+            boxes.extend(path.bounds());
+        }
+    });
+    assert!(
+        boxes.iter().any(|b| (b.x0 - 20.0).abs() < 1e-3 && (b.x1 - 20.0 - 70.0 / 3.0).abs() < 1e-3 && (b.height() - 10.0).abs() < 1e-3),
+        "{boxes:?}"
+    );
+}
+
 /// A scaled instance of a symbol with 9-slice guides whose art placed through the guides could
 /// hold more than `MAX_SYMBOL_NODES` objects is left out, as the canvas leaves it out: here a
 /// gradient square in all nine cells, each copy with a disabled opacity mask of 2,251,501 objects.

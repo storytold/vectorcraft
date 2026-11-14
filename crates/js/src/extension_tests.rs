@@ -220,6 +220,32 @@ fn script_items_read_the_global_object_the_last_error_the_line_and_the_stack() {
 }
 
 #[test]
+fn the_line_and_the_stack_give_the_place_the_source_locator_maps_each_frame_to() {
+    let mut r = realm();
+    let items = [("line", ScriptItem::Line), ("stack", ScriptItem::Stack)].into_iter().map(|(n, i)| (n.to_string(), HostItem::Script(i))).collect();
+    r.define_host_object("h", items).unwrap();
+    let asked: Rc<RefCell<Vec<(u32, u32)>>> = Rc::default();
+    let seen = asked.clone();
+    r.set_source_locator(Rc::new(move |tag, line| {
+        seen.borrow_mut().push((tag, line));
+        let file = if tag == UNKNOWN_SOURCE { "[eval]".to_string() } else { format!("f{tag}") };
+        (file, line + 100)
+    }));
+    let source = "function inner() {\n  return h.stack;\n}\n\ninner()";
+    let stack = text(&mut r, source);
+    let tag = r.script_tag();
+    assert_eq!(stack, format!("[global]@f{tag}:105\ninner@f{tag}:102\n"));
+    assert_eq!(*asked.borrow(), [(tag, 5), (tag, 2)], "each frame's tag and its line in the compiled source");
+    assert_eq!(r.run("\n\n  h.line").unwrap(), JsValue::Number(103.0));
+    let tag = r.script_tag();
+    let stack = text(&mut r, "\neval('\\n\\nh.stack')");
+    assert_eq!(stack, format!("[global]@f{}:102\n[global]@[eval]:103\n", tag + 1), "code eval compiles has no tag of its own");
+    let deep = "function d(n) { return n ? d(n - 1) : h.stack; } var s = d(100).split('\\n'); s.length + ',' + s[0] + ',' + s[1]";
+    let tag = r.script_tag() + 1;
+    assert_eq!(text(&mut r, deep), format!("66,…,d@f{tag}:101"), "the frames past 64 are still left out");
+}
+
+#[test]
 fn a_host_property_reads_its_getter_and_gives_assignments_to_its_setter() {
     let mut r = Realm::new();
     let seen: Rc<RefCell<Vec<Data>>> = Rc::default();

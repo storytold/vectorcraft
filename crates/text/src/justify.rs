@@ -141,6 +141,11 @@ pub(crate) fn apply_desired(sg: &mut [SGlyph], j: &JustificationOptions, scale_g
             owner = None;
         }
         let (Some(g), Some(f)) = (sg.get_mut(k), flex.get_mut(k)) else { continue };
+        // A warichu block keeps the length its lines set and its glyphs their size, as an inline
+        // graphic does.
+        if g.wari.is_some() {
+            continue;
+        }
         if zero_width_space {
             if let Some(space) = space_gap {
                 g.adv += space * l_des;
@@ -167,6 +172,8 @@ pub(crate) fn apply_desired(sg: &mut [SGlyph], j: &JustificationOptions, scale_g
             g.sx *= g_des;
             g.dx *= g_des;
             g.kern_shift = (g.kern_shift - g.aki_shift) * g_des + g.aki_shift;
+            // The space Mojikumi took off before the glyph scales with it.
+            g.lead *= g_des;
         }
         f.width = g.adv - aki;
         f.scale = g_des;

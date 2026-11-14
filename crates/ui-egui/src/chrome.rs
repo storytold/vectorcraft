@@ -18,9 +18,13 @@ mod hints;
 mod status_bar;
 mod tabs;
 
+pub(crate) use control_bar::group_separator;
+pub use control_bar::{
+    AnchorControls, CONTROL_BAR_EDGES, CONTROL_BAR_GROUPS, anchor_buttons, anchor_controls, control_bar, control_bar_moving, control_bar_placement,
+    read_hidden_groups,
+};
 #[cfg(test)]
-use control_bar::ISOLATION_BUTTON;
-pub use control_bar::{AnchorControls, CONTROL_BAR_EDGES, CONTROL_BAR_GROUPS, anchor_buttons, anchor_controls, control_bar, read_hidden_groups};
+use control_bar::{CONTROL_BAR_FLOAT_AT, ISOLATION_BUTTON};
 #[cfg(test)]
 use hints::hint_segments;
 pub use hints::{hint_bar, hint_strings};
@@ -41,7 +45,8 @@ const WIDGET_H: f32 = 22.0;
 
 /// The application bar: brand mark, Home, menus, then Discord, search and the workspace switcher
 /// at the right. With [`VectorcraftApp::custom_titlebar`] it is also the window's title bar
-/// ([`titlebar`]): the caption buttons take the right end and the rest of the bar drags the window.
+/// ([`titlebar`]): the caption buttons take the ends [`VectorcraftApp::caption_layout`] names and the
+/// rest of the bar drags the window.
 /// On macOS, under the system's transparent title bar, its empty space drags and zooms the window
 /// too ([`titlebar::drag_area`]). With the system title bar (Windows and Linux, `system_title_bar`) the OS draws its own icon and
 /// title, so the in-app bar shows Home, menus and workspace controls only: no brand mark.
@@ -50,7 +55,10 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let custom = app.custom_titlebar;
     let system = system_title_bar(app);
     let left = app.titlebar_inset.clamp(8.0, f32::from(i8::MAX)) as i8;
-    let frame = egui::Frame::NONE.fill(t.app_bar).inner_margin(egui::Margin { left, right: if custom { 0 } else { 14 }, top: 0, bottom: 0 });
+    // The room the caption buttons take at each end of the bar.
+    let (captions_left, captions_right) = if custom { (app.caption_layout.left_width(), app.caption_layout.right_width()) } else { (0.0, 0.0) };
+    let right_margin = if captions_right > 0.0 { 0 } else { 14 };
+    let frame = egui::Frame::NONE.fill(t.app_bar).inner_margin(egui::Margin { left, right: right_margin, top: 0, bottom: 0 });
     let bar = egui::Panel::top("app_bar").exact_size(APP_BAR_HEIGHT).frame(frame.stroke(Stroke::new(1.0, t.border))).show(ui, |ui| {
         // macOS draws the bar under its transparent title bar, so the bar gets the title bar's
         // clicks: without this a double-click there zooms nothing (#1932).
@@ -58,6 +66,9 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             titlebar::drag_area(ui, ui.max_rect());
         }
         ui.horizontal_centered(|ui| {
+            if captions_left > 0.0 {
+                ui.add_space(captions_left);
+            }
             // With the system title bar the OS draws its own icon: no in-app brand mark.
             if !system {
                 let (r, _) = ui.allocate_exact_size(vec2(MARK, MARK), Sense::hover());
@@ -76,7 +87,7 @@ pub fn app_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             // Window › Learn), then the search icon (the palette stays under its shortcut), then
             // the workspace switcher narrows.
             let full = ui.max_rect();
-            let right_edge = if custom { full.right() - titlebar::WIDTH - 10.0 } else { full.right() };
+            let right_edge = if captions_right > 0.0 { full.right() - captions_right - 10.0 } else { full.right() };
             let right = egui::Rect::from_min_max(egui::pos2(menus_end + 8.0, full.top()), egui::pos2(right_edge, full.bottom()));
             // In Safe Mode, a label that stays in the bar whatever document is open, and opens
             // Help › Safe Mode; the other controls fit in the room it leaves, and the workspace

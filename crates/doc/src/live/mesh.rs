@@ -147,14 +147,18 @@ impl Coons {
     /// The patch of a top object's outline (the largest subpath of `path`), split into four sides
     /// at its corners. Each piece of a side between two anchors or corners takes a share of `u` or
     /// `v` in proportion to the length of its control polygon, spread along the piece by its own
-    /// curve parameter. A segment without handles counts as a cubic with its handles a third of
-    /// the way along, so the content spreads evenly along it. `corners` are the anchors (indices
-    /// into the outline, in its own order) at the top left, top right, bottom right and bottom
-    /// left, as a saved file gives them. They stay on those anchors when they run the way the
-    /// outline does or the opposite way, so a reflected outline keeps them; without them, or when
-    /// they don't fit the outline, each corner is found from the outline ([`top_object_corner`]).
-    /// A straight segment closes an open subpath, and segments of no length are left out. A top
-    /// object's envelope maps onto this patch.
+    /// curve parameter. A side whose pieces, from corner to corner, are all one cubic curve split at
+    /// anchors (each within 0.02 pt of that curve's piece) runs along that curve instead, by its
+    /// parameter: splitting the curve of such a side at more anchors, without changing its shape,
+    /// leaves how the side shares out the content as it was (corners found from the outline can
+    /// still move). A segment without handles counts as a cubic with its handles a third of the way
+    /// along, so the content spreads evenly along it. `corners` are the anchors (indices into the
+    /// outline, in its own order) at the top left, top right, bottom right and bottom left, as a
+    /// saved file gives them. They stay on those anchors when they run the way the outline does or
+    /// the opposite way, so a reflected outline keeps them; without them, or when they don't fit
+    /// the outline, each corner is found from the outline ([`top_object_corner`]). A straight
+    /// segment closes an open subpath, and segments of no length are left out. A top object's
+    /// envelope maps onto this patch.
     pub fn from_top_object(path: &PathData, corners: Option<[u32; 4]>) -> Option<Self> {
         let sp = path.subpaths.iter().filter(|s| s.anchors.len() >= 2).max_by(|a, b| a.area().abs().total_cmp(&b.area().abs()))?;
         let mut sp = sp.clone();
@@ -212,11 +216,12 @@ impl Coons {
             segs.get(i).map_or(Point::ZERO, |(c, _)| c.eval((s - i as f64).clamp(0.0, 1.0)))
         };
         // The side from `a` to `b`: its points, and where along it (0 to 1) each lies. It runs
-        // through pieces of segments, split at `a` and `b`. Each piece takes its share of the side
-        // by the length of its control polygon and holds points at even steps of its parameter
-        // (at least 16, and at least `SIDE` points on the side), its ends included. A side of
-        // many pieces takes fewer points in each, so it holds at most `MAX_SIDE_POINTS` points,
-        // or one for each piece when it has more pieces than that.
+        // through pieces of segments, split at `a` and `b`; when all of them are one curve split
+        // at anchors ([`one_curve`]), it runs along that curve instead. Each piece takes its share
+        // of the side by the length of its control polygon and holds points at even steps of its
+        // parameter (at least 16, and at least `SIDE` points on the side), its ends included. A
+        // side of many pieces takes fewer points in each, so it holds at most `MAX_SIDE_POINTS`
+        // points, or one for each piece when it has more pieces than that.
         let side = |a: f64, b: f64| {
             let span = (b - a).rem_euclid(n);
             if !(span.is_finite() && span > 0.0) {
@@ -232,8 +237,11 @@ impl Coons {
                 }
                 s = next;
             }
-            let polygon = |c: &CubicBez| c.p0.distance(c.p1) + c.p1.distance(c.p2) + c.p2.distance(c.p3);
-            let mut weights: Vec<f64> = pieces.iter().map(polygon).collect();
+            let pieces = match one_curve(&pieces) {
+                Some(one) => vec![one],
+                None => pieces,
+            };
+            let mut weights: Vec<f64> = pieces.iter().map(control_polygon).collect();
             let mut total: f64 = weights.iter().sum();
             if !(total.is_finite() && total > 0.0) {
                 weights.iter_mut().for_each(|w| *w = 1.0);
@@ -335,6 +343,76 @@ impl Coons {
 /// The most points one side of [`Coons::from_top_object`] holds while it adds points between its
 /// anchors.
 const MAX_SIDE_POINTS: usize = 1 << 16;
+
+/// How far, in points, each control point of each piece of a top object's side may lie from the
+/// matching piece of one cubic curve for the side to run along that curve ([`one_curve`]); the side
+/// then lies within this of the pieces it is drawn with. A curve split into thirds or tenths and
+/// saved with its coordinates rounded to 0.001 pt stays within it, on outlines from 5 to 5,000 pt
+/// wide; coarser rounding, or a piece of a much smaller share of the curve, can take it past this.
+/// A smooth side that isn't one curve, such as an arc of a circle drawn in many pieces, lies
+/// further off as a whole, even where each pair of its pieces would not.
+const ONE_CURVE: f64 = 0.02;
+
+/// The length of `c`'s control polygon.
+fn control_polygon(c: &CubicBez) -> f64 {
+    c.p0.distance(c.p1) + c.p1.distance(c.p2) + c.p2.distance(c.p3)
+}
+
+/// The cubic curve that `pieces`, two or more end to end, are all pieces of, split at the anchors
+/// between them, when each control point of each piece lies within [`ONE_CURVE`] of the matching
+/// piece of that curve; `None` otherwise. Split at parameter `t`, a curve's handles on either side
+/// of the split lie in line, their lengths in proportion to the spans of its parameter the two
+/// pieces take; split where the curve stops (a cusp), both handles lie on the anchor, and the
+/// pieces' second derivatives there, in proportion to the squares of the spans, give the proportion
+/// instead (whichever of the two pairs is the longer). Those proportions give each piece's span, and the curve follows from the first
+/// piece's start and its handle, and the last piece's end and its handle, scaled up by their spans.
+/// Every piece is then checked against that curve's piece over its span, so error can't build up
+/// from one split to the next (the first piece's start and handle, and the last piece's end and
+/// handle, match by construction).
+fn one_curve(pieces: &[CubicBez]) -> Option<CubicBez> {
+    let (first, last) = (pieces.first()?, pieces.last()?);
+    if pieces.len() < 2 {
+        return None;
+    }
+    let mut spans = Vec::with_capacity(pieces.len());
+    spans.push(1.0);
+    for pair in pieces.windows(2) {
+        let [a, b] = pair else { return None };
+        let (into, out) = (a.p3.distance(a.p2), b.p0.distance(b.p1));
+        // How far each piece bends away from the anchor goes with the squares of the spans. Split
+        // where the curve stops (a cusp), both handles lie on the anchor and say nothing of the
+        // spans, and the bends say it; where the curve runs straight through the split, the bends
+        // are nothing and the handles say it. Whichever pair is the longer is the one to go by.
+        let bend_in = ((a.p3 - a.p2) - (a.p2 - a.p1)).hypot();
+        let bend_out = ((b.p2 - b.p1) - (b.p1 - b.p0)).hypot();
+        let ratio = if into.min(out) >= bend_in.min(bend_out) { out / into } else { (bend_out / bend_in).sqrt() };
+        let next = spans.last().copied().unwrap_or(1.0) * ratio;
+        if !(next.is_finite() && next > 0.0) {
+            return None;
+        }
+        spans.push(next);
+    }
+    let total: f64 = spans.iter().sum();
+    let (head, tail) = (spans.first().copied().unwrap_or(1.0) / total, spans.last().copied().unwrap_or(1.0) / total);
+    if !(total.is_finite() && head > 0.0 && tail > 0.0) {
+        return None;
+    }
+    let one = CubicBez::new(first.p0, first.p0 + (first.p1 - first.p0) / head, last.p3 + (last.p2 - last.p3) / tail, last.p3);
+    if ![one.p1, one.p2].iter().all(|p| p.is_finite()) {
+        return None;
+    }
+    let near = |p: Point, q: Point| p.distance(q) <= ONE_CURVE;
+    let mut from = 0.0;
+    for (k, (piece, span)) in pieces.iter().zip(&spans).enumerate() {
+        let to = if k + 1 == pieces.len() { 1.0 } else { (from + span / total).min(1.0) };
+        let part = one.subsegment(from..to);
+        if !(near(part.p0, piece.p0) && near(part.p1, piece.p1) && near(part.p2, piece.p2) && near(part.p3, piece.p3)) {
+            return None;
+        }
+        from = to;
+    }
+    Some(one)
+}
 
 /// How far into the outline's bounding box, as a share of its width and of its height, a corner
 /// of a top object looks for an anchor.
@@ -529,6 +607,10 @@ pub(super) const MAX_BORDER_LINES: usize = 256;
 
 /// The most rounds of new lines a mesh made from a path takes to keep its border on the outline.
 const MAX_BORDER_ROUNDS: usize = 64;
+
+/// A point this close (in points) to a mesh's outline is on it, for [`GradientMesh::locate_within`]
+/// with any tolerance.
+const ON_OUTLINE: f64 = 1e-6;
 
 /// An anchor whose directions in and out differ by more than this (radians) is a corner: a border
 /// edge that can't follow the outline takes a mesh line through its sharpest corner first.
@@ -1436,17 +1518,23 @@ impl GradientMesh {
     }
 
     /// As [`Self::locate`], and for a point outside the mesh within `tol` of its outline, the
-    /// patch and local (u, v) of the nearest point of the mesh's edge.
+    /// patch and local (u, v) of the nearest point of the mesh's edge. A point on the outline
+    /// (within [`ON_OUTLINE`]) locates on its edge on every side, with any `tol`.
     pub fn locate_within(&self, p: Point, tol: f64) -> Option<(usize, usize, f64, f64)> {
-        if !self.is_valid() {
+        if !self.is_valid() || !p.is_finite() {
             return None;
         }
-        let bp = self.outline().to_bezpath();
-        if bp.winding(p) == 0 {
+        // A point on the outline takes the nearest point of the edge on every side: the nonzero
+        // winding number counts a point on some edges as outside (a rectangle's bottom and right
+        // edges) and on the others as inside.
+        if let Some((_, r, c, u, v)) = self.nearest_edge(p, ON_OUTLINE).filter(|e| e.0 <= ON_OUTLINE * ON_OUTLINE) {
+            return Some((r, c, u, v));
+        }
+        if self.outline().to_bezpath().winding(p) == 0 {
             if tol.is_nan() || tol <= 0.0 {
                 return None;
             }
-            return self.nearest_edge(p).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
+            return self.nearest_edge(p, tol).filter(|e| e.0 <= tol * tol).map(|(_, r, c, u, v)| (r, c, u, v));
         }
         const N: usize = 16;
         let mut best = (f64::INFINITY, 0, 0, 0.0, 0.0);
@@ -1484,12 +1572,20 @@ impl GradientMesh {
     }
 
     /// The point of the mesh's outer edge nearest `p`: its squared distance from `p`, and its
-    /// boundary patch and local (u, v).
-    fn nearest_edge(&self, p: Point) -> Option<(f64, usize, usize, f64, f64)> {
+    /// boundary patch and local (u, v). Edges whose control points all lie farther than `within`
+    /// from `p` are skipped, so `None` means no edge is within `within`.
+    fn nearest_edge(&self, p: Point, within: f64) -> Option<(f64, usize, usize, f64, f64)> {
         use vectorcraft_geom::kurbo::ParamCurveNearest;
         let (rows, cols) = (self.rows as usize, self.cols as usize);
         let mut best: Option<(f64, usize, usize, f64, f64)> = None;
         let mut take = |e: CubicBez, at: (usize, usize, Option<f64>, Option<f64>)| {
+            // The edge lies inside its control points' box, so a box farther than `within` holds
+            // no point of the edge within it.
+            let b = Rect::from_points(e.p0, e.p1).union_pt(e.p2).union_pt(e.p3);
+            let (dx, dy) = ((b.x0 - p.x).max(p.x - b.x1).max(0.0), (b.y0 - p.y).max(p.y - b.y1).max(0.0));
+            if dx * dx + dy * dy > within * within {
+                return;
+            }
             let n = e.nearest(p, 1e-9);
             if best.is_none_or(|b| n.distance_sq < b.0) {
                 let (r, c, u, v) = at;

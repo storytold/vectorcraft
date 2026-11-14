@@ -14,8 +14,8 @@ use vectorcraft_doc::{Artboard, ArtboardSide, Document, LAYER_COLORS, LayerColor
 use vectorcraft_geom::{Affine, Rect};
 
 use super::{
-    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, cmd, color_value, f64_or, has_doc,
-    has_selection, ids_param, index, object_param, ok, str_param, switch_or,
+    CommandSpec, Result, Session, bad, bool_or, check_numbers, check_switches, checked_id, checked_ids_param, checked_node, checked_nodes_param, cmd,
+    color_value, f64_or, has_doc, has_selection, ids_param, index, object_param, ok, str_param, switch_or,
 };
 use crate::EngineError;
 
@@ -83,7 +83,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Layer Options…",
             ["Window", "Layers"],
             None,
-            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
+            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked, and `ids` may name ruler guides (their `guide.list` id), which hide or lock on their own. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. One undo step",
             has_doc,
             set_props
         ),
@@ -200,7 +200,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste Remembers Layers",
             ["Window", "Layers"],
             None,
-            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers they were copied from (by name; a missing one is made on top), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
+            "{on?} (default: toggle) the document option: on, the Paste commands put objects back into the layers or sublayers they were copied from (in that document while they are still there, else by the names of the layer and the layers around it, the topmost match first; a missing sublayer is made inside its layer, a missing top-level layer on top; a hidden or locked one is an error and nothing is pasted), off into the current layer; one undo step when it changes (document.inspect → pasteRemembersLayers) → {on}",
             has_doc,
             paste_remembers_layers
         ),
@@ -210,11 +210,16 @@ pub fn specs() -> Vec<CommandSpec> {
 /// The rows a panel command acts on: `ids` or `id`, else the highlighted rows, else the current
 /// layer (capped at [`MAX_ROWS`]).
 pub(crate) fn rows_param(s: &Session, p: &Value, command: &str) -> Result<Vec<NodeId>> {
+    rows_or_guides_param(s, p, command, false)
+}
+
+/// The rows [`rows_param`] reads; given ruler guide ids are taken too when `guides`, else refused.
+fn rows_or_guides_param(s: &Session, p: &Value, command: &str, guides: bool) -> Result<Vec<NodeId>> {
     // Presence is explicit intent: validate every target before fallback, truncation or edits.
     let mut ids = if p.get("ids").is_some() {
-        checked_ids_param(s, p, "ids", command)?
+        checked_nodes_param(s, p, "ids", command, guides)?
     } else if let Some(id) = p.get("id") {
-        vec![checked_id(s, id, command)?]
+        vec![checked_node(s, id, command, guides)?]
     } else {
         let st = s.doc()?;
         let rows = st.highlighted_rows();
@@ -637,7 +642,8 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "layer.setProps";
     let xml_id = s.prefs.identify_objects_by == "xmlId";
     check_options(C, p, xml_id)?;
-    let ids = rows_param(s, p, C)?;
+    // A ruler guide's row takes visible and locked: its own eye and lock.
+    let ids = rows_or_guides_param(s, p, C, true)?;
     if ids.is_empty() {
         return Err(bad(C, "no rows"));
     }
@@ -988,18 +994,51 @@ fn artboard_delete(s: &mut Session, p: &Value) -> Result<Value> {
     ok()
 }
 
-/// Delete artboards `indices` (sorted) of `d` with their guides; at least one must be left.
-fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indices: &[usize]) -> Result<()> {
+/// Delete artboards `indices` (sorted, each once) of `d` with their guides; at least one must be
+/// left. The other artboards keep their order, no later artboard takes a deleted one's id, and
+/// `sel` forgets the deleted guides. One walk over the artboards and one over the ruler guides,
+/// however many go. Delete Artboard, Delete Empty Artboards, Cut Artboard and Artwork Cleanup's
+/// Empty Artboards.
+pub(crate) fn remove_artboards(d: &mut Document, sel: &mut vectorcraft_doc::Selection, indices: &[usize]) -> Result<()> {
+    if indices.iter().any(|i| *i >= d.artboards.len()) {
+        return Err(EngineError::Other("no such artboard".into()));
+    }
     if indices.len() >= d.artboards.len() {
         return Err(EngineError::Other("a document needs at least one artboard".into()));
     }
-    // The last first, so the others keep their places; their guides go with them.
-    for &i in indices.iter().rev() {
-        let id = d.artboards.remove(i).id;
-        d.retire_artboard_id(id);
-        d.retain_guides(sel, |g| g.artboard != Some(id));
+    if indices.is_empty() {
+        return Ok(());
     }
+    let mut gone: HashSet<u32> = HashSet::with_capacity(indices.len());
+    let mut i = 0;
+    d.artboards.retain(|a| {
+        let keep = indices.binary_search(&i).is_err();
+        i += 1;
+        if !keep {
+            gone.insert(a.id);
+        }
+        keep
+    });
+    count_artboard_pass();
+    for &id in &gone {
+        d.retire_artboard_id(id);
+    }
+    d.retain_guides(sel, |g| !g.artboard.is_some_and(|a| gone.contains(&a)));
+    count_artboard_pass();
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many walks [`remove_artboards`] made over the artboards and the ruler guides on
+    /// this thread.
+    pub(crate) static ARTBOARD_PASSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Tests: count one walk over the artboards or the ruler guides.
+fn count_artboard_pass() {
+    #[cfg(test)]
+    ARTBOARD_PASSES.set(ARTBOARD_PASSES.get() + 1);
 }
 
 /// The artboards Delete Empty Artboards deletes: those with no artwork

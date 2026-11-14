@@ -453,7 +453,7 @@ pub fn vertical_punctuation_font(alternates: bool) -> Option<Vec<u8>> {
 pub const FULL_WIDTH_FAMILY: &str = "Fullwidthtest Sans";
 
 /// The ideographs and Japanese punctuation [`full_width_font`] sets one em wide.
-pub const FULL_WIDTH_CHARS: &str = "一二三四五六「」、。";
+pub const FULL_WIDTH_CHARS: &str = "一二三四五六「」、。・";
 
 /// A test-only cmap over bundled Source Sans 3: [`FULL_WIDTH_CHARS`] use the one-em-wide glyph of
 /// U+2318, so Japanese composition is tested without OS fonts; Latin letters and the space keep
@@ -693,6 +693,36 @@ pub fn lam_alef_font(feature: &[u8; 4]) -> Option<Vec<u8>> {
     ]);
     let scripts = ScriptList::new(vec![ScriptRecord::new(Tag::new(b"arab"), Script::new(Some(LangSys::new(vec![0, 1])), vec![]))]);
     builder.add_table(&Gsub::new(scripts, features, lookups)).ok()?;
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The family of [`tatweel_font`].
+pub const TATWEEL_FAMILY: &str = "Tatweeltest Sans";
+
+/// A test-only Arabic cmap over bundled Source Sans 3, without Arabic shaping: beh uses b, teh t,
+/// dal d, the tatweel the hyphen and the space the space, so that a justified line takes kashidas
+/// without an OS font. `None` when it can't be built.
+pub fn tatweel_font() -> Option<Vec<u8>> {
+    use write_fonts::tables::cmap::Cmap;
+
+    const BASE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    let font = skrifa::FontRef::new(BASE).ok()?;
+    let charmap = font.charmap();
+    let mapping = [(' ', ' '), ('\u{0628}', 'b'), ('\u{062A}', 't'), ('\u{062F}', 'd'), ('\u{0640}', '-')];
+    let mappings = mapping.into_iter().map(|(c, source)| Some((c, write_fonts::types::GlyphId::new(charmap.map(source)?.to_u32()))));
+    let cmap = Cmap::from_mappings(mappings.collect::<Option<Vec<_>>>()?).ok()?;
+    let full = format!("{TATWEEL_FAMILY} Regular");
+    let postscript = format!("{}-Regular", TATWEEL_FAMILY.replace(' ', ""));
+    let name = name_table(&[(1, TATWEEL_FAMILY), (2, "Regular"), (4, &full), (6, &postscript)])?;
+    let mut builder = FontBuilder::new();
+    builder.add_table(&cmap).ok()?;
+    builder.add_raw(Tag::new(b"name"), name);
     for r in font.table_directory.table_records() {
         let tag = Tag::new(&r.tag().to_be_bytes());
         if !builder.contains(tag) {
@@ -1583,6 +1613,30 @@ pub fn twin_font(newer: bool) -> Option<Vec<u8>> {
     let font = skrifa::FontRef::new(if newer { NEWER } else { OLDER }).ok()?;
     let version = TWIN_VERSIONS[usize::from(newer)];
     let name = name_table(&[(1, TWIN_FAMILY), (2, "Regular"), (4, "Twintest Sans Regular"), (5, version), (6, "TwintestSans-Regular")])?;
+    let mut builder = FontBuilder::new();
+    builder.add_raw(Tag::new(b"name"), name);
+    for r in font.table_directory.table_records() {
+        let tag = Tag::new(&r.tag().to_be_bytes());
+        if !builder.contains(tag) {
+            builder.add_raw(tag, font.table_data(r.tag())?.as_bytes());
+        }
+    }
+    Some(builder.build())
+}
+
+/// The names of a [`named_copy`]: family, style, version string and PostScript name.
+pub type CopyNames<'a> = (&'a str, &'a str, &'a str, &'a str);
+
+/// The bundled Source Sans 3 Regular or, `inter`, the bundled Inter Regular (glyphs of other
+/// widths) under `names`, as an installed copy of a font: a font library can keep copies whose
+/// names differ only in case or punctuation, or whose family and style are one but whose PostScript
+/// names or versions differ. `None` when it can't be built.
+pub fn named_copy(inter: bool, (family, style, version, postscript): CopyNames<'_>) -> Option<Vec<u8>> {
+    const SOURCE: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+    const INTER: &[u8] = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+    let font = skrifa::FontRef::new(if inter { INTER } else { SOURCE }).ok()?;
+    let full = format!("{family} {style}");
+    let name = name_table(&[(1, family), (2, style), (4, &full), (5, version), (6, postscript)])?;
     let mut builder = FontBuilder::new();
     builder.add_raw(Tag::new(b"name"), name);
     for r in font.table_directory.table_records() {

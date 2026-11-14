@@ -8,15 +8,17 @@
 //! (`…settings as file.new`), or, naming none, any key (the options of the format an export picks). Objects inside a value aren't
 //! described key by key, so only the top level is checked, except in the options of an export, a
 //! save or Export for Screens: those are checked against the options of the formats the command
-//! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]).
+//! can write, in `marks`, `bleed` and the other objects too ([`check_export_options`]); and in the
+//! objects of an array whose keys `MEMBER_KEYS` lists, such as the `items` of
+//! `object.setLiveShape`.
 //!
 //! [`Session::execute`] answers a key the description doesn't name with a parameter error
 //! ([`check_params`]), for every caller (the app, the control channel, MCP, the CLI) and for the
 //! commands a command runs, the steps of a `command.batch` or an `action.batch` included: a
 //! misspelled `widht` no longer runs the command with its default. So are the `params` of an
 //! effect (#1592): `effect.apply` and
-//! `effect.setParams` answer a key the effect doesn't take, or a value of another type than its
-//! default, with a parameter error ([`check_effect_params`]).
+//! `effect.setParams` answer a key the effect doesn't take, or a value of another type than the
+//! effect reads, with a parameter error ([`check_effect_params`]).
 //!
 //! A command with a parameter schema (`CommandSpec::schema`) is also checked against the schema
 //! before it runs ([`crate::schemas::check`]): the schema refuses a value of the wrong type or out
@@ -172,6 +174,13 @@ fn accepted(doc: &'static str, depth: usize) -> Option<Vec<&'static str>> {
     Some(keys)
 }
 
+/// Every key the description `doc` takes, those of the commands its `…` entries name included, or
+/// `None` when that isn't known: it doesn't parse, a `…` entry names no command, or one names a
+/// command in [`UNCHECKED`].
+pub(crate) fn accepted_keys(doc: &'static str) -> Option<Vec<&'static str>> {
+    accepted(doc, 0)
+}
+
 /// Does the description `doc` name `key` as a parameter (its own keys, and those of the commands
 /// its `…` entries name)?
 pub(crate) fn takes_key(doc: &'static str, key: &str) -> bool {
@@ -262,16 +271,51 @@ pub(crate) fn unknown(id: &str, key: &str, keys: &[&str]) -> crate::EngineError 
     )
 }
 
+/// Commands whose params hold an array of objects with keys of their own: the command, the key of
+/// the array and the keys each of its objects takes.
+const MEMBER_KEYS: &[(&str, &str, &[&str])] = &[("object.setLiveShape", "items", &["id", "corners"])];
+
+/// Each object in the arrays [`MEMBER_KEYS`] names for command `id` has only the keys it lists, or
+/// the parameter error naming the first other one with its place (`items[0].corner`), and the
+/// nearest accepted key or the accepted ones. A member that isn't an object is the command's to
+/// report.
+fn check_member_keys(id: &str, params: &Value) -> Result<()> {
+    for (_, list, keys) in MEMBER_KEYS.iter().filter(|(c, ..)| *c == id) {
+        let Some(members) = params.get(*list).and_then(Value::as_array) else { continue };
+        for (i, member) in members.iter().enumerate() {
+            let Value::Object(given) = member else { continue };
+            let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) else { continue };
+            let at = |k: &str| format!("{list}[{i}].{k}");
+            let near = nearest(key, keys);
+            let key = at(&shown_key(key));
+            return Err(bad(
+                id,
+                match near {
+                    Some(near) => {
+                        let near = at(near);
+                        format!("unknown parameter `{key}`; did you mean `{near}`?")
+                    }
+                    None => {
+                        let keys = keys.iter().map(|k| at(k)).collect::<Vec<_>>().join(", ");
+                        format!("unknown parameter `{key}`; the command takes: {keys}")
+                    }
+                },
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
-/// effect takes (those of its dialog defaults and of its params description), each of its
-/// default's type, a `color` the effect can draw ([`check_effect_color`]) and a Levels or Curves
-/// `channel` the effect has ([`check_effect_channel`]). Numbers out of range pass: the effect
-/// clamps them when it draws. An effect plug-in resolves its own against its manifest, and an
-/// unknown effect is the command's to report.
+/// effect takes (those of its dialog defaults and of its params description), each of the type
+/// the effect reads ([`check_effect_types`]), a `color` the effect can draw ([`check_effect_color`])
+/// and a Levels or Curves `channel` the effect has ([`check_effect_channel`]). Numbers out of range
+/// pass: the effect clamps them when it draws. An installed effect plug-in's are checked against its
+/// manifest, and an unknown effect is the command's to report.
 pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()> {
     let Value::Object(given) = params else { return Ok(()) };
     if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
-        return Ok(());
+        return check_effect_types(id, effect, params);
     }
     let Some(info) = vectorcraft_render::effects::effect_info(effect) else { return Ok(()) };
     let defaults = info.defaults.as_object();
@@ -282,18 +326,10 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
             keys.push(key);
         }
     }
-    for (key, v) in given {
-        if !keys.contains(&key.as_str()) {
-            return Err(unknown(id, key, &keys));
-        }
-        match defaults.and_then(|d| d.get(key)) {
-            Some(Value::Number(_)) if !v.is_number() => return Err(bad(id, format!("`{key}` must be a number"))),
-            Some(Value::Bool(_)) if !v.is_boolean() => return Err(bad(id, format!("`{key}` must be true or false"))),
-            // (A colour is also taken as `[r, g, b]` or as a colour object.)
-            Some(Value::String(_)) if v.is_number() || v.is_boolean() => return Err(bad(id, format!("`{key}` must be a string"))),
-            _ => {}
-        }
+    if let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) {
+        return Err(unknown(id, key, &keys));
     }
+    check_effect_types(id, effect, params)?;
     // An SVG filter's XML is one drawable <filter> element.
     if effect == vectorcraft_render::effects::SVG_FILTER
         && let Some(xml) = given.get("xml")
@@ -327,6 +363,59 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     }
     check_effect_color(id, effect, params)?;
     check_effect_channel(id, effect, params)
+}
+
+/// The type of the values in `params` of effect `effect`, as command `id` was given them: a key
+/// the effect has a dialog default for takes a value of its default's type, a key only the
+/// effect's params description names takes the type the effect reads ([`undefaulted_type`]), and
+/// an installed effect plug-in's take the types its manifest gives them. The `style` of Crop Marks
+/// is `roman` or `japanese`. A number given as text (`"10 pt"`), `true` for a number, `1` for a
+/// switch and `null` for either are refused.
+fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
+    let Value::Object(given) = params else { return Ok(()) };
+    if effect.starts_with(vectorcraft_plugins::effect::PREFIX) {
+        return match vectorcraft_plugins::effect::installed(effect) {
+            Some(plugin) => plugin.manifest().resolve_params(params).map(drop).map_err(|why| bad(id, why.to_string())),
+            None => Ok(()),
+        };
+    }
+    let Some(info) = vectorcraft_render::effects::effect_info(effect) else { return Ok(()) };
+    for (key, v) in given {
+        let want = info.defaults.get(key).cloned().or_else(|| undefaulted_type(effect, key));
+        match want {
+            Some(Value::Number(_)) if !v.is_number() => return Err(bad(id, format!("`{key}` must be a number"))),
+            Some(Value::Bool(_)) if !v.is_boolean() => return Err(bad(id, format!("`{key}` must be true or false"))),
+            // (A colour is also taken as `[r, g, b]` or as a colour object.)
+            Some(Value::String(_)) if v.is_number() || v.is_boolean() => return Err(bad(id, format!("`{key}` must be a string"))),
+            _ => {}
+        }
+    }
+    // Crop Marks draw one of two styles.
+    if effect == vectorcraft_render::effects::CROP_MARKS
+        && let Some(style) = given.get("style")
+        && style.as_str().and_then(vectorcraft_doc::marks::MarkStyle::parse).is_none()
+    {
+        return Err(bad(id, "`style` must be roman or japanese"));
+    }
+    Ok(())
+}
+
+/// A value of the type effect `effect` reads for `key`, a parameter its params description names
+/// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
+/// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
+/// and a Gaussian Blur's `linear` is true or false. A Glass or Texturizer `textureImage`, an SVG
+/// filter's `name` and `xml`, a Warp's `version` and the `style` of Crop Marks have checks of their
+/// own; they aren't listed.
+pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
+    use vectorcraft_render::effects;
+    let number = || Some(Value::from(0.0));
+    match key {
+        "perspective" | "lightAzimuth" | "lightElevation" if effects::is_three_d(effect) => number(),
+        "variation" if effect == "stylize.scribble" => number(),
+        "width" if effect == "path.outlineStroke" => number(),
+        "linear" if effect == "blur.gaussian" => Some(Value::Bool(false)),
+        _ => None,
+    }
 }
 
 /// Can an effect read `v` as its `color`: a string [`Color::from_hex`] reads (`#rrggbb`, `#rgb`,
@@ -474,7 +563,6 @@ pub const UNCHECKED: &[&str] = &[
     "object.rasterize",
     "object.repeat.options",
     "object.setBounds",
-    "object.setLiveShape",
     "object.setOverprint",
     "object.setProps",
     "object.slice.divide",
@@ -728,9 +816,7 @@ fn check_export_options(id: &str, params: &Value) -> Result<()> {
             NO_SAVE_FORMAT
         }
         "document.export" | "document.exportSelection" | "document.serialize" => {
-            // `richBlack` is Appearance of Black's setting for a raster export, and `params` an
-            // exporter plug-in's own.
-            keys.extend(["includeArtboardFill", "selectedOnly", "richBlack", "params"]);
+            keys.extend(super::fileio::EXPORT_PARAMS);
             keys.extend(FORMATS.iter().filter(|f| f.write).flat_map(|f| f.options).map(|o| o.name));
             NO_FORMAT
         }
@@ -783,6 +869,7 @@ fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
         return Ok(());
     }
     check_keys(id, spec.params, params)?;
+    check_member_keys(id, params)?;
     if in_batch {
         crate::schemas::check(spec, params, false)?;
     }

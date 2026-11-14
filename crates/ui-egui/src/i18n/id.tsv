@@ -96,6 +96,8 @@
 	Blend Vertically	Blend vertikal
 	Convert to CMYK	Konversi ke CMYK
 	Convert to Grayscale	Konversi ke skala kelabu
+	Convert to Indexed Color	Konversi ke warna terindeks
+	Convert to Indexed Color…	Konversi ke warna terindeks…
 	Convert to RGB	Konversi ke RGB
 	Invert Colors	Balikkan warna
 	Overprint Black…	Overprint hitam…
@@ -199,6 +201,10 @@
 	Corner Color	Warna sudut
 	Contiguous	Bersambung
 	Each Channel	Setiap kanal
+	Color Mask…	Masker warna…
+	Color Mask	Masker warna
+	Remove Color Mask	Hapus masker warna
+	Apply Color Mask	Terapkan masker warna
 	Edit Path	Edit jalur
 	Mask	Masker
 	Rasterize…	Rasterisasi…
@@ -849,6 +855,10 @@
 	Dock Panel	Tambatkan panel
 	Dock to Top	Tambatkan ke atas
 	Dock to Bottom	Tambatkan ke bawah
+	Dock to Left	Tambatkan ke kiri
+	Dock to Right	Tambatkan ke kanan
+	Dock Toolbar	Tambatkan bilah alat
+	Float Toolbar	Mengambangkan bilah alat
 	Control Bar Options	Opsi bilah kontrol
 	Tool Options	Opsi alat
 	Object Options	Opsi objek
@@ -1532,6 +1542,11 @@ digits	Malayalam	Malayalam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Pengaturan Tate-chu-yoko…
 	Tate-chu-yoko Settings	Pengaturan Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Pengaturan Warichu…
+	Warichu Settings	Pengaturan Warichu
+	Lines:	Baris:
+	Line Gap:	Celah Baris:
 	Composite Fonts…	Font komposit…
 	Composite Fonts	Font komposit
 	Export Composite Fonts	Ekspor font komposit
@@ -1771,6 +1786,8 @@ digits	Malayalam	Malayalam
 	Modified since it was read: {path}	Diubah sejak terakhir dibaca: {path}
 	No Thumbnails	Tanpa thumbnail
 	Nothing matches the Show filter.	Tidak ada yang cocok dengan filter Tampilkan.
+	Show DCS Transparency Interactions	Tampilkan Interaksi Transparansi DCS
+	Transparent, or overlaps transparent objects: check its separations	Transparan, atau menimpa objek transparan: periksa separasinya
 	PPI	PPI
 	Relink…	Tautkan ulang…
 	Find Linked Files	Temukan file tertaut
@@ -1833,6 +1850,10 @@ digits	Malayalam	Malayalam
 	Long	Panjang
 	Stylistic	Stilistik
 	Mojikumi Set	Set Mojikumi
+	YakumonoHankaku	YakumonoHankaku
+	GyomatsuYakumonoHankaku	GyomatsuYakumonoHankaku
+	GyomatsuYakumonoZenkaku	GyomatsuYakumonoZenkaku
+	YakumonoZenkaku	YakumonoZenkaku
 	Kinsoku Set	Set Kinsoku
 	Kinsoku Shori Type	Jenis Kinsoku Shori
 	Push In First	Dorong masuk dahulu
@@ -1968,6 +1989,8 @@ digits	Malayalam	Malayalam
 	Weight:	Ketebalan:
 	Art using a deleted global swatch keeps its colour.	Karya seni yang memakai swatch global terhapus tetap mempertahankan warnanya.
 	Color Group: {name}	Grup warna: {name}
+	Delete the selected items and their artwork?	Hapus item yang dipilih beserta karya seninya?
+	Delete this layer and its artwork?	Hapus lapisan ini beserta karya seninya?
 	Delete “{name}”?	Hapus “{name}”?
 	Document Swatches	Swatch dokumen
 	Edit or Apply Color Group	Edit atau terapkan grup warna
@@ -2663,6 +2686,9 @@ digits	Malayalam	Malayalam
 	Reset the rows to the artwork's colors	Setel ulang baris ke warna karya seni
 	Color Theme Picker	Pemilih tema warna
 	Click or drag across the art to pick its colors; Shift adds more	Klik atau seret melintasi karya seni untuk mengambil warnanya; Shift menambahkan lagi
+	Prominent Colors	Warna menonjol
+	Save All Colors	Simpan semua warna
+	Save Prominent Colors	Simpan warna menonjol
 	Separate colors into rows	Pisahkan warna ke dalam baris
 	Unlink harmony colors	Lepaskan tautan warna harmoni
 	1 Color Job	Pekerjaan 1 warna
@@ -3114,6 +3140,29 @@ theme	Appearance	Tampilan
 	Bristle Brush	Kuas bristle
 	Pattern Brush	Kuas pola
 	missing from the Brushes panel	tidak ada di panel Kuas
+	built in	bawaan
+	embedding not allowed	penyematan tidak diizinkan
+	embedding for editing	penyematan untuk pengeditan
+	embedding for preview and print	penyematan untuk pratinjau dan cetak
+	embedding allowed	penyematan diizinkan
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	diganti: ditampilkan dengan {family} {style} ({detail})
+	missing: shown in {family} {style}	tidak ada: ditampilkan dengan {family} {style}
+	missing	tidak ada
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppi
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Gradien linear
+	Radial gradient	Gradien radial
+	Conic gradient	Gradien kerucut
+	Diamond gradient	Gradien wajik
+	Freeform gradient	Gradien bentuk bebas
+@plural	{n} instance|{n} instances	{n} instans
+@plural	{n} row|{n} rows	{n} baris
+@plural	{n} column|{n} columns	{n} kolom
 	Select art to make a scatter, art or pattern brush.	Pilih karya seni untuk membuat kuas sebar, seni, atau pola.
 	Brush Art	Karya seni kuas
 	New Symbol	Simbol baru
@@ -3326,6 +3375,8 @@ theme	Appearance	Tampilan
 	Rename Library Group	Ganti nama grup pustaka
 	Delete Library Group	Hapus grup pustaka
 	Move Library Item to Group	Pindahkan item pustaka ke grup
+	Rename Library Item	Ganti nama item pustaka
+	Add to Character Styles	Tambahkan ke gaya karakter
 	Rename Library	Ganti nama pustaka
 	Show Library	Tampilkan pustaka
 	Use Library Item	Gunakan item pustaka
@@ -3511,9 +3562,11 @@ theme	Appearance	Tampilan
 	Enable Background Export	Aktifkan ekspor di latar belakang
 	Enable Background Save	Aktifkan penyimpanan di latar belakang
 	Enable in-menu font previews	Aktifkan pratinjau font dalam menu
+	Show samples on white	Tampilkan sampel di atas putih
 	Enable Missing Glyph Protection	Aktifkan perlindungan glyph yang hilang
 	Enable Rubber Band for	Aktifkan rubber band untuk
 	Enable Touch Gestures	Aktifkan gestur sentuh
+	Switch Selection and Drawing Modes	Beralih antara mode seleksi dan menggambar
 	Enable Touch Workspace	Aktifkan ruang kerja sentuh
 	English: UK	Inggris: UK
 	Every (minutes)	Setiap (menit)
@@ -3584,6 +3637,11 @@ theme	Appearance	Tampilan
 	Primary	Utama
 	Printing / Exporting	Pencetakan / Ekspor
 	Real-time Drawing and Editing	Penggambaran dan pengeditan waktu nyata
+	Use Monitor Profile for Canvas	Gunakan profil monitor untuk kanvas
+	The canvas is drawn in sRGB.	Kanvas digambar dalam sRGB.
+	Canvas display profile:	Profil layar kanvas:
+	The system matches the window to the display's colors.	Sistem menyesuaikan jendela dengan warna layar.
+	No usable display profile was found: the canvas is drawn in sRGB.	Tidak ditemukan profil layar yang dapat digunakan: kanvas digambar dalam sRGB.
 	Render Threads (-1 = Automatic)	Utas render (-1 = Otomatis)
 	Reset Preferences	Atur ulang preferensi
 	Export Preferences…	Ekspor preferensi…
@@ -3716,6 +3774,19 @@ theme	Appearance	Tampilan
 	Spot Color Objects	Objek dengan Warna Spot
 	Pattern Objects	Objek dengan Pola
 	Gradient Objects	Objek dengan Gradien
+	Font Details	Detail Font
+	Linked Images	Gambar Tertaut
+	Embedded Images	Gambar Tersemat
+	Compound Paths	Jalur Majemuk
+	Text Objects	Objek Teks
+	Placed Documents	Dokumen yang Ditempatkan
+	Symbol Instances	Instans Simbol
+	Gradient Meshes	Mesh Gradien
+	Blends	Blend
+	Envelopes	Amplop
+	Intertwine Groups	Grup Jalinan
+	Opacity Masks	Mask Opasitas
+	Objects with Effects	Objek dengan Efek
 	Spot Colors	Warna spot
 	Spot Colors (0)	Warna spot (0)
 	Swatch Options	Opsi sampel
@@ -4170,6 +4241,7 @@ imageTrace	Outline	Kontur
 @plural	{n} step|{n} steps	{n} langkah
 @plural	{n} stroke|{n} strokes	{n} goresan
 @msg	no library `{id}`	tidak ada pustaka `{id}`
+@msg	the library has another item of that kind named `{name}`	pustaka sudah memiliki item lain dari jenis itu bernama `{name}`
 @msg	select some type first	pilih beberapa teks terlebih dahulu
 @msg	kerning must be a number, "auto", or "optical"	kerning harus berupa angka, “auto”, atau “optical”
 @msg	{_1} has no {_2} style	{_1} tidak memiliki gaya {_2}
@@ -4210,8 +4282,15 @@ imageTrace	Outline	Kontur
 @msg	Couldn't open {name}: {e}	Tidak dapat membuka {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	Tidak dapat menempatkan {name}: dokumen tempatnya dijatuhkan sudah ditutup
 @msg	Couldn't place {name}: the document it was placed in was closed	Tidak dapat menempatkan {name}: dokumen tempatnya ditempatkan sudah ditutup
+@msg	Couldn't place {name}: the document it was dropped on was reverted	Tidak dapat menempatkan {name}: dokumen tempatnya dijatuhkan sudah dikembalikan
+@msg	Couldn't place {name}: the document it was placed in was reverted	Tidak dapat menempatkan {name}: dokumen tempatnya ditempatkan sudah dikembalikan
+@msg	Couldn't paste: the document it was pasted in was reverted	Tidak dapat menempel: dokumen tempatnya ditempel sudah dikembalikan
 @msg	Couldn't read {name}: {e}	Tidak dapat membaca {name}: {e}
 @msg	Couldn't save recovery data: {e}	Tidak dapat menyimpan data pemulihan: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan untuk {title}: {e}. Salinan disimpan di {folder}, folder pemulihan bawaan; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan untuk {title}: {e}. Salinan disimpan di {folder}, folder yang diatur di Preferensi; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan: {e}. Salinan disimpan di {folder}, folder pemulihan bawaan; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	Tidak dapat menyimpan data pemulihan: {e}. Salinan disimpan di {folder}, folder yang diatur di Preferensi; untuk memakai folder lain, atur Preferensi → Penanganan File → Pemulihan Data → Folder (recoveryFolder)
 @msg	Create Outlines: select text objects	Buat kontur: pilih objek teks
 @msg	Create from Guides: the document has no artboard	Buat dari panduan: dokumen tidak memiliki artboard
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Buat dari panduan: panduan menghasilkan lebih dari {MAX_PIECES} irisan
@@ -4296,6 +4375,7 @@ imageTrace	Outline	Kontur
 @msg	`{key}` must be a whole number between {min} and {max} (got {x})	`{key}` harus berupa bilangan bulat antara {min} dan {max} (diperoleh {x})
 @msg	`{key}` must be between {min} and {max} (got {x})	`{key}` harus di antara {min} dan {max} (diperoleh {x})
 @msg	`{key}` must be one of {_1}	`{key}` harus salah satu dari {_1}
+@msg	`{path}` must be one of {_1}, not {got}	`{path}` harus salah satu dari {_1}, bukan {got}
 @msg	`{key}` must be true or false	`{key}` harus true atau false
 @msg	`{k}` must be [x, y]	`{k}` harus [x, y]
 @msg	`{name}` has no options	`{name}` tidak memiliki opsi
@@ -4577,6 +4657,7 @@ imageTrace	Outline	Kontur
 @msg	paths contain invalid coordinates	jalur berisi koordinat yang tidak valid
 @msg	paths: give at least one file	jalur: berikan setidaknya satu berkas
 @msg	replace: the object to replace was changed or deleted	ganti: objek yang akan diganti telah diubah atau dihapus
+@msg	the document it was prepared for is no longer active	dokumen yang menjadi tujuan persiapannya tidak lagi aktif
 @msg	pattern missing	pola hilang
 @msg	patterns nested too deeply are filled with mid-grey	pola yang bersarang terlalu dalam diisi dengan abu-abu tengah
 @msg	percent must be above 0 and at most 6400, not {p}	percent harus di atas 0 dan paling banyak 6400, bukan {p}
@@ -4790,6 +4871,7 @@ imageTrace	Outline	Kontur
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	{n} dokumen hasil pemulihan dibuang
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	{n} dokumen hasil pemulihan dipulihkan: simpan agar tidak hilang
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Dibuka dengan {n} catatan: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Dibuka dengan {n} catatan: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	{path} disimpan dengan {n} catatan: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	{n} gambar tersemat; {missing} hilang: tautkan ulang dulu
 @msgplural	Embedded {n} image|Embedded {n} images	{n} gambar tersemat
@@ -4865,6 +4947,8 @@ imageTrace	Outline	Kontur
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	gambar tersemat berukuran {_1} × {_2} piksel diperkecil menjadi {_3} × {_4} piksel agar lapisannya tetap terjaga
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	gambar tertaut menampilkan pratinjau resolusi rendah yang tersimpan dalam berkas sampai berkasnya ditemukan: tautkan ulang di panel Tautan
 @msg	linked type areas past VectorCraft's limits were left out	area teks tertaut di luar batas VectorCraft dihilangkan
+@msg	the Line Breaking setting of legacy type was left out	pengaturan pemisah baris teks format lama dihilangkan
+@msg	the Japanese layout rules of legacy type were left out	aturan tata letak Jepang teks format lama dihilangkan
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	teks yang mengubah arah penulisan di dalam objek teks dibuka dengan arah karakter pertamanya
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	teks yang digunakan sebagai masker di area tertaut, teks terbungkus, atau jalur majemuk tidak memotong
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	gambar tertaut tanpa pratinjau dalam berkas menampilkan penanda tempat sampai berkasnya ditemukan: tautkan ulang di panel Tautan
@@ -5139,6 +5223,8 @@ imageTrace	Outline	Kontur
 	Vivid	Cerah
 	Spectrum	Spektrum
 	Perceptual	Perseptual
+	Hue Clockwise	Rona searah jarum jam
+	Hue Counterclockwise	Rona berlawanan arah jarum jam
 	Relative Colorimetric	Kolorimetrik relatif
 	Absolute Colorimetric	Kolorimetrik absolut
 	Exact	Eksak
@@ -5686,6 +5772,7 @@ swatch	Bright Violet	Violet cerah
 @msg	no such color	tidak ada warna seperti itu
 @msg	{_1} cannot be used on Windows	{_1} tidak dapat digunakan di Windows
 @msg	more than one action is named “{_1}”	lebih dari satu tindakan bernama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	tindakan “{_1}” mengatur preferensi folder {_2}; hapus langkah itu untuk menyimpan set
 @msg	no symbol named `{n}`	tidak ada simbol bernama `{n}`
 	Remove Color Profile…	Hapus profil warna…
 	Color wheel	Roda warna
@@ -5804,6 +5891,8 @@ swatch	Bright Violet	Violet cerah
 	Objects on Path Tool	Alat objek pada jalur
 	Attach Objects on Path	Tempelkan objek pada jalur
 	Expand Objects on Path	Perluas objek pada jalur
+	Detach	Lepaskan
+	Detach Object from Path	Lepaskan objek dari jalur
 	Release Live Paint	Lepaskan Live Paint
 	Release Repeat	Lepaskan perulangan
 	Release Slice	Lepaskan slice
@@ -5951,7 +6040,7 @@ axis	Y Axis	Sumbu Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` berlaku untuk isian gradien (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` berlaku untuk isian gradien (paint.setFill)
 @msg	`dither` must be true or false	`dither` harus true atau false
-@msg	`method` must be classic or perceptual	`method` harus classic atau perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` harus classic, perceptual, hue-clockwise atau hue-counterclockwise
 # Heavy plug-in filters (plugin.inspect, plug-in runs)
 	Install “{name}”, which asks for a heavy budget?	Instal “{name}”, yang meminta anggaran komputasi besar?
 	Each run may take up to {minutes} minutes and do {times} times the work other plug-ins may. It runs in the background, and you can cancel it.	Setiap kali dijalankan, plug-in ini bisa memakan waktu hingga {minutes} menit dan melakukan {times} kali pekerjaan yang diizinkan untuk plug-in lain. Plug-in ini berjalan di latar belakang, dan Anda dapat membatalkannya.
@@ -5992,14 +6081,33 @@ axis	Y Axis	Sumbu Y
 	Continue	Lanjutkan
 	Continue Action	Lanjutkan tindakan
 	Delete Action Step	Hapus langkah tindakan
+	Move Action Step	Pindahkan langkah tindakan
 	Press Play Current Selection in the Actions panel to go on.	Untuk melanjutkan, tekan Putar seleksi saat ini di panel Tindakan.
 	Stop: {message}	Henti: {message}
 @msg	no action is waiting at a stop	tidak ada tindakan yang menunggu di titik henti
 @msg	message must be text	message harus berupa teks
 @msg	allowContinue must be true or false	allowContinue harus true atau false
 @msg	Batch cannot play an action with a stop	Batch tidak dapat memutar tindakan dengan titik henti
+@msg	Batch cannot play an action with a View menu step	Batch tidak dapat memutar tindakan dengan langkah menu Tampilan
 	Insert Menu Item…	Sisipkan item menu…
 	Insert Menu Item	Sisipkan item menu
+	Insert Select Path	Sisipkan pemilihan jalur
+	Select Path	Pilih jalur
+@msg	select one whole path or compound path	pilih satu jalur utuh atau jalur majemuk
+@msg	select only one path	pilih hanya satu jalur
+@msg	the path is hidden or locked, or cannot be selected here	jalur tersembunyi atau terkunci, atau tidak dapat dipilih di sini
+@msg	object {value} is not the stored path: it changed, or the document is another one	objek {value} bukan jalur yang disimpan: jalur itu berubah, atau dokumennya berbeda
+@msg	`fingerprint` must be "v1:" and 16 lowercase hex digits	`fingerprint` harus berupa "v1:" dan 16 digit heksadesimal huruf kecil
+	Select Object…	Pilih objek…
+	Select Object	Pilih objek
+	Set Selection	Atur seleksi
+	Case Sensitive	Peka huruf besar/kecil
+	Whole Word	Seluruh kata
+	Select Object: {note}	Pilih objek: {note}
+	Select by Note	Pilih berdasarkan catatan
+@msg	the note is empty	catatan kosong
+@msg	the note is longer than 1,024 bytes	catatan lebih panjang dari 1.024 byte
+@msg	no object that can be selected has a note matching “{query}”	tidak ada objek yang dapat dipilih dengan catatan yang cocok dengan “{query}”
 	Menu Item:	Item menu:
 	No menu item matches.	Tidak ada item menu yang cocok.
 	Several menu items match. Choose one from the list.	Beberapa item menu cocok. Pilih salah satu dari daftar.
@@ -6134,6 +6242,22 @@ axis	Y Axis	Sumbu Y
 	Graphite Pencil	Pensil grafit
 	Wax Crayon	Krayon lilin
 	Charcoal Dust	Debu arang
+	Notched Ribbon	Pita bertakik
+	Double Line	Garis ganda
+	Wave	Gelombang
+	Teardrop	Tetesan
+	Striped Ribbon	Pita bergaris
+	Fine Nib	Mata pena halus
+	Broad Nib	Mata pena lebar
+	Chisel	Pahat
+	Round Pen	Pena bulat
+	Pressure Pen	Pena tekanan
+	Beads	Manik-manik
+	Dash Dot	Garis titik
+	Scallops	Lekuk kerang
+	Stars	Bintang
+	Triangles	Segitiga
+	Sparkles	Kilauan
 	Save Brush Library…	Simpan pustaka kuas…
 @msg	no empty artboards to delete	tidak ada artboard kosong untuk dihapus
 	Scale Presets	Preset skala
@@ -6145,6 +6269,13 @@ axis	Y Axis	Sumbu Y
 	Area Text	Teks area
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Ukur teks menurut batas glif
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opsi snap ke piksel
+	Pixel Snapping Options…	Opsi snap ke piksel…
+	Snap to Pixel While Drawing	Snap ke piksel saat menggambar
+	Snap to Pixel While Moving	Snap ke piksel saat memindahkan
+	Snap to Pixel While Scaling	Snap ke piksel saat menskalakan
+	These options take effect when View › Snap to Pixel is on.	Opsi ini berlaku saat Tampilan › Snap ke piksel aktif.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Tampilkan opsi snap ke glif
 	Hide Snap to Glyph Options	Sembunyikan opsi snap ke glif
@@ -6230,6 +6361,8 @@ anchor	Points:	Titik:
 	Anchor Inspector	Pemeriksa titik jangkar
 	Add Points at Crossings	Tambahkan titik di persilangan
 	Split at Crossings	Pisahkan di persilangan
+	Trim at Crossings Tool	Alat pangkas di persilangan
+	Trim at Crossings	Pangkas di persilangan
 	Extend Path	Perpanjang jalur
 	Measure & Inspect	Ukur dan periksa
 	Set Anchor	Atur titik jangkar
@@ -6729,6 +6862,19 @@ breakText	Glyphs	Glif
 	Show where this tool is	Tampilkan letak alat ini
 @msg	missing `tutorial` (see learn.list)	`tutorial` tidak ada (lihat learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial `{id}` tidak dikenal (lihat learn.list)
+	View more	Lihat selengkapnya
+	Finish tutorial	Selesaikan tutorial
+	Next Up	Berikutnya
+	You finished the last tutorial in this skill.	Anda telah menyelesaikan tutorial terakhir dalam keterampilan ini.
+	Back to skills	Kembali ke keterampilan
+	Open Tutorial Sample	Buka contoh tutorial
+	Finish Tutorial	Selesaikan tutorial
+	Next Tutorial	Tutorial berikutnya
+	Back to Skills	Kembali ke keterampilan
+@msg	tutorial `{id}` has no practice sample	tutorial `{id}` tidak memiliki contoh latihan
+@msg	open the practice sample of `{id}` first (see learn.openSample)	buka contoh latihan `{id}` terlebih dahulu (lihat learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	selesaikan `{id}` terlebih dahulu (lihat learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` adalah tutorial terakhir dalam keterampilannya
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Segarkan efek yang ditunda
@@ -6745,3 +6891,9 @@ breakText	Glyphs	Glif
 	Box	Kotak
 	Swatch	Sampel warna
 	Direction	Arah
+	Banner Hems and Grommets…	Lipatan dan Mata Ayam Spanduk…
+	Banner Hems and Grommets	Lipatan dan Mata Ayam Spanduk
+	Hem	Lipatan
+	Grommets	Mata ayam
+	Grommet Inset	Jarak mata ayam dari tepi
+	Diameter	Diameter

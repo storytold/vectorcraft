@@ -4,7 +4,7 @@
 
 use serde_json::{Value, json};
 use vectorcraft_doc::{Node, OrientedBox};
-use vectorcraft_geom::{Point, Rect};
+use vectorcraft_geom::{Affine, Point, Rect};
 use vectorcraft_tools::bbox::Handle;
 use vectorcraft_tools::{Mods, PointerEvent, PointerKind};
 
@@ -102,6 +102,313 @@ fn handles_turn_with_the_object_and_scale_along_its_axes() {
     assert!(left(&nb).distance(left(&b)) < 1e-6);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(near(selection_box(&s).rect.width(), 100.0));
+}
+
+/// Presses, drags and lets go with the current tool along `pts`, holding `mods`.
+fn drag_with(s: &mut Session, pts: &[Point], mods: Mods) {
+    let v = ViewInfo::default();
+    let kinds = std::iter::once(PointerKind::Down).chain(std::iter::repeat_n(PointerKind::Drag, pts.len().saturating_sub(2)));
+    for (kind, p) in kinds.chain([PointerKind::Up]).zip(pts) {
+        s.pointer(&PointerEvent::new(kind, p.x, p.y).with_mods(mods), v).unwrap();
+    }
+}
+
+/// The anchors of path `id`, on the page.
+fn anchors(s: &Session, id: NodeId) -> Vec<Point> {
+    s.doc().unwrap().doc.node(id).unwrap().path_data().unwrap().anchors().map(|(_, _, an)| an.p).collect()
+}
+
+fn has_point(pts: &[Point], p: Point) -> bool {
+    pts.iter().any(|q| q.distance(p) < 1e-6)
+}
+
+#[test]
+fn free_transform_handles_turn_with_the_object_and_scale_along_its_axes() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    // The Right handle of the turned box, dragged 50 pt further out along the object's own x axis.
+    let right = b.to_doc() * Handle::Right.pos(b.rect);
+    let to = b.to_doc() * (Handle::Right.pos(b.rect) + vectorcraft_geom::Vec2::new(50.0, 0.0));
+    let n = undo_len(&s);
+    s.select_tool("freeTransform", ViewInfo::default()).unwrap();
+    drag_with(&mut s, &[right, to, to], Mods::default());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Scale"));
+    // 150 × 50 along its own axes, still at exactly 45°, the left side where it was.
+    assert_eq!(angle(&s, a), b.angle);
+    let nb = selection_box(&s);
+    assert!(near(nb.rect.width(), 150.0) && near(nb.rect.height(), 50.0), "{nb:?}");
+    let left = |b: &OrientedBox| b.to_doc() * Handle::Left.pos(b.rect);
+    assert!(left(&nb).distance(left(&b)) < 1e-6);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(near(selection_box(&s).rect.width(), 100.0));
+}
+
+#[test]
+fn free_transform_shears_along_the_turned_side() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    let [tl, tr, br, bl] = b.corners();
+    // Dragging the Top handle 20 pt along the object's own top side with Cmd held once the drag
+    // started (a Cmd press is the temporary Selection tool) slides that side along itself; the
+    // bottom side stays.
+    let top = b.to_doc() * Handle::Top.pos(b.rect);
+    let along = b.to_doc() * (Handle::Top.pos(b.rect) + vectorcraft_geom::Vec2::new(20.0, 0.0));
+    let shift = along - top;
+    let v = ViewInfo::default();
+    s.select_tool("freeTransform", v).unwrap();
+    let cmd = Mods { cmd: true, ..Default::default() };
+    for (kind, p, m) in [(PointerKind::Down, top, Mods::default()), (PointerKind::Drag, along, cmd), (PointerKind::Up, along, cmd)] {
+        s.pointer(&PointerEvent::new(kind, p.x, p.y).with_mods(m), v).unwrap();
+    }
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Shear"));
+    let pts = anchors(&s, a);
+    for p in [tl + shift, tr + shift, br, bl] {
+        assert!(has_point(&pts, p), "{p:?} not in {pts:?}");
+    }
+}
+
+#[test]
+fn free_transform_distort_starts_from_the_turned_box() {
+    let mut s = session();
+    let a = turned_rect(&mut s);
+    let b = selection_box(&s);
+    let [tl, tr, br, bl] = b.corners();
+    s.select_tool("freeTransform", ViewInfo::default()).unwrap();
+    s.set_tool_option("mode", &json!("distort"));
+    let to = br + vectorcraft_geom::Vec2::new(10.0, 20.0);
+    let n = undo_len(&s);
+    drag_with(&mut s, &[br, to, to], Mods::default());
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.journal.last().map(|j| j.0.as_str()), Some("object.distort"));
+    // The dragged corner of the turned box lands under the pointer; the other three stay.
+    let pts = anchors(&s, a);
+    for p in [tl, tr, to, bl] {
+        assert!(has_point(&pts, p), "{p:?} not in {pts:?}");
+    }
+}
+
+/// Where the line through `a` and `b` crosses the line through `c` and `d`.
+fn cross(a: Point, b: Point, c: Point, d: Point) -> Point {
+    let (r, q) = (b - a, d - c);
+    let t = ((c - a).x * q.y - (c - a).y * q.x) / (r.x * q.y - r.y * q.x);
+    a + r * t
+}
+
+/// The counter-clockwise angle of the direction from `from` to `to`.
+fn direction(from: Point, to: Point) -> f64 {
+    -(to.y - from.y).atan2(to.x - from.x).to_degrees()
+}
+
+fn near_deg(a: f64, b: f64) -> bool {
+    vectorcraft_geom::normalize_deg(a - b).abs() < 1e-6
+}
+
+fn json_points(pts: [Point; 4]) -> Value {
+    json!(pts.map(|p| [p.x, p.y]))
+}
+
+/// `pts` turned by `deg` (counter-clockwise) about `c`.
+fn turned(pts: [Point; 4], c: Point, deg: f64) -> [Point; 4] {
+    let a = Affine::translate(c.to_vec2()) * Affine::rotate(-deg.to_radians()) * Affine::translate(-c.to_vec2());
+    pts.map(|p| a * p)
+}
+
+/// A perspective quad for the 100 × 100 box at the origin: its top-right corner raised 20 pt.
+const RAISED: [(f64, f64); 4] = [(0.0, 0.0), (100.0, -20.0), (100.0, 100.0), (0.0, 100.0)];
+
+fn raised() -> [Point; 4] {
+    RAISED.map(|(x, y)| Point::new(x, y))
+}
+
+/// The angle a warp onto `quad` (from a box square to the page) turns an upright object's x axis
+/// to, where the object's center lands at `center`: every horizontal line of the box is drawn
+/// through the point where the lines of the quad's top and bottom sides cross.
+fn upright_angle_after(quad: [Point; 4], center: Point) -> f64 {
+    direction(cross(quad[0], quad[1], quad[3], quad[2]), center)
+}
+
+/// Where a warped rectangle's center lands: where the diagonals of its warped corners cross.
+fn warped_center(s: &Session, id: NodeId) -> Point {
+    let p = anchors(s, id);
+    assert_eq!(p.len(), 4, "{p:?}");
+    cross(p[0], p[2], p[1], p[3])
+}
+
+#[test]
+fn distort_turns_an_upright_box_with_the_warp_at_its_center() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let quad = raised();
+    s.execute("object.distort", &json!({ "corners": json_points(quad) })).unwrap();
+    // The top tilts up to the right: a small counter-clockwise angle (atan 0.1 for this quad).
+    let want = upright_angle_after(quad, cross(quad[0], quad[2], quad[1], quad[3]));
+    assert!(near(want, 0.1_f64.atan().to_degrees()), "{want}");
+    assert!(near(angle(&s, a), want), "{} vs {want}", angle(&s, a));
+    // The Selection and Free Transform tools' box stands at it.
+    assert!(near(selection_box(&s).angle, want), "{:?}", selection_box(&s));
+    // Reset Bounding Box squares it to the page and leaves the art.
+    let pts = anchors(&s, a);
+    assert_eq!(s.execute("object.resetBoundingBox", &json!({})).unwrap()["changed"], 1);
+    assert_eq!(angle(&s, a), 0.0);
+    assert_eq!(anchors(&s, a), pts);
+
+    // A warp that only stretches a turned object along its own axes keeps its angle exactly.
+    let mut s = session();
+    let t = turned_rect(&mut s);
+    let b = selection_box(&s);
+    let wide = OrientedBox { angle: b.angle, rect: Rect::new(b.rect.x0, b.rect.y0, b.rect.x1 + 50.0, b.rect.y1) };
+    let r = b.rect;
+    s.execute("object.distort", &json!({"corners": json_points(wide.corners()), "from": [r.x0, r.y0, r.x1, r.y1], "angle": b.angle})).unwrap();
+    assert_eq!(angle(&s, t), b.angle);
+    assert!(near(selection_box(&s).rect.width(), 150.0), "{:?}", selection_box(&s));
+}
+
+/// Every object's angle in `n`'s subtree, opacity mask art included, each with whether it is the
+/// art of an unlinked mask (or inside one).
+fn angles_with_links(n: &Node, unlinked: bool, out: &mut Vec<(f64, bool)>) {
+    out.push((n.bbox_angle, unlinked));
+    for c in n.children().into_iter().flatten() {
+        angles_with_links(c, unlinked, out);
+    }
+    if let Some(m) = &n.extras().mask {
+        angles_with_links(&m.art, unlinked || !m.linked, out);
+    }
+}
+
+fn group_angles(s: &Session, g: NodeId) -> Vec<(f64, bool)> {
+    let mut out = vec![];
+    angles_with_links(s.doc().unwrap().doc.node(g).unwrap(), false, &mut out);
+    out
+}
+
+fn selected(s: &Session) -> NodeId {
+    s.doc().unwrap().selection.objects[0]
+}
+
+#[test]
+fn distort_turns_each_member_and_linked_mask_by_its_own_warp() {
+    let mut s = session();
+    // A path turned 20° with a linked mask turned with it.
+    let a = rect(&mut s, 100.0, 100.0, 60.0, 40.0);
+    let am = rect(&mut s, 100.0, 100.0, 60.0, 40.0);
+    sel(&mut s, &[a, am]);
+    s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    // A path with an unlinked mask.
+    let u = rect(&mut s, 200.0, 100.0, 40.0, 40.0);
+    let um = rect(&mut s, 200.0, 100.0, 40.0, 40.0);
+    sel(&mut s, &[u, um]);
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    s.execute("transparency.unlinkOpacityMask", &json!({})).unwrap();
+    // A compound path turned 10°.
+    let c1 = rect(&mut s, 100.0, 200.0, 40.0, 40.0);
+    let c2 = rect(&mut s, 120.0, 220.0, 40.0, 40.0);
+    sel(&mut s, &[c1, c2]);
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = selected(&s);
+    s.execute("object.rotate", &json!({"angle": 10})).unwrap();
+    // A clip group.
+    let k1 = rect(&mut s, 250.0, 200.0, 50.0, 50.0);
+    let k2 = rect(&mut s, 260.0, 210.0, 50.0, 50.0);
+    sel(&mut s, &[k1, k2]);
+    s.execute("object.clippingMask.make", &json!({})).unwrap();
+    let clip = selected(&s);
+    sel(&mut s, &[a, u, compound, clip]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let before = group_angles(&s, g);
+    assert!(before.len() >= 10 && before.iter().any(|(a, _)| near(*a, 20.0)) && before.iter().any(|(_, u)| *u), "{before:?}");
+    // A warp that turns the group 30° about its center turns every object 30° more, except the
+    // art of the unlinked mask, which stays.
+    let b = s.doc().unwrap().doc.bounds_of(&[g], false).unwrap();
+    let n = undo_len(&s);
+    s.execute("object.distort", &json!({ "corners": json_points(turned(OrientedBox::aligned(b).corners(), b.center(), 30.0)) })).unwrap();
+    assert_eq!(undo_len(&s), n + 1, "one step");
+    let after = group_angles(&s, g);
+    assert_eq!(after.len(), before.len());
+    for ((old, unlinked), (new, _)) in before.iter().zip(&after) {
+        if *unlinked {
+            assert_eq!(new, old, "{before:?} → {after:?}");
+        } else {
+            assert!(near_deg(*new, old + 30.0), "{before:?} → {after:?}");
+        }
+    }
+
+    // Under a perspective warp each object follows the warp at its own center: two members of a
+    // group, one above the other, tilt by different amounts, and the group by the warp at its own
+    // center.
+    let mut s = session();
+    let p = rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    let q = rect(&mut s, 0.0, 50.0, 100.0, 50.0);
+    sel(&mut s, &[p, q]);
+    let g = id_of(&s.execute("object.group", &json!({})).unwrap());
+    let quad = raised();
+    s.execute("object.distort", &json!({ "corners": json_points(quad) })).unwrap();
+    let (want_p, want_q) = (upright_angle_after(quad, warped_center(&s, p)), upright_angle_after(quad, warped_center(&s, q)));
+    assert!(near(angle(&s, p), want_p) && near(angle(&s, q), want_q), "{} {} vs {want_p} {want_q}", angle(&s, p), angle(&s, q));
+    assert!(want_p > want_q + 1.0, "{want_p} {want_q}");
+    let want_g = upright_angle_after(quad, cross(quad[0], quad[2], quad[1], quad[3]));
+    assert!(near(angle(&s, g), want_g), "{} vs {want_g}", angle(&s, g));
+}
+
+#[test]
+fn mirrored_and_collapsing_distorts_keep_valid_angles() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 50.0);
+    sel(&mut s, &[a]);
+    s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    // Corners swapped left for right mirror the art: the box stands at the mirrored angle.
+    let b = s.doc().unwrap().doc.bounds_of(&[a], false).unwrap();
+    let [tl, tr, br, bl] = OrientedBox::aligned(b).corners();
+    s.execute("object.distort", &json!({ "corners": json_points([tr, tl, bl, br]) })).unwrap();
+    assert!(near(angle(&s, a), -30.0), "{}", angle(&s, a));
+    // A warp that collapses the art to a point leaves the angle as it was.
+    let n = undo_len(&s);
+    let c = b.center();
+    match s.execute("object.distort", &json!({ "corners": json_points([c; 4]) })) {
+        Ok(_) => assert!(near(angle(&s, a), -30.0), "{}", angle(&s, a)),
+        Err(_) => {
+            assert_eq!(undo_len(&s), n);
+            assert!(near(angle(&s, a), -30.0));
+        }
+    }
+}
+
+#[test]
+fn distort_angles_undo_redo_and_reopen_together() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    sel(&mut s, &[a]);
+    let before = anchors(&s, a);
+    let n = undo_len(&s);
+    let b = Rect::new(0.0, 0.0, 100.0, 100.0);
+    s.execute("object.distort", &json!({ "corners": json_points(turned(OrientedBox::aligned(b).corners(), b.center(), 30.0)) })).unwrap();
+    assert_eq!(undo_len(&s), n + 1);
+    assert_eq!(s.doc().unwrap().history.undo.last().map(|e| e.label.as_str()), Some("Free Distort"));
+    assert!(near(angle(&s, a), 30.0), "{}", angle(&s, a));
+    let warped = anchors(&s, a);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!((anchors(&s, a), angle(&s, a)), (before, 0.0));
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(anchors(&s, a), warped);
+    assert!(near(angle(&s, a), 30.0));
+    // A native file keeps the angle.
+    let data = s.execute("document.save", &json!({})).unwrap()["dataBase64"].as_str().unwrap().to_string();
+    s.execute("document.open", &json!({"name": "warped.vectorcraft", "dataBase64": data})).unwrap();
+    assert!(near(angle(&s, a), 30.0));
+    sel(&mut s, &[a]);
+    let b = selection_box(&s);
+    assert!(near(b.angle, 30.0) && near(b.rect.width(), 100.0) && near(b.rect.height(), 100.0), "{b:?}");
+    // The next handle drag scales along the turned box: the Right handle 50 pt further out.
+    let right = b.to_doc() * Handle::Right.pos(b.rect);
+    let to = b.to_doc() * (Handle::Right.pos(b.rect) + vectorcraft_geom::Vec2::new(50.0, 0.0));
+    s.select_tool("selection", ViewInfo::default()).unwrap();
+    drag_with(&mut s, &[right, to, to], Mods::default());
+    let nb = selection_box(&s);
+    assert!(near(nb.angle, 30.0) && near(nb.rect.width(), 150.0) && near(nb.rect.height(), 100.0), "{nb:?}");
 }
 
 #[test]

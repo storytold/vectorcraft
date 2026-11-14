@@ -92,7 +92,7 @@ fn clicking_a_library_style_adds_and_applies_it_in_one_step() {
     assert!(d.graphic_style("Feathered").is_some() && d.graphic_style("Haze").is_some());
     // Find filters by name; list rows describe the styles; looks are computed once per library.
     let lib = GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1;
-    let rows = GraphicStyleLibraries::rows(&lib, "ember");
+    let rows = GraphicStyleLibraries::rows(&lib, "shadows-glows", "ember");
     assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Ember"]);
     assert_eq!(GraphicStyleLibraries::describe(rows[0].item.unwrap()), "1 fill, Inner Glow, Outer Glow");
     assert!(std::sync::Arc::ptr_eq(&lib, &GraphicStyleLibraries::get(&app, "shadows-glows").unwrap().1));
@@ -121,7 +121,7 @@ fn painted_and_sketched_opens_from_the_window_menu_and_a_click_applies_its_style
     let node = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(rect)).unwrap().appearance.effects.clone();
     assert_eq!(node.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["sketch.charcoal"]);
     let lib = GraphicStyleLibraries::get(&app, "painted-sketched").unwrap().1;
-    let rows = GraphicStyleLibraries::rows(&lib, "ink");
+    let rows = GraphicStyleLibraries::rows(&lib, "painted-sketched", "ink");
     assert_eq!(rows.iter().map(|r| r.name).collect::<Vec<_>>(), ["Ink Contour", "Wet Ink"]);
 }
 

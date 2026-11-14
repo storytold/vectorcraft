@@ -438,12 +438,35 @@ fn the_materials_tab_lists_the_graphics_and_maps_one_in_one_undo_step() {
     let nodes = controls(&mut app, &ctx);
     named(&nodes, "Remove Graphic");
     named(&nodes, "Scale");
-    // Inflate has no planar faces to map onto.
+    // Inflate takes no graphics.
     set_type(&mut app, "inflate").unwrap();
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
     out.textures_delta.clear();
     let text = crate::tests_labels::shapes_text(&out);
-    assert!(text.contains("Graphics map onto planar faces"), "{text}");
+    assert!(text.contains("Graphics map onto the Plane, Extrude and Revolve object types"), "{text}");
+}
+
+#[test]
+fn on_revolve_the_materials_tab_maps_onto_the_side_without_a_face_choice() {
+    let (mut app, ctx) = materials_app();
+    ctx.enable_accesskit();
+    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    let drawn = |app: &mut VectorcraftApp| {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        out.textures_delta.clear();
+        crate::tests_labels::shapes_text(&out)
+    };
+    assert!(drawn(&mut app).contains("Face"));
+    // Revolve keeps the graphic on its side and lists it without Face; a pick maps another.
+    set_type(&mut app, "revolve").unwrap();
+    assert_eq!(graphics(&app).as_array().map(Vec::len), Some(1));
+    let history = undo_len(&app);
+    super::run_action(&mut app, &ctx, crate::dialogs::three_d_materials::Action::Map("Graphic".into()));
+    assert_eq!(graphics(&app).as_array().map(Vec::len), Some(2));
+    assert_eq!(undo_len(&app), history + 1);
+    named(&controls(&mut app, &ctx), "Scale");
+    let text = drawn(&mut app);
+    assert!(text.contains("Mapped graphics") && !text.contains("Face"), "{text}");
 }
 
 #[test]
@@ -610,6 +633,42 @@ fn a_geometry_effect_after_the_3d_effect_hides_the_graphics_handles() {
     push_effect(&mut app, 1, "distort.transform", json!({"moveH": 40.0}));
     assert!(!handles_frame(&mut app, &ctx, vec![primary(handle, true)]));
     handles_frame(&mut app, &ctx, vec![primary(handle, false)]);
+}
+
+#[test]
+fn a_hidden_fill_shows_no_handles_for_its_graphics() {
+    let (mut app, ctx) = materials_app();
+    app.run("threeD.mapGraphic", json!({"symbol": "Graphic"})).unwrap();
+    // The 3D effect, with its graphic, moves onto the square's fill.
+    let fill = {
+        let st = app.session.active_mut().unwrap();
+        let id = st.selection.objects[0];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
+        let fx = n.appearance.effects.remove(0);
+        let fill = n.appearance.items.iter().position(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(_))).unwrap();
+        n.appearance.effects_mut(Some(fill)).unwrap().push(fx);
+        fill
+    };
+    let shown = |app: &VectorcraftApp| {
+        let mut shown = false;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            crate::panels::set_pstate(ui.ctx(), super::DRAWN, Some(super::root_pass(ui.ctx())));
+            shown = super::graphic_handles(app, ui.ctx()).is_some_and(|(_, _, handles)| !handles.is_empty());
+        })
+        .textures_delta
+        .clear();
+        shown
+    };
+    assert!(shown(&app), "the visible fill's graphic has a handle");
+    {
+        let st = app.session.active_mut().unwrap();
+        let id = st.selection.objects[0];
+        let n = std::sync::Arc::make_mut(&mut st.doc).node_mut(id).unwrap();
+        if let Some(vectorcraft_doc::AppearanceItem::Fill(f)) = n.appearance.items.get_mut(fill) {
+            f.visible = false;
+        }
+    }
+    assert!(!shown(&app), "the hidden fill draws no graphic, so it has no handle");
 }
 
 #[test]

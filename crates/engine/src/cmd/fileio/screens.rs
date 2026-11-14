@@ -1030,6 +1030,10 @@ pub(crate) fn export(s: &mut Session, p: &Value) -> Result<Value> {
     o.one_source()?;
     // `<filename>`: the document's file, as Save names it, or its title before it is saved.
     let st = s.doc()?;
+    // Before the folder is made or any row is written.
+    for r in &rows {
+        super::check_linked_scripts(C, r.format.id, st)?;
+    }
     let naming = Naming::of(&o, st.path.as_deref().unwrap_or(&st.doc.title))?;
     let selection = o.selection_mode()?;
     let selected = if selection.is_some() { selected_artwork(s)? } else { vec![] };

@@ -56,7 +56,7 @@ use crate::pie::{self, PieDrag};
 use crate::rulerguide::GuideEdit;
 use crate::shaperwidget;
 use crate::typewidget;
-use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
+use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey, json_ids};
 
 /// Direction is read on screen, even in a turned view. Within three pixels of the press's
 /// horizontal position, retain the previous rule so hand jitter does not flip it.
@@ -228,8 +228,9 @@ fn distance_overlays(cx: &ToolContext, to: DistanceTo) -> Vec<Overlay> {
 /// Snap to Grid lands its edges on the grid (#740), taking over from the rest; otherwise Smart
 /// Guides line its bounds up with the other art, and with them off, View → Snap to Point lands the
 /// point it was grabbed by (an anchor pressed near, else the pressed point) on an anchor or a ruler
-/// guide. Snap to Pixel puts its top-left on whole pixels. A copy (Alt, which can go down or up at
-/// any time during the drag) leaves the original behind, so it snaps to the original too.
+/// guide. Snap to Pixel puts its top-left on whole pixels while its While Moving option is on. A
+/// copy (Alt, which can go down or up at any time during the drag) leaves the original behind, so
+/// it snaps to the original too.
 pub(crate) struct MoveSnap {
     bounds: Option<Rect>,
     targets: Option<Targets>,
@@ -239,7 +240,8 @@ pub(crate) struct MoveSnap {
     copy_targets: Option<Targets>,
     copy_points: Option<Targets>,
     /// With Smart Guides on, the ruler guides View › Snap to Point still pulls the grabbed point
-    /// onto (#1534), and lines the bounds up with (#5746); `points` holds them with Smart Guides off.
+    /// onto (#1534), and lines the bounds up with (#5746), within the Snapping Tolerance as drawing
+    /// does; `points` holds them with Smart Guides off.
     rulers: Option<Targets>,
 }
 
@@ -303,7 +305,7 @@ impl MoveSnap {
         // axis without one that Smart Guides left free, the bounds line up with the ruler guides
         // (#5746), alongside the Smart Guides.
         if let Some(t) = &self.rulers {
-            let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.tol(cx.snap_tolerance), taken);
+            let (adj, ov, held) = t.snap_moved_to_rulers(start + d, self.bounds.map(|b| b + d), cx.snap_tol(), taken);
             if adj != Vec2::ZERO {
                 d += adj;
                 if held {
@@ -313,7 +315,7 @@ impl MoveSnap {
                 }
             }
         }
-        if cx.snap_to_pixel
+        if cx.snaps_to_pixel(PixelOp::Moving)
             && let Some(b) = self.bounds
         {
             d = Vec2::new((b.x0 + d.x).round() - b.x0, (b.y0 + d.y).round() - b.y0);
@@ -373,7 +375,7 @@ impl MoveSnap {
             }
         }
         if let Some(t) = &self.rulers {
-            let (q, ov) = t.snap_point_along(start + d, u, cx.tol(cx.snap_tolerance));
+            let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
             if q != start + d {
                 d = q - start;
                 guides = ov;
@@ -382,12 +384,12 @@ impl MoveSnap {
             {
                 // Nothing else lined up: the bounds slide along the line onto a ruler guide, as
                 // they do without Shift (#4312).
-                let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.tol(cx.snap_tolerance));
+                let (adj, ov) = t.snap_moved_along_to_rulers(start + d, b + d, u, cx.snap_tol());
                 d += adj;
                 guides = ov;
             }
         }
-        if cx.snap_to_pixel
+        if cx.snaps_to_pixel(PixelOp::Moving)
             && let Some(b) = self.bounds
         {
             let at = Point::new(b.x0, b.y0) + d;
@@ -1382,14 +1384,19 @@ pub(crate) fn release_guide_at(cx: &ToolContext, p: Point, m: Mods) -> Option<Ac
 /// handle that sits where `h` appears on screen, in 45° steps. In a turned view, `angle` is the
 /// box's own angle less [`ToolContext::view_angle`].
 pub(crate) fn handle_cursor(h: Handle, angle: f64) -> Cursor {
-    let steps = if angle.is_finite() { (angle / 45.0).round() as i64 } else { 0 };
-    let h = Handle::ALL.get((h as i64 - steps).rem_euclid(8) as usize).copied().unwrap_or(h);
-    match h {
+    match screen_handle(h, angle) {
         Handle::Top | Handle::Bottom => Cursor::ResizeV,
         Handle::Left | Handle::Right => Cursor::ResizeH,
         Handle::TopLeft | Handle::BottomRight => Cursor::ResizeNwSe,
         Handle::TopRight | Handle::BottomLeft => Cursor::ResizeNeSw,
     }
+}
+
+/// The handle of an upright box that sits where handle `h` of a box turned by `angle`
+/// (counter-clockwise degrees) appears, in 45° steps.
+pub(crate) fn screen_handle(h: Handle, angle: f64) -> Handle {
+    let steps = if angle.is_finite() { (angle / 45.0).round() as i64 } else { 0 };
+    Handle::ALL.get((h as i64 - steps).rem_euclid(8) as usize).copied().unwrap_or(h)
 }
 
 #[cfg(test)]
@@ -1649,7 +1656,7 @@ impl SelectionTool {
                     // What the handle moves snaps as a dragged point does: to pixels or the
                     // grid, else with Smart Guides to the other objects, else with Snap to
                     // Point to their anchors; the ruler guides with Snap to Point.
-                    self.targets = Some(PointSnap::new(cx, || Targets::for_scale(cx)));
+                    self.targets = Some(PointSnap::scaling(cx, || Targets::for_scale(cx)));
                     self.last_backquote = false;
                     self.last_box_pos = None;
                     self.state = State::Scaling { handle, bx, areas };

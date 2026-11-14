@@ -83,15 +83,17 @@ fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &GeomContext
 
 /// The geometry `g` with the own effects of `item` (one of the fills and strokes `ctx` is the
 /// context of) applied, and `carried` (`item` as the object's effects left it) with its gradient
-/// moved along with them.
+/// moved along with them and the Transform effects the geometry pass left out hidden
+/// ([`crate::Carry::hide_skipped`]).
 fn apply_item(item: &AppearanceItem, carried: &AppearanceItem, g: &PathData, ctx: &GeomContext) -> (PathData, AppearanceItem) {
     let (ig, carry) = apply(item_effects(item), g, &ctx.item(item));
     let mut ap = Appearance { items: vec![carried.clone()], ..Default::default() };
-    if !carry.moves(&ap) {
-        return (ig, carried.clone());
+    if carry.moves(&ap) {
+        carry.apply(&mut ap);
     }
-    carry.apply(&mut ap);
-    (ig, ap.items.pop().unwrap_or_else(|| carried.clone()))
+    let mut out = ap.items.pop().unwrap_or_else(|| carried.clone());
+    carry.hide_skipped(out.effects_mut());
+    (ig, out)
 }
 
 /// A path node of `kind`'s flavour (compound when the result has several subpaths).
@@ -102,6 +104,15 @@ fn path_kind(d: &mut Document, path: PathData, rule: FillRule) -> NodeKind {
     } else {
         NodeKind::Path { path, rule, live: None, clipping: false, guide: false }
     }
+}
+
+thread_local! {
+    /// How many symbol instances deep [`bake_node`] is baking, through the art of instances whose
+    /// effects reshape it.
+    static INSTANCE_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The objects of symbol art that [`bake_document`] has baked for instances inside the art of
+    /// other instances, counted against [`crate::SYMBOL_ART_MAX_NODES`].
+    static NESTED_NODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 /// `n` with its geometry effects evaluated (`None` = unchanged).
@@ -143,8 +154,27 @@ fn bake_node(d: &mut Document, n: &Node) -> Option<Node> {
             }
             _ => None,
         };
+        // Instances baked inside the art of others stop at the depth limit, or once their art
+        // passes the objects one export bakes that way: an instance of a symbol whose art holds
+        // instances of itself is kept as it is there.
+        let instance = matches!(n.kind, NodeKind::SymbolInstance { .. });
+        if instance && INSTANCE_DEPTH.with(|c| c.get()) > 0 {
+            let count = symbol.as_ref().map_or(0, |a| a.count() as u64);
+            let spent = NESTED_NODES.with(|c| c.get()).saturating_add(count);
+            if INSTANCE_DEPTH.with(|c| c.get()) >= vectorcraft_doc::depth::MAX_DEPTH || spent > crate::SYMBOL_ART_MAX_NODES {
+                return None;
+            }
+            NESTED_NODES.with(|c| c.set(spent));
+        }
         let m = reshape(Some(d), n, symbol.as_ref())?;
-        return Some(bake_node(d, &m).unwrap_or(m));
+        if instance {
+            INSTANCE_DEPTH.with(|c| c.set(c.get() + 1));
+        }
+        let baked = bake_node(d, &m);
+        if instance {
+            INSTANCE_DEPTH.with(|c| c.set(c.get() - 1));
+        }
+        return Some(baked.unwrap_or(m));
     }
     // A path whose Transform effect copies it with a gradient, or scales its strokes or moves its
     // patterns: each copy an object of its own, so its gradient fits it rather than spanning
@@ -396,6 +426,8 @@ fn container_keeping_type(d: &Document, n: &Node) -> Option<Node> {
     if !kept {
         return None;
     }
+    // The members' own effects run first, as on the canvas.
+    crate::group::members_as_drawn(Some(d), &mut m);
     reshape_leaves(&mut m, &fx, &n.appearance.effects, Some(d));
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
     m.appearance.effects.retain(|e| !is_pathfinder(&e.id));
@@ -440,6 +472,7 @@ fn leaf_base(n: &Node) -> Option<(PathData, FillRule, GeomContext<'_>, Node)> {
     if carry.moves(&m.appearance) {
         carry.apply(&mut m.appearance);
     }
+    carry.hide_skipped(&mut m.appearance.effects);
     // The raster effects of its fills and strokes follow its Transform effects, as on the canvas.
     crate::raster::follow_items(&mut m);
     m.appearance.effects = crate::raster::without_geometry(&m.appearance.effects);
@@ -531,13 +564,20 @@ fn hoist_transparency(mut p: Node) -> Node {
 }
 
 /// [`expand_leaf`] every path and compound path in `n` (art made for Expand Appearance, such as a
-/// group's own fills and strokes or outlined type), in place.
+/// group's own fills and strokes or outlined type), in place. A group or layer in it with an
+/// appearance of its own ([`crate::has_container_appearance`]) is first made into the art that
+/// appearance paints ([`crate::evaluate_container`]).
 pub fn expand_art(d: &mut Document, n: &mut Node, stroke_art: StrokeArt) {
     if matches!(n.kind, NodeKind::Path { clipping: false, guide: false, .. } | NodeKind::Compound { .. }) {
         if let Some(m) = expand_leaf(d, n, stroke_art) {
             *n = m;
         }
         return;
+    }
+    if crate::has_container_appearance(n)
+        && let Some(m) = crate::evaluate_container(Some(&*d), n)
+    {
+        *n = m;
     }
     for c in n.children_mut().into_iter().flatten() {
         expand_art(d, Arc::make_mut(c), stroke_art);
@@ -661,6 +701,7 @@ pub fn bake_document(doc: &Document) -> Option<Document> {
         };
     }
     let mut d = placed.into_owned();
+    NESTED_NODES.with(|c| c.set(0));
     let layers = d.layers.clone();
     d.layers = layers.iter().map(|l| bake_node(&mut d, l).map(Arc::new).unwrap_or_else(|| l.clone())).collect();
     Some(d)

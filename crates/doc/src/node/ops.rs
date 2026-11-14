@@ -716,6 +716,37 @@ impl Node {
         out
     }
 
+    /// As a piece of a mesh-warped image ([`crate::NodeExtras::warp_piece`]), the art whose area is its
+    /// knockout shape at full coverage: the art of its opacity mask (on and not inverted), or the
+    /// clipping path of its clip group. `None` for other objects, whose knockout shape is what they
+    /// paint.
+    pub fn knockout_outline(&self) -> Option<&Arc<Node>> {
+        let e = self.extras();
+        if !e.warp_piece {
+            return None;
+        }
+        if let Some(m) = e.mask.as_deref() {
+            return (!m.disabled && !m.invert).then_some(&m.art);
+        }
+        match &self.kind {
+            NodeKind::Group { children, clip: true } => children.first(),
+            _ => None,
+        }
+    }
+
+    /// The image a piece of a mesh-warped image draws ([`Self::knockout_outline`]): the piece itself
+    /// when an opacity mask cuts it, else the image its clip group clips. `None` for other objects.
+    pub fn warp_piece_image(&self) -> Option<&Node> {
+        if !self.extras().warp_piece {
+            return None;
+        }
+        match &self.kind {
+            NodeKind::Image(_) => Some(self),
+            NodeKind::Group { children, clip: true } => children.get(1).map(|c| &**c).filter(|c| matches!(c.kind, NodeKind::Image(_))),
+            _ => None,
+        }
+    }
+
     /// Whether this is a clip group or a layer with a clipping mask: its first child clips the rest.
     /// A layer whose first child is a ruler guide holds no art, so a guide never clips it.
     pub fn clips(&self) -> bool {
@@ -732,33 +763,19 @@ impl Node {
         children.iter().rposition(|c| !c.is_ruler_guide()).map_or(0, |i| i + 1)
     }
 
-    /// Remove the ruler guides of this layer and of its sublayers. Other nodes hold none.
+    /// Remove the ruler guides of this layer and of its sublayers. Other nodes hold none. Only
+    /// layers that hold one are copied.
     pub fn strip_ruler_guides(&mut self) {
-        if !self.holds_ruler_guides() {
-            return;
-        }
-        if let Some(ch) = self.children_mut() {
-            ch.retain(|c| !c.is_ruler_guide());
-            for c in ch.iter_mut().filter(|c| c.holds_ruler_guides()) {
-                Arc::make_mut(c).strip_ruler_guides();
-            }
+        if let Some(held) = held_guides(self, &Self::is_ruler_guide) {
+            strip_held(self, held);
         }
     }
 
     /// Call `f` on the position (along the axis it crosses) of each ruler guide of this layer and
     /// of its sublayers, with whether the guide is vertical. Only layers that hold one are copied.
     pub fn map_ruler_guide_positions(&mut self, f: &mut impl FnMut(bool, &mut f64)) {
-        if !self.holds_ruler_guides() {
-            return;
-        }
-        if let Some(ch) = self.children_mut() {
-            for c in ch.iter_mut().filter(|c| c.is_ruler_guide() || c.holds_ruler_guides()) {
-                let c = Arc::make_mut(c);
-                match &mut c.kind {
-                    NodeKind::RulerGuide { vertical, pos, .. } => f(*vertical, pos),
-                    _ => c.map_ruler_guide_positions(f),
-                }
-            }
+        if let Some(held) = held_guides(self, &Self::is_ruler_guide) {
+            map_held(self, held, f);
         }
     }
 
@@ -803,6 +820,61 @@ impl Node {
     }
 }
 
+/// The ruler guides a layer holds: its children that are one, by index in order (each with
+/// nothing inside), and its sublayers holding one (with what they hold).
+#[derive(Debug, Default)]
+pub(super) struct HeldGuides(Vec<(usize, HeldGuides)>);
+
+/// The ruler guides, by `is_guide`, that `n` holds if it is a layer, or `None` when it holds
+/// none. `is_guide` looks at each child of `n` and of its sublayers once.
+pub(super) fn held_guides(n: &Node, is_guide: &impl Fn(&Node) -> bool) -> Option<HeldGuides> {
+    if !n.is_layer() {
+        return None;
+    }
+    let held: Vec<_> = n
+        .children()
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter_map(|(i, c)| if is_guide(c) { Some((i, HeldGuides::default())) } else { held_guides(c, is_guide).map(|h| (i, h)) })
+        .collect();
+    (!held.is_empty()).then_some(HeldGuides(held))
+}
+
+/// Remove the ruler guides of `layer` and of its sublayers that [`held_guides`] found (`held`).
+/// Only the sublayers holding one are copied, and only those are visited.
+pub(super) fn strip_held(layer: &mut Node, held: HeldGuides) {
+    let Some(ch) = layer.children_mut() else { return };
+    let mut held = held.0.into_iter().peekable();
+    let mut next = 0;
+    ch.retain_mut(|c| {
+        let at = next;
+        next += 1;
+        let Some((_, inner)) = held.next_if(|(i, _)| *i == at) else { return true };
+        // A sublayer holds something; a ruler guide has nothing inside.
+        if inner.0.is_empty() {
+            return false;
+        }
+        strip_held(Arc::make_mut(c), inner);
+        true
+    });
+}
+
+/// Call `f` (whether it is vertical, its position) on each ruler guide of `layer` and of its
+/// sublayers that [`held_guides`] found (`held`), in the order they lie in. Only the sublayers
+/// holding one, and the guides, are copied, and only those sublayers are visited.
+pub(super) fn map_held(layer: &mut Node, held: HeldGuides, f: &mut impl FnMut(bool, &mut f64)) {
+    let Some(ch) = layer.children_mut() else { return };
+    for (i, inner) in held.0 {
+        let Some(c) = ch.get_mut(i) else { continue };
+        if !inner.0.is_empty() {
+            map_held(Arc::make_mut(c), inner, f);
+        } else if let NodeKind::RulerGuide { vertical, pos, .. } = &mut Arc::make_mut(c).kind {
+            f(*vertical, pos);
+        }
+    }
+}
+
 impl Node {
     /// The Appearance panel's row for what this object's own fills and strokes paint around:
     /// "Contents" for a group or layer (its members) and for an image (its pixels), "Characters"
@@ -819,7 +891,8 @@ impl Node {
 impl Node {
     /// Whether this object shows any transparency, itself or anything inside it: object, fill or
     /// stroke opacity below 100%, a blend mode, an opacity mask, effects, transparent gradient
-    /// stops or a colorized image. Hidden objects show none.
+    /// stops (characters' fills and strokes included) or a colorized image. Hidden objects show
+    /// none.
     pub fn shows_transparency(&self) -> bool {
         self.shows_transparency_with(&|_| true)
     }
@@ -827,21 +900,31 @@ impl Node {
     /// [`Self::shows_transparency`], counting a colorized image by itself only when `colorize`
     /// accepts it, for files that write some colorized images in their colorize paint (EPS).
     pub fn shows_transparency_with(&self, colorize: &dyn Fn(&Node) -> bool) -> bool {
+        self.visible && (self.own_transparency(colorize) || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency_with(colorize))))
+    }
+
+    /// [`Self::shows_transparency`] of the object alone, what it holds left out.
+    pub fn shows_own_transparency(&self) -> bool {
+        self.visible && self.own_transparency(&|_| true)
+    }
+
+    /// The object's own transparency, as [`Self::shows_transparency_with`] counts it.
+    fn own_transparency(&self, colorize: &dyn Fn(&Node) -> bool) -> bool {
         use vectorcraft_color::Paint;
         let see_through = |p: &Paint| matches!(p, Paint::Gradient(g) if g.gradient.stops.iter().any(|s| s.opacity < 1.0));
         let effects = |fx: &[crate::Effect]| fx.iter().any(|e| e.visible);
-        self.visible
-            && (self.opacity < 1.0
-                || self.blend != BlendMode::Normal
-                || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
-                || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some() && colorize(self))
-                || effects(&self.appearance.effects)
-                || self
-                    .appearance
-                    .items
-                    .iter()
-                    .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
-                || self.children().is_some_and(|ch| ch.iter().any(|c| c.shows_transparency_with(colorize))))
+        self.opacity < 1.0
+            || self.blend != BlendMode::Normal
+            || self.extras().mask.as_ref().is_some_and(|m| !m.disabled)
+            || (matches!(self.kind, NodeKind::Image(_)) && self.extras().colorize.is_some() && colorize(self))
+            || effects(&self.appearance.effects)
+            || self
+                .appearance
+                .items
+                .iter()
+                .any(|i| i.visible() && (i.opacity() < 1.0 || i.blend() != BlendMode::Normal || see_through(i.paint()) || effects(i.effects())))
+            // Characters' own fills and strokes, which draw with the object.
+            || matches!(&self.kind, NodeKind::Text(t) if t.runs.iter().any(|r| see_through(&r.style.fill) || (r.style.stroke_width > 0.0 && see_through(&r.style.stroke))))
     }
 }
 

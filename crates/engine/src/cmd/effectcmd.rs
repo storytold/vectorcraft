@@ -13,10 +13,10 @@ use vectorcraft_doc::{Document, Effect, Node, NodeKind, StrokeLayer};
 use vectorcraft_geom::{FillRule, PathData};
 use vectorcraft_render::effects;
 
-use super::appearance::{ItemTarget, aligned, appearance_targets, index_param, item_indices, item_target, item_target_at};
+use super::appearance::{ItemTarget, aligned, appearance_targets, edit_targets, index_param, item_indices, item_target, item_target_at};
 use super::expand::has_seeded;
 use super::rasterfx;
-use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, cmd, fileio, has_doc, str_param, switch_or};
+use super::{CommandSpec, EngineError, NodeId, Result, Session, always, bad, check_switches, cmd, fileio, has_doc, str_param, switch_or};
 
 /// The name of the `svg.filter` effect drawing `xml`: its `<filter>` id. An effect names the
 /// document's filter of that name, so `xml` that differs from the document's filter of the same
@@ -49,7 +49,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Apply Effect",
             [],
             None,
-            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?|id?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step) → {ids, index, item, grouped?}",
+            "{effect: id (see effect.list, e.g. \"stylize.dropShadow\", \"distort.roughen\", \"warp.arc\", or \"plugin.<id>\" for an installed effect plug-in), params?: {…} (missing keys take the dialog defaults), item?: appearance item index|null (apply to that fill/stroke only; omitted: the Appearance panel's active item, else the whole object), ids?|id?: [..] (layers too), target?: \"object\"|\"contents\" (contents: the objects inside groups and layers)} append a live effect to each selected object's appearance (a group's or layer's apply to its members as one piece: one combined shadow; a Pathfinder effect, which combines a group's contents, groups several loose selected objects first, in the same undo step); the art of a graph design in a graph series is left out, and objects that are all such art are an error (docs/mcp.md) → {ids, index, item, grouped?}",
             has_doc,
             apply
         ),
@@ -76,7 +76,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Effect Options",
             [],
             None,
-            "{index: int, params?: {…} (merged into the current parameters), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place), threeDType?: plane|extrude|revolve|inflate (the 3D and Materials panel's object type: changes only an applied 3D effect in place into Rotate, Extrude & Bevel, Revolve or Inflate; the settings the new effect also takes keep their values, rotation angles wrapped into -180..180 outside Revolve, and the others start at its defaults; params then merge into the new effect's; the type the effect already has, with nothing else given, changes nothing and records no undo step), visible?: bool, item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} → {ids}",
+            "{index: int, params?: {…} (merged into the current parameters), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place; params are checked against the new style), threeDType?: plane|extrude|revolve|inflate (the 3D and Materials panel's object type: changes only an applied 3D effect in place into Rotate, Extrude & Bevel, Revolve or Inflate; the settings the new effect also takes keep their values, rotation angles wrapped into -180..180 outside Revolve, and the others start at its defaults; params then merge into the new effect's; the type the effect already has, with nothing else given, changes nothing and records no undo step), visible?: bool (any other value but null is refused, when a step plays too), item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection)} → {ids}",
             has_doc,
             set_params
         ),
@@ -94,7 +94,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Expand Appearance",
             ["Object"],
             None,
-            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked. Hidden fills, strokes and effects are dropped. In Safe Mode, an object with a visible plug-in effect (in it, or in a symbol it places) is an error and nothing changes. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
+            "{ids?|id?: [..], target?} turn each object's appearance into objects: every fill and stroke becomes an object of its own (a stroke stays a stroke, with its weight, dashes, arrowheads and width profile, on its own copy of the path, which object.expand or object.path.outlineStroke outline; brushed strokes become their brush art) grouped in paint order under the object's id and transparency, geometry effects are baked, raster effects become an embedded image (shadows and outer glows below the art; blur, feather and inner glow replace it; an object whose only raster effect is its own Rasterize becomes the image object.rasterize makes with the effect's options), type with effects or fills of its own is outlined; Crop Marks become a group of the object and its marks; Vector Halftone (addon.color.halftone) becomes a group of its dot paths, one per ink; a group's or layer's own fills and strokes become objects among its members, which are expanded too; a symbol instance whose topmost fill or stroke is visible, has an opacity above 0 and has a geometry effect becomes a group of its art, that fill's effects reshaping the art's filled shapes and that stroke's effects reshaping its stroked shapes, as the canvas draws them. An outlined frame of threaded text leaves its thread with the text it shows, and a frame kept as type in a group stays in its thread. A dimension whose art it changes becomes a plain group of its art, except one selected with art it measures, directly or in groups without fills, strokes or effects of their own: its lines and label stay as they are, and if the new art no longer fits its link it stays where it was, no longer linked. Hidden fills, strokes and effects are dropped. In Safe Mode, an object with a visible plug-in effect (in it, or in a symbol it places) is an error and nothing changes. Enabled when a selected or targeted object's appearance isn't basic (`ids` then pick which objects) → {ids, warning? (an image in the art couldn't be decoded, as object.rasterize says)}",
             can_expand,
             expand_appearance
         ),
@@ -298,7 +298,7 @@ fn ids_json(ids: &[NodeId]) -> Value {
 /// edits its equal item, or its equal object-level effect, each target matched on its own whatever
 /// the other targets have; in a target without them, `item` and `index` stand for themselves.
 pub(crate) fn effect_targets(s: &Session, p: &Value, item: ItemTarget, index: usize, cmd: &str) -> Result<Vec<(NodeId, Option<usize>, usize)>> {
-    let roots = appearance_targets(s, p)?;
+    let roots = edit_targets(s, p)?;
     let d = &s.doc()?.doc;
     let per = item.per_target(s, &roots);
     let first = roots.first().and_then(|f| d.node(*f));
@@ -453,13 +453,14 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let item = item_target(s, p, C)?;
     if effects::is_three_d(id) {
-        let targets = appearance_targets(s, p)?;
+        let targets = edit_targets(s, p)?;
         for (target, at) in targets.iter().copied().zip(item.per_target(s, &targets)) {
             let d = &s.doc()?.doc;
             let n = d.node(target).ok_or(EngineError::NoNode(target))?;
-            // A new effect goes after the item's others.
+            // A new effect goes after the item's (or the object's) others.
             let on = at.and_then(|at| at.effects_item(&n.appearance, C).ok()).flatten();
-            let on = on.and_then(|i| Some((i, n.appearance.items.get(i)?.effects().len())));
+            let on = on.and_then(|i| Some((Some(i), n.appearance.items.get(i)?.effects().len())));
+            let on = on.unwrap_or((None, n.appearance.effects.len()));
             effects::validate_three_d_at_in(Some(d), n, id, &effect.params, on).map_err(|e| bad(C, e))?;
             if let Some(name) = effects::missing_symbol(d, &effect.params, None) {
                 return Err(bad(C, format!("no symbol named `{name}`")));
@@ -491,8 +492,9 @@ fn loose_for_pathfinder(s: &Session, p: &Value, id: &str) -> Result<Option<Vec<N
     if !effects::is_pathfinder(id) || ["ids", "id", "item", "target"].iter().any(|k| p.get(k).is_some()) {
         return Ok(None);
     }
-    let roots = super::appearance::subject_roots(s)?;
     let d = &s.doc()?.doc;
+    // The art of a graph design in a series stays where the graph draws it.
+    let roots = super::appearance::without_design_art(d, super::appearance::subject_roots(s)?, "appearance")?;
     let grouped = roots.iter().any(|r| d.node(*r).is_some_and(|n| matches!(n.kind, NodeKind::Group { clip: false, .. } | NodeKind::Layer { .. })));
     Ok((roots.len() >= 2 && !grouped).then_some(roots))
 }
@@ -605,7 +607,7 @@ fn move_effect(s: &mut Session, p: &Value) -> Result<Value> {
     let src = item_target_at(s, p, "fromItem", C)?;
     let dst = if p.get("toItem").is_some() { item_target_at(s, p, "toItem", C)? } else { src };
     let copy = switch_or(p, "copy", false, C)?;
-    let roots = appearance_targets(s, p)?;
+    let roots = edit_targets(s, p)?;
     // Where an aligned effect would go in each of several different stacks isn't one place.
     if aligned(p, C)? && super::appearance::appearances_differ(&s.doc()?.doc, &roots) {
         return Err(bad(C, "effects of objects whose appearances differ can't be moved together"));
@@ -649,13 +651,26 @@ pub(crate) fn set_params_effects(s: &Session, p: &Value) -> Vec<String> {
         return vec![];
     };
     let Ok(targets) = effect_targets(s, p, item, index, C) else { return vec![] };
-    // A 3D effect whose type `threeDType` changes takes the new effect's parameters.
+    // A 3D effect whose type `threeDType` changes, and a Warp whose style `warpStyle` changes, take
+    // the new effect's parameters.
     let kind = three_d_type(p, C).ok().flatten();
+    let warp = p.get("warpStyle").and_then(Value::as_str).filter(|style| effects::WarpStyle::from_id(style).is_some());
     let effect = |&(id, at, index): &(NodeId, Option<usize>, usize)| {
         let id = &st.doc.node(id)?.appearance.effects_at(at)?.get(index)?.id;
-        Some(kind.filter(|_| effects::is_three_d(id)).map_or_else(|| id.clone(), str::to_string))
+        Some(edited_effect_id(id, kind, warp))
     };
     targets.iter().filter_map(effect).collect()
+}
+
+/// The id effect `id` has once `effect.setParams` sets its 3D type to `kind` or its Warp style to
+/// `warp` (each when given and when `id` is an effect of that family).
+fn edited_effect_id(id: &str, kind: Option<&str>, warp: Option<&str>) -> String {
+    let is_warp = id.strip_prefix("warp.").and_then(effects::WarpStyle::from_id).is_some();
+    match (kind, warp) {
+        (Some(to), _) if effects::is_three_d(id) => to.to_string(),
+        (_, Some(style)) if is_warp => format!("warp.{style}"),
+        _ => id.to_string(),
+    }
 }
 
 /// The effect `threeDType` in `p` turns a 3D effect into ([`effects::THREE_D_TYPES`]), when given.
@@ -718,6 +733,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             Ok(format!("warp.{style}"))
         })
         .transpose()?;
+    check_switches(p, &["visible"], C)?;
     let visible = p.get("visible").and_then(Value::as_bool);
     let item = item_target(s, p, C)?;
     let edited = set_params_effects(s, p);
@@ -772,7 +788,7 @@ fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
                 return Err(bad(C, format!("no symbol named `{name}`")));
             }
             if visible != Some(false) {
-                effects::validate_three_d_at_in(Some(d), n, to, &prospective, target.map(|item| (item, index))).map_err(|e| bad(C, e))?;
+                effects::validate_three_d_at_in(Some(d), n, to, &prospective, (target, index)).map_err(|e| bad(C, e))?;
             } else {
                 // Hidden, the effect draws nothing, so its object need not fit. The values given are
                 // checked, and after a change of 3D type so is every value it keeps.
@@ -848,8 +864,9 @@ fn load_texture(params: &mut Value, cmd: &str) -> Result<()> {
 
 /// Has `n` an appearance Expand Appearance turns into objects: a path that isn't basic (several
 /// fills or strokes, effects, transparency of a fill or stroke, a brush), a group or layer with
-/// fills, strokes or effects of its own or such members, other objects with effects, or type with
-/// fills or strokes of its own?
+/// fills, strokes or effects of its own or such members, other objects with effects, type with
+/// fills or strokes of its own, or a symbol instance whose active fill or stroke has a geometry
+/// effect ([`effects::has_item_geometry`])?
 pub(crate) fn expandable(n: &Node) -> bool {
     expandable_except(n, &[])
 }
@@ -866,7 +883,7 @@ pub(crate) fn expandable_except(n: &Node, skip: &[NodeId]) -> bool {
             !n.appearance.items.is_empty() || !n.appearance.effects.is_empty() || children.iter().any(|c| expandable_except(c, skip))
         }
         NodeKind::Text(_) => !n.appearance.items.is_empty() || !n.appearance.effects.is_empty(),
-        NodeKind::Image(_) => effects::has_item_geometry(n) || !n.appearance.effects.is_empty(),
+        NodeKind::Image(_) | NodeKind::SymbolInstance { .. } => effects::has_item_geometry(n) || !n.appearance.effects.is_empty(),
         _ => !n.appearance.effects.is_empty(),
     }
 }
@@ -937,6 +954,38 @@ fn expand_pieces(
         }
     }
     expanded
+}
+
+/// Replace each symbol instance in `m`, art an instance placed (`depth` instances deep), whose
+/// active fill or stroke has a geometry effect ([`effects::has_item_geometry`]) by its art as
+/// [`effects::expand_outlined`] makes it, and the instances in that art in turn, so
+/// [`expand_pieces`] bakes their effects with the rest. An instance stays as it is when it is more
+/// than [`vectorcraft_doc::depth::MAX_DEPTH`] instances deep, its symbol is missing, or its art
+/// would take the objects placed so far past `budget`.
+fn expand_nested_instances(d: &Document, m: &mut Node, depth: usize, budget: &mut u64) {
+    for c in m.children_mut().into_iter().flatten() {
+        if !matches!(c.kind, NodeKind::SymbolInstance { .. }) {
+            if c.children().is_some() {
+                expand_nested_instances(d, Arc::make_mut(c), depth, budget);
+            }
+            continue;
+        }
+        let NodeKind::SymbolInstance { symbol, .. } = &c.kind else { continue };
+        if depth >= vectorcraft_doc::depth::MAX_DEPTH || !effects::has_item_geometry(c) {
+            continue;
+        }
+        let Some(sym) = d.symbols.iter().find(|s| s.name == *symbol) else { continue };
+        let count = sym.art.count() as u64;
+        if count > *budget {
+            continue;
+        }
+        *budget -= count;
+        let art = vectorcraft_render::instance_art(&sym.art, c);
+        if let Some(mut a) = effects::expand_outlined(Some(d), c, Some(&art)) {
+            expand_nested_instances(d, &mut a, depth + 1, budget);
+            *c = Arc::new(a);
+        }
+    }
 }
 
 /// Does `n` hold an id of `seen`, or one id twice: does [`effects::fresh_ids`] give it new ids?
@@ -1094,6 +1143,8 @@ fn expanded_node(d: &mut Document, mut n: Node, brushes: &[vectorcraft_brush::Br
                     _ => None,
                 };
                 effects::expand_outlined(Some(&*d), &v, symbol.as_ref()).map(|mut m| {
+                    let mut budget = vectorcraft_doc::MAX_SYMBOL_NODES;
+                    expand_nested_instances(d, &mut m, 1, &mut budget);
                     expand_pieces(d, &mut m, true, brushes, &mut stroke_art);
                     m
                 })
