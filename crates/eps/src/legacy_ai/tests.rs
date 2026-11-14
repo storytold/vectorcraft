@@ -1394,6 +1394,41 @@ fn variable_font_settings_are_warned_as_left_out() {
     assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
 }
 
+/// A legacy `.ai` text object has no Insert Aki (§15.4): type with Insert Aki Left or Right is
+/// written as text with the warning that it is left out. Written as outlines, the glyphs keep the
+/// space it adds, and nothing is reported.
+#[test]
+fn insert_aki_is_warned_as_left_out_of_text() {
+    for (left, right) in [(250.0, 0.0), (0.0, 125.0)] {
+        let mut doc = typed();
+        let id = texts(&doc)[0].0.id;
+        if let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) {
+            t.runs[0].style.aki_left = left;
+            t.runs[0].style.aki_right = right;
+        }
+        let out = write(&doc);
+        assert!(out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{left} {right}: {:?}", out.warnings);
+        assert!(String::from_utf8(out.bytes).unwrap().contains("(H\\351llo \\2005\\r) Tx\n"), "still written as text");
+    }
+    let width = |aki: f64| {
+        let mut st = style(20.0, red());
+        st.aki_left = aki;
+        st.aki_right = aki;
+        let t = vectorcraft_doc::TextObject::point(vectorcraft_geom::Point::new(20.0, 40.0), "HH", st);
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(t)));
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let out = write_with(&doc, LegacyAiOptions { outline_text: true, ..LegacyAiOptions::default() });
+        assert!(!out.warnings.iter().any(|w| w == TYPE_ATTRIBUTES), "{:?}", out.warnings);
+        let back = crate::import(&out.bytes).unwrap().document;
+        children(&children(&back.layers[0])[0])[0].visual_bounds().unwrap().width()
+    };
+    // Between the two H's: 0.5 em after the first and 0.5 em before the second, 20 pt.
+    let (plain, spaced) = (width(0.0), width(500.0));
+    assert!((spaced - plain - 20.0).abs() < 0.05, "{plain} {spaced}");
+}
+
 /// Standard Vertical Roman Alignment is written as `Tv` and Tate-chu-yoko in horizontal type as a
 /// Kumi block recorded for later use, `TY` (§15.3.4), each where it changes: the marks read back
 /// on the same characters, a block is closed before its text object ends, and type with neither
