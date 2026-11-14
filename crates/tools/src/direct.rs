@@ -68,6 +68,18 @@ use crate::rulerguide::GuideEdit;
 use crate::select::{MoveSnap, hit_center, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at, selection_bounds};
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
+/// An ordinary path's handle drag keeps its owner across previews, which each start at Begin.
+#[derive(Clone, Debug)]
+struct HandleDrag {
+    at: Point,
+    last: Point,
+    handle: Point,
+    offset: Vec2,
+    space: bool,
+    independent: bool,
+    translated: bool,
+}
+
 #[derive(Clone, Debug)]
 enum State {
     Idle,
@@ -106,6 +118,7 @@ enum State {
         si: usize,
         ai: usize,
         out: bool,
+        drag: Option<HandleDrag>,
     },
     Marquee {
         start: Point,
@@ -836,7 +849,22 @@ impl Tool for DirectSelectionTool {
                     self.mesh.unfocus();
                 }
                 if let Some((id, si, ai, out)) = hit_handle(cx, p, point) {
-                    self.state = State::Handle { id, si, ai, out };
+                    let drag = cx.doc.node(id).and_then(|n| match &n.kind {
+                        NodeKind::Path { path, .. } => {
+                            let a = path.subpaths.get(si)?.anchors.get(ai)?;
+                            Some(HandleDrag {
+                                at: a.p,
+                                last: p,
+                                handle: if out { a.h_out } else { a.h_in },
+                                offset: Vec2::ZERO,
+                                space: false,
+                                independent: false,
+                                translated: false,
+                            })
+                        }
+                        _ => None,
+                    });
+                    self.state = State::Handle { id, si, ai, out, drag };
                     self.handle_snap = HandleSnap::default();
                     return vec![Action::Begin("Reshape".into())];
                 }
@@ -925,7 +953,8 @@ impl Tool for DirectSelectionTool {
                 self.state = State::TypeArea { items, start, began: true };
                 out
             }
-            (PointerKind::Drag, State::Handle { id, si, ai, out }) => {
+            (PointerKind::Drag, State::Handle { id, si, ai, out, drag: Some(drag) }) => self.drag_handle(cx, ev, p, (id, si, ai, out), drag),
+            (PointerKind::Drag, State::Handle { id, si, ai, out, drag: None }) => {
                 let (q, guides) = self.handle_snap.snap(cx, (id, si, ai), p, ev.mods.shift);
                 self.snapped = snapped(q.to_vec2(), p.to_vec2(), ev.mods.shift, &guides);
                 self.guides = guides;
@@ -1451,6 +1480,57 @@ impl DirectSelectionTool {
         }
         vec![]
     }
+    /// Update one ordinary-path handle preview, retaining its Space translation phase.
+    fn drag_handle(
+        &mut self,
+        cx: &ToolContext,
+        ev: &PointerEvent,
+        p: Point,
+        (id, si, ai, out): (NodeId, usize, usize, bool),
+        mut drag: HandleDrag,
+    ) -> Vec<Action> {
+        let delta = p - drag.last;
+        if ev.mods.space {
+            drag.at += delta;
+            drag.handle += delta;
+            if delta != Vec2::ZERO {
+                drag.translated = true;
+                // Handle targets include this path's anchors, which just moved.
+                self.handle_snap = HandleSnap::default();
+            }
+            self.snapped = false;
+            self.guides.clear();
+        } else {
+            if drag.space {
+                // Resume at the accepted handle even when it was snapped away from the pointer.
+                drag.offset = drag.handle - drag.last;
+                self.handle_snap = HandleSnap::default();
+                self.snapped = false;
+                self.guides.clear();
+            }
+            // Releasing Space without moving must not reshape the translated handles.
+            if !drag.space || delta != Vec2::ZERO {
+                let input = p + drag.offset;
+                let (q, guides) = self.handle_snap.snap(cx, (id, si, ai), input, ev.mods.shift);
+                self.snapped = snapped(q.to_vec2(), input.to_vec2(), ev.mods.shift, &guides);
+                self.guides = guides;
+                drag.handle = q;
+                drag.independent = ev.mods.alt;
+            }
+        }
+        drag.last = p;
+        drag.space = ev.mods.space;
+        let mut params = json!({
+            "id": id.0, "subpath": si, "anchor": ai, "which": if out { "out" } else { "in" },
+            "x": drag.handle.x, "y": drag.handle.y, "independent": drag.independent,
+        });
+        if drag.translated {
+            params["at"] = json!([drag.at.x, drag.at.y]);
+        }
+        self.state = State::Handle { id, si, ai, out, drag: Some(drag) };
+        vec![Action::Preview("path.setHandle".into(), params)]
+    }
+
     fn drag_move_anchors(
         &mut self,
         cx: &ToolContext,
