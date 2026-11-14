@@ -90,8 +90,16 @@ fn the_panel_lists_the_images_with_link_info_for_the_selected_one() {
     assert!(text.contains("Linked") && text.contains("300 × 200 px") && text.contains("Location"), "{text}");
     // The flyout draws with every item.
     let menu = painted_text(&mut app, super::links::menu);
-    for item in ["Relink to Folder…", "Embed Image(s)", "Placement Options…", "Show Missing", "Sort by Status", "Large Thumbnails", "Show in Folder"]
-    {
+    for item in [
+        "Relink to Folder…",
+        "Embed Image(s)",
+        "Placement Options…",
+        "Show Missing",
+        "Sort by Status",
+        "Sort by Size",
+        "Large Thumbnails",
+        "Show in Folder",
+    ] {
         assert!(menu.contains(item), "{item}: {menu}");
     }
 }
