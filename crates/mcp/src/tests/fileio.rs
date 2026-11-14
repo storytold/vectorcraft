@@ -284,7 +284,7 @@ fn save_file_warns_about_options_it_does_not_use() {
 }
 
 /// The notes on `options` name the `.ai` file the save writes, as the note on a top-level option
-/// does: a legacy `.ai` for `aiVersion: "7"` (beside `pdfCompatible: false` too), a
+/// does: a legacy `.ai` for `aiVersion: "7"` (beside `pdfCompatible: false` too, which it notes), a
 /// non-PDF-compatible `.ai` for `pdfCompatible: false`, and a PDF-compatible `.ai` otherwise, also
 /// when the save reuses the options the document was last saved with.
 #[test]
@@ -301,8 +301,12 @@ fn save_file_notes_name_the_ai_file_it_writes() {
         ("pdf.ai", json!({"pdfCompatible": true, "preview": true}), "PDF-compatible .ai"),
     ] {
         let r = text(&call_tool(&mut h, "save_file", &json!({"path": tmp(&dir, name), "version": 3, "options": options})));
-        let expected =
-            [format!("`version` was not used: {label} files don't read it"), format!("`options.preview` was not used: {label} files don't read it")];
+        // A legacy `.ai` doesn't read `pdfCompatible` either.
+        let unread = |k: &str| options.get(k).is_some() && (k != "pdfCompatible" || label.starts_with("legacy"));
+        let expected: Vec<String> = std::iter::once("version".to_string())
+            .chain(["pdfCompatible", "preview"].into_iter().filter(|k| unread(k)).map(|k| format!("options.{k}")))
+            .map(|k| format!("`{k}` was not used: {label} files don't read it"))
+            .collect();
         assert_eq!(notes(&r), expected, "{name}: {r}");
     }
     // A save given no option the file reads writes it as last saved: a legacy `.ai` again.
