@@ -67,6 +67,21 @@ pub fn num_field_within(
     unit_field(ui, id, label, None, value, unit, width, false, bounds, &[], Tokens::get(ui.ctx()).cr(), false, "")
 }
 
+/// [`num_field_within`] that refuses a value typed outside `bounds` (points), as it refuses text
+/// that doesn't read: the field flashes, keeps its value and holds the dialog open. ↑/↓, the wheel
+/// and a scrub still stop at the ends.
+pub fn num_field_refusing(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    value: Option<f64>,
+    unit: Unit,
+    width: f32,
+    bounds: RangeInclusive<f64>,
+) -> Option<f64> {
+    let label = take_previous_label(ui);
+    unit_field_from(ui, id, label, None, value, unit, width, false, bounds, &[], Tokens::get(ui.ctx()).cr(), false, None, "", true)
+}
+
 /// [`num_field_within`] whose empty value reads `empty` (Transform Each's Absolute scales read
 /// "Mixed" when the selected objects differ): typing replaces it, as it replaces the value shown.
 pub fn num_field_within_empty(
@@ -123,11 +138,12 @@ fn unit_field(
     live: bool,
     empty: &str,
 ) -> Option<f64> {
-    unit_field_from(ui, id, label, name, value, unit, width, share_of_value, bounds, stops, corners, live, None, empty)
+    unit_field_from(ui, id, label, name, value, unit, width, share_of_value, bounds, stops, corners, live, None, empty, false)
 }
 
 /// [`unit_field`] whose blank field (`value` is `None`) steps from `blank_from` (points) with
-/// ↑/↓ and the wheel instead of doing nothing.
+/// ↑/↓ and the wheel instead of doing nothing. With `refuse_outside`, a value typed outside
+/// `bounds` is refused as text that doesn't read is, rather than kept at the nearer end.
 #[allow(clippy::too_many_arguments)]
 fn unit_field_from(
     ui: &mut Ui,
@@ -144,6 +160,7 @@ fn unit_field_from(
     live: bool,
     blank_from: Option<f64>,
     empty: &str,
+    refuse_outside: bool,
 ) -> Option<f64> {
     let id = id_with(ui.scope_id(), id);
     let shown = value.map(|v| unit.format(v)).unwrap_or_else(|| empty.to_string());
@@ -165,7 +182,11 @@ fn unit_field_from(
     let scrubbed = scrub::field(ui, id, rect, &buf, value.map(|v| unit.from_pt(v)), STEP_DECIMALS, &bounds_unit);
     let commit = commit && buf != shown;
     if commit {
-        match read(&buf).or_else(|| if share_of_value { share_of(&buf, value?) } else { None }) {
+        let typed_value = read(&buf).or_else(|| if share_of_value { share_of(&buf, value?) } else { None });
+        // A refused value is one outside `bounds` that the field doesn't show as an end: the end
+        // shown in the field's unit ("352.7778 mm" for 1000 pt) reads back as that end.
+        let typed_value = typed_value.filter(|&v| !refuse_outside || bounds.contains(&v) || unit.format(within(v, &bounds)) == unit.format(v));
+        match typed_value {
             Some(v) => {
                 let clamped = within(v, &bounds);
                 let formatted = unit.format(clamped);
@@ -1042,7 +1063,7 @@ pub fn spin_field_stops_named(
     let stops = if value.is_none() { &BLANK_WEIGHT_STOPS[..] } else { presets };
     let fmt = |v: f64| unit.format(v);
     spin_generic(ui, label, value, Some(blank_from), None, None, None, width, step, min, presets, stops, &fmt, &mut |ui, fw, corners, label| {
-        unit_field_from(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, stops, corners, false, Some(blank_from), "")
+        unit_field_from(ui, id, label, name, value, unit, fw, false, min..=f64::INFINITY, stops, corners, false, Some(blank_from), "", false)
     })
     .and_then(SpinPick::value)
 }

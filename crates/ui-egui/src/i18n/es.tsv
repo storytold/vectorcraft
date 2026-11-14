@@ -629,6 +629,8 @@ font-technology	Variable	Variables
 	Convert to Artboards	Convertir en mesas de trabajo
 	Convert to CMYK	Convertir a CMYK
 	Convert to Grayscale	Convertir a escala de grises
+	Convert to Indexed Color	Convertir a color indexado
+	Convert to Indexed Color…	Convertir a color indexado…
 	Convert To Outlines	Convertir en contornos
 	Convert To Point Type	Convertir en texto de punto
 	Convert to RGB	Convertir a RGB
@@ -1592,6 +1594,8 @@ font-technology	Variable	Variables
 	Objects on Path Tool	Herramienta Objetos en trazado
 	Attach Objects on Path	Adjuntar objetos al trazado
 	Expand Objects on Path	Expandir objetos en trazado
+	Detach	Separar
+	Detach Object from Path	Separar objeto del trazado
 	Release Live Paint	Soltar pintura interactiva
 	Release Repeat	Soltar repetición
 	Release Slice	Soltar sector
@@ -2188,6 +2192,29 @@ font-technology	Variable	Variables
 	Bristle Brush	Pincel de cerdas
 	Pattern Brush	Pincel de motivo
 	missing from the Brushes panel	falta en el panel Pinceles
+	built in	integrada
+	embedding not allowed	incrustación no permitida
+	embedding for editing	incrustación para edición
+	embedding for preview and print	incrustación para vista previa e impresión
+	embedding allowed	incrustación permitida
+	{file}; {embedding}	{file}; {embedding}
+	substituted: shown in {family} {style} ({detail})	sustituida: se muestra con {family} {style} ({detail})
+	missing: shown in {family} {style}	falta: se muestra con {family} {style}
+	missing	falta
+	{width} × {height} px	{width} × {height} px
+	{size} — {file}	{size} — {file}
+	{n} ppi	{n} ppp
+	{kind}, {instances}	{kind}, {instances}
+	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
+	{grid}, {instances}	{grid}, {instances}
+	Linear gradient	Degradado lineal
+	Radial gradient	Degradado radial
+	Conic gradient	Degradado cónico
+	Diamond gradient	Degradado de rombo
+	Freeform gradient	Degradado libre
+@plural	{n} instance|{n} instances	{n} instancia|{n} instancias
+@plural	{n} row|{n} rows	{n} fila|{n} filas
+@plural	{n} column|{n} columns	{n} columna|{n} columnas
 	Select art to make a scatter, art or pattern brush.	Selecciona una ilustración para crear un pincel de dispersión, de arte o de motivo.
 	Brush Art	Ilustración del pincel
 	New Calligraphic Brush	Nuevo pincel caligráfico
@@ -2699,6 +2726,11 @@ digits	Malayalam	Malayálam
 	Rating:	Clasificación:
 	Real World:	Mundo real:
 	Real-time Drawing and Editing	Dibujo y edición en tiempo real
+	Use Monitor Profile for Canvas	Usar perfil del monitor para el lienzo
+	The canvas is drawn in sRGB.	El lienzo se dibuja en sRGB.
+	Canvas display profile:	Perfil de pantalla del lienzo:
+	The system matches the window to the display's colors.	El sistema ajusta la ventana a los colores de la pantalla.
+	No usable display profile was found: the canvas is drawn in sRGB.	No se encontró ningún perfil de pantalla utilizable: el lienzo se dibuja en sRGB.
 	Rearrange All Artboards	Reorganizar todas las mesas de trabajo
 	Rearrange	Reorganizar
 	Select All Artboards	Seleccionar todas las mesas de trabajo
@@ -2912,6 +2944,9 @@ digits	Malayalam	Malayálam
 	Reset the rows to the artwork's colors	Restablecer las filas a los colores de la ilustración
 	Color Theme Picker	Selector de tema de color
 	Click or drag across the art to pick its colors; Shift adds more	Haga clic o arrastre sobre la ilustración para tomar sus colores; Mayús añade más
+	Prominent Colors	Colores destacados
+	Save All Colors	Guardar todos los colores
+	Save Prominent Colors	Guardar colores destacados
 	Reset to Default	Restablecer valores predeterminados
 	Reset to White, Black	Restablecer a blanco, negro
 	Reset with Mesh	Restablecer con malla
@@ -3462,6 +3497,19 @@ digits	Malayalam	Malayálam
 	Spot Color Objects	Objetos con tintas planas
 	Pattern Objects	Objetos con motivos
 	Gradient Objects	Objetos con degradados
+	Font Details	Detalles de fuentes
+	Linked Images	Imágenes vinculadas
+	Embedded Images	Imágenes incrustadas
+	Compound Paths	Trazados compuestos
+	Text Objects	Objetos de texto
+	Placed Documents	Documentos colocados
+	Symbol Instances	Instancias de símbolo
+	Gradient Meshes	Mallas de degradado
+	Blends	Fusiones
+	Envelopes	Envolventes
+	Intertwine Groups	Grupos entrelazados
+	Opacity Masks	Máscaras de opacidad
+	Objects with Effects	Objetos con efectos
 	Spot Colors	Tintas planas
 	Spot Colors…	Tintas planas…
 	Spread:	Extensión:
@@ -3583,6 +3631,8 @@ digits	Malayalam	Malayálam
 	Rename Library Group	Cambiar nombre del grupo de biblioteca
 	Delete Library Group	Eliminar grupo de biblioteca
 	Move Library Item to Group	Mover elemento de la biblioteca al grupo
+	Rename Library Item	Cambiar nombre del elemento de la biblioteca
+	Add to Character Styles	Agregar a estilos de carácter
 	Library	Biblioteca
 	Rename Library	Cambiar nombre de la biblioteca
 	Show Library	Mostrar biblioteca
@@ -3616,6 +3666,11 @@ digits	Malayalam	Malayálam
 	Tate-chu-yoko	Tate-chu-yoko
 	Tate-chu-yoko Settings…	Ajustes de Tate-chu-yoko…
 	Tate-chu-yoko Settings	Ajustes de Tate-chu-yoko
+	Warichu	Warichu
+	Warichu Settings…	Ajustes de Warichu…
+	Warichu Settings	Ajustes de Warichu
+	Lines:	Líneas:
+	Line Gap:	Separación entre líneas:
 	Composite Fonts…	Fuentes compuestas…
 	Composite Fonts	Fuentes compuestas
 	Export Composite Fonts	Exportar fuentes compuestas
@@ -4150,6 +4205,10 @@ axis	Both	Ambos
 	Dock Panel	Anclar panel
 	Dock to Top	Anclar arriba
 	Dock to Bottom	Anclar abajo
+	Dock to Left	Anclar a la izquierda
+	Dock to Right	Anclar a la derecha
+	Dock Toolbar	Anclar barra de herramientas
+	Float Toolbar	Hacer flotar la barra de herramientas
 	Control Bar Options	Opciones de la barra de control
 	Tool Options	Opciones de herramienta
 	Object Options	Opciones de objeto
@@ -4167,6 +4226,7 @@ axis	Both	Ambos
 # (`untranslated_report` lists any that are missing). Command ids, parameter
 # names and values in backticks or code (`colorModel rgb`, `document.export`) stay as they are.
 @msg	no library `{id}`	no hay ninguna biblioteca `{id}`
+@msg	the library has another item of that kind named `{name}`	la biblioteca ya tiene otro elemento de ese tipo llamado `{name}`
 @msg	select some type first	selecciona primero algún texto
 @msg	kerning must be a number, "auto", or "optical"	kerning debe ser un número, «auto» u «optical»
 @msg	the selection has no gradient fill	la selección no tiene un degradado de relleno
@@ -4316,8 +4376,15 @@ axis	Both	Ambos
 @msg	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
 @msg	Couldn't place {name}: the document it was dropped on was closed	No se pudo colocar {name}: se cerró el documento en el que se soltó
 @msg	Couldn't place {name}: the document it was placed in was closed	No se pudo colocar {name}: se cerró el documento en el que se estaba colocando
+@msg	Couldn't place {name}: the document it was dropped on was reverted	No se pudo colocar {name}: se revirtió el documento en el que se soltó
+@msg	Couldn't place {name}: the document it was placed in was reverted	No se pudo colocar {name}: se revirtió el documento en el que se estaba colocando
+@msg	Couldn't paste: the document it was pasted in was reverted	No se pudo pegar: se revirtió el documento en el que se estaba pegando
 @msg	Couldn't read {name}: {e}	No se pudo leer {name}: {e}
 @msg	Couldn't save recovery data: {e}	No se pudieron guardar los datos de recuperación: {e}
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No se pudieron guardar los datos de recuperación de {title}: {e}. Las copias se guardan en {folder}, la carpeta de recuperación predeterminada; para usar otra carpeta, configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data for {title}: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No se pudieron guardar los datos de recuperación de {title}: {e}. Las copias se guardan en {folder}, la carpeta definida en Preferencias; para usar otra carpeta, configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the default recovery folder; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No se pudieron guardar los datos de recuperación: {e}. Las copias se guardan en {folder}, la carpeta de recuperación predeterminada; para usar otra carpeta, configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
+@msg	Couldn't save recovery data: {e}. Copies go to {folder}, the folder set in Preferences; to use another folder, set Preferences → File Handling → Data Recovery → Folder (recoveryFolder)	No se pudieron guardar los datos de recuperación: {e}. Las copias se guardan en {folder}, la carpeta definida en Preferencias; para usar otra carpeta, configura Preferencias → Manejo de archivos → Recuperación de datos → Carpeta (recoveryFolder)
 @msg	Create Outlines: select text objects	Crear contornos: selecciona objetos de texto
 @msg	Create from Guides: the document has no artboard	Crear a partir de guías: el documento no tiene mesa de trabajo
 @msg	Create from Guides: the guides make more than {MAX_PIECES} slices	Crear a partir de guías: las guías forman más de {MAX_PIECES} sectores
@@ -4327,6 +4394,7 @@ axis	Both	Ambos
 @msg	Plug-ins can't be loaded from {path}: {e}	No se pueden cargar plugins desde {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecciona con Selección directa los puntos de ancla en los que cortar (no los puntos finales de trazados abiertos)
 @msg	Divide Objects Below: select a path	Dividir objetos inferiores: selecciona un trazado
+@msg	select a path	selecciona un trazado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos inferiores: selecciona exactamente un trazado
 @msg	Downloaded {what}	Se descargó {what}
 @msg	Expand Appearance: the selection has a basic appearance	Expandir apariencia: la selección tiene una apariencia básica
@@ -4403,6 +4471,9 @@ axis	Both	Ambos
 @msg	`{keep}` is not a side of this axis	`{keep}` no es un lado de este eje
 @msg	`{key}` must be `auto` or a language code such as `en` or `zh-hant`	`{key}` debe ser `auto` o un código de idioma como `en` o `zh-hant`
 @msg	`{key}` must be a #rrggbb color	`{key}` debe ser un color #rrggbb
+@msg	`{key}` must be a #rrggbb color or a layer color name	`{key}` debe ser un color #rrggbb o el nombre de un color de capa
+@msg	unknown Live Paint option `{key}`	opción de pintura interactiva desconocida `{key}`
+@msg	unknown Shape Builder option `{key}`	opción del generador de formas desconocida `{key}`
 @msg	`{key}` must be a #rrggbb colour	`{key}` debe ser un color #rrggbb
 @msg	`{key}` must be a number	`{key}` debe ser un número
 @msg	`{key}` must be a number, not {v}	`{key}` debe ser un número, no {v}
@@ -4562,6 +4633,7 @@ axis	Both	Ambos
 @msg	internal error: {msg} (please report this bug)	error interno: {msg} (por favor, informa de este error)
 @msg	invalid PDF setting: {0}	ajuste de PDF no válido: {0}
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): se escribe con un UserUnit de {unit}, así que las aplicaciones que ignoran UserUnit la muestran ese número de veces más pequeña
+@msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): it is written with a UserUnit of {unit}, so apps that ignore UserUnit show it that many times smaller: turn on Write pages longer than 200 in at full size in points	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): se escribe con un UserUnit de {unit}, así que las aplicaciones que ignoran UserUnit la muestran ese número de veces más pequeña: activa «Escribir las páginas de más de 200 in a tamaño real, en puntos»
 @msg	the page of artboard {n} is {size}, longer than PDF's page limit of 14,400 pt (200 in): {label} pages are written without a UserUnit, in points, and apps that keep to the limit cut the page to 200 in	la página de la mesa de trabajo {n} mide {size}, más que el límite de página de PDF de 14.400 pt (200 in): las páginas {label} se escriben sin UserUnit, en puntos, y las aplicaciones que respetan el límite recortan la página a 200 in
 @msg	PDF 1.5 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to keep its size: the file is written as PDF 1.6	PDF 1.5 no tiene UserUnit, que una página de más de 14.400 pt (200 in) necesita para conservar su tamaño: el archivo se escribe como PDF 1.6
 @msg	PDF 1.4 has no UserUnit, which a page longer than 14,400 pt (200 in) needs to stay within PDF/A-2's page limit of 14,400 units: the file is written as PDF 1.6	PDF 1.4 no tiene UserUnit, que una página de más de 14.400 pt (200 in) necesita para no superar el límite de página de PDF/A-2, de 14.400 unidades: el archivo se escribe como PDF 1.6
@@ -4745,6 +4817,7 @@ axis	Both	Ambos
 @msg	paths contain invalid coordinates	los trazados contienen coordenadas no válidas
 @msg	paths: give at least one file	paths: indica al menos un archivo
 @msg	replace: the object to replace was changed or deleted	replace: se modificó o eliminó el objeto que se iba a reemplazar
+@msg	the document it was prepared for is no longer active	el documento para el que se preparó ya no está activo
 @msg	pattern missing	falta el motivo
 @msg	patterns nested too deeply are filled with mid-grey	los motivos anidados a demasiada profundidad se rellenan de gris medio
 @msg	percent must be above 0 and at most 6400, not {p}	percent debe ser mayor que 0 y como máximo 6400, no {p}
@@ -4780,6 +4853,7 @@ axis	Both	Ambos
 @msg	select a repeat	selecciona una repetición
 @msg	select an Intertwine group	selecciona un grupo entrelazado
 @msg	select an Objects on Path group	selecciona un grupo de objetos en trazado
+@msg	choose the object to detach with its Select/Move widget	elige el objeto que quieres separar con su control Seleccionar/Mover
 @msg	a path inside a compound path, blend, envelope, repeat or Intertwine group can't take objects	un trazado dentro de un trazado compuesto, una fusión, una envolvente, una repetición o un grupo entrelazado no puede recibir objetos
 @msg	a clipping path can't take objects	un trazado de recorte no puede recibir objetos
 @msg	objects inside a blend, envelope, repeat or Intertwine group can't be attached to a path	los objetos dentro de una fusión, una envolvente, una repetición o un grupo entrelazado no se pueden adjuntar a un trazado
@@ -5000,6 +5074,7 @@ axis	Both	Ambos
 @msgplural	Discarded {n} recovered document|Discarded {n} recovered documents	Se descartó {n} documento recuperado|Se descartaron {n} documentos recuperados
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	Se restauró {n} documento recuperado: guárdalo para conservarlo|Se restauraron {n} documentos recuperados: guárdalos para conservarlos
 @msgplural	Opened with {n} note: {first}|Opened with {n} notes: {first}	Se abrió con {n} nota: {first}|Se abrió con {n} notas: {first}
+@msgplural	{notice}. Opened with {n} note: {first}|{notice}. Opened with {n} notes: {first}	{notice}. Se abrió con {n} nota: {first}|{notice}. Se abrió con {n} notas: {first}
 @msgplural	Saved {path} with {n} note: {first}|Saved {path} with {n} notes: {first}	Se guardó {path} con {n} nota: {first}|Se guardó {path} con {n} notas: {first}
 @msgplural	Embedded {n} image; {missing} missing: relink them first|Embedded {n} images; {missing} missing: relink them first	Se incrustó {n} imagen; faltan {missing}: vuelve a vincularlas primero|Se incrustaron {n} imágenes; faltan {missing}: vuelve a vincularlas primero
 @msgplural	Embedded {n} image|Embedded {n} images	Se incrustó {n} imagen|Se incrustaron {n} imágenes
@@ -5079,6 +5154,8 @@ axis	Both	Ambos
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	una imagen incrustada de {_1} × {_2} píxeles se redujo a {_3} × {_4} píxeles para conservar las capas
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	las imágenes vinculadas muestran la vista previa de baja resolución guardada en el archivo hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
 @msg	linked type areas past VectorCraft's limits were left out	se omitieron las áreas de texto enlazadas que superan los límites de VectorCraft
+@msg	the Line Breaking setting of legacy type was left out	se omitió el ajuste de salto de línea del texto en formato antiguo
+@msg	the Japanese layout rules of legacy type were left out	se omitieron las reglas de composición japonesa del texto en formato antiguo
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	el texto que cambia de dirección de escritura dentro de un objeto de texto se abre en la dirección de su primer carácter
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	el texto usado como máscara en áreas enlazadas, texto ceñido o un trazado compuesto no recorta
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	las imágenes vinculadas sin vista previa en el archivo muestran un marcador de posición hasta que se encuentren sus archivos: vuelva a vincularlas en el panel Vínculos
@@ -5104,6 +5181,7 @@ axis	Both	Ambos
 @msg	every numbered name for it is taken in the Fonts folder	todos los nombres numerados para él ya existen en la carpeta Fonts
 @msg	every numbered name for {name} is taken in the document's folder	todos los nombres numerados para {name} ya existen en la carpeta del documento
 @msg	No linked files to look for	No hay archivos vinculados que buscar
+@msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	El vínculo está dentro de un símbolo, un diseño de gráfico, un motivo o una máscara de opacidad y no tiene lugar en el lienzo
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Servicios
@@ -5602,6 +5680,8 @@ effect	Regular	Regular
 	High Contrast 3	Alto contraste 3
 	Pentagram	Pentagrama
 	Perceptual	Perceptual
+	Hue Clockwise	Tono en sentido horario
+	Hue Counterclockwise	Tono en sentido antihorario
 	Relative Colorimetric	Colorimétrico relativo
 	Absolute Colorimetric	Colorimétrico absoluto
 	Exact	Exacto
@@ -5876,7 +5956,10 @@ mark-style	Japanese	Japonesas
 @msg	`{GRAPHICS}` face must be front or back	face de `{GRAPHICS}` debe ser front o back
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` debe ser un número de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` debe ser una matriz
-@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Los gráficos se asignan a caras planas: use el tipo de objeto Extrusión o Plano
+@msg	Graphics map onto the Plane, Extrude and Revolve object types	Los gráficos se asignan a los tipos de objeto Plano, Extrusión y Revolución
+	Graphics map onto the Plane, Extrude and Revolve object types.	Los gráficos se asignan a los tipos de objeto Plano, Extrusión y Revolución.
+@msg	Revolve maps graphics onto its side: map them onto the front	Revolución asigna los gráficos a su lateral: asígnelos a la cara frontal
+@msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Los gráficos son demasiado complejos para esta superficie: simplifique la ilustración de los símbolos o reduzca Segmentos
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admite como máximo {MAX_GRAPHICS} gráficos
 @msg	A plane has one face: map its graphics onto the front	Un plano tiene una sola cara: asigne sus gráficos a la cara frontal
 @msg	The graphics are too complex: simplify the symbols' art	Los gráficos son demasiado complejos: simplifique la ilustración de los símbolos
@@ -6063,6 +6146,7 @@ mark-style	Japanese	Japonesas
 @msg	no such color	no existe ese color
 @msg	{_1} cannot be used on Windows	{_1} no se puede usar en Windows
 @msg	more than one action is named “{_1}”	más de una acción se llama “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	la acción “{_1}” establece la preferencia de carpeta {_2}; elimine ese paso para guardar el conjunto
 @msg	no symbol named `{n}`	no hay ningún símbolo llamado `{n}`
 	Smudge Stick…	Difuminar con barra…
 	Smudge Stick	Difuminar con barra
@@ -6223,7 +6307,7 @@ axis	Y Axis	Eje Y
 @msg	`dither` applies to gradient fills (stroke: false)	`dither` se aplica a rellenos de degradado (stroke: false)
 @msg	`dither` applies to gradient fills (paint.setFill)	`dither` se aplica a rellenos de degradado (paint.setFill)
 @msg	`dither` must be true or false	`dither` debe ser true o false
-@msg	`method` must be classic or perceptual	`method` debe ser classic o perceptual
+@msg	`method` must be classic, perceptual, hue-clockwise or hue-counterclockwise	`method` debe ser classic, perceptual, hue-clockwise o hue-counterclockwise
 @msg	`spread` must be pad, repeat or reflect	`spread` debe ser pad, repeat o reflect
 @msg	`repeats` must be a whole number from 1 to {MAX_REPEATS}	`repeats` debe ser un número entero de 1 a {MAX_REPEATS}
 @msg	`spread` applies to linear, radial, conic and diamond gradients	`spread` se aplica a los degradados lineales, radiales, cónicos y de rombo
@@ -6466,12 +6550,14 @@ axis	Y Axis	Eje Y
 	Continue	Continuar
 	Continue Action	Continuar acción
 	Delete Action Step	Eliminar paso de la acción
+	Move Action Step	Mover paso de la acción
 	Press Play Current Selection in the Actions panel to go on.	Para continuar, pulse Reproducir la selección actual en el panel Acciones.
 	Stop: {message}	Parada: {message}
 @msg	no action is waiting at a stop	ninguna acción está esperando en una parada
 @msg	message must be text	message debe ser texto
 @msg	allowContinue must be true or false	allowContinue debe ser true o false
 @msg	Batch cannot play an action with a stop	Lote no puede reproducir una acción con una parada
+@msg	Batch cannot play an action with a View menu step	Lote no puede reproducir una acción con un paso del menú Ver
 	Insert Menu Item…	Insertar elemento de menú…
 	Insert Menu Item	Insertar elemento de menú
 	Insert Select Path	Insertar selección de trazado
@@ -6636,6 +6722,22 @@ axis	Y Axis	Eje Y
 	Graphite Pencil	Lápiz de grafito
 	Wax Crayon	Cera de colores
 	Charcoal Dust	Polvo de carboncillo
+	Notched Ribbon	Cinta dentada
+	Double Line	Línea doble
+	Wave	Onda
+	Teardrop	Lágrima
+	Striped Ribbon	Cinta a rayas
+	Fine Nib	Plumilla fina
+	Broad Nib	Plumilla ancha
+	Chisel	Cincel
+	Round Pen	Pluma redonda
+	Pressure Pen	Pluma de presión
+	Beads	Cuentas
+	Dash Dot	Raya y punto
+	Scallops	Festones
+	Stars	Estrellas
+	Triangles	Triángulos
+	Sparkles	Destellos
 	Save Brush Library…	Guardar biblioteca de pinceles…
 @msg	`{_1}` has no brushes to apply	`{_1}` no tiene pinceles para aplicar
 @msg	missing `library` (see brush.libraries)	falta `library` (consulte brush.libraries)
@@ -6655,6 +6757,13 @@ axis	Y Axis	Eje Y
 	Area Text	Texto de área
 # Transform panel menu › Measure Type by Glyph Bounds.
 	Measure Type by Glyph Bounds	Medir el texto por los límites del glifo
+# Control bar › Snapping › Pixel Snapping Options… (view.snapToPixel.options).
+	Pixel Snapping Options	Opciones de ajuste a píxel
+	Pixel Snapping Options…	Opciones de ajuste a píxel…
+	Snap to Pixel While Drawing	Ajustar a píxel al dibujar
+	Snap to Pixel While Moving	Ajustar a píxel al mover
+	Snap to Pixel While Scaling	Ajustar a píxel al escalar
+	These options take effect when View › Snap to Pixel is on.	Estas opciones se aplican cuando Ver › Ajustar a píxel está activado.
 # Character panel menu › Show Snap to Glyph Options (#4232).
 	Show Snap to Glyph Options	Mostrar opciones de ajuste a glifo
 	Hide Snap to Glyph Options	Ocultar opciones de ajuste a glifo
@@ -6740,6 +6849,8 @@ anchor	Points:	Puntos:
 	Anchor Inspector	Inspector de puntos de ancla
 	Add Points at Crossings	Agregar puntos en los cruces
 	Split at Crossings	Dividir en los cruces
+	Trim at Crossings Tool	Herramienta Recortar en los cruces
+	Trim at Crossings	Recortar en los cruces
 	Extend Path	Prolongar trazado
 	Measure & Inspect	Medir e inspeccionar
 	Set Anchor	Definir punto de ancla
@@ -7283,6 +7394,19 @@ breakText	Glyphs	Glifos
 	Show where this tool is	Mostrar dónde está esta herramienta
 @msg	missing `tutorial` (see learn.list)	falta `tutorial` (consulta learn.list)
 @msg	unknown tutorial `{id}` (see learn.list)	tutorial desconocido `{id}` (consulta learn.list)
+	View more	Ver más
+	Finish tutorial	Terminar tutorial
+	Next Up	A continuación
+	You finished the last tutorial in this skill.	Has terminado el último tutorial de esta habilidad.
+	Back to skills	Volver a las habilidades
+	Open Tutorial Sample	Abrir muestra del tutorial
+	Finish Tutorial	Terminar tutorial
+	Next Tutorial	Tutorial siguiente
+	Back to Skills	Volver a las habilidades
+@msg	tutorial `{id}` has no practice sample	el tutorial `{id}` no tiene muestra de práctica
+@msg	open the practice sample of `{id}` first (see learn.openSample)	abre primero la muestra de práctica de `{id}` (consulta learn.openSample)
+@msg	finish `{id}` first (see learn.finish)	termina primero `{id}` (consulta learn.finish)
+@msg	`{id}` is the last tutorial in its skill	`{id}` es el último tutorial de su habilidad
 
 # Deferred plug-in effects
 	Refresh Deferred Effects	Actualizar efectos aplazados
@@ -7306,3 +7430,9 @@ breakText	Glyphs	Glifos
 	Margin	Margen
 	Box	Caja
 	Swatch	Muestra
+	Banner Hems and Grommets…	Dobladillos y ojales de pancarta…
+	Banner Hems and Grommets	Dobladillos y ojales de pancarta
+	Hem	Dobladillo
+	Grommets	Ojales
+	Grommet Inset	Distancia de los ojales al borde
+	Diameter	Diámetro

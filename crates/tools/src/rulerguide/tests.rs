@@ -253,6 +253,24 @@ fn new_ruler_guide_alt_snaps_on_the_effective_axis() {
     }
 }
 
+/// A guide dragged out of a ruler snaps to whole pixels with Snap to Pixel only while the Pixel
+/// Snapping Options' While Moving is on; While Drawing and While Scaling do not change it.
+#[test]
+fn new_ruler_guide_follows_the_while_moving_option() {
+    use crate::PixelSnap;
+    let (d, _) = doc_with_rect();
+    let (s, p) = (Selection::default(), paint());
+    let off = ToolContext { smart_guides: false, snap_to_point: false, snap_to_pixel: true, ..cx(&d, &s, &p) };
+    for (pixel_snap, expected) in
+        [(PixelSnap { moving: false, ..PixelSnap::default() }, 226.4), (PixelSnap { drawing: false, scaling: false, moving: true }, 226.0)]
+    {
+        let c = ToolContext { pixel_snap, ..off };
+        let mut g = NewGuide::new(&c, true, None);
+        let actions = g.pointer(&c, &ev(PointerKind::Drag, 226.4, 237.6, Mods::default()), true);
+        assert_eq!(actions.last(), Some(&Action::Preview("guide.add".into(), json!({"vertical": true, "pos": expected}))), "{pixel_snap:?}");
+    }
+}
+
 /// With Smart Guides off, Snap to Point pulls a dragged guide onto the anchors (within its
 /// distance), not the edges' midpoints.
 #[test]

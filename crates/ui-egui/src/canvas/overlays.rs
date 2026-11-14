@@ -252,7 +252,9 @@ pub(super) fn selection_overlay(app: &mut VectorcraftApp, p: &egui::Painter, xf:
 
 /// The Appearance and Easing widgets of one selected blend (Selection and Blend tools), each joined
 /// by a line to the spine's halfway point: the Appearance widget hollow above it, the Easing widget
-/// filled below it. Drawn with the edges hidden too, as they are controls.
+/// filled below it. For a blend without a spine the line goes to the halfway point of the straight
+/// lines between its key centers, which are not drawn. Drawn with the edges hidden too, as they are
+/// controls.
 pub(super) fn blend_widgets_overlay(app: &VectorcraftApp, p: &egui::Painter, xf: &Xf) {
     use vectorcraft_tools::blendwidget::{BlendControl, BlendWidget, RADIUS_PX};
     if !matches!(app.session.tool_id(), "selection" | "blend") {

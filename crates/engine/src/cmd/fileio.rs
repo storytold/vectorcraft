@@ -69,8 +69,8 @@ pub use dxf::{UNSUPPORTED, Unsupported, unsupported};
 pub use encode::{ARTBOARD_PARAMS, ArtboardPick, Encoded, Note, NoteKind, encode, encode_all, encode_with_notes, encode_with_warnings, note_texts};
 pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
-pub(crate) use export::{export_crop, isolated};
-pub use export::{export_doc, export_source};
+pub(crate) use export::{EXPORT_PARAMS, export_crop, isolated};
+pub use export::{export_doc, export_source, unused_option_notes};
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::is_placeholder;
@@ -123,7 +123,7 @@ mod formats;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use access::list_dir;
-pub use access::{write_file_with, write_save_file, write_save_file_with};
+pub use access::{check_linked_scripts, write_file_with, write_save_file, write_save_file_with};
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests_readonly;

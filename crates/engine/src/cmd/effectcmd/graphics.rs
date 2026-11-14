@@ -1,5 +1,5 @@
 //! Window › 3D and Materials › Materials › Graphics: art kept as a document symbol (Add as Single
-//! Graphic) and mapped onto the planar faces of 3D objects (Extrude & Bevel's caps, a plane). The
+//! Graphic) and mapped onto 3D objects (Extrude & Bevel's caps, a plane, Revolve's side). The
 //! graphics an object shows are the `graphics` parameter of its 3D effect, which `effect.setParams`
 //! also edits.
 
@@ -7,7 +7,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node};
 use vectorcraft_render::effects;
 
-use super::super::appearance::{appearance_targets, index_param, item_target};
+use super::super::appearance::{edit_targets, index_param, item_target};
 use super::super::brushsym::{normalize, selection_art, store_symbol};
 use super::super::{CommandSpec, EngineError, NodeId, Result, Session, bad, cmd, has_doc, has_selection, str_param};
 use super::{effect_targets, ids_json};
@@ -28,7 +28,7 @@ pub(super) fn specs() -> Vec<CommandSpec> {
             "Map Graphic",
             [],
             None,
-            "{symbol: name of a document symbol, face?: front|back (front; Plane has only a front; the back reads left to right as seen from behind), x?: pt, y?: pt (0, 0: the offset of the graphic's center from the center of the object's bounds, in the face's own plane), scale?: % (1..10000; default 100, or less so the graphic fits inside the object), rotation?: degrees (-360..360, 0; counterclockwise), index?: int (the 3D effect's position; default: each object's first 3D effect, its own before its fills' and strokes'), item?: appearance item index|null (refused without index; as effect.setParams), ids?|id?} add a graphic to the 3D effect of each selected object, drawn on that face turned, foreshortened and shaded with it and clipped to it; every object's 3D effect must be Extrude & Bevel (on a solid cap) or Rotate (the Plane type); one undo step → {ids, graphic}",
+            "{symbol: name of a document symbol, face?: front|back (front; Plane has only a front; the back reads left to right as seen from behind; on Revolve the front is its swept side, which is the only face), x?: pt, y?: pt (0, 0: the offset of the graphic's center from the center of the object's bounds, in the face's own plane; on Revolve from the middle of the side unrolled flat, x around the axis and y along the profile), scale?: % (1..10000; default 100, or less so the graphic fits inside the object, on Revolve inside the half of the side seen from the front), rotation?: degrees (-360..360, 0; counterclockwise), index?: int (the 3D effect's position; default: each object's first 3D effect, its own before its fills' and strokes'), item?: appearance item index|null (refused without index; as effect.setParams), ids?|id?} add a graphic to the 3D effect of each selected object, drawn on that face turned, foreshortened and shaded with it and clipped to it (on Revolve wrapped around the side, and drawn only where its outside faces the viewer); every object's 3D effect must be Extrude & Bevel (on a solid cap), Rotate (the Plane type) or Revolve; one undo step → {ids, graphic}",
             has_doc,
             map_graphic
         ),
@@ -95,7 +95,7 @@ fn map_graphic(s: &mut Session, p: &Value) -> Result<Value> {
         effect_targets(s, p, item, index, C)?
     } else {
         let mut out = vec![];
-        for id in appearance_targets(s, p)? {
+        for id in edit_targets(s, p)? {
             let (item, index) = d.node(id).and_then(first_three_d).ok_or_else(|| bad(C, format!("object {} needs a 3D effect", id.0)))?;
             out.push((id, item, index));
         }
@@ -111,7 +111,7 @@ fn map_graphic(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, format!("object {} needs a 3D effect at index {index}", id.0)));
         };
         if !effects::takes_graphics(&effect.id) {
-            return Err(bad(C, format!("object {}: Graphics map onto planar faces: use the Extrude or Plane object type", id.0)));
+            return Err(bad(C, format!("object {}: {}", id.0, effects::GRAPHICS_NOT_TAKEN)));
         }
         // A hollow Extrude & Bevel keeps the graphics it has, to show when Cap is turned on again,
         // but has no cap to show a new one on.

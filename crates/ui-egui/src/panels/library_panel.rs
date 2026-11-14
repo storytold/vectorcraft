@@ -104,8 +104,13 @@ pub(crate) trait LibraryKind {
     fn find(app: &VectorcraftApp, key: &str) -> Found;
     /// The file library `id` was read from, if any.
     fn path(app: &VectorcraftApp, id: &str) -> Option<String>;
-    /// The rows matching the find field's `query` (lower case; empty: all).
-    fn rows<'a>(lib: &'a Self::Lib, query: &str) -> Vec<Row<'a, Self::Item>>;
+    /// The rows of library `id` matching the find field's `query` (lower case; empty: all).
+    fn rows<'a>(lib: &'a Self::Lib, id: &str, query: &str) -> Vec<Row<'a, Self::Item>>;
+    /// Row `name` of library `id` as its list row and tooltips show it (by default as it is). The
+    /// row keeps `name` for its tile, selection, clicks, drags and the commands they run.
+    fn label<'a>(_id: &str, name: &'a str) -> &'a str {
+        name
+    }
     /// An item's thumbnail in `r`.
     fn draw(app: &VectorcraftApp, ui: &Ui, r: Rect, item: &Self::Item, selected: bool, hovered: bool);
     /// The icons at the right of list row `r`.
@@ -626,7 +631,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     let (view, hide_find) = settings(&app.ui, K::KIND, id).map_or((K::VIEW, false), |s| (s.view.unwrap_or(K::VIEW), s.hide_find));
     let query = if hide_find { String::new() } else { widgets::search_field(ui, egui::Id::unique(key(&panel, "find")), tl!("Find")) };
     ui.add_space(4.0);
-    let rows = K::rows(&lib, &query.trim().to_lowercase());
+    let rows = K::rows(&lib, id, &query.trim().to_lowercase());
     let selected = selection(ui.ctx(), &panel);
     let is_sel = |n: &str| selected.iter().any(|s| s == n);
     let mut clicked: Option<(String, bool, egui::Modifiers)> = None;
@@ -659,9 +664,10 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
                         }
                         None => super::swatches::draw_folder(ui, chip),
                     }
-                    list_row_name(ui, r, chip, row.name);
+                    let label = K::label(id, row.name);
+                    list_row_name(ui, r, chip, label);
                     drag_out::<K>(ui, &resp, id, row);
-                    let tip = || row.item.map_or_else(|| row.name.to_string(), |i| format!("{} ({})", row.name, K::describe(i)));
+                    let tip = || row.item.map_or_else(|| label.to_string(), |i| format!("{label} ({})", K::describe(i)));
                     click(ui, resp, row, &tip);
                 }
             } else {
@@ -672,7 +678,7 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
                         None => folder_tile(ui, cell, is_sel(row.name)),
                     }
                     drag_out::<K>(ui, &resp, id, row);
-                    click(ui, resp, row, &|| row.name.to_string());
+                    click(ui, resp, row, &|| K::label(id, row.name).to_string());
                 }
             }
         });
@@ -690,10 +696,11 @@ fn body<K: LibraryKind>(app: &mut VectorcraftApp, ui: &mut Ui, id: &str) {
     bottom::<K>(app, ui, id);
 }
 
-/// An item of library `id` dragged out of its tile or row `resp` carries what `K` says it does.
+/// An item of library `id` dragged out of its tile or row `resp` with the primary button carries
+/// what `K` says it does.
 fn drag_out<K: LibraryKind>(ui: &Ui, resp: &egui::Response, id: &str, row: &Row<K::Item>) {
     if row.item.is_some()
-        && resp.drag_started()
+        && resp.drag_started_by(egui::PointerButton::Primary)
         && let Some(drag) = K::drag(id, row.name)
     {
         egui::DragAndDrop::set_payload(ui.ctx(), drag);

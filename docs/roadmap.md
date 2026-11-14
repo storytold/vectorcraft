@@ -10,6 +10,8 @@
 >
 > Numeric spinner update (2026-11-10): held mouse arrows repeat past the click timeout; scores and estimates unchanged (#6307).
 
+> **PDF import status (2026-11-14, #6957):** Outlined Indic glyphs retain their full stroke properties; translucent glyphs stay separate, and a soft mask attaches to each glyph separately. Scores and estimates unchanged.
+
 ## Feature submission evidence
 
 M4: Explicitly requested editing data keeps a single artboard larger than its 14,400 pt capped PDF page (#6865). Scores and estimates unchanged.
@@ -56,6 +58,7 @@ M7 type: Touch Type moves a right-to-left character along its line and up from i
 | 2026-11-13 | minor | PDF import: glyphs inside a marked-content span with an empty `ActualText` come in as outlines in their fill and stroke instead of being left out, adding no text (#6971; `empty_actual_text_keeps_the_glyphs_art` in `crates/pdf/src/tests/actual_text.rs`). Scores and estimates unchanged. |
 | 2026-11-13 | minor | Library panels (swatch, Color Book, brush, symbol and graphic style libraries): in a panel made taller the list fills the space above the footer instead of scrolling inside 220 or 280 pt (#2992; `the_list_fills_a_tall_panel_above_its_footer` in `crates/ui-egui/src/panels/library_panel/tests.rs`). Scores and estimates unchanged. |
 | 2026-11-13 | minor | Swatches: in a panel made taller the swatch list fills the space above the footer instead of scrolling inside 150 or 200 pt (#1638; `the_list_fills_a_tall_panel_above_its_footer` in `crates/ui-egui/src/panels/swatches/tests.rs`). Scores and estimates unchanged. |
+| 2026-11-13 | minor | M4: PDF import (#5235, #6906): Indic type keeps its marks on their line, and a line whose type would not draw as the file does keeps the file's glyphs as outlines (opaque, alike-stroked ones share a path except under a soft mask, where each glyph keeps its own path and mask; translucent ones keep their own). Scores and estimates unchanged. Evidence: `crates/pdf/src/tests/reshaped.rs`. |
 | 2026-11-10 | minor | M13 / G6: MCP catalogue (#6460): headless lists UI commands, eight prompts, 33 tools, effect vs command ids; scores and estimates unchanged. |
 | 2026-11-08 | minor | Character Styles panel: a double-click on a user style's row opens its Character Style Options (`ui.charStyleOptions`); the dialog keeps a fixed width and scrolls its sections in a shorter window, so OK and Cancel stay on screen. Tests `panels::text_styles::tests::double_clicking_a_character_style_row_opens_its_options` and `dialogs::char_style_options::tests::the_sections_scroll_in_a_window_shorter_than_the_general_list`. Scores and estimates unchanged. |
 | 2026-11-08 | minor | #3380, deletion only: preserve gradient placement and exact surviving geometry; consume owned subpaths with a shared original-node snapshot; consolidate status/evidence and document command/helper contracts. Compound behavior and the existing M2 status entry are retained. Endpoint highlighting remains open; scores and estimates unchanged. |

@@ -555,6 +555,298 @@ fn a_nested_groups_own_gradient_follows_the_outer_groups_transform_and_free_dist
     assert!(near(s, Point::new(0.0, 5.0)) && near(e, Point::new(20.0, 5.0)), "{s:?} {e:?}");
 }
 
+/// The bounds of what `n` draws, as the renderer draws it: a group or layer with an appearance of
+/// its own as the art [`evaluate_container`] makes of it, and each visible path and compound path
+/// with the geometry effects still on it applied, then those of each visible fill and stroke that
+/// has some.
+fn drawn_bounds(n: &Node) -> Option<Rect> {
+    if !n.visible {
+        return None;
+    }
+    if let Some(m) = evaluate_container(None, n) {
+        return drawn_bounds(&m);
+    }
+    if let Some(ch) = n.children()
+        && !matches!(n.kind, NodeKind::Compound { .. })
+    {
+        return ch.iter().filter_map(|c| drawn_bounds(c)).reduce(|a, b| a.union(b));
+    }
+    let (path, _) = crate::reshape::leaf_geometry(n)?;
+    let geometry = |fx: &[Effect]| -> Vec<Effect> { fx.iter().filter(|e| e.visible && crate::is_geometry(&e.id)).cloned().collect() };
+    let apply = |fx: &[Effect], p: &PathData| crate::apply_geometry(&geometry(fx), p, p.bounds().unwrap());
+    let g = apply(&n.appearance.effects, &path);
+    let items: Vec<&AppearanceItem> = n.appearance.items.iter().filter(|i| paints(i) && !geometry(i.effects()).is_empty()).collect();
+    if items.is_empty() {
+        return g.bounds();
+    }
+    items.iter().filter_map(|i| apply(i.effects(), &g).bounds()).reduce(|a, b| a.union(b))
+}
+
+fn black() -> Appearance {
+    Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)
+}
+
+/// A black 100 pt square from (100, 100).
+fn square_at_100() -> Node {
+    Node::path(NodeId(1), shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), black())
+}
+
+fn effect(id: &str, params: serde_json::Value) -> Effect {
+    Effect { id: id.into(), params, visible: true }
+}
+
+fn offset_10() -> Effect {
+    effect("path.offsetPath", serde_json::json!({"offset": 10}))
+}
+
+fn scaled(s: f64) -> Effect {
+    effect("distort.transform", serde_json::json!({"scaleH": s, "scaleV": s}))
+}
+
+fn with_effect(mut n: Node, e: Effect) -> Node {
+    n.appearance.effects.push(e);
+    n
+}
+
+/// The width that a group with `e` holding `member` draws at.
+fn drawn_width(member: Node, e: Effect) -> f64 {
+    let g = with_effect(Node::group(NodeId(10), vec![Arc::new(member)]), e);
+    drawn_bounds(&g).unwrap().width()
+}
+
+/// A member's own Offset Path runs before its group's Transform: the square offset by 10 pt to
+/// 120 pt, then scaled by half, is 60 pt wide (70 pt the other way round).
+#[test]
+fn a_members_own_offset_runs_before_its_groups_scale() {
+    let w = drawn_width(with_effect(square_at_100(), offset_10()), scaled(50.0));
+    assert!((w - 60.0).abs() < 1e-6, "{w}");
+}
+
+/// A member's own Transform runs before its group's Offset Path: the square scaled to 200 pt, then
+/// offset by 10 pt, is 220 pt wide (240 pt the other way round).
+#[test]
+fn a_members_own_scale_runs_before_its_groups_offset() {
+    let w = drawn_width(with_effect(square_at_100(), scaled(200.0)), offset_10());
+    assert!((w - 220.0).abs() < 1e-6, "{w}");
+}
+
+/// A member inside a plain group inside the group takes its own effects first too.
+#[test]
+fn a_member_of_a_plain_nested_group_takes_its_own_effects_first() {
+    let w = drawn_width(Node::group(NodeId(5), vec![Arc::new(with_effect(square_at_100(), offset_10()))]), scaled(50.0));
+    assert!((w - 60.0).abs() < 1e-6, "{w}");
+}
+
+/// A nested group's own geometry effects run before the outer group's.
+#[test]
+fn a_nested_groups_own_effects_run_before_its_groups() {
+    let w = drawn_width(with_effect(Node::group(NodeId(5), vec![Arc::new(square_at_100())]), offset_10()), scaled(50.0));
+    assert!((w - 60.0).abs() < 1e-6, "{w}");
+}
+
+/// A nested group's Pathfinder effect runs before the outer group's geometry effects: the back
+/// square minus the front one is 50 pt wide, and offset by 10 pt it is 70 pt (offsetting the
+/// squares first leaves 50 pt).
+#[test]
+fn a_nested_groups_pathfinder_runs_before_its_groups_effects() {
+    let back = square_at_100();
+    let front = Node::path(NodeId(2), shapes::rectangle(Rect::new(150.0, 100.0, 250.0, 200.0)), black());
+    let nested = with_effect(Node::group(NodeId(5), vec![Arc::new(back), Arc::new(front)]), effect("pathfinder.subtract", serde_json::json!({})));
+    let w = drawn_width(nested, offset_10());
+    assert!((w - 70.0).abs() < 1e-6, "{w}");
+}
+
+/// The geometry effects of a member's own fill run before its group's: 60 pt, as for the
+/// member's own effect.
+#[test]
+fn a_members_fill_effects_run_before_its_groups() {
+    let mut member = square_at_100();
+    member.appearance.items[0].effects_mut().push(offset_10());
+    let w = drawn_width(member, scaled(50.0));
+    assert!((w - 60.0).abs() < 1e-6, "{w}");
+}
+
+/// A member whose fills have geometry effects stays one element of a knockout group: its fills do
+/// not knock each other out.
+#[test]
+fn a_member_drawn_as_its_fills_stays_one_knockout_element() {
+    let mut member = square_at_100();
+    member.appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)))));
+    member.appearance.items[0].effects_mut().push(offset_10());
+    let mut g = with_effect(Node::group(NodeId(10), vec![Arc::new(member)]), scaled(50.0));
+    g.knockout = vectorcraft_doc::Knockout::On;
+    let art = evaluate_container(None, &g).unwrap();
+    let elements = Node::knockout_elements(art.children().unwrap());
+    assert_eq!(elements.len(), 1, "{:?}", elements.iter().map(|e| (e.id, &e.kind)).collect::<Vec<_>>());
+}
+
+/// The art a Pathfinder operation or compound shape takes from a group with geometry effects has
+/// the members' own effects applied first, as the canvas draws it.
+#[test]
+fn shape_art_of_a_group_applies_its_members_effects_first() {
+    let g = with_effect(Node::group(NodeId(10), vec![Arc::new(with_effect(square_at_100(), offset_10()))]), scaled(50.0));
+    let art = shape_art(None, &g, None).unwrap();
+    let w = drawn_bounds(&art).unwrap().width();
+    assert!((w - 60.0).abs() < 1e-6, "{w}");
+    let leaves = member_leaves(None, &g, None);
+    let w = leaves.iter().filter_map(drawn_bounds).reduce(|a, b| a.union(b)).unwrap().width();
+    assert!((w - 60.0).abs() < 1e-6, "leaves: {w}");
+}
+
+/// A symbol instance's own geometry effects run after those of its symbol's members, as the canvas
+/// draws it and in the art a Pathfinder operation takes from it.
+#[test]
+fn a_symbol_instances_effects_run_after_its_symbols_members_own() {
+    let art = Node::group(NodeId(20), vec![Arc::new(with_effect(square_at_100(), offset_10()))]);
+    let instance =
+        with_effect(Node::new(NodeId(6), NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY }), scaled(50.0));
+    let drawn = crate::reshape(None, &instance, Some(&art)).unwrap();
+    let w = drawn_bounds(&drawn).unwrap().width();
+    assert!((w - 60.0).abs() < 1e-6, "drawn: {w}");
+    let hook = move |_: &Node| Some(art.clone());
+    let w = drawn_bounds(&shape_art(None, &instance, Some(&hook)).unwrap()).unwrap().width();
+    assert!((w - 60.0).abs() < 1e-6, "shape art: {w}");
+}
+
+/// Export bakes the group as the canvas draws it.
+#[test]
+fn a_baked_group_applies_its_members_effects_first() {
+    let mut d = Document::new(800.0, 800.0);
+    let layer = d.layers[0].id;
+    let g = with_effect(Node::group(NodeId(10), vec![Arc::new(with_effect(square_at_100(), offset_10()))]), scaled(50.0));
+    d.insert(Some(layer), 0, g).unwrap();
+    let baked = crate::bake_document(&d).unwrap();
+    let w = baked.node(NodeId(10)).unwrap().geometric_bounds().unwrap().width();
+    assert!((w - 60.0).abs() < 1e-6, "{w}");
+}
+
+/// A group whose Transform effect only moves and copies keeps its type when baked; a nested
+/// group's own Transform still runs before the copies: the nested square scaled by half to 50 pt
+/// and copied 200 pt to the right spans 250 pt (copying first, then scaling both copies about
+/// their middle, spans 150 pt).
+#[test]
+fn a_baked_group_that_keeps_its_type_applies_its_members_effects_first() {
+    if skip_without_craft_fonts() {
+        return;
+    }
+    let style = CharStyle { size: 24.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let text = Node::new(NodeId(3), NodeKind::Text(Box::new(TextObject::point(Point::new(20.0, 60.0), "Type", style))));
+    let nested = with_effect(Node::group(NodeId(5), vec![Arc::new(square_at_100())]), scaled(50.0));
+    let g = with_effect(
+        Node::group(NodeId(10), vec![Arc::new(text), Arc::new(nested)]),
+        effect("distort.transform", serde_json::json!({"moveH": 200, "copies": 1})),
+    );
+    let mut d = Document::new(800.0, 800.0);
+    let layer = d.layers[0].id;
+    d.insert(Some(layer), 0, g).unwrap();
+    let baked = crate::bake_document(&d).unwrap();
+    let mut text = 0;
+    baked.walk(|n| text += usize::from(matches!(n.kind, NodeKind::Text(_))));
+    assert_eq!(text, 2, "the type stays type, copied");
+    let w = baked.node(NodeId(5)).unwrap().geometric_bounds().unwrap().width();
+    assert!((w - 250.0).abs() < 1e-6, "{w}");
+}
+
+/// A clip group's clipping path keeps its own effects; the clipped members take theirs first.
+#[test]
+fn a_clipping_path_keeps_its_own_effects_under_a_groups_effects() {
+    let mut clip = with_effect(square_at_100(), offset_10());
+    clip.id = NodeId(2);
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let clipped =
+        Node::new(NodeId(5), NodeKind::Group { children: vec![Arc::new(clip), Arc::new(with_effect(square_at_100(), offset_10()))], clip: true });
+    let g = with_effect(Node::group(NodeId(10), vec![Arc::new(clipped)]), scaled(50.0));
+    let art = evaluate_container(None, &g).unwrap();
+    let clip_group = art.children().unwrap()[0].clone();
+    let ch = clip_group.children().unwrap();
+    assert!(matches!(ch[0].kind, NodeKind::Path { clipping: true, .. }), "{:?}", ch[0].kind);
+    assert_eq!(crate::reshape::geometry_effects(&ch[0]).len(), 1, "the clipping path keeps its Offset Path");
+    assert!(matches!(ch[1].kind, NodeKind::Group { .. }) && crate::reshape::geometry_effects(&ch[1]).is_empty(), "the member is drawn as its art");
+}
+
+/// A member with a linked opacity mask keeps its own effects on it, so its mask moves with it
+/// under the group's Transform; so does a member with a 3D effect, whose later geometry effects
+/// apply to its 3D art.
+#[test]
+fn members_with_linked_masks_or_3d_effects_keep_their_own_effects() {
+    let mut masked = with_effect(square_at_100(), offset_10());
+    masked.extras_mut().mask = Some(Box::new(vectorcraft_doc::OpacityMask::new(
+        Node::path(NodeId(2), shapes::rectangle(Rect::new(100.0, 100.0, 200.0, 200.0)), black()),
+        true,
+    )));
+    let mut solid = with_effect(square_at_100(), effect(crate::solids::EXTRUDE, serde_json::json!({})));
+    solid.id = NodeId(3);
+    solid.appearance.effects.push(scaled(50.0));
+    let moved = effect("distort.transform", serde_json::json!({"moveH": 50, "strokes": true}));
+    let g = with_effect(Node::group(NodeId(10), vec![Arc::new(masked), Arc::new(solid)]), moved);
+    let art = evaluate_container(None, &g).unwrap();
+    let ch = art.children().unwrap();
+    assert!(matches!(ch[0].kind, NodeKind::Path { .. }) && crate::reshape::geometry_effects(&ch[0]).len() == 1, "{:?}", ch[0].kind);
+    let mask = ch[0].extras().mask.as_deref().unwrap().art.geometric_bounds().unwrap();
+    assert!((mask.x0 - 150.0).abs() < 1e-6, "the mask moves with the square: {mask:?}");
+    assert!(matches!(ch[1].kind, NodeKind::Path { .. }) && ch[1].appearance.effects.len() == 2, "{:?}", ch[1].kind);
+}
+
+/// A nested group with a 3D effect stays as it is, with its members: the Transform listed after
+/// its Extrude still applies to its 3D art.
+#[test]
+fn a_nested_group_with_a_3d_effect_keeps_its_own_effects() {
+    let inner = with_effect(square_at_100(), offset_10());
+    let mut solid = with_effect(Node::group(NodeId(5), vec![Arc::new(inner)]), effect(crate::solids::EXTRUDE, serde_json::json!({})));
+    solid.appearance.effects.push(scaled(50.0));
+    let moved = effect("distort.transform", serde_json::json!({"moveH": 50}));
+    let g = with_effect(Node::group(NodeId(10), vec![Arc::new(solid)]), moved);
+    let art = evaluate_container(None, &g).unwrap();
+    let ch = art.children().unwrap();
+    assert!(
+        matches!(ch[0].kind, NodeKind::Group { .. }) && ch[0].id == NodeId(5) && ch[0].appearance.effects.len() == 2,
+        "{:?}",
+        ch[0].appearance.effects
+    );
+    let member = &ch[0].children().unwrap()[0];
+    assert!(matches!(member.kind, NodeKind::Path { .. }) && crate::reshape::geometry_effects(member).len() == 1, "{:?}", member.kind);
+}
+
+/// Members nested deeper than the depth limit keep their own effects as they are.
+#[test]
+fn members_past_the_depth_limit_stay_as_they_are() {
+    let mut n = with_effect(square_at_100(), offset_10());
+    for i in 0..vectorcraft_doc::depth::MAX_DEPTH {
+        n = Node::group(NodeId(100 + i as u64), vec![Arc::new(n)]);
+    }
+    let g = with_effect(Node::group(NodeId(10), vec![Arc::new(n)]), scaled(50.0));
+    let art = evaluate_container(None, &g).unwrap();
+    let mut deepest = None;
+    art.walk(&mut |c: &Node| {
+        if c.id == NodeId(1) {
+            deepest = Some(c.clone());
+        }
+    });
+    let deepest = deepest.unwrap();
+    assert!(matches!(deepest.kind, NodeKind::Path { .. }), "{:?}", deepest.kind);
+    assert_eq!(crate::reshape::geometry_effects(&deepest).len(), 1);
+}
+
+/// The depth limit counts nested groups with effects of their own too.
+#[test]
+fn nested_groups_with_effects_count_toward_the_depth_limit() {
+    let mut n = with_effect(square_at_100(), offset_10());
+    for i in 0..vectorcraft_doc::depth::MAX_DEPTH {
+        n = with_effect(Node::group(NodeId(100 + i as u64), vec![Arc::new(n)]), effect("distort.transform", serde_json::json!({"moveH": 1})));
+    }
+    let g = with_effect(Node::group(NodeId(10), vec![Arc::new(n)]), scaled(50.0));
+    let art = evaluate_container(None, &g).unwrap();
+    let mut deepest = None;
+    art.walk(&mut |c: &Node| {
+        if c.id == NodeId(1) && matches!(c.kind, NodeKind::Path { .. }) {
+            deepest = Some(c.clone());
+        }
+    });
+    assert!(deepest.is_some_and(|d| crate::reshape::geometry_effects(&d).len() == 1), "the deepest member keeps its effect");
+}
+
 /// An image or a symbol instance that a group's Transform effect moves takes the placed gradients
 /// of its own fills along, as a path does, and each copy takes them as many times as it takes the
 /// transform.
