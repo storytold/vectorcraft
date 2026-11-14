@@ -1070,7 +1070,7 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
         return Ok(json!({ "changed": changed as usize }));
     }
     let item = item_target(s, p, cmd)?.of_kind(s, !stroke);
-    let (r, shown_item) = match item {
+    let (r, shown_item, edited) = match item {
         ItemTarget::Item { index, .. } => {
             let ids = super::appearance::drop_design_art(&s.doc()?.doc, item.targets(s, p)?);
             let mut changed = 0;
@@ -1080,15 +1080,19 @@ fn proxy_recolor(s: &mut Session, p: &Value, cmd: &str, label: &str, f: &dyn Fn(
                 changed += paint.is_some_and(|paint| super::colorcmds::map_paint(paint, f)) as usize;
                 Ok(())
             })?;
-            (json!({ "changed": changed }), Some(index))
+            (json!({ "changed": changed }), Some(index), Some(ids))
         }
         // The proxy recolors its paints, including a colorized image's fill, without changing image pixels or pattern tiles.
         ItemTarget::Top => {
             let q = json!({"fill": !stroke, "stroke": stroke, "includeImages": false, "includePatterns": false, "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()});
-            (super::colorcmds::recolor(s, &q, cmd, label, f)?, None)
+            (super::colorcmds::recolor(s, &q, cmd, label, f)?, None, None)
         }
     };
-    let shown_ids = if shown_item.is_some() { ids } else { leaf_targets(s, &ids)? };
+    // The paint remembered is one the edit recolored: a graph design's art that the item edit leaves out gives none.
+    let shown_ids = match edited {
+        Some(ids) => ids,
+        None => leaf_targets(s, &ids)?,
+    };
     if let Some(shown) = shown_ids.first().and_then(|id| s.doc().ok()?.doc.node(*id).map(|n| proxy_paint(n, stroke, shown_item))) {
         s.remember_paint(&shown);
     }

@@ -1365,6 +1365,10 @@ fn move_item(s: &mut Session, p: &Value) -> Result<Value> {
         if ids.is_empty() {
             return Err(bad(C, "select objects or give ids"));
         }
+        // The Contents row's place counts the rows below it, which isn't one place in several different stacks either.
+        if aligned && appearances_differ(&s.doc()?.doc, &with_reference(design_reference(s, p, C)?, &ids)) {
+            return Err(bad(C, "rows of objects whose appearances differ can't be reordered together"));
+        }
         return move_contents(s, &ids, to);
     }
     let ids = require_targets(s, p, C)?;
