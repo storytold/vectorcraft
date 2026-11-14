@@ -230,6 +230,28 @@ fn a_mask_rows_tooltip_names_its_object_inside_a_symbol() {
     assert!(text.iter().any(|t| t.contains(&want)), "{want} in {text:?}");
 }
 
+/// The row of an image in a stored brush's art finds its object for the thumbnail, though that art
+/// is set on the document only while a command uses it.
+#[test]
+fn a_row_in_a_stored_brushs_art_finds_its_object() {
+    let dir = Folder::new("brush-art");
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let leaf = dir.file("leaf.png", &png(30, 20));
+    let id = app.run("file.place", json!({"path": leaf, "at": [100, 100]})).unwrap()["ids"][0].as_u64().unwrap();
+    app.run("brush.new", json!({"type": "scatter", "name": "Leaf", "ids": [id]})).unwrap();
+    app.run("edit.clear", json!({"ids": [id]})).unwrap();
+    let list = app.run("links.list", json!({})).unwrap();
+    let row = list["links"].as_array().unwrap().iter().find(|r| r["name"] == "leaf.png").unwrap_or_else(|| panic!("{list}")).clone();
+    assert_eq!(row["owner"]["kind"], "brush", "{list}");
+    let row = row["id"].as_u64().unwrap();
+    let doc = &app.session.active().unwrap().doc;
+    assert!(doc.mounted_art.is_empty(), "the brush's art is not set on the document");
+    let found = super::links::stored_objects(doc, [row].into());
+    assert_eq!(found.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [row]);
+    assert!(matches!(found[0].1.kind, vectorcraft_doc::NodeKind::Image(_)), "{:?}", found[0].1.kind);
+}
+
 #[test]
 fn an_empty_document_shows_how_to_add_images() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
