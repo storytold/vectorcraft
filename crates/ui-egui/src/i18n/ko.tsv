@@ -596,7 +596,7 @@ digits	Malayalam	말라얄람어
 	Feather…	페더…
 	SVG Filters	SVG 필터
 	Apply SVG Filter…	SVG 필터 적용…
-	Warp	왜곡
+	Warp	뒤틀기
 	Arc…	호…
 	Arc Lower…	아래쪽 호…
 	Arc Upper…	위쪽 호…
@@ -743,7 +743,7 @@ digits	Malayalam	말라얄람어
 	Keep Tools Beside the Canvas	캔버스 옆에 도구 배치
 	Actions	액션
 	Asset Export	에셋 내보내기
-	Attributes	속성
+	Attributes	특성
 	Brushes	브러시
 	Color	색상
 	Color Guide	색상 가이드
@@ -5564,6 +5564,25 @@ lighting	Light	광원
 @msg	a 3D effect on a group's fill or stroke draws nothing	그룹의 칠이나 획에 있는 3D 효과는 아무것도 그리지 않습니다
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	그룹의 칠이나 획에 있는 3D 효과는 내보낼 것을 그리지 않습니다
 @msg	The 3D object is too complex to export	3D 개체가 너무 복잡하여 내보낼 수 없습니다
+@msg	give one <filter> element	<filter> 요소를 하나 지정하세요
+@msg	the <filter> element needs an id, the filter's name	<filter> 요소에는 필터 이름인 id가 필요합니다
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 필터의 id는 최대 {MAX_NAME}자입니다
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}>은(는) SVG 필터의 요소가 아닙니다
+@msg	an SVG filter has no event attributes such as {_1}	SVG 필터에는 {_1} 같은 이벤트 속성이 없습니다
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 필터의 이미지는 PNG, JPEG, GIF 또는 WebP data: URL입니다
+@msg	the SVG filter isn't valid XML: {e}	SVG 필터가 올바른 XML이 아닙니다: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence의 numOctaves는 최대 {MAX_OCTAVES}입니다
+@msg	{what} is at most {max}	{what}은(는) 최대 {max}입니다
+@msg	feConvolveMatrix's order	feConvolveMatrix의 order
+@msg	feMorphology's radius	feMorphology의 radius
+@msg	a blur's stdDeviation	흐림 효과의 stdDeviation
+@msg	the SVG filter has no primitives	SVG 필터에 프리미티브가 없습니다
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 필터의 프리미티브는 최대 {MAX_PRIMITIVES}개입니다
+@msg	the SVG filter is too large once its attributes are written out	속성을 모두 쓰면 SVG 필터가 너무 커집니다
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 필터의 이미지는 모두 합쳐 최대 {MAX_IMAGE_PIXELS}픽셀입니다
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG 필터를 그릴 수 없습니다: 프리미티브와 그 입력을 확인하세요
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 필터의 요소는 최대 {MAX_DEPTH}단계까지 중첩됩니다
+@msg	an SVG filter is at most {_1} KB	SVG 필터는 최대 {_1}KB입니다
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	개체에 3D 효과(돌출 및 경사, 회전체, 부풀리기 또는 회전)가 없습니다
 @msg	its 3D effect builds no solid	3D 효과가 입체를 만들지 않습니다
 @msg	bevel must be none or one of {_1}	bevel은 none 또는 {_1} 중 하나여야 합니다

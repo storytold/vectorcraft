@@ -5970,6 +5970,25 @@ imageTrace	Outline	Körvonal
 @msg	a 3D effect on a group's fill or stroke draws nothing	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmit
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	a csoport kitöltésén vagy körvonalán lévő 3D effektus nem rajzol semmi exportálhatót
 @msg	The 3D object is too complex to export	A 3D objektum túl összetett az exportáláshoz
+@msg	give one <filter> element	adjon meg egy <filter> elemet
+@msg	the <filter> element needs an id, the filter's name	a <filter> elemnek id kell, a szűrő neve
+@msg	an SVG filter's id is at most {MAX_NAME} characters	egy SVG-szűrő id-je legfeljebb {MAX_NAME} karakter
+@msg	<{_1}> isn't an element of an SVG filter	a(z) <{_1}> nem SVG-szűrő eleme
+@msg	an SVG filter has no event attributes such as {_1}	egy SVG-szűrőnek nincsenek eseményattribútumai, például {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	egy SVG-szűrő képei PNG, JPEG, GIF vagy WebP formátumú data: URL-ek
+@msg	the SVG filter isn't valid XML: {e}	az SVG-szűrő nem érvényes XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	a feTurbulence numOctaves értéke legfeljebb {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} legfeljebb {max}
+@msg	feConvolveMatrix's order	a feConvolveMatrix order értéke
+@msg	feMorphology's radius	a feMorphology radius értéke
+@msg	a blur's stdDeviation	egy elmosás stdDeviation értéke
+@msg	the SVG filter has no primitives	az SVG-szűrőnek nincsenek primitívjei
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	egy SVG-szűrőnek legfeljebb {MAX_PRIMITIVES} primitívje van
+@msg	the SVG filter is too large once its attributes are written out	az SVG-szűrő túl nagy, miután az attribútumai ki vannak írva
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	egy SVG-szűrő képei összesen legfeljebb {MAX_IMAGE_PIXELS} képpontosak
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	az SVG-szűrő nem rajzolható meg: ellenőrizze a primitívjeit és azok bemeneteit
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	egy SVG-szűrő elemei legfeljebb {MAX_DEPTH} szint mélyen ágyazhatók egymásba
+@msg	an SVG filter is at most {_1} KB	egy SVG-szűrő legfeljebb {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	az objektumnak nincs 3D effektusa (Kihúzás és élletörés, Forgatás tengely körül, Felfújás vagy Elforgatás)
 @msg	its 3D effect builds no solid	a 3D effektusa nem hoz létre testet
 @msg	bevel must be none or one of {_1}	a bevel értéke none vagy ezek egyike lehet: {_1}

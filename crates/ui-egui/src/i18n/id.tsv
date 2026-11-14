@@ -34,7 +34,7 @@
 	Clear Recent Files	Kosongkan berkas terbaru
 	Show in Folder	Tampilkan di folder
 	Close	Tutup
-@id	file.close	berkas.tutup
+@id	file.close	Tutup
 	Close All	Tutup semua
 	Save	Simpan
 	Save As…	Simpan sebagai…
@@ -497,7 +497,7 @@
 	Zig Zag…	Zig Zag…
 	Pathfinder	Pathfinder
 	Add	Tambah
-@id	pathfinder.add	pathfinder.tambah
+@id	pathfinder.add	Satukan
 	Intersect	Iris
 	Exclude	Kecualikan
 	Subtract	Kurangi

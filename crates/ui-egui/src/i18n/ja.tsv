@@ -5645,6 +5645,25 @@ lighting	Light	ライト
 @msg	a 3D effect on a group's fill or stroke draws nothing	グループの塗りまたは線にある 3D 効果は何も描画しません
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	グループの塗りまたは線にある 3D 効果には書き出せる描画がありません
 @msg	The 3D object is too complex to export	3D オブジェクトが複雑すぎるため書き出せません
+@msg	give one <filter> element	<filter> 要素を 1 つ指定してください
+@msg	the <filter> element needs an id, the filter's name	<filter> 要素には id (フィルターの名前) が必要です
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG フィルターの id は {MAX_NAME} 文字までです
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> は SVG フィルターの要素ではありません
+@msg	an SVG filter has no event attributes such as {_1}	SVG フィルターには {_1} などのイベント属性は使えません
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG フィルターの画像は PNG、JPEG、GIF、WebP の data: URL に限ります
+@msg	the SVG filter isn't valid XML: {e}	SVG フィルターが有効な XML ではありません: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence の numOctaves は {MAX_OCTAVES} までです
+@msg	{what} is at most {max}	{what} は {max} までです
+@msg	feConvolveMatrix's order	feConvolveMatrix の order
+@msg	feMorphology's radius	feMorphology の radius
+@msg	a blur's stdDeviation	ぼかしの stdDeviation
+@msg	the SVG filter has no primitives	SVG フィルターにプリミティブがありません
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG フィルターのプリミティブは {MAX_PRIMITIVES} 個までです
+@msg	the SVG filter is too large once its attributes are written out	属性を書き出すと SVG フィルターが大きくなりすぎます
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG フィルターの画像は合計 {MAX_IMAGE_PIXELS} ピクセルまでです
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG フィルターを描画できません: プリミティブとその入力を確認してください
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG フィルターの要素の入れ子は {MAX_DEPTH} 階層までです
+@msg	an SVG filter is at most {_1} KB	SVG フィルターは {_1} KB までです
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	オブジェクトに 3D 効果 (押し出しとベベル、回転体、膨張、回転) がありません
 @msg	its 3D effect builds no solid	3D 効果からソリッドが作成されません
 @msg	bevel must be none or one of {_1}	bevel には none または {_1} のいずれかを指定してください

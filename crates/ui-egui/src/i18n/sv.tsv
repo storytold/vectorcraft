@@ -5241,7 +5241,7 @@ effect	Soft	Mjuk
 	On Both Sides	På båda sidor
 	Short	Kort
 	Full Width	Full bredd
-	Distort	Förvräng
+	Distort	Förvrängning
 	Diffuse Glow…	Diffus glöd…
 	Glass…	Glas…
 	Ocean Ripple…	Havskrusning…
@@ -5454,6 +5454,25 @@ lighting	Light	Ljus
 @msg	a 3D effect on a group's fill or stroke draws nothing	en 3D-effekt på en grupps fyllning eller linje ritar ingenting
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	en 3D-effekt på en grupps fyllning eller linje ritar ingenting att exportera
 @msg	The 3D object is too complex to export	3D-objektet är för komplext för att exporteras
+@msg	give one <filter> element	ange ett <filter>-element
+@msg	the <filter> element needs an id, the filter's name	<filter>-elementet behöver ett id, filtrets namn
+@msg	an SVG filter's id is at most {MAX_NAME} characters	ett SVG-filters id har högst {MAX_NAME} tecken
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> är inte ett element i ett SVG-filter
+@msg	an SVG filter has no event attributes such as {_1}	ett SVG-filter har inga händelseattribut som {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	ett SVG-filters bilder är data:-URL:er i PNG, JPEG, GIF eller WebP
+@msg	the SVG filter isn't valid XML: {e}	SVG-filtret är inte giltig XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves för feTurbulence är högst {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} är högst {max}
+@msg	feConvolveMatrix's order	order för feConvolveMatrix
+@msg	feMorphology's radius	radius för feMorphology
+@msg	a blur's stdDeviation	stdDeviation för en oskärpa
+@msg	the SVG filter has no primitives	SVG-filtret har inga primitiver
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	ett SVG-filter har högst {MAX_PRIMITIVES} primitiver
+@msg	the SVG filter is too large once its attributes are written out	SVG-filtret blir för stort när dess attribut skrivs ut
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	ett SVG-filters bilder har högst {MAX_IMAGE_PIXELS} pixlar sammanlagt
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	SVG-filtret kan inte ritas: kontrollera dess primitiver och deras indata
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	ett SVG-filters element kapslas högst {MAX_DEPTH} nivåer djupt
+@msg	an SVG filter is at most {_1} KB	ett SVG-filter är högst {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objektet har ingen 3D-effekt (Extrudera och fasa, Rotera runt axel, Blås upp eller Rotera)
 @msg	its 3D effect builds no solid	dess 3D-effekt bygger ingen solid
 @msg	bevel must be none or one of {_1}	bevel måste vara none eller något av {_1}

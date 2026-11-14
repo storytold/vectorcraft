@@ -226,7 +226,7 @@ antiAlias	Sharp	Nítido
 	Arc Lower…	Arco Inferior…
 	Arc Tool	Ferramenta Arco
 	Arc Upper…	Arco Superior…
-	Arch…	Arco…
+	Arch…	Abóbada…
 	Arc…	Arco…
 	Area / Path Type	Texto de Área / Caminho
 	Area Graph Tool	Ferramenta Gráfico de Área
@@ -1298,7 +1298,7 @@ antiAlias	Sharp	Nítido
 	Guides & Grid	Guias e Grade
 	H Spacing:	Espaçamento H:
 	H:	H:
-	Hair Space	Espaço Fino
+	Hair Space	Espaço Ultrafino
 	Hand Tool	Ferramenta Mão
 	Hand-Drawn	Desenhado à Mão
 	Painted and Sketched	Pintado e Esboçado
@@ -3142,7 +3142,7 @@ digits	Malayalam	Malaiala
 	Trim mark weight:	Peso da marca de corte:
 	True colour needs version 2004 or later: the nearest of 256 colours is written.	A cor verdadeira requer a versão 2004 ou posterior: a cor mais próxima das 256 cores é escrita.
 	Turn off Data Recovery for complex documents	Desligar Recuperação de Dados para documentos complexos
-	Tweak…	Torcer…
+	Tweak…	Ajustar…
 	Twirl Rate:	Taxa de Redemoinho:
 	Twirl Tool	Ferramenta Redemoinho
 	Twist…	Torcer…
@@ -3290,7 +3290,7 @@ digits	Malayalam	Malaiala
 	Viewing Distance:	Distância de Visualização:
 	W:	W:
 	Warnings	Avisos
-	Warp	Distorcer
+	Warp	Deformar
 	Warp Options	Opções de Distorção
 	Warp Tool	Ferramenta Distorcer
 	Wave…	Onda…
@@ -5936,6 +5936,24 @@ mark-style	Japanese	Japonesas
 @msg	a 3D effect on a group's fill or stroke draws nothing	um efeito 3D no preenchimento ou traçado de um grupo não desenha nada
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	um efeito 3D no preenchimento ou traçado de um grupo não desenha nada para exportar
 @msg	The 3D object is too complex to export	O objeto 3D é complexo demais para ser exportado
+@msg	the <filter> element needs an id, the filter's name	o elemento <filter> precisa de um id, o nome do filtro
+@msg	an SVG filter's id is at most {MAX_NAME} characters	o id de um filtro SVG tem no máximo {MAX_NAME} caracteres
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> não é um elemento de filtro SVG
+@msg	an SVG filter has no event attributes such as {_1}	um filtro SVG não tem atributos de evento como {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	as imagens de um filtro SVG são URLs data: em PNG, JPEG, GIF ou WebP
+@msg	the SVG filter isn't valid XML: {e}	o filtro SVG não é um XML válido: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves de feTurbulence é no máximo {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} é no máximo {max}
+@msg	feConvolveMatrix's order	order de feConvolveMatrix
+@msg	feMorphology's radius	radius de feMorphology
+@msg	a blur's stdDeviation	stdDeviation de um desfoque
+@msg	the SVG filter has no primitives	o filtro SVG não tem primitivas
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	um filtro SVG tem no máximo {MAX_PRIMITIVES} primitivas
+@msg	the SVG filter is too large once its attributes are written out	o filtro SVG fica grande demais depois que seus atributos são escritos
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	as imagens de um filtro SVG têm no máximo {MAX_IMAGE_PIXELS} pixels no total
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	não é possível desenhar o filtro SVG: verifique suas primitivas e as entradas delas
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	os elementos de um filtro SVG se aninham em no máximo {MAX_DEPTH} níveis
+@msg	an SVG filter is at most {_1} KB	um filtro SVG tem no máximo {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	o objeto não tem efeito 3D (Extrusão e Bisel, Revolver, Inflar ou Girar)
 @msg	its 3D effect builds no solid	seu efeito 3D não constrói nenhum sólido
 @msg	bevel must be none or one of {_1}	bevel deve ser none ou um de {_1}

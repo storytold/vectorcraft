@@ -537,7 +537,7 @@
 	Clear Recent Files	Recente bestanden wissen
 	Show in Folder	Tonen in map
 	Close	Sluiten
-@id	file.close	file.close
+@id	file.close	Sluiten
 	Close All	Alles sluiten
 	Save	Opslaan
 	Save As…	Opslaan als…
@@ -1014,7 +1014,7 @@
 	Zig Zag…	Zigzag…
 	Pathfinder	Padvinder
 	Add	Toevoegen
-@id	pathfinder.add	pathfinder.add
+@id	pathfinder.add	Verenigen
 	Intersect	Doorsnede
 	Exclude	Uitsluiten
 	Subtract	Aftrekken
@@ -5926,6 +5926,25 @@ mark-style	Japanese	Japans
 @msg	a 3D effect on a group's fill or stroke draws nothing	een 3D-effect op de vulling of contour van een groep tekent niets
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	een 3D-effect op de vulling of contour van een groep tekent niets om te exporteren
 @msg	The 3D object is too complex to export	Het 3D-object is te complex om te exporteren
+@msg	give one <filter> element	geef één <filter>-element op
+@msg	the <filter> element needs an id, the filter's name	het <filter>-element heeft een id nodig, de naam van het filter
+@msg	an SVG filter's id is at most {MAX_NAME} characters	de id van een SVG-filter is hoogstens {MAX_NAME} tekens lang
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> is geen element van een SVG-filter
+@msg	an SVG filter has no event attributes such as {_1}	een SVG-filter heeft geen gebeurtenisattributen zoals {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	de afbeeldingen van een SVG-filter zijn data:-URL's in PNG, JPEG, GIF of WebP
+@msg	the SVG filter isn't valid XML: {e}	het SVG-filter is geen geldige XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves van feTurbulence is hoogstens {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} is hoogstens {max}
+@msg	feConvolveMatrix's order	order van feConvolveMatrix
+@msg	feMorphology's radius	radius van feMorphology
+@msg	a blur's stdDeviation	stdDeviation van een vervaging
+@msg	the SVG filter has no primitives	het SVG-filter heeft geen primitieven
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	een SVG-filter heeft hoogstens {MAX_PRIMITIVES} primitieven
+@msg	the SVG filter is too large once its attributes are written out	het SVG-filter is te groot zodra de attributen zijn uitgeschreven
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	de afbeeldingen van een SVG-filter hebben samen hoogstens {MAX_IMAGE_PIXELS} pixels
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	het SVG-filter kan niet worden getekend: controleer de primitieven en hun invoer
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	de elementen van een SVG-filter zijn hoogstens {MAX_DEPTH} niveaus diep genest
+@msg	an SVG filter is at most {_1} KB	een SVG-filter is hoogstens {_1} kB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	het object heeft geen 3D-effect (Extruderen en afschuinen, Draaien, Opblazen of Roteren)
 @msg	its 3D effect builds no solid	het 3D-effect ervan maakt geen massief object
 @msg	bevel must be none or one of {_1}	bevel moet none of een van {_1} zijn

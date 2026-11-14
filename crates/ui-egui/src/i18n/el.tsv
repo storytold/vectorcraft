@@ -2212,7 +2212,7 @@ font-technology	Variable	Μεταβλητές
 	Vertical:	Κατακόρυφα:
 	View	Προβολή
 	W:	Π:
-	Warp	Παραμόρφωση
+	Warp	Στρέβλωση
 	Wave…	Κύμα…
 	Web Snap:	Προσκόλληση στον ιστό:
 	Weight	Βάρος
@@ -5346,6 +5346,25 @@ digits	Malayalam	Μαλαγιάλαμ
 @msg	a 3D effect on a group's fill or stroke draws nothing	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	ένα εφέ 3D στο γέμισμα ή στην πινελιά μιας ομάδας δεν σχεδιάζει τίποτα για εξαγωγή
 @msg	The 3D object is too complex to export	Το αντικείμενο 3D είναι πολύ σύνθετο για εξαγωγή
+@msg	give one <filter> element	δώστε ένα στοιχείο <filter>
+@msg	the <filter> element needs an id, the filter's name	το στοιχείο <filter> χρειάζεται id, το όνομα του φίλτρου
+@msg	an SVG filter's id is at most {MAX_NAME} characters	το id ενός φίλτρου SVG έχει το πολύ {MAX_NAME} χαρακτήρες
+@msg	<{_1}> isn't an element of an SVG filter	το <{_1}> δεν είναι στοιχείο φίλτρου SVG
+@msg	an SVG filter has no event attributes such as {_1}	ένα φίλτρο SVG δεν έχει χαρακτηριστικά συμβάντων όπως το {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	οι εικόνες ενός φίλτρου SVG είναι διευθύνσεις data: PNG, JPEG, GIF ή WebP
+@msg	the SVG filter isn't valid XML: {e}	το φίλτρο SVG δεν είναι έγκυρη XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	το numOctaves του feTurbulence είναι το πολύ {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}: το πολύ {max}
+@msg	feConvolveMatrix's order	order του feConvolveMatrix
+@msg	feMorphology's radius	radius του feMorphology
+@msg	a blur's stdDeviation	stdDeviation ενός θολώματος
+@msg	the SVG filter has no primitives	το φίλτρο SVG δεν έχει πρωτογενή στοιχεία
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	ένα φίλτρο SVG έχει το πολύ {MAX_PRIMITIVES} πρωτογενή στοιχεία
+@msg	the SVG filter is too large once its attributes are written out	το φίλτρο SVG είναι πολύ μεγάλο όταν γραφτούν τα χαρακτηριστικά του
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	οι εικόνες ενός φίλτρου SVG έχουν συνολικά το πολύ {MAX_IMAGE_PIXELS} εικονοστοιχεία
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	το φίλτρο SVG δεν μπορεί να σχεδιαστεί: ελέγξτε τα πρωτογενή στοιχεία του και τις εισόδους τους
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	τα στοιχεία ενός φίλτρου SVG εμφωλεύονται σε βάθος το πολύ {MAX_DEPTH} επιπέδων
+@msg	an SVG filter is at most {_1} KB	ένα φίλτρο SVG είναι το πολύ {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	το αντικείμενο δεν έχει εφέ 3D (Εξώθηση και λοξότμηση, Περιστροφή γύρω από άξονα, Φούσκωμα ή Περιστροφή)
 @msg	its 3D effect builds no solid	το εφέ 3D του δεν δημιουργεί στερεό
 @msg	bevel must be none or one of {_1}	το bevel πρέπει να είναι none ή ένα από τα {_1}

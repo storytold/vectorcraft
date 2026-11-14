@@ -4419,8 +4419,8 @@ digits	Malayalam	馬來亞拉姆數字
 	Shear	傾斜
 	Shear Tool	傾斜工具
 	Shear…	傾斜…
-	Shell Lower…	下弧形…
-	Shell Upper…	上弧形…
+	Shell Lower…	下殼形…
+	Shell Upper…	上殼形…
 	Shift	Shift
 	Shift to Color…	位移至顏色…
 	Shifts the tints of global and spot colors; other colors stay.	位移整體色與特別色的色調；其他顏色維持不變。
@@ -5691,6 +5691,25 @@ lighting	Light	光源
 @msg	a 3D effect on a group's fill or stroke draws nothing	群組填色或筆畫上的 3D 效果不會繪製任何內容
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	群組填色或筆畫上的 3D 效果沒有可匯出的內容
 @msg	The 3D object is too complex to export	3D 物件過於複雜，無法匯出
+@msg	give one <filter> element	請提供一個 <filter> 元素
+@msg	the <filter> element needs an id, the filter's name	<filter> 元素需要 id，也就是濾鏡的名稱
+@msg	an SVG filter's id is at most {MAX_NAME} characters	SVG 濾鏡的 id 最多 {MAX_NAME} 個字元
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> 不是 SVG 濾鏡的元素
+@msg	an SVG filter has no event attributes such as {_1}	SVG 濾鏡不能有 {_1} 等事件屬性
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	SVG 濾鏡的影像必須是 PNG、JPEG、GIF 或 WebP 格式的 data: URL
+@msg	the SVG filter isn't valid XML: {e}	SVG 濾鏡不是有效的 XML：{e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	feTurbulence 的 numOctaves 最大為 {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what}最大為 {max}
+@msg	feConvolveMatrix's order	feConvolveMatrix 的 order
+@msg	feMorphology's radius	feMorphology 的 radius
+@msg	a blur's stdDeviation	模糊的 stdDeviation
+@msg	the SVG filter has no primitives	SVG 濾鏡沒有基本元件
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	SVG 濾鏡最多有 {MAX_PRIMITIVES} 個基本元件
+@msg	the SVG filter is too large once its attributes are written out	寫出屬性後，SVG 濾鏡過大
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	SVG 濾鏡的影像總共最多 {MAX_IMAGE_PIXELS} 像素
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	無法繪製 SVG 濾鏡：請檢查其基本元件及其輸入
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	SVG 濾鏡的元素最多巢狀 {MAX_DEPTH} 層
+@msg	an SVG filter is at most {_1} KB	SVG 濾鏡最大為 {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	此物件沒有 3D 效果 (突出與斜角、迴轉、膨脹或旋轉)
 @msg	its 3D effect builds no solid	其 3D 效果沒有產生任何實體
 @msg	bevel must be none or one of {_1}	bevel 必須是 none 或 {_1} 其中之一

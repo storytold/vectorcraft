@@ -5987,6 +5987,25 @@ mark-style	Japanese	Japonské
 @msg	a 3D effect on a group's fill or stroke draws nothing	3D efekt na výplni nebo tahu skupiny nic nekreslí
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	3D efekt na výplni nebo tahu skupiny nekreslí nic k exportu
 @msg	The 3D object is too complex to export	3D objekt je pro export příliš složitý
+@msg	give one <filter> element	zadejte jeden prvek <filter>
+@msg	the <filter> element needs an id, the filter's name	prvek <filter> potřebuje id, název filtru
+@msg	an SVG filter's id is at most {MAX_NAME} characters	id filtru SVG má nejvýše {MAX_NAME} znaků
+@msg	<{_1}> isn't an element of an SVG filter	<{_1}> není prvkem filtru SVG
+@msg	an SVG filter has no event attributes such as {_1}	filtr SVG nemá atributy událostí, jako je {_1}
+@msg	an SVG filter's images are PNG, JPEG, GIF or WebP data: URLs	obrázky filtru SVG jsou adresy data: ve formátu PNG, JPEG, GIF nebo WebP
+@msg	the SVG filter isn't valid XML: {e}	filtr SVG není platné XML: {e}
+@msg	feTurbulence's numOctaves is at most {MAX_OCTAVES}	numOctaves prvku feTurbulence je nejvýše {MAX_OCTAVES}
+@msg	{what} is at most {max}	{what} je nejvýše {max}
+@msg	feConvolveMatrix's order	order prvku feConvolveMatrix
+@msg	feMorphology's radius	radius prvku feMorphology
+@msg	a blur's stdDeviation	stdDeviation rozostření
+@msg	the SVG filter has no primitives	filtr SVG nemá žádná primitiva
+@msg	an SVG filter has at most {MAX_PRIMITIVES} primitives	filtr SVG má nejvýše {MAX_PRIMITIVES} primitiv
+@msg	the SVG filter is too large once its attributes are written out	filtr SVG je po vypsání jeho atributů příliš velký
+@msg	an SVG filter's images have at most {MAX_IMAGE_PIXELS} pixels in all	obrázky filtru SVG mají celkem nejvýše {MAX_IMAGE_PIXELS} pixelů
+@msg	the SVG filter can't be drawn: check its primitives and their inputs	filtr SVG nelze vykreslit: zkontrolujte jeho primitiva a jejich vstupy
+@msg	an SVG filter's elements nest at most {MAX_DEPTH} deep	prvky filtru SVG jsou vnořeny nejvýše {MAX_DEPTH} úrovní hluboko
+@msg	an SVG filter is at most {_1} KB	filtr SVG má nejvýše {_1} KB
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	objekt nemá žádný 3D efekt (Vysunutí a zkosení, Rotační těleso, Nafouknutí ani Otočit)
 @msg	its 3D effect builds no solid	jeho 3D efekt nevytváří žádné těleso
 @msg	bevel must be none or one of {_1}	bevel musí být none nebo jedno z {_1}
