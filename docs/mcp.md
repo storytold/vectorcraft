@@ -3525,8 +3525,19 @@ already walks Image Trace. Short agent entry points:
   `ui.imageTracePresetDialog {params?, rename?}` opens the Image Trace panel's Save as New Preset… or Rename… dialog.
 - Live Paint: `livePaint.make`, `livePaint.merge`, `livePaint.fill {group?, point}`, `livePaint.strokeEdge`,
   `livePaint.info {group}`, `livePaint.release`, `livePaint.expand`, and `livePaint.gapOptions {ids?, detect?, size?,
-  color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill of its front-most
-  covering source, including compound paths with shared curved boundaries. Expand keeps those face fills.
+  color?, closeGaps?}` (Object › Live Paint › Gap Options). Make gives each covered face the fill rows that draw of
+  its front-most covering source that has one, including compound paths with shared curved boundaries, and each edge
+  the stroke rows that draw of its source. A row draws when it is shown and has paint and an opacity above 0; a
+  stroke also needs a weight above 0, and a source whose opacity is 0 has no rows that draw. The rows keep their order
+  and settings (opacity, blending mode, effects, overprint, and a stroke's weight, caps, joins, dashes and alignment),
+  gradients keep their fit on the source, and the face or edge takes the source's opacity and blending mode. Where a
+  path is cut into several edges, each edge runs the way the path does, its dashes go on from where it starts along
+  the path (Align Dashes to Corners is turned off on it), the arrowheads stay only at the path's own ends, and a width
+  profile or brush stays only on an edge that runs the whole path. A gradient applied along a stroke starts again on
+  each cut edge, and an inside or outside stroke is drawn centered on an edge that is an open piece of a closed path.
+  A face or edge given no such row has one unpainted row. Rows that do not draw stay with the stored sources, which
+  `livePaint.release` returns unchanged. The source's object effects and the strokes' pen pressure are not carried.
+  Expand keeps those face fills.
   With `detect: true`, paint stops at the gaps that run
   from a loose end of a path to the nearest path, up to `size` wide (`small` 3 pt, `medium` 6 pt, `large` 12 pt, or a
   number of points up to 72); `closeGaps: true` adds an unpainted path across each of them. `color` (the Gap Preview

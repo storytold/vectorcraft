@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{BlendMode, Color, Paint};
 use vectorcraft_doc::appearance::{AppearanceItem, FillLayer, LineCap, LineJoin, StrokeLayer};
 use vectorcraft_doc::{Appearance, Document, GapOptions, GapSize, LiveShape, Node, NodeId, NodeKind, Selection, TraceView};
 use vectorcraft_geom::{FillRule, PathData, Point, Rect, SubPath};
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Make",
             ["Object", "Live Paint"],
             Some("Cmd+Alt+X"),
-            "{ids?|id?} build a Live Paint group from the selected paths (paths, compound paths and groups of them; type, images and other objects are refused, nothing changes); each covered face starts with its front-most covering source's fill; with a Live Paint group among them, add the others to it as livePaint.merge does; a Live Paint group alone has nothing to add, so it is selected and nothing changes (no undo step) → {id, faces, edges}",
+            "{ids?|id?} build a Live Paint group from the selected paths (paths, compound paths and groups of them; type, images and other objects are refused, nothing changes); each covered face starts with the fill rows that draw (shown, with paint and an opacity above 0) of its front-most covering source that has one and an opacity above 0, and each edge with the stroke rows that draw (also a weight above 0) of its source, in order with their settings and with that source's opacity and blending mode (on a path cut into several edges, dashes go on along the path, arrowheads stay at its own ends, and a width profile or brush stays only on an edge that runs the whole path); a face or edge given no such row has one unpainted row; with a Live Paint group among them, add the others to it as livePaint.merge does; a Live Paint group alone has nothing to add, so it is selected and nothing changes (no undo step) → {id, faces, edges}",
             has_selection_or_ids,
             lp_make
         ),
@@ -414,22 +414,256 @@ fn source_nodes(n: &Node) -> Vec<Arc<Node>> {
     if is_live_paint(n) { b::sources(n).and_then(|g| g.children().cloned()).unwrap_or_default() } else { vec![Arc::new(n.clone())] }
 }
 
+/// Does appearance row `i` draw: it is shown, has paint and an opacity above 0, and a stroke also
+/// has a weight above 0?
+fn row_draws(i: &AppearanceItem) -> bool {
+    match i {
+        AppearanceItem::Fill(f) => f.visible && !f.paint.is_none() && f.opacity > 0.0,
+        AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.opacity > 0.0 && s.width > 0.0,
+    }
+}
+
+/// What a source path gives the faces and edges made from it.
+struct SourceStyle {
+    /// The fill rows that draw, in paint order (none when the path's opacity is 0).
+    fills: Vec<AppearanceItem>,
+    /// The stroke rows that draw, in paint order (none when the path's opacity is 0).
+    strokes: Vec<AppearanceItem>,
+    /// The top stroke's weight, for an edge given no stroke that draws.
+    width: f64,
+    opacity: f32,
+    blend: BlendMode,
+}
+
+impl SourceStyle {
+    /// The style of source path `n`: its rows keep their order and settings, gradients fitted to
+    /// its bounds keep that fit, and the strokes' pen pressure, tilt, bearing and rotation stay
+    /// with the path.
+    fn of(n: &Node) -> Self {
+        let mut a = (*n.appearance).clone().without_pressure();
+        if a.has_unplaced_gradient()
+            && let Some(bounds) = n.geometric_bounds()
+        {
+            a.pin_gradients(bounds);
+        }
+        let width = a.stroke().map_or(1.0, |s| s.width);
+        let (mut fills, mut strokes) = (vec![], vec![]);
+        if n.opacity > 0.0 {
+            for i in a.items.into_iter().filter(row_draws) {
+                if i.is_fill() { fills.push(i) } else { strokes.push(i) }
+            }
+        }
+        Self { fills, strokes, width, opacity: n.opacity, blend: n.blend }
+    }
+
+    /// Give part `n` the rows `rows` of this source with its opacity and blending mode; with no
+    /// rows, `n` keeps the unpainted row it has.
+    fn paint(&self, n: &mut Node, rows: &[AppearanceItem]) {
+        if rows.is_empty() {
+            return;
+        }
+        n.appearance = Appearance { items: rows.to_vec(), ..Default::default() }.into();
+        n.opacity = self.opacity;
+        n.blend = self.blend;
+    }
+}
+
+/// How far, in points, a place on an edge may be from its source path and still be on it.
+const ON_SOURCE: f64 = 0.05;
+
+/// Does stroke row `i` have settings that depend on where along its path a piece of it lies:
+/// dashes, arrowheads, a width profile or a brush?
+fn depends_on_place(i: &AppearanceItem) -> bool {
+    matches!(i, AppearanceItem::Stroke(s) if s.dash.is_some() || s.start_arrow.is_some() || s.end_arrow.is_some() || s.profile.is_some() || s.brush.is_some())
+}
+
+/// One subpath's segments with the length along it where each starts, then its whole length, and
+/// a grid of square cells listing the segments whose bounds, grown by [`ON_SOURCE`], reach into
+/// each cell, so finding the segments near a point does not look at every segment.
+struct Track {
+    segs: Vec<kurbo::PathSeg>,
+    at: Vec<f64>,
+    closed: bool,
+    cell: f64,
+    grid: HashMap<(i64, i64), Vec<usize>>,
+    /// Segments that reach into more than [`Track::MAX_CELLS`] cells, or that come after the grid
+    /// holds [`Track::CELLS_PER_SEGMENT`] entries per segment, looked at for every point.
+    wide: Vec<usize>,
+}
+
+impl Track {
+    const ACCURACY: f64 = 1e-4;
+    const MAX_CELLS: i64 = 4096;
+    const CELLS_PER_SEGMENT: usize = 16;
+
+    fn new(sp: &SubPath) -> Self {
+        use kurbo::{ParamCurveArclen, Shape as _};
+        let mut bp = kurbo::BezPath::new();
+        sp.to_bezpath_into(&mut bp);
+        let segs: Vec<kurbo::PathSeg> = bp.segments().collect();
+        let mut at = Vec::with_capacity(segs.len() + 1);
+        let mut len = 0.0;
+        for s in &segs {
+            at.push(len);
+            len += s.arclen(Self::ACCURACY);
+        }
+        at.push(len);
+        let boxes: Vec<kurbo::Rect> = segs.iter().map(|s| s.bounding_box().inflate(ON_SOURCE, ON_SOURCE)).collect();
+        // Cells about as wide as an average segment's bounds.
+        let mean = boxes.iter().map(|b| b.width().max(b.height())).sum::<f64>() / boxes.len().max(1) as f64;
+        let cell = if mean.is_finite() { mean.max(4.0 * ON_SOURCE) } else { 4.0 * ON_SOURCE };
+        let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+        let mut wide = vec![];
+        // The grid holds at most this many entries in all.
+        let mut budget = boxes.len().saturating_mul(Self::CELLS_PER_SEGMENT);
+        for (k, b) in boxes.iter().enumerate() {
+            let (x0, y0) = Self::cell_of(Point::new(b.x0, b.y0), cell);
+            let (x1, y1) = Self::cell_of(Point::new(b.x1, b.y1), cell);
+            let cells = x1.saturating_sub(x0).saturating_add(1).saturating_mul(y1.saturating_sub(y0).saturating_add(1));
+            let Some(cells) = usize::try_from(cells).ok().filter(|&c| cells <= Self::MAX_CELLS && c <= budget) else {
+                wide.push(k);
+                continue;
+            };
+            budget -= cells;
+            for x in x0..=x1 {
+                for y in y0..=y1 {
+                    grid.entry((x, y)).or_default().push(k);
+                }
+            }
+        }
+        Self { segs, at, closed: sp.closed, cell, grid, wide }
+    }
+
+    fn cell_of(p: Point, cell: f64) -> (i64, i64) {
+        ((p.x / cell).floor() as i64, (p.y / cell).floor() as i64)
+    }
+
+    fn len(&self) -> f64 {
+        self.at.last().copied().unwrap_or(0.0)
+    }
+
+    /// The lengths along the subpath to each of its segments' places nearest `p` that are within
+    /// [`ON_SOURCE`] of it (more than one where the subpath passes `p` again).
+    fn places(&self, p: Point) -> Vec<f64> {
+        use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
+        let near = self.grid.get(&Self::cell_of(p, self.cell)).map(Vec::as_slice).unwrap_or_default();
+        let mut out = vec![];
+        for &k in near.iter().chain(&self.wide) {
+            let Some(s) = self.segs.get(k) else { continue };
+            let n = s.nearest(p, 1e-9);
+            if n.distance_sq <= ON_SOURCE * ON_SOURCE {
+                out.push(self.at.get(k).copied().unwrap_or(0.0) + s.subsegment(0.0..n.t).arclen(Self::ACCURACY));
+            }
+        }
+        out
+    }
+
+    /// The signed length from `a` to `b` along the subpath (the shorter way round a closed one).
+    fn step(&self, a: f64, b: f64) -> f64 {
+        let (d, len) = (b - a, self.len());
+        if self.closed && len > 0.0 { d - len * (d / len).round() } else { d }
+    }
+
+    /// Of `places`, the one nearest along the subpath to `target`.
+    fn nearest(&self, places: &[f64], target: f64) -> Option<f64> {
+        places.iter().copied().min_by(|x, y| self.step(*x, target).abs().total_cmp(&self.step(*y, target).abs()))
+    }
+}
+
+/// Where edge `edge` runs along its source path, whose subpaths' tracks are `tracks`: the length
+/// along the source subpath to the edge's start, whether the edge starts at that subpath's start and
+/// ends at its end (an open subpath), and whether it runs the whole subpath. The middle of the
+/// edge's first segment places it, and its ends are taken where they lie that far along the source,
+/// so a path that passes a point twice is told apart. An edge that runs against the direction of its
+/// source is reversed first. `None` when the edge is not a single piece found on the source.
+fn edge_run(tracks: &[Track], edge: &mut PathData) -> Option<(f64, bool, bool, bool)> {
+    use kurbo::{ParamCurve, ParamCurveArclen};
+    let [sp] = edge.subpaths.as_slice() else { return None };
+    if sp.segment_count() == 0 {
+        return None;
+    }
+    let (a, z) = (sp.anchors.first()?.p, if sp.closed { sp.anchors.first()?.p } else { sp.anchors.last()?.p });
+    let first = sp.segment(0);
+    let mid = first.eval(0.5);
+    let half = first.subsegment(0.0..0.5).arclen(Track::ACCURACY);
+    let length = sp.anchor_arc_positions().last().copied().unwrap_or(0.0);
+    let edge_closed = sp.closed;
+    // (how far off the fit is, track, start, end, runs forward) for the subpath that fits best.
+    let mut found: Option<(f64, &Track, f64, f64, bool)> = None;
+    for track in tracks {
+        // The start lies half the first segment before its middle along the source, or after it
+        // when the edge runs the other way: take the place and way that fit best.
+        let starts_at = track.places(a);
+        let mut best: Option<(f64, f64, bool)> = None;
+        for pm in track.places(mid) {
+            for forward in [true, false] {
+                let Some(pa) = track.nearest(&starts_at, if forward { pm - half } else { pm + half }) else { continue };
+                let miss = (if forward { track.step(pa, pm) } else { track.step(pm, pa) } - half).abs();
+                if best.is_none_or(|(m, _, _)| miss < m) {
+                    best = Some((miss, pa, forward));
+                }
+            }
+        }
+        let Some((miss, pa, forward)) = best else { continue };
+        let target = if forward { pa + length } else { pa - length };
+        let Some(pz) = track.nearest(&track.places(z), target) else { continue };
+        let miss = miss + track.step(pz, target).abs();
+        if found.is_none_or(|(m, ..)| miss < m) {
+            found = Some((miss, track, pa, pz, forward));
+        }
+    }
+    let (_, track, pa, pz, forward) = found?;
+    let (from, to) = if forward { (pa, pz) } else { (pz, pa) };
+    if !forward {
+        edge.reverse();
+    }
+    let open = !track.closed;
+    let starts = open && from <= ON_SOURCE;
+    let ends = open && to >= track.len() - ON_SOURCE;
+    let whole = if open { starts && ends } else { edge_closed };
+    Some((from, starts, ends, whole))
+}
+
+/// Fit stroke row `row` of a source path to an edge cut from it, which runs as [`edge_run`] says
+/// (`None`: not known): its dashes go on from where the edge starts along the source, its
+/// arrowheads stay only at the source's own ends, and its width profile and brush, which spread
+/// over the whole path, stay only on an edge that runs the whole path.
+fn fit_to_edge(row: &mut AppearanceItem, run: Option<(f64, bool, bool, bool)>) {
+    let AppearanceItem::Stroke(s) = row else { return };
+    let (from, starts, ends, whole) = run.unwrap_or((0.0, false, false, false));
+    if !whole {
+        if let Some(d) = &mut s.dash
+            && run.is_some()
+        {
+            d.offset += from;
+            d.align_corners = false;
+        }
+        s.profile = None;
+        s.brush = None;
+    }
+    if !starts {
+        s.start_arrow = None;
+    }
+    if !ends {
+        s.end_arrow = None;
+    }
+}
+
 /// The planar map's inputs from `sources` (paths and compound paths, back → front), with the
-/// fill, stroke and stroke width of each.
-fn source_shapes(sources: &[Arc<Node>]) -> (Vec<po::Shape>, Vec<(Paint, Paint, f64)>) {
+/// style of each.
+fn source_shapes(sources: &[Arc<Node>]) -> (Vec<po::Shape>, Vec<SourceStyle>) {
     let mut lv = vec![];
     for n in sources {
         b::leaf_shapes(n, &mut lv);
     }
     let mut shapes = vec![];
-    let mut styles: Vec<(Paint, Paint, f64)> = vec![];
+    let mut styles: Vec<SourceStyle> = vec![];
     for l in lv {
         if let Some((path, rule)) = b::node_outline(l)
             && !path.is_empty()
         {
             shapes.push(po::Shape::new(path, rule, styles.len() as u64));
-            let a = &l.appearance;
-            styles.push((a.fill_paint(), a.stroke_paint(), a.stroke().map(|s| s.width).unwrap_or(1.0)));
+            styles.push(SourceStyle::of(l));
         }
     }
     (shapes, styles)
@@ -462,17 +696,35 @@ fn build_children(d: &mut Document, sources: Vec<Arc<Node>>, max_gap: Option<f64
     let nfaces = regs.len();
     for r in regs {
         let id = d.alloc_id();
-        let fill = r.top().and_then(|t| styles.get(t)).map_or(Paint::None, |s| s.0.clone());
-        let mut n = Node::path(id, r.path, fill_only(fill));
+        let mut n = Node::path(id, r.path, fill_only(Paint::None));
         n.name = Some(FACE_NAME.into());
+        // The front-most covering source with a fill that draws gives the face its fill rows.
+        if let Some(s) = r.sources.iter().rev().filter_map(|&t| styles.get(t)).find(|s| !s.fills.is_empty()) {
+            s.paint(&mut n, &s.fills);
+        }
         children.push(Arc::new(n));
     }
     let nedges = edges.len();
+    // The tracks of the sources whose edges need them, measured once each.
+    let mut tracks: HashMap<usize, Vec<Track>> = HashMap::new();
     for e in edges {
-        let Some((_, stroke, w)) = styles.get(e.key as usize) else { continue };
+        let key = e.key as usize;
+        let Some(s) = styles.get(key) else { continue };
+        let mut path = e.path;
+        let mut rows = s.strokes.clone();
+        if rows.iter().any(depends_on_place) {
+            let source = tracks
+                .entry(key)
+                .or_insert_with(|| shapes.get(key).map(|src| src.path.subpaths.iter().map(Track::new).collect()).unwrap_or_default());
+            let run = edge_run(source, &mut path);
+            for r in &mut rows {
+                fit_to_edge(r, run);
+            }
+        }
         let id = d.alloc_id();
-        let mut n = Node::path(id, e.path, stroke_only(stroke.clone(), *w));
+        let mut n = Node::path(id, path, stroke_only(Paint::None, s.width));
         n.name = Some(EDGE_NAME.into());
+        s.paint(&mut n, &rows);
         children.push(Arc::new(n));
     }
     Ok((children, nfaces, nedges))

@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_color::{Color, Paint};
+use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::appearance::{Effect, FillLayer, StrokeLayer};
 use vectorcraft_doc::{AppearanceItem, ImageBlob, ImageObject, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Affine, FillRule, PathData, Point, Rect};
 use vectorcraft_testkit::pdf::{PdfPage, pdf};
@@ -2595,6 +2596,237 @@ fn live_paint_make_and_expand_keep_abutting_compound_colors() {
     s.execute("edit.redo", &json!({})).unwrap();
     s.execute("edit.redo", &json!({})).unwrap();
     check_colors(&node(&s, group));
+}
+
+/// Gives `id` the appearance rows `items` (paint order) and returns them.
+fn set_rows(s: &mut Session, id: NodeId, items: Vec<AppearanceItem>) -> Vec<AppearanceItem> {
+    s.edit("t", |d, _| {
+        d.node_mut(id).unwrap().appearance = vectorcraft_doc::Appearance { items: items.clone(), ..Default::default() }.into();
+        Ok(())
+    })
+    .unwrap();
+    items
+}
+
+/// A fill row of `p`, changed by `f`.
+fn fill_row(p: Paint, f: impl FnOnce(&mut FillLayer)) -> AppearanceItem {
+    let mut l = FillLayer::new(p);
+    f(&mut l);
+    AppearanceItem::Fill(l)
+}
+
+/// A stroke row of `p` `width` wide, changed by `f`.
+fn stroke_row(p: Paint, width: f64, f: impl FnOnce(&mut StrokeLayer)) -> AppearanceItem {
+    let mut l = StrokeLayer::new(p, width);
+    f(&mut l);
+    AppearanceItem::Stroke(l)
+}
+
+/// The faces and edges of Live Paint group `g` whose bounds lie within x `x0`..`x1`.
+fn parts_within(s: &Session, g: NodeId, x0: f64, x1: f64) -> (Vec<Node>, Vec<Node>) {
+    let n = node(s, g);
+    let within = |c: &&Arc<Node>| c.geometric_bounds().is_some_and(|b| b.x0 >= x0 - 1e-6 && b.x1 <= x1 + 1e-6);
+    let faces = vectorcraft_tools::builder::faces(&n).into_iter().filter(within).map(|c| (**c).clone()).collect();
+    let edges = vectorcraft_tools::builder::edges(&n).into_iter().filter(within).map(|c| (**c).clone()).collect();
+    (faces, edges)
+}
+
+/// Make gives each edge every stroke row of its source that draws, a lower one under an
+/// unpainted or hidden top row included, with the rows' settings and the source's opacity and
+/// blending mode; rows that draw nothing stay only with the stored source, which Release returns.
+#[test]
+fn live_paint_make_keeps_lower_drawn_stroke_rows() {
+    let mut s = session();
+    let (a, b) = two_at(&mut s, 200.0);
+    let black = Paint::solid(Color::BLACK);
+    let green = Paint::solid(Color::rgb(0.0, 1.0, 0.0));
+    let thick = stroke_row(black.clone(), 3.0, |l| {
+        l.opacity = 0.5;
+        l.blend = BlendMode::Multiply;
+        l.cap = LineCap::Round;
+    });
+    // A: the top stroke has no paint.
+    let a_rows =
+        set_rows(&mut s, a, vec![fill_row(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), |_| {}), thick.clone(), stroke_row(Paint::None, 1.0, |_| {})]);
+    // B: the top stroke is hidden; a zero-weight and a transparent stroke draw nothing either.
+    set_rows(
+        &mut s,
+        b,
+        vec![
+            stroke_row(green.clone(), 2.0, |_| {}),
+            stroke_row(black.clone(), 0.0, |_| {}),
+            stroke_row(black, 2.0, |l| l.opacity = 0.0),
+            stroke_row(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 5.0, |l| l.visible = false),
+        ],
+    );
+    s.edit("t", |d, _| {
+        let n = d.node_mut(a).unwrap();
+        n.opacity = 0.75;
+        n.blend = BlendMode::Screen;
+        Ok(())
+    })
+    .unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let (_, a_edges) = parts_within(&s, g, 0.0, 100.0);
+    let (_, b_edges) = parts_within(&s, g, 200.0, 300.0);
+    assert!(!a_edges.is_empty() && !b_edges.is_empty());
+    for e in &a_edges {
+        assert_eq!(e.appearance.items, vec![thick.clone()], "A's edge takes the stroke that draws");
+        assert_eq!((e.opacity, e.blend), (0.75, BlendMode::Screen));
+    }
+    for e in &b_edges {
+        assert_eq!(e.appearance.items, vec![stroke_row(green.clone(), 2.0, |_| {})], "B's edge takes only its green stroke");
+        assert_eq!((e.opacity, e.blend), (1.0, BlendMode::Normal));
+    }
+    // Release returns the sources with every row they had.
+    let released = ids(&s.execute("livePaint.release", &json!({})).unwrap());
+    assert!(released.contains(&a));
+    assert_eq!(node(&s, a).appearance.items, a_rows);
+}
+
+/// When Make cuts a dashed stroke with arrowheads, a width profile and a brush into edges, each
+/// edge's dashes go on from where it starts along the path, the arrowheads stay at the path's own
+/// ends, and the profile and brush, which spread over the whole path, are left off the pieces.
+#[test]
+fn live_paint_make_fits_dashes_and_arrowheads_to_each_edge() {
+    use vectorcraft_doc::{Arrowhead, Dash};
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let l = line(&mut s, (-20.0, 50.0), (120.0, 50.0));
+    let dash = Dash { pattern: vec![10.0, 5.0], offset: 2.0, align_corners: true };
+    let row = stroke_row(Paint::solid(Color::BLACK), 2.0, |st| {
+        st.dash = Some(dash.clone());
+        st.start_arrow = Some(Arrowhead::Triangle);
+        st.end_arrow = Some(Arrowhead::Circle);
+        st.brush = Some("Charcoal".into());
+    });
+    let rows = set_rows(&mut s, l, vec![row]);
+    s.execute("select.set", &json!({"ids": [a.0, l.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let gn = node(&s, g);
+    let mut pieces: Vec<(f64, f64, vectorcraft_doc::StrokeLayer)> = vectorcraft_tools::builder::edges(&gn)
+        .iter()
+        .filter_map(|e| {
+            let st = e.appearance.stroke().filter(|st| st.dash.is_some())?.clone();
+            let sp = e.path_data()?.subpaths.first()?;
+            Some((sp.anchors.first()?.p.x, sp.anchors.last()?.p.x, st))
+        })
+        .collect();
+    pieces.sort_by(|p, q| p.0.total_cmp(&q.0));
+    let ends: Vec<(f64, f64)> = pieces.iter().map(|p| ((p.0 * 1e3).round() / 1e3, (p.1 * 1e3).round() / 1e3)).collect();
+    assert_eq!(ends, vec![(-20.0, 0.0), (0.0, 100.0), (100.0, 120.0)], "each piece runs the way the line does");
+    let offsets: Vec<f64> = pieces.iter().map(|p| (p.2.dash.as_ref().unwrap().offset * 1e3).round() / 1e3).collect();
+    assert_eq!(offsets, vec![2.0, 22.0, 122.0], "the dashes go on along the line");
+    assert!(pieces.iter().all(|p| !p.2.dash.as_ref().unwrap().align_corners && p.2.brush.is_none()));
+    let arrows: Vec<_> = pieces.iter().map(|p| (p.2.start_arrow.clone(), p.2.end_arrow.clone())).collect();
+    assert_eq!(arrows, vec![(Some(Arrowhead::Triangle), None), (None, None), (None, Some(Arrowhead::Circle))]);
+    // A path that crosses itself: the pieces that start at the crossing take their place on the
+    // path from where they run, not from the first time the path passes that point.
+    let mut s3 = session();
+    let anchors = [(0.0, 0.0), (100.0, 100.0), (100.0, 0.0), (0.0, 100.0)].map(|(x, y)| json!({"x": x, "y": y}));
+    let z = NodeId(s3.execute("path.create", &json!({"anchors": anchors, "closed": false})).unwrap()["id"].as_u64().unwrap());
+    set_rows(&mut s3, z, rows.clone());
+    s3.execute("select.set", &json!({"ids": [z.0]})).unwrap();
+    let g3 = NodeId(s3.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let mut cut: Vec<(f64, Option<Arrowhead>, Option<Arrowhead>)> = vectorcraft_tools::builder::edges(&node(&s3, g3))
+        .iter()
+        .filter_map(|e| {
+            let st = e.appearance.stroke()?;
+            Some(((st.dash.as_ref()?.offset * 1e3).round() / 1e3, st.start_arrow.clone(), st.end_arrow.clone()))
+        })
+        .collect();
+    cut.sort_by(|p, q| p.0.total_cmp(&q.0));
+    let d = 2.0 + 50.0 * 2f64.sqrt();
+    let r = |v: f64| (v * 1e3).round() / 1e3;
+    assert_eq!(
+        cut,
+        vec![(2.0, Some(Arrowhead::Triangle), None), (r(d), None, None), (r(d + 100.0 + 100.0 * 2f64.sqrt()), None, Some(Arrowhead::Circle))]
+    );
+    // An uncut path keeps all of it.
+    let mut s2 = session();
+    let l2 = line(&mut s2, (0.0, 0.0), (50.0, 0.0));
+    set_rows(&mut s2, l2, rows.clone());
+    s2.execute("select.set", &json!({"ids": [l2.0]})).unwrap();
+    let g2 = NodeId(s2.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let edges: Vec<_> = vectorcraft_tools::builder::edges(&node(&s2, g2)).iter().map(|e| e.appearance.items.clone()).collect();
+    assert_eq!(edges, vec![rows]);
+}
+
+/// Make gives each face every fill row of its source that draws, in order and with their
+/// opacity, blending mode, overprint and effects, and the source's gradients keep their fit on
+/// the source; Expand keeps the rows, and Undo and Redo bring the group back with them.
+#[test]
+fn live_paint_make_keeps_all_drawn_fill_rows_and_attributes() {
+    let mut s = session();
+    let (a, b) = two(&mut s);
+    let lower = fill_row(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), |l| {
+        l.opacity = 0.4;
+        l.blend = BlendMode::Multiply;
+        l.overprint = true;
+        l.effects.push(Effect { id: "distort.roughen".into(), params: Value::Null, visible: true });
+    });
+    // A: two fills that draw, with a hidden one between them and an unpainted one above them.
+    set_rows(
+        &mut s,
+        a,
+        vec![
+            lower.clone(),
+            fill_row(Paint::solid(Color::rgb(0.0, 1.0, 0.0)), |l| l.visible = false),
+            fill_row(Paint::None, |_| {}),
+            stroke_row(Paint::None, 1.0, |_| {}),
+        ],
+    );
+    // The top fill (and the stroke) become a gradient fitted to A's bounds.
+    let (want_fill, _) = paint_with_gradients(&mut s, a);
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let want = vec![lower, fill_row(want_fill, |_| {})];
+    let rows_within = |s: &Session, x0: f64, x1: f64| parts_within(s, g, x0, x1).0.iter().map(|f| f.appearance.items.clone()).collect::<Vec<_>>();
+    assert_eq!(rows_within(&s, 0.0, 50.0), vec![want.clone()], "A's face takes both fills that draw, the gradient at its fit on A");
+    let blue = vec![fill_row(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), |_| {})];
+    assert_eq!(rows_within(&s, 50.0, 100.0), vec![blue], "B is in front");
+    s.execute("livePaint.expand", &json!({})).unwrap();
+    let expanded = node(&s, g);
+    assert!(!vectorcraft_tools::builder::is_live_paint(&expanded));
+    let kept =
+        expanded.children().unwrap().iter().filter(|c| c.geometric_bounds().is_some_and(|b| b.x1 <= 50.0 + 1e-6)).any(|c| c.appearance.items == want);
+    assert!(kept, "Expand keeps both fills");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(rows_within(&s, 0.0, 50.0), vec![want.clone()]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(rows_within(&s, 0.0, 50.0), vec![want]);
+}
+
+/// A face takes the fill rows of the front-most covering source whose fill draws: a source in
+/// front whose fill is hidden or transparent, or whose opacity is 0, does not hide the paint of the
+/// source behind it, and a face that no such source covers has no paint.
+#[test]
+fn live_paint_make_uses_frontmost_source_with_drawn_fill() {
+    for front in ["hidden", "clear", "transparent object"] {
+        let mut s = session();
+        let (a, b) = two(&mut s);
+        s.edit("t", |d, _| {
+            let n = d.node_mut(b).unwrap();
+            let mut app = (*n.appearance).clone();
+            match front {
+                "hidden" => app.fill_mut().unwrap().visible = false,
+                "clear" => app.fill_mut().unwrap().opacity = 0.0,
+                _ => n.opacity = 0.0,
+            }
+            n.appearance = app.into();
+            Ok(())
+        })
+        .unwrap();
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        let g = NodeId(s.execute("livePaint.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+        let rows_within = |x0: f64, x1: f64| parts_within(&s, g, x0, x1).0.iter().map(|f| f.appearance.items.clone()).collect::<Vec<_>>();
+        let red = vec![fill_row(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), |_| {})];
+        assert_eq!(rows_within(50.0, 100.0), vec![red], "{front}: the overlap shows A");
+        assert_eq!(rows_within(100.0, 150.0), vec![vec![fill_row(Paint::None, |_| {})]], "{front}: B alone paints nothing");
+        assert_eq!(parts_within(&s, g, 100.0, 150.0).0[0].opacity, 1.0, "{front}");
+    }
 }
 
 #[test]
