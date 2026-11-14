@@ -703,6 +703,23 @@ fn insert_moves_the_row_past_what_a_traced_source_paints() {
     assert!(placed.x0 >= painted.x1 + GAP - 2.0, "{placed:?} after {painted:?}");
 }
 
+/// A layer's own drop shadow that reaches where the row would go moves the row past it.
+#[test]
+fn insert_moves_the_row_past_a_layers_own_shadow() {
+    let (mut s, img) = doc_with(&art());
+    let layer = s.execute("layer.new", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("shape.rectangle", &json!({"x": 200, "y": 150, "width": 100, "height": 40})).unwrap();
+    let shadow = json!({"effect": "stylize.dropShadow", "params": {"x": 150, "y": 0, "blur": 0}, "ids": [layer]});
+    s.execute("effect.apply", &shadow).unwrap();
+    let painted = bounds(&s, layer);
+    assert!(painted.x1 > 400.0, "the shadow reaches where the row would start: {painted:?}");
+    s.execute("select.set", &json!({"ids": [img.0]})).unwrap();
+    let job = generate(&mut s, json!({"provider": ID, "styles": ["flatColor"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
+    let r = s.execute("conceptVector.insert", &json!({"job": job, "variations": ["flatColor"]})).unwrap();
+    let placed = bounds(&s, r["ids"][0].as_u64().unwrap());
+    assert!(placed.x0 >= painted.x1 + GAP - 2.0, "{placed:?} after {painted:?}");
+}
+
 /// A variation's paths reaching past the image's box keep clear of art there too.
 #[test]
 fn insert_moves_the_row_past_art_that_a_variation_reaches_beyond_the_image_box() {
@@ -878,9 +895,15 @@ fn a_batch_close_drops_the_jobs_only_when_the_batch_succeeds() {
     let job = generate(&mut s, json!({"provider": ID, "styles": ["outline"], "id": img.0})).unwrap()["job"].as_u64().unwrap();
     let close = json!({"command": "file.close", "params": {"index": 0}});
     let bad = json!({"command": "no.suchCommand", "params": {}});
-    assert!(s.execute("command.batch", &json!({"commands": [close.clone(), bad]})).is_err());
+    assert!(s.execute("command.batch", &json!({"commands": [close.clone(), bad.clone()]})).is_err());
     assert_eq!(s.documents().len(), 1, "the document is back");
     assert!(s.concept_variations(job).is_some(), "the restored document's job is kept");
+    // A job command after the close, in the same batch, does not drop the job either.
+    let results = json!({"command": "conceptVector.results", "params": {"job": job}});
+    new_doc_with(&mut s, &art());
+    assert!(s.execute("command.batch", &json!({"commands": [close.clone(), results, bad]})).is_err());
+    assert_eq!(s.documents().len(), 2, "the document is back");
+    assert!(s.concept_variations(job).is_some(), "the restored document's job is kept after a job command");
     s.execute("command.batch", &json!({"commands": [close]})).unwrap();
     assert!(s.concept_variations(job).is_none(), "the job goes with the batch that closed its document");
 }

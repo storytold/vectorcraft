@@ -85,7 +85,11 @@ impl Session {
     }
 
     /// Drops the jobs whose document is closed.
+    /// In a batch, nothing is dropped until the batch ends without an error.
     pub(crate) fn prune_concept_jobs(&mut self) {
+        if self.batch_stash.is_some() {
+            return;
+        }
         let open: Vec<u64> = self.documents().iter().map(|d| d.uid).collect();
         self.concept.jobs.retain(|j| open.contains(&j.doc));
     }
@@ -509,8 +513,8 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
             .collect()
     };
     // The painted bounds of every visible object (the source's too: an Image Trace object's traced
-    // art and effects can reach past the image), and the image's own box. A layer, and a group that
-    // paints nothing of its own, is measured by its members (an opacity mask only hides them); one
+    // art and effects can reach past the image), and the image's own box. A layer or group that
+    // paints nothing of its own is measured by its members (an opacity mask only hides them); one
     // that clips, by its members after the clipping path, cut to what it paints.
     let mut obstacles: Vec<Rect> = vec![src];
     let mut stack: Vec<(&Arc<Node>, Option<Rect>)> = st.doc.layers.iter().map(|l| (l, None)).collect();
@@ -528,8 +532,9 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
             continue;
         }
         let clips = matches!(node.kind, NodeKind::Group { clip: true, .. } | NodeKind::Layer { clip: true, .. });
-        let by_members = node.is_layer()
-            || (matches!(node.kind, NodeKind::Group { .. }) && node.appearance.items.is_empty() && node.appearance.effects.is_empty());
+        let by_members = (node.is_layer() || matches!(node.kind, NodeKind::Group { .. }))
+            && node.appearance.items.is_empty()
+            && node.appearance.effects.is_empty();
         if by_members {
             // A clipping path paints its fills and strokes when they are set (`Node::clip_paint`),
             // its strokes outside the clip too, whether or not it is shown.
