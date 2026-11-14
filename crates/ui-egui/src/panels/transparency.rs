@@ -380,7 +380,14 @@ mod tests {
         assert_eq!(picked(&app), Some(vec![0]), "the click picks the top-left point");
         assert_eq!(state(&app, &ctx).0.opacity, Some(30.0), "the newly picked point's opacity");
         // An active Appearance row takes the opacity, so the values are the object's again.
-        let rows = app.session.active().unwrap().selection.objects.first().map(|id| app.session.active().unwrap().doc.node(*id).unwrap().appearance.items.len());
+        let rows = app
+            .session
+            .active()
+            .unwrap()
+            .selection
+            .objects
+            .first()
+            .map(|id| app.session.active().unwrap().doc.node(*id).unwrap().appearance.items.len());
         assert!(rows.is_some_and(|n| n > 0), "the mesh has its stroke row");
         run(&mut app, "appearance.setActiveItem", json!({"index": 0}));
         assert_eq!(picked(&app), None);
