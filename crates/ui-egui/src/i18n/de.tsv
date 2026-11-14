@@ -5106,6 +5106,7 @@ theme	Appearance	Erscheinungsbild
 @msg	every numbered name for {name} is taken in the document's folder	alle nummerierten Namen für {name} sind im Ordner des Dokuments bereits vergeben
 @msg	No linked files to look for	Keine verknüpften Dateien zum Suchen
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Die Verknüpfung befindet sich in einem Symbol, einem Diagrammdesign, einem Muster oder einer Deckkraftmaske und hat keinen Platz auf der Zeichenfläche
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	die Grafik eines Diagrammdesigns in einer Diagrammreihe wird aus dem Design neu gezeichnet: Bearbeiten Sie das Design, um sie zu ändern
 
 # The macOS menu bar (native_menu): the app and Window menus' system items, Settings pages.
 	Services	Dienste
@@ -5172,6 +5173,7 @@ theme	Appearance	Erscheinungsbild
 @msg	automation filesystem access is not granted: write authority is absent: {path}	Dateisystemzugriff für die Automatisierung ist nicht gewährt: Die Schreibberechtigung fehlt: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	Automatisierungspfad abgelehnt: außerhalb des Lesestammordners {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	Automatisierungspfad abgelehnt: außerhalb der Lesestammordner {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	eine verknüpfte JavaScript-Datei liegt außerhalb der Lesestammordner
 @msg	automation path rejected: outside the write root {root}: {path}	Automatisierungspfad abgelehnt: außerhalb des Schreibstammordners {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	Automatisierungspfad abgelehnt: außerhalb der Schreibstammordner {roots}: {path}
 @msg	automation path rejected: path is empty	Automatisierungspfad abgelehnt: Der Pfad ist leer

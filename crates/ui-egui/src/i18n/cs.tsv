@@ -5490,6 +5490,7 @@ imageTrace	Outline	Obrys
 @msg	every numbered name for {name} is taken in the document's folder	ve složce dokumentu jsou obsazena všechna číslovaná jména pro {name}
 @msg	No linked files to look for	Žádné propojené soubory k vyhledání
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	Propojení je uvnitř symbolu, návrhu grafu, vzorku nebo masky krytí a nemá na plátně žádné místo
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	kresba návrhu grafu v datové řadě grafu se znovu vykresluje podle návrhu: chcete-li ji změnit, upravte návrh
 @msg	`id` is the step reference {r}, which only `run` and `command_batch` resolve	`id` je odkaz na krok {r}, který vyhodnocují jen `run` a `command_batch`
 @msg	`ids` must be an array of object ids, not {v}	`ids` musí být pole ID objektů, ne {v}
 @msg	`colors` must be an array of colors, not {v}	`colors` musí být pole barev, ne {v}
@@ -5509,6 +5510,7 @@ imageTrace	Outline	Obrys
 @msg	automation filesystem access is not granted: write authority is absent: {path}	přístup automatizace k systému souborů není udělen: chybí oprávnění k zápisu: {path}
 @msg	automation path rejected: outside the read root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro čtení {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro čtení {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	propojený soubor JavaScript je mimo kořeny pro čtení
 @msg	automation path rejected: outside the write root {root}: {path}	cesta automatizace odmítnuta: mimo kořen pro zápis {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	cesta automatizace odmítnuta: mimo kořeny pro zápis {roots}: {path}
 @msg	automation path rejected: path is empty	cesta automatizace odmítnuta: cesta je prázdná

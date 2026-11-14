@@ -5404,6 +5404,9 @@ digits	Malayalam	Malaiàlam
 @msg	automation path rejected: cannot resolve {path}: {e}	camí d’automatització rebutjat: no es pot resoldre {path}: {e}
 @msg	automation path rejected: outside the read root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel de lectura {root}: {path}
 @msg	automation path rejected: outside the read roots {roots}: {path}	camí d’automatització rebutjat: fora de les arrels de lectura {roots}: {path}
+@msg	a linked JavaScript file is outside the read roots	un fitxer JavaScript enllaçat és fora de les arrels de lectura
+@msg	the library's file is outside the read roots	el fitxer de la biblioteca és fora de les arrels de lectura
+@msg	{file} names more than one linked JavaScript file	{file} correspon a més d’un fitxer JavaScript enllaçat
 @msg	automation path rejected: outside the write root {root}: {path}	camí d’automatització rebutjat: fora de l’arrel d’escriptura {root}: {path}
 @msg	automation path rejected: outside the write roots {roots}: {path}	camí d’automatització rebutjat: fora de les arrels d’escriptura {roots}: {path}
 @msg	automation path rejected: parent traversal below a folder that doesn't exist: {path}	camí d’automatització rebutjat: recorregut ascendent per sota d’una carpeta que no existeix: {path}
@@ -5828,6 +5831,7 @@ digits	Malayalam	Malaiàlam
 @msg	no library `{key}` (see {list})	no hi ha la biblioteca `{key}` (vegeu {list})
 @msg	No linked files to look for	No hi ha fitxers enllaçats per buscar
 @msg	The link is inside a symbol, graph design, pattern or opacity mask and has no place on the canvas	L’enllaç és dins d’un símbol, un disseny de gràfic, un motiu o una màscara d’opacitat i no té lloc al llenç
+@msg	the art of a graph design in a graph series is drawn again from the design: edit the design to change it	la il·lustració d’un disseny de gràfic en una sèrie d’un gràfic es torna a dibuixar a partir del disseny: editeu el disseny per canviar-la
 @msg	no Live Paint edge near that point	no hi ha cap aresta de pintura interactiva a prop d’aquell punt
 @msg	no Live Paint face at that point	no hi ha cap cara de pintura interactiva en aquell punt
 @msg	no native format	no hi ha format natiu
