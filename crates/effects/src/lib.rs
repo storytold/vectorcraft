@@ -82,7 +82,7 @@ pub use raster::{RASTERIZE, RasterFx, Rasterize, color_param, follow_items, item
 pub use reshape::{
     SYMBOL_ART_MAX_NODES, expand_outlined, follows_image_pixels, gives_image_shape, has_gradient_copies, has_instance_row_raster, has_item_geometry,
     has_painted_effects, has_transform_art, has_transform_copies, has_transform_options, image_paint, needs_outline, outline_art, outline_text,
-    reshape,
+    paint_type_piece, reshape,
 };
 pub use revolve::{
     CLASSIC_REVOLVE, REVOLVE, has_revolve, is_revolve, revolve_art, revolve_art_in, revolve_options, validate_revolve, validate_revolve_in,

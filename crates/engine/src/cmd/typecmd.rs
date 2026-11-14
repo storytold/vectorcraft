@@ -594,6 +594,21 @@ fn scale_text_attributes(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "changed": changed }))
 }
 
+/// A path (or compound path) of `outline`, a piece of type `t`'s outline in text space, painted as
+/// run `run` and placed in the document as the canvas paints it ([`paint_type_piece`]: unplaced
+/// gradients fitted to `bounds`, the layout's bounds, stroke weights scaled by the type's
+/// transform); `None` when the piece has no path.
+fn type_piece(d: &mut Document, t: &TextObject, bounds: kurbo::Rect, run: usize, outline: &kurbo::BezPath) -> Option<Node> {
+    let path = PathData::from_bezpath(outline);
+    if path.is_empty() {
+        return None;
+    }
+    let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
+    let mut node = shape_node(d, path, None);
+    vectorcraft_render::effects::paint_type_piece(&mut node, &st, bounds, t.xf);
+    Some(node)
+}
+
 fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Create Outlines", |d, sel| {
@@ -636,14 +651,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                         children.push(Arc::new(d.reid(&art)));
                         break 'glyph;
                     }
-                    let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
-                    if path.is_empty() {
-                        break 'glyph;
+                    if let Some(node) = type_piece(d, t, lay.bounds, g.run, &g.outline) {
+                        children.push(Arc::new(node));
                     }
-                    let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                    let mut node = shape_node(d, path, None);
-                    node.appearance = st.appearance().into();
-                    children.push(Arc::new(node));
                 }
                 run_end.insert(g.run, children.len());
             }
@@ -652,13 +662,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // nothing there either).
             let mut ruby: Vec<(usize, Arc<Node>)> = vec![];
             for g in &lay.ruby {
-                let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
-                if path.is_empty() {
-                    continue;
-                }
-                let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                let mut node = shape_node(d, path, None);
-                node.appearance = st.appearance().into();
+                let Some(node) = type_piece(d, t, lay.bounds, g.run, &g.outline) else { continue };
                 // After the glyphs of its run and of the runs before it.
                 let at = run_end.range(..=g.run).map(|(_, end)| *end).max().unwrap_or(0);
                 ruby.push((at, Arc::new(node)));
@@ -683,10 +687,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
                 all.extend(bar.iter());
-                let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
-                node.appearance = st.appearance().into();
-                children.push(Arc::new(node));
+                if let Some(node) = type_piece(d, t, lay.bounds, run, &bar) {
+                    children.push(Arc::new(node));
+                }
             }
             // The object's own fills and strokes (not its characters') paint the whole outline:
             // those below the Characters row under the characters, the others over them, with
