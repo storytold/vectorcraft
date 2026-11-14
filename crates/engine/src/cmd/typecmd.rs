@@ -601,6 +601,8 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         if texts.is_empty() {
             return Err(EngineError::Other("Create Outlines: select text objects".into()));
         }
+        // Outlining a graph's labels does not move or scale its plot at the next redraw.
+        let graphs = super::graph::graphs_holding(d, &texts);
         let before = (!super::dimension::reached(d, &roots).is_empty()).then(|| d.clone());
         let ended = super::dimension::end_links(d, &roots);
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
@@ -728,6 +730,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         }
         // Outlined frames of threaded text leave their threads with the text they show.
         super::threads::leave_threads(d, &threaded);
+        super::graph::keep_placed(d, &graphs);
         sel.set(new_sel);
         Ok(out)
     })?;

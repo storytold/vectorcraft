@@ -5716,11 +5716,86 @@ fn moving_one_label_leaves_the_plot_in_place() {
     s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
     let id = graph(&mut s, "column");
     let rect = spec(&s, id).rect;
-    let l = text_id(&s, id, "Legend", "2025");
-    s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
-    s.execute("object.move", &json!({"dx": 120, "dy": 60})).unwrap();
+    for (grp, text) in [("Legend", "2025"), ("Axes", "Q2")] {
+        let l = text_id(&s, id, grp, text);
+        s.execute("select.set", &json!({"ids": [l.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 120, "dy": 60})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+        assert_eq!(spec(&s, id).rect, rect, "after moving {text}");
+    }
+}
+
+/// Label edits leave the plot in place in graphs whose legend swatches follow the size of the labels at the next
+/// drawing: a legend across the top, a legend after a right value axis, and legend labels of several lines. A move of
+/// the graph made after them is still followed.
+#[test]
+fn restyling_the_labels_of_a_graph_whose_legend_follows_them_leaves_the_plot_in_place() {
+    let csv = ",North|East|Coast,South|West,Inland|Hills|Lakes|Plains\nQ1,3,2,4\nQ2,5,4,1\nQ3,-1,6,2";
+    for options in [json!({"legendAcrossTop": true}), json!({"valueAxis": "right"}), json!({"valueAxis": "both"}), json!({})] {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        let id = graph(&mut s, "column");
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("graph.setType", &options).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+        let rect = spec(&s, id).rect;
+        for size in [16, 5] {
+            s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+            s.execute("text.setStyle", &json!({"size": size})).unwrap();
+            for _ in 0..2 {
+                s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+                assert_eq!(spec(&s, id).rect, rect, "{options}: labels at {size} pt");
+            }
+        }
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        s.execute("object.move", &json!({"dx": 30, "dy": 20})).unwrap();
+        s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+        let moved = spec(&s, id).rect;
+        assert!((moved.x0 - (rect.x0 + 30.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 20.0)).abs() < 1e-6, "{options}: {moved:?}");
+        assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{options}: {moved:?}");
+    }
+}
+
+/// Outlining a graph's labels leaves the plot where it is when the graph is drawn again, and a move of the graph made
+/// before them is still followed.
+#[test]
+fn outlining_a_graphs_labels_leaves_the_plot_in_place() {
+    let csv = ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6";
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    s.execute("select.set", &json!({"ids": [text_id(&s, id, "Axes", "Q2").0, text_id(&s, id, "Legend", "2025").0]})).unwrap();
+    s.execute("type.createOutlines", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    assert_eq!(spec(&s, id).rect, rect, "after outlining labels");
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 30, "dy": 15})).unwrap();
+    s.execute("select.set", &json!({"ids": [text_id(&s, id, "Axes", "Q1").0, text_id(&s, id, "Legend", "2024").0]})).unwrap();
+    s.execute("type.createOutlines", &json!({})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": csv})).unwrap();
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 30.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 15.0)).abs() < 1e-6, "{moved:?}");
+    assert!((moved.width() - rect.width()).abs() < 1e-6 && (moved.height() - rect.height()).abs() < 1e-6, "{moved:?}");
+}
+
+/// A graph whose kept bounds of its art without type have no width follows a move with the bounds of all of its art.
+#[test]
+fn a_graph_whose_art_without_type_kept_no_width_still_follows_a_move() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let rect = spec(&s, id).rect;
+    let mut flat = spec(&s, id);
+    let art = flat.placed_art.unwrap();
+    flat.placed_art = Some(vectorcraft_geom::Rect::new(art.x0, art.y0, art.x0, art.y1));
+    std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc).node_mut(id).unwrap().extras_mut().graph = Some(Box::new(flat));
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 25, "dy": 5})).unwrap();
     s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
-    assert_eq!(spec(&s, id).rect, rect);
+    let moved = spec(&s, id).rect;
+    assert!((moved.x0 - (rect.x0 + 25.0)).abs() < 1e-6 && (moved.y0 - (rect.y0 + 5.0)).abs() < 1e-6, "{moved:?}");
 }
 
 /// A graph saved before it kept the bounds of its art without type follows a move made since with its old bounds.
@@ -6658,4 +6733,43 @@ fn a_graph_opened_from_ai_keeps_its_data_for_editing() {
         let notes = r["warnings"].as_array().cloned().unwrap_or_default();
         assert!(notes.iter().any(|w| w.as_str().is_some_and(|w| w.starts_with("graphs are written as their art"))), "{name}: {r}");
     }
+}
+
+/// A graph opened from a `.ai` keeps the bounds of its art without type, so moving one of its labels on its own
+/// leaves the plot where it is at the first redraw.
+#[test]
+fn a_graph_opened_from_ai_measures_moves_without_its_labels() {
+    let graph = "%_Gs\n%_100 200 300 100 Gb\n%_5 0 0 14 0 1 0 0 6 44 Gy\n%_10 2 0 0 90 80 0 Gd\n\
+        %_1 () Ga\n%_0 13 0 0 0 0 0 () GA\n%_2 () Ga\n%_0 14 0 0 0 0 0 () GA\n%_4 () Ga\n%_0 14 0 0 0 0 0 () GA\n\
+        %_2 2 1 1 Gz\n%_() Gc (East) Gc (Q1) Gc 5 Gc GC\n\
+        u\nu\n0.6 0 1 0 k\n110 100 m\n110 150 L\n130 150 L\n130 100 L\nf\nU\n%_2 1 0 0 Go\n\
+        u\n0 0 0 1 K\n100 200 m\n100 100 L\n300 100 L\nS\nU\n\
+        0 To\n1 0 0 1 100 220 0 Tp\nTP\n0 Tr\n0 0 0 1 k\n/_Helvetica 12 Tf\n(Sales) Tx\nTO\nU\n%_GS\n";
+    let text = format!(
+        "%!PS-Adobe-3.0\n%%Creator: a script\n%%BoundingBox: 0 0 400 400\n%AI5_FileFormat 3\n%AI3_Cropmarks: 0 0 400 400\n%%EndComments\n\
+         %%BeginProlog\n%%EndProlog\n%%BeginSetup\n%%EndSetup\n%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Graph) Ln\n0 A\n{graph}LB\n\
+         %AI5_EndLayer--\n%%PageTrailer\n%%Trailer\n%%EOF\n"
+    );
+    let dir = vectorcraft_testkit::temp_dir("graph-ai-label");
+    let path = dir.join("graph.ai");
+    std::fs::write(&path, text).unwrap();
+    let mut s = Session::new();
+    s.execute("document.open", &json!({"path": path})).unwrap();
+    let (mut graphs, mut labels) = (vec![], vec![]);
+    s.doc().unwrap().doc.walk(|n| {
+        if n.extras().graph.is_some() {
+            graphs.push(n.id);
+        }
+        if matches!(&n.kind, NodeKind::Text(t) if t.plain_text() == "Sales") {
+            labels.push(n.id);
+        }
+    });
+    assert_eq!((graphs.len(), labels.len()), (1, 1));
+    let (id, label) = (graphs[0], labels[0]);
+    let before = spec(&s, id);
+    assert!(before.placed_art.is_some());
+    s.execute("select.set", &json!({"ids": [label.0]})).unwrap();
+    s.execute("object.move", &json!({"dx": 80, "dy": -40})).unwrap();
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",East\nQ1,8\nQ2,2"})).unwrap();
+    assert_eq!(spec(&s, id).rect, before.rect);
 }

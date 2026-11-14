@@ -1,6 +1,8 @@
+use vectorcraft_doc::graph::art_bounds;
+
 use super::axis::{MAX_TICK_MARKS, count_given, one_line};
 use super::data::apply_data;
-use super::generate::{art_bounds, children_bounds, generate};
+use super::generate::{children_bounds, generate};
 use super::series::{picked_series, reselect_series};
 use super::{
     Affine, Document, EngineError, GraphKind, GraphSpec, Node, NodeId, Rect, Result, Session, TickLength, Value, ValueAxisSide, bad, f64_req, json,
@@ -17,17 +19,62 @@ fn bound_param(p: &Value, key: &str, cmd: &str) -> Result<Option<Option<f64>>> {
     }
 }
 
+/// The bounds a redraw of graph `n` measures a move or scale on, as kept at the last generation and as they are now:
+/// those of its art without type ([`GraphSpec::placed_art`]), or those of all its art when the graph keeps no such
+/// bounds with a width and a height, or has no art without type now.
+fn measured(n: &Node) -> Option<(Rect, Rect)> {
+    let kept = n.extras().graph.as_deref()?;
+    let c = n.children()?;
+    let art = kept.placed_art.filter(|p| p.width() > 1e-9 && p.height() > 1e-9).zip(art_bounds(c));
+    art.or_else(|| kept.placed.zip(children_bounds(c)))
+}
+
+/// `r` carried by the change from bounds `from` to bounds `to`: each edge stays at the same place relative to them.
+/// `None` when `from` has no width or no height.
+fn carried(r: Rect, from: Rect, to: Rect) -> Option<Rect> {
+    if from.width() <= 1e-9 || from.height() <= 1e-9 {
+        return None;
+    }
+    let (sx, sy) = (to.width() / from.width(), to.height() / from.height());
+    Some(Rect::new(to.x0 + (r.x0 - from.x0) * sx, to.y0 + (r.y0 - from.y0) * sy, to.x0 + (r.x1 - from.x0) * sx, to.y0 + (r.y1 - from.y0) * sy))
+}
+
+/// The graphs holding objects `ids`, each with the bounds of its art without type and of all its art. Give them to
+/// [`keep_placed`] after an edit that changes a graph's art without moving the graph.
+pub(crate) fn graphs_holding(d: &Document, ids: &[NodeId]) -> Vec<(NodeId, Option<Rect>, Option<Rect>)> {
+    let mut out: Vec<(NodeId, Option<Rect>, Option<Rect>)> = vec![];
+    for id in ids {
+        let Some(chain) = d.ancestry(*id) else { continue };
+        let holder = chain.iter().rev().skip(1).copied().find(|a| d.node(*a).is_some_and(|n| n.extras().graph.is_some()));
+        let Some(gid) = holder.filter(|g| !out.iter().any(|(o, ..)| o == g)) else { continue };
+        let children = d.node(gid).and_then(Node::children);
+        out.push((gid, children.and_then(|c| art_bounds(c)), children.and_then(|c| children_bounds(c))));
+    }
+    out
+}
+
+/// After an edit that changed the art of `graphs` (from [`graphs_holding`]) without moving them, set the bounds each
+/// keeps so that its next redraw measures the same move or scale as it would have before the edit.
+pub(crate) fn keep_placed(d: &mut Document, graphs: &[(NodeId, Option<Rect>, Option<Rect>)]) {
+    for &(gid, art_was, whole_was) in graphs {
+        let Some(n) = d.node(gid) else { continue };
+        let children = n.children();
+        let (art_now, whole_now) = (children.and_then(|c| art_bounds(c)), children.and_then(|c| children_bounds(c)));
+        let Some(spec) = d.node_mut(gid).and_then(|n| n.extras_if_any().and_then(|e| e.graph.as_deref_mut())) else { continue };
+        if let (Some(placed), Some(was), Some(now)) = (spec.placed_art, art_was, art_now) {
+            spec.placed_art = carried(now, was, placed).or(spec.placed_art);
+        }
+        if let (Some(placed), Some(was), Some(now)) = (spec.placed, whole_was, whole_now) {
+            spec.placed = carried(now, was, placed).or(spec.placed);
+        }
+    }
+}
+
 /// Regenerate graph `id` from `spec` (adjusting the plot rect for any move/scale since the last
 /// generation, which is recorded in the spec's `placed_art` bounds, or `placed` in graphs saved without them).
 pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> Result<()> {
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
-    let kept = n.extras().graph.as_deref();
-    let measured = match (kept.and_then(|g| g.placed_art), n.children()) {
-        (Some(placed), Some(c)) => art_bounds(c).map(|now| (placed, now)),
-        (None, Some(c)) => kept.and_then(|g| g.placed).zip(children_bounds(c)),
-        (_, None) => None,
-    };
-    if let Some((placed, now)) = measured
+    if let Some((placed, now)) = measured(n)
         && placed.width() > 1e-9
         && placed.height() > 1e-9
         && (placed.x0 - now.x0).abs() + (placed.y0 - now.y0).abs() + (placed.x1 - now.x1).abs() + (placed.y1 - now.y1).abs() > 1e-6
