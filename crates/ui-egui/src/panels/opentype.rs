@@ -7,7 +7,7 @@ use serde_json::json;
 use vectorcraft_doc::{CharStyle, NodeKind};
 use vectorcraft_text::{EXTRA_FEATURES, FontDb, OtFeatures, StylisticSet};
 
-use super::character::{shared, text_editing, text_style};
+use super::character::{any_style, shared, text_editing, text_style};
 use crate::VectorcraftApp;
 use crate::widgets::{self, menu_item};
 
@@ -203,7 +203,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         widgets::dim_label(ui, tl!("Select text to set its OpenType features."));
         return;
     };
-    let cur = OtFeatures::from_tags(st.features.iter().map(String::as_str));
     let mut change = None;
     let fig = shown_figure(app);
     ui.horizontal(|ui| {
@@ -251,12 +250,23 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             });
         });
     });
-    if cur.ligatures && vectorcraft_text::ligatures_suppressed_by(st.tracking) && !vectorcraft_text::explicit_ligatures(&st.features) {
+    if tracking_drops_ligatures(app) {
         widgets::dim_label(ui, tl!("Ligatures are off while the text is tracked."));
     }
     if let Some(c) = change {
         edit(app, c);
     }
+}
+
+/// Whether tracking turns off the standard ligatures of any character the panel acts on: one with
+/// Standard Ligatures on, tracked past [`vectorcraft_text::ligatures_suppressed_by`]'s limit and
+/// without an explicit `liga` or `clig` tag ([`vectorcraft_text::explicit_ligatures`]).
+fn tracking_drops_ligatures(app: &VectorcraftApp) -> bool {
+    any_style(app, |s| {
+        OtFeatures::from_tags(s.features.iter().map(String::as_str)).ligatures
+            && vectorcraft_text::ligatures_suppressed_by(s.tracking)
+            && !vectorcraft_text::explicit_ligatures(&s.features)
+    })
 }
 
 /// The stylistic sets of the font `st` names. A font that is not available offers none, rather than
@@ -303,6 +313,7 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
+    use vectorcraft_doc::NodeId;
 
     use super::*;
 
@@ -642,6 +653,45 @@ mod tests {
                 ("3".to_string(), none)
             ]
         );
+    }
+
+    /// With the Selection tool on the first frame of a threaded story, the tracked-ligatures note
+    /// reads every frame: it shows when a later, locked frame is tracked with Standard Ligatures
+    /// on, and not once that frame's ligatures are explicit, off, or its tracking is back within
+    /// the limit.
+    #[test]
+    fn ligature_note_reads_every_frame_of_the_story() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 900, "height": 300})).unwrap();
+        let story = "The quick brown fox jumps over the lazy dog and keeps running far beyond the first frame. ".repeat(6);
+        let area = json!({"x": 10, "y": 10, "text": story, "size": 12, "area": {"width": 150, "height": 60}});
+        let a = app.session.execute("text.create", &area).unwrap()["id"].clone();
+        let b = app.session.execute("text.thread.add", &json!({"from": a, "rect": [200, 10, 150, 60]})).unwrap()["id"].clone();
+        assert!(!run_features(&mut app, &b, 4).is_empty(), "the second frame holds text");
+        app.session.execute("text.setStyle", &json!({"ids": [b], "tracking": 100})).unwrap();
+        app.session.execute("select.set", &json!({"ids": [b]})).unwrap();
+        app.session.execute("object.lock", &json!({})).unwrap();
+        app.session.execute("select.set", &json!({"ids": [a]})).unwrap();
+        assert_eq!(text_editing(&app), None);
+        assert_eq!(text_style(&app).unwrap().0.tracking, 0.0, "the panel reads its first run from the first frame");
+        assert!(tracking_drops_ligatures(&app), "the tracked second frame shows the note");
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        // Commands write `liga` as the default and leave it out; an opened file can keep it.
+        let b_id = NodeId(b.as_u64().unwrap());
+        for tags in [&["liga"][..], &["clig"][..], &["-liga"][..]] {
+            let doc = std::sync::Arc::make_mut(&mut app.session.doc_mut().unwrap().doc);
+            let Some(NodeKind::Text(t)) = doc.node_mut(b_id).map(|n| &mut n.kind) else { panic!("no second frame") };
+            for r in &mut t.runs {
+                r.style.features = tags.iter().map(|s| s.to_string()).collect();
+            }
+            assert!(!tracking_drops_ligatures(&app), "{tags:?}");
+        }
+        app.session.execute("text.setStyle", &json!({"ids": [b], "features": [], "tracking": 20})).unwrap();
+        assert!(!tracking_drops_ligatures(&app), "tracking within the limit");
+        app.session.execute("text.setStyle", &json!({"ids": [b], "tracking": -100})).unwrap();
+        assert!(tracking_drops_ligatures(&app), "tight tracking shows the note too");
     }
 
     /// At a caret whose insertion style is already a denominator, Denominator still reaches the
