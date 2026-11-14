@@ -592,7 +592,8 @@ fn shapes_of<'a>(doc: &'a Document, roots: &[NodeId], builder: bool) -> (Vec<po:
 /// ([`vectorcraft_doc::Appearance::has_drawn_fill`], [`vectorcraft_doc::Appearance::has_drawn_stroke`]),
 /// whichever row is on top. A Live Paint group contributes its filled faces as shapes and its
 /// stroked edges as open lines; its unfilled faces, its edges without a stroke, and its faces and
-/// edges whose own opacity is 0 are left out. Locked objects, and objects in a locked group or layer, give nothing.
+/// edges whose own opacity is 0 are left out. Locked objects, and objects in a locked group or
+/// layer, give nothing.
 pub fn shape_builder_shapes<'a>(doc: &'a Document, roots: &[NodeId], open_filled_as_closed: bool) -> (Vec<po::Shape>, Vec<&'a Node>) {
     let (mut shapes, leaves) = shapes_of(doc, roots, true);
     for (s, l) in shapes.iter_mut().zip(&leaves) {
