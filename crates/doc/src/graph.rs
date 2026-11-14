@@ -363,6 +363,22 @@ pub struct SeriesPaint {
     /// Object blend mode of each path directly in the series group, as [`Self::opacity`]. Absent: Normal.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blend: Option<vectorcraft_color::BlendMode>,
+    /// Object opacity (0..1) of the series group itself, taken from the transparency set on the group. Absent: fully opaque.
+    /// Graph labels keep none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_opacity: Option<f32>,
+    /// Object blend mode of the series group itself, as [`Self::group_opacity`]. Absent: Normal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_blend: Option<vectorcraft_color::BlendMode>,
+    /// Isolate Blending of the series group itself, as [`Self::group_opacity`]. Absent: off.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub group_isolate: bool,
+    /// Knockout Group state of the series group itself, as [`Self::group_opacity`]. Absent: neutral.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_knockout: Option<crate::Knockout>,
+    /// Knockout Shape of the series group itself, as [`Self::group_opacity`]. Absent: off.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub group_knockout_shape: bool,
     /// A gradient in [`Self::fill`] is placed relative to the unit box (0, 0)–(1, 1), and each mark takes it on its own
     /// geometric bounds. False: the gradient is in document coordinates, and every mark takes it unchanged.
     #[serde(skip_serializing_if = "std::ops::Not::not")]

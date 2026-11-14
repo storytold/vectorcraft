@@ -806,10 +806,18 @@ look was edited keep their look. Read as a source, by `graphicStyle.new`, `graph
 style link of its own gives the look and the style link of the topmost path directly in it, and a move with
 `appearance.transfer` clears each of those paths; a series group that has one of them is read itself.
 
+`transparency.set` and `object.setProps` with an opacity, blend mode, isolation, knockout or knockout shape for the
+object, given a series group's id or the selected series group, set them on the group itself, and the graph stores them
+for that series. The series group has them again when the graph is drawn again, and they apply to the group as a whole
+in addition to each path's own opacity and blend mode. `addon.arrange.randomizeOpacity` and `addon.arrange.sort` with
+`apply: "opacity"` given a series group, and Global Edit when a series group takes an edit from another match, store
+what they change on the group the same way. Each of the commands above that clears the group's own opacity, blend mode, isolation
+and knockout also removes what the graph stores for it.
+
 The other commands given a series group's id edit the group itself, and the graph does not store what they set on it:
-`transparency.set` and `object.setProps` with an opacity or blend mode for the object, the `effect.*` commands and
-`appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke `item`, which is a row of the
-group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected group's own rows.
+the `effect.*` commands and `appearance.addEffect`, and the paint, stroke and gradient commands with a fill or stroke
+`item`, which is a row of the group's own stack. The Appearance panel and `appearance.setActiveItem` read the selected
+group's own rows.
 
 The graph draws the art of a column or marker design in a series again from the design, so the commands that add,
 change, move or remove fill and stroke rows, effects or graphic styles leave that art out: the `appearance.*` commands
