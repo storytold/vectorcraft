@@ -173,13 +173,13 @@ impl Builder {
         // In paint order: an outline behind the fill comes first.
         let mut items = Vec::new();
         if let Some(o) = s.outline.as_ref().filter(|o| o.behind_fill) {
-            items.push(AppearanceItem::Stroke(self.stroke(o)));
+            items.push(AppearanceItem::Stroke(self.stroke(o, &s.matrix)));
         }
         if let Some(c) = &s.fill {
             items.push(AppearanceItem::Fill(FillLayer::new(self.paint(c))));
         }
         if let Some(o) = s.outline.as_ref().filter(|o| !o.behind_fill) {
-            items.push(AppearanceItem::Stroke(self.stroke(o)));
+            items.push(AppearanceItem::Stroke(self.stroke(o, &s.matrix)));
         }
         // A curve of several subpaths is filled with holes where they overlap: VectorCraft's own
         // choice of rule for it.
@@ -189,9 +189,19 @@ impl Builder {
         Some(Arc::new(n))
     }
 
-    fn stroke(&mut self, o: &cd::Outline) -> StrokeLayer {
+    /// The stroke of outline `o` on a shape placed by `matrix`.
+    fn stroke(&mut self, o: &cd::Outline, matrix: &cd::Matrix) -> StrokeLayer {
+        // The width of an outline scaled with the shape is multiplied by the square root of the
+        // matrix's area factor (R50). For a matrix that scales x and y differently, that width is
+        // VectorCraft's own value.
+        let width = if o.scale_with {
+            let [a, b, c, d, _, _] = matrix.0;
+            o.width * (a * d - b * c).abs().sqrt()
+        } else {
+            o.width
+        };
         // A drawn outline of width 0 shows as a hairline, as a PDF line width of 0 does.
-        let width = if o.width.is_finite() && o.width > 0.0 { o.width.min(1000.0) } else { HAIRLINE };
+        let width = if width.is_finite() && width > 0.0 { width.min(1000.0) } else { HAIRLINE };
         let mut l = StrokeLayer::new(self.paint(&o.color), width);
         l.cap = match o.cap {
             cd::Cap::Butt => LineCap::Butt,
@@ -485,6 +495,7 @@ mod tests {
             join: cd::Join::Miter,
             dashes: vec![1.0; 299],
             behind_fill: false,
+            scale_with: false,
         };
         let rect = cd::Object::Shape(Box::new(cd::Shape {
             geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] },
@@ -507,6 +518,32 @@ mod tests {
         let copies = doc.layers.first().and_then(|l| l.children()).map_or(0, |c| c.len());
         assert_eq!(copies, 3, "1,000 holds three copies of 300");
         assert!(b.notes.contains(&Warning::TooDeep));
+    }
+
+    /// An outline scaled with the shape takes the square root of the matrix's area factor on its
+    /// width and dashes; another outline keeps its stored width under the same matrix.
+    #[test]
+    fn outlines_scaled_with_the_shape_scale_their_width_and_dashes() {
+        // A matrix that scales by 2 and 8 and skews: area factor 2 * 8 - 3 * 0 = 16, mean scale 4.
+        let matrix = cd::Matrix([2.0, 0.0, 3.0, 8.0, 5.0, 5.0]);
+        for (scale_with, width, dashes) in [(true, 6.0, [12.0, 6.0]), (false, 1.5, [3.0, 1.5])] {
+            let outline = cd::Outline {
+                width: 1.5,
+                color: cd::Color::Gray(1.0),
+                cap: cd::Cap::Butt,
+                join: cd::Join::Miter,
+                dashes: vec![2.0, 1.0],
+                behind_fill: false,
+                scale_with,
+            };
+            let rect = cd::Shape { geometry: Geometry::Rect { w: 10.0, h: 10.0, radii: [0.0; 4] }, matrix, fill: None, outline: Some(outline) };
+            let mut b = Builder::new();
+            let Some(node) = b.shape(&rect, Affine::IDENTITY, false) else { panic!("{scale_with}: no shape") };
+            let [AppearanceItem::Stroke(s)] = node.appearance.items.as_slice() else { panic!("{scale_with}: {:?}", node.appearance.items) };
+            assert!((s.width - width).abs() < 1e-9, "{scale_with}: {}", s.width);
+            let pattern = s.dash.as_ref().map(|d| d.pattern.clone());
+            assert_eq!(pattern, Some(dashes.to_vec()), "{scale_with}");
+        }
     }
 
     /// A corner rounded in the file stays on the same corner of the page, however the rectangle's

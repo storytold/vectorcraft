@@ -360,7 +360,9 @@ pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<
     let dashes = if line_type & 4 != 0 && dashes.iter().any(|d| *d > 0.0) { dashes } else { Vec::new() };
     // Bit 4 of the line type: behind the fill (R49).
     let behind_fill = line_type & 0x10 != 0;
-    Some((id, Some(Outline { width, color, cap, join, dashes, behind_fill })))
+    // Bit 5 of the line type: scaled with the shape (R50).
+    let scale_with = line_type & 0x20 != 0;
+    Some((id, Some(Outline { width, color, cap, join, dashes, behind_fill, scale_with })))
 }
 
 /// A name argument (R9): Windows-1252 up to a NUL before version 12, UTF-16LE from it. A name

@@ -1600,6 +1600,23 @@ fn outlines_flagged_behind_the_fill_say_so() {
     }
 }
 
+/// Bit 5 of the line type scales the outline with the shape.
+#[test]
+fn outlines_flagged_to_scale_with_the_shape_say_so() {
+    let black = synth::color(2, [0, 0, 0, 100]);
+    for version in [700, 1300, 1600] {
+        for (line_type, scale_with) in [(2, false), (0x22, true), (0x12, false), (0x26, true)] {
+            let v = V(version);
+            let outline = v.outline(9, synth::Pen { line_type, width: 4.0, cap: 0, join: 0 }, &black, &[]);
+            let style = vec![(10, 9u32.to_le_bytes().to_vec()), (30, v.rect(10.0, 10.0, 0.0))];
+            let page = synth::page(false, vec![synth::layer(v, [0, 0, 0, 0x98], "L", vec![synth::object(v, 1, &style, None)])]);
+            let d = read(&synth::file_of(version, vec![list(b"otlt", vec![chunk(b"outl", outline)]), page]), Limits::default()).unwrap();
+            let s = shapes(&d.pages[0].layers[0].objects);
+            assert_eq!(s[0].outline.as_ref().map(|o| o.scale_with), Some(scale_with), "{version} {line_type:#x}");
+        }
+    }
+}
+
 #[test]
 fn library_colors_from_version_13_keep_their_names_and_tints() {
     // A model 21 color (blue, green, red, tint) shown at 50 %, and its library name.

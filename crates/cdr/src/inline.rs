@@ -79,7 +79,7 @@ pub(crate) fn outline(b: &[u8], p: &Profile, warn: &mut Vec<Warning>) -> Option<
     let _stretch = r.u16()?;
     let _nib = angle(&mut r, p)?;
     let color = records::color(&mut r, p, warn)?;
-    let mut out = Outline { width, color, cap: Cap::Butt, join: Join::Miter, dashes: Vec::new(), behind_fill: false };
+    let mut out = Outline { width, color, cap: Cap::Butt, join: Join::Miter, dashes: Vec::new(), behind_fill: false, scale_with: false };
     let Some(stored) = r.skip(7).and_then(|()| r.u8()).map(usize::from) else { return Some(Some(out)) };
     let Some(area) = r.bytes(DASH_AREA) else { return Some(Some(out)) };
     if stored > DASH_AREA {

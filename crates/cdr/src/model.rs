@@ -107,6 +107,9 @@ pub struct Outline {
     pub dashes: Vec<f64>,
     /// Drawn behind the fill, so that a filled shape shows only the outer half of it.
     pub behind_fill: bool,
+    /// Scaled with the shape: the shape's matrix scales the width and dashes as it scales the
+    /// geometry.
+    pub scale_with: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
