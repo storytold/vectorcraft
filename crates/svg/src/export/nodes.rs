@@ -431,9 +431,73 @@ impl Writer<'_> {
         self.def(1, "</mask>");
         self.line(&format!("<g mask=\"url(#{mid})\">"));
         self.depth += 1;
+        self.spanning_rect(&bare, &region);
         self.node_body(&bare);
         self.depth -= 1;
         self.line("</g>");
+    }
+
+    /// Some readers draw a masked group only inside the bounding box of its shapes, which leaves
+    /// out a drop shadow, blur, glow or feather that paints past them. When `n`, written inside a
+    /// `<g mask>`, holds one ([`Self::holds_raster`]), a hidden, unpainted rectangle over the
+    /// mask's `region` makes that box cover what it paints.
+    fn spanning_rect(&mut self, n: &Node, region: &str) {
+        if self.holds_raster(n) {
+            self.line(&format!("<rect {region} fill=\"none\" visibility=\"hidden\"/>"));
+        }
+    }
+
+    /// Do `n`, its fills and strokes, its members at any depth, its symbols' art or the art its
+    /// live objects are written as have a visible raster effect (shadow, glow, blur, feather)?
+    /// Objects that aren't written (hidden ones, unless the options keep them) are skipped, and so
+    /// are fills and strokes that [`Self::shape`] doesn't write (hidden, unpainted or zero-width).
+    /// An instance with overrides is looked at in the art it is written as
+    /// ([`vectorcraft_brush::instance_art`]). The walk keeps its own stack, and looks at each
+    /// symbol's art once, and at each instance's overridden art once.
+    fn holds_raster(&self, n: &Node) -> bool {
+        let mut stack: Vec<std::sync::Arc<Node>> = vec![];
+        let mut symbols: std::collections::HashSet<(String, Option<vectorcraft_doc::NodeId>)> = std::collections::HashSet::new();
+        let paints = |i: &AppearanceItem| match i {
+            AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+            AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
+        };
+        // Whether `n` itself has one; else its members, symbol art or expanded art go on the stack.
+        let mut visit = |n: &Node, stack: &mut Vec<std::sync::Arc<Node>>| {
+            if !(n.visible || self.opts.hidden_layers) {
+                return false;
+            }
+            if has_raster(&n.appearance.effects) || n.appearance.items.iter().any(|i| paints(i) && has_raster(i.effects())) {
+                return true;
+            }
+            // A live object is written as its expanded art ([`Self::node_body`]), which holds no
+            // live objects.
+            if vectorcraft_doc::live::is_live(n) {
+                let g = vectorcraft_effects::expand_live_deep(Some(self.doc), n);
+                if !vectorcraft_doc::live::is_live(&g) {
+                    stack.push(std::sync::Arc::new(g));
+                    return false;
+                }
+            }
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                let custom = !n.extras().symbol_overrides.is_empty();
+                if symbols.insert((symbol.clone(), custom.then_some(n.id)))
+                    && let Some(s) = self.doc.symbols.iter().find(|s| s.name == *symbol)
+                {
+                    stack.push(if custom { std::sync::Arc::new(vectorcraft_brush::instance_art(&s.art, n)) } else { s.art.clone() });
+                }
+            }
+            stack.extend(n.children().into_iter().flatten().cloned());
+            false
+        };
+        if visit(n, &mut stack) {
+            return true;
+        }
+        while let Some(c) = stack.pop() {
+            if visit(&c, &mut stack) {
+                return true;
+            }
+        }
+        false
     }
 
     /// What `write` writes to the body, taken out of it (written at `depth`, for `<defs>`).
@@ -664,7 +728,7 @@ impl Writer<'_> {
             }
         }
         self.symbol_nodes = after;
-        for (above, (_, body)) in above.iter().zip(written) {
+        for ((c, above), (_, body)) in elements.iter().zip(&above).zip(written) {
             if above.is_empty() {
                 self.body.push_str(&body);
                 continue;
@@ -672,6 +736,11 @@ impl Writer<'_> {
             let ids: Vec<&str> = above.iter().filter_map(|&j| shapes[j].as_deref()).collect();
             let mid = self.knockout_mask(&ids, &region);
             self.line(&format!("<g mask=\"url(#{mid})\">"));
+            // An element that paints past its shapes starts its mask group with a spanning
+            // rectangle (`Self::spanning_rect`).
+            self.depth += 1;
+            self.spanning_rect(c, &region);
+            self.depth -= 1;
             self.body.push_str(&body);
             self.line("</g>");
         }

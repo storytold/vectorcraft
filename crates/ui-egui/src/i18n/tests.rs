@@ -353,6 +353,27 @@ fn catalan_reads_as_catalan() {
     assert_eq!(message(ca, nested), "l’ordre `object.group` no està disponible ara mateix: no hi ha res seleccionat");
 }
 
+/// Brazilian Portuguese spells Relink "Revincular", and no row calls a process color a
+/// selection color ("cor de seleção").
+#[test]
+fn brazilian_portuguese_spells_relink_and_process_color() {
+    let pt = Lang::from_code("pt-br").expect("pt-br registered");
+    let (entries, _) = parse_entries(pt.0.source);
+    let mut wrong = Vec::new();
+    for (_, src, translation) in &entries {
+        let portuguese = translation.to_lowercase();
+        if portuguese.contains("revinculcar") {
+            wrong.push(format!("Relink in {src:?} -> {translation:?}"));
+        }
+        if src.to_lowercase().contains("process colo") && (portuguese.contains("cor de seleção") || portuguese.contains("cores de seleção")) {
+            wrong.push(format!("process color in {src:?} -> {translation:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{} Brazilian Portuguese rows are wrong:\n{}", wrong.len(), wrong.join("\n"));
+    assert_eq!(tr(pt, "Relink…"), "Revincular…");
+    assert!(message(pt, "`{name}` is a process colour: tints apply to global and spot colours").to_lowercase().contains("cor de processo"));
+}
+
 #[test]
 fn font_height_reference_labels_are_in_complete_catalogs() {
     for lang in LANGUAGES.iter().filter(|lang| lang.complete_menus) {
@@ -2080,6 +2101,44 @@ fn recolor_notes_on_objects_left_unchanged_translate_with_their_counts() {
     }
 }
 
+/// Spanish shows the image encoders', color profiles', swatch exchange files', Revolve's, DXF
+/// import's, the script engine's and the parameter checks' errors in Spanish, with their values,
+/// backticked names and accepted values kept as the English writes them.
+#[test]
+fn spanish_translates_encoder_profile_swatch_revolve_and_parameter_errors() {
+    let es = Lang::from_code("es").expect("registered");
+    for (english, spanish) in [
+        ("PNG encoding failed: 0 × 0 pixels is not a valid image size", "Error al codificar PNG: 0 × 0 píxeles no es un tamaño de imagen válido"),
+        (
+            "70000 × 10 pixels is too large for GIF (at most 65535 pixels a side): lower the resolution",
+            "70000 × 10 píxeles es demasiado grande para GIF (como máximo 65535 píxeles por lado): baja la resolución",
+        ),
+        ("profile colour space XYZ is not RGB, CMYK or Gray", "el espacio de color XYZ del perfil no es RGB, CMYK ni Gray"),
+        (
+            "color books in color space HSB aren't supported (only RGB, CMYK and Lab)",
+            "no se admiten libros de colores en el espacio de color HSB (solo RGB, CMYK y Lab)",
+        ),
+        (
+            "the swatch exchange file holds more than 65536 colors and groups",
+            "el archivo de intercambio de muestras contiene más de 65536 colores y grupos",
+        ),
+        (
+            "Revolve surface is too complex; reduce Segments or simplify the profile",
+            "La superficie de Revolución es demasiado compleja; reduce Segmentos o simplifica el perfil",
+        ),
+        ("regular expression too large", "expresión regular demasiado grande"),
+        ("this binary DXF file is damaged or cut short", "este archivo DXF binario está dañado o truncado"),
+        (
+            "`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList",
+            "`view` es smallThumb, mediumThumb, largeThumb, smallList o largeList",
+        ),
+        ("give `fill` or `stroke`, not both", "indica `fill` o `stroke`, no ambos"),
+        ("stop 2: oops", "parada 2: oops"),
+    ] {
+        assert_eq!(message(es, english), spanish);
+    }
+}
+
 #[test]
 fn package_status_message_templates_parse() {
     let c = Catalog::parse(concat!(
@@ -2543,6 +2602,10 @@ const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
     ("Downloaded 1 file", "Downloaded 2 files"),
     ("Exported 1 file to /out", "Exported 2 files to /out"),
     ("Loaded “Tidy”: 1 step was left out", "Loaded “Tidy”: 2 steps were left out"),
+    (
+        "Loaded “Tidy”: 1 step has an unknown command and was kept: “Export”, step 4, `example.finish`",
+        "Loaded “Tidy”: 2 steps have unknown commands and were kept; the first: “Export”, step 4.2, `example.finish`",
+    ),
 ];
 
 /// The link, font, export and action set status messages name a count of 1 in the singular and other counts in
@@ -4215,7 +4278,7 @@ fn translated_messages_keep_the_field_names_and_values_their_english_lists() {
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
     "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl",
+    "nl", "da",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
