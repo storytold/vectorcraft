@@ -367,3 +367,25 @@ fn enclosing_lasso_considers_the_geometry_a_visible_compound_paints() {
         );
     }
 }
+
+/// A loop around clipped art that the clipping path's own shape holds, but not the region a live
+/// effect moved it to, selects the art in Outline view only, which draws the clipping path without
+/// its effects.
+#[test]
+fn outline_view_loops_measure_clipped_art_by_the_plain_clipping_path() {
+    let (d, _, art) = doc_with_moved_clip_region();
+    let s = Selection::default();
+    let p = paint();
+    let around = [(410.0, 410.0), (490.0, 410.0), (490.0, 490.0), (410.0, 490.0)];
+    let gesture = |outline: bool| {
+        let cx = ToolContext { outline, ..cx(&d, &s, &p) };
+        let mut tool = crate::create(ID);
+        tool.pointer(&cx, &PointerEvent::new(PointerKind::Down, 410.0, 410.0));
+        for &(x, y) in &around[1..] {
+            tool.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y));
+        }
+        tool.pointer(&cx, &PointerEvent::new(PointerKind::Up, 410.0, 490.0))
+    };
+    assert_eq!(gesture(true), vec![Action::Exec("select.set".into(), json!({"ids": [art.0]}))]);
+    assert_eq!(gesture(false), vec![Action::Exec("select.set".into(), json!({"ids": []}))]);
+}

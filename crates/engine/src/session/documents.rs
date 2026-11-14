@@ -24,6 +24,8 @@ impl Session {
         });
         // Clicks find an image's own fills and strokes where their effects draw them.
         vectorcraft_doc::hit::set_image_paint(vectorcraft_render::effects::image_paint);
+        // Clicks inside a clip group fall in the region its clipping path's effects give it.
+        vectorcraft_doc::hit::set_clip_region(reshaped_clip_region);
         // Clicks find a blend's steps and an envelope's distorted art where the canvas draws them,
         // evaluated again when the fonts, the hyphenation exceptions or the plug-ins change.
         vectorcraft_doc::hit::set_live_art(vectorcraft_render::effects::expand_live, || {
@@ -489,6 +491,17 @@ impl Session {
     pub fn commands(&self) -> Vec<CommandInfo> {
         command_specs().iter().chain(crate::cmd::plugin::command_specs()).map(|c| c.info(self)).collect()
     }
+}
+
+/// The region clipping path `clip` clips to with its live geometry effects applied
+/// ([`vectorcraft_render::effects::clip_outline`]), for clicks inside its clip group; `None` when
+/// nothing in it has a visible geometry effect of its own or on a fill or stroke, so that clicks
+/// count its plain shapes, type by its frame.
+fn reshaped_clip_region(clip: &Node) -> Option<Option<(vectorcraft_geom::BezPath, vectorcraft_geom::FillRule)>> {
+    use vectorcraft_render::effects::has_geometry;
+    let mut reshaped = false;
+    clip.walk(&mut |n| reshaped |= has_geometry(&n.appearance.effects) || n.appearance.items.iter().any(|i| has_geometry(i.effects())));
+    reshaped.then(|| vectorcraft_render::effects::clip_outline(clip))
 }
 
 /// Whether some of type `t` is set in a font named (in any case) one of `names`, lowercased.

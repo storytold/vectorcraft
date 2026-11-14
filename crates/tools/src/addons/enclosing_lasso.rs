@@ -134,7 +134,7 @@ impl Tool for EnclosingLassoTool {
                 let symbols = cx.doc.symbol_boxes();
                 let region = (points.len() >= 3).then(|| Region::new(polygon(&points, true))).flatten();
                 let mut ids = if let Some(region) = region {
-                    enclosure_candidates(cx.doc, region.path.bounding_box(), cx.isolation)
+                    enclosure_candidates(cx.doc, region.path.bounding_box(), cx.isolation, cx.outline)
                         .into_iter()
                         .filter(|id| cx.doc.node(*id).is_some_and(|n| node_inside(n, &symbols, &region)))
                         .collect()
