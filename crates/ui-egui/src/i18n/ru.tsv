@@ -703,6 +703,8 @@ font-technology	Variable	Вариативные
 	Crop Image	Обрезать изображение
 	Image Tools	Инструменты изображения
 	Remove Background…	Удалить фон…
+	Draw (Pencil)	Рисовать (Карандаш)
+	Place Image	Поместить изображение
 	Remove Background	Удалить фон
 	Background	Фон
 	Edge Color	Цвет края
@@ -2693,6 +2695,7 @@ mark-style	Japanese	Японский
 	Proportional Metrics	Пропорциональные метрики
 	Insert Aki Left	Вставить аки слева
 	Insert Aki Right	Вставить аки справа
+	Tsume	Цумэ
 	Character Direction	Направление символов
 	Digits	Цифры
 	Arabic	Арабские
@@ -4526,6 +4529,7 @@ axis	Both	Оба
 @msg	`select` must be true or false	`select` должно быть true или false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` и `maxAnchors` должны быть целыми числами
 @msg	`{key}` must be a number not below 0	`{key}` должно быть числом не меньше 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` должно быть четырьмя числами не меньше 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` должно быть [x, y, width, height]: четыре конечных числа, ширина и высота не отрицательные
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` больше, чем `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	укажите хотя бы один из параметров `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -5362,6 +5366,7 @@ axis	Both	Оба
 	VectorCraft Title Bar on Every Desktop	Строка заголовка VectorCraft на любом рабочем столе
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Пока переменная среды VECTORCRAFT_TITLEBAR задана, строку заголовка выбирает она.
 	System Title Bar takes precedence over this option while it is on.	Пока включена «Системная строка заголовка», она имеет приоритет над этим параметром.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Пока «Строка заголовка VectorCraft на любом рабочем столе» выключена, этот рабочий стол рисует строку заголовка окна независимо от того, включён ли этот параметр.
 	Value Axis	Ось значений
 	On Left Side	Слева
 	On Right Side	Справа
@@ -6000,8 +6005,8 @@ axis	Y Axis	Ось Y
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	модуль экспорта объявляет от 1 до {MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	вне групп может быть не более {MAX_UNGROUPED} параметров: задайте остальным `group`
 @msg	can't encode the input	не удаётся закодировать входные данные
-@msg	expected {"dataBase64"}	ожидалось {"dataBase64"}
-@msg	expected {"objects"}	ожидалось {"objects"}
+@msg	expected {{"dataBase64": "…"}}	ожидалось {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	ожидалось {{"objects": [...]}}
 @msg	export `{name}`: {e}	экспорт модуля `{name}`: {e}
 @msg	extension {e} is listed twice	расширение {e} указано дважды
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	расширение {e}: используйте 1-16 строчных букв и цифр, без точки
@@ -6065,11 +6070,11 @@ axis	Y Axis	Ось Y
 @msg	a painted live effect returns only `objects`	рисующий динамический эффект возвращает только `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	у части рисующего динамического эффекта есть только `path`, `fillRule`, `fills` и `strokes`
 @msg	a read-only object was left out	пропущен объект только для чтения
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	пропущен объект только для чтения: верните его как один {"id"} или в том виде, в каком он был передан
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущен объект только для чтения: верните его как один {{"id": …}} или в том виде, в каком он был передан
 @msg	a string	строка
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	у обводки есть только `paint`, `width`, `join`, `cap` и `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	обводка должна иметь вид {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	эффект должен иметь вид {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обводка должна иметь вид {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	эффект должен иметь вид {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	эффект на заливке возвращает только `fills`
 @msg	an effect on a stroke returns only `strokes`	эффект на обводке возвращает только `strokes`
 @msg	an object must be a JSON object	объект должен быть объектом JSON
@@ -6211,6 +6216,8 @@ axis	Y Axis	Ось Y
 	Action Options…	Параметры действия…
 	Action Options	Параметры действия
 	Playback Options…	Параметры воспроизведения…
+	Button Mode	Режим кнопок
+	No actions.	Нет действий.
 	Insert Stop…	Вставить остановку…
 	Insert Stop	Вставить остановку
 	Record Stop	Записать остановку
@@ -7375,7 +7382,7 @@ breakText	Glyphs	Глифы
 @id	pathfinder.add	Объединить
 @msg	give corners of the path: anchors between two straight sides	укажите углы контура: опорные точки между двумя прямыми сторонами
 @msg	image '{key}' has no pixels and was left out	изображение '{key}' не содержит пикселов и было пропущено
-@msg	not an RTF file: it doesn't start with {\\rtf	это не файл RTF: он не начинается с {\\rtf
+@msg	not an RTF file: it doesn't start with {{\\rtf	это не файл RTF: он не начинается с {{\\rtf
 @msg	this is a PostScript file (an .ai saved in an older format or without PDF compatibility, or an EPS file), which can't be opened yet: save it as PDF, PDF-compatible .ai or SVG	это файл PostScript (.ai, сохранённый в старом формате или без совместимости с PDF, либо EPS-файл), который пока нельзя открыть: сохраните его как PDF, .ai с совместимостью с PDF или SVG
 @msg	this kind of brush has no options dialog yet	у кистей этого типа пока нет диалога параметров
 digits	Hindi	Хинди
@@ -7594,3 +7601,119 @@ shape	Open	Открытый
 	Grommets	Люверсы
 	Grommet Inset	Отступ люверсов от края
 	Diameter	Диаметр
+
+# Messages of the effects, 3D, image export, color profiles, swatch exchange files, color books and DXF import.
+@msg	3D effects require finite coordinates within 100 million points	3D-эффектам нужны конечные координаты в пределах 100 миллионов пунктов
+@msg	3D effects require one to ten lights	3D-эффектам нужно от одного до десяти источников света
+@msg	BMP depth {_1}: 1, 4, 8, 16, 24 or 32 bits per pixel	Глубина цвета BMP {_1}: допустимо 1, 4, 8, 16, 24 или 32 бита на пиксель
+@msg	BMP encoding failed: {width} × {height} pixels doesn't fit the format or the pixel buffer	Ошибка кодирования BMP: {width} × {height} пикселей не соответствует формату или буферу пикселей
+@msg	GIF encoding failed: the palette image is malformed	Ошибка кодирования GIF: изображение с палитрой имеет неверную структуру
+@msg	GIF encoding failed: {e}	Ошибка кодирования GIF: {e}
+@msg	JPEG colour profile: {e}	Цветовой профиль JPEG: {e}
+@msg	JPEG encoding failed: pixel buffer doesn't match the image size	Ошибка кодирования JPEG: буфер пикселей не соответствует размеру изображения
+@msg	JPEG encoding failed: {e}	Ошибка кодирования JPEG: {e}
+@msg	PNG encoding failed: pixel buffer doesn't match the image size	Ошибка кодирования PNG: буфер пикселей не соответствует размеру изображения
+@msg	PNG encoding failed: the palette image is malformed	Ошибка кодирования PNG: изображение с палитрой имеет неверную структуру
+@msg	PNG encoding failed: {e}	Ошибка кодирования PNG: {e}
+@msg	PNG encoding failed: {width} × {height} pixels is not a valid image size	Ошибка кодирования PNG: {width} × {height} пикселей — недопустимый размер изображения
+@msg	PSD colour profile: {e}	Цветовой профиль PSD: {e}
+@msg	PSD encoding failed: the pixel buffer doesn't match the image size	Ошибка кодирования PSD: буфер пикселей не соответствует размеру изображения
+@msg	Revolve profile contains invalid coordinates	Профиль вращения содержит недопустимые координаты
+@msg	Revolve profile is too complex	Профиль вращения слишком сложен
+@msg	Revolve projection is not finite	Проекция вращения не является конечной
+@msg	Revolve requires finite profile coordinates within 100 million points	Для вращения нужны конечные координаты профиля в пределах 100 миллионов пунктов
+@msg	Revolve surface is too complex; reduce Segments or simplify the profile	Поверхность вращения слишком сложна; уменьшите «Сегменты» или упростите профиль
+@msg	Revolve surface is too complex; simplify the profile	Поверхность вращения слишком сложна; упростите профиль
+@msg	Revolve visibility cannot split the projected boundary	Расчёт видимости вращения не может разделить спроецированную границу
+@msg	Revolve visibility creates too many fragments	Расчёт видимости вращения создаёт слишком много фрагментов
+@msg	Revolve visibility creates too many vector anchors	Расчёт видимости вращения создаёт слишком много векторных опорных точек
+@msg	Revolve visibility exceeds its geometry work limit	Расчёт видимости вращения превышает свой предел геометрических вычислений
+@msg	Revolve visibility exceeds its spatial index limit	Расчёт видимости вращения превышает свой предел пространственного индекса
+@msg	Revolve visibility has too many boundary crossings	В расчёте видимости вращения слишком много пересечений границы
+@msg	Revolve visibility has too many input anchors	В расчёте видимости вращения слишком много входных опорных точек
+@msg	Revolve visibility requires convex cap sectors	Для расчёта видимости вращения нужны выпуклые секторы торцов
+@msg	Revolve visibility requires finite projected faces	Для расчёта видимости вращения нужны конечные спроецированные грани
+@msg	SVG options: {e}	Параметры SVG: {e}
+@msg	Save for Web settings: {e}	Параметры «Сохранить для web»: {e}
+@msg	TIFF colour profile: {e}	Цветовой профиль TIFF: {e}
+@msg	TIFF encoding failed: the pixel buffer doesn't match the image size	Ошибка кодирования TIFF: буфер пикселей не соответствует размеру изображения
+@msg	TIFF encoding failed: {e}	Ошибка кодирования TIFF: {e}
+@msg	Targa depth {_1}: 16, 24 or 32 bits per pixel	Глубина цвета Targa {_1}: допустимо 16, 24 или 32 бита на пиксель
+@msg	Targa encoding failed: the pixel buffer doesn't match the image size	Ошибка кодирования Targa: буфер пикселей не соответствует размеру изображения
+@msg	The 3D projection is not finite	3D-проекция не является конечной
+@msg	The 3D shadow is too complex; turn Shadows off or simplify the art	3D-тень слишком сложна; отключите «Тени» или упростите графику
+@msg	The shape contains invalid coordinates	Фигура содержит недопустимые координаты
+@msg	Too many Revolve faces for visibility evaluation	Слишком много граней вращения для расчёта видимости
+@msg	VectorCraft reads at most {ASE_MAX_ENTRIES} colors and groups from a swatch exchange file, and this library has {entries}	VectorCraft читает из файла обмена образцами не более {ASE_MAX_ENTRIES} цветов и групп, а в этой библиотеке их {entries}
+@msg	WebP encoding failed: {e}	Ошибка кодирования WebP: {e}
+@msg	[{j}] `{_1}`: {why}	[{j}] `{_1}`: {why}
+@msg	`answers[{i}]` {e}	`answers[{i}]` {e}
+@msg	`view` is smallThumb, mediumThumb, largeThumb, smallList or largeList	`view` принимает значения smallThumb, mediumThumb, largeThumb, smallList или largeList
+@msg	a line can't run from a point to itself	линия не может идти от точки к самой себе
+@msg	a line needs at least two points	линии нужны хотя бы две точки
+@msg	a number cannot be read	не удаётся прочитать число
+@msg	a swatch exchange block is too long	блок файла обмена образцами слишком длинный
+@msg	a swatch exchange name is too long	имя в файле обмена образцами слишком длинное
+@msg	a {sw} × {sh} image can't be resized to {width} × {height} pixels	размер изображения {sw} × {sh} нельзя изменить до {width} × {height} пикселей
+@msg	a {width} × {height} image is too large	изображение {width} × {height} слишком велико
+@msg	a {width} × {height} image: {e}	изображение {width} × {height}: {e}
+@msg	an image could not be written: {e}	не удалось записать изображение: {e}
+@msg	an image that couldn't be read was left out	изображение, которое не удалось прочитать, пропущено
+@msg	can't open “{name}”: {e}	не удаётся открыть «{name}»: {e}
+@msg	cannot align zip entries to {align} bytes	не удаётся выровнять записи zip по {align} байт
+@msg	cannot open the automation {kind} root `{_1}`: {e}	не удаётся открыть корневую папку автоматизации ({kind}) `{_1}`: {e}
+@msg	cannot read profile: {0}	не удаётся прочитать профиль: {0}
+@msg	color book version {version} isn't supported (only 1)	версия цветовой книги {version} не поддерживается (только 1)
+@msg	color books in color space {other} aren't supported (only RGB, CMYK and Lab)	цветовые книги в цветовом пространстве {other} не поддерживаются (только RGB, CMYK и Lab)
+@msg	file name too long to zip: {_1}	имя файла слишком длинное для zip: {_1}
+@msg	file name too long to zip: {name}	имя файла слишком длинное для zip: {name}
+@msg	freeform line {i}: {e}	произвольная линия {i}: {e}
+@msg	freeform point {i}: {e}	произвольная точка {i}: {e}
+@msg	give `{key}` or `{other}`, not both	укажите `{key}` или `{other}`, но не то и другое
+@msg	grayscale profiles can't be working spaces yet	профили оттенков серого пока не могут быть рабочими пространствами
+@msg	input contains NaN or infinite coordinates	входные данные содержат координаты NaN или бесконечные координаты
+@msg	input path could not be closed	не удалось замкнуть входной контур
+@msg	invalid ICC profile: {0}	недопустимый профиль ICC: {0}
+@msg	invalid scale {scale}	недопустимый масштаб {scale}
+@msg	its localized names take more than {_1} KB	его локализованные имена занимают более {_1} КБ
+@msg	its objects are nested too deep ({e})	его объекты вложены слишком глубоко ({e})
+@msg	its tag table lists the `{_1}` tag more than once	в его таблице тегов тег `{_1}` указан более одного раза
+@msg	not a graphic style library: {e}	не библиотека графических стилей: {e}
+@msg	not a swatch library (.vcswatches or .gpl)	не библиотека образцов (.vcswatches или .gpl)
+@msg	not a swatch library (format `{_1}`)	не библиотека образцов (формат `{_1}`)
+@msg	not a swatch library: {e}	не библиотека образцов: {e}
+@msg	not an action set file ({e})	не файл набора действий ({e})
+@msg	profile colour space {other} is not RGB, CMYK or Gray	цветовое пространство профиля {other} не является RGB, CMYK или оттенками серого
+@msg	regular expression too large	регулярное выражение слишком велико
+@msg	script file is not UTF-8 text: {value}	файл скрипта не является текстом UTF-8: {value}
+@msg	stop {i}: {e}	точка перехода {i}: {e}
+@msg	swatch exchange version {major}.{minor} isn't supported (only 1.x)	версия файла обмена образцами {major}.{minor} не поддерживается (только 1.x)
+@msg	the color book holds more than {ASE_MAX_ENTRIES} colors	в цветовой книге больше {ASE_MAX_ENTRIES} цветов
+@msg	the color book is cut short	цветовая книга обрезана
+@msg	the color book's names take more than {_1} MB	имена цветовой книги занимают более {_1} МБ
+@msg	the image would be {w} × {h} pixels; raster exports are limited to {MAX_RASTER_SIDE} pixels per side and {_1} megapixels: lower the scale or resolution	изображение имело бы размер {w} × {h} пикселей; растровый экспорт ограничен {MAX_RASTER_SIDE} пикселями по стороне и {_1} мегапикселями: уменьшите масштаб или разрешение
+@msg	the optimised image can't be read back: {e}	оптимизированное изображение не удаётся прочитать обратно: {e}
+@msg	the pixel buffer doesn't match the image size	буфер пикселей не соответствует размеру изображения
+@msg	the preview: {e}	изображение для просмотра: {e}
+@msg	the request may not read the New Document profiles folder	запросу не разрешено читать папку профилей нового документа
+@msg	the shapes are too degenerate to combine	фигуры слишком вырождены для объединения
+@msg	the shapes cross themselves and each other too often to combine	фигуры слишком часто пересекают себя и друг друга для объединения
+@msg	the swatch exchange file holds more than {ASE_MAX_ENTRIES} colors and groups	в файле обмена образцами больше {ASE_MAX_ENTRIES} цветов и групп
+@msg	the swatch exchange file is cut short	файл обмена образцами обрезан
+@msg	the {_1} plate can't be read: {e}	не удаётся прочитать пластину {_1}: {e}
+@msg	this binary DXF file is damaged or cut short	этот двоичный файл DXF повреждён или обрезан
+@msg	this is a DWG drawing, which can't be read: save it from the CAD app as a DXF and open that	это чертёж DWG, который невозможно прочитать: сохраните его из приложения CAD как DXF и откройте его
+@msg	too many classes	слишком много классов
+@msg	too many groups	слишком много групп
+@msg	too many layers for PSD (at most 32767)	слишком много слоёв для PSD (не более 32767)
+@msg	too many swatch exchange blocks	слишком много блоков в файле обмена образцами
+@msg	unknown colour profile: {0}	неизвестный цветовой профиль: {0}
+@msg	{_1} clashes with a built-in profile name	{_1} совпадает с именем встроенного профиля
+@msg	{_1} × {_2} pixels is too large for GIF (at most 65535 pixels a side): lower the resolution	{_1} × {_2} пикселей — слишком большой размер для GIF (не более 65535 пикселей по стороне): уменьшите разрешение
+@msg	{_1}: no usable transform to/from sRGB	{_1}: нет пригодного преобразования в sRGB или из sRGB
+@msg	{name} is not a CMYK profile	{name} — не профиль CMYK
+@msg	{name} is not an RGB profile	{name} — не профиль RGB
+@msg	{path}: could not be read	{path}: не удалось прочитать
+@msg	{width} × {height} pixels is too large for JPEG (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для JPEG (не более 65535 пикселей по стороне): уменьшите разрешение
+@msg	{width} × {height} pixels is too large for Targa (at most 65535 pixels a side): lower the resolution	{width} × {height} пикселей — слишком большой размер для Targa (не более 65535 пикселей по стороне): уменьшите разрешение
+@msg	{w} × {h} pixels is too large for PSD (at most {MAX_SIDE} pixels a side): lower the resolution	{w} × {h} пикселей — слишком большой размер для PSD (не более {MAX_SIDE} пикселей по стороне): уменьшите разрешение

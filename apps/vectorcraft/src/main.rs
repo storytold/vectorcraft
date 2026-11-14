@@ -60,6 +60,8 @@ mod portal_request;
 mod portal_save;
 mod prefs_dir;
 mod printing;
+#[cfg(not(any(target_os = "macos", windows)))]
+mod quit_windows;
 #[cfg(not(target_os = "macos"))]
 mod single_instance;
 #[cfg(windows)]
@@ -90,8 +92,6 @@ mod titlebar;
 use app::bring_window_forward;
 use app::native_input_hook;
 use app::open_or_hold;
-#[cfg(all(test, not(any(target_os = "macos", windows))))]
-use app::{QuittingWindow, hide_before_teardown};
 use host_services::services;
 #[cfg(all(test, feature = "wgpu"))]
 use prefs::{KEEP_UI_PREFS, decode_saved_prefs, keep_prefs_copy, prefs_bytes};
@@ -122,7 +122,7 @@ struct App {
     /// Keeps the custom title bar's window borderless (Windows, #1758).
     window_frame: Option<window_frame::WindowFrameFn>,
     /// The main window; used to read and set maximized state the UI layer does not see on Linux (#3635),
-    /// and to hide the window on quit before the clipboard handles let go (`app::hide_before_teardown`).
+    /// and to take the window off screen on quit before the clipboard handles let go (`quit_windows`).
     winit_window: Option<std::sync::Arc<winit::window::Window>>,
     /// A saved or fitted geometry asked for maximize once the window is mapped (Linux).
     pending_maximize: bool,
@@ -373,11 +373,14 @@ fn main() -> std::process::ExitCode {
     // Display Server › X11 opens the window through XWayland instead, where file drops work (#1151),
     // and the other choices do so when a pen is attached, where the pen draws (#2028, #4967).
     #[cfg(target_os = "linux")]
+    let mut forced_to_x11 = false;
+    #[cfg(target_os = "linux")]
     let options = {
         let mut options = options;
         let pref = saved.as_ref().and_then(|ui| ui.engine_prefs.get("linuxDisplayServer")).and_then(serde_json::Value::as_str);
         if xwayland::wanted(pref, |name| std::env::var_os(name), xwayland::pen_attached) {
             if xwayland::x11_libraries_found() {
+                forced_to_x11 = true;
                 if pref != Some("x11") {
                     log::info!("pen found: opening the window through XWayland, where the pen works (VECTORCRAFT_NATIVE_WAYLAND=1 keeps Wayland)");
                 } else {
@@ -393,6 +396,11 @@ fn main() -> std::process::ExitCode {
         }
         options
     };
+    #[cfg(not(target_os = "linux"))]
+    let forced_to_x11 = false;
+    // Preferences › User Interface notes under System Title Bar when the desktop draws the frame
+    // with it on or off.
+    let desktop_keeps_frame = titlebar::desktop_keeps_frame(forced_to_x11);
     // With Windows Ink, winit reports a pen as a touch and drops its barrel button and which end
     // is down; the message hook notes each pointer contact and whether it starts with the barrel
     // button held, and writes the pen's end into the pen feed (`windows_stylus`). It also notes the
@@ -410,6 +418,10 @@ fn main() -> std::process::ExitCode {
         }));
         options
     };
+    // Quitting takes the X11 windows of floating panels and documents off screen with the main
+    // window, so eframe's windows are recorded as it makes and drops them (`quit_windows`).
+    #[cfg(target_os = "linux")]
+    let options = eframe::NativeOptions { viewport_hooks: Some(std::sync::Arc::new(quit_windows::Hooks)), ..options };
     #[cfg(feature = "wgpu")]
     let options = {
         let mut options = options;
@@ -595,6 +607,7 @@ fn main() -> std::process::ExitCode {
                 app.custom_titlebar = custom_titlebar;
                 app.caption_layout = caption_layout;
                 app.desktop_frame = !custom_titlebar;
+                app.desktop_keeps_frame = desktop_keeps_frame;
                 if let Some(port) = control_port {
                     let rx = control_server::start(port, cc.egui_ctx.clone());
                     app = app.with_control(rx).with_automation_roots(roots.clone());

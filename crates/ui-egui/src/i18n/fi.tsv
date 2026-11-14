@@ -214,6 +214,8 @@
 	Crop Image	Rajaa kuva
 	Image Tools	Kuvatyökalut
 	Remove Background…	Poista tausta…
+	Draw (Pencil)	Piirrä (lyijykynä)
+	Place Image	Sijoita kuva
 	Remove Background	Poista tausta
 	Background	Tausta
 	Edge Color	Reunan väri
@@ -985,6 +987,7 @@
 	VectorCraft Title Bar on Every Desktop	VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Ympäristömuuttuja VECTORCRAFT_TITLEBAR valitsee otsikkorivin niin kauan kuin se on asetettu.
 	System Title Bar takes precedence over this option while it is on.	Järjestelmän otsikkorivi ohittaa tämän asetuksen niin kauan kuin se on käytössä.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Niin kauan kuin VectorCraftin otsikkorivi kaikissa työpöytäympäristöissä ei ole käytössä, tämä työpöytäympäristö piirtää ikkunan otsikkorivin, oli tämä asetus käytössä tai ei.
 	Exit	Lopeta
 	Distort	Vääristä
 	Diffuse Glow…	Hajautettu hehku…
@@ -1573,6 +1576,7 @@ lighting	Light	Valo
 	Proportional Metrics	Suhteelliset metriikat
 	Insert Aki Left	Lisää aki vasemmalle
 	Insert Aki Right	Lisää aki oikealle
+	Tsume	Tsume
 	Character Direction	Merkkien suunta
 	Digits	Numerot
 	Arabic	Arabia
@@ -4712,6 +4716,7 @@ imageTrace	Outline	Ääriviiva
 @msg	`select` must be true or false	`select` on oltava true tai false
 @msg	`minAnchors` and `maxAnchors` must be whole numbers	`minAnchors` ja `maxAnchors` on oltava kokonaislukuja
 @msg	`{key}` must be a number not below 0	`{key}` on oltava luku, joka on vähintään 0
+@msg	`{key}` must be four numbers not below 0: [tl, tr, br, bl]	`{key}` on oltava neljä lukua, jotka ovat vähintään 0: [tl, tr, br, bl]
 @msg	`{key}` must be [x, y, width, height]: four finite numbers, width and height not negative	`{key}` on oltava [x, y, width, height]: neljä äärellistä lukua, joista leveys ja korkeus eivät ole negatiivisia
 @msg	`{min_key}` is greater than `{max_key}`	`{min_key}` on suurempi kuin `{max_key}`
 @msg	give at least one of `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`	anna vähintään yksi parametreista `name`, `kind`, `text`, `within`, `intersects`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight`, `minThickness`, `maxThickness`, `minArea`, `maxArea`, `minAnchors`, `maxAnchors`
@@ -6419,8 +6424,8 @@ axis	Y Axis	Y-akseli
 @msg	an exporter declares 1 to {MAX_EXTENSIONS} `extensions`	vientilaajennus ilmoittaa 1–{MAX_EXTENSIONS} `extensions`
 @msg	at most {MAX_UNGROUPED} parameters outside groups: give the others a `group`	ryhmien ulkopuolella saa olla enintään {MAX_UNGROUPED} parametria: anna muille `group`
 @msg	can't encode the input	syötettä ei voi koodata
-@msg	expected {"dataBase64"}	odotettiin {"dataBase64"}
-@msg	expected {"objects"}	odotettiin {"objects"}
+@msg	expected {{"dataBase64": "…"}}	odotettiin {{"dataBase64": "…"}}
+@msg	expected {{"objects": [...]}}	odotettiin {{"objects": [...]}}
 @msg	export `{name}`: {e}	moduulin vienti `{name}`: {e}
 @msg	extension {e} is listed twice	tunniste {e} on luettelossa kahdesti
 @msg	extension {e}: use 1-16 lower-case letters and digits, without the dot	tunniste {e}: käytä 1-16 pientä kirjainta ja numeroa ilman pistettä
@@ -6484,11 +6489,11 @@ axis	Y Axis	Y-akseli
 @msg	a painted live effect returns only `objects`	maalaava live-tehoste palauttaa vain kentän `objects`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	maalaavan live-tehosteen osalla on vain `path`, `fillRule`, `fills` ja `strokes`
 @msg	a read-only object was left out	vain luku -objekti jätettiin pois
-@msg	a read-only object was left out: return it, as {"id"} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {"id"}-muotona tai sellaisena kuin se annettiin
+@msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {{"id": …}}-muotona tai sellaisena kuin se annettiin
 @msg	a string	merkkijono
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	viivalla on vain `paint`, `width`, `join`, `cap` ja `miterLimit`
-@msg	a stroke must be {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}	viivan on oltava muotoa {"paint", "width"?, "join"?, "cap"?, "miterLimit"?}
-@msg	an effect must be {"id", "params"?, "visible"?}	tehosteen on oltava muotoa {"id", "params"?, "visible"?}
+@msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	viivan on oltava muotoa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
+@msg	an effect must be {{"id", "params"?, "visible"?}}	tehosteen on oltava muotoa {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	täytön tehoste palauttaa vain kentän `fills`
 @msg	an effect on a stroke returns only `strokes`	viivan tehoste palauttaa vain kentän `strokes`
 @msg	an object must be a JSON object	objektin on oltava JSON-objekti
@@ -6630,6 +6635,8 @@ axis	Y Axis	Y-akseli
 	Action Options…	Toiminnon asetukset…
 	Action Options	Toiminnon asetukset
 	Playback Options…	Toistoasetukset…
+	Button Mode	Painiketila
+	No actions.	Ei toimintoja.
 	Insert Stop…	Lisää pysäytys…
 	Insert Stop	Lisää pysäytys
 	Record Stop	Nauhoita pysäytys
