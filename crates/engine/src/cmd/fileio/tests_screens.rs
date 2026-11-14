@@ -1163,3 +1163,93 @@ fn single_file_pdfs_hold_every_chosen_artboard() {
     assert_eq!(names(&r), ["Artboard-1.pdf", "Artboard-2.pdf"]);
     assert!(s.execute("document.exportForScreens", &json!({"pdfs": "both", "formats": [{"format": "pdf"}]})).is_err());
 }
+
+/// The warnings of reply `r` that name an option the file doesn't read.
+fn unused(r: &Value) -> Vec<String> {
+    r["warnings"].as_array().unwrap().iter().filter_map(Value::as_str).filter(|w| w.contains("was not used")).map(str::to_string).collect()
+}
+
+/// An option of a format row, or of a format's settings, that only another format reads is
+/// accepted, and the reply's warnings name it as the request does, in the words of a save's note.
+#[test]
+fn a_row_option_only_another_format_reads_gets_a_note() {
+    let mut s = session(1);
+    let p = json!({
+        "formats": [{"format": "png", "quality": 80}, {"format": "jpg", "quality": 80}, {"format": "ai", "aiVersion": "7", "compress": true}],
+        "settings": {"png": {"quality": 50, "interlaced": true}, "svg": {"interlaced": true}},
+    });
+    let r = export(&mut s, p);
+    assert_eq!(
+        unused(&r),
+        [
+            "`formats[0].quality` was not used: PNG files don't read it",
+            "`formats[2].compress` was not used: legacy .ai (version 7) files don't read it",
+            "`settings.png.quality` was not used: PNG files don't read it",
+            "`settings.svg.interlaced` was not used: SVG files don't read it"
+        ],
+        "{r}"
+    );
+    // A row's own keys, the keys every row takes and the artboard choices get none.
+    let p = json!({"formats": [
+        {"format": "png", "scale": "2x", "suffix": "@2x", "folder": "x", "includeArtboardFill": false, "artboard": 0, "useArtboards": true},
+        {"format": "pdf", "marks": {"trim": true}, "preset": "High Quality Print"},
+        {"format": "vectorcraft", "compress": true, "range": "1"},
+    ]});
+    let r = export(&mut s, p);
+    assert!(unused(&r).is_empty(), "{r}");
+    // A format's settings are read as each row of that format writes them: a row can name another
+    // `.ai` version than the settings do.
+    let r = export(&mut s, json!({"formats": [{"format": "ai", "aiVersion": "7"}], "settings": {"ai": {"marks": {"trim": true}}}}));
+    assert_eq!(unused(&r), ["`settings.ai.marks` was not used: legacy .ai (version 7) files don't read it"], "{r}");
+    let r = export(&mut s, json!({"formats": [{"format": "ai", "aiVersion": "pdf"}], "settings": {"ai": {"aiVersion": "7", "compress": true}}}));
+    assert!(unused(&r).is_empty(), "{r}");
+    // A setting another row of the format reads gets none; one no row reads names the first row's
+    // file.
+    let rows = json!([{"format": "ai", "aiVersion": "7"}, {"format": "ai"}]);
+    let r = export(&mut s, json!({"formats": rows, "settings": {"ai": {"editingData": false}}}));
+    assert!(unused(&r).is_empty(), "{r}");
+    let r = export(&mut s, json!({"formats": rows, "settings": {"ai": {"quality": 80}}}));
+    assert_eq!(unused(&r), ["`settings.ai.quality` was not used: legacy .ai (version 7) files don't read it"], "{r}");
+    // A row that gives the key itself doesn't use the setting.
+    let rows = json!([{"format": "ai", "aiVersion": "7"}, {"format": "ai", "editingData": true}]);
+    let r = export(&mut s, json!({"formats": rows, "settings": {"ai": {"editingData": false}}}));
+    assert_eq!(unused(&r), ["`settings.ai.editingData` was not used: legacy .ai (version 7) files don't read it"], "{r}");
+    let rows = json!([{"format": "ai", "aiVersion": "7"}, {"format": "ai", "editingData": null}]);
+    let r = export(&mut s, json!({"formats": rows, "settings": {"ai": {"editingData": false}}}));
+    assert_eq!(unused(&r), ["`settings.ai.editingData` was not used: legacy .ai (version 7) files don't read it"], "{r}");
+    // An export writes one file per row and item: a native row doesn't read `separateArtboards`.
+    let r = export(&mut s, json!({"formats": [{"format": "vectorcraft", "separateArtboards": true}]}));
+    assert_eq!(unused(&r), ["`formats[0].separateArtboards` was not used: VectorCraft files don't read it"], "{r}");
+}
+
+/// The Asset Export panel's export notes the options of its request, not those of the settings
+/// the document remembers.
+#[test]
+fn an_asset_export_notes_the_options_it_is_given() {
+    let mut s = session(1);
+    s.execute("select.all", &json!({})).unwrap();
+    s.execute("assets.add", &json!({"multiple": false})).unwrap();
+    s.execute("assets.settings.set", &json!({"formats": [{"format": "png", "quality": 80}]})).unwrap();
+    let r = s.execute("assets.export", &json!({})).unwrap();
+    assert!(unused(&r).is_empty(), "{r}");
+    let r = s.execute("assets.export", &json!({"formats": [{"format": "svg", "quality": 80}]})).unwrap();
+    assert_eq!(unused(&r), ["`formats[0].quality` was not used: SVG files don't read it"], "{r}");
+    // Settings given are read as the remembered rows write them.
+    s.execute("assets.settings.set", &json!({"formats": [{"format": "ai", "aiVersion": "7"}]})).unwrap();
+    let r = s.execute("assets.export", &json!({"settings": {"ai": {"editingData": false}}})).unwrap();
+    assert_eq!(unused(&r), ["`settings.ai.editingData` was not used: legacy .ai (version 7) files don't read it"], "{r}");
+    s.execute("assets.settings.set", &json!({"formats": [{"format": "png", "quality": 80}]})).unwrap();
+    // So does the export a client prepares.
+    let p = json!({"formats": [{"format": "svg", "quality": 80}]});
+    let r = s.prepare_screen_export("assets.export", &p).unwrap().write(&mut |_: &str, _: &[u8]| Ok(())).unwrap();
+    assert_eq!(unused(&r), ["`formats[0].quality` was not used: SVG files don't read it"], "{r}");
+}
+
+/// A preset's options add no notes: Export for Screens notes the options of its request.
+#[test]
+fn an_export_preset_adds_no_notes() {
+    let mut s = session(1);
+    s.execute("document.exportPresets.save", &json!({"name": "Mixed", "settings": {"formats": [{"format": "png", "quality": 80}]}})).unwrap();
+    let r = export(&mut s, json!({"exportPreset": "Mixed"}));
+    assert!(unused(&r).is_empty(), "{r}");
+}
