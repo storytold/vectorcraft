@@ -1,6 +1,7 @@
 //! OpenType panel: per-character OpenType features (ligatures, alternates, swashes, small caps,
-//! ordinals, fractions, figure style, position) for the selected text (every frame of each
-//! selected threaded story) or the Type tool's selected characters.
+//! ordinals, fractions, figure style, position, and with the East Asian options the menu's H or V
+//! Style and Roman Italics) for the selected text (every frame of each selected threaded story) or
+//! the Type tool's selected characters.
 
 use egui::Ui;
 use serde_json::json;
@@ -294,9 +295,28 @@ fn rows() -> [Toggle; 9] {
     ]
 }
 
+/// The panel menu's East Asian items, with Show East Asian Options: label and the feature each
+/// turns on and off. H or V Style sets kana in the forms the font draws for the writing direction
+/// (`hkna`, shaped as `vkna` in vertical type), and Roman Italics sets half-width alphanumerics
+/// in the font's italic forms (`ital`).
+fn east_asian_items() -> [Toggle; 2] {
+    [(tl!("H or V Style"), Flag::Extra("hkna")), (tl!("Roman Italics"), Flag::Extra("ital"))]
+}
+
 pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    if menu_item(ui, tl!("Reset OpenType Features"), text_style(app).is_some(), false) {
+    let has = text_style(app).is_some();
+    if menu_item(ui, tl!("Reset OpenType Features"), has, false) {
         set(app, OtFeatures::default());
+    }
+    if app.session.prefs.show_east_asian_options {
+        ui.separator();
+        // Checked when every character the panel acts on has it; chosen then, it turns it off.
+        for (label, flag) in east_asian_items() {
+            let on = shown_flag(app, flag) == Some(true);
+            if menu_item(ui, label, has, on) {
+                edit(app, Change::Toggle(flag, !on));
+            }
+        }
     }
 }
 
@@ -664,5 +684,59 @@ mod tests {
         assert_eq!(run_features(&mut app, &id, 4), [("1/23".to_string(), json!(["dnom"]))]);
         edit(&mut app, Change::Position(4));
         assert_eq!(undo_steps(&app), undo + 1);
+    }
+
+    /// H or V Style and Roman Italics are in the panel menu with the East Asian options only.
+    #[test]
+    fn kana_style_and_roman_italics_show_with_the_east_asian_options() {
+        let mut app = selected_text();
+        let shown = |app: &mut VectorcraftApp| {
+            let text = crate::tests_labels::painted_text(app, menu);
+            (text.contains("H or V Style"), text.contains("Roman Italics"))
+        };
+        assert_eq!(shown(&mut app), (false, false));
+        app.session.prefs.show_east_asian_options = true;
+        assert_eq!(shown(&mut app), (true, true));
+    }
+
+    /// With the Type tool's characters only partly set, H or V Style and Roman Italics show
+    /// unchecked; chosen, each turns its feature on for every selected character in one undo step,
+    /// each run keeping its other features, and shows checked; chosen again, it turns it off.
+    /// Reset OpenType Features clears both.
+    #[test]
+    fn kana_style_and_roman_italics_turn_on_and_off() {
+        for (label, tag) in [("H or V Style", "hkna"), ("Roman Italics", "ital")] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.session.prefs.show_east_asian_options = true;
+            app.session.execute("file.new", &json!({"width": 300, "height": 200})).unwrap();
+            app.session.select_tool("type", Default::default()).unwrap();
+            let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "かなAB"})).unwrap()["id"].clone();
+            app.session.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": 3, "features": [tag, "smcp"]})).unwrap();
+            app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
+            // "かなAB" is 8 bytes.
+            app.session.set_tool_option("select", &json!({"start": 0, "end": 8}));
+            let ctx = egui::Context::default();
+            let row = |app: &mut VectorcraftApp, label: &str| {
+                let texts = super::super::tests_appearance::frame_events(&ctx, app, vec![], menu);
+                texts.into_iter().find(|(t, _)| t.trim_start_matches(['✓', ' ']) == label).unwrap_or_else(|| panic!("{label} missing"))
+            };
+            let has = |runs: &[(String, Value)], t: &str| runs.iter().all(|(_, f)| f.as_array().is_some_and(|f| f.iter().any(|x| x == t)));
+            let (text, at) = row(&mut app, label);
+            assert!(!text.starts_with('✓'), "{label}: {text:?}");
+            let undo = undo_steps(&app);
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            assert_eq!(undo_steps(&app), undo + 1, "{label}");
+            let runs = run_features(&mut app, &id, 8);
+            assert!(has(&runs, tag), "{label}: {runs:?}");
+            assert!(has(&runs[..1], "smcp") && runs[0].0 == "か", "{label} keeps the other features: {runs:?}");
+            let (text, at) = row(&mut app, label);
+            assert!(text.starts_with('✓'), "{label}: {text:?}");
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            assert_eq!(run_features(&mut app, &id, 8), [("か".to_string(), json!(["smcp"])), ("なAB".to_string(), Value::Null)], "{label} off");
+            app.session.execute("text.setRangeStyle", &json!({"id": id, "features": ["hkna", "ital", "dlig"]})).unwrap();
+            let at = row(&mut app, "Reset OpenType Features").1;
+            super::super::tests_appearance::click(&ctx, &mut app, at.center(), menu);
+            assert_eq!(run_features(&mut app, &id, 8), [("かなAB".to_string(), Value::Null)], "{label}: reset");
+        }
     }
 }
