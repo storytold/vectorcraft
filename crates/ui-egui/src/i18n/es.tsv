@@ -7352,6 +7352,19 @@ breakText	Glyphs	Glifos
 	Not Aligned to Pixel Grid	No alineado con cuadrícula de píxeles
 @msg	only paths and compound paths can be aligned to the pixel grid	solo los trazados y los trazados compuestos se pueden alinear con la cuadrícula de píxeles
 @msg	side is left or right, not `{s}`	side es left o right, no `{s}`
+@msg	side is left or right, not `{v}`	side es left o right, no `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order es un número entero de 0 a {others}, no `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (el nombre de una barra de herramientas) debe ser una cadena de texto
+@msg	no toolbar named `{name}`	no hay ninguna barra de herramientas llamada `{name}`
+@msg	toolbar name can't be empty	el nombre de la barra de herramientas no puede estar vacío
+@msg	a toolbar name has at most {MAX_NAME} characters	el nombre de una barra de herramientas tiene como máximo {MAX_NAME} caracteres
+@msg	there is already a toolbar named `{name}`	ya hay una barra de herramientas llamada `{name}`
+@msg	there is already a toolbar named `{to}`	ya hay una barra de herramientas llamada `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espacio de trabajo guarda como máximo {MAX} barras de herramientas
+@msg	name (a toolbar's name) must be a string	name (el nombre de una barra de herramientas) debe ser una cadena de texto
+@msg	name (a toolbar's name) is required	Se requiere name (el nombre de una barra de herramientas)
+@msg	to (the new name) is required	Se requiere to (el nuevo nombre)
+@msg	name must be a toolbar's name	name debe ser el nombre de una barra de herramientas
 	Ignore All	Omitir todo
 	Add to Dictionary	Añadir al diccionario
 	No Suggestions	No hay sugerencias

@@ -7361,6 +7361,19 @@ breakText	Glyphs	Γλύφοι
 	Not Aligned to Pixel Grid	Μη στοιχισμένα στο πλέγμα εικονοστοιχείων
 @msg	only paths and compound paths can be aligned to the pixel grid	μόνο διαδρομές και σύνθετες διαδρομές μπορούν να στοιχιστούν στο πλέγμα εικονοστοιχείων
 @msg	side is left or right, not `{s}`	το side είναι left ή right, όχι `{s}`
+@msg	side is left or right, not `{v}`	το side είναι left ή right, όχι `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	το order είναι ακέραιος αριθμός από 0 έως {others}, όχι `{v}`
+@msg	toolbar (a toolbar's name) must be a string	το toolbar (το όνομα μιας γραμμής εργαλείων) πρέπει να είναι συμβολοσειρά
+@msg	no toolbar named `{name}`	δεν υπάρχει γραμμή εργαλείων με όνομα `{name}`
+@msg	toolbar name can't be empty	το όνομα της γραμμής εργαλείων δεν μπορεί να είναι κενό
+@msg	a toolbar name has at most {MAX_NAME} characters	ένα όνομα γραμμής εργαλείων έχει το πολύ {MAX_NAME} χαρακτήρες
+@msg	there is already a toolbar named `{name}`	υπάρχει ήδη γραμμή εργαλείων με όνομα `{name}`
+@msg	there is already a toolbar named `{to}`	υπάρχει ήδη γραμμή εργαλείων με όνομα `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	ένας χώρος εργασίας κρατά το πολύ {MAX} γραμμές εργαλείων
+@msg	name (a toolbar's name) must be a string	το name (το όνομα μιας γραμμής εργαλείων) πρέπει να είναι συμβολοσειρά
+@msg	name (a toolbar's name) is required	απαιτείται το name (το όνομα μιας γραμμής εργαλείων)
+@msg	to (the new name) is required	απαιτείται το to (το νέο όνομα)
+@msg	name must be a toolbar's name	το name πρέπει να είναι όνομα γραμμής εργαλείων
 	Ignore All	Παράβλεψη όλων
 	Add to Dictionary	Προσθήκη στο λεξικό
 	No Suggestions	Καμία πρόταση

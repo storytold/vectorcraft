@@ -7389,6 +7389,19 @@ breakText	Glyphs	Glifs
 	Not Aligned to Pixel Grid	No alineat a la quadrícula de píxels
 @msg	only paths and compound paths can be aligned to the pixel grid	només els traçats i els traçats compostos es poden alinear a la quadrícula de píxels
 @msg	side is left or right, not `{s}`	side ha de ser left o right, no `{s}`
+@msg	side is left or right, not `{v}`	side ha de ser left o right, no `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order ha de ser un nombre enter de 0 a {others}, no `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (el nom d’una barra d’eines) ha de ser una cadena
+@msg	no toolbar named `{name}`	no hi ha cap barra d’eines anomenada `{name}`
+@msg	toolbar name can't be empty	el nom de la barra d’eines no pot ser buit
+@msg	a toolbar name has at most {MAX_NAME} characters	un nom de barra d’eines té com a màxim {MAX_NAME} caràcters
+@msg	there is already a toolbar named `{name}`	ja hi ha una barra d’eines anomenada `{name}`
+@msg	there is already a toolbar named `{to}`	ja hi ha una barra d’eines anomenada `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	un espai de treball conté com a màxim {MAX} barres d’eines
+@msg	name (a toolbar's name) must be a string	name (el nom d’una barra d’eines) ha de ser una cadena
+@msg	name (a toolbar's name) is required	cal name (el nom d’una barra d’eines)
+@msg	to (the new name) is required	cal to (el nom nou)
+@msg	name must be a toolbar's name	name ha de ser el nom d’una barra d’eines
 	Ignore All	Ignora-ho tot
 	Add to Dictionary	Afegeix al diccionari
 	No Suggestions	No hi ha suggeriments

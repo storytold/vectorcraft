@@ -7364,6 +7364,19 @@ breakText	Glyphs	Glifler
 	Not Aligned to Pixel Grid	Piksel Izgarasına Hizalanmamış
 @msg	only paths and compound paths can be aligned to the pixel grid	piksel ızgarasına yalnızca yollar ve bileşik yollar hizalanabilir
 @msg	side is left or right, not `{s}`	side left veya right olmalıdır, `{s}` değil
+@msg	side is left or right, not `{v}`	side left veya right olmalıdır, `{v}` değil
+@msg	order is a whole number from 0 to {others}, not `{v}`	order 0 ile {others} arasında bir tam sayı olmalıdır, `{v}` değil
+@msg	toolbar (a toolbar's name) must be a string	toolbar (bir araç çubuğunun adı) bir dize olmalıdır
+@msg	no toolbar named `{name}`	`{name}` adlı araç çubuğu yok
+@msg	toolbar name can't be empty	araç çubuğu adı boş olamaz
+@msg	a toolbar name has at most {MAX_NAME} characters	bir araç çubuğu adı en fazla {MAX_NAME} karakter olabilir
+@msg	there is already a toolbar named `{name}`	`{name}` adlı bir araç çubuğu zaten var
+@msg	there is already a toolbar named `{to}`	`{to}` adlı bir araç çubuğu zaten var
+@msg	a workspace keeps at most {MAX} toolbars	bir çalışma alanı en fazla {MAX} araç çubuğu tutar
+@msg	name (a toolbar's name) must be a string	name (bir araç çubuğunun adı) bir dize olmalıdır
+@msg	name (a toolbar's name) is required	name (bir araç çubuğunun adı) gerekli
+@msg	to (the new name) is required	to (yeni ad) gerekli
+@msg	name must be a toolbar's name	name bir araç çubuğunun adı olmalıdır
 	Ignore All	Tümünü Yoksay
 	Add to Dictionary	Sözlüğe Ekle
 	No Suggestions	Öneri Yok

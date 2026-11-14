@@ -7392,6 +7392,19 @@ breakText	Glyphs	Glifák
 	Not Aligned to Pixel Grid	Pixelrácshoz nem igazított
 @msg	only paths and compound paths can be aligned to the pixel grid	csak útvonalak és összetett útvonalak igazíthatók a pixelrácshoz
 @msg	side is left or right, not `{s}`	a side értéke left vagy right lehet, nem `{s}`
+@msg	side is left or right, not `{v}`	a side értéke left vagy right lehet, nem `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	az order értéke 0 és {others} közötti egész szám lehet, nem `{v}`
+@msg	toolbar (a toolbar's name) must be a string	a toolbar értéke (egy eszköztár neve) szöveg lehet
+@msg	no toolbar named `{name}`	nincs ilyen nevű eszköztár: `{name}`
+@msg	toolbar name can't be empty	az eszköztár neve nem lehet üres
+@msg	a toolbar name has at most {MAX_NAME} characters	egy eszköztár neve legfeljebb {MAX_NAME} karakter lehet
+@msg	there is already a toolbar named `{name}`	már van ilyen nevű eszköztár: `{name}`
+@msg	there is already a toolbar named `{to}`	már van ilyen nevű eszköztár: `{to}`
+@msg	a workspace keeps at most {MAX} toolbars	egy munkaterület legfeljebb {MAX} eszköztárat tartalmazhat
+@msg	name (a toolbar's name) must be a string	a name értéke (egy eszköztár neve) szöveg lehet
+@msg	name (a toolbar's name) is required	a name (egy eszköztár neve) kötelező
+@msg	to (the new name) is required	a to (az új név) kötelező
+@msg	name must be a toolbar's name	a name értéke egy eszköztár neve lehet
 	Ignore All	Az összes kihagyása
 	Add to Dictionary	Hozzáadás a szótárhoz
 	No Suggestions	Nincs javaslat

@@ -8799,6 +8799,8 @@ theme	Appearance	अपीयरेंस
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	इंपोर्टर 1 से {MAX_EXTENSIONS} `extensions` घोषित करता है
 @msg	an importer always gets an import's budget: leave `budget` out	इंपोर्टर को हमेशा इंपोर्ट का बजट मिलता है: `budget` छोड़ दें
 @msg	side is left or right, not `{s}`	side left या right होना चाहिए, `{s}` नहीं
+@msg	side is left or right, not `{v}`	side left या right होना चाहिए, `{v}` नहीं
+@msg	order is a whole number from 0 to {others}, not `{v}`	order 0 से {others} तक की पूर्ण संख्या होनी चाहिए, `{v}` नहीं
 	Ignore All	सभी को अनदेखा करें
 	Add to Dictionary	शब्दकोश में जोड़ें
 	No Suggestions	कोई सुझाव नहीं

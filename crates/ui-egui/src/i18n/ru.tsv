@@ -7497,6 +7497,19 @@ shape	Open	Открытый
 	Not Aligned to Pixel Grid	Не выровненные по пиксельной сетке
 @msg	only paths and compound paths can be aligned to the pixel grid	по пиксельной сетке можно выровнять только контуры и составные контуры
 @msg	side is left or right, not `{s}`	side — это left или right, а не `{s}`
+@msg	side is left or right, not `{v}`	side принимает значение left или right, а не `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order должен быть целым числом от 0 до {others}, а не `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (имя панели инструментов) должен быть строкой
+@msg	no toolbar named `{name}`	нет панели инструментов с именем `{name}`
+@msg	toolbar name can't be empty	имя панели инструментов не может быть пустым
+@msg	a toolbar name has at most {MAX_NAME} characters	имя панели инструментов содержит не более {MAX_NAME} символов
+@msg	there is already a toolbar named `{name}`	панель инструментов с именем `{name}` уже есть
+@msg	there is already a toolbar named `{to}`	панель инструментов с именем `{to}` уже есть
+@msg	a workspace keeps at most {MAX} toolbars	рабочая среда хранит не более {MAX} панелей инструментов
+@msg	name (a toolbar's name) must be a string	name (имя панели инструментов) должен быть строкой
+@msg	name (a toolbar's name) is required	Необходимо указать name (имя панели инструментов)
+@msg	to (the new name) is required	Необходимо указать to (новое имя)
+@msg	name must be a toolbar's name	name должен быть именем панели инструментов
 	Ignore All	Пропустить все
 	Add to Dictionary	Добавить в словарь
 	No Suggestions	Нет вариантов

@@ -7057,6 +7057,19 @@ breakText	Glyphs	字符
 	Not Aligned to Pixel Grid	未對齊像素格點
 @msg	only paths and compound paths can be aligned to the pixel grid	只有路徑和複合路徑可以對齊像素格點
 @msg	side is left or right, not `{s}`	side 應為 left 或 right，而不是 `{s}`
+@msg	side is left or right, not `{v}`	side 應為 left 或 right，而不是 `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order 應為 0 到 {others} 之間的整數，而不是 `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (工具列的名稱) 必須是字串
+@msg	no toolbar named `{name}`	沒有名為 `{name}` 的工具列
+@msg	toolbar name can't be empty	工具列名稱不能是空的
+@msg	a toolbar name has at most {MAX_NAME} characters	工具列名稱最多 {MAX_NAME} 個字元
+@msg	there is already a toolbar named `{name}`	已經有名為 `{name}` 的工具列
+@msg	there is already a toolbar named `{to}`	已經有名為 `{to}` 的工具列
+@msg	a workspace keeps at most {MAX} toolbars	一個工作區最多保留 {MAX} 個工具列
+@msg	name (a toolbar's name) must be a string	name (工具列的名稱) 必須是字串
+@msg	name (a toolbar's name) is required	需要 name (工具列的名稱)
+@msg	to (the new name) is required	需要 to (新名稱)
+@msg	name must be a toolbar's name	name 必須是工具列的名稱
 	Edit Custom Dictionary	編輯自訂字典
 	Entry:	項目：
 # Script Console

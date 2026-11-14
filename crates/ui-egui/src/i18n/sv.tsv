@@ -8846,6 +8846,8 @@ digits	Hindi	Hindi
 	Not Aligned to Pixel Grid	Inte justerade mot pixelrutnät
 @msg	only paths and compound paths can be aligned to the pixel grid	bara banor och sammansatta banor kan justeras mot pixelrutnätet
 @msg	side is left or right, not `{s}`	side är left eller right, inte `{s}`
+@msg	side is left or right, not `{v}`	side är left eller right, inte `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order är ett heltal från 0 till {others}, inte `{v}`
 	Ignore All	Ignorera alla
 	Add to Dictionary	Lägg till i ordlistan
 	No Suggestions	Inga förslag

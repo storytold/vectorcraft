@@ -7408,6 +7408,19 @@ breakText	Glyphs	Glyfy
 	Not Aligned to Pixel Grid	Nezarovnané na mřížku obrazových bodů
 @msg	only paths and compound paths can be aligned to the pixel grid	na mřížku obrazových bodů lze zarovnat jen cesty a složené cesty
 @msg	side is left or right, not `{s}`	side je left nebo right, ne `{s}`
+@msg	side is left or right, not `{v}`	side je left nebo right, ne `{v}`
+@msg	order is a whole number from 0 to {others}, not `{v}`	order je celé číslo od 0 do {others}, ne `{v}`
+@msg	toolbar (a toolbar's name) must be a string	toolbar (název panelu nástrojů) musí být řetězec
+@msg	no toolbar named `{name}`	panel nástrojů s názvem `{name}` neexistuje
+@msg	toolbar name can't be empty	název panelu nástrojů nesmí být prázdný
+@msg	a toolbar name has at most {MAX_NAME} characters	název panelu nástrojů má nejvýše {MAX_NAME} znaků
+@msg	there is already a toolbar named `{name}`	panel nástrojů s názvem `{name}` už existuje
+@msg	there is already a toolbar named `{to}`	panel nástrojů s názvem `{to}` už existuje
+@msg	a workspace keeps at most {MAX} toolbars	pracovní prostor obsahuje nejvýše {MAX} panelů nástrojů
+@msg	name (a toolbar's name) must be a string	name (název panelu nástrojů) musí být řetězec
+@msg	name (a toolbar's name) is required	name (název panelu nástrojů) je povinné
+@msg	to (the new name) is required	to (nový název) je povinné
+@msg	name must be a toolbar's name	name musí být název panelu nástrojů
 	Ignore All	Ignorovat vše
 	Add to Dictionary	Přidat do slovníku
 	No Suggestions	Žádné návrhy

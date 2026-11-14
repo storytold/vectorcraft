@@ -6999,6 +6999,19 @@ breakText	Glyphs	글리프
 	Not Aligned to Pixel Grid	픽셀 격자에 정렬되지 않음
 @msg	only paths and compound paths can be aligned to the pixel grid	패스와 컴파운드 패스만 픽셀 격자에 정렬할 수 있습니다
 @msg	side is left or right, not `{s}`	side는 left 또는 right입니다(`{s}` 아님)
+@msg	side is left or right, not `{v}`	side는 left 또는 right입니다(`{v}` 아님)
+@msg	order is a whole number from 0 to {others}, not `{v}`	order는 0부터 {others}까지의 정수입니다(`{v}` 아님)
+@msg	toolbar (a toolbar's name) must be a string	toolbar(도구 막대 이름)은 문자열이어야 합니다
+@msg	no toolbar named `{name}`	`{name}` 도구 막대가 없습니다
+@msg	toolbar name can't be empty	도구 막대 이름은 비워 둘 수 없습니다
+@msg	a toolbar name has at most {MAX_NAME} characters	도구 막대 이름은 최대 {MAX_NAME}자입니다
+@msg	there is already a toolbar named `{name}`	`{name}` 도구 막대가 이미 있습니다
+@msg	there is already a toolbar named `{to}`	`{to}` 도구 막대가 이미 있습니다
+@msg	a workspace keeps at most {MAX} toolbars	작업 영역에는 도구 막대를 최대 {MAX}개까지 둘 수 있습니다
+@msg	name (a toolbar's name) must be a string	name(도구 막대 이름)은 문자열이어야 합니다
+@msg	name (a toolbar's name) is required	name(도구 막대 이름)이 필요합니다
+@msg	to (the new name) is required	to(새 이름)가 필요합니다
+@msg	name must be a toolbar's name	name은 도구 막대 이름이어야 합니다
 	Ignore All	모두 무시
 	Add to Dictionary	사전에 추가
 	No Suggestions	제안 없음
