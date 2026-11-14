@@ -1,16 +1,14 @@
-//! The metafile reader: the format parsers (`emf`, `wmf`, and `pict` for QuickDraw pictures) play
-//! their records on a [`Player`], a small model of the device context they draw into (objects,
-//! transforms, the current position, the path bracket, the clip), which turns what they draw into
-//! document objects.
+//! The metafile readers. EMF (with its EMF+ records) and WMF files are read by `craft_metafile`,
+//! and `picture` turns what they draw into document objects. QuickDraw pictures (`pict`) play their
+//! opcodes on a [`Player`], a small model of the drawing state (pen, brush, font, the clip), which
+//! turns what they draw into document objects.
 //!
 //! Fills and strokes become paths with a fill and a stroke; lines drawn one after another with the
 //! same pen join into one path. Clips become clipping groups around what they clip. Images keep
-//! their pixels (as PNG), text becomes point type in the font the file names. Records the reader
-//! doesn't know are counted and skipped, with one warning.
+//! their pixels (as PNG), text becomes point type in the font the file names.
 
-mod emf;
 pub(crate) mod pict;
-mod wmf;
+mod picture;
 
 use std::sync::Arc;
 
@@ -20,7 +18,7 @@ use vectorcraft_doc::{
     Appearance, AppearanceItem, CharStyle, Dash, Document, FillLayer, ImageBlob, ImageObject, Justify, LayerColor, LineCap, LineJoin, Node, NodeKind,
     StrokeLayer, TextObject,
 };
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, PathEl, Point, Rect, Shape, Vec2, shapes};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, PathEl, Point, Rect, Shape, shapes};
 
 use crate::dib::{self, Rgba};
 use crate::{Imported, Kind};
@@ -30,24 +28,13 @@ const MAX_NODES: usize = 1 << 20;
 /// Objects and clips reaching further than this from the origin (points, well inside the canvas)
 /// are left out: they come from damaged or hostile coordinates.
 const LIMIT: f64 = 1e6;
-/// Most nested saved device contexts.
-const MAX_SAVED: usize = 1024;
 /// Width of a cosmetic pen (one pixel of a 96 ppi screen), points.
 const HAIRLINE: f64 = 0.75;
-/// Curves made for arcs and ellipses are this close to the true curve (logical units are
-/// transformed after, so it is relative).
-const ARC_TOLERANCE: f64 = 0.01;
 
 /// Raster operations.
 pub(crate) const SRCCOPY: u32 = 0x00CC_0020;
-const PATCOPY: u32 = 0x00F0_0021;
-const WHITENESS: u32 = 0x00FF_0062;
-const BLACKNESS: u32 = 0x0000_0042;
 
 const SKIPPED_ROPS: &str = "images drawn with raster operations other than a plain copy (masks, inversions) were left out";
-const HATCHES: &str = "hatched brushes are filled with their colour";
-const PATTERN_BRUSHES: &str = "pattern brushes are filled grey";
-const EXCLUDED_CLIPS: &str = "clip areas cut out of the clip (excluded rectangles, differences) are ignored";
 const BAD_IMAGE: &str = "an image that couldn't be read was left out";
 const TOO_MANY_PIXELS: &str = "images past the most pixels one file may hold were left out";
 const FAR_AWAY: &str = "objects far outside the picture were left out";
@@ -55,6 +42,50 @@ const FAR_AWAY: &str = "objects far outside the picture were left out";
 /// Is `r` finite and within [`LIMIT`]?
 fn sane(r: Rect) -> bool {
     [r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite() && v.abs() <= LIMIT)
+}
+
+/// Is `path` an upright rectangle around the whole of `frame`? Writers clip to one first; it clips
+/// nothing in the picture.
+fn around(path: &BezPath, frame: Rect) -> bool {
+    if path.elements().len() > 6 {
+        return false;
+    }
+    let b = path.bounding_box();
+    let corners = [Point::new(b.x0, b.y0), Point::new(b.x1, b.y0), Point::new(b.x1, b.y1), Point::new(b.x0, b.y1)];
+    let near = |p: Point, q: Point| (p - q).hypot() <= 1e-6 * (1.0 + b.width().max(b.height()));
+    // Each edge, the closing one included, runs along a side: from a corner to itself or to a
+    // neighbor (corners are in order around the box), never across it.
+    let along = |i: usize, j: usize| (i + 4 - j) % 4 != 2;
+    let mut seen = [false; 4];
+    let (mut first, mut last) = (None, None);
+    for e in path.elements() {
+        let (p, start) = match e {
+            PathEl::MoveTo(p) => (*p, true),
+            PathEl::LineTo(p) => (*p, false),
+            PathEl::ClosePath => continue,
+            PathEl::QuadTo(..) | PathEl::CurveTo(..) => return false,
+        };
+        let Some(i) = corners.iter().position(|c| near(*c, p)) else { return false };
+        if start {
+            if let (Some(f), Some(l)) = (first, last)
+                && !along(f, l)
+            {
+                return false;
+            }
+            first = Some(i);
+        } else if last.is_some_and(|l| !along(l, i)) {
+            return false;
+        }
+        last = Some(i);
+        seen[i] = true;
+    }
+    if let (Some(f), Some(l)) = (first, last)
+        && !along(f, l)
+    {
+        return false;
+    }
+    let b = b.inflate(0.5, 0.5);
+    seen.iter().all(|s| *s) && b.contains(frame.origin()) && b.contains(Point::new(frame.x1, frame.y1))
 }
 
 /// A pen: its style flags (`PS_*`), width in logical units, colour and dash entries.
@@ -68,7 +99,6 @@ pub(crate) struct PenObj {
 }
 
 impl PenObj {
-    pub const NULL: PenObj = PenObj { style: PS_NULL, width: 0.0, color: [0; 3], entries: vec![] };
     pub fn solid(color: [u8; 3]) -> Self {
         Self { style: 0, width: 0.0, color, entries: vec![] }
     }
@@ -76,28 +106,6 @@ impl PenObj {
 
 pub(crate) const PS_NULL: u32 = 5;
 const PS_GEOMETRIC: u32 = 0x0001_0000;
-
-/// A brush.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum BrushObj {
-    Null,
-    Solid([u8; 3]),
-    Hatched([u8; 3]),
-    /// A bitmap pattern (written grey).
-    Pattern,
-}
-
-impl BrushObj {
-    /// From a LOGBRUSH's style and colour.
-    pub fn from_log(style: u32, color: [u8; 3]) -> Self {
-        match style {
-            0 => Self::Solid(color),
-            1 => Self::Null,
-            2 => Self::Hatched(color),
-            _ => Self::Pattern,
-        }
-    }
-}
 
 /// A font: its height in logical units (negative: the character height, positive: the cell
 /// height), escapement (tenths of a degree), weight, italics and face.
@@ -110,35 +118,17 @@ pub(crate) struct FontObj {
     pub face: String,
 }
 
-/// A GDI object.
-#[derive(Clone, Debug)]
-pub(crate) enum Obj {
-    Pen(PenObj),
-    Brush(BrushObj),
-    Font(FontObj),
-    /// Palettes, regions, colour spaces: they take a slot but don't change the drawing.
-    Other,
-}
-
-/// The state records change, saved and restored as a whole.
+/// The drawing state.
 #[derive(Clone, Debug)]
 struct Dc {
     pen: PenObj,
-    brush: BrushObj,
+    /// The brush's color.
+    brush: [u8; 3],
     font: FontObj,
     text_color: [u8; 3],
     text_align: u32,
     fill_rule: FillRule,
     miter: f64,
-    /// Arcs run counterclockwise (the default).
-    arc_ccw: bool,
-    /// Logical → page (EMF world transform).
-    world: Affine,
-    map_mode: u32,
-    win_org: Vec2,
-    win_ext: Vec2,
-    vp_org: Vec2,
-    vp_ext: Vec2,
     clips: Vec<Arc<Clip>>,
 }
 
@@ -146,103 +136,36 @@ impl Default for Dc {
     fn default() -> Self {
         Self {
             pen: PenObj::solid([0; 3]),
-            brush: BrushObj::Solid([255; 3]),
+            brush: [255; 3],
             font: FontObj::default(),
             text_color: [0; 3],
             text_align: 0,
             fill_rule: FillRule::EvenOdd,
             miter: 10.0,
-            arc_ccw: true,
-            world: Affine::IDENTITY,
-            map_mode: 1,
-            win_org: Vec2::ZERO,
-            win_ext: Vec2::new(1.0, 1.0),
-            vp_org: Vec2::ZERO,
-            vp_ext: Vec2::new(1.0, 1.0),
             clips: vec![],
         }
     }
 }
 
-/// How an arc closes.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ArcKind {
-    Open,
-    Chord,
-    Pie,
-}
-
 pub(crate) struct Player {
     kind: Kind,
-    /// Device units (EMF) or logical units (WMF) → document points.
+    /// Picture units → document points.
     dev_to_doc: Affine,
-    /// Millimetres per device pixel (EMF's fixed mapping modes).
-    mm_per_px: f64,
     dc: Dc,
-    saved: Vec<Dc>,
-    objects: Vec<Option<Obj>>,
-    /// The lowest object slot that may be free (WMF numbering).
-    free_hint: usize,
-    /// The path being recorded (document space), whether a figure is open in it and where that
-    /// figure started (logical).
-    path: Option<BezPath>,
-    figure: bool,
-    figure_start: Point,
     /// The artboard (document space): clips holding all of it clip nothing worth keeping.
     frame: Rect,
-    /// The current position (logical).
-    pos: Point,
-    /// Lines drawn one after another outside a path bracket, not drawn yet.
+    /// Lines drawn one after another, not drawn yet.
     pending: BezPath,
     out: Drawn,
     doc: Document,
     warnings: Vec<String>,
-    skipped: usize,
     next_clip: u32,
     /// Pixels the file's bitmaps may still decode to ([`dib::MAX_FILE_PIXELS`]).
     pub pixels_left: u64,
-    /// The file holds EMF+ records (which aren't read).
-    pub emf_plus: bool,
 }
 
 fn rgb(c: [u8; 3]) -> Paint {
     Paint::solid(Color::rgb8(c[0], c[1], c[2]))
-}
-
-/// The arc of the ellipse in `r` from the ray through `start` to the ray through `end`.
-pub(crate) fn arc_path(r: Rect, start: Point, end: Point, ccw: bool, kind: ArcKind) -> BezPath {
-    let r = r.abs();
-    let c = r.center();
-    let radii = Vec2::new(r.width() / 2.0, r.height() / 2.0);
-    let mut bp = BezPath::new();
-    if radii.x <= 0.0 || radii.y <= 0.0 {
-        return bp;
-    }
-    let angle = |p: Point| ((p.y - c.y) / radii.y).atan2((p.x - c.x) / radii.x);
-    let (a0, a1) = (angle(start), angle(end));
-    let tau = std::f64::consts::TAU;
-    // Counterclockwise on a y-down device is towards smaller angles.
-    let sweep = if ccw {
-        let s = (a0 - a1).rem_euclid(tau);
-        -(if s == 0.0 { tau } else { s })
-    } else {
-        let s = (a1 - a0).rem_euclid(tau);
-        if s == 0.0 { tau } else { s }
-    };
-    let arc = kurbo::Arc { center: c, radii, start_angle: a0, sweep_angle: sweep, x_rotation: 0.0 };
-    let tol = ARC_TOLERANCE * radii.x.max(radii.y).max(1e-9);
-    if kind == ArcKind::Pie {
-        bp.move_to(c);
-        let first = c + Vec2::new(radii.x * a0.cos(), radii.y * a0.sin());
-        bp.line_to(first);
-        arc.append_iter(tol).for_each(|el| bp.push(el));
-    } else {
-        kurbo::Shape::path_elements(&arc, tol).for_each(|el| bp.push(el));
-    }
-    if kind != ArcKind::Open {
-        bp.close_path();
-    }
-    bp
 }
 
 /// A rectangle with elliptical corners `rx` × `ry`.
@@ -261,7 +184,7 @@ pub(crate) fn round_rect(r: Rect, rx: f64, ry: f64) -> BezPath {
 }
 
 impl Player {
-    fn new(kind: Kind, dev_to_doc: Affine, mm_per_px: f64, artboard: Rect) -> Self {
+    fn new(kind: Kind, dev_to_doc: Affine, artboard: Rect) -> Self {
         let side = |v: f64| if v.is_finite() { v.clamp(1.0, LIMIT) } else { 1.0 };
         let (w, h) = (side(artboard.width()), side(artboard.height()));
         let mut doc = Document::new(w, h);
@@ -269,24 +192,14 @@ impl Player {
         Self {
             kind,
             dev_to_doc,
-            mm_per_px,
             dc: Dc::default(),
-            saved: vec![],
-            objects: vec![],
-            free_hint: 0,
-            path: None,
-            figure: false,
-            figure_start: Point::ZERO,
             frame: artboard,
-            pos: Point::ZERO,
             pending: BezPath::new(),
             out: vec![],
             doc,
             warnings: vec![],
-            skipped: 0,
             next_clip: 0,
             pixels_left: dib::MAX_FILE_PIXELS,
-            emf_plus: false,
         }
     }
 
@@ -296,186 +209,17 @@ impl Player {
         }
     }
 
-    /// A record of a kind the reader doesn't know.
-    pub fn skip(&mut self) {
-        self.skipped += 1;
-    }
-
     // ---------- mapping ----------
 
-    /// Logical → document.
+    /// Picture units → document.
     fn xf(&self) -> Affine {
-        if self.kind == Kind::Wmf {
-            return self.dev_to_doc;
-        }
-        let d = &self.dc;
-        let page_to_dev = match d.map_mode {
-            // Fixed modes: millimetres a unit, y up.
-            2..=6 => {
-                let mm = [0.1, 0.01, 0.254, 0.0254, 25.4 / 1440.0][(d.map_mode - 2) as usize];
-                let s = mm / self.mm_per_px.max(1e-12);
-                Affine::translate(d.vp_org) * Affine::scale_non_uniform(s, -s) * Affine::translate(-d.win_org)
-            }
-            7 | 8 => {
-                let ratio = |v: f64, w: f64| if w.abs() > 1e-12 && v.is_finite() { v / w } else { 1.0 };
-                let (mut sx, mut sy) = (ratio(d.vp_ext.x, d.win_ext.x), ratio(d.vp_ext.y, d.win_ext.y));
-                if d.map_mode == 7 {
-                    // Isotropic: the same scale both ways, the smaller one.
-                    let s = sx.abs().min(sy.abs());
-                    (sx, sy) = (s.copysign(sx), s.copysign(sy));
-                }
-                Affine::translate(d.vp_org) * Affine::scale_non_uniform(sx, sy) * Affine::translate(-d.win_org)
-            }
-            _ => Affine::translate(d.vp_org - d.win_org),
-        };
-        self.dev_to_doc * page_to_dev * d.world
+        self.dev_to_doc
     }
 
-    /// How much logical lengths grow in the document.
+    /// How much picture lengths grow in the document.
     fn scale(&self) -> f64 {
         let s = self.xf().determinant().abs().sqrt();
         if s.is_finite() { s } else { 0.0 }
-    }
-
-    pub fn set_map_mode(&mut self, m: u32) {
-        self.dc.map_mode = m;
-    }
-    pub fn set_window_org(&mut self, x: f64, y: f64) {
-        self.dc.win_org = Vec2::new(x, y);
-    }
-    pub fn set_window_ext(&mut self, x: f64, y: f64) {
-        self.dc.win_ext = Vec2::new(x, y);
-    }
-    pub fn set_viewport_org(&mut self, x: f64, y: f64) {
-        self.dc.vp_org = Vec2::new(x, y);
-    }
-    pub fn set_viewport_ext(&mut self, x: f64, y: f64) {
-        self.dc.vp_ext = Vec2::new(x, y);
-    }
-    pub fn scale_ext(&mut self, window: bool, x: (f64, f64), y: (f64, f64)) {
-        let e = if window { &mut self.dc.win_ext } else { &mut self.dc.vp_ext };
-        if x.1 != 0.0 && y.1 != 0.0 {
-            *e = Vec2::new(e.x * x.0 / x.1, e.y * y.0 / y.1);
-        }
-    }
-    /// `SetWorldTransform` / `ModifyWorldTransform` (`mode`: 1 identity, 2 left, 3 right, 4 set).
-    pub fn world(&mut self, x: Affine, mode: u32) {
-        if !x.as_coeffs().iter().all(|v| v.is_finite()) {
-            return;
-        }
-        self.dc.world = match mode {
-            1 => Affine::IDENTITY,
-            2 => self.dc.world * x,
-            3 => x * self.dc.world,
-            _ => x,
-        };
-    }
-
-    // ---------- state ----------
-
-    pub fn set_fill_mode(&mut self, alternate: bool) {
-        self.dc.fill_rule = if alternate { FillRule::EvenOdd } else { FillRule::NonZero };
-    }
-    pub fn set_miter(&mut self, m: f64) {
-        if m.is_finite() && m >= 1.0 {
-            self.dc.miter = m;
-        }
-    }
-    pub fn set_arc_ccw(&mut self, ccw: bool) {
-        self.dc.arc_ccw = ccw;
-    }
-    pub fn set_text_color(&mut self, c: [u8; 3]) {
-        self.dc.text_color = c;
-    }
-    pub fn set_text_align(&mut self, a: u32) {
-        self.dc.text_align = a;
-    }
-
-    pub fn save(&mut self) {
-        if self.saved.len() < MAX_SAVED {
-            self.saved.push(self.dc.clone());
-        }
-    }
-
-    /// `RestoreDC(n)`: a negative `n` counts back from the latest save, a positive one is a save's
-    /// number.
-    pub fn restore(&mut self, n: i32) {
-        let len = self.saved.len();
-        let keep = if n < 0 { len.checked_sub(n.unsigned_abs() as usize) } else { (n as usize).checked_sub(1).filter(|k| *k < len) };
-        if let Some(k) = keep {
-            self.saved.truncate(k + 1);
-            if let Some(dc) = self.saved.pop() {
-                self.dc = dc;
-            }
-        }
-    }
-
-    // ---------- objects ----------
-
-    /// Put `obj` in slot `index` (EMF numbers its objects).
-    pub fn create_at(&mut self, index: u32, obj: Obj) {
-        let i = index as usize;
-        if i == 0 || i > u16::MAX as usize {
-            return;
-        }
-        if self.objects.len() <= i {
-            self.objects.resize(i + 1, None);
-        }
-        if let Some(s) = self.objects.get_mut(i) {
-            *s = Some(obj);
-        }
-    }
-
-    /// Put `obj` in the lowest free slot (WMF).
-    pub fn create(&mut self, obj: Obj) {
-        let start = self.free_hint.min(self.objects.len());
-        let i = self.objects.iter().skip(start).position(Option::is_none).map_or(self.objects.len(), |p| p + start);
-        if i > u16::MAX as usize {
-            // The table is full past the hint: the next creation looks from the end, not again
-            // through every slot.
-            self.free_hint = i;
-            return;
-        }
-        if i == self.objects.len() {
-            self.objects.push(None);
-        }
-        if let Some(s) = self.objects.get_mut(i) {
-            *s = Some(obj);
-        }
-        self.free_hint = i + 1;
-    }
-
-    pub fn delete(&mut self, index: u32) {
-        if let Some(s) = self.objects.get_mut(index as usize) {
-            *s = None;
-            self.free_hint = self.free_hint.min(index as usize);
-        }
-    }
-
-    /// Select object `index`, or a stock object (EMF: the high bit set).
-    pub fn select(&mut self, index: u32) {
-        if self.kind == Kind::Emf && index & 0x8000_0000 != 0 {
-            match index & 0x7fff_ffff {
-                0 | 18 => self.dc.brush = BrushObj::Solid([255; 3]),
-                1 => self.dc.brush = BrushObj::Solid([0xc0; 3]),
-                2 => self.dc.brush = BrushObj::Solid([0x80; 3]),
-                3 => self.dc.brush = BrushObj::Solid([0x40; 3]),
-                4 => self.dc.brush = BrushObj::Solid([0; 3]),
-                5 => self.dc.brush = BrushObj::Null,
-                6 => self.dc.pen = PenObj::solid([255; 3]),
-                7 | 19 => self.dc.pen = PenObj::solid([0; 3]),
-                8 => self.dc.pen = PenObj::NULL,
-                10..=17 => self.dc.font = FontObj::default(),
-                _ => {}
-            }
-            return;
-        }
-        match self.objects.get(index as usize).cloned().flatten() {
-            Some(Obj::Pen(p)) => self.dc.pen = p,
-            Some(Obj::Brush(b)) => self.dc.brush = b,
-            Some(Obj::Font(f)) => self.dc.font = f,
-            _ => {}
-        }
     }
 
     // ---------- output ----------
@@ -491,19 +235,8 @@ impl Player {
         self.out.push((self.dc.clips.clone(), node));
     }
 
-    fn fill_paint(&mut self) -> Option<Paint> {
-        match self.dc.brush.clone() {
-            BrushObj::Null => None,
-            BrushObj::Solid(c) => Some(rgb(c)),
-            BrushObj::Hatched(c) => {
-                self.warn(HATCHES);
-                Some(rgb(c))
-            }
-            BrushObj::Pattern => {
-                self.warn(PATTERN_BRUSHES);
-                Some(rgb([0x80; 3]))
-            }
-        }
+    fn fill_paint(&self) -> Paint {
+        rgb(self.dc.brush)
     }
 
     fn stroke_layer(&self) -> Option<StrokeLayer> {
@@ -549,8 +282,8 @@ impl Player {
             return;
         }
         let mut items = vec![];
-        if fill && let Some(p) = self.fill_paint() {
-            items.push(AppearanceItem::Fill(FillLayer::new(p)));
+        if fill {
+            items.push(AppearanceItem::Fill(FillLayer::new(self.fill_paint())));
         }
         if stroke && let Some(st) = self.stroke_layer() {
             items.push(AppearanceItem::Stroke(st));
@@ -573,124 +306,7 @@ impl Player {
         }
     }
 
-    /// A figure in logical units: added to the path being recorded, else drawn (filled when it is
-    /// an area).
-    pub fn figure(&mut self, mut bp: BezPath, area: bool) {
-        bp.apply_affine(self.xf());
-        match &mut self.path {
-            Some(path) => {
-                path.extend(bp);
-                self.figure = false;
-            }
-            None => self.draw(bp, area, true),
-        }
-    }
-
-    /// Polygon / Polyline (and Bézier ones): `pts` in logical units.
-    pub fn poly(&mut self, pts: &[Point], closed: bool, bezier: bool) {
-        let Some((first, rest)) = pts.split_first() else { return };
-        let mut bp = BezPath::new();
-        bp.move_to(*first);
-        if bezier {
-            for c in rest.as_chunks::<3>().0 {
-                bp.curve_to(c[0], c[1], c[2]);
-            }
-        } else {
-            rest.iter().for_each(|p| bp.line_to(*p));
-        }
-        if closed {
-            bp.close_path();
-        }
-        self.figure(bp, closed);
-    }
-
-    /// Several polygons (one area) or polylines.
-    pub fn poly_poly(&mut self, polys: &[Vec<Point>], closed: bool) {
-        let mut bp = BezPath::new();
-        for p in polys {
-            let Some((first, rest)) = p.split_first() else { continue };
-            bp.move_to(*first);
-            rest.iter().for_each(|q| bp.line_to(*q));
-            if closed {
-                bp.close_path();
-            }
-        }
-        self.figure(bp, closed);
-    }
-
-    pub fn move_to(&mut self, p: Point) {
-        self.pos = p;
-        self.figure = false;
-    }
-
-    /// LineTo / PolylineTo / PolyBezierTo: from the current position through `pts` (logical).
-    pub fn poly_to(&mut self, pts: &[Point], bezier: bool) {
-        let Some(last) = pts.last().copied() else { return };
-        let xf = self.xf();
-        let start = xf * self.pos;
-        let target = match &mut self.path {
-            Some(path) => {
-                if !self.figure {
-                    path.move_to(start);
-                    self.figure = true;
-                    self.figure_start = self.pos;
-                }
-                path
-            }
-            None => {
-                if self.pending.elements().last().and_then(|e| e.end_point()) != Some(start) {
-                    self.pending.move_to(start);
-                }
-                &mut self.pending
-            }
-        };
-        if bezier {
-            for c in pts.as_chunks::<3>().0 {
-                target.curve_to(xf * c[0], xf * c[1], xf * c[2]);
-            }
-        } else {
-            pts.iter().for_each(|p| target.line_to(xf * *p));
-        }
-        self.pos = last;
-    }
-
-    pub fn arc(&mut self, r: Rect, start: Point, end: Point, kind: ArcKind) {
-        let bp = arc_path(r, start, end, self.dc.arc_ccw, kind);
-        self.figure(bp, kind != ArcKind::Open);
-    }
-
-    // ---------- paths and clips ----------
-
-    pub fn begin_path(&mut self) {
-        self.path = Some(BezPath::new());
-        self.figure = false;
-    }
-    pub fn end_path(&mut self) {
-        // The path stays until it is filled, stroked or made the clip.
-    }
-    pub fn close_figure(&mut self) {
-        if let Some(p) = &mut self.path
-            && self.figure
-        {
-            p.close_path();
-            self.figure = false;
-            self.pos = self.figure_start;
-        }
-    }
-    pub fn abort_path(&mut self) {
-        self.path = None;
-    }
-
-    /// FillPath / StrokePath / StrokeAndFillPath.
-    pub fn paint_path(&mut self, fill: bool, stroke: bool) {
-        if let Some(mut bp) = self.path.take() {
-            // Filling closes the open figure.
-            if fill && self.figure {
-                bp.close_path();
-            }
-            self.draw(bp, fill, stroke);
-        }
-    }
+    // ---------- clips ----------
 
     fn push_clip(&mut self, path: BezPath, rule: FillRule, replace: bool) {
         if replace {
@@ -699,10 +315,7 @@ impl Player {
         if !sane(path.bounding_box()) {
             return self.warn(FAR_AWAY);
         }
-        // A rectangle around the whole picture (what writers clip to first) clips nothing in it.
-        let lines = path.elements().iter().all(|e| !matches!(e, PathEl::QuadTo(..) | PathEl::CurveTo(..)));
-        let around = path.bounding_box().inflate(0.5, 0.5);
-        if lines && path.elements().len() <= 6 && around.contains(self.frame.origin()) && around.contains(Point::new(self.frame.x1, self.frame.y1)) {
+        if around(&path, self.frame) {
             return;
         }
         if self.dc.clips.len() >= MAX_NEST {
@@ -712,69 +325,10 @@ impl Player {
         self.dc.clips.push(Arc::new(Clip { id: self.next_clip, region: Some((path, rule)) }));
     }
 
-    /// SelectClipPath (`mode`: 1 and, 5 copy; the others cut out, which isn't read).
-    pub fn clip_path(&mut self, mode: u32) {
-        let Some(bp) = self.path.take() else { return };
-        match mode {
-            1 => self.push_clip(bp, self.dc.fill_rule, false),
-            5 => self.push_clip(bp, self.dc.fill_rule, true),
-            _ => self.warn(EXCLUDED_CLIPS),
-        }
-    }
-
-    /// IntersectClipRect (logical units).
-    pub fn clip_rect(&mut self, r: Rect) {
-        let mut bp = shapes::rectangle(r.abs()).to_bezpath();
-        bp.apply_affine(self.xf());
-        self.push_clip(bp, FillRule::NonZero, false);
-    }
-
-    /// A clip region of `rects` in device units (`mode` as [`Self::clip_path`]); none with mode
-    /// copy removes the clip.
-    pub fn clip_region(&mut self, rects: &[Rect], mode: u32) {
-        if rects.is_empty() {
-            if mode == 5 {
-                self.dc.clips.clear();
-            }
-            return;
-        }
-        let mut bp = BezPath::new();
-        for r in rects {
-            bp.extend(shapes::rectangle(r.abs()).to_bezpath());
-        }
-        bp.apply_affine(self.dev_to_doc);
-        match mode {
-            1 => self.push_clip(bp, FillRule::NonZero, false),
-            5 => self.push_clip(bp, FillRule::NonZero, true),
-            _ => self.warn(EXCLUDED_CLIPS),
-        }
-    }
-
-    pub fn exclude_clip(&mut self) {
-        self.warn(EXCLUDED_CLIPS);
-    }
-
-    // ---------- blits, images and text ----------
-
-    /// A raster operation without a source over `dest` (logical): the brush, white or black.
-    pub fn pattern_blit(&mut self, dest: Rect, rop: u32) {
-        let brush = match rop {
-            PATCOPY => self.dc.brush.clone(),
-            WHITENESS => BrushObj::Solid([255; 3]),
-            BLACKNESS => BrushObj::Solid([0; 3]),
-            _ => return self.skip(),
-        };
-        let pen = std::mem::replace(&mut self.dc.pen, PenObj::NULL);
-        let outer = std::mem::replace(&mut self.dc.brush, brush);
-        let mut bp = shapes::rectangle(dest.abs()).to_bezpath();
-        bp.apply_affine(self.xf());
-        self.draw(bp, true, false);
-        self.dc.pen = pen;
-        self.dc.brush = outer;
-    }
+    // ---------- images and text ----------
 
     /// An image whose source rectangle `src` (pixels, from the top-left) is drawn into `dest`
-    /// (logical: origin and signed size) with raster operation `rop`, at `opacity`.
+    /// (picture units: origin and signed size) with raster operation `rop`, at `opacity`.
     pub fn image(&mut self, img: Result<Rgba, String>, src: Rect, dest: Rect, rop: u32, opacity: f64) {
         if rop != SRCCOPY {
             self.warn(SKIPPED_ROPS);
@@ -793,8 +347,8 @@ impl Player {
         self.image_xf(img, Affine::translate((dest.x0, dest.y0)) * Affine::scale_non_uniform(dest.width() / w, dest.height() / h), opacity);
     }
 
-    /// An image placed by `xf` (its pixels, from the top-left, → logical), at `opacity`. An image
-    /// that `xf` flattens or sends past finite numbers is left out, and adds nothing to the
+    /// An image placed by `xf` (its pixels, from the top-left, → picture units), at `opacity`. An
+    /// image that `xf` flattens or sends past finite numbers is left out, and adds nothing to the
     /// document's images.
     pub(crate) fn image_xf(&mut self, img: Rgba, xf: Affine, opacity: f64) {
         if img.width == 0 || img.height == 0 {
@@ -814,14 +368,13 @@ impl Player {
         self.push(n);
     }
 
-    /// Text at `at` (logical; the current position with TA_UPDATECP) in the current font.
+    /// Text at `at` (picture units) in the current font.
     pub fn text(&mut self, at: Point, s: &str) {
         let s: String = s.chars().filter(|c| *c != '\0').collect();
         if s.trim().is_empty() {
             return;
         }
         let align = self.dc.text_align;
-        let at = if align & 1 != 0 { self.pos } else { at };
         let f = self.dc.font.clone();
         let k = self.scale();
         // A negative height is the em; a positive one the cell (the em and the internal leading).
@@ -863,18 +416,7 @@ impl Player {
     /// The document: what was drawn on one layer, clipped art in clipping groups.
     fn finish(mut self) -> Imported {
         self.flush();
-        if self.skipped > 0 {
-            let n = self.skipped;
-            self.warnings.push(format!(
-                "{n} record{} of kinds VectorCraft doesn't read {} skipped",
-                if n == 1 { "" } else { "s" },
-                if n == 1 { "was" } else { "were" }
-            ));
-        }
         let out = std::mem::take(&mut self.out);
-        if out.is_empty() && self.emf_plus {
-            self.warnings.push("the picture is drawn with EMF+ records, which aren't read yet: nothing was imported".into());
-        }
         let children = nest(&mut self.doc, out);
         let mut layer = Node::layer(self.doc.alloc_id(), "Layer 1", LayerColor::Preset(0));
         if let Some(c) = layer.children_mut() {
@@ -904,33 +446,7 @@ fn crop(img: Rgba, src: Rect) -> Rgba {
     Rgba { width: x1 - x0, height: y1 - y0, pixels }
 }
 
-/// Read a metafile.
+/// Read an EMF or WMF file.
 pub(crate) fn import(bytes: &[u8]) -> Result<Imported, String> {
-    match crate::sniff(bytes) {
-        Some(Kind::Emf) => emf::play(bytes),
-        Some(Kind::Wmf) => wmf::play(bytes),
-        None => Err("not an EMF or WMF file".into()),
-    }
-}
-
-#[cfg(test)]
-mod table_tests {
-    use super::*;
-
-    /// Once the WMF table is full, a rejected creation leaves the hint at its end, so the next
-    /// ones don't scan every slot again; a freed slot is still found.
-    #[test]
-    fn a_full_object_table_is_not_rescanned() {
-        let mut p = Player::new(Kind::Wmf, Affine::IDENTITY, 1.0, Rect::new(0.0, 0.0, 10.0, 10.0));
-        for _ in 0..=u16::MAX as usize + 1 {
-            p.create(Obj::Other);
-        }
-        p.delete(5);
-        p.create(Obj::Other);
-        p.create(Obj::Other);
-        assert!(p.free_hint > u16::MAX as usize);
-        p.delete(7);
-        p.create(Obj::Other);
-        assert!(p.objects[7].is_some());
-    }
+    picture::import(bytes)
 }

@@ -7700,10 +7700,11 @@ and is missing from the picture" once for all such images.
 
 `document.open` and `file.place` read `.emf` and `.wmf` (placeable or not) into one artboard, the picture's frame, and
 one layer: paths with their fills and strokes (pens become strokes with caps, joins and dashes), clipping groups,
-images and point type in the font the file names. Records VectorCraft doesn't read (EMF+ drawing among them) are
-skipped with one warning. `clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard
-for `edit.paste`; the app pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's
-clipboard service offers it (the Windows desktop service doesn't read metafiles yet).
+images and point type in the font the file names. An EMF that draws with EMF+ records is read from them. Hatched and
+pattern brushes fill with their average color. Records VectorCraft doesn't read are skipped with one warning.
+`clipboard.importEmf {dataBase64, center?}` loads an EMF or WMF picture into the clipboard for `edit.paste`; the app
+pastes `image/emf` from the system clipboard ahead of text and bitmaps when the platform's clipboard service offers it
+(the Windows desktop service doesn't read metafiles yet).
 
 ```json
 {"name":"export","arguments":{"path":"/tmp/logo.emf"}}

@@ -151,13 +151,14 @@ fn dashes_gradients_and_images_round_trip_through_emf() {
 // ---------- hand-built records ----------
 
 /// An EMF of `records` (type, body) with a frame of `w` × `h` hundredths of a millimetre on a
-/// device of 100 pixels a millimetre.
+/// device of 100 pixels a millimetre. Bodies are padded to a multiple of 4 bytes.
 fn hand_emf(w: i32, h: i32, records: &[(u32, Vec<u8>)]) -> Vec<u8> {
     let mut o = Out::default();
     let rec = |o: &mut Out, kind: u32, body: &[u8]| {
         o.u32(kind);
-        o.u32(8 + body.len() as u32);
+        o.u32(8 + body.len().next_multiple_of(4) as u32);
         o.bytes(body);
+        o.pad(4);
     };
     let mut head = Out::default();
     head.bytes(&[0; 16]);
@@ -337,6 +338,18 @@ fn wmf_window_is_mapped_onto_the_placeable_box() {
 }
 
 #[test]
+fn wmf_without_a_placeable_header_is_read_at_1440_units_an_inch() {
+    // The window is 2880 × 1440 units: 2 × 1 inches. The rectangle is its left half.
+    let records = vec![(0x020B, le16(&[0, 0])), (0x020C, le16(&[1440, 2880])), (0x041B, le16(&[1440, 1440, 0, 0]))];
+    let plain = hand_wmf(2880, 1440, &records)[22..].to_vec();
+    let back = import(&plain).unwrap();
+    assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 144.0, 72.0), 1e-6), "{:?}", back.document.artboards[0].rect);
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1);
+    assert!(near(p[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 72.0, 72.0), 1e-6), "{:?}", p[0].geometric_bounds());
+}
+
+#[test]
 fn damaged_files_fail_or_import_partly() {
     let good = emf(&sample()).bytes;
     for cut in [0, 8, 50, 107, 108, 120, good.len() / 2, good.len() - 4] {
@@ -371,19 +384,29 @@ fn png_stretch_dibits(png: &[u8]) -> Vec<u8> {
 }
 
 #[test]
-fn embedded_bitmaps_share_one_pixel_budget() {
-    // #3600: each bitmap was bounded but not their total, so many records of the largest one a record
-    // may hold cost minutes. Those past the file's budget are left out before they're decoded.
+fn oversized_embedded_bitmaps_are_left_out_before_decoding() {
+    // #3600: many records of the largest bitmap a record may hold cost minutes. Each of these claims
+    // more pixels than one image may have, so the reader leaves it out from its header. (The reader's
+    // budget for all the images of one file is tested where the reader is.)
     let records = vec![(81, png_stretch_dibits(&png_claiming(1 << 13, 1 << 13))); 5];
     let back = import(&hand_emf(5000, 3000, &records)).unwrap();
-    assert!(back.warnings.iter().any(|w| w == "images past the most pixels one file may hold were left out"), "{:?}", back.warnings);
+    assert!(!all(&back.document).iter().any(|n| matches!(n.kind, NodeKind::Image(_))));
 }
 
 #[test]
 fn clips_nest_only_so_deep() {
-    // Each clip inside the last one used to nest a clipping group one level deeper, past the stack.
-    let mut records = vec![(30, le(&[0, 0, 1500, 1500])); 200_000];
-    records.push((43, le(&[100, 100, 200, 200])));
+    // Each clip inside the last one nests a clipping group one level deeper; past the stack they
+    // are left out with a warning.
+    let mut records = vec![];
+    // As many as the reader keeps: one more than the stack.
+    for i in 0..32 {
+        // BEGINPATH, a rectangle a little smaller each time, ENDPATH, SELECTCLIPPATH (RGN_AND).
+        records.push((59, vec![]));
+        records.push((43, le(&[100 + i, 100 + i, 2000 - i, 2000 - i])));
+        records.push((60, vec![]));
+        records.push((67, le(&[1])));
+    }
+    records.push((43, le(&[500, 500, 600, 600])));
     let back = import(&hand_emf(5000, 3000, &records)).unwrap();
     let mut depth = 0;
     let mut n = back.document.layers[0].children().unwrap()[0].clone();
@@ -393,4 +416,267 @@ fn clips_nest_only_so_deep() {
     }
     assert_eq!(depth, vectorcraft_doc::clipnest::MAX_NEST);
     assert!(back.warnings.iter().any(|w| w.contains("clips nested more than")), "{:?}", back.warnings);
+    // A hostile count of clip records: each one used to nest a clipping group one level deeper,
+    // past the stack. They make one clip.
+    let mut records = vec![(30, le(&[0, 0, 1500, 1500])); 200_000];
+    records.push((43, le(&[100, 100, 200, 200])));
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let layer = back.document.layers[0].children().unwrap();
+    assert_eq!(layer.len(), 1);
+    let NodeKind::Group { children, clip: true } = &layer[0].kind else { panic!("a clipping group: {:?}", layer[0].kind) };
+    assert!(children.iter().all(|c| !matches!(c.kind, NodeKind::Group { .. })), "one level");
+    assert_eq!(paths(&back.document).len(), 1);
+}
+
+/// An EMR_COMMENT holding EMF+ `records` (type, flags, data).
+fn emf_plus(records: &[(u16, u16, Vec<u8>)]) -> Vec<u8> {
+    let mut plus = Out::default();
+    for (kind, flags, data) in records {
+        plus.u16(*kind);
+        plus.u16(*flags);
+        plus.u32(12 + data.len() as u32);
+        plus.u32(data.len() as u32);
+        plus.bytes(data);
+    }
+    let mut body = Out::default();
+    body.u32(4 + plus.len() as u32);
+    // "EMF+"
+    body.u32(0x2B46_4D45);
+    body.bytes(&plus.0);
+    body.0
+}
+
+fn le_f32(values: &[f32]) -> Vec<u8> {
+    values.iter().flat_map(|v| v.to_le_bytes()).collect()
+}
+
+#[test]
+fn emf_plus_only_pictures_import_their_drawing() {
+    // An EMF+ only file: its EMF records draw nothing, so it was imported empty with a warning.
+    // EmfPlusHeader (version, flags, 96 dpi), FillRects with an inline green color (flag S) and one
+    // rectangle of 10 × 5 mm at (10, 10) mm in device pixels, EmfPlusEndOfFile.
+    let header = le(&[0xDBC0_1002u32 as i32, 0, 96, 96]);
+    let rects = [le(&[0xFF00_FF00u32 as i32, 1]), le_f32(&[1000.0, 1000.0, 1000.0, 500.0])].concat();
+    let comment = emf_plus(&[(0x4001, 0, header), (0x400A, 0x8000, rects), (0x4002, 0, vec![])]);
+    let back = import(&hand_emf(5000, 3000, &[(70, comment)])).unwrap();
+    assert!(back.warnings.is_empty(), "{:?}", back.warnings);
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1);
+    assert_eq!(fill_rgb(&p[0]), Some([0, 255, 0]));
+    let mm = 72.0 / 25.4;
+    let b = p[0].geometric_bounds().unwrap();
+    assert!(near(b, Rect::new(10.0 * mm, 10.0 * mm, 20.0 * mm, 15.0 * mm), 0.01), "{b:?}");
+}
+
+#[test]
+fn hatched_brushes_fill_with_their_average_color() {
+    // CREATEBRUSHINDIRECT: a hatched (style 2) blue brush, selected; a null pen; a rectangle. The
+    // hatch is drawn over the white background, so the average is a light blue.
+    let records = vec![(39, le(&[1, 2, 0x00ff_0000, 0])), (37, le(&[1])), (37, le(&[0x8000_0008u32 as i32])), (43, le(&[1000, 1000, 2000, 1500]))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(back.warnings, vec!["hatched and pattern brushes are filled with their average color".to_string()]);
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1);
+    let [r, g, b] = fill_rgb(&p[0]).unwrap();
+    assert!(b == 255 && r == g && r > 0 && r < 255, "{:?}", [r, g, b]);
+    // With a transparent background (SETBKMODE 1) the hatch is blue with gaps: a translucent fill.
+    let mut records = records;
+    records.insert(0, (18, le(&[1])));
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let p = paths(&back.document);
+    assert_eq!(fill_rgb(&p[0]), Some([0, 0, 255]));
+    let AppearanceItem::Fill(f) = &p[0].appearance.items[0] else { panic!("a fill") };
+    assert!(f.opacity > 0.0 && f.opacity < 1.0, "{}", f.opacity);
+}
+
+#[test]
+fn text_keeps_a_stretch_across() {
+    // A world transform twice as wide as it is high, a 10 mm font and "Hi".
+    let mut text = vec![0; 16];
+    text.extend(le(&[1, 0, 0]));
+    text.extend(le(&[1000, 1500, 2, 76, 0, 0, 0, 0, 0, 0]));
+    text.extend("Hi".encode_utf16().flat_map(u16::to_le_bytes));
+    let mut font = le(&[2, -1000, 0, 0, 0, 400]);
+    font.extend([0u8; 8]);
+    font.extend("Arial".encode_utf16().chain(std::iter::repeat_n(0, 27)).flat_map(u16::to_le_bytes));
+    let world = [2.0f32, 0.0, 0.0, 1.0, 0.0, 0.0].iter().flat_map(|v| v.to_le_bytes()).collect();
+    let records = vec![(35, world), (82, font), (37, le(&[2])), (84, text)];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let t = all(&back.document)
+        .into_iter()
+        .find_map(|n| match n.kind {
+            NodeKind::Text(t) => Some(t),
+            _ => None,
+        })
+        .unwrap();
+    let mm = 72.0 / 25.4;
+    assert!((t.runs[0].style.size - 10.0 * mm).abs() < 0.01, "{}", t.runs[0].style.size);
+    let [a, b, c, d, ..] = t.xf.as_coeffs();
+    assert!((a - 2.0).abs() < 1e-6 && b.abs() < 1e-6 && c.abs() < 1e-6 && (d - 1.0).abs() < 1e-6, "{:?}", t.xf);
+}
+
+#[test]
+fn a_clip_whose_box_holds_the_picture_still_clips() {
+    // A diamond around the middle of the picture, whose box holds the whole frame but which cuts
+    // off its corners: BEGINPATH, POLYGON, ENDPATH, SELECTCLIPPATH (RGN_COPY), then a rectangle.
+    let mut diamond = le(&[0, 0, 0, 0, 4]);
+    diamond.extend(le(&[2500, -500, 5500, 1500, 2500, 3500, -500, 1500]));
+    // A bow tie through the four corners of a box around the picture.
+    let mut bow_tie = le(&[0, 0, 0, 0, 4]);
+    bow_tie.extend(le(&[-500, -500, 5500, 3500, 5500, -500, -500, 3500]));
+    for clip in [diamond, bow_tie] {
+        let records = vec![(59, vec![]), (3, clip), (60, vec![]), (67, le(&[5])), (43, le(&[0, 0, 5000, 3000]))];
+        let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+        let layer = back.document.layers[0].children().unwrap();
+        assert_eq!(layer.len(), 1);
+        assert!(matches!(layer[0].kind, NodeKind::Group { clip: true, .. }), "{:?}", layer[0].kind);
+    }
+}
+
+#[test]
+fn dual_emf_plus_files_draw_their_emf_plus_records() {
+    // A dual file (header flag 1): a translucent red EMF+ fill, and a plain rectangle that is only
+    // the fallback for readers of plain records.
+    let header = le(&[0xDBC0_1002u32 as i32, 0, 96, 96]);
+    let rects = [le(&[0x80FF_0000u32 as i32, 1]), le_f32(&[1000.0, 1000.0, 1000.0, 500.0])].concat();
+    let comment = emf_plus(&[(0x4001, 1, header), (0x400A, 0x8000, rects), (0x4002, 0, vec![])]);
+    let back = import(&hand_emf(5000, 3000, &[(70, comment), (43, le(&[3000, 1000, 4000, 2000]))])).unwrap();
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1);
+    assert_eq!(fill_rgb(&p[0]), Some([255, 0, 0]));
+    let AppearanceItem::Fill(f) = &p[0].appearance.items[0] else { panic!("a fill") };
+    assert!((f.opacity - 128.0 / 255.0).abs() < 1e-6, "{}", f.opacity);
+}
+
+#[test]
+fn pattern_brushes_fill_with_their_average_color() {
+    // CREATEDIBPATTERNBRUSHPT: a 2 × 2 tile of 24-bit pixels, two red and two blue (bottom-up rows
+    // padded to 4 bytes); selected, a null pen, a rectangle.
+    let mut brush = le(&[1, 0, 32, 40, 72, 16]);
+    brush.extend(le(&[40, 2, 2, 0x0018_0001, 0, 0, 0, 0, 0, 0]));
+    brush.extend([0, 0, 255, 255, 0, 0, 0, 0, 255, 0, 0, 0, 0, 255, 0, 0]);
+    let records = vec![(94, brush), (37, le(&[1])), (37, le(&[0x8000_0008u32 as i32])), (43, le(&[1000, 1000, 2000, 1500]))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    assert_eq!(back.warnings, vec!["hatched and pattern brushes are filled with their average color".to_string()]);
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1);
+    let [r, g, b] = fill_rgb(&p[0]).unwrap();
+    assert!((126..=128).contains(&r) && g == 0 && (126..=128).contains(&b), "{:?}", [r, g, b]);
+}
+
+#[test]
+fn clipped_text_is_clipped_to_its_rectangle() {
+    // EXTTEXTOUTW with ETO_CLIPPED and a rectangle of 9–12 × 10–16 mm, in an underlined and struck
+    // through font.
+    let mut text = vec![0; 16];
+    text.extend(le(&[1, 0, 0]));
+    text.extend(le(&[1000, 1500, 2, 76, 4, 900, 1000, 1200, 1600, 0]));
+    text.extend("Hi".encode_utf16().flat_map(u16::to_le_bytes));
+    let mut font = le(&[2, -1000, 0, 0, 0, 400]);
+    font.extend([0, 1, 1, 0, 0, 0, 0, 0]);
+    font.extend("Arial".encode_utf16().chain(std::iter::repeat_n(0, 27)).flat_map(u16::to_le_bytes));
+    let mut records = vec![(82, font), (37, le(&[2])), (84, text)];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let layer = back.document.layers[0].children().unwrap();
+    assert_eq!(layer.len(), 1);
+    let NodeKind::Group { children, clip: true } = &layer[0].kind else { panic!("a clipping group: {:?}", layer[0].kind) };
+    let mm = 72.0 / 25.4;
+    let own = Rect::new(9.0 * mm, 10.0 * mm, 12.0 * mm, 16.0 * mm);
+    assert!(near(children[0].geometric_bounds().unwrap(), own, 0.01));
+    let NodeKind::Text(t) = &children[1].kind else { panic!("text") };
+    assert!(t.runs[0].style.underline && t.runs[0].style.strikethrough);
+    // Under clip paths nested as deep as the stack, the text's own clip is still the innermost.
+    for i in 0..32 {
+        records.insert(0, (67, le(&[1])));
+        records.insert(0, (60, vec![]));
+        records.insert(0, (43, le(&[100 + i, 100 + i, 4000 - i, 2500 - i])));
+        records.insert(0, (59, vec![]));
+    }
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let mut n = back.document.layers[0].children().unwrap()[0].clone();
+    while let NodeKind::Group { children, clip: true } = &n.kind
+        && matches!(children.last().map(|c| &c.kind), Some(NodeKind::Group { .. }))
+    {
+        n = children.last().unwrap().clone();
+    }
+    let NodeKind::Group { children, clip: true } = &n.kind else { panic!("a clipping group: {:?}", n.kind) };
+    assert!(near(children[0].geometric_bounds().unwrap(), own, 0.01), "{:?}", children[0].geometric_bounds());
+    assert!(matches!(children[1].kind, NodeKind::Text(_)));
+}
+
+#[test]
+fn excluded_clip_rectangles_clip() {
+    // EXCLUDECLIPRECT cuts the top-left of the picture out of the clip; the rectangle crosses it.
+    // The clip it cuts from is the picture's bounds (5000 × 3000 device pixels).
+    let records = vec![(29, le(&[0, 0, 1500, 1500])), (43, le(&[1000, 1000, 2000, 1500]))];
+    let mut bytes = hand_emf(5000, 3000, &records);
+    for (i, v) in [0i32, 0, 5000, 3000].iter().enumerate() {
+        bytes[8 + i * 4..12 + i * 4].copy_from_slice(&v.to_le_bytes());
+    }
+    let back = import(&bytes).unwrap();
+    assert!(back.warnings.is_empty(), "{:?}", back.warnings);
+    let layer = back.document.layers[0].children().unwrap();
+    assert_eq!(layer.len(), 1);
+    assert!(matches!(layer[0].kind, NodeKind::Group { clip: true, .. }), "{:?}", layer[0].kind);
+}
+
+#[test]
+fn shapes_under_the_same_clip_share_one_clipping_group() {
+    let records = vec![(30, le(&[0, 0, 1500, 1500])), (43, le(&[100, 100, 200, 200])), (43, le(&[300, 300, 400, 400]))];
+    let back = import(&hand_emf(5000, 3000, &records)).unwrap();
+    let layer = back.document.layers[0].children().unwrap();
+    assert_eq!(layer.len(), 1);
+    let NodeKind::Group { children, clip: true } = &layer[0].kind else { panic!("a clipping group: {:?}", layer[0].kind) };
+    assert_eq!(children.len(), 3, "the clip and both rectangles");
+}
+
+#[test]
+fn a_record_whose_size_is_not_a_multiple_of_4_ends_the_file() {
+    let records = vec![(43, le(&[100, 100, 200, 200])), (43, le(&[300, 300, 400, 400])), (43, le(&[500, 500, 600, 600]))];
+    let mut bytes = hand_emf(5000, 3000, &records);
+    // The second rectangle's size, after the header and the first rectangle.
+    let header = u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize;
+    let first = u32::from_le_bytes(bytes[header + 4..header + 8].try_into().unwrap()) as usize;
+    let at = header + first + 4;
+    let size = u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+    bytes[at..at + 4].copy_from_slice(&(size + 2).to_le_bytes());
+    let back = import(&bytes).unwrap();
+    assert_eq!(paths(&back.document).len(), 1);
+    assert_eq!(back.warnings, vec!["the file ends early: what it held was imported".to_string()]);
+}
+
+#[test]
+fn wmf_with_an_inverted_placeable_box_is_read_at_its_units_an_inch() {
+    // The box runs from right to left, so it gives no size: the window (1440 units square, one inch
+    // at the header's 1440 units an inch) does. The rectangle is its top-left quarter.
+    let records = vec![(0x020B, le16(&[0, 0])), (0x020C, le16(&[1440, 1440])), (0x041B, le16(&[720, 720, 0, 0]))];
+    let mut bytes = hand_wmf(1440, 1440, &records);
+    bytes[6..8].copy_from_slice(&1440i16.to_le_bytes());
+    bytes[10..12].copy_from_slice(&0i16.to_le_bytes());
+    let back = import(&bytes).unwrap();
+    assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 72.0, 72.0), 1e-6), "{:?}", back.document.artboards[0].rect);
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1);
+    assert!(near(p[0].geometric_bounds().unwrap(), Rect::new(0.0, 0.0, 36.0, 36.0), 1e-6), "{:?}", p[0].geometric_bounds());
+}
+
+#[test]
+fn emf_without_a_frame_is_read_at_its_device_resolution() {
+    // An empty frame, and bounds of 5000 × 3000 device pixels at 100 pixels a millimetre.
+    let mut bytes = hand_emf(0, 0, &[(43, le(&[1000, 1000, 2000, 1500]))]);
+    for (i, v) in [0i32, 0, 5000, 3000].iter().enumerate() {
+        bytes[8 + i * 4..12 + i * 4].copy_from_slice(&v.to_le_bytes());
+    }
+    let back = import(&bytes).unwrap();
+    let mm = 72.0 / 25.4;
+    assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 50.0 * mm, 30.0 * mm), 0.01), "{:?}", back.document.artboards[0].rect);
+    let p = paths(&back.document);
+    assert_eq!(p.len(), 1);
+    assert!(near(p[0].geometric_bounds().unwrap(), Rect::new(10.0 * mm, 10.0 * mm, 20.0 * mm, 15.0 * mm), 0.01), "{:?}", p[0].geometric_bounds());
+    // A device 50 mm high: 200 pixels a millimetre down, so everything is half as tall.
+    bytes[84..88].copy_from_slice(&50i32.to_le_bytes());
+    let back = import(&bytes).unwrap();
+    assert!(near(back.document.artboards[0].rect, Rect::new(0.0, 0.0, 50.0 * mm, 15.0 * mm), 0.01), "{:?}", back.document.artboards[0].rect);
+    let p = paths(&back.document);
+    assert!(near(p[0].geometric_bounds().unwrap(), Rect::new(10.0 * mm, 5.0 * mm, 20.0 * mm, 7.5 * mm), 0.01), "{:?}", p[0].geometric_bounds());
 }

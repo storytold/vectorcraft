@@ -2934,6 +2934,24 @@ proptest! {
     }
 
     #[test]
+    fn random_emf_plus_records_never_panic(records in prop::collection::vec((0x4001u16..0x403B, any::<u16>(), arb_body()), 0..32)) {
+        // One comment of EMF+ records (type, flags, data) after an EmfPlusHeader.
+        let mut plus = vec![];
+        let header = (0x4001u16, 0u16, [0xDBC0_1002u32, 0, 96, 96].iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>());
+        for (kind, flags, data) in std::iter::once(&header).chain(&records) {
+            plus.extend(kind.to_le_bytes());
+            plus.extend(flags.to_le_bytes());
+            plus.extend((12 + data.len() as u32).to_le_bytes());
+            plus.extend((data.len() as u32).to_le_bytes());
+            plus.extend(data);
+        }
+        let mut comment = (4 + plus.len() as u32).to_le_bytes().to_vec();
+        comment.extend(b"EMF+");
+        comment.extend(plus);
+        survive_metafile("EMF+ records", "x.emf", &emf_of(&[(70, comment)]))?;
+    }
+
+    #[test]
     fn pasted_metafiles_never_panic(which in 0usize..2, cut in 0usize..200_000, edits in prop::collection::vec((0usize..200_000, any::<u8>()), 0..12)) {
         paste_from_elsewhere("clipboard.importEmf", json!({"dataBase64": mutated_b64(metafile_samples()[which].clone(), cut, &edits)}))?;
     }
