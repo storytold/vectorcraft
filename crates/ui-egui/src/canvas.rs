@@ -15,6 +15,7 @@ use crate::stylus::StylusFeed;
 use crate::theme::{self, Tokens};
 use crate::{CacheKey, VectorcraftApp, now_ms, widgets};
 
+mod alternates_bar;
 mod artboards;
 mod context;
 mod contour_bar;
@@ -441,6 +442,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if app.ui.screen_mode < 3 {
         contour_bar::contour_bar(app, ui, &xf);
+        // After the task bar, which the row of character alternates keeps clear of.
+        alternates_bar::alternates_bar(app, ui, &xf);
     }
     if app.ui.screen_mode < 3 {
         crate::free_transform::show(app, ui, xf.rect);
