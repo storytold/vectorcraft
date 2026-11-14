@@ -1,12 +1,9 @@
 use super::containers::close;
 use super::document::slot_of;
-use super::types::{
-    BLENDS, FLIP, Frame, GRAPH_OPS, GRAPH_PLAIN, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, MAX_TAG_TEXT, MAX_TAGS, Place, URL_TAG,
-    line_width,
-};
+use super::types::{BLENDS, FLIP, Frame, GRAPH_UNENDED, IGNORED, Kind, MAX_DEPTH, MAX_NODES, MAX_TAG_TEXT, MAX_TAGS, Place, URL_TAG, line_width};
 use super::{
-    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, Graph, HashMap,
-    HashSet, Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
+    Affine, Appearance, AppearanceItem, Arc, BlendMode, BrushesKept, Dash, FillLayer, FillRule, Global, Gradient, GradientDef, HashMap, HashSet,
+    Instance, Knockout, LayerColor, LineCap, LineJoin, Node, NodeId, NodeKind, Paint, Reader, Rect, ShownNames, StrokeLayer, V, obj, paint,
 };
 
 impl<'a> Reader<'a> {
@@ -69,6 +66,7 @@ impl<'a> Reader<'a> {
     /// `LB`: a graph started in this layer that hasn't ended doesn't go on past it; the layer ends.
     fn layer_end(&mut self) -> Result<(), String> {
         if self.graph.as_ref().is_some_and(|g| g.frames >= self.frames.len()) {
+            self.graph_plain();
             self.graph = None;
             self.warn(GRAPH_UNENDED);
         }
@@ -158,7 +156,7 @@ impl<'a> Reader<'a> {
         let mesh_ended = std::mem::take(&mut self.mesh_ended);
         let vals = self.operands();
         let vals = self.take_head(vals);
-        if self.graph_record(w, hidden) {
+        if self.graph_record(w, &vals, hidden, (group_ended, mesh_ended)) {
             return Ok(());
         }
         // Only `Bh` reads an undefined number. Anywhere else it would reach a point or a size, so
@@ -428,33 +426,6 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    /// A graph's records (version 7 specification §17 and appendix A): `%_Gs` starts the graph on
-    /// a layer, `GS` ends it, and its data and settings (the operators in [`GRAPH_OPS`], and any
-    /// operator on a `%_` line between `Gt` and `GT`) are left out with their operands. Its drawn
-    /// art, and anything else, is read as usual. `true` when `w` was one of them.
-    fn graph_record(&mut self, w: &str, hidden: bool) -> bool {
-        let Some(g) = self.graph.as_mut() else {
-            // Outside a graph, its operators stay ones the reader doesn't know.
-            if w == "Gs" && hidden && !self.frames.is_empty() {
-                self.graph = Some(Graph { settings: false, frames: self.frames.len() });
-                self.warn(GRAPH_PLAIN);
-                return true;
-            }
-            return false;
-        };
-        match w {
-            // A graph doesn't start inside another: the one being read goes on.
-            "Gs" => self.warn(GRAPH_UNENDED),
-            "GS" => self.graph = None,
-            "Gt" => g.settings = true,
-            "GT" => g.settings = false,
-            _ if GRAPH_OPS.contains(&w) => {}
-            _ if hidden && g.settings => {}
-            _ => return false,
-        }
-        true
-    }
-
     /// `… Lb`: a layer's options, `visible preview unlocked printing dimmed`, then the colour index
     /// and its RGB. The colour index is at 5 with fewer than ten operands, 6 with ten to twelve
     /// (`masks` before it) and 7 with thirteen or more (one more flag before it). Four places after
@@ -588,9 +559,9 @@ impl<'a> Reader<'a> {
             return;
         }
         self.image_tail = false;
-        // An object's tags (`XT`) follow it one after another, and an image's follow the `XH` that
-        // ends its data.
-        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH") {
+        // An object's tags (`XT`, and a graph's `Go`) follow it one after another, and an image's
+        // follow the `XH` that ends its data.
+        if matches!(w, "Xy" | "Xd" | "XW" | "BB" | "LB" | "XT" | "XH" | "Go") {
             return;
         }
         self.after_object = false;
@@ -1105,6 +1076,15 @@ fn no_guides(n: &Node, depth: usize) -> bool {
     depth <= MAX_DEPTH && !n.is_guide() && n.children().into_iter().flatten().all(|c| no_guides(c, depth + 1))
 }
 
+/// Is `n` a compound path with a guide member whose bounds reach past the bounds of its members that
+/// aren't guides, or with guide members only? Any other object counts as no.
+fn guides_reach_past(n: &Node) -> bool {
+    let NodeKind::Compound { children, .. } = &n.kind else { return false };
+    let bounds =
+        |guides: bool| children.iter().filter(|c| c.is_guide() == guides).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric_bounds()));
+    bounds(true).is_some_and(|g| bounds(false).is_none_or(|o| o.union(g) != o))
+}
+
 /// The largest Twist angle, in degrees either way, read as a live effect on an object that isn't a
 /// path or compound path with straight segments: VectorCraft's own limit. An object with a larger
 /// Twist keeps the file's drawn look.
@@ -1118,7 +1098,8 @@ const MAX_STRAIGHT_TWIST: f64 = 180.0;
 /// Is `object` one that style `st`, whose effect moves the outline, is read on? It and everything
 /// in it [`moves_alike`], and the style paints no gradient. Twist is read only when nothing is
 /// stroked and its angle is a number: up to [`MAX_STRAIGHT_TWIST`] degrees either way on a path or
-/// compound path with straight segments, or up to [`MAX_TWIST`] degrees either way on another object
+/// compound path with straight segments (only at 0° when its guide members reach past its other
+/// members, see [`guides_reach_past`]), or up to [`MAX_TWIST`] degrees either way on another object
 /// with no guide in it. Transform that scales, turns or reflects is read only when nothing is stroked
 /// (its reference point lies on the bounds without strokes).
 fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
@@ -1131,7 +1112,12 @@ fn moves_with(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
         && st.effects.iter().all(|e| match e.id.as_str() {
             "distort.twist" => {
                 let within = |limit: f64| e.params["angle"].as_f64().is_some_and(|a| a.abs() <= limit);
-                !stroked && if straight(object) { within(MAX_STRAIGHT_TWIST) } else { no_guides(object, 0) && within(MAX_TWIST) }
+                !stroked
+                    && if straight(object) {
+                        within(MAX_STRAIGHT_TWIST) && (e.params["angle"].as_f64() == Some(0.0) || !guides_reach_past(object))
+                    } else {
+                        no_guides(object, 0) && within(MAX_TWIST)
+                    }
             }
             "distort.transform" => {
                 let p = &e.params;
@@ -1155,7 +1141,8 @@ fn image_warps(object: &Node, st: &crate::import::ai::style::ArtStyle) -> bool {
 
 /// Does image `object` with `appearance` (its style's Warp) draw as `look`, its drawn look, compared
 /// over all that the warp draws ([`crate::import::ai::envelope::warped_alike`]) on `layer`, a layer
-/// id no other node has? Both are drawn shown, opaque and in the Normal mode. Unless the look is on
+/// id no other node has? Both are drawn shown, opaque and in the Normal mode; a hidden look is drawn
+/// with every object in it shown, as the hidden object's look holds them. Unless the look is on
 /// `%_` lines itself (`hidden`), the copies in it that are on `%_` lines (`hidden_ids`) are left out.
 #[allow(clippy::too_many_arguments)]
 fn image_warp_alike(
@@ -1175,10 +1162,22 @@ fn image_warp_alike(
     if !hidden {
         strip(&mut plain, hidden_ids);
     }
+    if !plain.visible {
+        show_members(&mut plain);
+    }
     for n in [&mut live, &mut plain] {
         (n.visible, n.opacity, n.blend) = (true, 1.0, BlendMode::Normal);
     }
     crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
+}
+
+/// Show every object in container `n`, at any depth.
+fn show_members(n: &mut Node) {
+    for c in n.children_mut().into_iter().flatten() {
+        let c = Arc::make_mut(c);
+        c.visible = true;
+        show_members(c);
+    }
 }
 
 /// What [`placed_paints`] keys a pattern's name with, apart from the gradients' names.

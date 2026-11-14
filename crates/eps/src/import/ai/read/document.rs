@@ -1165,7 +1165,9 @@ impl<'a> Reader<'a> {
     }
 
     pub(super) fn finish(mut self) -> Result<Structure, String> {
-        if self.graph.take().is_some() {
+        if self.graph.is_some() {
+            self.graph_plain();
+            self.graph = None;
             self.warn(super::types::GRAPH_UNENDED);
         }
         // Envelopes whose plugin never closed them keep their drawn art.
@@ -1443,7 +1445,8 @@ fn ruler_guide(a: Point, b: Point, centre: Option<(f64, f64)>, boards: &[Rect]) 
 }
 
 /// Makes the children of the layers and sublayers of `nodes` that `pick` makes a guide of into
-/// ruler guide nodes with the same ids, moved to the top of their layer in their order.
+/// ruler guide nodes with the same ids, names, locks and visibility, moved to the top of their layer
+/// in their order.
 fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Guide>, depth: usize) {
     if depth > MAX_DEPTH {
         return;
@@ -1456,7 +1459,11 @@ fn take_ruler_guides(nodes: &mut [Arc<Node>], pick: &dyn Fn(NodeId) -> Option<Gu
         let mut guides = vec![];
         kids.retain(|k| match pick(k.id) {
             Some(g) => {
-                guides.push(Arc::new(Node::new(k.id, NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard })));
+                let mut n = Node::new(k.id, NodeKind::RulerGuide { vertical: g.vertical, pos: g.pos, artboard: g.artboard });
+                n.name = k.name.clone();
+                n.locked = k.locked;
+                n.visible = k.visible;
+                guides.push(Arc::new(n));
                 false
             }
             None => true,

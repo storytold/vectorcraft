@@ -4095,6 +4095,8 @@ digits	Malayalam	Malaiàlam
 	Action Options…	Opcions de l’acció…
 	Action Options	Opcions de l’acció
 	Playback Options…	Opcions de reproducció…
+	Button Mode	Mode de botons
+	No actions.	No hi ha accions.
 	Insert Stop…	Insereix una aturada…
 	Insert Stop	Insereix una aturada
 	Record Stop	Enregistra una aturada
@@ -4613,6 +4615,7 @@ digits	Malayalam	Malaiàlam
 	VectorCraft Title Bar on Every Desktop	Barra de títol de VectorCraft a tots els escriptoris
 	The VECTORCRAFT_TITLEBAR environment variable chooses the title bar while it is set.	Mentre està definida, la variable d’entorn VECTORCRAFT_TITLEBAR determina la barra de títol.
 	System Title Bar takes precedence over this option while it is on.	Mentre està activada, Barra de títol del sistema té prioritat sobre aquesta opció.
+	This desktop draws the window's title bar with this option on or off while VectorCraft Title Bar on Every Desktop is off.	Mentre Barra de títol de VectorCraft a tots els escriptoris està desactivada, aquest escriptori dibuixa la barra de títol de la finestra tant si aquesta opció està activada com si no.
 	Tab	Tabulació
 	Tab Stops	Aturades de tabulació
 	Table	Taula
@@ -5771,6 +5774,7 @@ digits	Malayalam	Malaiàlam
 @msg	no such color	no existeix aquest color
 @msg	{_1} cannot be used on Windows	{_1} no es pot fer servir al Windows
 @msg	more than one action is named “{_1}”	més d’una acció es diu “{_1}”
+@msg	the action “{_1}” sets the folder preference {_2}; delete that step to save the set	l’acció “{_1}” defineix la preferència de carpeta {_2}; suprimiu aquest pas per desar el conjunt
 @msg	name the file	poseu un nom al fitxer
 @msg	New Window isn't available yet: a document opens in one window	Finestra nova encara no està disponible: un document s’obre en una sola finestra
 @msg	no active document	no hi ha cap document actiu
