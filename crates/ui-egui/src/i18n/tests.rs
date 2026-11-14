@@ -2561,6 +2561,10 @@ const COUNTED_STATUS_MESSAGES: &[(&str, &str)] = &[
     ("Downloaded 1 file", "Downloaded 2 files"),
     ("Exported 1 file to /out", "Exported 2 files to /out"),
     ("Loaded “Tidy”: 1 step was left out", "Loaded “Tidy”: 2 steps were left out"),
+    (
+        "Loaded “Tidy”: 1 step has an unknown command and was kept: “Export”, step 4, `example.finish`",
+        "Loaded “Tidy”: 2 steps have unknown commands and were kept; the first: “Export”, step 4.2, `example.finish`",
+    ),
 ];
 
 /// The link, font, export and action set status messages name a count of 1 in the singular and other counts in
