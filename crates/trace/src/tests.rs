@@ -1909,6 +1909,31 @@ fn the_bands_of_a_gradient_stay_apart() {
 }
 
 #[test]
+fn a_nearly_flat_dark_ground_keeps_one_color() {
+    // A ground of three near-black grays in patches (too close to tell apart) around a gradient
+    // figure: the ground holds three quarters of the pixels, but splitting it would show nothing.
+    let img = Raster::from_fn(240, 240, |x, y| {
+        if (60..180).contains(&x) && (60..180).contains(&y) {
+            let t = ((x - 60) * 255 / 119) as u8;
+            [t, 255 - t, t / 2, 255]
+        } else {
+            let g = [5, 7, 9][((jitter(x / 30, y / 30, 0) + 1.0) * 1.5).clamp(0.0, 2.0) as usize];
+            [g, g, g, 255]
+        }
+    });
+    let q = quantize(&img, &sixteen_colors());
+    let in_figure = |i: usize| (60..180).contains(&(i % 240)) && (60..180).contains(&(i / 240));
+    let labels = |figure: bool| -> std::collections::BTreeSet<u16> {
+        q.labels.iter().enumerate().filter(|(i, _)| in_figure(*i) == figure).map(|(_, &l)| l).collect()
+    };
+    let ground = labels(false);
+    assert_eq!(ground.len(), 1, "ground colors {:?} of {:?}", ground, q.palette);
+    // The color the ground does not take goes to the figure.
+    let figure = labels(true);
+    assert_eq!(figure.len(), 15, "figure colors {:?} of {:?}", figure, q.palette);
+}
+
+#[test]
 fn a_noisy_gradient_keeps_its_tones_without_specks() {
     // Tones 0–255 across with noise larger than High Fidelity Photo's 64 steps are apart.
     let img = Raster::from_fn(256, 96, |x, y| {

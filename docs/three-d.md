@@ -102,7 +102,7 @@ middle.
 | Volume | 0–100 %. The surface is a membrane under even pressure, held along the outline (and around holes): it rises vertically from the edge and rounds smoothly inside, without creases along the shape's middle. At 50 % a circle becomes a half sphere; 100 % puffs twice as high, 0 % is flat. |
 | Both sides | The back puffs out too; otherwise it is flat. |
 
-The surface starts with a grid of 48 cells across the larger side, halved or quartered where it rises steeply near the outline. White-light Inflate retains the existing clipped polygon cells, shading and paint composition. With colored lights, simple cells are triangulated with shared border samples, and lighting interpolates shared membrane normals through ordinary RGB vector gradients, including on a puffed back. Solid fills batch those triangles into three channel groups and one coverage clip for the whole surface. Source gradients retain per-facet vector composition and apply transparent coverage once. Seam widths retain the 0.05 to 0.75 pt bounds, and every facet's seam has round joins ([Seams](#seams)). Shading is automatic, with no additional dialog option.
+The surface starts with a grid of 48 cells across the larger side, halved or quartered where it rises steeply near the outline. White-light Inflate retains the existing clipped polygon cells, shading and paint composition. With colored lights, simple cells are triangulated with shared border samples, and lighting interpolates shared membrane normals through ordinary RGB vector gradients, including on a puffed back. A solid fill or stroke drawn alone, or drawn whole because a fill or stroke of the object is translucent or blended, batches those triangles into three channel groups and one coverage clip for the whole surface; when its faces share one depth order with another solid's, each triangle has its own clip and channel ramps. Source gradients retain per-facet vector composition and apply transparent coverage once. Seam widths retain the 0.05 to 0.75 pt bounds, and every facet's seam has round joins ([Seams](#seams)). Shading is automatic, with no additional dialog option.
 
 ## Seams
 
@@ -115,9 +115,11 @@ How a facet carries its seam depends on the lights and the paint:
 - Extrude & Bevel, Inflate and Rotate, when no light is colored (one white light or several): a path filled with
   the facet's shading and stroked with its seam. With a colored light, Extrude & Bevel and Rotate (planar shading)
   are drawn the same way.
-- Inflate with a colored light and shading on: a solid-color fill draws each facet's light ramps with its seam in three channel
-  groups clipped to the union of its facets, so no seam reaches past the surface; a gradient fill fills each facet's
-  ramps through a clip of the facet and its seam, outlined with round joins. In both, the facets lie over an underlay
+- Inflate with a colored light and shading on: a solid-color fill or stroke drawn as one composite draws each facet's light ramps with its seam in three channel
+  groups clipped to the union of its facets, so no seam reaches past the surface; a gradient fill, and a solid-color
+  fill or stroke whose faces share one depth order with another solid's, fills each facet's ramps through a clip of
+  the facet and its seam, outlined with round joins.
+  The facets of a surface drawn this way lie over an underlay
   of themselves whose seams are 2 pt wide, reaching 1 pt past each edge, and one clip to the union of the facets and
   their seams removes what the underlay paints past the surface. Where two facets' antialiased edges meet, the
   underlay fills the pixels they leave partly uncovered with the neighbors' own light, so no black channel backdrop
@@ -133,7 +135,7 @@ How a facet carries its seam depends on the lights and the paint:
 A facet seen almost edge-on is a sliver, and a seam with mitered joins would reach past the solid as a thorn; a round
 one reaches no more than half its width past its facet. So where a facet has no neighbor (Rotate's plane, every
 silhouette corner) its convex corners are drawn rounded by up to 0.375 pt (half the largest seam), except a
-solid-color Inflate under a colored light, whose clip keeps its corners sharp.
+solid-color Inflate surface under a colored light drawn as one composite, whose clip keeps its corners sharp.
 
 ## Fills and strokes
 
@@ -160,8 +162,9 @@ The rest is our reading:
   this order, in runs that each carry the mask, and so do its graphics. A member of a 3D group with its own opacity
   mask or blending mode draws its fill's and strokes' faces in this order inside that mask or blending mode when
   they are opaque with Normal blending. Otherwise each solid is drawn on its own with its opacity and blending, the
-  lower item's first. With a light that is not white, each solid is also drawn on its own when one of them is a
-  puffed, shaded Inflate surface in a solid color (drawn as one composite).
+  lower item's first. With a light that is not white, a puffed, shaded Inflate surface in a solid color takes its
+  place in this order too, each of its faces drawn with its own light ramps; a lone solid of that kind is still
+  drawn as one composite, and so is each such solid when they hold more than 30,720 faces together.
 - The solids turn, twist and taper about the center of the bounds of all their shapes, Inflate's grid covers
   those bounds, and with Perspective one eye sees every solid. A stroke too narrow to hold a point of Inflate's
   grid stays flat.

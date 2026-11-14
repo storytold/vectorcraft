@@ -242,6 +242,36 @@ fn control_export_refuses_an_option_no_format_takes() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// `app.export`, and `file.exportAs` run as a command, write no SVG of a document that links a
+/// JavaScript file outside the read root, and the error names no file or folder; the person at the
+/// keyboard exports it with the link as stored.
+#[test]
+fn control_svg_export_refuses_a_linked_javascript_file_outside_the_read_root() {
+    let (mut app, tx, base) = confined("svg-script");
+    app.run("file.new", json!({"width": 100, "height": 50})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let script = s(base.join("outside/menu.js"));
+    app.run("svgInteractivity.addFile", json!({"file": script})).unwrap();
+    let path = s(base.join("out/a.svg"));
+    for (method, params) in [
+        ("app.export", json!({"path": path, "format": "svg", "wait": true})),
+        ("app.export", json!({"path": s(base.join("out/a.svgz")), "wait": true})),
+        ("app.export", json!({"format": "svg"})),
+        ("engine.execute", json!({"command": "file.exportAs", "params": {"path": path, "format": "svg"}})),
+    ] {
+        let r = request(&mut app, &tx, method, params.clone());
+        let e = r["error"].as_str().unwrap_or_default();
+        assert!(e.contains("a linked JavaScript file is outside the read roots"), "{method} {params}: {r}");
+        assert!(!e.contains("menu.js") && !e.contains(&s(base.clone())), "{method} {params}: {r}");
+    }
+    assert_eq!(std::fs::read_dir(base.join("out")).unwrap().count(), 0, "nothing written");
+    // The person at the keyboard isn't confined.
+    app.run("file.exportAs", json!({"path": path, "format": "svg"})).unwrap();
+    let svg = std::fs::read_to_string(&path).unwrap();
+    assert!(svg.contains(&format!("<script xlink:href=\"{script}\"/>")), "{svg}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
 /// `app.export` with a path writes the file when given an option only another format reads, and
 /// its warnings name that option, as `document.export`'s do without a path. `file.exportAs` run
 /// as a command does the same; an export that automation did not ask for gets no such note.

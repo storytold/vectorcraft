@@ -3858,6 +3858,7 @@ axis	Both	Ambos
 @msg	Plug-ins can't be loaded from {path}: {e}	Não é possível carregar plug-ins de {path}: {e}
 @msg	direct-select anchor points to cut at (not the end points of open paths)	selecione diretamente os pontos de ancoragem onde cortar (não as extremidades de traçados abertos)
 @msg	Divide Objects Below: select a path	Dividir objetos abaixo: selecione um traçado
+@msg	select a path	selecione um traçado
 @msg	Divide Objects Below: select exactly one path	Dividir objetos abaixo: selecione exatamente um traçado
 @msg	Downloaded {what}	{what} baixado
 @msg	Expand Appearance: the selection has a basic appearance	Expandir aparência: a seleção tem uma aparência básica
@@ -5408,6 +5409,8 @@ axis	Both	Ambos
 @msg	{path}: not a file	{path}: não é um arquivo
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	as imagens vinculadas mostram a visualização de baixa resolução salva no arquivo até que seus arquivos sejam encontrados: revincule-as no painel Links
 @msg	linked type areas past VectorCraft's limits were left out	as áreas de texto encadeadas além dos limites do VectorCraft foram omitidas
+@msg	the Line Breaking setting of legacy type was left out	a configuração de quebra de linha do texto no formato antigo foi omitida
+@msg	the Japanese layout rules of legacy type were left out	as regras de composição japonesa do texto no formato antigo foram omitidas
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	o texto que muda de direção de escrita dentro de um objeto de texto abre na direção do primeiro caractere
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	o texto usado como máscara em áreas encadeadas, texto com quebra ou um caminho composto não recorta
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	as imagens vinculadas sem visualização no arquivo mostram um espaço reservado até que seus arquivos sejam encontrados: revincule-as no painel Links

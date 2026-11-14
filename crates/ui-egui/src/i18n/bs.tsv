@@ -5259,6 +5259,8 @@ imageTrace	Outline	Obris
 @msg	an embedded image of {_1} × {_2} pixels was reduced to {_3} × {_4} pixels to keep the layers	ugrađena slika od {_1} × {_2} piksela smanjena je na {_3} × {_4} piksela kako bi se zadržali slojevi
 @msg	linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel	povezane slike prikazuju pregled niske rezolucije sačuvan u datoteci dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
 @msg	linked type areas past VectorCraft's limits were left out	povezana područja teksta izvan ograničenja programa VectorCraft su izostavljena
+@msg	the Line Breaking setting of legacy type was left out	postavka prijeloma redova teksta u starom formatu je izostavljena
+@msg	the Japanese layout rules of legacy type were left out	japanska pravila rasporeda teksta u starom formatu su izostavljena
 @msg	type that changes writing direction inside a text object opens in the direction of its first character	tekst koji mijenja smjer pisanja unutar tekstualnog objekta otvara se u smjeru svog prvog znaka
 @msg	type used as a mask in linked areas, wraparound text or a compound path doesn't clip	tekst korišten kao maska u povezanim područjima, omotanom tekstu ili složenoj putanji ne odsijeca
 @msg	linked pictures with no preview in the file show a placeholder until their files are found: relink them in the Links panel	povezane slike bez pregleda u datoteci prikazuju čuvar mjesta dok se njihove datoteke ne pronađu: ponovo ih povežite u panelu Veze
