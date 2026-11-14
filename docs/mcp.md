@@ -835,9 +835,13 @@ them sets what the graph stores. While Global Edit is on, a path directly in a s
 match (a graph's paths are matches only while the graph is isolated) has what changed on it stored for its series: the
 paint, weight, opacity and blend mode of the topmost visible fill and stroke, and the object's opacity and blend mode.
 `addon.arrange.randomizeOpacity` and `addon.arrange.sort` with `apply: "opacity"` store the object opacity, with the
-blend mode, of the frontmost path of a series whose opacity they change. A gradient is stored with its placement, and
-every path of the series takes that placement when the graph is drawn again. The graph does not store a stroke's
-dashes, caps, joins, arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
+blend mode, of the frontmost path of a series whose opacity they change. A gradient is stored with its placement relative
+to the box of the path it was stored from (a stroke's box is the path's bounds grown by half the weight), and every path
+of the series, the legend swatch included, takes it at the same place on its own box when the graph is drawn again, also
+after the data changes or the graph moves. The graph saves this as `fillUnitBox` and `strokeUnitBox` in its series
+paints. A gradient stored from a path with no width or no height is drawn at the place in the document where it was
+stored. So is a gradient a graph stored without these flags. The graph does not store a stroke's dashes, caps, joins,
+arrowheads, width profile or brush. These commands do not store the colors they give a graph's axes and labels, which are drawn again
 with the paint they had.
 
 `text.setFormat` without `start` and `end`, on a graph or on its labels, stores the character and paragraph attributes
