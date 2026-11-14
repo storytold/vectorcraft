@@ -341,6 +341,10 @@ fn header(ui: &mut Ui, title: &str) {
 /// Draws the responsive picker and updates its color fields and live preview.
 /// Returns the requested action for the shared frame to confirm or cancel.
 fn body(app: &mut VectorcraftApp, ui: &mut Ui, d: &mut Dialog) -> DialogAction {
+    // #6445: the dialog's first-field focus goes to the hex field, not H.
+    if ui.ctx().data_mut(|m| m.get_temp::<bool>(widgets::dialog_focus_flag())).unwrap_or(false) {
+        widgets::arm_field_focus(ui.ctx(), "cp-hex");
+    }
     let channel = Channel::parse(&d.str("channel")).unwrap_or_default();
     let web = d.bool("webOnly");
     let swatches = d.bool("swatches");
